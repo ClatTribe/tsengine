@@ -1,0 +1,29 @@
+# Binaries
+bin/
+/tsengine
+/tool-server
+*.exe
+*.dylib
+*.so
+
+# Coverage / profiling
+*.out
+coverage.html
+*.prof
+
+# Editor / local agent state
+.idea/
+.vscode/
+.claude/
+*.swp
+.DS_Store
+
+# Runtime artifacts
+runs/
+scan_runs/
+*.log
+
+# Secrets / keys (never commit)
+*.pem
+*.key
+attestation-private.bin

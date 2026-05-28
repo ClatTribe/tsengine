@@ -1,0 +1,20 @@
+[
+  {
+    "RuleID": "aws-access-token",
+    "Description": "AWS Access Key",
+    "File": "config/settings.py",
+    "StartLine": 42,
+    "EndLine": 42,
+    "Match": "AKIA****REDACTED****",
+    "Secret": "AKIA****REDACTED****"
+  },
+  {
+    "RuleID": "generic-api-key",
+    "Description": "Generic API Key",
+    "File": ".env",
+    "StartLine": 7,
+    "EndLine": 7,
+    "Match": "api_key=****",
+    "Secret": "****"
+  }
+]

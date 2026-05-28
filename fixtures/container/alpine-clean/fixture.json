@@ -1,0 +1,13 @@
+{
+  "name": "container-alpine-clean",
+  "asset": "container_image",
+  "target": "alpine:3.18",
+  "description": "Maintained Alpine 3.18 image with no current CVEs. Specificity check — tsengine must not invent findings on a clean target.",
+  "metric": "fp_rate",
+  "max_findings": 0,
+  "competitors": {
+    "leaderboard": "Trivy / Snyk Container / Anchore — self-published only",
+    "note": "Negative (specificity) test case: a clean image should produce zero CVE findings. Pairs with container-nginx-vuln (sensitivity) for a recall+FP-rate read on container scanning."
+  },
+  "runnable": true
+}

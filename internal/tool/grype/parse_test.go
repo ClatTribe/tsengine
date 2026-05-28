@@ -1,0 +1,48 @@
+package grype
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
+
+func TestParse_Matches(t *testing.T) {
+	blob, err := os.ReadFile(filepath.Join("testdata", "sample.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings := parse(blob, "nginx:1.14")
+	if len(findings) != 3 {
+		t.Fatalf("got %d findings; want 3", len(findings))
+	}
+	if findings[0].RuleID != "grype::CVE-2021-44228" {
+		t.Errorf("RuleID[0]: %q", findings[0].RuleID)
+	}
+	if findings[0].Severity != types.SeverityCritical {
+		t.Errorf("severity[0]: %q", findings[0].Severity)
+	}
+	// Negligible → info.
+	if findings[2].Severity != types.SeverityInfo {
+		t.Errorf("severity[2]: %q, want info", findings[2].Severity)
+	}
+	// Endpoint scopes to the package (so cross_tool_merge keeps distinct).
+	if !strings.Contains(findings[0].Endpoint, "log4j-core@2.14.1") {
+		t.Errorf("endpoint should carry package: %q", findings[0].Endpoint)
+	}
+}
+
+func TestParse_Empty(t *testing.T) {
+	if parse(nil, "x") != nil {
+		t.Error("nil expected")
+	}
+}
+
+func TestSurface(t *testing.T) {
+	g := New()
+	if g.Name() != "grype" || !g.SandboxExecution() {
+		t.Error("surface wrong")
+	}
+}

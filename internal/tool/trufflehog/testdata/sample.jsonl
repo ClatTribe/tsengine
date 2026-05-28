@@ -1,0 +1,4 @@
+{"DetectorName":"AWS","Verified":true,"Raw":"AKIA...","SourceMetadata":{"Data":{"Filesystem":{"file":"/workspace/config.env","line":2}}}}
+not json
+{"DetectorName":"Github","Verified":false,"Raw":"ghp_...","SourceMetadata":{"Data":{"Filesystem":{"file":"/workspace/config.env","line":3}}}}
+{"Verified":true}

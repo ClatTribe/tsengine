@@ -1,0 +1,4 @@
+{"url":"https://example.com","input":"example.com","status_code":200,"title":"Example Domain","webserver":"ECS","tech":["Amazon ECS","HSTS"]}
+garbage line
+{"url":"https://api.example.com","input":"api.example.com","status_code":403,"webserver":"nginx","tech":["Nginx"]}
+{"input":"no-url-here","status_code":500}

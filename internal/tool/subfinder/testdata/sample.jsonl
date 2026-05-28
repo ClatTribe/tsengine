@@ -1,0 +1,6 @@
+{"host":"www.example.com","input":"example.com","source":"crtsh"}
+{"host":"api.example.com","input":"example.com","source":"alienvault"}
+{"host":"www.example.com","input":"example.com","source":"hackertarget"}
+not a json line
+{"host":"","source":"empty"}
+{"host":"cdn.example.com","input":"example.com","source":"chaos"}

@@ -1,0 +1,18 @@
+{
+  "name": "repo-owasp-benchmark",
+  "asset": "repository",
+  "target": "/fixtures/BenchmarkJava",
+  "description": "STUB. OWASP Benchmark v1.2 — the neutral SAST leaderboard (2,740 Java cases). Requires semgrep wrapped (Phase 3.x) and the BenchmarkJava source tree volume-mounted into the sandbox. Score per-CWE Youden.",
+  "metric": "youden",
+  "competitors": {
+    "leaderboard": "OWASP Benchmark v1.2 SAST leaderboard",
+    "scores": {
+      "Veracode": "51%",
+      "Checkmarx": "47%",
+      "Fortify": "35%",
+      "SonarQube": "6%"
+    },
+    "note": "Per-CWE Youden index against OWASP Benchmark v1.2. Blocked on (1) a semgrep wrapper for the repository asset and (2) repo source-tree mounting into the sandbox. DAST tools on the same corpus (ZAP 13%) are NOT the SAST comparison — see CLAUDE.md §6.1.1. This stub records the SAST cohort numbers."
+  },
+  "runnable": false
+}

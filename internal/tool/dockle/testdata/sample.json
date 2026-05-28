@@ -1,0 +1,9 @@
+{
+  "summary": { "fatal": 1, "warn": 1, "info": 1, "pass": 10 },
+  "details": [
+    { "code": "CIS-DI-0001", "title": "Create a user for the container", "level": "WARN", "alerts": ["Last user should not be root"] },
+    { "code": "CIS-DI-0008", "title": "Confirm safety of setuid/setgid files", "level": "FATAL", "alerts": ["setuid file: usr/bin/passwd"] },
+    { "code": "DKL-LI-0003", "title": "Only put necessary files", "level": "INFO", "alerts": ["unnecessary file: /tmp/cache"] },
+    { "code": "CIS-DI-0006", "title": "Add HEALTHCHECK", "level": "PASS", "alerts": [] }
+  ]
+}

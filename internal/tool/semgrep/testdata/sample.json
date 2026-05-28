@@ -1,0 +1,33 @@
+{
+  "results": [
+    {
+      "check_id": "python.lang.security.audit.dangerous-system-call.dangerous-system-call",
+      "path": "app/handlers.py",
+      "start": { "line": 88, "col": 5 },
+      "end": { "line": 88, "col": 40 },
+      "extra": {
+        "message": "Found user-controlled data in a system call",
+        "severity": "ERROR",
+        "metadata": { "cwe": ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"], "owasp": ["A03:2021 - Injection"] }
+      }
+    },
+    {
+      "check_id": "javascript.express.security.audit.xss.direct-response-write",
+      "path": "src/routes/user.js",
+      "start": { "line": 15, "col": 3 },
+      "end": { "line": 15, "col": 60 },
+      "extra": {
+        "message": "Reflected value written directly to response",
+        "severity": "WARNING",
+        "metadata": { "cwe": "CWE-79: Cross-site Scripting" }
+      }
+    },
+    {
+      "check_id": "generic.info.style-note",
+      "path": "README.md",
+      "start": { "line": 1, "col": 1 },
+      "end": { "line": 1, "col": 1 },
+      "extra": { "message": "info note", "severity": "INFO", "metadata": {} }
+    }
+  ]
+}

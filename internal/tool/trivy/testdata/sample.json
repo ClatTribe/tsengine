@@ -1,0 +1,65 @@
+{
+  "SchemaVersion": 2,
+  "ArtifactName": "alpine:3.14",
+  "ArtifactType": "container_image",
+  "Results": [
+    {
+      "Target": "alpine:3.14 (alpine 3.14.0)",
+      "Class": "os-pkgs",
+      "Type": "alpine",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2021-42374",
+          "PkgName": "busybox",
+          "InstalledVersion": "1.33.1-r3",
+          "FixedVersion": "1.33.1-r6",
+          "Severity": "HIGH",
+          "Title": "busybox: out-of-bounds heap read in unlzma applet",
+          "Description": "An out-of-bounds heap read in BusyBox unlzma applet",
+          "CweIDs": ["CWE-125"],
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2021-42374"
+        },
+        {
+          "VulnerabilityID": "CVE-2022-1234",
+          "PkgName": "libssl",
+          "InstalledVersion": "1.1.1k-r0",
+          "FixedVersion": "",
+          "Severity": "CRITICAL",
+          "Title": "Critical OpenSSL bug",
+          "Description": "Example CRITICAL CVE for testing",
+          "CweIDs": ["CWE-787"]
+        }
+      ]
+    },
+    {
+      "Target": "Dockerfile",
+      "Class": "config",
+      "Type": "dockerfile",
+      "Misconfigurations": [
+        {
+          "ID": "DS002",
+          "AVDID": "AVD-DS-0002",
+          "Title": "Image user should not be root",
+          "Description": "Running containers as root is a security risk.",
+          "Severity": "HIGH",
+          "Resolution": "Add a USER directive."
+        }
+      ]
+    },
+    {
+      "Target": "config.yaml",
+      "Class": "secret",
+      "Secrets": [
+        {
+          "RuleID": "aws-access-key-id",
+          "Category": "AWS",
+          "Severity": "CRITICAL",
+          "Title": "AWS Access Key ID",
+          "StartLine": 12,
+          "EndLine": 12,
+          "Match": "AKIA****REDACTED****"
+        }
+      ]
+    }
+  ]
+}

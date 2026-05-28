@@ -1,0 +1,38 @@
+[
+  {
+    "type": "V",
+    "inject_type": "inHTML-URL",
+    "method": "GET",
+    "data": "https://example.com/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E",
+    "param": "q",
+    "payload": "<script>alert(1)</script>",
+    "evidence": "alert(1) executed",
+    "cwe": "CWE-79",
+    "severity": "High",
+    "msg": "Verified XSS via q parameter"
+  },
+  {
+    "type": "R",
+    "inject_type": "inHTML-attribute",
+    "method": "GET",
+    "data": "https://example.com/profile?name=%22%3E%3Csvg%2Fonload%3Dalert%281%29%3E",
+    "param": "name",
+    "payload": "\"><svg/onload=alert(1)>",
+    "evidence": "payload reflected unescaped",
+    "cwe": "cwe-79",
+    "severity": "Medium",
+    "msg": "Reflected XSS in profile name"
+  },
+  {
+    "type": "",
+    "inject_type": "",
+    "method": "",
+    "data": "",
+    "param": "",
+    "payload": "",
+    "evidence": "",
+    "cwe": "",
+    "severity": "",
+    "msg": ""
+  }
+]

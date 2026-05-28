@@ -1,0 +1,14 @@
+# Don't ship docs / tests / build artifacts into the docker build context.
+.git/
+.github/
+.claude/
+bin/
+runs/
+docs/
+tests/
+fixtures/
+*.md
+.golangci.yml
+.gitignore
+.dockerignore
+Makefile

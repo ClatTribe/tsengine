@@ -1,0 +1,20 @@
+package main
+
+// Blank imports register tool wrappers in the global tool.Registry.
+// Adding a tool to the sandbox image means adding a blank import here
+// AND adding its binary to docker/sandbox/Dockerfile.
+import (
+	_ "github.com/ClatTribe/tsengine/internal/tool/dalfox"
+	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
+	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"
+	_ "github.com/ClatTribe/tsengine/internal/tool/grype"
+	_ "github.com/ClatTribe/tsengine/internal/tool/httpx"
+	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
+	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
+	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
+	_ "github.com/ClatTribe/tsengine/internal/tool/prowler"
+	_ "github.com/ClatTribe/tsengine/internal/tool/semgrep"
+	_ "github.com/ClatTribe/tsengine/internal/tool/subfinder"
+	_ "github.com/ClatTribe/tsengine/internal/tool/trivy"
+	_ "github.com/ClatTribe/tsengine/internal/tool/trufflehog"
+)

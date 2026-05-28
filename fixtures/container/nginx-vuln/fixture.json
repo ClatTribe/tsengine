@@ -1,0 +1,18 @@
+{
+  "name": "container-nginx-vuln",
+  "asset": "container_image",
+  "target": "nginx:1.14",
+  "description": "Known-vulnerable nginx 1.14 (debian 9.8) base image. trivy must surface its well-known CVEs.",
+  "metric": "must_find_recall",
+  "pass_recall": 1.0,
+  "must_find": [
+    "CVE-2016-2779",
+    "CVE-2017-12424",
+    "CVE-2017-16932"
+  ],
+  "competitors": {
+    "leaderboard": "Trivy / Snyk Container / Anchore — self-published only (no neutral leaderboard for container CVE scanning)",
+    "note": "Container CVE detection has no neutral competitor scorecard; recall is measured against a curated must-find CVE set from this image's known advisories."
+  },
+  "runnable": true
+}

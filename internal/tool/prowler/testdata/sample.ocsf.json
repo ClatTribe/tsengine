@@ -1,0 +1,26 @@
+[
+  {
+    "status_code": "FAIL",
+    "severity": "High",
+    "message": "S3 bucket my-bucket is publicly accessible",
+    "finding_info": { "title": "S3 Bucket Public Access", "uid": "prowler-aws-s3_bucket_public_access-123" },
+    "resources": [{ "uid": "arn:aws:s3:::my-bucket", "name": "my-bucket", "region": "us-east-1", "type": "AwsS3Bucket" }],
+    "unmapped": { "check_id": "s3_bucket_public_access" }
+  },
+  {
+    "status_code": "FAIL",
+    "severity": "Critical",
+    "message": "Root account has active access keys",
+    "finding_info": { "title": "Root Access Keys", "uid": "prowler-aws-iam_root_keys-456" },
+    "resources": [{ "uid": "arn:aws:iam::root", "name": "root", "region": "global", "type": "AwsIamUser" }],
+    "unmapped": { "check_id": "iam_no_root_access_keys" }
+  },
+  {
+    "status_code": "PASS",
+    "severity": "Medium",
+    "message": "MFA enabled — control held",
+    "finding_info": { "title": "MFA Enabled", "uid": "prowler-aws-iam_mfa-789" },
+    "resources": [],
+    "unmapped": { "check_id": "iam_mfa_enabled" }
+  }
+]

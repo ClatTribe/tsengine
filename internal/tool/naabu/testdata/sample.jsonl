@@ -1,0 +1,5 @@
+{"host":"scanme.example.com","ip":"93.184.216.34","port":22,"protocol":"tcp"}
+{"ip":"93.184.216.34","port":80,"protocol":"tcp"}
+not json
+{"ip":"93.184.216.34","port":443,"protocol":"tcp"}
+{"ip":"","port":0}
