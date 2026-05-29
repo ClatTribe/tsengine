@@ -39,11 +39,11 @@ func (o RunOptions) withDefaults() RunOptions {
 // RunResult is the harness output for one fixture: per-trial scores plus
 // recall/enrichment trial statistics.
 type RunResult struct {
-	Fixture       string     `json:"fixture"`
-	Scores        []Score    `json:"scores"`
-	RecallStats   TrialStats `json:"recall_stats"`
-	EnrichStats   TrialStats `json:"enrichment_stats"`
-	AllPass       bool       `json:"all_pass"`
+	Fixture     string     `json:"fixture"`
+	Scores      []Score    `json:"scores"`
+	RecallStats TrialStats `json:"recall_stats"`
+	EnrichStats TrialStats `json:"enrichment_stats"`
+	AllPass     bool       `json:"all_pass"`
 }
 
 // Run executes a fixture N times via the real tsengine binary and scores
@@ -81,7 +81,9 @@ func runOnce(ctx context.Context, f *Fixture, opts RunOptions) (*types.Scan, err
 	}
 	defer os.RemoveAll(outDir)
 
-	cmd := exec.CommandContext(ctx, opts.Binary, "scan",
+	// gosec G204: opts.Binary + args come from internal bench config (operator
+	// supplies them on the CLI), not from a finding/scan target.
+	cmd := exec.CommandContext(ctx, opts.Binary, "scan", //nolint:gosec
 		"--asset", f.Asset,
 		"--target", f.Target,
 		"--out", outDir,

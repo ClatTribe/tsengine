@@ -18,10 +18,10 @@ func TestParse_DedupesAndExtracts(t *testing.T) {
 		t.Fatalf("got %d urls; want 4: %v", len(urls), urls)
 	}
 	want := map[string]bool{
-		"https://example.com/":          true,
-		"https://example.com/login":     true,
+		"https://example.com/":           true,
+		"https://example.com/login":      true,
 		"https://example.com/search?q=1": true,
-		"https://example.com/api/users": true,
+		"https://example.com/api/users":  true,
 	}
 	for _, u := range urls {
 		if !want[u] {

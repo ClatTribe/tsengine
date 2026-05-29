@@ -4,14 +4,14 @@ import "testing"
 
 func TestCanonicalizePath(t *testing.T) {
 	cases := map[string]string{
-		"/items/42":                              "/items/:int",
-		"/users/9999/posts/3":                    "/users/:int/posts/:int",
+		"/items/42":           "/items/:int",
+		"/users/9999/posts/3": "/users/:int/posts/:int",
 		"/o/550e8400-e29b-41d4-a716-446655440000": "/o/:uuid",
-		"/files/a1b2c3d4e5f60718":                "/files/:hash",
-		"/reports/2026-05-29":                    "/reports/:date",
-		"/search":                                "/search",   // content, not id — preserved
-		"/api/users":                             "/api/users", // preserved
-		"":                                       "/",
+		"/files/a1b2c3d4e5f60718":                 "/files/:hash",
+		"/reports/2026-05-29":                     "/reports/:date",
+		"/search":                                 "/search",    // content, not id — preserved
+		"/api/users":                              "/api/users", // preserved
+		"":                                        "/",
 	}
 	for in, want := range cases {
 		if got := canonicalizePath(in); got != want {

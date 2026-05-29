@@ -13,10 +13,10 @@ type fakeTool struct {
 	runResponse Result
 }
 
-func (f *fakeTool) Name() string                                 { return f.name }
-func (f *fakeTool) SandboxExecution() bool                       { return f.sandbox }
-func (f *fakeTool) MITRETechniques() []string                    { return f.mitre }
-func (f *fakeTool) Run(context.Context, Args) (Result, error)    { return f.runResponse, nil }
+func (f *fakeTool) Name() string                              { return f.name }
+func (f *fakeTool) SandboxExecution() bool                    { return f.sandbox }
+func (f *fakeTool) MITRETechniques() []string                 { return f.mitre }
+func (f *fakeTool) Run(context.Context, Args) (Result, error) { return f.runResponse, nil }
 
 func TestRegister_RoundTrip(t *testing.T) {
 	defer reset()

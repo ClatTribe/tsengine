@@ -533,17 +533,36 @@ machine (triage→investigate→chain→report), hard ≤12-tool catalog, budget
 caps + progress watchdog, render guard, OODA-shaped actionable rejections.
 Provider-agnostic `Client` (Anthropic default).
 
-**Locked per-asset catalog (≤12, ~10):**
+**Locked per-asset catalog (≤12, ~10) — BUILT (L2-1..L2-4):**
 ```
 advance_phase · get_finding · query_threat_intel · lookup_compliance_mapping ·
 dispatch_l2_probe · send_request · record_hypothesis · create_vulnerability_report ·
 update_finding · finish_scan
 ```
+Assembled by `BuildCatalog(Deps)`; external tools (threat-intel / compliance
+/ probe / send_request) are included only when their backing service is wired
+(a partial `Deps` yields a valid smaller catalog). `Catalog.Validate()`
+enforces the per-phase ≤12 cap, gated by a CI test on the full-width catalog.
 Depth comes from `dispatch_l2_probe` (re-fire a deterministic L1/registry
 tool via /replay) — NOT raw shell/browser. No `think` (reasoning isn't a
 tool, §2.7). `record_hypothesis` (durable plan, TodoWrite-style) is the one
-addition over the dropped `think`: it persists, so it's §2.7-legit and
-survives compaction.
+addition over the dropped `think`: it persists to `State.Hypotheses` and is
+re-surfaced in the compaction summary, so it's §2.7-legit and survives
+compaction.
+
+**Commit + verification model (L2-2/L2-4, built):**
+- `create_vulnerability_report` is **eager-emit** (available in every phase,
+  no gate) and **grounded at the tool boundary** — it must cite existing L1
+  finding ids (the "never invent" rule enforced in code, not just the
+  prompt). Reasoning rides as parameters (kill_chain, plain_english,
+  remediation); the report lands on `types.Finding.L2` (`*L2Report`).
+- Fresh reports emit at `pattern_match` strength. `update_finding` upgrades to
+  `verified` only once independent methods confirm it — **HIGH/CRITICAL need
+  ≥2 independent methods** (`verifyGate`), because a lone signature match is
+  the false-positive class L2 exists to filter.
+- **Auto-bypass:** after 3 rejections of the same phase-gated tool the loop
+  advances the phase and runs the call — the hard backstop for strix's 36×
+  finish_scan rejection loop.
 
 **Context engineering (Claude Code-informed, L2-0 built):** four-tier
 memory — hot (recent turns) / warm (compacted) / **crystal** (findings +
@@ -556,11 +575,11 @@ because crystal memory makes the narrative expendable. System prompt stays
 fixed (cache prefix). This is what lets the Lead do proper analysis on a
 1000-finding scan.
 
-**L2 waves:** L2-1 read-state (`get_finding`) · L2-2 commit tools +
-`record_hypothesis` + per-asset catalogs + CI cap test · L2-3
-threat-intel/compliance + `dispatch_l2_probe` + `send_request` · L2-4
-verification (pattern_match→verified, ≥2 methods) + auto-bypass · L2-5
-bench (detection_rate + completion_rate).
+**L2 waves:** L2-1 read-state (`get_finding`) ✓ · L2-2 commit tools
+(`create_vulnerability_report` / `update_finding` / `record_hypothesis`) + CI
+cap test ✓ · L2-3 threat-intel/compliance + `dispatch_l2_probe` +
+`send_request` ✓ · L2-4 verification (pattern_match→verified, ≥2 methods) +
+auto-bypass ✓ · **L2-5 bench (detection_rate + completion_rate) — next.**
 
 ### Roadmap: autonomous-exploiter track (ADR-gated, not default)
 

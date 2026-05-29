@@ -7,11 +7,11 @@ import "time"
 // dimension here is a hard cap so that can't happen. A zero value means
 // "no limit" for that dimension (use Defaults() for sane bounds).
 type Budget struct {
-	MaxCostUSD     float64       // hard $ cap
-	MaxTokens      int           // input+output token cap
-	MaxIterations  int           // agent-loop turn cap
-	MaxWallClock   time.Duration // wall-clock cap
-	MaxIdleTurns   int           // progress watchdog: turns with no progress before force-report
+	MaxCostUSD    float64       // hard $ cap
+	MaxTokens     int           // input+output token cap
+	MaxIterations int           // agent-loop turn cap
+	MaxWallClock  time.Duration // wall-clock cap
+	MaxIdleTurns  int           // progress watchdog: turns with no progress before force-report
 
 	// Compaction (Claude Code-style auto-compact): when the last turn's
 	// context crosses CompactAtFraction of the model window, the loop
@@ -67,14 +67,14 @@ func (b *Budget) idleTurns() int { return b.iterations - b.lastProg }
 type StopReason string
 
 const (
-	StopFinished    StopReason = "finished"      // finish_scan fired
-	StopBudgetCost  StopReason = "budget_cost"
-	StopBudgetToks  StopReason = "budget_tokens"
-	StopMaxIters    StopReason = "max_iterations"
-	StopWallClock   StopReason = "wall_clock"
-	StopStalled     StopReason = "stalled"        // watchdog: no progress
-	StopCancelled   StopReason = "cancelled"      // ctx cancelled
-	StopRunning     StopReason = ""               // not stopped yet
+	StopFinished   StopReason = "finished" // finish_scan fired
+	StopBudgetCost StopReason = "budget_cost"
+	StopBudgetToks StopReason = "budget_tokens"
+	StopMaxIters   StopReason = "max_iterations"
+	StopWallClock  StopReason = "wall_clock"
+	StopStalled    StopReason = "stalled"   // watchdog: no progress
+	StopCancelled  StopReason = "cancelled" // ctx cancelled
+	StopRunning    StopReason = ""          // not stopped yet
 )
 
 // exceeded returns the StopReason if any HARD bound is hit, else

@@ -23,9 +23,9 @@ type jsonlEvent struct {
 		Description    string   `json:"description"`
 		Tags           []string `json:"tags"`
 		Classification struct {
-			CWEID   []string `json:"cwe-id"`
-			CVEID   []string `json:"cve-id"`
-			CVSSScore float64 `json:"cvss-score"`
+			CWEID     []string `json:"cwe-id"`
+			CVEID     []string `json:"cve-id"`
+			CVSSScore float64  `json:"cvss-score"`
 		} `json:"classification"`
 	} `json:"info"`
 }

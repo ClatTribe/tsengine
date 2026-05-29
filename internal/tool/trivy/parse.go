@@ -17,12 +17,12 @@ type report struct {
 }
 
 type result struct {
-	Target          string          `json:"Target"`
-	Class           string          `json:"Class"`
-	Type            string          `json:"Type"`
-	Vulnerabilities []vulnerability `json:"Vulnerabilities"`
-	Misconfigurations []misconfig   `json:"Misconfigurations"`
-	Secrets         []secret        `json:"Secrets"`
+	Target            string          `json:"Target"`
+	Class             string          `json:"Class"`
+	Type              string          `json:"Type"`
+	Vulnerabilities   []vulnerability `json:"Vulnerabilities"`
+	Misconfigurations []misconfig     `json:"Misconfigurations"`
+	Secrets           []secret        `json:"Secrets"`
 }
 
 type vulnerability struct {
@@ -115,10 +115,10 @@ func vulnToFinding(v vulnerability, endpoint string) types.SandboxEmittedFinding
 		RawOutput:       raw,
 		MITRETechniques: []string{"T1195.002"}, // supply-chain-via-software-deps
 		ToolArgs: map[string]string{
-			"pkg":              v.PkgName,
+			"pkg":               v.PkgName,
 			"installed_version": v.InstalledVersion,
-			"fixed_version":    v.FixedVersion,
-			"primary_url":      v.PrimaryURL,
+			"fixed_version":     v.FixedVersion,
+			"primary_url":       v.PrimaryURL,
 		},
 	}
 }

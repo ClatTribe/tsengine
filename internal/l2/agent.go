@@ -13,6 +13,13 @@ import (
 // the full payload lives in run state / the dashboard, not the transcript.
 const maxToolResultBytes = 2048
 
+// autoBypassThreshold is how many times the Lead may call the SAME
+// phase-gated tool and be rejected before the loop advances the phase on its
+// behalf and runs the call. The hard backstop for strix's 36× finish_scan
+// rejection loop: the OODA-shaped rejection TELLS the model to advance_phase;
+// if it ignores that this many times, we do it for it rather than spin.
+const autoBypassThreshold = 3
+
 // Agent is the single L2 Lead. It runs a ReAct loop (generate → act →
 // observe) over a phase-gated, ≤12-tool catalog, bounded by a Budget and a
 // progress watchdog. One Agent per scan.
@@ -50,6 +57,9 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 	history := []Message{{Role: RoleUser, Content: "Begin triage of the L1 findings."}}
 	a.budget.start()
 
+	// rejected tracks per-tool phase-gate rejections for the auto-bypass
+	// backstop. Reset for a tool when it finally runs (consecutive intent).
+	rejected := map[string]int{}
 	compactions := 0
 	stop := StopRunning
 	for {
@@ -95,7 +105,7 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 
 		phaseBefore, findingsBefore := st.Phase, len(st.Findings)
 		for _, call := range resp.ToolCalls {
-			res := a.dispatch(ctx, call, st)
+			res := a.dispatch(ctx, call, st, rejected)
 			history = append(history, Message{
 				Role:       RoleTool,
 				ToolCallID: call.ID,
@@ -139,15 +149,37 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 
 // dispatch executes one tool call against state, applying phase gating with
 // an OODA-shaped, ACTIONABLE rejection (strix's 36× finish_scan loop came
-// from rejections that explained but didn't tell the model what to do).
-func (a *Agent) dispatch(ctx context.Context, call ToolCall, st *State) ToolResult {
+// from rejections that explained but didn't tell the model what to do). After
+// autoBypassThreshold rejections of the same gated tool, it advances the
+// phase on the model's behalf and runs the call — the hard backstop so a
+// stubborn model can never spin forever on a gate.
+func (a *Agent) dispatch(ctx context.Context, call ToolCall, st *State, rejected map[string]int) ToolResult {
 	tool, ok := a.catalog.find(call.Name)
 	if !ok {
 		return ToolResult{Err: true, Content: fmt.Sprintf("unknown tool %q — use only the tools in your catalog", call.Name)}
 	}
 	if !allowedInPhase(tool.Phases, st.Phase) {
+		rejected[call.Name]++
+		if rejected[call.Name] >= autoBypassThreshold {
+			rejected[call.Name] = 0
+			target := tool.Phases[0]
+			for phaseIndex(st.Phase) < phaseIndex(target) {
+				st.Phase = nextPhase(st.Phase)
+			}
+			a.budget.markProgress()
+			res := a.runHandler(ctx, tool, call, st)
+			res.Content = fmt.Sprintf("[auto-advanced to phase %s after %d rejected attempts] %s",
+				st.Phase, autoBypassThreshold, res.Content)
+			return res
+		}
 		return ToolResult{Err: true, Content: rejectMsg(call.Name, tool.Phases, st.Phase)}
 	}
+	rejected[call.Name] = 0 // the tool ran — reset its streak
+	return a.runHandler(ctx, tool, call, st)
+}
+
+// runHandler invokes a tool's handler, mapping a Go error to an error result.
+func (a *Agent) runHandler(ctx context.Context, tool Tool, call ToolCall, st *State) ToolResult {
 	res, err := tool.Handler(ctx, call.Args, st)
 	if err != nil {
 		return ToolResult{Err: true, Content: "tool error: " + err.Error()}

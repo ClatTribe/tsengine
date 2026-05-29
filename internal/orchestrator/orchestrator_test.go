@@ -15,9 +15,9 @@ import (
 
 type mockTool struct{ name string }
 
-func (m *mockTool) Name() string                                    { return m.name }
-func (*mockTool) SandboxExecution() bool                            { return true }
-func (*mockTool) MITRETechniques() []string                         { return nil }
+func (m *mockTool) Name() string                                      { return m.name }
+func (*mockTool) SandboxExecution() bool                              { return true }
+func (*mockTool) MITRETechniques() []string                           { return nil }
 func (*mockTool) Run(context.Context, tool.Args) (tool.Result, error) { return tool.Result{}, nil }
 
 type mockHandler struct {
@@ -41,9 +41,9 @@ func (h *mockHandler) Filter(_ context.Context, _ types.Asset, in []asset.Dispat
 func (h *mockHandler) Normalize([]tool.Result) []types.Finding { return h.normalizes }
 
 type mockDispatcher struct {
-	calls       atomic.Int64
+	calls         atomic.Int64
 	resultsByTool map[string]tool.Result
-	errByTool   map[string]error
+	errByTool     map[string]error
 }
 
 func (m *mockDispatcher) Execute(_ context.Context, name string, _ tool.Args) (tool.Result, error) {

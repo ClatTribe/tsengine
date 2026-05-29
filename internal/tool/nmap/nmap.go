@@ -22,8 +22,8 @@ type Nmap struct{}
 // New constructs an Nmap wrapper.
 func New() *Nmap { return &Nmap{} }
 
-func (*Nmap) Name() string             { return "nmap" }
-func (*Nmap) SandboxExecution() bool   { return true }
+func (*Nmap) Name() string              { return "nmap" }
+func (*Nmap) SandboxExecution() bool    { return true }
 func (*Nmap) MITRETechniques() []string { return []string{"T1046"} }
 
 // Run invokes nmap with XML output.

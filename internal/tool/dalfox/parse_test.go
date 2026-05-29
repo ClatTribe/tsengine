@@ -60,13 +60,13 @@ func TestParseAny_EmptyBlob(t *testing.T) {
 
 func TestNormalizeSeverity_DalfoxValues(t *testing.T) {
 	cases := map[string]types.Severity{
-		"High":     types.SeverityHigh,
-		"HIGH":     types.SeverityHigh,
-		"Medium":   types.SeverityMedium,
-		"Low":      types.SeverityLow,
-		"Info":     types.SeverityInfo,
-		"":         types.SeverityInfo,
-		"weird":    types.SeverityInfo,
+		"High":   types.SeverityHigh,
+		"HIGH":   types.SeverityHigh,
+		"Medium": types.SeverityMedium,
+		"Low":    types.SeverityLow,
+		"Info":   types.SeverityInfo,
+		"":       types.SeverityInfo,
+		"weird":  types.SeverityInfo,
 	}
 	for in, want := range cases {
 		if got := normalizeSeverity(in); got != want {

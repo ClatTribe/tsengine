@@ -24,8 +24,8 @@ type Trivy struct{}
 // New constructs a Trivy wrapper.
 func New() *Trivy { return &Trivy{} }
 
-func (*Trivy) Name() string             { return "trivy" }
-func (*Trivy) SandboxExecution() bool   { return true }
+func (*Trivy) Name() string           { return "trivy" }
+func (*Trivy) SandboxExecution() bool { return true }
 func (*Trivy) MITRETechniques() []string {
 	return []string{"T1195.002", "T1610", "T1552.001"}
 }

@@ -27,11 +27,11 @@ type ThreatIntel struct {
 }
 
 type corpusEntry struct {
-	CVSS       float64            `json:"cvss"`
-	KEV        *types.KEVStatus   `json:"kev"`
-	EPSS       *types.EPSSScore   `json:"epss"`
-	Advisories []string           `json:"advisories"`
-	Exploits   []string           `json:"exploits"`
+	CVSS       float64          `json:"cvss"`
+	KEV        *types.KEVStatus `json:"kev"`
+	EPSS       *types.EPSSScore `json:"epss"`
+	Advisories []string         `json:"advisories"`
+	Exploits   []string         `json:"exploits"`
 }
 
 // cvePattern extracts a CVE id from a rule_id like "trivy::CVE-2021-42374".

@@ -63,9 +63,9 @@ type osvReport struct {
 				Ecosystem string `json:"ecosystem"`
 			} `json:"package"`
 			Vulnerabilities []struct {
-				ID       string   `json:"id"`
-				Summary  string   `json:"summary"`
-				Aliases  []string `json:"aliases"`
+				ID      string   `json:"id"`
+				Summary string   `json:"summary"`
+				Aliases []string `json:"aliases"`
 			} `json:"vulnerabilities"`
 		} `json:"packages"`
 	} `json:"results"`

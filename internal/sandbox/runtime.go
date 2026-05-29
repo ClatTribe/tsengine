@@ -111,7 +111,9 @@ func Destroy(ctx context.Context, info *Info) error {
 		return nil
 	}
 	// `docker run --rm` removes on stop; stop is sufficient.
-	out, err := exec.CommandContext(ctx, "docker", "stop", "-t", "2", info.ContainerID).CombinedOutput()
+	// gosec G204: binary is literal "docker"; ContainerID was produced by our
+	// own `docker run` and is not user-controlled.
+	out, err := exec.CommandContext(ctx, "docker", "stop", "-t", "2", info.ContainerID).CombinedOutput() //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("sandbox.Destroy: %w (%s)", err, strings.TrimSpace(string(out)))
 	}

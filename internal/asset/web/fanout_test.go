@@ -14,9 +14,9 @@ import (
 func TestPlanFanout_ListToolsOnceParamToolsPerURL(t *testing.T) {
 	h := NewHandler()
 	surface := []string{
-		"https://x/",            // no params
-		"https://x/search?q=1",  // params → dalfox
-		"https://x/p?id=2",      // params → dalfox
+		"https://x/",           // no params
+		"https://x/search?q=1", // params → dalfox
+		"https://x/p?id=2",     // params → dalfox
 	}
 	out := h.PlanFanout(types.Asset{Type: types.AssetWebApplication, Target: "https://x/"}, surface)
 

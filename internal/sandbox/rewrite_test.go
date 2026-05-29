@@ -36,12 +36,12 @@ func TestRewriteLoopbackArgs_RewritesKnownURLKeys(t *testing.T) {
 
 func TestRewriteOneLoopback(t *testing.T) {
 	cases := map[string]string{
-		"http://localhost:8098/x":  "http://host.docker.internal:8098/x",
-		"https://127.0.0.1/y":      "https://host.docker.internal/y",
-		"http://0.0.0.0:3000":      "http://host.docker.internal:3000",
-		"localhost:8080":           "host.docker.internal:8080",
-		"127.0.0.1":                "host.docker.internal",
-		"localhost":                "host.docker.internal",
+		"http://localhost:8098/x": "http://host.docker.internal:8098/x",
+		"https://127.0.0.1/y":     "https://host.docker.internal/y",
+		"http://0.0.0.0:3000":     "http://host.docker.internal:3000",
+		"localhost:8080":          "host.docker.internal:8080",
+		"127.0.0.1":               "host.docker.internal",
+		"localhost":               "host.docker.internal",
 		// Must NOT rewrite a non-loopback host that merely contains the token.
 		"http://localhosting.example.com/z": "http://localhosting.example.com/z",
 		"http://example.com/localhost":      "http://example.com/localhost",

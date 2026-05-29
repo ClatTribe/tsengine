@@ -10,15 +10,15 @@ func TestFilterSurface_DropsAndDedupes(t *testing.T) {
 	target := types.Asset{Type: types.AssetWebApplication, Target: "https://x"}
 	surface := []string{
 		"https://x/",
-		"https://x/style.css",       // static → drop
-		"https://x/app.bundle.js",   // bundled JS → drop
-		"https://x/items/1",         // shape /items/:int
-		"https://x/items/2",         // dup shape → drop
-		"https://x/items/3",         // dup shape → drop
+		"https://x/style.css",         // static → drop
+		"https://x/app.bundle.js",     // bundled JS → drop
+		"https://x/items/1",           // shape /items/:int
+		"https://x/items/2",           // dup shape → drop
+		"https://x/items/3",           // dup shape → drop
 		"https://x/admin/delete-user", // destructive → drop
-		"https://x/logout",          // destructive → drop
-		"https://attacker.com/evil", // off-scope → drop
-		"https://x/search?q=hi",     // kept
+		"https://x/logout",            // destructive → drop
+		"https://attacker.com/evil",   // off-scope → drop
+		"https://x/search?q=hi",       // kept
 	}
 	got := filterSurface(target, surface)
 	// survivors: /, /items/1 (rep), /search?q=hi → 3

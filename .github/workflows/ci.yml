@@ -32,9 +32,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Pin Go to 1.24 specifically for the lint job: golangci-lint's "latest"
+      # release binary is built with go1.24 and can't typecheck the stdlib of a
+      # newer Go runtime (it chokes on forward-compat shims like
+      # x/crypto/.../fips140only_go1.26.go). Test/vet/vulncheck still use
+      # 'stable'.
       - uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          go-version: '1.24'
       - uses: golangci/golangci-lint-action@v6
         with:
           version: latest

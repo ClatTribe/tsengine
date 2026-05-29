@@ -59,15 +59,15 @@ type service struct {
 // 4) will refine these; for now we surface them at medium so the
 // security engineer notices.
 var highRiskServices = map[string]struct{}{
-	"telnet":  {},
-	"ftp":     {},
-	"rlogin":  {},
-	"rsh":     {},
-	"tftp":    {},
-	"vnc":     {},
-	"redis":   {},
-	"memcached": {},
-	"mongodb": {},
+	"telnet":        {},
+	"ftp":           {},
+	"rlogin":        {},
+	"rsh":           {},
+	"tftp":          {},
+	"vnc":           {},
+	"redis":         {},
+	"memcached":     {},
+	"mongodb":       {},
 	"elasticsearch": {},
 }
 

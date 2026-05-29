@@ -56,10 +56,10 @@ type report struct {
 
 type match struct {
 	Vulnerability struct {
-		ID         string   `json:"id"`
-		Severity   string   `json:"severity"`
-		Description string  `json:"description"`
-		URLs       []string `json:"urls"`
+		ID          string   `json:"id"`
+		Severity    string   `json:"severity"`
+		Description string   `json:"description"`
+		URLs        []string `json:"urls"`
 	} `json:"vulnerability"`
 	Artifact struct {
 		Name    string `json:"name"`
