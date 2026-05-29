@@ -72,6 +72,15 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	if c, ok := args["cookie"].(string); ok && c != "" {
 		cliArgs = append(cliArgs, "-H", "Cookie: "+c)
 	}
+	// DAST/OAST mode: enable nuclei's fuzzing templates, which use the
+	// built-in interactsh client for OUT-OF-BAND (blind) detection —
+	// SSRF/XXE/RCE/blind-SQLi that produce no in-band response. This is
+	// the OSS OAST path; the escalation engine turns it on for
+	// param-bearing URLs (CLAUDE.md §5.3). It's expensive, so it's never
+	// the default.
+	if d, ok := args["dast"].(bool); ok && d {
+		cliArgs = append(cliArgs, "-dast")
+	}
 	if rl, ok := args["rate_limit"].(int); ok && rl > 0 {
 		cliArgs = append(cliArgs, "-rl", fmt.Sprintf("%d", rl))
 	}
@@ -99,7 +108,7 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 // KnownArgs declares the recognized arg keys (tool.ArgSpec). nuclei reads
 // "targets" via tool.TargetList in addition to a single "target".
 func (*Nuclei) KnownArgs() []string {
-	return []string{"target", "targets", "templates", "tags", "cookie", "rate_limit"}
+	return []string{"target", "targets", "templates", "tags", "cookie", "rate_limit", "dast"}
 }
 
 func init() {

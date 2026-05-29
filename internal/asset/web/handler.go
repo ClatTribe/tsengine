@@ -151,6 +151,65 @@ func hasQueryParams(rawURL string) bool {
 	return u.RawQuery != ""
 }
 
+// thinSurfaceThreshold: at or below this many discovered URLs, the crawl
+// likely missed hidden content, so content discovery (ffuf) is worth it.
+const thinSurfaceThreshold = 5
+
+// loginPathHints mark a likely authentication endpoint (default-creds
+// candidate).
+var loginPathHints = []string{"/login", "/signin", "/admin", "/wp-login", "/auth", "/account/login"}
+
+func isLoginURL(rawURL string) bool {
+	low := strings.ToLower(rawURL)
+	for _, h := range loginPathHints {
+		if strings.Contains(low, h) {
+			return true
+		}
+	}
+	return false
+}
+
+// PlanEscalation is the web conditional-depth stage (asset.EscalationPlanner).
+// Depth tools fire ONLY where a signal points, never blanket:
+//
+//   - param-bearing URLs → nuclei DAST/OAST (blind SSRF/XXE/RCE via
+//     interactsh) ONCE over the param list (list mode, not per-URL).
+//   - login URLs → nuclei `default-logins` templates ONCE over them.
+//   - a thin crawl surface → ffuf content discovery on the target root
+//     (find hidden paths katana's link-following missed).
+func (h *Handler) PlanEscalation(target types.Asset, surface []string, _ []types.Finding) []asset.Dispatch {
+	var out []asset.Dispatch
+	var paramURLs, loginURLs []string
+	for _, u := range surface {
+		if hasQueryParams(u) {
+			paramURLs = append(paramURLs, u)
+		}
+		if isLoginURL(u) {
+			loginURLs = append(loginURLs, u)
+		}
+	}
+
+	if nuc, ok := tool.Get("nuclei"); ok {
+		if len(paramURLs) > 0 {
+			out = append(out, asset.Dispatch{Tool: nuc, Args: tool.Args{
+				"targets": strings.Join(paramURLs, "\n"), "dast": true,
+			}, EscalatedFrom: "param→oast(nuclei-dast)"})
+		}
+		if len(loginURLs) > 0 {
+			out = append(out, asset.Dispatch{Tool: nuc, Args: tool.Args{
+				"targets": strings.Join(loginURLs, "\n"), "tags": "default-logins",
+			}, EscalatedFrom: "login→default-logins"})
+		}
+	}
+	if len(surface) <= thinSurfaceThreshold {
+		if ff, ok := tool.Get("ffuf"); ok {
+			out = append(out, asset.Dispatch{Tool: ff, Args: tool.Args{"target": target.Target},
+				EscalatedFrom: "thin-surface→ffuf"})
+		}
+	}
+	return out
+}
+
 // Filter applies Q5.34-style filtration rules (URL shape dedup, scope,
 // static-asset drop, login protection, per-URL tool routing). See
 // filter.go for the rule implementations.

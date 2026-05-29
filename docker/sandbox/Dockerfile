@@ -76,6 +76,10 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go install github.com/BishopFox/cloudfox@latest
 
+# ffuf — web content discovery (web escalation, E1). Go, CGO-free.
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go install github.com/ffuf/ffuf/v2@latest
+
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04
 
@@ -88,7 +92,7 @@ ARG NUCLEI_VERSION=3.3.7
 # repo for reliable, signed builds).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates curl unzip gnupg lsb-release nmap libpcap0.8 \
+        ca-certificates curl unzip gnupg lsb-release nmap libpcap0.8 hydra seclists \
     && curl -fL https://aquasecurity.github.io/trivy-repo/deb/public.key \
         | gpg --dearmor -o /usr/share/keyrings/trivy.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
@@ -125,6 +129,7 @@ COPY --from=builder /go/bin/naabu /usr/local/bin/naabu
 COPY --from=builder /go/bin/amass /usr/local/bin/amass
 COPY --from=builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /go/bin/cloudfox /usr/local/bin/cloudfox
+COPY --from=builder /go/bin/ffuf /usr/local/bin/ffuf
 
 # syft (SBOM) + hadolint (Dockerfile lint) via release artifacts. syft's
 # install script is anchore's recommended path; hadolint ships per-arch
