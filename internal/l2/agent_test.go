@@ -15,7 +15,6 @@ func webTarget() types.Asset {
 // ONLY in the report phase (phase gating).
 func TestAgent_DrivesToFinish(t *testing.T) {
 	mc := &MockClient{ModelName: "mock", Script: []Response{
-		scriptCall("think", map[string]any{"thought": "triaging"}, 0.001),
 		scriptCall("advance_phase", nil, 0.001), // triage→investigate
 		scriptCall("advance_phase", nil, 0.001), // investigate→chain
 		scriptCall("advance_phase", nil, 0.001), // chain→report
@@ -39,8 +38,8 @@ func TestAgent_DrivesToFinish(t *testing.T) {
 	if hasTool(mc.ToolSets[0], "finish_scan") {
 		t.Error("finish_scan must not be exposed in the triage phase")
 	}
-	if !hasTool(mc.ToolSets[0], "think") || !hasTool(mc.ToolSets[0], "advance_phase") {
-		t.Error("triage should expose think + advance_phase")
+	if !hasTool(mc.ToolSets[0], "advance_phase") {
+		t.Error("triage should expose advance_phase")
 	}
 	// The finish turn (last) is in the report phase → finish_scan exposed.
 	if !hasTool(mc.ToolSets[len(mc.ToolSets)-1], "finish_scan") {
@@ -48,13 +47,13 @@ func TestAgent_DrivesToFinish(t *testing.T) {
 	}
 }
 
-// A model that only ever calls think (no progress) is force-advanced to
-// report by the watchdog, then stopped (StopStalled) — guaranteed
+// A model that calls advance_phase forever — once at report it's a no-op
+// (no progress) — is stopped by the watchdog (StopStalled): guaranteed
 // termination on a stuck model.
 func TestAgent_WatchdogStopsStuckModel(t *testing.T) {
 	script := make([]Response, 0, 20)
 	for i := 0; i < 20; i++ {
-		script = append(script, scriptCall("think", map[string]any{"thought": "..."}, 0.0))
+		script = append(script, scriptCall("advance_phase", nil, 0.0))
 	}
 	b := DefaultBudget()
 	b.MaxIdleTurns = 3
@@ -76,7 +75,7 @@ func TestAgent_WatchdogStopsStuckModel(t *testing.T) {
 func TestAgent_BudgetCostCap(t *testing.T) {
 	script := make([]Response, 0, 10)
 	for i := 0; i < 10; i++ {
-		script = append(script, scriptCall("think", map[string]any{"thought": "x"}, 0.5))
+		script = append(script, scriptCall("advance_phase", nil, 0.5))
 	}
 	b := DefaultBudget()
 	b.MaxCostUSD = 1.0
@@ -92,7 +91,7 @@ func TestAgent_BudgetCostCap(t *testing.T) {
 func TestAgent_ContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	a, _ := New(&MockClient{Script: []Response{scriptCall("think", nil, 0)}}, CoreTools(), DefaultBudget())
+	a, _ := New(&MockClient{Script: []Response{scriptCall("advance_phase", nil, 0)}}, CoreTools(), DefaultBudget())
 	out, _ := a.Run(ctx, webTarget(), nil)
 	if out.StopReason != StopCancelled {
 		t.Errorf("stop = %q, want cancelled", out.StopReason)
