@@ -53,6 +53,46 @@ func applyFilter(target types.Asset, in []asset.Dispatch) []asset.Dispatch {
 	return out
 }
 
+// filterSurface reduces the recon-discovered URL set BEFORE PlanFanout
+// builds dispatches, so both the list-mode tools (nuclei/httpx over
+// args["targets"]) and the per-URL tools (dalfox) operate on a clean
+// surface. This is the "filter the URL set" half of the pipeline;
+// applyFilter handles the "route tools to URLs" half (login protection).
+//
+// Order: scope → static-asset drop → destructive-path drop → shape-dedup.
+// Shape-dedup runs last so it collapses what survives the content filters.
+func filterSurface(target types.Asset, surface []string) []string {
+	scope := compileScope(target)
+	kept := make([]string, 0, len(surface))
+	for _, u := range surface {
+		if !scope.allow(u) {
+			continue
+		}
+		if isStaticAsset(u) {
+			continue
+		}
+		if isDestructivePath(u) {
+			continue
+		}
+		kept = append(kept, u)
+	}
+	return dedupeByShape(kept)
+}
+
+// destructivePathPattern catches state-mutating endpoints that must
+// never be auto-scanned — strix's "/admin/delete-*, /logout" class.
+// Dropped for ALL tools (not just destructive ones): firing any scanner
+// at a delete/logout endpoint risks data loss or session teardown.
+var destructivePathPattern = regexp.MustCompile(`(?i)/(delete|remove|destroy|drop|logout|signout|sign-out)(/|-|_|\?|$)`)
+
+func isDestructivePath(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return destructivePathPattern.MatchString(u.Path)
+}
+
 // targetURL extracts the URL the dispatch is aimed at, if any. Tools
 // without a target arg return "" so callers can decide to keep them.
 func targetURL(d asset.Dispatch) string {
@@ -163,18 +203,12 @@ func toolApplies(toolName, rawURL string) bool {
 		}
 	}
 
-	// dalfox only makes sense on URLs that have at least one query parameter
-	// (so it has somewhere to inject). Pre-Phase-2.x recon, the orchestrator
-	// dispatches against the user-provided target as-is; respect that — we
-	// don't gate dalfox on params unless the URL has a path/query at all.
+	// dalfox needs an injection point — a query parameter. Gate it on
+	// params so the fan-out never spends a dalfox run on a param-less URL
+	// (PlanFanout already only emits dalfox for param URLs; this is the
+	// belt-and-suspenders guard for any other code path).
 	if toolName == "dalfox" {
-		u, err := url.Parse(rawURL)
-		if err != nil {
-			return true
-		}
-		// Always allow if URL has a query (params present). Otherwise
-		// allow only if it's the bare target (let dalfox try its discovery).
-		_ = u
+		return hasQueryParams(rawURL)
 	}
 	return true
 }

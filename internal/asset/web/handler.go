@@ -67,7 +67,12 @@ func (h *Handler) Recon() []tool.Tool {
 //
 // Tools other than these three (future sqlmap, ffuf, …) default to
 // per-URL dispatch; the filter decides which URLs they apply to.
-func (h *Handler) PlanFanout(_ types.Asset, surface []string) []asset.Dispatch {
+func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispatch {
+	// Reduce the surface first: scope, static-asset + destructive-path
+	// drops, then shape-dedup (so /items/1..N collapse to one). Both the
+	// list-mode tools and the per-URL tools fan out over this clean set.
+	surface = filterSurface(target, surface)
+
 	listArg := strings.Join(surface, "\n")
 	var out []asset.Dispatch
 
