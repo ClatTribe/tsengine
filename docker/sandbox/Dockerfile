@@ -109,8 +109,8 @@ RUN apt-get update \
 # (cloud_account posture), sqlmap (web SQLi specialist). All Python;
 # installed system-wide so the non-root runtime user can invoke them.
 RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite schemathesis inql \
-    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite schemathesis inql
+        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite schemathesis inql mobsfscan \
+    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite schemathesis inql mobsfscan
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
@@ -144,6 +144,18 @@ RUN mkdir -p /usr/share/kiterunner \
     && tar -xzf /tmp/routes-small.kite.tar.gz -C /usr/share/kiterunner \
     && rm -f /tmp/routes-small.kite.tar.gz \
     || echo "kiterunner wordlist fetch failed (non-fatal; pass an explicit wordlist arg)"
+
+# CodeQL CLI + query bundle (repository escalation, E3 — interprocedural
+# taint). Large (~hundreds of MB); escalation-only, fired only when semgrep
+# flags an injection candidate. Pinned bundle for reproducibility (§10).
+ARG CODEQL_VERSION=2.20.3
+RUN CQ_ARCH="$([ "${TARGETARCH}" = "amd64" ] && echo linux64 || echo linux64)" \
+    && curl -fL -o /tmp/codeql.tar.gz \
+        "https://github.com/github/codeql-cli-binaries/releases/download/v${CODEQL_VERSION}/codeql-${CQ_ARCH}.tar.gz" \
+    && tar -xzf /tmp/codeql.tar.gz -C /opt \
+    && ln -s /opt/codeql/codeql /usr/local/bin/codeql \
+    && rm -f /tmp/codeql.tar.gz \
+    || echo "codeql fetch failed (non-fatal; codeql escalation will degrade)"
 
 # syft (SBOM) + hadolint (Dockerfile lint) via release artifacts. syft's
 # install script is anchore's recommended path; hadolint ships per-arch
