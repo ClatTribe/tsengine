@@ -1,0 +1,42 @@
+# CIS AWS Foundations Benchmark — ground truth for the cloud_account bench.
+#
+# Each row is one CIS control: the control id, its CIS section, the prowler
+# check_id that detects it, and whether the SEEDED mock account violates it.
+# "violated=true" = the account is misconfigured so the engine SHOULD flag it
+# (counts toward recall); "violated=false" = the control HOLDS so the engine
+# must NOT flag it (a flag here is a false positive).
+#
+# This is a SAMPLE posture (a deliberately-misconfigured account with a few
+# controls left correct). Replace the rows with the exact check_ids your
+# seeded mock account violates before citing the recall number — the scorer
+# is SUT-agnostic, so only this file changes per account.
+#
+# Format: cis_control,section,check_id,violated
+#
+# --- IAM (CIS 1.x) ---
+1.4,iam,iam_no_root_access_key,true
+1.5,iam,iam_root_mfa_enabled,true
+1.8,iam,iam_password_policy_minimum_length_14,true
+1.9,iam,iam_password_policy_reuse_24,true
+1.10,iam,iam_user_mfa_enabled_console_access,true
+1.14,iam,iam_rotate_access_key_90_days,true
+1.16,iam,iam_aws_attached_policy_no_administrative_privileges,false
+# --- Storage (CIS 2.x) ---
+2.1.1,storage,s3_bucket_default_encryption,true
+2.1.2,storage,s3_bucket_secure_transport_policy,true
+2.1.5,storage,s3_account_level_public_access_blocks,true
+2.2.1,storage,ec2_ebs_default_encryption,true
+# --- Logging (CIS 3.x) ---
+3.1,logging,cloudtrail_multi_region_enabled,true
+3.2,logging,cloudtrail_log_file_validation_enabled,true
+3.3,logging,cloudtrail_logs_s3_bucket_is_not_publicly_accessible,true
+3.7,logging,cloudtrail_kms_encryption_enabled,true
+3.9,logging,vpc_flow_logs_enabled,true
+# --- Monitoring (CIS 4.x) ---
+4.1,monitoring,cloudwatch_log_metric_filter_unauthorized_api_calls,true
+4.3,monitoring,cloudwatch_log_metric_filter_root_usage,true
+4.16,monitoring,securityhub_enabled,false
+# --- Networking (CIS 5.x) ---
+5.2,networking,ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_22,true
+5.3,networking,ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_3389,true
+5.4,networking,vpc_default_security_group_closed,false

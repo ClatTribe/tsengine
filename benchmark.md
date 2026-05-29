@@ -48,7 +48,7 @@ harness ready, target not wired; **✗ none** = no fixture.
 | **container_image** | CVE / misconfig | must-find CVE set (nginx:1.14) | Trivy / Snyk / Anchore (self) | ✅ `nginx` images | **✓ live** — recall 1.0 on must-find CVEs, 0 FP on clean alpine |
 | **ip_address** | network / services | vulnerable-services host | Tenable / Qualys / Rapid7 (no scorecard) | ⚠ compose (ex-strix `vulnerable-services`) | **⚠ stub** — naabu open-port must-find |
 | **domain** | recon breadth | subdomain-enum corpus | subfinder vs amass (published rates) | ✗ (needs a target domain) | **⚠ stub** — subdomain-found must-find |
-| **cloud_account** | CSPM / CIS | CIS Benchmark vs mock AWS | Prowler / scout-suite (self) · CIS AWS Foundations recall | ✗ **strix had none** (tsengine-only asset) | **⚠ stub** — prowler/scoutsuite wrapped; needs seeded mock AWS |
+| **cloud_account** | CSPM / CIS | CIS Benchmark vs mock AWS | Prowler / scout-suite (self) · CIS AWS Foundations recall | ✗ **strix had none** (tsengine-only asset) | **✅ scorer-ready** — `tsbench cloud` + per-CIS-section recall scorer (`internal/bench/cloud.go`) + ground-truth CSV (`fixtures/cloud/baseline/expected-controls.csv`, 22 controls × 5 sections). Blocked only on a seeded mock account (no code gap); creds forwarded short-lived via env, never on disk |
 
 **Status: 2 of 7 live** (container_image; **repository/SAST — Youden 38.67%**);
 web (WAVSEP) is scorer-ready but the full-corpus fan-out times out at 50m
