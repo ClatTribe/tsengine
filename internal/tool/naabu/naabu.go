@@ -53,7 +53,13 @@ func (*Naabu) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 			return tool.Result{}, fmt.Errorf("naabu: exec: %w", err)
 		}
 	}
-	return tool.Result{Output: string(stdout), Findings: parse(stdout)}, nil
+	findings, surface := parse(stdout)
+	// DiscoveredURLs is the recon channel: the open host:port endpoints
+	// become the ip_address scan surface that PlanFanout routes per-port
+	// (nuclei tag routing, deep nmap). Open ports are ALSO emitted as
+	// findings (above) for the dashboard — recon and detection both keep
+	// their copy (CLAUDE.md §5.1).
+	return tool.Result{Output: string(stdout), Findings: findings, DiscoveredURLs: surface}, nil
 }
 
 type event struct {
@@ -62,11 +68,15 @@ type event struct {
 	Port int    `json:"port"`
 }
 
-func parse(blob []byte) []types.SandboxEmittedFinding {
+// parse returns the open-port findings AND the host:port surface for the
+// recon channel (deduped, deterministic order).
+func parse(blob []byte) ([]types.SandboxEmittedFinding, []string) {
 	if len(blob) == 0 {
-		return nil
+		return nil, nil
 	}
 	var out []types.SandboxEmittedFinding
+	var surface []string
+	seen := map[string]struct{}{}
 	sc := bufio.NewScanner(bytes.NewReader(blob))
 	sc.Buffer(make([]byte, 0, 8*1024), 256*1024)
 	for sc.Scan() {
@@ -82,20 +92,25 @@ func parse(blob []byte) []types.SandboxEmittedFinding {
 		if host == "" {
 			host = ev.Host
 		}
+		endpoint := fmt.Sprintf("%s:%d", host, ev.Port)
 		raw := make([]byte, len(line))
 		copy(raw, line)
 		out = append(out, types.SandboxEmittedFinding{
 			RuleID:          "naabu::open-port",
 			Tool:            "naabu",
 			Severity:        types.SeverityInfo,
-			Endpoint:        fmt.Sprintf("%s:%d", host, ev.Port),
+			Endpoint:        endpoint,
 			Title:           fmt.Sprintf("Open port %d on %s", ev.Port, host),
 			RawOutput:       raw,
 			MITRETechniques: []string{"T1046"},
 			ToolArgs:        map[string]string{"port": fmt.Sprintf("%d", ev.Port)},
 		})
+		if _, dup := seen[endpoint]; !dup {
+			seen[endpoint] = struct{}{}
+			surface = append(surface, endpoint)
+		}
 	}
-	return out
+	return out, surface
 }
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec).

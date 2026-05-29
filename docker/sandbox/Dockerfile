@@ -52,6 +52,17 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/anchore/grype/cm
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/goodwithtech/dockle/cmd/dockle@latest \
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/projectdiscovery/katana/cmd/katana@latest
 
+# naabu — fast port scanner, the ip_address recon tool (A1). Requires
+# libpcap + CGO (unlike the other ProjectDiscovery tools). Our wrapper
+# uses CONNECT scan (-s c) so no CAP_NET_RAW is needed at runtime, but the
+# binary still links libpcap. Built natively for TARGETARCH (CGO cross-
+# compile would need a cross toolchain; the supported build host matches
+# the target arch).
+RUN apt-get update && apt-get install -y --no-install-recommends libpcap-dev \
+    && CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+       go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest \
+    && rm -rf /var/lib/apt/lists/*
+
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04
 
@@ -64,7 +75,7 @@ ARG NUCLEI_VERSION=3.3.7
 # repo for reliable, signed builds).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates curl unzip gnupg lsb-release nmap \
+        ca-certificates curl unzip gnupg lsb-release nmap libpcap0.8 \
     && curl -fL https://aquasecurity.github.io/trivy-repo/deb/public.key \
         | gpg --dearmor -o /usr/share/keyrings/trivy.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
@@ -97,6 +108,7 @@ COPY --from=builder /go/bin/grype /usr/local/bin/grype
 COPY --from=builder /go/bin/httpx /usr/local/bin/httpx
 COPY --from=builder /go/bin/dockle /usr/local/bin/dockle
 COPY --from=builder /go/bin/katana /usr/local/bin/katana
+COPY --from=builder /go/bin/naabu /usr/local/bin/naabu
 
 # trufflehog via its official release script (go install is blocked by
 # replace directives in its go.mod). Pins to /usr/local/bin.
