@@ -38,6 +38,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench ablation: %v\n", err)
 			os.Exit(1)
 		}
+	case "wavsep":
+		if err := wavsepCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench wavsep: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -51,10 +56,43 @@ func usage() {
 Usage:
   tsbench run      --fixture <path> [--trials N] [--binary <path>] [--image <ref>]
   tsbench ablation --fixture <path> [--trials N]
+  tsbench wavsep   --target <url> --ground-truth <expected-cases.csv> [--image <ref>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
 `)
+}
+
+// wavsepCmd runs the WAVSEP DAST benchmark: scan the deployed WAVSEP root
+// (katana crawls the test-case URLs, the fan-out scans them), then score
+// per-category Youden against the ground-truth CSV. Needs the WAVSEP
+// webapp reachable + the sandbox image built with katana.
+func wavsepCmd(argv []string) error {
+	fs := flag.NewFlagSet("wavsep", flag.ContinueOnError)
+	target := fs.String("target", "", "deployed WAVSEP root URL (e.g. http://host.docker.internal:8098/wavsep/)")
+	groundTruth := fs.String("ground-truth", "", "path to expected-cases.csv (WAVSEP ground truth)")
+	binary := fs.String("binary", "./bin/tsengine", "tsengine binary path")
+	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox image")
+	timeout := fs.String("timeout", "30m", "scan timeout (WAVSEP is large)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *target == "" || *groundTruth == "" {
+		return fmt.Errorf("--target and --ground-truth are required")
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	ctx, cancelT := context.WithTimeout(ctx, time.Hour)
+	defer cancelT()
+
+	rep, err := bench.RunWavsep(ctx, *target, *groundTruth,
+		bench.RunOptions{Binary: *binary, Image: *image, Timeout: *timeout})
+	if err != nil {
+		return err
+	}
+	fmt.Print(bench.RenderWavsep(rep))
+	return nil
 }
 
 func runCmd(argv []string, ablation bool) error {
