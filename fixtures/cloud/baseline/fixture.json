@@ -1,0 +1,14 @@
+{
+  "name": "cloud-baseline",
+  "asset": "cloud_account",
+  "target": "aws",
+  "description": "Internal must-find fixture for the cloud_account asset. Run against a mock AWS account seeded with CIS-failing posture (e.g. a public S3 bucket, root access keys). prowler + scoutsuite (two posture engines → corroboration) emit FAIL findings; cloudfox (registry, scope-gated) enumerates IAM attack paths on demand. must_find is intentionally empty until a seeded account's exact rule_ids are pinned — this is a documented stub.",
+  "metric": "must_find_recall",
+  "must_find": [],
+  "pass_recall": 1.0,
+  "competitors": {
+    "leaderboard": "",
+    "note": "No neutral CSPM leaderboard (Prowler / Scout Suite / Wiz / Orca self-published). Reference: CIS AWS Foundations recall vs. a seeded mock account. Honest-mapping discipline (CLAUDE.md §8): only the 6 frameworks with catalogs are annotated; unmapped frameworks (FedRAMP, AWS-FSBP) are dropped, never mis-claimed."
+  },
+  "runnable": false
+}

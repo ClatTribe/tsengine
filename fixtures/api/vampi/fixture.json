@@ -1,0 +1,17 @@
+{
+  "name": "api-vampi",
+  "asset": "api",
+  "target": "http://host.docker.internal:5002/openapi.json",
+  "description": "Internal must-find fixture for the api asset. Deploy VAmPI (erev0s/vampi) and point target at its OpenAPI spec. openapi_spec_ingest ingests the spec; schemathesis spec-fuzzes it; nuclei runs api signatures. NOTE: BOLA/BFLA/mass-assignment recall awaits the authz specialists (Akto wrapper or ADR — not built), so must_find is limited to what the current toolset reliably surfaces (schemathesis contract violations).",
+  "metric": "must_find_recall",
+  "must_find": [
+    "openapi_spec_ingest::spec-found",
+    "schemathesis::contract-violation"
+  ],
+  "pass_recall": 1.0,
+  "competitors": {
+    "leaderboard": "",
+    "note": "No neutral API-security leaderboard exists (unlike WAVSEP/OWASP-Benchmark). Reference points: VAmPI + crAPI working-group writeups; Salt Security / Wallarm / Akto self-published. Per CLAUDE.md §14.2 this fixture pairs with the anti-overfit source-grep guard so api recall isn't tuned to VAmPI/crAPI path heuristics (the strix iter-17.5 overfit trap)."
+  },
+  "runnable": false
+}

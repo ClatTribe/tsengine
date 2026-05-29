@@ -23,6 +23,8 @@ func TestScorer_NoSUTIdentifiers(t *testing.T) {
 		// vulnerable-app SUTs
 		"juice-shop", "juiceshop", "bkimminich", "vampi", "crapi",
 		"erev0s", "testphp", "vulnweb", "dvwa", "webgoat", "wavsep",
+		// per-asset internal-fixture SUT tokens (C6)
+		"vulhub", "example.com", "host.docker.internal",
 		// fixture target tokens that must not leak into scoring math
 		"nginx", "alpine", "cve-2020", "cve-2019",
 	}
@@ -52,6 +54,11 @@ func TestAllFixtures_CiteCompetitors(t *testing.T) {
 		"../../fixtures/container/alpine-clean",
 		"../../fixtures/web/wavsep",
 		"../../fixtures/repo/owasp-benchmark",
+		// Per-asset internal must-find fixtures (C6).
+		"../../fixtures/api/vampi",
+		"../../fixtures/ip/services",
+		"../../fixtures/domain/recon",
+		"../../fixtures/cloud/baseline",
 	}
 	for _, r := range roots {
 		f, err := Load(r)
