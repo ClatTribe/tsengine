@@ -113,9 +113,37 @@ type scopeRule struct {
 	denyHosts   map[string]struct{}
 }
 
+// loopbackScopeClass is the set of host tokens that all denote "the host
+// machine" across the sandbox boundary. The sandbox client rewrites a
+// loopback target (localhost/127.0.0.1/…) to host.docker.internal before any
+// tool dials (CLAUDE.md §5.2 C2), so katana reports the crawled surface under
+// host.docker.internal even when the scan target was localhost. The scope
+// filter runs host-side on those rewritten URLs — without treating the whole
+// class as one host, every discovered URL is dropped as out-of-scope and the
+// surface collapses to just the seed (the localhost-target empty-surface bug).
+var loopbackScopeClass = []string{
+	"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", "host.docker.internal",
+}
+
+func isLoopbackScopeHost(h string) bool {
+	for _, lh := range loopbackScopeClass {
+		if h == lh {
+			return true
+		}
+	}
+	return false
+}
+
 func compileScope(target types.Asset) scopeRule {
 	primary := hostOf(target.Target)
 	allow := map[string]struct{}{primary: {}}
+	// If the target is loopback (or the sandbox alias), admit the whole
+	// equivalence class so the rewritten crawl surface stays in scope.
+	if isLoopbackScopeHost(primary) {
+		for _, lh := range loopbackScopeClass {
+			allow[lh] = struct{}{}
+		}
+	}
 	for _, h := range target.Scope.ScopeHosts {
 		allow[strings.ToLower(strings.TrimSpace(h))] = struct{}{}
 	}
