@@ -58,7 +58,9 @@ func (*FFUF) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	_ = f.Close()
 	defer os.Remove(out)
 
-	cmd := exec.CommandContext(ctx, "ffuf",
+	// gosec G204: binary is literal "ffuf"; target is a validated tool.Args
+	// asset target, wl is a path baked into the sandbox image.
+	cmd := exec.CommandContext(ctx, "ffuf", //nolint:gosec
 		"-u", target+"/FUZZ", "-w", wl,
 		"-mc", "200,204,301,302,307,401,403,405",
 		"-of", "json", "-o", out, "-s")

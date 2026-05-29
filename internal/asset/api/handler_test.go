@@ -165,9 +165,9 @@ func splitOnNewline(s string) []string {
 
 type fakeTool struct{ name string }
 
-func (f *fakeTool) Name() string                                    { return f.name }
-func (*fakeTool) SandboxExecution() bool                            { return true }
-func (*fakeTool) MITRETechniques() []string                         { return nil }
+func (f *fakeTool) Name() string                                      { return f.name }
+func (*fakeTool) SandboxExecution() bool                              { return true }
+func (*fakeTool) MITRETechniques() []string                           { return nil }
 func (*fakeTool) Run(context.Context, tool.Args) (tool.Result, error) { return tool.Result{}, nil }
 
 func names(ts []tool.Tool) []string {

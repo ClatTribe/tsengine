@@ -81,7 +81,9 @@ func runOnce(ctx context.Context, f *Fixture, opts RunOptions) (*types.Scan, err
 	}
 	defer os.RemoveAll(outDir)
 
-	cmd := exec.CommandContext(ctx, opts.Binary, "scan",
+	// gosec G204: opts.Binary + args come from internal bench config (operator
+	// supplies them on the CLI), not from a finding/scan target.
+	cmd := exec.CommandContext(ctx, opts.Binary, "scan", //nolint:gosec
 		"--asset", f.Asset,
 		"--target", f.Target,
 		"--out", outDir,

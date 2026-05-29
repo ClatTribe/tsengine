@@ -54,7 +54,9 @@ func TestSignerID_StableDifferentKeysDiffer(t *testing.T) {
 	if SignerID(pub1) == SignerID(pub2) {
 		t.Error("distinct keys produced same signer id")
 	}
-	if SignerID(pub1) != SignerID(pub1) {
+	// Determinism: two distinct calls on the same key produce the same id.
+	id1, id2 := SignerID(pub1), SignerID(pub1)
+	if id1 != id2 {
 		t.Error("signer id not deterministic")
 	}
 }
