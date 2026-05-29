@@ -30,6 +30,14 @@ type Scan struct {
 	L15AuditLog      []AuditEntry `json:"l15_audit_log,omitempty"`
 	ChildAssets      []ChildAsset `json:"child_assets,omitempty"`
 	Attestation      *Attestation `json:"attestation,omitempty"`
+
+	// Partial is true when the scan did not run to completion (e.g. the
+	// --timeout deadline fired mid-fan-out). The findings present are what
+	// completed before the cutoff — never silently discarded. StopReason
+	// records why. The security-engineer audience MUST be able to tell a
+	// 0-finding timeout from a clean bill of health.
+	Partial    bool   `json:"partial,omitempty"`
+	StopReason string `json:"stop_reason,omitempty"`
 }
 
 // ChildAsset is an asset discovered DURING a scan that warrants its own

@@ -69,11 +69,11 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 	dispatches = handler.Filter(ctx, target, dispatches)
 
 	results, fired, err := executeWaves(ctx, dispatches, dispatcher)
-	if err != nil {
-		return nil, fired, err
-	}
+	// Even on a deadline error we normalize + return the partial results so
+	// the CLI can persist them (err signals "partial", findings are kept).
 	// Single-stage assets have no recon surface; the target itself is it.
-	return finalizeWithEscalation(ctx, target, handler, dispatcher, results, fired, []string{target.Target})
+	findings, allFired := finalizeWithEscalation(ctx, target, handler, dispatcher, results, fired, []string{target.Target})
+	return findings, allFired, err
 }
 
 // runWithRecon implements the two-stage recon → fan-out flow:
@@ -98,7 +98,10 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 	}
 	reconResults, reconFired, err := executeAll(ctx, reconDispatches, dispatcher)
 	if err != nil {
-		return nil, reconFired, err
+		// Recon itself was cut short — normalize + return whatever it
+		// produced (usually empty) so the caller persists it.
+		findings, f := finalizeWithEscalation(ctx, target, handler, dispatcher, reconResults, reconFired, []string{target.Target})
+		return findings, f, err
 	}
 
 	surface := asset.CollectSurface(target.Target, reconResults, fanoutMaxURLs())
@@ -108,14 +111,15 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 	dispatches := rh.PlanFanout(target, surface)
 	dispatches = handler.Filter(ctx, target, dispatches)
 
-	fanoutResults, fanoutFired, err := executeWaves(ctx, dispatches, dispatcher)
-	if err != nil {
-		return nil, append(reconFired, fanoutFired...), err
-	}
+	// fanoutErr is non-nil only on a deadline; fanoutResults still holds
+	// every detector that completed before it (the WAVSEP timeout case —
+	// keep the partial findings rather than scoring zero).
+	fanoutResults, fanoutFired, fanoutErr := executeWaves(ctx, dispatches, dispatcher)
 
 	allResults := append(reconResults, fanoutResults...)
 	allFired := append(reconFired, fanoutFired...)
-	return finalizeWithEscalation(ctx, target, handler, dispatcher, allResults, allFired, surface)
+	findings, fnFired := finalizeWithEscalation(ctx, target, handler, dispatcher, allResults, allFired, surface)
+	return findings, fnFired, fanoutErr
 }
 
 // finalizeWithEscalation is the shared tail of both the single-stage and
@@ -129,36 +133,40 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 // TSENGINE_ESCALATION_MAX so a flood of signals can't explode cost, and by
 // the per-tool timeout (C3). This is the L1 (reproducible) half of "which
 // tool when"; the open-ended half is L2 (Phase 6). CLAUDE.md §5.3.
-func finalizeWithEscalation(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher, detResults []tool.Result, detFired []string, surface []string) ([]types.Finding, []string, error) {
+func finalizeWithEscalation(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher, detResults []tool.Result, detFired []string, surface []string) ([]types.Finding, []string) {
 	allResults := detResults
 	allFired := detFired
 
-	if ep, ok := handler.(asset.EscalationPlanner); ok {
-		// Trigger evaluation needs findings, so normalize the detection
-		// results to an interim view (IDs here are throwaway; the final
-		// Normalize over all results assigns the canonical IDs).
-		interim := handler.Normalize(detResults)
-		esc := ep.PlanEscalation(target, surface, interim)
-		esc = capEscalation(esc)
-		esc = handler.Filter(ctx, target, esc)
-		if len(esc) > 0 {
-			labels := make([]string, 0, len(esc))
-			for _, d := range esc {
-				labels = append(labels, d.EscalatedFrom)
+	// Skip escalation if the scan was already cut short (deadline) — no
+	// point dispatching depth tools onto a dead context; we just normalize
+	// the partial detection results so they're persisted.
+	if ctx.Err() == nil {
+		if ep, ok := handler.(asset.EscalationPlanner); ok {
+			// Trigger evaluation needs findings, so normalize the detection
+			// results to an interim view (IDs here are throwaway; the final
+			// Normalize over all results assigns the canonical IDs).
+			interim := handler.Normalize(detResults)
+			esc := ep.PlanEscalation(target, surface, interim)
+			esc = capEscalation(esc)
+			esc = handler.Filter(ctx, target, esc)
+			if len(esc) > 0 {
+				labels := make([]string, 0, len(esc))
+				for _, d := range esc {
+					labels = append(labels, d.EscalatedFrom)
+				}
+				fmt.Fprintf(os.Stderr, "[escalate] %d depth dispatch(es): %s\n",
+					len(esc), strings.Join(labels, ","))
+				// Best-effort: a deadline mid-escalation keeps the partial
+				// escalation results too.
+				r, f, _ := executeWaves(ctx, esc, dispatcher)
+				allResults = append(allResults, r...)
+				allFired = append(allFired, f...)
 			}
-			fmt.Fprintf(os.Stderr, "[escalate] %d depth dispatch(es): %s\n",
-				len(esc), strings.Join(labels, ","))
-			r, f, err := executeWaves(ctx, esc, dispatcher)
-			if err != nil {
-				return nil, allFired, err
-			}
-			allResults = append(allResults, r...)
-			allFired = append(allFired, f...)
 		}
 	}
 
 	findings := handler.Normalize(allResults)
-	return findings, allFired, nil
+	return findings, allFired
 }
 
 // capEscalation bounds the escalation dispatch set to TSENGINE_ESCALATION_MAX
@@ -217,9 +225,9 @@ func executeWaves(ctx context.Context, dispatches []asset.Dispatch, dispatcher D
 			}
 		}
 		r, f, err := executeAll(ctx, wave, dispatcher)
-		if err != nil {
-			return nil, allFired, err
-		}
+		// Accumulate the partial set BEFORE the error check so a mid-wave
+		// cancellation keeps every result that completed (incl. earlier
+		// whole waves).
 		for _, res := range r {
 			if res.CapturedSession != "" {
 				session = res.CapturedSession
@@ -227,6 +235,9 @@ func executeWaves(ctx context.Context, dispatches []asset.Dispatch, dispatcher D
 		}
 		allResults = append(allResults, r...)
 		allFired = append(allFired, f...)
+		if err != nil {
+			return allResults, allFired, err
+		}
 	}
 	return allResults, allFired, nil
 }
@@ -284,12 +295,15 @@ func executeAll(ctx context.Context, dispatches []asset.Dispatch, dispatcher Dis
 			return nil
 		})
 	}
-	if err := g.Wait(); err != nil {
-		return nil, nil, err
-	}
+	// waitErr is non-nil only on ctx cancellation (the scan --timeout) — a
+	// queued goroutine returns gctx.Err(); per-tool failures are swallowed
+	// above. We do NOT discard the partial set on cancellation: tools that
+	// completed before the deadline wrote their slots, and the caller
+	// persists them (the no-score-on-timeout trap, see CLAUDE.md §5.1).
+	waitErr := g.Wait()
 
-	// Drop slots from failed tools so anchors_fired only lists tools
-	// that actually produced results.
+	// Drop slots from failed/cancelled tools so anchors_fired only lists
+	// tools that actually produced results.
 	cleanResults := make([]tool.Result, 0, len(results))
 	cleanFired := make([]string, 0, len(fired))
 	for i := range results {
@@ -299,7 +313,7 @@ func executeAll(ctx context.Context, dispatches []asset.Dispatch, dispatcher Dis
 		cleanResults = append(cleanResults, results[i])
 		cleanFired = append(cleanFired, fired[i])
 	}
-	return cleanResults, cleanFired, nil
+	return cleanResults, cleanFired, waitErr
 }
 
 // concurrencyLimit honors TSENGINE_DISPATCH_CONCURRENCY; default 4 per
