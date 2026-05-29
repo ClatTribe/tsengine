@@ -1,0 +1,16 @@
+{
+  "name": "domain-recon",
+  "asset": "domain",
+  "target": "example.com",
+  "description": "Internal must-find fixture for the domain asset. Point target at a domain with a known subdomain set. subfinder + amass + crt.sh enumerate (the union lifts recall); checkdmarc audits DNS hygiene; nuclei takeover templates run over the surface; discovered subdomains become ChildAssets. must_find asserts subdomain discovery; takeover/hygiene recall depends on the chosen target.",
+  "metric": "must_find_recall",
+  "must_find": [
+    "subdomain-found"
+  ],
+  "pass_recall": 1.0,
+  "competitors": {
+    "leaderboard": "",
+    "note": "No neutral subdomain-enumeration leaderboard. Reference: subfinder vs. amass vs. assetfinder self-published discovery rates. The union-of-sources design targets parity-or-better; the anti-overfit grep keeps scoring source-agnostic."
+  },
+  "runnable": false
+}

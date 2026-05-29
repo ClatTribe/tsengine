@@ -1,0 +1,16 @@
+{
+  "name": "ip-services",
+  "asset": "ip_address",
+  "target": "host.docker.internal",
+  "description": "Internal must-find fixture for the ip_address asset. Deploy a host exposing known services (e.g. vulhub redis-no-auth, ftp-anon) and point target at it. naabu discovers open ports (the recon surface); nmap does -sV; nuclei runs PER-PORT routed tags. must_find asserts the open-port discovery; service-CVE recall grows as nuclei network templates land.",
+  "metric": "must_find_recall",
+  "must_find": [
+    "naabu::open-port"
+  ],
+  "pass_recall": 1.0,
+  "competitors": {
+    "leaderboard": "",
+    "note": "No neutral network-scan leaderboard (Tenable / Qualys / Rapid7 publish no comparable scorecard). Reference: credentialed-scan recall vs. Nessus. This internal fixture + the anti-overfit grep guard recall against over-tuning to the fixture host."
+  },
+  "runnable": false
+}
