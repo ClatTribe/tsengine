@@ -101,8 +101,8 @@ RUN apt-get update \
 # (cloud_account posture), sqlmap (web SQLi specialist). All Python;
 # installed system-wide so the non-root runtime user can invoke them.
 RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite \
-    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite
+        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite schemathesis \
+    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite schemathesis
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
