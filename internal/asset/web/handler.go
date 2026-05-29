@@ -120,41 +120,47 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 		}})
 	}
 
-	// 1) List-mode tools run ONCE over the whole surface: nuclei with its
-	//    default signature/CVE/misconfig templates, httpx for tech/probe.
-	var nucleiTool tool.Tool
+	// Param-bearing URLs are the injection / fuzzing surface.
+	var paramURLs []string
+	for _, u := range surface {
+		if hasQueryParams(u) {
+			paramURLs = append(paramURLs, u)
+		}
+	}
+
+	// 1) List-mode tools run ONCE: nuclei signature/CVE/misconfig templates +
+	//    httpx over the whole surface, AND nuclei -dast over the PARAM surface
+	//    (active fuzzing: path-traversal / open-redirect / SSRF — the generic
+	//    classes WAVSEP measures, which nuclei's signature templates don't
+	//    catch). nuclei is LIST-NATIVE: one engine fuzzes the whole list with
+	//    internal concurrency + rate-limiting. A single nuclei spawn costs
+	//    ~27s of template compile, so -dast is ONE list dispatch — running it
+	//    per-URL would pay that ~27s for every URL (and run N full engines at
+	//    once under parallelism). Only genuinely single-target tools go
+	//    per-URL (step 2).
 	for _, t := range h.anchors {
 		switch t.Name() {
 		case "nuclei":
-			nucleiTool = t
 			out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"targets": listArg}})
+			if len(paramURLs) > 0 {
+				out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{
+					"targets": strings.Join(paramURLs, "\n"), "dast": true}})
+			}
 		case "httpx":
 			out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"targets": listArg}})
 		}
 	}
 
-	// 2) Per-URL ACTIVE tools, INTERLEAVED by URL (all tools for one URL
-	//    before moving on). Interleaving matters under sequential / partial
-	//    execution: it covers COMPLETE URLs — every covered param URL gets
-	//    sqlmap (SQLi) + dalfox (XSS) + nuclei -dast — instead of spending the
-	//    whole budget on one tool across every URL and never reaching the
-	//    next. nuclei's signature templates (step 1) do NOT catch GENERIC
-	//    injection (SQLi/XSS/path-traversal/open-redirect in arbitrary
-	//    params) — that's what WAVSEP measures and what active DAST scanners
-	//    do; nuclei's dast/ + fuzzing/ templates fan per-param here to cover
-	//    path-traversal / open-redirect / SSRF.
-	for _, u := range surface {
-		if !hasQueryParams(u) {
-			continue
-		}
+	// 2) Genuinely single-target tools (sqlmap=SQLi, dalfox=XSS) fan per-URL
+	//    over the param surface, interleaved by URL so a sequential / partial
+	//    run covers COMPLETE URLs (both tools per URL) rather than all of one
+	//    tool then none of the next.
+	for _, u := range paramURLs {
 		for _, t := range h.anchors {
 			switch t.Name() {
 			case "sqlmap", "dalfox":
 				out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
 			}
-		}
-		if nucleiTool != nil {
-			out = append(out, asset.Dispatch{Tool: nucleiTool, Args: tool.Args{"target": u, "dast": true}})
 		}
 	}
 

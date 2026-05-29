@@ -20,16 +20,17 @@ func TestPlanFanout_ListToolsOnceParamToolsPerURL(t *testing.T) {
 	}
 	out := h.PlanFanout(types.Asset{Type: types.AssetWebApplication, Target: "https://x/"}, surface)
 
-	var nucleiList, nucleiDast, dalfox, httpx int
-	var nucleiTargets string
+	var nucleiSig, nucleiDast, dalfox, httpx int
+	var sigTargets, dastTargets string
 	for _, d := range out {
 		switch d.Tool.Name() {
 		case "nuclei":
-			if _, isList := d.Args["targets"]; isList {
-				nucleiList++
-				nucleiTargets, _ = d.Args["targets"].(string)
-			} else if dast, _ := d.Args["dast"].(bool); dast {
+			if dast, _ := d.Args["dast"].(bool); dast {
 				nucleiDast++
+				dastTargets, _ = d.Args["targets"].(string)
+			} else {
+				nucleiSig++
+				sigTargets, _ = d.Args["targets"].(string)
 			}
 		case "httpx":
 			httpx++
@@ -38,23 +39,27 @@ func TestPlanFanout_ListToolsOnceParamToolsPerURL(t *testing.T) {
 		}
 	}
 
-	// nuclei (signature templates) + httpx run ONCE over the whole surface.
-	if nucleiList != 1 {
-		t.Errorf("nuclei list-mode dispatches: got %d, want 1", nucleiList)
+	// nuclei signature templates + httpx run ONCE over the whole surface.
+	if nucleiSig != 1 {
+		t.Errorf("nuclei signature dispatches: got %d, want 1", nucleiSig)
 	}
 	if httpx != 1 {
 		t.Errorf("httpx dispatches: got %d, want 1 (list mode)", httpx)
 	}
-	if strings.Count(nucleiTargets, "\n")+1 != 3 {
-		t.Errorf("nuclei list should hold the whole surface (3 URLs); got %q", nucleiTargets)
+	if strings.Count(sigTargets, "\n")+1 != 3 {
+		t.Errorf("nuclei signature list should hold the whole surface (3 URLs); got %q", sigTargets)
 	}
-	// Active per-param tools fan over the 2 param-bearing URLs: dalfox (XSS)
-	// + nuclei -dast (fuzzing: path-traversal / redirect / SSRF).
+	// nuclei -dast is ONE list dispatch over the param surface (efficient —
+	// nuclei is list-native; per-URL spawning pays ~27s engine startup each).
+	if nucleiDast != 1 {
+		t.Errorf("nuclei -dast dispatches: got %d, want 1 (single list over param URLs)", nucleiDast)
+	}
+	if strings.Count(dastTargets, "\n")+1 != 2 {
+		t.Errorf("nuclei -dast list should hold the 2 param URLs; got %q", dastTargets)
+	}
+	// dalfox (genuinely single-target) fans per-URL over the 2 param URLs.
 	if dalfox != 2 {
 		t.Errorf("dalfox dispatches: got %d, want 2 (param URLs only)", dalfox)
-	}
-	if nucleiDast != 2 {
-		t.Errorf("nuclei -dast dispatches: got %d, want 2 (one per param URL)", nucleiDast)
 	}
 }
 
