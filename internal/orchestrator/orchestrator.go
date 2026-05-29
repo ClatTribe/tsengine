@@ -134,10 +134,29 @@ func executeWaves(ctx context.Context, dispatches []asset.Dispatch, dispatcher D
 	}
 	var allResults []tool.Result
 	var allFired []string
+	var session string // captured by seed_auth in an earlier wave
 	for _, wave := range waves {
+		// Thread a session captured by an earlier wave into this wave's
+		// authed dispatches (seed_auth → authed re-scan). Don't clobber a
+		// per-dispatch cookie if one was set explicitly.
+		if session != "" {
+			for i := range wave {
+				if wave[i].Args == nil {
+					wave[i].Args = tool.Args{}
+				}
+				if _, has := wave[i].Args["cookie"]; !has {
+					wave[i].Args["cookie"] = session
+				}
+			}
+		}
 		r, f, err := executeAll(ctx, wave, dispatcher)
 		if err != nil {
 			return nil, allFired, err
+		}
+		for _, res := range r {
+			if res.CapturedSession != "" {
+				session = res.CapturedSession
+			}
 		}
 		allResults = append(allResults, r...)
 		allFired = append(allFired, f...)
