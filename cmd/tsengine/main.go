@@ -62,6 +62,9 @@ import (
 
 	// Side-effect imports register tool wrappers in the global registry.
 	// Anchor + registry tier per arch.md.
+	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
+	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
+	_ "github.com/ClatTribe/tsengine/internal/tool/crtsh"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dalfox"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
@@ -264,6 +267,17 @@ func runScan(argv []string) error {
 	fmt.Fprintf(os.Stderr, "[%s] L1.5 enriched=%d audit_entries=%d (l15_disabled=%v)\n",
 		scanID, len(tr.Enriched()), len(tr.AuditLog()), disabled)
 
+	// Child-asset pivot: a recon asset (domain) derives downstream targets
+	// (subdomains → web/ip child assets) so webappsec spawns child scans
+	// instead of re-enumerating (CLAUDE.md §5.1 / strix re-enumeration trap).
+	var childAssets []types.ChildAsset
+	if ce, ok := handler.(asset.ChildAssetExtractor); ok {
+		childAssets = ce.ChildAssets(tr.Raw())
+		if len(childAssets) > 0 {
+			fmt.Fprintf(os.Stderr, "[%s] child assets discovered=%d\n", scanID, len(childAssets))
+		}
+	}
+
 	scan := types.Scan{
 		ScanID:           scanID,
 		Asset:            assetTarget,
@@ -275,6 +289,7 @@ func runScan(argv []string) error {
 		FindingsRaw:      tr.Raw(),
 		FindingsEnriched: tr.Enriched(),
 		L15AuditLog:      tr.AuditLog(),
+		ChildAssets:      childAssets,
 	}
 
 	if err := signAndWrite(&scan, *outDir, scanID); err != nil {

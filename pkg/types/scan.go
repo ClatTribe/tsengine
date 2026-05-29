@@ -28,7 +28,21 @@ type Scan struct {
 	FindingsRaw      []Finding    `json:"findings_raw"`
 	FindingsEnriched []Finding    `json:"findings_enriched"`
 	L15AuditLog      []AuditEntry `json:"l15_audit_log,omitempty"`
+	ChildAssets      []ChildAsset `json:"child_assets,omitempty"`
 	Attestation      *Attestation `json:"attestation,omitempty"`
+}
+
+// ChildAsset is an asset discovered DURING a scan that warrants its own
+// downstream scan — e.g. a subdomain found by a domain scan becomes a
+// web_application (if it serves HTTP) or ip_address target. Emitting these
+// as a first-class dashboard artifact (rather than having webappsec
+// re-enumerate) is strix's "consume, don't re-derive" lesson (its
+// re-enumeration trap). webappsec spawns child scans from this list.
+type ChildAsset struct {
+	Host      string    `json:"host"`
+	AssetType AssetType `json:"asset_type"`
+	Scheme    string    `json:"scheme,omitempty"`
+	Source    string    `json:"source,omitempty"`
 }
 
 // Engine captures the tsengine version and the sandbox container image

@@ -4,6 +4,9 @@ package main
 // Adding a tool to the sandbox image means adding a blank import here
 // AND adding its binary to docker/sandbox/Dockerfile.
 import (
+	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
+	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
+	_ "github.com/ClatTribe/tsengine/internal/tool/crtsh"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dalfox"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"

@@ -56,9 +56,17 @@ func (*Subfinder) Run(ctx context.Context, args tool.Args) (tool.Result, error) 
 	}
 
 	findings := parseJSONL(stdout)
+	// Mirror discovered subdomains into the recon channel so the domain
+	// Handler (ReconHandler) can fan detection across them + emit child
+	// assets. Findings keep their copy for the dashboard.
+	surface := make([]string, 0, len(findings))
+	for _, f := range findings {
+		surface = append(surface, f.Endpoint)
+	}
 	return tool.Result{
-		Output:   string(stdout),
-		Findings: findings,
+		Output:         string(stdout),
+		Findings:       findings,
+		DiscoveredURLs: surface,
 	}, nil
 }
 
