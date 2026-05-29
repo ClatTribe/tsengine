@@ -80,6 +80,10 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go install github.com/ffuf/ffuf/v2@latest
 
+# kiterunner — undocumented API route discovery (api escalation, E2). Go.
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go install github.com/assetnote/kiterunner/cmd/kr@latest
+
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04
 
@@ -105,8 +109,8 @@ RUN apt-get update \
 # (cloud_account posture), sqlmap (web SQLi specialist). All Python;
 # installed system-wide so the non-root runtime user can invoke them.
 RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite schemathesis \
-    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite schemathesis
+        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite schemathesis inql \
+    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite schemathesis inql
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
@@ -130,6 +134,16 @@ COPY --from=builder /go/bin/amass /usr/local/bin/amass
 COPY --from=builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /go/bin/cloudfox /usr/local/bin/cloudfox
 COPY --from=builder /go/bin/ffuf /usr/local/bin/ffuf
+COPY --from=builder /go/bin/kr /usr/local/bin/kr
+
+# kiterunner API-route wordlist (assetnote routes-small). Escalation-only,
+# so the small list keeps the image lean.
+RUN mkdir -p /usr/share/kiterunner \
+    && curl -fL -o /tmp/routes-small.kite.tar.gz \
+        https://wordlists-cdn.assetnote.io/data/kiterunner/routes-small.kite.tar.gz \
+    && tar -xzf /tmp/routes-small.kite.tar.gz -C /usr/share/kiterunner \
+    && rm -f /tmp/routes-small.kite.tar.gz \
+    || echo "kiterunner wordlist fetch failed (non-fatal; pass an explicit wordlist arg)"
 
 # syft (SBOM) + hadolint (Dockerfile lint) via release artifacts. syft's
 # install script is anchore's recommended path; hadolint ships per-arch

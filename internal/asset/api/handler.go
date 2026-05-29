@@ -109,6 +109,44 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 	return out
 }
 
+// PlanEscalation is the api conditional-depth stage (asset.EscalationPlanner):
+//
+//   - a successfully-ingested spec → kiterunner to brute-force the
+//     UNDOCUMENTED routes the spec omits (shadow/debug/old-version
+//     endpoints). Fires once on the target.
+//   - a /graphql endpoint in the surface → inql introspection.
+//
+// Depth tools fire only on the signal, never blanket.
+func (h *Handler) PlanEscalation(target types.Asset, surface []string, findings []types.Finding) []asset.Dispatch {
+	triggers := []asset.Trigger{
+		{
+			Name: "spec→kiterunner",
+			Tool: "kiterunner",
+			MatchFinding: func(f types.Finding) (tool.Args, bool) {
+				if strings.Contains(f.RuleID, "openapi_spec_ingest::spec-found") {
+					return tool.Args{"target": target.Target}, true
+				}
+				return nil, false
+			},
+		},
+		{
+			Name: "graphql→inql",
+			Tool: "inql",
+			MatchSurface: func(entry string) (tool.Args, bool) {
+				_, u, ok := splitOp(entry)
+				if !ok {
+					return nil, false
+				}
+				if strings.Contains(strings.ToLower(u), "/graphql") {
+					return tool.Args{"target": u}, true
+				}
+				return nil, false
+			},
+		},
+	}
+	return asset.EvalTriggers(triggers, surface, findings, tool.Get)
+}
+
 // Filter drops health/spec endpoints from any per-op dispatch (arch.md
 // "api" filtration). List-mode dispatches (schemathesis/nuclei) carry no
 // per-op "target", so they pass through untouched.
