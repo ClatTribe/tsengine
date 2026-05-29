@@ -37,6 +37,29 @@ func TestFilterSurface_DropsAndDedupes(t *testing.T) {
 	}
 }
 
+// TestFilterSurface_LoopbackTargetKeepsSandboxAliasSurface guards the
+// localhost-target empty-surface bug: a scan targeting localhost has its
+// surface rewritten to host.docker.internal inside the sandbox (C2), so the
+// host-side scope filter must treat the loopback class + alias as one host
+// or it drops every discovered URL.
+func TestFilterSurface_LoopbackTargetKeepsSandboxAliasSurface(t *testing.T) {
+	target := types.Asset{Type: types.AssetWebApplication, Target: "http://localhost:8098/wavsep/"}
+	surface := []string{
+		"http://host.docker.internal:8098/wavsep/case01.jsp?id=1",
+		"http://host.docker.internal:8098/wavsep/case02.jsp?q=x",
+		"http://attacker.com/evil", // still off-scope → drop
+	}
+	got := filterSurface(target, surface)
+	if len(got) != 2 {
+		t.Fatalf("loopback target dropped the rewritten surface: got %d, want 2: %v", len(got), got)
+	}
+	for _, u := range got {
+		if hostOf(u) != "host.docker.internal" {
+			t.Errorf("unexpected survivor host in %q", u)
+		}
+	}
+}
+
 func TestIsDestructivePath(t *testing.T) {
 	drop := []string{
 		"https://x/admin/delete-user", "https://x/logout",
