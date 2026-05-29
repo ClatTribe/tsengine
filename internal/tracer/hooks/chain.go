@@ -26,12 +26,12 @@ func DefaultPerFinding() []tracer.PerFindingHook {
 // DefaultFinalize returns the cross-finding hook chain in canonical
 // order:
 //
-//	5.  corroborator       (cross-tool agreement — runs before merge so
-//	    the multi-source signal is captured)
-//	8.  post_emit_verifier (wired, inert until L2.5)
-//	9.  cross_tool_merge   (collapse exact duplicates)
-//	11. confidence         (verification_status + confidence; runs LAST so it
-//	    sees the final, merged, corroborated set)
+//  5. corroborator       (cross-tool agreement — runs before merge so
+//     the multi-source signal is captured)
+//  8. post_emit_verifier (wired, inert until L2.5)
+//  9. cross_tool_merge   (collapse exact duplicates)
+//  11. confidence         (verification_status + confidence; runs LAST so it
+//     sees the final, merged, corroborated set)
 func DefaultFinalize() []tracer.FinalizeHook {
 	return []tracer.FinalizeHook{
 		NewCorroborator(),
