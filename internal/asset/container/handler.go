@@ -38,8 +38,13 @@ func (h *Handler) PlanAnchors(target types.Asset) []asset.Dispatch {
 	out := make([]asset.Dispatch, 0, len(h.anchors))
 	for _, t := range h.anchors {
 		args := tool.Args{"target": target.Target}
-		if t.Name() == "trivy" {
+		switch t.Name() {
+		case "trivy":
 			args["mode"] = "image"
+			// Base-layer skip (A5): surface only fixable CVEs so a
+			// customer's app-fixable vulns stand apart from the unfixable
+			// base-image baseline noise (strix Q5.42).
+			args["ignore_unfixed"] = true
 		}
 		out = append(out, asset.Dispatch{Tool: t, Args: args})
 	}
@@ -59,12 +64,13 @@ func (h *Handler) Normalize(results []tool.Result) []types.Finding {
 }
 
 // anchorNames: trivy (CVE+misconfig+secret), grype (second CVE DB →
-// corroboration), dockle (CIS misconfig). Phase 3.x adds syft (SBOM),
-// hadolint, anchore.
+// corroboration), dockle (CIS misconfig), syft (CycloneDX SBOM →
+// compliance evidence). Phase 3.x adds anchore.
 var anchorNames = []string{
 	"trivy",
 	"grype",
 	"dockle",
+	"syft",
 }
 
 var registryNames = []string{

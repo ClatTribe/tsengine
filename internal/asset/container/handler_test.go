@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/grype"
+	_ "github.com/ClatTribe/tsengine/internal/tool/syft"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trivy"
 )
 
@@ -19,7 +20,7 @@ func TestHandler_TypeAndAnchors(t *testing.T) {
 	for _, a := range h.Anchors() {
 		got[a.Name()] = true
 	}
-	for _, want := range []string{"trivy", "grype", "dockle"} {
+	for _, want := range []string{"trivy", "grype", "dockle", "syft"} {
 		if !got[want] {
 			t.Errorf("missing anchor %q (got %v)", want, got)
 		}
@@ -29,15 +30,21 @@ func TestHandler_TypeAndAnchors(t *testing.T) {
 func TestPlanAnchors_TrivyImageMode(t *testing.T) {
 	h := NewHandler()
 	out := h.PlanAnchors(types.Asset{Type: types.AssetContainerImage, Target: "alpine:3.18"})
-	if len(out) != 3 {
-		t.Fatalf("dispatches: %d, want 3", len(out))
+	if len(out) != 4 {
+		t.Fatalf("dispatches: %d, want 4", len(out))
 	}
 	for _, d := range out {
 		if d.Args["target"] != "alpine:3.18" {
 			t.Errorf("%s target: %v", d.Tool.Name(), d.Args["target"])
 		}
-		if d.Tool.Name() == "trivy" && d.Args["mode"] != "image" {
-			t.Errorf("trivy mode: %v, want image", d.Args["mode"])
+		if d.Tool.Name() == "trivy" {
+			if d.Args["mode"] != "image" {
+				t.Errorf("trivy mode: %v, want image", d.Args["mode"])
+			}
+			// Base-layer skip wired (A5).
+			if iu, _ := d.Args["ignore_unfixed"].(bool); !iu {
+				t.Error("trivy should set ignore_unfixed for container base-layer skip")
+			}
 		}
 	}
 }

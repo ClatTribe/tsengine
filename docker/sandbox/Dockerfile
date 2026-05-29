@@ -67,6 +67,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpcap-dev \
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go install github.com/owasp-amass/amass/v4/...@master
 
+# osv-scanner — Google OSV.dev SCA (repository asset, A5). Go, CGO-free.
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
+
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04
 
@@ -92,8 +96,8 @@ RUN apt-get update \
 # (cloud_account posture), sqlmap (web SQLi specialist). All Python;
 # installed system-wide so the non-root runtime user can invoke them.
 RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc \
-    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc
+        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov \
+    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
@@ -114,6 +118,17 @@ COPY --from=builder /go/bin/dockle /usr/local/bin/dockle
 COPY --from=builder /go/bin/katana /usr/local/bin/katana
 COPY --from=builder /go/bin/naabu /usr/local/bin/naabu
 COPY --from=builder /go/bin/amass /usr/local/bin/amass
+COPY --from=builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
+
+# syft (SBOM) + hadolint (Dockerfile lint) via release artifacts. syft's
+# install script is anchore's recommended path; hadolint ships per-arch
+# static binaries (Linux-x86_64 / Linux-arm64).
+RUN curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+        | sh -s -- -b /usr/local/bin \
+    && HADOLINT_ARCH="$([ "${TARGETARCH}" = "amd64" ] && echo x86_64 || echo arm64)" \
+    && curl -fL -o /usr/local/bin/hadolint \
+        "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-${HADOLINT_ARCH}" \
+    && chmod +x /usr/local/bin/hadolint
 
 # trufflehog via its official release script (go install is blocked by
 # replace directives in its go.mod). Pins to /usr/local/bin.

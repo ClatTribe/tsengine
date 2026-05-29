@@ -52,8 +52,13 @@ func (h *Handler) PlanAnchors(_ types.Asset) []asset.Dispatch {
 		switch t.Name() {
 		case "trivy":
 			args["mode"] = "fs"
-		case "grype":
+		case "grype", "syft":
+			// grype + syft take a source string; "dir:" scans the tree.
 			args["target"] = "dir:" + WorkspacePath
+		case "hadolint":
+			// hadolint lints a single Dockerfile; missing file → no
+			// findings (the wrapper degrades gracefully).
+			args["target"] = WorkspacePath + "/Dockerfile"
 		}
 		out = append(out, asset.Dispatch{Tool: t, Args: args})
 	}
@@ -81,15 +86,21 @@ var SkipDirs = []string{
 }
 
 // anchorNames: SAST (semgrep), secrets (gitleaks + trufflehog — different
-// engines, corroborate), SCA (trivy fs + grype — different DBs,
-// corroborate). Phase 3.x adds bandit, mobsfscan, osv-scanner, checkov,
-// hadolint, tfsec, syft.
+// engines, corroborate), SCA (trivy fs + grype + osv-scanner — three
+// different DBs, strong corroboration), IaC (checkov — the HashiCorp/
+// cloud-native coverage strix's in-house engine lacked), Dockerfile lint
+// (hadolint), SBOM (syft → compliance evidence). CodeQL stays registry-
+// tier (the taint-flow depth jump).
 var anchorNames = []string{
 	"semgrep",
 	"gitleaks",
 	"trufflehog",
 	"trivy",
 	"grype",
+	"osv-scanner",
+	"checkov",
+	"hadolint",
+	"syft",
 }
 
 var registryNames = []string{
