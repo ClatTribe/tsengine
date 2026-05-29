@@ -54,11 +54,11 @@ type ToolCall struct {
 // provider impl from its pricing (cache-aware where supported — the cost
 // lever strix found load-bearing).
 type Usage struct {
-	InputTokens       int     `json:"input_tokens"`
-	OutputTokens      int     `json:"output_tokens"`
-	CacheReadTokens   int     `json:"cache_read_tokens,omitempty"`
-	CacheWriteTokens  int     `json:"cache_write_tokens,omitempty"`
-	CostUSD           float64 `json:"cost_usd"`
+	InputTokens      int     `json:"input_tokens"`
+	OutputTokens     int     `json:"output_tokens"`
+	CacheReadTokens  int     `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int     `json:"cache_write_tokens,omitempty"`
+	CostUSD          float64 `json:"cost_usd"`
 }
 
 // Response is one model turn. StopReason ∈ {"tool_use","end_turn","max_tokens"}.

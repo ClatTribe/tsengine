@@ -20,8 +20,8 @@ type Dalfox struct{}
 // New constructs a Dalfox wrapper.
 func New() *Dalfox { return &Dalfox{} }
 
-func (*Dalfox) Name() string             { return "dalfox" }
-func (*Dalfox) SandboxExecution() bool   { return true }
+func (*Dalfox) Name() string              { return "dalfox" }
+func (*Dalfox) SandboxExecution() bool    { return true }
 func (*Dalfox) MITRETechniques() []string { return []string{"T1059.007"} }
 
 // Run invokes the dalfox CLI in URL mode.

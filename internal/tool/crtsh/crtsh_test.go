@@ -9,10 +9,10 @@ import (
 func TestUniqueHosts_ScopeDedupWildcard(t *testing.T) {
 	entries := []crtEntry{
 		{NameValue: "*.example.com\napi.example.com", CommonName: "www.example.com"},
-		{NameValue: "api.example.com"},           // dup
-		{NameValue: "evil.com"},                  // out of scope
-		{NameValue: "deep.sub.example.com"},      // in scope (suffix)
-		{CommonName: "example.com"},              // apex itself
+		{NameValue: "api.example.com"},      // dup
+		{NameValue: "evil.com"},             // out of scope
+		{NameValue: "deep.sub.example.com"}, // in scope (suffix)
+		{CommonName: "example.com"},         // apex itself
 	}
 	got := uniqueHosts(entries, "example.com")
 	want := map[string]bool{

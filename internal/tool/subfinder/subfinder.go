@@ -23,8 +23,8 @@ type Subfinder struct{}
 // New constructs a Subfinder wrapper.
 func New() *Subfinder { return &Subfinder{} }
 
-func (*Subfinder) Name() string             { return "subfinder" }
-func (*Subfinder) SandboxExecution() bool   { return true }
+func (*Subfinder) Name() string              { return "subfinder" }
+func (*Subfinder) SandboxExecution() bool    { return true }
 func (*Subfinder) MITRETechniques() []string { return []string{"T1590.005"} }
 
 // Run invokes subfinder.

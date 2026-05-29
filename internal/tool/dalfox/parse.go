@@ -13,7 +13,7 @@ import (
 // dalfox emits either a JSON array or JSONL depending on flags; parseAny
 // tolerates both shapes.
 type event struct {
-	Type       string `json:"type"`        // "G" = grep, "R" = reflected, "V" = verified
+	Type       string `json:"type"` // "G" = grep, "R" = reflected, "V" = verified
 	InjectType string `json:"inject_type"`
 	Method     string `json:"method"`
 	Data       string `json:"data"` // URL with injected payload

@@ -11,9 +11,9 @@ import (
 // ocsfFinding mirrors the subset of prowler's OCSF output we project.
 // prowler emits an array of OCSF detection findings.
 type ocsfFinding struct {
-	StatusCode string `json:"status_code"` // "PASS" | "FAIL" | "MANUAL"
-	Severity   string `json:"severity"`
-	Message    string `json:"message"`
+	StatusCode  string `json:"status_code"` // "PASS" | "FAIL" | "MANUAL"
+	Severity    string `json:"severity"`
+	Message     string `json:"message"`
 	FindingInfo struct {
 		Title string `json:"title"`
 		UID   string `json:"uid"`

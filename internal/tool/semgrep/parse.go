@@ -35,7 +35,7 @@ type extra struct {
 
 type metadata struct {
 	// semgrep CWE entries look like "CWE-79: Improper Neutralization..."
-	CWE  json.RawMessage `json:"cwe"`
+	CWE   json.RawMessage `json:"cwe"`
 	OWASP json.RawMessage `json:"owasp"`
 }
 

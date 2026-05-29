@@ -12,8 +12,8 @@ import (
 
 // FPFilter implements hooks 1+2 of CLAUDE.md §11:
 //
-//	1. pre_emission_fp_filter — drop known-decoy / pure-noise findings
-//	2. fp_filter.demote        — lower severity for overrated rules
+//  1. pre_emission_fp_filter — drop known-decoy / pure-noise findings
+//  2. fp_filter.demote        — lower severity for overrated rules
 //
 // Both decisions are logged to the audit trail so the security engineer
 // can see (and override in webappsec) what L1.5 suppressed. This is the

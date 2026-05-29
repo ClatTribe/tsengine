@@ -186,9 +186,9 @@ func (c *AnthropicClient) parseResponse(blob []byte) (Response, error) {
 type price struct{ in, out float64 }
 
 var pricing = map[string]price{
-	"claude-sonnet-4-5":  {3.0, 15.0},
-	"claude-opus-4-1":    {15.0, 75.0},
-	"claude-haiku-4-5":   {1.0, 5.0},
+	"claude-sonnet-4-5": {3.0, 15.0},
+	"claude-opus-4-1":   {15.0, 75.0},
+	"claude-haiku-4-5":  {1.0, 5.0},
 }
 
 func estimateCost(model string, u Usage) float64 {

@@ -166,9 +166,9 @@ func materialize(in []asset0Dispatch) []asset.Dispatch {
 
 type mockTool struct{ name string }
 
-func (m *mockTool) Name() string                                    { return m.name }
-func (*mockTool) SandboxExecution() bool                            { return true }
-func (*mockTool) MITRETechniques() []string                         { return nil }
+func (m *mockTool) Name() string                                      { return m.name }
+func (*mockTool) SandboxExecution() bool                              { return true }
+func (*mockTool) MITRETechniques() []string                           { return nil }
 func (*mockTool) Run(context.Context, tool.Args) (tool.Result, error) { return tool.Result{}, nil }
 
 func names(in []tool.Tool) []string {

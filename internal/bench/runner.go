@@ -39,11 +39,11 @@ func (o RunOptions) withDefaults() RunOptions {
 // RunResult is the harness output for one fixture: per-trial scores plus
 // recall/enrichment trial statistics.
 type RunResult struct {
-	Fixture       string     `json:"fixture"`
-	Scores        []Score    `json:"scores"`
-	RecallStats   TrialStats `json:"recall_stats"`
-	EnrichStats   TrialStats `json:"enrichment_stats"`
-	AllPass       bool       `json:"all_pass"`
+	Fixture     string     `json:"fixture"`
+	Scores      []Score    `json:"scores"`
+	RecallStats TrialStats `json:"recall_stats"`
+	EnrichStats TrialStats `json:"enrichment_stats"`
+	AllPass     bool       `json:"all_pass"`
 }
 
 // Run executes a fixture N times via the real tsengine binary and scores
