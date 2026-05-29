@@ -135,6 +135,11 @@ func strArr(desc string) map[string]any {
 	return map[string]any{"type": "array", "description": desc, "items": map[string]any{"type": "string"}}
 }
 
+// objParam is a freeform object param (e.g. tool args, HTTP headers).
+func objParam(desc string) map[string]any {
+	return map[string]any{"type": "object", "description": desc}
+}
+
 func argStr(args map[string]any, k string) string {
 	if v, ok := args[k].(string); ok {
 		return v
@@ -168,4 +173,27 @@ func argStrList(args map[string]any, k string) []string {
 		return []string{t}
 	}
 	return nil
+}
+
+// argMap coerces a tool arg into a map[string]any (a JSON object param).
+func argMap(args map[string]any, k string) map[string]any {
+	if v, ok := args[k].(map[string]any); ok {
+		return v
+	}
+	return nil
+}
+
+// argStrMap coerces a JSON-object arg into map[string]string (HTTP headers).
+func argStrMap(args map[string]any, k string) map[string]string {
+	m := argMap(args, k)
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for kk, vv := range m {
+		if s, ok := vv.(string); ok {
+			out[kk] = s
+		}
+	}
+	return out
 }
