@@ -278,7 +278,16 @@ func executeAll(ctx context.Context, dispatches []asset.Dispatch, dispatcher Dis
 			// single hard URL) from consuming the whole scan budget and
 			// starving its siblings. Default 0 = no per-tool cap.
 			ectx := gctx
-			if tt := toolTimeout(); tt > 0 {
+			// The per-tool cap targets ONE runaway single-target tool (e.g.
+			// sqlmap grinding a hard URL). It must NOT apply to a LIST-mode
+			// dispatch (args["targets"] = many URLs): that's a batch job —
+			// nuclei fuzzing ~hundreds of URLs in one engine — governed by its
+			// own per-request timeout + the scan --timeout. Capping the whole
+			// batch at the single-tool budget truncates it mid-list (the
+			// nuclei -dast list would die after ~startup, scanning almost
+			// nothing).
+			_, isListMode := d.Args["targets"]
+			if tt := toolTimeout(); tt > 0 && !isListMode {
 				var cancel context.CancelFunc
 				ectx, cancel = context.WithTimeout(gctx, tt)
 				defer cancel()
