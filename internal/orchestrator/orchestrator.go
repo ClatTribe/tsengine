@@ -67,7 +67,7 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 	dispatches := handler.PlanAnchors(target)
 	dispatches = handler.Filter(ctx, target, dispatches)
 
-	results, fired, err := executeAll(ctx, dispatches, dispatcher)
+	results, fired, err := executeWaves(ctx, dispatches, dispatcher)
 	if err != nil {
 		return nil, fired, err
 	}
@@ -100,7 +100,7 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 	dispatches := rh.PlanFanout(target, surface)
 	dispatches = handler.Filter(ctx, target, dispatches)
 
-	fanoutResults, fanoutFired, err := executeAll(ctx, dispatches, dispatcher)
+	fanoutResults, fanoutFired, err := executeWaves(ctx, dispatches, dispatcher)
 	if err != nil {
 		return nil, append(reconFired, fanoutFired...), err
 	}
@@ -120,6 +120,29 @@ func fanoutMaxURLs() int {
 		}
 	}
 	return 200
+}
+
+// executeWaves runs dispatches in dependency-ordered waves: concurrent
+// within a wave (executeAll), sequential across waves. An all-independent
+// batch collapses to one wave — the common case, zero overhead. This is
+// the safety guard that lets the fan-out stay parallel without racing a
+// state-writer against its reader once auth/verify tools land (see deps.go).
+func executeWaves(ctx context.Context, dispatches []asset.Dispatch, dispatcher Dispatcher) ([]tool.Result, []string, error) {
+	waves := partitionWaves(dispatches)
+	if len(waves) <= 1 {
+		return executeAll(ctx, dispatches, dispatcher)
+	}
+	var allResults []tool.Result
+	var allFired []string
+	for _, wave := range waves {
+		r, f, err := executeAll(ctx, wave, dispatcher)
+		if err != nil {
+			return nil, allFired, err
+		}
+		allResults = append(allResults, r...)
+		allFired = append(allFired, f...)
+	}
+	return allResults, allFired, nil
 }
 
 // executeAll runs dispatches concurrently with a bounded semaphore.
