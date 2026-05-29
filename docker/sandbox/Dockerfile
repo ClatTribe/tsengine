@@ -85,8 +85,13 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go install github.com/ffuf/ffuf/v2@latest
 
 # kiterunner — undocumented API route discovery (api escalation, E2). Go.
+# The binary's main package is cmd/kiterunner (NOT cmd/kr); install it and
+# rename to `kr` (the name the wrapper invokes). Pinned to v1.0.2 — `@latest`
+# resolved to a tree WITHOUT cmd/kr and broke the build (it only succeeded
+# before via a stale build-cache layer).
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go install github.com/assetnote/kiterunner/cmd/kr@latest
+    go install github.com/assetnote/kiterunner/cmd/kiterunner@v1.0.2 \
+    && mv /go/bin/kiterunner /go/bin/kr
 
 # cosign — image signature / SLSA provenance verification (container, E4).
 # Go, CGO-free.
