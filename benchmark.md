@@ -27,29 +27,96 @@ tools are the documented target set — **anchor tier** fires on every scan,
 ## Benchmark build status (per asset)
 
 The harness (`tsbench`, `internal/bench`) is fully built and tested. What
-varies is whether each asset has a *fixture wired to a corpus*. Legend:
-**✓ live** = runnable + passing; **⚠ stub** = harness + competitor numbers
-ready, corpus not yet deployed; **✗ none** = no fixture yet.
+varies per asset is whether a *fixture is wired to a reachable target/corpus*
+and (for neutral-leaderboard assets) whether a per-category scorer exists.
+Legend: **✓ live** = runnable + scored; **⚠ scorer-ready** = harness + scorer
++ competitor numbers ready, target reachable, number pending; **⚠ stub** =
+harness ready, target not wired; **✗ none** = no fixture.
 
-| Asset | Popular benchmark | Fixture | Built? |
-|---|---|---|---|
-| **container_image** | (no neutral leaderboard) — Trivy / Snyk / Anchore self-published | `fixtures/container/nginx-vuln` + `alpine-clean` | **✓ live** — recall 1.0 on nginx:1.14 (must-find CVEs), 0 false-positives on clean alpine:3.18 |
-| **web_application** | **WAVSEP** (Shay Chen) — Acunetix 87% / Burp 78% / ZAP 56% | `fixtures/web/wavsep` | **⚠ scorer-ready** — per-category Youden scorer + `tsbench wavsep` subcommand built (W5); CWE→WAVSEP category map (sqli/xss/pathtraver/redirect/…). Blocked on: deploy the WAVSEP webapp reachable from the sandbox **and** rebuild the image (katana/sqlmap/seed_auth not yet baked) |
-| **repository** | **OWASP Benchmark v1.2** (SAST) — Veracode 51% / Checkmarx 47% / Fortify 35% / SonarQube 6% | `fixtures/repo/owasp-benchmark` | **⚠ stub** — semgrep now wrapped (tool-ready); needs the BenchmarkJava source tree mounted at `/workspace` |
-| **api** | **VAmPI** + **crAPI** (no neutral leaderboard) | `fixtures/api/vampi` | **⚠ stub** — must-find fixture written (openapi+schemathesis); needs VAmPI deployed + image rebuilt |
-| **ip_address** | (no neutral leaderboard) — Tenable / Qualys / Rapid7 | `fixtures/ip/services` | **⚠ stub** — must-find fixture written (naabu open-port); needs a services host + image rebuilt |
-| **domain** | (no neutral leaderboard) — subfinder vs amass published rates | `fixtures/domain/recon` | **⚠ stub** — must-find fixture written (subdomain-found); needs a target domain + image rebuilt |
-| **cloud_account** | (no neutral) — Prowler / scout-suite; CIS AWS Foundations | `fixtures/cloud/baseline` | **⚠ stub** — fixture written; needs a seeded mock AWS account + image rebuilt |
+> **Leg-up — reuse the strix target images.** The strix project left several
+> intentionally-vulnerable **target images already on the build host**.
+> tsengine can point `tsbench` at them directly (no new deployment), exactly
+> as we did for WAVSEP.
 
-**Summary: 1 of 7 assets has a live benchmark** (container_image); the other
-six are **stubs** — every asset now has a fixture that cites its competitor
-context and loads through the harness. They're blocked on deploying the
-external corpus/target (and, for the asset-wave tools, a single image
-rebuild), not on tsengine code.
+| Asset | Class | Benchmark dataset | Neutral leaderboard | Target image local (ex-strix) | Status |
+|---|---|---|---|---|---|
+| **web_application** | DAST | **WAVSEP** (1,133 cases) | Acunetix 87 / Netsparker 87 / Burp 78 / WebInspect 76 / AppScan 69 / ZAP 56 (Shay Chen) | ✅ `zaproxy/wavsep` | **⚠ scorer-ready** — full recon→fan-out + **form-param synthesis** live; per-category Youden run in progress |
+| **repository** | SAST | **OWASP Benchmark v1.2** (BenchmarkJava) | Veracode 51 / Checkmarx 47 / Fortify 35 / SonarQube 6 | ✅ `strix-bench/owasp-benchmark:v1.2` | **⚠ scorer-ready** — semgrep+codeql wrapped; needs source mounted at `/workspace` + per-CWE Youden scorer |
+| **repository** | SCA | OWASP **NodeGoat** + lockfiles | Snyk / Dependabot (self-published) | ⬇️ git repo (lockfile scan, no image) | **⚠ stub** — trivy-fs/grype/osv wrapped; must-find CVE set |
+| **repository** | IaC | **TerraGoat** / KICS samples | Checkov / tfsec / KICS (self) | ✗ (clone TerraGoat) | **✗ none** — checkov wrapped; corpus not wired |
+| **api** | spec-fuzz / authz | **VAmPI** + **crAPI** | none neutral (Salt / Wallarm commercial) | ✅ `erev0s/vampi` + `crapi/*` | **⚠ stub** — openapi+schemathesis must-find fixture |
+| **container_image** | CVE / misconfig | must-find CVE set (nginx:1.14) | Trivy / Snyk / Anchore (self) | ✅ `nginx` images | **✓ live** — recall 1.0 on must-find CVEs, 0 FP on clean alpine |
+| **ip_address** | network / services | vulnerable-services host | Tenable / Qualys / Rapid7 (no scorecard) | ⚠ compose (ex-strix `vulnerable-services`) | **⚠ stub** — naabu open-port must-find |
+| **domain** | recon breadth | subdomain-enum corpus | subfinder vs amass (published rates) | ✗ (needs a target domain) | **⚠ stub** — subdomain-found must-find |
+| **cloud_account** | CSPM / CIS | CIS Benchmark vs mock AWS | Prowler / scout-suite (self) · CIS AWS Foundations recall | ✗ **strix had none** (tsengine-only asset) | **⚠ stub** — prowler/scoutsuite wrapped; needs seeded mock AWS |
 
-Per CLAUDE.md §14, a benchmark is meaningless without "vs. what" — so every
-fixture **must** cite its competitor leaderboard, and the harness refuses to
-load one that doesn't (CLAUDE.md §14.2.2).
+**Status: 1 of 7 live** (container_image); web + repo-SAST are scorer-ready
+against **locally-available** images; the rest are harness-ready stubs blocked
+on a target, not on tsengine code. Per CLAUDE.md §14, every fixture **must**
+cite its competitor leaderboard — the loader rejects one that doesn't (§14.2.2).
+
+> **L1 vs L2 benchmarks.** This matrix is **L1 detection recall** (did we find
+> the vuln the OSS tool would?). The **L2 exploit/agentic** benchmarks —
+> **XBEN** (104 web CTF, strix scored 96%), **Juice Shop**, **WebGoat** —
+> measure *completion_rate* (did the agent chain + capture the flag), a
+> different metric on the ADR-gated autonomous-exploiter track (arch.md).
+> `bkimminich/juice-shop` + `webgoat/webgoat` are already local for that track.
+
+---
+
+## Proposal: wiring L1 benchmarks for all 7 assets
+
+The harness, multi-trial (median + p10/p90), L1.5 ablation, and anti-overfit
+guards are built. What remains per asset is a **fixture wired to a reachable
+target** plus, for the two neutral-leaderboard assets, a per-category Youden
+scorer. Ordered by effort — exploit the locally-available ex-strix images first.
+
+### Tier 1 — target image already local (≈ WAVSEP effort each)
+
+1. **repository / SAST → OWASP Benchmark v1.2 — highest value** (the 2nd neutral
+   leaderboard after WAVSEP). Mount `strix-bench/owasp-benchmark:v1.2`'s
+   BenchmarkJava tree at `/workspace`; add a per-CWE Youden scorer keyed on
+   `expectedresults-1.2.csv` (the SAST analogue of the WAVSEP CWE→category map);
+   `tsbench sast --target <repo> --ground-truth expectedresults-1.2.csv`. Scores
+   vs Veracode 51 / Checkmarx 47 / Fortify 35 / SonarQube 6.
+2. **api → VAmPI (+ crAPI)**. Bring up the local `erev0s/vampi` (and `crapi/*`
+   compose); `openapi_spec_ingest` → schemathesis/nuclei/kiterunner fan-out;
+   score the written must-find set (BOLA / BFLA / mass-assignment / JWT). No
+   neutral leaderboard → internal must-find recall.
+3. **web → Juice Shop / WebGoat** (secondary DAST corpus). `bkimminich/juice-shop`
+   + `webgoat/webgoat` already local — a second DAST data point beyond WAVSEP
+   (and the bridge to the L2 completion_rate track).
+
+### Tier 2 — clone a repo (no running target)
+
+4. **repository / SCA → NodeGoat + lockfiles**. Clone NodeGoat; trivy-fs / grype /
+   osv-scanner over its lockfiles; must-find CVE recall vs Snyk / Dependabot.
+5. **repository / IaC → TerraGoat / KICS samples**. Clone TerraGoat; checkov over
+   it; must-find recall vs Checkov / tfsec / KICS.
+
+### Tier 3 — needs a provisioned target
+
+6. **ip_address → vulnerable-services host**. Stand up the ex-strix
+   `vulnerable-services` compose (or a vulhub host); naabu → nmap → nuclei;
+   must-find open-port/service recall.
+7. **domain → recon breadth**. Point subfinder + amass + crt.sh at a controlled
+   zone (or a public bug-bounty scope) with known subdomains; subdomain-discovery
+   rate vs published subfinder/amass numbers.
+8. **cloud_account → CIS vs mock AWS**. Seed a mock AWS account (LocalStack, or a
+   sandbox account with known CIS misconfigs); prowler + scoutsuite; CIS-control
+   recall. tsengine-only asset (no strix precedent) — the compliance differentiator.
+
+### Cross-cutting requirements (every new bench)
+
+- **Scorer**: per-CWE/category Youden for the neutral-leaderboard assets
+  (web ✓ built, repo-SAST ✗ to build); **must-find recall** for the rest.
+- **Anti-overfit source-grep** (`internal/bench/guard_test.go`) must forbid each
+  new SUT identifier — `benchmarkjava`, `vampi`, `crapi`, `nodegoat`,
+  `terragoat` — in scoring code (§14.2.1). Ground truth lives in fixture JSON only.
+- Every fixture **must** cite its competitor leaderboard or the loader rejects
+  it (§14.2.2); reports always emit a `competitors:` block.
+- **Multi-trial** (median + p10/p90) and the **L1.5 ablation**
+  (`TSENGINE_L15_DISABLED=1`) are already wired — reuse them.
 
 ---
 
