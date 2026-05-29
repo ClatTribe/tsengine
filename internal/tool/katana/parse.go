@@ -25,11 +25,20 @@ type event struct {
 	// tools (sqlmap/dalfox/nuclei -dast) get an injection point — they fan
 	// only on param-bearing URLs. (Targets like WAVSEP accept the param via
 	// GET even when the form method is POST.)
-	Forms []struct {
-		Method     string   `json:"method"`
-		Action     string   `json:"action"`
-		Parameters []string `json:"parameters"`
-	} `json:"forms"`
+	//
+	// Schema moved between katana versions: <1.6 emits a TOP-LEVEL `forms`;
+	// >=1.6 (v1.6.1 in the image) nests it under `response.forms`. We read
+	// both so the fix survives katana upgrades.
+	Forms    []katanaForm `json:"forms"`
+	Response struct {
+		Forms []katanaForm `json:"forms"`
+	} `json:"response"`
+}
+
+type katanaForm struct {
+	Method     string   `json:"method"`
+	Action     string   `json:"action"`
+	Parameters []string `json:"parameters"`
 }
 
 // parse extracts the unique set of discovered URLs from katana's JSONL
@@ -60,8 +69,11 @@ func parse(blob []byte) []string {
 		}
 		// Synthesize an injectable GET URL from each extracted form so the
 		// fan-out's injection tools get an injection point (the WAVSEP/most-
-		// apps gap: params live in forms, not in crawled URLs).
-		for _, f := range ev.Forms {
+		// apps gap: params live in forms, not in crawled URLs). Read both the
+		// top-level (katana <1.6) and response-nested (>=1.6) form lists.
+		forms := ev.Forms
+		forms = append(forms, ev.Response.Forms...)
+		for _, f := range forms {
 			if fu := formParamURL(base, f.Action, f.Parameters); fu != "" {
 				seen[fu] = struct{}{}
 			}

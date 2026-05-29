@@ -84,3 +84,16 @@ func TestFormParamURL(t *testing.T) {
 		t.Errorf("no params should yield empty; got %q", got)
 	}
 }
+
+func TestParse_SynthesizesFromResponseForms_v16(t *testing.T) {
+	// katana >=1.6 nests forms under response.forms (the schema in the image).
+	blob := []byte(`{"request":{"endpoint":"https://x/c.jsp","method":"GET"},` +
+		`"response":{"forms":[{"method":"POST","action":"https://x/c.jsp","parameters":["msg"]}]}}` + "\n")
+	got := map[string]bool{}
+	for _, u := range parse(blob) {
+		got[u] = true
+	}
+	if !got["https://x/c.jsp?msg=1"] {
+		t.Errorf("response.forms (v1.6) not synthesized: %v", got)
+	}
+}
