@@ -107,6 +107,29 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 	return out
 }
 
+// PlanEscalation is the ip conditional-depth stage (asset.EscalationPlanner):
+// a discovered auth service → hydra default-credential check on that exact
+// host:port. Credential brute is intrusive + slow, so it fires ONLY on the
+// services that have a login, never blanket. (one trigger via EvalTriggers)
+func (h *Handler) PlanEscalation(_ types.Asset, surface []string, findings []types.Finding) []asset.Dispatch {
+	trigger := asset.Trigger{
+		Name: "auth-service→hydra",
+		Tool: "hydra",
+		MatchSurface: func(entry string) (tool.Args, bool) {
+			host, port, ok := splitHostPort(entry)
+			if !ok {
+				return nil, false
+			}
+			svc, isAuth := hydraServiceForPort(port)
+			if !isAuth {
+				return nil, false
+			}
+			return tool.Args{"target": host, "service": svc, "port": port}, true
+		},
+	}
+	return asset.EvalTriggers([]asset.Trigger{trigger}, surface, findings, tool.Get)
+}
+
 func (h *Handler) Filter(_ context.Context, _ types.Asset, in []asset.Dispatch) []asset.Dispatch {
 	return in
 }

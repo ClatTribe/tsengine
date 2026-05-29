@@ -1,6 +1,9 @@
 package asset
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/ClatTribe/tsengine/internal/tool"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -54,7 +57,7 @@ func EvalTriggers(triggers []Trigger, surface []string, findings []types.Finding
 		if !ok {
 			return
 		}
-		key := tr.Tool + "\x00" + dispatchTarget(args)
+		key := tr.Tool + "\x00" + dedupKey(args)
 		if _, dup := seen[key]; dup {
 			return
 		}
@@ -81,12 +84,31 @@ func EvalTriggers(triggers []Trigger, surface []string, findings []types.Finding
 	return out
 }
 
-// dispatchTarget returns the dedup key for a dispatch's primary target.
-func dispatchTarget(args tool.Args) string {
+// dedupKey identifies a dispatch for (tool, X) dedup. It's the primary
+// target PLUS the discriminating sub-target fields (service/port) so that
+// e.g. hydra on host:22(ssh) and host:3306(mysql) — same target host —
+// stay distinct rather than collapsing to one probe.
+func dedupKey(args tool.Args) string {
+	var target string
 	for _, k := range []string{"target", "targets", "spec_url", "login_url"} {
 		if v, ok := args[k].(string); ok && v != "" {
-			return v
+			target = v
+			break
 		}
 	}
-	return ""
+	var parts []string
+	for _, k := range []string{"service", "port", "command"} {
+		switch v := args[k].(type) {
+		case string:
+			if v != "" {
+				parts = append(parts, k+"="+v)
+			}
+		case int:
+			parts = append(parts, k+"="+strconv.Itoa(v))
+		}
+	}
+	if len(parts) == 0 {
+		return target
+	}
+	return target + "|" + strings.Join(parts, "|")
 }

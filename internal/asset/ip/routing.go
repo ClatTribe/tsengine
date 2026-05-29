@@ -59,6 +59,21 @@ var httpLikePorts = map[int]bool{
 	8081: true, 8443: true, 8888: true, 3000: true, 5000: true,
 }
 
+// portToHydraService maps an open port to the hydra module that
+// default-cred checks it. Only auth-bearing services — the escalation
+// engine fires hydra on these and nothing else (intrusive → targeted).
+var portToHydraService = map[int]string{
+	21: "ftp", 22: "ssh", 23: "telnet", 445: "smb",
+	1433: "mssql", 3306: "mysql", 3389: "rdp", 5432: "postgres",
+	5900: "vnc", 6379: "redis",
+}
+
+// hydraServiceForPort returns the hydra service for an auth-bearing port.
+func hydraServiceForPort(port int) (string, bool) {
+	s, ok := portToHydraService[port]
+	return s, ok
+}
+
 // splitHostPort extracts the port from a "host:port" surface entry.
 // Returns ok=false for a bare host (no port) so PlanFanout can treat it
 // as the recon-empty fallback. Handles IPv6 brackets via net.SplitHostPort

@@ -36,10 +36,12 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/crtsh"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dalfox"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
+	_ "github.com/ClatTribe/tsengine/internal/tool/ffuf"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"
 	_ "github.com/ClatTribe/tsengine/internal/tool/grype"
 	_ "github.com/ClatTribe/tsengine/internal/tool/hadolint"
 	_ "github.com/ClatTribe/tsengine/internal/tool/httpx"
+	_ "github.com/ClatTribe/tsengine/internal/tool/hydra"
 	_ "github.com/ClatTribe/tsengine/internal/tool/katana"
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
@@ -122,6 +124,12 @@ func TestArgContracts_AllHandlers(t *testing.T) {
 		// ReconHandler: PlanFanout dispatches over a sample surface.
 		if rh, ok := c.handler.(asset.ReconHandler); ok {
 			for _, d := range c.handler.Filter(ctx, c.target, rh.PlanFanout(c.target, c.surface)) {
+				validate(t, c.name, d)
+			}
+		}
+		// EscalationPlanner: depth dispatches off the surface/findings.
+		if ep, ok := c.handler.(asset.EscalationPlanner); ok {
+			for _, d := range ep.PlanEscalation(c.target, c.surface, nil) {
 				validate(t, c.name, d)
 			}
 		}
