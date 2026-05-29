@@ -77,6 +77,11 @@ func (*Dalfox) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	}, nil
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Dalfox) KnownArgs() []string {
+	return []string{"target", "method", "data", "params", "cookie", "timeout"}
+}
+
 func init() {
 	tool.Register(New())
 }

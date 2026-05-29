@@ -62,6 +62,9 @@ func (*Subfinder) Run(ctx context.Context, args tool.Args) (tool.Result, error) 
 	}, nil
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Subfinder) KnownArgs() []string { return []string{"target", "timeout"} }
+
 func init() {
 	tool.Register(New())
 }

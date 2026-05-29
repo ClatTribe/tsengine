@@ -35,6 +35,16 @@ type ReconHandler interface {
 	PlanFanout(target types.Asset, surface []string) []Dispatch
 }
 
+// ReconPlanner is an OPTIONAL refinement of ReconHandler: a handler that
+// implements it controls how its recon tools are dispatched (crawl depth,
+// seeds, …) instead of accepting the generic DefaultPlanAnchors mapping.
+// The orchestrator type-asserts for it; handlers that don't implement it
+// keep the single-arg target dispatch. This mirrors PlanFanout — the
+// recon dispatch shape is the handler's business, not the orchestrator's.
+type ReconPlanner interface {
+	PlanRecon(target types.Asset) []Dispatch
+}
+
 // CollectSurface flattens DiscoveredURLs from recon results, dedupes
 // (preserving first-seen order), guarantees the original target is
 // present, and caps the result. The cap bounds fan-out cost — strix's

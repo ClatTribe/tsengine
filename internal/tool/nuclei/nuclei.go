@@ -96,6 +96,12 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	}, nil
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec). nuclei reads
+// "targets" via tool.TargetList in addition to a single "target".
+func (*Nuclei) KnownArgs() []string {
+	return []string{"target", "targets", "templates", "tags", "cookie", "rate_limit"}
+}
+
 func init() {
 	tool.Register(New())
 }

@@ -73,4 +73,7 @@ func (*Sqlmap) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	return tool.Result{Output: string(stdout), Findings: parse(stdout, target)}, nil
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Sqlmap) KnownArgs() []string { return []string{"target", "data", "method", "cookie"} }
+
 func init() { tool.Register(New()) }

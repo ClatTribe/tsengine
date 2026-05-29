@@ -108,4 +108,9 @@ func strOr(v any, def string) string {
 	return def
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*SeedAuth) KnownArgs() []string {
+	return []string{"cookie", "login_url", "username", "password", "username_field", "password_field"}
+}
+
 func init() { tool.Register(New()) }

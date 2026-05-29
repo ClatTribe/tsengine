@@ -155,6 +155,14 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 		"-e", "TSENGINE_AUTH_TOKEN=" + token,
 		"--cap-drop=ALL",
 		"--security-opt", "no-new-privileges",
+		// Make host.docker.internal resolve to the host gateway from
+		// inside the sandbox. Docker Desktop (macOS/Windows) injects this
+		// automatically, but Linux does not — without it, a target the
+		// client rewrites to host.docker.internal (see client.go
+		// rewriteLoopbackArgs) is unreachable and network probes silently
+		// fail. strix lost a full ip_address benchmark to exactly this
+		// (recall 1.0→0.0). The alias is harmless where it already exists.
+		"--add-host", "host.docker.internal:host-gateway",
 	}
 	for hostname, ip := range opts.ExtraHosts {
 		args = append(args, "--add-host", hostname+":"+ip)

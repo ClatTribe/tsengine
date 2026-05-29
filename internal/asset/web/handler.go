@@ -59,6 +59,29 @@ func (h *Handler) Recon() []tool.Tool {
 	return resolveTools([]string{"katana"})
 }
 
+// reconDepth is the crawl depth handed to katana. Depth 2 is too shallow
+// to discover a real app's surface — landing pages, index/menu pages, and
+// list→detail links routinely sit 3 hops from the entry point (WAVSEP's
+// index → category-index → eval-index → case is the canonical example).
+// Depth 3 is the realistic default; bounded by TSENGINE_FANOUT_MAX_URLS
+// downstream so a deep crawl still can't explode the dispatch set.
+const reconDepth = 3
+
+// PlanRecon shapes the katana dispatch with an explicit crawl depth.
+// Without this the orchestrator's DefaultPlanAnchors would dispatch katana
+// with only args["target"], inheriting the wrapper's shallow depth-2
+// default. (asset.ReconPlanner)
+func (h *Handler) PlanRecon(target types.Asset) []asset.Dispatch {
+	out := make([]asset.Dispatch, 0, 1)
+	for _, t := range h.Recon() {
+		out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{
+			"target": target.Target,
+			"depth":  reconDepth,
+		}})
+	}
+	return out
+}
+
 // PlanFanout shapes the detection dispatch set across the crawled
 // surface. The split is deliberate (and the reason nuclei/httpx grew a
 // URL-list mode):

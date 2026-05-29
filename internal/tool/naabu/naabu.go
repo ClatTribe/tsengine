@@ -98,4 +98,7 @@ func parse(blob []byte) []types.SandboxEmittedFinding {
 	return out
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Naabu) KnownArgs() []string { return []string{"target", "ports"} }
+
 func init() { tool.Register(New()) }

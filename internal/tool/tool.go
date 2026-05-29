@@ -39,6 +39,36 @@ type Tool interface {
 // CLI flags / library options.
 type Args map[string]any
 
+// ArgSpec is an OPTIONAL interface a Tool may implement to declare the arg
+// keys it recognizes. It exists to kill a whole class of silent-recall
+// bug: strix passed args by string key with no contract, so a Handler that
+// dispatched a tool with the wrong key ("url" vs "target") had its args
+// silently ignored — dropping 5+ anchor signals per target with no error.
+// A CI test (internal/asset arg-contract test) asserts every key a Handler
+// dispatches is in the tool's KnownArgs, turning a mis-wire into a loud
+// build failure instead of zero recall. Tools that don't implement it are
+// skipped by the check (back-compat).
+type ArgSpec interface {
+	// KnownArgs returns the arg keys this tool reads in Run. Keys a
+	// Handler passes that aren't listed are a contract violation.
+	KnownArgs() []string
+}
+
+// ArgIsKnown reports whether key is recognized by t. Tools that don't
+// implement ArgSpec are treated as accepting any key (returns true).
+func ArgIsKnown(t Tool, key string) bool {
+	spec, ok := t.(ArgSpec)
+	if !ok {
+		return true
+	}
+	for _, k := range spec.KnownArgs() {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
 // Result is the wire format every tool returns. Findings are the
 // host-shape findings the tool emits explicitly; SandboxEmittedFindings
 // is the sidecar channel populated by the tool-server when the tool

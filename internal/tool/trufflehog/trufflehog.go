@@ -109,4 +109,7 @@ func parse(blob []byte) []types.SandboxEmittedFinding {
 	return out
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Trufflehog) KnownArgs() []string { return []string{"target"} }
+
 func init() { tool.Register(New()) }

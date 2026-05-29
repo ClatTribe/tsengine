@@ -105,4 +105,7 @@ func normalizeLevel(l string) types.Severity {
 	}
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Dockle) KnownArgs() []string { return []string{"target"} }
+
 func init() { tool.Register(New()) }

@@ -141,3 +141,20 @@ func names(ds []asset.Dispatch) []string {
 	}
 	return out
 }
+
+// C3: the per-tool timeout knob. Default is 0 (no cap; the scan --timeout
+// governs), a valid duration parses, garbage disables it.
+func TestToolTimeout(t *testing.T) {
+	t.Setenv("TSENGINE_TOOL_TIMEOUT", "")
+	if got := toolTimeout(); got != 0 {
+		t.Errorf("default tool timeout = %v, want 0 (uncapped)", got)
+	}
+	t.Setenv("TSENGINE_TOOL_TIMEOUT", "90s")
+	if got := toolTimeout(); got != 90*1e9 {
+		t.Errorf("tool timeout = %v, want 90s", got)
+	}
+	t.Setenv("TSENGINE_TOOL_TIMEOUT", "not-a-duration")
+	if got := toolTimeout(); got != 0 {
+		t.Errorf("bad value should disable cap, got %v", got)
+	}
+}

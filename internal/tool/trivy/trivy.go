@@ -80,6 +80,9 @@ func (*Trivy) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	}, nil
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Trivy) KnownArgs() []string { return []string{"target", "mode", "severity"} }
+
 func init() {
 	tool.Register(New())
 }

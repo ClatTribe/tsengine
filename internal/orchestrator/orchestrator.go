@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -87,7 +88,14 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 // Recon findings (if any) + fan-out findings are both normalized, so a
 // recon tool that also emits a finding never loses it.
 func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler, rh asset.ReconHandler, dispatcher Dispatcher) ([]types.Finding, []string, error) {
-	reconDispatches := asset.DefaultPlanAnchors(target, rh.Recon())
+	// A ReconPlanner shapes its own recon dispatches (crawl depth, seeds);
+	// otherwise fall back to the generic single-arg target mapping.
+	var reconDispatches []asset.Dispatch
+	if rp, ok := handler.(asset.ReconPlanner); ok {
+		reconDispatches = rp.PlanRecon(target)
+	} else {
+		reconDispatches = asset.DefaultPlanAnchors(target, rh.Recon())
+	}
 	reconResults, reconFired, err := executeAll(ctx, reconDispatches, dispatcher)
 	if err != nil {
 		return nil, reconFired, err
@@ -186,7 +194,24 @@ func executeAll(ctx context.Context, dispatches []asset.Dispatch, dispatcher Dis
 			}
 			defer func() { <-sem }()
 
-			res, err := dispatcher.Execute(gctx, d.Tool.Name(), d.Args)
+			// Optional per-tool timeout. The parent ctx (scan --timeout) is
+			// the single source of truth — there is NO fixed host client
+			// timeout, and the tool-server runs each tool on the request
+			// ctx, so host cancellation propagates into the sandbox via
+			// connection close. tsengine therefore can't hit strix's
+			// "timeout split-brain" (host 120s < sandbox 300s) by
+			// construction. This per-tool cap is a separate, opt-in safety
+			// valve: it stops ONE runaway tool (e.g. sqlmap grinding a
+			// single hard URL) from consuming the whole scan budget and
+			// starving its siblings. Default 0 = no per-tool cap.
+			ectx := gctx
+			if tt := toolTimeout(); tt > 0 {
+				var cancel context.CancelFunc
+				ectx, cancel = context.WithTimeout(gctx, tt)
+				defer cancel()
+			}
+
+			res, err := dispatcher.Execute(ectx, d.Tool.Name(), d.Args)
 			if err != nil {
 				// A single tool failure should not abort the scan. The
 				// security-engineer audience can see partial output —
@@ -227,6 +252,21 @@ func concurrencyLimit() int {
 		}
 	}
 	return 4
+}
+
+// toolTimeout honors TSENGINE_TOOL_TIMEOUT (a Go duration, e.g. "90s",
+// "5m"), the OPT-IN per-tool wall-clock cap. Default 0 = no cap (the scan
+// --timeout governs). A bad/zero value disables the cap. This is the knob
+// that makes a per-URL injection fan-out (sqlmap across a large surface)
+// bounded: each tool gets at most this long before it's cancelled and the
+// scan moves on with partial results.
+func toolTimeout() time.Duration {
+	if v := os.Getenv("TSENGINE_TOOL_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 // ErrToolFailed wraps a tool execution failure so the orchestrator can
