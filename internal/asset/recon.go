@@ -89,3 +89,57 @@ func CollectSurface(target string, results []tool.Result, max int) []string {
 	}
 	return out
 }
+
+// FlattenSurface is CollectSurface WITHOUT the cap: dedupe (first-seen
+// order), target-first, every discovered URL. The cap MUST come after
+// filtering + prioritization (see ResolveSurface) — capping raw URLs lets
+// crawl noise (static assets, off-scope, shape-duplicates) eat the budget
+// and truncate real targets before the filter ever runs. That ordering bug
+// is what crippled the WAVSEP fan-out.
+func FlattenSurface(target string, results []tool.Result) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0)
+	add := func(u string) {
+		if u == "" {
+			return
+		}
+		if _, dup := seen[u]; dup {
+			return
+		}
+		seen[u] = struct{}{}
+		out = append(out, u)
+	}
+	add(target)
+	for _, r := range results {
+		for _, u := range r.DiscoveredURLs {
+			add(u)
+		}
+	}
+	return out
+}
+
+// SurfaceSelector is the OPTIONAL capability for a recon Handler to shape its
+// own scan surface: filter out noise, cluster redundant endpoints, prioritize
+// the highest-value targets, and THEN cap. Assets that don't implement it
+// fall back to a plain dedupe+cap (ResolveSurface). The web handler
+// implements it (scope/static/destructive filter → shape-dedup → priority
+// sort → cap), so the cap budget is spent on real, distinct, high-value
+// endpoints rather than the first N raw crawl hits.
+type SurfaceSelector interface {
+	SelectSurface(target types.Asset, raw []string, max int) []string
+}
+
+// ResolveSurface turns recon results into the capped scan surface. If the
+// handler implements SurfaceSelector it does the filter→cluster→prioritize→cap
+// pipeline on the UNcapped flattened set; otherwise we dedupe + cap (the old
+// behavior, fine for assets without a noise problem).
+func ResolveSurface(handler any, target types.Asset, results []tool.Result, max int) []string {
+	raw := FlattenSurface(target.Target, results)
+	if ss, ok := handler.(SurfaceSelector); ok {
+		return ss.SelectSurface(target, raw, max)
+	}
+	if max > 0 && len(raw) > max {
+		return raw[:max]
+	}
+	return raw
+}

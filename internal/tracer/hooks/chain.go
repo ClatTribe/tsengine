@@ -30,10 +30,13 @@ func DefaultPerFinding() []tracer.PerFindingHook {
 //     the multi-source signal is captured)
 //  8. post_emit_verifier (wired, inert until L2.5)
 //  9. cross_tool_merge   (collapse exact duplicates)
+//  11. confidence         (verification_status + confidence; runs LAST so it
+//     sees the final, merged, corroborated set)
 func DefaultFinalize() []tracer.FinalizeHook {
 	return []tracer.FinalizeHook{
 		NewCorroborator(),
 		NewPostEmitVerifier(),
 		NewCrossToolMerge(),
+		NewConfidence(),
 	}
 }

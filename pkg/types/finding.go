@@ -34,6 +34,16 @@ type Finding struct {
 	ThreatIntel     *ThreatIntel     `json:"threat_intel,omitempty"`
 	Compliance      *Compliance      `json:"compliance,omitempty"`
 
+	// VerificationStatus + Confidence are the L1.5 quality signal (strix
+	// parity — its #1 triage signal). They tell the security engineer + L2
+	// HOW MUCH to trust a finding. Status ladder: pattern_match (one tool's
+	// signature match) → corroborated (≥2 independent tools agree) →
+	// verified (re-fired + confirmed; L2.5). Confidence is a 0–1 scalar from
+	// per-tool reliability bumped by corroboration. Derived, so populated on
+	// FindingsEnriched only (never on the verbatim raw view).
+	VerificationStatus VerificationState `json:"verification_status,omitempty"`
+	Confidence         float64           `json:"confidence,omitempty"`
+
 	// DiscoveryMethod tracks how this finding was produced. Replay-sourced
 	// findings carry the original replay_id.
 	DiscoveryMethod *DiscoveryMethod `json:"discovery_method,omitempty"`
@@ -86,8 +96,13 @@ const (
 	// VerificationPatternMatch is the default: rests on an L1 tool's
 	// signature/pattern match, not yet independently confirmed.
 	VerificationPatternMatch VerificationState = "pattern_match"
-	// VerificationVerified means independent method(s) confirmed it. For
-	// HIGH/CRITICAL this requires ≥2 independent methods (L2-4).
+	// VerificationCorroborated means ≥2 INDEPENDENT tools agreed on the same
+	// (endpoint, CWE) / CVE — cross-source agreement, set at L1.5 by the
+	// corroborator→confidence chain without re-firing anything.
+	VerificationCorroborated VerificationState = "corroborated"
+	// VerificationVerified means independent method(s) actively confirmed it
+	// (re-fire via tool-replay). For HIGH/CRITICAL this requires ≥2
+	// independent methods (L2-4 / L2.5).
 	VerificationVerified VerificationState = "verified"
 )
 

@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -314,10 +315,20 @@ func runScan(argv []string) error {
 
 	fmt.Fprintf(os.Stderr, "[%s] orchestrator running anchors against %s\n", scanID, *target)
 	findings, fired, err := orchestrator.Run(ctx, assetTarget, handler, client)
+	// A deadline (scan --timeout) is NOT fatal: the orchestrator returns the
+	// findings that completed before the cutoff. Persist them, flagged
+	// partial — a 0-finding timeout must be distinguishable from a clean
+	// scan (the no-score-on-timeout trap). Any other error is fatal.
+	partial, stopReason := false, ""
 	if err != nil {
-		return fmt.Errorf("orchestrator: %w", err)
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			partial, stopReason = true, "timeout"
+			fmt.Fprintf(os.Stderr, "[%s] scan hit the deadline — writing PARTIAL results\n", scanID)
+		} else {
+			return fmt.Errorf("orchestrator: %w", err)
+		}
 	}
-	fmt.Fprintf(os.Stderr, "[%s] anchors_fired=%v raw_findings=%d\n", scanID, fired, len(findings))
+	fmt.Fprintf(os.Stderr, "[%s] anchors_fired=%v raw_findings=%d partial=%v\n", scanID, fired, len(findings), partial)
 
 	// L1.5 enrichment runs host-side, after L1 emission (CLAUDE.md §11).
 	// The raw findings feed the tracer; it produces the enriched view +
@@ -354,6 +365,8 @@ func runScan(argv []string) error {
 		FindingsEnriched: tr.Enriched(),
 		L15AuditLog:      tr.AuditLog(),
 		ChildAssets:      childAssets,
+		Partial:          partial,
+		StopReason:       stopReason,
 	}
 
 	if err := signAndWrite(&scan, *outDir, scanID); err != nil {

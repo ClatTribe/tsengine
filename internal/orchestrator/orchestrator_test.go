@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/internal/tool"
@@ -160,5 +161,42 @@ func TestConcurrencyLimit_RejectsBadValue(t *testing.T) {
 	t.Setenv("TSENGINE_DISPATCH_CONCURRENCY", "notanumber")
 	if got := concurrencyLimit(); got != 4 {
 		t.Errorf("fallback: got %d, want 4", got)
+	}
+}
+
+// blockingDispatcher blocks every tool until the context is cancelled —
+// simulates a fan-out the scan --timeout cuts off mid-flight.
+type blockingDispatcher struct{}
+
+func (blockingDispatcher) Execute(ctx context.Context, _ string, _ tool.Args) (tool.Result, error) {
+	<-ctx.Done()
+	return tool.Result{}, ctx.Err()
+}
+
+// A deadline mid-scan must NOT discard results: Run returns the (normalized)
+// partial findings alongside the ctx error so the CLI can persist them. This
+// is the no-score-on-timeout fix — the WAVSEP run died exactly here.
+func TestRun_PartialResultsOnDeadline(t *testing.T) {
+	t.Setenv("TSENGINE_DISPATCH_CONCURRENCY", "1") // force queuing so the deadline surfaces
+	h := &mockHandler{
+		anchors:    []tool.Tool{&mockTool{"a"}, &mockTool{"b"}, &mockTool{"c"}},
+		normalizes: []types.Finding{{ID: "f-partial", Tool: "a"}},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+
+	findings, _, err := Run(ctx,
+		types.Asset{Type: types.AssetWebApplication, Target: "https://x"},
+		h, blockingDispatcher{})
+
+	if err == nil {
+		t.Fatal("a cut-short scan should report the deadline error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		t.Errorf("want a context error, got %v", err)
+	}
+	// Critical: the normalized findings survive the deadline (not nil).
+	if len(findings) != 1 {
+		t.Errorf("partial findings must survive the deadline; got %d", len(findings))
 	}
 }
