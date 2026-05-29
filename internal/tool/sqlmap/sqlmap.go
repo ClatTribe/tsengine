@@ -57,6 +57,9 @@ func (*Sqlmap) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	if m, ok := args["method"].(string); ok && m != "" {
 		cli = append(cli, "--method", m)
 	}
+	if c, ok := args["cookie"].(string); ok && c != "" {
+		cli = append(cli, "--cookie", c)
+	}
 
 	cmd := exec.CommandContext(ctx, "sqlmap", cli...)
 	stdout, err := cmd.Output()

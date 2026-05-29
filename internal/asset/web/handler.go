@@ -17,6 +17,7 @@ import (
 type Handler struct {
 	anchors  []tool.Tool
 	registry []tool.Tool
+	seedAuth tool.Tool // nil if seed_auth isn't registered
 }
 
 // NewHandler resolves anchor + registry tool slots from the global
@@ -24,10 +25,14 @@ type Handler struct {
 // — that lets the Handler grow as Phase 2.x ships more wrappers without
 // breaking when a tool is missing in dev images.
 func NewHandler() *Handler {
-	return &Handler{
+	h := &Handler{
 		anchors:  resolveTools(anchorNames),
 		registry: resolveTools(registryNames),
 	}
+	if sa := resolveTools([]string{"seed_auth"}); len(sa) == 1 {
+		h.seedAuth = sa[0]
+	}
+	return h
 }
 
 // Type returns the asset type.
@@ -75,6 +80,22 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 
 	listArg := strings.Join(surface, "\n")
 	var out []asset.Dispatch
+
+	// Authenticated scan: a seed_auth dispatch leads. The W3 wave
+	// classifier puts it in wave 0 (the detectors depend on seed_auth);
+	// the orchestrator threads the captured session into the detectors'
+	// args["cookie"] in the next wave.
+	if target.Auth != nil && h.seedAuth != nil {
+		a := target.Auth
+		out = append(out, asset.Dispatch{Tool: h.seedAuth, Args: tool.Args{
+			"cookie":         a.Cookie,
+			"login_url":      a.LoginURL,
+			"username":       a.Username,
+			"password":       a.Password,
+			"username_field": a.UsernameField,
+			"password_field": a.PasswordField,
+		}})
+	}
 
 	for _, t := range h.anchors {
 		switch t.Name() {

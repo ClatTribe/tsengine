@@ -47,6 +47,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/katana"
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
 	_ "github.com/ClatTribe/tsengine/internal/tool/prowler"
+	_ "github.com/ClatTribe/tsengine/internal/tool/seedauth"
 	_ "github.com/ClatTribe/tsengine/internal/tool/semgrep"
 	_ "github.com/ClatTribe/tsengine/internal/tool/sqlmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trufflehog"
@@ -125,9 +126,15 @@ func usage() {
 Usage:
   tsengine version
   tsengine scan   --asset <type> --target <url> [--image <ref>] [--out <dir>]
+                  [--auth-cookie <c> | --auth-login-url <url> --auth-username <u> --auth-password <p>]
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
+
+Authenticated web scans (web_application): supply a ready session via
+--auth-cookie, or form-login credentials via --auth-login-url plus
+--auth-username/--auth-password. seed_auth captures the session and the
+wave classifier threads it into the detectors.
 
 Asset types: web_application, api, repository, container_image,
              ip_address, domain, cloud_account
@@ -144,6 +151,18 @@ func runScan(argv []string) error {
 	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox docker image")
 	outDir := fs.String("out", "runs", "output directory (one subdir per scan)")
 	timeout := fs.Duration("timeout", 10*time.Minute, "overall scan timeout")
+	// Authenticated-scan flags (web_application). Supply EITHER a ready
+	// session cookie (--auth-cookie) OR form-login credentials
+	// (--auth-login-url + --auth-username + --auth-password). When set,
+	// the web Handler prepends a seed_auth dispatch and the wave classifier
+	// threads the captured session into the detectors. See arch.md
+	// "web_application" auth flow.
+	authCookie := fs.String("auth-cookie", "", "session cookie for authenticated scan (web_application)")
+	authLoginURL := fs.String("auth-login-url", "", "form login URL for authenticated scan (web_application)")
+	authUsername := fs.String("auth-username", "", "login username (with --auth-login-url)")
+	authPassword := fs.String("auth-password", "", "login password (with --auth-login-url)")
+	authUserField := fs.String("auth-username-field", "", "login form username field name (default: username)")
+	authPassField := fs.String("auth-password-field", "", "login form password field name (default: password)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -200,6 +219,22 @@ func runScan(argv []string) error {
 
 	client := sandbox.NewClient(info)
 	assetTarget := types.Asset{Type: at, Target: *target}
+
+	// Wire authenticated-scan config when any auth flag is supplied. The
+	// web Handler's PlanFanout only prepends seed_auth when target.Auth is
+	// non-nil; the credentials never enter vulnerabilities.json (AuthConfig
+	// is json:"-").
+	if *authCookie != "" || *authLoginURL != "" {
+		assetTarget.Auth = &types.AuthConfig{
+			Cookie:        *authCookie,
+			LoginURL:      *authLoginURL,
+			Username:      *authUsername,
+			Password:      *authPassword,
+			UsernameField: *authUserField,
+			PasswordField: *authPassField,
+		}
+		fmt.Fprintf(os.Stderr, "[%s] authenticated scan enabled (seed_auth)\n", scanID)
+	}
 
 	// Resolve the corpus pin BEFORE running anchors (CLAUDE.md §10): the
 	// versions recorded here are what the scan ran against. Then write

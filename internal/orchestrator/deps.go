@@ -25,9 +25,17 @@ import "github.com/ClatTribe/tsengine/internal/asset"
 // Populated ahead of the tools themselves (W5/W6 auth, L2.5 verifier) so
 // the ordering is correct the day those tools are wired.
 var toolDependencies = map[string]map[string]bool{
-	// Auth/session readers depend on the session writers. (Auth flow
-	// lands in W6; the entries are here so the wave order is already
-	// right.)
+	// Web detectors depend on seed_auth: in an authenticated scan,
+	// seed_auth (wave 0) captures the session the orchestrator threads
+	// into these tools' args["cookie"] (wave 1). In an unauthenticated
+	// scan seed_auth isn't in the batch → no in-batch dependency →
+	// single wave, zero overhead.
+	"nuclei": {"seed_auth": true},
+	"dalfox": {"seed_auth": true},
+	"sqlmap": {"seed_auth": true},
+	"httpx":  {"seed_auth": true},
+
+	// Auth/session readers depend on the session writers (L2 tools).
 	"scan_idor":           {"seed_auth": true, "scan_auth_flow": true},
 	"scan_business_logic": {"seed_auth": true, "scan_auth_flow": true},
 

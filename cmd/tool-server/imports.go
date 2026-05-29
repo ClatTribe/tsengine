@@ -14,6 +14,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
 	_ "github.com/ClatTribe/tsengine/internal/tool/prowler"
+	_ "github.com/ClatTribe/tsengine/internal/tool/seedauth"
 	_ "github.com/ClatTribe/tsengine/internal/tool/semgrep"
 	_ "github.com/ClatTribe/tsengine/internal/tool/sqlmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/subfinder"

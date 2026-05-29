@@ -69,6 +69,9 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	if tags, ok := args["tags"].(string); ok && tags != "" {
 		cliArgs = append(cliArgs, "-tags", tags)
 	}
+	if c, ok := args["cookie"].(string); ok && c != "" {
+		cliArgs = append(cliArgs, "-H", "Cookie: "+c)
+	}
 	if rl, ok := args["rate_limit"].(int); ok && rl > 0 {
 		cliArgs = append(cliArgs, "-rl", fmt.Sprintf("%d", rl))
 	}

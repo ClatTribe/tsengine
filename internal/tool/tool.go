@@ -57,4 +57,12 @@ type Result struct {
 	// here, NOT as findings. The orchestrator's recon stage collects
 	// these into the scan surface that detection tools fan out across.
 	DiscoveredURLs []string `json:"discovered_urls,omitempty"`
+
+	// CapturedSession is the auth channel: seed_auth returns a captured
+	// session cookie here. It rides the sandbox→host transport (this
+	// Result) but is NEVER part of the dashboard (vulnerabilities.json is
+	// types.Scan, which doesn't embed Result) — so the live credential
+	// never lands on disk. The orchestrator threads it into later-wave
+	// (authed) dispatches' args["cookie"] (CLAUDE.md §11 wave ordering).
+	CapturedSession string `json:"captured_session,omitempty"`
 }
