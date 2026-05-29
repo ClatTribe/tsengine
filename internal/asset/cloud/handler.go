@@ -54,12 +54,18 @@ func (h *Handler) Normalize(results []tool.Result) []types.Finding {
 	return common.Normalize(results)
 }
 
-// anchorNames: prowler is the multi-cloud posture anchor. Phase 3.x adds
-// scout-suite, cloudsploit, cloudquery, steampipe, parliament.
+// anchorNames: prowler + scoutsuite are the two multi-cloud posture
+// engines (different rule sets → L1.5 corroboration, the cloud analog of
+// trivy+grype). Phase 3.x adds cloudsploit, steampipe, parliament.
 var anchorNames = []string{
 	"prowler",
+	"scoutsuite",
 }
 
+// registryNames are on-demand (tool-replay / dispatch_l2_probe), never
+// auto-fired. cloudfox is read-only IAM attack-path enumeration — the
+// privilege-escalation depth bar — gated behind explicit scope opt-in.
 var registryNames = []string{
-	// Phase 3.x: pacu (gated by explicit scope opt-in), cloudmapper, principal-mapper
+	"cloudfox",
+	// Phase 3.x: pacu (mutating — hard scope gate), cloudmapper, principal-mapper
 }

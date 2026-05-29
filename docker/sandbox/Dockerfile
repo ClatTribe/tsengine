@@ -71,6 +71,11 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
 
+# cloudfox — BishopFox read-only cloud IAM attack-path enum (cloud_account
+# registry tier, A3). Go, CGO-free.
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go install github.com/BishopFox/cloudfox@latest
+
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04
 
@@ -96,8 +101,8 @@ RUN apt-get update \
 # (cloud_account posture), sqlmap (web SQLi specialist). All Python;
 # installed system-wide so the non-root runtime user can invoke them.
 RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov \
-    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov
+        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite \
+    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
@@ -119,6 +124,7 @@ COPY --from=builder /go/bin/katana /usr/local/bin/katana
 COPY --from=builder /go/bin/naabu /usr/local/bin/naabu
 COPY --from=builder /go/bin/amass /usr/local/bin/amass
 COPY --from=builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
+COPY --from=builder /go/bin/cloudfox /usr/local/bin/cloudfox
 
 # syft (SBOM) + hadolint (Dockerfile lint) via release artifacts. syft's
 # install script is anchore's recommended path; hadolint ships per-arch
