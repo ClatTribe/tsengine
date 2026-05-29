@@ -65,24 +65,15 @@ func (c Catalog) Validate() error {
 	return nil
 }
 
-// CoreTools are the framework tools every asset catalog includes: orient
-// (think), workflow control (advance_phase), and the terminal commit
-// (finish_scan). Per-asset waves add the read-state / probe / report tools
-// on top, staying within the cap.
+// CoreTools are the framework tools every asset catalog includes: workflow
+// control (advance_phase) and the terminal commit (finish_scan). Per-asset
+// waves add the read-state / probe / report tools on top, within the cap.
+//
+// There is deliberately NO `think` tool: per CLAUDE.md §2.7 reasoning is
+// not a tool — it lives in the model's response text between tool calls.
+// (strix ships a think scratchpad; tsengine takes the strict §2.7 line.)
 func CoreTools() Catalog {
 	return Catalog{
-		{
-			Schema: ToolSchema{
-				Name:        "think",
-				Description: "Record reasoning/plan to your scratchpad. No side effect; use it to orient before acting. Does NOT emit a finding.",
-				Params: obj(map[string]any{
-					"thought": str("your reasoning"),
-				}, "thought"),
-			},
-			Handler: func(_ context.Context, args map[string]any, _ *State) (ToolResult, error) {
-				return ToolResult{Content: "noted"}, nil
-			},
-		},
 		{
 			Schema: ToolSchema{
 				Name:        "advance_phase",
