@@ -44,8 +44,10 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
+	_ "github.com/ClatTribe/tsengine/internal/tool/openapi"
 	_ "github.com/ClatTribe/tsengine/internal/tool/osvscanner"
 	_ "github.com/ClatTribe/tsengine/internal/tool/prowler"
+	_ "github.com/ClatTribe/tsengine/internal/tool/schemathesis"
 	_ "github.com/ClatTribe/tsengine/internal/tool/scoutsuite"
 	_ "github.com/ClatTribe/tsengine/internal/tool/seedauth"
 	_ "github.com/ClatTribe/tsengine/internal/tool/semgrep"
@@ -71,7 +73,8 @@ func cases() []assetCase {
 				Auth: &types.AuthConfig{LoginURL: "http://localhost:8080/login", Username: "u", Password: "p"}},
 			[]string{"http://localhost:8080/", "http://localhost:8080/x?id=1"}},
 		{"api", apiasset.NewHandler(),
-			types.Asset{Type: types.AssetAPI, Target: "http://localhost:8080/"}, nil},
+			types.Asset{Type: types.AssetAPI, Target: "http://localhost:8080/"},
+			[]string{"SPEC http://localhost:8080/openapi.json", "GET http://localhost:8080/users/{id}", "POST http://localhost:8080/users"}},
 		{"domain", domainasset.NewHandler(),
 			types.Asset{Type: types.AssetDomain, Target: "example.com"},
 			[]string{"example.com", "a.example.com", "b.example.com"}},
