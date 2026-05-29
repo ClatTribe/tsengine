@@ -43,6 +43,8 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"
 	_ "github.com/ClatTribe/tsengine/internal/tool/cloudfox"
 	_ "github.com/ClatTribe/tsengine/internal/tool/codeql"
+	_ "github.com/ClatTribe/tsengine/internal/tool/cosign"
+	_ "github.com/ClatTribe/tsengine/internal/tool/dnstwist"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/ffuf"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"

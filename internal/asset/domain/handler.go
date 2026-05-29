@@ -83,6 +83,12 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 	if cd, ok := tool.Get("checkdmarc"); ok {
 		out = append(out, asset.Dispatch{Tool: cd, Args: tool.Args{"target": apex}})
 	}
+	// dnstwist runs once on the apex to find registered look-alike /
+	// typosquat domains (impersonators), not subdomains. Cheap breadth,
+	// always worth it for a domain scan.
+	if dt, ok := tool.Get("dnstwist"); ok {
+		out = append(out, asset.Dispatch{Tool: dt, Args: tool.Args{"target": apex}})
+	}
 
 	list := strings.Join(surface, "\n")
 	if nuc, ok := tool.Get("nuclei"); ok {
