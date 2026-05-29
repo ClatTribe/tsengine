@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/tool"
@@ -46,6 +47,7 @@ func (c *Client) Execute(ctx context.Context, toolName string, args tool.Args) (
 	if toolName == "" {
 		return tool.Result{}, errors.New("sandbox.Execute: empty tool name")
 	}
+	args = rewriteLoopbackArgs(args)
 	body, err := json.Marshal(ExecuteRequest{Tool: toolName, Args: args})
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("sandbox.Execute: marshal: %w", err)
@@ -125,6 +127,83 @@ func (c *Client) Healthz(ctx context.Context) error {
 		return fmt.Errorf("sandbox.Healthz: status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// loopbackHostArgs are the arg keys that carry a URL or host the sandbox
+// must dial. A loopback host in any of these refers to the HOST machine
+// (where the target runs), not the sandbox container — so it's rewritten
+// to host.docker.internal. Other args (payloads, field names) are left
+// untouched: rewriting arbitrary string values could corrupt a payload.
+var loopbackHostArgs = []string{"target", "targets", "login_url", "url", "urls"}
+
+// loopbackHosts are the host tokens that, inside the sandbox, would point
+// at the sandbox itself rather than the host running the target.
+var loopbackHosts = []string{"127.0.0.1", "localhost", "0.0.0.0", "[::1]", "::1"}
+
+const sandboxHostAlias = "host.docker.internal"
+
+// rewriteLoopbackArgs returns a copy of args with loopback host tokens in
+// the known URL/host keys rewritten to host.docker.internal. This is the
+// host→sandbox boundary fix: a scan targeting http://localhost:8098 means
+// "the app on the host", but inside the sandbox localhost is the sandbox.
+// strix shipped network probes without this and watched ip_address recall
+// collapse from 1.0 to 0.0 (CLAUDE.md §5.1 host/sandbox boundary).
+//
+// Conservative: only the loopbackHostArgs keys are touched, and only the
+// host token is swapped (scheme/port/path preserved). Newline-joined
+// lists (targets) are rewritten per line.
+func rewriteLoopbackArgs(args tool.Args) tool.Args {
+	if len(args) == 0 {
+		return args
+	}
+	out := make(tool.Args, len(args))
+	for k, v := range args {
+		out[k] = v
+	}
+	for _, key := range loopbackHostArgs {
+		s, ok := out[key].(string)
+		if !ok || s == "" {
+			continue
+		}
+		out[key] = rewriteLoopbackString(s)
+	}
+	return out
+}
+
+func rewriteLoopbackString(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		lines[i] = rewriteOneLoopback(ln)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// rewriteOneLoopback swaps a leading-host loopback token for the sandbox
+// alias. Handles bare hosts ("localhost:8098"), scheme URLs
+// ("http://127.0.0.1/x"), and the host token alone.
+func rewriteOneLoopback(s string) string {
+	for _, lh := range loopbackHosts {
+		// scheme://host... and //host...
+		for _, sep := range []string{"://", "//"} {
+			if i := strings.Index(s, sep+lh); i >= 0 {
+				after := i + len(sep) + len(lh)
+				// Only rewrite when the match ends at a host boundary
+				// (port colon, path slash, or end) — avoids matching
+				// "localhosting.example.com".
+				if after == len(s) || s[after] == ':' || s[after] == '/' {
+					return s[:i+len(sep)] + sandboxHostAlias + s[after:]
+				}
+			}
+		}
+		// bare "host:port" or exact "host"
+		if s == lh {
+			return sandboxHostAlias
+		}
+		if strings.HasPrefix(s, lh+":") {
+			return sandboxHostAlias + s[len(lh):]
+		}
+	}
+	return s
 }
 
 func newHTTPClient(timeout time.Duration) *http.Client {

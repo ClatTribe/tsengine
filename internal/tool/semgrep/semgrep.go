@@ -63,4 +63,7 @@ func (*Semgrep) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	return tool.Result{Output: string(stdout), Findings: parse(stdout)}, nil
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Semgrep) KnownArgs() []string { return []string{"target", "config"} }
+
 func init() { tool.Register(New()) }

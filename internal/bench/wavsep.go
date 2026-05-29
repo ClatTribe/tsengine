@@ -78,8 +78,11 @@ func LoadWavsepCases(path string) ([]WavsepCase, error) {
 			continue
 		}
 		url := strings.TrimSpace(row[0])
-		if url == "" || strings.HasPrefix(url, "#") || strings.EqualFold(url, "url") {
-			continue // comment / header
+		// Skip blanks, comment lines, and either header spelling ("url" or
+		// the WAVSEP corpus's "url_path"). Real case paths start with "/",
+		// so a "url"-prefixed first field is always a header, never data.
+		if url == "" || strings.HasPrefix(url, "#") || strings.HasPrefix(strings.ToLower(url), "url") {
+			continue
 		}
 		cases = append(cases, WavsepCase{
 			URL:        url,

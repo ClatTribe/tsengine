@@ -107,4 +107,7 @@ func firstNonEmpty(a, b string) string {
 	return b
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Gitleaks) KnownArgs() []string { return []string{"target"} }
+
 func init() { tool.Register(New()) }

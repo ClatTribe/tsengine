@@ -90,4 +90,7 @@ func readOCSF(dir string) ([]byte, error) {
 	return nil, errors.New("prowler: no json output produced")
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Prowler) KnownArgs() []string { return []string{"target"} }
+
 func init() { tool.Register(New()) }

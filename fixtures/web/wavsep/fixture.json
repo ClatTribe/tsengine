@@ -2,7 +2,7 @@
   "name": "web-wavsep",
   "asset": "web_application",
   "target": "http://wavsep.local:8080",
-  "description": "STUB. WAVSEP (Web Application Vulnerability Scanner Evaluation Project) — the neutral DAST leaderboard. Deploy the WAVSEP webapp and set target to its URL to run. Score per-class Youden against WAVSEP's vulnerable + false-positive test cases.",
+  "description": "WAVSEP (Web Application Vulnerability Scanner Evaluation Project) — the neutral DAST leaderboard. Full 1,133-case ground truth bundled in expected-cases.csv. Deploy the WAVSEP webapp (zaproxy/wavsep, port 8080) and run via `tsbench wavsep --target <url> --ground-truth fixtures/web/wavsep/expected-cases.csv`. Score per-class Youden against WAVSEP's vulnerable + false-positive test cases.",
   "metric": "youden",
   "competitors": {
     "leaderboard": "Shay Chen WAVSEP comparison, sectoolmarket.com",

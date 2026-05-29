@@ -68,6 +68,9 @@ func (*Nmap) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	}, nil
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Nmap) KnownArgs() []string { return []string{"target", "ports", "timing"} }
+
 func init() {
 	tool.Register(New())
 }

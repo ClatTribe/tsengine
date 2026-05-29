@@ -110,4 +110,8 @@ func parse(blob []byte) []types.SandboxEmittedFinding {
 	return out
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec). httpx reads
+// "targets" via tool.TargetList in addition to a single "target".
+func (*HTTPX) KnownArgs() []string { return []string{"target", "targets"} }
+
 func init() { tool.Register(New()) }

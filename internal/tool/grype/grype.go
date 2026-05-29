@@ -120,4 +120,7 @@ func normalizeSeverity(s string) types.Severity {
 	}
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Grype) KnownArgs() []string { return []string{"target"} }
+
 func init() { tool.Register(New()) }

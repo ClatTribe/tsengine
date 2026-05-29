@@ -76,6 +76,41 @@ func TestLoadWavsepCases_SampleCSV(t *testing.T) {
 	}
 }
 
+// The full WAVSEP corpus (ported from the WAVSEP project) must load
+// cleanly: ~1,133 cases, the 4th `cwe` column ignored, and the
+// `url_path` header row skipped (no junk "category" category).
+func TestLoadWavsepCases_FullCorpus(t *testing.T) {
+	cases, err := LoadWavsepCases(filepath.Join("..", "..", "fixtures", "web", "wavsep", "expected-cases.csv"))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(cases) != 1133 {
+		t.Fatalf("got %d cases; want 1133 (header + comments skipped, 4th col ignored)", len(cases))
+	}
+	// The header row must not leak in as a bogus case.
+	seen := map[string]int{}
+	for _, c := range cases {
+		seen[c.Category]++
+		if c.Category == "category" || strings.HasPrefix(strings.ToLower(c.URL), "url") {
+			t.Fatalf("header row leaked as a case: %+v", c)
+		}
+	}
+	// Every category must map to a CWE the scorer understands, else the
+	// ground truth and the CWE→category map have drifted.
+	for cat := range seen {
+		found := false
+		for _, mapped := range cweToWavsepCategory {
+			if mapped == cat {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("corpus category %q has no CWE mapping in cweToWavsepCategory", cat)
+		}
+	}
+}
+
 func TestRenderWavsep_CitesCompetitors(t *testing.T) {
 	rep := ScoreWavsep([]WavsepCase{{URL: "a", Category: "sqli", Vulnerable: true}},
 		&types.Scan{FindingsRaw: []types.Finding{wf("sqlmap::sqli", "CWE-89", "https://t/a?id=1")}})

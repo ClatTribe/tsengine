@@ -63,4 +63,7 @@ func (*Katana) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	return tool.Result{Output: string(stdout), DiscoveredURLs: urls}, nil
 }
 
+// KnownArgs declares the recognized arg keys (tool.ArgSpec).
+func (*Katana) KnownArgs() []string { return []string{"target", "depth"} }
+
 func init() { tool.Register(New()) }
