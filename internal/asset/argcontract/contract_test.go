@@ -29,6 +29,9 @@ import (
 	webasset "github.com/ClatTribe/tsengine/internal/asset/web"
 
 	// Register every tool wrapper so the handlers resolve their anchors.
+	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
+	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
+	_ "github.com/ClatTribe/tsengine/internal/tool/crtsh"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dalfox"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"
@@ -64,7 +67,8 @@ func cases() []assetCase {
 		{"api", apiasset.NewHandler(),
 			types.Asset{Type: types.AssetAPI, Target: "http://localhost:8080/"}, nil},
 		{"domain", domainasset.NewHandler(),
-			types.Asset{Type: types.AssetDomain, Target: "example.com"}, nil},
+			types.Asset{Type: types.AssetDomain, Target: "example.com"},
+			[]string{"example.com", "a.example.com", "b.example.com"}},
 		{"cloud", cloudasset.NewHandler(),
 			types.Asset{Type: types.AssetCloudAccount, Target: "aws"}, nil},
 		{"ip", ipasset.NewHandler(),

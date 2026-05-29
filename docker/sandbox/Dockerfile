@@ -63,6 +63,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpcap-dev \
        go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest \
     && rm -rf /var/lib/apt/lists/*
 
+# amass — OWASP subdomain enumerator (domain asset, A2). Go, CGO-free.
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go install github.com/owasp-amass/amass/v4/...@master
+
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04
 
@@ -88,8 +92,8 @@ RUN apt-get update \
 # (cloud_account posture), sqlmap (web SQLi specialist). All Python;
 # installed system-wide so the non-root runtime user can invoke them.
 RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 sqlmap \
-    || pip3 install --no-cache-dir semgrep prowler sqlmap
+        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc \
+    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
@@ -109,6 +113,7 @@ COPY --from=builder /go/bin/httpx /usr/local/bin/httpx
 COPY --from=builder /go/bin/dockle /usr/local/bin/dockle
 COPY --from=builder /go/bin/katana /usr/local/bin/katana
 COPY --from=builder /go/bin/naabu /usr/local/bin/naabu
+COPY --from=builder /go/bin/amass /usr/local/bin/amass
 
 # trufflehog via its official release script (go install is blocked by
 # replace directives in its go.mod). Pins to /usr/local/bin.

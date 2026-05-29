@@ -35,6 +35,15 @@ type ReconHandler interface {
 	PlanFanout(target types.Asset, surface []string) []Dispatch
 }
 
+// ChildAssetExtractor is an OPTIONAL capability: a handler that derives
+// downstream assets from its own findings (a domain scan → child
+// web_application/ip_address assets per discovered subdomain). The CLI
+// records the result in Scan.ChildAssets so webappsec spawns child scans
+// instead of re-enumerating (strix's "consume, don't re-derive" lesson).
+type ChildAssetExtractor interface {
+	ChildAssets(findings []types.Finding) []types.ChildAsset
+}
+
 // ReconPlanner is an OPTIONAL refinement of ReconHandler: a handler that
 // implements it controls how its recon tools are dispatched (crawl depth,
 // seeds, …) instead of accepting the generic DefaultPlanAnchors mapping.
