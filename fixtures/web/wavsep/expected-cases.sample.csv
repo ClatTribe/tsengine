@@ -1,0 +1,12 @@
+# WAVSEP ground truth — SAMPLE (5 of the real ~1133 rows).
+# Format: url_substring,category,vulnerable
+# Replace with the full expected-cases.csv from the WAVSEP project for a
+# real run. url_substring identifies the test-case URL; category is the
+# WAVSEP class; vulnerable=true means the case is a real bug (should be
+# flagged), false means a false-positive case (must NOT be flagged).
+url,category,vulnerable
+Case01-InjectionInLogin-String-LoginBypass,sqli,true
+Case16-FalsePositive-NumericInput,sqli,false
+RXSS-Case01-Tag2HtmlPlainText,xss,true
+RXSS-FalsePositive-Case01-NoOutput,xss,false
+LFI-Case01-Traversal-Read,pathtraver,true
