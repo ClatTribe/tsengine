@@ -37,12 +37,13 @@ type FinalReport struct {
 // Outcome is what Agent.Run returns: why it stopped + what it produced +
 // what it cost. Recorded for the dashboard + the acceptance gates.
 type Outcome struct {
-	StopReason StopReason     `json:"stop_reason"`
-	Phase      Phase          `json:"final_phase"`
-	Findings   []types.Finding `json:"findings"`
-	Summary    *FinalReport   `json:"summary,omitempty"`
-	Iterations int            `json:"iterations"`
-	CostUSD    float64        `json:"cost_usd"`
-	Tokens     int            `json:"tokens"`
-	Model      string         `json:"model"`
+	StopReason  StopReason      `json:"stop_reason"`
+	Phase       Phase           `json:"final_phase"`
+	Findings    []types.Finding `json:"findings"`
+	Summary     *FinalReport    `json:"summary,omitempty"`
+	Iterations  int             `json:"iterations"`
+	CostUSD     float64         `json:"cost_usd"`
+	Tokens      int             `json:"tokens"`
+	Compactions int             `json:"compactions"`
+	Model       string          `json:"model"`
 }

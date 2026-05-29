@@ -13,6 +13,13 @@ type Budget struct {
 	MaxWallClock   time.Duration // wall-clock cap
 	MaxIdleTurns   int           // progress watchdog: turns with no progress before force-report
 
+	// Compaction (Claude Code-style auto-compact): when the last turn's
+	// context crosses CompactAtFraction of the model window, the loop
+	// compacts the conversation middle, keeping KeepRecentMsgs of tail.
+	// Zero CompactAtFraction disables compaction.
+	CompactAtFraction float64
+	KeepRecentMsgs    int
+
 	// running totals
 	spentUSD   float64
 	spentToks  int
@@ -25,11 +32,13 @@ type Budget struct {
 // bounded (the strix acceptance-gate ballpark: ~$0.50–0.80, ~15–20 min).
 func DefaultBudget() Budget {
 	return Budget{
-		MaxCostUSD:    1.00,
-		MaxTokens:     2_000_000,
-		MaxIterations: 60,
-		MaxWallClock:  20 * time.Minute,
-		MaxIdleTurns:  6,
+		MaxCostUSD:        1.00,
+		MaxTokens:         2_000_000,
+		MaxIterations:     60,
+		MaxWallClock:      20 * time.Minute,
+		MaxIdleTurns:      6,
+		CompactAtFraction: 0.70, // compact at 70% of the window ("lost in the middle")
+		KeepRecentMsgs:    12,
 	}
 }
 
