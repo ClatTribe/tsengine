@@ -12,6 +12,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/dalfox"
 	_ "github.com/ClatTribe/tsengine/internal/tool/httpx"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
+	_ "github.com/ClatTribe/tsengine/internal/tool/sqlmap"
 )
 
 func TestHandler_TypeAndCatalog(t *testing.T) {
@@ -20,7 +21,7 @@ func TestHandler_TypeAndCatalog(t *testing.T) {
 		t.Errorf("Type: got %q", h.Type())
 	}
 	names := names(h.Anchors())
-	wantAnchors := []string{"nuclei", "dalfox", "httpx"}
+	wantAnchors := []string{"nuclei", "dalfox", "httpx", "sqlmap"}
 	if !equal(names, wantAnchors) {
 		t.Errorf("Anchors: got %v, want %v", names, wantAnchors)
 	}

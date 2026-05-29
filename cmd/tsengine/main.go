@@ -48,6 +48,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
 	_ "github.com/ClatTribe/tsengine/internal/tool/prowler"
 	_ "github.com/ClatTribe/tsengine/internal/tool/semgrep"
+	_ "github.com/ClatTribe/tsengine/internal/tool/sqlmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trufflehog"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"

@@ -65,8 +65,8 @@ func (h *Handler) Recon() []tool.Tool {
 //     (nothing to inject into a param-less URL). The filter's per-URL
 //     routing prunes the rest.
 //
-// Tools other than these three (future sqlmap, ffuf, …) default to
-// per-URL dispatch; the filter decides which URLs they apply to.
+// Tools other than the listed ones default to per-URL dispatch; the
+// filter decides which URLs they apply to.
 func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispatch {
 	// Reduce the surface first: scope, static-asset + destructive-path
 	// drops, then shape-dedup (so /items/1..N collapse to one). Both the
@@ -79,10 +79,12 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 	for _, t := range h.anchors {
 		switch t.Name() {
 		case "nuclei", "httpx":
-			// One run over the whole surface.
+			// One run over the whole surface (-list/-l).
 			out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"targets": listArg}})
-		case "dalfox":
-			// Per-URL, params only (dalfox needs an injection point).
+		case "dalfox", "sqlmap":
+			// Injection tools — per-URL, params only (they need an
+			// injection point). sqlmap is also login-protected by the
+			// filter and ordered after auth by the wave classifier.
 			for _, u := range surface {
 				if hasQueryParams(u) {
 					out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
@@ -129,6 +131,7 @@ var anchorNames = []string{
 	"nuclei",
 	"dalfox",
 	"httpx",
+	"sqlmap",
 }
 
 // registryNames are the on-demand tools webappsec's "investigate" button

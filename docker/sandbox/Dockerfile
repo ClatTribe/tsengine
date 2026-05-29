@@ -73,12 +73,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends trivy python3 python3-pip python3-venv git \
     && rm -rf /var/lib/apt/lists/*
 
-# semgrep (repository SAST — the OWASP Benchmark tool) + prowler
-# (cloud_account posture). Both are Python; install system-wide so the
-# non-root runtime user can invoke them.
+# semgrep (repository SAST — the OWASP Benchmark tool), prowler
+# (cloud_account posture), sqlmap (web SQLi specialist). All Python;
+# installed system-wide so the non-root runtime user can invoke them.
 RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 \
-    || pip3 install --no-cache-dir semgrep prowler
+        semgrep==1.96.0 prowler==4.6.0 sqlmap \
+    || pip3 install --no-cache-dir semgrep prowler sqlmap
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
