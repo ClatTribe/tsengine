@@ -18,7 +18,11 @@ COPY pkg ./pkg
 COPY internal ./internal
 COPY cmd ./cmd
 
-ENV CGO_ENABLED=0 GO111MODULE=on
+# GOTOOLCHAIN=auto lets `go install <tool>@latest` download a newer Go
+# toolchain when a tool's go.mod requires one (e.g. osv-scanner v2 needs
+# go >= 1.26). The golang images default to GOTOOLCHAIN=local, which would
+# hard-fail those installs. Only the builder stage is affected (discarded).
+ENV CGO_ENABLED=0 GO111MODULE=on GOTOOLCHAIN=auto
 
 # Build the tool-server.
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
@@ -101,7 +105,7 @@ ARG NUCLEI_VERSION=3.3.7
 # repo for reliable, signed builds).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates curl unzip gnupg lsb-release nmap libpcap0.8 hydra seclists \
+        ca-certificates curl unzip gnupg lsb-release nmap libpcap0.8 hydra \
     && curl -fL https://aquasecurity.github.io/trivy-repo/deb/public.key \
         | gpg --dearmor -o /usr/share/keyrings/trivy.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
@@ -113,9 +117,16 @@ RUN apt-get update \
 # semgrep (repository SAST — the OWASP Benchmark tool), prowler
 # (cloud_account posture), sqlmap (web SQLi specialist). All Python;
 # installed system-wide so the non-root runtime user can invoke them.
-RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite schemathesis inql mobsfscan dnstwist \
-    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite schemathesis inql mobsfscan dnstwist
+# Install each Python tool independently so one dependency conflict can't
+# fail the whole image — a missing tool degrades gracefully at runtime. The
+# heavy resolvers (semgrep/prowler/checkov/scoutsuite) often pin
+# incompatible shared deps; isolating each install avoids backtracking hell.
+RUN for p in "semgrep==1.96.0" sqlmap checkdmarc dnstwist "prowler==4.6.0" \
+             checkov scoutsuite schemathesis inql mobsfscan; do \
+        pip3 install --no-cache-dir --break-system-packages "$p" \
+        || pip3 install --no-cache-dir "$p" \
+        || echo "WARN: pip install $p failed (tool will be unavailable)"; \
+    done
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
@@ -141,6 +152,13 @@ COPY --from=builder /go/bin/cloudfox /usr/local/bin/cloudfox
 COPY --from=builder /go/bin/ffuf /usr/local/bin/ffuf
 COPY --from=builder /go/bin/kr /usr/local/bin/kr
 COPY --from=builder /go/bin/cosign /usr/local/bin/cosign
+
+# ffuf content-discovery wordlist (SecLists common.txt). Not packaged for
+# Ubuntu, so fetch the single list to the path the ffuf wrapper defaults to.
+RUN mkdir -p /usr/share/seclists/Discovery/Web-Content \
+    && curl -fL -o /usr/share/seclists/Discovery/Web-Content/common.txt \
+        https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt \
+    || echo "seclists common.txt fetch failed (non-fatal; pass an explicit ffuf wordlist arg)"
 
 # kiterunner API-route wordlist (assetnote routes-small). Escalation-only,
 # so the small list keeps the image lean.
