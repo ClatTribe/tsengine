@@ -1,0 +1,6 @@
+{"timestamp":"2026-05-29T00:00:00Z","request":{"method":"GET","endpoint":"https://example.com/"},"response":{"status_code":200}}
+{"timestamp":"2026-05-29T00:00:01Z","request":{"method":"GET","endpoint":"https://example.com/login"},"response":{"status_code":200}}
+not a json line
+{"timestamp":"2026-05-29T00:00:02Z","request":{"method":"GET","endpoint":"https://example.com/search?q=1"},"response":{"status_code":200}}
+{"url":"https://example.com/api/users","request":{"method":"GET","endpoint":""}}
+{"timestamp":"2026-05-29T00:00:03Z","request":{"method":"GET","endpoint":"https://example.com/"},"response":{"status_code":200}}

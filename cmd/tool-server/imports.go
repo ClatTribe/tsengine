@@ -9,6 +9,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"
 	_ "github.com/ClatTribe/tsengine/internal/tool/grype"
 	_ "github.com/ClatTribe/tsengine/internal/tool/httpx"
+	_ "github.com/ClatTribe/tsengine/internal/tool/katana"
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"

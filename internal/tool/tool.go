@@ -51,4 +51,10 @@ type Result struct {
 	Output                 any                           `json:"output,omitempty"`
 	Findings               []types.SandboxEmittedFinding `json:"findings,omitempty"`
 	SandboxEmittedFindings []types.SandboxEmittedFinding `json:"_sandbox_emitted_findings,omitempty"`
+
+	// DiscoveredURLs is the recon channel: surface-discovery tools
+	// (katana, openapi_ingest) return the URLs/endpoints they found
+	// here, NOT as findings. The orchestrator's recon stage collects
+	// these into the scan surface that detection tools fan out across.
+	DiscoveredURLs []string `json:"discovered_urls,omitempty"`
 }
