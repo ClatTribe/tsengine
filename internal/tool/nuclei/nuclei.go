@@ -38,22 +38,31 @@ func (*Nuclei) MITRETechniques() []string {
 	return []string{"T1595", "T1595.002"}
 }
 
-// Run invokes the nuclei CLI with the target from args. Recognized args:
+// Run invokes the nuclei CLI. Recognized args:
 //
-//	"target"     string  — required
+//	"target"     string  — single target (used when "targets" is absent)
+//	"targets"    string  — newline-joined URL list → one run via -list
 //	"templates"  string  — optional -t value (e.g. "cves/", "default-logins/")
 //	"tags"       string  — optional -tags filter (comma-separated)
 //	"rate_limit" int     — optional -rl value
 //
-// Output: the parsed findings end up in Result.Findings. Result.Output
-// carries the raw JSONL blob for the security-engineer audience.
+// When the fan-out planner supplies a "targets" list, nuclei runs ONCE
+// over the whole surface (-list) rather than once per URL. Output: parsed
+// findings in Result.Findings; raw JSONL in Result.Output.
 func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
-	target, _ := args["target"].(string)
-	if strings.TrimSpace(target) == "" {
-		return tool.Result{}, errors.New("nuclei: missing required arg 'target'")
-	}
+	listFile, cleanup, isList := tool.TargetList(args)
+	defer cleanup()
 
-	cliArgs := []string{"-u", target, "-jsonl", "-silent", "-disable-update-check"}
+	var cliArgs []string
+	if isList {
+		cliArgs = []string{"-list", listFile, "-jsonl", "-silent", "-disable-update-check"}
+	} else {
+		target, _ := args["target"].(string)
+		if strings.TrimSpace(target) == "" {
+			return tool.Result{}, errors.New("nuclei: missing required arg 'target' or 'targets'")
+		}
+		cliArgs = []string{"-u", target, "-jsonl", "-silent", "-disable-update-check"}
+	}
 	if t, ok := args["templates"].(string); ok && t != "" {
 		cliArgs = append(cliArgs, "-t", t)
 	}

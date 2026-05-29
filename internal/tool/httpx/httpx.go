@@ -29,20 +29,28 @@ func (*HTTPX) Name() string              { return "httpx" }
 func (*HTTPX) SandboxExecution() bool    { return true }
 func (*HTTPX) MITRETechniques() []string { return []string{"T1595.002"} }
 
-// Run probes a URL or host.
+// Run probes a URL/host, or a whole URL list.
 //
 // Recognized args:
 //
-//	"target" string — required, URL or host.
+//	"target"  string — single URL/host (used when "targets" is absent)
+//	"targets" string — newline-joined URL list → one run via -l
 func (*HTTPX) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
-	target, _ := args["target"].(string)
-	if strings.TrimSpace(target) == "" {
-		return tool.Result{}, errors.New("httpx: missing required arg 'target'")
+	listFile, cleanup, isList := tool.TargetList(args)
+	defer cleanup()
+
+	probeFlags := []string{"-json", "-silent", "-duc", "-title", "-tech-detect", "-web-server", "-status-code"}
+	var cliArgs []string
+	if isList {
+		cliArgs = append([]string{"-l", listFile}, probeFlags...)
+	} else {
+		target, _ := args["target"].(string)
+		if strings.TrimSpace(target) == "" {
+			return tool.Result{}, errors.New("httpx: missing required arg 'target' or 'targets'")
+		}
+		cliArgs = append([]string{"-u", target}, probeFlags...)
 	}
-	cmd := exec.CommandContext(ctx, "httpx",
-		"-u", target, "-json", "-silent", "-duc",
-		"-title", "-tech-detect", "-web-server", "-status-code",
-	)
+	cmd := exec.CommandContext(ctx, "httpx", cliArgs...)
 	stdout, err := cmd.Output()
 	if err != nil {
 		var ee *exec.ExitError

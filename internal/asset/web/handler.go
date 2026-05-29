@@ -5,6 +5,8 @@ package web
 
 import (
 	"context"
+	"net/url"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/internal/tool"
@@ -39,11 +41,63 @@ func (h *Handler) Anchors() []tool.Tool { return h.anchors }
 // tool-replay API and L2's dispatch_l2_probe.
 func (h *Handler) Registry() []tool.Tool { return h.registry }
 
-// PlanAnchors uses the default recipe — each anchor receives the user's
-// target URL as args["target"]. Once recon (katana) is wired, this
-// expands into per-URL fan-out.
+// PlanAnchors is the single-target fallback (used when katana isn't
+// registered). Each anchor receives the target URL as args["target"].
 func (h *Handler) PlanAnchors(target types.Asset) []asset.Dispatch {
 	return asset.DefaultPlanAnchors(target, h.anchors)
+}
+
+// Recon returns the surface-discovery tools (katana). If katana isn't
+// registered/installed, this is empty and the orchestrator falls back to
+// the single-target PlanAnchors path.
+func (h *Handler) Recon() []tool.Tool {
+	return resolveTools([]string{"katana"})
+}
+
+// PlanFanout shapes the detection dispatch set across the crawled
+// surface. The split is deliberate (and the reason nuclei/httpx grew a
+// URL-list mode):
+//
+//   - nuclei + httpx run ONCE over the whole surface (args["targets"] =
+//     newline-joined list → -list/-l). Running them per-URL would re-run
+//     the full template/probe set N times — the WAVSEP 2h+ trap.
+//   - dalfox runs per-URL, but only on URLs that carry query params
+//     (nothing to inject into a param-less URL). The filter's per-URL
+//     routing prunes the rest.
+//
+// Tools other than these three (future sqlmap, ffuf, …) default to
+// per-URL dispatch; the filter decides which URLs they apply to.
+func (h *Handler) PlanFanout(_ types.Asset, surface []string) []asset.Dispatch {
+	listArg := strings.Join(surface, "\n")
+	var out []asset.Dispatch
+
+	for _, t := range h.anchors {
+		switch t.Name() {
+		case "nuclei", "httpx":
+			// One run over the whole surface.
+			out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"targets": listArg}})
+		case "dalfox":
+			// Per-URL, params only (dalfox needs an injection point).
+			for _, u := range surface {
+				if hasQueryParams(u) {
+					out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
+				}
+			}
+		default:
+			for _, u := range surface {
+				out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
+			}
+		}
+	}
+	return out
+}
+
+func hasQueryParams(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return u.RawQuery != ""
 }
 
 // Filter applies Q5.34-style filtration rules (URL shape dedup, scope,

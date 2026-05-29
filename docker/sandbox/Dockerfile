@@ -49,7 +49,8 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 # `go install`; it's installed via its release script in stage 2.
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/anchore/grype/cmd/grype@latest \
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/projectdiscovery/httpx/cmd/httpx@latest \
-    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/goodwithtech/dockle/cmd/dockle@latest
+    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/goodwithtech/dockle/cmd/dockle@latest \
+    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/projectdiscovery/katana/cmd/katana@latest
 
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04
@@ -95,6 +96,7 @@ COPY --from=builder /go/bin/gitleaks /usr/local/bin/gitleaks
 COPY --from=builder /go/bin/grype /usr/local/bin/grype
 COPY --from=builder /go/bin/httpx /usr/local/bin/httpx
 COPY --from=builder /go/bin/dockle /usr/local/bin/dockle
+COPY --from=builder /go/bin/katana /usr/local/bin/katana
 
 # trufflehog via its official release script (go install is blocked by
 # replace directives in its go.mod). Pins to /usr/local/bin.

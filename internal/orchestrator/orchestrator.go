@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -53,6 +54,16 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 		return nil, nil, errors.New("orchestrator: nil dispatcher")
 	}
 
+	// Recon-capable assets (web crawl, api spec ingest) run a two-stage
+	// flow: discover the surface, then fan detection tools across it.
+	// Assets without a recon stage fall through to single-target
+	// PlanAnchors. The recon stage is deterministic — not prompt-driven —
+	// so tsengine never hits strix's "model ignored the recon directive"
+	// class of bug (CLAUDE.md §10).
+	if rh, ok := handler.(asset.ReconHandler); ok && len(rh.Recon()) > 0 {
+		return runWithRecon(ctx, target, handler, rh, dispatcher)
+	}
+
 	dispatches := handler.PlanAnchors(target)
 	dispatches = handler.Filter(ctx, target, dispatches)
 
@@ -62,6 +73,53 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 	}
 	findings := handler.Normalize(results)
 	return findings, fired, nil
+}
+
+// runWithRecon implements the two-stage recon → fan-out flow:
+//
+//  1. Run the recon tools (katana) → collect Result.DiscoveredURLs into
+//     the scan surface (capped + deduped; the original target is always
+//     included so a crawl that finds nothing still scans the target).
+//  2. PlanFanout shapes the (tool × URL) detection dispatches; Filter
+//     prunes them (scope, static-asset, login-protection, per-URL
+//     routing); executeAll runs them concurrently.
+//
+// Recon findings (if any) + fan-out findings are both normalized, so a
+// recon tool that also emits a finding never loses it.
+func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler, rh asset.ReconHandler, dispatcher Dispatcher) ([]types.Finding, []string, error) {
+	reconDispatches := asset.DefaultPlanAnchors(target, rh.Recon())
+	reconResults, reconFired, err := executeAll(ctx, reconDispatches, dispatcher)
+	if err != nil {
+		return nil, reconFired, err
+	}
+
+	surface := asset.CollectSurface(target.Target, reconResults, fanoutMaxURLs())
+	fmt.Fprintf(os.Stderr, "[recon] %s discovered surface=%d URLs (cap %d)\n",
+		strings.Join(reconFired, ","), len(surface), fanoutMaxURLs())
+
+	dispatches := rh.PlanFanout(target, surface)
+	dispatches = handler.Filter(ctx, target, dispatches)
+
+	fanoutResults, fanoutFired, err := executeAll(ctx, dispatches, dispatcher)
+	if err != nil {
+		return nil, append(reconFired, fanoutFired...), err
+	}
+
+	allResults := append(reconResults, fanoutResults...)
+	findings := handler.Normalize(allResults)
+	return findings, append(reconFired, fanoutFired...), nil
+}
+
+// fanoutMaxURLs caps the discovered surface to bound fan-out cost.
+// strix's unbounded WAVSEP fan-out ran for hours (Q5.34l); the cap is
+// the guard. Honors TSENGINE_FANOUT_MAX_URLS (default 200).
+func fanoutMaxURLs() int {
+	if v := os.Getenv("TSENGINE_FANOUT_MAX_URLS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 200
 }
 
 // executeAll runs dispatches concurrently with a bounded semaphore.
