@@ -132,8 +132,18 @@ func reportTools(d Deps) Catalog {
 					changed = append(changed, "verified_by")
 				}
 				if s := argStr(args, "verification"); s != "" {
-					// L2-4 inserts the ≥2-independent-methods discipline here.
-					f.L2.Verification = types.VerificationState(s)
+					vs := types.VerificationState(s)
+					if vs != types.VerificationPatternMatch && vs != types.VerificationVerified {
+						return ToolResult{Err: true, Content: `verification must be "pattern_match" or "verified"`}, nil
+					}
+					// L2-4 discipline: a report may only become "verified" once
+					// independent methods confirm it, and HIGH/CRITICAL need ≥2.
+					if vs == types.VerificationVerified {
+						if msg, ok := verifyGate(f.Severity, f.L2.VerifiedBy); !ok {
+							return ToolResult{Err: true, Content: msg}, nil
+						}
+					}
+					f.L2.Verification = vs
 					changed = append(changed, "verification")
 				}
 				if len(changed) == 0 {
@@ -166,6 +176,28 @@ func reportTools(d Deps) Catalog {
 			},
 		},
 	}
+}
+
+// verifyGate enforces the L2-4 verification discipline: a report may only be
+// marked "verified" once independent methods confirm it, and HIGH/CRITICAL
+// require ≥2 INDEPENDENT methods (the ≥2-source rule) — a lone signature
+// match is exactly the false-positive class L2 exists to filter, so claiming
+// a critical is "verified" off one tool is forbidden. VerifiedBy is kept
+// deduped (mergeUnique), so distinct entries ⇒ distinct methods.
+func verifyGate(sev types.Severity, methods []string) (msg string, ok bool) {
+	need := 1
+	if sev == types.SeverityHigh || sev == types.SeverityCritical {
+		need = 2
+	}
+	if len(methods) < need {
+		return fmt.Sprintf(
+			"OBSERVE: you marked a %s report verified with %d independent method(s). ORIENT: %s findings need ≥%d "+
+				"(a lone signature match is the false-positive class L2 filters). DECIDE: gather another, independent "+
+				"confirmation. ACT: send_request to confirm the response AND/OR dispatch_l2_probe(<tool>), then "+
+				"update_finding(id, verified_by=[...]).",
+			sev, len(methods), sev, need), false
+	}
+	return "", true
 }
 
 // findReport returns a pointer into st.Findings for the L2 report with the

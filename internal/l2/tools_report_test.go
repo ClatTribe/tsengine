@@ -145,6 +145,64 @@ func TestUpdateFinding_UnknownId(t *testing.T) {
 	}
 }
 
+// L2-4 discipline: a HIGH/CRITICAL report needs ≥2 independent methods before
+// it can be marked verified; a lone method is rejected (the false-positive
+// class L2 exists to filter).
+func TestUpdateFinding_VerificationDiscipline(t *testing.T) {
+	c := BuildCatalog(fullDeps())
+	uf, _ := c.find("update_finding")
+	st := &State{}
+	emit(t, c, st, map[string]any{
+		"title": "SQLi", "severity": "critical",
+		"evidence_finding_ids": []string{"f-001"}, "plain_english": "x",
+	})
+
+	// 0 methods → rejected.
+	if res, _ := uf.Handler(context.Background(), map[string]any{"id": "l2-001", "verification": "verified"}, st); !res.Err {
+		t.Error("critical verified with 0 methods must be rejected")
+	}
+	// 1 method → still rejected (critical needs ≥2).
+	res, _ := uf.Handler(context.Background(), map[string]any{
+		"id": "l2-001", "verified_by": []string{"send_request"}, "verification": "verified",
+	}, st)
+	if !res.Err {
+		t.Error("critical verified with 1 method must be rejected")
+	}
+	if st.Findings[0].L2.Verification == types.VerificationVerified {
+		t.Error("verification must NOT have flipped to verified on a rejected gate")
+	}
+	// 2nd independent method → now allowed.
+	res2, _ := uf.Handler(context.Background(), map[string]any{
+		"id": "l2-001", "verified_by": []string{"dispatch_l2_probe:sqlmap"}, "verification": "verified",
+	}, st)
+	if res2.Err {
+		t.Fatalf("critical verified with 2 independent methods should pass: %s", res2.Content)
+	}
+	f := st.Findings[0]
+	if f.L2.Verification != types.VerificationVerified || len(f.L2.VerifiedBy) != 2 {
+		t.Errorf("want verified with 2 methods, got %q %v", f.L2.Verification, f.L2.VerifiedBy)
+	}
+}
+
+func TestUpdateFinding_LowSeverityVerifiesWithOneMethod(t *testing.T) {
+	c := BuildCatalog(fullDeps())
+	uf, _ := c.find("update_finding")
+	st := &State{}
+	emit(t, c, st, map[string]any{
+		"title": "Info leak", "severity": "low",
+		"evidence_finding_ids": []string{"f-002"}, "plain_english": "x",
+	})
+	res, _ := uf.Handler(context.Background(), map[string]any{
+		"id": "l2-001", "verified_by": []string{"send_request"}, "verification": "verified",
+	}, st)
+	if res.Err {
+		t.Fatalf("low severity should verify with a single method: %s", res.Content)
+	}
+	if st.Findings[0].L2.Verification != types.VerificationVerified {
+		t.Error("low-severity report should be verified")
+	}
+}
+
 func TestRecordHypothesis_PersistsAndSurvivesCompaction(t *testing.T) {
 	c := BuildCatalog(fullDeps())
 	st := &State{Phase: PhaseInvestigate}

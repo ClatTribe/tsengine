@@ -103,7 +103,7 @@ func TestAgent_ContextCancel(t *testing.T) {
 func TestDispatch_PhaseRejectionIsActionable(t *testing.T) {
 	a, _ := New(&MockClient{}, CoreTools(), DefaultBudget())
 	st := &State{Phase: PhaseTriage}
-	res := a.dispatch(context.Background(), ToolCall{Name: "finish_scan", Args: map[string]any{}}, st)
+	res := a.dispatch(context.Background(), ToolCall{Name: "finish_scan", Args: map[string]any{}}, st, map[string]int{})
 	if !res.Err {
 		t.Fatal("finish_scan in triage should be rejected")
 	}
@@ -114,6 +114,33 @@ func TestDispatch_PhaseRejectionIsActionable(t *testing.T) {
 	}
 	if st.Done {
 		t.Error("rejected finish_scan must not mark the scan done")
+	}
+}
+
+// A stubborn model that calls finish_scan in triage over and over, ignoring
+// the advance_phase instruction, is auto-bypassed: after autoBypassThreshold
+// rejections the loop advances to report on its behalf and runs the call.
+// This is the hard backstop for strix's 36× finish_scan rejection loop.
+func TestAgent_AutoBypassesRepeatedPhaseRejection(t *testing.T) {
+	script := make([]Response, 0, 6)
+	for i := 0; i < 6; i++ {
+		script = append(script, scriptCall("finish_scan", map[string]any{"executive_summary": "done"}, 0.0))
+	}
+	b := DefaultBudget()
+	b.MaxIdleTurns = 0 // isolate auto-bypass from the watchdog
+	a, _ := New(&MockClient{Script: script}, CoreTools(), b)
+	out, err := a.Run(context.Background(), webTarget(), nil)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if out.StopReason != StopFinished {
+		t.Errorf("stop = %q, want finished (auto-bypass should let finish_scan run)", out.StopReason)
+	}
+	if out.Phase != PhaseReport {
+		t.Errorf("auto-bypass should advance to report; phase=%q", out.Phase)
+	}
+	if out.Iterations != autoBypassThreshold {
+		t.Errorf("should finish on attempt #%d; iterations=%d", autoBypassThreshold, out.Iterations)
 	}
 }
 
