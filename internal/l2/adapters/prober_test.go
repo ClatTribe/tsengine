@@ -48,7 +48,7 @@ func writeScan(t *testing.T, runsDir, scanID string) {
 		Engine: types.Engine{SandboxImageDigest: "sha256:deadbeef"},
 	}
 	b, _ := json.Marshal(scan)
-	if err := os.WriteFile(filepath.Join(dir, "vulnerabilities.json"), b, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "vulnerabilities.json"), b, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

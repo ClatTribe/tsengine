@@ -41,7 +41,7 @@ func TestHTTPDoer_RejectsNonHTTPScheme(t *testing.T) {
 
 func TestHTTPDoer_CapsBodyRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(strings.Repeat("A", 200<<10))) // 200 KiB
+		_, _ = w.Write([]byte(strings.Repeat("A", 200<<10))) // 200 KiB
 	}))
 	defer srv.Close()
 
