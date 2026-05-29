@@ -13,7 +13,7 @@ func TestParse_OpenPorts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	findings := parse(blob)
+	findings, surface := parse(blob)
 	// 3 valid ports (22, 80, 443); bad lines + port:0 dropped.
 	if len(findings) != 3 {
 		t.Fatalf("got %d findings; want 3", len(findings))
@@ -24,10 +24,15 @@ func TestParse_OpenPorts(t *testing.T) {
 	if findings[0].Severity != types.SeverityInfo {
 		t.Errorf("severity: %q", findings[0].Severity)
 	}
+	// Recon surface mirrors the open host:port endpoints (deduped).
+	if len(surface) != 3 || surface[0] != "93.184.216.34:22" {
+		t.Errorf("surface: %v", surface)
+	}
 }
 
 func TestParse_Empty(t *testing.T) {
-	if parse(nil) != nil {
+	f, s := parse(nil)
+	if f != nil || s != nil {
 		t.Error("nil expected")
 	}
 }
