@@ -543,6 +543,22 @@ Assembled by `BuildCatalog(Deps)`; external tools (threat-intel / compliance
 / probe / send_request) are included only when their backing service is wired
 (a partial `Deps` yields a valid smaller catalog). `Catalog.Validate()`
 enforces the per-phase ≤12 cap, gated by a CI test on the full-width catalog.
+
+**Real adapters (`internal/l2/adapters`, built).** The four external-service
+interfaces are wired to production backings — and this is where the strix
+divergence is concrete. Where strix exposes ~10 live-API threat-intel tools +
+raw `terminal`/`python` for depth, tsengine collapses each into ONE tool
+backed by existing, reproducible L1 infra:
+- `ThreatIntelLookup` → the L1.5 `threat_intel` corpus (pinned per scan, §10 —
+  NOT a live NVD/Perplexity call). Shared `hooks.ThreatIntel.Lookup`.
+- `ComplianceLookup` → the L1.5 `compliance` corpus. Shared `hooks.Compliance.Lookup`.
+- `Prober` → `internal/replay` (§9 "thin wrapper over /replay" — deterministic
+  re-fire, NOT raw shell).
+- `HTTPDoer` → a bounded host `net/http` client (scheme allow-list, timeout,
+  capped body) — a *verification* primitive, not strix's Burp-style repeater.
+`adapters.NewDeps(...)` assembles a fully-wired `l2.Deps`. Still pending: the
+CLI/orchestrator step that calls it post-L1 + persists the L2 report to the
+dashboard, and the live LLM generate path.
 Depth comes from `dispatch_l2_probe` (re-fire a deterministic L1/registry
 tool via /replay) — NOT raw shell/browser. No `think` (reasoning isn't a
 tool, §2.7). `record_hypothesis` (durable plan, TodoWrite-style) is the one

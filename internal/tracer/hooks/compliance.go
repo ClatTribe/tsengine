@@ -42,14 +42,14 @@ func NewCompliance() *Compliance {
 
 func (*Compliance) Name() string { return "compliance" }
 
-// Apply maps the finding's CWEs to controls. Annotation-only.
-func (h *Compliance) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bool) {
-	if len(f.CWE) == 0 {
-		return f, nil, true
-	}
+// Lookup maps a set of CWEs to the union of compliance controls they affect,
+// or (nil,false) if none match. Single corpus access path, shared by the
+// L1.5 Apply hook AND the L2 lookup_compliance_mapping adapter
+// (internal/l2/adapters) — one corpus, one mapping.
+func (h *Compliance) Lookup(cwes []string) (*types.Compliance, bool) {
 	agg := &types.Compliance{}
 	matched := false
-	for _, cwe := range f.CWE {
+	for _, cwe := range cwes {
 		cs, ok := h.corpus[cwe]
 		if !ok {
 			continue
@@ -63,6 +63,18 @@ func (h *Compliance) Apply(f types.Finding) (types.Finding, []types.AuditEntry, 
 		agg.ISO27001 = mergeUnique(agg.ISO27001, cs.ISO27001)
 	}
 	if !matched {
+		return nil, false
+	}
+	return agg, true
+}
+
+// Apply maps the finding's CWEs to controls. Annotation-only.
+func (h *Compliance) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bool) {
+	if len(f.CWE) == 0 {
+		return f, nil, true
+	}
+	agg, ok := h.Lookup(f.CWE)
+	if !ok {
 		return f, nil, true
 	}
 	f.Compliance = agg
