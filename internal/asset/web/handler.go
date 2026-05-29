@@ -120,20 +120,56 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 		}})
 	}
 
+	// Param-bearing URLs are the injection / fuzzing surface.
+	var paramURLs []string
+	for _, u := range surface {
+		if hasQueryParams(u) {
+			paramURLs = append(paramURLs, u)
+		}
+	}
+
+	// 1) List-mode tools run ONCE: nuclei signature/CVE/misconfig templates +
+	//    httpx over the whole surface, AND nuclei -dast over the PARAM surface
+	//    (active fuzzing: path-traversal / open-redirect / SSRF — the generic
+	//    classes WAVSEP measures, which nuclei's signature templates don't
+	//    catch). nuclei is LIST-NATIVE: one engine fuzzes the whole list with
+	//    internal concurrency + rate-limiting. A single nuclei spawn costs
+	//    ~27s of template compile, so -dast is ONE list dispatch — running it
+	//    per-URL would pay that ~27s for every URL (and run N full engines at
+	//    once under parallelism). Only genuinely single-target tools go
+	//    per-URL (step 2).
 	for _, t := range h.anchors {
 		switch t.Name() {
-		case "nuclei", "httpx":
-			// One run over the whole surface (-list/-l).
+		case "nuclei":
 			out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"targets": listArg}})
-		case "dalfox", "sqlmap":
-			// Injection tools — per-URL, params only (they need an
-			// injection point). sqlmap is also login-protected by the
-			// filter and ordered after auth by the wave classifier.
-			for _, u := range surface {
-				if hasQueryParams(u) {
-					out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
-				}
+			if len(paramURLs) > 0 {
+				out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{
+					"targets": strings.Join(paramURLs, "\n"), "dast": true}})
 			}
+		case "httpx":
+			out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"targets": listArg}})
+		}
+	}
+
+	// 2) Genuinely single-target tools (sqlmap=SQLi, dalfox=XSS) fan per-URL
+	//    over the param surface, interleaved by URL so a sequential / partial
+	//    run covers COMPLETE URLs (both tools per URL) rather than all of one
+	//    tool then none of the next.
+	for _, u := range paramURLs {
+		for _, t := range h.anchors {
+			switch t.Name() {
+			case "sqlmap", "dalfox":
+				out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
+			}
+		}
+	}
+
+	// 3) Any other per-URL anchor (not list-mode, not injection) fans across
+	//    the whole surface — unchanged behavior for assets with such tools.
+	for _, t := range h.anchors {
+		switch t.Name() {
+		case "nuclei", "httpx", "sqlmap", "dalfox":
+			// handled above
 		default:
 			for _, u := range surface {
 				out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})

@@ -51,6 +51,7 @@ func (*Katana) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		"-u", target, "-jsonl", "-silent", "-nc",
 		"-d", depth,
 		"-c", "10", // crawl concurrency inside katana
+		"-fx", // form extraction: emit each page's forms (method/action/params)
 	)
 	stdout, err := cmd.Output()
 	if err != nil {

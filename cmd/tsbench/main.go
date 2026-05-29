@@ -43,6 +43,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench wavsep: %v\n", err)
 			os.Exit(1)
 		}
+	case "sast":
+		if err := sastCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench sast: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -57,9 +62,14 @@ Usage:
   tsbench run      --fixture <path> [--trials N] [--binary <path>] [--image <ref>]
   tsbench ablation --fixture <path> [--trials N]
   tsbench wavsep   --target <url> --ground-truth <expected-cases.csv> [--image <ref>]
+  tsbench sast     --target <src-dir> --ground-truth <expectedresults.csv> [--image <ref>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
+
+sast scans a source tree (e.g. the OWASP BenchmarkJava source, extracted from
+the strix-bench/owasp-benchmark image) with the repository asset and scores
+per-CWE-category Youden vs the SAST leaderboard (Veracode/Checkmarx/Fortify).
 `)
 }
 
@@ -92,6 +102,38 @@ func wavsepCmd(argv []string) error {
 		return err
 	}
 	fmt.Print(bench.RenderWavsep(rep))
+	return nil
+}
+
+// sastCmd runs the OWASP Benchmark v1.2 SAST benchmark: scan a source tree
+// (the BenchmarkJava tree — extract it from the strix-bench/owasp-benchmark
+// image or clone it) with the repository asset, then score per-CWE-category
+// Youden against expectedresults*.csv vs the SAST leaderboard.
+func sastCmd(argv []string) error {
+	fs := flag.NewFlagSet("sast", flag.ContinueOnError)
+	target := fs.String("target", "", "path to the SAST benchmark source tree (e.g. BenchmarkJava)")
+	groundTruth := fs.String("ground-truth", "", "path to expectedresults*.csv (OWASP Benchmark ground truth)")
+	binary := fs.String("binary", "./bin/tsengine", "tsengine binary path")
+	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox image")
+	timeout := fs.String("timeout", "30m", "scan timeout (the tree is large)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *target == "" || *groundTruth == "" {
+		return fmt.Errorf("--target and --ground-truth are required")
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	ctx, cancelT := context.WithTimeout(ctx, time.Hour)
+	defer cancelT()
+
+	rep, err := bench.RunSast(ctx, *target, *groundTruth,
+		bench.RunOptions{Binary: *binary, Image: *image, Timeout: *timeout})
+	if err != nil {
+		return err
+	}
+	fmt.Print(bench.RenderSast(rep))
 	return nil
 }
 

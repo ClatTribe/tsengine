@@ -278,7 +278,16 @@ func executeAll(ctx context.Context, dispatches []asset.Dispatch, dispatcher Dis
 			// single hard URL) from consuming the whole scan budget and
 			// starving its siblings. Default 0 = no per-tool cap.
 			ectx := gctx
-			if tt := toolTimeout(); tt > 0 {
+			// The per-tool cap targets ONE runaway single-target tool (e.g.
+			// sqlmap grinding a hard URL). It must NOT apply to a LIST-mode
+			// dispatch (args["targets"] = many URLs): that's a batch job —
+			// nuclei fuzzing ~hundreds of URLs in one engine — governed by its
+			// own per-request timeout + the scan --timeout. Capping the whole
+			// batch at the single-tool budget truncates it mid-list (the
+			// nuclei -dast list would die after ~startup, scanning almost
+			// nothing).
+			_, isListMode := d.Args["targets"]
+			if tt := toolTimeout(); tt > 0 && !isListMode {
 				var cancel context.CancelFunc
 				ectx, cancel = context.WithTimeout(gctx, tt)
 				defer cancel()
@@ -304,6 +313,29 @@ func executeAll(ctx context.Context, dispatches []asset.Dispatch, dispatcher Dis
 	// completed before the deadline wrote their slots, and the caller
 	// persists them (the no-score-on-timeout trap, see CLAUDE.md §5.1).
 	waitErr := g.Wait()
+	// Robust partial-flag: if every in-flight tool happened to swallow the
+	// deadline (no goroutine was queued to surface gctx.Err — possible when
+	// dispatches ≤ concurrency), still report the cancellation so the caller
+	// marks the scan partial.
+	if waitErr == nil && ctx.Err() != nil {
+		waitErr = ctx.Err()
+	}
+
+	// Surface swallowed tool failures (per-tool timeouts + real errors). These
+	// were invisible before — a tool that ERRORED looked identical to a tool
+	// that found nothing, which masks detection bugs (e.g. is sqlmap timing
+	// out, or is it running clean and finding nothing?).
+	nFail := 0
+	failed.Range(func(k, v any) bool {
+		nFail++
+		if nFail <= 8 {
+			fmt.Fprintf(os.Stderr, "[dispatch] %s failed: %v\n", dispatches[k.(int)].Tool.Name(), v)
+		}
+		return true
+	})
+	if nFail > 8 {
+		fmt.Fprintf(os.Stderr, "[dispatch] +%d more tool failure(s)\n", nFail-8)
+	}
 
 	// Drop slots from failed/cancelled tools so anchors_fired only lists
 	// tools that actually produced results.
