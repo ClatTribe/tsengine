@@ -110,6 +110,30 @@ shape, bench.
 
 ---
 
+### Escalation triggers — conditional depth (deterministic L1, waves E0–E4)
+
+After detection, each handler may run a depth stage that fires expensive
+tools ONLY on a matching signal (CLAUDE.md §5.3). Reproducible, bounded
+(`TSENGINE_ESCALATION_MAX`=50, per-tool timeout), provenance-tagged
+(`Dispatch.EscalatedFrom`). The deterministic half of "which tool when";
+open-ended reasoning stays L2 (Phase 6).
+
+| Asset | Signal | Depth tool | Why (gap no detector fills) |
+|---|---|---|---|
+| web | param URL | nuclei DAST/OAST (interactsh) | blind/out-of-band SSRF/XXE/RCE |
+| web | login URL | nuclei `default-logins` | default creds |
+| web | thin crawl surface | ffuf | hidden paths katana can't reach |
+| ip | open auth port (22/3306/…) | hydra | default/weak service creds |
+| api | spec ingested | kiterunner | undocumented/shadow routes |
+| api | `/graphql` endpoint | inql | GraphQL introspection/schema |
+| repository | semgrep injection finding | CodeQL (that language) | interprocedural taint past semgrep's ceiling |
+| repository | mobile-file finding | mobsfscan | Android/iOS-specific SAST |
+
+Unconditional breadth tools (dnstwist on domain, cosign on container) are
+NOT escalation — they fan out / anchor every scan.
+
+---
+
 ### `api` — DAST + spec-driven
 
 | Layer | Element | Detail |

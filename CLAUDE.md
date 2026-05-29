@@ -235,6 +235,44 @@ These hold for **every** asset, recon or single-stage:
    authz logic), it's a **documented ADR/backlog item**, never a silent
    in-house build.
 
+### 5.3 The escalation stage — conditional depth (deterministic, L1)
+
+After detection (anchors/fan-out), a handler may run a third stage:
+inspect its own findings + surface and dispatch **deep** tools ONLY where a
+signal warrants. This is "in-depth yet efficient" — expensive tools fire
+targeted, never blanket.
+
+The L1/L2 split is the load-bearing decision: this engine handles the
+**known** signal→tool mappings *deterministically* (reproducible, §10, zero
+token cost). The open-ended "what's interesting here, what should I try"
+reasoning stays **L2** (`dispatch_l2_probe`, Phase 6). Do not move
+deterministic escalation into L2, and do not encode open-ended reasoning as
+escalation triggers.
+
+Invariants:
+
+1. **Signal-gated, not blanket.** A handler implements
+   `asset.EscalationPlanner.PlanEscalation(target, surface, findings)`. It
+   uses a per-asset `Trigger` table (`MatchFinding`/`MatchSurface` →
+   args) via `EvalTriggers`, which dedups by (tool, target+service+port).
+   Depth tools never fire without a matching signal.
+2. **Bounded.** The dispatch set is capped by `TSENGINE_ESCALATION_MAX`
+   (default 50 — the cost twin of `TSENGINE_FANOUT_MAX_URLS`) and each tool
+   by `TSENGINE_TOOL_TIMEOUT`. A signal flood can't turn "depth" into
+   "unbounded".
+3. **Provenance.** Escalated dispatches carry `Dispatch.EscalatedFrom` (the
+   trigger name) for logging/audit. Detection + escalation findings are
+   normalized together.
+4. **Current trigger tables** (signal → depth tool):
+   - web: param URL → nuclei DAST/OAST (blind, interactsh); login URL →
+     nuclei default-logins; thin surface → ffuf content discovery.
+   - ip: open auth port (22/3306/…) → hydra default-cred check.
+   - api: spec ingested → kiterunner (shadow routes); `/graphql` → inql.
+   - repository: semgrep injection finding → CodeQL on that language
+     (taint); mobile-file finding → mobsfscan.
+   Breadth tools that are unconditional (dnstwist, cosign) are NOT
+   escalation — they're fan-out/anchor.
+
 ---
 
 ## 6. The L1 dashboard contract — `vulnerabilities.json`
