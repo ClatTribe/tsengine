@@ -104,8 +104,11 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 		return findings, f, err
 	}
 
-	surface := asset.CollectSurface(target.Target, reconResults, fanoutMaxURLs())
-	fmt.Fprintf(os.Stderr, "[recon] %s discovered surface=%d URLs (cap %d)\n",
+	// ResolveSurface filters + prioritizes BEFORE capping (web), so the cap
+	// budget holds real, distinct, high-value endpoints — not the first N
+	// raw crawl hits. Assets without a SurfaceSelector get plain dedupe+cap.
+	surface := asset.ResolveSurface(handler, target, reconResults, fanoutMaxURLs())
+	fmt.Fprintf(os.Stderr, "[recon] %s discovered surface=%d URLs (cap %d, filtered+prioritized)\n",
 		strings.Join(reconFired, ","), len(surface), fanoutMaxURLs())
 
 	dispatches := rh.PlanFanout(target, surface)
