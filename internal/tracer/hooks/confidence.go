@@ -31,19 +31,19 @@ func (*Confidence) Name() string { return "confidence" }
 // high; broad pattern scanners rank lower (more false positives). Unknown
 // tools default to defaultBaseConfidence.
 var toolBaseConfidence = map[string]float64{
-	"trivy":      0.90, // CVE DB match against a pinned lockfile/image
-	"grype":      0.90,
+	"trivy":       0.90, // CVE DB match against a pinned lockfile/image
+	"grype":       0.90,
 	"osv-scanner": 0.90,
-	"sqlmap":     0.85, // confirms injection by differential response
-	"nuclei":     0.85, // curated templates, mostly verified matches
-	"gitleaks":   0.80, // entropy + rule; some FPs
-	"trufflehog": 0.80,
-	"cosign":     0.85,
-	"dalfox":     0.70, // reflection ≠ always exploitable
-	"semgrep":    0.60, // static pattern; needs taint to confirm
-	"checkov":    0.65,
-	"hadolint":   0.65,
-	"dockle":     0.70,
+	"sqlmap":      0.85, // confirms injection by differential response
+	"nuclei":      0.85, // curated templates, mostly verified matches
+	"gitleaks":    0.80, // entropy + rule; some FPs
+	"trufflehog":  0.80,
+	"cosign":      0.85,
+	"dalfox":      0.70, // reflection ≠ always exploitable
+	"semgrep":     0.60, // static pattern; needs taint to confirm
+	"checkov":     0.65,
+	"hadolint":    0.65,
+	"dockle":      0.70,
 }
 
 const defaultBaseConfidence = 0.50
