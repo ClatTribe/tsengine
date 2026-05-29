@@ -521,6 +521,66 @@ CLAUDE.md §14. Per-asset bench targets:
 
 ---
 
+## L2 design (Phase 6) — the AI security engineer
+
+L2 is a **triage/translator**, not an autonomous exploiter. It reads L1's
+complete findings and produces the developer/PM artifact (prioritize →
+chain → verify → explain → remediate). It detects nothing, drives no recon,
+runs no known escalations — open-ended reasoning only. `internal/l2/`.
+
+**Architecture (L2-0, built):** single Lead, ReAct loop over a phase state
+machine (triage→investigate→chain→report), hard ≤12-tool catalog, budget
+caps + progress watchdog, render guard, OODA-shaped actionable rejections.
+Provider-agnostic `Client` (Anthropic default).
+
+**Locked per-asset catalog (≤12, ~10):**
+```
+advance_phase · get_finding · query_threat_intel · lookup_compliance_mapping ·
+dispatch_l2_probe · send_request · record_hypothesis · create_vulnerability_report ·
+update_finding · finish_scan
+```
+Depth comes from `dispatch_l2_probe` (re-fire a deterministic L1/registry
+tool via /replay) — NOT raw shell/browser. No `think` (reasoning isn't a
+tool, §2.7). `record_hypothesis` (durable plan, TodoWrite-style) is the one
+addition over the dropped `think`: it persists, so it's §2.7-legit and
+survives compaction.
+
+**Context engineering (Claude Code-informed, L2-0 built):** four-tier
+memory — hot (recent turns) / warm (compacted) / **crystal** (findings +
+plan, durable, read on demand via tools, never re-derived from prose) /
+cold (audit). Auto-compaction fires when the last turn's real context
+(`Usage.InputTokens`) crosses `CompactAtFraction` of the model window; it's
+**deterministic + templated** (a progress summary from State, no extra LLM
+call) — cheaper + reproducible (§10) than an LLM summary, affordable
+because crystal memory makes the narrative expendable. System prompt stays
+fixed (cache prefix). This is what lets the Lead do proper analysis on a
+1000-finding scan.
+
+**L2 waves:** L2-1 read-state (`get_finding`) · L2-2 commit tools +
+`record_hypothesis` + per-asset catalogs + CI cap test · L2-3
+threat-intel/compliance + `dispatch_l2_probe` + `send_request` · L2-4
+verification (pattern_match→verified, ≥2 methods) + auto-bypass · L2-5
+bench (detection_rate + completion_rate).
+
+### Roadmap: autonomous-exploiter track (ADR-gated, not default)
+
+A *separate* future track turns L2 into an XBOW/strix-XBEN-class **active
+exploiter** (capture-the-flag, live chaining). It needs **exploit
+primitives** — `terminal_execute`, `browser_action`, an HTTP repeater,
+`submit_flag`, file I/O — which:
+- break the ≤12 cap (strix needed ~25 even in orchestrator mode),
+- add nondeterminism + arbitrary code-exec risk (needs a hardened,
+  network-egress-scoped sandbox + an explicit safety model),
+- are measured by **completion_rate** (flag captured?), a different metric
+  from the translator's detection_rate.
+
+This is **gated behind an ADR** (safety/sandbox model, cap exemption,
+reproducibility fence) — never enabled by default, and reachable only as a
+registry-tier capability, so the deterministic+reproducible translator L2
+stays the product's spine.
+
+---
+
 ## Repo layout
 
 ```
@@ -536,6 +596,8 @@ tsengine/
 │   ├── tracer/           # findings store + L1.5 hook chain
 │   ├── dashboard/        # vulnerabilities.json renderer
 │   ├── replay/           # tool-replay API handler
+│   ├── l2/               # L2 Lead agent (Phase 6): ReAct loop, phases,
+│   │                     #   ≤12 catalog, budget, compaction
 │   └── bench/            # per-asset bench harnesses
 ├── pkg/
 │   └── types/            # Finding, Asset, AssetType, MITRETechnique

@@ -8,6 +8,7 @@ import "context"
 // runaway loop is caught by the watchdog/budget rather than a panic.
 type MockClient struct {
 	ModelName string
+	Window    int // context window (0 → 200K); set small to test compaction
 	Script    []Response
 	i         int
 
@@ -37,6 +38,15 @@ func (m *MockClient) Model() string {
 		return "mock"
 	}
 	return m.ModelName
+}
+
+// ContextWindow returns the configured window (default 200K; set small to
+// trigger compaction in tests).
+func (m *MockClient) ContextWindow() int {
+	if m.Window == 0 {
+		return 200_000
+	}
+	return m.Window
 }
 
 // scriptCall is a tiny helper for tests to script a tool-use turn.

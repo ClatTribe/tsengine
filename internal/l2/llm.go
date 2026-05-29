@@ -77,4 +77,8 @@ type Client interface {
 	Generate(ctx context.Context, system string, history []Message, tools []ToolSchema) (Response, error)
 	// Model returns the model identifier (recorded for reproducibility).
 	Model() string
+	// ContextWindow is the model's max input-token window. The agent uses
+	// it to decide when to compact (the actual context size of the last
+	// turn is read from Response.Usage.InputTokens).
+	ContextWindow() int
 }

@@ -50,6 +50,7 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 	history := []Message{{Role: RoleUser, Content: "Begin triage of the L1 findings."}}
 	a.budget.start()
 
+	compactions := 0
 	stop := StopRunning
 	for {
 		if ctx.Err() != nil {
@@ -88,7 +89,7 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 			// Empty-action guard: nudge the model to act via a tool rather
 			// than hang on prose (strix's empty-message guard).
 			history = append(history, Message{Role: RoleUser,
-				Content: "Take an action via a tool (think, advance_phase, emit a finding, or finish_scan). Prose alone changes nothing."})
+				Content: "Take an action via a tool (advance_phase, emit a finding, or finish_scan). Prose alone changes nothing."})
 			continue
 		}
 
@@ -110,17 +111,29 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 			stop = StopFinished
 			break
 		}
+
+		// Auto-compact when the last turn's REAL context size crossed the
+		// window fraction (Claude Code's auto-compact). Deterministic +
+		// durable state preserved → "proper analysis" survives a long scan.
+		if shouldCompact(resp.Usage.InputTokens, a.client.ContextWindow(), a.budget.CompactAtFraction) {
+			before := len(history)
+			history = compactHistory(history, a.budget.KeepRecentMsgs, st)
+			if len(history) < before {
+				compactions++
+			}
+		}
 	}
 
 	return Outcome{
-		StopReason: stop,
-		Phase:      st.Phase,
-		Findings:   st.Findings,
-		Summary:    st.Summary,
-		Iterations: a.budget.iterations,
-		CostUSD:    a.budget.spentUSD,
-		Tokens:     a.budget.spentToks,
-		Model:      a.client.Model(),
+		StopReason:  stop,
+		Phase:       st.Phase,
+		Findings:    st.Findings,
+		Summary:     st.Summary,
+		Iterations:  a.budget.iterations,
+		CostUSD:     a.budget.spentUSD,
+		Tokens:      a.budget.spentToks,
+		Compactions: compactions,
+		Model:       a.client.Model(),
 	}, nil
 }
 

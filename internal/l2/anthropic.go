@@ -39,6 +39,10 @@ func NewAnthropicClient(model string) *AnthropicClient {
 
 func (c *AnthropicClient) Model() string { return c.model }
 
+// ContextWindow returns the Claude input-token window (200K for the
+// current Sonnet/Opus generation).
+func (c *AnthropicClient) ContextWindow() int { return 200_000 }
+
 // Generate runs one turn against the Anthropic Messages API.
 func (c *AnthropicClient) Generate(ctx context.Context, system string, history []Message, tools []ToolSchema) (Response, error) {
 	if c.apiKey == "" {
