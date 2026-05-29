@@ -60,6 +60,13 @@ func (*Trivy) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	if sev, ok := args["severity"].(string); ok && sev != "" {
 		cliArgs = append(cliArgs, "--severity", sev)
 	}
+	// Base-layer skip (container base-image noise reduction, A5): only
+	// surface vulns that have a fix, so a customer's app-fixable CVEs stand
+	// apart from the unfixable alpine/debian baseline. strix's Q5.42
+	// filtration dimension for container_image.
+	if iu, ok := args["ignore_unfixed"].(bool); ok && iu {
+		cliArgs = append(cliArgs, "--ignore-unfixed")
+	}
 	cliArgs = append(cliArgs, target)
 
 	cmd := exec.CommandContext(ctx, "trivy", cliArgs...)
@@ -81,7 +88,9 @@ func (*Trivy) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 }
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec).
-func (*Trivy) KnownArgs() []string { return []string{"target", "mode", "severity"} }
+func (*Trivy) KnownArgs() []string {
+	return []string{"target", "mode", "severity", "ignore_unfixed"}
+}
 
 func init() {
 	tool.Register(New())
