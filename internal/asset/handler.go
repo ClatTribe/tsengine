@@ -65,4 +65,11 @@ func DefaultPlanAnchors(target types.Asset, anchors []tool.Tool) []Dispatch {
 type Dispatch struct {
 	Tool tool.Tool
 	Args tool.Args
+
+	// EscalatedFrom is set (to the trigger name) when this dispatch was
+	// produced by the escalation stage rather than the anchor/fan-out
+	// stage — i.e. a depth tool fired because a detection signal warranted
+	// it. Empty for normal anchor/fan-out dispatches. Carried for
+	// provenance/logging (CLAUDE.md §5.3 escalation).
+	EscalatedFrom string
 }
