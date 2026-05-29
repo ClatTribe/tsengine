@@ -78,7 +78,7 @@ func CoreTools() Catalog {
 			Schema: ToolSchema{
 				Name:        "advance_phase",
 				Description: "Advance the workflow to the next phase (triage→investigate→chain→report) when the current phase's work is done. finish_scan is only available in the report phase.",
-				Params:      obj(map[string]any{}, ),
+				Params:      obj(map[string]any{}),
 			},
 			Handler: func(_ context.Context, _ map[string]any, st *State) (ToolResult, error) {
 				prev := st.Phase
