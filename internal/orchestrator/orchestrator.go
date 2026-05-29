@@ -72,8 +72,8 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 	if err != nil {
 		return nil, fired, err
 	}
-	findings := handler.Normalize(results)
-	return findings, fired, nil
+	// Single-stage assets have no recon surface; the target itself is it.
+	return finalizeWithEscalation(ctx, target, handler, dispatcher, results, fired, []string{target.Target})
 }
 
 // runWithRecon implements the two-stage recon → fan-out flow:
@@ -114,8 +114,67 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 	}
 
 	allResults := append(reconResults, fanoutResults...)
+	allFired := append(reconFired, fanoutFired...)
+	return finalizeWithEscalation(ctx, target, handler, dispatcher, allResults, allFired, surface)
+}
+
+// finalizeWithEscalation is the shared tail of both the single-stage and
+// recon paths: it runs the deterministic escalation stage (if the Handler
+// implements asset.EscalationPlanner), then normalizes detection +
+// escalation results together.
+//
+// Escalation = conditional depth: the handler inspects the detection
+// findings + surface and proposes DEEP tool dispatches only where a signal
+// warrants (a /graphql endpoint → inql, a login → hydra, …). Bounded by
+// TSENGINE_ESCALATION_MAX so a flood of signals can't explode cost, and by
+// the per-tool timeout (C3). This is the L1 (reproducible) half of "which
+// tool when"; the open-ended half is L2 (Phase 6). CLAUDE.md §5.3.
+func finalizeWithEscalation(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher, detResults []tool.Result, detFired []string, surface []string) ([]types.Finding, []string, error) {
+	allResults := detResults
+	allFired := detFired
+
+	if ep, ok := handler.(asset.EscalationPlanner); ok {
+		// Trigger evaluation needs findings, so normalize the detection
+		// results to an interim view (IDs here are throwaway; the final
+		// Normalize over all results assigns the canonical IDs).
+		interim := handler.Normalize(detResults)
+		esc := ep.PlanEscalation(target, surface, interim)
+		esc = capEscalation(esc)
+		esc = handler.Filter(ctx, target, esc)
+		if len(esc) > 0 {
+			labels := make([]string, 0, len(esc))
+			for _, d := range esc {
+				labels = append(labels, d.EscalatedFrom)
+			}
+			fmt.Fprintf(os.Stderr, "[escalate] %d depth dispatch(es): %s\n",
+				len(esc), strings.Join(labels, ","))
+			r, f, err := executeWaves(ctx, esc, dispatcher)
+			if err != nil {
+				return nil, allFired, err
+			}
+			allResults = append(allResults, r...)
+			allFired = append(allFired, f...)
+		}
+	}
+
 	findings := handler.Normalize(allResults)
-	return findings, append(reconFired, fanoutFired...), nil
+	return findings, allFired, nil
+}
+
+// capEscalation bounds the escalation dispatch set to TSENGINE_ESCALATION_MAX
+// (default 50). The guard against a signal flood turning "in-depth" into
+// "unbounded" — the cost twin of TSENGINE_FANOUT_MAX_URLS.
+func capEscalation(in []asset.Dispatch) []asset.Dispatch {
+	max := 50
+	if v := os.Getenv("TSENGINE_ESCALATION_MAX"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			max = n
+		}
+	}
+	if len(in) > max {
+		return in[:max]
+	}
+	return in
 }
 
 // fanoutMaxURLs caps the discovered surface to bound fan-out cost.
