@@ -20,29 +20,41 @@ func TestPlanFanout_ListToolsOnceParamToolsPerURL(t *testing.T) {
 	}
 	out := h.PlanFanout(types.Asset{Type: types.AssetWebApplication, Target: "https://x/"}, surface)
 
-	byTool := map[string]int{}
+	var nucleiList, nucleiDast, dalfox, httpx int
 	var nucleiTargets string
 	for _, d := range out {
-		byTool[d.Tool.Name()]++
-		if d.Tool.Name() == "nuclei" {
-			nucleiTargets, _ = d.Args["targets"].(string)
+		switch d.Tool.Name() {
+		case "nuclei":
+			if _, isList := d.Args["targets"]; isList {
+				nucleiList++
+				nucleiTargets, _ = d.Args["targets"].(string)
+			} else if dast, _ := d.Args["dast"].(bool); dast {
+				nucleiDast++
+			}
+		case "httpx":
+			httpx++
+		case "dalfox":
+			dalfox++
 		}
 	}
 
-	// nuclei + httpx: exactly one dispatch each (whole-surface list).
-	if byTool["nuclei"] != 1 {
-		t.Errorf("nuclei dispatches: got %d, want 1 (list mode)", byTool["nuclei"])
+	// nuclei (signature templates) + httpx run ONCE over the whole surface.
+	if nucleiList != 1 {
+		t.Errorf("nuclei list-mode dispatches: got %d, want 1", nucleiList)
 	}
-	if byTool["httpx"] != 1 {
-		t.Errorf("httpx dispatches: got %d, want 1 (list mode)", byTool["httpx"])
+	if httpx != 1 {
+		t.Errorf("httpx dispatches: got %d, want 1 (list mode)", httpx)
 	}
-	// nuclei's list carries the whole surface.
 	if strings.Count(nucleiTargets, "\n")+1 != 3 {
-		t.Errorf("nuclei targets list should hold 3 URLs; got %q", nucleiTargets)
+		t.Errorf("nuclei list should hold the whole surface (3 URLs); got %q", nucleiTargets)
 	}
-	// dalfox: one per param-bearing URL (2 of 3).
-	if byTool["dalfox"] != 2 {
-		t.Errorf("dalfox dispatches: got %d, want 2 (param URLs only)", byTool["dalfox"])
+	// Active per-param tools fan over the 2 param-bearing URLs: dalfox (XSS)
+	// + nuclei -dast (fuzzing: path-traversal / redirect / SSRF).
+	if dalfox != 2 {
+		t.Errorf("dalfox dispatches: got %d, want 2 (param URLs only)", dalfox)
+	}
+	if nucleiDast != 2 {
+		t.Errorf("nuclei -dast dispatches: got %d, want 2 (one per param URL)", nucleiDast)
 	}
 }
 

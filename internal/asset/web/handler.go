@@ -120,20 +120,50 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 		}})
 	}
 
+	// 1) List-mode tools run ONCE over the whole surface: nuclei with its
+	//    default signature/CVE/misconfig templates, httpx for tech/probe.
+	var nucleiTool tool.Tool
 	for _, t := range h.anchors {
 		switch t.Name() {
-		case "nuclei", "httpx":
-			// One run over the whole surface (-list/-l).
+		case "nuclei":
+			nucleiTool = t
 			out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"targets": listArg}})
-		case "dalfox", "sqlmap":
-			// Injection tools — per-URL, params only (they need an
-			// injection point). sqlmap is also login-protected by the
-			// filter and ordered after auth by the wave classifier.
-			for _, u := range surface {
-				if hasQueryParams(u) {
-					out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
-				}
+		case "httpx":
+			out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"targets": listArg}})
+		}
+	}
+
+	// 2) Per-URL ACTIVE tools, INTERLEAVED by URL (all tools for one URL
+	//    before moving on). Interleaving matters under sequential / partial
+	//    execution: it covers COMPLETE URLs — every covered param URL gets
+	//    sqlmap (SQLi) + dalfox (XSS) + nuclei -dast — instead of spending the
+	//    whole budget on one tool across every URL and never reaching the
+	//    next. nuclei's signature templates (step 1) do NOT catch GENERIC
+	//    injection (SQLi/XSS/path-traversal/open-redirect in arbitrary
+	//    params) — that's what WAVSEP measures and what active DAST scanners
+	//    do; nuclei's dast/ + fuzzing/ templates fan per-param here to cover
+	//    path-traversal / open-redirect / SSRF.
+	for _, u := range surface {
+		if !hasQueryParams(u) {
+			continue
+		}
+		for _, t := range h.anchors {
+			switch t.Name() {
+			case "sqlmap", "dalfox":
+				out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
 			}
+		}
+		if nucleiTool != nil {
+			out = append(out, asset.Dispatch{Tool: nucleiTool, Args: tool.Args{"target": u, "dast": true}})
+		}
+	}
+
+	// 3) Any other per-URL anchor (not list-mode, not injection) fans across
+	//    the whole surface — unchanged behavior for assets with such tools.
+	for _, t := range h.anchors {
+		switch t.Name() {
+		case "nuclei", "httpx", "sqlmap", "dalfox":
+			// handled above
 		default:
 			for _, u := range surface {
 				out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{"target": u}})
