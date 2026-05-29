@@ -19,11 +19,30 @@ type State struct {
 	// create_vulnerability_report in a later wave; empty in L2-0.
 	Findings []types.Finding
 
+	// Hypotheses is the Lead's durable plan/scratchpad — the §2.7-LEGIT
+	// version of strix's `think` tool. It is a tool (record_hypothesis) NOT
+	// because reasoning is a tool (it isn't — §2.7), but because this state
+	// must SURVIVE context compaction: a hypothesis written only into the
+	// model's response text is dropped when compactHistory replaces the
+	// middle. Persisting it here makes it crystal memory — re-surfaced in the
+	// compaction summary so a long scan's plan is never lost.
+	Hypotheses []Hypothesis
+
 	// Summary is the finish_scan output (executive narrative).
 	Summary *FinalReport
 
 	// Done is set by finish_scan — the terminal signal.
 	Done bool
+}
+
+// Hypothesis is one durable plan item the Lead commits via record_hypothesis.
+type Hypothesis struct {
+	// Statement is what the Lead believes / wants to test (e.g. "f-001 SQLi
+	// and f-004 weak-session may chain to account takeover").
+	Statement string `json:"statement"`
+	// NextStep is the concrete action the hypothesis implies (e.g. "probe
+	// f-001 with dispatch_l2_probe(sqlmap) to confirm dumpability").
+	NextStep string `json:"next_step,omitempty"`
 }
 
 // FinalReport is the finish_scan artifact: the scan's executive narrative,

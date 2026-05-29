@@ -124,9 +124,48 @@ func obj(props map[string]any, required ...string) map[string]any {
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 
+// enumStr is a string param constrained to a fixed value set (renders as a
+// JSON-schema `enum` the model must pick from).
+func enumStr(desc string, vals ...string) map[string]any {
+	return map[string]any{"type": "string", "description": desc, "enum": vals}
+}
+
+// strArr is a string-array param.
+func strArr(desc string) map[string]any {
+	return map[string]any{"type": "array", "description": desc, "items": map[string]any{"type": "string"}}
+}
+
 func argStr(args map[string]any, k string) string {
 	if v, ok := args[k].(string); ok {
 		return v
 	}
 	return ""
+}
+
+// argStrList coerces a tool arg into a []string. JSON arrays arrive as
+// []any; tests pass []string directly; a bare string is accepted leniently
+// as a single-element list. Empty strings are dropped.
+func argStrList(args map[string]any, k string) []string {
+	v, ok := args[k]
+	if !ok {
+		return nil
+	}
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			if s, ok := e.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		if t == "" {
+			return nil
+		}
+		return []string{t}
+	}
+	return nil
 }

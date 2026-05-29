@@ -31,7 +31,8 @@ type Deps struct {
 // ≤12 cap is therefore trivially met (~10). Validate() enforces it.
 func BuildCatalog(d Deps) Catalog {
 	c := CoreTools()
-	c = append(c, readTools(d)...)
-	c = append(c, externalTools(d)...) // L2-3 (no-ops if services nil)
+	c = append(c, readTools(d)...)     // L2-1: get_finding
+	c = append(c, reportTools(d)...)   // L2-2: create/update report + record_hypothesis
+	c = append(c, externalTools(d)...) // L2-3: threat-intel / compliance / probe / send_request
 	return c
 }

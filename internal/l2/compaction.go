@@ -81,6 +81,26 @@ func compactionSummary(dropped int, st *State) string {
 			fmt.Fprintf(&b, "%s %s", f.ID, f.Title)
 		}
 	}
+	// Hypotheses are durable crystal memory — the whole reason
+	// record_hypothesis is a tool (§2.7) is that the plan must survive THIS
+	// compaction. Re-surface it verbatim so a long scan never loses its
+	// thread.
+	if len(st.Hypotheses) > 0 {
+		b.WriteString(". Open hypotheses: ")
+		for i, h := range st.Hypotheses {
+			if i >= 5 {
+				fmt.Fprintf(&b, "; +%d more", len(st.Hypotheses)-5)
+				break
+			}
+			if i > 0 {
+				b.WriteString("; ")
+			}
+			b.WriteString(h.Statement)
+			if h.NextStep != "" {
+				fmt.Fprintf(&b, " (next: %s)", h.NextStep)
+			}
+		}
+	}
 	b.WriteString(". Re-read full detail with get_finding; your durable findings/plan are intact.]")
 	return b.String()
 }
