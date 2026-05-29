@@ -152,11 +152,15 @@ Per-asset anchor + registry lists live in [arch.md](arch.md).
 
 ### 5.1 The L1 recon → fan-out pipeline (deterministic, not LLM-driven)
 
-Recon-capable assets (web today; api spec-ingest next) run a **two-stage L1
-flow** in the orchestrator — discover the surface, then fan detection tools
-across it. This is the L1 prepass, entirely deterministic; the L2 LLM never
-drives it (strix's "model ignored the recon directive" class of bug, §10,
-is structurally impossible here).
+Recon-capable assets run a **two-stage L1 flow** in the orchestrator —
+discover the surface, then fan detection tools across it. Four assets are
+recon→fan-out today: **web** (katana crawl), **ip_address** (naabu port
+discovery → per-port nuclei routing), **domain** (subfinder+amass+crt.sh
+enum → child-asset pivot), **api** (openapi_spec_ingest → per-method
+routing). repository + container_image stay single-stage (the tree / image
+is the whole surface). This is the L1 prepass, entirely deterministic; the
+L2 LLM never drives it (strix's "model ignored the recon directive" class
+of bug, §10, is structurally impossible here).
 
 The contract — invariants, not implementation detail:
 
@@ -189,6 +193,47 @@ The contract — invariants, not implementation detail:
    written to `vulnerabilities.json`) into the detectors' `args["cookie"]`,
    never clobbering an explicit cookie. Auth failure → no session →
    unauthenticated scan (graceful, never crashes).
+6. **Recon dispatch shape is the handler's (`ReconPlanner`).** A handler may
+   implement `PlanRecon(target)` to shape its recon dispatches (crawl depth,
+   spec URL, bare apex) instead of the generic single-arg mapping — e.g. web
+   crawls at depth 3 (depth 2 can't reach a real app's surface), domain
+   passes the bare apex, api passes the base URL. Mirrors `PlanFanout`.
+
+### 5.2 Cross-asset invariants (the strix-mistake guardrails)
+
+These hold for **every** asset, recon or single-stage:
+
+1. **Loopback rewrite at the host/sandbox boundary (C2).** The sandbox
+   client rewrites loopback hosts (`localhost`, `127.0.0.1`, `0.0.0.0`) in
+   URL/host args (`target`/`targets`/`login_url`/`url`/`urls`) to
+   `host.docker.internal`, and the runtime always adds `--add-host
+   host.docker.internal:host-gateway`. Without this, network probes hit the
+   sandbox itself — strix watched ip_address recall collapse 1.0→0.0.
+2. **Single timeout source of truth + opt-in per-tool cap (C3).** The host
+   scan `--timeout` (propagated via request-ctx cancellation into the
+   sandbox) is the only deadline — there is **no** fixed host client
+   timeout, so strix's "timeout split-brain" can't occur.
+   `TSENGINE_TOOL_TIMEOUT` is an opt-in per-tool wall-clock cap so one
+   runaway tool can't starve the scan.
+3. **Tool arg contracts are validated (C4).** Each wrapper declares
+   `tool.ArgSpec.KnownArgs`; a CI test (`internal/asset/argcontract`)
+   asserts every key a Handler dispatches is recognized. A mis-wired arg is
+   a **loud build failure**, not strix's silent "unexpected keyword
+   argument" recall drop.
+4. **Per-asset routing table.** "Run the whole corpus everywhere" is the
+   universal perf/noise trap — solved per asset: web per-URL, api per-method
+   (`classifyOp`), ip per-port nuclei tags (~50× speedup), container
+   base-layer skip, domain child-triage. Add the routing dimension when you
+   add an asset's fan-out.
+5. **Child-asset pivot is a first-class artifact (C5).** A handler may
+   implement `ChildAssetExtractor.ChildAssets(findings)` → `Scan.ChildAssets`
+   (domain subdomains → web/ip child targets) so webappsec spawns child
+   scans instead of re-enumerating (strix's re-enumeration trap).
+6. **Wrap OSS; never build in-house detectors (§13).** strix rebuilt IaC,
+   CSPM, SCA, and taint analysis in-house and reverted each to OSS. Every
+   asset wave here wraps an OSS tool. Where no OSS exists (API BOLA/BFLA
+   authz logic), it's a **documented ADR/backlog item**, never a silent
+   in-house build.
 
 ---
 
