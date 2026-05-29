@@ -15,12 +15,12 @@ tools are the documented target set — **anchor tier** fires on every scan,
 | # | Asset type | Popular benchmark (neutral competitor scores) | Detection tools |
 |---|---|---|---|
 | 1 | **web_application** | **WAVSEP** (Shay Chen, sectoolmarket.com) — Acunetix 87%, Netsparker 87%, Burp 78%, WebInspect 76%, AppScan 69%, ZAP 56% | `✓` katana (recon), `✓` nuclei, `✓` dalfox, `✓` sqlmap (SQLi specialist), `✓` httpx, `✓` seed_auth (authed re-scan) · *anchor:* ffuf, hydra, smuggler, http_security_headers_audit, tls_audit, cors_deep_check, csrf_check, open_redirect_check · *registry:* wapiti, nikto, jaeles, arachni, w3af, skipfish, ZAP-active, gobuster |
-| 2 | **api** | **VAmPI** + **crAPI** working-group writeups (no neutral leaderboard; Salt / Wallarm commercial) | `✓` nuclei (`tags=api,graphql,jwt,oauth`) · *anchor:* openapi_spec_ingest, schemathesis, scan_idor, jwt_audit, scan_api_bola/bfla/mass_assignment, kiterunner · *registry:* APIClarity, ZAP-API, restler, fuzzapi |
-| 3 | **repository** | **OWASP Benchmark v1.2** (SAST) — Veracode 51%, Checkmarx 47%, Fortify 35%, SonarQube 6%; SCA: Snyk / Dependabot self-published | `✓` semgrep (SAST), `✓` gitleaks + `✓` trufflehog (secrets), `✓` trivy fs + `✓` grype (SCA) · *anchor:* bandit, mobsfscan, osv-scanner, checkov, hadolint, tfsec, syft · *registry:* CodeQL (taint-flow), brakeman, gosec, staticcheck, snyk-code, kics, terrascan |
-| 4 | **container_image** | None neutral — Trivy / Snyk Container / Anchore self-published | `✓` trivy image (CVE + misconfig + secret), `✓` grype (2nd CVE DB), `✓` dockle (CIS misconfig) · *anchor:* syft, anchore, hadolint · *registry:* clair, kube-bench, falco-rules, snyk-container |
-| 5 | **ip_address** | None neutral — Tenable / Qualys / Rapid7 (no open scorecard) | `✓` nmap (port + service), `✓` httpx (HTTP probe + tech) · *anchor:* naabu, nuclei (per-port tag-routed), tls_audit · *registry:* naabu, masscan, rustscan, nessus-essentials, openvas |
-| 6 | **domain** | None neutral — subfinder vs amass vs assetfinder published enum rates | `✓` subfinder · *anchor:* amass, assetfinder, checkdmarc, dnstwist, crt.sh, nuclei · *registry:* findomain, censys-cli, shodan-cli, bbot |
-| 7 | **cloud_account** | None neutral — Prowler / scout-suite self-published; CIS AWS Foundations recall | `✓` prowler (multi-cloud posture) · *anchor:* scout-suite, cloudsploit, cloudquery, steampipe, parliament · *registry:* pacu (gated), cloudmapper, principal-mapper |
+| 2 | **api** | **VAmPI** + **crAPI** working-group writeups (no neutral leaderboard; Salt / Wallarm commercial) | `✓` openapi_spec_ingest (recon), `✓` schemathesis (spec fuzz), `✓` nuclei (`tags=api,graphql,jwt,oauth`, per-method routed) · *anchor:* kiterunner, inql · *authz backlog (Akto/ADR):* scan_api_bola/bfla/mass_assignment · *registry:* APIClarity, ZAP-API, restler |
+| 3 | **repository** | **OWASP Benchmark v1.2** (SAST) — Veracode 51%, Checkmarx 47%, Fortify 35%, SonarQube 6%; SCA: Snyk / Dependabot self-published | `✓` semgrep (SAST), `✓` gitleaks + `✓` trufflehog (secrets), `✓` trivy fs + `✓` grype + `✓` osv-scanner (SCA ×3), `✓` checkov (IaC), `✓` hadolint (Dockerfile), `✓` syft (SBOM) · *anchor:* bandit, mobsfscan, tfsec · *registry:* CodeQL (taint-flow), brakeman, gosec, staticcheck, snyk-code, kics |
+| 4 | **container_image** | None neutral — Trivy / Snyk Container / Anchore self-published | `✓` trivy image (CVE + misconfig + secret, base-layer skip), `✓` grype (2nd CVE DB), `✓` dockle (CIS misconfig), `✓` syft (SBOM) · *anchor:* anchore, hadolint · *registry:* clair, kube-bench, falco-rules, snyk-container |
+| 5 | **ip_address** | None neutral — Tenable / Qualys / Rapid7 (no open scorecard) | `✓` naabu (recon → port surface), `✓` nmap (deep `-sV`), `✓` httpx (HTTP probe + tech), `✓` nuclei (per-port tag-routed) · *anchor:* tls_audit (via nuclei ssl tags) · *registry:* masscan, rustscan, nessus-essentials, openvas |
+| 6 | **domain** | None neutral — subfinder vs amass vs assetfinder published enum rates | `✓` subfinder + `✓` amass + `✓` crt.sh (enum ×3, union), `✓` checkdmarc (DNS hygiene), `✓` nuclei (takeover) · child-asset pivot → web/ip · *registry:* findomain, censys-cli, shodan-cli, bbot |
+| 7 | **cloud_account** | None neutral — Prowler / scout-suite self-published; CIS AWS Foundations recall | `✓` prowler + `✓` scoutsuite (posture ×2, corroboration) · *registry:* `✓` cloudfox (IAM attack-path, scope-gated), pacu (gated), cloudmapper, principal-mapper |
 
 ---
 
@@ -36,17 +36,16 @@ ready, corpus not yet deployed; **✗ none** = no fixture yet.
 | **container_image** | (no neutral leaderboard) — Trivy / Snyk / Anchore self-published | `fixtures/container/nginx-vuln` + `alpine-clean` | **✓ live** — recall 1.0 on nginx:1.14 (must-find CVEs), 0 false-positives on clean alpine:3.18 |
 | **web_application** | **WAVSEP** (Shay Chen) — Acunetix 87% / Burp 78% / ZAP 56% | `fixtures/web/wavsep` | **⚠ scorer-ready** — per-category Youden scorer + `tsbench wavsep` subcommand built (W5); CWE→WAVSEP category map (sqli/xss/pathtraver/redirect/…). Blocked on: deploy the WAVSEP webapp reachable from the sandbox **and** rebuild the image (katana/sqlmap/seed_auth not yet baked) |
 | **repository** | **OWASP Benchmark v1.2** (SAST) — Veracode 51% / Checkmarx 47% / Fortify 35% / SonarQube 6% | `fixtures/repo/owasp-benchmark` | **⚠ stub** — semgrep now wrapped (tool-ready); needs the BenchmarkJava source tree mounted at `/workspace` |
-| **api** | **VAmPI** + **crAPI** (no neutral leaderboard) | — | **✗ none** — internal must-find recall fixture not written yet |
-| **ip_address** | (no neutral leaderboard) — Tenable / Qualys / Rapid7 | — | **✗ none** — internal must-find recall fixture not written yet |
-| **domain** | (no neutral leaderboard) — subfinder vs amass published rates | — | **✗ none** — subdomain-recall fixture not written yet |
-| **cloud_account** | (no neutral) — Prowler / scout-suite; CIS AWS Foundations | — | **✗ none** — needs a mock cloud account / CIS-baseline fixture |
+| **api** | **VAmPI** + **crAPI** (no neutral leaderboard) | `fixtures/api/vampi` | **⚠ stub** — must-find fixture written (openapi+schemathesis); needs VAmPI deployed + image rebuilt |
+| **ip_address** | (no neutral leaderboard) — Tenable / Qualys / Rapid7 | `fixtures/ip/services` | **⚠ stub** — must-find fixture written (naabu open-port); needs a services host + image rebuilt |
+| **domain** | (no neutral leaderboard) — subfinder vs amass published rates | `fixtures/domain/recon` | **⚠ stub** — must-find fixture written (subdomain-found); needs a target domain + image rebuilt |
+| **cloud_account** | (no neutral) — Prowler / scout-suite; CIS AWS Foundations | `fixtures/cloud/baseline` | **⚠ stub** — fixture written; needs a seeded mock AWS account + image rebuilt |
 
-**Summary: 1 of 7 assets has a live benchmark** (container_image). Two more
-(web, repository) are stubs whose competitor scorecards are recorded and
-whose harness is ready — they're blocked on deploying the external corpus,
-not on tsengine code. The remaining four have no fixture yet; only api has a
-candidate corpus (VAmPI/crAPI), the rest would use a curated internal
-must-find set since no neutral leaderboard exists.
+**Summary: 1 of 7 assets has a live benchmark** (container_image); the other
+six are **stubs** — every asset now has a fixture that cites its competitor
+context and loads through the harness. They're blocked on deploying the
+external corpus/target (and, for the asset-wave tools, a single image
+rebuild), not on tsengine code.
 
 Per CLAUDE.md §14, a benchmark is meaningless without "vs. what" — so every
 fixture **must** cite its competitor leaderboard, and the harness refuses to

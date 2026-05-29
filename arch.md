@@ -126,6 +126,15 @@ shape, bench.
 | **Bench** | Headline | `bench/api_fixtures` (VAmPI + crAPI) |
 | | Comparator | None public — VAmPI/crAPI working-group writeups; Salt/Wallarm (commercial) |
 
+> **Implemented (wave A4).** Spec-ingest→fan-out: `openapi_spec_ingest`
+> (pure-Go, fetches+parses the spec → `METHOD url` surface) is the recon
+> tool; `PlanFanout` runs `schemathesis` once on the resolved schema +
+> `nuclei` once over the operations (api tags). Per-method routing
+> (`classifyOp`) is pre-declared for the authz specialists. **Backlog:**
+> kiterunner + inql (registry sources); BOLA/BFLA/mass-assignment await an
+> OSS wrapper (Akto) or an ADR — §13 forbids in-house. Fixture:
+> `fixtures/api/vampi`.
+
 ---
 
 ### `repository` — SAST + SCA
@@ -144,6 +153,13 @@ shape, bench.
 | **Bench** | Headline | `bench/owasp_benchmark` (2,740 cases) |
 | | Comparator | Veracode 51% / Checkmarx 47% / Fortify 35% / SonarQube 6% (OWASP Benchmark v1.2 SAST leaderboard) |
 
+> **Implemented (wave A5).** Wrapped: semgrep, gitleaks+trufflehog,
+> trivy-fs+grype+**osv-scanner** (SCA ×3 → strong corroboration),
+> **checkov** (IaC — the HashiCorp/cloud-native coverage strix's in-house
+> engine lacked), **hadolint** (Dockerfile), **syft** (SBOM). CodeQL stays
+> registry-tier (taint-flow depth). osv-scanner emits the CVE in its
+> RuleID so the 3-source corroborator joins them.
+
 ---
 
 ### `container_image` — Image scan
@@ -160,6 +176,10 @@ shape, bench.
 | **L2 catalog** | Specialists | scan_image_dockle, terminal_execute |
 | **Bench** | Headline | `bench/container_cves` (nginx-vuln + custom images) |
 | | Comparator | None public — Trivy/Snyk/Anchore self-published |
+
+> **Implemented (wave A5).** trivy image + grype + dockle + **syft** (SBOM).
+> trivy runs with base-layer skip (`--ignore-unfixed`) so app-fixable CVEs
+> stand apart from the unfixable base-image baseline (strix Q5.42).
 
 ---
 
@@ -180,6 +200,13 @@ shape, bench.
 | **Bench** | Headline | `bench/ip_services` (vulnerable-services + Vulhub CVE recipes) |
 | | Comparator | Tenable / Qualys / Rapid7 — no open scorecard |
 
+> **Implemented (wave A1).** Recon→fan-out: `naabu` discovers open ports
+> (the surface), `PlanFanout` runs deep `nmap -sV` on the discovered ports,
+> `httpx` on HTTP-like ports, and `nuclei` **per-port with routed tags**
+> (22→ssh, 443→ssl,tls, 3306→mysql, …; unknown→network) — strix's ~50×
+> speedup (iter-Q5.43). Graceful fallback to nmap+httpx on the bare target
+> when naabu is absent. Fixture: `fixtures/ip/services`.
+
 ---
 
 ### `domain` — Asset discovery + DNS hygiene
@@ -198,6 +225,13 @@ shape, bench.
 | **L2 catalog** | Specialists | send_request, terminal_execute |
 | **Bench** | Headline | `bench/recon_breadth` (subdomain recall against known-target fixtures) |
 | | Comparator | subfinder vs amass vs assetfinder published rates |
+
+> **Implemented (wave A2).** Recon→fan-out: `subfinder`+`amass`+`crt.sh`
+> enumerate (the union lifts recall; crt.sh is pure-Go, no binary),
+> `PlanFanout` runs `checkdmarc` (DNS hygiene) + `nuclei` takeover templates
+> + `httpx` over the surface. Discovered subdomains become
+> `Scan.ChildAssets` (web/ip children) so webappsec spawns child scans
+> rather than re-enumerating. Fixture: `fixtures/domain/recon`.
 
 ---
 
@@ -219,6 +253,14 @@ The compliance team's primary asset. Without it, tsengine doesn't serve the comp
 | **L2 catalog** | Specialists | terminal_execute, query_cloud_resource (steampipe query wrapper) |
 | **Bench** | Headline | `bench/cloud_baseline` (mock AWS account with known misconfigs) |
 | | Comparator | Prowler / scout-suite self-published; CIS AWS Foundations recall |
+
+> **Implemented (wave A3).** Two posture engines — `prowler` + `scoutsuite`
+> (different rule sets → corroboration, the cloud analog of trivy+grype).
+> `cloudfox` is registry-tier, scope-gated read-only IAM attack-path
+> enumeration (the privilege-escalation depth bar). Compliance mapping is
+> honest by construction: only the 6 frameworks with catalogs are annotated
+> — unmapped frameworks (FedRAMP, AWS-FSBP) are dropped, never mis-claimed
+> (§8). Fixture: `fixtures/cloud/baseline`.
 
 **Authentication**: scan config carries `cloud.credentials` (assumed-role ARN or scoped read-only keys). Sandbox container receives credentials via short-lived env vars + scope-limited IAM session. Credentials never written to disk inside the container; rotated per-scan.
 
