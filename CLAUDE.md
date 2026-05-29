@@ -359,7 +359,7 @@ Hook: `threat_intel.enrich` fires in the L1.5 hook chain (§11) for every findin
 * Vendor advisory URLs
 * Known exploit availability (Metasploit, ExploitDB, GitHub PoCs)
 
-Sourced from a versioned, on-disk corpus refreshed via cron. 24h cache. The corpus version is pinned per scan for reproducibility (§10).
+**Sourced from authoritative OSINT feeds, not hand-curated.** `tsengine corpus refresh` (`internal/corpus/threatintel`) ingests **CISA KEV** (the actively-exploited signal) + **FIRST.org EPSS** (~336k CVEs, the patch-priority signal) — both free, no API key — into a versioned on-disk corpus (`threat_intel.json` + sidecar manifest). The hook loads it when `TSENGINE_THREAT_INTEL_CORPUS` points at it, else falls back to the small embedded snapshot (the checked-in default). The corpus dir is gitignored; refresh runs **out of band** (the L0 cron, §5), and each scan **pins the manifest version** into `vulnerabilities.json`'s `corpus` block — so it's OSINT-fresh yet reproducible (§10), NOT a live per-query API call (strix's non-reproducible model). Scope today is KEV+EPSS; CVSS (NVD) + exploit-refs (ExploitDB/Metasploit/nuclei) are the documented next sources.
 
 L2 retains a separate `query_threat_intel` tool for the LLM to look up CVEs that aren't in current findings (chain reasoning across related CVEs). The two are complementary: L1.5 hook annotates emitted findings; L2 tool serves on-demand lookups during reasoning.
 

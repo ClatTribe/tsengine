@@ -1,0 +1,85 @@
+package threatintel
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+// RefreshOptions configures an out-of-band corpus refresh.
+type RefreshOptions struct {
+	OutDir     string       // output dir (default "./corpus")
+	HTTPClient *http.Client // default: 120s timeout
+	KEVURL     string       // override for tests
+	EPSSURL    string       // override for tests
+}
+
+func (o RefreshOptions) withDefaults() RefreshOptions {
+	if o.OutDir == "" {
+		o.OutDir = "./corpus"
+	}
+	if o.HTTPClient == nil {
+		o.HTTPClient = &http.Client{Timeout: 120 * time.Second}
+	}
+	if o.KEVURL == "" {
+		o.KEVURL = KEVURL
+	}
+	if o.EPSSURL == "" {
+		o.EPSSURL = EPSSURL
+	}
+	return o
+}
+
+// Refresh fetches the CISA KEV + FIRST.org EPSS feeds, merges them into the
+// pinned corpus, and writes <OutDir>/threat_intel.json + sidecar manifest.
+// This is the L0 cron-refresh step (CLAUDE.md §5) — run out of band, NOT per
+// scan. Returns the manifest and the data-file path.
+func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error) {
+	opts = opts.withDefaults()
+
+	kevBody, err := httpGet(ctx, opts.HTTPClient, opts.KEVURL)
+	if err != nil {
+		return Manifest{}, "", fmt.Errorf("threatintel: fetch KEV: %w", err)
+	}
+	kev, kevAsOf, kevVer, err := ParseKEV(kevBody)
+	_ = kevBody.Close()
+	if err != nil {
+		return Manifest{}, "", err
+	}
+
+	epssBody, err := httpGet(ctx, opts.HTTPClient, opts.EPSSURL)
+	if err != nil {
+		return Manifest{}, "", fmt.Errorf("threatintel: fetch EPSS: %w", err)
+	}
+	epss, epssAsOf, err := ParseEPSSGzip(epssBody)
+	_ = epssBody.Close()
+	if err != nil {
+		return Manifest{}, "", err
+	}
+
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf)
+	dataPath, err := Write(opts.OutDir, entries, m)
+	if err != nil {
+		return Manifest{}, "", err
+	}
+	return m, dataPath, nil
+}
+
+func httpGet(ctx context.Context, c *http.Client, url string) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "tsengine-corpus-refresh")
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("GET %s: HTTP %d", url, resp.StatusCode)
+	}
+	return resp.Body, nil
+}

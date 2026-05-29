@@ -23,6 +23,12 @@ runs/
 scan_runs/
 *.log
 
+# Generated OSINT threat-intel corpus (cron-refreshed, not committed — scans
+# pin it via TSENGINE_THREAT_INTEL_CORPUS; the embedded snapshot is the
+# checked-in fallback). Leading slash anchors to repo root so it does NOT
+# match internal/corpus/ source.
+/corpus/
+
 # Secrets / keys (never commit)
 *.pem
 *.key

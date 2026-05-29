@@ -40,6 +40,7 @@ import (
 	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
 	webasset "github.com/ClatTribe/tsengine/internal/asset/web"
 	"github.com/ClatTribe/tsengine/internal/attest"
+	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/replay"
@@ -132,6 +133,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine verify: %v\n", err)
 			os.Exit(1)
 		}
+	case "corpus":
+		if err := runCorpus(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine corpus: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -149,6 +155,7 @@ Usage:
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
+  tsengine corpus refresh [--out <dir>] [--timeout <dur>]
 
 Authenticated web scans (web_application): supply a ready session via
 --auth-cookie, or form-login credentials via --auth-login-url plus
@@ -159,6 +166,47 @@ Asset types: web_application, api, repository, container_image,
              ip_address, domain, cloud_account
 See CLAUDE.md and arch.md for the layered architecture.
 `)
+}
+
+// --- corpus ------------------------------------------------------
+
+// runCorpus handles `tsengine corpus <subcommand>`. Today: `refresh` — the
+// out-of-band OSINT ingest (CISA KEV + FIRST.org EPSS) into the pinned,
+// per-scan threat-intel corpus the L1.5 hook + L2 query_threat_intel read.
+func runCorpus(argv []string) error {
+	if len(argv) == 0 {
+		return fmt.Errorf("usage: tsengine corpus refresh [--out <dir>] [--timeout <dur>]")
+	}
+	switch argv[0] {
+	case "refresh":
+		return runCorpusRefresh(argv[1:])
+	default:
+		return fmt.Errorf("unknown corpus subcommand %q (want: refresh)", argv[0])
+	}
+}
+
+func runCorpusRefresh(argv []string) error {
+	fs := flag.NewFlagSet("corpus refresh", flag.ContinueOnError)
+	out := fs.String("out", "./corpus", "output dir for threat_intel.json + manifest")
+	timeout := fs.Duration("timeout", 5*time.Minute, "fetch timeout")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+
+	fmt.Fprintf(os.Stderr, "[corpus] refreshing threat-intel from CISA KEV + FIRST.org EPSS …\n")
+	m, path, err := threatintel.Refresh(ctx, threatintel.RefreshOptions{OutDir: *out})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("threat-intel corpus written: %s\n", path)
+	fmt.Printf("  version:    %s\n", m.Version)
+	fmt.Printf("  entries:    %d  (KEV %d, EPSS %d)\n", m.EntryCount, m.KEVCount, m.EPSSCount)
+	fmt.Printf("  KEV as-of:  %s\n", m.KEVAsOf.Format(time.RFC3339))
+	fmt.Printf("  EPSS as-of: %s\n", m.EPSSAsOf.Format(time.RFC3339))
+	fmt.Printf("\nUse it in scans:\n  export %s=%s\n", hooks.ThreatIntelCorpusEnv, path)
+	return nil
 }
 
 // --- scan --------------------------------------------------------
@@ -453,10 +501,11 @@ func handlerFor(at types.AssetType) (asset.Handler, error) {
 // (threat-intel, compliance) come from version constants. Best-effort —
 // a sandbox that can't report a version just leaves it blank.
 func resolveCorpus(ctx context.Context, client *sandbox.Client, info *sandbox.Info) types.Corpus {
+	tiVersion, kevAsOf, epssAsOf := hooks.ThreatIntelCorpusInfo()
 	corpus := types.Corpus{
 		ComplianceCorpus: hooks.ComplianceCorpusVersion,
-		KEVSnapshot:      hooks.ThreatIntelSnapshot,
-		EPSSSnapshot:     hooks.ThreatIntelSnapshot,
+		KEVSnapshot:      kevAsOf,
+		EPSSSnapshot:     epssAsOf,
 		Custom:           map[string]string{},
 	}
 	ci, err := client.Corpus(ctx)
@@ -473,7 +522,7 @@ func resolveCorpus(ctx context.Context, client *sandbox.Client, info *sandbox.In
 	for tool, ver := range ci.ToolVersions {
 		corpus.Custom[tool] = ver
 	}
-	corpus.Custom["threat_intel_corpus"] = hooks.ThreatIntelCorpusVersion
+	corpus.Custom["threat_intel_corpus"] = tiVersion
 	return corpus
 }
 
