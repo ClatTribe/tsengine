@@ -15,6 +15,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
 	_ "github.com/ClatTribe/tsengine/internal/tool/prowler"
 	_ "github.com/ClatTribe/tsengine/internal/tool/semgrep"
+	_ "github.com/ClatTribe/tsengine/internal/tool/sqlmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/subfinder"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trivy"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trufflehog"

