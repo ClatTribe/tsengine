@@ -48,6 +48,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench sast: %v\n", err)
 			os.Exit(1)
 		}
+	case "cloud":
+		if err := cloudCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench cloud: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -63,6 +68,7 @@ Usage:
   tsbench ablation --fixture <path> [--trials N]
   tsbench wavsep   --target <url> --ground-truth <expected-cases.csv> [--image <ref>]
   tsbench sast     --target <src-dir> --ground-truth <expectedresults.csv> [--image <ref>]
+  tsbench cloud    --target <provider> --ground-truth <expected-controls.csv> [--image <ref>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
@@ -70,6 +76,13 @@ corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
 sast scans a source tree (e.g. the OWASP BenchmarkJava source, extracted from
 the strix-bench/owasp-benchmark image) with the repository asset and scores
 per-CWE-category Youden vs the SAST leaderboard (Veracode/Checkmarx/Fortify).
+
+cloud scans a cloud account (--target aws|gcp|azure) with the cloud_account
+asset (prowler + scoutsuite) and scores per-CIS-section recall against a mock
+account seeded with a known-failing posture. Scoped, short-lived credentials
+are read from the environment (AWS_*/GOOGLE_*/AZURE_*) and forwarded into the
+sandbox — never written to disk. No neutral CSPM leaderboard (Prowler/Scout
+Suite/Wiz/Orca self-publish), so the cite is the CIS-recall reference.
 `)
 }
 
@@ -134,6 +147,39 @@ func sastCmd(argv []string) error {
 		return err
 	}
 	fmt.Print(bench.RenderSast(rep))
+	return nil
+}
+
+// cloudCmd runs the CIS AWS Foundations CSPM benchmark: scan a cloud account
+// (--target aws|gcp|azure) with the cloud_account asset (prowler + scoutsuite),
+// then score per-CIS-section recall against a mock account seeded with a
+// known-failing posture. Scoped, short-lived credentials are read from the
+// environment by the scan CLI and forwarded into the sandbox — never on disk.
+func cloudCmd(argv []string) error {
+	fs := flag.NewFlagSet("cloud", flag.ContinueOnError)
+	target := fs.String("target", "aws", "cloud provider: aws | gcp | azure")
+	groundTruth := fs.String("ground-truth", "", "path to expected-controls.csv (CIS ground truth)")
+	binary := fs.String("binary", "./bin/tsengine", "tsengine binary path")
+	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox image")
+	timeout := fs.String("timeout", "30m", "scan timeout (a full account sweep is large)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *groundTruth == "" {
+		return fmt.Errorf("--ground-truth is required")
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	ctx, cancelT := context.WithTimeout(ctx, time.Hour)
+	defer cancelT()
+
+	rep, err := bench.RunCloud(ctx, *target, *groundTruth,
+		bench.RunOptions{Binary: *binary, Image: *image, Timeout: *timeout})
+	if err != nil {
+		return err
+	}
+	fmt.Print(bench.RenderCloud(rep))
 	return nil
 }
 
