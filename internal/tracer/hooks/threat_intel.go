@@ -119,6 +119,26 @@ func ThreatIntelCorpusInfo() (version string, kevAsOf, epssAsOf time.Time) {
 
 func (*ThreatIntel) Name() string { return "threat_intel" }
 
+// Lookup returns the threat-intel annotation for a CVE id from the pinned
+// corpus, or (nil,false) if absent. It is the single corpus access path,
+// shared by the L1.5 Apply hook AND the L2 query_threat_intel adapter
+// (internal/l2/adapters) — so L2's "real-time data" tool and L1's enrichment
+// read the same versioned snapshot, never diverging (and never a live API
+// call that would break reproducibility, §10).
+func (h *ThreatIntel) Lookup(cve string) (*types.ThreatIntel, bool) {
+	entry, ok := h.corpus[cve]
+	if !ok {
+		return nil, false
+	}
+	return &types.ThreatIntel{
+		CVSS:       entry.CVSS,
+		KEV:        entry.KEV,
+		EPSS:       entry.EPSS,
+		Advisories: entry.Advisories,
+		Exploits:   entry.Exploits,
+	}, true
+}
+
 // Apply enriches CVE-bearing findings. Annotation-only — never drops or
 // changes severity (KEV-driven severity escalation is a deliberate
 // future enrichment, gated behind policy).
@@ -127,16 +147,9 @@ func (h *ThreatIntel) Apply(f types.Finding) (types.Finding, []types.AuditEntry,
 	if cve == "" {
 		return f, nil, true
 	}
-	entry, ok := h.corpus[cve]
+	ti, ok := h.Lookup(cve)
 	if !ok {
 		return f, nil, true
-	}
-	ti := &types.ThreatIntel{
-		CVSS:       entry.CVSS,
-		KEV:        entry.KEV,
-		EPSS:       entry.EPSS,
-		Advisories: entry.Advisories,
-		Exploits:   entry.Exploits,
 	}
 	f.ThreatIntel = ti
 
