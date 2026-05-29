@@ -115,8 +115,8 @@ func TestDefaultChains_Wired(t *testing.T) {
 		t.Errorf("per-finding chain: got %d hooks, want 5", len(pf))
 	}
 	fin := DefaultFinalize()
-	if len(fin) != 3 {
-		t.Errorf("finalize chain: got %d hooks, want 3", len(fin))
+	if len(fin) != 4 {
+		t.Errorf("finalize chain: got %d hooks, want 4", len(fin))
 	}
 	// Confirm they satisfy the tracer interfaces (compile-time + names).
 	var _ []tracer.PerFindingHook = pf
@@ -127,7 +127,7 @@ func TestDefaultChains_Wired(t *testing.T) {
 			t.Errorf("per-finding[%d]: got %q, want %q", i, h.Name(), wantPF[i])
 		}
 	}
-	wantFin := []string{"corroborator", "post_emit_verifier", "cross_tool_merge"}
+	wantFin := []string{"corroborator", "post_emit_verifier", "cross_tool_merge", "confidence"}
 	for i, h := range fin {
 		if h.Name() != wantFin[i] {
 			t.Errorf("finalize[%d]: got %q, want %q", i, h.Name(), wantFin[i])

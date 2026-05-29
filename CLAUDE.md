@@ -451,9 +451,10 @@ When the host tracer's `Add(finding)` is called, hooks fire in this order. Each 
 5. corroborator_ledger.check   → cross-source agreement → attaches corroborated_by[]
 6. threat_intel.enrich         → CVSS/KEV/EPSS/advisories for CVE-bearing findings (§7)
 7. compliance.map              → SOC2/PCI/HIPAA/CIS/NIST control annotation (§8)
-8. post_emit_verifier          → re-fires via tool-replay to upgrade pattern_match → verified
+8. post_emit_verifier          → re-fires via tool-replay to upgrade pattern_match → verified (inert until L2.5)
 9. cross_tool_merge            → cross-tool dedup
-10. tracer.Append              → persists to findings_enriched
+10. confidence                 → sets verification_status (pattern_match → corroborated when ≥1 independent tool agrees) + a 0–1 confidence scalar (per-tool base bumped by corroboration). Runs last so it sees the merged set (§7-style quality signal, strix parity)
+11. tracer.Append              → persists to findings_enriched
 ```
 
 `findings_raw` is captured **before** hook 1 — that's what the security engineer reads. `findings_enriched` is the post-hook view. Both ship.
