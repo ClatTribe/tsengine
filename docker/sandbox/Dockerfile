@@ -84,6 +84,11 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go install github.com/assetnote/kiterunner/cmd/kr@latest
 
+# cosign — image signature / SLSA provenance verification (container, E4).
+# Go, CGO-free.
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go install github.com/sigstore/cosign/v2/cmd/cosign@latest
+
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04
 
@@ -109,8 +114,8 @@ RUN apt-get update \
 # (cloud_account posture), sqlmap (web SQLi specialist). All Python;
 # installed system-wide so the non-root runtime user can invoke them.
 RUN pip3 install --no-cache-dir --break-system-packages \
-        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite schemathesis inql mobsfscan \
-    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite schemathesis inql mobsfscan
+        semgrep==1.96.0 prowler==4.6.0 sqlmap checkdmarc checkov scoutsuite schemathesis inql mobsfscan dnstwist \
+    || pip3 install --no-cache-dir semgrep prowler sqlmap checkdmarc checkov scoutsuite schemathesis inql mobsfscan dnstwist
 
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
@@ -135,6 +140,7 @@ COPY --from=builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /go/bin/cloudfox /usr/local/bin/cloudfox
 COPY --from=builder /go/bin/ffuf /usr/local/bin/ffuf
 COPY --from=builder /go/bin/kr /usr/local/bin/kr
+COPY --from=builder /go/bin/cosign /usr/local/bin/cosign
 
 # kiterunner API-route wordlist (assetnote routes-small). Escalation-only,
 # so the small list keeps the image lean.

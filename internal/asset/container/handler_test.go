@@ -5,6 +5,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 
+	_ "github.com/ClatTribe/tsengine/internal/tool/cosign"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/grype"
 	_ "github.com/ClatTribe/tsengine/internal/tool/syft"
@@ -20,7 +21,7 @@ func TestHandler_TypeAndAnchors(t *testing.T) {
 	for _, a := range h.Anchors() {
 		got[a.Name()] = true
 	}
-	for _, want := range []string{"trivy", "grype", "dockle", "syft"} {
+	for _, want := range []string{"trivy", "grype", "dockle", "syft", "cosign"} {
 		if !got[want] {
 			t.Errorf("missing anchor %q (got %v)", want, got)
 		}
@@ -30,8 +31,8 @@ func TestHandler_TypeAndAnchors(t *testing.T) {
 func TestPlanAnchors_TrivyImageMode(t *testing.T) {
 	h := NewHandler()
 	out := h.PlanAnchors(types.Asset{Type: types.AssetContainerImage, Target: "alpine:3.18"})
-	if len(out) != 4 {
-		t.Fatalf("dispatches: %d, want 4", len(out))
+	if len(out) != 5 {
+		t.Fatalf("dispatches: %d, want 5", len(out))
 	}
 	for _, d := range out {
 		if d.Args["target"] != "alpine:3.18" {

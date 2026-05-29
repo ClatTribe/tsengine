@@ -65,12 +65,14 @@ func (h *Handler) Normalize(results []tool.Result) []types.Finding {
 
 // anchorNames: trivy (CVE+misconfig+secret), grype (second CVE DB →
 // corroboration), dockle (CIS misconfig), syft (CycloneDX SBOM →
-// compliance evidence). Phase 3.x adds anchore.
+// compliance evidence), cosign (supply-chain trust: signature / SLSA
+// provenance — unsigned images flagged). Phase 3.x adds anchore.
 var anchorNames = []string{
 	"trivy",
 	"grype",
 	"dockle",
 	"syft",
+	"cosign",
 }
 
 var registryNames = []string{

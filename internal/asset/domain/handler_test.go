@@ -8,6 +8,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
 	_ "github.com/ClatTribe/tsengine/internal/tool/crtsh"
+	_ "github.com/ClatTribe/tsengine/internal/tool/dnstwist"
 	_ "github.com/ClatTribe/tsengine/internal/tool/httpx"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
 	_ "github.com/ClatTribe/tsengine/internal/tool/subfinder"
@@ -79,6 +80,9 @@ func TestPlanFanout_DNSHealthTakeoverHTTP(t *testing.T) {
 	}
 	if byTool["checkdmarc"] != 1 || cdTarget != "example.com" {
 		t.Errorf("checkdmarc should run once on the apex; got %d target=%q", byTool["checkdmarc"], cdTarget)
+	}
+	if byTool["dnstwist"] != 1 {
+		t.Errorf("dnstwist should run once (lookalike domains); got %d", byTool["dnstwist"])
 	}
 	if byTool["nuclei"] != 1 || nucleiTags != "takeover" {
 		t.Errorf("nuclei should run once with takeover tags; got %d tags=%q", byTool["nuclei"], nucleiTags)
