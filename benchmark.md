@@ -14,7 +14,7 @@ tools are the documented target set — **anchor tier** fires on every scan,
 
 | # | Asset type | Popular benchmark (neutral competitor scores) | Detection tools |
 |---|---|---|---|
-| 1 | **web_application** | **WAVSEP** (Shay Chen, sectoolmarket.com) — Acunetix 87%, Netsparker 87%, Burp 78%, WebInspect 76%, AppScan 69%, ZAP 56% | `✓` nuclei, `✓` dalfox, `✓` httpx · *anchor:* katana, sqlmap, ffuf, hydra, smuggler, http_security_headers_audit, tls_audit, cors_deep_check, csrf_check, open_redirect_check · *registry:* wapiti, nikto, jaeles, arachni, w3af, skipfish, ZAP-active, gobuster |
+| 1 | **web_application** | **WAVSEP** (Shay Chen, sectoolmarket.com) — Acunetix 87%, Netsparker 87%, Burp 78%, WebInspect 76%, AppScan 69%, ZAP 56% | `✓` katana (recon), `✓` nuclei, `✓` dalfox, `✓` sqlmap (SQLi specialist), `✓` httpx, `✓` seed_auth (authed re-scan) · *anchor:* ffuf, hydra, smuggler, http_security_headers_audit, tls_audit, cors_deep_check, csrf_check, open_redirect_check · *registry:* wapiti, nikto, jaeles, arachni, w3af, skipfish, ZAP-active, gobuster |
 | 2 | **api** | **VAmPI** + **crAPI** working-group writeups (no neutral leaderboard; Salt / Wallarm commercial) | `✓` nuclei (`tags=api,graphql,jwt,oauth`) · *anchor:* openapi_spec_ingest, schemathesis, scan_idor, jwt_audit, scan_api_bola/bfla/mass_assignment, kiterunner · *registry:* APIClarity, ZAP-API, restler, fuzzapi |
 | 3 | **repository** | **OWASP Benchmark v1.2** (SAST) — Veracode 51%, Checkmarx 47%, Fortify 35%, SonarQube 6%; SCA: Snyk / Dependabot self-published | `✓` semgrep (SAST), `✓` gitleaks + `✓` trufflehog (secrets), `✓` trivy fs + `✓` grype (SCA) · *anchor:* bandit, mobsfscan, osv-scanner, checkov, hadolint, tfsec, syft · *registry:* CodeQL (taint-flow), brakeman, gosec, staticcheck, snyk-code, kics, terrascan |
 | 4 | **container_image** | None neutral — Trivy / Snyk Container / Anchore self-published | `✓` trivy image (CVE + misconfig + secret), `✓` grype (2nd CVE DB), `✓` dockle (CIS misconfig) · *anchor:* syft, anchore, hadolint · *registry:* clair, kube-bench, falco-rules, snyk-container |
@@ -34,7 +34,7 @@ ready, corpus not yet deployed; **✗ none** = no fixture yet.
 | Asset | Popular benchmark | Fixture | Built? |
 |---|---|---|---|
 | **container_image** | (no neutral leaderboard) — Trivy / Snyk / Anchore self-published | `fixtures/container/nginx-vuln` + `alpine-clean` | **✓ live** — recall 1.0 on nginx:1.14 (must-find CVEs), 0 false-positives on clean alpine:3.18 |
-| **web_application** | **WAVSEP** (Shay Chen) — Acunetix 87% / Burp 78% / ZAP 56% | `fixtures/web/wavsep` | **⚠ stub** — competitor numbers recorded; needs the WAVSEP webapp deployed + reachable from the sandbox |
+| **web_application** | **WAVSEP** (Shay Chen) — Acunetix 87% / Burp 78% / ZAP 56% | `fixtures/web/wavsep` | **⚠ scorer-ready** — per-category Youden scorer + `tsbench wavsep` subcommand built (W5); CWE→WAVSEP category map (sqli/xss/pathtraver/redirect/…). Blocked on: deploy the WAVSEP webapp reachable from the sandbox **and** rebuild the image (katana/sqlmap/seed_auth not yet baked) |
 | **repository** | **OWASP Benchmark v1.2** (SAST) — Veracode 51% / Checkmarx 47% / Fortify 35% / SonarQube 6% | `fixtures/repo/owasp-benchmark` | **⚠ stub** — semgrep now wrapped (tool-ready); needs the BenchmarkJava source tree mounted at `/workspace` |
 | **api** | **VAmPI** + **crAPI** (no neutral leaderboard) | — | **✗ none** — internal must-find recall fixture not written yet |
 | **ip_address** | (no neutral leaderboard) — Tenable / Qualys / Rapid7 | — | **✗ none** — internal must-find recall fixture not written yet |
@@ -63,7 +63,12 @@ make bench-ablation   # L1.5 on-vs-off on the container fixture
 # individual fixtures:
 ./bin/tsbench run      --fixture fixtures/container/nginx-vuln
 ./bin/tsbench ablation --fixture fixtures/container/nginx-vuln
-./bin/tsbench run      --fixture fixtures/web/wavsep   # prints competitor numbers (stub)
+
+# WAVSEP: per-category Youden vs. the commercial leaderboard (W5).
+# Drives a deployed WAVSEP webapp through the full recon→fan-out pipeline,
+# scores findings by CWE→category, renders the competitor comparison.
+./bin/tsbench wavsep --target http://<wavsep-host>:8080 \
+                     --ground-truth fixtures/web/wavsep/expected-cases.csv
 ```
 
 `run` repeats N trials (`--trials N`) and reports **median + p10/p90** —

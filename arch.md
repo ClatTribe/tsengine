@@ -71,6 +71,43 @@ shape, bench.
 | **Bench** | Headline | `bench/wavsep` (1,133 cases) |
 | | Comparator | Acunetix 87% / Netsparker 87% / Burp 78% / ZAP 56% (Shay Chen WAVSEP, sectoolmarket.com) |
 
+> **Implemented DAST pipeline (W1–W6).** The matrix above is the target
+> catalog. What ships today is the deterministic L1 pipeline that fans the
+> built anchors across a crawled surface:
+>
+> 1. **Recon** (W1) — `katana` crawls the target *in the sandbox* (not a
+>    host helper; strix's mistake was routing recon host-side).
+>    `Result.DiscoveredURLs` → `asset.CollectSurface` (dedupe, target-first,
+>    cap `TSENGINE_FANOUT_MAX_URLS`=200). No recon tool → graceful fallback
+>    to single-target `PlanAnchors`.
+> 2. **Filtration** (W2) — `filterSurface`: scope → static-asset drop →
+>    destructive-path drop → shape-dedup (`/items/1`≡`/items/N`→`:int`,
+>    plus uuid/hash/date). `internal/asset/web/{filter,shape}.go`.
+> 3. **Fan-out** (W1/W4) — `PlanFanout`: `nuclei`+`httpx` run **once** over
+>    the whole surface (`-list`/`-l`); `dalfox`+`sqlmap` run **per-URL on
+>    param-bearing URLs only** (an injection point is required). sqlmap is
+>    the SQLi specialist (W4) — stdout Parameter/Type parse → CWE-89.
+> 4. **Wave ordering** (W3) — `partitionWaves` (`internal/orchestrator/deps.go`)
+>    topo-sorts dispatches by a static dependency table. All-independent
+>    batches collapse to one wave (zero overhead). Lands the guard *before*
+>    any state-coupled tool exists, so strix's Q4.2 unguarded-parallel race
+>    is impossible by construction.
+> 5. **Authenticated re-scan** (W6) — when `Asset.Auth` is set, `PlanFanout`
+>    prepends a `seed_auth` dispatch (passthrough cookie, or form-login →
+>    `Set-Cookie`). nuclei/dalfox/sqlmap/httpx depend on `seed_auth` in the
+>    table → it runs in wave 0; `executeWaves` threads the captured session
+>    (`Result.CapturedSession`, sandbox-boundary-only, never in the
+>    dashboard) into the detectors' `args["cookie"]` in wave 1 (an explicit
+>    cookie is never clobbered). CLI: `--auth-cookie` | `--auth-login-url
+>    --auth-username --auth-password`. Auth failure → no session →
+>    detectors scan unauthenticated (graceful).
+>
+> **Backlog (not built):** SPA/JS-rendered crawl (`webapp_recon_pipeline`),
+> DOM-aware specialists (`scan_xss`, `dom_xss_static_probe`, prototype
+> pollution, cache deception), request-smuggling (`smuggler`), CSRF-token /
+> multi-step / SPA login in `seed_auth`, and the registry-tier tools
+> (wapiti, nikto, ZAP active, …). The L2 catalog rows are Phase 6.
+
 ---
 
 ### `api` — DAST + spec-driven

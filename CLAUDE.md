@@ -150,6 +150,46 @@ Per-asset anchor + registry lists live in [arch.md](arch.md).
 | **L2.5** | Verifier — re-fire L1 tool via tool-replay with benign-control payload to upgrade `pattern_match` → `verified` | Mixed | Per finding flagged for verification |
 | **L3** | Portfolio-level (cross-scan dedup, multi-target correlation) | Host | Future |
 
+### 5.1 The L1 recon → fan-out pipeline (deterministic, not LLM-driven)
+
+Recon-capable assets (web today; api spec-ingest next) run a **two-stage L1
+flow** in the orchestrator — discover the surface, then fan detection tools
+across it. This is the L1 prepass, entirely deterministic; the L2 LLM never
+drives it (strix's "model ignored the recon directive" class of bug, §10,
+is structurally impossible here).
+
+The contract — invariants, not implementation detail:
+
+1. **Recon is a hard stage, not a prompt.** A `ReconHandler` exposes
+   `Recon()`; if it returns tools they run first (`katana` crawls *in the
+   sandbox*). `Result.DiscoveredURLs` → `CollectSurface` (dedupe,
+   target-always-included, capped by `TSENGINE_FANOUT_MAX_URLS`=200). No
+   recon tools → graceful fallback to single-target `PlanAnchors`.
+2. **Fan-out shape is the tool's, not uniform.** `PlanFanout` decides:
+   list-mode tools (`nuclei`, `httpx`) run **once** over the whole surface
+   (`-list`); injection tools (`dalfox`, `sqlmap`) run **per-URL on
+   param-bearing URLs only**. Running list-mode tools per-URL is the WAVSEP
+   2h+ trap — don't.
+3. **Surface filtration runs before fan-out.** Scope → static-asset drop →
+   destructive-path drop → URL-shape dedup (`/items/1`≡`/items/N`). The cap
+   + filtration are the guard against strix's unbounded fan-out (Q5.34l).
+4. **Dispatch is wave-ordered, never flat-parallel when state-coupled.**
+   `partitionWaves` (`internal/orchestrator/deps.go`) topo-sorts by a static
+   dependency table: concurrent within a wave, sequential across. An
+   all-independent batch collapses to one wave (zero overhead). The
+   classifier landed **before** any state-coupled tool existed, so strix's
+   Q4.2 unguarded-parallel-auth race is impossible by construction. When you
+   add a tool that reads another's side-effect, **add the edge to
+   `toolDependencies`** — do not rely on dispatch order.
+5. **Authenticated scan = a `seed_auth` tool in wave 0.** When `Asset.Auth`
+   is set, `PlanFanout` prepends a `seed_auth` dispatch (passthrough cookie,
+   or form-login → captured `Set-Cookie`). The authed detectors depend on it
+   in the table → it runs first; `executeWaves` threads the captured session
+   (`Result.CapturedSession` — crosses the sandbox boundary but is **never**
+   written to `vulnerabilities.json`) into the detectors' `args["cookie"]`,
+   never clobbering an explicit cookie. Auth failure → no session →
+   unauthenticated scan (graceful, never crashes).
+
 ---
 
 ## 6. The L1 dashboard contract — `vulnerabilities.json`
