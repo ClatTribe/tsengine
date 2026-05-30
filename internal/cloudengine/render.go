@@ -27,6 +27,10 @@ func RenderAssessment(a *types.AIAssessment) string {
 		if p.Remediation != "" {
 			fmt.Fprintf(&b, "  fix:  %s\n", p.Remediation)
 		}
+		if c := p.Compliance; c != nil {
+			fmt.Fprintf(&b, "  violates: SOC2 %v · PCI %v · CIS-v8 %v · NIST-CSF %v\n",
+				c.SOC2, c.PCI, c.CISv8, c.NISTCSF)
+		}
 		fmt.Fprintf(&b, "  evidence: %d step(s) replayable vs the snapshot\n\n", len(p.Evidence))
 	}
 	if len(a.Downgraded) > 0 {
