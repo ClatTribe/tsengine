@@ -124,13 +124,39 @@ measuring CIS-control recall (that's prowler/L1) — we measure **attack-path
 discovery, FP-reduction, prioritization, safety, and efficiency.** So the bench
 needs an environment with **ground-truth paths** + **decoys**.
 
-### Targets (the de-facto cloud attack-path "benchmarks")
-Deploy into a **throwaway/sandbox account**, each with a *documented kill-chain*
-= ground truth:
-- **CloudGoat** (Rhino) — Terraform AWS scenarios, each a known attack path. The flagship.
-- **IAM Vulnerable** (BishopFox) — deploys the catalog of known IAM privesc paths — exact ground truth for the identity dimension.
-- **AWSGoat / flaws.cloud / sadcloud** — additional scenarios/breadth.
-- **Planted decoys (ours)** — misconfigs that are **config-bad but NOT reachable/exploitable** (no listener, NACL blocks, condition blocks, non-sensitive data). **These are the crux:** they measure whether the engineer does the live validation that separates it from a config linter.
+### Two-tier targets
+
+**Tier 1 — real labs (the fidelity anchor).** Deploy into a throwaway account,
+each with a *documented kill-chain* = ground truth:
+- **CloudGoat** (Rhino) — Terraform AWS scenarios, each a known attack path. Flagship.
+- **IAM Vulnerable** (BishopFox) — the catalog of known IAM privesc paths — exact identity-dimension ground truth.
+- **AWSGoat / flaws.cloud / sadcloud** — extra scenarios/breadth.
+- **Planted decoys (ours)** — config-bad but NOT reachable/exploitable (no listener, NACL/condition blocks, non-sensitive data). The crux: they measure whether the engineer *disproves* what a config linter flags.
+
+Tier 1 is slow + infra-bound but **high fidelity** — it is the truth anchor.
+
+**Tier 2 — LLM-generated synthetic scenarios (scale + anti-overfit).** Because
+the engineer reasons over the *snapshot* (ADR 0002), a benchmark scenario is just
+a synthetic **(snapshot graph + live-oracle + labels)** — no real cloud needed.
+Precedent: OWASP Benchmark (our SAST bench) is itself template-generated.
+
+```
+template primitives (deterministic) ─► LLM composer ─► materializer ─► deterministic VERIFIER ─► bench
+  prowler check_ids (the misconfigs)    arrange into     render the        confirm each planted     score vs
+  PMapper privesc edges (the moves)     complex multi-   snapshot +         path IS reachable &      verified
+  network/trust/exposure primitives     step scenarios   live-oracle +      each decoy is NOT        labels
+                                        + noise + decoys  ground-truth       (reject if intent ≠ fact)
+```
+- **Primitives are deterministic** (prowler checks, PMapper edges) — building blocks are mechanical, not LLM imagination.
+- **The LLM only *composes*** — arranges primitives into complex scenarios buried in realistic noise + decoys (what hand-written labs can't scale).
+- **The deterministic verifier is load-bearing** — independently confirms every label (planted path reachable, decoy inert) over the synthetic graph *before* admitting the scenario. The LLM proposes; a mechanical checker confirms. This + template-derived (not LLM-judged) ground truth defuses the "grading your own homework" circularity.
+- **Generate fresh scenarios per CI run** → memorization-proof (§14.2 taken to the limit); thousands of exactly-labeled cases, no infra.
+
+**Two non-negotiables:** (1) the deterministic verifier on every label; (2) Tier 1
+as the **calibration anchor** — if the Tier-2 score diverges from the Tier-1 score,
+the generator's realism is off → tune. Synthetic gives scale + anti-overfit of the
+*reasoning*; real gives fidelity of the *live-probe execution*. Synthetic never
+replaces real.
 
 ### Scorecard (`tsbench cloud-engineer`)
 | Metric | What | Note |
@@ -164,7 +190,64 @@ Deploy into a **throwaway/sandbox account**, each with a *documented kill-chain*
 to measure the engineer's actual thesis — *live-validated real impact, not config
 theater* — by rewarding it for **disproving** what a config linter would flag.
 
-## 7. References
+## 7. Build plan (proposed changes)
+
+Phased so each slice is independently shippable + testable. Reuses the existing
+L2 core (`internal/l2`), orchestrator, replay (§9), and tracer.
+
+| Phase | Build | New / changed |
+|---|---|---|
+| **C0 · Snapshot substrate (L3)** | Wrap CloudQuery/Cartography as a read-only prepass → normalized inventory graph; content-address it (`snapshot_hash`). Define the graph schema (resources, identities, edges, data-class). | `internal/snapshot/` (schema + ingest), `internal/tool/cloudquery` (or cartography) |
+| **C1 · Safety harness (BEFORE any agent touch)** | Scoped STS session-policy generator; mutation deny-guard (reject non-`Get`/`List`/`Describe`); live-call budget; audit logger; the gated `validate(rung)` tool. | `internal/cloudsafety/`, `internal/l2/tools_validate.go` |
+| **C2 · Deterministic reasoning tools (local)** | `query_inventory`, `get_resource`, `resolve_access` (wrap cloudsplaining/PMapper for effective perms), `find_paths` (PMapper/Cartography traversal), `classify_data` (Macie/tags). | `internal/cloudreason/` + tool wrappers |
+| **C3 · Cloud-engineer agent** | Orientation-brief prepass; the cloud catalog over the L2 ReAct loop; worklist + termination governors; `record_hypothesis/finding`, `finish_assessment`. | `internal/l2/cloud/` (catalog), reuse `agent.go`/`phase.go`/`compaction.go`/`budget.go` |
+| **C4 · Dual-view contract** | Extend the dashboard with the `ai_assessment` block (attack-path findings + evidence bundle + prowler correlation + remediation). | `pkg/types/scan.go` (`AIAssessment`), dashboard renderer |
+| **C5 · Test (two-tier)** | Tier 1: CloudGoat/IAM-Vulnerable harness + scorer. Tier 2: synthetic generator + **deterministic verifier** + scorer. Scorecard + CI non-regression gate. | `internal/bench/cloudengine.go` (+ `_test.go`), `internal/bench/synthgen/`, `tsbench cloud-engineer` |
+| **C6 · Wrapper interface** | The `tswrap` contract + control endpoints (below). | extend `internal/replay` HTTP surface |
+
+**Invariant compliance:** ≤12-tool catalog (§2.6); no in-house *detector* — we
+wrap CloudQuery/PMapper/cloudsplaining (§13); the deterministic prepass keeps the
+recall floor (prowler) intact; reproducibility = `snapshot_hash` + evidence
+bundle (§10).
+
+## 8. Wrapper (`tswrap`) interface — what's exposed to the user
+
+`tswrap` is the consumer-facing wrapper (the tsengine analog of `webappsec`). The
+engineer exposes one **artifact** + a small **control plane**, rendered as the
+two audience views (§6 dual-audience).
+
+### 8.1 The artifact — `ai_assessment` block on `vulnerabilities.json`
+Sits alongside `findings_raw` (prowler "tools say"). Per attack-path finding:
+- `narrative` — plain-English chain ("internet → ALB → EC2 role → assume data-role → PII bucket") **[non-security view]**
+- `path_graph` — nodes + edges, for the wrapper to render the attack-path visually
+- `real_impact` + components (`config_possible`/`live_reachable`/`data_sensitivity`/`privilege`)
+- `verification_status` + `rung_reached` + `confidence`
+- `evidence_bundle` — every query + live observation, **replayable vs `snapshot_hash`** **[security-engineer view]**
+- `corroborates[]` — which prowler `finding_id`s this path chains; `downgrades[]` — which prowler "criticals" it proved inert
+- `remediation` — the single cheapest edge to cut + config diff + retest criteria
+- `affected_resources[]` (ARNs)
+
+Plus assessment-level: `snapshot_hash`, `audit_log` (every query + live call), `attestation` (signs `snapshot_hash + findings + evidence`), `pending_validations[]` (rung-5 awaiting human approval).
+
+### 8.2 Control plane (HTTP, extends the §9 replay surface)
+- `POST /assess {cloud_account, scope, budget, active_validation_policy}` → run an assessment.
+- `GET /assessment/{id}` → the dual-view artifact (both lenses + correlation).
+- `POST /approve-validation {assessment_id, hypothesis_id}` → **the human-in-the-loop gate** for rung-5 active validation. tswrap is *where the human authorizes* live exploitation; nothing rung-5 runs without it.
+- `POST /replay {assessment_id, hypothesis_id | tool, args}` → re-investigate one hypothesis / dig deeper (the §9 replay, extended to cloud hypotheses).
+- `GET /audit/{assessment_id}` → the full query + live-call log (the trust surface: "exactly what the agent touched").
+
+### 8.3 The two views tswrap renders (mirrors §6 dual-audience)
+- **Security-engineer view:** prowler `findings_raw` + the engineer's evidence bundles + replay/verify + the audit trail + the approve-validation queue. (Trust + drill-down.)
+- **Developer / PM / compliance view:** the prioritized attack-path list + plain-English narrative + "fix this first" remediation + compliance evidence pack. (Actionable without a security background.)
+
+### 8.4 Safety surfaced to the user
+tswrap must *show* the safety envelope so the customer trusts it: the scoped
+read-only role in use, the live-call budget + what was spent, the full audit log,
+and the human-gated `pending_validations` queue. **Nothing rung-5 executes from
+the agent — only from a human clicking approve in `tswrap`.**
+
+## 9. References
 ADR 0001 (L2 bounded discoverer) · ADR 0002 (AI Cloud Engineer + safety +
-reproducibility) · CLAUDE.md §10 (reproducibility = snapshot + evidence-replay),
-§2.6/§2.7 (tool cap + tool-existence), §14 (benchmark discipline).
+reproducibility) · CLAUDE.md §6 (dashboard contract), §9 (replay/control plane),
+§10 (reproducibility = snapshot + evidence-replay), §2.6/§2.7 (tool cap +
+tool-existence), §13 (wrap OSS), §14 (benchmark discipline).
