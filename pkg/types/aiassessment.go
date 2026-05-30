@@ -27,6 +27,7 @@ type AttackPath struct {
 	Downgrades   []string          `json:"downgrades,omitempty"`   // prowler "criticals" proven inert
 	Remediation  string            `json:"remediation"`            // the cheapest edge to cut + retest
 	Affected     []string          `json:"affected_resources"`
+	Compliance   *Compliance       `json:"compliance,omitempty"` // controls this path violates (compliance-auditor view, §8)
 }
 
 // RealImpact decomposes real_impact = config_possible ∧ live_reachable ∧

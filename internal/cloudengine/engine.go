@@ -174,6 +174,7 @@ func buildFinding(snap *cloudgraph.Snapshot, id string, p cloudgraph.Path, rung 
 		Confidence:   confidence(rung, ri),
 		Evidence:     ev,
 		Affected:     affected(p),
+		Compliance:   pathCompliance(p, target),
 	}
 }
 
