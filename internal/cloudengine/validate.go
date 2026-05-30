@@ -24,17 +24,27 @@ func (o SnapshotOracle) Validate(p cloudgraph.Path) (bool, int, []types.Evidence
 	var ev []types.EvidenceItem
 	for _, e := range p.Edges {
 		k := fmt.Sprintf("%s->%s:%s", e.From, e.To, e.Kind)
+		// Passive reachability can confirm an unconditioned edge, but it CANNOT
+		// confirm an edge gated by a runtime condition (MFA/IP/tag) — that needs
+		// a live probe (rung 4). So a conditioned (or explicitly-blocked) edge is
+		// config-possible but NOT passively reachable: the honest rung-3 verdict
+		// is "unknown → not confirmed" (the config-possible ≠ exploitable gap,
+		// ADR 0002). This is what stops a config-bad-but-conditioned decoy from
+		// being reported as a real path without live validation.
+		unconfirmable := o.Blocked[k] || e.Condition != ""
 		obs := "reachable"
 		if o.Blocked[k] {
 			obs = "blocked by runtime condition"
+		} else if e.Condition != "" {
+			obs = "gated by a runtime condition — needs live validation (rung 4)"
 		}
 		ev = append(ev, types.EvidenceItem{
 			Query:       fmt.Sprintf("reachability(%s → %s, %s)", e.From, e.To, e.Kind),
 			Observation: obs,
 			AtRung:      3,
 		})
-		if o.Blocked[k] {
-			return false, 3, ev // config-possible but not live-reachable → decoy
+		if unconfirmable {
+			return false, 3, ev // config-possible but not passively confirmable
 		}
 	}
 	return true, 3, ev

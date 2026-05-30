@@ -461,6 +461,7 @@ func runCloudAssess(argv []string) error {
 	prowlerPath := fs.String("prowler", "", "optional path to prowler findings JSON (for corroborate/downgrade)")
 	out := fs.String("out", "", "optional path to write the assessment JSON")
 	llmFlag := fs.String("llm", "auto", "L2 LLM translator: auto (on if LLM_API_KEY set) | on | off")
+	maxHyp := fs.Int("max-hypotheses", 0, "engine worklist budget (0 = default 20); raise for accounts with many real attack paths")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -484,7 +485,7 @@ func runCloudAssess(argv []string) error {
 		}
 	}
 
-	assessment := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{})
+	assessment := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: *maxHyp})
 
 	// L2 translator: refine the deterministic findings into developer-facing
 	// prose + an executive summary (graceful — leaves the deterministic output

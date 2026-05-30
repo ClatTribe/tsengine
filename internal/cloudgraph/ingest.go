@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -96,6 +97,44 @@ func LoadSnapshot(path string) (*Snapshot, error) {
 		return nil, err
 	}
 	return Ingest(inv), nil
+}
+
+// ToInventory serializes a Snapshot back into a normalized Inventory — the
+// reverse of Ingest. Used to export a synthetic/emulated cloud account as the
+// operator-facing inventory JSON, so the full pipeline (ingest → engine → LLM)
+// can be exercised on it exactly as on a real CloudQuery export. Deterministic
+// (nodes sorted by id) for reproducibility.
+func (s *Snapshot) ToInventory() Inventory {
+	inv := Inventory{AccountID: s.AccountID, Provider: s.Provider, CapturedAt: s.CapturedAt}
+	ids := make([]string, 0, len(s.Nodes))
+	for id := range s.Nodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		n := s.Nodes[id]
+		inv.Resources = append(inv.Resources, InvResource{
+			ID: n.ID, Kind: n.Kind, Type: n.Type, Name: n.Name, Region: n.Region,
+			Public: n.Public, Sensitive: n.Sensitive, Privileged: n.Privileged, Tags: n.Tags,
+		})
+	}
+	for _, e := range s.Edges {
+		switch e.Kind {
+		case EdgeAssumeRole:
+			inv.Trusts = append(inv.Trusts, InvTrust{Principal: e.From, Role: e.To, Condition: e.Condition})
+		case EdgePassRole:
+			inv.Passes = append(inv.Passes, InvPass{Principal: e.From, Role: e.To})
+		case EdgeHasAccess:
+			inv.Grants = append(inv.Grants, InvGrant{Principal: e.From, Resource: e.To, Condition: e.Condition})
+		case EdgeNetworkReach:
+			inv.Reaches = append(inv.Reaches, InvReach{From: e.From, To: e.To, Condition: e.Condition})
+		case EdgeRunsAs:
+			inv.RunsAs = append(inv.RunsAs, InvRunsAs{Compute: e.From, Principal: e.To})
+		case EdgePrivesc:
+			inv.Privescs = append(inv.Privescs, InvPrivesc{Principal: e.From, Target: e.To, Detail: e.Detail})
+		}
+	}
+	return inv
 }
 
 // Ingest assembles a Snapshot from a normalized Inventory.
