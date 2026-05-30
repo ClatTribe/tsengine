@@ -65,6 +65,39 @@ cite its competitor leaderboard — the loader rejects one that doesn't (§14.2.
 
 ---
 
+## Proving best-in-class without a public leaderboard (differential recall)
+
+Only **2 of 7** assets have a neutral leaderboard (web→WAVSEP, repo-SAST→OWASP
+Benchmark). For the other 5 (api, ip_address, domain, container/SCA,
+cloud_account) the "best-in-class" claim is **not** "we beat the commercial
+scanners" — it is CLAUDE.md §2.4: **per-tool recall = the standalone OSS tool.**
+That claim is provable *without any public corpus* by **differential testing**:
+
+```
+tsbench parity --asset <type> --target <t> --tool <name>
+```
+
+- **STANDALONE arm** — `tsengine replay --tool <t>` runs only that tool against
+  the target (no surface filter, no other tools, no L1.5).
+- **THROUGH arm** — a full `tsengine scan` → the tool's contribution to
+  `findings_raw` (captured *before* the L1.5 hooks, §11, so it isolates the
+  **orchestration**, not enrichment).
+- **Gate** — recall == 1.0: the orchestrated run drops **nothing** the
+  standalone tool found. A drop is a `FAIL` (exit 3) listing the missed
+  findings. `internal/bench/parity.go`; the baseline cite is the standalone
+  tool itself (§14.2.2).
+
+This is a **strict gate for single-stage assets** (repository, container_image,
+cloud_account) — the tool sees the whole target both ways, so any miss is an
+orchestration bug. For recon→fan-out assets a miss may instead be surface the
+fan-out deliberately pruned (informative). Combined with **union recall** (we
+run ≥2 engines per asset — trivy+grype+osv, prowler+scoutsuite — so union
+coverage exceeds any single competitor) this is how the leaderboard-less assets
+establish best-in-class: *no degradation + more engines than any one tool*,
+gated in CI and non-regressing over time.
+
+---
+
 ## Proposal: wiring L1 benchmarks for all 7 assets
 
 The harness, multi-trial (median + p10/p90), L1.5 ablation, and anti-overfit

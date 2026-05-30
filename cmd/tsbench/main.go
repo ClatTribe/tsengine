@@ -53,6 +53,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench cloud: %v\n", err)
 			os.Exit(1)
 		}
+	case "parity":
+		if err := parityCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench parity: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -69,6 +74,7 @@ Usage:
   tsbench wavsep   --target <url> --ground-truth <expected-cases.csv> [--image <ref>]
   tsbench sast     --target <src-dir> --ground-truth <expectedresults.csv> [--image <ref>]
   tsbench cloud    --target <provider> --ground-truth <expected-controls.csv> [--image <ref>]
+  tsbench parity   --asset <type> --target <t> --tool <name> [--image <ref>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
@@ -83,6 +89,13 @@ account seeded with a known-failing posture. Scoped, short-lived credentials
 are read from the environment (AWS_*/GOOGLE_*/AZURE_*) and forwarded into the
 sandbox — never written to disk. No neutral CSPM leaderboard (Prowler/Scout
 Suite/Wiz/Orca self-publish), so the cite is the CIS-recall reference.
+
+parity is the differential-recall gate for the asset types with NO public
+leaderboard: it runs <tool> standalone (via replay) and through a full scan
+against the same target, then asserts the orchestrated run drops nothing the
+standalone tool found (recall == 1.0). This proves the L1 best-in-class claim
+(CLAUDE.md §2.4 — per-tool recall = the standalone OSS tool) without needing a
+public corpus. Cleanest for single-stage assets (repository/container/cloud).
 `)
 }
 
@@ -180,6 +193,42 @@ func cloudCmd(argv []string) error {
 		return err
 	}
 	fmt.Print(bench.RenderCloud(rep))
+	return nil
+}
+
+// parityCmd runs the differential-recall gate: run a tool standalone (replay)
+// and through a full scan against the same target, then assert the orchestrated
+// run drops nothing the standalone tool found. Exits non-zero on a parity FAIL
+// so CI can gate on it (CLAUDE.md §2.4).
+func parityCmd(argv []string) error {
+	fs := flag.NewFlagSet("parity", flag.ContinueOnError)
+	assetType := fs.String("asset", "", "asset type (repository | container_image | cloud_account | ...)")
+	target := fs.String("target", "", "scan target")
+	toolName := fs.String("tool", "", "wrapped OSS tool to check parity for (e.g. trivy, prowler, semgrep)")
+	binary := fs.String("binary", "./bin/tsengine", "tsengine binary path")
+	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox image")
+	timeout := fs.String("timeout", "10m", "per-scan timeout")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *assetType == "" || *target == "" || *toolName == "" {
+		return fmt.Errorf("--asset, --target and --tool are required")
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	ctx, cancelT := context.WithTimeout(ctx, time.Hour)
+	defer cancelT()
+
+	rep, err := bench.RunParity(ctx, *assetType, *target, *toolName,
+		bench.RunOptions{Binary: *binary, Image: *image, Timeout: *timeout})
+	if err != nil {
+		return err
+	}
+	fmt.Print(bench.RenderParity(rep))
+	if !rep.Result.Pass {
+		os.Exit(3)
+	}
 	return nil
 }
 
