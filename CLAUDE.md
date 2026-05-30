@@ -425,7 +425,25 @@ The L2 path doesn't get a separate codepath — `dispatch_l2_probe` is a thin wr
 
 ## 10. Reproducibility invariants
 
-For compliance evidence, "same scan = same result." These are invariants, not best-effort:
+> **What reproducibility means (clarified — see ADR 0002).** Reproducibility is
+> a property of a **finding**, not of the detection **process**: *given a
+> captured config + environment, the issue can be replicated.* It does NOT
+> require the process to be deterministic. The mechanism is **snapshot +
+> evidence-replay**: pin the config/environment the scan ran against
+> (`corpus.*`, `sandbox_image_digest`, and — for live targets like
+> `cloud_account` — a content-addressed inventory `snapshot_hash`), and have
+> every finding carry a **deterministic evidence bundle** that re-confirms
+> against that pinned state. Deterministic tools (prowler, trivy) satisfy this
+> *and* happen to be byte-identical (so the N=5 output-equality bench below is a
+> valid test *for them*). An L2 discoverer / AI engine is non-deterministic in
+> its *discovery path* — that affects **coverage stability** (a recall property,
+> handled by the deterministic floor + temp-0 + multi-pass), NOT reproducibility:
+> its findings are first-class and attestable as long as each ships a replayable
+> evidence predicate over the pinned snapshot. The signed attestation covers
+> `snapshot_hash + findings + evidence`, never "the process was deterministic."
+
+For compliance evidence, a pinned config+environment replays to the same issue.
+These are invariants, not best-effort:
 
 | Invariant | Mechanism |
 |---|---|
