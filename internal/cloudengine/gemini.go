@@ -46,7 +46,7 @@ func GeminiFromEnv() (*Gemini, bool) {
 	if model == "" {
 		model = "gemini-2.0-flash"
 	}
-	return &Gemini{apiKey: key, model: model, http: &http.Client{Timeout: 60 * time.Second}}, true
+	return &Gemini{apiKey: key, model: model, http: &http.Client{Timeout: 90 * time.Second}}, true
 }
 
 type geminiReq struct {

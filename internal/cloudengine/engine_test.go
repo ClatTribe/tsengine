@@ -95,8 +95,16 @@ func TestSynthetic_GenerateVerifyAssessScore(t *testing.T) {
 
 func TestSynthetic_VerifierRejectsBadScenario(t *testing.T) {
 	scn := Generate(7, 2, 1, false)
-	// Corrupt the oracle so a "decoy" becomes reachable → Verify must catch it.
+	// Corrupt the scenario so a "decoy" becomes genuinely reachable. A decoy is
+	// inert via TWO independent mechanisms now: the live oracle's Blocked map AND
+	// the snapshot Condition on its assume edge (a conditioned edge is not
+	// passively confirmable — config-possible ≠ exploitable, ADR 0002). To make
+	// it a real path we must defeat both: clear the block AND strip the runtime
+	// condition. With both gone the decoy is reachable → Verify must reject it.
 	scn.Blocked = map[string]bool{}
+	for i := range scn.Snapshot.Edges {
+		scn.Snapshot.Edges[i].Condition = ""
+	}
 	if err := scn.Verify(); err == nil {
 		t.Error("verifier must reject a scenario whose decoy is actually reachable")
 	}
