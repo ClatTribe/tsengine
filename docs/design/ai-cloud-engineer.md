@@ -246,7 +246,64 @@ read-only role in use, the live-call budget + what was spent, the full audit log
 and the human-gated `pending_validations` queue. **Nothing rung-5 executes from
 the agent — only from a human clicking approve in `tswrap`.**
 
-## 9. References
+## 9. Training / fine-tuning (RLVR)
+
+The synthetic generator (§6 Tier 2) produces *deterministic ground truth*, so it
+is also a training signal — not RLHF (no human in the reward loop) but **RLVR
+(RL from Verifiable Rewards)**, the clean-signal regime where RL actually works
+(like math/code RL). Optional, sequenced after the engineer works with prompting.
+
+### Reward (multi-objective)
+- **Detection:** found planted paths (recall) + correctly downgraded decoys (FP-reduction).
+- **Efficiency:** penalize tokens / live-calls / iterations — the cost↔quality frontier prompting can't tune precisely. **The biggest, safest win — aim RL here.**
+- **Validation discipline:** reward stopping at the right rung.
+- **Safety:** a **hard** episode-fail penalty, never a soft reward (or RL learns to cheat it).
+
+### The three risks (and why they're survivable)
+1. **Reward hacking — #1 danger.** RL optimizes the *generator's* truth and will
+   exploit any gap to *real* truth (learn template signatures, get worse on real
+   accounts). **Mitigation: train on synthetic, gate on real** — Tier 1 (real
+   labs) is held out as an eval the model never trains on; divergence ⇒ stop.
+   The generator's realism is the ceiling.
+2. **Safety in an exploring loop.** RL explores to maximize reward and could
+   drift toward live exploitation. **Mitigation: safety is *structural*, not
+   learned** — (a) train only against the synthetic oracle (the model never
+   touches a real cloud in the RL loop); (b) the deterministic safety harness
+   (§7 C1) sits *outside* the model and physically blocks unsafe actions, so a
+   reward-hacked policy still cannot do harm. RL can't unlearn a hard guard.
+3. **Catastrophic forgetting** of the novel-reasoning the generator didn't cover.
+   **Mitigation:** LoRA/adapters over full fine-tune; or RL a *small* model for
+   the common/fast path + keep a frontier model for novel cases (model routing).
+
+### Why it's tractable
+The deterministic prepass narrows the **learnable surface** to judgment +
+prioritization + when-to-stop (a small action space) → RL is tractable *and*
+safer (less room to hack). Point RL at **efficiency** (clear, safe win); let the
+strong base model + prepass carry detection (where hacking bites hardest).
+
+### Graduated path (lowest-risk first)
+1. **Prompt + few-shot optimization** on synthetic scenarios — no weights,
+   model-agnostic, reversible. Get the benchmark up this way first.
+2. **SFT on golden trajectories** — behavior-clone the efficient, safe
+   investigations (teaches orient→hypothesize→disprove). Works with API fine-tune.
+3. **RLVR for efficiency** on an **open-weights** model (can't RLVR a frontier
+   API) — synthetic-oracle-only, safety as a hard structural guard + reward
+   penalty, train-synthetic/eval-real, optionally a **co-evolving generator**
+   (rewarded for scenarios the current agent fails → automatic difficulty
+   curriculum, *regularized by the real-lab anchor* so it can't drift unrealistic).
+
+### Caveats
+- **Sequence after** the engineer works (prompting) and the generator+benchmark
+  are *trusted* (verifier + real-lab calibration) — RL before a trustworthy
+  reward amplifies a bad signal.
+- **Build-vs-buy:** RLVR needs open weights you control; on a frontier API you're
+  capped at prompt-opt + their SFT. A hybrid (small RL'd model for common cases,
+  frontier for novel) is the likely sweet spot.
+- **Invariants unaffected:** safety stays structural (harness), not learned;
+  reproducibility is per-finding evidence-replay regardless of the model (§10) —
+  a fine-tuned model is still non-deterministic in discovery, which is fine.
+
+## 10. References
 ADR 0001 (L2 bounded discoverer) · ADR 0002 (AI Cloud Engineer + safety +
 reproducibility) · CLAUDE.md §6 (dashboard contract), §9 (replay/control plane),
 §10 (reproducibility = snapshot + evidence-replay), §2.6/§2.7 (tool cap +
