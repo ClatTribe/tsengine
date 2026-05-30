@@ -160,6 +160,7 @@ Usage:
   tsengine version
   tsengine scan   --asset <type> --target <url> [--image <ref>] [--out <dir>]
                   [--auth-cookie <c> | --auth-login-url <url> --auth-username <u> --auth-password <p>]
+                  [--snapshot <inventory.json>]   # cloud_account: emit the AI-engineer dual-view
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
   tsengine cloud-assess --snapshot <inventory.json> [--prowler <findings.json>] [--out <assessment.json>]
   tsengine pubkey [--key <path>]
@@ -239,6 +240,7 @@ func runScan(argv []string) error {
 	authPassword := fs.String("auth-password", "", "login password (with --auth-login-url)")
 	authUserField := fs.String("auth-username-field", "", "login form username field name (default: username)")
 	authPassField := fs.String("auth-password-field", "", "login form password field name (default: password)")
+	snapshotPath := fs.String("snapshot", "", "cloud_account: inventory JSON (CloudQuery/Cartography export) → runs the AI Cloud Engineer dual-view")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -377,6 +379,11 @@ func runScan(argv []string) error {
 		StopReason:       stopReason,
 	}
 
+	// Dual-view: for a cloud_account scan with an inventory snapshot, attach the
+	// AI Cloud Security Engineer's "engineer says" assessment alongside the
+	// "tools say" findings_raw (ADR 0002). The attestation below covers both.
+	attachCloudEngine(&scan, *snapshotPath, scanID)
+
 	if err := signAndWrite(&scan, *outDir, scanID); err != nil {
 		return err
 	}
@@ -420,6 +427,24 @@ func runReplay(argv []string) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(resp)
+}
+
+// attachCloudEngine runs the AI Cloud Security Engineer over a cloud_account
+// scan's prowler findings + an inventory snapshot and attaches the dual-view
+// assessment to the scan. No-op unless the asset is cloud_account and a
+// snapshot path is given. Extracted for testability.
+func attachCloudEngine(scan *types.Scan, snapshotPath, scanID string) {
+	if scan.Asset.Type != types.AssetCloudAccount || snapshotPath == "" {
+		return
+	}
+	snap, err := cloudgraph.LoadSnapshot(snapshotPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[%s] cloud-engine: snapshot load failed: %v\n", scanID, err)
+		return
+	}
+	scan.AIAssessment = cloudengine.Assess(snap, scan.FindingsRaw, cloudengine.SnapshotOracle{}, cloudengine.Options{})
+	fmt.Fprintf(os.Stderr, "[%s] AI cloud engineer: %d attack path(s), %d prowler finding(s) downgraded\n",
+		scanID, len(scan.AIAssessment.Paths), len(scan.AIAssessment.Downgraded))
 }
 
 // --- cloud-assess ------------------------------------------------
