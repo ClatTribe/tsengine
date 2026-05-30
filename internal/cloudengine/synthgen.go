@@ -5,6 +5,7 @@ import (
 	"math/rand"
 
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/cloudiam"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -27,9 +28,10 @@ type Scenario struct {
 // Oracle returns the live-oracle Validator for this scenario.
 func (s *Scenario) Oracle() Validator { return SnapshotOracle{Blocked: s.Blocked} }
 
-// Generate builds a scenario with nReal planted kill-chains and nDecoy
-// config-bad-but-unreachable decoys, deterministically from seed.
-func Generate(seed int64, nReal, nDecoy int) *Scenario {
+// Generate builds a scenario with nReal planted network→data kill-chains,
+// nDecoy config-bad-but-unreachable decoys, and (when withPrivesc) one IAM
+// privilege-escalation-to-admin chain — deterministically from seed.
+func Generate(seed int64, nReal, nDecoy int, withPrivesc bool) *Scenario {
 	rng := rand.New(rand.NewSource(seed)) //nolint:gosec // benchmark fixture, not crypto
 	snap := cloudgraph.New(fmt.Sprintf("acct-%d", seed), "aws")
 	snap.AddNode(&cloudgraph.Node{ID: cloudgraph.InternetID, Kind: cloudgraph.KindNetwork, Name: "internet"})
@@ -79,6 +81,27 @@ func Generate(seed int64, nReal, nDecoy int) *Scenario {
 		fid := id("f-decoy", i)
 		scn.Prowler = append(scn.Prowler, prowlerFinding(fid, "AWS::S3::Bucket", bucket))
 		scn.DecoyFindings = append(scn.DecoyFindings, fid)
+	}
+
+	// IAM privesc chain: internet → alb → ec2 → low-role, where low-role holds
+	// a policy that enables a known privesc technique. The cloudiam evaluator +
+	// the AddPrivescEdges bridge turn that policy into a low-role → admin edge,
+	// so the engineer discovers "internet → … → low-role → privesc → admin".
+	if withPrivesc {
+		alb := "palb"
+		ec2 := "pec2"
+		low := "low-role"
+		snap.AddNode(&cloudgraph.Node{ID: alb, Kind: cloudgraph.KindResource, Type: "AWS::ELB::LB", Name: alb, Public: true})
+		snap.AddNode(&cloudgraph.Node{ID: ec2, Kind: cloudgraph.KindResource, Type: "AWS::EC2::Instance", Name: ec2})
+		snap.AddNode(&cloudgraph.Node{ID: low, Kind: cloudgraph.KindPrincipal, Type: "AWS::IAM::Role", Name: low})
+		snap.AddEdge(cloudgraph.Edge{From: cloudgraph.InternetID, To: alb, Kind: cloudgraph.EdgeNetworkReach})
+		snap.AddEdge(cloudgraph.Edge{From: alb, To: ec2, Kind: cloudgraph.EdgeNetworkReach})
+		snap.AddEdge(cloudgraph.Edge{From: ec2, To: low, Kind: cloudgraph.EdgeRunsAs})
+
+		pol, _ := cloudiam.Parse([]byte(`{"Statement":[{"Effect":"Allow","Action":["iam:CreatePolicyVersion"],"Resource":"*"}]}`))
+		snap.AddPrivescEdges(map[string][]*cloudiam.Document{low: {pol}})
+		scn.RealTargets = append(scn.RealTargets, cloudgraph.AdminID)
+		scn.Prowler = append(scn.Prowler, prowlerFinding("f-privesc", "AWS::IAM::Role", low))
 	}
 
 	// Benign noise so real paths aren't trivially the only resources.

@@ -66,10 +66,10 @@ func ScoreEngine(scn *Scenario, a *types.AIAssessment) EngineScore {
 // RunSynthetic generates → verifies → assesses → scores n scenarios and returns
 // the aggregate scorecard. Every scenario must pass the deterministic Verify()
 // before it is scored (the anti-circularity safeguard).
-func RunSynthetic(seedBase int64, n, nReal, nDecoy int) (EngineScore, int, error) {
+func RunSynthetic(seedBase int64, n, nReal, nDecoy int, withPrivesc bool) (EngineScore, int, error) {
 	agg := EngineScore{Pass: true}
 	for i := 0; i < n; i++ {
-		scn := Generate(seedBase+int64(i), nReal, nDecoy)
+		scn := Generate(seedBase+int64(i), nReal, nDecoy, withPrivesc)
 		if err := scn.Verify(); err != nil {
 			return agg, i, fmt.Errorf("scenario %d failed verify: %w", i, err)
 		}
