@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
 )
 
 func main() {
@@ -58,6 +59,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench parity: %v\n", err)
 			os.Exit(1)
 		}
+	case "cloud-engine":
+		if err := cloudEngineCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench cloud-engine: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -75,6 +81,7 @@ Usage:
   tsbench sast     --target <src-dir> --ground-truth <expectedresults.csv> [--image <ref>]
   tsbench cloud    --target <provider> --ground-truth <expected-controls.csv> [--image <ref>]
   tsbench parity   --asset <type> --target <t> --tool <name> [--image <ref>]
+  tsbench cloud-engine [--scenarios N] [--real R] [--decoy D] [--seed S]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
@@ -227,6 +234,31 @@ func parityCmd(argv []string) error {
 	}
 	fmt.Print(bench.RenderParity(rep))
 	if !rep.Result.Pass {
+		os.Exit(3)
+	}
+	return nil
+}
+
+// cloudEngineCmd runs the AI Cloud Security Engineer benchmark (Tier 2,
+// synthetic): generate N scenarios with planted attack paths + config-bad-but-
+// inert decoys, deterministically verify each, run the engine, and score
+// attack-path recall + FP-reduction. No cloud/infra — the engineer reasons over
+// the synthetic snapshot (docs/design/ai-cloud-engineer.md §6).
+func cloudEngineCmd(argv []string) error {
+	fs := flag.NewFlagSet("cloud-engine", flag.ContinueOnError)
+	scenarios := fs.Int("scenarios", 50, "number of synthetic scenarios")
+	real := fs.Int("real", 3, "planted real attack paths per scenario")
+	decoy := fs.Int("decoy", 2, "config-bad-but-inert decoys per scenario")
+	seed := fs.Int64("seed", 1, "base seed (scenario i uses seed+i)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	agg, n, err := cloudengine.RunSynthetic(*seed, *scenarios, *real, *decoy)
+	if err != nil {
+		return err
+	}
+	fmt.Print(cloudengine.RenderEngineScore(agg, n))
+	if !agg.Pass {
 		os.Exit(3)
 	}
 	return nil

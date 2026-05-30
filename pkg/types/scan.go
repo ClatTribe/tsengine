@@ -29,7 +29,11 @@ type Scan struct {
 	FindingsEnriched []Finding    `json:"findings_enriched"`
 	L15AuditLog      []AuditEntry `json:"l15_audit_log,omitempty"`
 	ChildAssets      []ChildAsset `json:"child_assets,omitempty"`
-	Attestation      *Attestation `json:"attestation,omitempty"`
+	// AIAssessment is the AI Cloud Security Engineer's "engineer says" lens
+	// (attack paths over the inventory snapshot), shipped alongside FindingsRaw
+	// ("tools say"). Present for cloud_account when the engineer runs. ADR 0002.
+	AIAssessment *AIAssessment `json:"ai_assessment,omitempty"`
+	Attestation  *Attestation  `json:"attestation,omitempty"`
 
 	// Partial is true when the scan did not run to completion (e.g. the
 	// --timeout deadline fired mid-fan-out). The findings present are what

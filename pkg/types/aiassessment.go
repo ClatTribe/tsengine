@@ -8,6 +8,7 @@ package types
 type AIAssessment struct {
 	SnapshotHash       string       `json:"snapshot_hash"` // the pinned config+env (§10 reproducibility base)
 	Paths              []AttackPath `json:"attack_paths"`
+	Downgraded         []string     `json:"downgraded,omitempty"`          // prowler finding ids judged inert (config-bad, not reachable) — the FP-reduction lens
 	AuditLog           []string     `json:"audit_log,omitempty"`           // every query + live call touched
 	PendingValidations []string     `json:"pending_validations,omitempty"` // rung-5 awaiting human approval
 }
