@@ -247,13 +247,14 @@ func parityCmd(argv []string) error {
 func cloudEngineCmd(argv []string) error {
 	fs := flag.NewFlagSet("cloud-engine", flag.ContinueOnError)
 	scenarios := fs.Int("scenarios", 50, "number of synthetic scenarios")
-	real := fs.Int("real", 3, "planted real attack paths per scenario")
+	real := fs.Int("real", 3, "planted real network→data attack paths per scenario")
 	decoy := fs.Int("decoy", 2, "config-bad-but-inert decoys per scenario")
+	privesc := fs.Bool("privesc", true, "include an IAM privesc-to-admin chain per scenario")
 	seed := fs.Int64("seed", 1, "base seed (scenario i uses seed+i)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
-	agg, n, err := cloudengine.RunSynthetic(*seed, *scenarios, *real, *decoy)
+	agg, n, err := cloudengine.RunSynthetic(*seed, *scenarios, *real, *decoy, *privesc)
 	if err != nil {
 		return err
 	}

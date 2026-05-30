@@ -72,7 +72,7 @@ func TestAssess_DowngradesBlockedDecoy(t *testing.T) {
 
 func TestSynthetic_GenerateVerifyAssessScore(t *testing.T) {
 	for _, seed := range []int64{1, 2, 42, 1000} {
-		scn := Generate(seed, 3, 2)
+		scn := Generate(seed, 3, 2, true) // includes the IAM privesc-to-admin chain
 		if err := scn.Verify(); err != nil {
 			t.Fatalf("seed %d: scenario failed deterministic verify: %v", seed, err)
 		}
@@ -94,10 +94,33 @@ func TestSynthetic_GenerateVerifyAssessScore(t *testing.T) {
 }
 
 func TestSynthetic_VerifierRejectsBadScenario(t *testing.T) {
-	scn := Generate(7, 2, 1)
+	scn := Generate(7, 2, 1, false)
 	// Corrupt the oracle so a "decoy" becomes reachable → Verify must catch it.
 	scn.Blocked = map[string]bool{}
 	if err := scn.Verify(); err == nil {
 		t.Error("verifier must reject a scenario whose decoy is actually reachable")
+	}
+}
+
+func TestSynthetic_PrivescChainDetected(t *testing.T) {
+	// A privesc-only scenario: the engine must discover the IAM
+	// escalation-to-admin chain via the cloudiam evaluator + bridge.
+	scn := Generate(99, 0, 0, true)
+	if err := scn.Verify(); err != nil {
+		t.Fatalf("privesc scenario failed verify: %v", err)
+	}
+	a := Assess(scn.Snapshot, scn.Prowler, scn.Oracle(), Options{})
+	if s := ScoreEngine(scn, a); !s.Pass || s.PathRecall != 1.0 {
+		t.Fatalf("engine must detect the privesc-to-admin chain: %+v", s)
+	}
+	// the discovered path should end at the synthetic admin node
+	found := false
+	for _, p := range a.Paths {
+		if pathEnd(p) == "admin" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("a path to the effective-admin node should be reported")
 	}
 }
