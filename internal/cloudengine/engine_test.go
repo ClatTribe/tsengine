@@ -1,0 +1,103 @@
+package cloudengine
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
+
+// scenario: internet → alb → ec2 → web-role → assume → data-role → reads PII.
+func handBuilt() *cloudgraph.Snapshot {
+	s := cloudgraph.New("acct", "aws")
+	s.AddNode(&cloudgraph.Node{ID: cloudgraph.InternetID, Kind: cloudgraph.KindNetwork})
+	s.AddNode(&cloudgraph.Node{ID: "alb", Kind: cloudgraph.KindResource, Public: true, Name: "alb"})
+	s.AddNode(&cloudgraph.Node{ID: "ec2", Kind: cloudgraph.KindResource, Name: "ec2"})
+	s.AddNode(&cloudgraph.Node{ID: "web", Kind: cloudgraph.KindPrincipal, Name: "web-role"})
+	s.AddNode(&cloudgraph.Node{ID: "data", Kind: cloudgraph.KindPrincipal, Name: "data-role"})
+	s.AddNode(&cloudgraph.Node{ID: "pii", Kind: cloudgraph.KindData, Sensitive: cloudgraph.SensHigh, Name: "pii-bucket"})
+	s.AddEdge(cloudgraph.Edge{From: cloudgraph.InternetID, To: "alb", Kind: cloudgraph.EdgeNetworkReach})
+	s.AddEdge(cloudgraph.Edge{From: "alb", To: "ec2", Kind: cloudgraph.EdgeNetworkReach})
+	s.AddEdge(cloudgraph.Edge{From: "ec2", To: "web", Kind: cloudgraph.EdgeRunsAs})
+	s.AddEdge(cloudgraph.Edge{From: "web", To: "data", Kind: cloudgraph.EdgeAssumeRole})
+	s.AddEdge(cloudgraph.Edge{From: "data", To: "pii", Kind: cloudgraph.EdgeHasAccess})
+	return s
+}
+
+func TestAssess_FindsPathWithEvidenceAndRemediation(t *testing.T) {
+	snap := handBuilt()
+	prowler := []types.Finding{{ID: "p-1", Tool: "prowler", Endpoint: "AWS::IAM::Role data @us-east-1"}}
+	a := Assess(snap, prowler, SnapshotOracle{}, Options{})
+
+	if len(a.Paths) != 1 {
+		t.Fatalf("want 1 attack path, got %d", len(a.Paths))
+	}
+	p := a.Paths[0]
+	if !p.RealImpact.LiveReachable || p.RealImpact.Score < 0.99 {
+		t.Errorf("PII path should be reachable + high-impact: %+v", p.RealImpact)
+	}
+	if len(p.Evidence) == 0 {
+		t.Error("finding must carry an evidence bundle")
+	}
+	if p.Remediation == "" {
+		t.Error("finding must carry remediation (cheapest edge to cut)")
+	}
+	if !strings.Contains(p.Narrative, "assumes") {
+		t.Errorf("narrative should describe the assume-role move: %q", p.Narrative)
+	}
+	if a.SnapshotHash == "" {
+		t.Error("assessment must pin the snapshot hash")
+	}
+	// the prowler finding on data-role sits on the real path → corroborated
+	if len(p.Corroborates) != 1 || p.Corroborates[0] != "p-1" {
+		t.Errorf("prowler p-1 on the path should be corroborated: %v", p.Corroborates)
+	}
+}
+
+func TestAssess_DowngradesBlockedDecoy(t *testing.T) {
+	snap := handBuilt()
+	// block the assume edge ⇒ the PII path is config-possible but not reachable.
+	oracle := SnapshotOracle{Blocked: map[string]bool{"web->data:assume_role": true}}
+	prowler := []types.Finding{{ID: "p-1", Tool: "prowler", Endpoint: "AWS::S3::Bucket pii @us-east-1"}}
+	a := Assess(snap, prowler, oracle, Options{})
+
+	if len(a.Paths) != 0 {
+		t.Fatalf("blocked path must NOT become a finding, got %d", len(a.Paths))
+	}
+	if len(a.Downgraded) != 1 || a.Downgraded[0] != "p-1" {
+		t.Errorf("the inert prowler finding should be downgraded: %v", a.Downgraded)
+	}
+}
+
+func TestSynthetic_GenerateVerifyAssessScore(t *testing.T) {
+	for _, seed := range []int64{1, 2, 42, 1000} {
+		scn := Generate(seed, 3, 2)
+		if err := scn.Verify(); err != nil {
+			t.Fatalf("seed %d: scenario failed deterministic verify: %v", seed, err)
+		}
+		a := Assess(scn.Snapshot, scn.Prowler, scn.Oracle(), Options{})
+		s := ScoreEngine(scn, a)
+		if !s.Pass {
+			t.Errorf("seed %d: engine should ace a verified scenario: %+v", seed, s)
+		}
+		if s.PathRecall != 1.0 {
+			t.Errorf("seed %d: path recall %.2f, want 1.0", seed, s.PathRecall)
+		}
+		if s.FPReduction != 1.0 {
+			t.Errorf("seed %d: FP-reduction %.2f, want 1.0 (decoys downgraded)", seed, s.FPReduction)
+		}
+		if s.FalsePaths != 0 {
+			t.Errorf("seed %d: %d false paths", seed, s.FalsePaths)
+		}
+	}
+}
+
+func TestSynthetic_VerifierRejectsBadScenario(t *testing.T) {
+	scn := Generate(7, 2, 1)
+	// Corrupt the oracle so a "decoy" becomes reachable → Verify must catch it.
+	scn.Blocked = map[string]bool{}
+	if err := scn.Verify(); err == nil {
+		t.Error("verifier must reject a scenario whose decoy is actually reachable")
+	}
+}
