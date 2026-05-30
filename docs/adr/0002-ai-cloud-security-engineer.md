@@ -36,6 +36,19 @@ Two earlier discussions shape this ADR:
    against the same state), not of the **process** (how it was discovered). This
    reframes everything below — see §"Reproducibility" and the companion §10 note.
 
+3. **Real impact requires live validation — config-possible ≠ exploitable.** A
+   static snapshot tells you what's *theoretically* exposed; only the live
+   environment tells you what's *actually* exploitable, and the gap between them
+   is where real impact lives ("SG open to 0.0.0.0/0" vs. *is anything
+   listening and reachable through the full live path*; "role R trusts P" vs.
+   *does the assume actually succeed at runtime*; runtime-only classes like SSRF
+   aren't in config at all). A snapshot-only engine just rebuilds prowler with
+   an LLM and inherits the CSPM disease (200 "criticals", mostly inert). The
+   snapshot is therefore the **hypothesis layer**, not the conclusion — the
+   engineer's value is *validating which hypotheses have real impact*, which
+   means touching reality. The safety model below makes that validation
+   **graduated and overwhelmingly read-only**, not forbidden.
+
 ## Decision
 
 Build the AI Cloud Security Engineer as an **L2 bounded discoverer that reasons
@@ -49,19 +62,25 @@ L1   prowler + scoutsuite ───────────────►  find
         (deterministic recall floor — unchanged)
 
 L3   inventory snapshot (CloudQuery / Cartography), read-only, pinned + hashed
-        = the captured config+environment (the reproducibility artifact)
+        = the captured config (the hypothesis layer + reproducibility base)
                           │
-L2   AI Cloud Engineer (LLM agent) ◄────────┘   reasons over the FROZEN snapshot,
-        proves with analysis (not exploitation)  ──►  ai_assessment  "AI engineer says"
+L2   AI Cloud Engineer (LLM agent) ◄────────┘   hypothesize on the snapshot,
+        then VALIDATE against live (graduated, read-only-first) to establish
+        REAL IMPACT  ──►  ai_assessment  "AI engineer says"
 ```
 
 - **L1 stays the floor.** prowler/scoutsuite are unchanged — reproducible,
   compliance-grade, the "tools say" column.
-- **L3 snapshot is the substrate AND the safety boundary.** One controlled,
-  read-only inventory sync builds a frozen, content-addressed graph. The agent
-  reasons over *this static data*, not the live account.
-- **L2 engineer is the discoverer.** An LLM agent over the snapshot, with the
-  tool catalog below, emitting evidence-backed attack-path findings.
+- **L3 snapshot is the hypothesis substrate.** One controlled, read-only sync
+  builds a frozen, content-addressed graph. The agent forms attack-path
+  hypotheses cheaply and comprehensively over this static data — but the
+  snapshot is the *start*, not the end.
+- **L2 engineer is the discoverer + validator.** It validates the handful of
+  promising hypotheses against the live environment via the graduated ladder
+  (below) to separate *possible* from *real impact*. Captured live observations
+  become part of the evidence bundle. The snapshot makes this validation
+  **surgical** (probe the 5 that matter, not blanket-scan 10,000) — which is
+  the safety win, not isolation from live.
 - **Dual-view dashboard.** `vulnerabilities.json` carries both `findings_raw`
   (detection) and a new `ai_assessment` block (engineer), each finding tagged
   with confidence + a replayable evidence bundle.
@@ -89,25 +108,28 @@ attestation covers `snapshot_hash + findings + evidence + the live-call log`.
 
 ### The tool catalog (≤12, §2.7 "hands not brain", snapshot-first)
 
-The agent is **90% local-snapshot reads (zero live blast radius)**, a couple of
-**passive live analysis** calls (read-only, throttled), and **active validation
-is a human-gated proposal** — the agent literally cannot exploit on its own.
+Most tools are **local-snapshot reads (zero live blast radius)**; live contact
+is concentrated in **one** parameterized `validate` tool that the agent calls
+*surgically* on promising hypotheses and that enforces the ladder's per-rung
+gate. Exactly **≤12 slots** (the §2.6 cap):
 
-| Tool | What it does | Blast radius |
-|---|---|---|
-| `query_inventory(typed)` | Curated typed primitives over the FROZEN snapshot (`list_resources`, `who_can_assume`, …) — never raw SQL, never live | **none** (local) |
-| `resolve_permissions(principal)` | Effective IAM perms by simulating captured policies (cloudsplaining / policy_sentry) | **none** (local) |
-| `attack_path(from,to)` | Graph reachability over the snapshot (PMapper / Cartography) | **none** (local) |
-| `get_resource_config(arn)` | Full config of one resource from the snapshot (policy/SG/env) | **none** (local) |
-| `get_data_classification(resource)` | **Metadata only** — Macie verdict, tags, naming. NEVER reads object contents | **none** (local) |
-| `get_detector_findings()` | prowler/scoutsuite output, to corroborate / chain / FP-reduce | **none** (local) |
-| `query_threat_intel(cve)` | KEV/EPSS for CVEs in exposed workloads (existing L2 tool) | external, read |
-| `analyze_reachability(resource)` | AWS Reachability/Access Analyzer — computes *whether traffic could reach* WITHOUT sending any | **passive live**, read-only, throttled |
-| `propose_active_validation(path)` | Does **not** execute — QUEUES an active-validation request for human approval | **none** (queues only) |
-| `record_finding` / `record_hypothesis` / `finish_assessment` | Commit to the report (evidence + narrative + confidence) | local side-effect |
+| # | Tool | What it does | Blast radius |
+|---|---|---|---|
+| 1 | `query_inventory(typed)` | Curated typed primitives over the FROZEN snapshot (`list_resources`, `who_can_assume`, …) — never raw SQL, never live | **none** (local) |
+| 2 | `resolve_permissions(principal)` | Effective IAM perms by simulating captured policies (cloudsplaining / policy_sentry) | **none** (local) |
+| 3 | `attack_path(from,to)` | Graph reachability over the snapshot (PMapper / Cartography) | **none** (local) |
+| 4 | `get_resource_config(arn)` | Full config of one resource from the snapshot (policy/SG/env) | **none** (local) |
+| 5 | `get_data_classification(resource)` | **Metadata only** — Macie verdict, tags, naming. NEVER reads object contents | **none** (local) |
+| 6 | `get_detector_findings()` | prowler/scoutsuite output, to corroborate / chain / FP-reduce | **none** (local) |
+| 7 | `query_threat_intel(cve)` | KEV/EPSS for CVEs in exposed workloads (existing L2 tool) | external, read |
+| 8 | `validate(hypothesis, rung)` | The single live-contact tool. `rung 2` live read-only state; `rung 3` passive reachability (no traffic); `rung 4` benign probe (no access used, nothing mutated); `rung 5` full exploitation → **refuses and queues for human approval**. Enforces budget/throttle; records observations into the evidence bundle | rung-scoped (≤ low for 2–4; 5 is human-gated) |
+| 9–11 | `record_finding` / `record_hypothesis` / `finish_assessment` | Commit to the report (evidence + narrative + confidence) | local side-effect |
 
 Snapshot collection itself is **not** an agent tool — it runs once in the L3
-prepass, so the agent can't trigger arbitrary collection.
+prepass, so the agent can't trigger arbitrary collection. Collapsing all
+live-contact into the single gated `validate` tool keeps the catalog ≤12 *and*
+gives one auditable chokepoint for every byte that touches the customer's
+account.
 
 ## How the engineer must behave to keep the customer safe
 
@@ -122,20 +144,30 @@ escalation, or the very data exposure it's meant to prevent. The behavior model:
    (c) a deny-guard rejects any non-`Get`/`List`/`Describe` API call. If the
    LLM "decides" to mutate, it physically cannot.
 
-2. **Reason over the snapshot, not the live account.** The single biggest safety
-   lever (and why the reproducibility reframe and safety align): one controlled,
-   rate-limited, read-only sync — then all reasoning is over static local data.
-   The agent does not hammer the live account; live access is the *exception*,
-   gated, not the default.
+2. **Hypothesize on the snapshot; validate surgically against live.** Safety is
+   *not* "never touch live" — that would forfeit real-impact detection
+   (config-possible ≠ exploitable). It is *minimize and graduate* live contact.
+   The snapshot lets the agent form hypotheses cheaply and comprehensively, then
+   validate only the *handful that matter* against live — surgical, not a
+   blanket scan of the whole account. That targeting is the safety win.
 
-3. **Prove with analysis, never exploitation.** The validation ladder:
-   *reasoned* (snapshot says the path exists) → *statically validated* (AWS
-   Access/Reachability Analyzer proves reachability **mathematically, sending no
-   traffic**) → *actively validated* (actually assume a role / send a request) —
-   which is **OFF by default**, requires **explicit human authorization**, uses
-   **benign-control payloads only** (the §11 post_emit_verifier pattern), and is
-   **never destructive or data-exfiltrating**. The agent emits a *proposal*; a
-   human pulls the trigger.
+3. **Graduated validation ladder — "live" ≠ "exploit".** Real impact is
+   established mostly on the *safe* rungs; only the last needs a human:
+
+   | Rung | Establishes | Risk | Gate |
+   |---|---|---|---|
+   | 1 · static (snapshot) | what's *possible* per config | none | auto |
+   | 2 · live read-only state | actual listening services, current session perms (`SimulatePrincipalPolicy`/`GetCallerIdentity`), drift | very low | auto |
+   | 3 · passive reachability | path *actually* reachable vs full live network — **no traffic** (Access/Reachability Analyzer) | very low | auto |
+   | 4 · benign active probe | "knock on the door": port accepts? endpoint 200 vs 403? assume-role trust *actually* works? — **no access used, no data read, nothing mutated** | low | budget + throttle |
+   | 5 · full exploitation | walk the path end-to-end, prove the breach | high | **human-gated, benign-control, never destructive/exfiltrating** |
+
+   `real_impact = config_possible ∧ live_reachable ∧ (sensitive_data ∨
+   meaningful_privilege)` — the `live_reachable` term means rungs 2–4 are
+   mandatory, not optional. Rung 5 is reachable only by `validate(_, rung=5)`,
+   which refuses to execute and queues for explicit human authorization (the §11
+   post_emit_verifier pattern). Live-probe observations are recorded into the
+   evidence bundle, so the finding stays reproducible against the captured state.
 
 4. **Never read the data — only metadata.** To judge "is this sensitive," the
    agent reads classification *signals* (Macie verdict, tags, naming), **never
@@ -168,8 +200,12 @@ escalation, or the very data exposure it's meant to prevent. The behavior model:
 - AI-engineer findings are evidence-backed, attestable, **compliance-grade** —
   the corrected reproducibility model removes the "non-deterministic ⇒
   second-class" objection.
-- Near-zero live blast radius: the agent reasons over a frozen snapshot and
-  proves with analysis APIs, not exploitation.
+- Detects **real impact**, not just config-possible issues — the validation
+  ladder separates exploitable from theoretical, which is the whole point of an
+  *engineer* vs a config linter.
+- Minimal, **surgical** live blast radius: hypotheses form on the frozen
+  snapshot; only the handful that matter get validated live, mostly on the
+  read-only/passive/benign rungs; exploitation is human-gated.
 - Dual-view gives the customer recall + compliance (tools) *and* prioritization
   + discovery + chains (engineer) — neither alone is enough.
 - Generalizes: snapshot + query-tools + bounded discoverer + dual-view is the
@@ -189,9 +225,14 @@ escalation, or the very data exposure it's meant to prevent. The behavior model:
 - **CloudQuery as the CSPM detector** (write our own SQL controls). Rejected —
   §13 (no in-house detectors) + the reproducibility/sandbox clash. CloudQuery is
   the inventory substrate, not the rule engine.
-- **Agent reasons against the live account directly.** Rejected — unbounded live
-  blast radius and non-reproducible. The pinned snapshot is both the safety
-  boundary and the reproducibility artifact.
+- **Snapshot-only (never touch live).** Rejected — config-possible ≠
+  exploitable, so it under-detects real impact and rebuilds a config linter, not
+  an engineer. The snapshot is the hypothesis layer; live validation establishes
+  impact.
+- **Blanket live scanning (agent hammers the live account).** Rejected —
+  unbounded blast radius, alarm-tripping, non-reproducible. The snapshot makes
+  validation *surgical* (probe the few that matter), and live observations are
+  captured into the evidence bundle.
 - **Active exploitation to validate by default.** Rejected — unsafe. Analysis
   APIs prove reachability without traffic; active validation is human-gated.
 
