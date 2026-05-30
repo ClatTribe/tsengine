@@ -41,6 +41,8 @@ import (
 	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
 	webasset "github.com/ClatTribe/tsengine/internal/asset/web"
 	"github.com/ClatTribe/tsengine/internal/attest"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
@@ -139,6 +141,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine corpus: %v\n", err)
 			os.Exit(1)
 		}
+	case "cloud-assess":
+		if err := runCloudAssess(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine cloud-assess: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -154,6 +161,7 @@ Usage:
   tsengine scan   --asset <type> --target <url> [--image <ref>] [--out <dir>]
                   [--auth-cookie <c> | --auth-login-url <url> --auth-username <u> --auth-password <p>]
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
+  tsengine cloud-assess --snapshot <inventory.json> [--prowler <findings.json>] [--out <assessment.json>]
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -412,6 +420,58 @@ func runReplay(argv []string) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(resp)
+}
+
+// --- cloud-assess ------------------------------------------------
+
+// runCloudAssess runs the AI Cloud Security Engineer over an operator-provided
+// inventory snapshot (a CloudQuery/Cartography export, or any inventory JSON)
+// plus the optional prowler findings, and emits the dual-view assessment. No
+// AWS, no model — the deterministic reasoning spine over the snapshot
+// (ADR 0002, docs/design/ai-cloud-engineer.md). The live-AWS Analyzer and the
+// LLM agent plug in on top of this same path.
+func runCloudAssess(argv []string) error {
+	fs := flag.NewFlagSet("cloud-assess", flag.ContinueOnError)
+	snapshot := fs.String("snapshot", "", "path to the inventory JSON (CloudQuery/Cartography export)")
+	prowlerPath := fs.String("prowler", "", "optional path to prowler findings JSON (for corroborate/downgrade)")
+	out := fs.String("out", "", "optional path to write the assessment JSON")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *snapshot == "" {
+		return fmt.Errorf("--snapshot is required")
+	}
+
+	snap, err := cloudgraph.LoadSnapshot(*snapshot)
+	if err != nil {
+		return err
+	}
+
+	var prowler []types.Finding
+	if *prowlerPath != "" {
+		b, rerr := os.ReadFile(*prowlerPath) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read prowler findings: %w", rerr)
+		}
+		if jerr := json.Unmarshal(b, &prowler); jerr != nil {
+			return fmt.Errorf("parse prowler findings: %w", jerr)
+		}
+	}
+
+	assessment := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{})
+	fmt.Print(cloudengine.RenderAssessment(assessment))
+
+	if *out != "" {
+		b, merr := json.MarshalIndent(assessment, "", "  ")
+		if merr != nil {
+			return merr
+		}
+		if werr := os.WriteFile(*out, b, 0o600); werr != nil {
+			return fmt.Errorf("write assessment: %w", werr)
+		}
+		fmt.Fprintf(os.Stderr, "[cloud-assess] wrote %s\n", *out)
+	}
+	return nil
 }
 
 // --- pubkey ------------------------------------------------------

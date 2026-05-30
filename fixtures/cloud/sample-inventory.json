@@ -1,0 +1,26 @@
+{
+  "account_id": "111122223333",
+  "provider": "aws",
+  "resources": [
+    { "id": "internet", "kind": "network", "name": "internet" },
+    { "id": "alb-prod", "kind": "resource", "type": "AWS::ELB::LB", "name": "alb-prod", "public": true },
+    { "id": "ec2-web", "kind": "resource", "type": "AWS::EC2::Instance", "name": "ec2-web" },
+    { "id": "role-web", "kind": "principal", "type": "AWS::IAM::Role", "name": "role-web" },
+    { "id": "role-data", "kind": "principal", "type": "AWS::IAM::Role", "name": "role-data" },
+    { "id": "bucket-pii", "kind": "data", "type": "AWS::S3::Bucket", "name": "bucket-pii", "sensitive": "high" },
+    { "id": "bucket-public-assets", "kind": "data", "type": "AWS::S3::Bucket", "name": "bucket-public-assets", "public": true }
+  ],
+  "reaches": [
+    { "from": "internet", "to": "alb-prod" },
+    { "from": "alb-prod", "to": "ec2-web" }
+  ],
+  "runs_as": [
+    { "compute": "ec2-web", "principal": "role-web" }
+  ],
+  "trusts": [
+    { "principal": "role-web", "role": "role-data" }
+  ],
+  "grants": [
+    { "principal": "role-data", "resource": "bucket-pii" }
+  ]
+}

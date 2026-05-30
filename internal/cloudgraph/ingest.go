@@ -1,6 +1,11 @@
 package cloudgraph
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+)
 
 // Inventory is the normalized cloud state an ingest source produces — the seam
 // between the (sandbox-side, AWS-touching) CloudQuery/Cartography runner and the
@@ -14,48 +19,83 @@ import "time"
 // evaluation, wrapping cloudsplaining/PMapper) is the source's job — this mapper
 // just assembles the graph.
 type Inventory struct {
-	AccountID  string
-	Provider   string
-	CapturedAt time.Time
-	Resources  []InvResource
-	Trusts     []InvTrust // principal → role it may assume
-	Passes     []InvPass  // principal → role it may pass (iam:PassRole)
-	Grants     []InvGrant // principal → resource it may access
-	Reaches    []InvReach // network reachability (incl. internet exposure)
-	RunsAs     []InvRunsAs
-	Privescs   []InvPrivesc // known IAM privesc edges (PMapper-style)
+	AccountID  string        `json:"account_id"`
+	Provider   string        `json:"provider"`
+	CapturedAt time.Time     `json:"captured_at,omitempty"`
+	Resources  []InvResource `json:"resources,omitempty"`
+	Trusts     []InvTrust    `json:"trusts,omitempty"`  // principal → role it may assume
+	Passes     []InvPass     `json:"passes,omitempty"`  // principal → role it may pass (iam:PassRole)
+	Grants     []InvGrant    `json:"grants,omitempty"`  // principal → resource it may access
+	Reaches    []InvReach    `json:"reaches,omitempty"` // network reachability (incl. internet exposure)
+	RunsAs     []InvRunsAs   `json:"runs_as,omitempty"`
+	Privescs   []InvPrivesc  `json:"privescs,omitempty"` // known IAM privesc edges (PMapper-style)
 }
 
 // InvResource is one resource or identity.
 type InvResource struct {
-	ID         string
-	Kind       NodeKind
-	Type       string
-	Name       string
-	Region     string
-	Public     bool
-	Sensitive  Sensitivity
-	Privileged bool
-	Tags       map[string]string
+	ID         string            `json:"id"`
+	Kind       NodeKind          `json:"kind"`
+	Type       string            `json:"type,omitempty"`
+	Name       string            `json:"name,omitempty"`
+	Region     string            `json:"region,omitempty"`
+	Public     bool              `json:"public,omitempty"`
+	Sensitive  Sensitivity       `json:"sensitive,omitempty"`
+	Privileged bool              `json:"privileged,omitempty"`
+	Tags       map[string]string `json:"tags,omitempty"`
 }
 
 type InvTrust struct {
-	Principal, Role, Condition string
+	Principal string `json:"principal"`
+	Role      string `json:"role"`
+	Condition string `json:"condition,omitempty"`
 }
 type InvPass struct {
-	Principal, Role string
+	Principal string `json:"principal"`
+	Role      string `json:"role"`
 }
 type InvGrant struct {
-	Principal, Resource, Condition string
+	Principal string `json:"principal"`
+	Resource  string `json:"resource"`
+	Condition string `json:"condition,omitempty"`
 }
 type InvReach struct {
-	From, To, Condition string // From may be InternetID
+	From      string `json:"from"` // may be InternetID
+	To        string `json:"to"`
+	Condition string `json:"condition,omitempty"`
 }
 type InvRunsAs struct {
-	Compute, Principal string
+	Compute   string `json:"compute"`
+	Principal string `json:"principal"`
 }
 type InvPrivesc struct {
-	Principal, Target, Detail string
+	Principal string `json:"principal"`
+	Target    string `json:"target"`
+	Detail    string `json:"detail,omitempty"`
+}
+
+// ParseInventory decodes a normalized inventory JSON document. This is the
+// operator-facing seam: a CloudQuery/Cartography export (or any inventory
+// script) emits this JSON; tsengine reasons over it. SUT-agnostic — no AWS, no
+// network.
+func ParseInventory(b []byte) (Inventory, error) {
+	var inv Inventory
+	if err := json.Unmarshal(b, &inv); err != nil {
+		return inv, fmt.Errorf("cloudgraph: parse inventory: %w", err)
+	}
+	return inv, nil
+}
+
+// LoadSnapshot reads an inventory JSON file and ingests it into a Snapshot.
+func LoadSnapshot(path string) (*Snapshot, error) {
+	b, err := os.ReadFile(path) //nolint:gosec // operator-provided inventory path
+	if err != nil {
+		return nil, fmt.Errorf("cloudgraph: read inventory %s: %w", path, err)
+	}
+	inv, err := ParseInventory(b)
+	if err != nil {
+		return nil, err
+	}
+	return Ingest(inv), nil
 }
 
 // Ingest assembles a Snapshot from a normalized Inventory.
