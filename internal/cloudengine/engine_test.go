@@ -93,6 +93,42 @@ func TestSynthetic_GenerateVerifyAssessScore(t *testing.T) {
 	}
 }
 
+func TestSynthetic_ScalesToManyRealPaths(t *testing.T) {
+	// A dense account: 25 planted network→data chains + an IAM privesc chain per
+	// scenario (26 real paths each). With a raised worklist budget the engineer
+	// must find every one and still downgrade all decoys — proving the engine
+	// scales past the default governor when given the budget.
+	const nReal, nDecoy = 25, 3
+	agg, n, err := RunSynthetic(11, 20, nReal, nDecoy, true, 60)
+	if err != nil {
+		t.Fatalf("scaled synthetic run errored: %v", err)
+	}
+	if !agg.Pass {
+		t.Errorf("engine must ace 26-real-path scenarios at budget 60: %+v", agg)
+	}
+	if agg.PathRecall != 1.0 {
+		t.Errorf("path recall %.4f over %d scenarios, want 1.0 (%d/%d)",
+			agg.PathRecall, n, agg.RealFound, agg.RealTotal)
+	}
+	if agg.FPReduction != 1.0 {
+		t.Errorf("FP-reduction %.4f, want 1.0 (%d/%d decoys)", agg.FPReduction, agg.DecoyDowngraded, agg.DecoyTotal)
+	}
+	if agg.FalsePaths != 0 {
+		t.Errorf("%d false paths at scale", agg.FalsePaths)
+	}
+
+	// And the governor is real: at the default budget (20) the same dense
+	// scenarios can't validate all 26 real paths, so recall is bounded below 1.0.
+	// This documents that --max-hypotheses is the load-bearing knob.
+	capped, _, err := RunSynthetic(11, 5, nReal, nDecoy, true, 0)
+	if err != nil {
+		t.Fatalf("default-budget run errored: %v", err)
+	}
+	if capped.PathRecall >= 1.0 {
+		t.Errorf("default worklist budget should cap recall below 1.0 on dense scenarios, got %.4f", capped.PathRecall)
+	}
+}
+
 func TestSynthetic_VerifierRejectsBadScenario(t *testing.T) {
 	scn := Generate(7, 2, 1, false)
 	// Corrupt the scenario so a "decoy" becomes genuinely reachable. A decoy is

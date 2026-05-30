@@ -65,15 +65,18 @@ func ScoreEngine(scn *Scenario, a *types.AIAssessment) EngineScore {
 
 // RunSynthetic generates → verifies → assesses → scores n scenarios and returns
 // the aggregate scorecard. Every scenario must pass the deterministic Verify()
-// before it is scored (the anti-circularity safeguard).
-func RunSynthetic(seedBase int64, n, nReal, nDecoy int, withPrivesc bool) (EngineScore, int, error) {
+// before it is scored (the anti-circularity safeguard). maxHyp sets the engine's
+// worklist budget (Options.MaxHypotheses); 0 uses the production default (20).
+// Raise it to stress-test scenarios with more planted real paths than the
+// default governor would validate.
+func RunSynthetic(seedBase int64, n, nReal, nDecoy int, withPrivesc bool, maxHyp int) (EngineScore, int, error) {
 	agg := EngineScore{Pass: true}
 	for i := 0; i < n; i++ {
 		scn := Generate(seedBase+int64(i), nReal, nDecoy, withPrivesc)
 		if err := scn.Verify(); err != nil {
 			return agg, i, fmt.Errorf("scenario %d failed verify: %w", i, err)
 		}
-		a := Assess(scn.Snapshot, scn.Prowler, scn.Oracle(), Options{})
+		a := Assess(scn.Snapshot, scn.Prowler, scn.Oracle(), Options{MaxHypotheses: maxHyp})
 		s := ScoreEngine(scn, a)
 		agg.RealTotal += s.RealTotal
 		agg.RealFound += s.RealFound

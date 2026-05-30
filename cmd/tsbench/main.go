@@ -251,6 +251,7 @@ func cloudEngineCmd(argv []string) error {
 	decoy := fs.Int("decoy", 2, "config-bad-but-inert decoys per scenario")
 	privesc := fs.Bool("privesc", true, "include an IAM privesc-to-admin chain per scenario")
 	seed := fs.Int64("seed", 1, "base seed (scenario i uses seed+i)")
+	maxHyp := fs.Int("max-hypotheses", 0, "engine worklist budget (0 = production default 20); raise to stress-test many real paths")
 	emit := fs.String("emit", "", "write ONE synthetic emulated cloud account to <path> (inventory JSON + <path>.prowler.json) and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -262,7 +263,7 @@ func cloudEngineCmd(argv []string) error {
 		return cloudengine.EmitScenario(*emit, *seed, *real, *decoy, *privesc)
 	}
 
-	agg, n, err := cloudengine.RunSynthetic(*seed, *scenarios, *real, *decoy, *privesc)
+	agg, n, err := cloudengine.RunSynthetic(*seed, *scenarios, *real, *decoy, *privesc, *maxHyp)
 	if err != nil {
 		return err
 	}
