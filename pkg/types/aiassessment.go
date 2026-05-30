@@ -6,7 +6,8 @@ package types
 // clearly-labelled stream: it never mutates the deterministic FindingsRaw the
 // security engineer / compliance auditor reads.
 type AIAssessment struct {
-	SnapshotHash       string       `json:"snapshot_hash"` // the pinned config+env (§10 reproducibility base)
+	SnapshotHash       string       `json:"snapshot_hash"`               // the pinned config+env (§10 reproducibility base)
+	ExecutiveSummary   string       `json:"executive_summary,omitempty"` // L2 plain-English risk summary (LLM translator, §2.2)
 	Paths              []AttackPath `json:"attack_paths"`
 	Downgraded         []string     `json:"downgraded,omitempty"`          // prowler finding ids judged inert (config-bad, not reachable) — the FP-reduction lens
 	AuditLog           []string     `json:"audit_log,omitempty"`           // every query + live call touched

@@ -460,6 +460,7 @@ func runCloudAssess(argv []string) error {
 	snapshot := fs.String("snapshot", "", "path to the inventory JSON (CloudQuery/Cartography export)")
 	prowlerPath := fs.String("prowler", "", "optional path to prowler findings JSON (for corroborate/downgrade)")
 	out := fs.String("out", "", "optional path to write the assessment JSON")
+	llmFlag := fs.String("llm", "auto", "L2 LLM translator: auto (on if LLM_API_KEY set) | on | off")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -484,6 +485,20 @@ func runCloudAssess(argv []string) error {
 	}
 
 	assessment := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{})
+
+	// L2 translator: refine the deterministic findings into developer-facing
+	// prose + an executive summary (graceful — leaves the deterministic output
+	// on any error or when no key is set).
+	if *llmFlag != "off" {
+		if g, ok := cloudengine.GeminiFromEnv(); ok {
+			if terr := cloudengine.EnrichWithLLM(context.Background(), g, assessment); terr != nil {
+				fmt.Fprintf(os.Stderr, "[cloud-assess] L2 translator skipped: %v\n", terr)
+			}
+		} else if *llmFlag == "on" {
+			return fmt.Errorf("--llm on but LLM_API_KEY is not set")
+		}
+	}
+
 	fmt.Print(cloudengine.RenderAssessment(assessment))
 
 	if *out != "" {

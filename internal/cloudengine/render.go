@@ -14,6 +14,9 @@ func RenderAssessment(a *types.AIAssessment) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "=== AI Cloud Security Engineer — assessment ===\n")
 	fmt.Fprintf(&b, "snapshot: %s\n", a.SnapshotHash)
+	if a.ExecutiveSummary != "" {
+		fmt.Fprintf(&b, "\nsummary: %s\n", a.ExecutiveSummary)
+	}
 	fmt.Fprintf(&b, "attack paths (real impact): %d   |   prowler findings downgraded (inert): %d\n\n",
 		len(a.Paths), len(a.Downgraded))
 
