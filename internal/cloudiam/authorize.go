@@ -277,7 +277,6 @@ func principalMatches(raw json.RawMessage, principal string) (matched, present b
 	if len(raw) == 0 {
 		return false, false
 	}
-	present = true
 	if strings.TrimSpace(string(raw)) == `"*"` {
 		return true, true
 	}
