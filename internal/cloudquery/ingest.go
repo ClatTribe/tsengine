@@ -89,26 +89,35 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 		}
 	}
 
-	// IAM effective-permission resolution
+	// IAM resolution via the full AWS decision (cloudiam.Authorize): identity ∧
+	// boundary, the org SCP ceiling, RESOURCE-based (bucket) policies, and
+	// condition evaluation. Account-level inputs computed once.
+	scps := parseDocs(t.SCPs)
+	bucketPolicy := map[string]*cloudiam.Document{}
+	for _, b := range t.S3Buckets {
+		bucketPolicy[b.ARN] = parseDoc(b.Policy)
+	}
 	var anyPrivesc bool
+
 	for _, r := range t.IAMRoles {
-		attached := parseDocs(r.InlinePolicies)
+		identity := parseDocs(r.InlinePolicies)
 		boundary := parseDoc(r.PermissionsBoundary)
 
-		// has_access role→bucket
+		// has_access role→bucket (identity OR bucket policy, gated by SCP/boundary).
 		for _, b := range t.S3Buckets {
-			if effectiveAllows("s3:GetObject", b.ARN, attached, boundary) ||
-				effectiveAllows("s3:GetObject", b.ARN+"/*", attached, boundary) {
-				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: r.ARN, Resource: b.ARN})
+			if ok, cond := canReadBucket(r.ARN, b.ARN, identity, boundary, scps, bucketPolicy[b.ARN]); ok {
+				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: r.ARN, Resource: b.ARN, Condition: condStr(cond)})
 			}
 		}
-
-		// assume_role A→B: A may call AssumeRole on B AND B trusts A
+		// assume_role A→B: A may call AssumeRole on B (SCP/boundary-aware) AND B's
+		// trust policy permits A.
 		for _, b := range t.IAMRoles {
 			if b.ARN == r.ARN {
 				continue
 			}
-			if !effectiveAllows("sts:AssumeRole", b.ARN, attached, boundary) {
+			aOK, _ := cloudiam.Permits(cloudiam.Request{Principal: r.ARN, Action: "sts:AssumeRole", Resource: b.ARN},
+				cloudiam.PolicySet{Identity: identity, Boundary: boundary, SCPs: scps, SameAccount: true})
+			if !aOK {
 				continue
 			}
 			if trust := parseDoc(b.AssumeRolePolicyDocument); trust != nil {
@@ -117,41 +126,25 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 				}
 			}
 		}
-
-		// privesc role→admin (effective, boundary-aware)
-		can := func(a string) bool { return effectiveAllows(a, "*", attached, boundary) }
-		if techs := cloudiam.DetectPrivesc(can); len(techs) > 0 {
+		// privesc role→admin (SCP/boundary-aware effective perms).
+		if names, ok := detectPrivesc(r.ARN, identity, boundary, scps); ok {
 			anyPrivesc = true
-			names := make([]string, len(techs))
-			for i, tc := range techs {
-				names[i] = tc.Name
-			}
-			inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{
-				Principal: r.ARN, Target: cloudgraph.AdminID, Detail: strings.Join(names, ","),
-			})
+			inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{Principal: r.ARN, Target: cloudgraph.AdminID, Detail: names})
 		}
 	}
-	// IAM users: effective has_access + privesc (a user is not assumed, so no
-	// trust/assume-target resolution).
+
+	// IAM users: has_access + privesc (a user is not assumed).
 	for _, u := range t.IAMUsers {
-		attached := parseDocs(u.InlinePolicies)
+		identity := parseDocs(u.InlinePolicies)
 		boundary := parseDoc(u.PermissionsBoundary)
 		for _, b := range t.S3Buckets {
-			if effectiveAllows("s3:GetObject", b.ARN, attached, boundary) ||
-				effectiveAllows("s3:GetObject", b.ARN+"/*", attached, boundary) {
-				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: u.ARN, Resource: b.ARN})
+			if ok, cond := canReadBucket(u.ARN, b.ARN, identity, boundary, scps, bucketPolicy[b.ARN]); ok {
+				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: u.ARN, Resource: b.ARN, Condition: condStr(cond)})
 			}
 		}
-		can := func(a string) bool { return effectiveAllows(a, "*", attached, boundary) }
-		if techs := cloudiam.DetectPrivesc(can); len(techs) > 0 {
+		if names, ok := detectPrivesc(u.ARN, identity, boundary, scps); ok {
 			anyPrivesc = true
-			names := make([]string, len(techs))
-			for i, tc := range techs {
-				names[i] = tc.Name
-			}
-			inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{
-				Principal: u.ARN, Target: cloudgraph.AdminID, Detail: strings.Join(names, ","),
-			})
+			inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{Principal: u.ARN, Target: cloudgraph.AdminID, Detail: names})
 		}
 	}
 
@@ -163,10 +156,52 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 	return inv
 }
 
+// canReadBucket resolves has_access via the full AWS decision: s3:GetObject is
+// granted if the identity policy OR the bucket's RESOURCE policy allows it (same
+// account), subject to the SCP and permission-boundary ceilings. The second
+// return is true when the grant is gated by an unresolved condition.
+func canReadBucket(principal, bucketARN string, identity []*cloudiam.Document, boundary *cloudiam.Document, scps []*cloudiam.Document, resourcePolicy *cloudiam.Document) (allowed, conditional bool) {
+	ps := cloudiam.PolicySet{Identity: identity, Boundary: boundary, SCPs: scps, ResourcePolicy: resourcePolicy, SameAccount: true}
+	for _, res := range []string{bucketARN, bucketARN + "/*"} {
+		if ok, cond := cloudiam.Permits(cloudiam.Request{Principal: principal, Action: "s3:GetObject", Resource: res}, ps); ok {
+			return true, cond
+		}
+	}
+	return false, false
+}
+
+// detectPrivesc evaluates the privesc techniques a principal can perform under
+// its effective permissions, honouring the SCP + boundary ceilings (an SCP that
+// denies the escalation action blocks the privesc edge).
+func detectPrivesc(principal string, identity []*cloudiam.Document, boundary *cloudiam.Document, scps []*cloudiam.Document) (string, bool) {
+	can := func(a string) bool {
+		ok, _ := cloudiam.Permits(cloudiam.Request{Principal: principal, Action: a, Resource: "*"},
+			cloudiam.PolicySet{Identity: identity, Boundary: boundary, SCPs: scps, SameAccount: true})
+		return ok
+	}
+	techs := cloudiam.DetectPrivesc(can)
+	if len(techs) == 0 {
+		return "", false
+	}
+	names := make([]string, len(techs))
+	for i, tc := range techs {
+		names[i] = tc.Name
+	}
+	return strings.Join(names, ","), true
+}
+
+func condStr(conditional bool) string {
+	if conditional {
+		return "runtime condition (needs live validation)"
+	}
+	return ""
+}
+
 // effectiveAllows implements AWS effective-permission semantics for our subset:
 // the action must be permitted by the identity (attached) policies AND, if a
 // permission boundary is present, by the boundary too (intersection). An explicit
-// Deny in either wins (handled inside cloudiam.Allows).
+// Deny in either wins (handled inside cloudiam.Allows). Retained for the
+// generator's independent answer-key checks (dataset.go).
 func effectiveAllows(action, resource string, attached []*cloudiam.Document, boundary *cloudiam.Document) bool {
 	ok, _ := cloudiam.Allows(action, resource, attached...)
 	if !ok {

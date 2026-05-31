@@ -133,15 +133,17 @@ and on those the engine is at 0% until they are modeled.
 ## 4. The fix (how to make the 100% mean something)
 
 > **Status: implemented for the CloudQuery source** (`internal/cloudquery`). A
-> real CloudQuery sync carries role trust policies + permission boundaries as
-> first-class columns, and `cloudquery.ToInventory` resolves effective
-> permissions (cloudiam over `attached ∧ boundary`, plus trust-policy gating on
-> assume) before emitting edges. On a prowler-grounded CloudQuery account
-> (`tsbench cloud-engine --cloudquery`) the engineer now correctly downgrades the
-> boundary-blocked privesc and the trust-denied assume — the exact classes the
-> held-out bench flagged. The naive synthetic ingest paths (`synthgen`,
-> `holdout`) still over-approximate by design, which is why
-> `TestHoldout_ExposesOverfitGap` remains a tripwire for those.
+> real CloudQuery sync carries role trust policies, permission boundaries, bucket
+> (resource) policies, and org SCPs as first-class columns, and
+> `cloudquery.ToInventory` resolves effective permissions via the full
+> `cloudiam.Authorize` (identity ∨ resource-policy, gated by the SCP + boundary
+> ceilings, with condition evaluation) before emitting edges. On a prowler-grounded
+> CloudQuery account (`tsbench cloud-engine --cloudquery`) the engineer correctly
+> downgrades the boundary-blocked privesc and the trust-denied assume; it also now
+> (a) FINDS a sensitive bucket reachable only via its resource policy and (b) does
+> NOT report a privesc an SCP blocks (`TestCloudQuery_ResourcePolicyAndSCP`). The
+> naive synthetic ingest paths (`synthgen`, `holdout`) still over-approximate by
+> design, which is why `TestHoldout_ExposesOverfitGap` remains a tripwire for those.
 
 The held-out bench is not just a critique; it is a checklist. tsengine **already
 has** the evaluator that computes the correct answer (`cloudiam`); the gap is that

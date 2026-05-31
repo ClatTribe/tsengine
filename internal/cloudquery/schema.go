@@ -35,6 +35,10 @@ type Tables struct {
 	IAMUsers       []IAMUser       `json:"aws_iam_users"`
 	EC2Instances   []EC2Instance   `json:"aws_ec2_instances"`
 	SecurityGroups []SecurityGroup `json:"aws_ec2_security_groups"`
+	// SCPs are the Service Control Policies on the account's OU path (an org
+	// ceiling). In a real sync these come from aws_organizations_policies filtered
+	// to the account; modelled here as the effective SCP set for the account.
+	SCPs []json.RawMessage `json:"scps,omitempty"`
 }
 
 // IAMUser mirrors aws_iam_users (subset). A user has identity policies and an
@@ -50,14 +54,18 @@ type IAMUser struct {
 // S3Bucket mirrors aws_s3_buckets (subset). Classification rides in tags the way
 // real accounts mark data sensitivity (e.g. {"classification":"pii"}).
 type S3Bucket struct {
-	ARN                string            `json:"arn"`
-	Name               string            `json:"name"`
-	Region             string            `json:"region"`
-	BlockPublicACLs    bool              `json:"block_public_acls"`
-	BlockPublicPolicy  bool              `json:"block_public_policy"`
-	PolicyAllowsPublic bool              `json:"policy_allows_public"` // bucket policy grants a public principal
-	MFADelete          bool              `json:"mfa_delete"`
-	Tags               map[string]string `json:"tags,omitempty"`
+	ARN                string `json:"arn"`
+	Name               string `json:"name"`
+	Region             string `json:"region"`
+	BlockPublicACLs    bool   `json:"block_public_acls"`
+	BlockPublicPolicy  bool   `json:"block_public_policy"`
+	PolicyAllowsPublic bool   `json:"policy_allows_public"` // bucket policy grants a public principal
+	MFADelete          bool   `json:"mfa_delete"`
+	// Policy is the bucket's RESOURCE-based policy (the bucket policy). It can grant
+	// a principal access the principal's identity policy does not — so it must be
+	// evaluated to resolve has_access correctly.
+	Policy json.RawMessage   `json:"policy,omitempty"`
+	Tags   map[string]string `json:"tags,omitempty"`
 }
 
 // IAMRole mirrors aws_iam_roles (subset). The policy columns are JSON documents,
@@ -95,11 +103,12 @@ func (t *Tables) Save(dir string) error {
 		return err
 	}
 	files := map[string]any{
-		"aws_s3_buckets.json":          t.S3Buckets,
-		"aws_iam_roles.json":           t.IAMRoles,
-		"aws_iam_users.json":           t.IAMUsers,
-		"aws_ec2_instances.json":       t.EC2Instances,
-		"aws_ec2_security_groups.json": t.SecurityGroups,
+		"aws_s3_buckets.json":             t.S3Buckets,
+		"aws_iam_roles.json":              t.IAMRoles,
+		"aws_iam_users.json":              t.IAMUsers,
+		"aws_ec2_instances.json":          t.EC2Instances,
+		"aws_ec2_security_groups.json":    t.SecurityGroups,
+		"aws_organizations_policies.json": t.SCPs,
 	}
 	for name, rows := range files {
 		b, err := json.MarshalIndent(rows, "", "  ")
@@ -117,11 +126,12 @@ func (t *Tables) Save(dir string) error {
 func Load(dir string) (*Tables, error) {
 	var t Tables
 	for name, dst := range map[string]any{
-		"aws_s3_buckets.json":          &t.S3Buckets,
-		"aws_iam_roles.json":           &t.IAMRoles,
-		"aws_iam_users.json":           &t.IAMUsers,
-		"aws_ec2_instances.json":       &t.EC2Instances,
-		"aws_ec2_security_groups.json": &t.SecurityGroups,
+		"aws_s3_buckets.json":             &t.S3Buckets,
+		"aws_iam_roles.json":              &t.IAMRoles,
+		"aws_iam_users.json":              &t.IAMUsers,
+		"aws_ec2_instances.json":          &t.EC2Instances,
+		"aws_ec2_security_groups.json":    &t.SecurityGroups,
+		"aws_organizations_policies.json": &t.SCPs,
 	} {
 		b, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // operator-provided dataset dir
 		if err != nil {
