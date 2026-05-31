@@ -165,3 +165,23 @@ Until then, the honest reading is:
   (Genuine, but do not over-read it.)
 - **Held-out 0%** → the modeled vocabulary is narrower than reality. (This is the
   number that should drive the roadmap.)
+
+## 5. The fidelity ladder (which oracle defines "truth")
+
+Each rung removes a shared dependency between the engine and its ground truth:
+
+| Rung | Bench | Truth oracle | Shares with engine? |
+|---|---|---|---|
+| 1 | in-distribution synthetic | engine's own `FindPaths`+oracle | everything (circular) |
+| 2 | `--llm-emulate` | external model, inventory vocabulary | the predicate `P` |
+| 3 | `--cloudquery` | `cloudiam` over trust + boundaries | the `cloudiam` evaluator |
+| 4 | `--cloudgoat` (Tier-1) | **CloudGoat's published pentest solution** | **nothing** — `cloudiam` is under test |
+
+Rung 4 (`tsbench cloud-engine --cloudgoat`, `internal/cloudquery/cloudgoat.go`)
+transcribes real CloudGoat (Rhino Security Labs) scenarios and asserts the
+engineer reaches the *documented* compromise — so `cloudiam` is no longer the
+referee, it is the thing being graded. Today it runs in **replay** mode
+(transcribed state + documented truth); the final rung is **live** mode
+(`RunTier1Live`): deploy with `cloudgoat`, sync the live account with CloudQuery,
+and confirm with a real `pacu`/`aws-cli` attempt — gated on AWS creds + those
+binaries, so it degrades to replay rather than pretending.

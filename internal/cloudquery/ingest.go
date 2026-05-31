@@ -53,6 +53,11 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 			ID: r.ARN, Kind: cloudgraph.KindPrincipal, Type: "AWS::IAM::Role", Name: r.Name,
 		})
 	}
+	for _, u := range t.IAMUsers {
+		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
+			ID: u.ARN, Kind: cloudgraph.KindPrincipal, Type: "AWS::IAM::User", Name: u.Name,
+		})
+	}
 
 	sgOpen := map[string]bool{}
 	for _, sg := range t.SecurityGroups {
@@ -126,6 +131,30 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 			})
 		}
 	}
+	// IAM users: effective has_access + privesc (a user is not assumed, so no
+	// trust/assume-target resolution).
+	for _, u := range t.IAMUsers {
+		attached := parseDocs(u.InlinePolicies)
+		boundary := parseDoc(u.PermissionsBoundary)
+		for _, b := range t.S3Buckets {
+			if effectiveAllows("s3:GetObject", b.ARN, attached, boundary) ||
+				effectiveAllows("s3:GetObject", b.ARN+"/*", attached, boundary) {
+				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: u.ARN, Resource: b.ARN})
+			}
+		}
+		can := func(a string) bool { return effectiveAllows(a, "*", attached, boundary) }
+		if techs := cloudiam.DetectPrivesc(can); len(techs) > 0 {
+			anyPrivesc = true
+			names := make([]string, len(techs))
+			for i, tc := range techs {
+				names[i] = tc.Name
+			}
+			inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{
+				Principal: u.ARN, Target: cloudgraph.AdminID, Detail: strings.Join(names, ","),
+			})
+		}
+	}
+
 	if anyPrivesc {
 		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
 			ID: cloudgraph.AdminID, Kind: cloudgraph.KindPrincipal, Name: "effective-admin", Privileged: true,

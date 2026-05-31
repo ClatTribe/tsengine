@@ -264,8 +264,16 @@ func cloudEngineCmd(argv []string) error {
 	cqRun := fs.Bool("cloudquery", false, "emulate a prowler-grounded CloudQuery account, run the engineer on it (effective-perms ingest), score vs the cloudiam answer key, and exit")
 	cqDir := fs.String("cloudquery-dir", "", "load a CloudQuery dataset from this dir instead of generating (one JSON per table)")
 	cqEmit := fs.String("cloudquery-emit", "", "write the emulated CloudQuery dataset (one JSON per table) to this dir and exit")
+	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
+	}
+
+	// Tier-1 fidelity calibration vs CloudGoat (Rhino Security Labs): the ground
+	// truth is the scenarios' documented real-lab compromise, so cloudiam is under
+	// test rather than the referee.
+	if *cloudgoat {
+		return runCloudGoat(*maxHyp)
 	}
 
 	// Prowler-grounded CloudQuery path: prowler's catalog defines "bad" over the
@@ -394,6 +402,25 @@ func runCloudQuery(loadDir, emitDir string, maxHyp int) error {
 	fmt.Println()
 	fmt.Print(cloudengine.RenderAssessment(a))
 	if !s.Pass {
+		os.Exit(3)
+	}
+	return nil
+}
+
+// runCloudGoat runs the Tier-1 calibration: the engineer over transcribed
+// CloudGoat scenarios, scored against their published pentest solutions.
+func runCloudGoat(maxHyp int) error {
+	var results []cloudquery.Tier1Result
+	allPass := true
+	for _, sc := range cloudquery.Tier1Scenarios() {
+		r, _ := cloudquery.RunTier1(sc, maxHyp)
+		results = append(results, r)
+		if !r.Pass {
+			allPass = false
+		}
+	}
+	fmt.Print(cloudquery.RenderTier1(results))
+	if !allPass {
 		os.Exit(3)
 	}
 	return nil

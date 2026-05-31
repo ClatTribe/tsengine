@@ -95,12 +95,18 @@ var Catalog = []Check{
 		// engineer must triage (a boundary-blocked escalation is config-bad, inert).
 		detect: func(t *Tables) []string {
 			var out []string
-			for _, r := range t.IAMRoles {
-				attached := parseDocs(r.InlinePolicies)
+			flag := func(arn string, pols []json.RawMessage) {
+				attached := parseDocs(pols)
 				can := func(a string) bool { return cloudiam.CanDo(a, attached...) }
 				if len(cloudiam.DetectPrivesc(can)) > 0 {
-					out = append(out, r.ARN)
+					out = append(out, arn)
 				}
+			}
+			for _, r := range t.IAMRoles {
+				flag(r.ARN, r.InlinePolicies)
+			}
+			for _, u := range t.IAMUsers {
+				flag(u.ARN, u.InlinePolicies)
 			}
 			return out
 		},

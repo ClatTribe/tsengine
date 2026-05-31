@@ -32,8 +32,19 @@ import (
 type Tables struct {
 	S3Buckets      []S3Bucket      `json:"aws_s3_buckets"`
 	IAMRoles       []IAMRole       `json:"aws_iam_roles"`
+	IAMUsers       []IAMUser       `json:"aws_iam_users"`
 	EC2Instances   []EC2Instance   `json:"aws_ec2_instances"`
 	SecurityGroups []SecurityGroup `json:"aws_ec2_security_groups"`
+}
+
+// IAMUser mirrors aws_iam_users (subset). A user has identity policies and an
+// optional permission boundary, but no trust policy (it is not assumed).
+type IAMUser struct {
+	ARN                 string            `json:"arn"`
+	Name                string            `json:"name"`
+	InlinePolicies      []json.RawMessage `json:"inline_policy_documents,omitempty"`
+	PermissionsBoundary json.RawMessage   `json:"permissions_boundary_document,omitempty"`
+	Tags                map[string]string `json:"tags,omitempty"`
 }
 
 // S3Bucket mirrors aws_s3_buckets (subset). Classification rides in tags the way
@@ -86,6 +97,7 @@ func (t *Tables) Save(dir string) error {
 	files := map[string]any{
 		"aws_s3_buckets.json":          t.S3Buckets,
 		"aws_iam_roles.json":           t.IAMRoles,
+		"aws_iam_users.json":           t.IAMUsers,
 		"aws_ec2_instances.json":       t.EC2Instances,
 		"aws_ec2_security_groups.json": t.SecurityGroups,
 	}
@@ -107,6 +119,7 @@ func Load(dir string) (*Tables, error) {
 	for name, dst := range map[string]any{
 		"aws_s3_buckets.json":          &t.S3Buckets,
 		"aws_iam_roles.json":           &t.IAMRoles,
+		"aws_iam_users.json":           &t.IAMUsers,
 		"aws_ec2_instances.json":       &t.EC2Instances,
 		"aws_ec2_security_groups.json": &t.SecurityGroups,
 	} {
