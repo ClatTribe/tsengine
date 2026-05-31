@@ -264,6 +264,7 @@ func cloudEngineCmd(argv []string) error {
 	cqRun := fs.Bool("cloudquery", false, "emulate a prowler-grounded CloudQuery account, run the engineer on it (effective-perms ingest), score vs the cloudiam answer key, and exit")
 	cqDir := fs.String("cloudquery-dir", "", "load a CloudQuery dataset from this dir instead of generating (one JSON per table)")
 	cqEmit := fs.String("cloudquery-emit", "", "write the emulated CloudQuery dataset (one JSON per table) to this dir and exit")
+	cqAdvanced := fs.Bool("cloudquery-advanced", false, "use the advanced scenario (resource-policy-only grant + SCP-blocked privesc) to show effective-permission reasoning")
 	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -281,7 +282,7 @@ func cloudEngineCmd(argv []string) error {
 	// exploitability truth; the engineer ingests CloudQuery (resolving effective
 	// perms) and is scored against that independent key.
 	if *cqRun || *cqEmit != "" {
-		return runCloudQuery(*cqDir, *cqEmit, *maxHyp)
+		return runCloudQuery(*cqDir, *cqEmit, *maxHyp, *cqAdvanced)
 	}
 
 	// Independent-generator check: an external model authors the account AND its
@@ -366,8 +367,12 @@ func runLLMEmulate(seed int64, nReal, nDecoy, maxHyp int, outPrefix string) erro
 // runCloudQuery emulates (or loads) a prowler-grounded CloudQuery account, runs
 // the AI Cloud Security Engineer over it via the effective-permission resolving
 // ingest, and scores the result against the independent cloudiam answer key.
-func runCloudQuery(loadDir, emitDir string, maxHyp int) error {
-	ds, err := cloudquery.Generate()
+func runCloudQuery(loadDir, emitDir string, maxHyp int, advanced bool) error {
+	gen := cloudquery.Generate
+	if advanced {
+		gen = cloudquery.GenerateAdvanced
+	}
+	ds, err := gen()
 	if err != nil {
 		return fmt.Errorf("cloudquery: emulate dataset: %w", err)
 	}
