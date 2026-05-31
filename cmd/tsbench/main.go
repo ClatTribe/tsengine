@@ -20,6 +20,8 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/bench"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/cloudquery"
 )
 
 func main() {
@@ -259,8 +261,19 @@ func cloudEngineCmd(argv []string) error {
 	holdoutK := fs.Int("holdout-k", 2, "per held-out account: K fragments of each posture class")
 	llmEmulate := fs.Bool("llm-emulate", false, "generate an INDEPENDENT emulated account with an external LLM, run the engine on it, score vs the model's answer key, and exit")
 	emOut := fs.String("emulate-out", "", "with --llm-emulate: write the generated inventory + prowler + answer key under this path prefix")
+	cqRun := fs.Bool("cloudquery", false, "emulate a prowler-grounded CloudQuery account, run the engineer on it (effective-perms ingest), score vs the cloudiam answer key, and exit")
+	cqDir := fs.String("cloudquery-dir", "", "load a CloudQuery dataset from this dir instead of generating (one JSON per table)")
+	cqEmit := fs.String("cloudquery-emit", "", "write the emulated CloudQuery dataset (one JSON per table) to this dir and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
+	}
+
+	// Prowler-grounded CloudQuery path: prowler's catalog defines "bad" over the
+	// CloudQuery config; cloudiam (trust policies + permission boundaries) defines
+	// exploitability truth; the engineer ingests CloudQuery (resolving effective
+	// perms) and is scored against that independent key.
+	if *cqRun || *cqEmit != "" {
+		return runCloudQuery(*cqDir, *cqEmit, *maxHyp)
 	}
 
 	// Independent-generator check: an external model authors the account AND its
@@ -336,6 +349,50 @@ func runLLMEmulate(seed int64, nReal, nDecoy, maxHyp int, outPrefix string) erro
 		fmt.Fprintf(os.Stderr, "[llm-emulate] wrote %s.json (+ .prowler.json, .answerkey.json) — re-run with: tsengine cloud-assess --snapshot %s.json --prowler %s.prowler.json\n",
 			outPrefix, outPrefix, outPrefix)
 	}
+	if !s.Pass {
+		os.Exit(3)
+	}
+	return nil
+}
+
+// runCloudQuery emulates (or loads) a prowler-grounded CloudQuery account, runs
+// the AI Cloud Security Engineer over it via the effective-permission resolving
+// ingest, and scores the result against the independent cloudiam answer key.
+func runCloudQuery(loadDir, emitDir string, maxHyp int) error {
+	ds, err := cloudquery.Generate()
+	if err != nil {
+		return fmt.Errorf("cloudquery: emulate dataset: %w", err)
+	}
+
+	// --cloudquery-emit: persist the emulated dataset (one JSON per table) and exit.
+	if emitDir != "" {
+		if werr := ds.Tables.Save(emitDir); werr != nil {
+			return werr
+		}
+		fmt.Fprintf(os.Stderr, "[cloudquery] wrote emulated CloudQuery dataset → %s/ (aws_s3_buckets.json, aws_iam_roles.json, aws_ec2_instances.json, aws_ec2_security_groups.json)\n", emitDir)
+		return nil
+	}
+
+	// --cloudquery-dir: ingest an operator-provided CloudQuery sync instead of the
+	// emulated tables (the answer key still comes from the generator for scoring).
+	tables := ds.Tables
+	if loadDir != "" {
+		t, lerr := cloudquery.Load(loadDir)
+		if lerr != nil {
+			return lerr
+		}
+		tables = t
+	}
+
+	findings := cloudquery.EvalProwler(tables) // prowler "tools say"
+	inv := cloudquery.ToInventory(tables)      // effective-perms resolution (the eyes)
+	snap := cloudgraph.Ingest(inv)             // the engineer's pinned graph
+	a := cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: maxHyp})
+	s := cloudquery.ScoreAssessment(ds, a)
+
+	fmt.Print(cloudquery.Render(ds, findings, a, s))
+	fmt.Println()
+	fmt.Print(cloudengine.RenderAssessment(a))
 	if !s.Pass {
 		os.Exit(3)
 	}
