@@ -401,6 +401,9 @@ func runCloudQuery(loadDir, emitDir string, maxHyp int) error {
 	fmt.Print(cloudquery.Render(ds, findings, a, s))
 	fmt.Println()
 	fmt.Print(cloudengine.RenderAssessment(a))
+	// The "act" half: emit applyable, self-verified remediation artifacts.
+	fmt.Println()
+	fmt.Print(cloudengine.RenderRemediations(cloudengine.GenerateRemediations(a)))
 	if !s.Pass {
 		os.Exit(3)
 	}

@@ -461,6 +461,7 @@ func runCloudAssess(argv []string) error {
 	prowlerPath := fs.String("prowler", "", "optional path to prowler findings JSON (for corroborate/downgrade)")
 	out := fs.String("out", "", "optional path to write the assessment JSON")
 	llmFlag := fs.String("llm", "auto", "L2 LLM translator: auto (on if LLM_API_KEY set) | on | off")
+	remediate := fs.Bool("remediate", false, "emit applyable, self-verified remediation artifacts (SCP / IAM Deny / SG revoke) for each attack path")
 	maxHyp := fs.Int("max-hypotheses", 0, "engine worklist budget (0 = default 20); raise for accounts with many real attack paths")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -501,6 +502,11 @@ func runCloudAssess(argv []string) error {
 	}
 
 	fmt.Print(cloudengine.RenderAssessment(assessment))
+
+	if *remediate {
+		fmt.Println()
+		fmt.Print(cloudengine.RenderRemediations(cloudengine.GenerateRemediations(assessment)))
+	}
 
 	if *out != "" {
 		b, merr := json.MarshalIndent(assessment, "", "  ")

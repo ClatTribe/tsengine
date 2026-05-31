@@ -23,13 +23,18 @@ type Document struct {
 // Statement is one IAM statement. Action/Resource/etc. may each be a single
 // string or an array in AWS JSON, so they decode through stringOrSlice.
 type Statement struct {
-	Sid         string                 `json:"Sid,omitempty"`
-	Effect      string                 `json:"Effect"` // "Allow" | "Deny"
-	Action      stringOrSlice          `json:"Action,omitempty"`
-	NotAction   stringOrSlice          `json:"NotAction,omitempty"`
-	Resource    stringOrSlice          `json:"Resource,omitempty"`
-	NotResource stringOrSlice          `json:"NotResource,omitempty"`
-	Condition   map[string]interface{} `json:"Condition,omitempty"`
+	Sid         string        `json:"Sid,omitempty"`
+	Effect      string        `json:"Effect"` // "Allow" | "Deny"
+	Action      stringOrSlice `json:"Action,omitempty"`
+	NotAction   stringOrSlice `json:"NotAction,omitempty"`
+	Resource    stringOrSlice `json:"Resource,omitempty"`
+	NotResource stringOrSlice `json:"NotResource,omitempty"`
+	// Principal appears on RESOURCE-based policies (bucket/KMS/trust policies):
+	// "*", "arn", ["arn",...], or {"AWS":...,"Service":...}. Absent on
+	// identity-based policies. Kept raw and interpreted by principalMatches.
+	Principal    json.RawMessage        `json:"Principal,omitempty"`
+	NotPrincipal json.RawMessage        `json:"NotPrincipal,omitempty"`
+	Condition    map[string]interface{} `json:"Condition,omitempty"`
 }
 
 // stringOrSlice decodes a JSON value that is either a string or []string.
