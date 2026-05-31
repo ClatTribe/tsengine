@@ -253,6 +253,8 @@ func cloudEngineCmd(argv []string) error {
 	seed := fs.Int64("seed", 1, "base seed (scenario i uses seed+i)")
 	maxHyp := fs.Int("max-hypotheses", 0, "engine worklist budget (0 = production default 20); raise to stress-test many real paths")
 	emit := fs.String("emit", "", "write ONE synthetic emulated cloud account to <path> (inventory JSON + <path>.prowler.json) and exit")
+	holdout := fs.Int("holdout", 0, "run the HELD-OUT generalization benchmark over N accounts (anti-overfit: independent ground truth) and exit")
+	holdoutK := fs.Int("holdout-k", 2, "per held-out account: K fragments of each posture class")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -261,6 +263,21 @@ func cloudEngineCmd(argv []string) error {
 	// real pipeline (tsengine cloud-assess / scan) can consume — no real AWS.
 	if *emit != "" {
 		return cloudengine.EmitScenario(*emit, *seed, *real, *decoy, *privesc)
+	}
+
+	// Held-out generalization benchmark: prowler-check-derived postures with
+	// INDEPENDENT ground truth (cloudiam eval incl. boundaries + trust policies),
+	// measuring the overfit gap the in-distribution bench cannot see.
+	if *holdout > 0 {
+		agg, n, err := cloudengine.RunHoldout(*seed, *holdout, *holdoutK, *maxHyp)
+		if err != nil {
+			return err
+		}
+		fmt.Print(cloudengine.RenderHoldout(agg, n))
+		if !agg.Pass {
+			os.Exit(3)
+		}
+		return nil
 	}
 
 	agg, n, err := cloudengine.RunSynthetic(*seed, *scenarios, *real, *decoy, *privesc, *maxHyp)
