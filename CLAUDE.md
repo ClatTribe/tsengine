@@ -243,7 +243,7 @@ signal warrants. This is "in-depth yet efficient" — expensive tools fire
 targeted, never blanket.
 
 The L1/L2 split is the load-bearing decision: this engine handles the
-**known** signal→tool mappings *deterministically* (reproducible, §10, zero
+**known** signal→tool mappings *deterministically* (evidence-grounded, §10, zero
 token cost). The open-ended "what's interesting here, what should I try"
 reasoning stays **L2** (`dispatch_l2_probe`, Phase 6). Do not move
 deterministic escalation into L2, and do not encode open-ended reasoning as
@@ -359,7 +359,7 @@ Hook: `threat_intel.enrich` fires in the L1.5 hook chain (§11) for every findin
 * Vendor advisory URLs
 * Known exploit availability (Metasploit, ExploitDB, GitHub PoCs)
 
-**Sourced from authoritative OSINT feeds, not hand-curated.** `tsengine corpus refresh` (`internal/corpus/threatintel`) ingests **CISA KEV** (the actively-exploited signal) + **FIRST.org EPSS** (~336k CVEs, the patch-priority signal) — both free, no API key — into a versioned on-disk corpus (`threat_intel.json` + sidecar manifest). The hook loads it when `TSENGINE_THREAT_INTEL_CORPUS` points at it, else falls back to the small embedded snapshot (the checked-in default). The corpus dir is gitignored; refresh runs **out of band** (the L0 cron, §5), and each scan **pins the manifest version** into `vulnerabilities.json`'s `corpus` block — so it's OSINT-fresh yet reproducible (§10), NOT a live per-query API call (strix's non-reproducible model). Scope today is KEV+EPSS; CVSS (NVD) + exploit-refs (ExploitDB/Metasploit/nuclei) are the documented next sources.
+**Sourced from authoritative OSINT feeds, not hand-curated.** `tsengine corpus refresh` (`internal/corpus/threatintel`) ingests **CISA KEV** (the actively-exploited signal) + **FIRST.org EPSS** (~336k CVEs, the patch-priority signal) — both free, no API key — into a versioned on-disk corpus (`threat_intel.json` + sidecar manifest). The hook loads it when `TSENGINE_THREAT_INTEL_CORPUS` points at it, else falls back to the small embedded snapshot (the checked-in default). The corpus dir is gitignored; refresh runs **out of band** (the L0 cron, §5), and each scan **pins the manifest version** into `vulnerabilities.json`'s `corpus` block — so it's OSINT-fresh yet pinned for the evidence pack (§10), NOT a live per-query API call. Scope today is KEV+EPSS; CVSS (NVD) + exploit-refs (ExploitDB/Metasploit/nuclei) are the documented next sources.
 
 L2 retains a separate `query_threat_intel` tool for the LLM to look up CVEs that aren't in current findings (chain reasoning across related CVEs). The two are complementary: L1.5 hook annotates emitted findings; L2 tool serves on-demand lookups during reasoning.
 
@@ -423,37 +423,33 @@ The L2 path doesn't get a separate codepath — `dispatch_l2_probe` is a thin wr
 
 ---
 
-## 10. Reproducibility invariants
+## 10. Evidence grounding (the LLM determines issues; tools back every claim)
 
-> **What reproducibility means (clarified — see ADR 0002).** Reproducibility is
-> a property of a **finding**, not of the detection **process**: *given a
-> captured config + environment, the issue can be replicated.* It does NOT
-> require the process to be deterministic. The mechanism is **snapshot +
-> evidence-replay**: pin the config/environment the scan ran against
-> (`corpus.*`, `sandbox_image_digest`, and — for live targets like
-> `cloud_account` — a content-addressed inventory `snapshot_hash`), and have
-> every finding carry a **deterministic evidence bundle** that re-confirms
-> against that pinned state. Deterministic tools (prowler, trivy) satisfy this
-> *and* happen to be byte-identical (so the N=5 output-equality bench below is a
-> valid test *for them*). An L2 discoverer / AI engine is non-deterministic in
-> its *discovery path* — that affects **coverage stability** (a recall property,
-> handled by the deterministic floor + temp-0 + multi-pass), NOT reproducibility:
-> its findings are first-class and attestable as long as each ships a replayable
-> evidence predicate over the pinned snapshot. The signed attestation covers
-> `snapshot_hash + findings + evidence`, never "the process was deterministic."
+> **Process-reproducibility is NOT an invariant here — it was removed.** The old
+> "reproducibility invariant" (deterministic tool args, N=5 output equality, "any
+> nondeterminism breaks the gate") pushed the engine toward a fixed deterministic
+> spine with the LLM bolted on as a translator. That is the wrong shape. The AI
+> security engineer is an **LLM agent that uses deterministic tools to access and
+> assess resources and determine issues** (the VulnAgent model). The *reasoning* —
+> which resources matter, how they chain, the blast radius, what to fix — is the
+> LLM's job and is allowed to be non-deterministic.
 
-For compliance evidence, a pinned config+environment replays to the same issue.
-These are invariants, not best-effort:
+What we require instead is **evidence grounding** — the LLM never asserts a fact it
+could have *queried*, and never records an issue no tool supports:
 
-| Invariant | Mechanism |
+| Rule | Mechanism |
 |---|---|
-| Pinned corpus per scan | `corpus.*` versions written at scan start, used throughout. Re-runs by `scan_id` use the same corpus |
-| Pinned sandbox image per scan | `sandbox_image_digest` recorded. Re-runs use the same image (or fail loudly) |
-| Deterministic tool args | No random seeds, sorted iteration order, fixed timeout buckets. Bench enforces output equality across N=5 trials |
-| Signed evidence bundle | `attestation` block — SHA-256 of canonical JSON + ed25519 signature. Tampering detectable |
-| Re-run by scan_id | `POST /replay {scan_id, mode:"full"}` reproduces the original findings within tolerance (timestamps, ordering) |
+| Every recorded issue cites tool evidence | A finding references the `resolve_access` / `find_paths` / prowler result that backs it. The LLM cannot record a vulnerability no tool supports — the anti-hallucination guard (VulnAgent's "no LLM hallucinations in syntax checking"). |
+| Effective-permission claims come from the evaluator, never the model | "Can X do Y on Z?" is answered by `cloudiam.Authorize` (identity ∧ boundary ∧ SCP ∧ resource-policy ∧ conditions), not the LLM's recollection. |
+| Proposed fixes are verified before delivery | A remediation is re-checked through `cloudiam.Authorize` (does it cut the path?) and, for IaC, compiled (`terraform plan`) before a PR/ticket opens. |
+| Mutations are human-gated (HITL) | The agent opens a PR/ticket and pauses for a human approval; its own cloud access stays read-only (`cloudsafety.Guard` + scoped STS). |
+| Pinned context for the evidence pack | The inventory `snapshot_hash`, `corpus.*`, and `sandbox_image_digest` are recorded so an auditor can see exactly what state a finding was assessed against, and re-run the finding's evidence predicate against it. |
+| Signed attestation | `attestation` block (SHA-256 of canonical JSON + ed25519) covers `snapshot_hash + findings + evidence`. Tamper-evident — it attests the *evidence*, never "the process was deterministic." |
 
-A CI test (`tests/reproducibility/`) pins this: any PR that introduces nondeterminism breaks the gate.
+So the compliance value (auditable, signed, pinned-context evidence) is kept; the
+process-determinism mandate is gone. The deterministic components (`cloudiam`,
+`cloudgraph`, the attack-path enumerator) are **tools the agent calls**, not the
+agent itself.
 
 ---
 
@@ -627,7 +623,7 @@ Per-asset recall vs. neutral competitor leaderboards where possible:
 
 | Phase | Scope | Status |
 |---|---|---|
-| **0. Foundation** | Repo skeleton, core types (`pkg/types`), `Tool`/`Handler` interfaces, L1 dashboard JSON schema, reproducibility invariants, CI (go test + golangci-lint + govulncheck) | not started |
+| **0. Foundation** | Repo skeleton, core types (`pkg/types`), `Tool`/`Handler` interfaces, L1 dashboard JSON schema, evidence/attestation grounding (§10), CI (go test + golangci-lint + govulncheck) | not started |
 | **1. Sandbox + E2E** | Docker sandbox image (nuclei baked), `cmd/tool-server` HTTP API, host-side `internal/sandbox` client, run nuclei against one fixture target end-to-end | not started |
 | **2. web_application asset** | Anchor + registry tiers, filter rules, WAVSEP fixture + scorer, tool-replay API | not started |
 | **3. Other 6 assets** | api, repo, container, ip, domain, cloud_account — anchor + registry tiers, per-asset filter, per-asset normalize | not started |
@@ -656,7 +652,7 @@ tsengine **diverges** from strix:
 * Anchor + registry tier — strix has only anchors + a 99-tool legacy catalog flag
 * Threat intel + compliance mapping happen at L1 emission (in addition to being L2 tools for arbitrary lookups)
 * L1 dashboard JSON is a frozen schema spec'd in Phase 0, not implicit
-* Reproducibility is an invariant with attestation, not best-effort metadata
+* Evidence-grounded LLM agent with signed attestation — NOT a deterministic-process mandate (§10)
 * No iter-Q5.* history — clean build phases (§16)
 
 When in doubt, the strix design lineage at `/Users/ashish/Downloads/cowork/strix/` is reference reading, not authoritative — this file is authoritative.

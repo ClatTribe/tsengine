@@ -41,6 +41,7 @@ import (
 	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
 	webasset "github.com/ClatTribe/tsengine/internal/asset/web"
 	"github.com/ClatTribe/tsengine/internal/attest"
+	"github.com/ClatTribe/tsengine/internal/cloudagent"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
@@ -144,6 +145,11 @@ func main() {
 	case "cloud-assess":
 		if err := runCloudAssess(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsengine cloud-assess: %v\n", err)
+			os.Exit(1)
+		}
+	case "cloud-investigate":
+		if err := runCloudInvestigate(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine cloud-investigate: %v\n", err)
 			os.Exit(1)
 		}
 	default:
@@ -518,6 +524,51 @@ func runCloudAssess(argv []string) error {
 		}
 		fmt.Fprintf(os.Stderr, "[cloud-assess] wrote %s\n", *out)
 	}
+	return nil
+}
+
+// runCloudInvestigate runs the AI Cloud Security Engineer as an LLM AGENT (the
+// VulnAgent shape, CLAUDE.md §10): the model drives, calling the cloud tool
+// catalog (cloudgraph reachability, cloudiam effective-perms, the attack-path
+// enumerator, the verified remediation generator) to access + assess the account
+// and determine real attack paths. Needs LLM_API_KEY (the brain).
+func runCloudInvestigate(argv []string) error {
+	fs := flag.NewFlagSet("cloud-investigate", flag.ContinueOnError)
+	snapshot := fs.String("snapshot", "", "path to the inventory JSON (CloudQuery/Cartography export)")
+	prowlerPath := fs.String("prowler", "", "optional path to prowler findings JSON")
+	maxIters := fs.Int("max-iters", 28, "max tool-call turns before the loop is force-closed")
+	maxHyp := fs.Int("max-hypotheses", 60, "worklist budget for the enumerate_attack_paths prepass tool")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *snapshot == "" {
+		return fmt.Errorf("--snapshot is required")
+	}
+	snap, err := cloudgraph.LoadSnapshot(*snapshot)
+	if err != nil {
+		return err
+	}
+	var prowler []types.Finding
+	if *prowlerPath != "" {
+		b, rerr := os.ReadFile(*prowlerPath) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read prowler findings: %w", rerr)
+		}
+		if jerr := json.Unmarshal(b, &prowler); jerr != nil {
+			return fmt.Errorf("parse prowler findings: %w", jerr)
+		}
+	}
+
+	llm, ok := cloudengine.GeminiFromEnv()
+	if !ok {
+		return fmt.Errorf("cloud-investigate needs LLM_API_KEY (the agent's brain)")
+	}
+	cc := &cloudagent.Context{Snap: snap, Prowler: prowler}
+	rep, err := cloudagent.Investigate(context.Background(), llm, cc, cloudagent.Options{MaxIters: *maxIters, MaxHyp: *maxHyp})
+	if err != nil {
+		return err
+	}
+	fmt.Print(cloudagent.Render(rep))
 	return nil
 }
 
