@@ -267,6 +267,7 @@ func cloudEngineCmd(argv []string) error {
 	cqAdvanced := fs.Bool("cloudquery-advanced", false, "use the advanced scenario (resource-policy-only grant + SCP-blocked privesc) to show effective-permission reasoning")
 	cqLarge := fs.Bool("cloudquery-large", false, "generate a large, realistic CloudQuery account (hundreds of resources + noise) with planted paths and an independent answer key")
 	cqSize := fs.Int("size", 300, "with --cloudquery-large: approximate account size (number of benign principals; other counts scale from it)")
+	cqEmitInv := fs.String("cloudquery-emit-inventory", "", "write the RESOLVED inventory + prowler findings (the `tsengine cloud-assess` input) to <prefix>.json / <prefix>.prowler.json and exit")
 	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -283,8 +284,8 @@ func cloudEngineCmd(argv []string) error {
 	// CloudQuery config; cloudiam (trust policies + permission boundaries) defines
 	// exploitability truth; the engineer ingests CloudQuery (resolving effective
 	// perms) and is scored against that independent key.
-	if *cqRun || *cqEmit != "" {
-		return runCloudQuery(cqOpts{loadDir: *cqDir, emitDir: *cqEmit, maxHyp: *maxHyp,
+	if *cqRun || *cqEmit != "" || *cqEmitInv != "" {
+		return runCloudQuery(cqOpts{loadDir: *cqDir, emitDir: *cqEmit, emitInv: *cqEmitInv, maxHyp: *maxHyp,
 			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed})
 	}
 
@@ -371,10 +372,10 @@ func runLLMEmulate(seed int64, nReal, nDecoy, maxHyp int, outPrefix string) erro
 // the AI Cloud Security Engineer over it via the effective-permission resolving
 // ingest, and scores the result against the independent cloudiam answer key.
 type cqOpts struct {
-	loadDir, emitDir string
-	maxHyp, size     int
-	advanced, large  bool
-	seed             int64
+	loadDir, emitDir, emitInv string
+	maxHyp, size              int
+	advanced, large           bool
+	seed                      int64
 }
 
 func runCloudQuery(o cqOpts) error {
@@ -401,6 +402,30 @@ func runCloudQuery(o cqOpts) error {
 			return werr
 		}
 		fmt.Fprintf(os.Stderr, "[cloudquery] wrote dataset → %s/ (CloudQuery tables + answer_key.json)\n  %s\n", o.emitDir, ds.Stats())
+		return nil
+	}
+
+	// --cloudquery-emit-inventory: write the RESOLVED inventory + prowler findings
+	// — the operator-facing input that `tsengine cloud-assess` (the full AI engineer
+	// + LLM) consumes. This bridges a CloudQuery dataset into the real pipeline.
+	if o.emitInv != "" {
+		base := strings.TrimSuffix(o.emitInv, ".json")
+		invJSON, merr := json.MarshalIndent(cloudquery.ToInventory(ds.Tables), "", "  ")
+		if merr != nil {
+			return merr
+		}
+		if werr := os.WriteFile(base+".json", invJSON, 0o600); werr != nil {
+			return werr
+		}
+		prowJSON, perr := json.MarshalIndent(cloudquery.EvalProwler(ds.Tables), "", "  ")
+		if perr != nil {
+			return perr
+		}
+		if werr := os.WriteFile(base+".prowler.json", prowJSON, 0o600); werr != nil {
+			return werr
+		}
+		fmt.Fprintf(os.Stderr, "[cloudquery] wrote %s.json (+ .prowler.json) — run: tsengine cloud-assess --snapshot %s.json --prowler %s.prowler.json --llm on --max-hypotheses %d\n  %s\n",
+			base, base, base, max(150, len(ds.AnswerKey.RealTargets)*8), ds.Stats())
 		return nil
 	}
 
