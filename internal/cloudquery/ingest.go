@@ -110,19 +110,22 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 			}
 		}
 		// assume_role A→B: A may call AssumeRole on B (SCP/boundary-aware) AND B's
-		// trust policy permits A.
-		for _, b := range t.IAMRoles {
-			if b.ARN == r.ARN {
-				continue
-			}
-			aOK, _ := cloudiam.Permits(cloudiam.Request{Principal: r.ARN, Action: "sts:AssumeRole", Resource: b.ARN},
-				cloudiam.PolicySet{Identity: identity, Boundary: boundary, SCPs: scps, SameAccount: true})
-			if !aOK {
-				continue
-			}
-			if trust := parseDoc(b.AssumeRolePolicyDocument); trust != nil {
-				if ok, _ := cloudiam.Allows("sts:AssumeRole", r.ARN, trust); ok {
-					inv.Trusts = append(inv.Trusts, cloudgraph.InvTrust{Principal: r.ARN, Role: b.ARN})
+		// trust policy permits A. Skip the whole O(n) inner scan for the many roles
+		// that cannot call sts:AssumeRole at all (keeps large accounts near-linear).
+		if canPossiblyAssume(identity) {
+			for _, b := range t.IAMRoles {
+				if b.ARN == r.ARN {
+					continue
+				}
+				aOK, _ := cloudiam.Permits(cloudiam.Request{Principal: r.ARN, Action: "sts:AssumeRole", Resource: b.ARN},
+					cloudiam.PolicySet{Identity: identity, Boundary: boundary, SCPs: scps, SameAccount: true})
+				if !aOK {
+					continue
+				}
+				if trust := parseDoc(b.AssumeRolePolicyDocument); trust != nil {
+					if ok, _ := cloudiam.Allows("sts:AssumeRole", r.ARN, trust); ok {
+						inv.Trusts = append(inv.Trusts, cloudgraph.InvTrust{Principal: r.ARN, Role: b.ARN})
+					}
 				}
 			}
 		}
@@ -195,6 +198,29 @@ func condStr(conditional bool) string {
 		return "runtime condition (needs live validation)"
 	}
 	return ""
+}
+
+// canPossiblyAssume is a cheap, permissive pre-filter: does any Allow statement
+// plausibly grant sts:AssumeRole? Used to skip the O(n) assume-resolution scan for
+// the many roles that cannot assume anything (keeps large accounts near-linear).
+// When unsure it returns true (never skips a role that might assume).
+func canPossiblyAssume(identity []*cloudiam.Document) bool {
+	for _, d := range identity {
+		if d == nil {
+			continue
+		}
+		for _, st := range d.Statement {
+			if !strings.EqualFold(st.Effect, "Allow") {
+				continue
+			}
+			for _, a := range st.Action {
+				if a == "*" || a == "sts:*" || strings.EqualFold(a, "sts:AssumeRole") {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // effectiveAllows implements AWS effective-permission semantics for our subset:
