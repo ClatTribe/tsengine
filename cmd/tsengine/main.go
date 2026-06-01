@@ -538,6 +538,7 @@ func runCloudInvestigate(argv []string) error {
 	prowlerPath := fs.String("prowler", "", "optional path to prowler findings JSON")
 	maxIters := fs.Int("max-iters", 28, "max tool-call turns before the loop is force-closed")
 	maxHyp := fs.Int("max-hypotheses", 60, "worklist budget for the enumerate_attack_paths prepass tool")
+	export := fs.String("export", "", "write each issue's verified remediation artifact to this dir (the applyable 'act' output)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -569,6 +570,13 @@ func runCloudInvestigate(argv []string) error {
 		return err
 	}
 	fmt.Print(cloudagent.Render(rep))
+	if *export != "" {
+		n, eerr := cloudagent.ExportRemediations(rep, *export)
+		if eerr != nil {
+			return eerr
+		}
+		fmt.Fprintf(os.Stderr, "[cloud-investigate] exported %d applyable remediation artifact(s) → %s/\n", n, *export)
+	}
 	return nil
 }
 

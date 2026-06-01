@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/cloudagent"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudquery"
@@ -268,6 +269,7 @@ func cloudEngineCmd(argv []string) error {
 	cqLarge := fs.Bool("cloudquery-large", false, "generate a large, realistic CloudQuery account (hundreds of resources + noise) with planted paths and an independent answer key")
 	cqSize := fs.Int("size", 300, "with --cloudquery-large: approximate account size (number of benign principals; other counts scale from it)")
 	cqEmitInv := fs.String("cloudquery-emit-inventory", "", "write the RESOLVED inventory + prowler findings (the `tsengine cloud-assess` input) to <prefix>.json / <prefix>.prowler.json and exit")
+	cqAgent := fs.Bool("agent", false, "also run the LLM agent (cloudagent) over the same account and score it head-to-head vs the deterministic engine (needs LLM_API_KEY)")
 	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -286,7 +288,7 @@ func cloudEngineCmd(argv []string) error {
 	// perms) and is scored against that independent key.
 	if *cqRun || *cqEmit != "" || *cqEmitInv != "" {
 		return runCloudQuery(cqOpts{loadDir: *cqDir, emitDir: *cqEmit, emitInv: *cqEmitInv, maxHyp: *maxHyp,
-			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed})
+			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed, agent: *cqAgent})
 	}
 
 	// Independent-generator check: an external model authors the account AND its
@@ -374,7 +376,7 @@ func runLLMEmulate(seed int64, nReal, nDecoy, maxHyp int, outPrefix string) erro
 type cqOpts struct {
 	loadDir, emitDir, emitInv string
 	maxHyp, size              int
-	advanced, large           bool
+	advanced, large, agent    bool
 	seed                      int64
 }
 
@@ -449,6 +451,31 @@ func runCloudQuery(o cqOpts) error {
 		fmt.Println()
 		fmt.Print(cloudengine.RenderRemediations(cloudengine.GenerateRemediations(a)))
 	}
+
+	// --agent: run the LLM agent over the SAME account and score it head-to-head
+	// against the deterministic engine, both vs the independent answer key.
+	if o.agent {
+		llm, ok := cloudengine.GeminiFromEnv()
+		if !ok {
+			return fmt.Errorf("--agent needs LLM_API_KEY (the agent's brain)")
+		}
+		cc := &cloudagent.Context{Snap: snap, Prowler: findings}
+		rep, aerr := cloudagent.Investigate(context.Background(), llm, cc, cloudagent.Options{MaxIters: 4*len(ds.AnswerKey.RealTargets) + 12, MaxHyp: maxHyp})
+		if aerr != nil {
+			return aerr
+		}
+		as := rep.Score(ds.AnswerKey.RealTargets)
+		fmt.Printf("\n=== head-to-head on the same account (vs the independent answer key) ===\n")
+		fmt.Printf("deterministic engine: recall %.2f%% (%d/%d), FP-reduction %.2f%%, false paths %d\n",
+			s.PathRecall*100, s.RealFound, s.RealTotal, s.FPReduction*100, len(s.Extra))
+		fmt.Printf("LLM agent           : %s", cloudagent.RenderScore(as))
+		fmt.Print(cloudagent.Render(rep))
+		if !as.Pass {
+			os.Exit(3)
+		}
+		return nil
+	}
+
 	if !s.Pass {
 		os.Exit(3)
 	}
