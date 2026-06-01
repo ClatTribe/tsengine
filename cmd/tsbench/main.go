@@ -265,6 +265,8 @@ func cloudEngineCmd(argv []string) error {
 	cqDir := fs.String("cloudquery-dir", "", "load a CloudQuery dataset from this dir instead of generating (one JSON per table)")
 	cqEmit := fs.String("cloudquery-emit", "", "write the emulated CloudQuery dataset (one JSON per table) to this dir and exit")
 	cqAdvanced := fs.Bool("cloudquery-advanced", false, "use the advanced scenario (resource-policy-only grant + SCP-blocked privesc) to show effective-permission reasoning")
+	cqLarge := fs.Bool("cloudquery-large", false, "generate a large, realistic CloudQuery account (hundreds of resources + noise) with planted paths and an independent answer key")
+	cqSize := fs.Int("size", 300, "with --cloudquery-large: approximate account size (number of benign principals; other counts scale from it)")
 	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -282,7 +284,8 @@ func cloudEngineCmd(argv []string) error {
 	// exploitability truth; the engineer ingests CloudQuery (resolving effective
 	// perms) and is scored against that independent key.
 	if *cqRun || *cqEmit != "" {
-		return runCloudQuery(*cqDir, *cqEmit, *maxHyp, *cqAdvanced)
+		return runCloudQuery(cqOpts{loadDir: *cqDir, emitDir: *cqEmit, maxHyp: *maxHyp,
+			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed})
 	}
 
 	// Independent-generator check: an external model authors the account AND its
@@ -367,48 +370,60 @@ func runLLMEmulate(seed int64, nReal, nDecoy, maxHyp int, outPrefix string) erro
 // runCloudQuery emulates (or loads) a prowler-grounded CloudQuery account, runs
 // the AI Cloud Security Engineer over it via the effective-permission resolving
 // ingest, and scores the result against the independent cloudiam answer key.
-func runCloudQuery(loadDir, emitDir string, maxHyp int, advanced bool) error {
-	gen := cloudquery.Generate
-	if advanced {
-		gen = cloudquery.GenerateAdvanced
+type cqOpts struct {
+	loadDir, emitDir string
+	maxHyp, size     int
+	advanced, large  bool
+	seed             int64
+}
+
+func runCloudQuery(o cqOpts) error {
+	// Resolve the dataset: load from a dir (with its answer key), else generate.
+	var ds *cloudquery.Dataset
+	var err error
+	switch {
+	case o.loadDir != "":
+		ds, err = cloudquery.LoadDataset(o.loadDir)
+	case o.large:
+		ds, err = cloudquery.GenerateLarge(cloudquery.SizedLargeOpts(o.seed, o.size))
+	case o.advanced:
+		ds, err = cloudquery.GenerateAdvanced()
+	default:
+		ds, err = cloudquery.Generate()
 	}
-	ds, err := gen()
 	if err != nil {
-		return fmt.Errorf("cloudquery: emulate dataset: %w", err)
+		return fmt.Errorf("cloudquery: dataset: %w", err)
 	}
 
-	// --cloudquery-emit: persist the emulated dataset (one JSON per table) and exit.
-	if emitDir != "" {
-		if werr := ds.Tables.Save(emitDir); werr != nil {
+	// --cloudquery-emit: persist tables + answer key and exit.
+	if o.emitDir != "" {
+		if werr := ds.SaveAll(o.emitDir); werr != nil {
 			return werr
 		}
-		fmt.Fprintf(os.Stderr, "[cloudquery] wrote emulated CloudQuery dataset → %s/ (aws_s3_buckets.json, aws_iam_roles.json, aws_ec2_instances.json, aws_ec2_security_groups.json)\n", emitDir)
+		fmt.Fprintf(os.Stderr, "[cloudquery] wrote dataset → %s/ (CloudQuery tables + answer_key.json)\n  %s\n", o.emitDir, ds.Stats())
 		return nil
 	}
 
-	// --cloudquery-dir: ingest an operator-provided CloudQuery sync instead of the
-	// emulated tables (the answer key still comes from the generator for scoring).
-	tables := ds.Tables
-	if loadDir != "" {
-		t, lerr := cloudquery.Load(loadDir)
-		if lerr != nil {
-			return lerr
-		}
-		tables = t
+	// A large account needs a worklist budget big enough to validate every planted
+	// path; default it generously when the operator did not set one.
+	maxHyp := o.maxHyp
+	if o.large && maxHyp == 0 {
+		maxHyp = max(150, len(ds.AnswerKey.RealTargets)*8)
 	}
 
-	findings := cloudquery.EvalProwler(tables) // prowler "tools say"
-	inv := cloudquery.ToInventory(tables)      // effective-perms resolution (the eyes)
-	snap := cloudgraph.Ingest(inv)             // the engineer's pinned graph
+	findings := cloudquery.EvalProwler(ds.Tables) // prowler "tools say"
+	inv := cloudquery.ToInventory(ds.Tables)      // effective-perms resolution (the eyes)
+	snap := cloudgraph.Ingest(inv)                // the engineer's pinned graph
 	a := cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: maxHyp})
 	s := cloudquery.ScoreAssessment(ds, a)
 
 	fmt.Print(cloudquery.Render(ds, findings, a, s))
-	fmt.Println()
-	fmt.Print(cloudengine.RenderAssessment(a))
-	// The "act" half: emit applyable, self-verified remediation artifacts.
-	fmt.Println()
-	fmt.Print(cloudengine.RenderRemediations(cloudengine.GenerateRemediations(a)))
+	if !o.large { // the per-path detail + remediations are noise on a large account
+		fmt.Println()
+		fmt.Print(cloudengine.RenderAssessment(a))
+		fmt.Println()
+		fmt.Print(cloudengine.RenderRemediations(cloudengine.GenerateRemediations(a)))
+	}
 	if !s.Pass {
 		os.Exit(3)
 	}
