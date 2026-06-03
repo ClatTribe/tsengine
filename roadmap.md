@@ -104,7 +104,7 @@ exploit execution, CI-gate trigger, browser tool for DOM XSS.
 | Capability | Status | Note |
 |---|---|---|
 | Multi-tenancy + RBAC + data isolation | 🔴 | engine is single-scan; tenants/clients/teams model |
-| Durable **findings DB** + lifecycle (open→fixed→verified→closed) + SLA + ownership | 🔴 | L3 portfolio layer is "future"; needed for retainer model |
+| Durable **findings DB** + lifecycle (open→fixed→verified→closed) + SLA + ownership | ✅ | `internal/findingstore` + `tsengine findings ingest/list/set` — fingerprint dedup across scans, auto open→fixed (disappeared) / reopened (returned), per-severity SLA + overdue, owner assignment, audit history, JSON-backed. Multi-tenant SQL is the separate platform layer |
 | **Continuous scheduling** (cron + event/CI-triggered) | 🔴 | the "continuous loop" the thesis sells |
 | Integrations: Jira/Linear, Slack/Teams, GitHub/GitLab, SSO | 🔴 | delivery + ingest connectors |
 | Customer **onboarding / connect** (read-only cloud role, GitHub App, OAuth) | 🔴 | how a client plugs in |
@@ -149,7 +149,7 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 
 ## 7. Prioritized sequencing (maps to the tiered monetization)
 
-1. 🟡 **Report generator** ✅ (`internal/report` — branded MD/HTML from any engine output) **+ findings DB + lifecycle** 🔴 — turns the engine's output into the *sellable artifact* and the retainer's backbone. (Platform §4)
+1. ✅ **Report generator** (`internal/report` — branded MD/HTML) **+ findings DB + lifecycle** (`internal/findingstore` — dedup, open→fixed→reopened, SLA, ownership) — the *sellable artifact* + the retainer's backbone. SOC2 evidence-pack templating + a hosted multi-tenant store are the remaining slices. (Platform §4)
 2. **AI pentester for web/API** — extend the proven cloud agent pattern + sandboxed exploit-confirmation. → **Tier 2 "Attack"** ($5–12k/scan). (Service §1)
 3. ✅ **LLM Red-Team module** (`internal/llmredteam`) — core built (attacker + verifier + emulated bench); remaining: live HTTP target adapter + RAG depth. → **Tier 1 "Guard"** ($990–1990/mo). (Service §2, §6)
 4. **Continuous loop + CI trigger + multi-tenant + PR/ChatOps delivery** — converts "engine" into "retainer SaaS." → **Tier 3 "Scale"** ($50k+/yr). (Platform §4, Service §3)
