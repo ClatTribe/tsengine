@@ -36,6 +36,38 @@ Because findings ride on **deterministic indicators**, a response body that says
 
 `list_routes` · `send_request(method, path, payload?, headers?)` · `record_finding(route, class, evidence[], severity, rationale)` · `confirm_exploit(finding_id)` · `note_defense(signature)` · `finish(summary)`.
 
+## Vuln classes + their grounding indicators
+
+| Class | Required indicator | How it's detected (deterministic) |
+|---|---|---|
+| `sqli` | `sql_error` | DB error signature in the body (MySQL/Postgres/Oracle/SQLite/MSSQL) |
+| `blind_sqli` | `slow_response` | response > 4s (time-based) |
+| `xss` | `reflected_input` | the injected `<>"'`/`script` payload reflected raw in the body |
+| `open_redirect` | `redirect:<host>` | 3xx + `Location` to the injected host |
+| `path_traversal` / `lfi` | `file_disclosure` | `/etc/passwd` line or Windows `win.ini` section leaked |
+| `command_injection` / `rce` | `cmd_output` | `id`/`uname` output (`uid=…(…) gid=…`) reflected |
+
+A `record_finding` whose cited turn lacks the class's indicator is **rejected** — same gate for every class.
+
+## Seed from L1 scanners
+
+`Options.SeedFindings []SeedFinding{Route, Class, Tool}` hands the agent the leads an
+L1 scanner (nuclei/sqlmap/dalfox) raised. They're surfaced in the prompt as
+*suspected, not proven* — the agent must still send a payload that elicits the
+indicator and record-grounded, so a noisy L1 alert can't become a finding on faith.
+Seed routes also widen the network allowlist.
+
+## Signed evidence bundle (the VAPT deliverable)
+
+`BuildEvidence(report, ctx) → EvidenceBundle` packs each finding with the exact
+proving request/response turns (method, URL, payload, status, indicators, captured
+response snippet). `SignEvidence` attaches an ed25519 attestation (SHA-256 over the
+bundle's canonical JSON — no maps, so `encoding/json` field order is deterministic);
+`VerifyEvidence` rejects any post-signing mutation. CLI: `web-investigate
+--export-evidence <file>` writes it; `web-verify [--pubkey hex] <file>` checks it.
+This is the tamper-evident PoC an engagement ships — same attestation discipline as
+the L1 dashboard (`internal/dashboard`), scoped to an offensive engagement.
+
 ## What P1 ships (this PR) — ✅ built
 - `internal/webagent`: state, the 6 tools, the loop, the safety `Requester`, deterministic indicators, grounded `record_finding` + `confirm_exploit`.
 - Unit tests against an in-process mock-vulnerable target (no live infra): a planted SQLi confirmed end-to-end (recorded grounded **and** verified by re-fire); grounding rejects an unproven claim; a prompt-injection in the response body cannot fabricate a finding; the `Requester` blocks off-scope hosts + enforces the cap; indicators are deterministic.
@@ -47,5 +79,10 @@ Because findings ride on **deterministic indicators**, a response body that says
 > build → API call); a live run is gated only by external API billing/quota, never by
 > the agent code.
 
+## Shipped after P1
+- **Five vuln classes** (added `path_traversal`/`lfi` + `command_injection`/`rce` to sqli/xss/open_redirect), each with a deterministic grounding indicator.
+- **Seed-from-scanners** (`SeedFindings`) — confirm L1 leads instead of rediscovering.
+- **Signed evidence bundle** — `BuildEvidence`/`SignEvidence`/`VerifyEvidence`/`ExportEvidence`/`LoadEvidence` + CLI `web-investigate --export-evidence` / `web-verify`. Proven E2E: all five classes discovered on a live target, bundle signed→verified, tampered bundle rejected (both library and CLI).
+
 ## Deferred (later rungs)
-Browser-driven DOM/JS exploitation (Playwright tool); authenticated/business-logic chains; the ownership-handshake token check; CI/CD gatekeeper trigger; the shared durable findings DB; extracting a generic `agentloop` package shared with `cloudagent`.
+Browser-driven DOM/JS exploitation (Playwright tool); authenticated/business-logic chains; the ownership-handshake token check; CI/CD gatekeeper trigger; the shared durable findings DB; bridging the bundle into the L1 `vulnerabilities.json` dashboard contract; extracting a generic `agentloop` package shared with `cloudagent`.

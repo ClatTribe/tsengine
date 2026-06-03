@@ -110,6 +110,15 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 
 var sqlErrRe = regexp.MustCompile(`(?i)(SQL syntax|mysql_fetch|valid MySQL result|ORA-\d{5}|SQLITE_ERROR|PG::\w+Error|psql:|Unclosed quotation mark|quoted string not properly terminated|SQLSTATE\[|syntax error at or near|Microsoft OLE DB|ODBC SQL Server)`)
 
+// fileDiscRe matches the unmistakable shape of a sensitive file leaked into the
+// response — /etc/passwd line, Windows win.ini section. The signal of a successful
+// path traversal / LFI.
+var fileDiscRe = regexp.MustCompile(`(?i)(root:[^:]*:0:0:|daemon:[x*]:1:1:|\[fonts\]|\[extensions\]|; for 16-bit app support)`)
+
+// cmdOutRe matches the output of a benign probe command (id / uname) reflected in
+// the response — the signal of OS command injection.
+var cmdOutRe = regexp.MustCompile(`(uid=\d+\([^)]*\)\s+gid=\d+\(|Linux [\w.-]+ \d+\.\d+\.|Darwin Kernel Version)`)
+
 // indicators are deterministic, evidence-grade signals extracted from a response.
 // A finding may ONLY be recorded against a turn that carries the matching indicator.
 func indicators(payload string, resp *Resp) []string {
@@ -119,6 +128,12 @@ func indicators(payload string, resp *Resp) []string {
 	}
 	if payload != "" && looksInjectable(payload) && strings.Contains(resp.Body, payload) {
 		ind = append(ind, "reflected_input") // raw, unescaped reflection ⇒ potential XSS
+	}
+	if fileDiscRe.MatchString(resp.Body) {
+		ind = append(ind, "file_disclosure") // path traversal / LFI
+	}
+	if cmdOutRe.MatchString(resp.Body) {
+		ind = append(ind, "cmd_output") // OS command injection
 	}
 	if resp.Status >= 300 && resp.Status < 400 && resp.Location != "" {
 		ind = append(ind, "redirect:"+resp.Location)
