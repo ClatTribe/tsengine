@@ -109,7 +109,7 @@ exploit execution, CI-gate trigger, browser tool for DOM XSS.
 | Integrations: Jira/Linear, Slack/Teams, GitHub/GitLab, SSO | 🔴 | delivery + ingest connectors |
 | Customer **onboarding / connect** (read-only cloud role, GitHub App, OAuth) | 🔴 | how a client plugs in |
 | Dashboards + posture trend + exec report | 🟡 | webappsec named; engine emits JSON |
-| **Report generator** (branded VAPT PDF / SOC2 evidence pack) | 🔴 | the actual sellable deliverable |
+| **Report generator** (branded VAPT deliverable) | ✅ | `internal/report` + `tsengine report` — branded Markdown + self-contained HTML (print-to-PDF) from any engine output (vulnerabilities.json / web evidence bundle / LLM red-team); exec summary, risk dashboard, per-finding evidence + remediation, compliance mapping, signed-attestation provenance. SOC2 evidence-pack templating is the next slice |
 | HITL **analyst console** (review/accept/reject/add manual findings, sign report) | 🔴 | deferred; required for a VAPT firm's sign-off |
 | Billing / SOW / engagement mgmt | 🔴 | commercial layer |
 
@@ -149,7 +149,7 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 
 ## 7. Prioritized sequencing (maps to the tiered monetization)
 
-1. **Report generator + findings DB + lifecycle** — turns the engine's output into the *sellable artifact* and the retainer's backbone. (Platform §4)
+1. 🟡 **Report generator** ✅ (`internal/report` — branded MD/HTML from any engine output) **+ findings DB + lifecycle** 🔴 — turns the engine's output into the *sellable artifact* and the retainer's backbone. (Platform §4)
 2. **AI pentester for web/API** — extend the proven cloud agent pattern + sandboxed exploit-confirmation. → **Tier 2 "Attack"** ($5–12k/scan). (Service §1)
 3. ✅ **LLM Red-Team module** (`internal/llmredteam`) — core built (attacker + verifier + emulated bench); remaining: live HTTP target adapter + RAG depth. → **Tier 1 "Guard"** ($990–1990/mo). (Service §2, §6)
 4. **Continuous loop + CI trigger + multi-tenant + PR/ChatOps delivery** — converts "engine" into "retainer SaaS." → **Tier 3 "Scale"** ($50k+/yr). (Platform §4, Service §3)
