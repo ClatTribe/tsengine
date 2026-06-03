@@ -15,9 +15,10 @@ import (
 // It is in-process state (not a durable store — that's the platform layer); the
 // loop, the tools, and the safety Requester all read/write it.
 type Context struct {
-	Target   string   // the authorized base URL
-	Routes   []string // known request surface (target + seeded/discovered)
-	Defenses []string // WAF/filter signatures the agent has hit
+	Target   string        // the authorized base URL
+	Routes   []string      // known request surface (target + seeded/discovered)
+	Seeds    []SeedFinding // suspected L1 findings the agent should confirm
+	Defenses []string      // WAF/filter signatures the agent has hit
 
 	History  []Turn    // every request/response (the evidence substrate)
 	Findings []Finding // grounded, recorded vulns
@@ -50,12 +51,23 @@ type Report struct {
 	Calls    int       `json:"tool_calls"`
 }
 
+// SeedFinding is a suspected vuln handed to the agent by an L1 scanner
+// (nuclei/sqlmap/dalfox). The agent's job is to CONFIRM it (send the request,
+// elicit the indicator, record-grounded) rather than rediscover it — "seed from
+// scanners, don't start blind" (docs/design/web-agent.md).
+type SeedFinding struct {
+	Route string `json:"route"` // URL to probe (may carry a param marker)
+	Class string `json:"class"` // suspected class: sqli|xss|open_redirect|path_traversal|command_injection
+	Tool  string `json:"tool"`  // the L1 scanner that raised it (provenance)
+}
+
 // Options bounds the engagement.
 type Options struct {
-	MaxIters    int           // tool-call turns before the loop is force-closed
-	MaxRequests int           // hard request cap (the runaway guard)
-	MinInterval time.Duration // throttle between requests (do-no-harm)
-	Seed        []string      // optional routes from L1 scanners to start from
+	MaxIters     int           // tool-call turns before the loop is force-closed
+	MaxRequests  int           // hard request cap (the runaway guard)
+	MinInterval  time.Duration // throttle between requests (do-no-harm)
+	Seed         []string      // optional routes from L1 scanners to start from
+	SeedFindings []SeedFinding // optional suspected findings from L1 to CONFIRM
 }
 
 // Investigate runs the LLM-as-brain loop against a live target (the cloudagent
@@ -71,8 +83,14 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 	if opts.MaxRequests <= 0 {
 		opts.MaxRequests = 120
 	}
+	// Seed routes for the allowlist come from --seed, --target, and any seed
+	// findings' routes (the agent must be allowed to probe what L1 flagged).
+	allowSeeds := append([]string{}, opts.Seed...)
+	for _, sf := range opts.SeedFindings {
+		allowSeeds = append(allowSeeds, sf.Route)
+	}
 	if cc.req == nil {
-		cc.req = NewRequester(allowHostsFor(cc.Target, opts.Seed), opts.MaxRequests, opts.MinInterval)
+		cc.req = NewRequester(allowHostsFor(cc.Target, allowSeeds), opts.MaxRequests, opts.MinInterval)
 	}
 	cc.ctx = ctx
 	if cc.Target != "" {
@@ -80,6 +98,12 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 	}
 	for _, s := range opts.Seed {
 		cc.Routes = appendUniq(cc.Routes, s)
+	}
+	if len(opts.SeedFindings) > 0 {
+		cc.Seeds = append(cc.Seeds, opts.SeedFindings...)
+		for _, sf := range opts.SeedFindings {
+			cc.Routes = appendUniq(cc.Routes, sf.Route)
+		}
 	}
 
 	reg := map[string]toolDef{}

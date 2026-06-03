@@ -39,6 +39,12 @@ RULES
 	if len(cc.Routes) > 0 {
 		fmt.Fprintf(&b, "KNOWN ROUTES: %s\n", strings.Join(cc.Routes, ", "))
 	}
+	if len(cc.Seeds) > 0 {
+		b.WriteString("SUSPECTED FINDINGS FROM L1 SCANNERS — confirm each (send a payload that\nelicits the class's indicator, then record_finding grounded). Do NOT take them\non faith; an L1 alert is a lead, not proof:\n")
+		for _, s := range cc.Seeds {
+			fmt.Fprintf(&b, "  - %s on %s (raised by %s)\n", s.Class, s.Route, s.Tool)
+		}
+	}
 	if len(cc.Defenses) > 0 {
 		fmt.Fprintf(&b, "DEFENSES OBSERVED: %s\n", strings.Join(cc.Defenses, "; "))
 	}

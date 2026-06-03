@@ -36,6 +36,9 @@ The agentic exploiter now exists for **cloud AND web/api** (`internal/webagent`)
 | **Structural safety** (host allowlist + request cap + throttle, never LLM-trusted) | ✅ web | the `Requester` (cloudsafety principle); legal RoE/consent capture still 🔴 (§6) |
 | **Context-aware fuzzing** (read client-side JS + API spec → craft payloads) | 🔴 | new tools: spec/JS reader, payload-crafter |
 | **Prove-in-sandbox validation** (execute the exploit before alerting) | 🟡 web | `confirm_exploit` re-fires the proving request in isolation (indicator must reproduce); full sandboxed payload execution still 🔴; for cloud we prove *reachability* instead |
+| **Signed evidence bundle** (tamper-evident PoC deliverable) | ✅ web | `BuildEvidence`/`SignEvidence`/`VerifyEvidence` (ed25519 over canonical JSON) + CLI `web-investigate --export-evidence` / `web-verify`; proving request+response captured per finding |
+| **Vuln coverage** | ✅ 5 classes | sqli, xss, open_redirect, **path_traversal/lfi**, **command_injection/rce** — each grounded on a deterministic indicator |
+| **Seed from L1 scanners** (confirm, don't rediscover) | ✅ web | `Options.SeedFindings` surfaces nuclei/sqlmap/dalfox leads as *suspected*; the agent must still ground them |
 | **CI/CD gatekeeping** (offensive test on every push) | 🔴 | VCS webhook trigger + scoped staging run + pass/fail gate |
 | **Browser-driven DOM/JS exploitation** | 🔴 | Playwright tool (deferred — see docs/design/web-agent.md) |
 | Authenticated + business-logic / BOLA/BFLA / IDOR | 🟡 | seed_auth exists; authz-logic is a documented backlog item (no OSS does it — agent's job) |

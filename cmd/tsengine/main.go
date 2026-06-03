@@ -158,6 +158,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine web-investigate: %v\n", err)
 			os.Exit(1)
 		}
+	case "web-verify":
+		if err := runWebVerify(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine web-verify: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -176,6 +181,8 @@ Usage:
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
   tsengine cloud-assess --snapshot <inventory.json> [--prowler <findings.json>] [--out <assessment.json>]
   tsengine web-investigate --target <url> [--seed <url>,...] [--max-requests N] [--min-interval <dur>] [--max-iters N]
+                  [--export-evidence <file.json>] [--sign-key <path>] [--signer <id>]
+  tsengine web-verify [--pubkey <hex>] <evidence.json>
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -599,6 +606,9 @@ func runWebInvestigate(argv []string) error {
 	maxReq := fs.Int("max-requests", 120, "hard request budget (the runaway / do-no-harm guard)")
 	maxIters := fs.Int("max-iters", 30, "max tool-call turns before the loop is force-closed")
 	minInterval := fs.Duration("min-interval", 0, "throttle between requests (e.g. 200ms)")
+	exportEvidence := fs.String("export-evidence", "", "write a signed, tamper-evident evidence bundle (the VAPT PoC deliverable) to this JSON file")
+	signKey := fs.String("sign-key", attest.DefaultKeyPath(), "ed25519 key to sign the evidence bundle")
+	signer := fs.String("signer", "", "human-readable signer id recorded in the bundle (default: derived from key)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -625,6 +635,76 @@ func runWebInvestigate(argv []string) error {
 		return err
 	}
 	fmt.Print(webagent.Render(rep))
+
+	if *exportEvidence != "" {
+		priv, id, kerr := attest.LoadOrCreate(*signKey)
+		if kerr != nil {
+			return fmt.Errorf("evidence: load signing key: %w", kerr)
+		}
+		if *signer != "" {
+			id = *signer
+		}
+		bundle := webagent.BuildEvidence(rep, cc, "tsengine "+Version)
+		if serr := webagent.SignEvidence(bundle, id, priv, time.Now().UTC()); serr != nil {
+			return serr
+		}
+		if werr := webagent.ExportEvidence(*exportEvidence, bundle); werr != nil {
+			return werr
+		}
+		fmt.Fprintf(os.Stderr, "[web-investigate] signed evidence bundle (%d finding(s), signer=%s) → %s\n",
+			len(bundle.Findings), id, *exportEvidence)
+	}
+	return nil
+}
+
+// runWebVerify checks the ed25519 attestation on a web-agent evidence bundle.
+// Without --pubkey it verifies against the local signing key's public half (the
+// key that would have signed it on this machine); an auditor on another machine
+// passes the distributed --pubkey.
+func runWebVerify(argv []string) error {
+	fs := flag.NewFlagSet("web-verify", flag.ContinueOnError)
+	pubHex := fs.String("pubkey", "", "hex public key (default: local signing key's public half)")
+	keyPath := fs.String("key", attest.DefaultKeyPath(), "local signing key (for the default pubkey)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	rest := fs.Args()
+	if len(rest) != 1 {
+		return fmt.Errorf("usage: tsengine web-verify [--pubkey hex] <evidence.json>")
+	}
+
+	bundle, err := webagent.LoadEvidence(rest[0])
+	if err != nil {
+		return err
+	}
+
+	var pub ed25519.PublicKey
+	if *pubHex != "" {
+		if pub, err = attest.ParsePublicKeyHex(*pubHex); err != nil {
+			return fmt.Errorf("parse --pubkey: %w", err)
+		}
+	} else {
+		priv, _, kerr := attest.LoadOrCreate(*keyPath)
+		if kerr != nil {
+			return fmt.Errorf("load local key: %w", kerr)
+		}
+		pub = priv.Public().(ed25519.PublicKey)
+	}
+
+	if err := webagent.VerifyEvidence(bundle, pub); err != nil {
+		return err
+	}
+	fmt.Printf("OK — evidence bundle verified (signer=%s, signed_at=%s)\n",
+		bundle.Attestation.Signer, bundle.Attestation.SignedAt.Format(time.RFC3339))
+	fmt.Printf("target: %s   findings: %d\n", bundle.Target, len(bundle.Findings))
+	for _, f := range bundle.Findings {
+		tick := " "
+		if f.Verified {
+			tick = "✓"
+		}
+		fmt.Printf("  [%s] %s  class=%s  verified=%s  proving_turns=%d\n",
+			f.ID, f.Route, f.Class, tick, len(f.ProvingTurns))
+	}
 	return nil
 }
 
