@@ -26,18 +26,30 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 
 ## 1. Service: Autonomous AppSec Pentesting  🟡
 
-The agentic exploiter exists **only for cloud**. Web/API have detection + a translator, not a brain.
+The agentic exploiter now exists for **cloud AND web/api** (`internal/webagent`). Remaining gaps are depth (browser/JS, business-logic) and delivery (CI gate).
 
 | Capability | Status | Gap |
 |---|---|---|
 | Web/API detection (katana, nuclei, sqlmap, dalfox, OpenAPI ingest) | ✅ | — |
-| **Multi-turn agentic exploitation** (analyze response → adapt → follow-up) | 🟡 cloud only | point the `cloudagent` brain+tools pattern at web/api/repo |
+| **Multi-turn agentic exploitation** (analyze response → adapt → follow-up) | ✅ web/api (`internal/webagent`), ✅ cloud | the cloudagent brain+tools pattern now drives live HTTP; same grounded ReAct loop |
+| **Grounded findings + injection defense** (finding rides on a deterministic indicator, not the model reading attacker text) | ✅ | `record_finding` rejects any claim whose cited turn lacks the class's indicator (sqli⇒sql_error, xss⇒reflected_input, redirect⇒redirect:host); `confirm_exploit` re-fires to verify |
+| **Structural safety** (host allowlist + request cap + throttle, never LLM-trusted) | ✅ web | the `Requester` (cloudsafety principle); legal RoE/consent capture still 🔴 (§6) |
 | **Context-aware fuzzing** (read client-side JS + API spec → craft payloads) | 🔴 | new tools: spec/JS reader, payload-crafter |
-| **Prove-in-sandbox validation** (execute the exploit before alerting) | 🔴 | a *safe-exploit verifier* in the sandbox; for cloud we prove *reachability* instead of executing |
+| **Prove-in-sandbox validation** (execute the exploit before alerting) | 🟡 web | `confirm_exploit` re-fires the proving request in isolation (indicator must reproduce); full sandboxed payload execution still 🔴; for cloud we prove *reachability* instead |
 | **CI/CD gatekeeping** (offensive test on every push) | 🔴 | VCS webhook trigger + scoped staging run + pass/fail gate |
+| **Browser-driven DOM/JS exploitation** | 🔴 | Playwright tool (deferred — see docs/design/web-agent.md) |
 | Authenticated + business-logic / BOLA/BFLA / IDOR | 🟡 | seed_auth exists; authz-logic is a documented backlog item (no OSS does it — agent's job) |
 
-**Build:** an `web`/`api` agent (reuse `internal/l2` + the cloudagent loop) with HTTP-interaction tools (`send_request`, `read_response`, `replay_with_mutation`) and a **sandboxed exploit-confirmation** step → that *is* "zero-false-positive by proof."
+**Built (this rung):** `internal/webagent` — single grounded agent + 6-tool catalog
+(`list_routes`, `send_request`, `record_finding`, `confirm_exploit`, `note_defense`,
+`finish`), deterministic indicators, the safety `Requester`, `tsengine
+web-investigate --target`. Proven end-to-end against an in-process mock-vulnerable
+target (planted SQLi found, recorded grounded, and verified; ungrounded + injected
+claims rejected; off-scope/over-budget requests blocked). Design + decisions in
+`docs/design/web-agent.md`.
+
+**Next:** context-aware payload crafting (JS/spec readers), full sandboxed
+exploit execution, CI-gate trigger, browser tool for DOM XSS.
 
 ---
 

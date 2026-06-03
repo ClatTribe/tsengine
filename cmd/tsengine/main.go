@@ -79,6 +79,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/trufflehog"
 	"github.com/ClatTribe/tsengine/internal/tracer"
 	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
+	"github.com/ClatTribe/tsengine/internal/webagent"
 	"github.com/ClatTribe/tsengine/pkg/types"
 
 	// Side-effect imports register tool wrappers in the global registry.
@@ -152,6 +153,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine cloud-investigate: %v\n", err)
 			os.Exit(1)
 		}
+	case "web-investigate":
+		if err := runWebInvestigate(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine web-investigate: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -169,6 +175,7 @@ Usage:
                   [--snapshot <inventory.json>]   # cloud_account: emit the AI-engineer dual-view
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
   tsengine cloud-assess --snapshot <inventory.json> [--prowler <findings.json>] [--out <assessment.json>]
+  tsengine web-investigate --target <url> [--seed <url>,...] [--max-requests N] [--min-interval <dur>] [--max-iters N]
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -577,6 +584,47 @@ func runCloudInvestigate(argv []string) error {
 		}
 		fmt.Fprintf(os.Stderr, "[cloud-investigate] exported %d applyable remediation artifact(s) → %s/\n", n, *export)
 	}
+	return nil
+}
+
+// runWebInvestigate points the LLM-as-brain offensive agent at one authorized
+// live web/API target. The agent sends crafted requests, reads the engine's
+// DETERMINISTIC indicators, and records only structurally-grounded findings
+// (roadmap §1, docs/design/web-agent.md). The target's responses are untrusted
+// data — a finding rides on an indicator, never on the model reading a page.
+func runWebInvestigate(argv []string) error {
+	fs := flag.NewFlagSet("web-investigate", flag.ContinueOnError)
+	target := fs.String("target", "", "authorized target base URL (REQUIRED — you must own/have permission to test it)")
+	seedCSV := fs.String("seed", "", "optional comma-separated seed routes from a prior scan (same host(s) as --target)")
+	maxReq := fs.Int("max-requests", 120, "hard request budget (the runaway / do-no-harm guard)")
+	maxIters := fs.Int("max-iters", 30, "max tool-call turns before the loop is force-closed")
+	minInterval := fs.Duration("min-interval", 0, "throttle between requests (e.g. 200ms)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *target == "" {
+		return fmt.Errorf("--target is required")
+	}
+
+	var seed []string
+	for _, s := range strings.Split(*seedCSV, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			seed = append(seed, s)
+		}
+	}
+
+	llm, ok := cloudengine.GeminiFromEnv()
+	if !ok {
+		return fmt.Errorf("web-investigate needs LLM_API_KEY (the agent's brain)")
+	}
+	cc := &webagent.Context{Target: *target}
+	rep, err := webagent.Investigate(context.Background(), llm, cc, webagent.Options{
+		MaxIters: *maxIters, MaxRequests: *maxReq, MinInterval: *minInterval, Seed: seed,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Print(webagent.Render(rep))
 	return nil
 }
 
