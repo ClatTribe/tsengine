@@ -37,7 +37,7 @@ func TestLifecycle(t *testing.T) {
 
 	// scan 2 (a week later): sqli fixed (gone), xss persists
 	t1 := t0.Add(7 * 24 * time.Hour)
-	n, r, fx = s.IngestScan(scanWith("s2", "https://app",
+	n, _, fx = s.IngestScan(scanWith("s2", "https://app",
 		f("b", "nuclei::xss", "medium", "https://app/echo?name="),
 	), t1)
 	if n != 0 || fx != 1 {
@@ -51,7 +51,7 @@ func TestLifecycle(t *testing.T) {
 
 	// scan 3: sqli REAPPEARS → reopened
 	t2 := t1.Add(7 * 24 * time.Hour)
-	n, r, fx = s.IngestScan(scanWith("s3", "https://app",
+	_, r, _ = s.IngestScan(scanWith("s3", "https://app",
 		f("a", "nuclei::sqli", "high", "https://app/search?q="),
 		f("b", "nuclei::xss", "medium", "https://app/echo?name="),
 	), t2)
