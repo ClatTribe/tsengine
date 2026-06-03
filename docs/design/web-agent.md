@@ -79,6 +79,35 @@ the L1 dashboard (`internal/dashboard`), scoped to an offensive engagement.
 > build → API call); a live run is gated only by external API billing/quota, never by
 > the agent code.
 
+## Emulated environment — proving it isn't circular (`internal/webrange`)
+
+The unit tests above plant a vuln and assert the agent finds it — but the same
+person wrote the planter and the detector, so a green test could just mean the two
+agree. `internal/webrange` removes that circularity the way the cloud agent's
+procedural dataset + CloudGoat harness did:
+
+- **Procedurally generated** vulnerable app from a seed (`Generate(seed, Opts)`) —
+  routes, params, and class assignments vary per seed, so nothing is memorisable.
+- **Decoys** are the core: each class has a *safe sibling* that looks identical on
+  the surface (reflects input, takes a `next=`/`file=`/`host=` param) but is patched
+  — output-escaped XSS, allowlisted redirect, traversal-stripped path, shell-escaped
+  arg, parameterised SQL. A `Manifest` records which routes are real vs decoy (the
+  ground-truth answer key).
+- **A blind attacker** (`Prober`, a `cloudengine.LLM`) sweeps every route with every
+  class's payload — it has zero knowledge of which are vulnerable. Only the real
+  vulns emit a deterministic indicator, so the *engine's grounding gate*, not the
+  attacker's guesswork, decides what is recorded.
+- **`ScoreReport`** grades the agent's findings against the manifest: recall (real
+  vulns found) and — the anti-circularity metric — decoys-flagged + invented (must be
+  0). A self-test independently verifies the fixture (every real route shows its
+  indicator; every decoy doesn't).
+
+Result across 7 seeds (40 decoys): **100% recall (58/58), 0 decoys flagged, 0
+invented, every finding re-fire-verified.** A circular "detector" would confirm the
+decoys too; grounding refuses them. Run it: `go test ./internal/webrange/`. Serve a
+range for a live LLM run: `webrange --seed 7 --addr 127.0.0.1:8099` then `tsengine
+web-investigate --target http://127.0.0.1:8099`.
+
 ## Shipped after P1
 - **Five vuln classes** (added `path_traversal`/`lfi` + `command_injection`/`rce` to sqli/xss/open_redirect), each with a deterministic grounding indicator.
 - **Seed-from-scanners** (`SeedFindings`) — confirm L1 leads instead of rediscovering.

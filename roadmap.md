@@ -20,7 +20,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 - ✅ **Verified remediation** (`cloudengine.GenerateRemediations`) — SCP/IAM-Deny/SG artifacts, self-checked via `cloudiam.Authorize`; `--export` to disk.
 - ✅ **L1.5 enrichment** — FP filter, corroboration, confidence, threat-intel (KEV/EPSS), `compliance.map` (SOC2/PCI/HIPAA/CIS/NIST).
 - ✅ **Signed evidence/attestation** (ed25519 over snapshot+findings+evidence).
-- ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset.
+- ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** procedural vulnerable-app + decoys for web (100% recall, 0 decoys flagged / 0 invented across 7 seeds — grounding proven non-circular).
 
 ---
 
@@ -130,7 +130,7 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 | **Runtime guardrails for active web/api testing** (rate-limit, scope, do-no-harm) | 🔴 | needed before autonomous testing at scale |
 | **Authorization / consent / RoE capture** (legal) | 🔴 | required to test client assets |
 | **Agent-injection resilience** (prompt injection from scanned content) | 🔴 | the AgentLAB axis; also Service 2 pointed inward |
-| Eval/regression harness on real engagements | 🟡 | bench ladder for cloud exists; extend to agents |
+| Eval/regression harness on real engagements | 🟡 | cloud bench ladder + **web agent bench** (`internal/webrange`: procedural vuln-app + decoys, recall/precision vs answer key); LLM red-team harness still 🔴 |
 | Chain of custody / audit trail | 🟡 | attestation exists; extend to per-action log |
 | Live-AWS validation rung (CloudGoat deploy→sync→confirm) | 🟡 | `RunTier1Live` stub; needs AWS account |
 

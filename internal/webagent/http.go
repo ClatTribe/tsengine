@@ -136,7 +136,16 @@ func indicators(payload string, resp *Resp) []string {
 		ind = append(ind, "cmd_output") // OS command injection
 	}
 	if resp.Status >= 300 && resp.Status < 400 && resp.Location != "" {
-		ind = append(ind, "redirect:"+resp.Location)
+		ind = append(ind, "redirect:"+resp.Location) // informational
+		// open redirect is proven only when the response sends the browser to the
+		// EXTERNAL host the attacker injected — a same-origin redirect (Location is a
+		// bare path, no host) is NOT a finding. This is what tells an exploitable
+		// redirect apart from a safe one.
+		if payload != "" {
+			if loc, err := url.Parse(resp.Location); err == nil && loc.Host != "" && strings.Contains(payload, loc.Host) {
+				ind = append(ind, "external_redirect:"+loc.Host)
+			}
+		}
 	}
 	if resp.Elapsed > 4*time.Second {
 		ind = append(ind, "slow_response") // time-based blind signal

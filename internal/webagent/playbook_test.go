@@ -52,7 +52,7 @@ func newPlaybook(base string) *playbookBrain {
 			{q(base, "/product", "id", "'"), "'", "sqli", "sql_error"},
 			{q(base, "/greet", "name", "<script>alert(1)</script>"), "<script>alert(1)</script>", "xss", "reflected_input"},             // WAF will block this
 			{q(base, "/greet", "name", "\"><img src=x onerror=alert(1)>"), "\"><img src=x onerror=alert(1)>", "xss", "reflected_input"}, // adapted vector
-			{q(base, "/out", "next", "http://evil.test/"), "", "open_redirect", "redirect:"},
+			{q(base, "/out", "next", "http://evil.test/"), "http://evil.test/", "open_redirect", "external_redirect"},
 		},
 	}
 }
