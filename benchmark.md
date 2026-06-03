@@ -71,6 +71,15 @@ cite its competitor leaderboard — the loader rejects one that doesn't (§14.2.
 > the decoys too). Current: **100% recall, 0 decoys flagged / 0 invented across 7
 > seeds** (`go test ./internal/webrange/`). Serve a range for a live-LLM run:
 > `webrange --seed 7 --addr 127.0.0.1:8099`.
+>
+> **LLM red-team eval (`internal/llmredteam`).** Same shape for Service §2: a
+> procedurally generated **population of target LLMs** — vulnerable (leaks under one
+> jailbreak technique) + hardened **decoys** (refuse everything). A blind attacker
+> runs the technique battery against all; a breach is recorded only when the
+> deterministic verifier sees a planted canary/sentinel leak or a forbidden tool
+> fire. `ScorePopulation` measures recall (vulnerable cracked) + false-breaches on
+> hardened (must be 0). Current: **100% recall (61/61), 0 false breaches across 7
+> seeds** (`go test ./internal/llmredteam/` or `tsengine llm-redteam --bench`).
 
 ---
 
