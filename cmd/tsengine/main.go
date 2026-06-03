@@ -49,6 +49,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/replay"
+	"github.com/ClatTribe/tsengine/internal/report"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
 	"github.com/ClatTribe/tsengine/internal/tool"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"
@@ -169,6 +170,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine llm-redteam: %v\n", err)
 			os.Exit(1)
 		}
+	case "report":
+		if err := runReport(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine report: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -190,6 +196,7 @@ Usage:
                   [--export-evidence <file.json>] [--sign-key <path>] [--signer <id>]
   tsengine web-verify [--pubkey <hex>] <evidence.json>
   tsengine llm-redteam --bench [--seed N] [--n N] [--hardened-frac F]   # emulated LLM red-team population
+  tsengine report --in <vulnerabilities.json|evidence.json> [--format md|html] [--out <file>] [--org <name>]
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -753,6 +760,77 @@ func runLLMRedteam(argv []string) error {
 		fmt.Printf("  %-9s %-22s %s  (%d breach, %d prompts)\n", spec.ID, status, mark, len(rep.Breaches), rep.Turns)
 	}
 	return nil
+}
+
+// runReport renders a branded VAPT report (Markdown or self-contained HTML) from
+// an engine output — an L1 dashboard vulnerabilities.json or a web-agent signed
+// evidence bundle (auto-detected). The sellable deliverable (roadmap §4 / §7-#1).
+func runReport(argv []string) error {
+	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+	in := fs.String("in", "", "input JSON: a vulnerabilities.json scan OR a web-agent evidence bundle (REQUIRED)")
+	format := fs.String("format", "md", "output format: md | html")
+	out := fs.String("out", "", "output file (default: stdout)")
+	org := fs.String("org", "", "client/org name printed on the report")
+	title := fs.String("title", "", "override the report title")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *in == "" {
+		return fmt.Errorf("--in is required")
+	}
+	data, err := os.ReadFile(*in) //nolint:gosec // operator-provided path
+	if err != nil {
+		return fmt.Errorf("read input: %w", err)
+	}
+
+	rep, err := buildReport(data)
+	if err != nil {
+		return err
+	}
+	if *org != "" {
+		rep.Org = *org
+	}
+	if *title != "" {
+		rep.Title = *title
+	}
+
+	var rendered string
+	switch *format {
+	case "md", "markdown":
+		rendered = report.Markdown(rep)
+	case "html":
+		rendered = report.HTML(rep)
+	default:
+		return fmt.Errorf("unknown --format %q (want md or html)", *format)
+	}
+
+	if *out == "" {
+		fmt.Print(rendered)
+		return nil
+	}
+	if err := os.WriteFile(*out, []byte(rendered), 0o600); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "[report] %d finding(s) → %s (%s)\n", len(rep.Findings), *out, *format)
+	return nil
+}
+
+// buildReport auto-detects the input kind (scan vs web-evidence bundle) and adapts.
+func buildReport(data []byte) (*report.Report, error) {
+	now := time.Now().UTC()
+	var scan types.Scan
+	if err := json.Unmarshal(data, &scan); err == nil && scan.ScanID != "" {
+		return report.FromScan(scan, now), nil
+	}
+	var bundle webagent.EvidenceBundle
+	if err := json.Unmarshal(data, &bundle); err == nil && bundle.Target != "" && len(bundle.Findings) >= 0 && bundle.Attestation != nil {
+		return report.FromWebEvidence(&bundle, now), nil
+	}
+	// last resort: a scan without a scan_id (e.g. hand-authored) still has an asset
+	if scan.Asset.Target != "" {
+		return report.FromScan(scan, now), nil
+	}
+	return nil, fmt.Errorf("could not recognize input as a vulnerabilities.json scan or a web-agent evidence bundle")
 }
 
 // --- pubkey ------------------------------------------------------
