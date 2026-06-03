@@ -33,7 +33,7 @@ type Finding struct {
 var requiredIndicator = map[string]string{
 	"sqli": "sql_error", "sql_injection": "sql_error", "blind_sqli": "slow_response",
 	"xss": "reflected_input", "reflected_xss": "reflected_input",
-	"open_redirect": "redirect:", "redirect": "redirect:",
+	"open_redirect": "external_redirect", "redirect": "external_redirect",
 	"path_traversal": "file_disclosure", "lfi": "file_disclosure", "file_disclosure": "file_disclosure",
 	"command_injection": "cmd_output", "cmdi": "cmd_output", "rce": "cmd_output",
 }

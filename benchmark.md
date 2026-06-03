@@ -62,6 +62,15 @@ cite its competitor leaderboard — the loader rejects one that doesn't (§14.2.
 > measure *completion_rate* (did the agent chain + capture the flag), a
 > different metric on the ADR-gated autonomous-exploiter track (arch.md).
 > `bkimminich/juice-shop` + `webgoat/webgoat` are already local for that track.
+>
+> **Web agent eval (`internal/webrange`).** A self-contained, procedurally
+> generated vulnerable app + **decoys** (safe siblings of each class) with a
+> ground-truth manifest. A blind `Prober` sweeps every route; `ScoreReport`
+> measures **recall** (real vulns found) and the **anti-circularity** metric —
+> decoys-flagged + invented (must be 0, since a circular detector would "confirm"
+> the decoys too). Current: **100% recall, 0 decoys flagged / 0 invented across 7
+> seeds** (`go test ./internal/webrange/`). Serve a range for a live-LLM run:
+> `webrange --seed 7 --addr 127.0.0.1:8099`.
 
 ---
 

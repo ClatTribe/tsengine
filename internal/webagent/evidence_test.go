@@ -66,7 +66,7 @@ func newFullPlaybook(base string) *playbookBrain {
 			{q(base, "/product", "id", "'"), "'", "sqli", "sql_error"},
 			{q(base, "/greet", "name", "<script>alert(1)</script>"), "<script>alert(1)</script>", "xss", "reflected_input"},             // blocked
 			{q(base, "/greet", "name", "\"><img src=x onerror=alert(1)>"), "\"><img src=x onerror=alert(1)>", "xss", "reflected_input"}, // bypass
-			{q(base, "/out", "next", "http://evil.test/"), "", "open_redirect", "redirect:"},
+			{q(base, "/out", "next", "http://evil.test/"), "http://evil.test/", "open_redirect", "external_redirect"},
 			{q(base, "/download", "file", "../../../../etc/passwd"), "", "path_traversal", "file_disclosure"},
 			{q(base, "/ping", "host", "127.0.0.1;id"), "", "command_injection", "cmd_output"},
 		},
