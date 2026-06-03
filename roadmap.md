@@ -20,7 +20,8 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 - ✅ **Verified remediation** (`cloudengine.GenerateRemediations`) — SCP/IAM-Deny/SG artifacts, self-checked via `cloudiam.Authorize`; `--export` to disk.
 - ✅ **L1.5 enrichment** — FP filter, corroboration, confidence, threat-intel (KEV/EPSS), `compliance.map` (SOC2/PCI/HIPAA/CIS/NIST).
 - ✅ **Signed evidence/attestation** (ed25519 over snapshot+findings+evidence).
-- ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** procedural vulnerable-app + decoys for web (100% recall, 0 decoys flagged / 0 invented across 7 seeds — grounding proven non-circular).
+- ✅ **The LLM red-team agent** (`internal/llmredteam`) — multi-turn attacker + **deterministic verifier**; a jailbreak is recorded only when a planted canary/sentinel leaks or a forbidden tool fires (grounded, not asserted). 100% recall / 0 false breaches vs an emulated population of vulnerable + hardened targets.
+- ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** (web) + **`internal/llmredteam`** (LLM) procedural populations with decoys — grounding proven non-circular for all three agents (100% recall, 0 false positives across seeds).
 
 ---
 
@@ -56,20 +57,30 @@ exploit execution, CI-gate trigger, browser tool for DOM XSS.
 
 ---
 
-## 2. Service: Agentic / LLM Red Teaming (AI-Sec)  🔴
+## 2. Service: Agentic / LLM Red Teaming (AI-Sec)  🟡
 
-**Greenfield — zero current overlap.** This is the hottest 2026 wedge *and* the cheapest entry tier.
+**Core built (`internal/llmredteam`)** — the multi-turn attacker agent + deterministic verifier + emulated population. Remaining gaps are the live HTTP-target adapter and depth (RAG extraction, richer orchestration).
 
 | Capability | Status | Gap |
 |---|---|---|
-| `llm_endpoint` / `ai_agent` asset type | 🔴 | new asset type + handler |
-| **Indirect prompt-injection auditing** (untrusted-data → action) | 🔴 | poisoned-context corpus + a judge |
-| **Multi-turn jailbreak orchestration** (PyRIT-style) | 🔴 | adversarial-prompt agent (reuse the agent loop; prompts are the "payloads") |
-| **RAG / vector-DB / system-prompt leakage** | 🔴 | extraction probes + a deterministic leak-detector |
-| **Agent goal-hijack / tool-misuse** | 🔴 | tool-abuse scenarios + grader |
-| **Our own** agent-injection resilience (we read untrusted pages/logs) | 🔴 | same harness, pointed inward — closes a real self-risk |
+| Attacker agent + deterministic verifier (grounded breaches) | ✅ | `internal/llmredteam`: `record_breach` rejected unless the verifier confirmed it on a real turn |
+| **Multi-turn jailbreak orchestration** | ✅ | conversation is multi-turn; technique battery (direct/ignore/DAN/encoding/injection/tool-abuse) via the `Prober`, or a real LLM brain |
+| **System-prompt extraction + secret leak** | ✅ | `secret_leak` (planted canary) + `system_prompt_leak` (sentinel) breach classes |
+| **Agent goal-hijack / tool-misuse** | ✅ | `forbidden_tool` breach — denylisted tool fired |
+| **PII disclosure** | ✅ | `pii_leak` breach (planted PII pattern) |
+| **Indirect prompt-injection auditing** (untrusted-data → action) | 🟡 | injection technique + the inward-pointed defense exist; a poisoned-RAG corpus is the depth gap |
+| Emulated eval (vulnerable + hardened decoys, recall vs answer key) | ✅ | `Generate`/`ScorePopulation`: 100% recall, 0 false breaches across 7 seeds; `tsengine llm-redteam --bench` |
+| `llm_endpoint` asset type + **live HTTP target adapter** | 🔴 | OpenAI/Anthropic/custom chat-endpoint adapter; wire into the L1 dashboard |
+| **RAG / vector-DB leakage** | 🔴 | extraction probes + leak-detector over a retrieval corpus |
+| **Our own** agent-injection resilience (we read untrusted pages/logs) | 🟡 | the same harness points inward; web/llm agents already ride on grounded indicators not model-read text |
 
-**Build:** an `llmredteam` module — a multi-turn attacker agent vs the client's LLM, graded by a **deterministic verifier** (did PII/secret/system-prompt leak; did a forbidden tool fire). Same grounding principle: a "successful jailbreak" must be provable, not asserted.
+**Built:** `internal/llmredteam` — `Target`/`Engagement`, the deterministic verifier
+(`detectBreaches`), the attacker loop + 3-tool catalog (`send_prompt`,
+`record_breach`, `finish`), the `Prober` technique battery, the emulated population
++ scorer, `tsengine llm-redteam --bench`. Design: `docs/design/llm-redteam.md`.
+
+**Next:** live HTTP target adapter, RAG extraction probes, signed evidence bundle
+(reuse `webagent.EvidenceBundle`), real-model attacker benched vs the population.
 
 ---
 
@@ -129,8 +140,8 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 | Read-only enforcement for cloud (Guard + scoped STS) | ✅ | `cloudsafety` |
 | **Runtime guardrails for active web/api testing** (rate-limit, scope, do-no-harm) | 🔴 | needed before autonomous testing at scale |
 | **Authorization / consent / RoE capture** (legal) | 🔴 | required to test client assets |
-| **Agent-injection resilience** (prompt injection from scanned content) | 🔴 | the AgentLAB axis; also Service 2 pointed inward |
-| Eval/regression harness on real engagements | 🟡 | cloud bench ladder + **web agent bench** (`internal/webrange`: procedural vuln-app + decoys, recall/precision vs answer key); LLM red-team harness still 🔴 |
+| **Agent-injection resilience** (prompt injection from scanned content) | 🟡 | web + LLM agents ride on grounded indicators, not model-read attacker text (proven: a lying reply can't fabricate a finding); the `llmredteam` harness points inward to measure it. RAG/document-injection depth still 🔴 |
+| Eval/regression harness on real engagements | 🟡 | cloud bench ladder + **web agent bench** (`internal/webrange`) + **LLM red-team bench** (`internal/llmredteam`) — procedural populations with decoys, recall/precision vs answer key, all three agents |
 | Chain of custody / audit trail | 🟡 | attestation exists; extend to per-action log |
 | Live-AWS validation rung (CloudGoat deploy→sync→confirm) | 🟡 | `RunTier1Live` stub; needs AWS account |
 
@@ -140,9 +151,9 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 
 1. **Report generator + findings DB + lifecycle** — turns the engine's output into the *sellable artifact* and the retainer's backbone. (Platform §4)
 2. **AI pentester for web/API** — extend the proven cloud agent pattern + sandboxed exploit-confirmation. → **Tier 2 "Attack"** ($5–12k/scan). (Service §1)
-3. **LLM Red-Team module** — cheapest, hottest wedge; also fixes our own agent-resilience gap. → **Tier 1 "Guard"** ($990–1990/mo). (Service §2, §6)
+3. ✅ **LLM Red-Team module** (`internal/llmredteam`) — core built (attacker + verifier + emulated bench); remaining: live HTTP target adapter + RAG depth. → **Tier 1 "Guard"** ($990–1990/mo). (Service §2, §6)
 4. **Continuous loop + CI trigger + multi-tenant + PR/ChatOps delivery** — converts "engine" into "retainer SaaS." → **Tier 3 "Scale"** ($50k+/yr). (Platform §4, Service §3)
 5. **Compliance connectors + continuous control monitoring** — the SOC2 product's center of gravity (only after the above, unless compliance is the lead GTM). (§5)
 6. **Live-AWS / safety hardening** — guardrails + injection resilience before autonomous testing at customer scale. (§6)
 
-> **Blunt summary:** the part that's genuinely hard — *grounded autonomous reasoning that separates real from noise and verifies its own fixes* — is built and proven. What remains is mostly **breadth** (two new agent flavors: web/api + LLM red-team) and **product surface** (continuous, multi-tenant, delivery, reporting, compliance connectors) on top of a core that's hard to copy.
+> **Blunt summary:** the part that's genuinely hard — *grounded autonomous reasoning that separates real from noise and verifies its own claims* — is built and proven across **all three agent flavors** (cloud, web/api, LLM red-team), each with an anti-circularity bench. What remains is mostly **product surface** (continuous, multi-tenant, delivery, reporting, compliance connectors) and depth (live LLM-target adapter, RAG probes, browser/business-logic) on top of a core that's hard to copy.

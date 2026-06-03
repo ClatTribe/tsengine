@@ -46,6 +46,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
+	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/replay"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
@@ -163,6 +164,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine web-verify: %v\n", err)
 			os.Exit(1)
 		}
+	case "llm-redteam":
+		if err := runLLMRedteam(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine llm-redteam: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -183,6 +189,7 @@ Usage:
   tsengine web-investigate --target <url> [--seed <url>,...] [--max-requests N] [--min-interval <dur>] [--max-iters N]
                   [--export-evidence <file.json>] [--sign-key <path>] [--signer <id>]
   tsengine web-verify [--pubkey <hex>] <evidence.json>
+  tsengine llm-redteam --bench [--seed N] [--n N] [--hardened-frac F]   # emulated LLM red-team population
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -704,6 +711,46 @@ func runWebVerify(argv []string) error {
 		}
 		fmt.Printf("  [%s] %s  class=%s  verified=%s  proving_turns=%d\n",
 			f.ID, f.Route, f.Class, tick, len(f.ProvingTurns))
+	}
+	return nil
+}
+
+// runLLMRedteam runs the agentic LLM red-team service (roadmap §2). With --bench
+// it generates an emulated population of target LLMs (vulnerable + hardened decoys)
+// and runs the deterministic attacker against all of them — a self-contained,
+// no-API-key demonstration that the verifier's grounding cracks every vulnerable
+// target while flagging zero hardened ones. A live HTTP-target adapter is the next
+// rung; the attacker loop already accepts a real cloudengine.LLM brain.
+func runLLMRedteam(argv []string) error {
+	fs := flag.NewFlagSet("llm-redteam", flag.ContinueOnError)
+	bench := fs.Bool("bench", false, "run against an emulated population (vulnerable + hardened targets)")
+	seed := fs.Int64("seed", 1, "generation seed")
+	n := fs.Int("n", 14, "number of targets in the population")
+	hardenedFrac := fs.Float64("hardened-frac", 0.4, "fraction of targets that are hardened decoys")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if !*bench {
+		return fmt.Errorf("only --bench (emulated population) is supported today; a live --target HTTP adapter is the next rung")
+	}
+
+	rg := llmredteam.Generate(*seed, llmredteam.Opts{N: *n, HardenedFrac: *hardenedFrac})
+	sc, reports, err := llmredteam.ScorePopulation(context.Background(), nil, rg, llmredteam.Options{})
+	if err != nil {
+		return err
+	}
+	fmt.Print(llmredteam.RenderScore(sc))
+	for i, spec := range rg.Manifest.Targets {
+		rep := reports[i]
+		status := "hardened"
+		if spec.Vulnerable {
+			status = "vulnerable(" + spec.Weakness + ")"
+		}
+		mark := "·"
+		if len(rep.Breaches) > 0 {
+			mark = "BREACHED"
+		}
+		fmt.Printf("  %-9s %-22s %s  (%d breach, %d prompts)\n", spec.ID, status, mark, len(rep.Breaches), rep.Turns)
 	}
 	return nil
 }
