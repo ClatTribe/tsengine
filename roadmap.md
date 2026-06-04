@@ -20,7 +20,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 > 3. ✅ **SARIF / Snyk / GHAS importers** — `internal/importers` + `tsengine import`: a customer's existing scanner output flows through the grounding, reachability, and gate. §3.
 > 4. **Live HTTP target adapter + RAG probes** — finishes the LLM red-team service. §2.
 > 5. **Browser/DOM + business-logic (BOLA/BFLA)** — web agent depth. §1.
-> 6. **Cross-asset correlation** — chain a web/repo finding to a cloud identity + network path (the Prioritization graph, L3). §3/§4.
+> 6. ✅ **Cross-asset correlation** — `internal/correlate` + `tsengine correlate`: stitch findings across assets into one attack chain to a crown jewel (moves the Prioritization pillar 🟢🟡~7 → 🟢~8). §3/§4.
 > 7. **Continuous scheduler + delivery connectors (PR/Jira/Slack)** — converts engine → retainer SaaS. §4.
 > 8. **Multi-tenant store + onboarding + billing + compliance workflow** — the SaaS/Vanta surface; an *infra* project, not in-tree code. §4/§5.
 >
@@ -41,6 +41,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 - ✅ **SCA / code reachability** (`internal/reachability`) — real call graph from source (stdlib, no deps); answers "does our app actually *call* the vulnerable dependency function, from an entrypoint?" with a **cited call path**. Splits SCA noise into reachable / dead-code / unused. `tsengine reachability`. (Go-first; closes the Validation-pillar hole for dependency findings.)
 - ✅ **CI/CD security gate** (`internal/gate`) — `tsengine gate`: policy over scan / web-exploit / SCA-reachability findings → pass/fail exit code. Gates on **proof** (verified exploit, reachable CVE) not raw CVSS; an unreachable critical dep CVE does **not** block. Baseline (fail on new only) + waivers; GitHub-annotation output; reusable composite Action + `docs/CI.md`. (Opens the Shift-Left pillar.)
 - ✅ **Third-party scanner importers** (`internal/importers`) — `tsengine import`: SARIF 2.1.0 (CodeQL/semgrep/code-scanning), Snyk, GitHub Dependabot → `types.Scan` + `reachability.SCAFinding`. A customer's existing Snyk/CodeQL output flows through the grounding, reachability triage, gate, report, and findings DB.
+- ✅ **Cross-asset correlation** (`internal/correlate`) — `tsengine correlate`: stitches findings ACROSS the 7 asset types into one attack chain (external entry → crown jewel) via a concrete shared identifier (leaked AWS key, ARN, host). The Prioritization "path to a crown jewel", applied across asset boundaries; grounded (no shared id → no chain).
 - ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** (web) + **`internal/llmredteam`** (LLM) procedural populations with decoys — grounding proven non-circular for all three agents (100% recall, 0 false positives across seeds).
 
 ---
@@ -111,6 +112,7 @@ exploit execution, CI-gate trigger, browser tool for DOM XSS.
 | Capability | Status | Gap |
 |---|---|---|
 | **Reachability prioritization** (real vs config-bad noise) | ✅ cloud | this is the core competency |
+| **Cross-asset correlation** (a finding HERE → a crown jewel THERE) | ✅ | `internal/correlate` + `tsengine correlate` — bridges findings across assets by a concrete shared identifier (leaked AWS key, ARN, host) into one chain (web SQLi leaks key → cloud IAM privesc to admin); grounded (no shared id → no chain). Richer linkers + live attack-path-graph feed are incremental |
 | **Verified remediation** (the fix is proven to cut the path) | ✅ cloud | — |
 | **Code/SCA reachability** ("does our app *call* the vulnerable function?") | ✅ Go | `internal/reachability` + `tsengine reachability` — builds a real call graph from source (stdlib, no deps), reports whether an app entrypoint reaches the vulnerable symbol, **cites the call path** (grounded); SCA triage splits findings into reachable / dead-code / unused. Go-first; other languages = new extractor (solver is language-agnostic) |
 | **Auto-generated Pull Requests** | 🔴 | GitHub App: open a PR with the verified fix |
@@ -184,7 +186,7 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 1. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
 2. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
 3. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
-4. **Cross-asset correlation** — chain a web/repo finding to a cloud identity + network path (the Prioritization graph, L3). (§3/§4)
+4. **Richer correlation linkers** — container image → cloud workload, more credential/identity kinds, feed the live cloud attack-path graph into the chain. (§3/§4)
 5. **VCS-webhook trigger** — fire a scoped staging scan on push, feed the gate (the platform half of CI/CD). (§4)
 
 **Then (needs real infrastructure, not in-tree Go):**
@@ -208,7 +210,7 @@ Validation + Prioritization** — the hard, defensible end — and lighter on Sh
 | **1. Shift Left** | 🟢🟡 ~7/10 | repo SAST (semgrep), secrets (gitleaks/trufflehog), SCA (trivy/grype/osv), container (trivy/grype/dockle/hadolint), CodeQL/mobsfscan escalation; **CI/CD pass-fail gate** (`tsengine gate` + composite Action) gating on proof + reachability, with baseline + waivers | VCS-webhook-triggered *staging run* (the gate consumes findings; the trigger is platform §4); IDE/pre-commit hook |
 | **2. Continuous Scanning** | 🟡 ~6/10 | 7 asset types, recon→fan-out, L1.5 enrichment, deployable benchmarked service, per-tool recall held to OSS baseline | no **scheduler** — cron / event / CI-triggered re-scan loop; no L3 portfolio re-scan (§4) |
 | **3. Validation** *(is it running, reachable, exploitable?)* | 🟢 ~9/10 | the core thesis — web agent **proves exploitability** (payload→indicator→re-fire verify, signed PoC); cloud **computes reachability** (`cloudiam.Authorize` ∧ attack-path graph); **SCA/code reachability** (`internal/reachability` — does the app call the vulnerable dep function, with a cited path); `verification_status` ladder; anti-circularity benches prove validation isn't itself a hallucination | SCA reachability is Go-first (other langs = new extractors); the runtime side is complete |
-| **4. Prioritization** *(context → path to crown jewel)* | 🟢🟡 ~7/10 | cloud agent's job **is** "path to a crown jewel" (identity ∧ network ∧ resource-policy reachability, blast radius); threat-intel beyond CVSS (KEV/EPSS); surface_priority + exploitability hooks; compliance mapping | the asset/identity/network **graph** is cloud-deep but thinner for web/repo; no **cross-asset correlation** (web finding + cloud identity + network path as one chain) — the L3 portfolio layer (§3, §4) |
+| **4. Prioritization** *(context → path to crown jewel)* | 🟢 ~8/10 | cloud agent's job **is** "path to a crown jewel" (identity ∧ network ∧ resource-policy reachability, blast radius); **cross-asset correlation** (`internal/correlate` — a web/repo finding bridges via a shared identifier to a cloud crown jewel, e.g. web SQLi leaks an AWS key → cloud IAM privesc to admin); threat-intel beyond CVSS (KEV/EPSS); surface_priority + exploitability hooks | richer bridge linkers (more identifier kinds, container→workload), and feeding the live cloud attack-path graph into the chain (today correlation links findings; deepening per-asset reachability is incremental) |
 
 **Read:** tsengine is a **Validation-and-Prioritization engine**, not a shift-left or
 continuous-scanning product — by design, since those pillars are commoditizing and
