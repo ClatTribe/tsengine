@@ -3,7 +3,13 @@
 # dependencies — Go tooling handles its own caching.
 
 SANDBOX_IMAGE ?= tsengine/sandbox:0.1.0
+HOST_IMAGE    ?= tsengine/host:dev
 NUCLEI_VERSION ?= 3.3.7
+
+# Version stamped into the binary (overrides main.Version). Defaults to the git
+# describe so local/dev builds self-identify; CI release passes the tag.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.Version=$(VERSION)
 
 GOFLAGS ?=
 GOTESTFLAGS ?= -race -count=1
@@ -28,9 +34,20 @@ lint: ## golangci-lint (requires golangci-lint installed)
 	golangci-lint run
 
 .PHONY: cli
-cli: ## build the host CLI binary into ./bin/
+cli: ## build the host CLI binary into ./bin/ (version-stamped)
 	mkdir -p bin
-	go build -o ./bin/tsengine ./cmd/tsengine
+	go build -trimpath -ldflags "$(LDFLAGS)" -o ./bin/tsengine ./cmd/tsengine
+
+.PHONY: serve
+serve: cli ## run the long-running service locally (set TSENGINE_API_TOKEN)
+	./bin/tsengine serve
+
+.PHONY: host-image
+host-image: ## build the host service docker image (tsengine serve)
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		-t $(HOST_IMAGE) \
+		-f docker/host/Dockerfile .
 
 .PHONY: sandbox-image
 sandbox-image: ## build the sandbox docker image

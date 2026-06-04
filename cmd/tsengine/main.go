@@ -52,6 +52,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/replay"
 	"github.com/ClatTribe/tsengine/internal/report"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
+	"github.com/ClatTribe/tsengine/internal/server"
 	"github.com/ClatTribe/tsengine/internal/tool"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"
 	_ "github.com/ClatTribe/tsengine/internal/tool/cloudfox"
@@ -181,6 +182,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine findings: %v\n", err)
 			os.Exit(1)
 		}
+	case "serve":
+		if err := runServe(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine serve: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -206,6 +212,8 @@ Usage:
   tsengine findings ingest --db <file> --in <vulnerabilities.json|evidence.json>
   tsengine findings list   --db <file> [--status <s>] [--severity <s>] [--open] [--overdue]
   tsengine findings set    --db <file> --id <F-...> [--status <s>] [--owner <who>] [--note <text>]
+  tsengine serve  [--addr :8080] [--runs <dir>] [--image <ref>]   # long-running service (tool-replay API + health)
+                  # auth token from --token or TSENGINE_API_TOKEN (required)
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -991,6 +999,38 @@ func age(d time.Duration) string {
 		return "today"
 	}
 	return fmt.Sprintf("%dd", days)
+}
+
+// runServe starts the long-running tsengine HTTP service (CLAUDE.md §9): the
+// tool-replay API behind bearer auth + liveness/readiness/version probes. This is
+// the deployable surface webappsec talks to. It blocks until SIGINT/SIGTERM, then
+// drains gracefully.
+func runServe(argv []string) error {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	addr := fs.String("addr", envOr("TSENGINE_ADDR", ":8080"), "listen address")
+	runsDir := fs.String("runs", envOr("TSENGINE_RUNS_DIR", "runs"), "directory holding scan outputs (for /replay)")
+	token := fs.String("token", os.Getenv("TSENGINE_API_TOKEN"), "bearer token for protected endpoints (or TSENGINE_API_TOKEN)")
+	image := fs.String("image", os.Getenv("TSENGINE_SANDBOX_IMAGE"), "sandbox image ref/digest for replay dispatch")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	return server.Run(ctx, server.Config{
+		Addr:    *addr,
+		Token:   *token,
+		RunsDir: *runsDir,
+		Version: Version,
+	}, &replay.LiveSpawner{Image: *image})
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 // --- pubkey ------------------------------------------------------
