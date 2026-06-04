@@ -69,9 +69,9 @@ Full operations guide — env vars, the docker-socket model, scaling, security h
 
 ## Commands
 
-`scan` · `replay` · `serve` · `report` · `findings` · `reachability` · `gate` · `web-investigate` / `web-verify` · `cloud-investigate` / `cloud-assess` · `llm-redteam` · `pubkey` / `verify` · `corpus` · `version`. Run `tsengine` with no args for usage.
+`scan` · `replay` · `serve` · `report` · `findings` · `import` · `reachability` · `gate` · `web-investigate` / `web-verify` · `cloud-investigate` / `cloud-assess` · `llm-redteam` · `pubkey` / `verify` · `corpus` · `version`. Run `tsengine` with no args for usage.
 
-**Shift-left / CI:** `tsengine reachability` answers "does our code actually call the vulnerable dependency function?"; `tsengine gate` turns scan / web-exploit / SCA-reachability findings into a **pass/fail** for your pipeline (gates on *proof*, not raw CVSS). See **[docs/CI.md](docs/CI.md)** + the reusable `.github/actions/tsengine-gate` Action.
+**Shift-left / CI:** `tsengine import` pulls in another scanner's output (SARIF / Snyk / GitHub Dependabot); `tsengine reachability` answers "does our code actually call the vulnerable dependency function?"; `tsengine gate` turns scan / web-exploit / SCA-reachability findings into a **pass/fail** for your pipeline (gates on *proof*, not raw CVSS). So your existing Snyk/CodeQL results get the grounding + gate treatment. See **[docs/CI.md](docs/CI.md)** + the reusable `.github/actions/tsengine-gate` Action.
 
 ## Develop
 
