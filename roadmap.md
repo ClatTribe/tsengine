@@ -15,15 +15,16 @@
 Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here; convert to PRs as picked up.
 
 > **What's left at a glance** (prioritized, buildable in-tree first):
-> 1. **SCA / code reachability triage** — the one hole in Validation (does our app *call* the vulnerable dep function?). §3.
-> 2. **CI/CD gate trigger** — opens the Shift-Left pillar (offensive test on push → pass/fail). §1.
+> 1. ✅ **SCA / code reachability triage** — closed the one Validation hole (`internal/reachability`: does our app *call* the vulnerable dep function, from an entrypoint, with a cited path?). Go-first; extend to other languages via new extractors. §3.
+> 2. **CI/CD gate trigger** — opens the Shift-Left pillar (offensive/reachability test on push → pass/fail). §1.
 > 3. **SARIF / Snyk / GHAS importers** — triage other scanners' alerts through the grounding engine. §3.
 > 4. **Live HTTP target adapter + RAG probes** — finishes the LLM red-team service. §2.
 > 5. **Browser/DOM + business-logic (BOLA/BFLA)** — web agent depth. §1.
-> 6. **Continuous scheduler + delivery connectors (PR/Jira/Slack)** — converts engine → retainer SaaS. §4.
-> 7. **Multi-tenant store + onboarding + billing + compliance workflow** — the SaaS/Vanta surface; an *infra* project, not in-tree code. §4/§5.
+> 6. **Cross-asset correlation** — chain a web/repo finding to a cloud identity + network path (the Prioritization graph, L3). §3/§4.
+> 7. **Continuous scheduler + delivery connectors (PR/Jira/Slack)** — converts engine → retainer SaaS. §4.
+> 8. **Multi-tenant store + onboarding + billing + compliance workflow** — the SaaS/Vanta surface; an *infra* project, not in-tree code. §4/§5.
 >
-> Items 1–5 are Go you can write + test in this repo today; 6–7 need real infrastructure (DB, OAuth apps, a cluster).
+> Items 2–6 are Go you can write + test in this repo today; 7–8 need real infrastructure (DB, OAuth apps, a cluster).
 
 ---
 
@@ -37,6 +38,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 - ✅ **Signed evidence/attestation** (ed25519 over snapshot+findings+evidence).
 - ✅ **Deployable service** — `tsengine serve` (tool-replay API behind bearer auth + `/healthz` `/readyz` `/version` probes, request logging, graceful SIGTERM drain), host container image (`docker/host`), version-stamped builds, tag-triggered release pipeline (cross-platform binaries + GHCR image), ops guide (`docs/DEPLOYMENT.md`).
 - ✅ **The LLM red-team agent** (`internal/llmredteam`) — multi-turn attacker + **deterministic verifier**; a jailbreak is recorded only when a planted canary/sentinel leaks or a forbidden tool fires (grounded, not asserted). 100% recall / 0 false breaches vs an emulated population of vulnerable + hardened targets.
+- ✅ **SCA / code reachability** (`internal/reachability`) — real call graph from source (stdlib, no deps); answers "does our app actually *call* the vulnerable dependency function, from an entrypoint?" with a **cited call path**. Splits SCA noise into reachable / dead-code / unused. `tsengine reachability`. (Go-first; closes the Validation-pillar hole for dependency findings.)
 - ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** (web) + **`internal/llmredteam`** (LLM) procedural populations with decoys — grounding proven non-circular for all three agents (100% recall, 0 false positives across seeds).
 
 ---
@@ -108,7 +110,7 @@ exploit execution, CI-gate trigger, browser tool for DOM XSS.
 |---|---|---|
 | **Reachability prioritization** (real vs config-bad noise) | ✅ cloud | this is the core competency |
 | **Verified remediation** (the fix is proven to cut the path) | ✅ cloud | — |
-| **Code/SCA reachability** ("does our app *call* the vulnerable function?") | 🔴 | call-graph/taint reachability over repo findings (CodeQL/semgrep escalation exists; no agentic triage over it) |
+| **Code/SCA reachability** ("does our app *call* the vulnerable function?") | ✅ Go | `internal/reachability` + `tsengine reachability` — builds a real call graph from source (stdlib, no deps), reports whether an app entrypoint reaches the vulnerable symbol, **cites the call path** (grounded); SCA triage splits findings into reachable / dead-code / unused. Go-first; other languages = new extractor (solver is language-agnostic) |
 | **Auto-generated Pull Requests** | 🔴 | GitHub App: open a PR with the verified fix |
 | **ChatOps verification** ("why is this a risk?" in Slack) | 🔴 | Slack/Teams bot over the finding + attack-path |
 | Ingest other scanners' alerts (Snyk/GHAS/cloud) to triage | 🟡 | prowler ingested; add Snyk/GHAS/SARIF importers |
@@ -171,13 +173,14 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 - ✅ **LLM Red-Team module** (`internal/llmredteam`) — attacker + verifier + emulated bench. → Tier 1 "Guard".
 - ✅ **Report generator + findings DB + lifecycle** (`internal/report`, `internal/findingstore`) — the sellable artifact + the retainer backbone.
 - ✅ **Deployable service + packaging + load/auth benchmark** (`internal/server`, `internal/loadbench`, `docker/host`, release pipeline).
+- ✅ **SCA / code-reachability triage** (`internal/reachability`) — closes the Validation hole for dependency findings (call path cited; reachable/dead-code/unused).
 
 **Next (buildable in-tree, highest leverage first):**
-1. **SCA / code-reachability triage** — closes the one Validation hole (does our app call the vulnerable dependency function?). Agentic triage over CodeQL/semgrep escalation. (§3)
-2. **CI/CD gate trigger** — VCS webhook → scoped staging run → pass/fail. Opens the Shift-Left pillar. (§1)
-3. **SARIF / Snyk / GHAS importers** — triage external scanner alerts through the grounding engine. (§3)
-4. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
-5. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
+1. **CI/CD gate trigger** — VCS webhook → scoped staging run + reachability gate → pass/fail. Opens the Shift-Left pillar. (§1)
+2. **SARIF / Snyk / GHAS importers** — triage external scanner alerts through the grounding + reachability engine. (§3)
+3. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
+4. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
+5. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
 
 **Then (needs real infrastructure, not in-tree Go):**
 6. **Continuous scheduler + delivery connectors** (cron/event trigger, auto-PR, Jira/Slack) — converts engine → retainer SaaS. → Tier 3 "Scale". (Platform §4, Service §3)
@@ -199,7 +202,7 @@ Validation + Prioritization** — the hard, defensible end — and lighter on Sh
 |---|---|---|---|
 | **1. Shift Left** | 🟡 ~5/10 | repo SAST (semgrep), secrets (gitleaks/trufflehog, corroborated), SCA (trivy/grype/osv), container (trivy/grype/dockle/hadolint), CodeQL/mobsfscan escalation | no shift-left **workflow** — CI/CD gate, VCS webhook, PR-block, IDE/pre-commit (§1, §7-next-2) |
 | **2. Continuous Scanning** | 🟡 ~6/10 | 7 asset types, recon→fan-out, L1.5 enrichment, deployable benchmarked service, per-tool recall held to OSS baseline | no **scheduler** — cron / event / CI-triggered re-scan loop; no L3 portfolio re-scan (§4) |
-| **3. Validation** *(is it running, reachable, exploitable?)* | 🟢 ~9/10 | the core thesis — web agent **proves exploitability** (payload→indicator→re-fire verify, signed PoC); cloud **computes reachability** (`cloudiam.Authorize` ∧ attack-path graph); `verification_status` ladder; anti-circularity benches prove validation isn't itself a hallucination | **code/SCA reachability** ("does our app *call* the vulnerable function?") — call-graph/taint triage over dependency findings (§3, §7-next-1) |
+| **3. Validation** *(is it running, reachable, exploitable?)* | 🟢 ~9/10 | the core thesis — web agent **proves exploitability** (payload→indicator→re-fire verify, signed PoC); cloud **computes reachability** (`cloudiam.Authorize` ∧ attack-path graph); **SCA/code reachability** (`internal/reachability` — does the app call the vulnerable dep function, with a cited path); `verification_status` ladder; anti-circularity benches prove validation isn't itself a hallucination | SCA reachability is Go-first (other langs = new extractors); the runtime side is complete |
 | **4. Prioritization** *(context → path to crown jewel)* | 🟢🟡 ~7/10 | cloud agent's job **is** "path to a crown jewel" (identity ∧ network ∧ resource-policy reachability, blast radius); threat-intel beyond CVSS (KEV/EPSS); surface_priority + exploitability hooks; compliance mapping | the asset/identity/network **graph** is cloud-deep but thinner for web/repo; no **cross-asset correlation** (web finding + cloud identity + network path as one chain) — the L3 portfolio layer (§3, §4) |
 
 **Read:** tsengine is a **Validation-and-Prioritization engine**, not a shift-left or

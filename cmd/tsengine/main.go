@@ -51,6 +51,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
+	"github.com/ClatTribe/tsengine/internal/reachability"
 	"github.com/ClatTribe/tsengine/internal/replay"
 	"github.com/ClatTribe/tsengine/internal/report"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
@@ -194,6 +195,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine serve-bench: %v\n", err)
 			os.Exit(1)
 		}
+	case "reachability":
+		if err := runReachability(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine reachability: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -223,6 +229,8 @@ Usage:
                   # auth token from --token or TSENGINE_API_TOKEN (required)
   tsengine serve-bench --target <url> --token <t> [--requests N] [--concurrency C] [--duration D]
                   # load + auth-correctness benchmark against a running service
+  tsengine reachability --repo <dir> (--package <import/path> [--symbol <Name>...] | --sca <findings.json>)
+                  # does this codebase actually CALL the vulnerable dependency function? (Go-first)
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -1076,6 +1084,83 @@ func runServeBench(argv []string) error {
 	if !res.Pass {
 		return fmt.Errorf("benchmark FAILED: %d auth violations, %d transport errors", res.AuthViolations, res.Errors)
 	}
+	return nil
+}
+
+// runReachability answers the SCA-triage question that separates noise from a real
+// finding: a scanner says a dependency has a vulnerable function — does THIS code
+// actually call it, from an application entrypoint? Closes the Validation hole for
+// dependency findings (roadmap §3). Go-first; verdict cites the call path (grounded).
+func runReachability(argv []string) error {
+	fs := flag.NewFlagSet("reachability", flag.ContinueOnError)
+	repo := fs.String("repo", ".", "path to the source repository to analyze")
+	pkg := fs.String("package", "", "vulnerable dependency import/module path (single-query mode)")
+	sca := fs.String("sca", "", "JSON file of SCA findings to triage (batch mode): [{id,cve,package,symbols,severity}]")
+	var symbols multiFlag
+	fs.Var(&symbols, "symbol", "vulnerable symbol (repeatable; empty = any symbol from the package)")
+	jsonOut := fs.Bool("json", false, "emit JSON")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *pkg == "" && *sca == "" {
+		return fmt.Errorf("provide --package <path> (single query) or --sca <findings.json> (batch)")
+	}
+
+	g, err := reachability.Extract(*repo)
+	if err != nil {
+		return fmt.Errorf("extract call graph: %w", err)
+	}
+
+	if *sca != "" {
+		data, rerr := os.ReadFile(*sca) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read sca findings: %w", rerr)
+		}
+		var findings []reachability.SCAFinding
+		if jerr := json.Unmarshal(data, &findings); jerr != nil {
+			return fmt.Errorf("parse sca findings: %w", jerr)
+		}
+		results := reachability.TriageSCA(g, findings)
+		if *jsonOut {
+			b, _ := json.MarshalIndent(results, "", "  ")
+			fmt.Println(string(b))
+			return nil
+		}
+		fmt.Print(reachability.Render(results))
+		// non-zero exit if any reachable (useful as a CI gate)
+		for _, r := range results {
+			if r.Priority == "reachable" {
+				os.Exit(3)
+			}
+		}
+		return nil
+	}
+
+	v := reachability.Analyze(g, *pkg, symbols)
+	if *jsonOut {
+		b, _ := json.MarshalIndent(v, "", "  ")
+		fmt.Println(string(b))
+		return nil
+	}
+	if v.Reachable {
+		fmt.Printf("REACHABLE: %s is called from an application entrypoint.\n  path: %s\n", *pkg, strings.Join(v.Path, " → "))
+		os.Exit(3)
+	}
+	switch {
+	case !v.Imported:
+		fmt.Printf("NOT REACHABLE: %s — the vulnerable symbol is never called in this codebase (present-but-unused).\n", *pkg)
+	default:
+		fmt.Printf("NOT REACHABLE: %s is called only from non-entrypoint (dead) code: %s\n", *pkg, strings.Join(v.DirectHitters, ", "))
+	}
+	return nil
+}
+
+// multiFlag collects a repeatable string flag.
+type multiFlag []string
+
+func (m *multiFlag) String() string { return strings.Join(*m, ",") }
+func (m *multiFlag) Set(s string) error {
+	*m = append(*m, s)
 	return nil
 }
 
