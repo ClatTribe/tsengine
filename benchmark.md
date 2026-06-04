@@ -72,6 +72,18 @@ cite its competitor leaderboard — the loader rejects one that doesn't (§14.2.
 > seeds** (`go test ./internal/webrange/`). Serve a range for a live-LLM run:
 > `webrange --seed 7 --addr 127.0.0.1:8099`.
 >
+> **Service load + correctness benchmark (`internal/loadbench`).** Benchmarks the
+> deployable surface (`tsengine serve`) — throughput + latency percentiles AND a
+> SECURITY invariant under concurrency: across thousands of racing requests every
+> unauthenticated `/replay` must be rejected and every authenticated one admitted,
+> with **0 violations** (a pure speed test would miss an auth-bypass race). Run it
+> against a live instance: `tsengine serve-bench --target <url> --token <t>` (exits
+> non-zero if the gate breaks — a pre-deploy gate). In-tree: `go test
+> ./internal/loadbench/` + `go test -bench . ./internal/loadbench/`. Reference
+> numbers on a laptop: ~90k req/s at concurrency 64, p99 ~2.7ms, **0 auth violations
+> across 8k probes**; hot-path micro-benchmarks `/healthz` ~416 ns/op, `/replay`
+> auth-reject ~1.2 µs/op.
+>
 > **LLM red-team eval (`internal/llmredteam`).** Same shape for Service §2: a
 > procedurally generated **population of target LLMs** — vulnerable (leaks under one
 > jailbreak technique) + hardened **decoys** (refuse everything). A blind attacker
