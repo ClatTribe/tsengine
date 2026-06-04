@@ -48,6 +48,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/findingstore"
+	"github.com/ClatTribe/tsengine/internal/gate"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
@@ -200,6 +201,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine reachability: %v\n", err)
 			os.Exit(1)
 		}
+	case "gate":
+		if err := runGate(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine gate: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -231,6 +237,8 @@ Usage:
                   # load + auth-correctness benchmark against a running service
   tsengine reachability --repo <dir> (--package <import/path> [--symbol <Name>...] | --sca <findings.json>)
                   # does this codebase actually CALL the vulnerable dependency function? (Go-first)
+  tsengine gate   [--in <scan|evidence.json>] [--sca <findings.json> --repo <dir>] [--fail-on <sev>]
+                  [--new-only --baseline <fps.json>] [--format text|json|github]   # CI/CD pass/fail gate
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -1161,6 +1169,127 @@ type multiFlag []string
 func (m *multiFlag) String() string { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(s string) error {
 	*m = append(*m, s)
+	return nil
+}
+
+// runGate is the CI/CD security gate (roadmap §1, Shift-Left): evaluate the
+// engine's findings (an L1 scan, a web-exploit evidence bundle, and/or SCA
+// reachability) against a policy and exit non-zero to block a merge. Gates on what
+// the engine PROVED (verified exploit, reachable dependency CVE), supports a
+// baseline (fail on NEW risk only) + waivers.
+func runGate(argv []string) error {
+	fs := flag.NewFlagSet("gate", flag.ContinueOnError)
+	in := fs.String("in", "", "findings input: vulnerabilities.json scan OR a web-agent evidence bundle")
+	scaPath := fs.String("sca", "", "SCA findings JSON to reachability-triage (needs --repo)")
+	repo := fs.String("repo", ".", "repo for --sca reachability")
+	policyPath := fs.String("policy", "", "policy JSON (gate.Policy); flags override its fields")
+	failOn := fs.String("fail-on", "high", "fail if any finding severity ≥ this (critical|high|medium|low; empty disables)")
+	failVerified := fs.Bool("fail-on-verified", true, "fail on any verified/proven-exploitable finding")
+	failReachable := fs.Bool("fail-on-reachable", true, "fail on any reachable dependency CVE")
+	maxNew := fs.Int("max-new", -1, "fail if NEW findings (vs baseline) exceed this; <0 disables")
+	newOnly := fs.Bool("new-only", false, "only gate on findings absent from the baseline")
+	baselinePath := fs.String("baseline", "", "baseline fingerprints JSON ([\"g-...\"]) — accepted prior findings")
+	saveBaseline := fs.String("save-baseline", "", "write the current findings' fingerprints to this file")
+	format := fs.String("format", "text", "output format: text | json | github")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *in == "" && *scaPath == "" {
+		return fmt.Errorf("provide --in <scan|evidence.json> and/or --sca <findings.json>")
+	}
+
+	var findings []gate.Finding
+	if *in != "" {
+		data, rerr := os.ReadFile(*in) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read --in: %w", rerr)
+		}
+		rep, berr := buildReport(data)
+		if berr != nil {
+			return berr
+		}
+		findings = append(findings, gate.FromReport(rep)...)
+	}
+	if *scaPath != "" {
+		g, gerr := reachability.Extract(*repo)
+		if gerr != nil {
+			return fmt.Errorf("reachability extract: %w", gerr)
+		}
+		data, rerr := os.ReadFile(*scaPath) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read --sca: %w", rerr)
+		}
+		var sca []reachability.SCAFinding
+		if jerr := json.Unmarshal(data, &sca); jerr != nil {
+			return fmt.Errorf("parse --sca: %w", jerr)
+		}
+		findings = append(findings, gate.FromReachability(reachability.TriageSCA(g, sca))...)
+	}
+
+	// policy: start from the JSON file (or defaults), then let explicitly-set flags win.
+	policy := gate.DefaultPolicy()
+	if *policyPath != "" {
+		data, rerr := os.ReadFile(*policyPath) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read --policy: %w", rerr)
+		}
+		if jerr := json.Unmarshal(data, &policy); jerr != nil {
+			return fmt.Errorf("parse --policy: %w", jerr)
+		}
+	}
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "fail-on":
+			policy.FailOnSeverity = *failOn
+		case "fail-on-verified":
+			policy.FailOnVerified = *failVerified
+		case "fail-on-reachable":
+			policy.FailOnReachableSCA = *failReachable
+		case "max-new":
+			policy.MaxNewFindings = *maxNew
+		case "new-only":
+			policy.NewOnly = *newOnly
+		}
+	})
+
+	var baseline map[string]bool
+	if *baselinePath != "" {
+		data, rerr := os.ReadFile(*baselinePath) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read --baseline: %w", rerr)
+		}
+		var fps []string
+		if jerr := json.Unmarshal(data, &fps); jerr != nil {
+			return fmt.Errorf("parse --baseline: %w", jerr)
+		}
+		baseline = map[string]bool{}
+		for _, fp := range fps {
+			baseline[fp] = true
+		}
+	}
+
+	res := gate.Evaluate(findings, policy, baseline, time.Now().UTC())
+
+	if *saveBaseline != "" {
+		b, _ := json.MarshalIndent(gate.Fingerprints(findings), "", "  ")
+		if werr := os.WriteFile(*saveBaseline, append(b, '\n'), 0o600); werr != nil {
+			return werr
+		}
+		fmt.Fprintf(os.Stderr, "[gate] baseline (%d fingerprints) → %s\n", len(findings), *saveBaseline)
+	}
+
+	switch *format {
+	case "json":
+		b, _ := json.MarshalIndent(res, "", "  ")
+		fmt.Println(string(b))
+	case "github":
+		fmt.Print(gate.RenderGitHub(res))
+	default:
+		fmt.Print(gate.Render(res))
+	}
+	if !res.Passed {
+		os.Exit(1)
+	}
 	return nil
 }
 
