@@ -24,6 +24,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -48,6 +49,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
+	"github.com/ClatTribe/tsengine/internal/loadbench"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/replay"
 	"github.com/ClatTribe/tsengine/internal/report"
@@ -187,6 +189,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine serve: %v\n", err)
 			os.Exit(1)
 		}
+	case "serve-bench":
+		if err := runServeBench(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine serve-bench: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -214,6 +221,8 @@ Usage:
   tsengine findings set    --db <file> --id <F-...> [--status <s>] [--owner <who>] [--note <text>]
   tsengine serve  [--addr :8080] [--runs <dir>] [--image <ref>]   # long-running service (tool-replay API + health)
                   # auth token from --token or TSENGINE_API_TOKEN (required)
+  tsengine serve-bench --target <url> --token <t> [--requests N] [--concurrency C] [--duration D]
+                  # load + auth-correctness benchmark against a running service
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -1031,6 +1040,43 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// runServeBench load-tests a RUNNING tsengine service: throughput + latency
+// percentiles AND the auth-correctness invariant under concurrency (every
+// unauthenticated /replay rejected, every authenticated one admitted — zero
+// violations). Exits non-zero if the invariant breaks or transport errors occur,
+// so it doubles as a pre-deploy gate.
+func runServeBench(argv []string) error {
+	fs := flag.NewFlagSet("serve-bench", flag.ContinueOnError)
+	target := fs.String("target", "http://127.0.0.1:8080", "base URL of a running tsengine service")
+	token := fs.String("token", os.Getenv("TSENGINE_API_TOKEN"), "the service's API token (or TSENGINE_API_TOKEN)")
+	requests := fs.Int("requests", 6000, "total requests (ignored if --duration > 0)")
+	concurrency := fs.Int("concurrency", 48, "parallel workers")
+	duration := fs.Duration("duration", 0, "run for this long instead of a fixed request count")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *token == "" {
+		return fmt.Errorf("--token (or TSENGINE_API_TOKEN) is required")
+	}
+
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: &http.Transport{MaxIdleConns: 256, MaxIdleConnsPerHost: 256, IdleConnTimeout: 30 * time.Second},
+	}
+	res, err := loadbench.Run(context.Background(), loadbench.Config{
+		BaseURL: *target, Token: *token, Requests: *requests, Duration: *duration,
+		Concurrency: *concurrency, Client: client,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Print(loadbench.Render(res))
+	if !res.Pass {
+		return fmt.Errorf("benchmark FAILED: %d auth violations, %d transport errors", res.AuthViolations, res.Errors)
+	}
+	return nil
 }
 
 // --- pubkey ------------------------------------------------------
