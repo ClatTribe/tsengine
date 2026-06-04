@@ -46,6 +46,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
+	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/replay"
@@ -175,6 +176,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine report: %v\n", err)
 			os.Exit(1)
 		}
+	case "findings":
+		if err := runFindings(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine findings: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -197,6 +203,9 @@ Usage:
   tsengine web-verify [--pubkey <hex>] <evidence.json>
   tsengine llm-redteam --bench [--seed N] [--n N] [--hardened-frac F]   # emulated LLM red-team population
   tsengine report --in <vulnerabilities.json|evidence.json> [--format md|html] [--out <file>] [--org <name>]
+  tsengine findings ingest --db <file> --in <vulnerabilities.json|evidence.json>
+  tsengine findings list   --db <file> [--status <s>] [--severity <s>] [--open] [--overdue]
+  tsengine findings set    --db <file> --id <F-...> [--status <s>] [--owner <who>] [--note <text>]
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -831,6 +840,157 @@ func buildReport(data []byte) (*report.Report, error) {
 		return report.FromScan(scan, now), nil
 	}
 	return nil, fmt.Errorf("could not recognize input as a vulnerabilities.json scan or a web-agent evidence bundle")
+}
+
+// runFindings is the durable findings DB CLI (roadmap §4 / §7-#1): ingest scans /
+// evidence bundles, list with filters + SLA, and transition lifecycle state.
+func runFindings(argv []string) error {
+	if len(argv) == 0 {
+		return fmt.Errorf("usage: tsengine findings <ingest|list|set> --db <file> [...]")
+	}
+	switch argv[0] {
+	case "ingest":
+		return runFindingsIngest(argv[1:])
+	case "list":
+		return runFindingsList(argv[1:])
+	case "set":
+		return runFindingsSet(argv[1:])
+	default:
+		return fmt.Errorf("unknown findings subcommand %q (want ingest|list|set)", argv[0])
+	}
+}
+
+func runFindingsIngest(argv []string) error {
+	fs := flag.NewFlagSet("findings ingest", flag.ContinueOnError)
+	db := fs.String("db", "findings.json", "path to the findings database")
+	in := fs.String("in", "", "input: vulnerabilities.json scan OR web-agent evidence bundle (REQUIRED)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *in == "" {
+		return fmt.Errorf("--in is required")
+	}
+	store, err := findingstore.Load(*db)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(*in) //nolint:gosec // operator-provided path
+	if err != nil {
+		return fmt.Errorf("read input: %w", err)
+	}
+	now := time.Now().UTC()
+
+	var newN, reopenN, fixedN int
+	var scan types.Scan
+	if json.Unmarshal(data, &scan) == nil && (scan.ScanID != "" || scan.Asset.Target != "") {
+		newN, reopenN, fixedN = store.IngestScan(scan, now)
+	} else {
+		var bundle webagent.EvidenceBundle
+		if json.Unmarshal(data, &bundle) != nil || bundle.Target == "" {
+			return fmt.Errorf("input is neither a vulnerabilities.json scan nor a web-agent evidence bundle")
+		}
+		newN, reopenN, fixedN = store.IngestWebEvidence(&bundle, now)
+	}
+	if err := store.Save(*db); err != nil {
+		return err
+	}
+	fmt.Printf("ingested: %d new, %d reopened, %d auto-fixed → %s (%d tracked)\n", newN, reopenN, fixedN, *db, len(store.Records))
+	return nil
+}
+
+func runFindingsList(argv []string) error {
+	fs := flag.NewFlagSet("findings list", flag.ContinueOnError)
+	db := fs.String("db", "findings.json", "path to the findings database")
+	status := fs.String("status", "", "filter by status (open|fixed|verified|closed|reopened|accepted_risk)")
+	severity := fs.String("severity", "", "filter by severity")
+	openOnly := fs.Bool("open", false, "only open + reopened")
+	overdue := fs.Bool("overdue", false, "only SLA-overdue (implies open)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	store, err := findingstore.Load(*db)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+
+	var recs []*findingstore.Record
+	if *overdue {
+		recs = store.Overdue(now)
+	} else {
+		recs = store.List(findingstore.Filter{Status: findingstore.Status(*status), Severity: *severity, OpenOnly: *openOnly})
+	}
+
+	c := store.Counts()
+	fmt.Printf("findings DB: %s  (open %d, reopened %d, fixed %d, verified %d, closed %d) — %d overdue\n",
+		*db, c[findingstore.StatusOpen], c[findingstore.StatusReopened], c[findingstore.StatusFixed],
+		c[findingstore.StatusVerified], c[findingstore.StatusClosed], len(store.Overdue(now)))
+	if len(recs) == 0 {
+		fmt.Println("(no matching findings)")
+		return nil
+	}
+	for _, r := range recs {
+		due := ""
+		if (r.Status == findingstore.StatusOpen || r.Status == findingstore.StatusReopened) && now.After(r.DueAt) {
+			due = "  ⚠ OVERDUE"
+		}
+		owner := ""
+		if r.Owner != "" {
+			owner = "  @" + r.Owner
+		}
+		fmt.Printf("  %s  %-8s %-9s %-9s %s  <%s>%s%s\n",
+			r.ID, strings.ToUpper(r.Severity), r.Status, age(now.Sub(r.FirstSeen)), r.Title, r.Endpoint, owner, due)
+	}
+	return nil
+}
+
+func runFindingsSet(argv []string) error {
+	fs := flag.NewFlagSet("findings set", flag.ContinueOnError)
+	db := fs.String("db", "findings.json", "path to the findings database")
+	id := fs.String("id", "", "finding id (F-...) (REQUIRED)")
+	status := fs.String("status", "", "new status")
+	owner := fs.String("owner", "", "assign owner")
+	note := fs.String("note", "", "transition note")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *id == "" {
+		return fmt.Errorf("--id is required")
+	}
+	store, err := findingstore.Load(*db)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	did := false
+	if *status != "" {
+		if !store.Transition(*id, findingstore.Status(*status), *note, now) {
+			return fmt.Errorf("unknown finding id %q", *id)
+		}
+		did = true
+	}
+	if *owner != "" {
+		if !store.Assign(*id, *owner) {
+			return fmt.Errorf("unknown finding id %q", *id)
+		}
+		did = true
+	}
+	if !did {
+		return fmt.Errorf("nothing to do: pass --status and/or --owner")
+	}
+	if err := store.Save(*db); err != nil {
+		return err
+	}
+	fmt.Printf("updated %s → status=%s owner=%s\n", *id, store.Records[*id].Status, store.Records[*id].Owner)
+	return nil
+}
+
+func age(d time.Duration) string {
+	days := int(d.Hours() / 24)
+	if days <= 0 {
+		return "today"
+	}
+	return fmt.Sprintf("%dd", days)
 }
 
 // --- pubkey ------------------------------------------------------
