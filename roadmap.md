@@ -16,7 +16,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 
 > **What's left at a glance** (prioritized, buildable in-tree first):
 > 1. ✅ **SCA / code reachability triage** — closed the one Validation hole (`internal/reachability`: does our app *call* the vulnerable dep function, from an entrypoint, with a cited path?). Go-first; extend to other languages via new extractors. §3.
-> 2. **CI/CD gate trigger** — opens the Shift-Left pillar (offensive/reachability test on push → pass/fail). §1.
+> 2. ✅ **CI/CD gate** — opened the Shift-Left pillar (`internal/gate` + `tsengine gate` + composite Action): pass/fail on proof + reachability, baseline + waivers, GitHub annotations. §1.
 > 3. **SARIF / Snyk / GHAS importers** — triage other scanners' alerts through the grounding engine. §3.
 > 4. **Live HTTP target adapter + RAG probes** — finishes the LLM red-team service. §2.
 > 5. **Browser/DOM + business-logic (BOLA/BFLA)** — web agent depth. §1.
@@ -39,6 +39,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 - ✅ **Deployable service** — `tsengine serve` (tool-replay API behind bearer auth + `/healthz` `/readyz` `/version` probes, request logging, graceful SIGTERM drain), host container image (`docker/host`), version-stamped builds, tag-triggered release pipeline (cross-platform binaries + GHCR image), ops guide (`docs/DEPLOYMENT.md`).
 - ✅ **The LLM red-team agent** (`internal/llmredteam`) — multi-turn attacker + **deterministic verifier**; a jailbreak is recorded only when a planted canary/sentinel leaks or a forbidden tool fires (grounded, not asserted). 100% recall / 0 false breaches vs an emulated population of vulnerable + hardened targets.
 - ✅ **SCA / code reachability** (`internal/reachability`) — real call graph from source (stdlib, no deps); answers "does our app actually *call* the vulnerable dependency function, from an entrypoint?" with a **cited call path**. Splits SCA noise into reachable / dead-code / unused. `tsengine reachability`. (Go-first; closes the Validation-pillar hole for dependency findings.)
+- ✅ **CI/CD security gate** (`internal/gate`) — `tsengine gate`: policy over scan / web-exploit / SCA-reachability findings → pass/fail exit code. Gates on **proof** (verified exploit, reachable CVE) not raw CVSS; an unreachable critical dep CVE does **not** block. Baseline (fail on new only) + waivers; GitHub-annotation output; reusable composite Action + `docs/CI.md`. (Opens the Shift-Left pillar.)
 - ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** (web) + **`internal/llmredteam`** (LLM) procedural populations with decoys — grounding proven non-circular for all three agents (100% recall, 0 false positives across seeds).
 
 ---
@@ -58,7 +59,7 @@ The agentic exploiter now exists for **cloud AND web/api** (`internal/webagent`)
 | **Signed evidence bundle** (tamper-evident PoC deliverable) | ✅ web | `BuildEvidence`/`SignEvidence`/`VerifyEvidence` (ed25519 over canonical JSON) + CLI `web-investigate --export-evidence` / `web-verify`; proving request+response captured per finding |
 | **Vuln coverage** | ✅ 5 classes | sqli, xss, open_redirect, **path_traversal/lfi**, **command_injection/rce** — each grounded on a deterministic indicator |
 | **Seed from L1 scanners** (confirm, don't rediscover) | ✅ web | `Options.SeedFindings` surfaces nuclei/sqlmap/dalfox leads as *suspected*; the agent must still ground them |
-| **CI/CD gatekeeping** (offensive test on every push) | 🔴 | VCS webhook trigger + scoped staging run + pass/fail gate |
+| **CI/CD gatekeeping** (pass/fail gate on every push) | ✅ | `internal/gate` + `tsengine gate` — policy over scan/web-exploit/SCA-reachability findings; gates on PROOF (verified exploit, reachable CVE) not raw CVSS; baseline (fail on new only) + waivers; `--format github` annotations; reusable composite Action (`.github/actions/tsengine-gate`) + `docs/CI.md`. (VCS-webhook-triggered staging *runs* are the remaining slice — the gate consumes findings; the trigger is platform §4) |
 | **Browser-driven DOM/JS exploitation** | 🔴 | Playwright tool (deferred — see docs/design/web-agent.md) |
 | Authenticated + business-logic / BOLA/BFLA / IDOR | 🟡 | seed_auth exists; authz-logic is a documented backlog item (no OSS does it — agent's job) |
 
@@ -174,13 +175,14 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 - ✅ **Report generator + findings DB + lifecycle** (`internal/report`, `internal/findingstore`) — the sellable artifact + the retainer backbone.
 - ✅ **Deployable service + packaging + load/auth benchmark** (`internal/server`, `internal/loadbench`, `docker/host`, release pipeline).
 - ✅ **SCA / code-reachability triage** (`internal/reachability`) — closes the Validation hole for dependency findings (call path cited; reachable/dead-code/unused).
+- ✅ **CI/CD security gate** (`internal/gate` + `tsengine gate` + composite Action) — pass/fail on proof + reachability, baseline + waivers, GitHub annotations. Opens the Shift-Left pillar.
 
 **Next (buildable in-tree, highest leverage first):**
-1. **CI/CD gate trigger** — VCS webhook → scoped staging run + reachability gate → pass/fail. Opens the Shift-Left pillar. (§1)
-2. **SARIF / Snyk / GHAS importers** — triage external scanner alerts through the grounding + reachability engine. (§3)
-3. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
-4. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
-5. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
+1. **SARIF / Snyk / GHAS importers** — triage external scanner alerts through the grounding + reachability engine, then gate on them. (§3)
+2. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
+3. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
+4. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
+5. **VCS-webhook trigger** — fire a scoped staging scan on push, feed the gate (the platform half of CI/CD). (§4)
 
 **Then (needs real infrastructure, not in-tree Go):**
 6. **Continuous scheduler + delivery connectors** (cron/event trigger, auto-PR, Jira/Slack) — converts engine → retainer SaaS. → Tier 3 "Scale". (Platform §4, Service §3)
@@ -200,7 +202,7 @@ Validation + Prioritization** — the hard, defensible end — and lighter on Sh
 
 | Pillar | Rating | Built | What's left |
 |---|---|---|---|
-| **1. Shift Left** | 🟡 ~5/10 | repo SAST (semgrep), secrets (gitleaks/trufflehog, corroborated), SCA (trivy/grype/osv), container (trivy/grype/dockle/hadolint), CodeQL/mobsfscan escalation | no shift-left **workflow** — CI/CD gate, VCS webhook, PR-block, IDE/pre-commit (§1, §7-next-2) |
+| **1. Shift Left** | 🟢🟡 ~7/10 | repo SAST (semgrep), secrets (gitleaks/trufflehog), SCA (trivy/grype/osv), container (trivy/grype/dockle/hadolint), CodeQL/mobsfscan escalation; **CI/CD pass-fail gate** (`tsengine gate` + composite Action) gating on proof + reachability, with baseline + waivers | VCS-webhook-triggered *staging run* (the gate consumes findings; the trigger is platform §4); IDE/pre-commit hook |
 | **2. Continuous Scanning** | 🟡 ~6/10 | 7 asset types, recon→fan-out, L1.5 enrichment, deployable benchmarked service, per-tool recall held to OSS baseline | no **scheduler** — cron / event / CI-triggered re-scan loop; no L3 portfolio re-scan (§4) |
 | **3. Validation** *(is it running, reachable, exploitable?)* | 🟢 ~9/10 | the core thesis — web agent **proves exploitability** (payload→indicator→re-fire verify, signed PoC); cloud **computes reachability** (`cloudiam.Authorize` ∧ attack-path graph); **SCA/code reachability** (`internal/reachability` — does the app call the vulnerable dep function, with a cited path); `verification_status` ladder; anti-circularity benches prove validation isn't itself a hallucination | SCA reachability is Go-first (other langs = new extractors); the runtime side is complete |
 | **4. Prioritization** *(context → path to crown jewel)* | 🟢🟡 ~7/10 | cloud agent's job **is** "path to a crown jewel" (identity ∧ network ∧ resource-policy reachability, blast radius); threat-intel beyond CVSS (KEV/EPSS); surface_priority + exploitability hooks; compliance mapping | the asset/identity/network **graph** is cloud-deep but thinner for web/repo; no **cross-asset correlation** (web finding + cloud identity + network path as one chain) — the L3 portfolio layer (§3, §4) |

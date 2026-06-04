@@ -1,0 +1,49 @@
+name: tsengine security gate
+description: >
+  Fail a CI build on PROVEN-exploitable findings or REACHABLE dependency CVEs.
+  Gates on what the engine proved (verified exploit / reachable call path), not raw
+  CVSS, and supports a baseline so you fail on new risk, not pre-existing debt.
+
+inputs:
+  version:
+    description: tsengine version to install (go install ...@version)
+    default: latest
+  in:
+    description: findings input — a vulnerabilities.json scan OR a web-agent evidence bundle
+    required: false
+  sca:
+    description: SCA findings JSON to reachability-triage (requires `repo`)
+    required: false
+  repo:
+    description: repository path for --sca reachability
+    default: "."
+  fail-on:
+    description: severity threshold for non-SCA findings (critical|high|medium|low; empty disables)
+    default: high
+  baseline:
+    description: baseline fingerprints JSON (accepted prior findings)
+    required: false
+  new-only:
+    description: gate only on findings absent from the baseline
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version: stable
+    - name: Install tsengine
+      shell: bash
+      run: go install github.com/ClatTribe/tsengine/cmd/tsengine@${{ inputs.version }}
+    - name: Run security gate
+      shell: bash
+      run: |
+        set -euo pipefail
+        args=(gate --format github --fail-on "${{ inputs.fail-on }}")
+        [ -n "${{ inputs.in }}" ]       && args+=(--in "${{ inputs.in }}")
+        [ -n "${{ inputs.sca }}" ]      && args+=(--sca "${{ inputs.sca }}" --repo "${{ inputs.repo }}")
+        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
+        [ "${{ inputs.new-only }}" = "true" ] && args+=(--new-only)
+        echo "+ tsengine ${args[*]}"
+        tsengine "${args[@]}"   # exits non-zero on any policy violation → blocks the merge
