@@ -17,7 +17,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 > **What's left at a glance** (prioritized, buildable in-tree first):
 > 1. ✅ **SCA / code reachability triage** — closed the one Validation hole (`internal/reachability`: does our app *call* the vulnerable dep function, from an entrypoint, with a cited path?). Go-first; extend to other languages via new extractors. §3.
 > 2. ✅ **CI/CD gate** — opened the Shift-Left pillar (`internal/gate` + `tsengine gate` + composite Action): pass/fail on proof + reachability, baseline + waivers, GitHub annotations. §1.
-> 3. **SARIF / Snyk / GHAS importers** — triage other scanners' alerts through the grounding engine. §3.
+> 3. ✅ **SARIF / Snyk / GHAS importers** — `internal/importers` + `tsengine import`: a customer's existing scanner output flows through the grounding, reachability, and gate. §3.
 > 4. **Live HTTP target adapter + RAG probes** — finishes the LLM red-team service. §2.
 > 5. **Browser/DOM + business-logic (BOLA/BFLA)** — web agent depth. §1.
 > 6. **Cross-asset correlation** — chain a web/repo finding to a cloud identity + network path (the Prioritization graph, L3). §3/§4.
@@ -40,6 +40,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 - ✅ **The LLM red-team agent** (`internal/llmredteam`) — multi-turn attacker + **deterministic verifier**; a jailbreak is recorded only when a planted canary/sentinel leaks or a forbidden tool fires (grounded, not asserted). 100% recall / 0 false breaches vs an emulated population of vulnerable + hardened targets.
 - ✅ **SCA / code reachability** (`internal/reachability`) — real call graph from source (stdlib, no deps); answers "does our app actually *call* the vulnerable dependency function, from an entrypoint?" with a **cited call path**. Splits SCA noise into reachable / dead-code / unused. `tsengine reachability`. (Go-first; closes the Validation-pillar hole for dependency findings.)
 - ✅ **CI/CD security gate** (`internal/gate`) — `tsengine gate`: policy over scan / web-exploit / SCA-reachability findings → pass/fail exit code. Gates on **proof** (verified exploit, reachable CVE) not raw CVSS; an unreachable critical dep CVE does **not** block. Baseline (fail on new only) + waivers; GitHub-annotation output; reusable composite Action + `docs/CI.md`. (Opens the Shift-Left pillar.)
+- ✅ **Third-party scanner importers** (`internal/importers`) — `tsengine import`: SARIF 2.1.0 (CodeQL/semgrep/code-scanning), Snyk, GitHub Dependabot → `types.Scan` + `reachability.SCAFinding`. A customer's existing Snyk/CodeQL output flows through the grounding, reachability triage, gate, report, and findings DB.
 - ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** (web) + **`internal/llmredteam`** (LLM) procedural populations with decoys — grounding proven non-circular for all three agents (100% recall, 0 false positives across seeds).
 
 ---
@@ -114,7 +115,7 @@ exploit execution, CI-gate trigger, browser tool for DOM XSS.
 | **Code/SCA reachability** ("does our app *call* the vulnerable function?") | ✅ Go | `internal/reachability` + `tsengine reachability` — builds a real call graph from source (stdlib, no deps), reports whether an app entrypoint reaches the vulnerable symbol, **cites the call path** (grounded); SCA triage splits findings into reachable / dead-code / unused. Go-first; other languages = new extractor (solver is language-agnostic) |
 | **Auto-generated Pull Requests** | 🔴 | GitHub App: open a PR with the verified fix |
 | **ChatOps verification** ("why is this a risk?" in Slack) | 🔴 | Slack/Teams bot over the finding + attack-path |
-| Ingest other scanners' alerts (Snyk/GHAS/cloud) to triage | 🟡 | prowler ingested; add Snyk/GHAS/SARIF importers |
+| Ingest other scanners' alerts (SARIF/Snyk/GHAS) to triage | ✅ | `internal/importers` + `tsengine import` — SARIF 2.1.0 (CodeQL/semgrep/code-scanning), Snyk test JSON, GitHub Dependabot alerts → `types.Scan` (report/findings/gate) and `reachability.SCAFinding` (reachability triage). A customer's existing Snyk/CodeQL output flows through the grounding + gate; SARIF→cloud connectors are the next slice |
 
 ---
 
@@ -177,11 +178,13 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 - ✅ **SCA / code-reachability triage** (`internal/reachability`) — closes the Validation hole for dependency findings (call path cited; reachable/dead-code/unused).
 - ✅ **CI/CD security gate** (`internal/gate` + `tsengine gate` + composite Action) — pass/fail on proof + reachability, baseline + waivers, GitHub annotations. Opens the Shift-Left pillar.
 
+- ✅ **Third-party scanner importers** (`internal/importers` + `tsengine import`) — SARIF / Snyk / Dependabot → the engine; gate + reachability + report + findings DB consume them.
+
 **Next (buildable in-tree, highest leverage first):**
-1. **SARIF / Snyk / GHAS importers** — triage external scanner alerts through the grounding + reachability engine, then gate on them. (§3)
-2. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
-3. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
-4. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
+1. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
+2. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
+3. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
+4. **Cross-asset correlation** — chain a web/repo finding to a cloud identity + network path (the Prioritization graph, L3). (§3/§4)
 5. **VCS-webhook trigger** — fire a scoped staging scan on push, feed the gate (the platform half of CI/CD). (§4)
 
 **Then (needs real infrastructure, not in-tree Go):**

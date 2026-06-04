@@ -49,6 +49,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/gate"
+	"github.com/ClatTribe/tsengine/internal/importers"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
@@ -206,6 +207,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine gate: %v\n", err)
 			os.Exit(1)
 		}
+	case "import":
+		if err := runImport(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine import: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -239,6 +245,8 @@ Usage:
                   # does this codebase actually CALL the vulnerable dependency function? (Go-first)
   tsengine gate   [--in <scan|evidence.json>] [--sca <findings.json> --repo <dir>] [--fail-on <sev>]
                   [--new-only --baseline <fps.json>] [--format text|json|github]   # CI/CD pass/fail gate
+  tsengine import --in <file> [--format auto|sarif|snyk|dependabot] [--as scan|sca] [--out <file>]
+                  # normalize SARIF / Snyk / GHAS-Dependabot into the engine (then report/findings/gate/reachability)
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -1291,6 +1299,57 @@ func runGate(argv []string) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// runImport normalizes another scanner's output (SARIF / Snyk / GitHub Dependabot)
+// into the engine's contracts so it flows through report / findings DB / gate /
+// reachability (roadmap §3). The multiplier: a customer's existing Snyk/Semgrep/
+// CodeQL results get the grounding + gate treatment for free.
+func runImport(argv []string) error {
+	fs := flag.NewFlagSet("import", flag.ContinueOnError)
+	in := fs.String("in", "", "scanner output file (SARIF / Snyk JSON / Dependabot alerts JSON) (REQUIRED)")
+	format := fs.String("format", "auto", "input format: auto | sarif | snyk | dependabot")
+	as := fs.String("as", "scan", "output shape: scan (vulnerabilities.json) | sca (reachability findings)")
+	target := fs.String("target", "", "asset/project name for the emitted scan")
+	out := fs.String("out", "", "output file (default: stdout)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *in == "" {
+		return fmt.Errorf("--in is required")
+	}
+	data, err := os.ReadFile(*in) //nolint:gosec // operator-provided path
+	if err != nil {
+		return fmt.Errorf("read input: %w", err)
+	}
+
+	var payload any
+	switch *as {
+	case "sca":
+		sca, ierr := importers.ImportSCA(data, importers.Format(*format))
+		if ierr != nil {
+			return ierr
+		}
+		payload = sca
+		fmt.Fprintf(os.Stderr, "[import] %d SCA finding(s) (feed to: tsengine reachability --sca / gate --sca)\n", len(sca))
+	case "scan", "":
+		scan, ierr := importers.Import(data, importers.Format(*format), *target, time.Now().UTC())
+		if ierr != nil {
+			return ierr
+		}
+		payload = scan
+		fmt.Fprintf(os.Stderr, "[import] %d finding(s) from %s → scan (feed to: tsengine report / findings ingest / gate --in)\n",
+			len(scan.FindingsEnriched), strings.Join(scan.AnchorsFired, ","))
+	default:
+		return fmt.Errorf("unknown --as %q (want scan or sca)", *as)
+	}
+
+	b, _ := json.MarshalIndent(payload, "", "  ")
+	if *out == "" {
+		fmt.Println(string(b))
+		return nil
+	}
+	return os.WriteFile(*out, append(b, '\n'), 0o600)
 }
 
 // --- pubkey ------------------------------------------------------
