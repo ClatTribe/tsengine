@@ -20,6 +20,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 - ✅ **Verified remediation** (`cloudengine.GenerateRemediations`) — SCP/IAM-Deny/SG artifacts, self-checked via `cloudiam.Authorize`; `--export` to disk.
 - ✅ **L1.5 enrichment** — FP filter, corroboration, confidence, threat-intel (KEV/EPSS), `compliance.map` (SOC2/PCI/HIPAA/CIS/NIST).
 - ✅ **Signed evidence/attestation** (ed25519 over snapshot+findings+evidence).
+- ✅ **Deployable service** — `tsengine serve` (tool-replay API behind bearer auth + `/healthz` `/readyz` `/version` probes, request logging, graceful SIGTERM drain), host container image (`docker/host`), version-stamped builds, tag-triggered release pipeline (cross-platform binaries + GHCR image), ops guide (`docs/DEPLOYMENT.md`).
 - ✅ **The LLM red-team agent** (`internal/llmredteam`) — multi-turn attacker + **deterministic verifier**; a jailbreak is recorded only when a planted canary/sentinel leaks or a forbidden tool fires (grounded, not asserted). 100% recall / 0 false breaches vs an emulated population of vulnerable + hardened targets.
 - ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** (web) + **`internal/llmredteam`** (LLM) procedural populations with decoys — grounding proven non-circular for all three agents (100% recall, 0 false positives across seeds).
 
@@ -103,6 +104,7 @@ exploit execution, CI-gate trigger, browser tool for DOM XSS.
 
 | Capability | Status | Note |
 |---|---|---|
+| **Deployable service + health + auth + packaging** | ✅ | `tsengine serve` (bearer-auth `/replay` + liveness/readiness/version probes, graceful drain), host image, release pipeline (binaries + GHCR), `docs/DEPLOYMENT.md` — the engine runs as a service now |
 | Multi-tenancy + RBAC + data isolation | 🔴 | engine is single-scan; tenants/clients/teams model |
 | Durable **findings DB** + lifecycle (open→fixed→verified→closed) + SLA + ownership | ✅ | `internal/findingstore` + `tsengine findings ingest/list/set` — fingerprint dedup across scans, auto open→fixed (disappeared) / reopened (returned), per-severity SLA + overdue, owner assignment, audit history, JSON-backed. Multi-tenant SQL is the separate platform layer |
 | **Continuous scheduling** (cron + event/CI-triggered) | 🔴 | the "continuous loop" the thesis sells |
