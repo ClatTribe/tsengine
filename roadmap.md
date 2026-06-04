@@ -4,11 +4,26 @@
 > static PDF. Deploy AI agents that continuously hack staging/APIs/AI-models while an AI
 > triage layer separates the real from the noise — and *proves* each finding before it alerts.
 >
-> **Where we are honest:** the engine today is the **hardest part** (grounded autonomous
-> reasoning + verified remediation) but only **~1.5 of the 3 core services** and a fraction of
-> the services-company surface. This roadmap is the gap, prioritized.
+> **Where we are honest:** the engine today is the **hardest part** — grounded autonomous
+> reasoning + verified remediation across **all three agent flavors** (cloud, web/api, LLM
+> red-team), each with an anti-circularity bench — plus a **deployable service**, the
+> **report** deliverable, and a **findings DB**. What remains is mostly **product surface**
+> (multi-tenant SaaS, continuous loop, delivery/ingest connectors, compliance workflow) and
+> **agent depth** (browser/DOM, business-logic, RAG, live LLM-target adapter). This roadmap is
+> the gap, prioritized.
 
 Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here; convert to PRs as picked up.
+
+> **What's left at a glance** (prioritized, buildable in-tree first):
+> 1. **SCA / code reachability triage** — the one hole in Validation (does our app *call* the vulnerable dep function?). §3.
+> 2. **CI/CD gate trigger** — opens the Shift-Left pillar (offensive test on push → pass/fail). §1.
+> 3. **SARIF / Snyk / GHAS importers** — triage other scanners' alerts through the grounding engine. §3.
+> 4. **Live HTTP target adapter + RAG probes** — finishes the LLM red-team service. §2.
+> 5. **Browser/DOM + business-logic (BOLA/BFLA)** — web agent depth. §1.
+> 6. **Continuous scheduler + delivery connectors (PR/Jira/Slack)** — converts engine → retainer SaaS. §4.
+> 7. **Multi-tenant store + onboarding + billing + compliance workflow** — the SaaS/Vanta surface; an *infra* project, not in-tree code. §4/§5.
+>
+> Items 1–5 are Go you can write + test in this repo today; 6–7 need real infrastructure (DB, OAuth apps, a cluster).
 
 ---
 
@@ -140,7 +155,7 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 | Capability | Status | Gap |
 |---|---|---|
 | Read-only enforcement for cloud (Guard + scoped STS) | ✅ | `cloudsafety` |
-| **Runtime guardrails for active web/api testing** (rate-limit, scope, do-no-harm) | 🔴 | needed before autonomous testing at scale |
+| **Runtime guardrails for active web/api testing** (rate-limit, scope, do-no-harm) | 🟡 | web agent's `Requester` enforces host allowlist + request cap + throttle structurally (never LLM-trusted); a global per-engagement budget + kill-switch + audited scope policy across all agents is the remaining slice |
 | **Authorization / consent / RoE capture** (legal) | 🔴 | required to test client assets |
 | **Agent-injection resilience** (prompt injection from scanned content) | 🟡 | web + LLM agents ride on grounded indicators, not model-read attacker text (proven: a lying reply can't fabricate a finding); the `llmredteam` harness points inward to measure it. RAG/document-injection depth still 🔴 |
 | Eval/regression harness on real engagements | 🟡 | cloud bench ladder + **web agent bench** (`internal/webrange`) + **LLM red-team bench** (`internal/llmredteam`) — procedural populations with decoys, recall/precision vs answer key, all three agents |
@@ -151,11 +166,45 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 
 ## 7. Prioritized sequencing (maps to the tiered monetization)
 
-1. ✅ **Report generator** (`internal/report` — branded MD/HTML) **+ findings DB + lifecycle** (`internal/findingstore` — dedup, open→fixed→reopened, SLA, ownership) — the *sellable artifact* + the retainer's backbone. SOC2 evidence-pack templating + a hosted multi-tenant store are the remaining slices. (Platform §4)
-2. **AI pentester for web/API** — extend the proven cloud agent pattern + sandboxed exploit-confirmation. → **Tier 2 "Attack"** ($5–12k/scan). (Service §1)
-3. ✅ **LLM Red-Team module** (`internal/llmredteam`) — core built (attacker + verifier + emulated bench); remaining: live HTTP target adapter + RAG depth. → **Tier 1 "Guard"** ($990–1990/mo). (Service §2, §6)
-4. **Continuous loop + CI trigger + multi-tenant + PR/ChatOps delivery** — converts "engine" into "retainer SaaS." → **Tier 3 "Scale"** ($50k+/yr). (Platform §4, Service §3)
-5. **Compliance connectors + continuous control monitoring** — the SOC2 product's center of gravity (only after the above, unless compliance is the lead GTM). (§5)
-6. **Live-AWS / safety hardening** — guardrails + injection resilience before autonomous testing at customer scale. (§6)
+**Shipped:**
+- ✅ **AI pentester for web/API** (`internal/webagent`) — grounded exploitation, signed evidence, 5 classes. → Tier 2 "Attack".
+- ✅ **LLM Red-Team module** (`internal/llmredteam`) — attacker + verifier + emulated bench. → Tier 1 "Guard".
+- ✅ **Report generator + findings DB + lifecycle** (`internal/report`, `internal/findingstore`) — the sellable artifact + the retainer backbone.
+- ✅ **Deployable service + packaging + load/auth benchmark** (`internal/server`, `internal/loadbench`, `docker/host`, release pipeline).
 
-> **Blunt summary:** the part that's genuinely hard — *grounded autonomous reasoning that separates real from noise and verifies its own claims* — is built and proven across **all three agent flavors** (cloud, web/api, LLM red-team), each with an anti-circularity bench. What remains is mostly **product surface** (continuous, multi-tenant, delivery, reporting, compliance connectors) and depth (live LLM-target adapter, RAG probes, browser/business-logic) on top of a core that's hard to copy.
+**Next (buildable in-tree, highest leverage first):**
+1. **SCA / code-reachability triage** — closes the one Validation hole (does our app call the vulnerable dependency function?). Agentic triage over CodeQL/semgrep escalation. (§3)
+2. **CI/CD gate trigger** — VCS webhook → scoped staging run → pass/fail. Opens the Shift-Left pillar. (§1)
+3. **SARIF / Snyk / GHAS importers** — triage external scanner alerts through the grounding engine. (§3)
+4. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
+5. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
+
+**Then (needs real infrastructure, not in-tree Go):**
+6. **Continuous scheduler + delivery connectors** (cron/event trigger, auto-PR, Jira/Slack) — converts engine → retainer SaaS. → Tier 3 "Scale". (Platform §4, Service §3)
+7. **Multi-tenant store + onboarding (OAuth/GitHub App) + billing + compliance workflow** (org-evidence connectors, continuous control monitoring, auditor portal). The Vanta/Drata surface. (§4, §5)
+8. **Live-AWS validation rung + global safety/RoE hardening** before autonomous testing at customer scale. (§6)
+
+> **Blunt summary:** the part that's genuinely hard — *grounded autonomous reasoning that separates real from noise and verifies its own claims* — is built and proven across **all three agent flavors** (cloud, web/api, LLM red-team), each with an anti-circularity bench, and now runs as a benchmarked service that emits a sellable report and tracks findings over time. What remains is **agent depth** (SCA-reachability, browser/DOM, RAG, business-logic), **delivery glue** (CI gate, importers, connectors), and the **SaaS/compliance platform** (multi-tenant, scheduling, onboarding, billing, control-monitoring) — which is an infrastructure project on top of a core that's hard to copy.
+
+---
+
+## 8. Maturity-model scorecard (Shift-Left / Continuous / Validation / Prioritization)
+
+How we map against the modern VM maturity model. We are **deliberately strongest on
+Validation + Prioritization** — the hard, defensible end — and lighter on Shift-Left
++ Continuous-Scanning, which the model itself calls the first line of defense and
+"increasingly commoditized by AI."
+
+| Pillar | Rating | Built | What's left |
+|---|---|---|---|
+| **1. Shift Left** | 🟡 ~5/10 | repo SAST (semgrep), secrets (gitleaks/trufflehog, corroborated), SCA (trivy/grype/osv), container (trivy/grype/dockle/hadolint), CodeQL/mobsfscan escalation | no shift-left **workflow** — CI/CD gate, VCS webhook, PR-block, IDE/pre-commit (§1, §7-next-2) |
+| **2. Continuous Scanning** | 🟡 ~6/10 | 7 asset types, recon→fan-out, L1.5 enrichment, deployable benchmarked service, per-tool recall held to OSS baseline | no **scheduler** — cron / event / CI-triggered re-scan loop; no L3 portfolio re-scan (§4) |
+| **3. Validation** *(is it running, reachable, exploitable?)* | 🟢 ~9/10 | the core thesis — web agent **proves exploitability** (payload→indicator→re-fire verify, signed PoC); cloud **computes reachability** (`cloudiam.Authorize` ∧ attack-path graph); `verification_status` ladder; anti-circularity benches prove validation isn't itself a hallucination | **code/SCA reachability** ("does our app *call* the vulnerable function?") — call-graph/taint triage over dependency findings (§3, §7-next-1) |
+| **4. Prioritization** *(context → path to crown jewel)* | 🟢🟡 ~7/10 | cloud agent's job **is** "path to a crown jewel" (identity ∧ network ∧ resource-policy reachability, blast radius); threat-intel beyond CVSS (KEV/EPSS); surface_priority + exploitability hooks; compliance mapping | the asset/identity/network **graph** is cloud-deep but thinner for web/repo; no **cross-asset correlation** (web finding + cloud identity + network path as one chain) — the L3 portfolio layer (§3, §4) |
+
+**Read:** tsengine is a **Validation-and-Prioritization engine**, not a shift-left or
+continuous-scanning product — by design, since those pillars are commoditizing and
+#3/#4 are the hard, copy-resistant part. The three honest knocks: (a) no CI/shift-left
+workflow, (b) no continuous scheduler, (c) prioritization is cloud-deep but not
+cross-asset, and SCA call-reachability is unbuilt. None are architectural dead-ends —
+they're the §7 "next" list.
