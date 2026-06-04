@@ -46,6 +46,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
+	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/gate"
@@ -212,6 +213,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine import: %v\n", err)
 			os.Exit(1)
 		}
+	case "correlate":
+		if err := runCorrelate(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine correlate: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -247,6 +253,8 @@ Usage:
                   [--new-only --baseline <fps.json>] [--format text|json|github]   # CI/CD pass/fail gate
   tsengine import --in <file> [--format auto|sarif|snyk|dependabot] [--as scan|sca] [--out <file>]
                   # normalize SARIF / Snyk / GHAS-Dependabot into the engine (then report/findings/gate/reachability)
+  tsengine correlate --in <scan1.json> --in <scan2.json> ...
+                  # cross-asset attack chains: a finding HERE → a crown jewel THERE (e.g. web leak → cloud admin)
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -1350,6 +1358,45 @@ func runImport(argv []string) error {
 		return nil
 	}
 	return os.WriteFile(*out, append(b, '\n'), 0o600)
+}
+
+// runCorrelate builds cross-asset attack chains across multiple scans — the
+// Prioritization layer (roadmap §3/§4): a finding on one asset that bridges, via a
+// concrete shared identifier (a leaked AWS key, an ARN, a host), to a crown jewel on
+// another asset. Grounded: every hop cites the identifier that links the two.
+func runCorrelate(argv []string) error {
+	fs := flag.NewFlagSet("correlate", flag.ContinueOnError)
+	var ins multiFlag
+	fs.Var(&ins, "in", "a vulnerabilities.json scan (repeat --in for each asset's scan)")
+	jsonOut := fs.Bool("json", false, "emit JSON")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if len(ins) < 2 {
+		return fmt.Errorf("provide at least two --in <scan.json> files (one per asset) to correlate across")
+	}
+
+	var assets []correlate.Asset
+	for _, p := range ins {
+		data, rerr := os.ReadFile(p) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read %s: %w", p, rerr)
+		}
+		var scan types.Scan
+		if jerr := json.Unmarshal(data, &scan); jerr != nil {
+			return fmt.Errorf("parse %s: %w", p, jerr)
+		}
+		assets = append(assets, correlate.FromScan(scan))
+	}
+
+	chains := correlate.Correlate(assets)
+	if *jsonOut {
+		b, _ := json.MarshalIndent(chains, "", "  ")
+		fmt.Println(string(b))
+		return nil
+	}
+	fmt.Print(correlate.Render(chains))
+	return nil
 }
 
 // --- pubkey ------------------------------------------------------
