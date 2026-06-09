@@ -48,6 +48,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
+	"github.com/ClatTribe/tsengine/internal/exporter"
 	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/gate"
 	"github.com/ClatTribe/tsengine/internal/importers"
@@ -218,6 +219,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine correlate: %v\n", err)
 			os.Exit(1)
 		}
+	case "export":
+		if err := runExport(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine export: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -255,6 +261,8 @@ Usage:
                   # normalize SARIF / Snyk / GHAS-Dependabot into the engine (then report/findings/gate/reachability)
   tsengine correlate --in <scan1.json> --in <scan2.json> ...
                   # cross-asset attack chains: a finding HERE → a crown jewel THERE (e.g. web leak → cloud admin)
+  tsengine export --in <scan|evidence.json> [--format sarif|json] [--out <file>]
+                  [--webhook <url> --webhook-token <t> --hmac-secret <s>]   # emit findings OUT (code-scanning / SIEM / SOC)
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -1397,6 +1405,80 @@ func runCorrelate(argv []string) error {
 	}
 	fmt.Print(correlate.Render(chains))
 	return nil
+}
+
+// runExport is the OUTBOUND handoff (roadmap §9): emit tsengine's proven findings
+// into the systems a customer already runs — SARIF (→ GitHub code-scanning / any
+// SARIF consumer, inline on the PR) or a signed finding/case webhook (→ SIEM / SOC /
+// AI-SOC / ticketing). The mirror of `tsengine import`.
+func runExport(argv []string) error {
+	fs := flag.NewFlagSet("export", flag.ContinueOnError)
+	in := fs.String("in", "", "findings input: a vulnerabilities.json scan OR a web-agent evidence bundle (REQUIRED)")
+	format := fs.String("format", "sarif", "output format: sarif | json (the webhook event payload)")
+	out := fs.String("out", "", "output file (default: stdout)")
+	webhook := fs.String("webhook", "", "POST the finding/case event to this URL (instead of/with file output)")
+	webhookToken := fs.String("webhook-token", os.Getenv("TSENGINE_WEBHOOK_TOKEN"), "bearer token for the webhook")
+	hmacSecret := fs.String("hmac-secret", os.Getenv("TSENGINE_WEBHOOK_HMAC"), "HMAC-SHA256 secret to sign the webhook body")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *in == "" {
+		return fmt.Errorf("--in is required")
+	}
+	data, err := os.ReadFile(*in) //nolint:gosec // operator-provided path
+	if err != nil {
+		return fmt.Errorf("read input: %w", err)
+	}
+	rep, err := buildReport(data)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+
+	// webhook path: POST the normalized event.
+	if *webhook != "" {
+		ev := exporter.EventFromReport(rep, now)
+		code, eerr := exporter.Emit(context.Background(), ev, exporter.EmitOptions{
+			URL: *webhook, Token: *webhookToken, HMACSecret: *hmacSecret,
+		})
+		if eerr != nil {
+			return eerr
+		}
+		fmt.Fprintf(os.Stderr, "[export] POSTed %d finding(s) → %s (HTTP %d)%s\n",
+			len(ev.Findings), *webhook, code, signedNote(*hmacSecret))
+		return nil
+	}
+
+	// file/stdout path.
+	var rendered []byte
+	switch *format {
+	case "sarif":
+		rendered, err = exporter.ToSARIF(rep)
+	case "json":
+		ev := exporter.EventFromReport(rep, now)
+		rendered, err = json.MarshalIndent(ev, "", "  ")
+	default:
+		return fmt.Errorf("unknown --format %q (want sarif or json)", *format)
+	}
+	if err != nil {
+		return err
+	}
+	if *out == "" {
+		fmt.Println(string(rendered))
+		return nil
+	}
+	if werr := os.WriteFile(*out, append(rendered, '\n'), 0o600); werr != nil {
+		return werr
+	}
+	fmt.Fprintf(os.Stderr, "[export] %d finding(s) → %s (%s)\n", len(rep.Findings), *out, *format)
+	return nil
+}
+
+func signedNote(secret string) string {
+	if secret != "" {
+		return " [HMAC-signed]"
+	}
+	return ""
 }
 
 // --- pubkey ------------------------------------------------------
