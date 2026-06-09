@@ -6,13 +6,14 @@
 >
 > **Where we are honest:** the engine's *analysis loop* is complete — find (scan + import) →
 > **prove** (grounded agents + reachability) → **prioritize** (cross-asset correlation) →
-> decide (CI gate) → package (report) → track (findings DB) → serve (API), across all three
-> agent flavors with an anti-circularity bench each. What's left to **complete the
-> functionality** is, in order: (1) the **outbound handoff** — the engine can *import* other
-> scanners but can't yet *emit* its proven findings into the systems customers already run
-> (SARIF/code-scanning, SIEM/SOC, ticketing); it's import-only; (2) a **replayable agent
-> decision ledger** (the trust/transparency layer); (3) **agent depth** (browser/DOM,
-> business-logic, RAG, live LLM-target); and (4) the **platform surface** (continuous
+> decide (CI gate) → package (report) → **emit** (SARIF export + signed finding/case webhook) →
+> track (findings DB) → serve (API), across all three agent flavors with an anti-circularity
+> bench each. The **outbound handoff** is now built (`internal/exporter` + `tsengine export`):
+> the engine both *imports* other scanners and *emits* its proven findings into the systems
+> customers already run (SARIF/code-scanning, SIEM/SOC, ticketing) — the loop is closed.
+> What's left to **complete the functionality** is, in order: (1) a **replayable agent
+> decision ledger** (the trust/transparency layer); (2) **agent depth** (browser/DOM,
+> business-logic, RAG, live LLM-target); and (3) the **platform surface** (continuous
 > scheduler, multi-tenant SaaS, onboarding, billing, compliance workflow) — an infra project.
 > See §9 for how the handoff positions us vs a downstream AI-SOC.
 
@@ -23,7 +24,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 > 2. ✅ **CI/CD gate** — opened the Shift-Left pillar (`internal/gate` + `tsengine gate` + composite Action): pass/fail on proof + reachability, baseline + waivers, GitHub annotations. §1.
 > 3. ✅ **SARIF / Snyk / GHAS importers** — `internal/importers` + `tsengine import`: a customer's existing scanner output flows through the grounding, reachability, and gate. §3.
 > 4. ✅ **Cross-asset correlation** — `internal/correlate` + `tsengine correlate`: stitch findings across assets into one attack chain to a crown jewel (moves the Prioritization pillar 🟢🟡~7 → 🟢~8). §3/§4.
-> 5. 🔴 **Outbound handoff / export** — the completing piece (§9). Today import-only; build the OUT mirror: **SARIF export** (→ GitHub code-scanning / any SARIF consumer), a **finding/case webhook** (→ SIEM/SOC/AI-SOC), and **MITRE-tagged case emission**. In-tree, the natural integration point. §3/§9.
+> 5. ✅ **Outbound handoff / export** — the completing piece (§9). `internal/exporter` + `tsengine export`: **SARIF export** (→ GitHub code-scanning / any SARIF consumer, proven findings inline on the PR), a **signed finding/case webhook** (→ SIEM/SOC/AI-SOC/ticketing, Bearer + HMAC-SHA256). The OUT mirror of the importers — the engine is now a finding *source*, not just a sink. §3/§9.
 > 6. 🔴 **Replayable agent decision ledger** — persist + sign every agent step (prompt/tool-call/observation/decision) into a verifiable, replayable ledger (parity with an AI-SOC's "Investigation Ledger"). In-tree. §6.
 > 7. **Live HTTP LLM-target adapter + RAG probes** — finishes the LLM red-team service. §2.
 > 8. **Browser/DOM + business-logic (BOLA/BFLA)** — web agent depth. §1.
@@ -47,6 +48,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 - ✅ **SCA / code reachability** (`internal/reachability`) — real call graph from source (stdlib, no deps); answers "does our app actually *call* the vulnerable dependency function, from an entrypoint?" with a **cited call path**. Splits SCA noise into reachable / dead-code / unused. `tsengine reachability`. (Go-first; closes the Validation-pillar hole for dependency findings.)
 - ✅ **CI/CD security gate** (`internal/gate`) — `tsengine gate`: policy over scan / web-exploit / SCA-reachability findings → pass/fail exit code. Gates on **proof** (verified exploit, reachable CVE) not raw CVSS; an unreachable critical dep CVE does **not** block. Baseline (fail on new only) + waivers; GitHub-annotation output; reusable composite Action + `docs/CI.md`. (Opens the Shift-Left pillar.)
 - ✅ **Third-party scanner importers** (`internal/importers`) — `tsengine import`: SARIF 2.1.0 (CodeQL/semgrep/code-scanning), Snyk, GitHub Dependabot → `types.Scan` + `reachability.SCAFinding`. A customer's existing Snyk/CodeQL output flows through the grounding, reachability triage, gate, report, and findings DB.
+- ✅ **Outbound handoff / export** (`internal/exporter`) — `tsengine export`: the OUT mirror of the importers. **SARIF 2.1.0 export** (`--format sarif`) so GitHub code-scanning / any SARIF consumer shows *proven* tsengine findings inline on the PR (`[verified]` prefix, `security-severity` + CWE `external/cwe/*` tags, file:line→region locations); a **signed finding/case webhook** (`--webhook`) that POSTs a normalized, MITRE-friendly event to a SIEM / SOC / AI-SOC / ticketing endpoint with optional Bearer auth + HMAC-SHA256 body signature (`X-TSEngine-Signature`). The engine is now a finding *source*, not just a sink. (§9)
 - ✅ **Cross-asset correlation** (`internal/correlate`) — `tsengine correlate`: stitches findings ACROSS the 7 asset types into one attack chain (external entry → crown jewel) via a concrete shared identifier (leaked AWS key, ARN, host). The Prioritization "path to a crown jewel", applied across asset boundaries; grounded (no shared id → no chain).
 - ✅ **Anti-overfit benchmark ladder** — in-distribution / held-out / llm-emulate / CloudGoat / large procedural dataset (cloud); **`internal/webrange`** (web) + **`internal/llmredteam`** (LLM) procedural populations with decoys — grounding proven non-circular for all three agents (100% recall, 0 false positives across seeds).
 
@@ -122,8 +124,8 @@ exploit execution, CI-gate trigger, browser tool for DOM XSS.
 | **Verified remediation** (the fix is proven to cut the path) | ✅ cloud | — |
 | **Code/SCA reachability** ("does our app *call* the vulnerable function?") | ✅ Go | `internal/reachability` + `tsengine reachability` — builds a real call graph from source (stdlib, no deps), reports whether an app entrypoint reaches the vulnerable symbol, **cites the call path** (grounded); SCA triage splits findings into reachable / dead-code / unused. Go-first; other languages = new extractor (solver is language-agnostic) |
 | Ingest other scanners' alerts (SARIF/Snyk/GHAS) to triage | ✅ | `internal/importers` + `tsengine import` — SARIF 2.1.0 (CodeQL/semgrep/code-scanning), Snyk test JSON, GitHub Dependabot alerts → `types.Scan` (report/findings/gate) and `reachability.SCAFinding` (reachability triage). A customer's existing Snyk/CodeQL output flows through the grounding + gate |
-| **Outbound: SARIF *export*** (findings → code-scanning / any SARIF consumer) | 🔴 | the OUT mirror of the importer — `tsengine export --format sarif`; lets GitHub code-scanning show *proven* tsengine findings inline on the PR (and makes the gate visible). In-tree, highest-leverage (§9) |
-| **Outbound: finding/case webhook + emitter** (→ SIEM / SOC / AI-SOC / ticketing) | 🔴 | POST a normalized, MITRE-tagged, signed finding/chain to a downstream endpoint — the tsengine→SOC handoff; turns tsengine into a finding *source* a downstream operate layer consumes (§9) |
+| **Outbound: SARIF *export*** (findings → code-scanning / any SARIF consumer) | ✅ | the OUT mirror of the importer — `tsengine export --format sarif` (`internal/exporter`); GitHub code-scanning shows *proven* tsengine findings inline on the PR (`[verified]` prefix, `security-severity` + CWE tags, file:line regions). In-tree (§9) |
+| **Outbound: finding/case webhook + emitter** (→ SIEM / SOC / AI-SOC / ticketing) | ✅ | `tsengine export --webhook` POSTs a normalized, MITRE-friendly, **signed** (Bearer + HMAC-SHA256) finding/case event to a downstream endpoint — the tsengine→SOC handoff; turns tsengine into a finding *source* a downstream operate layer consumes (§9) |
 | **Auto-generated Pull Requests** | 🔴 | GitHub App: open a PR with the verified fix (the write side of delivery) |
 | **ChatOps verification** ("why is this a risk?" in Slack) | 🔴 | Slack/Teams bot over the finding + attack-path |
 
@@ -190,22 +192,22 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 - ✅ **CI/CD security gate** (`internal/gate` + `tsengine gate` + composite Action) — pass/fail on proof + reachability, baseline + waivers, GitHub annotations. Opens the Shift-Left pillar.
 
 - ✅ **Third-party scanner importers** (`internal/importers` + `tsengine import`) — SARIF / Snyk / Dependabot → the engine; gate + reachability + report + findings DB consume them.
+- ✅ **Outbound handoff: SARIF export + signed finding/case webhook** (`internal/exporter` + `tsengine export`) — the OUT mirror of the importers; emit proven findings into code-scanning (SARIF 2.1.0) and SIEM/SOC/ticketing (signed webhook). *The piece that completes the loop* (§9).
 
 **Next (buildable in-tree, highest leverage first — completion before depth):**
-1. **Outbound handoff: SARIF export + finding/case webhook** — the OUT mirror of the importers; emit proven, MITRE-tagged findings into code-scanning / SIEM / SOC / ticketing. *The piece that completes the loop* (§9). (§3)
-2. **Replayable agent decision ledger** — sign + persist every agent step; AI-SOC "Investigation Ledger" parity (§9). (§6)
-3. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
-4. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
-5. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
-6. **Richer correlation linkers** — container image → cloud workload, more credential/identity kinds, feed the live cloud attack-path graph into the chain. (§3/§4)
-7. **VCS-webhook trigger** — fire a scoped staging scan on push, feed the gate (the platform half of CI/CD). (§4)
+1. **Replayable agent decision ledger** — sign + persist every agent step; AI-SOC "Investigation Ledger" parity (§9). (§6)
+2. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
+3. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
+4. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
+5. **Richer correlation linkers** — container image → cloud workload, more credential/identity kinds, feed the live cloud attack-path graph into the chain. (§3/§4)
+6. **Auto-PR / Jira / Slack delivery + VCS-webhook trigger** — the write side of delivery (open a PR with the verified fix, file a ticket) and firing a scoped staging scan on push to feed the gate (the platform half of CI/CD). (§3/§4)
 
 **Then (needs real infrastructure, not in-tree Go):**
 8. **Continuous scheduler + delivery connectors** (cron/event trigger, auto-PR, Jira/Slack) — converts engine → retainer SaaS. → Tier 3 "Scale". (Platform §4, Service §3)
 9. **Multi-tenant store + onboarding (OAuth/GitHub App) + billing + compliance workflow** (org-evidence connectors, continuous control monitoring, auditor portal). The Vanta/Drata surface. (§4, §5)
 10. **Live-AWS validation rung + global safety/RoE hardening** before autonomous testing at customer scale. (§6)
 
-> **Blunt summary:** the genuinely hard part — *grounded autonomous reasoning that separates real from noise and verifies its own claims* — is built and proven across all three agent flavors (cloud, web/api, LLM red-team), each with an anti-circularity bench; the engine now scans, imports, proves, reachability-triages, correlates cross-asset, gates CI, reports, tracks, and serves. To **complete the functionality** the one missing edge is **outbound** — emit proven findings into the systems customers run (SARIF export + finding/case webhook + agent ledger; §9), the small in-tree mirror of the importers that turns the engine into an integrable finding *source*. After that it's **depth** (browser/DOM, RAG, more languages/linkers) and the **SaaS/compliance platform** (continuous scheduler, multi-tenant, onboarding, billing) — an infrastructure project on top of a core that's hard to copy.
+> **Blunt summary:** the genuinely hard part — *grounded autonomous reasoning that separates real from noise and verifies its own claims* — is built and proven across all three agent flavors (cloud, web/api, LLM red-team), each with an anti-circularity bench; the engine now scans, imports, proves, reachability-triages, correlates cross-asset, gates CI, reports, tracks, serves, and **emits** (SARIF export + signed finding/case webhook). The outbound edge is closed — the engine both ingests other scanners' output and emits its own proven findings into the systems customers run, an integrable finding *source*. What remains to fully **complete the functionality** is the **agent decision ledger** (the trust/transparency layer; §9). After that it's **depth** (browser/DOM, RAG, more languages/linkers) and the **SaaS/compliance platform** (continuous scheduler, multi-tenant, onboarding, billing) — an infrastructure project on top of a core that's hard to copy.
 
 ---
 
@@ -225,11 +227,11 @@ Validation + Prioritization** — the hard, defensible end — and lighter on Sh
 
 **Read:** tsengine is a **Validation-and-Prioritization engine** that now also gates
 the SDLC (Shift-Left) — strongest exactly where the model says the durable value is.
-Pillars #1/#3/#4 are built; SCA reachability, the CI gate, and cross-asset correlation
-all shipped. The two remaining honest knocks: (a) **no continuous scheduler** (#2 —
-infra), and (b) **no outbound handoff yet** — the engine can't emit its proven findings
-into the systems customers run (code-scanning / SIEM / ticketing). (b) is the
-highest-leverage *completion* piece and is in-tree (§9); (a) is the platform project.
+Pillars #1/#3/#4 are built; SCA reachability, the CI gate, cross-asset correlation, and
+the **outbound handoff** (SARIF export + signed finding/case webhook) all shipped. The
+one remaining honest knock is **no continuous scheduler** (#2 — the platform project);
+the outbound edge that used to be the highest-leverage completion gap is now closed
+in-tree (`internal/exporter` + `tsengine export`; §9).
 
 ---
 
@@ -240,24 +242,25 @@ highest-leverage *completion* piece and is in-tree (§9); (a) is the platform pr
 > of deploy** (detect → triage → respond). They're complementary, and the clean seam
 > is: **tsengine is a finding *source* that feeds the operate layer.**
 
-The analysis loop is complete. What "completes the functionality" is the **outbound
-edge** — today the engine is **import-only** (`tsengine import` pulls SARIF/Snyk/GHAS
-in) and emits a *human* report + a JSON file, but it cannot push proven, prioritized,
-MITRE-tagged findings into the machine systems a customer already runs. Building the
-OUT mirror turns tsengine from a tool into an integrable node:
+The analysis loop is complete, and the **outbound edge is now built** (`internal/exporter`
++ `tsengine export`). The engine is no longer import-only: it both pulls SARIF/Snyk/GHAS
+in (`tsengine import`) and pushes proven, prioritized findings out into the machine
+systems a customer already runs. The OUT mirror that turns tsengine into an integrable
+node:
 
 | Completion piece | Status | Why it completes the loop |
 |---|---|---|
-| **SARIF export** (`tsengine export --format sarif`) | 🔴 | the OUT mirror of the importer; GitHub code-scanning / any SARIF consumer shows *proven* tsengine findings inline on the PR — makes the gate visible where developers already look. Small, highest-leverage |
-| **Finding/case webhook + emitter** | 🔴 | POST a normalized, signed, MITRE-tagged finding / attack-chain to a downstream endpoint (SIEM / SOC / AI-SOC / ticketing) — the tsengine→operate handoff; both sides already speak MITRE ATT&CK so the contract is clean |
+| **SARIF export** (`tsengine export --format sarif`) | ✅ | the OUT mirror of the importer; GitHub code-scanning / any SARIF consumer shows *proven* tsengine findings inline on the PR (`[verified]` prefix, `security-severity` + CWE `external/cwe/*` tags, file:line→region locations) — makes the gate visible where developers already look |
+| **Finding/case webhook + emitter** (`tsengine export --webhook`) | ✅ | POSTs a normalized, **signed** (Bearer + HMAC-SHA256 over the body, `X-TSEngine-Signature`) finding/case event to a downstream endpoint (SIEM / SOC / AI-SOC / ticketing) — the tsengine→operate handoff; severity ladder + status (verified/corroborated) + CWE/threat-intel/compliance ride in the payload so a consumer can open a case directly |
 | **Replayable agent decision ledger** | 🔴 | persist + sign every agent step (prompt / tool-call / observation / decision) — parity with an AI-SOC's Investigation Ledger; the transparency/defensibility layer (§6) |
 | **Auto-PR / Jira / Slack delivery** | 🔴 | the write side of delivery — open a PR with the verified fix, file a ticket, post the chain to ChatOps (§3/§4) |
 
-**The combined picture:** with SARIF export + the webhook emitter, a customer wires
-tsengine as a *connector into* their SOC / code-scanning / ticketing — proven,
-prioritized risk flows left→right so analysts work *confirmed exploitable paths to
-crown jewels* instead of raw scanner noise. That handoff is one small in-tree build
+**The combined picture:** with SARIF export + the webhook emitter (both shipped), a
+customer wires tsengine as a *connector into* their SOC / code-scanning / ticketing —
+proven, prioritized risk flows left→right so analysts work *confirmed exploitable paths
+to crown jewels* instead of raw scanner noise. That handoff was one small in-tree build
 (the mirror of the importers against an existing contract), **not** an infra project —
 and it's what makes the engine *complete* as an interoperable product rather than a
-standalone CLI. The platform surface (continuous scheduler, multi-tenant, onboarding,
+standalone CLI. The remaining outbound items (agent ledger, auto-PR/Jira/Slack) deepen
+the same edge. The platform surface (continuous scheduler, multi-tenant, onboarding,
 billing — §4/§5) remains the separate infrastructure track.
