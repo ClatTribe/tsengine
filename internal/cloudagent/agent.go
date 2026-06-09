@@ -9,6 +9,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/ledger"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -52,6 +53,9 @@ type Report struct {
 type Options struct {
 	MaxIters int // tool-call turns before the loop is force-closed
 	MaxHyp   int // worklist budget for the enumerate_attack_paths prepass tool
+	// Ledger, when set, records every ReAct step into the replayable agent decision
+	// ledger. Nil-safe (a nil recorder is a no-op).
+	Ledger *ledger.Recorder
 }
 
 // Investigate runs the LLM-as-brain loop (the VulnAgent shape): the model reads
@@ -85,16 +89,19 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		}
 		act, perr := parseAction(out)
 		if perr != nil {
+			opts.Ledger.Note("reply was not a valid JSON action: " + perr.Error())
 			transcript = appendCapped(transcript, "OBSERVATION: your reply was not a valid JSON action ("+perr.Error()+"). Reply with exactly one JSON action.")
 			continue
 		}
 		t, ok := reg[act.Tool]
 		if !ok {
+			opts.Ledger.Note(fmt.Sprintf("unknown tool %q", act.Tool))
 			transcript = appendCapped(transcript, fmt.Sprintf("OBSERVATION: unknown tool %q. Available: %s", act.Tool, toolNames()))
 			continue
 		}
 		cc.calls++
 		obs := t.handler(cc, act.Args)
+		opts.Ledger.Record(act.Thought, act.Tool, act.Args, obs)
 		transcript = appendCapped(transcript, fmt.Sprintf("ACTION %s(%s)\nOBSERVATION: %s", act.Tool, compactArgs(act.Args), obs))
 	}
 	return &Report{Summary: cc.Summary, Issues: cc.Issues, Calls: cc.calls}, nil

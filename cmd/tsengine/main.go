@@ -52,6 +52,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/gate"
 	"github.com/ClatTribe/tsengine/internal/importers"
+	"github.com/ClatTribe/tsengine/internal/ledger"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
@@ -224,6 +225,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine export: %v\n", err)
 			os.Exit(1)
 		}
+	case "ledger":
+		if err := runLedger(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine ledger: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsengine: unknown subcommand %q\n", args[0])
 		usage()
@@ -242,9 +248,9 @@ Usage:
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
   tsengine cloud-assess --snapshot <inventory.json> [--prowler <findings.json>] [--out <assessment.json>]
   tsengine web-investigate --target <url> [--seed <url>,...] [--max-requests N] [--min-interval <dur>] [--max-iters N]
-                  [--export-evidence <file.json>] [--sign-key <path>] [--signer <id>]
+                  [--export-evidence <file.json>] [--ledger <file.json>] [--sign-key <path>] [--signer <id>]
   tsengine web-verify [--pubkey <hex>] <evidence.json>
-  tsengine llm-redteam --bench [--seed N] [--n N] [--hardened-frac F]   # emulated LLM red-team population
+  tsengine llm-redteam --bench [--seed N] [--n N] [--hardened-frac F] [--ledger <file.json>]   # emulated LLM red-team population
   tsengine report --in <vulnerabilities.json|evidence.json> [--format md|html] [--out <file>] [--org <name>]
   tsengine findings ingest --db <file> --in <vulnerabilities.json|evidence.json>
   tsengine findings list   --db <file> [--status <s>] [--severity <s>] [--open] [--overdue]
@@ -263,6 +269,9 @@ Usage:
                   # cross-asset attack chains: a finding HERE → a crown jewel THERE (e.g. web leak → cloud admin)
   tsengine export --in <scan|evidence.json> [--format sarif|json] [--out <file>]
                   [--webhook <url> --webhook-token <t> --hmac-secret <s>]   # emit findings OUT (code-scanning / SIEM / SOC)
+  tsengine ledger verify [--pubkey <hex>] <ledger.json>          # check the signed agent decision ledger is intact
+  tsengine ledger replay <ledger.json>                          # reconstruct the agent's thought→tool→observation trail
+  tsengine ledger show   <ledger.json>                          # one-line summary (steps, decisions, signer)
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
   tsengine corpus refresh [--out <dir>] [--timeout <dur>]
@@ -633,6 +642,9 @@ func runCloudInvestigate(argv []string) error {
 	maxIters := fs.Int("max-iters", 28, "max tool-call turns before the loop is force-closed")
 	maxHyp := fs.Int("max-hypotheses", 60, "worklist budget for the enumerate_attack_paths prepass tool")
 	export := fs.String("export", "", "write each issue's verified remediation artifact to this dir (the applyable 'act' output)")
+	ledgerOut := fs.String("ledger", "", "write a signed, replayable agent decision ledger (every thought/tool/observation step) to this JSON file")
+	signKey := fs.String("sign-key", attest.DefaultKeyPath(), "ed25519 key to sign the ledger")
+	signer := fs.String("signer", "", "human-readable signer id recorded in the ledger (default: derived from key)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -658,8 +670,13 @@ func runCloudInvestigate(argv []string) error {
 	if !ok {
 		return fmt.Errorf("cloud-investigate needs LLM_API_KEY (the agent's brain)")
 	}
+	var rec *ledger.Recorder
+	if *ledgerOut != "" {
+		rec = ledger.NewRecorder()
+	}
+	startedAt := time.Now().UTC()
 	cc := &cloudagent.Context{Snap: snap, Prowler: prowler}
-	rep, err := cloudagent.Investigate(context.Background(), llm, cc, cloudagent.Options{MaxIters: *maxIters, MaxHyp: *maxHyp})
+	rep, err := cloudagent.Investigate(context.Background(), llm, cc, cloudagent.Options{MaxIters: *maxIters, MaxHyp: *maxHyp, Ledger: rec})
 	if err != nil {
 		return err
 	}
@@ -670,6 +687,25 @@ func runCloudInvestigate(argv []string) error {
 			return eerr
 		}
 		fmt.Fprintf(os.Stderr, "[cloud-investigate] exported %d applyable remediation artifact(s) → %s/\n", n, *export)
+	}
+	if *ledgerOut != "" {
+		decisions := make([]ledger.Decision, 0, len(rep.Issues))
+		for _, is := range rep.Issues {
+			refs := is.Evidence
+			if len(refs) == 0 {
+				refs = is.Path
+			}
+			decisions = append(decisions, ledger.Decision{
+				ID: is.ID, Kind: "attack_path", Severity: is.Severity, Refs: refs, Detail: is.Rationale,
+			})
+		}
+		l := rec.Build(ledger.Meta{
+			AgentKind: "cloudagent", Target: "cloud_account", Engine: "tsengine " + Version,
+			Summary: rep.Summary, StartedAt: startedAt, CompletedAt: time.Now().UTC(), Decisions: decisions,
+		})
+		if werr := signAndWriteLedger(l, *signKey, *signer, *ledgerOut, "cloud-investigate"); werr != nil {
+			return werr
+		}
 	}
 	return nil
 }
@@ -687,7 +723,8 @@ func runWebInvestigate(argv []string) error {
 	maxIters := fs.Int("max-iters", 30, "max tool-call turns before the loop is force-closed")
 	minInterval := fs.Duration("min-interval", 0, "throttle between requests (e.g. 200ms)")
 	exportEvidence := fs.String("export-evidence", "", "write a signed, tamper-evident evidence bundle (the VAPT PoC deliverable) to this JSON file")
-	signKey := fs.String("sign-key", attest.DefaultKeyPath(), "ed25519 key to sign the evidence bundle")
+	ledgerOut := fs.String("ledger", "", "write a signed, replayable agent decision ledger (every thought/tool/observation step) to this JSON file")
+	signKey := fs.String("sign-key", attest.DefaultKeyPath(), "ed25519 key to sign the evidence bundle / ledger")
 	signer := fs.String("signer", "", "human-readable signer id recorded in the bundle (default: derived from key)")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -707,14 +744,35 @@ func runWebInvestigate(argv []string) error {
 	if !ok {
 		return fmt.Errorf("web-investigate needs LLM_API_KEY (the agent's brain)")
 	}
+	var rec *ledger.Recorder
+	if *ledgerOut != "" {
+		rec = ledger.NewRecorder()
+	}
+	startedAt := time.Now().UTC()
 	cc := &webagent.Context{Target: *target}
 	rep, err := webagent.Investigate(context.Background(), llm, cc, webagent.Options{
-		MaxIters: *maxIters, MaxRequests: *maxReq, MinInterval: *minInterval, Seed: seed,
+		MaxIters: *maxIters, MaxRequests: *maxReq, MinInterval: *minInterval, Seed: seed, Ledger: rec,
 	})
 	if err != nil {
 		return err
 	}
 	fmt.Print(webagent.Render(rep))
+
+	if *ledgerOut != "" {
+		decisions := make([]ledger.Decision, 0, len(rep.Findings))
+		for _, f := range rep.Findings {
+			decisions = append(decisions, ledger.Decision{
+				ID: f.ID, Kind: f.Class, Severity: f.Severity, Refs: f.Evidence, Detail: f.Rationale,
+			})
+		}
+		l := rec.Build(ledger.Meta{
+			AgentKind: "webagent", Target: rep.Target, Engine: "tsengine " + Version,
+			Summary: rep.Summary, StartedAt: startedAt, CompletedAt: time.Now().UTC(), Decisions: decisions,
+		})
+		if werr := signAndWriteLedger(l, *signKey, *signer, *ledgerOut, "web-investigate"); werr != nil {
+			return werr
+		}
+	}
 
 	if *exportEvidence != "" {
 		priv, id, kerr := attest.LoadOrCreate(*signKey)
@@ -800,6 +858,9 @@ func runLLMRedteam(argv []string) error {
 	seed := fs.Int64("seed", 1, "generation seed")
 	n := fs.Int("n", 14, "number of targets in the population")
 	hardenedFrac := fs.Float64("hardened-frac", 0.4, "fraction of targets that are hardened decoys")
+	ledgerOut := fs.String("ledger", "", "write a signed, replayable agent decision ledger for one engagement to this JSON file")
+	signKey := fs.String("sign-key", attest.DefaultKeyPath(), "ed25519 key to sign the ledger")
+	signer := fs.String("signer", "", "human-readable signer id recorded in the ledger (default: derived from key)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -824,6 +885,42 @@ func runLLMRedteam(argv []string) error {
 			mark = "BREACHED"
 		}
 		fmt.Printf("  %-9s %-22s %s  (%d breach, %d prompts)\n", spec.ID, status, mark, len(rep.Breaches), rep.Turns)
+	}
+
+	// --ledger: re-run ONE engagement (the first vulnerable target) with a recorder
+	// attached, then sign + export the replayable decision ledger. Deterministic
+	// attacker (no API key) → a self-contained, reproducible ledger demo.
+	if *ledgerOut != "" {
+		var pick string
+		for _, spec := range rg.Manifest.Targets {
+			if spec.Vulnerable {
+				pick = spec.ID
+				break
+			}
+		}
+		if pick == "" {
+			return fmt.Errorf("ledger: no vulnerable target in the population to record")
+		}
+		rec := ledger.NewRecorder()
+		startedAt := time.Now().UTC()
+		rep, rerr := llmredteam.RunEngagement(context.Background(), nil,
+			rg.Target(pick), rg.Engagement(pick), llmredteam.Options{Ledger: rec})
+		if rerr != nil {
+			return rerr
+		}
+		decisions := make([]ledger.Decision, 0, len(rep.Breaches))
+		for _, b := range rep.Breaches {
+			decisions = append(decisions, ledger.Decision{
+				ID: b.ID, Kind: b.Class, Severity: b.Severity, Refs: b.Evidence, Detail: b.Rationale,
+			})
+		}
+		l := rec.Build(ledger.Meta{
+			EngagementID: pick, AgentKind: "llmredteam", Target: rep.Engagement, Engine: "tsengine " + Version,
+			Summary: rep.Summary, StartedAt: startedAt, CompletedAt: time.Now().UTC(), Decisions: decisions,
+		})
+		if werr := signAndWriteLedger(l, *signKey, *signer, *ledgerOut, "llm-redteam"); werr != nil {
+			return werr
+		}
 	}
 	return nil
 }
@@ -1479,6 +1576,137 @@ func signedNote(secret string) string {
 		return " [HMAC-signed]"
 	}
 	return ""
+}
+
+// --- ledger (replayable agent decision ledger, roadmap §9) -------
+
+// signAndWriteLedger signs a built ledger with the local ed25519 key and writes it.
+// Shared by web-investigate / cloud-investigate / llm-redteam --ledger.
+func signAndWriteLedger(l *ledger.Ledger, keyPath, signerOverride, out, tag string) error {
+	priv, id, err := attest.LoadOrCreate(keyPath)
+	if err != nil {
+		return fmt.Errorf("ledger: load signing key: %w", err)
+	}
+	if signerOverride != "" {
+		id = signerOverride
+	}
+	if err := ledger.Sign(l, id, priv, time.Now().UTC()); err != nil {
+		return err
+	}
+	if err := ledger.Export(out, l); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "[%s] signed agent decision ledger (%d step(s), %d decision(s), signer=%s) → %s\n",
+		tag, len(l.Steps), len(l.Decisions), id, out)
+	return nil
+}
+
+// runLedger handles `tsengine ledger <verify|replay|show> <ledger.json>` — the
+// auditor's side of the replayable agent decision ledger. verify checks the ed25519
+// attestation (the record was not altered after signing); replay reconstructs the
+// thought→tool→observation trail; show prints a one-line summary.
+func runLedger(argv []string) error {
+	if len(argv) == 0 {
+		return fmt.Errorf("usage: tsengine ledger <verify|replay|show> [flags] <ledger.json>")
+	}
+	sub, rest := argv[0], argv[1:]
+	switch sub {
+	case "verify":
+		fs := flag.NewFlagSet("ledger verify", flag.ContinueOnError)
+		pubHex := fs.String("pubkey", "", "hex public key (default: local signing key's public half)")
+		keyPath := fs.String("key", attest.DefaultKeyPath(), "local signing key (for the default pubkey)")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		args := fs.Args()
+		if len(args) != 1 {
+			return fmt.Errorf("usage: tsengine ledger verify [--pubkey hex] <ledger.json>")
+		}
+		l, err := ledger.Load(args[0])
+		if err != nil {
+			return err
+		}
+		pub, err := resolvePubkey(*pubHex, *keyPath)
+		if err != nil {
+			return err
+		}
+		if err := ledger.Verify(l, pub); err != nil {
+			return err
+		}
+		fmt.Printf("OK — agent decision ledger verified (signer=%s, signed_at=%s)\n",
+			l.Attestation.Signer, l.Attestation.SignedAt.Format(time.RFC3339))
+		fmt.Printf("agent=%s  target=%s  steps=%d  decisions=%d\n",
+			l.AgentKind, l.Target, len(l.Steps), len(l.Decisions))
+		return nil
+
+	case "replay":
+		fs := flag.NewFlagSet("ledger replay", flag.ContinueOnError)
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		args := fs.Args()
+		if len(args) != 1 {
+			return fmt.Errorf("usage: tsengine ledger replay <ledger.json>")
+		}
+		l, err := ledger.Load(args[0])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("agent decision ledger — %s vs %s  (%d steps, %d grounded decisions)\n",
+			l.AgentKind, nzStr(l.Target, "—"), len(l.Steps), len(l.Decisions))
+		if l.Attestation != nil {
+			fmt.Printf("signer=%s  signed_at=%s\n\n", l.Attestation.Signer, l.Attestation.SignedAt.Format(time.RFC3339))
+		}
+		for _, line := range ledger.Replay(l) {
+			fmt.Println(line)
+		}
+		return nil
+
+	case "show":
+		fs := flag.NewFlagSet("ledger show", flag.ContinueOnError)
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		args := fs.Args()
+		if len(args) != 1 {
+			return fmt.Errorf("usage: tsengine ledger show <ledger.json>")
+		}
+		l, err := ledger.Load(args[0])
+		if err != nil {
+			return err
+		}
+		signer := "unsigned"
+		if l.Attestation != nil {
+			signer = l.Attestation.Signer
+		}
+		fmt.Printf("%s  agent=%s  target=%s  steps=%d  decisions=%d  signer=%s\n",
+			nzStr(l.EngagementID, "(ledger)"), l.AgentKind, nzStr(l.Target, "—"),
+			len(l.Steps), len(l.Decisions), signer)
+		return nil
+
+	default:
+		return fmt.Errorf("unknown ledger subcommand %q (want verify|replay|show)", sub)
+	}
+}
+
+// resolvePubkey returns the public key for verification: an explicit hex key, else
+// the public half of the local signing key.
+func resolvePubkey(pubHex, keyPath string) (ed25519.PublicKey, error) {
+	if pubHex != "" {
+		return attest.ParsePublicKeyHex(pubHex)
+	}
+	priv, _, err := attest.LoadOrCreate(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("load local key: %w", err)
+	}
+	return priv.Public().(ed25519.PublicKey), nil
+}
+
+func nzStr(s, def string) string {
+	if strings.TrimSpace(s) == "" {
+		return def
+	}
+	return s
 }
 
 // --- pubkey ------------------------------------------------------
