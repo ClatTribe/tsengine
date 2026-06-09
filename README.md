@@ -69,13 +69,15 @@ Full operations guide — env vars, the docker-socket model, scaling, security h
 
 ## Commands
 
-`scan` · `replay` · `serve` · `report` · `findings` · `import` · `export` · `reachability` · `gate` · `correlate` · `web-investigate` / `web-verify` · `cloud-investigate` / `cloud-assess` · `llm-redteam` · `pubkey` / `verify` · `corpus` · `version`. Run `tsengine` with no args for usage.
+`scan` · `replay` · `serve` · `report` · `findings` · `import` · `export` · `ledger` · `reachability` · `gate` · `correlate` · `web-investigate` / `web-verify` · `cloud-investigate` / `cloud-assess` · `llm-redteam` · `pubkey` / `verify` · `corpus` · `version`. Run `tsengine` with no args for usage.
 
 **Prioritization:** `tsengine correlate --in webscan.json --in cloudscan.json` stitches findings *across* assets into a single attack chain to a crown jewel (e.g. a web SQLi that leaks an AWS key → the cloud IAM user it maps to → privilege escalation to admin) — grounded by the shared identifier, so no shared id means no chain.
 
 **Shift-left / CI:** `tsengine import` pulls in another scanner's output (SARIF / Snyk / GitHub Dependabot); `tsengine reachability` answers "does our code actually call the vulnerable dependency function?"; `tsengine gate` turns scan / web-exploit / SCA-reachability findings into a **pass/fail** for your pipeline (gates on *proof*, not raw CVSS). So your existing Snyk/CodeQL results get the grounding + gate treatment. See **[docs/CI.md](docs/CI.md)** + the reusable `.github/actions/tsengine-gate` Action.
 
 **Outbound handoff:** `tsengine export --in scan.json --format sarif` emits **SARIF 2.1.0** so GitHub code-scanning (or any SARIF consumer) shows tsengine's *proven* findings inline on the PR (`[verified]` prefix, `security-severity` + CWE tags, file:line locations). `tsengine export --in scan.json --webhook <url> [--webhook-token … --hmac-secret …]` POSTs a normalized, **signed** (Bearer + HMAC-SHA256) finding/case event to a SIEM / SOC / AI-SOC / ticketing endpoint. The OUT mirror of `import` — tsengine is a finding *source*, not just a sink.
+
+**Agent decision ledger:** every autonomous agent run (`web-investigate` / `cloud-investigate` / `llm-redteam`) can write a `--ledger <file>` — a **signed, replayable** record of every ReAct step (the model's thought, the tool it chose, the args, the deterministic observation). `tsengine ledger replay <file>` reconstructs the thought→tool→observation trail offline; `tsengine ledger verify <file>` proves no step was added, dropped, or altered after signing (ed25519, same scheme as the evidence bundle). Parity with an AI-SOC's "Investigation Ledger" — the trust/transparency layer.
 
 ## Develop
 

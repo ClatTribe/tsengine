@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/ledger"
 )
 
 // Context is the agent's working memory for one engagement against one target.
@@ -68,6 +69,10 @@ type Options struct {
 	MinInterval  time.Duration // throttle between requests (do-no-harm)
 	Seed         []string      // optional routes from L1 scanners to start from
 	SeedFindings []SeedFinding // optional suspected findings from L1 to CONFIRM
+	// Ledger, when set, records every ReAct step (thought / tool / args /
+	// observation) into the replayable agent decision ledger. Nil-safe: a nil
+	// recorder is a no-op, so the loop calls it unconditionally.
+	Ledger *ledger.Recorder
 }
 
 // Investigate runs the LLM-as-brain loop against a live target (the cloudagent
@@ -122,16 +127,19 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		}
 		act, perr := parseAction(out)
 		if perr != nil {
+			opts.Ledger.Note("reply was not a valid JSON action: " + perr.Error())
 			transcript = appendCapped(transcript, "OBSERVATION: your reply was not a valid JSON action ("+perr.Error()+"). Reply with exactly one JSON action.")
 			continue
 		}
 		t, ok := reg[act.Tool]
 		if !ok {
+			opts.Ledger.Note(fmt.Sprintf("unknown tool %q", act.Tool))
 			transcript = appendCapped(transcript, fmt.Sprintf("OBSERVATION: unknown tool %q. Available: %s", act.Tool, toolNames()))
 			continue
 		}
 		cc.calls++
 		obs := t.handler(cc, act.Args)
+		opts.Ledger.Record(act.Thought, act.Tool, act.Args, obs)
 		transcript = appendCapped(transcript, fmt.Sprintf("ACTION %s(%s)\nOBSERVATION: %s", act.Tool, compactArgs(act.Args), obs))
 	}
 	return &Report{

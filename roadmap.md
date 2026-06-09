@@ -8,13 +8,14 @@
 > **prove** (grounded agents + reachability) → **prioritize** (cross-asset correlation) →
 > decide (CI gate) → package (report) → **emit** (SARIF export + signed finding/case webhook) →
 > track (findings DB) → serve (API), across all three agent flavors with an anti-circularity
-> bench each. The **outbound handoff** is now built (`internal/exporter` + `tsengine export`):
+> bench each. The **outbound handoff** is built (`internal/exporter` + `tsengine export`):
 > the engine both *imports* other scanners and *emits* its proven findings into the systems
-> customers already run (SARIF/code-scanning, SIEM/SOC, ticketing) — the loop is closed.
-> What's left to **complete the functionality** is, in order: (1) a **replayable agent
-> decision ledger** (the trust/transparency layer); (2) **agent depth** (browser/DOM,
-> business-logic, RAG, live LLM-target); and (3) the **platform surface** (continuous
-> scheduler, multi-tenant SaaS, onboarding, billing, compliance workflow) — an infra project.
+> customers already run (SARIF/code-scanning, SIEM/SOC, ticketing). And every agent run now
+> writes a **signed, replayable decision ledger** (`internal/ledger` + `tsengine ledger`) —
+> the trust/transparency layer — so the loop is closed *and* auditable. What's left to
+> complete the functionality is, in order: (1) **agent depth** (browser/DOM, business-logic,
+> RAG, live LLM-target); and (2) the **platform surface** (continuous scheduler, multi-tenant
+> SaaS, onboarding, billing, compliance workflow) — an infra project.
 > See §9 for how the handoff positions us vs a downstream AI-SOC.
 
 Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here; convert to PRs as picked up.
@@ -25,7 +26,7 @@ Status legend: ✅ built · 🟡 partial · 🔴 missing. Items are tracked here
 > 3. ✅ **SARIF / Snyk / GHAS importers** — `internal/importers` + `tsengine import`: a customer's existing scanner output flows through the grounding, reachability, and gate. §3.
 > 4. ✅ **Cross-asset correlation** — `internal/correlate` + `tsengine correlate`: stitch findings across assets into one attack chain to a crown jewel (moves the Prioritization pillar 🟢🟡~7 → 🟢~8). §3/§4.
 > 5. ✅ **Outbound handoff / export** — the completing piece (§9). `internal/exporter` + `tsengine export`: **SARIF export** (→ GitHub code-scanning / any SARIF consumer, proven findings inline on the PR), a **signed finding/case webhook** (→ SIEM/SOC/AI-SOC/ticketing, Bearer + HMAC-SHA256). The OUT mirror of the importers — the engine is now a finding *source*, not just a sink. §3/§9.
-> 6. 🔴 **Replayable agent decision ledger** — persist + sign every agent step (prompt/tool-call/observation/decision) into a verifiable, replayable ledger (parity with an AI-SOC's "Investigation Ledger"). In-tree. §6.
+> 6. ✅ **Replayable agent decision ledger** — `internal/ledger` + `tsengine ledger`: a `Recorder` captures every agent ReAct step (thought / tool / args / observation) across all three agent flavors; the ledger is ed25519-signed (same scheme as the evidence bundle), replayable (`ledger replay` reconstructs the thought→tool→observation trail), and tamper-evident (any post-signing edit breaks `ledger verify`). Parity with an AI-SOC's "Investigation Ledger". §6.
 > 7. **Live HTTP LLM-target adapter + RAG probes** — finishes the LLM red-team service. §2.
 > 8. **Browser/DOM + business-logic (BOLA/BFLA)** — web agent depth. §1.
 > 9. **Continuous scheduler + delivery connectors (PR/Jira/Slack)** — converts engine → retainer SaaS. §4.
@@ -175,7 +176,7 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 | **Authorization / consent / RoE capture** (legal) | 🔴 | required to test client assets |
 | **Agent-injection resilience** (prompt injection from scanned content) | 🟡 | web + LLM agents ride on grounded indicators, not model-read attacker text (proven: a lying reply can't fabricate a finding); the `llmredteam` harness points inward to measure it. RAG/document-injection depth still 🔴 |
 | Eval/regression harness on real engagements | 🟡 | cloud bench ladder + **web agent bench** (`internal/webrange`) + **LLM red-team bench** (`internal/llmredteam`) — procedural populations with decoys, recall/precision vs answer key, all three agents |
-| **Replayable agent decision ledger** | 🔴 | persist + sign every agent step (prompt / tool-call / observation / decision) into a verifiable, replayable ledger — parity with an AI-SOC's "Investigation Ledger". The agents already keep an in-memory transcript; this writes it to a signed, queryable record. In-tree; the trust/transparency completeness piece (§9) |
+| **Replayable agent decision ledger** | ✅ | `internal/ledger` + `tsengine ledger` — a nil-safe `Recorder` wired into all three agent loops captures every ReAct step (thought / tool / args / observation); `Build` + `Sign` produce an ed25519-signed record (same scheme as the evidence bundle), `ledger replay` reconstructs the thought→tool→observation trail, and `ledger verify` proves no step was added/dropped/altered after signing. Parity with an AI-SOC's "Investigation Ledger" (§9) |
 | Chain of custody / audit trail | 🟡 | attestation + (above) ledger extend the per-action trail; per-action log over the whole engagement still to wire |
 | Live-AWS validation rung (CloudGoat deploy→sync→confirm) | 🟡 | `RunTier1Live` stub; needs AWS account |
 
@@ -193,21 +194,21 @@ Most of SOC2 is **evidence + workflow**, not scanning. We cover the ~15–20% th
 
 - ✅ **Third-party scanner importers** (`internal/importers` + `tsengine import`) — SARIF / Snyk / Dependabot → the engine; gate + reachability + report + findings DB consume them.
 - ✅ **Outbound handoff: SARIF export + signed finding/case webhook** (`internal/exporter` + `tsengine export`) — the OUT mirror of the importers; emit proven findings into code-scanning (SARIF 2.1.0) and SIEM/SOC/ticketing (signed webhook). *The piece that completes the loop* (§9).
+- ✅ **Replayable agent decision ledger** (`internal/ledger` + `tsengine ledger`) — every agent ReAct step captured, ed25519-signed, replayable, tamper-evident. AI-SOC "Investigation Ledger" parity; the trust/transparency layer (§6/§9).
 
-**Next (buildable in-tree, highest leverage first — completion before depth):**
-1. **Replayable agent decision ledger** — sign + persist every agent step; AI-SOC "Investigation Ledger" parity (§9). (§6)
-2. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
-3. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
-4. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
-5. **Richer correlation linkers** — container image → cloud workload, more credential/identity kinds, feed the live cloud attack-path graph into the chain. (§3/§4)
-6. **Auto-PR / Jira / Slack delivery + VCS-webhook trigger** — the write side of delivery (open a PR with the verified fix, file a ticket) and firing a scoped staging scan on push to feed the gate (the platform half of CI/CD). (§3/§4)
+**Next (buildable in-tree, highest leverage first — depth, now that the loop is closed + auditable):**
+1. **LLM red-team depth** — live HTTP target adapter + RAG/vector-DB extraction probes + signed evidence (reuse `webagent.EvidenceBundle`). (§2)
+2. **Web agent depth** — browser/DOM (Playwright tool), authenticated business-logic / BOLA/BFLA. (§1)
+3. **Reachability beyond Go** — JS/TS + Python extractors over the same language-agnostic solver. (§3)
+4. **Richer correlation linkers** — container image → cloud workload, more credential/identity kinds, feed the live cloud attack-path graph into the chain. (§3/§4)
+5. **Auto-PR / Jira / Slack delivery + VCS-webhook trigger** — the write side of delivery (open a PR with the verified fix, file a ticket) and firing a scoped staging scan on push to feed the gate (the platform half of CI/CD). (§3/§4)
 
 **Then (needs real infrastructure, not in-tree Go):**
 8. **Continuous scheduler + delivery connectors** (cron/event trigger, auto-PR, Jira/Slack) — converts engine → retainer SaaS. → Tier 3 "Scale". (Platform §4, Service §3)
 9. **Multi-tenant store + onboarding (OAuth/GitHub App) + billing + compliance workflow** (org-evidence connectors, continuous control monitoring, auditor portal). The Vanta/Drata surface. (§4, §5)
 10. **Live-AWS validation rung + global safety/RoE hardening** before autonomous testing at customer scale. (§6)
 
-> **Blunt summary:** the genuinely hard part — *grounded autonomous reasoning that separates real from noise and verifies its own claims* — is built and proven across all three agent flavors (cloud, web/api, LLM red-team), each with an anti-circularity bench; the engine now scans, imports, proves, reachability-triages, correlates cross-asset, gates CI, reports, tracks, serves, and **emits** (SARIF export + signed finding/case webhook). The outbound edge is closed — the engine both ingests other scanners' output and emits its own proven findings into the systems customers run, an integrable finding *source*. What remains to fully **complete the functionality** is the **agent decision ledger** (the trust/transparency layer; §9). After that it's **depth** (browser/DOM, RAG, more languages/linkers) and the **SaaS/compliance platform** (continuous scheduler, multi-tenant, onboarding, billing) — an infrastructure project on top of a core that's hard to copy.
+> **Blunt summary:** the genuinely hard part — *grounded autonomous reasoning that separates real from noise and verifies its own claims* — is built and proven across all three agent flavors (cloud, web/api, LLM red-team), each with an anti-circularity bench; the engine now scans, imports, proves, reachability-triages, correlates cross-asset, gates CI, reports, tracks, serves, **emits** (SARIF export + signed finding/case webhook), and **records every agent decision into a signed, replayable, tamper-evident ledger**. The functional loop is closed *and* auditable — the engine ingests other scanners' output, emits its own proven findings into the systems customers run, and can prove exactly what its agents did and why. What remains is **depth** (browser/DOM, RAG, more languages/linkers) and the **SaaS/compliance platform** (continuous scheduler, multi-tenant, onboarding, billing) — an infrastructure project on top of a core that's hard to copy.
 
 ---
 
@@ -252,15 +253,17 @@ node:
 |---|---|---|
 | **SARIF export** (`tsengine export --format sarif`) | ✅ | the OUT mirror of the importer; GitHub code-scanning / any SARIF consumer shows *proven* tsengine findings inline on the PR (`[verified]` prefix, `security-severity` + CWE `external/cwe/*` tags, file:line→region locations) — makes the gate visible where developers already look |
 | **Finding/case webhook + emitter** (`tsengine export --webhook`) | ✅ | POSTs a normalized, **signed** (Bearer + HMAC-SHA256 over the body, `X-TSEngine-Signature`) finding/case event to a downstream endpoint (SIEM / SOC / AI-SOC / ticketing) — the tsengine→operate handoff; severity ladder + status (verified/corroborated) + CWE/threat-intel/compliance ride in the payload so a consumer can open a case directly |
-| **Replayable agent decision ledger** | 🔴 | persist + sign every agent step (prompt / tool-call / observation / decision) — parity with an AI-SOC's Investigation Ledger; the transparency/defensibility layer (§6) |
+| **Replayable agent decision ledger** (`tsengine ledger`) | ✅ | `internal/ledger`: a nil-safe `Recorder` wired into all three agent loops captures every ReAct step (thought / tool / args / observation); the record is ed25519-signed (same scheme as the evidence bundle), `ledger replay` reconstructs the thought→tool→observation trail offline, and `ledger verify` proves no step was added / dropped / altered after signing. Parity with an AI-SOC's Investigation Ledger — the transparency/defensibility layer (§6) |
 | **Auto-PR / Jira / Slack delivery** | 🔴 | the write side of delivery — open a PR with the verified fix, file a ticket, post the chain to ChatOps (§3/§4) |
 
-**The combined picture:** with SARIF export + the webhook emitter (both shipped), a
-customer wires tsengine as a *connector into* their SOC / code-scanning / ticketing —
-proven, prioritized risk flows left→right so analysts work *confirmed exploitable paths
-to crown jewels* instead of raw scanner noise. That handoff was one small in-tree build
-(the mirror of the importers against an existing contract), **not** an infra project —
-and it's what makes the engine *complete* as an interoperable product rather than a
-standalone CLI. The remaining outbound items (agent ledger, auto-PR/Jira/Slack) deepen
-the same edge. The platform surface (continuous scheduler, multi-tenant, onboarding,
-billing — §4/§5) remains the separate infrastructure track.
+**The combined picture:** with SARIF export + the webhook emitter + the signed agent
+ledger (all shipped), a customer wires tsengine as a *connector into* their SOC /
+code-scanning / ticketing — proven, prioritized risk flows left→right so analysts work
+*confirmed exploitable paths to crown jewels* instead of raw scanner noise, and every
+autonomous decision behind a finding is replayable and tamper-evident. That handoff was
+a small in-tree build (the mirror of the importers against an existing contract, plus a
+leaf ledger package over the existing ed25519 tooling), **not** an infra project — and
+it's what makes the engine *complete* as an interoperable, auditable product rather than
+a standalone CLI. The one remaining outbound item (auto-PR/Jira/Slack) deepens the same
+edge. The platform surface (continuous scheduler, multi-tenant, onboarding, billing —
+§4/§5) remains the separate infrastructure track.

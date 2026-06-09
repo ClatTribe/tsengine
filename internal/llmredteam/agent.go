@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/ledger"
 )
 
 // Turn is one attacker prompt + target reply (the evidence substrate).
@@ -70,6 +71,9 @@ type Report struct {
 type Options struct {
 	MaxIters   int // attacker turns before the loop is force-closed
 	MaxPrompts int // hard cap on prompts sent to the target
+	// Ledger, when set, records every attacker step into the replayable agent
+	// decision ledger. Nil-safe (a nil recorder is a no-op).
+	Ledger *ledger.Recorder
 }
 
 // Investigate runs the LLM-as-brain attacker loop against one target. The model
@@ -101,16 +105,19 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		}
 		act, perr := parseAction(out)
 		if perr != nil {
+			opts.Ledger.Note("reply was not a valid JSON action: " + perr.Error())
 			transcript = appendCapped(transcript, "OBSERVATION: reply was not a valid JSON action ("+perr.Error()+"). Reply with exactly one JSON action.")
 			continue
 		}
 		t, ok := reg[act.Tool]
 		if !ok {
+			opts.Ledger.Note(fmt.Sprintf("unknown tool %q", act.Tool))
 			transcript = appendCapped(transcript, fmt.Sprintf("OBSERVATION: unknown tool %q. Available: %s", act.Tool, toolNames()))
 			continue
 		}
 		cc.calls++
 		obs := t.handler(cc, act.Args)
+		opts.Ledger.Record(act.Thought, act.Tool, act.Args, obs)
 		transcript = appendCapped(transcript, fmt.Sprintf("ACTION %s(%s)\nOBSERVATION: %s", act.Tool, compactArgs(act.Args), obs))
 	}
 	name := ""
