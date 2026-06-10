@@ -693,7 +693,9 @@ platform is **purely additive**: it must never change the engine's detection log
 ### 18.3 Status
 
 Phases 0–3 + the wired loop are built (`store`/`platform`/`connector`/`runner`/`hitl`/
-`remediate`/`grc`/`platformapi`/`cmd/platform`), all tested + CI-green. Remaining:
-persistent store (sqlite/Postgres behind `Store`), the KMS token vault, Slack
+`remediate`/`grc`/`platformapi`/`cmd/platform`), all tested + CI-green. The store has a
+dependency-free **file-backed persistent impl** (`store.OpenFile`, atomic snapshot;
+`TSENGINE_PLATFORM_DB`) behind the `Store` interface — single-node-durable today.
+Remaining: a sqlite/Postgres `Store` (for concurrency/scale), the KMS token vault, Slack
 approve-buttons, and Phase 4 — the non-tech operate layer (identity/email/detect-respond),
 a separate-audience expansion on the same kernel.

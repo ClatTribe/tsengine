@@ -174,6 +174,72 @@ func (m *Memory) Posture(_ context.Context, tenantID, framework string) ([]platf
 	return out, nil
 }
 
+// Snapshot is the serializable form of a Memory store — what the file-backed store
+// persists. Fields are exported so encoding/json can round-trip them.
+type Snapshot struct {
+	Tenants     map[string]platform.Tenant                  `json:"tenants"`
+	Connections map[string][]platform.Connection            `json:"connections"`
+	Assets      map[string][]platform.Asset                 `json:"assets"`
+	Engagements map[string][]platform.Engagement            `json:"engagements"`
+	Findings    map[string][]types.Finding                  `json:"findings"`
+	Actions     map[string]map[string]platform.Action       `json:"actions"`
+	Controls    map[string]map[string]platform.ControlState `json:"controls"`
+}
+
+// Export returns a deep-enough copy of the store's data for persistence (taken under
+// the read lock).
+func (m *Memory) Export() Snapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return Snapshot{
+		Tenants:     m.tenants,
+		Connections: m.connections,
+		Assets:      m.assets,
+		Engagements: m.engagements,
+		Findings:    m.findings,
+		Actions:     m.actions,
+		Controls:    m.controls,
+	}
+}
+
+// load replaces the store's data from a snapshot (nil maps become empty).
+func (m *Memory) load(s Snapshot) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tenants = orEmptyMap(s.Tenants)
+	m.connections = orEmpty(s.Connections)
+	m.assets = orEmpty(s.Assets)
+	m.engagements = orEmpty(s.Engagements)
+	m.findings = orEmpty(s.Findings)
+	m.actions = orEmptyNested(s.Actions)
+	m.controls = orEmptyControls(s.Controls)
+}
+
+func orEmptyMap(m map[string]platform.Tenant) map[string]platform.Tenant {
+	if m == nil {
+		return map[string]platform.Tenant{}
+	}
+	return m
+}
+func orEmpty[V any](m map[string][]V) map[string][]V {
+	if m == nil {
+		return map[string][]V{}
+	}
+	return m
+}
+func orEmptyNested(m map[string]map[string]platform.Action) map[string]map[string]platform.Action {
+	if m == nil {
+		return map[string]map[string]platform.Action{}
+	}
+	return m
+}
+func orEmptyControls(m map[string]map[string]platform.ControlState) map[string]map[string]platform.ControlState {
+	if m == nil {
+		return map[string]map[string]platform.ControlState{}
+	}
+	return m
+}
+
 // upsertByID replaces an element with the same id, or appends it.
 func upsertByID[T any](xs []T, v T, id func(T) string) []T {
 	for i := range xs {
