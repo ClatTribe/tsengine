@@ -1,13 +1,17 @@
-// Command platform is the multi-tenant API server for the autonomous security team
+// Command platform is the multi-tenant server for the autonomous security team
 // (docs/autonomous-team.md). It wires the store + connectors + the engine
 // (EngineRunner over a per-asset sandbox) + the HITL desk + remediation + GRC behind
-// the platformapi HTTP surface, running the full loop: connect → scan → propose →
-// gate → record compliance, every decision signed into the ledger.
+// the platformapi HTTP surface AND the human-facing console (/ui), running the full
+// loop: onboard → connect → scan → propose → gate → record compliance, every decision
+// signed into the ledger. The console makes that loop clickable end to end: sign in →
+// connect a system (OAuth) → posture dashboard → approve/reject fixes → compliance
+// report.
 //
-// For the MVP the store is in-memory and OAuth tokens are vaulted inline
-// (Connection.SecretRef = "vault:<token>"); sqlite/Postgres + a KMS vault + the web
-// dashboard land next. Set TSENGINE_PLATFORM_NO_ENGINE=1 to boot the API without the
-// sandbox engine (connect/list/webhook-accept only).
+// Durability today: a file-backed store (TSENGINE_PLATFORM_DB; else in-memory) and
+// AES-256-GCM token sealing (TSENGINE_SECRET_KEY). A sqlite/Postgres store + a cloud-KMS
+// vault are the scale-out successors behind the same interfaces. Set
+// TSENGINE_PLATFORM_NO_ENGINE=1 to boot without the sandbox engine (connect / list /
+// webhook-accept / operate-workspace only).
 //
 // Env:
 //

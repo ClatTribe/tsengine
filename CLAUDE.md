@@ -718,8 +718,23 @@ live fetch). So a non-tech tenant connects **Google Workspace or Microsoft 365**
 posture findings flow through the same store/grc/hitl/ledger loop. `LiveWorkspaceSource`
 holds a `Fetchers map[kind]Fetcher` so it serves multiple providers; `operate.M365`
 fetches Microsoft Graph (`/users` + the auth-methods registration report, merged by UPN,
-OData-paginated). Remaining Phase 4: an Okta connector (same seam), domain email-auth +
-OAuth-grant live fetch (users are live today; domains/grants are snapshot), identity
-remediation (`*.Apply`), and detect/respond agents.
-Remaining platform infra: a sqlite/Postgres `Store` (concurrency/scale) and a cloud-KMS
-`secret.Vault` (vs the env-key MVP).
+OData-paginated).
+
+**The human UX layer is complete (`internal/console`, served at `/ui` by `cmd/platform`).**
+The promised loop is now clickable end to end: provision a tenant (`POST /v1/tenants`) →
+sign in (`/ui/login`, httpOnly+SameSite=Strict session cookie) → **connect a system**
+(`/ui/connect` → provider OAuth → callback discovers + scans) → the **posture dashboard**
+(risk rating, severity counts, top findings, connected systems) → **approve/reject fixes
+in the browser** (drives the same gated `hitl.Desk.Decide` as Slack/API) → **compliance**
+(posture cards → per-control drill-down with citing findings → signed Markdown report at
+`GET /v1/compliance/{framework}/report`). Security + compliance, UX to backend, on the
+untouched engine.
+
+Remaining is **next-phase breadth/scale, not core-loop gaps**: an Okta connector (same
+seam), domain email-auth + OAuth-grant live fetch (users are live today; domains/grants
+are snapshot), identity remediation (`operate *.Apply`), the detect/respond SOC half
+(real-time monitoring agents beyond scheduled re-scans), and the infra successors — a
+sqlite/Postgres `Store` (concurrency/scale) + a cloud-KMS `secret.Vault` (vs the env-key
+MVP) — both behind today's interfaces. Public per-tenant self-serve signup (vs the
+operator-token `POST /v1/tenants`) needs a real per-tenant identity/billing model and is
+a deliberate future step, not part of the shared-token MVP.
