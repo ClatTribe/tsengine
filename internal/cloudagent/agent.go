@@ -9,7 +9,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
-	"github.com/ClatTribe/tsengine/internal/ledger"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 

@@ -52,7 +52,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/gate"
 	"github.com/ClatTribe/tsengine/internal/importers"
-	"github.com/ClatTribe/tsengine/internal/ledger"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
