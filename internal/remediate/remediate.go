@@ -73,6 +73,12 @@ func fixBody(f types.Finding) string {
 		f.ID, f.Severity, f.Tool, nz(f.Description, f.Title))
 }
 
+// Filer delivers a file_ticket action to an issue tracker (satisfied by
+// *connector.Jira). Optional — when unset, file_ticket actions are a recorded no-op.
+type Filer interface {
+	FileTicket(ctx context.Context, a platform.Action) error
+}
+
 // Deliverer applies an approved Action through the connector write path. It resolves
 // the tenant's connection for the action kind, fetches the token, and calls
 // connector.Apply. Implements hitl.Applier.
@@ -80,6 +86,7 @@ type Deliverer struct {
 	Store      store.Store
 	Connectors *connector.Registry
 	Tokens     runner.Tokens
+	Ticket     Filer // optional: files file_ticket actions (e.g. Jira)
 }
 
 // Apply executes the action. It routes to the action's own Connection when set
@@ -87,8 +94,14 @@ type Deliverer struct {
 // MR), else falls back to any active connection of the kind the action implies.
 // File-ticket actions are a recorded no-op delivery for the MVP.
 func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
+	if a.Kind == platform.ActFileTicket {
+		if d.Ticket == nil {
+			return nil // no issue tracker configured → recorded no-op (graceful)
+		}
+		return d.Ticket.FileTicket(ctx, a)
+	}
 	if !deliverable(a.Kind) {
-		return nil // ActFileTicket and friends: recorded, no external write yet
+		return nil // anything else without a write path: recorded, no external write
 	}
 	conns, err := d.Store.ListConnections(ctx, a.TenantID)
 	if err != nil {

@@ -123,10 +123,30 @@ func TestDeliverer_RoutesToActionsOwnConnection(t *testing.T) {
 	}
 }
 
-func TestDeliverer_TicketIsNoopDelivery(t *testing.T) {
+func TestDeliverer_TicketNoopWhenNoFiler(t *testing.T) {
 	ctx := context.Background()
 	d := &Deliverer{Store: store.NewMemory(), Connectors: connector.NewRegistry(), Tokens: fakeTokens{}}
 	if err := d.Apply(ctx, platform.Action{ID: "a1", TenantID: "t", Kind: platform.ActFileTicket}); err != nil {
-		t.Errorf("file-ticket delivery is a recorded no-op for the MVP, got %v", err)
+		t.Errorf("file-ticket with no filer is a recorded no-op, got %v", err)
+	}
+}
+
+// recordingFiler captures file_ticket deliveries.
+type recordingFiler struct{ filed []string }
+
+func (f *recordingFiler) FileTicket(_ context.Context, a platform.Action) error {
+	f.filed = append(f.filed, a.ID)
+	return nil
+}
+
+func TestDeliverer_FileTicketRoutesToFiler(t *testing.T) {
+	ctx := context.Background()
+	f := &recordingFiler{}
+	d := &Deliverer{Store: store.NewMemory(), Connectors: connector.NewRegistry(), Tokens: fakeTokens{}, Ticket: f}
+	if err := d.Apply(ctx, platform.Action{ID: "tkt-1", TenantID: "t", Kind: platform.ActFileTicket, Title: "MFA gap"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.filed) != 1 || f.filed[0] != "tkt-1" {
+		t.Errorf("file_ticket should route to the filer, got %v", f.filed)
 	}
 }
