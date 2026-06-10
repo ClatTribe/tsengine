@@ -1,0 +1,58 @@
+// Package store is the multi-tenant persistence layer for the platform — the
+// system-of-record (docs/autonomous-team.md §3.1). Every call is scoped to a
+// tenantID and the store MUST NOT return one tenant's data to another; that
+// isolation is the security boundary of the whole product.
+//
+// This file defines the Store interface. memory.go provides an in-memory
+// implementation used for tests and the MVP; a sqlite/Postgres implementation
+// (adding a tenant_id column + row scoping, reusing the findingstore lifecycle
+// logic) lands in Phase 1 behind the same interface.
+package store
+
+import (
+	"context"
+	"errors"
+
+	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
+
+// ErrNotFound is returned when a scoped lookup misses (wrong id, or — critically —
+// the right id under the wrong tenant).
+var ErrNotFound = errors.New("store: not found")
+
+// FindingFilter narrows a finding list. Zero value = all of the tenant's findings.
+type FindingFilter struct {
+	AssetID  string
+	Severity types.Severity
+	Status   string // verification_status
+}
+
+// Store is the tenant-scoped system-of-record. Implementations must enforce that a
+// tenantID only ever sees its own rows.
+type Store interface {
+	// --- tenancy ---
+	PutTenant(ctx context.Context, t platform.Tenant) error
+	GetTenant(ctx context.Context, id string) (platform.Tenant, error)
+
+	// --- connections / assets / engagements ---
+	PutConnection(ctx context.Context, c platform.Connection) error
+	ListConnections(ctx context.Context, tenantID string) ([]platform.Connection, error)
+	PutAsset(ctx context.Context, a platform.Asset) error
+	ListAssets(ctx context.Context, tenantID string) ([]platform.Asset, error)
+	PutEngagement(ctx context.Context, e platform.Engagement) error
+	ListEngagements(ctx context.Context, tenantID string) ([]platform.Engagement, error)
+
+	// --- findings (the engine's output, persisted per tenant) ---
+	PutFinding(ctx context.Context, tenantID string, f types.Finding) error
+	ListFindings(ctx context.Context, tenantID string, filter FindingFilter) ([]types.Finding, error)
+
+	// --- remediation actions + the HITL queue ---
+	PutAction(ctx context.Context, a platform.Action) error
+	GetAction(ctx context.Context, tenantID, id string) (platform.Action, error)
+	PendingApprovals(ctx context.Context, tenantID string) ([]platform.Action, error)
+
+	// --- GRC system-of-record ---
+	UpsertControlState(ctx context.Context, cs platform.ControlState) error
+	Posture(ctx context.Context, tenantID, framework string) ([]platform.ControlState, error)
+}

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
-	"github.com/ClatTribe/tsengine/internal/ledger"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 )
 
 // Context is the agent's working memory for one engagement against one target.

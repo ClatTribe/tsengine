@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
-	"github.com/ClatTribe/tsengine/internal/ledger"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 )
 
 // Turn is one attacker prompt + target reply (the evidence substrate).

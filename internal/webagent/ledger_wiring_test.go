@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ClatTribe/tsengine/internal/ledger"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 )
 
 // TestLedger_CapturesRealEngagement runs the REAL Investigate loop against the
