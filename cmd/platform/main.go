@@ -1,36 +1,53 @@
 // Command platform is the multi-tenant API server for the autonomous security team
-// (docs/autonomous-team.md). It wires the store + connectors + runner behind the
-// platformapi HTTP surface. For the MVP the store is in-memory and the GitHub
-// connector is configured from env; sqlite/Postgres + a secret vault + the web
-// dashboard land in later phases.
+// (docs/autonomous-team.md). It wires the store + connectors + the engine
+// (EngineRunner over a per-asset sandbox) + the HITL desk + remediation + GRC behind
+// the platformapi HTTP surface, running the full loop: connect → scan → propose →
+// gate → record compliance, every decision signed into the ledger.
+//
+// For the MVP the store is in-memory and OAuth tokens are vaulted inline
+// (Connection.SecretRef = "vault:<token>"); sqlite/Postgres + a KMS vault + the web
+// dashboard land next. Set TSENGINE_PLATFORM_NO_ENGINE=1 to boot the API without the
+// sandbox engine (connect/list/webhook-accept only).
 //
 // Env:
 //
-//	TSENGINE_PLATFORM_TOKEN   static platform bearer token (required)
-//	TSENGINE_PLATFORM_ADDR    listen address (default :8090)
-//	GITHUB_CLIENT_ID/SECRET   GitHub OAuth app credentials (optional for boot)
+//	TSENGINE_PLATFORM_TOKEN     static platform bearer token (required)
+//	TSENGINE_PLATFORM_ADDR      listen address (default :8090)
+//	TSENGINE_PLATFORM_PUBLIC    public base URL for OAuth redirect_uri
+//	TSENGINE_SANDBOX_IMAGE      sandbox image ref (default tsengine/sandbox:latest)
+//	TSENGINE_PLATFORM_NO_ENGINE 1 → boot without the sandbox engine
+//	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
 package main
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/grc"
+	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/platformapi"
+	"github.com/ClatTribe/tsengine/internal/remediate"
 	"github.com/ClatTribe/tsengine/internal/runner"
+	"github.com/ClatTribe/tsengine/internal/sandbox"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // envTokens is the MVP secret resolver: connections vault their token inline as
-// "vault:<token>" (Exchange's transient form). A real KMS-envelope vault replaces
-// this behind the runner.Tokens interface.
+// "vault:<token>". A real KMS-envelope vault replaces this behind runner.Tokens.
 type envTokens struct{}
 
 func (envTokens) Resolve(_ context.Context, c platform.Connection) (string, error) {
@@ -41,25 +58,49 @@ func (envTokens) Resolve(_ context.Context, c platform.Connection) (string, erro
 	return "", errors.New("platform: no token for connection")
 }
 
+var seq uint64
+
+func newID() string { return fmt.Sprintf("%d", atomic.AddUint64(&seq, 1)) }
+
 func main() {
 	token := os.Getenv("TSENGINE_PLATFORM_TOKEN")
 	if token == "" {
 		log.Fatal("TSENGINE_PLATFORM_TOKEN is required")
 	}
-	addr := os.Getenv("TSENGINE_PLATFORM_ADDR")
-	if addr == "" {
-		addr = ":8090"
-	}
+	addr := envOr("TSENGINE_PLATFORM_ADDR", ":8090")
+	image := envOr("TSENGINE_SANDBOX_IMAGE", "tsengine/sandbox:latest")
 
 	st := store.NewMemory()
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 	)
-	// NOTE: Scanner is nil here — wiring the real EngineRunner (sandbox dispatcher)
-	// is the next step; the API surface (connect/list/webhook-accept) boots without it.
-	svc := &runner.Service{Store: st, Connectors: reg, Tokens: envTokens{}}
+	tokens := envTokens{}
 
-	h := platformapi.NewHandler(platformapi.Deps{Store: st, Connectors: reg, Runner: svc, Token: token})
+	// the HITL desk delivers approved fixes through the connector write path
+	deliverer := &remediate.Deliverer{Store: st, Connectors: reg, Tokens: tokens}
+	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
+	g := &grc.GRC{Store: st}
+
+	svc := &runner.Service{
+		Store: st, Connectors: reg, Tokens: tokens, NewID: newID,
+		GRC: g, Desk: desk,
+		Propose: func(f types.Finding, a platform.Asset) (platform.Action, bool) {
+			return remediate.Propose(f, a, newID)
+		},
+	}
+	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
+		svc.Scanner = &runner.EngineRunner{
+			Resolve:       assetregistry.HandlerFor,
+			NewDispatcher: sandboxDispatcher(image),
+		}
+	} else {
+		log.Print("[platform] NO_ENGINE mode: API boots without the sandbox scanner")
+	}
+
+	h := platformapi.NewHandler(platformapi.Deps{
+		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g,
+		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"), NewID: newID,
+	})
 	srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
@@ -76,4 +117,43 @@ func main() {
 	sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(sctx)
+}
+
+// sandboxDispatcher returns a factory that spawns a per-asset sandbox and hands back
+// the orchestrator Dispatcher + a teardown. Mirrors cmd/tsengine's scan path.
+func sandboxDispatcher(image string) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
+	return func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
+		opts := sandbox.SpawnOptions{Image: image}
+		if types.AssetType(a.Type) == types.AssetCloudAccount {
+			opts.Env = cloudCredentialEnv()
+		}
+		info, err := sandbox.Spawn(ctx, opts)
+		if err != nil {
+			return nil, nil, err
+		}
+		cleanup := func() { _ = sandbox.Destroy(context.Background(), info) }
+		return sandbox.NewClient(info), cleanup, nil
+	}
+}
+
+// cloudCredentialEnv forwards scoped, read-only cloud credentials into the sandbox
+// (only the standard provider vars that are set in the platform's environment).
+func cloudCredentialEnv() []string {
+	var env []string
+	for _, k := range []string{
+		"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_REGION",
+		"GOOGLE_APPLICATION_CREDENTIALS", "AZURE_CLIENT_ID", "AZURE_TENANT_ID",
+	} {
+		if v := os.Getenv(k); v != "" {
+			env = append(env, k+"="+v)
+		}
+	}
+	return env
+}
+
+func envOr(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }
