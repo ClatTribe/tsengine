@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/grc"
+	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -37,7 +39,15 @@ type Clock func() time.Time
 // IDGen returns a fresh unique id (injectable for deterministic tests).
 type IDGen func() string
 
-// Service ties connectors + the engine + the store together.
+// Proposer maps a grounded finding (under its asset) to a remediation Action and
+// whether one was produced. Wired to remediate.Propose by the caller — kept as a func
+// so runner does not import remediate (which imports runner.Tokens → would cycle).
+type Proposer func(types.Finding, platform.Asset) (platform.Action, bool)
+
+// Service ties connectors + the engine + the store together, and (optionally) runs the
+// full autonomous loop per finding: GRC control-state update → propose a fix → gate it
+// at the HITL desk. The loop collaborators are nil-safe — omit them and Service just
+// scans and persists (the Phase-1 behaviour).
 type Service struct {
 	Store      store.Store
 	Connectors *connector.Registry
@@ -45,6 +55,11 @@ type Service struct {
 	Scanner    ScanRunner
 	Now        Clock
 	NewID      IDGen
+
+	// optional autonomous-loop collaborators
+	GRC     *grc.GRC   // fold each finding into the compliance system-of-record
+	Propose Proposer   // generate a remediation Action per finding
+	Desk    *hitl.Desk // gate/auto-apply the proposed Action
 }
 
 func (s *Service) now() time.Time {
@@ -123,10 +138,33 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 		if err := s.Store.PutFinding(ctx, a.TenantID, f); err != nil {
 			return nil, err
 		}
+		if err := s.processFinding(ctx, a, f); err != nil {
+			return nil, err
+		}
 	}
 	eng.CompletedAt = s.now()
 	if err := s.Store.PutEngagement(ctx, eng); err != nil {
 		return nil, err
 	}
 	return &eng, nil
+}
+
+// processFinding runs the optional autonomous loop for one finding: update the
+// compliance system-of-record, propose a fix, and gate it at the desk. Each step is
+// nil-safe; a step error aborts the scan (findings are already persisted).
+func (s *Service) processFinding(ctx context.Context, a platform.Asset, f types.Finding) error {
+	if s.GRC != nil {
+		if err := s.GRC.Apply(ctx, a.TenantID, f); err != nil {
+			return fmt.Errorf("runner: grc apply: %w", err)
+		}
+	}
+	if s.Propose != nil && s.Desk != nil {
+		act, ok := s.Propose(f, a)
+		if ok {
+			if _, err := s.Desk.Submit(ctx, act); err != nil {
+				return fmt.Errorf("runner: desk submit: %w", err)
+			}
+		}
+	}
+	return nil
 }

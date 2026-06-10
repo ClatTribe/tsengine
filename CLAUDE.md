@@ -656,3 +656,44 @@ tsengine **diverges** from strix:
 * No iter-Q5.* history — clean build phases (§16)
 
 When in doubt, the strix design lineage at `/Users/ashish/Downloads/cowork/strix/` is reference reading, not authoritative — this file is authoritative.
+
+---
+
+## 18. The platform layer — autonomous security team (read before touching `cmd/platform`)
+
+`tsengine` (the engine, §1–§17) is the **detection brain**. The **platform** wraps it
+into a continuous, multi-tenant, human-backstopped product — *"reuse the brain, build
+the body"* (full design: [docs/autonomous-team.md](docs/autonomous-team.md)). The
+platform is **purely additive**: it must never change the engine's detection logic.
+
+### 18.1 The packages
+
+| Package | Role |
+|---|---|
+| `pkg/ledger` | the signed, replayable decision ledger (promoted from `internal/` so the platform imports it) |
+| `pkg/platform` | multi-tenant domain model — Tenant, Connection, Asset, Engagement, Action, ControlState |
+| `internal/store` | the tenant-scoped system-of-record (`Store` interface + in-memory impl) |
+| `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply); GitHub today |
+| `internal/runner` | connector→engine→store glue; `ScanRunner` abstracts the engine, `EngineRunner` is the sandbox adapter; runs the full loop |
+| `internal/hitl` | the human desk — the gate between *propose* and *apply* |
+| `internal/remediate` | `Propose` (finding→Action) + `Deliverer` (apply via connector) |
+| `internal/grc` | compliance control-state system-of-record + signed evidence pack |
+| `internal/assetregistry` | shared `HandlerFor(assetType)` (so `cmd/tsengine` + `cmd/platform` don't duplicate routing) |
+| `internal/platformapi` + `cmd/platform` | the multi-tenant HTTP API + server |
+
+### 18.2 Platform invariants (do not violate)
+
+1. **The engine is untouched.** The platform consumes `orchestrator.Run` via `runner.ScanRunner`; no platform change may alter `asset/*`, the agents, `reachability`, `correlate`, or `gate`.
+2. **Tenant isolation is the security boundary.** Every `Store` call is tenant-scoped; a tenant MUST NOT read another tenant's findings/connections/actions. Tests assert this at the store *and* the API.
+3. **The only write path is `connector.Apply`, and it is reached only AFTER a HITL gate.** Tier 0/1 actions auto-apply; tier ≥ `platform.GateTier` (2) queue at the desk. `hitl.Desk` decides; `remediate.Deliverer` delivers. Never call `connector.Apply` directly.
+4. **Every decision is signed.** Auto-apply and human verdicts both record into `pkg/ledger`; the GRC evidence pack uses the same ed25519-over-canonical-JSON scheme — one verifier covers ledger, evidence bundle, and evidence pack.
+5. **Grounding holds end-to-end.** GRC marks a control "gap" only because a real finding cites it; remediations always carry `FindingID`. No platform layer asserts something the engine did not prove.
+6. **Secrets never leave.** OAuth tokens live behind `Connection.SecretRef` (a vault ref), resolved via `runner.Tokens`; the API redacts `SecretRef` before returning a connection.
+
+### 18.3 Status
+
+Phases 0–3 + the wired loop are built (`store`/`platform`/`connector`/`runner`/`hitl`/
+`remediate`/`grc`/`platformapi`/`cmd/platform`), all tested + CI-green. Remaining:
+persistent store (sqlite/Postgres behind `Store`), the KMS token vault, Slack
+approve-buttons, and Phase 4 — the non-tech operate layer (identity/email/detect-respond),
+a separate-audience expansion on the same kernel.

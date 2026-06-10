@@ -19,8 +19,10 @@ import (
 
 type fakeConn struct{}
 
-func (fakeConn) Kind() string                   { return platform.ConnGitHub }
-func (fakeConn) OAuthURL(string, string) string { return "" }
+func (fakeConn) Kind() string { return platform.ConnGitHub }
+func (fakeConn) OAuthURL(state, redirect string) string {
+	return "https://gh/login/oauth/authorize?state=" + state + "&redirect_uri=" + redirect
+}
 func (fakeConn) Exchange(context.Context, string, string) (platform.Connection, error) {
 	return platform.Connection{}, nil
 }
