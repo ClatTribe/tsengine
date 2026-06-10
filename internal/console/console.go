@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -48,12 +49,21 @@ type Reporter interface {
 	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
 }
 
+// ConnectorSource lists the available connectors and resolves one by kind so the connect
+// page can offer them and kick off OAuth (satisfied by *connector.Registry).
+type ConnectorSource interface {
+	Kinds() []string
+	Get(kind string) (connector.Connector, error)
+}
+
 // Deps are the console's read collaborators plus the gated desk for approvals.
 type Deps struct {
-	Store  store.Store
-	Token  string   // platform bearer token (same as the API)
-	Desk   Decider  // gated approval path; nil → Approve/Reject return 501
-	Report Reporter // compliance drill-down; nil → posture cards are not linked
+	Store      store.Store
+	Token      string          // platform bearer token (same as the API)
+	Desk       Decider         // gated approval path; nil → Approve/Reject return 501
+	Report     Reporter        // compliance drill-down; nil → posture cards are not linked
+	Connectors ConnectorSource // onboarding; nil → the connect page/link is hidden
+	PublicURL  string          // base URL for the OAuth redirect_uri (e.g. https://app.example)
 }
 
 // Handler returns the console router: the dashboard, the login form, logout, and the
@@ -62,6 +72,8 @@ func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ui", d.dashboard)
 	mux.HandleFunc("GET /ui/compliance/{framework}", d.compliance)
+	mux.HandleFunc("GET /ui/connect", d.connectPage)
+	mux.HandleFunc("GET /ui/connect/{kind}", d.connect)
 	mux.HandleFunc("POST /ui/login", d.login)
 	mux.HandleFunc("POST /ui/logout", d.logout)
 	mux.HandleFunc("POST /ui/approvals/{id}", d.decide)
@@ -88,10 +100,73 @@ func (d Deps) dashboard(w http.ResponseWriter, r *http.Request) {
 	vm.Operator = cookieValue(r, operatorCookie)
 	vm.CanApprove = d.Desk != nil
 	vm.CanReport = d.Report != nil
+	vm.CanConnect = d.Connectors != nil
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := page.Execute(w, vm); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// connectPage lists the available connectors with the tenant's current connection count
+// and a Connect button — the first-run self-serve onboarding surface.
+func (d Deps) connectPage(w http.ResponseWriter, r *http.Request) {
+	if !d.authed(r) {
+		renderLogin(w, http.StatusOK, loginView{Tenant: r.URL.Query().Get("tenant")})
+		return
+	}
+	if d.Connectors == nil {
+		http.Error(w, "connectors not configured", http.StatusNotImplemented)
+		return
+	}
+	tenantID := firstNonEmpty(r.URL.Query().Get("tenant"), r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		http.Error(w, "missing tenant (?tenant=<id>)", http.StatusBadRequest)
+		return
+	}
+	conns, _ := d.Store.ListConnections(r.Context(), tenantID)
+	countByKind := map[string]int{}
+	for _, c := range conns {
+		countByKind[c.Kind]++
+	}
+	cv := connectView{TenantID: tenantID, Tenant: tenantID}
+	if t, err := d.Store.GetTenant(r.Context(), tenantID); err == nil && t.Name != "" {
+		cv.Tenant = t.Name
+	}
+	kinds := d.Connectors.Kinds()
+	sort.Strings(kinds)
+	for _, k := range kinds {
+		cv.Rows = append(cv.Rows, connectRow{Kind: k, Name: connectorName(k), Connected: countByKind[k]})
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := connectPg.Execute(w, cv); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// connect kicks off the provider OAuth consent: it builds the authorize URL (CSRF state =
+// tenant id, the form the /v1/connect/{kind}/callback handler already expects) and
+// redirects the browser. The callback exchanges the code, seals the token, and scans.
+func (d Deps) connect(w http.ResponseWriter, r *http.Request) {
+	if !d.authed(r) {
+		renderLogin(w, http.StatusOK, loginView{Tenant: r.URL.Query().Get("tenant")})
+		return
+	}
+	if d.Connectors == nil {
+		http.Error(w, "connectors not configured", http.StatusNotImplemented)
+		return
+	}
+	tenantID := firstNonEmpty(r.URL.Query().Get("tenant"), r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		http.Error(w, "missing tenant (?tenant=<id>)", http.StatusBadRequest)
+		return
+	}
+	c, err := d.Connectors.Get(r.PathValue("kind"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	redirectURI := d.PublicURL + "/v1/connect/" + c.Kind() + "/callback"
+	http.Redirect(w, r, c.OAuthURL(tenantID, redirectURI), http.StatusSeeOther)
 }
 
 // compliance renders the per-framework drill-down: every tracked control, gaps backed by
@@ -208,6 +283,39 @@ type view struct {
 	Operator    string
 	CanApprove  bool
 	CanReport   bool
+	CanConnect  bool
+}
+
+// connectView models the onboarding page.
+type connectView struct {
+	TenantID string
+	Tenant   string
+	Rows     []connectRow
+}
+
+type connectRow struct {
+	Kind      string
+	Name      string
+	Connected int
+}
+
+// connectorName maps a connector kind to its friendly display name.
+func connectorName(kind string) string {
+	switch kind {
+	case platform.ConnGitHub:
+		return "GitHub"
+	case platform.ConnGitLab:
+		return "GitLab"
+	case platform.ConnGWorkspace:
+		return "Google Workspace"
+	case platform.ConnM365:
+		return "Microsoft 365"
+	default:
+		if kind == "" {
+			return "Unknown"
+		}
+		return strings.ToUpper(kind[:1]) + kind[1:]
+	}
 }
 
 type sevCount struct {
@@ -342,4 +450,5 @@ var (
 	compliancePage = template.Must(template.New("compliance").Funcs(template.FuncMap{
 		"rfc3339": func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 	}).Parse(complianceHTML))
+	connectPg = template.Must(template.New("connect").Parse(connectHTML))
 )
