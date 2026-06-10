@@ -54,6 +54,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/importers"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
+	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/reachability"
 	"github.com/ClatTribe/tsengine/internal/replay"
@@ -160,6 +161,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine cloud-assess: %v\n", err)
 			os.Exit(1)
 		}
+	case "operate":
+		if err := runOperate(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine operate: %v\n", err)
+			os.Exit(1)
+		}
 	case "cloud-investigate":
 		if err := runCloudInvestigate(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsengine cloud-investigate: %v\n", err)
@@ -247,6 +253,8 @@ Usage:
                   [--snapshot <inventory.json>]   # cloud_account: emit the AI-engineer dual-view
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
   tsengine cloud-assess --snapshot <inventory.json> [--prowler <findings.json>] [--out <assessment.json>]
+  tsengine operate --snapshot <workspace.json> [--out <findings.json>] [--stale-days N] [--max-super-admins N]
+                  # non-tech identity/email posture: MFA gaps, weak DMARC, risky OAuth grants, stale accounts
   tsengine web-investigate --target <url> [--seed <url>,...] [--max-requests N] [--min-interval <dur>] [--max-iters N]
                   [--export-evidence <file.json>] [--ledger <file.json>] [--sign-key <path>] [--signer <id>]
   tsengine web-verify [--pubkey <hex>] <evidence.json>
@@ -626,6 +634,46 @@ func runCloudAssess(argv []string) error {
 			return fmt.Errorf("write assessment: %w", werr)
 		}
 		fmt.Fprintf(os.Stderr, "[cloud-assess] wrote %s\n", *out)
+	}
+	return nil
+}
+
+// runOperate is the non-tech "run-secure" posture assessment (Phase 4): a Workspace
+// snapshot (IdP / Google Workspace / M365 export) → grounded identity/email findings
+// (MFA gaps, weak DMARC, risky OAuth grants, stale/over-privileged accounts), each
+// citing the offending user/domain/app. Mirrors cloud-assess; emits the same
+// types.Finding the platform's grc/hitl loop consumes.
+func runOperate(argv []string) error {
+	fs := flag.NewFlagSet("operate", flag.ContinueOnError)
+	snapshot := fs.String("snapshot", "", "path to the workspace snapshot JSON (IdP/Google Workspace/M365 export) (REQUIRED)")
+	out := fs.String("out", "", "optional path to write the findings JSON")
+	staleDays := fs.Int("stale-days", 90, "flag a non-suspended account idle longer than this")
+	maxSuper := fs.Int("max-super-admins", 3, "flag more super-admins than this")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *snapshot == "" {
+		return fmt.Errorf("--snapshot is required")
+	}
+	ws, err := operate.LoadWorkspace(*snapshot)
+	if err != nil {
+		return err
+	}
+	findings := operate.Assess(ws, operate.Options{StaleLoginDays: *staleDays, MaxSuperAdmins: *maxSuper})
+
+	fmt.Printf("operate — %s posture for %s: %d finding(s)\n", nzStr(ws.Provider, "workspace"), nzStr(ws.Org, "—"), len(findings))
+	for _, f := range findings {
+		fmt.Printf("  [%-8s] %-32s %s\n", f.Severity, f.RuleID, f.Endpoint)
+	}
+	if *out != "" {
+		b, merr := json.MarshalIndent(findings, "", "  ")
+		if merr != nil {
+			return merr
+		}
+		if werr := os.WriteFile(*out, b, 0o600); werr != nil {
+			return fmt.Errorf("write findings: %w", werr)
+		}
+		fmt.Fprintf(os.Stderr, "[operate] wrote %d finding(s) → %s\n", len(findings), *out)
 	}
 	return nil
 }

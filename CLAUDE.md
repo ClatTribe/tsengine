@@ -700,7 +700,14 @@ dependency-free **file-backed persistent impl** (`store.OpenFile`, atomic snapsh
 Approve/Reject buttons, and `POST /v1/slack/interactive` verifies Slack's v0 signature
 (HMAC-SHA256, 5-min replay window) before driving `Desk.Decide`. OAuth tokens are
 **encrypted at rest** (`internal/secret`, AES-256-GCM; `TSENGINE_SECRET_KEY`), sealed at
-the callback before they reach the store. Remaining: a sqlite/Postgres `Store` (for
-concurrency/scale), a cloud-KMS `secret.Vault` (vs the env-key MVP), and Phase 4 — the
-non-tech operate layer (identity/email/detect-respond), a separate-audience expansion on
-the same kernel.
+the callback before they reach the store. **Phase 4 (non-tech operate layer) has
+started**: `internal/operate` is the identity/email posture engine — a Workspace
+snapshot (IdP / Google Workspace / M365 export) → grounded findings (MFA gaps, weak
+DMARC, risky OAuth grants, stale/over-privileged accounts), each citing the offending
+user/domain/app, mapped to compliance controls so they flow into the same `grc`/`hitl`
+loop. Snapshot-driven + LLM-free (mirrors `cloudengine`), so the logic is deterministic
+and testable (a hardened workspace yields zero findings). `tsengine operate --snapshot`.
+Remaining Phase 4: a live Workspace connector (IdP/M365 OAuth → snapshot), detect/respond
+agents, and wiring `operate` as a platform `ScanRunner` for the `workspace` asset.
+Remaining platform infra: a sqlite/Postgres `Store` (concurrency/scale) and a cloud-KMS
+`secret.Vault` (vs the env-key MVP).
