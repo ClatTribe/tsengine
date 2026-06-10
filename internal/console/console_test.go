@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
@@ -34,11 +35,11 @@ func seed(t *testing.T) store.Store {
 	return st
 }
 
-// deps builds a console wired to a real (non-applying) desk for approval tests.
+// deps builds a console wired to a real (non-applying) desk and the GRC reporter.
 func deps(t *testing.T, st store.Store) Deps {
 	t.Helper()
 	desk := &hitl.Desk{Store: st, Apply: applyNoop{}, Recorder: ledger.NewRecorder()}
-	return Deps{Store: st, Token: tok, Desk: desk}
+	return Deps{Store: st, Token: tok, Desk: desk, Report: &grc.GRC{Store: st}}
 }
 
 // applyNoop satisfies the desk's Applier without doing anything (tier-2 approve path).
@@ -197,6 +198,50 @@ func TestDecide_RequiresAuth(t *testing.T) {
 	pend, _ := st.PendingApprovals(context.Background(), "t1")
 	if len(pend) != 1 {
 		t.Fatal("unauthenticated decide must not touch the pending queue")
+	}
+}
+
+// The posture cards link into the per-framework drill-down when a reporter is wired.
+func TestDashboard_PostureCardsLink(t *testing.T) {
+	h := Handler(deps(t, seed(t)))
+	body := getBearer(t, h, "/ui?tenant=t1").Body.String()
+	if !strings.Contains(body, `href="/ui/compliance/soc2?tenant=t1"`) {
+		t.Error("SOC2 posture card should link to the compliance drill-down")
+	}
+}
+
+// The compliance page resolves gaps to their citing findings.
+func TestCompliance_RendersGapsAndEvidence(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme Inc"})
+	crit := types.Finding{ID: "f-001", Title: "SQL injection", Severity: types.SeverityCritical,
+		Compliance: &types.Compliance{SOC2: []string{"CC6.1"}}}
+	_ = st.PutFinding(ctx, "t1", crit)
+	g := &grc.GRC{Store: st}
+	if err := g.Apply(ctx, "t1", crit); err != nil { // CC6.1 → gap, cites f-001
+		t.Fatal(err)
+	}
+	h := Handler(Deps{Store: st, Token: tok, Report: g})
+	body := getBearer(t, h, "/ui/compliance/soc2?tenant=t1").Body.String()
+	for _, want := range []string{
+		"SOC 2 Compliance", "CC6.1", "GAP", "SQL injection", "critical", "← Dashboard",
+		"GET /v1/compliance/soc2/report",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("compliance page missing %q", want)
+		}
+	}
+}
+
+// The compliance page is gated behind auth like everything else.
+func TestCompliance_RequiresAuth(t *testing.T) {
+	h := Handler(deps(t, seed(t)))
+	r := httptest.NewRequest(http.MethodGet, "/ui/compliance/soc2?tenant=t1", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if strings.Contains(w.Body.String(), "GAP") {
+		t.Fatal("unauthenticated compliance request must not render the report")
 	}
 }
 

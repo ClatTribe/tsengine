@@ -677,11 +677,11 @@ platform is **purely additive**: it must never change the engine's detection log
 | `internal/runner` | connector→engine→store glue; `ScanRunner` abstracts the engine, `EngineRunner` is the sandbox adapter; runs the full loop |
 | `internal/hitl` | the human desk — the gate between *propose* and *apply* |
 | `internal/remediate` | `Propose` (finding→Action) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
-| `internal/grc` | compliance control-state system-of-record + signed evidence pack |
+| `internal/grc` | compliance control-state system-of-record + signed evidence pack + the auditor-facing **compliance report** (`Report` resolves each gap to its citing findings; `RenderMarkdown` is the attachable deliverable) |
 | `internal/assetregistry` | shared `HandlerFor(assetType)` (so `cmd/tsengine` + `cmd/platform` don't duplicate routing) |
 | `internal/scheduler` | continuous-monitoring loop — re-scans every tenant on a cadence (`TSENGINE_MONITOR_INTERVAL`); the "autonomous" heartbeat alongside event-driven webhook re-scans |
 | `internal/platformapi` + `cmd/platform` | the multi-tenant HTTP API + server (incl. `POST /v1/tenants` onboarding) |
-| `internal/console` | the human-facing web dashboard + login under `/ui` — server-rendered HTML (`html/template`, zero JS). `GET /ui` shows risk rating + severity counts + top findings + pending approvals + compliance posture; `POST /ui/login` sets an httpOnly+SameSite=Strict session cookie (a browser can't send the bearer header on navigation); `POST /ui/approvals/{id}` Approve/Reject buttons drive the **same gated `hitl.Desk.Decide`** path as the API/Slack (tier rules + signed ledger still apply — the console is a UI onto the gate, not a second write path). Connection `SecretRef`s redacted before render |
+| `internal/console` | the human-facing web dashboard + login under `/ui` — server-rendered HTML (`html/template`, zero JS). `GET /ui` shows risk rating + severity counts + top findings + pending approvals + compliance posture (cards link to the drill-down); `GET /ui/compliance/{framework}` is the per-control drill-down (gaps backed by their citing findings — the auditor view); `POST /ui/login` sets an httpOnly+SameSite=Strict session cookie (a browser can't send the bearer header on navigation); `POST /ui/approvals/{id}` Approve/Reject buttons drive the **same gated `hitl.Desk.Decide`** path as the API/Slack (tier rules + signed ledger still apply — the console is a UI onto the gate, not a second write path). Connection `SecretRef`s redacted before render |
 
 ### 18.2 Platform invariants (do not violate)
 
