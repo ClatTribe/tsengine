@@ -38,6 +38,7 @@ const pageHTML = `<!doctype html>
   .fwcard{flex:1;min-width:120px;background:#11161f;border:1px solid var(--line);border-radius:9px;padding:12px}
   a.fwcard{text-decoration:none;color:inherit;display:block} a.fwcard:hover{border-color:#3a4658}
   .fwcard .name{font-size:12px;color:var(--muted)} .fwcard .met{color:var(--low);font-weight:600} .fwcard .gap{color:var(--high);font-weight:600}
+  .fwcard .id{font-size:11px;color:var(--muted)}
   code{background:#11161f;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
   .foot{color:var(--muted);font-size:12px;margin-top:16px}
 </style></head><body><div class="wrap">
@@ -75,6 +76,12 @@ const pageHTML = `<!doctype html>
     {{if .Findings}}<table><tr><th>Severity</th><th>Finding</th><th>Where</th><th>Tool</th></tr>
     {{range .Findings}}<tr><td><span class="sev {{.Severity}}">{{.Severity}}</span></td><td>{{.Title}}</td><td><code>{{.Endpoint}}</code></td><td><span class="tag">{{.Tool}}</span></td></tr>{{end}}
     </table>{{else}}<div class="empty">No open findings.</div>{{end}}
+  </section>
+
+  <section><h2>Connected systems</h2>
+    {{if .Connections}}<div class="fw">{{range .Connections}}<div class="fwcard"><div class="name">{{.Kind}}</div><span class="id">{{.ID}}</span></div>{{end}}</div>
+    {{else}}<div class="empty">No systems connected yet.</div>{{end}}
+    {{if .CanConnect}}<div style="margin-top:12px"><a class="btn ok" href="/ui/connect?tenant={{.TenantID}}">+ Connect a system</a></div>{{end}}
   </section>
 
   <div class="foot">Every decision — approve or reject — is signed into the ledger. Tier 0/1 fixes auto-apply; tier 2+ wait for you here.</div>
@@ -174,4 +181,31 @@ const complianceHTML = `<!doctype html>
   </section>
 
   <div class="foot">Attachable Markdown for an auditor: <code>GET /v1/compliance/{{.Framework}}/report</code></div>
+</div></body></html>`
+
+// connectHTML is the first-run onboarding surface: the connectors a tenant can wire, with
+// the current connection count and a Connect button that kicks off the provider OAuth.
+const connectHTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect a system — {{.Tenant}}</title>
+<style>
+  :root{--bg:#0b0e14;--card:#151a23;--ink:#e6e9ef;--muted:#8b94a7;--line:#232a37;--low:#52c41a}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:680px;margin:0 auto;padding:28px 20px}
+  .topbar{display:flex;align-items:center;gap:12px} h1{font-size:20px;margin:0} .topbar .who{margin-left:auto}
+  .btn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:6px 13px;font-size:13px;color:var(--ink);text-decoration:none;background:#1d2530}
+  .btn.ok{border-color:#2a6b1f;color:var(--low)}
+  .sub{color:var(--muted);font-size:13px;margin:4px 0 18px}
+  .row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+  .row .name{font-weight:600} .row .st{color:var(--muted);font-size:12px} .row .act{margin-left:auto}
+  .on{color:var(--low);font-size:12px}
+</style></head><body><div class="wrap">
+  <div class="topbar"><h1>Connect a system</h1><div class="who"><a class="btn" href="/ui?tenant={{.TenantID}}">← Dashboard</a></div></div>
+  <div class="sub">{{.Tenant}} · connect a code or identity provider and the agent starts scanning it immediately.</div>
+  {{range .Rows}}<div class="row">
+    <div><div class="name">{{.Name}}</div><div class="st">{{if .Connected}}<span class="on">● {{.Connected}} connected</span>{{else}}not connected{{end}}</div></div>
+    <div class="act"><a class="btn ok" href="/ui/connect/{{.Kind}}?tenant={{$.TenantID}}">{{if .Connected}}Connect another{{else}}Connect{{end}}</a></div>
+  </div>{{end}}
+  {{if not .Rows}}<div class="sub">No connectors are configured on this deployment.</div>{{end}}
 </div></body></html>`

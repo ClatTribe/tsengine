@@ -134,7 +134,8 @@ func main() {
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
 	// through to the API for every non-/ui path.
-	ui := console.Handler(console.Deps{Store: st, Token: token, Desk: desk, Report: g})
+	ui := console.Handler(console.Deps{Store: st, Token: token, Desk: desk, Report: g,
+		Connectors: reg, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC")})
 	mux := http.NewServeMux()
 	mux.Handle("/ui", ui)
 	mux.Handle("/ui/", ui)

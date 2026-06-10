@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -35,11 +36,16 @@ func seed(t *testing.T) store.Store {
 	return st
 }
 
-// deps builds a console wired to a real (non-applying) desk and the GRC reporter.
+// deps builds a console wired to a real (non-applying) desk, the GRC reporter, and a
+// connector registry (GitHub) for onboarding.
 func deps(t *testing.T, st store.Store) Deps {
 	t.Helper()
 	desk := &hitl.Desk{Store: st, Apply: applyNoop{}, Recorder: ledger.NewRecorder()}
-	return Deps{Store: st, Token: tok, Desk: desk, Report: &grc.GRC{Store: st}}
+	return Deps{
+		Store: st, Token: tok, Desk: desk, Report: &grc.GRC{Store: st},
+		Connectors: connector.NewRegistry(connector.NewGitHub("client-123", "secret")),
+		PublicURL:  "https://app.example",
+	}
 }
 
 // applyNoop satisfies the desk's Applier without doing anything (tier-2 approve path).
@@ -242,6 +248,56 @@ func TestCompliance_RequiresAuth(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if strings.Contains(w.Body.String(), "GAP") {
 		t.Fatal("unauthenticated compliance request must not render the report")
+	}
+}
+
+// The connect page lists available connectors with a Connect button.
+func TestConnectPage_ListsConnectors(t *testing.T) {
+	h := Handler(deps(t, seed(t)))
+	body := getBearer(t, h, "/ui/connect?tenant=t1").Body.String()
+	for _, want := range []string{"Connect a system", "GitHub", `href="/ui/connect/github?tenant=t1"`, "← Dashboard"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("connect page missing %q", want)
+		}
+	}
+}
+
+// Hitting connect kicks off the provider OAuth consent with the tenant as CSRF state.
+func TestConnect_RedirectsToProvider(t *testing.T) {
+	h := Handler(deps(t, seed(t)))
+	w := getBearer(t, h, "/ui/connect/github?tenant=t1")
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("connect should redirect to the provider, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "github.com/login/oauth/authorize") {
+		t.Errorf("redirect should target GitHub OAuth, got %q", loc)
+	}
+	if !strings.Contains(loc, "state=t1") {
+		t.Errorf("OAuth state should carry the tenant id, got %q", loc)
+	}
+	if !strings.Contains(loc, "redirect_uri=https%3A%2F%2Fapp.example%2Fv1%2Fconnect%2Fgithub%2Fcallback") {
+		t.Errorf("redirect_uri should point at the callback, got %q", loc)
+	}
+}
+
+// Onboarding is auth-gated like the rest of the console.
+func TestConnect_RequiresAuth(t *testing.T) {
+	h := Handler(deps(t, seed(t)))
+	r := httptest.NewRequest(http.MethodGet, "/ui/connect/github?tenant=t1", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code == http.StatusSeeOther && strings.Contains(w.Header().Get("Location"), "github.com") {
+		t.Fatal("unauthenticated connect must not start the OAuth flow")
+	}
+}
+
+// The dashboard surfaces the Connect link when a connector source is wired.
+func TestDashboard_ShowsConnectLink(t *testing.T) {
+	h := Handler(deps(t, seed(t)))
+	body := getBearer(t, h, "/ui?tenant=t1").Body.String()
+	if !strings.Contains(body, `href="/ui/connect?tenant=t1"`) {
+		t.Error("dashboard should offer a Connect a system link")
 	}
 }
 
