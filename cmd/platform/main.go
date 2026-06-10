@@ -17,6 +17,7 @@
 //	TSENGINE_PLATFORM_PUBLIC    public base URL for OAuth redirect_uri
 //	TSENGINE_SANDBOX_IMAGE      sandbox image ref (default tsengine/sandbox:latest)
 //	TSENGINE_PLATFORM_NO_ENGINE 1 → boot without the sandbox engine
+//	TSENGINE_MONITOR_INTERVAL  continuous re-scan cadence (e.g. 6h; default 12h; 0 disables)
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
 //	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
 //	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
@@ -45,6 +46,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/remediate"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
+	"github.com/ClatTribe/tsengine/internal/scheduler"
 	"github.com/ClatTribe/tsengine/internal/secret"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
@@ -130,6 +132,12 @@ func main() {
 	})
 	srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
 
+	// continuous monitoring: re-scan every tenant on a cadence (the "autonomous" loop).
+	monitorCtx, stopMonitor := context.WithCancel(context.Background())
+	defer stopMonitor()
+	sched := &scheduler.Scheduler{Store: st, Runner: svc, Interval: monitorInterval()}
+	go func() { _ = sched.Run(monitorCtx) }()
+
 	go func() {
 		log.Printf("[platform] listening on %s", addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -183,6 +191,21 @@ func envOr(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// monitorInterval is the continuous re-scan cadence (TSENGINE_MONITOR_INTERVAL, e.g.
+// "6h"). Default 12h; "0" disables the scheduler (event-driven re-scans only).
+func monitorInterval() time.Duration {
+	v := os.Getenv("TSENGINE_MONITOR_INTERVAL")
+	if v == "" {
+		return 12 * time.Hour
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		log.Printf("[platform] bad TSENGINE_MONITOR_INTERVAL %q, using 12h", v)
+		return 12 * time.Hour
+	}
+	return d
 }
 
 // openStore returns the file-backed store when TSENGINE_PLATFORM_DB points at a path

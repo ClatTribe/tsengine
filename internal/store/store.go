@@ -34,6 +34,7 @@ type Store interface {
 	// --- tenancy ---
 	PutTenant(ctx context.Context, t platform.Tenant) error
 	GetTenant(ctx context.Context, id string) (platform.Tenant, error)
+	ListTenants(ctx context.Context) ([]platform.Tenant, error)
 
 	// --- connections / assets / engagements ---
 	PutConnection(ctx context.Context, c platform.Connection) error

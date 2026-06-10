@@ -107,6 +107,28 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 	return scanned, nil
 }
 
+// RescanTenant re-scans every asset a tenant has (the scheduled-monitoring path). It
+// runs the full loop per asset and returns how many it scanned; an asset error is
+// logged via the returned error but does not stop the rest.
+func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error) {
+	assets, err := s.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	scanned := 0
+	var firstErr error
+	for _, a := range assets {
+		if _, err := s.scanAsset(ctx, a, platform.TriggerSchedule); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		scanned++
+	}
+	return scanned, firstErr
+}
+
 // OnTrigger handles a single provider event (a push) — find the matching asset and
 // re-scan it.
 func (s *Service) OnTrigger(ctx context.Context, t connector.Trigger) (*platform.Engagement, error) {
