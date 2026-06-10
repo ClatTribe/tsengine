@@ -136,6 +136,42 @@ func TestConnectionsRedactSecretRef(t *testing.T) {
 	}
 }
 
+func TestCreateTenant_Provisions(t *testing.T) {
+	st := store.NewMemory()
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	// token only (no tenant header) → provisions a tenant
+	req := httptest.NewRequest("POST", "/v1/tenants", strings.NewReader(`{"name":"Acme Corp","plan":"pro"}`))
+	req.Header.Set("Authorization", "Bearer platform-tok")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create tenant: code %d body %s", rec.Code, rec.Body.String())
+	}
+	var tn platform.Tenant
+	_ = json.Unmarshal(rec.Body.Bytes(), &tn)
+	if tn.ID == "" || tn.Name != "Acme Corp" {
+		t.Fatalf("tenant wrong: %+v", tn)
+	}
+	// it's persisted + retrievable
+	got, err := st.GetTenant(context.Background(), tn.ID)
+	if err != nil || got.Name != "Acme Corp" {
+		t.Errorf("tenant not persisted: %+v %v", got, err)
+	}
+
+	// missing name → 400; missing token → 401
+	bad := do(h, "POST", "/v1/tenants", "", `{}`)
+	if bad.Code != http.StatusBadRequest {
+		t.Errorf("nameless tenant should be 400, got %d", bad.Code)
+	}
+	noauth := httptest.NewRequest("POST", "/v1/tenants", strings.NewReader(`{"name":"x"}`))
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, noauth)
+	if rec2.Code != http.StatusUnauthorized {
+		t.Errorf("no token should be 401, got %d", rec2.Code)
+	}
+}
+
 func TestHealthz(t *testing.T) {
 	h, _ := setup(t)
 	req := httptest.NewRequest("GET", "/healthz", nil)

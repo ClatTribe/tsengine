@@ -53,6 +53,16 @@ func (m *Memory) GetTenant(_ context.Context, id string) (platform.Tenant, error
 	return t, nil
 }
 
+func (m *Memory) ListTenants(_ context.Context) ([]platform.Tenant, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Tenant, 0, len(m.tenants))
+	for _, t := range m.tenants {
+		out = append(out, t)
+	}
+	return out, nil
+}
+
 func (m *Memory) PutConnection(_ context.Context, c platform.Connection) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

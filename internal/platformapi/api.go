@@ -43,6 +43,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	mux.HandleFunc("POST /v1/tenants", d.platformAuth(d.handleCreateTenant)) // provisioning (no tenant header)
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
@@ -71,6 +72,37 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 		}
 		h(w, r, tenantID)
 	}
+}
+
+// platformAuth enforces only the platform bearer token (no tenant scope) — for
+// provisioning endpoints that create/operate across tenants.
+func (d Deps) platformAuth(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d.Token == "" || r.Header.Get("Authorization") != "Bearer "+d.Token {
+			writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
+			return
+		}
+		h(w, r)
+	}
+}
+
+// handleCreateTenant provisions a new tenant (the start of onboarding). Returns the
+// tenant with its generated id, which the caller then uses as X-Tenant-ID.
+func (d Deps) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+		Plan string `json:"plan,omitempty"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil || body.Name == "" {
+		writeJSON(w, http.StatusBadRequest, errBody("a tenant needs a name"))
+		return
+	}
+	t := platform.Tenant{ID: d.newID("ten"), Name: body.Name, Plan: body.Plan}
+	if err := d.Store.PutTenant(r.Context(), t); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusCreated, t)
 }
 
 // handleWebhook turns a provider event into triggers and re-scans the matching assets.

@@ -679,7 +679,8 @@ platform is **purely additive**: it must never change the engine's detection log
 | `internal/remediate` | `Propose` (finding→Action) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
 | `internal/grc` | compliance control-state system-of-record + signed evidence pack |
 | `internal/assetregistry` | shared `HandlerFor(assetType)` (so `cmd/tsengine` + `cmd/platform` don't duplicate routing) |
-| `internal/platformapi` + `cmd/platform` | the multi-tenant HTTP API + server |
+| `internal/scheduler` | continuous-monitoring loop — re-scans every tenant on a cadence (`TSENGINE_MONITOR_INTERVAL`); the "autonomous" heartbeat alongside event-driven webhook re-scans |
+| `internal/platformapi` + `cmd/platform` | the multi-tenant HTTP API + server (incl. `POST /v1/tenants` onboarding) |
 
 ### 18.2 Platform invariants (do not violate)
 
