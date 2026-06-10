@@ -1,0 +1,118 @@
+package store
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+
+	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
+
+// File is a dependency-free, JSON-file-backed Store for single-node deployments. It
+// embeds Memory (so all read/query methods + isolation logic are reused unchanged) and
+// overrides the mutating methods to snapshot the whole store to disk atomically after
+// each write. Good enough for the MVP — a sqlite/Postgres Store replaces it behind the
+// same interface when concurrency/scale demand it.
+//
+// Persistence is synchronous + whole-snapshot: simple and crash-safe (temp file +
+// rename), at the cost of write throughput. The platform's write rate (scans, the
+// occasional approval) is low enough that this is fine.
+type File struct {
+	*Memory
+	path string
+	mu   sync.Mutex // serializes disk writes (the embedded Memory guards in-memory state)
+}
+
+// OpenFile loads a File store from path, creating an empty one if the file is absent.
+func OpenFile(path string) (*File, error) {
+	f := &File{Memory: NewMemory(), path: path}
+	data, err := os.ReadFile(path) //nolint:gosec // operator-provided path
+	if err != nil {
+		if os.IsNotExist(err) {
+			return f, nil // fresh store
+		}
+		return nil, fmt.Errorf("store: open %s: %w", path, err)
+	}
+	var snap Snapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return nil, fmt.Errorf("store: decode %s: %w", path, err)
+	}
+	f.Memory.load(snap)
+	return f, nil
+}
+
+// persist writes the current snapshot to disk atomically (temp + rename).
+func (f *File) persist() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	data, err := json.MarshalIndent(f.Memory.Export(), "", "  ")
+	if err != nil {
+		return err
+	}
+	if dir := filepath.Dir(f.path); dir != "" {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return err
+		}
+	}
+	tmp := f.path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, f.path)
+}
+
+// --- mutating methods: delegate to Memory, then persist. Read methods are promoted
+// from the embedded *Memory unchanged. ---
+
+func (f *File) PutTenant(ctx context.Context, t platform.Tenant) error {
+	if err := f.Memory.PutTenant(ctx, t); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutConnection(ctx context.Context, c platform.Connection) error {
+	if err := f.Memory.PutConnection(ctx, c); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutAsset(ctx context.Context, a platform.Asset) error {
+	if err := f.Memory.PutAsset(ctx, a); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutEngagement(ctx context.Context, e platform.Engagement) error {
+	if err := f.Memory.PutEngagement(ctx, e); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutFinding(ctx context.Context, tenantID string, fn types.Finding) error {
+	if err := f.Memory.PutFinding(ctx, tenantID, fn); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutAction(ctx context.Context, a platform.Action) error {
+	if err := f.Memory.PutAction(ctx, a); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) UpsertControlState(ctx context.Context, cs platform.ControlState) error {
+	if err := f.Memory.UpsertControlState(ctx, cs); err != nil {
+		return err
+	}
+	return f.persist()
+}

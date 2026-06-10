@@ -12,6 +12,7 @@
 // Env:
 //
 //	TSENGINE_PLATFORM_TOKEN     static platform bearer token (required)
+//	TSENGINE_PLATFORM_DB        path to a JSON store file (persists across restarts; else in-memory)
 //	TSENGINE_PLATFORM_ADDR      listen address (default :8090)
 //	TSENGINE_PLATFORM_PUBLIC    public base URL for OAuth redirect_uri
 //	TSENGINE_SANDBOX_IMAGE      sandbox image ref (default tsengine/sandbox:latest)
@@ -70,7 +71,7 @@ func main() {
 	addr := envOr("TSENGINE_PLATFORM_ADDR", ":8090")
 	image := envOr("TSENGINE_SANDBOX_IMAGE", "tsengine/sandbox:latest")
 
-	st := store.NewMemory()
+	st := openStore()
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 	)
@@ -156,4 +157,19 @@ func envOr(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// openStore returns the file-backed store when TSENGINE_PLATFORM_DB points at a path
+// (survives restarts), else an in-memory store.
+func openStore() store.Store {
+	if path := os.Getenv("TSENGINE_PLATFORM_DB"); path != "" {
+		f, err := store.OpenFile(path)
+		if err != nil {
+			log.Fatalf("[platform] open store %s: %v", path, err)
+		}
+		log.Printf("[platform] persistent store at %s", path)
+		return f
+	}
+	log.Print("[platform] in-memory store (set TSENGINE_PLATFORM_DB to persist)")
+	return store.NewMemory()
 }
