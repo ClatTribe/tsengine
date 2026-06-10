@@ -44,23 +44,12 @@ import (
 	"github.com/ClatTribe/tsengine/internal/remediate"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
+	"github.com/ClatTribe/tsengine/internal/secret"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
-
-// envTokens is the MVP secret resolver: connections vault their token inline as
-// "vault:<token>". A real KMS-envelope vault replaces this behind runner.Tokens.
-type envTokens struct{}
-
-func (envTokens) Resolve(_ context.Context, c platform.Connection) (string, error) {
-	const p = "vault:"
-	if len(c.SecretRef) > len(p) && c.SecretRef[:len(p)] == p {
-		return c.SecretRef[len(p):], nil
-	}
-	return "", errors.New("platform: no token for connection")
-}
 
 var seq uint64
 
@@ -78,7 +67,16 @@ func main() {
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 	)
-	tokens := envTokens{}
+	vault, encrypted, verr := secret.FromEnv()
+	if verr != nil {
+		log.Fatalf("[platform] secret vault: %v", verr)
+	}
+	if encrypted {
+		log.Print("[platform] OAuth tokens encrypted at rest (AES-256-GCM)")
+	} else {
+		log.Print("[platform] WARNING: tokens stored unsealed — set TSENGINE_SECRET_KEY (base64 32 bytes)")
+	}
+	tokens := secret.Tokens{V: vault}
 
 	// the HITL desk delivers approved fixes through the connector write path, and
 	// (optionally) pings Slack when a tier-gated action queues for approval.
@@ -107,7 +105,7 @@ func main() {
 	}
 
 	h := platformapi.NewHandler(platformapi.Deps{
-		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g,
+		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault,
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"), NewID: newID,
 	})
