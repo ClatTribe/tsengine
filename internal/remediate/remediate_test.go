@@ -93,6 +93,36 @@ func TestDeliverer_NoConnectionErrors(t *testing.T) {
 	}
 }
 
+func TestPropose_StampsConnectionID(t *testing.T) {
+	a := platform.Asset{TenantID: "t", ConnectionID: "conn-9", Type: "repository", Target: "https://gitlab.com/acme/web", Meta: map[string]string{"path": "acme/web"}}
+	act, _ := Propose(types.Finding{ID: "f1", Title: "SQLi"}, a, func() string { return "1" })
+	if act.ConnectionID != "conn-9" {
+		t.Errorf("action should carry the asset's connection id, got %q", act.ConnectionID)
+	}
+	if act.Payload["path"] != "acme/web" {
+		t.Errorf("repo action should carry the gitlab path too, got %+v", act.Payload)
+	}
+}
+
+func TestDeliverer_RoutesToActionsOwnConnection(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	// two active github connections; the action names the second one
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t", Kind: platform.ConnGitHub, Status: platform.ConnActive})
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c2", TenantID: "t", Kind: platform.ConnGitHub, Status: platform.ConnActive})
+	var applied platform.Action
+	reg := connector.NewRegistry(fakeGitHub{applied: &applied})
+	d := &Deliverer{Store: st, Connectors: reg, Tokens: fakeTokens{}}
+
+	act := platform.Action{ID: "a1", TenantID: "t", ConnectionID: "c2", Kind: platform.ActOpenPR, Payload: map[string]any{"full_name": "acme/web"}}
+	if err := d.Apply(ctx, act); err != nil {
+		t.Fatal(err)
+	}
+	if applied.ConnectionID != "c2" {
+		t.Errorf("delivery must route to the action's own connection c2, got %q", applied.ConnectionID)
+	}
+}
+
 func TestDeliverer_TicketIsNoopDelivery(t *testing.T) {
 	ctx := context.Background()
 	d := &Deliverer{Store: store.NewMemory(), Connectors: connector.NewRegistry(), Tokens: fakeTokens{}}

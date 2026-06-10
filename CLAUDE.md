@@ -673,7 +673,7 @@ platform is **purely additive**: it must never change the engine's detection log
 | `pkg/ledger` | the signed, replayable decision ledger (promoted from `internal/` so the platform imports it) |
 | `pkg/platform` | multi-tenant domain model — Tenant, Connection, Asset, Engagement, Action, ControlState |
 | `internal/store` | the tenant-scoped system-of-record (`Store` interface + in-memory impl) |
-| `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply); GitHub today |
+| `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply): GitHub + GitLab (tech SCM), Google Workspace + M365 (non-tech identity) |
 | `internal/runner` | connector→engine→store glue; `ScanRunner` abstracts the engine, `EngineRunner` is the sandbox adapter; runs the full loop |
 | `internal/hitl` | the human desk — the gate between *propose* and *apply* |
 | `internal/remediate` | `Propose` (finding→Action) + `Deliverer` (apply via connector) |
