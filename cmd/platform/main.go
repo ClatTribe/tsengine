@@ -95,13 +95,16 @@ func main() {
 			return remediate.Propose(f, a, newID)
 		},
 	}
+	// The operate backend serves non-tech "workspace" assets (identity/email posture)
+	// from a snapshot; the sandbox engine serves tech assets. The mux routes by type
+	// so one platform serves both audiences on the same store/grc/hitl/ledger loop.
+	workspaceRunner := &runner.OperateRunner{Source: runner.SnapshotSource{}}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
-		svc.Scanner = &runner.EngineRunner{
-			Resolve:       assetregistry.HandlerFor,
-			NewDispatcher: sandboxDispatcher(image),
-		}
+		engine := &runner.EngineRunner{Resolve: assetregistry.HandlerFor, NewDispatcher: sandboxDispatcher(image)}
+		svc.Scanner = &runner.MuxRunner{Engine: engine, Workspace: workspaceRunner}
 	} else {
-		log.Print("[platform] NO_ENGINE mode: API boots without the sandbox scanner")
+		log.Print("[platform] NO_ENGINE mode: tech-asset scanning disabled (operate workspace assets still run)")
+		svc.Scanner = &runner.MuxRunner{Workspace: workspaceRunner}
 	}
 
 	h := platformapi.NewHandler(platformapi.Deps{
