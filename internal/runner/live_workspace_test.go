@@ -29,7 +29,7 @@ func TestLiveWorkspaceSource_ResolvesTokenAndFetches(t *testing.T) {
 	st := store.NewMemory()
 	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: platform.ConnGWorkspace, SecretRef: "sealed"})
 	f := &fetcherStub{}
-	src := &LiveWorkspaceSource{Store: st, Tokens: tokStub{}, Fetcher: f}
+	src := &LiveWorkspaceSource{Store: st, Tokens: tokStub{}, Fetchers: map[string]Fetcher{platform.ConnGWorkspace: f}}
 
 	ws, err := src.Workspace(ctx, platform.Asset{TenantID: "t1", ConnectionID: "c1", Type: WorkspaceType, Target: "acme"})
 	if err != nil {
@@ -44,10 +44,21 @@ func TestLiveWorkspaceSource_ResolvesTokenAndFetches(t *testing.T) {
 }
 
 func TestLiveWorkspaceSource_MissingConnectionErrors(t *testing.T) {
-	src := &LiveWorkspaceSource{Store: store.NewMemory(), Tokens: tokStub{}, Fetcher: &fetcherStub{}}
+	src := &LiveWorkspaceSource{Store: store.NewMemory(), Tokens: tokStub{}, Fetchers: map[string]Fetcher{platform.ConnGWorkspace: &fetcherStub{}}}
 	_, err := src.Workspace(context.Background(), platform.Asset{TenantID: "t1", ConnectionID: "ghost", Type: WorkspaceType})
 	if err == nil {
 		t.Error("a workspace asset whose connection is missing should error")
+	}
+}
+
+func TestLiveWorkspaceSource_UnknownProviderErrors(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: platform.ConnM365, SecretRef: "x"})
+	// only a gworkspace fetcher registered → an m365 connection has no fetcher
+	src := &LiveWorkspaceSource{Store: st, Tokens: tokStub{}, Fetchers: map[string]Fetcher{platform.ConnGWorkspace: &fetcherStub{}}}
+	if _, err := src.Workspace(ctx, platform.Asset{TenantID: "t1", ConnectionID: "c1", Type: WorkspaceType}); err == nil {
+		t.Error("a provider with no registered fetcher should error")
 	}
 }
 

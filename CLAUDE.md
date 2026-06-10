@@ -712,9 +712,12 @@ and testable (a hardened workspace yields zero findings). `tsengine operate --sn
 and a **live Google Workspace path** exists end to end: `connector.GWorkspace` (OAuth
 onboarding → a `workspace` asset) + `operate.GWorkspace.Fetch` (Admin SDK directory →
 snapshot) + `runner.LiveWorkspaceSource`/`CompositeSource` (snapshot-file first, else
-live fetch). So a non-tech tenant connects Google Workspace → posture findings flow
-through the same store/grc/hitl/ledger loop. Remaining Phase 4: M365/Okta connectors,
-domain email-auth + OAuth-grant live fetch (users are live today; domains/grants are
-snapshot), identity remediation (`GWorkspace.Apply`), and detect/respond agents.
+live fetch). So a non-tech tenant connects **Google Workspace or Microsoft 365** →
+posture findings flow through the same store/grc/hitl/ledger loop. `LiveWorkspaceSource`
+holds a `Fetchers map[kind]Fetcher` so it serves multiple providers; `operate.M365`
+fetches Microsoft Graph (`/users` + the auth-methods registration report, merged by UPN,
+OData-paginated). Remaining Phase 4: an Okta connector (same seam), domain email-auth +
+OAuth-grant live fetch (users are live today; domains/grants are snapshot), identity
+remediation (`*.Apply`), and detect/respond agents.
 Remaining platform infra: a sqlite/Postgres `Store` (concurrency/scale) and a cloud-KMS
 `secret.Vault` (vs the env-key MVP).
