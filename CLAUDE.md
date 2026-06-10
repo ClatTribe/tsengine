@@ -707,7 +707,14 @@ DMARC, risky OAuth grants, stale/over-privileged accounts), each citing the offe
 user/domain/app, mapped to compliance controls so they flow into the same `grc`/`hitl`
 loop. Snapshot-driven + LLM-free (mirrors `cloudengine`), so the logic is deterministic
 and testable (a hardened workspace yields zero findings). `tsengine operate --snapshot`.
-Remaining Phase 4: a live Workspace connector (IdP/M365 OAuth → snapshot), detect/respond
-agents, and wiring `operate` as a platform `ScanRunner` for the `workspace` asset.
+`operate` is wired into the platform as a `ScanRunner` for the `workspace` asset via
+`runner.MuxRunner` (routes by asset type: workspace → operate, else → sandbox engine),
+and a **live Google Workspace path** exists end to end: `connector.GWorkspace` (OAuth
+onboarding → a `workspace` asset) + `operate.GWorkspace.Fetch` (Admin SDK directory →
+snapshot) + `runner.LiveWorkspaceSource`/`CompositeSource` (snapshot-file first, else
+live fetch). So a non-tech tenant connects Google Workspace → posture findings flow
+through the same store/grc/hitl/ledger loop. Remaining Phase 4: M365/Okta connectors,
+domain email-auth + OAuth-grant live fetch (users are live today; domains/grants are
+snapshot), identity remediation (`GWorkspace.Apply`), and detect/respond agents.
 Remaining platform infra: a sqlite/Postgres `Store` (concurrency/scale) and a cloud-KMS
 `secret.Vault` (vs the env-key MVP).
