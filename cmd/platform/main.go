@@ -37,6 +37,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/notify"
@@ -125,12 +126,17 @@ func main() {
 		svc.Scanner = &runner.MuxRunner{Workspace: workspaceRunner}
 	}
 
-	h := platformapi.NewHandler(platformapi.Deps{
+	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault,
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"), NewID: newID,
 	})
-	srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
+	// The human-facing dashboard (read-only HTML) shares the same bearer token as the
+	// API and falls through to it for every non-/ui path.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ui", console.Handler(console.Deps{Store: st, Token: token}))
+	mux.Handle("/", api)
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
 	// continuous monitoring: re-scan every tenant on a cadence (the "autonomous" loop).
 	monitorCtx, stopMonitor := context.WithCancel(context.Background())
