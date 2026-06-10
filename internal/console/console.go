@@ -1,57 +1,164 @@
-// Package dashboard is the human-facing web UI for the autonomous security team — the
+// Package console is the human-facing web UI for the autonomous security team — the
 // "from UX" surface a founder / IT-generalist actually looks at (docs/autonomous-team.md
 // §3.7). It is server-rendered HTML (html/template, zero JS framework, no build step),
 // served by cmd/platform alongside the JSON API. One screen answers "am I okay?":
-// posture by framework, open findings by severity, and the actions waiting on a human.
+// posture by framework, open findings by severity, and the actions waiting on a human —
+// each with Approve / Reject buttons so the human-in-the-loop closes in the browser.
 //
-// It is read-only and tenant-scoped (the viewer's tenant id), so the dashboard can
-// never approve an action — that stays the gated API path (/v1/approvals). The UI just
-// shows what's pending and links to it.
+// Auth: the console shares the platform bearer token. A browser can't send an
+// Authorization header on a plain navigation, so the console also accepts a session
+// cookie set by a tiny login form (POST /ui/login). The cookie is httpOnly +
+// SameSite=Strict (the CSRF defence for the POST actions) + Secure over TLS.
+//
+// Acting on an approval does NOT bypass the gate: the Approve/Reject buttons drive the
+// same hitl.Desk.Decide path the API and Slack use, so tier rules + the signed ledger
+// still apply. The console is a UI onto the gated decision, not a second write path.
 package console
 
 import (
 	"context"
+	"crypto/subtle"
 	"html/template"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
-// Deps are the dashboard's read collaborators.
-type Deps struct {
-	Store store.Store
-	Token string // platform bearer token (same as the API)
+const (
+	sessionCookie  = "ts_session"  // value = the platform token (httpOnly, SameSite=Strict)
+	operatorCookie = "ts_operator" // optional human name, used as the ledger approver
+)
+
+// Decider is the gated HITL surface the console drives (satisfied by *hitl.Desk). The
+// console never applies a fix itself — it hands the verdict to the desk.
+type Decider interface {
+	Decide(ctx context.Context, tenantID, actionID string, v hitl.Verdict) (platform.Action, error)
 }
 
-// Handler serves the dashboard at /ui (tenant from ?tenant= or X-Tenant-ID).
-func Handler(d Deps) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if d.Token == "" || r.Header.Get("Authorization") != "Bearer "+d.Token {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		tenantID := firstNonEmpty(r.URL.Query().Get("tenant"), r.Header.Get("X-Tenant-ID"))
-		if tenantID == "" {
-			http.Error(w, "missing tenant (?tenant=<id>)", http.StatusBadRequest)
-			return
-		}
-		vm, err := build(r.Context(), d.Store, tenantID)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := page.Execute(w, vm); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+// Deps are the console's read collaborators plus the gated desk for approvals.
+type Deps struct {
+	Store store.Store
+	Token string  // platform bearer token (same as the API)
+	Desk  Decider // gated approval path; nil → Approve/Reject return 501
+}
+
+// Handler returns the console router: the dashboard, the login form, logout, and the
+// gated approve/reject actions, all under /ui. Mount it at both "/ui" and "/ui/".
+func Handler(d Deps) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ui", d.dashboard)
+	mux.HandleFunc("POST /ui/login", d.login)
+	mux.HandleFunc("POST /ui/logout", d.logout)
+	mux.HandleFunc("POST /ui/approvals/{id}", d.decide)
+	return mux
+}
+
+// dashboard renders the posture screen, or the login page when unauthenticated, or a
+// tenant picker when authenticated without a chosen tenant.
+func (d Deps) dashboard(w http.ResponseWriter, r *http.Request) {
+	if !d.authed(r) {
+		renderLogin(w, http.StatusOK, loginView{Tenant: r.URL.Query().Get("tenant")})
+		return
+	}
+	tenantID := firstNonEmpty(r.URL.Query().Get("tenant"), r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		d.renderTenantPicker(w, r)
+		return
+	}
+	vm, err := build(r.Context(), d.Store, tenantID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	vm.Operator = cookieValue(r, operatorCookie)
+	vm.CanApprove = d.Desk != nil
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := page.Execute(w, vm); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-// view is the rendered model.
+// login validates the token, sets the session cookie, and redirects into the dashboard.
+func (d Deps) login(w http.ResponseWriter, r *http.Request) {
+	token := r.FormValue("token")
+	if d.Token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(d.Token)) != 1 {
+		renderLogin(w, http.StatusUnauthorized, loginView{Error: "Invalid token.", Tenant: r.FormValue("tenant")})
+		return
+	}
+	secure := isHTTPS(r)
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/ui",
+		HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: secure})
+	if op := strings.TrimSpace(r.FormValue("operator")); op != "" {
+		http.SetCookie(w, &http.Cookie{Name: operatorCookie, Value: op, Path: "/ui",
+			SameSite: http.SameSiteStrictMode, Secure: secure})
+	}
+	http.Redirect(w, r, "/ui?tenant="+url.QueryEscape(r.FormValue("tenant")), http.StatusSeeOther)
+}
+
+// logout clears the session.
+func (d Deps) logout(w http.ResponseWriter, r *http.Request) {
+	for _, name := range []string{sessionCookie, operatorCookie} {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/ui", MaxAge: -1})
+	}
+	http.Redirect(w, r, "/ui", http.StatusSeeOther)
+}
+
+// decide records a human verdict on a pending action through the gated desk.
+func (d Deps) decide(w http.ResponseWriter, r *http.Request) {
+	if !d.authed(r) {
+		renderLogin(w, http.StatusUnauthorized, loginView{Tenant: r.FormValue("tenant")})
+		return
+	}
+	if d.Desk == nil {
+		http.Error(w, "approvals not configured", http.StatusNotImplemented)
+		return
+	}
+	tenantID := r.FormValue("tenant")
+	if tenantID == "" {
+		http.Error(w, "missing tenant", http.StatusBadRequest)
+		return
+	}
+	approver := firstNonEmpty(cookieValue(r, operatorCookie), "console")
+	_, err := d.Desk.Decide(r.Context(), tenantID, r.PathValue("id"),
+		hitl.Verdict{Approver: approver, Approve: r.FormValue("decision") == "approve"})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/ui?tenant="+url.QueryEscape(tenantID), http.StatusSeeOther)
+}
+
+// authed accepts either a valid bearer header (programmatic) or a valid session cookie
+// (browser). Both compared in constant time.
+func (d Deps) authed(r *http.Request) bool {
+	if d.Token == "" {
+		return false
+	}
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") &&
+		subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(h, "Bearer ")), []byte(d.Token)) == 1 {
+		return true
+	}
+	if c, err := r.Cookie(sessionCookie); err == nil &&
+		subtle.ConstantTimeCompare([]byte(c.Value), []byte(d.Token)) == 1 {
+		return true
+	}
+	return false
+}
+
+func (d Deps) renderTenantPicker(w http.ResponseWriter, r *http.Request) {
+	tenants, _ := d.Store.ListTenants(r.Context())
+	sort.Slice(tenants, func(i, j int) bool { return tenants[i].ID < tenants[j].ID })
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = pickerPage.Execute(w, tenants)
+}
+
+// view is the rendered dashboard model.
 type view struct {
 	TenantID    string
 	Tenant      string
@@ -61,6 +168,8 @@ type view struct {
 	Pending     []platform.Action
 	Connections []platform.Connection
 	Frameworks  []framework
+	Operator    string
+	CanApprove  bool
 }
 
 type sevCount struct {
@@ -165,4 +274,30 @@ func firstNonEmpty(ss ...string) string {
 	return ""
 }
 
-var page = template.Must(template.New("dash").Parse(pageHTML))
+func cookieValue(r *http.Request, name string) string {
+	if c, err := r.Cookie(name); err == nil {
+		return c.Value
+	}
+	return ""
+}
+
+func isHTTPS(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+type loginView struct {
+	Error  string
+	Tenant string
+}
+
+func renderLogin(w http.ResponseWriter, code int, v loginView) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(code)
+	_ = loginPage.Execute(w, v)
+}
+
+var (
+	page       = template.Must(template.New("dash").Parse(pageHTML))
+	loginPage  = template.Must(template.New("login").Parse(loginHTML))
+	pickerPage = template.Must(template.New("picker").Parse(pickerHTML))
+)

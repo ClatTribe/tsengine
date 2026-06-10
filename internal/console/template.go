@@ -29,13 +29,21 @@ const pageHTML = `<!doctype html>
   .sev.medium{color:var(--medium)} .sev.low{color:var(--low)} .sev.info{color:var(--muted)}
   .tag{display:inline-block;background:#1d2530;border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:11px;color:var(--muted)}
   .empty{color:var(--muted);font-size:13px;padding:6px 0}
+  .btn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 11px;font-size:12px;cursor:pointer;background:#1d2530;color:var(--ink)}
+  .btn.ok{border-color:#2a6b1f;color:var(--low)} .btn.no{border-color:#6b2a2a;color:var(--high)}
+  form.inline{display:inline;margin:0}
+  .topbar{display:flex;align-items:center;gap:12px;margin-bottom:2px}
+  .topbar .who{margin-left:auto;color:var(--muted);font-size:12px}
   .fw{display:flex;gap:8px;flex-wrap:wrap}
   .fwcard{flex:1;min-width:120px;background:#11161f;border:1px solid var(--line);border-radius:9px;padding:12px}
   .fwcard .name{font-size:12px;color:var(--muted)} .fwcard .met{color:var(--low);font-weight:600} .fwcard .gap{color:var(--high);font-weight:600}
   code{background:#11161f;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
   .foot{color:var(--muted);font-size:12px;margin-top:16px}
 </style></head><body><div class="wrap">
-  <h1>{{.Tenant}}</h1>
+  <div class="topbar">
+    <h1>{{.Tenant}}</h1>
+    <div class="who">{{if .Operator}}{{.Operator}} · {{end}}<form class="inline" method="post" action="/ui/logout"><button class="btn" type="submit">Sign out</button></form></div>
+  </div>
   <div class="sub">Autonomous security posture · tenant <code>{{.TenantID}}</code></div>
 
   <div class="banner">
@@ -52,8 +60,12 @@ const pageHTML = `<!doctype html>
   </div></section>{{end}}
 
   <section><h2>Awaiting your approval</h2>
-    {{if .Pending}}<table><tr><th>Action</th><th>Kind</th><th>Tier</th><th>Finding</th></tr>
-    {{range .Pending}}<tr><td>{{.Title}}</td><td><span class="tag">{{.Kind}}</span></td><td>{{.Tier}}</td><td><code>{{.FindingID}}</code></td></tr>{{end}}
+    {{if .Pending}}<table><tr><th>Action</th><th>Kind</th><th>Tier</th><th>Finding</th>{{if $.CanApprove}}<th></th>{{end}}</tr>
+    {{range .Pending}}<tr><td>{{.Title}}</td><td><span class="tag">{{.Kind}}</span></td><td>{{.Tier}}</td><td><code>{{.FindingID}}</code></td>
+    {{if $.CanApprove}}<td>
+      <form class="inline" method="post" action="/ui/approvals/{{.ID}}"><input type="hidden" name="tenant" value="{{$.TenantID}}"><input type="hidden" name="decision" value="approve"><button class="btn ok" type="submit">Approve</button></form>
+      <form class="inline" method="post" action="/ui/approvals/{{.ID}}"><input type="hidden" name="tenant" value="{{$.TenantID}}"><input type="hidden" name="decision" value="reject"><button class="btn no" type="submit">Reject</button></form>
+    </td>{{end}}</tr>{{end}}
     </table>{{else}}<div class="empty">Nothing waiting on you — the agent is auto-handling everything safe.</div>{{end}}
   </section>
 
@@ -63,5 +75,49 @@ const pageHTML = `<!doctype html>
     </table>{{else}}<div class="empty">No open findings.</div>{{end}}
   </section>
 
-  <div class="foot">Read-only view. Approvals happen via the gated API / Slack, every decision signed into the ledger.</div>
+  <div class="foot">Every decision — approve or reject — is signed into the ledger. Tier 0/1 fixes auto-apply; tier 2+ wait for you here.</div>
+</div></body></html>`
+
+// loginHTML is the token gate. A browser can't send a bearer header on navigation, so
+// this POSTs the token to /ui/login, which sets the session cookie.
+const loginHTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Security Posture</title>
+<style>
+  :root{--bg:#0b0e14;--card:#151a23;--ink:#e6e9ef;--muted:#8b94a7;--line:#232a37;--high:#ff7a45}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       display:flex;min-height:100vh;align-items:center;justify-content:center}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px;width:320px}
+  h1{font-size:17px;margin:0 0 4px} .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+  label{display:block;font-size:12px;color:var(--muted);margin:12px 0 4px}
+  input{width:100%;box-sizing:border-box;background:#0b0e14;border:1px solid var(--line);border-radius:7px;padding:9px;color:var(--ink);font-size:14px}
+  button{margin-top:18px;width:100%;background:#1d2530;border:1px solid var(--line);border-radius:7px;padding:10px;color:var(--ink);font-size:14px;cursor:pointer}
+  .err{color:var(--high);font-size:13px;margin-top:12px}
+</style></head><body>
+  <form class="box" method="post" action="/ui/login">
+    <h1>Autonomous Security Team</h1>
+    <div class="sub">Sign in to review posture and approvals.</div>
+    <label>Access token</label><input type="password" name="token" autofocus autocomplete="current-password">
+    <label>Your name (optional)</label><input type="text" name="operator" placeholder="for the approval audit trail">
+    <label>Tenant</label><input type="text" name="tenant" value="{{.Tenant}}" placeholder="tenant id">
+    <button type="submit">Sign in</button>
+    {{if .Error}}<div class="err">{{.Error}}</div>{{end}}
+  </form>
+</body></html>`
+
+// pickerHTML lets a signed-in operator choose a tenant when none is in the URL.
+const pickerHTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choose tenant</title>
+<style>
+  :root{--bg:#0b0e14;--card:#151a23;--ink:#e6e9ef;--muted:#8b94a7;--line:#232a37}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:480px;margin:60px auto;padding:0 20px}
+  h1{font-size:18px} a{display:block;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin:8px 0;color:var(--ink);text-decoration:none}
+  a:hover{border-color:#3a4658} .id{color:var(--muted);font-size:12px}
+  .empty{color:var(--muted)}
+</style></head><body><div class="wrap">
+  <h1>Choose a tenant</h1>
+  {{if .}}{{range .}}<a href="/ui?tenant={{.ID}}">{{if .Name}}{{.Name}}{{else}}{{.ID}}{{end}}<div class="id">{{.ID}}</div></a>{{end}}
+  {{else}}<div class="empty">No tenants yet. Provision one via <code>POST /v1/tenants</code>.</div>{{end}}
 </div></body></html>`
