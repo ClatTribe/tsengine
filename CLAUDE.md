@@ -676,7 +676,7 @@ platform is **purely additive**: it must never change the engine's detection log
 | `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply): GitHub + GitLab (tech SCM), Google Workspace + M365 (non-tech identity) |
 | `internal/runner` | connector→engine→store glue; `ScanRunner` abstracts the engine, `EngineRunner` is the sandbox adapter; runs the full loop |
 | `internal/hitl` | the human desk — the gate between *propose* and *apply* |
-| `internal/remediate` | `Propose` (finding→Action) + `Deliverer` (apply via connector) |
+| `internal/remediate` | `Propose` (finding→Action) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
 | `internal/grc` | compliance control-state system-of-record + signed evidence pack |
 | `internal/assetregistry` | shared `HandlerFor(assetType)` (so `cmd/tsengine` + `cmd/platform` don't duplicate routing) |
 | `internal/platformapi` + `cmd/platform` | the multi-tenant HTTP API + server |

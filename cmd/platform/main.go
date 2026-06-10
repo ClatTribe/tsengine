@@ -85,6 +85,10 @@ func main() {
 	// the HITL desk delivers approved fixes through the connector write path, and
 	// (optionally) pings Slack when a tier-gated action queues for approval.
 	deliverer := &remediate.Deliverer{Store: st, Connectors: reg, Tokens: tokens}
+	if base := os.Getenv("JIRA_BASE_URL"); base != "" {
+		deliverer.Ticket = connector.NewJira(base, os.Getenv("JIRA_EMAIL"), os.Getenv("JIRA_API_TOKEN"), os.Getenv("JIRA_PROJECT"))
+		log.Print("[platform] Jira ticket delivery enabled")
+	}
 	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
 	if hook := os.Getenv("TSENGINE_SLACK_WEBHOOK"); hook != "" {
 		desk.Notify = notify.NewSlack(hook)
