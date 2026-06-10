@@ -131,10 +131,13 @@ func main() {
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"), NewID: newID,
 	})
-	// The human-facing dashboard (read-only HTML) shares the same bearer token as the
-	// API and falls through to it for every non-/ui path.
+	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
+	// browser session cookie) and drives the SAME gated desk for approvals. It falls
+	// through to the API for every non-/ui path.
+	ui := console.Handler(console.Deps{Store: st, Token: token, Desk: desk})
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ui", console.Handler(console.Deps{Store: st, Token: token}))
+	mux.Handle("/ui", ui)
+	mux.Handle("/ui/", ui)
 	mux.Handle("/", api)
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
