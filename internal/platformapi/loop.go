@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -16,9 +18,11 @@ type Decider interface {
 	Decide(ctx context.Context, tenantID, actionID string, v hitl.Verdict) (platform.Action, error)
 }
 
-// Posturer is the GRC surface the API needs (satisfied by *grc.GRC).
+// Posturer is the GRC surface the API needs (satisfied by *grc.GRC): the raw control
+// state plus the auditor-facing compliance report.
 type Posturer interface {
 	Posture(ctx context.Context, tenantID, framework string) ([]platform.ControlState, error)
+	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
 }
 
 // Sealer seals a raw OAuth token before it is persisted (satisfied by the secret
@@ -115,6 +119,26 @@ func (d Deps) handlePosture(w http.ResponseWriter, r *http.Request, tenantID str
 	}
 	cs, err := d.GRC.Posture(r.Context(), tenantID, r.PathValue("framework"))
 	respond(w, cs, err)
+}
+
+// handleComplianceReport renders the auditor-facing compliance report for a framework —
+// Markdown by default (the attachable deliverable), JSON with ?format=json.
+func (d Deps) handleComplianceReport(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.GRC == nil {
+		writeJSON(w, http.StatusNotImplemented, errBody("grc not configured"))
+		return
+	}
+	rep, err := d.GRC.Report(r.Context(), tenantID, r.PathValue("framework"))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	if r.URL.Query().Get("format") == "json" {
+		writeJSON(w, http.StatusOK, rep)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	_, _ = io.WriteString(w, grc.RenderMarkdown(rep))
 }
 
 func (d Deps) newID(prefix string) string {

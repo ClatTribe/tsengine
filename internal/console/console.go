@@ -23,7 +23,9 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -41,11 +43,17 @@ type Decider interface {
 	Decide(ctx context.Context, tenantID, actionID string, v hitl.Verdict) (platform.Action, error)
 }
 
+// Reporter is the GRC surface the compliance drill-down needs (satisfied by *grc.GRC).
+type Reporter interface {
+	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
+}
+
 // Deps are the console's read collaborators plus the gated desk for approvals.
 type Deps struct {
-	Store store.Store
-	Token string  // platform bearer token (same as the API)
-	Desk  Decider // gated approval path; nil → Approve/Reject return 501
+	Store  store.Store
+	Token  string   // platform bearer token (same as the API)
+	Desk   Decider  // gated approval path; nil → Approve/Reject return 501
+	Report Reporter // compliance drill-down; nil → posture cards are not linked
 }
 
 // Handler returns the console router: the dashboard, the login form, logout, and the
@@ -53,6 +61,7 @@ type Deps struct {
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ui", d.dashboard)
+	mux.HandleFunc("GET /ui/compliance/{framework}", d.compliance)
 	mux.HandleFunc("POST /ui/login", d.login)
 	mux.HandleFunc("POST /ui/logout", d.logout)
 	mux.HandleFunc("POST /ui/approvals/{id}", d.decide)
@@ -78,8 +87,36 @@ func (d Deps) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	vm.Operator = cookieValue(r, operatorCookie)
 	vm.CanApprove = d.Desk != nil
+	vm.CanReport = d.Report != nil
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := page.Execute(w, vm); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// compliance renders the per-framework drill-down: every tracked control, gaps backed by
+// their citing findings — the auditor-facing view of the dashboard's posture card.
+func (d Deps) compliance(w http.ResponseWriter, r *http.Request) {
+	if !d.authed(r) {
+		renderLogin(w, http.StatusOK, loginView{Tenant: r.URL.Query().Get("tenant")})
+		return
+	}
+	if d.Report == nil {
+		http.Error(w, "compliance reporting not configured", http.StatusNotImplemented)
+		return
+	}
+	tenantID := firstNonEmpty(r.URL.Query().Get("tenant"), r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		http.Error(w, "missing tenant (?tenant=<id>)", http.StatusBadRequest)
+		return
+	}
+	rep, err := d.Report.Report(r.Context(), tenantID, r.PathValue("framework"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := compliancePage.Execute(w, rep); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -170,6 +207,7 @@ type view struct {
 	Frameworks  []framework
 	Operator    string
 	CanApprove  bool
+	CanReport   bool
 }
 
 type sevCount struct {
@@ -179,7 +217,8 @@ type sevCount struct {
 }
 
 type framework struct {
-	Name string
+	Key  string // soc2 (for the drill-down link)
+	Name string // SOC2 (display)
 	Met  int
 	Gap  int
 }
@@ -223,7 +262,7 @@ func build(ctx context.Context, st store.Store, tenantID string) (view, error) {
 		if len(cs) == 0 {
 			continue
 		}
-		f := framework{Name: strings.ToUpper(fw)}
+		f := framework{Key: fw, Name: strings.ToUpper(fw)}
 		for _, c := range cs {
 			if c.State == platform.ControlMet {
 				f.Met++
@@ -297,7 +336,10 @@ func renderLogin(w http.ResponseWriter, code int, v loginView) {
 }
 
 var (
-	page       = template.Must(template.New("dash").Parse(pageHTML))
-	loginPage  = template.Must(template.New("login").Parse(loginHTML))
-	pickerPage = template.Must(template.New("picker").Parse(pickerHTML))
+	page           = template.Must(template.New("dash").Parse(pageHTML))
+	loginPage      = template.Must(template.New("login").Parse(loginHTML))
+	pickerPage     = template.Must(template.New("picker").Parse(pickerHTML))
+	compliancePage = template.Must(template.New("compliance").Funcs(template.FuncMap{
+		"rfc3339": func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
+	}).Parse(complianceHTML))
 )

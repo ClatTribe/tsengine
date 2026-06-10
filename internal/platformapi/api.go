@@ -53,6 +53,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/connect/{kind}", d.auth(d.handleConnectURL))
 	mux.HandleFunc("GET /v1/connect/{kind}/callback", d.handleConnectCallback) // OAuth redirect; tenant in state
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
+	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))
 	mux.HandleFunc("POST /v1/slack/interactive", d.handleSlackInteractive) // Slack-signed, not bearer-auth'd
 	return mux
 }
