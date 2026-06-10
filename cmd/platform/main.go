@@ -39,6 +39,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/notify"
+	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/platformapi"
 	"github.com/ClatTribe/tsengine/internal/remediate"
@@ -66,6 +67,7 @@ func main() {
 	st := openStore()
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
+		connector.NewGWorkspace(os.Getenv("GWORKSPACE_CLIENT_ID"), os.Getenv("GWORKSPACE_CLIENT_SECRET")),
 	)
 	vault, encrypted, verr := secret.FromEnv()
 	if verr != nil {
@@ -95,10 +97,15 @@ func main() {
 			return remediate.Propose(f, a, newID)
 		},
 	}
-	// The operate backend serves non-tech "workspace" assets (identity/email posture)
-	// from a snapshot; the sandbox engine serves tech assets. The mux routes by type
-	// so one platform serves both audiences on the same store/grc/hitl/ledger loop.
-	workspaceRunner := &runner.OperateRunner{Source: runner.SnapshotSource{}}
+	// The operate backend serves non-tech "workspace" assets (identity/email posture):
+	// a snapshot file if the asset names one, else a LIVE fetch from the connected
+	// Google Workspace directory. The sandbox engine serves tech assets. The mux routes
+	// by type so one platform serves both audiences on the same store/grc/hitl/ledger loop.
+	workspaceSource := runner.CompositeSource{
+		Snapshot: runner.SnapshotSource{},
+		Live:     &runner.LiveWorkspaceSource{Store: st, Tokens: tokens, Fetcher: operate.NewGWorkspace()},
+	}
+	workspaceRunner := &runner.OperateRunner{Source: workspaceSource}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
 		engine := &runner.EngineRunner{Resolve: assetregistry.HandlerFor, NewDispatcher: sandboxDispatcher(image)}
 		svc.Scanner = &runner.MuxRunner{Engine: engine, Workspace: workspaceRunner}
