@@ -17,6 +17,8 @@
 //	TSENGINE_PLATFORM_PUBLIC    public base URL for OAuth redirect_uri
 //	TSENGINE_SANDBOX_IMAGE      sandbox image ref (default tsengine/sandbox:latest)
 //	TSENGINE_PLATFORM_NO_ENGINE 1 → boot without the sandbox engine
+//	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
+//	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
 //	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
 package main
 
@@ -36,6 +38,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/notify"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/platformapi"
 	"github.com/ClatTribe/tsengine/internal/remediate"
@@ -77,9 +80,14 @@ func main() {
 	)
 	tokens := envTokens{}
 
-	// the HITL desk delivers approved fixes through the connector write path
+	// the HITL desk delivers approved fixes through the connector write path, and
+	// (optionally) pings Slack when a tier-gated action queues for approval.
 	deliverer := &remediate.Deliverer{Store: st, Connectors: reg, Tokens: tokens}
 	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
+	if hook := os.Getenv("TSENGINE_SLACK_WEBHOOK"); hook != "" {
+		desk.Notify = notify.NewSlack(hook)
+		log.Print("[platform] Slack approval notifications enabled")
+	}
 	g := &grc.GRC{Store: st}
 
 	svc := &runner.Service{
@@ -100,7 +108,8 @@ func main() {
 
 	h := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g,
-		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"), NewID: newID,
+		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
+		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"), NewID: newID,
 	})
 	srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
 

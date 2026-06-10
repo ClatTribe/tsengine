@@ -23,10 +23,17 @@ type Applier interface {
 	Apply(ctx context.Context, a platform.Action) error
 }
 
+// Notifier is pinged when an action queues for human approval (satisfied by
+// *notify.Slack). Optional + nil-safe — the desk calls it best-effort.
+type Notifier interface {
+	ApprovalNeeded(ctx context.Context, a platform.Action) error
+}
+
 // Desk is the approval gate over the store.
 type Desk struct {
 	Store    store.Store
 	Apply    Applier
+	Notify   Notifier         // optional; pinged when an action queues for approval
 	Recorder *ledger.Recorder // optional; records every decision into the signed ledger
 	Now      func() time.Time
 }
@@ -50,6 +57,11 @@ func (d *Desk) Submit(ctx context.Context, a platform.Action) (platform.Action, 
 			return a, err
 		}
 		d.record("queued", a, "")
+		// best-effort push to the human desk (Slack); a notify failure must not lose
+		// the queued action — it's already persisted and visible via the API.
+		if d.Notify != nil {
+			_ = d.Notify.ApprovalNeeded(ctx, a)
+		}
 		return a, nil
 	}
 	return d.apply(ctx, a, "auto")

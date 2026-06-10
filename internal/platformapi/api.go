@@ -30,7 +30,10 @@ type Deps struct {
 	GRC        Posturer // optional: the compliance system-of-record (posture)
 	Token      string   // static platform bearer token (required)
 	PublicURL  string   // base URL for OAuth redirect_uri (e.g. https://app.example)
-	NewID      func() string
+	// SlackSigningSecret verifies Slack interactive (approve/reject) callbacks. Empty
+	// → the Slack endpoint returns 501.
+	SlackSigningSecret string
+	NewID              func() string
 }
 
 // NewHandler returns the platform's HTTP handler.
@@ -48,6 +51,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/connect/{kind}", d.auth(d.handleConnectURL))
 	mux.HandleFunc("GET /v1/connect/{kind}/callback", d.handleConnectCallback) // OAuth redirect; tenant in state
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
+	mux.HandleFunc("POST /v1/slack/interactive", d.handleSlackInteractive) // Slack-signed, not bearer-auth'd
 	return mux
 }
 
