@@ -18,19 +18,18 @@ type Fetcher interface {
 
 // LiveWorkspaceSource is a WorkspaceSource that fetches the snapshot live from the
 // asset's connected provider: it finds the asset's Connection, resolves the vaulted
-// token, and calls the Fetcher. This is the production path behind the WorkspaceSource
-// seam (SnapshotSource is the file-based MVP).
+// token, and calls the Fetcher registered for the connection's kind (gworkspace, m365,
+// …). This is the production path behind the WorkspaceSource seam (SnapshotSource is the
+// file-based MVP).
 type LiveWorkspaceSource struct {
-	Store   store.Store
-	Tokens  Tokens
-	Fetcher Fetcher
+	Store    store.Store
+	Tokens   Tokens
+	Fetchers map[string]Fetcher // by connection kind (platform.ConnGWorkspace / ConnM365 / …)
 }
 
-// Workspace resolves the asset's connection token and fetches the live workspace.
+// Workspace resolves the asset's connection token and fetches the live workspace via
+// the fetcher for that provider.
 func (l *LiveWorkspaceSource) Workspace(ctx context.Context, a platform.Asset) (operate.Workspace, error) {
-	if l.Fetcher == nil {
-		return operate.Workspace{}, fmt.Errorf("operate: no live fetcher configured")
-	}
 	conns, err := l.Store.ListConnections(ctx, a.TenantID)
 	if err != nil {
 		return operate.Workspace{}, err
@@ -39,11 +38,15 @@ func (l *LiveWorkspaceSource) Workspace(ctx context.Context, a platform.Asset) (
 		if c.ID != a.ConnectionID {
 			continue
 		}
+		f := l.Fetchers[c.Kind]
+		if f == nil {
+			return operate.Workspace{}, fmt.Errorf("operate: no live fetcher for provider %q", c.Kind)
+		}
 		tok, terr := l.Tokens.Resolve(ctx, c)
 		if terr != nil {
 			return operate.Workspace{}, fmt.Errorf("operate: resolve token: %w", terr)
 		}
-		return l.Fetcher.Fetch(ctx, tok, time.Time{})
+		return f.Fetch(ctx, tok, time.Time{})
 	}
 	return operate.Workspace{}, fmt.Errorf("operate: no connection %s for workspace asset %s", a.ConnectionID, a.Target)
 }

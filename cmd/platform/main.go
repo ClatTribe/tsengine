@@ -68,6 +68,7 @@ func main() {
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 		connector.NewGWorkspace(os.Getenv("GWORKSPACE_CLIENT_ID"), os.Getenv("GWORKSPACE_CLIENT_SECRET")),
+		connector.NewM365(os.Getenv("M365_CLIENT_ID"), os.Getenv("M365_CLIENT_SECRET")),
 	)
 	vault, encrypted, verr := secret.FromEnv()
 	if verr != nil {
@@ -103,7 +104,10 @@ func main() {
 	// by type so one platform serves both audiences on the same store/grc/hitl/ledger loop.
 	workspaceSource := runner.CompositeSource{
 		Snapshot: runner.SnapshotSource{},
-		Live:     &runner.LiveWorkspaceSource{Store: st, Tokens: tokens, Fetcher: operate.NewGWorkspace()},
+		Live: &runner.LiveWorkspaceSource{Store: st, Tokens: tokens, Fetchers: map[string]runner.Fetcher{
+			platform.ConnGWorkspace: operate.NewGWorkspace(),
+			platform.ConnM365:       operate.NewM365(),
+		}},
 	}
 	workspaceRunner := &runner.OperateRunner{Source: workspaceSource}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
