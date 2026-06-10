@@ -38,11 +38,13 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 			full = asset.Target
 		}
 		return platform.Action{
-			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID,
+			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 			Kind: platform.ActOpenPR, Tier: tierOpenPR, Status: platform.ActProposed,
 			Title: "tsengine: fix " + f.Title,
 			Payload: map[string]any{
+				// both SCM shapes; each connector reads what it needs (github: full_name; gitlab: path)
 				"full_name": full,
+				"path":      nz(asset.Meta["path"], full),
 				"base":      "main",
 				"head":      "tsengine/fix-" + f.ID,
 				"body":      fixBody(f),
@@ -50,7 +52,7 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		}, true
 	case "cloud_account":
 		return platform.Action{
-			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID,
+			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 			Kind: platform.ActApplyConfig, Tier: tierApplyConfig, Status: platform.ActProposed,
 			Title:   "tsengine: remediate " + f.Title,
 			Payload: map[string]any{"target": asset.Target, "remediation": fixBody(f)},
@@ -58,7 +60,7 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 	default:
 		// no automated fix path yet → file a ticket for the human (reversible, tier 1)
 		return platform.Action{
-			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID,
+			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 			Kind: platform.ActFileTicket, Tier: 1, Status: platform.ActProposed,
 			Title:   "tsengine: review " + f.Title,
 			Payload: map[string]any{"summary": fixBody(f)},
@@ -80,11 +82,12 @@ type Deliverer struct {
 	Tokens     runner.Tokens
 }
 
-// Apply executes the action. File-ticket actions are a no-op delivery for the MVP
-// (the platform records them; an integration ships them later).
+// Apply executes the action. It routes to the action's own Connection when set
+// (so a GitHub finding's fix opens a GitHub PR and a GitLab finding's opens a GitLab
+// MR), else falls back to any active connection of the kind the action implies.
+// File-ticket actions are a recorded no-op delivery for the MVP.
 func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
-	kind, ok := connKindFor(a.Kind)
-	if !ok {
+	if !deliverable(a.Kind) {
 		return nil // ActFileTicket and friends: recorded, no external write yet
 	}
 	conns, err := d.Store.ListConnections(ctx, a.TenantID)
@@ -92,31 +95,45 @@ func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
 		return err
 	}
 	for _, c := range conns {
-		if c.Kind != kind || c.Status != platform.ConnActive {
+		if c.Status != platform.ConnActive {
 			continue
 		}
-		conn, err := d.Connectors.Get(c.Kind)
-		if err != nil {
-			return err
+		// prefer the action's own connection; else any connection that handles the kind
+		if a.ConnectionID != "" {
+			if c.ID != a.ConnectionID {
+				continue
+			}
+		} else if !handles(c.Kind, a.Kind) {
+			continue
 		}
-		tok, err := d.Tokens.Resolve(ctx, c)
-		if err != nil {
-			return fmt.Errorf("remediate: resolve token: %w", err)
+		conn, gerr := d.Connectors.Get(c.Kind)
+		if gerr != nil {
+			return gerr
+		}
+		tok, terr := d.Tokens.Resolve(ctx, c)
+		if terr != nil {
+			return fmt.Errorf("remediate: resolve token: %w", terr)
 		}
 		return conn.Apply(ctx, c, tok, a)
 	}
-	return fmt.Errorf("remediate: no active %s connection to apply action %s", kind, a.ID)
+	return fmt.Errorf("remediate: no active connection to deliver action %s", a.ID)
 }
 
-// connKindFor maps an action kind to the connector kind that delivers it.
-func connKindFor(actionKind string) (string, bool) {
+// deliverable reports whether an action kind writes through a connector at all.
+func deliverable(actionKind string) bool {
+	return actionKind == platform.ActOpenPR || actionKind == platform.ActApplyConfig
+}
+
+// handles reports whether a connector kind can deliver an action kind (the fallback
+// when an action carries no explicit ConnectionID).
+func handles(connKind, actionKind string) bool {
 	switch actionKind {
 	case platform.ActOpenPR:
-		return platform.ConnGitHub, true
+		return connKind == platform.ConnGitHub || connKind == platform.ConnGitLab
 	case platform.ActApplyConfig:
-		return platform.ConnAWS, true // first cloud target; extend per provider
+		return connKind == platform.ConnAWS || connKind == platform.ConnGCP
 	default:
-		return "", false
+		return false
 	}
 }
 

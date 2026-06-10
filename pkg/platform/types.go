@@ -24,6 +24,7 @@ type Tenant struct {
 // Connection kinds — the external systems the platform can link via OAuth.
 const (
 	ConnGitHub     = "github"
+	ConnGitLab     = "gitlab"
 	ConnAWS        = "aws"
 	ConnGCP        = "gcp"
 	ConnGWorkspace = "gworkspace"
@@ -107,18 +108,19 @@ const (
 // agentic-SMB spec): 0=observe, 1=reversible/low, 2=consequential, 3=irreversible/
 // legal. Tier ≥ 2 must be human-gated before it is applied.
 type Action struct {
-	ID        string         `json:"id"`
-	TenantID  string         `json:"tenant_id"`
-	FindingID string         `json:"finding_id"`
-	Kind      string         `json:"kind"`   // ActOpenPR | ActApplyConfig | ...
-	Tier      int            `json:"tier"`   // 0..3
-	Status    string         `json:"status"` // ActProposed | ActPendingApproval | ...
-	Title     string         `json:"title,omitempty"`
-	Payload   map[string]any `json:"payload,omitempty"`
-	Approver  string         `json:"approver,omitempty"`
-	LedgerRef string         `json:"ledger_ref,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
-	DecidedAt time.Time      `json:"decided_at,omitempty"`
+	ID           string         `json:"id"`
+	TenantID     string         `json:"tenant_id"`
+	FindingID    string         `json:"finding_id"`
+	ConnectionID string         `json:"connection_id,omitempty"` // the connection that delivers this action
+	Kind         string         `json:"kind"`                    // ActOpenPR | ActApplyConfig | ...
+	Tier         int            `json:"tier"`                    // 0..3
+	Status       string         `json:"status"`                  // ActProposed | ActPendingApproval | ...
+	Title        string         `json:"title,omitempty"`
+	Payload      map[string]any `json:"payload,omitempty"`
+	Approver     string         `json:"approver,omitempty"`
+	LedgerRef    string         `json:"ledger_ref,omitempty"`
+	CreatedAt    time.Time      `json:"created_at"`
+	DecidedAt    time.Time      `json:"decided_at,omitempty"`
 }
 
 // GateTier is the autonomy tier at/above which an Action must be human-approved
