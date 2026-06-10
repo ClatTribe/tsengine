@@ -21,6 +21,12 @@ type Posturer interface {
 	Posture(ctx context.Context, tenantID, framework string) ([]platform.ControlState, error)
 }
 
+// Sealer seals a raw OAuth token before it is persisted (satisfied by the secret
+// vault). When unset, the callback stores the token unsealed (dev only).
+type Sealer interface {
+	Seal(plaintext string) (string, error)
+}
+
 // handleApprovalDecide records a human's verdict on a pending action — the endpoint a
 // Slack approve/reject button (or the web console) POSTs to.
 func (d Deps) handleApprovalDecide(w http.ResponseWriter, r *http.Request, tenantID string) {
@@ -81,6 +87,15 @@ func (d Deps) handleConnectCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	c.TenantID = tenantID
 	c.ID = d.newID("conn")
+	// seal the raw token through the vault before it ever touches the store
+	if d.Vault != nil {
+		sealed, serr := d.Vault.Seal(c.SecretRef)
+		if serr != nil {
+			writeJSON(w, http.StatusInternalServerError, errBody("seal token: "+serr.Error()))
+			return
+		}
+		c.SecretRef = sealed
+	}
 	if err := d.Store.PutConnection(r.Context(), c); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return

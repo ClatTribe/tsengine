@@ -82,13 +82,12 @@ func (g *GitHub) Exchange(ctx context.Context, code, redirectURI string) (platfo
 	if tok.AccessToken == "" {
 		return platform.Connection{}, fmt.Errorf("github: oauth exchange failed: %s", nz(tok.Error, "no token"))
 	}
-	// The caller stores the token in the secret vault and sets SecretRef; we return
-	// the token ONLY via the dedicated field the caller immediately vaults + clears.
+	// SecretRef carries the RAW token transiently; the caller MUST seal it through the
+	// secret vault and overwrite SecretRef before persisting (handleConnectCallback).
 	return platform.Connection{
 		Kind: platform.ConnGitHub, Status: platform.ConnActive,
 		Scopes: []string{"repo", "read:org"}, CreatedAt: time.Now().UTC(),
-		// transient: caller vaults this and replaces with SecretRef
-		SecretRef: "vault:" + tok.AccessToken,
+		SecretRef: tok.AccessToken,
 	}, nil
 }
 

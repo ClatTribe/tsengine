@@ -688,7 +688,7 @@ platform is **purely additive**: it must never change the engine's detection log
 3. **The only write path is `connector.Apply`, and it is reached only AFTER a HITL gate.** Tier 0/1 actions auto-apply; tier ≥ `platform.GateTier` (2) queue at the desk. `hitl.Desk` decides; `remediate.Deliverer` delivers. Never call `connector.Apply` directly.
 4. **Every decision is signed.** Auto-apply and human verdicts both record into `pkg/ledger`; the GRC evidence pack uses the same ed25519-over-canonical-JSON scheme — one verifier covers ledger, evidence bundle, and evidence pack.
 5. **Grounding holds end-to-end.** GRC marks a control "gap" only because a real finding cites it; remediations always carry `FindingID`. No platform layer asserts something the engine did not prove.
-6. **Secrets never leave.** OAuth tokens live behind `Connection.SecretRef` (a vault ref), resolved via `runner.Tokens`; the API redacts `SecretRef` before returning a connection.
+6. **Secrets never leave, and never sit in plaintext.** OAuth tokens are sealed by `internal/secret` (AES-256-GCM, key from `TSENGINE_SECRET_KEY`) at the OAuth callback *before* they touch the store; `Connection.SecretRef` holds only the sealed ref, resolved via `secret.Tokens` (`runner.Tokens`); the API redacts `SecretRef` before returning a connection.
 
 ### 18.3 Status
 
@@ -698,7 +698,9 @@ dependency-free **file-backed persistent impl** (`store.OpenFile`, atomic snapsh
 `TSENGINE_PLATFORM_DB`) behind the `Store` interface — single-node-durable today. The
 **Slack approval loop** is wired: `internal/notify` posts a queued action to Slack with
 Approve/Reject buttons, and `POST /v1/slack/interactive` verifies Slack's v0 signature
-(HMAC-SHA256, 5-min replay window) before driving `Desk.Decide`. Remaining: a
-sqlite/Postgres `Store` (for concurrency/scale), the KMS token vault, and Phase 4 — the
+(HMAC-SHA256, 5-min replay window) before driving `Desk.Decide`. OAuth tokens are
+**encrypted at rest** (`internal/secret`, AES-256-GCM; `TSENGINE_SECRET_KEY`), sealed at
+the callback before they reach the store. Remaining: a sqlite/Postgres `Store` (for
+concurrency/scale), a cloud-KMS `secret.Vault` (vs the env-key MVP), and Phase 4 — the
 non-tech operate layer (identity/email/detect-respond), a separate-audience expansion on
 the same kernel.

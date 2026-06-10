@@ -28,6 +28,7 @@ type Deps struct {
 	Runner     *runner.Service
 	Desk       Decider  // optional: the HITL desk (approvals decide)
 	GRC        Posturer // optional: the compliance system-of-record (posture)
+	Vault      Sealer   // optional: seals OAuth tokens before persistence
 	Token      string   // static platform bearer token (required)
 	PublicURL  string   // base URL for OAuth redirect_uri (e.g. https://app.example)
 	// SlackSigningSecret verifies Slack interactive (approve/reject) callbacks. Empty
