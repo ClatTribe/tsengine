@@ -56,4 +56,8 @@ type Store interface {
 	// --- GRC system-of-record ---
 	UpsertControlState(ctx context.Context, cs platform.ControlState) error
 	Posture(ctx context.Context, tenantID, framework string) ([]platform.ControlState, error)
+
+	// --- incidents (the continuous-monitoring system-of-record) ---
+	PutIncident(ctx context.Context, i platform.Incident) error
+	ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error)
 }

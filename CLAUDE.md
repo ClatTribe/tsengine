@@ -678,6 +678,7 @@ platform is **purely additive**: it must never change the engine's detection log
 | `internal/hitl` | the human desk — the gate between *propose* and *apply* |
 | `internal/remediate` | `Propose` (finding→Action; repo→PR, cloud→config, **workspace→a per-rule identity runbook** `identity.go`) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
 | `internal/grc` | compliance control-state system-of-record + signed evidence pack + the auditor-facing **compliance report** (`Report` resolves each gap to its citing findings; `RenderMarkdown` is the attachable deliverable) |
+| `internal/detect` | the continuous-monitoring backbone (deterministic detect half of detect-&-respond): `Detector.Reconcile` diffs a tenant's current findings against its open incidents — opens a `platform.Incident` for a new finding at/above a severity threshold (default high), resolves one when its issue (keyed `rule_id\|endpoint`) stops appearing. Signed into the ledger; LLM-free + grounded. Driven by `runner.RescanTenant` each pass |
 | `internal/assetregistry` | shared `HandlerFor(assetType)` (so `cmd/tsengine` + `cmd/platform` don't duplicate routing) |
 | `internal/scheduler` | continuous-monitoring loop — re-scans every tenant on a cadence (`TSENGINE_MONITOR_INTERVAL`); the "autonomous" heartbeat alongside event-driven webhook re-scans |
 | `internal/platformapi` + `cmd/platform` | the multi-tenant HTTP API + server (incl. `POST /v1/tenants` onboarding) |
@@ -744,6 +745,14 @@ status→suspended, lastLogin→stale; `OKTA_ORG_URL`/`OKTA_CLIENT_ID`/`OKTA_CLI
 So a non-tech tenant can connect **Google Workspace, Microsoft 365, or Okta** and get the
 same grounded identity posture through the store/grc/hitl/ledger loop.
 
+**Continuous monitoring now detects change, not just re-scans** (`internal/detect`): each
+scheduled `RescanTenant` pass reconciles the tenant's current findings into durable
+`Incident`s — opening one when a high+/critical issue is NEW since the last pass, resolving
+it when the issue is fixed (keyed `rule_id|endpoint`, signed into the ledger, LLM-free).
+Surfaced at `GET /v1/incidents` and a dashboard "New since last scan" section. This is the
+deterministic **detect** half of detect-&-respond; the **respond** half is the existing
+remediate + HITL path. (The open-ended LLM-driven SOC reasoning remains future.)
+
 **Identity findings now get specific fixes, not generic tickets** (`remediate/identity.go`):
 each operate rule maps to a copy-pasteable runbook ticket naming the offending entity —
 e.g. a DMARC finding carries the exact `_dmarc.<domain>` TXT record to publish, an
@@ -757,8 +766,10 @@ admin-write creds.
 Remaining is **next-phase breadth/scale, not core-loop gaps**: OAuth-grant live fetch
 (grants are still snapshot), the live identity-mutation `Apply`
 (`operate *.Apply` — the GWorkspace/M365 connector `Apply` are honest stubs pending live
-admin-write creds), the detect/respond SOC half (real-time monitoring agents beyond
-scheduled re-scans), and the infra successors — a sqlite/Postgres `Store` + a cloud-KMS
+admin-write creds), the **open-ended LLM-driven** SOC reasoning (the deterministic
+detect/incident backbone now exists in `internal/detect`; what's left is agentic triage/
+response beyond the threshold rules), and the infra successors — a sqlite/Postgres `Store`
++ a cloud-KMS
 `secret.Vault` (both behind today's interfaces). Public per-tenant self-serve signup (vs
 the operator-token `POST /v1/tenants`) needs a real identity/billing model and is a
 deliberate future step, not part of the shared-token MVP.

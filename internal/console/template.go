@@ -62,6 +62,12 @@ const pageHTML = `<!doctype html>
     {{range .Frameworks}}{{if $rep}}<a class="fwcard" href="/ui/compliance/{{.Key}}?tenant={{$tid}}"><div class="name">{{.Name}} →</div><span class="met">{{.Met}} met</span> · <span class="gap">{{.Gap}} gap</span></a>{{else}}<div class="fwcard"><div class="name">{{.Name}}</div><span class="met">{{.Met}} met</span> · <span class="gap">{{.Gap}} gap</span></div>{{end}}{{end}}
   </div></section>{{end}}
 
+  {{if .Incidents}}<section><h2>New since last scan</h2>
+    <table><tr><th>Severity</th><th>Issue</th><th>Where</th></tr>
+    {{range .Incidents}}<tr><td><span class="sev {{.Severity}}">{{.Severity}}</span></td><td>{{.Title}}</td><td><code>{{.RuleID}}</code></td></tr>{{end}}
+    </table>
+  </section>{{end}}
+
   <section><h2>Awaiting your approval</h2>
     {{if .Pending}}<table><tr><th>Action</th><th>Kind</th><th>Tier</th><th>Finding</th>{{if $.CanApprove}}<th></th>{{end}}</tr>
     {{range .Pending}}<tr><td>{{.Title}}</td><td><span class="tag">{{.Kind}}</span></td><td>{{.Tier}}</td><td><code>{{.FindingID}}</code></td>

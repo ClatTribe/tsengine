@@ -278,6 +278,7 @@ type view struct {
 	SevCounts   []sevCount
 	Findings    []types.Finding
 	Pending     []platform.Action
+	Incidents   []platform.Incident
 	Connections []platform.Connection
 	Frameworks  []framework
 	Operator    string
@@ -358,6 +359,15 @@ func build(ctx context.Context, st store.Store, tenantID string) (view, error) {
 	v.Findings = findings
 
 	v.Pending, _ = st.PendingApprovals(ctx, tenantID)
+	// open incidents = "what's newly broken since the last monitoring pass"
+	if incs, err := st.ListIncidents(ctx, tenantID); err == nil {
+		for _, i := range incs {
+			if i.Status == platform.IncidentOpen {
+				v.Incidents = append(v.Incidents, i)
+			}
+		}
+		sort.SliceStable(v.Incidents, func(a, b int) bool { return v.Incidents[a].OpenedAt.After(v.Incidents[b].OpenedAt) })
+	}
 	conns, _ := st.ListConnections(ctx, tenantID)
 	for i := range conns {
 		conns[i].SecretRef = "" // never render the token ref
