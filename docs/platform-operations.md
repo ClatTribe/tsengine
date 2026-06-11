@@ -188,6 +188,7 @@ Auth: every `/v1/*` call (except the OAuth callback + Slack endpoint) needs
 | `GET /v1/connect/{kind}/callback` | OAuth redirect target (no bearer; tenant in `state`). |
 | `POST /v1/webhooks/{kind}` | Provider webhook → event-driven re-scan. |
 | `GET /v1/findings` | The tenant's findings. |
+| `GET /v1/findings/export` | Export findings — SARIF (default; GitHub code-scanning) or CSV (`?format=csv`). |
 | `GET /v1/engagements` | Scan history. |
 | `GET /v1/connections` | Connected systems (`SecretRef` redacted). |
 | `GET /v1/incidents` | Open incidents (`?status=all` includes resolved). |
