@@ -56,6 +56,12 @@ type ConnectorSource interface {
 	Get(kind string) (connector.Connector, error)
 }
 
+// Rescanner re-scans every asset a tenant has (satisfied by *runner.Service). Optional:
+// when set, the dashboard offers a "Scan now" button.
+type Rescanner interface {
+	RescanTenant(ctx context.Context, tenantID string) (int, error)
+}
+
 // Deps are the console's read collaborators plus the gated desk for approvals.
 type Deps struct {
 	Store      store.Store
@@ -64,6 +70,7 @@ type Deps struct {
 	Report     Reporter        // compliance drill-down; nil → posture cards are not linked
 	Connectors ConnectorSource // onboarding; nil → the connect page/link is hidden
 	PublicURL  string          // base URL for the OAuth redirect_uri (e.g. https://app.example)
+	Rescan     Rescanner       // manual "scan now"; nil → the button is hidden
 }
 
 // Handler returns the console router: the dashboard, the login form, logout, and the
@@ -77,6 +84,7 @@ func Handler(d Deps) http.Handler {
 	mux.HandleFunc("POST /ui/login", d.login)
 	mux.HandleFunc("POST /ui/logout", d.logout)
 	mux.HandleFunc("POST /ui/approvals/{id}", d.decide)
+	mux.HandleFunc("POST /ui/rescan", d.rescan)
 	return mux
 }
 
@@ -101,6 +109,7 @@ func (d Deps) dashboard(w http.ResponseWriter, r *http.Request) {
 	vm.CanApprove = d.Desk != nil
 	vm.CanReport = d.Report != nil
 	vm.CanConnect = d.Connectors != nil
+	vm.CanRescan = d.Rescan != nil
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := page.Execute(w, vm); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -246,6 +255,28 @@ func (d Deps) decide(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/ui?tenant="+url.QueryEscape(tenantID), http.StatusSeeOther)
 }
 
+// rescan triggers an immediate re-scan of all the tenant's assets (the "scan now" button).
+func (d Deps) rescan(w http.ResponseWriter, r *http.Request) {
+	if !d.authed(r) {
+		renderLogin(w, http.StatusUnauthorized, loginView{Tenant: r.FormValue("tenant")})
+		return
+	}
+	if d.Rescan == nil {
+		http.Error(w, "scanning not configured", http.StatusNotImplemented)
+		return
+	}
+	tenantID := r.FormValue("tenant")
+	if tenantID == "" {
+		http.Error(w, "missing tenant", http.StatusBadRequest)
+		return
+	}
+	if _, err := d.Rescan.RescanTenant(r.Context(), tenantID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	http.Redirect(w, r, "/ui?tenant="+url.QueryEscape(tenantID), http.StatusSeeOther)
+}
+
 // authed accepts either a valid bearer header (programmatic) or a valid session cookie
 // (browser). Both compared in constant time.
 func (d Deps) authed(r *http.Request) bool {
@@ -281,10 +312,19 @@ type view struct {
 	Incidents   []platform.Incident
 	Connections []platform.Connection
 	Frameworks  []framework
+	Assets      []assetRow
 	Operator    string
 	CanApprove  bool
 	CanReport   bool
 	CanConnect  bool
+	CanRescan   bool
+}
+
+// assetRow is one monitored asset with its last-scanned time.
+type assetRow struct {
+	Type     string
+	Target   string
+	LastScan string
 }
 
 // connectView models the onboarding page.
@@ -373,6 +413,23 @@ func build(ctx context.Context, st store.Store, tenantID string) (view, error) {
 		conns[i].SecretRef = "" // never render the token ref
 	}
 	v.Connections = conns
+
+	// monitored assets + when each was last scanned (so the owner sees what's watched)
+	assets, _ := st.ListAssets(ctx, tenantID)
+	engs, _ := st.ListEngagements(ctx, tenantID)
+	lastScan := map[string]time.Time{}
+	for _, e := range engs {
+		if e.CompletedAt.After(lastScan[e.AssetID]) {
+			lastScan[e.AssetID] = e.CompletedAt
+		}
+	}
+	for _, a := range assets {
+		row := assetRow{Type: a.Type, Target: a.Target, LastScan: "never"}
+		if t, ok := lastScan[a.ID]; ok && !t.IsZero() {
+			row.LastScan = t.UTC().Format("2006-01-02 15:04 UTC")
+		}
+		v.Assets = append(v.Assets, row)
+	}
 
 	// compliance posture by framework (met vs gap)
 	for _, fw := range []string{"soc2", "iso27001", "pci", "hipaa", "cis_v8", "nist_csf"} {

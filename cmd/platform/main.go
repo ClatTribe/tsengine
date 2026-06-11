@@ -148,7 +148,7 @@ func main() {
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
 	// through to the API for every non-/ui path.
 	ui := console.Handler(console.Deps{Store: st, Token: token, Desk: desk, Report: g,
-		Connectors: reg, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC")})
+		Connectors: reg, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"), Rescan: svc})
 	mux := http.NewServeMux()
 	mux.Handle("/ui", ui)
 	mux.Handle("/ui/", ui)

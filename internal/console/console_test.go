@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/grc"
@@ -32,6 +33,8 @@ func seed(t *testing.T) store.Store {
 		Tier: 2, Status: platform.ActPendingApproval, Title: "Patch SQLi in search handler"})
 	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: "github", SecretRef: "vault://tok-xyz"})
 	_ = st.PutIncident(ctx, platform.Incident{ID: "i1", TenantID: "t1", Title: "Admin without MFA", RuleID: "operate::admin-without-mfa", Severity: "critical", Status: platform.IncidentOpen})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "as1", TenantID: "t1", Type: "repository", Target: "github.com/acme/web"})
+	_ = st.PutEngagement(ctx, platform.Engagement{ID: "e1", TenantID: "t1", AssetID: "as1", CompletedAt: time.Date(2026, 6, 1, 9, 30, 0, 0, time.UTC)})
 	_ = st.UpsertControlState(ctx, platform.ControlState{TenantID: "t1", Framework: "soc2", ControlID: "CC6.1", State: platform.ControlMet})
 	_ = st.UpsertControlState(ctx, platform.ControlState{TenantID: "t1", Framework: "soc2", ControlID: "CC6.6", State: platform.ControlGap})
 	return st
@@ -46,7 +49,16 @@ func deps(t *testing.T, st store.Store) Deps {
 		Store: st, Token: tok, Desk: desk, Report: &grc.GRC{Store: st},
 		Connectors: connector.NewRegistry(connector.NewGitHub("client-123", "secret")),
 		PublicURL:  "https://app.example",
+		Rescan:     &fakeRescanner{},
 	}
+}
+
+// fakeRescanner records that a rescan was requested.
+type fakeRescanner struct{ calls []string }
+
+func (f *fakeRescanner) RescanTenant(_ context.Context, tenantID string) (int, error) {
+	f.calls = append(f.calls, tenantID)
+	return 1, nil
 }
 
 // applyNoop satisfies the desk's Applier without doing anything (tier-2 approve path).
@@ -82,6 +94,10 @@ func TestDashboard_RendersPosture(t *testing.T) {
 		`action="/ui/approvals/a1"`,    // the approve/reject forms are wired
 		"New since last scan",          // the continuous-monitoring incidents section
 		"Admin without MFA",            // the open incident renders
+		"Monitored assets",             // the asset-inventory section
+		"github.com/acme/web",          // the monitored asset
+		"2026-06-01 09:30 UTC",         // its last-scanned time
+		"Scan now",                     // the manual rescan button
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered page missing %q", want)
@@ -292,6 +308,38 @@ func TestConnect_RequiresAuth(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code == http.StatusSeeOther && strings.Contains(w.Header().Get("Location"), "github.com") {
 		t.Fatal("unauthenticated connect must not start the OAuth flow")
+	}
+}
+
+// "Scan now" triggers a tenant rescan through the wired Rescanner.
+func TestRescan_TriggersTenantScan(t *testing.T) {
+	rs := &fakeRescanner{}
+	h := Handler(Deps{Store: seed(t), Token: tok, Rescan: rs})
+	form := url.Values{"tenant": {"t1"}}
+	r := httptest.NewRequest(http.MethodPost, "/ui/rescan", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: tok})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("rescan should redirect, got %d", w.Code)
+	}
+	if len(rs.calls) != 1 || rs.calls[0] != "t1" {
+		t.Errorf("rescan should call RescanTenant(t1) once, got %v", rs.calls)
+	}
+}
+
+// Rescan is auth-gated like the rest of the console.
+func TestRescan_RequiresAuth(t *testing.T) {
+	rs := &fakeRescanner{}
+	h := Handler(Deps{Store: seed(t), Token: tok, Rescan: rs})
+	form := url.Values{"tenant": {"t1"}}
+	r := httptest.NewRequest(http.MethodPost, "/ui/rescan", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if len(rs.calls) != 0 {
+		t.Error("unauthenticated rescan must not run a scan")
 	}
 }
 
