@@ -47,7 +47,22 @@ func (s *Slack) ApprovalNeeded(ctx context.Context, a platform.Action) error {
 	if s == nil || s.WebhookURL == "" {
 		return nil
 	}
-	msg := slackMessage(a)
+	return s.post(ctx, slackMessage(a))
+}
+
+// IncidentOpened posts an alert when continuous monitoring opens a new incident — the
+// heads-up that something at/above the severity threshold is NEW since the last pass.
+// Unlike ApprovalNeeded it carries no buttons (a gated fix may follow separately); it
+// just makes sure a human knows now instead of on their next dashboard visit.
+func (s *Slack) IncidentOpened(ctx context.Context, inc platform.Incident) error {
+	if s == nil || s.WebhookURL == "" {
+		return nil
+	}
+	return s.post(ctx, incidentMessage(inc))
+}
+
+// post marshals + delivers a Slack payload (shared by every notification kind).
+func (s *Slack) post(ctx context.Context, msg map[string]any) error {
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -67,6 +82,25 @@ func (s *Slack) ApprovalNeeded(ctx context.Context, a platform.Action) error {
 		return fmt.Errorf("notify: slack returned %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// incidentMessage renders the alert payload (no buttons — it's a heads-up).
+func incidentMessage(inc platform.Incident) map[string]any {
+	text := fmt.Sprintf(":rotating_light: *New %s issue* — %s\n`%s`%s",
+		nz(inc.Severity, "security"), nz(inc.Title, inc.RuleID), inc.RuleID, openedSuffix(inc))
+	return map[string]any{
+		"text": "New incident: " + nz(inc.Title, inc.RuleID),
+		"blocks": []any{
+			map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": text}},
+		},
+	}
+}
+
+func openedSuffix(inc platform.Incident) string {
+	if inc.OpenedAt.IsZero() {
+		return ""
+	}
+	return " · opened " + inc.OpenedAt.UTC().Format(time.RFC3339)
 }
 
 // slackMessage renders the Block Kit payload. The button action_ids (approve/reject)

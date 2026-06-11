@@ -136,3 +136,51 @@ func TestReconcile_TenantIsolation(t *testing.T) {
 		t.Error("t2's pass must not affect t1's incidents")
 	}
 }
+
+// captureAlerter records every incident it was alerted about.
+type captureAlerter struct{ alerts []platform.Incident }
+
+func (c *captureAlerter) IncidentOpened(_ context.Context, i platform.Incident) error {
+	c.alerts = append(c.alerts, i)
+	return nil
+}
+
+func TestReconcile_AlertsOnOpenOnly(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := newDetector(st)
+	al := &captureAlerter{}
+	d.Alerter = al
+	fs := []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}
+
+	_, _ = d.Reconcile(ctx, "t1", fs) // open → one alert
+	if len(al.alerts) != 1 || al.alerts[0].Severity != "critical" {
+		t.Fatalf("opening an incident should alert once with the severity, got %+v", al.alerts)
+	}
+	_, _ = d.Reconcile(ctx, "t1", fs)  // idempotent → no new alert
+	_, _ = d.Reconcile(ctx, "t1", nil) // resolve → no alert (it's a heads-up for NEW issues)
+	if len(al.alerts) != 1 {
+		t.Errorf("only a newly-opened incident should alert; idempotent/resolve must not, got %d", len(al.alerts))
+	}
+}
+
+// A failing alerter never breaks reconciliation (best-effort).
+type failAlerter struct{}
+
+func (failAlerter) IncidentOpened(context.Context, platform.Incident) error {
+	return context.DeadlineExceeded
+}
+
+func TestReconcile_AlerterErrorIsSwallowed(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := newDetector(st)
+	d.Alerter = failAlerter{}
+	res, err := d.Reconcile(ctx, "t1", []types.Finding{crit("r", "e")})
+	if err != nil {
+		t.Fatalf("a failing alerter must not fail the pass, got %v", err)
+	}
+	if len(res.Opened) != 1 {
+		t.Error("the incident should still open even if the alert failed")
+	}
+}

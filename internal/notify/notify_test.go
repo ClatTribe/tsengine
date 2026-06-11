@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -65,5 +66,46 @@ func TestSlack_Non2xxIsError(t *testing.T) {
 	s.HTTP = srv.Client()
 	if err := s.ApprovalNeeded(context.Background(), platform.Action{ID: "x"}); err == nil {
 		t.Error("a 500 from Slack should be an error")
+	}
+}
+
+func TestSlack_PostsIncidentAlert(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &got)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	s := NewSlack(srv.URL)
+	s.HTTP = srv.Client()
+	inc := platform.Incident{ID: "inc-1", TenantID: "t1", Title: "Administrator without MFA",
+		RuleID: "operate::admin-without-mfa", Severity: "critical", Status: platform.IncidentOpen}
+	if err := s.IncidentOpened(context.Background(), inc); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := got["text"].(string)
+	if !strings.Contains(text, "Administrator without MFA") {
+		t.Errorf("alert should name the issue, got %q", text)
+	}
+	// it's a heads-up: a single section block, no action buttons
+	blocks, _ := got["blocks"].([]any)
+	if len(blocks) != 1 {
+		t.Fatalf("incident alert should be one section block (no buttons), got %d", len(blocks))
+	}
+	body := blocks[0].(map[string]any)["text"].(map[string]any)["text"].(string)
+	if !strings.Contains(body, "critical") || !strings.Contains(body, "operate::admin-without-mfa") {
+		t.Errorf("alert body should carry severity + rule, got %q", body)
+	}
+}
+
+func TestSlack_IncidentNilAndEmptyNoops(t *testing.T) {
+	var s *Slack
+	if err := s.IncidentOpened(context.Background(), platform.Incident{}); err != nil {
+		t.Errorf("nil Slack incident alert should be a no-op, got %v", err)
+	}
+	if err := (&Slack{}).IncidentOpened(context.Background(), platform.Incident{}); err != nil {
+		t.Errorf("empty-webhook incident alert should be a no-op, got %v", err)
 	}
 }
