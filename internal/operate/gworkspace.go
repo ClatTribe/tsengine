@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -17,9 +18,9 @@ import (
 // server. It takes an access token per call (resolved by the platform's token vault) —
 // it never holds credentials.
 //
-// Fetch covers the identity signals (users: admin/MFA/stale/suspended), which drive the
-// highest-value non-tech checks. Domain email-auth + OAuth grants come from the
-// snapshot today (separate APIs / DNS) and are the documented next fetch.
+// Fetch covers users (admin/MFA/stale/suspended) and now their OAuth grants (risky
+// third-party apps, via the Directory users.tokens API). Domain email-auth is resolved
+// live separately (operate.EmailAuth, via DNS).
 type GWorkspace struct {
 	APIBase string // default https://admin.googleapis.com
 	HTTP    *http.Client
@@ -75,7 +76,100 @@ func (g *GWorkspace) Fetch(ctx context.Context, token string, now time.Time) (Wo
 		}
 		page = ur.NextPageToken
 	}
+
+	// OAuth grants → risky third-party apps. Best-effort + per-user (users.tokens needs an
+	// extra scope; a single user's failure never drops the rest). Skip suspended accounts.
+	emails := make([]string, 0, len(ws.Users))
+	for _, u := range ws.Users {
+		if !u.Suspended {
+			emails = append(emails, u.Email)
+		}
+	}
+	ws.OAuthGrants = g.fetchGrants(ctx, token, emails)
 	return ws, nil
+}
+
+// gwsToken is the slice of a Directory API users.tokens item we use.
+type gwsToken struct {
+	ClientID    string   `json:"clientId"`
+	DisplayText string   `json:"displayText"`
+	Scopes      []string `json:"scopes"`
+}
+
+// fetchGrants aggregates each user's third-party OAuth tokens into per-app grants. Google's
+// tokens API exposes the granted scopes (→ AdminScope, grounded) but NOT publisher
+// verification, so grants are marked Verified=true — the unverified-app check stays
+// M365/snapshot-only rather than us guessing. Best-effort: any user's failed call (or a
+// missing scope) is skipped, never fatal.
+func (g *GWorkspace) fetchGrants(ctx context.Context, token string, emails []string) []OAuthGrant {
+	type agg struct {
+		name   string
+		scopes map[string]bool
+		users  map[string]bool
+	}
+	byApp := map[string]*agg{}
+	for _, email := range emails {
+		var tr struct {
+			Items []gwsToken `json:"items"`
+		}
+		u := strings.TrimRight(g.APIBase, "/") + "/admin/directory/v1/users/" + url.PathEscape(email) + "/tokens"
+		if err := g.getJSON(ctx, token, u, &tr); err != nil {
+			continue
+		}
+		for _, t := range tr.Items {
+			key := nz(t.ClientID, t.DisplayText)
+			a := byApp[key]
+			if a == nil {
+				a = &agg{name: nz(t.DisplayText, t.ClientID), scopes: map[string]bool{}, users: map[string]bool{}}
+				byApp[key] = a
+			}
+			a.users[email] = true
+			for _, s := range t.Scopes {
+				a.scopes[s] = true
+			}
+		}
+	}
+	var out []OAuthGrant
+	for _, a := range byApp {
+		var scopes []string
+		admin := false
+		for s := range a.scopes {
+			scopes = append(scopes, s)
+			if isGoogleAdminScope(s) {
+				admin = true
+			}
+		}
+		sort.Strings(scopes)
+		out = append(out, OAuthGrant{App: a.name, Scopes: scopes, Users: len(a.users), AdminScope: admin, Verified: true})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].App < out[j].App })
+	return out
+}
+
+// isGoogleAdminScope reports whether a Google OAuth scope grants directory/admin control —
+// effectively shadow-admin if held by a third-party app.
+func isGoogleAdminScope(scope string) bool {
+	s := strings.ToLower(scope)
+	return strings.Contains(s, "/auth/admin.") || strings.Contains(s, "/auth/cloud-platform")
+}
+
+// getJSON GETs url with the bearer token and decodes the body into out.
+func (g *GWorkspace) getJSON(ctx context.Context, token, url string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := g.client().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("gworkspace: GET %s: HTTP %d", url, resp.StatusCode)
+	}
+	return json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(out)
 }
 
 func (g *GWorkspace) fetchPage(ctx context.Context, token, page string) (usersResp, error) {
