@@ -663,8 +663,10 @@ When in doubt, the strix design lineage at `/Users/ashish/Downloads/cowork/strix
 
 `tsengine` (the engine, §1–§17) is the **detection brain**. The **platform** wraps it
 into a continuous, multi-tenant, human-backstopped product — *"reuse the brain, build
-the body"* (full design: [docs/autonomous-team.md](docs/autonomous-team.md)). The
-platform is **purely additive**: it must never change the engine's detection logic.
+the body"* (full design: [docs/autonomous-team.md](docs/autonomous-team.md); **operator
+deploy/config guide: [docs/platform-operations.md](docs/platform-operations.md)** — env
+matrix, per-provider OAuth setup, API reference). The platform is **purely additive**: it
+must never change the engine's detection logic.
 
 ### 18.1 The packages
 
