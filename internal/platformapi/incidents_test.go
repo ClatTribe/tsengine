@@ -58,3 +58,26 @@ func TestRescan_RunsTenantScan(t *testing.T) {
 		t.Errorf("response should report assets_scanned, got %s", rec.Body.String())
 	}
 }
+
+func TestApps_ReturnsInventory(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.ReplaceThirdPartyApps(ctx, "t1", "okta", []platform.ThirdPartyApp{
+		{TenantID: "t1", Provider: "okta", AppID: "Risky Tool", AdminScope: true},
+	})
+	_ = st.ReplaceThirdPartyApps(ctx, "t2", "okta", []platform.ThirdPartyApp{
+		{TenantID: "t2", Provider: "okta", AppID: "Other Tenant App"},
+	})
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	rec := do(h, "GET", "/v1/apps", "t1", "")
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Risky Tool") {
+		t.Error("the tenant's app should be listed")
+	}
+	if strings.Contains(rec.Body.String(), "Other Tenant App") {
+		t.Error("tenant isolation breached: another tenant's app leaked")
+	}
+}

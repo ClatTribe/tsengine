@@ -313,6 +313,7 @@ type view struct {
 	Connections []platform.Connection
 	Frameworks  []framework
 	Assets      []assetRow
+	Apps        []platform.ThirdPartyApp
 	Operator    string
 	CanApprove  bool
 	CanReport   bool
@@ -429,6 +430,17 @@ func build(ctx context.Context, st store.Store, tenantID string) (view, error) {
 			row.LastScan = t.UTC().Format("2006-01-02 15:04 UTC")
 		}
 		v.Assets = append(v.Assets, row)
+	}
+
+	// third-party OAuth app inventory (admin/risky apps first)
+	if apps, err := st.ListThirdPartyApps(ctx, tenantID); err == nil {
+		sort.SliceStable(apps, func(a, b int) bool {
+			if apps[a].AdminScope != apps[b].AdminScope {
+				return apps[a].AdminScope // admin apps first
+			}
+			return apps[a].AppID < apps[b].AppID
+		})
+		v.Apps = apps
 	}
 
 	// compliance posture by framework (met vs gap)

@@ -191,6 +191,7 @@ Auth: every `/v1/*` call (except the OAuth callback + Slack endpoint) needs
 | `GET /v1/engagements` | Scan history. |
 | `GET /v1/connections` | Connected systems (`SecretRef` redacted). |
 | `GET /v1/incidents` | Open incidents (`?status=all` includes resolved). |
+| `GET /v1/apps` | Third-party OAuth app inventory (all SaaS apps with access — SOC2 vendor/app review). |
 | `POST /v1/rescan` | Re-scan all the tenant's assets now. |
 | `GET /v1/approvals` | The HITL approval queue. |
 | `POST /v1/approvals/{id}` | Decide an action: `{"approver":"…","approve":true}`. |

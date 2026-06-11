@@ -35,6 +35,9 @@ func seed(t *testing.T) store.Store {
 	_ = st.PutIncident(ctx, platform.Incident{ID: "i1", TenantID: "t1", Title: "Admin without MFA", RuleID: "operate::admin-without-mfa", Severity: "critical", Status: platform.IncidentOpen})
 	_ = st.PutAsset(ctx, platform.Asset{ID: "as1", TenantID: "t1", Type: "repository", Target: "github.com/acme/web"})
 	_ = st.PutEngagement(ctx, platform.Engagement{ID: "e1", TenantID: "t1", AssetID: "as1", CompletedAt: time.Date(2026, 6, 1, 9, 30, 0, 0, time.UTC)})
+	_ = st.ReplaceThirdPartyApps(ctx, "t1", "okta", []platform.ThirdPartyApp{
+		{TenantID: "t1", Provider: "okta", AppID: "Risky Provisioner", Scopes: []string{"okta.users.manage"}, Users: 3, AdminScope: true, Verified: false},
+	})
 	_ = st.UpsertControlState(ctx, platform.ControlState{TenantID: "t1", Framework: "soc2", ControlID: "CC6.1", State: platform.ControlMet})
 	_ = st.UpsertControlState(ctx, platform.ControlState{TenantID: "t1", Framework: "soc2", ControlID: "CC6.6", State: platform.ControlGap})
 	return st
@@ -98,6 +101,9 @@ func TestDashboard_RendersPosture(t *testing.T) {
 		"github.com/acme/web",          // the monitored asset
 		"2026-06-01 09:30 UTC",         // its last-scanned time
 		"Scan now",                     // the manual rescan button
+		"Third-party apps with access", // the OAuth app inventory section
+		"Risky Provisioner",            // the inventoried app
+		"admin / directory",            // its admin-scope badge
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered page missing %q", want)

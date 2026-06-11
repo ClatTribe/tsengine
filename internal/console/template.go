@@ -99,6 +99,12 @@ const pageHTML = `<!doctype html>
     {{if .CanConnect}}<div style="margin-top:12px"><a class="btn ok" href="/ui/connect?tenant={{.TenantID}}">+ Connect a system</a></div>{{end}}
   </section>
 
+  {{if .Apps}}<section><h2>Third-party apps with access</h2>
+    <table><tr><th>App</th><th>Provider</th><th>Access</th><th>Users</th></tr>
+    {{range .Apps}}<tr><td>{{.AppID}}{{if not .Verified}} <span class="tag">unverified</span>{{end}}</td><td><span class="tag">{{.Provider}}</span></td><td>{{if .AdminScope}}<span class="sev high">admin / directory</span>{{else}}{{len .Scopes}} scope(s){{end}}</td><td>{{.Users}}</td></tr>{{end}}
+    </table>
+  </section>{{end}}
+
   <div class="foot">Every decision — approve or reject — is signed into the ledger. Tier 0/1 fixes auto-apply; tier 2+ wait for you here.</div>
 </div></body></html>`
 
