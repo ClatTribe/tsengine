@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -17,9 +18,9 @@ import (
 // token vault) — it never holds credentials.
 //
 // Fetch covers the identity signals that drive the highest-value non-tech checks: users
-// (status → suspended, lastLogin → stale), MFA enrollment (factors), and admin roles
-// (super/org admin). Domain email-auth comes from DNS (operate.EmailAuth); OAuth grants
-// remain the documented next fetch.
+// (status → suspended, lastLogin → stale), MFA enrollment (factors), admin roles
+// (super/org admin), and OAuth grants (risky third-party integrations). Domain email-auth
+// comes from DNS (operate.EmailAuth).
 type Okta struct {
 	OrgURL string
 	HTTP   *http.Client
@@ -56,6 +57,7 @@ func (o *Okta) Fetch(ctx context.Context, token string, now time.Time) (Workspac
 	now = now.UTC()
 	ws := Workspace{Provider: "okta"}
 
+	grants := map[string]*oktaGrantAgg{} // clientId → aggregated grant
 	next := o.OrgURL + "/api/v1/users?limit=200"
 	for next != "" {
 		var users []oktaUser
@@ -69,7 +71,7 @@ func (o *Okta) Fetch(ctx context.Context, token string, now time.Time) (Workspac
 				Suspended:     ou.Status != "ACTIVE",
 				LastLoginDays: daysSince(ou.LastLogin, now),
 			}
-			// Only active users get the per-user MFA/role calls (and the checks that use them).
+			// Only active users get the per-user MFA/role/grant calls (and the checks that use them).
 			if !u.Suspended {
 				if mfa, err := o.hasActiveFactor(ctx, token, ou.ID); err == nil {
 					u.MFA = mfa
@@ -77,12 +79,111 @@ func (o *Okta) Fetch(ctx context.Context, token string, now time.Time) (Workspac
 				if admin, super, err := o.roleLevel(ctx, token, ou.ID); err == nil {
 					u.Admin, u.SuperAdmin = admin, super
 				}
+				o.accumulateGrants(ctx, token, ou.ID, u.Email, grants)
 			}
 			ws.Users = append(ws.Users, u)
 		}
 		next = link
 	}
+	ws.OAuthGrants = o.buildGrants(ctx, token, grants)
 	return ws, nil
+}
+
+// oktaGrantAgg accumulates one app's grant across the users who consented to it.
+type oktaGrantAgg struct {
+	scopes map[string]bool
+	users  map[string]bool
+}
+
+// accumulateGrants folds a user's OAuth2 grants into the per-app map. expand=scope inlines
+// each grant's scope name, so AdminScope is grounded in the real consented scope. Best-
+// effort: grant read needs an extra scope, and a user's failed call is simply skipped.
+func (o *Okta) accumulateGrants(ctx context.Context, token, userID, email string, into map[string]*oktaGrantAgg) {
+	var gs []struct {
+		ClientID string `json:"clientId"`
+		Embedded struct {
+			Scope struct {
+				Name string `json:"name"`
+			} `json:"scope"`
+		} `json:"_embedded"`
+	}
+	if _, err := o.getJSON(ctx, token, o.OrgURL+"/api/v1/users/"+userID+"/grants?expand=scope", &gs); err != nil {
+		return
+	}
+	for _, g := range gs {
+		a := into[g.ClientID]
+		if a == nil {
+			a = &oktaGrantAgg{scopes: map[string]bool{}, users: map[string]bool{}}
+			into[g.ClientID] = a
+		}
+		a.users[email] = true
+		if g.Embedded.Scope.Name != "" {
+			a.scopes[g.Embedded.Scope.Name] = true
+		}
+	}
+}
+
+// buildGrants resolves app labels (best-effort) and assembles the OAuthGrants. Okta has no
+// publisher-verification concept, so grants are marked Verified (the unverified-app check
+// stays M365/snapshot — we don't guess); only the grounded oauth-admin-scope is emitted.
+func (o *Okta) buildGrants(ctx context.Context, token string, agg map[string]*oktaGrantAgg) []OAuthGrant {
+	if len(agg) == 0 {
+		return nil
+	}
+	labels := o.appLabels(ctx, token)
+	var out []OAuthGrant
+	for clientID, a := range agg {
+		var scopes []string
+		admin := false
+		for s := range a.scopes {
+			scopes = append(scopes, s)
+			if isOktaAdminScope(s) {
+				admin = true
+			}
+		}
+		sort.Strings(scopes)
+		out = append(out, OAuthGrant{
+			App: nz(labels[clientID], clientID), Scopes: scopes, Users: len(a.users),
+			AdminScope: admin, Verified: true,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].App < out[j].App })
+	return out
+}
+
+// appLabels maps each OAuth app's client_id to its human label (best-effort; a failure
+// just yields client-id-named grants).
+func (o *Okta) appLabels(ctx context.Context, token string) map[string]string {
+	labels := map[string]string{}
+	next := o.OrgURL + "/api/v1/apps?limit=200"
+	for next != "" {
+		var apps []struct {
+			Label       string `json:"label"`
+			Credentials struct {
+				OauthClient struct {
+					ClientID string `json:"client_id"`
+				} `json:"oauthClient"`
+			} `json:"credentials"`
+		}
+		link, err := o.getJSON(ctx, token, next, &apps)
+		if err != nil {
+			return labels
+		}
+		for _, ap := range apps {
+			if cid := ap.Credentials.OauthClient.ClientID; cid != "" {
+				labels[cid] = ap.Label
+			}
+		}
+		next = link
+	}
+	return labels
+}
+
+// isOktaAdminScope reports whether an Okta API scope grants management/admin control —
+// effectively shadow-admin if held by a third-party integration.
+func isOktaAdminScope(scope string) bool {
+	s := strings.ToLower(scope)
+	return strings.Contains(s, ".manage") || strings.Contains(s, "okta.roles")
 }
 
 // hasActiveFactor reports whether the user has any enrolled (ACTIVE) MFA factor.
