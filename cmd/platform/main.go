@@ -106,6 +106,9 @@ func main() {
 		incidentAlerter = slack // new-critical incidents → Slack heads-up
 		log.Print("[platform] Slack approval + incident notifications enabled")
 	}
+	if os.Getenv("TSENGINE_WEBHOOK_SECRET") == "" {
+		log.Print("[platform] WARNING: inbound webhooks are NOT verified — set TSENGINE_WEBHOOK_SECRET to reject spoofed events")
+	}
 	g := &grc.GRC{Store: st}
 
 	svc := &runner.Service{
@@ -142,7 +145,8 @@ func main() {
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault,
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
-		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"), NewID: newID,
+		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
+		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID,
 	})
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls

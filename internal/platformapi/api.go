@@ -34,7 +34,10 @@ type Deps struct {
 	// SlackSigningSecret verifies Slack interactive (approve/reject) callbacks. Empty
 	// → the Slack endpoint returns 501.
 	SlackSigningSecret string
-	NewID              func() string
+	// WebhookSecret authenticates inbound provider webhooks (GitHub HMAC / GitLab token).
+	// Empty → verification is skipped (a startup warning is logged; dev only).
+	WebhookSecret string
+	NewID         func() string
 }
 
 // NewHandler returns the platform's HTTP handler.
@@ -119,6 +122,17 @@ func (d Deps) handleWebhook(w http.ResponseWriter, r *http.Request, tenantID str
 		return
 	}
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+
+	// authenticate the webhook before triggering ANY re-scan: a spoofed payload must not
+	// be able to force scans. Verified against the shared secret when one is configured.
+	if d.WebhookSecret != "" {
+		if v, ok := conn.(connector.WebhookVerifier); ok {
+			if err := v.VerifyWebhook(r.Header, body, d.WebhookSecret); err != nil {
+				writeJSON(w, http.StatusUnauthorized, errBody("webhook verification failed"))
+				return
+			}
+		}
+	}
 
 	// find the tenant's active connection of this kind to attribute the event
 	conns, _ := d.Store.ListConnections(r.Context(), tenantID)

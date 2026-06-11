@@ -11,6 +11,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -40,6 +41,13 @@ type Connector interface {
 	Watch(ctx context.Context, c platform.Connection, event []byte) ([]Trigger, error)
 	// Apply executes an approved remediation (the only write path; gated upstream).
 	Apply(ctx context.Context, c platform.Connection, token string, a platform.Action) error
+}
+
+// WebhookVerifier authenticates an inbound provider webhook against the shared webhook
+// secret, before any re-scan is triggered (defends the endpoint against spoofed events).
+// Optional capability — a connector that doesn't implement it skips verification.
+type WebhookVerifier interface {
+	VerifyWebhook(h http.Header, body []byte, secret string) error
 }
 
 // Registry resolves connectors by kind.

@@ -181,3 +181,60 @@ func TestHealthz(t *testing.T) {
 		t.Errorf("healthz code %d", rec.Code)
 	}
 }
+
+// verifyConn is a fakeConn that also implements connector.WebhookVerifier (accepts when
+// header X-Sig == secret), to exercise the webhook-verification gate.
+type verifyConn struct{ fakeConn }
+
+func (verifyConn) VerifyWebhook(h http.Header, _ []byte, secret string) error {
+	if h.Get("X-Sig") == secret {
+		return nil
+	}
+	return errTestBadSig
+}
+
+var errTestBadSig = &testErr{"bad sig"}
+
+type testErr struct{ s string }
+
+func (e *testErr) Error() string { return e.s }
+
+func webhookReq(secret string) *http.Request {
+	req := httptest.NewRequest("POST", "/v1/webhooks/github", strings.NewReader(`{"repository":{"html_url":"https://github.com/acme/web"}}`))
+	req.Header.Set("Authorization", "Bearer platform-tok")
+	req.Header.Set("X-Tenant-ID", "t1")
+	if secret != "" {
+		req.Header.Set("X-Sig", secret)
+	}
+	return req
+}
+
+func TestWebhook_VerifiesSignature(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: platform.ConnGitHub, Status: platform.ConnActive, SecretRef: "v:S"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "t1", ConnectionID: "c1", Type: "repository", Target: "https://github.com/acme/web"})
+	reg := connector.NewRegistry(verifyConn{})
+	svc := &runner.Service{Store: st, Connectors: reg, Tokens: fakeTokens{}, Scanner: fakeScanner{}}
+	h := NewHandler(Deps{Store: st, Connectors: reg, Runner: svc, Token: "platform-tok", WebhookSecret: "shh"})
+
+	// no/!valid signature → 401, no re-scan
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, webhookReq(""))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("an unsigned webhook must be rejected, got %d", rec.Code)
+	}
+	if fs, _ := st.ListFindings(ctx, "t1", store.FindingFilter{}); len(fs) != 0 {
+		t.Fatal("a rejected webhook must NOT trigger a scan")
+	}
+	// valid signature → 202 + scan runs
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, webhookReq("shh"))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("a verified webhook should be accepted, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if fs, _ := st.ListFindings(ctx, "t1", store.FindingFilter{}); len(fs) == 0 {
+		t.Error("a verified webhook should trigger the re-scan")
+	}
+}
