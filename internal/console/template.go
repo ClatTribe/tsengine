@@ -30,6 +30,7 @@ const pageHTML = `<!doctype html>
   .tag{display:inline-block;background:#1d2530;border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:11px;color:var(--muted)}
   .empty{color:var(--muted);font-size:13px;padding:6px 0}
   .on{color:var(--low);font-size:12px}
+  a.flink{color:var(--ink);text-decoration:none;border-bottom:1px dotted var(--muted)} a.flink:hover{border-color:var(--ink)}
   .btn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 11px;font-size:12px;cursor:pointer;background:#1d2530;color:var(--ink)}
   .btn.ok{border-color:#2a6b1f;color:var(--low)} .btn.no{border-color:#6b2a2a;color:var(--high)}
   form.inline{display:inline;margin:0}
@@ -86,8 +87,8 @@ const pageHTML = `<!doctype html>
   </section>
 
   <section><h2>Top findings</h2>
-    {{if .Findings}}<table><tr><th>Severity</th><th>Finding</th><th>Where</th><th>Tool</th></tr>
-    {{range .Findings}}<tr><td><span class="sev {{.Severity}}">{{.Severity}}</span></td><td>{{.Title}}</td><td><code>{{.Endpoint}}</code></td><td><span class="tag">{{.Tool}}</span></td></tr>{{end}}
+    {{if .Findings}}{{$tid := .TenantID}}<table><tr><th>Severity</th><th>Finding</th><th>Where</th><th>Tool</th></tr>
+    {{range .Findings}}<tr><td><span class="sev {{.Severity}}">{{.Severity}}</span></td><td><a class="flink" href="/ui/findings/{{.ID}}?tenant={{$tid}}">{{.Title}}</a></td><td><code>{{.Endpoint}}</code></td><td><span class="tag">{{.Tool}}</span></td></tr>{{end}}
     </table>{{else}}<div class="empty">No open findings.</div>{{end}}
   </section>
 
@@ -236,4 +237,48 @@ const connectHTML = `<!doctype html>
     <div class="act"><a class="btn ok" href="/ui/connect/{{.Kind}}?tenant={{$.TenantID}}">{{if .Connected}}Connect another{{else}}Connect{{end}}</a></div>
   </div>{{end}}
   {{if not .Rows}}<div class="sub">No connectors are configured on this deployment.</div>{{end}}
+</div></body></html>`
+
+// findingHTML is the per-finding drill-down — the evidence behind a dashboard row.
+const findingHTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<style>
+  :root{--bg:#0b0e14;--card:#151a23;--ink:#e6e9ef;--muted:#8b94a7;--line:#232a37;
+        --critical:#ff4d4f;--high:#ff7a45;--medium:#faad14;--low:#52c41a}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:820px;margin:0 auto;padding:28px 20px}
+  .topbar{display:flex;align-items:center;gap:12px} h1{font-size:20px;margin:0} .topbar .who{margin-left:auto}
+  .btn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:4px 11px;font-size:12px;color:var(--ink);text-decoration:none;background:#1d2530}
+  .sub{color:var(--muted);font-size:13px;margin:4px 0 18px}
+  .sev{font-weight:700;text-transform:capitalize} .sev.critical{color:var(--critical)} .sev.high{color:var(--high)}
+  .sev.medium{color:var(--medium)} .sev.low{color:var(--low)} .sev.info{color:var(--muted)}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin-bottom:14px}
+  section h2{font-size:12px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .kv{display:flex;flex-wrap:wrap;gap:8px} .kv .k{color:var(--muted);font-size:12px;min-width:90px}
+  .tag{display:inline-block;background:#1d2530;border:1px solid var(--line);border-radius:6px;padding:1px 8px;font-size:12px;color:var(--muted);margin:0 4px 4px 0}
+  .kev{color:var(--critical);font-weight:600} code{background:#11161f;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
+  p{margin:0;white-space:pre-wrap}
+</style></head><body><div class="wrap">
+  <div class="topbar"><h1><span class="sev {{.Severity}}">{{.Severity}}</span> · {{.Title}}</h1>
+    <div class="who"><a class="btn" href="/ui?tenant={{.TenantID}}">← Dashboard</a></div></div>
+  <div class="sub">status: {{.Status}}{{if .Confidence}} · confidence {{printf "%.2f" .Confidence}}{{end}} · <code>{{.ID}}</code></div>
+
+  <section><h2>Where + how</h2>
+    <table><tr><td class="k">Tool</td><td><span class="tag">{{.Tool}}</span></td></tr>
+    <tr><td class="k">Rule</td><td><code>{{.RuleID}}</code></td></tr>
+    {{if .Endpoint}}<tr><td class="k">Endpoint</td><td><code>{{.Endpoint}}</code></td></tr>{{end}}
+    {{if .CWE}}<tr><td class="k">CWE</td><td>{{range .CWE}}<span class="tag">{{.}}</span>{{end}}</td></tr>{{end}}
+    {{if .MITRE}}<tr><td class="k">MITRE</td><td>{{range .MITRE}}<span class="tag">{{.}}</span>{{end}}</td></tr>{{end}}
+    {{if .CorroboratedBy}}<tr><td class="k">Corroborated</td><td>{{range .CorroboratedBy}}<span class="tag">{{.}}</span>{{end}}</td></tr>{{end}}
+    {{if .KEV}}<tr><td class="k">Threat intel</td><td><span class="kev">● CISA KEV (actively exploited)</span>{{if .EPSS}} · {{.EPSS}}{{end}}</td></tr>{{else if .EPSS}}<tr><td class="k">Threat intel</td><td>{{.EPSS}}</td></tr>{{end}}
+    </table>
+  </section>
+
+  {{if .Description}}<section><h2>Description</h2><p>{{.Description}}</p></section>{{end}}
+
+  {{if .Compliance}}<section><h2>Affected controls</h2>
+    {{range .Compliance}}<div>{{.}}</div>{{end}}
+  </section>{{end}}
 </div></body></html>`

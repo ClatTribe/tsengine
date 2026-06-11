@@ -78,6 +78,7 @@ type Deps struct {
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ui", d.dashboard)
+	mux.HandleFunc("GET /ui/findings/{id}", d.finding)
 	mux.HandleFunc("GET /ui/compliance/{framework}", d.compliance)
 	mux.HandleFunc("GET /ui/connect", d.connectPage)
 	mux.HandleFunc("GET /ui/connect/{kind}", d.connect)
@@ -176,6 +177,82 @@ func (d Deps) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	redirectURI := d.PublicURL + "/v1/connect/" + c.Kind() + "/callback"
 	http.Redirect(w, r, c.OAuthURL(tenantID, redirectURI), http.StatusSeeOther)
+}
+
+// finding renders one finding's full detail — the evidence behind a dashboard row
+// (description, status/confidence, CWE/MITRE, threat intel, compliance mapping).
+func (d Deps) finding(w http.ResponseWriter, r *http.Request) {
+	if !d.authed(r) {
+		renderLogin(w, http.StatusOK, loginView{Tenant: r.URL.Query().Get("tenant")})
+		return
+	}
+	tenantID := firstNonEmpty(r.URL.Query().Get("tenant"), r.Header.Get("X-Tenant-ID"))
+	if tenantID == "" {
+		http.Error(w, "missing tenant (?tenant=<id>)", http.StatusBadRequest)
+		return
+	}
+	fs, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	id := r.PathValue("id")
+	var found *types.Finding
+	for i := range fs {
+		if fs[i].ID == id {
+			found = &fs[i]
+			break
+		}
+	}
+	if found == nil {
+		http.Error(w, "finding not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := findingPage.Execute(w, findingDetail(tenantID, *found)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+type findingView struct {
+	TenantID, ID, Title, Severity, Status, Tool, RuleID, Endpoint, Description string
+	Confidence                                                                 float64
+	CWE, MITRE, CorroboratedBy, Compliance                                     []string
+	KEV                                                                        bool
+	EPSS                                                                       string
+}
+
+// findingDetail flattens a types.Finding into the render model.
+func findingDetail(tenantID string, f types.Finding) findingView {
+	v := findingView{
+		TenantID: tenantID, ID: f.ID, Title: f.Title, Severity: string(f.Severity),
+		Status: string(f.VerificationStatus), Tool: f.Tool, RuleID: f.RuleID,
+		Endpoint: f.Endpoint, Description: f.Description, Confidence: f.Confidence,
+		CWE: f.CWE, MITRE: f.MITRETechniques, CorroboratedBy: f.CorroboratedBy,
+	}
+	if v.Status == "" {
+		v.Status = string(types.VerificationPatternMatch)
+	}
+	if ti := f.ThreatIntel; ti != nil {
+		v.KEV = ti.KEV != nil
+		if ti.EPSS != nil {
+			v.EPSS = "EPSS present"
+		}
+	}
+	if c := f.Compliance; c != nil {
+		add := func(name string, ctrls []string) {
+			if len(ctrls) > 0 {
+				v.Compliance = append(v.Compliance, name+": "+strings.Join(ctrls, ", "))
+			}
+		}
+		add("SOC 2", c.SOC2)
+		add("ISO 27001", c.ISO27001)
+		add("PCI", c.PCI)
+		add("HIPAA", c.HIPAA)
+		add("CIS v8", c.CISv8)
+		add("NIST CSF", c.NISTCSF)
+	}
+	return v
 }
 
 // compliance renders the per-framework drill-down: every tracked control, gaps backed by
@@ -537,5 +614,6 @@ var (
 	compliancePage = template.Must(template.New("compliance").Funcs(template.FuncMap{
 		"rfc3339": func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 	}).Parse(complianceHTML))
-	connectPg = template.Must(template.New("connect").Parse(connectHTML))
+	findingPage = template.Must(template.New("finding").Parse(findingHTML))
+	connectPg   = template.Must(template.New("connect").Parse(connectHTML))
 )

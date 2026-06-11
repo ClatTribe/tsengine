@@ -236,6 +236,36 @@ func TestDecide_RequiresAuth(t *testing.T) {
 	}
 }
 
+// A finding row links to its drill-down, which renders the full evidence.
+func TestFinding_Drilldown(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme Inc"})
+	_ = st.PutFinding(ctx, "t1", types.Finding{
+		ID: "f9", RuleID: "nuclei::sqli", Tool: "nuclei", Severity: types.SeverityCritical,
+		Title: "SQL injection", Endpoint: "https://acme/search", Description: "User input flows into the query.",
+		CWE: []string{"CWE-89"}, VerificationStatus: types.VerificationCorroborated,
+		Compliance: &types.Compliance{SOC2: []string{"CC6.1"}},
+	})
+	h := Handler(Deps{Store: st, Token: tok})
+
+	// the dashboard links the finding
+	if body := getBearer(t, h, "/ui?tenant=t1").Body.String(); !strings.Contains(body, `href="/ui/findings/f9?tenant=t1"`) {
+		t.Error("the top-findings row should link to the drill-down")
+	}
+	// the drill-down renders the detail
+	body := getBearer(t, h, "/ui/findings/f9?tenant=t1").Body.String()
+	for _, want := range []string{"SQL injection", "User input flows into the query.", "CWE-89", "corroborated", "SOC 2: CC6.1", "← Dashboard"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("finding detail missing %q", want)
+		}
+	}
+	// a missing finding is a 404, not a panic
+	if w := getBearer(t, h, "/ui/findings/nope?tenant=t1"); w.Code != http.StatusNotFound {
+		t.Errorf("unknown finding should 404, got %d", w.Code)
+	}
+}
+
 // The posture cards link into the per-framework drill-down when a reporter is wired.
 func TestDashboard_PostureCardsLink(t *testing.T) {
 	h := Handler(deps(t, seed(t)))
