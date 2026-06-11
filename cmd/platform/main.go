@@ -130,7 +130,7 @@ func main() {
 			platform.ConnOkta:       operate.NewOkta(os.Getenv("OKTA_ORG_URL")),
 		}, EmailAuth: operate.NewEmailAuth()},
 	}
-	workspaceRunner := &runner.OperateRunner{Source: workspaceSource}
+	workspaceRunner := &runner.OperateRunner{Source: workspaceSource, Apps: st}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
 		engine := &runner.EngineRunner{Resolve: assetregistry.HandlerFor, NewDispatcher: sandboxDispatcher(image)}
 		svc.Scanner = &runner.MuxRunner{Engine: engine, Workspace: workspaceRunner}

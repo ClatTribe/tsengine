@@ -150,6 +150,20 @@ type ControlState struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// ThirdPartyApp is one third-party OAuth integration with access to a tenant's identity
+// provider (Google Workspace / M365 / Okta) — the SaaS/app inventory a compliance team
+// needs (SOC2 vendor management, shadow-IT review), not just the risky ones we flag as
+// findings. Refreshed each operate scan from the live OAuth grants.
+type ThirdPartyApp struct {
+	TenantID   string   `json:"tenant_id"`
+	Provider   string   `json:"provider"` // gworkspace | m365 | okta
+	AppID      string   `json:"app_id"`   // the app's display name (or client id)
+	Scopes     []string `json:"scopes"`
+	Users      int      `json:"users"`       // how many users granted it
+	AdminScope bool     `json:"admin_scope"` // holds a directory/admin scope (shadow-admin)
+	Verified   bool     `json:"verified"`    // publisher-verified by the provider
+}
+
 // Incident statuses.
 const (
 	IncidentOpen     = "open"

@@ -60,4 +60,8 @@ type Store interface {
 	// --- incidents (the continuous-monitoring system-of-record) ---
 	PutIncident(ctx context.Context, i platform.Incident) error
 	ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error)
+
+	// --- third-party app inventory (refreshed per operate scan, per provider) ---
+	ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error
+	ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error)
 }
