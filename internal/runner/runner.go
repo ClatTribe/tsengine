@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -57,9 +58,10 @@ type Service struct {
 	NewID      IDGen
 
 	// optional autonomous-loop collaborators
-	GRC     *grc.GRC   // fold each finding into the compliance system-of-record
-	Propose Proposer   // generate a remediation Action per finding
-	Desk    *hitl.Desk // gate/auto-apply the proposed Action
+	GRC      *grc.GRC         // fold each finding into the compliance system-of-record
+	Propose  Proposer         // generate a remediation Action per finding
+	Desk     *hitl.Desk       // gate/auto-apply the proposed Action
+	Detector *detect.Detector // open/resolve incidents from change between monitoring passes
 }
 
 func (s *Service) now() time.Time {
@@ -99,7 +101,7 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 		if err := s.Store.PutAsset(ctx, assets[i]); err != nil {
 			return scanned, err
 		}
-		if _, err := s.scanAsset(ctx, assets[i], platform.TriggerSchedule); err != nil {
+		if _, _, err := s.scanAsset(ctx, assets[i], platform.TriggerSchedule); err != nil {
 			return scanned, err
 		}
 		scanned++
@@ -117,14 +119,26 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	}
 	scanned := 0
 	var firstErr error
+	var current []types.Finding
 	for _, a := range assets {
-		if _, err := s.scanAsset(ctx, a, platform.TriggerSchedule); err != nil {
+		_, fs, err := s.scanAsset(ctx, a, platform.TriggerSchedule)
+		if err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
+		current = append(current, fs...)
 		scanned++
+	}
+	// continuous-monitoring: reconcile this pass's findings into incidents (what's NEW,
+	// what's RESOLVED since last pass). Runs over the whole tenant — a full pass is the
+	// authoritative present state. Only when every asset scanned cleanly, so a partial
+	// pass never falsely resolves an incident on an asset that errored.
+	if s.Detector != nil && firstErr == nil {
+		if _, err := s.Detector.Reconcile(ctx, tenantID, current); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
 	return scanned, firstErr
 }
@@ -138,7 +152,8 @@ func (s *Service) OnTrigger(ctx context.Context, t connector.Trigger) (*platform
 	}
 	for _, a := range assets {
 		if a.Target == t.AssetTarget {
-			return s.scanAsset(ctx, a, t.Kind)
+			eng, _, err := s.scanAsset(ctx, a, t.Kind)
+			return eng, err
 		}
 	}
 	return nil, fmt.Errorf("runner: no asset matches trigger target %q", t.AssetTarget)
@@ -147,28 +162,28 @@ func (s *Service) OnTrigger(ctx context.Context, t connector.Trigger) (*platform
 // scanAsset runs the engine over one asset, persists the findings, and records the
 // engagement. Findings carry no tenant field, so isolation rides entirely on the
 // store's tenant-scoped PutFinding.
-func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger string) (*platform.Engagement, error) {
+func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger string) (*platform.Engagement, []types.Finding, error) {
 	eng := platform.Engagement{
 		ID: s.newID("eng"), TenantID: a.TenantID, AssetID: a.ID,
 		Trigger: trigger, StartedAt: s.now(),
 	}
 	findings, err := s.Scanner.Scan(ctx, a)
 	if err != nil {
-		return nil, fmt.Errorf("runner: scan %s: %w", a.Target, err)
+		return nil, nil, fmt.Errorf("runner: scan %s: %w", a.Target, err)
 	}
 	for _, f := range findings {
 		if err := s.Store.PutFinding(ctx, a.TenantID, f); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if err := s.processFinding(ctx, a, f); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	eng.CompletedAt = s.now()
 	if err := s.Store.PutEngagement(ctx, eng); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &eng, nil
+	return &eng, findings, nil
 }
 
 // processFinding runs the optional autonomous loop for one finding: update the

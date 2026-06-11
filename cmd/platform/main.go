@@ -42,6 +42,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/console"
+	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/notify"
@@ -110,6 +111,8 @@ func main() {
 		Propose: func(f types.Finding, a platform.Asset) (platform.Action, bool) {
 			return remediate.Propose(f, a, newID)
 		},
+		// continuous-monitoring: open/resolve incidents from change between passes.
+		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), NewID: newID},
 	}
 	// The operate backend serves non-tech "workspace" assets (identity/email posture):
 	// a snapshot file if the asset names one, else a LIVE fetch from the connected

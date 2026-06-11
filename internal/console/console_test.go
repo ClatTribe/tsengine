@@ -31,6 +31,7 @@ func seed(t *testing.T) store.Store {
 	_ = st.PutAction(ctx, platform.Action{ID: "a1", TenantID: "t1", FindingID: "f1", Kind: platform.ActOpenPR,
 		Tier: 2, Status: platform.ActPendingApproval, Title: "Patch SQLi in search handler"})
 	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: "github", SecretRef: "vault://tok-xyz"})
+	_ = st.PutIncident(ctx, platform.Incident{ID: "i1", TenantID: "t1", Title: "Admin without MFA", RuleID: "operate::admin-without-mfa", Severity: "critical", Status: platform.IncidentOpen})
 	_ = st.UpsertControlState(ctx, platform.ControlState{TenantID: "t1", Framework: "soc2", ControlID: "CC6.1", State: platform.ControlMet})
 	_ = st.UpsertControlState(ctx, platform.ControlState{TenantID: "t1", Framework: "soc2", ControlID: "CC6.6", State: platform.ControlGap})
 	return st
@@ -79,6 +80,8 @@ func TestDashboard_RendersPosture(t *testing.T) {
 		"1 met",                        // CC6.1 met
 		"1 gap",                        // CC6.6 gap
 		`action="/ui/approvals/a1"`,    // the approve/reject forms are wired
+		"New since last scan",          // the continuous-monitoring incidents section
+		"Admin without MFA",            // the open incident renders
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered page missing %q", want)

@@ -21,6 +21,7 @@ type Memory struct {
 	findings    map[string][]types.Finding                  // tenantID → findings
 	actions     map[string]map[string]platform.Action       // tenantID → actionID → action
 	controls    map[string]map[string]platform.ControlState // tenantID → "framework/control" → state
+	incidents   map[string]map[string]platform.Incident     // tenantID → incidentID → incident
 }
 
 // NewMemory returns an empty in-memory store.
@@ -33,6 +34,7 @@ func NewMemory() *Memory {
 		findings:    map[string][]types.Finding{},
 		actions:     map[string]map[string]platform.Action{},
 		controls:    map[string]map[string]platform.ControlState{},
+		incidents:   map[string]map[string]platform.Incident{},
 	}
 }
 
@@ -184,6 +186,26 @@ func (m *Memory) Posture(_ context.Context, tenantID, framework string) ([]platf
 	return out, nil
 }
 
+func (m *Memory) PutIncident(_ context.Context, i platform.Incident) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.incidents[i.TenantID] == nil {
+		m.incidents[i.TenantID] = map[string]platform.Incident{}
+	}
+	m.incidents[i.TenantID][i.ID] = i
+	return nil
+}
+
+func (m *Memory) ListIncidents(_ context.Context, tenantID string) ([]platform.Incident, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Incident, 0, len(m.incidents[tenantID]))
+	for _, i := range m.incidents[tenantID] {
+		out = append(out, i)
+	}
+	return out, nil
+}
+
 // Snapshot is the serializable form of a Memory store — what the file-backed store
 // persists. Fields are exported so encoding/json can round-trip them.
 type Snapshot struct {
@@ -194,6 +216,7 @@ type Snapshot struct {
 	Findings    map[string][]types.Finding                  `json:"findings"`
 	Actions     map[string]map[string]platform.Action       `json:"actions"`
 	Controls    map[string]map[string]platform.ControlState `json:"controls"`
+	Incidents   map[string]map[string]platform.Incident     `json:"incidents"`
 }
 
 // Export returns a deep-enough copy of the store's data for persistence (taken under
@@ -209,6 +232,7 @@ func (m *Memory) Export() Snapshot {
 		Findings:    m.findings,
 		Actions:     m.actions,
 		Controls:    m.controls,
+		Incidents:   m.incidents,
 	}
 }
 
@@ -223,6 +247,7 @@ func (m *Memory) load(s Snapshot) {
 	m.findings = orEmpty(s.Findings)
 	m.actions = orEmptyNested(s.Actions)
 	m.controls = orEmptyControls(s.Controls)
+	m.incidents = orEmptyIncidents(s.Incidents)
 }
 
 func orEmptyMap(m map[string]platform.Tenant) map[string]platform.Tenant {
@@ -246,6 +271,12 @@ func orEmptyNested(m map[string]map[string]platform.Action) map[string]map[strin
 func orEmptyControls(m map[string]map[string]platform.ControlState) map[string]map[string]platform.ControlState {
 	if m == nil {
 		return map[string]map[string]platform.ControlState{}
+	}
+	return m
+}
+func orEmptyIncidents(m map[string]map[string]platform.Incident) map[string]map[string]platform.Incident {
+	if m == nil {
+		return map[string]map[string]platform.Incident{}
 	}
 	return m
 }

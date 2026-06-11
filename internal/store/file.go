@@ -116,3 +116,10 @@ func (f *File) UpsertControlState(ctx context.Context, cs platform.ControlState)
 	}
 	return f.persist()
 }
+
+func (f *File) PutIncident(ctx context.Context, i platform.Incident) error {
+	if err := f.Memory.PutIncident(ctx, i); err != nil {
+		return err
+	}
+	return f.persist()
+}

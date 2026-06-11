@@ -149,3 +149,30 @@ type ControlState struct {
 	EvidenceRefs []string  `json:"evidence_refs,omitempty"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+// Incident statuses.
+const (
+	IncidentOpen     = "open"
+	IncidentResolved = "resolved"
+)
+
+// Incident is a durable, deduped security issue tracked across monitoring passes — the
+// continuous-monitoring system-of-record that raw findings (overwritten every scan) can't
+// provide. The detect layer opens one when a finding at/above the severity threshold
+// first appears, and resolves it when that issue stops appearing — so the platform can
+// say "this critical issue is NEW since the last pass" and "this one is now fixed",
+// timestamped. Key is the stable issue identity (rule + cited entity) so the same issue
+// re-detected across scans maps to the same incident.
+type Incident struct {
+	ID         string    `json:"id"`
+	TenantID   string    `json:"tenant_id"`
+	Key        string    `json:"key"` // stable identity: "<rule_id>|<endpoint>"
+	RuleID     string    `json:"rule_id"`
+	Title      string    `json:"title"`
+	Severity   string    `json:"severity"`
+	Status     string    `json:"status"`     // IncidentOpen | IncidentResolved
+	FindingID  string    `json:"finding_id"` // the finding that opened it
+	OpenedAt   time.Time `json:"opened_at"`
+	ResolvedAt time.Time `json:"resolved_at,omitempty"`
+	LedgerRef  string    `json:"ledger_ref,omitempty"`
+}

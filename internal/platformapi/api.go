@@ -49,6 +49,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
+	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/approvals/{id}", d.auth(d.handleApprovalDecide))
 	mux.HandleFunc("GET /v1/connect/{kind}", d.auth(d.handleConnectURL))
 	mux.HandleFunc("GET /v1/connect/{kind}/callback", d.handleConnectCallback) // OAuth redirect; tenant in state
@@ -163,6 +164,27 @@ func (d Deps) handleConnections(w http.ResponseWriter, r *http.Request, tenantID
 func (d Deps) handleApprovals(w http.ResponseWriter, r *http.Request, tenantID string) {
 	a, err := d.Store.PendingApprovals(r.Context(), tenantID)
 	respond(w, a, err)
+}
+
+// handleIncidents returns the tenant's OPEN incidents (the continuous-monitoring view:
+// what's newly broken since a prior pass). ?status=all returns resolved ones too.
+func (d Deps) handleIncidents(w http.ResponseWriter, r *http.Request, tenantID string) {
+	all, err := d.Store.ListIncidents(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if r.URL.Query().Get("status") == "all" {
+		respond(w, all, nil)
+		return
+	}
+	open := make([]platform.Incident, 0, len(all))
+	for _, i := range all {
+		if i.Status == platform.IncidentOpen {
+			open = append(open, i)
+		}
+	}
+	respond(w, open, nil)
 }
 
 // --- helpers ---
