@@ -87,3 +87,70 @@ func TestGWorkspace_HTTPErrorSurfaces(t *testing.T) {
 		t.Error("a 403 from the directory API should surface as an error")
 	}
 }
+
+func TestGWorkspace_FetchOAuthGrants(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/admin/directory/v1/users":
+			// one active user (2sv on, so no MFA-finding noise)
+			_, _ = w.Write([]byte(`{"users":[{"primaryEmail":"ceo@acme","isEnrolledIn2Sv":true,"lastLoginTime":"2026-06-10T00:00:00.000Z"}]}`))
+		case r.URL.Path == "/admin/directory/v1/users/ceo@acme/tokens":
+			// a directory-admin-scoped app (shadow-admin) + a benign app
+			_, _ = w.Write([]byte(`{"items":[
+				{"clientId":"app-1","displayText":"Sketchy Admin Tool","scopes":["https://www.googleapis.com/auth/admin.directory.user","openid"]},
+				{"clientId":"app-2","displayText":"Calendar Sync","scopes":["https://www.googleapis.com/auth/calendar.readonly"]}
+			]}`))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	g := NewGWorkspace()
+	g.APIBase = srv.URL
+	ws, err := g.Fetch(context.Background(), "tok", time.Date(2026, 6, 11, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ws.OAuthGrants) != 2 {
+		t.Fatalf("want 2 grants, got %d: %+v", len(ws.OAuthGrants), ws.OAuthGrants)
+	}
+	byApp := map[string]OAuthGrant{}
+	for _, gr := range ws.OAuthGrants {
+		byApp[gr.App] = gr
+	}
+	if gr := byApp["Sketchy Admin Tool"]; !gr.AdminScope || gr.Users != 1 {
+		t.Errorf("admin-scoped app should be flagged admin-scope, 1 user, got %+v", gr)
+	}
+	if gr := byApp["Calendar Sync"]; gr.AdminScope {
+		t.Errorf("a calendar-readonly app should not be admin-scope, got %+v", gr)
+	}
+	// the admin-scoped third-party app drives the critical posture finding
+	var sawAdminApp bool
+	for _, f := range Assess(ws, Options{}) {
+		if f.RuleID == "operate::oauth-admin-scope" {
+			sawAdminApp = true
+		}
+	}
+	if !sawAdminApp {
+		t.Error("an admin-scoped third-party app should produce operate::oauth-admin-scope")
+	}
+}
+
+func TestIsGoogleAdminScope(t *testing.T) {
+	admin := []string{
+		"https://www.googleapis.com/auth/admin.directory.user",
+		"https://www.googleapis.com/auth/cloud-platform",
+	}
+	for _, s := range admin {
+		if !isGoogleAdminScope(s) {
+			t.Errorf("%q should be admin-scope", s)
+		}
+	}
+	for _, s := range []string{"https://www.googleapis.com/auth/calendar.readonly", "openid", "email"} {
+		if isGoogleAdminScope(s) {
+			t.Errorf("%q should NOT be admin-scope", s)
+		}
+	}
+}
