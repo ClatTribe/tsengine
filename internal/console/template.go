@@ -84,6 +84,15 @@ const pageHTML = `<!doctype html>
     </table>{{else}}<div class="empty">No open findings.</div>{{end}}
   </section>
 
+  <section>
+    <div class="topbar"><h2 style="margin:0">Monitored assets</h2>
+      {{if .CanRescan}}<div class="who"><form class="inline" method="post" action="/ui/rescan"><input type="hidden" name="tenant" value="{{.TenantID}}"><button class="btn ok" type="submit">Scan now</button></form></div>{{end}}
+    </div>
+    {{if .Assets}}<table><tr><th>Type</th><th>Target</th><th>Last scanned</th></tr>
+    {{range .Assets}}<tr><td><span class="tag">{{.Type}}</span></td><td><code>{{.Target}}</code></td><td>{{.LastScan}}</td></tr>{{end}}
+    </table>{{else}}<div class="empty">No assets yet — connect a system to start monitoring.</div>{{end}}
+  </section>
+
   <section><h2>Connected systems</h2>
     {{if .Connections}}<div class="fw">{{range .Connections}}<div class="fwcard"><div class="name">{{.Kind}}</div><span class="id">{{.ID}}</span></div>{{end}}</div>
     {{else}}<div class="empty">No systems connected yet.</div>{{end}}

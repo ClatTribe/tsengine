@@ -50,6 +50,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
+	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
 	mux.HandleFunc("POST /v1/approvals/{id}", d.auth(d.handleApprovalDecide))
 	mux.HandleFunc("GET /v1/connect/{kind}", d.auth(d.handleConnectURL))
 	mux.HandleFunc("GET /v1/connect/{kind}/callback", d.handleConnectCallback) // OAuth redirect; tenant in state
@@ -164,6 +165,21 @@ func (d Deps) handleConnections(w http.ResponseWriter, r *http.Request, tenantID
 func (d Deps) handleApprovals(w http.ResponseWriter, r *http.Request, tenantID string) {
 	a, err := d.Store.PendingApprovals(r.Context(), tenantID)
 	respond(w, a, err)
+}
+
+// handleRescan triggers an immediate re-scan of all the tenant's assets (the API behind
+// the dashboard's "Scan now"). Returns how many assets were scanned.
+func (d Deps) handleRescan(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.Runner == nil {
+		writeJSON(w, http.StatusNotImplemented, errBody("scanning not configured"))
+		return
+	}
+	n, err := d.Runner.RescanTenant(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errBody(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"assets_scanned": n})
 }
 
 // handleIncidents returns the tenant's OPEN incidents (the continuous-monitoring view:
