@@ -33,6 +33,7 @@ func seed(t *testing.T) store.Store {
 		Tier: 2, Status: platform.ActPendingApproval, Title: "Patch SQLi in search handler"})
 	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: "github", SecretRef: "vault://tok-xyz"})
 	_ = st.PutIncident(ctx, platform.Incident{ID: "i1", TenantID: "t1", Title: "Admin without MFA", RuleID: "operate::admin-without-mfa", Severity: "critical", Status: platform.IncidentOpen})
+	_ = st.PutIncident(ctx, platform.Incident{ID: "i2", TenantID: "t1", Title: "Weak DMARC", RuleID: "operate::dmarc-not-enforced", Severity: "high", Status: platform.IncidentResolved, ResolvedAt: time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC)})
 	_ = st.PutAsset(ctx, platform.Asset{ID: "as1", TenantID: "t1", Type: "repository", Target: "github.com/acme/web"})
 	_ = st.PutEngagement(ctx, platform.Engagement{ID: "e1", TenantID: "t1", AssetID: "as1", CompletedAt: time.Date(2026, 6, 1, 9, 30, 0, 0, time.UTC)})
 	_ = st.ReplaceThirdPartyApps(ctx, "t1", "okta", []platform.ThirdPartyApp{
@@ -104,6 +105,9 @@ func TestDashboard_RendersPosture(t *testing.T) {
 		"Third-party apps with access", // the OAuth app inventory section
 		"Risky Provisioner",            // the inventoried app
 		"admin / directory",            // its admin-scope badge
+		"Resolved since last check",    // the agent-wins section
+		"Weak DMARC",                   // the resolved incident
+		"✓ fixed",                      // the resolved badge
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered page missing %q", want)

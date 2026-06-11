@@ -310,6 +310,7 @@ type view struct {
 	Findings    []types.Finding
 	Pending     []platform.Action
 	Incidents   []platform.Incident
+	Resolved    []platform.Incident
 	Connections []platform.Connection
 	Frameworks  []framework
 	Assets      []assetRow
@@ -400,14 +401,21 @@ func build(ctx context.Context, st store.Store, tenantID string) (view, error) {
 	v.Findings = findings
 
 	v.Pending, _ = st.PendingApprovals(ctx, tenantID)
-	// open incidents = "what's newly broken since the last monitoring pass"
+	// open incidents = "what's newly broken since the last monitoring pass";
+	// resolved incidents = "what the agent caught and is now fixed" (the autonomy story).
 	if incs, err := st.ListIncidents(ctx, tenantID); err == nil {
 		for _, i := range incs {
 			if i.Status == platform.IncidentOpen {
 				v.Incidents = append(v.Incidents, i)
+			} else if i.Status == platform.IncidentResolved {
+				v.Resolved = append(v.Resolved, i)
 			}
 		}
 		sort.SliceStable(v.Incidents, func(a, b int) bool { return v.Incidents[a].OpenedAt.After(v.Incidents[b].OpenedAt) })
+		sort.SliceStable(v.Resolved, func(a, b int) bool { return v.Resolved[a].ResolvedAt.After(v.Resolved[b].ResolvedAt) })
+		if len(v.Resolved) > 8 {
+			v.Resolved = v.Resolved[:8] // a recent highlight, not the full history
+		}
 	}
 	conns, _ := st.ListConnections(ctx, tenantID)
 	for i := range conns {
