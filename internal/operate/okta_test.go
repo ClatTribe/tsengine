@@ -40,6 +40,8 @@ func oktaFake(t *testing.T) *httptest.Server {
 			_, _ = w.Write([]byte(`[{"factorType":"push","status":"ACTIVE"}]`))
 		case r.URL.Path == "/api/v1/users/u2/roles":
 			_, _ = w.Write([]byte(`[]`))
+		case r.URL.Path == "/api/v1/users/u1/grants", r.URL.Path == "/api/v1/users/u2/grants":
+			_, _ = w.Write([]byte(`[]`)) // no grants in this fixture
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -115,6 +117,77 @@ func TestNextLink(t *testing.T) {
 		}
 		if got := nextLink(in); got != want {
 			t.Errorf("nextLink(%q) = %q, want %q", hdr, got, want)
+		}
+	}
+}
+
+func TestOkta_FetchOAuthGrants(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v1/users":
+			_, _ = w.Write([]byte(`[{"id":"u1","status":"ACTIVE","lastLogin":"2026-06-09T00:00:00Z","profile":{"email":"ceo@acme.com"}}]`))
+		case r.URL.Path == "/api/v1/users/u1/factors":
+			_, _ = w.Write([]byte(`[{"factorType":"push","status":"ACTIVE"}]`))
+		case r.URL.Path == "/api/v1/users/u1/roles":
+			_, _ = w.Write([]byte(`[]`))
+		case r.URL.Path == "/api/v1/users/u1/grants":
+			// scope inlined via expand=scope: one admin (okta.users.manage) + one benign app
+			_, _ = w.Write([]byte(`[
+				{"clientId":"0oaADMIN","_embedded":{"scope":{"name":"okta.users.manage"}}},
+				{"clientId":"0oaCAL","_embedded":{"scope":{"name":"okta.users.read"}}}
+			]`))
+		case r.URL.Path == "/api/v1/apps":
+			_, _ = w.Write([]byte(`[
+				{"label":"Risky Provisioner","credentials":{"oauthClient":{"client_id":"0oaADMIN"}}},
+				{"label":"Calendar Buddy","credentials":{"oauthClient":{"client_id":"0oaCAL"}}}
+			]`))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	o := &Okta{OrgURL: srv.URL, HTTP: srv.Client()}
+	ws, err := o.Fetch(context.Background(), "tok", time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ws.OAuthGrants) != 2 {
+		t.Fatalf("want 2 grants, got %d: %+v", len(ws.OAuthGrants), ws.OAuthGrants)
+	}
+	byApp := map[string]OAuthGrant{}
+	for _, g := range ws.OAuthGrants {
+		byApp[g.App] = g
+	}
+	// the .manage-scoped app resolves its label + flags admin-scope
+	if g := byApp["Risky Provisioner"]; !g.AdminScope || g.Users != 1 {
+		t.Errorf("the manage-scoped app should be admin-scope, 1 user, got %+v", g)
+	}
+	if g := byApp["Calendar Buddy"]; g.AdminScope {
+		t.Errorf("a read-scoped app should not be admin-scope, got %+v", g)
+	}
+	var sawAdminApp bool
+	for _, f := range Assess(ws, Options{}) {
+		if f.RuleID == "operate::oauth-admin-scope" {
+			sawAdminApp = true
+		}
+	}
+	if !sawAdminApp {
+		t.Error("a manage-scoped third-party app should produce operate::oauth-admin-scope")
+	}
+}
+
+func TestIsOktaAdminScope(t *testing.T) {
+	for _, s := range []string{"okta.users.manage", "okta.apps.manage", "okta.roles.read"} {
+		if !isOktaAdminScope(s) {
+			t.Errorf("%q should be admin-scope", s)
+		}
+	}
+	for _, s := range []string{"okta.users.read", "openid", "profile"} {
+		if isOktaAdminScope(s) {
+			t.Errorf("%q should NOT be admin-scope", s)
 		}
 	}
 }
