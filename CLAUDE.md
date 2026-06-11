@@ -676,7 +676,7 @@ platform is **purely additive**: it must never change the engine's detection log
 | `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply): GitHub + GitLab (tech SCM), Google Workspace + M365 + Okta (non-tech identity) |
 | `internal/runner` | connector→engine→store glue; `ScanRunner` abstracts the engine, `EngineRunner` is the sandbox adapter; runs the full loop |
 | `internal/hitl` | the human desk — the gate between *propose* and *apply* |
-| `internal/remediate` | `Propose` (finding→Action) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
+| `internal/remediate` | `Propose` (finding→Action; repo→PR, cloud→config, **workspace→a per-rule identity runbook** `identity.go`) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
 | `internal/grc` | compliance control-state system-of-record + signed evidence pack + the auditor-facing **compliance report** (`Report` resolves each gap to its citing findings; `RenderMarkdown` is the attachable deliverable) |
 | `internal/assetregistry` | shared `HandlerFor(assetType)` (so `cmd/tsengine` + `cmd/platform` don't duplicate routing) |
 | `internal/scheduler` | continuous-monitoring loop — re-scans every tenant on a cadence (`TSENGINE_MONITOR_INTERVAL`); the "autonomous" heartbeat alongside event-driven webhook re-scans |
@@ -744,8 +744,18 @@ status→suspended, lastLogin→stale; `OKTA_ORG_URL`/`OKTA_CLIENT_ID`/`OKTA_CLI
 So a non-tech tenant can connect **Google Workspace, Microsoft 365, or Okta** and get the
 same grounded identity posture through the store/grc/hitl/ledger loop.
 
+**Identity findings now get specific fixes, not generic tickets** (`remediate/identity.go`):
+each operate rule maps to a copy-pasteable runbook ticket naming the offending entity —
+e.g. a DMARC finding carries the exact `_dmarc.<domain>` TXT record to publish, an
+admin-without-MFA finding names the admin + the enforce action. They ride as tier-1
+`file_ticket` actions (a ticket is reversible/informational → auto-delivers via the
+`Filer`) and carry a machine-readable `remediation_type`+`target` so a future live Apply
+has the fix ready. The actual identity *mutation* (enforce MFA, revoke a grant) still has
+no live write path — the GWorkspace/M365/Okta connector `Apply` are honest stubs pending
+admin-write creds.
+
 Remaining is **next-phase breadth/scale, not core-loop gaps**: OAuth-grant live fetch
-(grants are still snapshot), identity remediation
+(grants are still snapshot), the live identity-mutation `Apply`
 (`operate *.Apply` — the GWorkspace/M365 connector `Apply` are honest stubs pending live
 admin-write creds), the detect/respond SOC half (real-time monitoring agents beyond
 scheduled re-scans), and the infra successors — a sqlite/Postgres `Store` + a cloud-KMS

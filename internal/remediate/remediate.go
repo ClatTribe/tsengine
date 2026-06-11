@@ -57,6 +57,13 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 			Title:   "tsengine: remediate " + f.Title,
 			Payload: map[string]any{"target": asset.Target, "remediation": fixBody(f)},
 		}, true
+	case "workspace":
+		// identity/email posture: a specific runbook ticket per operate rule. Unknown
+		// rules fall through to the generic ticket below.
+		if a, ok := proposeIdentity(f, asset, idgen); ok {
+			return a, true
+		}
+		fallthrough
 	default:
 		// no automated fix path yet → file a ticket for the human (reversible, tier 1)
 		return platform.Action{
