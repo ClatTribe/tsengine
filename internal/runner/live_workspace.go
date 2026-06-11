@@ -16,15 +16,24 @@ type Fetcher interface {
 	Fetch(ctx context.Context, token string, now time.Time) (operate.Workspace, error)
 }
 
+// DomainEnricher resolves the live email-auth posture (DMARC/SPF/DKIM) of a set of
+// domains (satisfied by *operate.EmailAuth). Optional: when set, the live source fills in
+// a workspace's email-auth posture from public DNS — the provider user-fetch only yields
+// accounts, never the sending domains' DNS records.
+type DomainEnricher interface {
+	FetchDomains(ctx context.Context, domains []string) []operate.DomainConfig
+}
+
 // LiveWorkspaceSource is a WorkspaceSource that fetches the snapshot live from the
 // asset's connected provider: it finds the asset's Connection, resolves the vaulted
 // token, and calls the Fetcher registered for the connection's kind (gworkspace, m365,
 // …). This is the production path behind the WorkspaceSource seam (SnapshotSource is the
 // file-based MVP).
 type LiveWorkspaceSource struct {
-	Store    store.Store
-	Tokens   Tokens
-	Fetchers map[string]Fetcher // by connection kind (platform.ConnGWorkspace / ConnM365 / …)
+	Store     store.Store
+	Tokens    Tokens
+	Fetchers  map[string]Fetcher // by connection kind (platform.ConnGWorkspace / ConnM365 / …)
+	EmailAuth DomainEnricher     // optional: live DMARC/SPF/DKIM enrichment via DNS
 }
 
 // Workspace resolves the asset's connection token and fetches the live workspace via
@@ -46,7 +55,19 @@ func (l *LiveWorkspaceSource) Workspace(ctx context.Context, a platform.Asset) (
 		if terr != nil {
 			return operate.Workspace{}, fmt.Errorf("operate: resolve token: %w", terr)
 		}
-		return f.Fetch(ctx, tok, time.Time{})
+		ws, ferr := f.Fetch(ctx, tok, time.Time{})
+		if ferr != nil {
+			return ws, ferr
+		}
+		// Enrich email-auth posture live: the provider fetch yields users, not the
+		// sending domains' DNS. Derive the domains from the users and resolve DMARC/SPF/
+		// DKIM. Only when an enricher is wired and the fetch didn't already supply domains.
+		if l.EmailAuth != nil && len(ws.Domains) == 0 {
+			if domains := operate.DomainsFromUsers(ws.Users); len(domains) > 0 {
+				ws.Domains = l.EmailAuth.FetchDomains(ctx, domains)
+			}
+		}
+		return ws, nil
 	}
 	return operate.Workspace{}, fmt.Errorf("operate: no connection %s for workspace asset %s", a.ConnectionID, a.Target)
 }
