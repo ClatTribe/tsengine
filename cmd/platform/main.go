@@ -99,9 +99,12 @@ func main() {
 		log.Print("[platform] Jira ticket delivery enabled")
 	}
 	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
+	var incidentAlerter detect.Alerter
 	if hook := os.Getenv("TSENGINE_SLACK_WEBHOOK"); hook != "" {
-		desk.Notify = notify.NewSlack(hook)
-		log.Print("[platform] Slack approval notifications enabled")
+		slack := notify.NewSlack(hook)
+		desk.Notify = slack     // tier-gated approvals → Slack with buttons
+		incidentAlerter = slack // new-critical incidents → Slack heads-up
+		log.Print("[platform] Slack approval + incident notifications enabled")
 	}
 	g := &grc.GRC{Store: st}
 
@@ -111,8 +114,9 @@ func main() {
 		Propose: func(f types.Finding, a platform.Asset) (platform.Action, bool) {
 			return remediate.Propose(f, a, newID)
 		},
-		// continuous-monitoring: open/resolve incidents from change between passes.
-		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), NewID: newID},
+		// continuous-monitoring: open/resolve incidents from change between passes,
+		// alerting a human the moment a new at/above-threshold issue appears.
+		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), Alerter: incidentAlerter, NewID: newID},
 	}
 	// The operate backend serves non-tech "workspace" assets (identity/email posture):
 	// a snapshot file if the asset names one, else a LIVE fetch from the connected

@@ -27,10 +27,18 @@ type Store interface {
 	ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error)
 }
 
+// Alerter is pinged when a NEW incident opens — the heads-up so a human learns of a new
+// at/above-threshold issue immediately, not on their next dashboard visit (satisfied by
+// *notify.Slack). Optional + best-effort: a delivery error never fails reconciliation.
+type Alerter interface {
+	IncidentOpened(ctx context.Context, i platform.Incident) error
+}
+
 // Detector reconciles a tenant's findings into incidents.
 type Detector struct {
 	Store     Store
 	Recorder  *ledger.Recorder // optional: signs every open/resolve into the ledger
+	Alerter   Alerter          // optional: alerts a human when an incident opens
 	Threshold types.Severity   // minimum severity to open an incident (default high)
 	Now       func() time.Time
 	NewID     func() string
@@ -84,6 +92,9 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 		d.record("incident_opened", inc)
 		if err := d.Store.PutIncident(ctx, inc); err != nil {
 			return res, err
+		}
+		if d.Alerter != nil {
+			_ = d.Alerter.IncidentOpened(ctx, inc) // best-effort; never fails the pass
 		}
 		res.Opened = append(res.Opened, inc)
 	}
