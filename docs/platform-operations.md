@@ -87,6 +87,7 @@ provider (§5–§6).
 |---|---|
 | `TSENGINE_SLACK_WEBHOOK` | Slack Incoming Webhook — posts approvals (with buttons) + new-incident alerts. |
 | `TSENGINE_SLACK_SIGNING_SECRET` | Verifies Slack approve/reject button callbacks (`POST /v1/slack/interactive`). |
+| `TSENGINE_WEBHOOK_SECRET` | Verifies inbound provider webhooks (GitHub HMAC-SHA256 / GitLab token) before any re-scan. **Unset → webhooks are NOT verified** (a startup warning is logged); set it and configure the same secret on the provider's webhook. |
 | `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` / `JIRA_PROJECT` | Files `file_ticket` remediations as Jira issues. |
 
 ---
