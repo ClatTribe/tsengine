@@ -119,7 +119,7 @@ func main() {
 		Live: &runner.LiveWorkspaceSource{Store: st, Tokens: tokens, Fetchers: map[string]runner.Fetcher{
 			platform.ConnGWorkspace: operate.NewGWorkspace(),
 			platform.ConnM365:       operate.NewM365(),
-		}},
+		}, EmailAuth: operate.NewEmailAuth()},
 	}
 	workspaceRunner := &runner.OperateRunner{Source: workspaceSource}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {

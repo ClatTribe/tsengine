@@ -730,11 +730,19 @@ in the browser** (drives the same gated `hitl.Desk.Decide` as Slack/API) → **c
 `GET /v1/compliance/{framework}/report`). Security + compliance, UX to backend, on the
 untouched engine.
 
+**Domain email-auth is live too** (`operate.EmailAuth`): the provider user-fetch only
+yields accounts, so the live source now derives the org's sending domains from the user
+emails (`operate.DomainsFromUsers`) and resolves DMARC/SPF/DKIM from public DNS
+(`internal/runner.LiveWorkspaceSource.EmailAuth`, an injectable `Resolver` — `*net.Resolver`
+in prod, fake in tests). Grounded (each field reflects a real TXT record or its documented
+absence) and opt-in (nil enricher → today's snapshot-only behavior). So a connected
+workspace now gets MFA posture *and* email-spoofing posture with zero extra config.
+
 Remaining is **next-phase breadth/scale, not core-loop gaps**: an Okta connector (same
-seam), domain email-auth + OAuth-grant live fetch (users are live today; domains/grants
-are snapshot), identity remediation (`operate *.Apply`), the detect/respond SOC half
-(real-time monitoring agents beyond scheduled re-scans), and the infra successors — a
-sqlite/Postgres `Store` (concurrency/scale) + a cloud-KMS `secret.Vault` (vs the env-key
-MVP) — both behind today's interfaces. Public per-tenant self-serve signup (vs the
-operator-token `POST /v1/tenants`) needs a real per-tenant identity/billing model and is
-a deliberate future step, not part of the shared-token MVP.
+seam), OAuth-grant live fetch (grants are still snapshot), identity remediation
+(`operate *.Apply` — the GWorkspace/M365 connector `Apply` are honest stubs pending live
+admin-write creds), the detect/respond SOC half (real-time monitoring agents beyond
+scheduled re-scans), and the infra successors — a sqlite/Postgres `Store` + a cloud-KMS
+`secret.Vault` (both behind today's interfaces). Public per-tenant self-serve signup (vs
+the operator-token `POST /v1/tenants`) needs a real identity/billing model and is a
+deliberate future step, not part of the shared-token MVP.
