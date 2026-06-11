@@ -29,6 +29,7 @@ const pageHTML = `<!doctype html>
   .sev.medium{color:var(--medium)} .sev.low{color:var(--low)} .sev.info{color:var(--muted)}
   .tag{display:inline-block;background:#1d2530;border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:11px;color:var(--muted)}
   .empty{color:var(--muted);font-size:13px;padding:6px 0}
+  .on{color:var(--low);font-size:12px}
   .btn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 11px;font-size:12px;cursor:pointer;background:#1d2530;color:var(--ink)}
   .btn.ok{border-color:#2a6b1f;color:var(--low)} .btn.no{border-color:#6b2a2a;color:var(--high)}
   form.inline{display:inline;margin:0}
@@ -65,6 +66,12 @@ const pageHTML = `<!doctype html>
   {{if .Incidents}}<section><h2>New since last scan</h2>
     <table><tr><th>Severity</th><th>Issue</th><th>Where</th></tr>
     {{range .Incidents}}<tr><td><span class="sev {{.Severity}}">{{.Severity}}</span></td><td>{{.Title}}</td><td><code>{{.RuleID}}</code></td></tr>{{end}}
+    </table>
+  </section>{{end}}
+
+  {{if .Resolved}}<section><h2>Resolved since last check</h2>
+    <table><tr><th>Severity</th><th>Issue</th><th>Where</th></tr>
+    {{range .Resolved}}<tr><td><span class="sev {{.Severity}}">{{.Severity}}</span></td><td>{{.Title}} <span class="on">✓ fixed</span></td><td><code>{{.RuleID}}</code></td></tr>{{end}}
     </table>
   </section>{{end}}
 
