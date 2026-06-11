@@ -29,6 +29,7 @@ const (
 	ConnGCP        = "gcp"
 	ConnGWorkspace = "gworkspace"
 	ConnM365       = "m365"
+	ConnOkta       = "okta"
 	ConnSlack      = "slack"
 )
 

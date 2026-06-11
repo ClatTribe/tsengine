@@ -673,7 +673,7 @@ platform is **purely additive**: it must never change the engine's detection log
 | `pkg/ledger` | the signed, replayable decision ledger (promoted from `internal/` so the platform imports it) |
 | `pkg/platform` | multi-tenant domain model — Tenant, Connection, Asset, Engagement, Action, ControlState |
 | `internal/store` | the tenant-scoped system-of-record (`Store` interface + in-memory impl) |
-| `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply): GitHub + GitLab (tech SCM), Google Workspace + M365 (non-tech identity) |
+| `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply): GitHub + GitLab (tech SCM), Google Workspace + M365 + Okta (non-tech identity) |
 | `internal/runner` | connector→engine→store glue; `ScanRunner` abstracts the engine, `EngineRunner` is the sandbox adapter; runs the full loop |
 | `internal/hitl` | the human desk — the gate between *propose* and *apply* |
 | `internal/remediate` | `Propose` (finding→Action) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
@@ -738,8 +738,14 @@ in prod, fake in tests). Grounded (each field reflects a real TXT record or its 
 absence) and opt-in (nil enricher → today's snapshot-only behavior). So a connected
 workspace now gets MFA posture *and* email-spoofing posture with zero extra config.
 
-Remaining is **next-phase breadth/scale, not core-loop gaps**: an Okta connector (same
-seam), OAuth-grant live fetch (grants are still snapshot), identity remediation
+**Okta is wired** (`connector.Okta` OAuth onboarding → `workspace` asset + `operate.Okta`
+fetcher: users paginated via the `Link` header, per-active-user MFA factors + admin roles,
+status→suspended, lastLogin→stale; `OKTA_ORG_URL`/`OKTA_CLIENT_ID`/`OKTA_CLIENT_SECRET`).
+So a non-tech tenant can connect **Google Workspace, Microsoft 365, or Okta** and get the
+same grounded identity posture through the store/grc/hitl/ledger loop.
+
+Remaining is **next-phase breadth/scale, not core-loop gaps**: OAuth-grant live fetch
+(grants are still snapshot), identity remediation
 (`operate *.Apply` — the GWorkspace/M365 connector `Apply` are honest stubs pending live
 admin-write creds), the detect/respond SOC half (real-time monitoring agents beyond
 scheduled re-scans), and the infra successors — a sqlite/Postgres `Store` + a cloud-KMS
