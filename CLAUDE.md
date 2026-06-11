@@ -763,8 +763,17 @@ has the fix ready. The actual identity *mutation* (enforce MFA, revoke a grant) 
 no live write path — the GWorkspace/M365/Okta connector `Apply` are honest stubs pending
 admin-write creds.
 
-Remaining is **next-phase breadth/scale, not core-loop gaps**: OAuth-grant live fetch
-(grants are still snapshot), the live identity-mutation `Apply`
+**M365 OAuth grants are live too** (`operate.M365.fetchGrants`): Microsoft Graph
+`oauth2PermissionGrants` (delegated scopes + admin-vs-per-user consent) joined to
+`servicePrincipals` (app name + `verifiedPublisher`) → grounded `OAuthGrant`s, so the
+critical `oauth-admin-scope` (shadow-admin third-party app) + `oauth-unverified-app`
+checks run live for M365. Best-effort (grant read needs an extra Graph consent; absent →
+degrades to no grants, never fails the posture fetch). Google Workspace + Okta grant
+fetch is the documented next step (Google's directory tokens API exposes scopes but not
+verified-publisher).
+
+Remaining is **next-phase breadth/scale, not core-loop gaps**: Google/Okta OAuth-grant
+live fetch, the live identity-mutation `Apply`
 (`operate *.Apply` — the GWorkspace/M365 connector `Apply` are honest stubs pending live
 admin-write creds), the **open-ended LLM-driven** SOC reasoning (the deterministic
 detect/incident backbone now exists in `internal/detect`; what's left is agentic triage/
