@@ -77,6 +77,7 @@ func main() {
 		connector.NewGitLab(os.Getenv("GITLAB_CLIENT_ID"), os.Getenv("GITLAB_CLIENT_SECRET")),
 		connector.NewGWorkspace(os.Getenv("GWORKSPACE_CLIENT_ID"), os.Getenv("GWORKSPACE_CLIENT_SECRET")),
 		connector.NewM365(os.Getenv("M365_CLIENT_ID"), os.Getenv("M365_CLIENT_SECRET")),
+		connector.NewOkta(os.Getenv("OKTA_ORG_URL"), os.Getenv("OKTA_CLIENT_ID"), os.Getenv("OKTA_CLIENT_SECRET")),
 	)
 	vault, encrypted, verr := secret.FromEnv()
 	if verr != nil {
@@ -119,6 +120,7 @@ func main() {
 		Live: &runner.LiveWorkspaceSource{Store: st, Tokens: tokens, Fetchers: map[string]runner.Fetcher{
 			platform.ConnGWorkspace: operate.NewGWorkspace(),
 			platform.ConnM365:       operate.NewM365(),
+			platform.ConnOkta:       operate.NewOkta(os.Getenv("OKTA_ORG_URL")),
 		}, EmailAuth: operate.NewEmailAuth()},
 	}
 	workspaceRunner := &runner.OperateRunner{Source: workspaceSource}
