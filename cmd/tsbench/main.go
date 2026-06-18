@@ -70,6 +70,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench agent: %v\n", err)
 			os.Exit(1)
 		}
+	case "scoreboard":
+		if err := scoreboardCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench scoreboard: %v\n", err)
+			os.Exit(1)
+		}
 	case "cloud-engine":
 		if err := cloudEngineCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench cloud-engine: %v\n", err)
@@ -94,6 +99,7 @@ Usage:
   tsbench parity   --asset <type> --target <t> --tool <name> [--image <ref>]
   tsbench cloud-engine [--scenarios N] [--real R] [--decoy D] [--seed S]
   tsbench agent    --objectives <fixture.json> --scan <scan.json>
+  tsbench scoreboard [--results <json>] [--out <file>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
@@ -285,6 +291,41 @@ func agentCmd(argv []string) error {
 	if !rep.Pass {
 		return fmt.Errorf("gate failed: %s", rep.Reason)
 	}
+	return nil
+}
+
+// scoreboardCmd renders the unified competitive scorecard (Track 1/A2): every
+// benchmark lane's latest measured number against its competitor bar, with an
+// at-par verdict. Numbers come from a results JSON ({category_key: fraction});
+// missing lanes render as "pending a live run".
+//
+//	tsbench scoreboard --results bench/scoreboard.results.json --out SCOREBOARD.md
+func scoreboardCmd(argv []string) error {
+	fs := flag.NewFlagSet("scoreboard", flag.ContinueOnError)
+	resultsPath := fs.String("results", "", "optional JSON: {category_key: measured_fraction}")
+	out := fs.String("out", "", "optional output file (default stdout)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	results := map[string]float64{}
+	if *resultsPath != "" {
+		data, err := os.ReadFile(*resultsPath) //nolint:gosec // operator-provided results path
+		if err != nil {
+			return fmt.Errorf("read results %s: %w", *resultsPath, err)
+		}
+		if err := json.Unmarshal(data, &results); err != nil {
+			return fmt.Errorf("parse results %s: %w", *resultsPath, err)
+		}
+	}
+	md := bench.Scoreboard(results)
+	if *out != "" {
+		if err := os.WriteFile(*out, []byte(md), 0o644); err != nil { //nolint:gosec // human-readable report
+			return fmt.Errorf("write %s: %w", *out, err)
+		}
+		fmt.Printf("wrote %s\n", *out)
+		return nil
+	}
+	fmt.Print(md)
 	return nil
 }
 
