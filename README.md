@@ -63,6 +63,7 @@ Full operations guide — env vars, the docker-socket model, scaling, security h
 ## Read first
 
 - [CLAUDE.md](CLAUDE.md) — canonical architecture invariants (host/sandbox boundary, L1/L2 layers, ≤12-tool L2 cap, evidence grounding §10, build phases).
+- [frontend/DESIGN.md](frontend/DESIGN.md) — the flagship **agentic command-center UX** (Next.js, dark, consuming the /v1 API) and its build phases.
 - [docs/platform-operations.md](docs/platform-operations.md) — operator guide for the multi-tenant **platform** (`cmd/platform`): env matrix, per-provider OAuth setup, Slack/Jira, onboarding, the API reference, the security model.
 - [arch.md](arch.md) — per-asset architecture matrix (anchors, registry, filters, benches).
 - [roadmap.md](roadmap.md) — what's built vs. what's left (toward the AI-native security agency).
