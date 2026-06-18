@@ -24,6 +24,7 @@
 //	TSENGINE_MONITOR_INTERVAL  continuous re-scan cadence (e.g. 6h; default 12h; 0 disables)
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
 //	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
+//	PAGERDUTY_ROUTING_KEY      PagerDuty Events API v2 key — pages on-call for new high/critical incidents
 //	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
 package main
 
@@ -100,12 +101,22 @@ func main() {
 		log.Print("[platform] Jira ticket delivery enabled")
 	}
 	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
-	var incidentAlerter detect.Alerter
+	// new-incident alerts fan out to every configured channel (Slack heads-up +
+	// PagerDuty on-call page); best-effort, so one failing never blocks the others.
+	var alerters notify.MultiAlerter
 	if hook := os.Getenv("TSENGINE_SLACK_WEBHOOK"); hook != "" {
 		slack := notify.NewSlack(hook)
-		desk.Notify = slack     // tier-gated approvals → Slack with buttons
-		incidentAlerter = slack // new-critical incidents → Slack heads-up
+		desk.Notify = slack                // tier-gated approvals → Slack with buttons
+		alerters = append(alerters, slack) // new incidents → Slack heads-up
 		log.Print("[platform] Slack approval + incident notifications enabled")
+	}
+	if rk := os.Getenv("PAGERDUTY_ROUTING_KEY"); rk != "" {
+		alerters = append(alerters, notify.NewPagerDuty(rk)) // new high/critical → on-call page
+		log.Print("[platform] PagerDuty on-call paging enabled (high/critical)")
+	}
+	var incidentAlerter detect.Alerter
+	if len(alerters) > 0 {
+		incidentAlerter = alerters
 	}
 	if os.Getenv("TSENGINE_WEBHOOK_SECRET") == "" {
 		log.Print("[platform] WARNING: inbound webhooks are NOT verified — set TSENGINE_WEBHOOK_SECRET to reject spoofed events")
