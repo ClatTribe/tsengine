@@ -17,6 +17,7 @@ export const CONNECTORS: ConnectorDef[] = [
   // Code & cloud — the security audience (repos, lockfiles, IaC, secrets).
   { kind: "github", label: "GitHub", category: "code", blurb: "Repos, lockfiles & secrets", monitors: "SAST, dependency CVEs, leaked secrets across your repos" },
   { kind: "gitlab", label: "GitLab", category: "code", blurb: "Repos, lockfiles & secrets", monitors: "SAST, dependency CVEs, leaked secrets across your projects" },
+  { kind: "aws", label: "AWS", category: "code", blurb: "Cloud posture (CIS, IAM)", monitors: "CIS misconfigurations, public exposure, over-broad IAM via a read-only role" },
   // Identity & email — the non-tech / compliance audience (MFA, OAuth grants, email auth).
   { kind: "gworkspace", label: "Google Workspace", category: "identity", blurb: "Identity, MFA & OAuth grants", monitors: "MFA gaps, risky OAuth apps, stale accounts, DMARC/SPF" },
   { kind: "m365", label: "Microsoft 365", category: "identity", blurb: "Identity, MFA & OAuth grants", monitors: "MFA gaps, risky OAuth apps, stale accounts, email auth" },

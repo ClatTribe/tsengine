@@ -1,4 +1,4 @@
-import { Github, GitBranch, Mail, KeyRound, Users, Plug, ScanLine, CheckCircle2, ShieldCheck, ArrowRight } from "lucide-react";
+import { Github, GitBranch, Mail, KeyRound, Users, Plug, ScanLine, CheckCircle2, ShieldCheck, ArrowRight, Cloud } from "lucide-react";
 import { CONNECTORS, CATEGORY_LABEL, type ConnectorCategory } from "@/lib/connectors";
 
 const KIND_ICON: Record<string, typeof Github> = {
@@ -7,6 +7,7 @@ const KIND_ICON: Record<string, typeof Github> = {
   gworkspace: Mail,
   m365: Users,
   okta: KeyRound,
+  aws: Cloud,
 };
 
 const STEPS = [

@@ -1,4 +1,4 @@
-import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2, Cloud } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
@@ -14,6 +14,7 @@ const KIND_ICON: Record<string, typeof Github> = {
   gworkspace: Mail,
   m365: Users,
   okta: KeyRound,
+  aws: Cloud,
 };
 
 const STATUS_CLS: Record<string, string> = {
