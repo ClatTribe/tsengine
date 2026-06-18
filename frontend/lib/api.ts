@@ -65,12 +65,7 @@ export const api = {
   connectURL: (kind: string) => call<{ authorize_url: string }>(`/v1/connect/${kind}`),
 };
 
-export const FRAMEWORKS = ["soc2", "iso27001", "pci", "hipaa", "cis_v8", "nist_csf"] as const;
-export const FRAMEWORK_LABEL: Record<string, string> = {
-  soc2: "SOC 2",
-  iso27001: "ISO 27001",
-  pci: "PCI-DSS",
-  hipaa: "HIPAA",
-  cis_v8: "CIS v8",
-  nist_csf: "NIST CSF",
-};
+// Re-exported from the neutral module so existing server-side imports keep working while
+// client components import the constants directly from "@/lib/frameworks" (this file is
+// server-only and can't be pulled into a client bundle).
+export { FRAMEWORKS, FRAMEWORK_LABEL } from "./frameworks";

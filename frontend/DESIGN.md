@@ -113,7 +113,7 @@ API consumed (all exist today): `GET /v1/findings · /v1/findings/export · /v1/
 | **4 — Incidents** | the continuous-monitoring timeline (new / resolved), grouped by pass, with the agent's actions | |
 | **5 — Compliance** | posture cards → per-control drill-down → signed report download | ✅ shipped |
 | **6 — Assets & onboarding** | connect a system (OAuth handoff), monitored assets, scan-now, connection health | ✅ shipped |
-| **7 — Command palette + polish** | ⌘K, global keyboard nav, motion pass, empty/loading/error states, responsive, a11y | |
+| **7 — Command palette + polish** | ⌘K, global keyboard nav, motion pass, empty/loading/error states, responsive, a11y | ✅ shipped |
 | **8 — Real-time (backend + FE)** | a Go SSE endpoint (`GET /v1/events`) → the feed/inbox update live instead of polling | |
 
 ## 6. Project structure
