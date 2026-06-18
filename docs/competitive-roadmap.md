@@ -44,7 +44,7 @@ Verification: the SMB-platform feature matrix (Coro/Huntress/Cynet/Guardz) + GRC
 | Phase | What | Verification gate |
 |---|---|---|
 | **F1** ◑ | **Production multi-tenant infra**: SQLite/Postgres `Store` + cloud-KMS `secret.Vault` behind today's interfaces. | ✅ **Store conformance suite** shipped — the full contract + tenant isolation (§18.2 inv. 2) across *every* entity, run against Memory **and** the durable File store; this is the parity bar a future SQL store plugs into. ⚠ The networked **Postgres** store + KMS vault need a live DB/KMS to verify — **flagged for the user** (a local sqlite store is single-node like the existing File store, so it doesn't close the *multi-node* gap the analysis named) |
-| **F2** | **Integration breadth**: ServiceNow/PagerDuty ops surfaces; more IdP/cloud connectors. | N integrations live, each with a contract test |
+| **F2** ◑ | **Integration breadth**: ops surfaces + more connectors. **PagerDuty on-call paging** shipped — `notify.PagerDuty` (Events API v2 trigger) implements the detect-layer `Alerter`, severity-gated to high/critical, deduped by incident id; a `MultiAlerter` fans new-incident alerts to Slack **and** PagerDuty. Wired behind `PAGERDUTY_ROUTING_KEY`. | ✅ PagerDuty unit-verified (trigger payload, threshold gate, fan-out) vs the ops-integration breadth Coro/Huntress/Cynet ship; ServiceNow + more are the next increments |
 | **F3** | **Public self-serve signup + billing** (vs operator-token provisioning). | A tenant self-provisions end to end |
 
 ---
