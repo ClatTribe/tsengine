@@ -63,3 +63,18 @@ export interface ControlState {
   state: string; // met | gap | exception
   evidence_refs?: string[];
 }
+
+// grc.Report JSON (no json tags on the Go struct → PascalCase keys).
+export interface ReportEvidence { FindingID: string; Title: string; Severity: string }
+export interface ReportRow { ControlID: string; State: string; Gap: boolean; Evidence?: ReportEvidence[] }
+export interface ComplianceReport {
+  TenantName: string;
+  Title: string;
+  Framework: string;
+  GeneratedAt: string;
+  Rows: ReportRow[];
+  MetCount: number;
+  GapCount: number;
+  Signer?: string;
+  SHA256?: string;
+}
