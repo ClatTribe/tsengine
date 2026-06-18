@@ -50,6 +50,15 @@ type WebhookVerifier interface {
 	VerifyWebhook(h http.Header, body []byte, secret string) error
 }
 
+// WebhookRegistrar registers a push webhook on a discovered target (e.g. a repo) so future
+// provider events trigger instant re-scans — continuous monitoring becomes event-driven,
+// not just scheduled. Optional capability; called best-effort at connect time with the
+// shared secret (the same one WebhookVerifier checks). Idempotent: a target that already
+// has the hook is a no-op success.
+type WebhookRegistrar interface {
+	RegisterWebhook(ctx context.Context, token, target, callbackURL, secret string) error
+}
+
 // Registry resolves connectors by kind.
 type Registry struct{ byKind map[string]Connector }
 
