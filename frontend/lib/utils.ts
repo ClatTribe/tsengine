@@ -34,3 +34,14 @@ export function severityCounts(findings: { severity: string }[]): Record<string,
   for (const f of findings) c[f.severity] = (c[f.severity] ?? 0) + 1;
   return c;
 }
+
+export function duration(from?: string, to?: string): string {
+  if (!from || !to) return "—";
+  const ms = new Date(to).getTime() - new Date(from).getTime();
+  if (Number.isNaN(ms) || ms < 0) return "—";
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
