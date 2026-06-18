@@ -58,6 +58,24 @@ export interface Engagement {
   completed_at?: string;
 }
 
+// Security questionnaire (grc.Questionnaire — snake_case json tags).
+export interface QAnswer {
+  id: string;
+  domain: string;
+  text: string;
+  controls?: Record<string, string[]>;
+  answer: string; // "Yes" | "In Progress"
+  gap_controls?: string[];
+  evidence_ids?: string[];
+}
+export interface Questionnaire {
+  tenant_id: string;
+  generated_at: string;
+  answers: QAnswer[];
+  yes: number;
+  in_progress: number;
+}
+
 export interface Asset {
   id: string;
   connection_id: string;
