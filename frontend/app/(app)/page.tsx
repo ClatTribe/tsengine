@@ -3,6 +3,7 @@ import { ArrowRight, ScanLine, ShieldAlert, ShieldCheck, Wrench, Inbox as InboxI
 import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
 import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
 import { Card, SectionTitle, SeverityBadge, Empty } from "@/components/ui/primitives";
+import { FirstRun } from "@/components/onboarding/first-run";
 
 const RISK_COPY: Record<string, string> = {
   Critical: "Critical issues are open. The agent has queued fixes for your approval.",
@@ -22,6 +23,11 @@ const RISK_TONE: Record<string, string> = {
 type Event = { at: string; kind: "detected" | "resolved" | "scanned"; title: string; meta?: string };
 
 export default async function OverviewPage() {
+  // Cold start: with nothing connected the dashboard is empty and meaningless — lead the
+  // user straight into onboarding instead.
+  const connections = await api.connections();
+  if (connections.length === 0) return <FirstRun />;
+
   const [findings, incidents, approvals, engagements] = await Promise.all([
     api.findings(),
     api.incidents("all"),
