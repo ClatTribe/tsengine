@@ -114,7 +114,52 @@ func (o *Okta) Watch(context.Context, platform.Connection, []byte) ([]Trigger, e
 	return nil, nil
 }
 
-// Apply is unsupported today (autonomous identity remediation is future work).
-func (o *Okta) Apply(context.Context, platform.Connection, string, platform.Action) error {
-	return fmt.Errorf("okta: apply not supported yet")
+// Apply executes a gated identity remediation against the Okta org. The action
+// carries a structured remediation_type + target (set by remediate/identity.go).
+// Only the reversible account-suspend lifecycle transition is wired today; any
+// other type returns a clear error so the HITL desk + ledger record it honestly
+// rather than silently no-op'ing a "fix" that never happened.
+//
+// This is the only write path the connector has — it is reached ONLY after the
+// HITL gate (CLAUDE.md §18.2 invariant 3): remediate.Deliverer routes an
+// approved tier-≥2 ActApplyConfig identity action here. The okta.users.manage
+// scope is required for a live mutation (the onboarding scopes are read-only by
+// design — least privilege), so until an admin grants it Okta answers 403 and
+// that surfaces as an error (the action stays un-applied, never falsely "done").
+// The HTTP client is injectable (o.HTTP), so the write path is tested against a
+// fake org without live admin creds.
+func (o *Okta) Apply(ctx context.Context, _ platform.Connection, token string, a platform.Action) error {
+	rt, _ := a.Payload["remediation_type"].(string)
+	target, _ := a.Payload["target"].(string)
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf("okta apply: action %s has no target", a.ID)
+	}
+	switch rt {
+	case "account_suspend":
+		return o.lifecycle(ctx, token, target, "suspend")
+	default:
+		return fmt.Errorf("okta apply: remediation_type %q has no live write path yet (target %s)", rt, target)
+	}
+}
+
+// lifecycle issues an Okta user-lifecycle transition (suspend/unsuspend/…).
+// idOrLogin accepts the user's login (email) directly — Okta resolves it.
+func (o *Okta) lifecycle(ctx context.Context, token, idOrLogin, action string) error {
+	endpoint := o.OrgURL + "/api/v1/users/" + url.PathEscape(idOrLogin) + "/lifecycle/" + action
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := o.client().Do(req)
+	if err != nil {
+		return fmt.Errorf("okta %s %s: %w", action, idOrLogin, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+		return fmt.Errorf("okta %s %s: http %d: %s", action, idOrLogin, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return nil
 }
