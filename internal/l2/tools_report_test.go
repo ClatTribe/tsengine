@@ -203,6 +203,77 @@ func TestUpdateFinding_LowSeverityVerifiesWithOneMethod(t *testing.T) {
 	}
 }
 
+func TestVerifyGate_RequiresActiveConfirmation(t *testing.T) {
+	cases := []struct {
+		name    string
+		sev     types.Severity
+		methods []string
+		wantOK  bool
+	}{
+		{"critical 2 passive → blocked (no active)", types.SeverityCritical, []string{"nuclei", "semgrep"}, false},
+		{"critical 1 passive 1 active → ok", types.SeverityCritical, []string{"nuclei", "send_request"}, true},
+		{"critical 1 active only → blocked (needs 2)", types.SeverityCritical, []string{"send_request"}, false},
+		{"high 2 passive → blocked (no active)", types.SeverityHigh, []string{"nuclei", "grype"}, false},
+		{"high 2 active → ok", types.SeverityHigh, []string{"send_request", "dispatch_l2_probe:sqlmap"}, true},
+		{"low 1 passive → blocked (verified needs active)", types.SeverityLow, []string{"nuclei"}, false},
+		{"low 1 active → ok", types.SeverityLow, []string{"send_request"}, true},
+		{"medium probe → ok", types.SeverityMedium, []string{"dispatch_l2_probe:sqlmap"}, true},
+		{"low 0 methods → blocked", types.SeverityLow, nil, false},
+	}
+	for _, c := range cases {
+		_, ok := verifyGate(c.sev, c.methods)
+		if ok != c.wantOK {
+			t.Errorf("%s: verifyGate=%v, want %v", c.name, ok, c.wantOK)
+		}
+	}
+}
+
+func TestIsActiveConfirmation(t *testing.T) {
+	active := []string{"send_request", "dispatch_l2_probe:sqlmap", "replay:nuclei", "reproduced 500", "curl PoC", "Exploit confirmed"}
+	passive := []string{"nuclei", "semgrep", "grype signature", "trivy", "static-match"}
+	for _, m := range active {
+		if !isActiveConfirmation(m) {
+			t.Errorf("%q should be active", m)
+		}
+	}
+	for _, m := range passive {
+		if isActiveConfirmation(m) {
+			t.Errorf("%q should be passive", m)
+		}
+	}
+}
+
+func TestUpdateFinding_PassiveOnlyVerifiedRejected(t *testing.T) {
+	c := BuildCatalog(fullDeps())
+	uf, _ := c.find("update_finding")
+	st := &State{}
+	emit(t, c, st, map[string]any{
+		"title": "SQLi", "severity": "critical",
+		"evidence_finding_ids": []string{"f-001"}, "plain_english": "x",
+	})
+	// Two passive signature matches (no active re-confirmation) → must be rejected:
+	// that's the "corroborated" tier, not "verified".
+	res, _ := uf.Handler(context.Background(), map[string]any{
+		"id": "l2-001", "verified_by": []string{"nuclei", "semgrep"}, "verification": "verified",
+	}, st)
+	if !res.Err {
+		t.Fatalf("critical verified with only passive methods must be rejected, got: %s", res.Content)
+	}
+	if st.Findings[0].L2.Verification == types.VerificationVerified {
+		t.Error("verification must NOT have flipped to verified on a passive-only gate")
+	}
+	// Adding an active re-confirmation unblocks it.
+	res2, _ := uf.Handler(context.Background(), map[string]any{
+		"id": "l2-001", "verified_by": []string{"send_request"}, "verification": "verified",
+	}, st)
+	if res2.Err {
+		t.Fatalf("critical with 2 passive + 1 active should pass: %s", res2.Content)
+	}
+	if st.Findings[0].L2.Verification != types.VerificationVerified {
+		t.Error("should be verified once an active confirmation is present")
+	}
+}
+
 func TestRecordHypothesis_PersistsAndSurvivesCompaction(t *testing.T) {
 	c := BuildCatalog(fullDeps())
 	st := &State{Phase: PhaseInvestigate}
