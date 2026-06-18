@@ -43,6 +43,7 @@ async function safe<T>(path: string, fallback: T): Promise<T> {
 
 export const api = {
   findings: () => safe<Finding[]>("/v1/findings", []),
+  finding: async (id: string) => (await safe<Finding[]>("/v1/findings", [])).find((f) => f.id === id) ?? null,
   incidents: (status?: "all") => safe<Incident[]>(`/v1/incidents${status ? "?status=all" : ""}`, []),
   approvals: () => safe<Action[]>("/v1/approvals", []),
   connections: () => safe<Connection[]>("/v1/connections", []),
