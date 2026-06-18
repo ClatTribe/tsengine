@@ -55,6 +55,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
+	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents)) // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
 	mux.HandleFunc("POST /v1/approvals/{id}", d.auth(d.handleApprovalDecide))

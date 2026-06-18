@@ -88,9 +88,11 @@ Browser ──▶ Next.js (RSC + Route Handlers) ──server-side fetch──�
   **httpOnly + SameSite=Strict** cookies. Server Components/Actions read them and call the
   Go API **server-side** (`Authorization: Bearer …` + `X-Tenant-ID`). The browser never
   sees the token; no CORS. `TSENGINE_API_URL` points at the Go API.
-- **Reads**: Server Components fetch (cacheless, per-request) for first paint; client
-  components poll via SWR (`refreshInterval`) for the live feel until a backend SSE stream
-  lands (Phase 8). **Writes** (approve/reject, scan, connect) go through **Server Actions**
+- **Reads**: Server Components fetch (cacheless, per-request) for first paint. **Live
+  updates** (Phase 8): a single `EventSource` (`<LiveStatus>`) subscribes to the same-origin
+  SSE proxy (`/api/events` → Go `GET /v1/events`); when the server pushes a changed `state`
+  snapshot it calls `router.refresh()`, re-rendering the current view — so the whole
+  dashboard is live without per-component polling. **Writes** (approve/reject, scan, connect) go through **Server Actions**
   → the gated Go endpoints (`POST /v1/approvals/{id}`, `/v1/rescan`, …). The HITL gate,
   tiers, and signed ledger are unchanged — this UI is a client of the same gate.
 - **Engine untouched** (CLAUDE.md §18.2 invariant 1). This is presentation only.
@@ -114,7 +116,7 @@ API consumed (all exist today): `GET /v1/findings · /v1/findings/export · /v1/
 | **5 — Compliance** | posture cards → per-control drill-down → signed report download | ✅ shipped |
 | **6 — Assets & onboarding** | connect a system (OAuth handoff), monitored assets, scan-now, connection health | ✅ shipped |
 | **7 — Command palette + polish** | ⌘K, global keyboard nav, motion pass, empty/loading/error states, responsive, a11y | ✅ shipped |
-| **8 — Real-time (backend + FE)** | a Go SSE endpoint (`GET /v1/events`) → the feed/inbox update live instead of polling | |
+| **8 — Real-time (backend + FE)** | a Go SSE endpoint (`GET /v1/events`) → the feed/inbox update live instead of polling | ✅ shipped |
 
 ## 6. Project structure
 
