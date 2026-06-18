@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight } from "lucide-react";
+import { ShieldCheck, ArrowRight, FileText } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
 import { Empty } from "@/components/ui/primitives";
 
@@ -18,9 +18,17 @@ export default async function CompliancePage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold">Compliance</h1>
-        <p className="text-xs text-muted">Control posture, grounded in real findings — with a signed, attachable report.</p>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-semibold">Compliance</h1>
+          <p className="text-xs text-muted">Control posture, grounded in real findings — with a signed, attachable report.</p>
+        </div>
+        <Link
+          href="/compliance/questionnaire"
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
+        >
+          <FileText className="h-3.5 w-3.5" /> Security questionnaire
+        </Link>
       </div>
 
       {frameworks.length === 0 ? (

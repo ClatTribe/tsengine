@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { Action, Asset, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident } from "./types";
+import type { Action, Asset, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, Questionnaire } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -51,6 +51,7 @@ export const api = {
   engagements: () => safe<Engagement[]>("/v1/engagements", []),
   posture: (framework: string) => safe<ControlState[]>(`/v1/posture/${framework}`, []),
   report: (framework: string) => safe<ComplianceReport | null>(`/v1/compliance/${framework}/report?format=json`, null),
+  questionnaire: () => safe<Questionnaire | null>("/v1/questionnaire", null),
 
   // writes (Server Actions call these)
   decide: (id: string, approve: boolean, approver: string) =>

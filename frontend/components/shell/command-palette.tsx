@@ -64,6 +64,7 @@ export function CommandPalette() {
       { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities issues", run: go("/findings") },
       { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved", run: go("/incidents") },
       { id: "compliance", label: "Compliance", group: "Go to", icon: ShieldCheck, keywords: "soc2 controls audit posture", run: go("/compliance") },
+      { id: "questionnaire", label: "Security questionnaire", group: "Go to", icon: ShieldCheck, keywords: "caiq sig vendor trust center procurement", run: go("/compliance/questionnaire") },
       { id: "assets", label: "Assets & connections", group: "Go to", icon: Boxes, keywords: "connect systems monitored", run: go("/assets") },
       { id: "activity", label: "Activity", group: "Go to", icon: ScrollText, keywords: "feed log agent", run: go("/activity") },
     ];
