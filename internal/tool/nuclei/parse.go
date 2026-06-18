@@ -62,6 +62,14 @@ func eventToFinding(ev jsonlEvent, raw []byte) types.SandboxEmittedFinding {
 		endpoint = ev.Host
 	}
 	cwes := normalizeCWE(ev.Info.Classification.CWEID)
+	if len(cwes) == 0 {
+		// The generic `-dast` fuzzing templates (path-traversal, open-redirect,
+		// SSRF, …) carry no classification.cwe-id, so their findings would reach
+		// the WAVSEP/SAST scorers uncategorized and go uncredited — the §14
+		// "pathtraver + redirect" recall gap. Infer the CWE from the
+		// template-id / name / tags as a last resort (classification always wins).
+		cwes = cweFromTemplate(ev)
+	}
 	rawCopy := make([]byte, len(raw))
 	copy(rawCopy, raw)
 	return types.SandboxEmittedFinding{
@@ -125,6 +133,40 @@ func normalizeCWE(in []string) []string {
 		return nil
 	}
 	return out
+}
+
+// dastCWEHints maps vuln-class keywords (in a template's id / name / tags) to a
+// CWE. Ordered most-specific first so a single best match wins. Only consulted
+// when the template carries no classification.cwe-id — i.e. for the generic
+// `-dast` fuzzing templates whose findings would otherwise be uncategorized.
+var dastCWEHints = []struct {
+	cwe      string
+	keywords []string
+}{
+	{"CWE-89", []string{"sql-injection", "sqli", "error-based-sql", "blind-sql", "time-based-sql"}},
+	{"CWE-79", []string{"cross-site-scripting", "xss"}},
+	{"CWE-22", []string{"path-traversal", "directory-traversal", "local-file-inclusion", "file-inclusion", "lfi", "traversal"}},
+	{"CWE-918", []string{"server-side-request-forgery", "ssrf"}},
+	{"CWE-611", []string{"xml-external-entity", "xxe"}},
+	{"CWE-94", []string{"server-side-template-injection", "template-injection", "ssti", "code-injection"}},
+	{"CWE-78", []string{"command-injection", "os-command", "cmdi", "remote-code-execution", "rce"}},
+	{"CWE-90", []string{"ldap-injection", "ldapi"}},
+	{"CWE-601", []string{"open-redirect", "open_redirect", "openredirect", "redirect"}},
+}
+
+// cweFromTemplate infers a CWE for a classification-less finding from its
+// template-id, name, and tags. Returns nil when nothing matches (the finding
+// then carries no CWE, exactly as before).
+func cweFromTemplate(ev jsonlEvent) []string {
+	hay := strings.ToLower(ev.TemplateID + " " + ev.Info.Name + " " + strings.Join(ev.Info.Tags, " "))
+	for _, h := range dastCWEHints {
+		for _, kw := range h.keywords {
+			if strings.Contains(hay, kw) {
+				return []string{h.cwe}
+			}
+		}
+	}
+	return nil
 }
 
 func firstNonEmpty(a, b string) string {

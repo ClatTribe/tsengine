@@ -118,6 +118,61 @@ func TestParseJSONL_HandlesEmptyBlob(t *testing.T) {
 	}
 }
 
+func TestCweFromTemplate_DastInference(t *testing.T) {
+	cases := []struct {
+		id, name string
+		tags     []string
+		want     string // "" → expect nil
+	}{
+		{"dast/vulnerabilities/lfi/path-traversal", "Path Traversal", []string{"dast", "traversal"}, "CWE-22"},
+		{"dast/vulnerabilities/redirect/open-redirect", "Open Redirect", []string{"dast", "redirect"}, "CWE-601"},
+		{"fuzz/ssrf-detect", "SSRF", []string{"ssrf"}, "CWE-918"},
+		{"sqli/error-based", "Error-based SQL Injection", []string{"sqli"}, "CWE-89"},
+		{"xss-reflected", "Reflected Cross-Site-Scripting", []string{"xss"}, "CWE-79"},
+		{"os-command-injection", "Command Injection", []string{"cmdi"}, "CWE-78"},
+		{"weak-tls", "Weak TLS", []string{"tls"}, ""}, // no class keyword → nil (parity with existing fixture)
+	}
+	for _, c := range cases {
+		ev := jsonlEvent{TemplateID: c.id}
+		ev.Info.Name = c.name
+		ev.Info.Tags = c.tags
+		got := cweFromTemplate(ev)
+		if c.want == "" {
+			if got != nil {
+				t.Errorf("%s: want nil, got %v", c.id, got)
+			}
+			continue
+		}
+		if len(got) != 1 || got[0] != c.want {
+			t.Errorf("%s: want [%s], got %v", c.id, c.want, got)
+		}
+	}
+}
+
+func TestParseJSONL_InfersCWEWhenClassificationEmpty(t *testing.T) {
+	// A generic -dast path-traversal hit with NO classification.cwe-id: the
+	// parser must now infer CWE-22 (the WAVSEP pathtraver credit gap).
+	line := `{"template-id":"dast/path-traversal","info":{"name":"Path Traversal","tags":["dast","traversal"],"severity":"high"},"host":"http://t","matched-at":"http://t/download?file=","type":"http","matcher-status":true}`
+	f := parseJSONL([]byte(line))
+	if len(f) != 1 {
+		t.Fatalf("want 1 finding, got %d", len(f))
+	}
+	if len(f[0].CWE) != 1 || f[0].CWE[0] != "CWE-22" {
+		t.Errorf("inferred CWE: want [CWE-22], got %v", f[0].CWE)
+	}
+}
+
+func TestParseJSONL_ClassificationWinsOverInference(t *testing.T) {
+	// template-id contains "rce" (→ CWE-78 by inference) but the template DOES
+	// carry a classification (cwe-918). Classification must win — inference is
+	// only a last resort.
+	line := `{"template-id":"some-rce-check","info":{"name":"X","tags":["rce"],"severity":"high","classification":{"cwe-id":["cwe-918"]}},"host":"http://t","matched-at":"http://t/x","type":"http","matcher-status":true}`
+	f := parseJSONL([]byte(line))
+	if len(f) != 1 || len(f[0].CWE) != 1 || f[0].CWE[0] != "CWE-918" {
+		t.Fatalf("classification should win: got %v", f[0].CWE)
+	}
+}
+
 func TestNucleiTool_RegisteredAndStable(t *testing.T) {
 	// The package init() registers nuclei. Just verify the Tool surface.
 	n := New()
