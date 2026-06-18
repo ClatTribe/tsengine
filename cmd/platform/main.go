@@ -117,6 +117,7 @@ func main() {
 		Propose: func(f types.Finding, a platform.Asset) (platform.Action, bool) {
 			return remediate.Propose(f, a, newID)
 		},
+		WebhookSecret: os.Getenv("TSENGINE_WEBHOOK_SECRET"), PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// continuous-monitoring: open/resolve incidents from change between passes,
 		// alerting a human the moment a new at/above-threshold issue appears.
 		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), Alerter: incidentAlerter, NewID: newID},

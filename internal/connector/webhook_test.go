@@ -1,10 +1,14 @@
 package connector
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -54,4 +58,44 @@ func TestGitLab_VerifyWebhook(t *testing.T) {
 func TestWebhookVerifier_Implemented(t *testing.T) {
 	var _ WebhookVerifier = NewGitHub("a", "b")
 	var _ WebhookVerifier = NewGitLab("a", "b")
+}
+
+func TestGitHub_RegisterWebhook(t *testing.T) {
+	var gotPath, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":1}`))
+	}))
+	defer srv.Close()
+	g := NewGitHub("a", "b")
+	g.APIBase = srv.URL
+	g.HTTP = srv.Client()
+	if err := g.RegisterWebhook(context.Background(), "tok", "acme/web", "https://app/v1/webhooks/github", "shh"); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/repos/acme/web/hooks" {
+		t.Errorf("wrong hook path: %s", gotPath)
+	}
+	for _, want := range []string{`"push"`, `"https://app/v1/webhooks/github"`, `"shh"`, `"content_type":"json"`} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("hook body missing %q: %s", want, gotBody)
+		}
+	}
+}
+
+func TestGitHub_RegisterWebhook_Idempotent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"message":"Validation Failed","errors":[{"message":"Hook already exists on this repository"}]}`))
+	}))
+	defer srv.Close()
+	g := NewGitHub("a", "b")
+	g.APIBase = srv.URL
+	g.HTTP = srv.Client()
+	if err := g.RegisterWebhook(context.Background(), "tok", "acme/web", "https://app/cb", "shh"); err != nil {
+		t.Errorf("an already-existing hook should be a no-op success, got %v", err)
+	}
 }

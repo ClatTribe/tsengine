@@ -11,6 +11,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
@@ -62,6 +63,10 @@ type Service struct {
 	Propose  Proposer         // generate a remediation Action per finding
 	Desk     *hitl.Desk       // gate/auto-apply the proposed Action
 	Detector *detect.Detector // open/resolve incidents from change between monitoring passes
+
+	// optional webhook auto-registration (event-driven re-scans on connect)
+	WebhookSecret string // shared secret stamped on registered hooks (and verified inbound)
+	PublicURL     string // platform base URL for the webhook callback
 }
 
 func (s *Service) now() time.Time {
@@ -93,6 +98,7 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 	if err != nil {
 		return 0, fmt.Errorf("runner: discover: %w", err)
 	}
+	s.registerWebhooks(ctx, conn, c.Kind, tok, assets)
 	scanned := 0
 	for i := range assets {
 		if assets[i].ID == "" {
@@ -107,6 +113,23 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 		scanned++
 	}
 	return scanned, nil
+}
+
+// registerWebhooks installs a push webhook on each discovered repo so future events
+// re-scan instantly (event-driven monitoring). Best-effort: only when the connector
+// supports it and the platform is configured with a public URL + webhook secret; an
+// individual failure is swallowed (the scheduled re-scan still covers the asset).
+func (s *Service) registerWebhooks(ctx context.Context, conn connector.Connector, kind, tok string, assets []platform.Asset) {
+	reg, ok := conn.(connector.WebhookRegistrar)
+	if !ok || s.WebhookSecret == "" || s.PublicURL == "" {
+		return
+	}
+	callback := strings.TrimRight(s.PublicURL, "/") + "/v1/webhooks/" + kind
+	for _, a := range assets {
+		if full := a.Meta["full_name"]; full != "" {
+			_ = reg.RegisterWebhook(ctx, tok, full, callback, s.WebhookSecret)
+		}
+	}
 }
 
 // RescanTenant re-scans every asset a tenant has (the scheduled-monitoring path). It
