@@ -23,6 +23,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudquery"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 func main() {
@@ -64,6 +65,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench parity: %v\n", err)
 			os.Exit(1)
 		}
+	case "agent":
+		if err := agentCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench agent: %v\n", err)
+			os.Exit(1)
+		}
 	case "cloud-engine":
 		if err := cloudEngineCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench cloud-engine: %v\n", err)
@@ -87,6 +93,7 @@ Usage:
   tsbench cloud    --target <provider> --ground-truth <expected-controls.csv> [--image <ref>]
   tsbench parity   --asset <type> --target <t> --tool <name> [--image <ref>]
   tsbench cloud-engine [--scenarios N] [--real R] [--decoy D] [--seed S]
+  tsbench agent    --objectives <fixture.json> --scan <scan.json>
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
@@ -240,6 +247,43 @@ func parityCmd(argv []string) error {
 	fmt.Print(bench.RenderParity(rep))
 	if !rep.Result.Pass {
 		os.Exit(3)
+	}
+	return nil
+}
+
+// agentCmd scores the L2 agent's autonomous performance — detection_rate,
+// verified_rate (the XBOW exploitation-verified bar), completion_rate, and FP
+// control — against an objectives fixture. It grades a saved scan JSON
+// (`tsengine scan -o scan.json`, which runs L1+L2), so the metric is
+// reproducible without a live LLM key in CI.
+//
+//	tsbench agent --objectives fixtures/agent/objectives.example.json --scan scan.json
+func agentCmd(argv []string) error {
+	fs := flag.NewFlagSet("agent", flag.ContinueOnError)
+	objectives := fs.String("objectives", "", "path to the agent objectives fixture JSON")
+	scanPath := fs.String("scan", "", "path to a saved scan JSON (tsengine scan -o output) to grade")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *objectives == "" || *scanPath == "" {
+		return fmt.Errorf("--objectives and --scan are required")
+	}
+	obj, err := bench.LoadAgentObjectives(*objectives)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(*scanPath) //nolint:gosec // operator-provided scan path
+	if err != nil {
+		return fmt.Errorf("read scan %s: %w", *scanPath, err)
+	}
+	var scan types.Scan
+	if err := json.Unmarshal(data, &scan); err != nil {
+		return fmt.Errorf("parse scan %s: %w", *scanPath, err)
+	}
+	rep := bench.ScoreAgent(obj, &scan)
+	fmt.Print(bench.RenderAgent(rep))
+	if !rep.Pass {
+		return fmt.Errorf("gate failed: %s", rep.Reason)
 	}
 	return nil
 }

@@ -17,7 +17,7 @@ import (
 // data), runner.go (subprocess plumbing — takes target as a variable),
 // and *_test.go (legitimately reference SUTs) are excluded.
 func TestScorer_NoSUTIdentifiers(t *testing.T) {
-	scoringFiles := []string{"score.go", "report.go", "multitrial.go"}
+	scoringFiles := []string{"score.go", "report.go", "multitrial.go", "agent.go"}
 
 	forbidden := []string{
 		// vulnerable-app SUTs
