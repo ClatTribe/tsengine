@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { LogOut, Search } from "lucide-react";
 import { RiskPill } from "@/components/ui/primitives";
+import { LiveStatus } from "@/components/shell/live-status";
 
 export function TopBar({ tenant, risk }: { tenant: string; risk: string }) {
   const router = useRouter();
@@ -29,6 +30,7 @@ export function TopBar({ tenant, risk }: { tenant: string; risk: string }) {
       </button>
 
       <div className="ml-auto flex items-center gap-3">
+        <LiveStatus />
         <RiskPill rating={risk} />
         <button onClick={signOut} className="rounded-lg p-2 text-muted transition hover:bg-surface hover:text-ink" title="Sign out">
           <LogOut className="h-4 w-4" />
