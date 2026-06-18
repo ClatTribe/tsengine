@@ -99,6 +99,9 @@ func main() {
 	if base := os.Getenv("JIRA_BASE_URL"); base != "" {
 		deliverer.Ticket = connector.NewJira(base, os.Getenv("JIRA_EMAIL"), os.Getenv("JIRA_API_TOKEN"), os.Getenv("JIRA_PROJECT"))
 		log.Print("[platform] Jira ticket delivery enabled")
+	} else if inst := os.Getenv("SERVICENOW_INSTANCE_URL"); inst != "" {
+		deliverer.Ticket = connector.NewServiceNow(inst, os.Getenv("SERVICENOW_USER"), os.Getenv("SERVICENOW_PASSWORD"))
+		log.Print("[platform] ServiceNow ticket delivery enabled")
 	}
 	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
 	// new-incident alerts fan out to every configured channel (Slack heads-up +
