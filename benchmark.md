@@ -234,6 +234,26 @@ plug into the same scorer.
 
 ---
 
+## The unified scoreboard (`tsbench scoreboard`)
+
+One artifact, every lane: where we stand vs every competitor. It composes the
+published leaderboards (the same `Competitors` cites the per-asset reports use)
+with our latest **measured** numbers and renders an at-par verdict per category.
+It does NOT run the benches (those need live targets) — it aggregates their
+results, so it's the living "are we at par?" snapshot.
+
+```sh
+# Regenerate the committed SCOREBOARD.md from the measured-results file.
+./bin/tsbench scoreboard --results bench/scoreboard.results.json --out SCOREBOARD.md
+```
+
+`bench/scoreboard.results.json` holds the measured fraction per category key
+(e.g. `repo_sast: 0.3867`); a lane with no entry renders "pending a live run"
+with its bar still visible (the target is always shown). See
+[SCOREBOARD.md](SCOREBOARD.md) and [docs/competitive-roadmap.md](docs/competitive-roadmap.md).
+
+---
+
 ## The L1.5 ablation — the load-bearing measurement
 
 `tsbench ablation` runs each fixture twice — L1.5 hooks on, then off
