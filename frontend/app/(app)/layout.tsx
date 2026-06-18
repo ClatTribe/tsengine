@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { riskRating, severityCounts } from "@/lib/utils";
 import { Sidebar } from "@/components/shell/sidebar";
 import { TopBar } from "@/components/shell/topbar";
+import { CommandPalette } from "@/components/shell/command-palette";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -21,6 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

@@ -19,8 +19,9 @@ export function TopBar({ tenant, risk }: { tenant: string; risk: string }) {
       </div>
 
       <button
-        className="ml-2 flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted transition hover:border-border-strong"
-        title="Command palette (coming in Phase 7)"
+        onClick={() => window.dispatchEvent(new Event("cmdk:open"))}
+        className="ml-2 flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted transition hover:border-border-strong hover:text-ink"
+        title="Command palette — ⌘K"
       >
         <Search className="h-3.5 w-3.5" />
         <span>Search…</span>
