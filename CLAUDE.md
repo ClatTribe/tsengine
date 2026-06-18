@@ -668,6 +668,13 @@ deploy/config guide: [docs/platform-operations.md](docs/platform-operations.md)*
 matrix, per-provider OAuth setup, API reference). The platform is **purely additive**: it
 must never change the engine's detection logic.
 
+**Two front-ends, one API.** `internal/console` (Go `html/template`, zero-JS, at `/ui`) is
+the lightweight built-in fallback. **`frontend/`** is the flagship **agentic command-center
+UX** — a separate Next.js (App Router/RSC) app (dark, Linear/Vercel-grade) that consumes
+the same `/v1` JSON API server-side (httpOnly-cookie auth, no CORS, engine untouched). See
+[frontend/DESIGN.md](frontend/DESIGN.md) for the IA, design system, and build phases. Both
+are presentation only — the gate, ledger, and engines are unchanged.
+
 ### 18.1 The packages
 
 | Package | Role |
