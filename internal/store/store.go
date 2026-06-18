@@ -61,6 +61,10 @@ type Store interface {
 	PutIncident(ctx context.Context, i platform.Incident) error
 	ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error)
 
+	// --- human-expert review requests (the AI + human escalation) ---
+	PutReviewRequest(ctx context.Context, r platform.ReviewRequest) error
+	ListReviewRequests(ctx context.Context, tenantID string) ([]platform.ReviewRequest, error)
+
 	// --- third-party app inventory (refreshed per operate scan, per provider) ---
 	ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error
 	ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error)

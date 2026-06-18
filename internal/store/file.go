@@ -124,6 +124,13 @@ func (f *File) PutIncident(ctx context.Context, i platform.Incident) error {
 	return f.persist()
 }
 
+func (f *File) PutReviewRequest(ctx context.Context, r platform.ReviewRequest) error {
+	if err := f.Memory.PutReviewRequest(ctx, r); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error {
 	if err := f.Memory.ReplaceThirdPartyApps(ctx, tenantID, provider, apps); err != nil {
 		return err

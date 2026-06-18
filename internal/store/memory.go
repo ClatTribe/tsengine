@@ -15,14 +15,15 @@ type Memory struct {
 	mu sync.RWMutex
 
 	tenants     map[string]platform.Tenant
-	connections map[string][]platform.Connection            // tenantID → connections
-	assets      map[string][]platform.Asset                 // tenantID → assets
-	engagements map[string][]platform.Engagement            // tenantID → engagements
-	findings    map[string][]types.Finding                  // tenantID → findings
-	actions     map[string]map[string]platform.Action       // tenantID → actionID → action
-	controls    map[string]map[string]platform.ControlState // tenantID → "framework/control" → state
-	incidents   map[string]map[string]platform.Incident     // tenantID → incidentID → incident
-	apps        map[string][]platform.ThirdPartyApp         // tenantID → third-party apps
+	connections map[string][]platform.Connection             // tenantID → connections
+	assets      map[string][]platform.Asset                  // tenantID → assets
+	engagements map[string][]platform.Engagement             // tenantID → engagements
+	findings    map[string][]types.Finding                   // tenantID → findings
+	actions     map[string]map[string]platform.Action        // tenantID → actionID → action
+	controls    map[string]map[string]platform.ControlState  // tenantID → "framework/control" → state
+	incidents   map[string]map[string]platform.Incident      // tenantID → incidentID → incident
+	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
+	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
 }
 
 // NewMemory returns an empty in-memory store.
@@ -36,6 +37,7 @@ func NewMemory() *Memory {
 		actions:     map[string]map[string]platform.Action{},
 		controls:    map[string]map[string]platform.ControlState{},
 		incidents:   map[string]map[string]platform.Incident{},
+		reviews:     map[string]map[string]platform.ReviewRequest{},
 		apps:        map[string][]platform.ThirdPartyApp{},
 	}
 }
@@ -208,6 +210,26 @@ func (m *Memory) ListIncidents(_ context.Context, tenantID string) ([]platform.I
 	return out, nil
 }
 
+func (m *Memory) PutReviewRequest(_ context.Context, r platform.ReviewRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.reviews[r.TenantID] == nil {
+		m.reviews[r.TenantID] = map[string]platform.ReviewRequest{}
+	}
+	m.reviews[r.TenantID][r.ID] = r
+	return nil
+}
+
+func (m *Memory) ListReviewRequests(_ context.Context, tenantID string) ([]platform.ReviewRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.ReviewRequest, 0, len(m.reviews[tenantID]))
+	for _, r := range m.reviews[tenantID] {
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 // ReplaceThirdPartyApps swaps the tenant's apps for one provider with the freshly-scanned
 // set (so apps revoked since the last scan disappear), leaving other providers untouched.
 func (m *Memory) ReplaceThirdPartyApps(_ context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error {
@@ -232,15 +254,16 @@ func (m *Memory) ListThirdPartyApps(_ context.Context, tenantID string) ([]platf
 // Snapshot is the serializable form of a Memory store — what the file-backed store
 // persists. Fields are exported so encoding/json can round-trip them.
 type Snapshot struct {
-	Tenants     map[string]platform.Tenant                  `json:"tenants"`
-	Connections map[string][]platform.Connection            `json:"connections"`
-	Assets      map[string][]platform.Asset                 `json:"assets"`
-	Engagements map[string][]platform.Engagement            `json:"engagements"`
-	Findings    map[string][]types.Finding                  `json:"findings"`
-	Actions     map[string]map[string]platform.Action       `json:"actions"`
-	Controls    map[string]map[string]platform.ControlState `json:"controls"`
-	Incidents   map[string]map[string]platform.Incident     `json:"incidents"`
-	Apps        map[string][]platform.ThirdPartyApp         `json:"apps"`
+	Tenants     map[string]platform.Tenant                   `json:"tenants"`
+	Connections map[string][]platform.Connection             `json:"connections"`
+	Assets      map[string][]platform.Asset                  `json:"assets"`
+	Engagements map[string][]platform.Engagement             `json:"engagements"`
+	Findings    map[string][]types.Finding                   `json:"findings"`
+	Actions     map[string]map[string]platform.Action        `json:"actions"`
+	Controls    map[string]map[string]platform.ControlState  `json:"controls"`
+	Incidents   map[string]map[string]platform.Incident      `json:"incidents"`
+	Reviews     map[string]map[string]platform.ReviewRequest `json:"reviews"`
+	Apps        map[string][]platform.ThirdPartyApp          `json:"apps"`
 }
 
 // Export returns a deep-enough copy of the store's data for persistence (taken under
@@ -257,6 +280,7 @@ func (m *Memory) Export() Snapshot {
 		Actions:     m.actions,
 		Controls:    m.controls,
 		Incidents:   m.incidents,
+		Reviews:     m.reviews,
 		Apps:        m.apps,
 	}
 }
@@ -273,6 +297,7 @@ func (m *Memory) load(s Snapshot) {
 	m.actions = orEmptyNested(s.Actions)
 	m.controls = orEmptyControls(s.Controls)
 	m.incidents = orEmptyIncidents(s.Incidents)
+	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)
 }
 
@@ -303,6 +328,12 @@ func orEmptyControls(m map[string]map[string]platform.ControlState) map[string]m
 func orEmptyIncidents(m map[string]map[string]platform.Incident) map[string]map[string]platform.Incident {
 	if m == nil {
 		return map[string]map[string]platform.Incident{}
+	}
+	return m
+}
+func orEmptyReviews(m map[string]map[string]platform.ReviewRequest) map[string]map[string]platform.ReviewRequest {
+	if m == nil {
+		return map[string]map[string]platform.ReviewRequest{}
 	}
 	return m
 }
