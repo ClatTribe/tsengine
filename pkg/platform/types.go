@@ -190,3 +190,28 @@ type Incident struct {
 	ResolvedAt time.Time `json:"resolved_at,omitempty"`
 	LedgerRef  string    `json:"ledger_ref,omitempty"`
 }
+
+// ReviewRequest statuses.
+const (
+	ReviewOpen     = "open"
+	ReviewResolved = "resolved"
+)
+
+// ReviewRequest is a human-expert review the tenant asks for on a finding or a
+// proposed action — the "AI + a human" trust model SMB security buyers expect
+// (a managed-SOC / vCISO escalation). It is request-and-resolve, tenant-scoped,
+// and signed into the ledger like every other decision (§18.2 inv. 4). The agent
+// keeps working; this is the deliberate human-in-the-loop escape hatch.
+type ReviewRequest struct {
+	ID         string    `json:"id"`
+	TenantID   string    `json:"tenant_id"`
+	Subject    string    `json:"subject"`    // "finding" | "action"
+	SubjectID  string    `json:"subject_id"` // the finding/action id under review
+	Note       string    `json:"note"`       // why the tenant wants an expert to look
+	Requester  string    `json:"requester,omitempty"`
+	Status     string    `json:"status"` // ReviewOpen | ReviewResolved
+	Resolution string    `json:"resolution,omitempty"`
+	Reviewer   string    `json:"reviewer,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	ResolvedAt time.Time `json:"resolved_at,omitempty"`
+}

@@ -34,7 +34,7 @@ Verification: feature-for-feature vs Vanta / Drata / Sprinto / Delve / Huntress.
 | Phase | What | Verification gate |
 |---|---|---|
 | **U1** ✅ | **Security-questionnaire automation + Trust Center** (the #1 recurring SMB GRC value). `grc.Questionnaire` auto-answers a built-in CAIQ/SIG-lite set from live control state (gap→"In Progress" grounded in finding refs, else→"Yes"); `GET /v1/questionnaire` (JSON + `?format=md`); a frontend **Trust Center page** (`/compliance/questionnaire`) renders answers by domain with Yes/In-Progress badges + evidence links + Markdown download. | ✅ shipped end to end vs Vanta/Drata/Sprinto auto-answer |
-| **U2** | **Human/expert safety-net surface**: an async "request expert review" path in the inbox — the proven SMB trust model is *AI + a human*. | A gated review request routes + resolves through the ledger |
+| **U2** ◑ | **Human/expert safety-net surface**: an async "request expert review" path — the proven SMB trust model is *AI + a human*. Backend shipped: `platform.ReviewRequest` + store (tenant-scoped, file-persisted) + `POST/GET /v1/reviews` + `POST /v1/reviews/{id}/resolve`, request + resolution signed into the ledger. | ✅ engine + endpoints, unit-verified (create/list/resolve, validation, isolation) vs Delve/Huntress/Sprinto AI+human model; frontend "Request expert review" action is U2b |
 | **U3** | **Live cloud (AWS/GCP) connector onboarding** — engine already has `cloud_account`+prowler; platform onboarding doesn't wire it. | Connect a cloud account → posture findings flow through the same loop |
 
 ## Track 3 — Features → at par

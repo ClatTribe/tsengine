@@ -17,6 +17,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -26,11 +27,12 @@ type Deps struct {
 	Store      store.Store
 	Connectors *connector.Registry
 	Runner     *runner.Service
-	Desk       Decider  // optional: the HITL desk (approvals decide)
-	GRC        Posturer // optional: the compliance system-of-record (posture)
-	Vault      Sealer   // optional: seals OAuth tokens before persistence
-	Token      string   // static platform bearer token (required)
-	PublicURL  string   // base URL for OAuth redirect_uri (e.g. https://app.example)
+	Desk       Decider          // optional: the HITL desk (approvals decide)
+	GRC        Posturer         // optional: the compliance system-of-record (posture)
+	Vault      Sealer           // optional: seals OAuth tokens before persistence
+	Recorder   *ledger.Recorder // optional: signs review request/resolve into the ledger
+	Token      string           // static platform bearer token (required)
+	PublicURL  string           // base URL for OAuth redirect_uri (e.g. https://app.example)
 	// SlackSigningSecret verifies Slack interactive (approve/reject) callbacks. Empty
 	// → the Slack endpoint returns 501.
 	SlackSigningSecret string
@@ -64,6 +66,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
 	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))
 	mux.HandleFunc("GET /v1/questionnaire", d.auth(d.handleQuestionnaire))
+	mux.HandleFunc("POST /v1/reviews", d.auth(d.handleCreateReview))
+	mux.HandleFunc("GET /v1/reviews", d.auth(d.handleListReviews))
+	mux.HandleFunc("POST /v1/reviews/{id}/resolve", d.auth(d.handleResolveReview))
 	mux.HandleFunc("POST /v1/slack/interactive", d.handleSlackInteractive) // Slack-signed, not bearer-auth'd
 	return mux
 }
