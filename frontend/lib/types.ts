@@ -58,6 +58,20 @@ export interface Engagement {
   completed_at?: string;
 }
 
+// Human-expert review request (platform.ReviewRequest — snake_case json tags).
+export interface ReviewRequest {
+  id: string;
+  subject: string; // "finding" | "action"
+  subject_id: string;
+  note: string;
+  requester?: string;
+  status: string; // open | resolved
+  resolution?: string;
+  reviewer?: string;
+  created_at: string;
+  resolved_at?: string;
+}
+
 // Security questionnaire (grc.Questionnaire — snake_case json tags).
 export interface QAnswer {
   id: string;
