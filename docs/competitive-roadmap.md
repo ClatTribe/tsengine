@@ -43,7 +43,7 @@ Verification: the SMB-platform feature matrix (Coro/Huntress/Cynet/Guardz) + GRC
 
 | Phase | What | Verification gate |
 |---|---|---|
-| **F1** | **Production multi-tenant infra**: SQLite/Postgres `Store` + cloud-KMS `secret.Vault` behind today's interfaces. | Same test suite passes on the durable store; survives restart |
+| **F1** ◑ | **Production multi-tenant infra**: SQLite/Postgres `Store` + cloud-KMS `secret.Vault` behind today's interfaces. | ✅ **Store conformance suite** shipped — the full contract + tenant isolation (§18.2 inv. 2) across *every* entity, run against Memory **and** the durable File store; this is the parity bar a future SQL store plugs into. ⚠ The networked **Postgres** store + KMS vault need a live DB/KMS to verify — **flagged for the user** (a local sqlite store is single-node like the existing File store, so it doesn't close the *multi-node* gap the analysis named) |
 | **F2** | **Integration breadth**: ServiceNow/PagerDuty ops surfaces; more IdP/cloud connectors. | N integrations live, each with a contract test |
 | **F3** | **Public self-serve signup + billing** (vs operator-token provisioning). | A tenant self-provisions end to end |
 
