@@ -768,9 +768,15 @@ e.g. a DMARC finding carries the exact `_dmarc.<domain>` TXT record to publish, 
 admin-without-MFA finding names the admin + the enforce action. They ride as tier-1
 `file_ticket` actions (a ticket is reversible/informational → auto-delivers via the
 `Filer`) and carry a machine-readable `remediation_type`+`target` so a future live Apply
-has the fix ready. The actual identity *mutation* (enforce MFA, revoke a grant) still has
-no live write path — the GWorkspace/M365/Okta connector `Apply` are honest stubs pending
-admin-write creds.
+has the fix ready. The first live identity *mutation* now exists: **`connector.Okta.Apply`
+suspends a stale account** via the Okta user-lifecycle API (`POST
+/api/v1/users/{id}/lifecycle/suspend`), reached only after the HITL gate (§18.2 inv. 3) and
+tested against a fake org (injectable `HTTP` client). It needs the `okta.users.manage` scope
+(onboarding scopes are read-only by design), so a real mutation requires an admin to grant
+it — until then Okta answers 403 and `Apply` surfaces it as an error (never falsely "done").
+The GWorkspace/M365 connector `Apply` (and the other Okta `remediation_type`s) remain honest
+stubs pending admin-write creds; the operate→tier-2-`ActApplyConfig` action wiring is the
+remaining step to route a finding into this path end to end.
 
 **M365 OAuth grants are live too** (`operate.M365.fetchGrants`): Microsoft Graph
 `oauth2PermissionGrants` (delegated scopes + admin-vs-per-user consent) joined to
