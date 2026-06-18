@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { Action, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident } from "./types";
+import type { Action, Asset, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -47,6 +47,7 @@ export const api = {
   incidents: (status?: "all") => safe<Incident[]>(`/v1/incidents${status ? "?status=all" : ""}`, []),
   approvals: () => safe<Action[]>("/v1/approvals", []),
   connections: () => safe<Connection[]>("/v1/connections", []),
+  assets: () => safe<Asset[]>("/v1/assets", []),
   engagements: () => safe<Engagement[]>("/v1/engagements", []),
   posture: (framework: string) => safe<ControlState[]>(`/v1/posture/${framework}`, []),
   report: (framework: string) => safe<ComplianceReport | null>(`/v1/compliance/${framework}/report?format=json`, null),
@@ -58,6 +59,10 @@ export const api = {
       body: JSON.stringify({ approver, approve }),
     }),
   rescan: () => call<{ assets_scanned: number }>("/v1/rescan", { method: "POST" }),
+
+  // Returns the provider OAuth consent URL for a connector kind (the browser is then
+  // 302'd to it by the /connect/[kind] route handler). Throws if the kind is unknown.
+  connectURL: (kind: string) => call<{ authorize_url: string }>(`/v1/connect/${kind}`),
 };
 
 export const FRAMEWORKS = ["soc2", "iso27001", "pci", "hipaa", "cis_v8", "nist_csf"] as const;

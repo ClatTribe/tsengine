@@ -111,8 +111,8 @@ API consumed (all exist today): `GET /v1/findings · /v1/findings/export · /v1/
 | **2 — Inbox (HITL)** | the approval queue as a keyboard-driven triage inbox; Approve/Reject/Edit via Server Actions through the gated desk | |
 | **3 — Findings** | filterable list + the evidence drill-down (CWE/MITRE/KEV/EPSS/controls); export menu (SARIF/CSV) | |
 | **4 — Incidents** | the continuous-monitoring timeline (new / resolved), grouped by pass, with the agent's actions | |
-| **5 — Compliance** | posture cards → per-control drill-down → signed report download | |
-| **6 — Assets & onboarding** | connect a system (OAuth handoff), monitored assets, scan-now, connection health | |
+| **5 — Compliance** | posture cards → per-control drill-down → signed report download | ✅ shipped |
+| **6 — Assets & onboarding** | connect a system (OAuth handoff), monitored assets, scan-now, connection health | ✅ shipped |
 | **7 — Command palette + polish** | ⌘K, global keyboard nav, motion pass, empty/loading/error states, responsive, a11y | |
 | **8 — Real-time (backend + FE)** | a Go SSE endpoint (`GET /v1/events`) → the feed/inbox update live instead of polling | |
 

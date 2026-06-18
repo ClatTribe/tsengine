@@ -51,6 +51,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
+	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
@@ -176,6 +177,14 @@ func (d Deps) handleEngagements(w http.ResponseWriter, r *http.Request, tenantID
 func (d Deps) handleConnections(w http.ResponseWriter, r *http.Request, tenantID string) {
 	c, err := d.Store.ListConnections(r.Context(), tenantID)
 	respond(w, redactConnections(c), err)
+}
+
+// handleAssets returns the tenant's monitored assets (what the agent continuously scans:
+// repos, cloud accounts, domains, workspaces). Read-only; the console's "Monitored assets"
+// view joins these against engagements for last-scanned time.
+func (d Deps) handleAssets(w http.ResponseWriter, r *http.Request, tenantID string) {
+	a, err := d.Store.ListAssets(r.Context(), tenantID)
+	respond(w, a, err)
 }
 
 func (d Deps) handleApprovals(w http.ResponseWriter, r *http.Request, tenantID string) {

@@ -53,8 +53,18 @@ export interface Engagement {
   id: string;
   asset_id: string;
   trigger: string;
+  scan_id?: string;
   started_at: string;
   completed_at?: string;
+}
+
+export interface Asset {
+  id: string;
+  connection_id: string;
+  type: string; // repository | cloud_account | web_application | domain | workspace | ...
+  target: string;
+  meta?: Record<string, string>;
+  discovered_at?: string;
 }
 
 export interface ControlState {
