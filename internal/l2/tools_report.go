@@ -178,12 +178,40 @@ func reportTools(d Deps) Catalog {
 	}
 }
 
-// verifyGate enforces the L2-4 verification discipline: a report may only be
-// marked "verified" once independent methods confirm it, and HIGH/CRITICAL
-// require ≥2 INDEPENDENT methods (the ≥2-source rule) — a lone signature
-// match is exactly the false-positive class L2 exists to filter, so claiming
-// a critical is "verified" off one tool is forbidden. VerifiedBy is kept
-// deduped (mergeUnique), so distinct entries ⇒ distinct methods.
+// activeConfirmationVerbs name an EXECUTED re-confirmation — a re-fire, a live
+// request, a reproduced PoC — as opposed to a passive signature match. The
+// substring is matched case-insensitively against each verified_by entry.
+var activeConfirmationVerbs = []string{
+	"send_request", "dispatch_l2_probe", "probe", "replay",
+	"poc", "exploit", "reproduc", "curl", "confirmed",
+}
+
+// isActiveConfirmation reports whether a verified_by method names an executed
+// re-confirmation (vs a bare tool-signature agreement).
+func isActiveConfirmation(method string) bool {
+	m := strings.ToLower(method)
+	for _, v := range activeConfirmationVerbs {
+		if strings.Contains(m, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyGate enforces the verification discipline that separates the two L2
+// quality tiers. "corroborated" (§11 hook 10) means ≥1 INDEPENDENT tool agrees
+// — passive signature agreement. "verified" (§5 L2.5) is the stronger,
+// exploitation-VERIFIED tier the offensive-AI leaders publish (XBOW reached
+// HackerOne #1 with PoC-validated reports): it demands that the finding was
+// ACTIVELY re-confirmed. So a report may be marked "verified" only when:
+//
+//   - it has ≥1 method (HIGH/CRITICAL need ≥2 independent methods — the
+//     ≥2-source rule against lone-signature false positives), AND
+//   - at least one method is an ACTIVE confirmation (a re-fire / PoC / live
+//     request), not purely passive multi-tool agreement.
+//
+// VerifiedBy is kept deduped (mergeUnique), so distinct entries ⇒ distinct
+// methods.
 func verifyGate(sev types.Severity, methods []string) (msg string, ok bool) {
 	need := 1
 	if sev == types.SeverityHigh || sev == types.SeverityCritical {
@@ -196,6 +224,23 @@ func verifyGate(sev types.Severity, methods []string) (msg string, ok bool) {
 				"confirmation. ACT: send_request to confirm the response AND/OR dispatch_l2_probe(<tool>), then "+
 				"update_finding(id, verified_by=[...]).",
 			sev, len(methods), sev, need), false
+	}
+	hasActive := false
+	for _, m := range methods {
+		if isActiveConfirmation(m) {
+			hasActive = true
+			break
+		}
+	}
+	if !hasActive {
+		return fmt.Sprintf(
+			"OBSERVE: you marked a %s report verified, but every method is a passive signature match. ORIENT: "+
+				"'verified' is the exploitation-VERIFIED tier — it needs an EXECUTED re-confirmation (a re-fire / PoC / "+
+				"live request); passive multi-tool agreement is 'corroborated', not 'verified' (the false-positive class "+
+				"L2 filters). DECIDE: actively reproduce it. ACT: send_request to reproduce the response, or "+
+				"dispatch_l2_probe(<tool>) to re-fire, then update_finding(id, verified_by=[...]); or set "+
+				"verification=corroborated if you cannot.",
+			sev), false
 	}
 	return "", true
 }
