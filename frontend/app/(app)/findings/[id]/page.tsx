@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ShieldAlert, Flame } from "lucide-react";
 import { api } from "@/lib/api";
 import { SeverityBadge, Tag } from "@/components/ui/primitives";
+import { RequestReview } from "@/components/reviews/request-review";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +13,13 @@ const FW_LABEL: Record<string, string> = {
 
 export default async function FindingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const f = await api.finding(id);
+  const [f, reviews] = await Promise.all([api.finding(id), api.reviews()]);
   if (!f) notFound();
 
   const kev = !!f.threat_intel?.kev;
   const epss = !!f.threat_intel?.epss;
   const controls = Object.entries(f.compliance ?? {}).filter(([, v]) => Array.isArray(v) && v.length > 0);
+  const hasOpenReview = reviews.some((r) => r.subject_id === id && r.status === "open");
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
@@ -44,6 +46,8 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
           <Flame className="h-4 w-4" /> Listed in CISA KEV — actively exploited in the wild.{epss ? " EPSS available." : ""}
         </div>
       )}
+
+      <RequestReview subjectId={f.id} hasOpenReview={hasOpenReview} />
 
       <div className="card space-y-3 p-5">
         <Row label="Tool" value={<Tag>{f.tool}</Tag>} />

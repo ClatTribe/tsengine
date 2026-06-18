@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { Action, Asset, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, Questionnaire } from "./types";
+import type { Action, Asset, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, Questionnaire, ReviewRequest } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -52,6 +52,7 @@ export const api = {
   posture: (framework: string) => safe<ControlState[]>(`/v1/posture/${framework}`, []),
   report: (framework: string) => safe<ComplianceReport | null>(`/v1/compliance/${framework}/report?format=json`, null),
   questionnaire: () => safe<Questionnaire | null>("/v1/questionnaire", null),
+  reviews: () => safe<ReviewRequest[]>("/v1/reviews", []),
 
   // writes (Server Actions call these)
   decide: (id: string, approve: boolean, approver: string) =>
@@ -60,6 +61,13 @@ export const api = {
       body: JSON.stringify({ approver, approve }),
     }),
   rescan: () => call<{ assets_scanned: number }>("/v1/rescan", { method: "POST" }),
+
+  // Request a human-expert review on a finding or action (the AI + human escalation).
+  requestReview: (subject: string, subjectId: string, note: string) =>
+    call<ReviewRequest>("/v1/reviews", {
+      method: "POST",
+      body: JSON.stringify({ subject, subject_id: subjectId, note, requester: "console-user" }),
+    }),
 
   // Returns the provider OAuth consent URL for a connector kind (the browser is then
   // 302'd to it by the /connect/[kind] route handler). Throws if the kind is unknown.
