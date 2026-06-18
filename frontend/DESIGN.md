@@ -1,6 +1,7 @@
 # Sentinel — the agentic security console
 
-> The world-class, dark **command-center** UX for the fractional autonomous security team.
+> The world-class, **light & premium** UX for the fractional autonomous security team —
+> calm and trustworthy for the SMB buyer, not a dark "hacker" console (redesigned 2026-06).
 > A separate Next.js app (App Router / RSC) that consumes the Go `/v1` JSON API. The Go
 > `internal/console` (zero-JS) stays as the lightweight fallback; this is the flagship UX.
 
@@ -18,9 +19,12 @@ supervise.** Three feelings to engineer:
 3. **"This needs you."** — the human-in-the-loop is a *delightful*, keyboard-fast inbox,
    not a buried form (the operator).
 
-Aesthetic north stars: **Linear** (density, keyboard, motion), **Vercel** (calm dark
-surfaces, type), **Watchtower/Datadog** (live telemetry without anxiety). Dark, technical,
-fast. Monospace for machine data; a single confident accent for "the agent".
+Aesthetic north stars: **Linear** (craft, keyboard, motion), **Vercel/Stripe** (calm, type,
+restraint), **Vanta/Drata** (the trustworthy-light bar SMB buyers expect). **Light, warm,
+premium** — an off-white canvas so white cards lift, soft layered shadows (not heavy
+borders) for depth, generous whitespace, one confident **indigo** accent for "the agent"
+used sparingly, **emerald** for "handled/live". Monospace only for machine data. The
+non-technical SMB owner should feel *safe and in good hands*, never intimidated.
 
 ---
 
