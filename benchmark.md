@@ -206,6 +206,34 @@ single-trial numbers are noise (CLAUDE.md §14.2.3).
 
 ---
 
+## The L2 agentic benchmark (`tsbench agent`)
+
+Everything above measures **L1 detection**. The L2 agent — the *agentic*
+capability — is measured separately by `bench/agent`: not "did a scanner flag
+it" but "did the autonomous Lead **find**, **verify** (a working PoC /
+evidence-grounded — the XBOW no-false-positive bar), and **complete** the
+objective, while flagging **zero decoys**". This is the verification mechanism
+for the competitive-roadmap Track 1 (`docs/competitive-roadmap.md`); the
+competitor frame is the exploitation-verified offensive-AI leaders (XBOW
+HackerOne #1, strix, Horizon3 NodeZero/GOAD).
+
+```sh
+# Grade a saved scan (tsengine scan -o scan.json runs L1+L2) against an
+# objectives fixture. Reproducible without a live LLM key — CI-friendly.
+./bin/tsbench agent --objectives fixtures/agent/objectives.example.json \
+                    --scan scan.json
+# → detection_rate / verified_rate / completion_rate / false_positives + gate
+```
+
+The objectives fixture is the planted ground truth (`category`/`rule_id` +
+`endpoint`, `must_verify`) plus `decoys` that must NOT be flagged. The gate is
+the best-in-class bar: **all objectives found, every must-verify objective
+PoC-verified, zero false positives.** Scoring is SUT-agnostic (the §14.2.1
+guard now also scans `agent.go`). Live targets (WebGoat/Juice Shop dual-metric)
+plug into the same scorer.
+
+---
+
 ## The L1.5 ablation — the load-bearing measurement
 
 `tsbench ablation` runs each fixture twice — L1.5 hooks on, then off

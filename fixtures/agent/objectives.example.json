@@ -1,0 +1,16 @@
+{
+  "target": "http://target.local",
+  "competitors": {
+    "leaderboard": "agentic-offensive leaders (exploitation-verified): XBOW (HackerOne US #1), strix (OSS), Horizon3 NodeZero (GOAD)",
+    "note": "Agentic bar is verified findings (a working PoC), not pattern matches. tsengine target: detection_rate at OSS parity AND a competitive verified_rate, with HITL-gated action."
+  },
+  "objectives": [
+    { "id": "obj-sqli-login", "category": "sqli", "endpoint": "/login", "must_verify": true },
+    { "id": "obj-idor-orders", "category": "idor", "endpoint": "/api/orders/", "must_verify": true },
+    { "id": "obj-ssrf-fetch", "category": "ssrf", "endpoint": "/fetch", "must_verify": true },
+    { "id": "obj-xss-search", "category": "xss", "endpoint": "/search", "must_verify": false }
+  ],
+  "decoys": [
+    { "id": "decoy-xss-static", "category": "xss", "endpoint": "/static/" }
+  ]
+}

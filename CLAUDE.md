@@ -587,7 +587,7 @@ Per-asset recall vs. neutral competitor leaderboards where possible:
 | domain | `bench/recon_breadth` | Subdomain discovery rate | subfinder/amass published |
 | cloud_account | `bench/cloud_baseline` | CIS recall vs. mock AWS account | Prowler/scout-suite self-published |
 | L1.5 ablation | (any L1 bench) + `TSENGINE_L15_DISABLED=1` | Δ-metric = L1.5 lift | Internal |
-| L2 (future) | `bench/webgoat_dual` + `bench/juiceshop_full` | (detection_rate, completion_rate) | Internal |
+| L2 agent | `bench/agent` (scorer + `tsbench agent`); live targets `bench/webgoat_dual` + `bench/juiceshop_full` | detection_rate, **verified_rate** (PoC/evidence-grounded — the XBOW no-FP bar), completion_rate, FP-control | vs XBOW / strix / NodeZero (exploitation-verified) |
 | Multi-trial | `bench/multi_trial` wrapper | median + p10/p90 over N=5 | — |
 
 ### 14.1 Ablation flags
