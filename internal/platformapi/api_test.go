@@ -128,6 +128,28 @@ func TestAuthAndTenantScoping(t *testing.T) {
 	}
 }
 
+func TestAssets_ListsMonitored(t *testing.T) {
+	h, _ := setup(t)
+	rec := do(h, "GET", "/v1/assets", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /v1/assets: want 200, got %d", rec.Code)
+	}
+	var assets []platform.Asset
+	if err := json.Unmarshal(rec.Body.Bytes(), &assets); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(assets) != 1 || assets[0].Target != "https://github.com/acme/web" {
+		t.Fatalf("want the seeded repo asset, got %+v", assets)
+	}
+	// isolation: a different tenant sees none of t1's assets
+	rec = do(h, "GET", "/v1/assets", "t2", "")
+	var other []platform.Asset
+	_ = json.Unmarshal(rec.Body.Bytes(), &other)
+	if len(other) != 0 {
+		t.Errorf("ISOLATION: t2 must see no assets, got %d", len(other))
+	}
+}
+
 func TestConnectionsRedactSecretRef(t *testing.T) {
 	h, _ := setup(t)
 	rec := do(h, "GET", "/v1/connections", "t1", "")
