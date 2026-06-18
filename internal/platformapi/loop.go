@@ -23,6 +23,7 @@ type Decider interface {
 type Posturer interface {
 	Posture(ctx context.Context, tenantID, framework string) ([]platform.ControlState, error)
 	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
+	Questionnaire(ctx context.Context, tenantID string) (*grc.Questionnaire, error)
 }
 
 // Sealer seals a raw OAuth token before it is persisted (satisfied by the secret
@@ -139,6 +140,27 @@ func (d Deps) handleComplianceReport(w http.ResponseWriter, r *http.Request, ten
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	_, _ = io.WriteString(w, grc.RenderMarkdown(rep))
+}
+
+// handleQuestionnaire auto-answers the standardized security questionnaire from the
+// tenant's live control state — JSON by default, Markdown with ?format=md (the
+// attachable procurement deliverable).
+func (d Deps) handleQuestionnaire(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.GRC == nil {
+		writeJSON(w, http.StatusNotImplemented, errBody("grc not configured"))
+		return
+	}
+	q, err := d.GRC.Questionnaire(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	if r.URL.Query().Get("format") == "md" {
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		_, _ = io.WriteString(w, grc.RenderQuestionnaireMarkdown(q))
+		return
+	}
+	writeJSON(w, http.StatusOK, q)
 }
 
 func (d Deps) newID(prefix string) string {
