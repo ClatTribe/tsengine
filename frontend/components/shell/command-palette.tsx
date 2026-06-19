@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Bug, Activity, ShieldCheck, Boxes, ScrollText,
-  RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings,
+  RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings, FileText,
 } from "lucide-react";
 import { rescanAll } from "@/app/(app)/assets/actions";
 import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
@@ -65,6 +65,7 @@ export function CommandPalette() {
       { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved", run: go("/incidents") },
       { id: "compliance", label: "Compliance", group: "Go to", icon: ShieldCheck, keywords: "soc2 controls audit posture", run: go("/compliance") },
       { id: "questionnaire", label: "Security questionnaire", group: "Go to", icon: ShieldCheck, keywords: "caiq sig vendor trust center procurement", run: go("/compliance/questionnaire") },
+      { id: "reports", label: "Reports & evidence", group: "Go to", icon: FileText, keywords: "export sarif csv evidence pack signed download auditor", run: go("/reports") },
       { id: "assets", label: "Assets & connections", group: "Go to", icon: Boxes, keywords: "connect systems monitored", run: go("/assets") },
       { id: "activity", label: "Activity", group: "Go to", icon: ScrollText, keywords: "feed log agent", run: go("/activity") },
       { id: "settings", label: "Settings", group: "Go to", icon: Settings, keywords: "account organization notifications profile", run: go("/settings") },
