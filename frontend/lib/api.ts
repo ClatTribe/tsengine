@@ -67,6 +67,14 @@ export const api = {
   // 202 + a job (async, the platform default) or { assets_scanned } (synchronous fallback).
   rescan: () => call<{ assets_scanned?: number; id?: string; status?: string; kind?: string }>("/v1/rescan", { method: "POST" }),
 
+  // Change the signed-in user's password (also clears the forced-rotation flag for an
+  // invited member). The session stays valid afterward.
+  changePassword: (current: string, next: string) =>
+    call<{ ok: boolean }>("/v1/auth/password", {
+      method: "POST",
+      body: JSON.stringify({ current_password: current, new_password: next }),
+    }),
+
   // Request a human-expert review on a finding or action (the AI + human escalation).
   requestReview: (subject: string, subjectId: string, note: string) =>
     call<ReviewRequest>("/v1/reviews", {

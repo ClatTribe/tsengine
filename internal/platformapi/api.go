@@ -60,6 +60,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/auth/me", d.sessionAuth(d.handleMe))
 	mux.HandleFunc("GET /v1/auth/team", d.sessionAuth(d.handleTeam))
 	mux.HandleFunc("POST /v1/auth/invite", d.sessionAuth(d.handleInvite))
+	mux.HandleFunc("POST /v1/auth/password", d.sessionAuth(d.handlePassword)) // change pw + clear MustChangePassword
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))
@@ -105,6 +106,14 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 			return
 		}
 		if s, ok := d.resolveSession(r); ok {
+			// A member provisioned with a temporary password must set their own before the
+			// app unlocks (the owner who issued the temp password knows it). The auth-
+			// management endpoints (me/logout/password) use sessionAuth, not this gate, so
+			// the user can still see who they are and rotate the password.
+			if u, err := d.Store.GetUser(r.Context(), s.UserID); err == nil && u.MustChangePassword {
+				writeJSON(w, http.StatusForbidden, errCode("set a new password to continue", "password_change_required"))
+				return
+			}
 			h(w, r, s.TenantID)
 			return
 		}
@@ -329,6 +338,12 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 }
 
 func errBody(msg string) map[string]string { return map[string]string{"error": msg} }
+
+// errCode is errBody plus a machine-readable code the frontend can branch on (e.g.
+// "password_change_required" → route to the set-password screen).
+func errCode(msg, code string) map[string]string {
+	return map[string]string{"error": msg, "code": code}
+}
 
 func severityParam(r *http.Request) types.Severity {
 	return types.Severity(r.URL.Query().Get("severity"))

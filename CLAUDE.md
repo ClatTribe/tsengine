@@ -835,15 +835,22 @@ interfaces).
 iters, per-password salt — no new dependency) and mints random session tokens.
 `pkg/platform.User`/`Session` + Store `Put/Get/GetByEmail/ListUsers` and
 `Put/Get/DeleteSession` persist them. `internal/platformapi/auth.go` serves
-`POST /v1/auth/{signup,login,invite}` + `GET /v1/auth/{me,team}` + `POST /v1/auth/logout`.
+`POST /v1/auth/{signup,login,invite,password}` + `GET /v1/auth/{me,team}` + `POST /v1/auth/logout`.
 The `auth` middleware accepts **either** the shared platform token (+`X-Tenant-ID`, for
 operator `POST /v1/tenants` / Slack / tests) **or** a user session token — and for a session
 the tenant comes FROM the session, so a spoofed `X-Tenant-ID` header cannot cross tenants.
 Signup creates a workspace (tenant) + owner; an owner can invite members (one-time temp
-password — email-based invites are the next step). `cmd/platform` `newID()` is now a random
-hex id (a restart-resetting counter previously overwrote tenants). Frontend: `/login`
-(email+password), `/signup`, Settings → Team. **Still future:** email invites / password
-reset / forced first-login change, OAuth-SSO login, and a billing model.
+password — email-based invites are the next step). **Forced first-login rotation is wired**:
+an invited member's account carries `User.MustChangePassword`; while set, the `auth`
+middleware blocks every app endpoint with `403 password_change_required` (the auth-mgmt
+endpoints — me/logout/password — use `sessionAuth`, so they stay reachable), and
+`POST /v1/auth/password` (verify current → set new → clear the flag) unlocks it. So the
+owner-issued temp password can't remain the standing credential. Frontend: a top-level
+`/change-password` route (outside the `(app)` group to avoid a redirect loop) + the `(app)`
+layout redirect on `me.must_change_password`. `cmd/platform` `newID()` is a random hex id
+(a restart-resetting counter previously overwrote tenants). Frontend: `/login`
+(email+password), `/signup`, `/change-password`, Settings → Team. **Still future:** email
+invites / password reset, OAuth-SSO login, and a billing model.
 
 **The product stack is containerized** (`docker compose up` / `make up`): `docker/platform/
 Dockerfile` (the `cmd/platform` server, Go, ~108MB) + `frontend/Dockerfile` (Next.js

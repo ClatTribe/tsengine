@@ -64,6 +64,7 @@ export interface User {
   name?: string;
   role: string; // "owner" | "member"
   created_at: string;
+  must_change_password?: boolean; // invited member with a temp password; app is gated until they rotate it
 }
 
 // Public Trust Center aggregate (safe projection — coverage only, never findings).

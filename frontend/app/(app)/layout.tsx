@@ -10,6 +10,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getSession();
   if (!session) redirect("/login");
 
+  // An invited member with a temporary password is gated out of the app (the API returns
+  // 403 password_change_required) until they set their own — send them to the rotation
+  // screen, which lives outside (app) so this check can't loop.
+  const me = await api.me();
+  if (me?.must_change_password) redirect("/change-password");
+
   const [findings, approvals] = await Promise.all([api.findings(), api.approvals()]);
   const risk = riskRating(severityCounts(findings));
 

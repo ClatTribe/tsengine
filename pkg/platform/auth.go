@@ -19,6 +19,11 @@ type User struct {
 	Role         string    `json:"role"` // RoleOwner | RoleMember
 	PasswordHash string    `json:"password_hash,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+	// MustChangePassword is set when an account is provisioned with a temporary password
+	// (an owner invite) and cleared the first time the user sets their own. While true the
+	// app endpoints are blocked (403 password_change_required) so the temp password — which
+	// the owner who issued it knows — cannot remain the standing credential.
+	MustChangePassword bool `json:"must_change_password,omitempty"`
 }
 
 // Session is an authenticated browser session: an opaque random Token that maps to a
