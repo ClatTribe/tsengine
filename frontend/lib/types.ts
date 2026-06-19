@@ -49,6 +49,13 @@ export interface Connection {
   created_at?: string;
 }
 
+export interface Tenant {
+  id: string;
+  name: string;
+  plan?: string;
+  created_at?: string;
+}
+
 export interface Engagement {
   id: string;
   asset_id: string;
