@@ -1,25 +1,32 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ShieldAlert, Flame } from "lucide-react";
+import { ArrowLeft, ShieldAlert, Flame, Wrench, GitPullRequest, Settings2, Ticket, FileWarning, ArrowRight, Radar } from "lucide-react";
 import { api } from "@/lib/api";
+import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import { SeverityBadge, Tag } from "@/components/ui/primitives";
 import { RequestReview } from "@/components/reviews/request-review";
+import type { Action } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const FW_LABEL: Record<string, string> = {
-  soc2: "SOC 2", iso27001: "ISO 27001", pci: "PCI", hipaa: "HIPAA", cis_v8: "CIS v8", nist_csf: "NIST CSF",
+const ACTION_META: Record<string, { icon: typeof Wrench; label: string }> = {
+  open_pr: { icon: GitPullRequest, label: "Pull request with the fix" },
+  apply_config: { icon: Settings2, label: "Configuration change" },
+  file_ticket: { icon: Ticket, label: "Remediation ticket" },
+  draft_notification: { icon: FileWarning, label: "Breach disclosure draft" },
 };
 
 export default async function FindingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [f, reviews] = await Promise.all([api.finding(id), api.reviews()]);
+  const [f, reviews, approvals] = await Promise.all([api.finding(id), api.reviews(), api.approvals()]);
   if (!f) notFound();
 
   const kev = !!f.threat_intel?.kev;
   const epss = !!f.threat_intel?.epss;
   const controls = Object.entries(f.compliance ?? {}).filter(([, v]) => Array.isArray(v) && v.length > 0);
   const hasOpenReview = reviews.some((r) => r.subject_id === id && r.status === "open");
+  // The remediation the agent has queued for THIS finding (if any) — the agentic signal.
+  const action = approvals.find((a) => a.finding_id === id);
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
@@ -47,6 +54,8 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
         </div>
       )}
 
+      <AgentCard action={action} />
+
       <RequestReview subjectId={f.id} hasOpenReview={hasOpenReview} />
 
       <div className="card space-y-3 p-5">
@@ -72,12 +81,55 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
           <div className="card space-y-1.5 p-5">
             {controls.map(([fw, ids]) => (
               <div key={fw} className="text-sm">
-                <span className="text-muted">{FW_LABEL[fw] ?? fw}:</span> <span className="mono">{(ids as string[]).join(", ")}</span>
+                <span className="text-muted">{FRAMEWORK_LABEL[fw] ?? fw}:</span> <span className="mono">{(ids as string[]).join(", ")}</span>
               </div>
             ))}
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+// AgentCard surfaces what TensorShield is DOING about this finding — the human-in-the-loop
+// signal on the detail page. Grounded: it only claims a queued fix when a real gated action
+// references this finding; otherwise it states the honest monitoring posture.
+function AgentCard({ action }: { action?: Action }) {
+  if (action) {
+    const meta = ACTION_META[action.kind] ?? { icon: Wrench, label: action.kind };
+    const Icon = meta.icon;
+    const t3 = action.tier >= 3;
+    return (
+      <div className="card border-accent/40 bg-accent-soft/30 p-5">
+        <div className="flex items-start gap-3">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-white shadow-sm">
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">TensorShield prepared a fix for this</div>
+            <div className="mt-0.5 text-xs text-muted">
+              {action.title || meta.label} · {t3 ? "needs your signature" : "awaiting your approval"} · tier {action.tier}
+            </div>
+            <p className="mt-2 text-sm text-muted">
+              {t3
+                ? "This is irreversible — the agent drafted it and is holding for a named human to review and sign."
+                : "The agent generated the remediation and is holding for your decision. Nothing is applied until you approve."}
+            </p>
+          </div>
+          <Link
+            href="/inbox"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white transition hover:bg-accent-hover"
+          >
+            Review <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="card flex items-center gap-2.5 p-4 text-sm text-muted">
+      <Radar className="h-4 w-4 shrink-0 text-faint" />
+      TensorShield is monitoring this finding — nothing is awaiting your approval right now.
     </div>
   );
 }
