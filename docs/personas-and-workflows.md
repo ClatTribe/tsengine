@@ -15,6 +15,9 @@ human in the loop" is not a disclaimer; it is the product's safety model (§4).
 
 ## 1. The competitive landscape — and the user model each assumes
 
+> For the OSS-mapping + benchmark-vs-competitor "proof of parity" per lane, see
+> [competitive-proof-sheet.md](competitive-proof-sheet.md).
+
 No single incumbent is "a security team for an SMB." Each covers one lane and assumes a
 *different buyer already exists*. Reading their user models tells us which personas are
 table-stakes and where the wedge is.
