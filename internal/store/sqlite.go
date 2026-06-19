@@ -134,39 +134,41 @@ func (s *SQLite) ListTenants(ctx context.Context) ([]platform.Tenant, error) {
 // --- connections / assets / engagements / findings / actions / incidents / reviews
 //     (all upsert by (tenant_id,id), list by tenant in insertion order) ---
 
-func (s *SQLite) putTID(ctx context.Context, table, tenant, id string, v any) error {
+// upsertTID runs a fixed (compile-time constant) "INSERT … ON CONFLICT(tenant_id,id)"
+// upsert. The query is always a string literal from the caller — never built from input —
+// so it carries no injection risk.
+func (s *SQLite) upsertTID(ctx context.Context, query, tenant, id string, v any) error {
 	d, err := enc(v)
 	if err != nil {
 		return err
 	}
-	q := fmt.Sprintf(`INSERT INTO %s(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, table)
-	_, err = s.db.ExecContext(ctx, q, tenant, id, d)
+	_, err = s.db.ExecContext(ctx, query, tenant, id, d)
 	return err
 }
 
 func (s *SQLite) PutConnection(ctx context.Context, c platform.Connection) error {
-	return s.putTID(ctx, "connections", c.TenantID, c.ID, c)
+	return s.upsertTID(ctx, `INSERT INTO connections(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, c.TenantID, c.ID, c)
 }
 func (s *SQLite) ListConnections(ctx context.Context, tenantID string) ([]platform.Connection, error) {
 	return listJSON[platform.Connection](ctx, s.db, `SELECT data FROM connections WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 
 func (s *SQLite) PutAsset(ctx context.Context, a platform.Asset) error {
-	return s.putTID(ctx, "assets", a.TenantID, a.ID, a)
+	return s.upsertTID(ctx, `INSERT INTO assets(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, a.TenantID, a.ID, a)
 }
 func (s *SQLite) ListAssets(ctx context.Context, tenantID string) ([]platform.Asset, error) {
 	return listJSON[platform.Asset](ctx, s.db, `SELECT data FROM assets WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 
 func (s *SQLite) PutEngagement(ctx context.Context, e platform.Engagement) error {
-	return s.putTID(ctx, "engagements", e.TenantID, e.ID, e)
+	return s.upsertTID(ctx, `INSERT INTO engagements(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, e.TenantID, e.ID, e)
 }
 func (s *SQLite) ListEngagements(ctx context.Context, tenantID string) ([]platform.Engagement, error) {
 	return listJSON[platform.Engagement](ctx, s.db, `SELECT data FROM engagements WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 
 func (s *SQLite) PutFinding(ctx context.Context, tenantID string, f types.Finding) error {
-	return s.putTID(ctx, "findings", tenantID, f.ID, f)
+	return s.upsertTID(ctx, `INSERT INTO findings(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, tenantID, f.ID, f)
 }
 func (s *SQLite) ListFindings(ctx context.Context, tenantID string, filter FindingFilter) ([]types.Finding, error) {
 	all, err := listJSON[types.Finding](ctx, s.db, `SELECT data FROM findings WHERE tenant_id=? ORDER BY rowid`, tenantID)
@@ -191,7 +193,7 @@ func (s *SQLite) ListFindings(ctx context.Context, tenantID string, filter Findi
 }
 
 func (s *SQLite) PutAction(ctx context.Context, a platform.Action) error {
-	return s.putTID(ctx, "actions", a.TenantID, a.ID, a)
+	return s.upsertTID(ctx, `INSERT INTO actions(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, a.TenantID, a.ID, a)
 }
 func (s *SQLite) GetAction(ctx context.Context, tenantID, id string) (platform.Action, error) {
 	var a platform.Action
@@ -213,14 +215,14 @@ func (s *SQLite) PendingApprovals(ctx context.Context, tenantID string) ([]platf
 }
 
 func (s *SQLite) PutIncident(ctx context.Context, i platform.Incident) error {
-	return s.putTID(ctx, "incidents", i.TenantID, i.ID, i)
+	return s.upsertTID(ctx, `INSERT INTO incidents(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, i.TenantID, i.ID, i)
 }
 func (s *SQLite) ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error) {
 	return listJSON[platform.Incident](ctx, s.db, `SELECT data FROM incidents WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 
 func (s *SQLite) PutReviewRequest(ctx context.Context, r platform.ReviewRequest) error {
-	return s.putTID(ctx, "reviews", r.TenantID, r.ID, r)
+	return s.upsertTID(ctx, `INSERT INTO reviews(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, r.TenantID, r.ID, r)
 }
 func (s *SQLite) ListReviewRequests(ctx context.Context, tenantID string) ([]platform.ReviewRequest, error) {
 	return listJSON[platform.ReviewRequest](ctx, s.db, `SELECT data FROM reviews WHERE tenant_id=? ORDER BY rowid`, tenantID)
