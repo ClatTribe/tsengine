@@ -33,12 +33,13 @@ function info(framework: string) {
   return { label, desc, category, angle: CATEGORY_ANGLE[category] ?? CATEGORY_ANGLE["Security & trust"] };
 }
 
-export function generateMetadata({ params }: { params: { framework: string } }): Metadata {
-  const i = info(params.framework);
+export async function generateMetadata({ params }: { params: Promise<{ framework: string }> }): Promise<Metadata> {
+  const { framework } = await params;
+  const i = info(framework);
   if (!i) return {};
   const title = `${i.label} Compliance Automation for SMBs — TensorShield`;
   const description = `Get ${i.label}-ready without a security hire. TensorShield continuously maps your findings to ${i.label} controls, prepares fixes, and produces signed, auditor-ready evidence. ${i.desc}`;
-  const url = `${SITE_URL}/frameworks/${params.framework}`;
+  const url = `${SITE_URL}/frameworks/${framework}`;
   return {
     title,
     description,
@@ -47,11 +48,12 @@ export function generateMetadata({ params }: { params: { framework: string } }):
   };
 }
 
-export default function FrameworkLanding({ params }: { params: { framework: string } }) {
-  const i = info(params.framework);
+export default async function FrameworkLanding({ params }: { params: Promise<{ framework: string }> }) {
+  const { framework } = await params;
+  const i = info(framework);
   if (!i) notFound();
 
-  const others = FRAMEWORKS.filter((f) => f !== params.framework);
+  const others = FRAMEWORKS.filter((f) => f !== framework);
 
   return (
     <>
