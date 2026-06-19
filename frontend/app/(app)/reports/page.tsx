@@ -25,6 +25,29 @@ export default async function ReportsPage() {
         <p className="text-xs text-muted">Signed, auditor-ready exports of your posture and findings — generated from real data, not screenshots.</p>
       </div>
 
+      {/* VAPT / pentest report — the headline deliverable for a customer security review */}
+      <div>
+        <SectionTitle>Vulnerability assessment &amp; pentest (VAPT)</SectionTitle>
+        <Card className="flex items-center gap-4 p-5">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-white shadow-sm">
+            <ShieldCheck className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">VAPT / penetration-test report</div>
+            <div className="text-xs text-muted">
+              Executive summary, scope, and every finding with severity, CWE/CVSS, exploit status &amp; evidence — the
+              document an enterprise customer or insurer asks for. Continuously regenerated, grounded in real scans.
+            </div>
+          </div>
+          <a
+            href="/api/vapt"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white transition hover:bg-accent-hover active:translate-y-px"
+          >
+            <Download className="h-3.5 w-3.5" /> Download
+          </a>
+        </Card>
+      </div>
+
       {/* Compliance evidence packs */}
       <div>
         <SectionTitle>Compliance evidence packs</SectionTitle>
