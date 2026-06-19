@@ -69,7 +69,7 @@ export interface AIBomConnection {
 }
 export interface AIBom {
   governance: { kill_switch_engaged: boolean; gate_tier: number };
-  connections: AIBomConnection[];
+  connections: AIBomConnection[] | null; // Go nil slice → null
   summary: { connections: number; write_capable: number; read_only: number };
 }
 
@@ -89,7 +89,7 @@ export interface TrustView {
   org: string;
   monitored: boolean;
   signed: boolean;
-  frameworks: { framework: string; coverage: number; met: number; total: number }[];
+  frameworks: { framework: string; coverage: number; met: number; total: number }[] | null; // Go nil slice → null
   generated_at: string;
 }
 
@@ -135,7 +135,7 @@ export interface QAnswer {
 export interface Questionnaire {
   tenant_id: string;
   generated_at: string;
-  answers: QAnswer[];
+  answers: QAnswer[] | null; // Go nil slice → null
   yes: number;
   in_progress: number;
 }

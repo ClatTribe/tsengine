@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 
 export default async function QuestionnairePage() {
   const q = await api.questionnaire();
+  const answers = q?.answers ?? []; // Go marshals an empty slice as null — guard before .length/.map
 
-  if (!q || q.answers.length === 0) {
+  if (!q || answers.length === 0) {
     return (
       <div className="mx-auto max-w-3xl space-y-5">
         <Back />
@@ -21,12 +22,12 @@ export default async function QuestionnairePage() {
 
   // group by domain, preserving first-seen order
   const groups: { domain: string; items: QAnswer[] }[] = [];
-  for (const a of q.answers) {
+  for (const a of answers) {
     const last = groups[groups.length - 1];
     if (last && last.domain === a.domain) last.items.push(a);
     else groups.push({ domain: a.domain, items: [a] });
   }
-  const total = q.answers.length;
+  const total = answers.length;
   const pct = Math.round((q.yes / total) * 100);
 
   return (

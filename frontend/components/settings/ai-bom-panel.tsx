@@ -9,7 +9,8 @@ import { QuarantineButton } from "@/components/settings/quarantine-button";
 // surface a hijacked agent could mutate. An owner can quarantine any one connection
 // (WRD-4). Server-rendered; the quarantine control is a client child.
 export function AIBomPanel({ bom, canQuarantine }: { bom: AIBom | null; canQuarantine?: boolean }) {
-  if (!bom || bom.connections.length === 0) {
+  const conns = bom?.connections ?? []; // Go marshals an empty slice as null — guard before .length/.map
+  if (!bom || conns.length === 0) {
     return (
       <p className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-muted">
         Connect a system to see exactly what your automated security agent can access.
@@ -25,7 +26,7 @@ export function AIBomPanel({ bom, canQuarantine }: { bom: AIBom | null; canQuara
         <Stat label="Write-capable" value={summary.write_capable} tone={summary.write_capable > 0 ? "high" : "ok"} />
       </div>
       <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-        {bom.connections.map((c, i) => {
+        {conns.map((c, i) => {
           const write = c.capability === "read-write";
           const quarantined = c.status === "quarantined";
           return (
