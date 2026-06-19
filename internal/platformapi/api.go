@@ -49,6 +49,11 @@ func NewHandler(d Deps) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("POST /v1/tenants", d.platformAuth(d.handleCreateTenant)) // provisioning (no tenant header)
+	// Real account auth: self-serve signup + email/password login (public), session-gated me/logout.
+	mux.HandleFunc("POST /v1/auth/signup", d.handleSignup)
+	mux.HandleFunc("POST /v1/auth/login", d.handleLogin)
+	mux.HandleFunc("POST /v1/auth/logout", d.sessionAuth(d.handleLogout))
+	mux.HandleFunc("GET /v1/auth/me", d.sessionAuth(d.handleMe))
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))
@@ -76,20 +81,26 @@ func NewHandler(d Deps) http.Handler {
 	return mux
 }
 
-// auth enforces the platform bearer token and extracts the tenant id, passing it to
-// the handler via context.
+// auth resolves the request's tenant from either of two credentials and passes it to the
+// handler: (1) the shared platform bearer token + an X-Tenant-ID header (operator / Slack /
+// tests), or (2) a user session token, whose tenant comes from the session itself (the
+// header cannot override it — no cross-tenant escalation).
 func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if d.Token == "" || r.Header.Get("Authorization") != "Bearer "+d.Token {
-			writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
+		if d.Token != "" && r.Header.Get("Authorization") == "Bearer "+d.Token {
+			tenantID := r.Header.Get("X-Tenant-ID")
+			if tenantID == "" {
+				writeJSON(w, http.StatusBadRequest, errBody("missing X-Tenant-ID"))
+				return
+			}
+			h(w, r, tenantID)
 			return
 		}
-		tenantID := r.Header.Get("X-Tenant-ID")
-		if tenantID == "" {
-			writeJSON(w, http.StatusBadRequest, errBody("missing X-Tenant-ID"))
+		if s, ok := d.resolveSession(r); ok {
+			h(w, r, s.TenantID)
 			return
 		}
-		h(w, r, tenantID)
+		writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
 	}
 }
 
