@@ -74,6 +74,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                              // owner's shareable Trust Center token
 	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                      // PUBLIC, HMAC-token-gated; safe aggregates only
 	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                       // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
+	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                // PUBLIC: book-a-demo / talk-to-sales lead capture
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents)) // SSE live state feed
