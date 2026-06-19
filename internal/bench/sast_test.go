@@ -63,6 +63,23 @@ func TestScoreSast_ConfusionMatrix(t *testing.T) {
 	}
 }
 
+// CWE-326 (inadequate encryption strength, e.g. DES) is a sibling of CWE-327 and is what
+// semgrep emits for the OWASP-Benchmark crypto cases — it must score under "crypto", else
+// real crypto detections are silently discarded by the scorer (the crypto-0% bug).
+func TestScoreSast_Crypto326MapsToCrypto(t *testing.T) {
+	cases := []SastCase{
+		{Name: "BenchmarkTest10001", Category: "crypto", Vulnerable: true},  // DES → flagged → TP
+		{Name: "BenchmarkTest10002", Category: "crypto", Vulnerable: false}, // AES → not flagged → TN
+	}
+	scan := &types.Scan{FindingsRaw: []types.Finding{
+		{Tool: "semgrep", CWE: []string{"CWE-326"}, Endpoint: "src/BenchmarkTest10001.java:12"},
+	}}
+	c := ScoreSast(cases, scan).PerCategory["crypto"]
+	if c == nil || c.TP != 1 || c.TN != 1 || c.FP != 0 || c.FN != 0 {
+		t.Fatalf("CWE-326 must count as a crypto hit: got %+v", c)
+	}
+}
+
 func TestSastCaseFlagged_NoSubstringCollision(t *testing.T) {
 	// BenchmarkTest00004 must NOT be flagged by a finding on …00040.
 	c := SastCase{Name: "BenchmarkTest00004", Category: "sqli", Vulnerable: true}
