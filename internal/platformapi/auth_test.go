@@ -136,6 +136,70 @@ func TestAuth_TeamInvite(t *testing.T) {
 	}
 }
 
+// TestAuth_ForcedPasswordRotation: an invited member must set their own password before
+// the app unlocks — the owner-issued temp password can't be the standing credential.
+func TestAuth_ForcedPasswordRotation(t *testing.T) {
+	h, _ := setup(t)
+
+	owner := postJSON(h, "/v1/auth/signup", "", `{"workspace":"Hooli","email":"gavin@hooli.com","password":"ownerpass1"}`)
+	var o struct{ Token string }
+	_ = json.Unmarshal(owner.Body.Bytes(), &o)
+
+	inv := postJSON(h, "/v1/auth/invite", o.Token, `{"email":"dev@hooli.com","name":"Dev"}`)
+	var ir struct {
+		TempPassword string `json:"temp_password"`
+	}
+	_ = json.Unmarshal(inv.Body.Bytes(), &ir)
+
+	// the member logs in with the temp password; the login response flags the forced change
+	li := postJSON(h, "/v1/auth/login", "", `{"email":"dev@hooli.com","password":"`+ir.TempPassword+`"}`)
+	if li.Code != http.StatusOK {
+		t.Fatalf("member temp login: want 200, got %d", li.Code)
+	}
+	var ses struct {
+		Token string `json:"token"`
+		User  struct {
+			MustChangePassword bool `json:"must_change_password"`
+		} `json:"user"`
+	}
+	_ = json.Unmarshal(li.Body.Bytes(), &ses)
+	if !ses.User.MustChangePassword {
+		t.Fatalf("login should flag must_change_password for an invited member: %s", li.Body.String())
+	}
+
+	// app endpoints are BLOCKED with a machine-readable code until the password is set
+	blocked := getBearer(h, "/v1/findings", ses.Token)
+	if blocked.Code != http.StatusForbidden || !strings.Contains(blocked.Body.String(), "password_change_required") {
+		t.Fatalf("app endpoint should be 403 password_change_required, got %d %s", blocked.Code, blocked.Body.String())
+	}
+	// …but the auth-management endpoints stay reachable so the user can fix it
+	if rec := getBearer(h, "/v1/auth/me", ses.Token); rec.Code != http.StatusOK {
+		t.Fatalf("/me must stay reachable during forced change, got %d", rec.Code)
+	}
+
+	// wrong current password is rejected
+	if rec := postJSON(h, "/v1/auth/password", ses.Token, `{"current_password":"wrong","new_password":"brandnew99"}`); rec.Code != http.StatusUnauthorized {
+		t.Errorf("change with wrong current: want 401, got %d", rec.Code)
+	}
+	// setting the new password clears the flag
+	chg := postJSON(h, "/v1/auth/password", ses.Token, `{"current_password":"`+ir.TempPassword+`","new_password":"brandnew99"}`)
+	if chg.Code != http.StatusOK {
+		t.Fatalf("change password: want 200, got %d (%s)", chg.Code, chg.Body.String())
+	}
+
+	// the SAME session now unlocks the app
+	if rec := getBearer(h, "/v1/findings", ses.Token); rec.Code != http.StatusOK {
+		t.Errorf("after password change the app should unlock, got %d", rec.Code)
+	}
+	// the temp password no longer logs in; the new one does
+	if rec := postJSON(h, "/v1/auth/login", "", `{"email":"dev@hooli.com","password":"`+ir.TempPassword+`"}`); rec.Code != http.StatusUnauthorized {
+		t.Errorf("old temp password should no longer work, got %d", rec.Code)
+	}
+	if rec := postJSON(h, "/v1/auth/login", "", `{"email":"dev@hooli.com","password":"brandnew99"}`); rec.Code != http.StatusOK {
+		t.Errorf("new password should log in, got %d", rec.Code)
+	}
+}
+
 // TestAuth_SessionTenantIsolation asserts a session can only ever read its own tenant —
 // the X-Tenant-ID header cannot override the tenant bound to the session.
 func TestAuth_SessionTenantIsolation(t *testing.T) {

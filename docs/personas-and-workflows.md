@@ -170,7 +170,7 @@ Legend: ✅ built & wired · ◐ partial / honest-stub · ○ design only.
 | P5 Trust Center (public) | ✅ | `trust.go` | coverage only |
 | P6 autonomous loop | ✅ | `runner`+`detect`+`hitl`+`ledger`, `scheduler` | continuous + webhook + on-demand |
 | P7 request/resolve expert review | ✅ (surface) | `reviews.go`, `/reviews` | **Open design Q:** reviewer = teammate vs vendor expert (§3) |
-| Invited member first-login pw change | ○ | — | **GAP-3** — temp pw works; no forced rotation |
+| Invited member first-login pw change | ✅ | `User.MustChangePassword` + `auth` gate + `POST /v1/auth/password` + `/change-password` | **GAP-3 closed** — app blocked (403) until the temp pw is rotated |
 | Cloud (AWS/GCP) live *write* | ◐ | `connector.aws` stub | pending creds (documented) |
 
 ### The real, *fixable-now* gaps (not credential-gated)
@@ -184,8 +184,13 @@ Legend: ✅ built & wired · ◐ partial / honest-stub · ○ design only.
   Provider is carried in `Asset.Meta["provider"]`. E2E-tested
   (`TestNonTechLoop_StaleAccountGatedThenApprovedSuspends`). Promotion of the next pair
   (GWorkspace/M365 suspend, Okta `oauth_revoke`) is one line once its connector `Apply` lands.
-- **GAP-3 — forced first-login password rotation** for invited members (P2/P3 onboarding).
-  Temp passwords are issued but not force-rotated. Smaller, security-hygiene.
+- **GAP-3 — forced first-login password rotation — ✅ CLOSED.** An invited member's account
+  carries `User.MustChangePassword`; while set, the `auth` middleware blocks every app
+  endpoint with `403 password_change_required` (the auth-management endpoints stay
+  reachable), and `POST /v1/auth/password` rotates it and unlocks the app. Frontend: a
+  top-level `/change-password` route + the `(app)` layout redirect. So the owner-issued temp
+  password can't remain the standing credential. API-level E2E test:
+  `TestAuth_ForcedPasswordRotation`.
 - **Open design question (P7):** is the human expert a teammate or a Sentinel-side analyst?
   This is the literal "fractional team" promise; it's a go-to-market decision to record,
   not a code defect.

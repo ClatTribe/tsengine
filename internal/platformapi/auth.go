@@ -171,9 +171,50 @@ func (d Deps) handleTeam(w http.ResponseWriter, r *http.Request, s platform.Sess
 	writeJSON(w, http.StatusOK, users)
 }
 
+// handlePassword changes the signed-in user's password: verify the current one, store the
+// new one, and clear MustChangePassword. This is the forced-rotation path for an invited
+// member (their temp password is known to the owner who issued it) and a general
+// change-password for anyone. Same session stays valid.
+func (d Deps) handlePassword(w http.ResponseWriter, r *http.Request, s platform.Session) {
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	u, err := d.Store.GetUser(r.Context(), s.UserID)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
+		return
+	}
+	if !authn.VerifyPassword(body.CurrentPassword, u.PasswordHash) {
+		writeJSON(w, http.StatusUnauthorized, errBody("current password is incorrect"))
+		return
+	}
+	if body.NewPassword == body.CurrentPassword {
+		writeJSON(w, http.StatusBadRequest, errBody("the new password must differ from the current one"))
+		return
+	}
+	hash, err := authn.HashPassword(body.NewPassword)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("password must be at least 8 characters"))
+		return
+	}
+	u.PasswordHash = hash
+	u.MustChangePassword = false
+	if err := d.Store.PutUser(r.Context(), u); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // handleInvite lets a workspace OWNER add a teammate. Without email infrastructure, the
 // account is provisioned with a one-time temporary password returned to the owner to
-// share out-of-band; the teammate signs in with it (changing it is future work).
+// share out-of-band; the teammate signs in with it, then is forced to set their own
+// (MustChangePassword) before the app unlocks.
 func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Session) {
 	actor, err := d.Store.GetUser(r.Context(), s.UserID)
 	if err != nil {
@@ -218,6 +259,7 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 	u := platform.User{
 		ID: d.newID("usr"), TenantID: s.TenantID, Email: email, Name: strings.TrimSpace(body.Name),
 		Role: platform.RoleMember, PasswordHash: hash, CreatedAt: time.Now().UTC(),
+		MustChangePassword: true, // the temp password is the owner's; force the member to set their own
 	}
 	if err := d.Store.PutUser(r.Context(), u); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
