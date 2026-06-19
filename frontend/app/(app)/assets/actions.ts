@@ -8,6 +8,6 @@ import { api } from "@/lib/api";
 export async function rescanAll(): Promise<{ scanned: number }> {
   const { assets_scanned } = await api.rescan();
   revalidatePath("/assets");
-  revalidatePath("/"); // Overview risk + activity may shift after a fresh scan
+  revalidatePath("/dashboard"); // Overview risk + activity may shift after a fresh scan
   return { scanned: assets_scanned };
 }

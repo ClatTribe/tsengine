@@ -8,5 +8,5 @@ import { api } from "@/lib/api";
 export async function decideAction(id: string, approve: boolean) {
   await api.decide(id, approve, "console-operator");
   revalidatePath("/inbox");
-  revalidatePath("/"); // refresh the Overview "needs you" + the sidebar badge
+  revalidatePath("/dashboard"); // refresh the Overview "needs you" + the sidebar badge
 }

@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "pending" as const },
   { href: "/findings", label: "Findings", icon: Bug },
   { href: "/incidents", label: "Incidents", icon: Activity },
@@ -27,7 +27,7 @@ export function Sidebar({ pending }: { pending: number }) {
   const path = usePathname();
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-bg/60 px-3 py-4">
-      <Link href="/" className="mb-6 flex items-center gap-2.5 px-2">
+      <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
         <div className="grid h-8 w-8 place-items-center rounded-lg border border-accent/40 bg-accent-soft text-accent">
           <ShieldCheck className="h-4 w-4" />
         </div>
@@ -36,7 +36,7 @@ export function Sidebar({ pending }: { pending: number }) {
 
       <nav className="flex flex-col gap-0.5">
         {NAV.map(({ href, label, icon: Icon, badgeKey }) => {
-          const active = href === "/" ? path === "/" : path.startsWith(href);
+          const active = path === href || path.startsWith(href + "/");
           const badge = badgeKey === "pending" && pending > 0 ? pending : null;
           return (
             <Link

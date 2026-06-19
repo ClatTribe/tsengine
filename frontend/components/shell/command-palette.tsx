@@ -59,7 +59,7 @@ export function CommandPalette() {
   const commands = useMemo<Cmd[]>(() => {
     const go = (href: string) => () => { close(); router.push(href); };
     const nav: Cmd[] = [
-      { id: "overview", label: "Overview", group: "Go to", icon: LayoutDashboard, keywords: "home dashboard risk", run: go("/") },
+      { id: "overview", label: "Overview", group: "Go to", icon: LayoutDashboard, keywords: "home dashboard risk", run: go("/dashboard") },
       { id: "inbox", label: "Inbox", group: "Go to", icon: Inbox, keywords: "approvals hitl triage", run: go("/inbox") },
       { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities issues", run: go("/findings") },
       { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved", run: go("/incidents") },

@@ -22,7 +22,7 @@ export default function LoginPage() {
       body: JSON.stringify({ token, tenant }),
     });
     if (res.ok) {
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } else {
       const b = await res.json().catch(() => ({}));
