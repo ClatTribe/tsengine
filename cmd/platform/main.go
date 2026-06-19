@@ -38,7 +38,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -298,27 +297,23 @@ func monitorInterval() time.Duration {
 	return d
 }
 
-// openStore returns the file-backed store when TSENGINE_PLATFORM_DB points at a path
-// (survives restarts), else an in-memory store.
+// openStore returns the durable store for TSENGINE_PLATFORM_DB (a *.db/*.sqlite path →
+// SQLite, the production single-box backend; a *.json path → the whole-snapshot file
+// store), else an in-memory store. Routing lives in store.Open; this wraps it with
+// startup logging + fatal-on-error.
 func openStore() store.Store {
-	if path := os.Getenv("TSENGINE_PLATFORM_DB"); path != "" {
-		// A *.db / *.sqlite path → the durable SQLite store (ACID, indexed, the production
-		// single-box backend). A *.json path → the legacy whole-snapshot file store.
-		if ext := strings.ToLower(filepath.Ext(path)); ext == ".db" || ext == ".sqlite" || ext == ".sqlite3" {
-			s, err := store.OpenSQLite(path)
-			if err != nil {
-				log.Fatalf("[platform] open sqlite store %s: %v", path, err)
-			}
-			log.Printf("[platform] sqlite store at %s", path)
-			return s
-		}
-		f, err := store.OpenFile(path)
-		if err != nil {
-			log.Fatalf("[platform] open store %s: %v", path, err)
-		}
-		log.Printf("[platform] file store at %s", path)
-		return f
+	path := os.Getenv("TSENGINE_PLATFORM_DB")
+	s, err := store.Open(path)
+	if err != nil {
+		log.Fatalf("[platform] open store %s: %v", path, err)
 	}
-	log.Print("[platform] in-memory store (set TSENGINE_PLATFORM_DB=/data/platform.db to persist)")
-	return store.NewMemory()
+	switch {
+	case path == "":
+		log.Print("[platform] in-memory store (set TSENGINE_PLATFORM_DB=/data/platform.db to persist)")
+	case strings.HasSuffix(strings.ToLower(path), ".json"):
+		log.Printf("[platform] file store at %s", path)
+	default:
+		log.Printf("[platform] sqlite store at %s", path)
+	}
+	return s
 }

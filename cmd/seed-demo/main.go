@@ -22,7 +22,9 @@ func main() {
 	if len(os.Args) > 1 {
 		path = os.Args[1]
 	}
-	st, err := store.OpenFile(path)
+	// store.Open routes by extension (.db/.sqlite → SQLite prod store; else snapshot
+	// file), so the demo can seed whichever backend the platform will read.
+	st, err := store.Open(path)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -12,6 +12,8 @@ package store
 import (
 	"context"
 	"errors"
+	"path/filepath"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -20,6 +22,26 @@ import (
 // ErrNotFound is returned when a scoped lookup misses (wrong id, or — critically —
 // the right id under the wrong tenant).
 var ErrNotFound = errors.New("store: not found")
+
+// Open returns the right Store for a path — the single source of truth for store-path
+// routing, shared by the platform server and dev tooling so they can't drift:
+//
+//	""                      → in-memory (ephemeral)
+//	*.db / *.sqlite[3]      → durable SQLite (the production single-box backend)
+//	any other path (*.json) → the whole-snapshot file store
+//
+// Callers that want startup logging wrap this; the routing itself lives here.
+func Open(path string) (Store, error) {
+	if path == "" {
+		return NewMemory(), nil
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".db", ".sqlite", ".sqlite3":
+		return OpenSQLite(path)
+	default:
+		return OpenFile(path)
+	}
+}
 
 // FindingFilter narrows a finding list. Zero value = all of the tenant's findings.
 type FindingFilter struct {
