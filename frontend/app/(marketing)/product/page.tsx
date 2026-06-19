@@ -3,6 +3,7 @@ import {
   Plug, ScanLine, Filter, Wrench, CheckCircle2, FileCheck2, ArrowRight,
   Building2, Wallet, Code2, ClipboardCheck, Bot, UserCheck,
 } from "lucide-react";
+import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 
 export const metadata = {
   title: "Product — how TensorShield works",
@@ -15,7 +16,7 @@ const LOOP = [
   { icon: Filter, t: "Triage", d: "An AI security engineer separates real, exploitable risk from noise — verifying findings rather than dumping a raw scanner report on you." },
   { icon: Wrench, t: "Fix", d: "It prepares the actual remediation — a pull request, a config change, an identity action, or a ticket — ready to ship." },
   { icon: UserCheck, t: "Approve", d: "Low-risk fixes apply automatically; anything consequential waits for one tap of your approval. Autonomy where it's earned." },
-  { icon: FileCheck2, t: "Prove", d: "Every finding maps to your compliance controls and lands in a signed, auditor-ready evidence pack — automatically." },
+  { icon: FileCheck2, t: "Prove", d: "Every finding maps to controls across 14 frameworks and lands in a signed, auditor-ready evidence pack — automatically." },
 ];
 
 const PERSONAS = [
@@ -98,6 +99,9 @@ export default function Product() {
         </div>
       </section>
 
+      {/* Compliance coverage */}
+      <ComplianceBand />
+
       {/* Personas */}
       <section className="mx-auto max-w-6xl px-5 py-20">
         <div className="mx-auto mb-12 max-w-2xl text-center">
@@ -119,6 +123,47 @@ export default function Product() {
 
       <CTABand />
     </>
+  );
+}
+
+// ComplianceBand — surfaces the 14-framework breadth on the deep product page (it was the
+// one marketing page that omitted it). Grouped by category, sourced from the shared
+// framework list so it never drifts from what the app actually maps.
+const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government"];
+
+function ComplianceBand() {
+  const groups = CATEGORY_ORDER.map((cat) => ({
+    cat,
+    items: FRAMEWORKS.filter((f) => FRAMEWORK_CATEGORY[f] === cat),
+  })).filter((g) => g.items.length > 0);
+
+  return (
+    <section className="bg-surface">
+      <div className="mx-auto max-w-5xl px-5 py-20">
+        <div className="mx-auto mb-10 max-w-2xl text-center">
+          <span className="text-xs font-semibold uppercase tracking-wider text-accent">Prove it — automatically</span>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight">{FRAMEWORKS.length} frameworks, mapped as findings land.</h2>
+          <p className="mt-3 text-base leading-relaxed text-muted">
+            Every finding maps to the controls it touches — no spreadsheet, no screenshots. Your evidence pack stays
+            current and signed, ready for an auditor or a customer&apos;s security review.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {groups.map((g) => (
+            <div key={g.cat} className="card p-5">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-faint">{g.cat}</div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {g.items.map((f) => (
+                  <span key={f} className="inline-flex items-center gap-1 rounded-full border border-border bg-bg px-2.5 py-1 text-xs font-medium text-ink">
+                    <CheckCircle2 className="h-3 w-3 text-pulse" /> {FRAMEWORK_LABEL[f] ?? f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
