@@ -528,13 +528,14 @@ func build(ctx context.Context, st store.Store, tenantID string) (view, error) {
 		v.Apps = apps
 	}
 
-	// compliance posture by framework (met vs gap)
-	for _, fw := range []string{"soc2", "iso27001", "pci", "hipaa", "cis_v8", "nist_csf"} {
+	// compliance posture by framework (met vs gap). Iterate grc.Frameworks (the single
+	// source of truth) so the fallback console shows the full set, not a stale hardcoded six.
+	for _, fw := range grc.Frameworks {
 		cs, _ := st.Posture(ctx, tenantID, fw)
 		if len(cs) == 0 {
 			continue
 		}
-		f := framework{Key: fw, Name: strings.ToUpper(fw)}
+		f := framework{Key: fw, Name: grc.FrameworkTitle(fw)}
 		for _, c := range cs {
 			if c.State == platform.ControlMet {
 				f.Met++
