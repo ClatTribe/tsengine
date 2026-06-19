@@ -158,6 +158,21 @@ func TestConnectionsRedactSecretRef(t *testing.T) {
 	}
 }
 
+func TestGetTenant_ReturnsOwnOrg(t *testing.T) {
+	h, _ := setup(t)
+	rec := do(h, "GET", "/v1/tenant", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /v1/tenant: want 200, got %d", rec.Code)
+	}
+	var ten platform.Tenant
+	if err := json.Unmarshal(rec.Body.Bytes(), &ten); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if ten.ID != "t1" || ten.Name != "Acme" {
+		t.Fatalf("want the t1/Acme tenant, got %+v", ten)
+	}
+}
+
 func TestCreateTenant_Provisions(t *testing.T) {
 	st := store.NewMemory()
 	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})

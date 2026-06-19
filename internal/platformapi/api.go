@@ -55,6 +55,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
 	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
+	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant)) // the current tenant (org name/plan) for Settings
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents)) // SSE live state feed
@@ -184,6 +185,13 @@ func (d Deps) handleEngagements(w http.ResponseWriter, r *http.Request, tenantID
 func (d Deps) handleConnections(w http.ResponseWriter, r *http.Request, tenantID string) {
 	c, err := d.Store.ListConnections(r.Context(), tenantID)
 	respond(w, redactConnections(c), err)
+}
+
+// handleGetTenant returns the caller's own tenant (org name, plan, created) for the
+// Settings screen. Tenant-scoped: a tenant can only read itself.
+func (d Deps) handleGetTenant(w http.ResponseWriter, r *http.Request, tenantID string) {
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	respond(w, t, err)
 }
 
 // handleAssets returns the tenant's monitored assets (what the agent continuously scans:

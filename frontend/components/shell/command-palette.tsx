@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Bug, Activity, ShieldCheck, Boxes, ScrollText,
-  RefreshCw, Plug, LogOut, Search, CornerDownLeft,
+  RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings,
 } from "lucide-react";
 import { rescanAll } from "@/app/(app)/assets/actions";
 import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
@@ -67,6 +67,7 @@ export function CommandPalette() {
       { id: "questionnaire", label: "Security questionnaire", group: "Go to", icon: ShieldCheck, keywords: "caiq sig vendor trust center procurement", run: go("/compliance/questionnaire") },
       { id: "assets", label: "Assets & connections", group: "Go to", icon: Boxes, keywords: "connect systems monitored", run: go("/assets") },
       { id: "activity", label: "Activity", group: "Go to", icon: ScrollText, keywords: "feed log agent", run: go("/activity") },
+      { id: "settings", label: "Settings", group: "Go to", icon: Settings, keywords: "account organization notifications profile", run: go("/settings") },
     ];
     const actions: Cmd[] = [
       {
