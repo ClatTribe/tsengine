@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -154,4 +155,74 @@ func (d Deps) handleMe(w http.ResponseWriter, r *http.Request, s platform.Sessio
 	}
 	u.PasswordHash = ""
 	writeJSON(w, http.StatusOK, u)
+}
+
+// handleTeam lists the tenant's members, oldest first, with password hashes redacted.
+func (d Deps) handleTeam(w http.ResponseWriter, r *http.Request, s platform.Session) {
+	users, err := d.Store.ListUsers(r.Context(), s.TenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	sort.Slice(users, func(i, j int) bool { return users[i].CreatedAt.Before(users[j].CreatedAt) })
+	for i := range users {
+		users[i].PasswordHash = ""
+	}
+	writeJSON(w, http.StatusOK, users)
+}
+
+// handleInvite lets a workspace OWNER add a teammate. Without email infrastructure, the
+// account is provisioned with a one-time temporary password returned to the owner to
+// share out-of-band; the teammate signs in with it (changing it is future work).
+func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Session) {
+	actor, err := d.Store.GetUser(r.Context(), s.UserID)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
+		return
+	}
+	if actor.Role != platform.RoleOwner {
+		writeJSON(w, http.StatusForbidden, errBody("only the workspace owner can invite teammates"))
+		return
+	}
+	var body struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(body.Email))
+	if !strings.Contains(email, "@") {
+		writeJSON(w, http.StatusBadRequest, errBody("a valid email is required"))
+		return
+	}
+	if _, err := d.Store.GetUserByEmail(r.Context(), email); err == nil {
+		writeJSON(w, http.StatusConflict, errBody("a user with that email already exists"))
+		return
+	} else if !errors.Is(err, store.ErrNotFound) {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	tok, err := authn.NewToken()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	temp := tok[:14] // a usable one-time password (≥8 chars)
+	hash, err := authn.HashPassword(temp)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	u := platform.User{
+		ID: d.newID("usr"), TenantID: s.TenantID, Email: email, Name: strings.TrimSpace(body.Name),
+		Role: platform.RoleMember, PasswordHash: hash, CreatedAt: time.Now().UTC(),
+	}
+	if err := d.Store.PutUser(r.Context(), u); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	u.PasswordHash = ""
+	writeJSON(w, http.StatusCreated, map[string]any{"user": u, "temp_password": temp})
 }

@@ -92,6 +92,50 @@ func TestAuth_SignupLoginSessionFlow(t *testing.T) {
 	}
 }
 
+func TestAuth_TeamInvite(t *testing.T) {
+	h, _ := setup(t)
+
+	owner := postJSON(h, "/v1/auth/signup", "", `{"workspace":"Initech","email":"boss@initech.com","password":"ownerpass1"}`)
+	var o struct{ Token, Tenant string }
+	_ = json.Unmarshal(owner.Body.Bytes(), &o)
+
+	// owner invites a teammate → 201 with a one-time temp password
+	inv := postJSON(h, "/v1/auth/invite", o.Token, `{"email":"dev@initech.com","name":"Dev"}`)
+	if inv.Code != http.StatusCreated {
+		t.Fatalf("invite: want 201, got %d (%s)", inv.Code, inv.Body.String())
+	}
+	var ir struct {
+		TempPassword string                `json:"temp_password"`
+		User         struct{ Role string } `json:"user"`
+	}
+	_ = json.Unmarshal(inv.Body.Bytes(), &ir)
+	if len(ir.TempPassword) < 8 || ir.User.Role != "member" {
+		t.Fatalf("invite payload bad: %s", inv.Body.String())
+	}
+
+	// the teammate signs in with the temp password
+	li := postJSON(h, "/v1/auth/login", "", `{"email":"dev@initech.com","password":"`+ir.TempPassword+`"}`)
+	if li.Code != http.StatusOK {
+		t.Fatalf("member login with temp password: want 200, got %d", li.Code)
+	}
+
+	// the team lists both members, hashes redacted
+	team := getBearer(h, "/v1/auth/team", o.Token)
+	if team.Code != http.StatusOK || !strings.Contains(team.Body.String(), "boss@initech.com") || !strings.Contains(team.Body.String(), "dev@initech.com") {
+		t.Fatalf("team: want both members, got %d %s", team.Code, team.Body.String())
+	}
+	if strings.Contains(team.Body.String(), "pbkdf2") {
+		t.Error("team leaked password hashes")
+	}
+
+	// a member cannot invite (owner-only)
+	var member struct{ Token string }
+	_ = json.Unmarshal(li.Body.Bytes(), &member)
+	if rec := postJSON(h, "/v1/auth/invite", member.Token, `{"email":"x@initech.com"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("member invite: want 403, got %d", rec.Code)
+	}
+}
+
 // TestAuth_SessionTenantIsolation asserts a session can only ever read its own tenant —
 // the X-Tenant-ID header cannot override the tenant bound to the session.
 func TestAuth_SessionTenantIsolation(t *testing.T) {

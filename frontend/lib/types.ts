@@ -56,6 +56,16 @@ export interface Tenant {
   created_at?: string;
 }
 
+// A user account within a tenant (password hash never sent by the API).
+export interface User {
+  id: string;
+  tenant_id: string;
+  email: string;
+  name?: string;
+  role: string; // "owner" | "member"
+  created_at: string;
+}
+
 // Public Trust Center aggregate (safe projection — coverage only, never findings).
 export interface TrustView {
   org: string;
