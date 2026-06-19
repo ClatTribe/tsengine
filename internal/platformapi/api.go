@@ -67,9 +67,10 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
 	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
-	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))     // the current tenant (org name/plan) for Settings
-	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink)) // owner's shareable Trust Center token
-	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)         // PUBLIC, HMAC-token-gated; safe aggregates only
+	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))       // the current tenant (org name/plan) for Settings
+	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch)) // global kill-switch: halt/resume all agent action
+	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))   // owner's shareable Trust Center token
+	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)           // PUBLIC, HMAC-token-gated; safe aggregates only
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents)) // SSE live state feed
@@ -222,6 +223,39 @@ func (d Deps) handleConnections(w http.ResponseWriter, r *http.Request, tenantID
 func (d Deps) handleGetTenant(w http.ResponseWriter, r *http.Request, tenantID string) {
 	t, err := d.Store.GetTenant(r.Context(), tenantID)
 	respond(w, t, err)
+}
+
+// handleKillSwitch engages/disengages the tenant's global kill-switch (agentic-SMB spec
+// OM-3 / TS-5). While engaged the platform takes NO autonomous agent action for the tenant
+// — no new scans, no remediation writes (the hitl desk + runner fail closed). The toggle
+// is signed into the ledger as a governance action. Returns the updated tenant.
+func (d Deps) handleKillSwitch(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		Halted bool `json:"halted"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errBody("tenant not found"))
+		return
+	}
+	t.AgentsHalted = body.Halted
+	if err := d.Store.PutTenant(r.Context(), t); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	if d.Recorder != nil {
+		state := "resumed"
+		if body.Halted {
+			state = "halted"
+		}
+		d.Recorder.Record("kill-switch toggled", "kill_switch",
+			map[string]any{"tenant_id": tenantID, "halted": body.Halted}, "agent automation "+state)
+	}
+	writeJSON(w, http.StatusOK, t)
 }
 
 // handleAssets returns the tenant's monitored assets (what the agent continuously scans:

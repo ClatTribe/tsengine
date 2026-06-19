@@ -56,6 +56,25 @@ func newService() (*Service, *fakeScanner, store.Store) {
 	}, sc, st
 }
 
+// The kill-switch (Tenant.AgentsHalted) pauses scanning: a halted tenant gets no new
+// engagements until it is disengaged.
+func TestKillSwitchPausesScanning(t *testing.T) {
+	svc, sc, st := newService()
+	ctx := context.Background()
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "t1", Type: "repository", Target: "x"})
+
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme", AgentsHalted: true})
+	n, err := svc.RescanTenant(ctx, "t1")
+	if err != nil || n != 0 || sc.calls != 0 {
+		t.Fatalf("halted tenant must not scan: n=%d calls=%d err=%v", n, sc.calls, err)
+	}
+
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme"}) // disengage
+	if n, _ = svc.RescanTenant(ctx, "t1"); n != 1 {
+		t.Fatalf("after disengage want 1 scanned, got %d", n)
+	}
+}
+
 func TestDiscoverAndScan_PersistsFindingsTenantScoped(t *testing.T) {
 	svc, sc, st := newService()
 	ctx := context.Background()

@@ -32,6 +32,45 @@ func newDesk(app Applier) (*Desk, *ledger.Recorder, store.Store) {
 	return &Desk{Store: st, Apply: app, Recorder: rec}, rec, st
 }
 
+// The kill-switch (Tenant.AgentsHalted) freezes the write path: a tier-1 auto-apply queues
+// instead of executing, and even a human approval of a gated action is refused until the
+// switch is disengaged.
+func TestKillSwitchFreezesWritePath(t *testing.T) {
+	ctx := context.Background()
+	app := &recordingApplier{}
+	d, _, st := newDesk(app)
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t", Name: "Acme", AgentsHalted: true})
+
+	// a tier-1 action that would normally auto-apply must QUEUE while halted (not lost)
+	got, err := d.Submit(ctx, platform.Action{ID: "a1", TenantID: "t", Tier: 1, Kind: platform.ActOpenPR, Status: platform.ActProposed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != platform.ActPendingApproval {
+		t.Fatalf("halted tier-1 action should queue, got status %s", got.Status)
+	}
+	if len(app.applied) != 0 {
+		t.Fatalf("nothing must apply while halted, applied=%v", app.applied)
+	}
+
+	// approving the queued action while halted is refused (the switch wins over the verdict)
+	if _, err := d.Decide(ctx, "t", "a1", Verdict{Approver: "boss@acme.com", Approve: true}); !errors.Is(err, ErrHalted) {
+		t.Fatalf("approve while halted should return ErrHalted, got %v", err)
+	}
+	if len(app.applied) != 0 {
+		t.Fatalf("still nothing applied while halted, applied=%v", app.applied)
+	}
+
+	// disengage → the same approval now applies
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t", Name: "Acme", AgentsHalted: false})
+	if _, err := d.Decide(ctx, "t", "a1", Verdict{Approver: "boss@acme.com", Approve: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(app.applied) != 1 || app.applied[0] != "a1" {
+		t.Fatalf("after disengage the action must apply, applied=%v", app.applied)
+	}
+}
+
 func TestTier1AutoApplies(t *testing.T) {
 	app := &recordingApplier{}
 	d, rec, _ := newDesk(app)

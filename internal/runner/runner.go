@@ -136,6 +136,12 @@ func (s *Service) registerWebhooks(ctx context.Context, conn connector.Connector
 // runs the full loop per asset and returns how many it scanned; an asset error is
 // logged via the returned error but does not stop the rest.
 func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error) {
+	// Kill-switch (agentic-SMB spec OM-3 / TS-5): a halted tenant gets NO new agent
+	// activity — scanning is paused along with the write path. The human's already-collected
+	// state stays readable; nothing new runs until they disengage.
+	if s.halted(ctx, tenantID) {
+		return 0, nil
+	}
 	assets, err := s.Store.ListAssets(ctx, tenantID)
 	if err != nil {
 		return 0, err
@@ -169,6 +175,9 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 // OnTrigger handles a single provider event (a push) — find the matching asset and
 // re-scan it.
 func (s *Service) OnTrigger(ctx context.Context, t connector.Trigger) (*platform.Engagement, error) {
+	if s.halted(ctx, t.TenantID) { // kill-switch: ignore webhook-driven re-scans while halted
+		return nil, nil
+	}
 	assets, err := s.Store.ListAssets(ctx, t.TenantID)
 	if err != nil {
 		return nil, err
@@ -180,6 +189,14 @@ func (s *Service) OnTrigger(ctx context.Context, t connector.Trigger) (*platform
 		}
 	}
 	return nil, fmt.Errorf("runner: no asset matches trigger target %q", t.AssetTarget)
+}
+
+// halted reports whether the tenant's kill-switch is engaged (Tenant.AgentsHalted). A
+// store read error is treated as NOT halted — the switch is opt-in, and a transient error
+// must not silently freeze monitoring.
+func (s *Service) halted(ctx context.Context, tenantID string) bool {
+	t, err := s.Store.GetTenant(ctx, tenantID)
+	return err == nil && t.AgentsHalted
 }
 
 // scanAsset runs the engine over one asset, persists the findings, and records the

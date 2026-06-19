@@ -205,8 +205,41 @@ write scopes.
 
 - **Workflows** are exercised end-to-end against the production (SQLite) store — auth/team,
   connect-URL, scan-as-job, findings, the HITL approve path, compliance report, incidents,
-  Trust Center, `/metrics`. See the E2E smoke in the iteration log.
-- **Detection accuracy vs competitors** (the FP/FN bar) is tracked in
-  [benchmark.md](../benchmark.md): SAST **47.86% Youden ≈ Checkmarx (47)**, container
-  **100% recall / 0 FP**. Remaining asset benches are sandbox-image-gated (DAST/WAVSEP,
-  cloud, api, ip) and run in the build pipeline, not on a laptop with restricted egress.
+  Trust Center, `/metrics` — and at the **UI level** (founder + invited-member click-paths,
+  the forced-rotation redirect, the kill-switch banner/control).
+- **Detection accuracy vs competitors** (the FP/FN bar): SAST **47.86% Youden ≈ Checkmarx
+  (47)**, container **100% recall / 0 FP** (live host trivy), web-agent range **100% recall
+  / 0 decoys flagged** (7 seeds), LLM red-team **100% recall (61/61) / 0 false breaches**
+  (7 seeds). Remaining asset benches are sandbox-image-gated (DAST/WAVSEP, cloud, api, ip)
+  and run in the build pipeline, not on a laptop with restricted egress.
+
+---
+
+## 7. Reconciliation against the agentic-SMB spec (`sec_lifecycle_agentic_smb.md`)
+
+The companion design doc `sec_lifecycle_agentic_smb.md` is the formal RFC-2119 spec for this
+product: the run-secure lifecycle operated by an **orchestrated agent roster + one
+accountable human + a signed decision ledger**, autonomy classified by **blast-radius tier**
+(T0 observe / T1 reversible / T2 consequential / T3 irreversible-or-legal). This table maps
+its hard requirements to the implementation.
+
+| Spec requirement | State | Where |
+|---|---|---|
+| **Autonomy tiers T0–T3** (§3) | ✅ | `pkg/platform/types.go` (tier doc); `GateTier=2` gates T2+ |
+| **TS-2 — T2 pauses for a human; T3 always human-signed** | ✅ | `hitl.Desk` (tier ≥ GateTier queues); reject-safe, approve→apply gated |
+| **TS-3 — every decision signed (tier + approver) in a replayable ledger** | ✅ | `pkg/ledger`; `Desk.record` |
+| **TS-1 — no T1+ action on an ungrounded claim** | ✅ | grounding (CLAUDE.md §10); remediations carry `FindingID` |
+| **OM-3 / TS-5 — global kill-switch, halts all agent action** | ✅ **(this iteration)** | `Tenant.AgentsHalted`, `POST /v1/killswitch`, `hitl`+`runner` fail closed, single-pane control |
+| **A-IDN / A-ASR — grounded EASM + validation agents** | ✅ | the engine (domain/ip/cloud + web/cloud/LLM validation) |
+| **A-PRO / A-DET — identity hardening + continuous detection** | ✅ | `operate` (MFA/DMARC/OAuth/stale) + `detect` (incidents) |
+| **A-GOV — compliance/governance** | ◐ | `grc` (control state, evidence, questionnaire); risk-register/policy drafting not built |
+| **TS-4 — ledger as auditor/insurer evidence of record** | ✅ | `grc` signed evidence pack + compliance report |
+| **T3 distinct class** (breach-notification / customer-comms — agent prepares, human signs) | ○ | **next** — no T3-only action kind emitted yet (T3 would gate today, but isn't a distinct type) |
+| **WRD — the Warden** (AI-BOM of the platform's *own* agents, per-agent quarantine, injection-resistance audit) | ◐ | injection-resistance holds (instruction-boundary); a formal AI-BOM + quarantine of the platform's agents is not built |
+| **OM-5 — fail closed on connector/model unavailability** | ◐ | the HITL gate already prevents blind T2/T3 action; an explicit fail-closed-on-unavailable path is **next** |
+| **ACC-1/2 — named accountable human + autonomy-policy doc** | ◐ | the owner is the accountable human (role model); a per-tenant autonomy-policy artifact is **next** |
+
+The spec's own crosswalk (§11) frames tsengine's durable role as the **A-IDN + A-ASR agents
+and the TS decision-ledger substrate** — "the validation-and-evidence backbone an agentic
+MSSP would buy rather than build." The platform layer adds the **operating model** around it
+(orchestration cadence, the HITL desk, the single pane, and now the kill-switch).

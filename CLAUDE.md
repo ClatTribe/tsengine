@@ -701,6 +701,7 @@ are presentation only — the gate, ledger, and engines are unchanged.
 4. **Every decision is signed.** Auto-apply and human verdicts both record into `pkg/ledger`; the GRC evidence pack uses the same ed25519-over-canonical-JSON scheme — one verifier covers ledger, evidence bundle, and evidence pack.
 5. **Grounding holds end-to-end.** GRC marks a control "gap" only because a real finding cites it; remediations always carry `FindingID`. No platform layer asserts something the engine did not prove.
 6. **Secrets never leave, and never sit in plaintext.** OAuth tokens are sealed by `internal/secret` (AES-256-GCM, key from `TSENGINE_SECRET_KEY`) at the OAuth callback *before* they touch the store; `Connection.SecretRef` holds only the sealed ref, resolved via `secret.Tokens` (`runner.Tokens`); the API redacts `SecretRef` before returning a connection.
+7. **The kill-switch fails closed.** `Tenant.AgentsHalted` (the agentic-SMB spec OM-3 / TS-5 global kill-switch, toggled via `POST /v1/killswitch`) halts ALL autonomous action for a tenant: `hitl.Desk` refuses every apply (auto-applied AND human-approved alike — the switch wins over the verdict; queued actions wait) and `runner` pauses scanning. A read error on the flag is treated as NOT halted (opt-in; a transient error must not freeze a tenant). The one human "on the loop" can freeze the whole roster instantly; the toggle is signed into the ledger.
 
 ### 18.3 Status
 
@@ -862,3 +863,17 @@ verified. The detection **engine** has its own image (`docker/host/Dockerfile`, 
 GHCR by `release.yml`). **Not yet production-grade:** single-node file store (Postgres is the
 `store.Store` successor), env-key secrets (cloud-KMS is the `secret.Vault` successor), no
 bundled TLS/HA — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+**The global kill-switch is built** (agentic-SMB spec OM-3 / TS-5 — the "one human, one pane,
+kill-switch" operating-model primitive). `Tenant.AgentsHalted`, toggled by the owner via
+`POST /v1/killswitch` (signed into the ledger), makes the platform **fail closed** for a
+tenant: `hitl.Desk` refuses every apply (auto + human-approved; the switch beats the verdict,
+actions queue) and `runner` pauses scanning. The frontend surfaces it on the single pane — a
+Settings toggle (owner-gated) + a persistent halted banner across the app shell. This is the
+**§18.2 invariant 7**. The design source is the (untracked) `sec_lifecycle_agentic_smb.md` —
+the formal RFC-2119 spec for the fractional-autonomous-security-team-for-SMB product; the
+implementation's reconciliation against it lives in [docs/personas-and-workflows.md](docs/personas-and-workflows.md)
+§7. Remaining spec gaps (next, all additive): a distinct **T3** action class (irreversible/
+legal — breach-notification/customer-comms — agent *prepares*, human *signs*); the **Warden**
+phase (WRD: AI-BOM of the platform's own agents, per-agent quarantine); and OM-5 fail-closed
+on connector/model unavailability (the HITL gate already prevents blind T2/T3 action).

@@ -10,6 +10,7 @@ import { Card, SectionTitle } from "@/components/ui/primitives";
 import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
 import { TeamSection } from "@/components/settings/team-section";
+import { KillSwitch } from "@/components/settings/kill-switch";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,12 @@ export default async function SettingsPage() {
             <Row icon={CheckCircle2} label="Member since" value={<span className="text-sm text-muted">{new Date(tenant.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>} />
           )}
         </Card>
+      </div>
+
+      {/* Automation control — the global kill-switch (the human "on the loop") */}
+      <div>
+        <SectionTitle>Automation</SectionTitle>
+        <KillSwitch halted={tenant?.agents_halted ?? false} canToggle={me?.role === "owner"} />
       </div>
 
       {/* Team */}

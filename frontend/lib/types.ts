@@ -54,6 +54,7 @@ export interface Tenant {
   name: string;
   plan?: string;
   created_at?: string;
+  agents_halted?: boolean; // global kill-switch: when true, no autonomous agent action runs
 }
 
 // A user account within a tenant (password hash never sent by the API).
