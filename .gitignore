@@ -33,3 +33,4 @@ scan_runs/
 *.pem
 *.key
 attestation-private.bin
+.claude/launch.json
