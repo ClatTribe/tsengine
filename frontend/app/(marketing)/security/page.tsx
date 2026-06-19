@@ -6,7 +6,10 @@ export const metadata = {
   description: "Signed, reproducible, grounded evidence. Least-privilege by default, human-gated writes, encrypted at rest. The trust layer SMBs and their auditors need.",
 };
 
-const FRAMEWORKS = ["SOC 2", "ISO 27001", "PCI-DSS v4", "HIPAA", "CIS v8", "NIST CSF 2.0"];
+const FRAMEWORKS = [
+  "SOC 2", "ISO 27001", "PCI-DSS v4", "HIPAA", "CIS v8", "NIST CSF 2.0", "GDPR",
+  "ISO 27701", "NIST 800-53", "NIST 800-171", "CCPA / CPRA", "SOX", "FedRAMP", "India DPDP",
+];
 
 const PRINCIPLES = [
   { icon: Fingerprint, t: "Signed, tamper-evident evidence", d: "Every compliance pack is ed25519-signed over its canonical contents and pinned to the exact state it was assessed against. Altering it after the fact breaks the signature." },

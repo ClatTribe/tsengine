@@ -369,14 +369,14 @@ L2 retains a separate `query_threat_intel` tool for the LLM to look up CVEs that
 
 Every finding emitted at L1 carries a compliance annotation. Mapping is **annotation, not gate** — L1 emits the technical finding regardless of whether it maps to a control; the mapping just records which controls it affects.
 
-Frameworks supported day 1:
+Frameworks supported (14 — keys defined once in `grc.Frameworks`, mirrored by `pkg/types.Compliance`, the `compliance.json` crosswalk, and `frontend/lib/frameworks.ts`):
 
-* SOC 2 (Trust Services Criteria)
-* PCI-DSS v4.0
-* HIPAA Security Rule
-* CIS Controls v8
-* NIST CSF 2.0
-* ISO 27001:2022
+* **Security & trust**: SOC 2 (Trust Services Criteria), CIS Controls v8, NIST CSF 2.0, ISO 27001:2022
+* **Sector & payments**: PCI-DSS v4.0, HIPAA Security Rule, SOX (IT general controls)
+* **Privacy**: EU GDPR, ISO 27701:2019, CCPA/CPRA, India DPDP Act 2023
+* **Government**: NIST SP 800-53 r5, NIST SP 800-171 r2, FedRAMP Moderate
+
+A finding maps to a framework **only where the crosswalk has a real control nexus** (grounding §10) — e.g. an injection CWE cites NIST SI-10 and GDPR Art. 32; a data-exposure CWE additionally cites CCPA §1798.150 and SOX access-controls; a memory-safety CWE does not. Adding a framework is one entry in each of the four mirrors above; adding a control mapping is one key in `compliance.json`.
 
 Hook: `compliance.map` fires in the L1.5 hook chain. Sourced from `compliance_corpus/` (versioned YAML), refreshed on cron. Same per-scan pinning as threat intel.
 

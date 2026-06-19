@@ -23,12 +23,20 @@ type Compliance struct {
 }
 
 type controlSet struct {
-	SOC2     []string `json:"soc2"`
-	PCI      []string `json:"pci"`
-	HIPAA    []string `json:"hipaa"`
-	CISv8    []string `json:"cis_v8"`
-	NISTCSF  []string `json:"nist_csf"`
-	ISO27001 []string `json:"iso27001"`
+	SOC2       []string `json:"soc2"`
+	PCI        []string `json:"pci"`
+	HIPAA      []string `json:"hipaa"`
+	CISv8      []string `json:"cis_v8"`
+	NISTCSF    []string `json:"nist_csf"`
+	ISO27001   []string `json:"iso27001"`
+	GDPR       []string `json:"gdpr"`
+	ISO27701   []string `json:"iso27701"`
+	NIST80053  []string `json:"nist_800_53"`
+	NIST800171 []string `json:"nist_800_171"`
+	CCPA       []string `json:"ccpa"`
+	SOX        []string `json:"sox"`
+	FedRAMP    []string `json:"fedramp"`
+	DPDP       []string `json:"dpdp"`
 }
 
 // NewCompliance loads the embedded corpus. Panics on malformed data.
@@ -61,6 +69,14 @@ func (h *Compliance) Lookup(cwes []string) (*types.Compliance, bool) {
 		agg.CISv8 = mergeUnique(agg.CISv8, cs.CISv8)
 		agg.NISTCSF = mergeUnique(agg.NISTCSF, cs.NISTCSF)
 		agg.ISO27001 = mergeUnique(agg.ISO27001, cs.ISO27001)
+		agg.GDPR = mergeUnique(agg.GDPR, cs.GDPR)
+		agg.ISO27701 = mergeUnique(agg.ISO27701, cs.ISO27701)
+		agg.NIST80053 = mergeUnique(agg.NIST80053, cs.NIST80053)
+		agg.NIST800171 = mergeUnique(agg.NIST800171, cs.NIST800171)
+		agg.CCPA = mergeUnique(agg.CCPA, cs.CCPA)
+		agg.SOX = mergeUnique(agg.SOX, cs.SOX)
+		agg.FedRAMP = mergeUnique(agg.FedRAMP, cs.FedRAMP)
+		agg.DPDP = mergeUnique(agg.DPDP, cs.DPDP)
 	}
 	if !matched {
 		return nil, false
