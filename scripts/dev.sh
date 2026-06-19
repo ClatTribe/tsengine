@@ -8,6 +8,7 @@
 #
 #   make dev            # or: ./scripts/dev.sh
 #   → sign in at http://localhost:3000/login · founder@northwind.io / sentinel123 (or /signup)
+#   make dev-reseed     # refresh demo data to current code (drops + re-seeds the DB), then restart
 #   make dev-down       # stop the stack
 #
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -43,6 +44,10 @@ sleep 1
 
 echo "→ building platform + seeding demo data ($DB)"
 go build -o platform ./cmd/platform
+# RESEED=1 forces a fresh seed (drops the existing DB) so the demo reflects the LATEST
+# seed-demo — e.g. after compliance/framework changes. Otherwise an existing DB is kept
+# (fast restart). `make dev-reseed` sets this for you.
+[ -n "${RESEED:-}" ] && { echo "  RESEED=1 → dropping $DB for a fresh seed"; rm -f "$DB"; }
 [ -f "$DB" ] || go run ./cmd/seed-demo "$DB"
 
 echo "→ starting platform API on :$API_PORT (logs → /tmp/platform.log)"
