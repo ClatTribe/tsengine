@@ -99,7 +99,8 @@ Each workflow is written as the persona experiences it, then grounded to the bui
    *Success = identity findings name the entity and carry the fix, not generic advice.*
 
 ### P4 — Compliance lead: "Get us audit-ready and answer the questionnaire."
-1. Opens **Compliance** → posture per framework (SOC 2, ISO 27001, PCI, HIPAA, CIS, NIST)
+1. Opens **Compliance** → posture across 14 frameworks (SOC 2, ISO 27001, PCI, HIPAA, CIS v8,
+   NIST CSF, GDPR, ISO 27701, NIST 800-53/171, CCPA, SOX, FedRAMP, DPDP), grouped by category
    with met/gap counts (`/compliance`).
 2. Drills a framework → each **gap is backed by the citing finding** (`/compliance/[framework]`).
 3. **Auto-answers a security questionnaire** (CAIQ/SIG-style), grounded in findings (`/compliance/questionnaire`).
