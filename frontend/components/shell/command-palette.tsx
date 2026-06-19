@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Bug, Activity, ShieldCheck, Boxes, ScrollText,
-  RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings, FileText,
+  RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings, FileText, UserCheck,
 } from "lucide-react";
 import { rescanAll } from "@/app/(app)/assets/actions";
 import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
@@ -61,6 +61,7 @@ export function CommandPalette() {
     const nav: Cmd[] = [
       { id: "overview", label: "Overview", group: "Go to", icon: LayoutDashboard, keywords: "home dashboard risk", run: go("/dashboard") },
       { id: "inbox", label: "Inbox", group: "Go to", icon: Inbox, keywords: "approvals hitl triage", run: go("/inbox") },
+      { id: "reviews", label: "Expert reviews", group: "Go to", icon: UserCheck, keywords: "human expert escalation second opinion vciso", run: go("/reviews") },
       { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities issues", run: go("/findings") },
       { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved", run: go("/incidents") },
       { id: "compliance", label: "Compliance", group: "Go to", icon: ShieldCheck, keywords: "soc2 controls audit posture", run: go("/compliance") },
