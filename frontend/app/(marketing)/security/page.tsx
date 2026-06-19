@@ -75,7 +75,7 @@ export default function Security() {
           Our own posture is continuously monitored by the same engine, on the same signed loop. The trust we ask you to
           extend is trust we hold ourselves to first.
         </p>
-        <Link href="/login" className="mt-7 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">
+        <Link href="/signup" className="mt-7 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">
           Start free and see your evidence <ArrowRight className="h-4 w-4" />
         </Link>
       </section>

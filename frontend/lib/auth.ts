@@ -25,3 +25,8 @@ export async function getSession(): Promise<Session | null> {
 export function apiBase(): string {
   return process.env.TSENGINE_API_URL ?? "http://localhost:8090";
 }
+
+/** httpOnly + SameSite=Strict cookie options shared by the login + signup routes. */
+export function sessionCookieOptions() {
+  return { httpOnly: true, sameSite: "strict" as const, secure: process.env.NODE_ENV === "production", path: "/" };
+}

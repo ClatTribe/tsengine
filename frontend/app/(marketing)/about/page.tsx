@@ -52,7 +52,7 @@ export default function About() {
             We&apos;re packaging that team into software so every company can have one — not just the ones who can afford to
             hire it.
           </p>
-          <Link href="/login" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px">
+          <Link href="/signup" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px">
             Start free <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

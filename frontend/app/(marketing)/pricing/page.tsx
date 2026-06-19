@@ -149,7 +149,7 @@ export default function Pricing() {
         <div className="relative mx-auto max-w-2xl px-5 py-16 text-center text-white">
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Start with the free plan today.</h2>
           <p className="mx-auto mt-3 max-w-md text-white/75">See your posture and first fixes in minutes. Upgrade when you&apos;re ready.</p>
-          <Link href="/login" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-accent shadow-sm transition hover:bg-white/90">
+          <Link href="/signup" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-accent shadow-sm transition hover:bg-white/90">
             Start free <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
