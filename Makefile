@@ -102,6 +102,11 @@ frontend-image: ## build the frontend image
 dev: ## run the local demo stack (platform + frontend) with a CLEAN Next cache — fixes "unstyled" app
 	./scripts/dev.sh
 
+.PHONY: dev-reseed
+dev-reseed: ## refresh demo data to current code, then (re)start the stack — drops + re-seeds the DB
+	@$(MAKE) dev-down
+	@RESEED=1 ./scripts/dev.sh
+
 .PHONY: dev-down
 dev-down: ## stop the local dev stack (frees :3000 and :8090)
 	@pkill -f 'next dev' 2>/dev/null || true; pkill -f 'next-server' 2>/dev/null || true
