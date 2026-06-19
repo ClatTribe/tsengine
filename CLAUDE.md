@@ -802,6 +802,19 @@ admin-write creds), the **open-ended LLM-driven** SOC reasoning (the determinist
 detect/incident backbone now exists in `internal/detect`; what's left is agentic triage/
 response beyond the threshold rules), and the infra successors — a sqlite/Postgres `Store`
 + a cloud-KMS
-`secret.Vault` (both behind today's interfaces). Public per-tenant self-serve signup (vs
-the operator-token `POST /v1/tenants`) needs a real identity/billing model and is a
-deliberate future step, not part of the shared-token MVP.
+`secret.Vault` (both behind today's interfaces).
+
+**Real per-user account auth is now built** (was the deferred "self-serve signup" item).
+`internal/authn` hashes passwords with stdlib `crypto/pbkdf2` (PBKDF2-HMAC-SHA256, 600k
+iters, per-password salt — no new dependency) and mints random session tokens.
+`pkg/platform.User`/`Session` + Store `Put/Get/GetByEmail/ListUsers` and
+`Put/Get/DeleteSession` persist them. `internal/platformapi/auth.go` serves
+`POST /v1/auth/{signup,login,invite}` + `GET /v1/auth/{me,team}` + `POST /v1/auth/logout`.
+The `auth` middleware accepts **either** the shared platform token (+`X-Tenant-ID`, for
+operator `POST /v1/tenants` / Slack / tests) **or** a user session token — and for a session
+the tenant comes FROM the session, so a spoofed `X-Tenant-ID` header cannot cross tenants.
+Signup creates a workspace (tenant) + owner; an owner can invite members (one-time temp
+password — email-based invites are the next step). `cmd/platform` `newID()` is now a random
+hex id (a restart-resetting counter previously overwrote tenants). Frontend: `/login`
+(email+password), `/signup`, Settings → Team. **Still future:** email invites / password
+reset / forced first-login change, OAuth-SSO login, and a billing model.
