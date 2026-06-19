@@ -31,6 +31,17 @@ func TestPathCompliance_SensitiveDataPath(t *testing.T) {
 	if !containsAll(c.NISTCSF, want["NISTCSF"]) {
 		t.Errorf("NIST-CSF = %v, want superset of %v", c.NISTCSF, want["NISTCSF"])
 	}
+	// The expanded framework set must map too — an internet-exposed sensitive-data path is a
+	// GDPR Art. 32 / CCPA / NIST 800-53 boundary+data-protection concern, not just the orig six.
+	if !containsAll(c.GDPR, []string{"Art. 32"}) {
+		t.Errorf("GDPR = %v, want Art. 32", c.GDPR)
+	}
+	if !containsAll(c.NIST80053, []string{"SC-7", "SC-28"}) {
+		t.Errorf("NIST 800-53 = %v, want SC-7 (boundary) + SC-28 (data at rest)", c.NIST80053)
+	}
+	if len(c.CCPA) == 0 || len(c.FedRAMP) == 0 || len(c.DPDP) == 0 {
+		t.Errorf("sensitive-data path should also map CCPA/FedRAMP/DPDP, got ccpa=%v fedramp=%v dpdp=%v", c.CCPA, c.FedRAMP, c.DPDP)
+	}
 }
 
 func TestPathCompliance_PrivescMapsLeastPrivilege(t *testing.T) {
