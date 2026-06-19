@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useOptimistic, useState, useTransition } from "react";
-import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2 } from "lucide-react";
+import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine } from "lucide-react";
 import type { Action, Finding } from "@/lib/types";
 import { decideAction } from "@/app/(app)/inbox/actions";
 import { SeverityBadge } from "@/components/ui/primitives";
@@ -11,11 +11,18 @@ const KIND_META: Record<string, { icon: typeof Check; label: string }> = {
   open_pr: { icon: GitPullRequest, label: "Open pull request" },
   apply_config: { icon: Settings2, label: "Apply config change" },
   file_ticket: { icon: Ticket, label: "File a ticket" },
+  draft_notification: { icon: FileWarning, label: "Breach disclosure draft" },
 };
 
 function payloadSummary(a: Action): string | undefined {
   const p = a.payload ?? {};
-  return (p.summary as string) || (p.body as string) || (p.remediation as string) || undefined;
+  return (p.summary as string) || (p.draft as string) || (p.body as string) || (p.remediation as string) || undefined;
+}
+
+// Tier-3 (irreversible/legal — e.g. a breach disclosure) requires a named human signature;
+// it can never auto-apply, and "approving" it means signing it.
+function needsSignature(a: Action): boolean {
+  return a.tier >= 3;
 }
 
 export function InboxClient({ actions, findings }: { actions: Action[]; findings: Record<string, Finding> }) {
@@ -131,20 +138,33 @@ function DetailPane({
   const Icon = meta.icon;
   const summary = payloadSummary(action);
   const target = action.payload?.target as string | undefined;
+  const sign = needsSignature(action);
 
   return (
     <>
       <div className="flex items-start gap-3 border-b border-border p-5">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+        <div className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", sign ? "bg-critical/10 text-critical" : "bg-accent-soft text-accent")}>
           <Icon className="h-4 w-4" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">{action.title ?? meta.label}</div>
           <div className="mono mt-0.5 text-xs text-faint">
             {meta.label} · tier {action.tier} · {action.id}
           </div>
         </div>
+        {sign && (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[11px] font-medium text-critical ring-1 ring-critical/30">
+            <PenLine className="h-3 w-3" /> needs your signature
+          </span>
+        )}
       </div>
+
+      {sign && (
+        <div className="border-b border-critical/20 bg-critical/5 px-5 py-2.5 text-xs text-critical">
+          Irreversible / legal action. The agent prepared this draft — it cannot send it. Review and edit it,
+          then sign to file it; reject to discard. Nothing is sent until a person signs.
+        </div>
+      )}
 
       <div className="flex-1 space-y-5 overflow-y-auto p-5">
         {/* Why — the citing finding */}
@@ -164,9 +184,9 @@ function DetailPane({
           )}
         </section>
 
-        {/* What it will do */}
+        {/* What it will do / the draft to review */}
         <section>
-          <div className="mb-2 text-xs uppercase tracking-wider text-muted">What it will do</div>
+          <div className="mb-2 text-xs uppercase tracking-wider text-muted">{sign ? "Draft to review & sign" : "What it will do"}</div>
           {target && (
             <div className="mb-2 text-sm">
               Target: <span className="mono rounded border border-border bg-surface-2 px-1.5 py-0.5">{target}</span>
@@ -187,8 +207,8 @@ function DetailPane({
           onClick={() => onDecide(action.id, true)}
           className="flex items-center gap-2 rounded-lg bg-pulse/15 px-3.5 py-2 text-sm font-medium text-pulse transition hover:bg-pulse/25 disabled:opacity-50"
         >
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          Approve <kbd className="mono ml-1 rounded border border-pulse/30 px-1 text-[10px]">a</kbd>
+          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : sign ? <PenLine className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+          {sign ? "Sign & file" : "Approve"} <kbd className="mono ml-1 rounded border border-pulse/30 px-1 text-[10px]">a</kbd>
         </button>
         <button
           disabled={pending}
