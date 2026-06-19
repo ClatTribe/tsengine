@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Boxes,
   ScrollText,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ const NAV = [
   { href: "/findings", label: "Findings", icon: Bug },
   { href: "/incidents", label: "Incidents", icon: Activity },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+  { href: "/reports", label: "Reports", icon: FileText },
   { href: "/assets", label: "Assets", icon: Boxes },
   { href: "/activity", label: "Activity", icon: ScrollText },
 ];
