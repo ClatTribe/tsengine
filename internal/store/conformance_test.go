@@ -31,6 +31,14 @@ func factories() []storeFactory {
 			}
 			return s
 		}},
+		{"sqlite", func(t *testing.T) Store {
+			s, err := OpenSQLite(filepath.Join(t.TempDir(), "store.db"))
+			if err != nil {
+				t.Fatalf("open sqlite store: %v", err)
+			}
+			t.Cleanup(func() { _ = s.Close() })
+			return s
+		}},
 	}
 }
 
