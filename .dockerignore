@@ -7,6 +7,10 @@ runs/
 docs/
 tests/
 fixtures/
+# the Go images (host, platform) don't need the Next.js app or its huge node_modules/.next
+frontend/
+node_modules/
+platform
 *.md
 .golangci.yml
 .gitignore

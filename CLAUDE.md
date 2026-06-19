@@ -818,3 +818,14 @@ password — email-based invites are the next step). `cmd/platform` `newID()` is
 hex id (a restart-resetting counter previously overwrote tenants). Frontend: `/login`
 (email+password), `/signup`, Settings → Team. **Still future:** email invites / password
 reset / forced first-login change, OAuth-SSO login, and a billing model.
+
+**The product stack is containerized** (`docker compose up` / `make up`): `docker/platform/
+Dockerfile` (the `cmd/platform` server, Go, ~108MB) + `frontend/Dockerfile` (Next.js
+`output:"standalone"`, ~105MB) + `docker-compose.yml` (platform :8090 + frontend :3000,
+`platform-data` volume, `.env`/`.env.example` for `TSENGINE_SECRET_KEY`). Defaults to
+`NO_ENGINE` (operate/identity assets + the whole loop work; tech-asset scanning needs the
+sandbox image + the commented Docker-socket mount). Both images build + run + sign-up E2E
+verified. The detection **engine** has its own image (`docker/host/Dockerfile`, released to
+GHCR by `release.yml`). **Not yet production-grade:** single-node file store (Postgres is the
+`store.Store` successor), env-key secrets (cloud-KMS is the `secret.Vault` successor), no
+bundled TLS/HA — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

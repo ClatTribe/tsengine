@@ -81,6 +81,23 @@ bench: cli tsbench sandbox-image ## run the runnable L1 benchmarks
 bench-ablation: cli tsbench sandbox-image ## run the L1.5 ablation on the container fixture
 	./bin/tsbench ablation --fixture fixtures/container/nginx-vuln
 
+.PHONY: up
+up: ## bring up the full product stack (platform API + frontend) via docker compose
+	docker compose up --build -d
+	@echo "→ console http://localhost:3000 (sign up at /signup) · API http://localhost:8090"
+
+.PHONY: down
+down: ## stop the product stack
+	docker compose down
+
+.PHONY: platform-image
+platform-image: ## build the platform server image
+	docker build -t tsengine/platform:dev -f docker/platform/Dockerfile .
+
+.PHONY: frontend-image
+frontend-image: ## build the frontend image
+	docker build -t tsengine/frontend:dev frontend/
+
 .PHONY: clean
 clean: ## remove build artifacts
 	rm -rf bin/ runs/

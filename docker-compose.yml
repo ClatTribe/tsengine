@@ -1,0 +1,49 @@
+# tsengine — full product stack: the multi-tenant platform API/console + the Next.js UX.
+#
+#   cp .env.example .env      # then set TSENGINE_SECRET_KEY (the file shows how)
+#   docker compose up --build
+#   → console at http://localhost:3000  (create a workspace at /signup)
+#   → API + /ui at http://localhost:8090
+#
+# Runs WITHOUT the sandbox engine by default — auth, dashboard, approvals, compliance, and
+# identity/workspace ("operate") scanning all work; tech-asset (repo/web/cloud) scanning
+# needs the engine. To enable it: `make sandbox-image`, then in the `platform` service set
+# TSENGINE_PLATFORM_NO_ENGINE=0 and mount the Docker socket (see the commented lines).
+
+services:
+  platform:
+    build:
+      context: .
+      dockerfile: docker/platform/Dockerfile
+    environment:
+      TSENGINE_PLATFORM_TOKEN: ${TSENGINE_PLATFORM_TOKEN:-dev-token} # operator/API bearer (users sign in with email/password)
+      TSENGINE_SECRET_KEY: ${TSENGINE_SECRET_KEY:?set TSENGINE_SECRET_KEY in .env (see .env.example)} # AES-256 key sealing OAuth tokens
+      TSENGINE_PLATFORM_DB: /data/platform.json # persisted on the named volume below
+      TSENGINE_PLATFORM_NO_ENGINE: "1"          # 0 + the docker socket mount below to enable tech-asset scanning
+      TSENGINE_MONITOR_INTERVAL: ${TSENGINE_MONITOR_INTERVAL:-12h}
+      TSENGINE_WEBHOOK_SECRET: ${TSENGINE_WEBHOOK_SECRET:-}
+      TSENGINE_PLATFORM_PUBLIC: ${TSENGINE_PLATFORM_PUBLIC:-http://localhost:8090}
+    ports:
+      - "8090:8090"
+    volumes:
+      - platform-data:/data
+      # --- enable the sandbox engine (with TSENGINE_PLATFORM_NO_ENGINE=0) ---
+      # - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      TSENGINE_API_URL: http://platform:8090 # server-side only; the browser never sees it
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      platform:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  platform-data:
