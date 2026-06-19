@@ -59,9 +59,10 @@ export interface Tenant {
 
 // AI-BOM (agent capability manifest, WRD-1): what the autonomous agent can touch.
 export interface AIBomConnection {
+  id: string;
   kind: string;
   account?: string;
-  status: string;
+  status: string; // "active" | "quarantined" | "degraded" | "revoked"
   scopes?: string[];
   write_scopes?: string[];
   capability: "read-only" | "read-write";

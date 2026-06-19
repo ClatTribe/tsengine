@@ -1,12 +1,14 @@
-import { ShieldCheck, KeyRound, Pencil, Eye } from "lucide-react";
+import { ShieldCheck, KeyRound, Pencil, Eye, ShieldOff } from "lucide-react";
 import type { AIBom } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { QuarantineButton } from "@/components/settings/quarantine-button";
 
 // The AI-BOM panel (agent capability manifest, WRD-1): the least-privilege view of what
 // the autonomous agent can actually touch — every connected system + a read/write
 // classification of its granted scopes. Write-capable connections are the higher-risk
-// surface a hijacked agent could mutate. Server-rendered, presentational.
-export function AIBomPanel({ bom }: { bom: AIBom | null }) {
+// surface a hijacked agent could mutate. An owner can quarantine any one connection
+// (WRD-4). Server-rendered; the quarantine control is a client child.
+export function AIBomPanel({ bom, canQuarantine }: { bom: AIBom | null; canQuarantine?: boolean }) {
   if (!bom || bom.connections.length === 0) {
     return (
       <p className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-muted">
@@ -25,25 +27,30 @@ export function AIBomPanel({ bom }: { bom: AIBom | null }) {
       <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
         {bom.connections.map((c, i) => {
           const write = c.capability === "read-write";
+          const quarantined = c.status === "quarantined";
           return (
-            <li key={i} className="flex items-center justify-between gap-3 bg-surface px-4 py-2.5">
+            <li key={i} className={cn("flex items-center justify-between gap-3 px-4 py-2.5", quarantined ? "bg-critical/5" : "bg-surface")}>
               <div className="min-w-0">
                 <div className="text-sm font-medium capitalize">{c.kind}</div>
                 {c.account && <div className="mono truncate text-[11px] text-faint">{c.account}</div>}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {c.write_scopes && c.write_scopes.length > 0 && (
-                  <span className="mono hidden text-[10px] text-muted sm:inline">{c.write_scopes.join(", ")}</span>
+                {quarantined ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[11px] font-medium text-critical ring-1 ring-critical/30">
+                    <ShieldOff className="h-3 w-3" /> quarantined
+                  </span>
+                ) : (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                      write ? "bg-high/10 text-high ring-1 ring-high/30" : "bg-pulse/10 text-pulse ring-1 ring-pulse/30",
+                    )}
+                  >
+                    {write ? <Pencil className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    {write ? "read-write" : "read-only"}
+                  </span>
                 )}
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                    write ? "bg-high/10 text-high ring-1 ring-high/30" : "bg-pulse/10 text-pulse ring-1 ring-pulse/30",
-                  )}
-                >
-                  {write ? <Pencil className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                  {write ? "read-write" : "read-only"}
-                </span>
+                {canQuarantine && c.id && <QuarantineButton id={c.id} status={c.status} />}
               </div>
             </li>
           );

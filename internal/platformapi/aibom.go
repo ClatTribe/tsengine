@@ -30,6 +30,7 @@ type AIBOMGovernance struct {
 
 // AIBOMConnection is one connected system's capability line.
 type AIBOMConnection struct {
+	ID          string   `json:"id"` // so the UI can target this connection (e.g. quarantine it)
 	Kind        string   `json:"kind"`
 	Account     string   `json:"account,omitempty"`
 	Status      string   `json:"status"`
@@ -93,7 +94,7 @@ func buildAIBOM(t platform.Tenant, conns []platform.Connection) AIBOM {
 			bom.Summary.ReadOnly++
 		}
 		bom.Connections = append(bom.Connections, AIBOMConnection{
-			Kind: c.Kind, Account: c.Account, Status: c.Status,
+			ID: c.ID, Kind: c.Kind, Account: c.Account, Status: c.Status,
 			Scopes: c.Scopes, WriteScopes: writes, Capability: cap,
 		})
 	}
