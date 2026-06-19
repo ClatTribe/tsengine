@@ -45,6 +45,7 @@ var cweToOwaspCategory = map[string]string{
 	"CWE-90":  "ldapi",
 	"CWE-643": "xpathi",
 	"CWE-327": "crypto",
+	"CWE-326": "crypto", // inadequate encryption strength (e.g. DES) — sibling of CWE-327; semgrep emits this for the OWASP-Benchmark crypto cases
 	"CWE-328": "hash",
 	"CWE-330": "weakrand",
 	"CWE-501": "trustbound",

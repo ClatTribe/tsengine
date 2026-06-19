@@ -41,7 +41,7 @@ harness ready, target not wired; **✗ none** = no fixture.
 | Asset | Class | Benchmark dataset | Neutral leaderboard | Target image local (ex-strix) | Status |
 |---|---|---|---|---|---|
 | **web_application** | DAST | **WAVSEP** (1,133 cases) | Acunetix 87 / Netsparker 87 / Burp 78 / WebInspect 76 / AppScan 69 / ZAP 56 (Shay Chen) | ✅ `zaproxy/wavsep` | **⚠ scorer-ready** — full recon→fan-out + **form-param synthesis** live; per-category Youden run in progress |
-| **repository** | SAST | **OWASP Benchmark v1.2** (BenchmarkJava, 2,740 cases) | Veracode 51 / Checkmarx 47 / Fortify 35 / SonarQube 6 | ✅ `strix-bench/owasp-benchmark:v1.2` | **✅ live — overall Youden 38.67%** (TP=1094 FP=512 TN=813 FN=321; clean run, not partial). Between Fortify (35) and Checkmarx (47), ≫ SonarQube (6). `tsbench sast` + per-CWE scorer (`internal/bench/sast.go`). Best cats: securecookie/weakrand 100, hash 69, xss 30. Gap: crypto 0 (CWE-327 unmapped by semgrep p/security-audit) |
+| **repository** | SAST | **OWASP Benchmark v1.2** (BenchmarkJava, 2,740 cases) | Veracode 51 / Checkmarx 47 / Fortify 35 / SonarQube 6 | ✅ `strix-bench/owasp-benchmark:v1.2` | **✅ live — overall Youden 47.86%** (TP=1224 FP=512 TN=813 FN=191). **≈ Checkmarx (47), just behind Veracode (51), ≫ Fortify (35) & SonarQube (6).** Score via `tsbench sast` (sandbox) or `go run ./cmd/sast-score sg.json expectedresults-1.2.csv` (host semgrep, no sandbox) + per-CWE scorer (`internal/bench/sast.go`). Per-cat: crypto/securecookie/weakrand **100**, hash 69, xss 30, xpathi 28, sqli 24. (Was 38.67% — crypto sat at 0 because semgrep emits **CWE-326** for the DES cases, which the scorer's CWE→category map didn't credit; adding `CWE-326→crypto` recovers all 130 crypto TPs at **0 FP**.) |
 | **repository** | SCA | OWASP **NodeGoat** + lockfiles | Snyk / Dependabot (self-published) | ⬇️ git repo (lockfile scan, no image) | **⚠ stub** — trivy-fs/grype/osv wrapped; must-find CVE set |
 | **repository** | IaC | **TerraGoat** / KICS samples | Checkov / tfsec / KICS (self) | ✗ (clone TerraGoat) | **✗ none** — checkov wrapped; corpus not wired |
 | **api** | spec-fuzz / authz | **VAmPI** + **crAPI** | none neutral (Salt / Wallarm commercial) | ✅ `erev0s/vampi` + `crapi/*` | **⚠ stub** — openapi+schemathesis must-find fixture |
@@ -50,7 +50,7 @@ harness ready, target not wired; **✗ none** = no fixture.
 | **domain** | recon breadth | subdomain-enum corpus | subfinder vs amass (published rates) | ✗ (needs a target domain) | **⚠ stub** — subdomain-found must-find |
 | **cloud_account** | CSPM / CIS | CIS Benchmark vs mock AWS | Prowler / scout-suite (self) · CIS AWS Foundations recall | ✗ **strix had none** (tsengine-only asset) | **✅ scorer-ready** — `tsbench cloud` + per-CIS-section recall scorer (`internal/bench/cloud.go`) + ground-truth CSV (`fixtures/cloud/baseline/expected-controls.csv`, 22 controls × 5 sections). Blocked only on a seeded mock account (no code gap); creds forwarded short-lived via env, never on disk |
 
-**Status: 2 of 7 live** (container_image; **repository/SAST — Youden 38.67%**);
+**Status: 2 of 7 live** (container_image — recall 1.0 / 0 FP; **repository/SAST — Youden 47.86%, ≈ Checkmarx**);
 web (WAVSEP) is scorer-ready but the full-corpus fan-out times out at 50m
 (detection proven on focused scans; scaling fix tracked). The rest are
 harness-ready stubs blocked on a target, not on tsengine code. Per CLAUDE.md §14, every fixture **must**
