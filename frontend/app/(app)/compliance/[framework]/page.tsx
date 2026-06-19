@@ -12,9 +12,13 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
   const rep = await api.report(framework);
   if (!rep) notFound();
 
-  const gaps = rep.Rows.filter((r) => r.Gap);
-  const met = rep.Rows.filter((r) => !r.Gap);
-  const total = rep.Rows.length;
+  // Go marshals an empty slice as JSON `null`, so Rows is null for a not-yet-mapped
+  // framework — guard it (a raw .filter would crash the page). This is exactly the case
+  // the 14-framework index now links to.
+  const rows = rep.Rows ?? [];
+  const gaps = rows.filter((r) => r.Gap);
+  const met = rows.filter((r) => !r.Gap);
+  const total = rows.length;
   const pct = total > 0 ? Math.round((met.length / total) * 100) : 0;
   const assessed = total > 0;
   const desc = FRAMEWORK_DESC[framework];
