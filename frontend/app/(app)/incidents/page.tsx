@@ -1,4 +1,5 @@
-import { ShieldAlert, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { ShieldAlert, CheckCircle2, Wrench, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Incident } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -7,20 +8,25 @@ import { timeAgo, duration } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function IncidentsPage() {
-  const all = await api.incidents("all");
+  // Join incidents to the gated actions so an OPEN incident can show the agent's response
+  // (the detect→respond half) — a queued fix awaiting approval, not just the detection.
+  const [all, approvals] = await Promise.all([api.incidents("all"), api.approvals()]);
+  const pending = new Set(approvals.map((a) => a.finding_id).filter(Boolean));
   const open = all.filter((i) => i.status === "open").sort(byTime("opened_at"));
   const resolved = all.filter((i) => i.status === "resolved").sort(byTime("resolved_at"));
+  const mttr = meanResolveMs(resolved);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">Incidents</h1>
-          <p className="text-xs text-muted">The agent watches continuously — here&apos;s what changed.</p>
+          <p className="text-xs text-muted">Detect → respond. The agent watches continuously — here&apos;s what changed and what it did.</p>
         </div>
         <div className="flex gap-4 text-sm">
           <Stat n={open.length} label="open" tone="text-high" />
           <Stat n={resolved.length} label="resolved" tone="text-pulse" />
+          {mttr !== null && <Stat n={fmtMs(mttr)} label="avg time to resolve" tone="text-ink" />}
         </div>
       </div>
 
@@ -31,7 +37,7 @@ export default async function IncidentsPage() {
         ) : (
           <Timeline>
             {open.map((i) => (
-              <Node key={i.id} incident={i} resolved={false} />
+              <Node key={i.id} incident={i} resolved={false} respondPending={!!i.finding_id && pending.has(i.finding_id)} />
             ))}
           </Timeline>
         )}
@@ -44,7 +50,7 @@ export default async function IncidentsPage() {
         ) : (
           <Timeline>
             {resolved.slice(0, 25).map((i) => (
-              <Node key={i.id} incident={i} resolved />
+              <Node key={i.id} incident={i} resolved respondPending={false} />
             ))}
           </Timeline>
         )}
@@ -57,11 +63,29 @@ function byTime(field: "opened_at" | "resolved_at") {
   return (a: Incident, b: Incident) => new Date(b[field] ?? 0).getTime() - new Date(a[field] ?? 0).getTime();
 }
 
+// meanResolveMs averages (resolved_at − opened_at) over resolved incidents with both
+// timestamps — the agent's mean-time-to-resolve. null when there's nothing to average.
+function meanResolveMs(resolved: Incident[]): number | null {
+  const spans = resolved
+    .map((i) => (i.opened_at && i.resolved_at ? new Date(i.resolved_at).getTime() - new Date(i.opened_at).getTime() : NaN))
+    .filter((ms) => Number.isFinite(ms) && ms >= 0);
+  if (spans.length === 0) return null;
+  return spans.reduce((a, b) => a + b, 0) / spans.length;
+}
+
+function fmtMs(ms: number): string {
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
 function SubHead({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">{children}</h2>;
 }
 
-function Stat({ n, label, tone }: { n: number; label: string; tone: string }) {
+function Stat({ n, label, tone }: { n: number | string; label: string; tone: string }) {
   return (
     <div className="text-right">
       <span className={`text-xl font-semibold ${tone}`}>{n}</span> <span className="text-xs text-faint">{label}</span>
@@ -73,8 +97,38 @@ function Timeline({ children }: { children: React.ReactNode }) {
   return <ol className="relative space-y-2 border-l border-border pl-5">{children}</ol>;
 }
 
-function Node({ incident: i, resolved }: { incident: Incident; resolved: boolean }) {
+function Node({ incident: i, resolved, respondPending }: { incident: Incident; resolved: boolean; respondPending: boolean }) {
   const Icon = resolved ? CheckCircle2 : ShieldAlert;
+  // The incident links to the finding that opened it — incident → evidence.
+  const href = i.finding_id ? `/findings/${i.finding_id}` : undefined;
+  const body = (
+    <div className="card flex items-center gap-3 px-4 py-3 transition hover:border-border-strong">
+      <Icon className={`h-4 w-4 shrink-0 ${resolved ? "text-pulse" : "text-high"}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <SeverityBadge severity={i.severity} className="scale-90" />
+          <span className="truncate text-sm">{i.title}</span>
+          {respondPending && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30">
+              <Wrench className="h-2.5 w-2.5" /> fix ready
+            </span>
+          )}
+        </div>
+        <div className="mono mt-0.5 truncate text-[11px] text-faint">{i.rule_id}</div>
+      </div>
+      <div className="shrink-0 text-right text-xs">
+        {resolved ? (
+          <>
+            <div className="text-pulse">fixed {timeAgo(i.resolved_at)}</div>
+            <div className="text-faint">open for {duration(i.opened_at, i.resolved_at)}</div>
+          </>
+        ) : (
+          <div className="text-muted">detected {timeAgo(i.opened_at)}</div>
+        )}
+      </div>
+      {href && <ArrowRight className="h-4 w-4 shrink-0 text-faint" />}
+    </div>
+  );
   return (
     <li className="animate-fade-rise">
       <span
@@ -82,26 +136,7 @@ function Node({ incident: i, resolved }: { incident: Incident; resolved: boolean
           resolved ? "bg-pulse" : "bg-high"
         }`}
       />
-      <div className="card flex items-center gap-3 px-4 py-3">
-        <Icon className={`h-4 w-4 shrink-0 ${resolved ? "text-pulse" : "text-high"}`} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <SeverityBadge severity={i.severity} className="scale-90" />
-            <span className="truncate text-sm">{i.title}</span>
-          </div>
-          <div className="mono mt-0.5 truncate text-[11px] text-faint">{i.rule_id}</div>
-        </div>
-        <div className="shrink-0 text-right text-xs">
-          {resolved ? (
-            <>
-              <div className="text-pulse">fixed {timeAgo(i.resolved_at)}</div>
-              <div className="text-faint">open for {duration(i.opened_at, i.resolved_at)}</div>
-            </>
-          ) : (
-            <div className="text-muted">detected {timeAgo(i.opened_at)}</div>
-          )}
-        </div>
-      </div>
+      {href ? <Link href={href} className="block">{body}</Link> : body}
     </li>
   );
 }
