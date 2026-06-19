@@ -30,7 +30,7 @@ type Deps struct {
 	Store      store.Store
 	Connectors *connector.Registry
 	Runner     *runner.Service
-	Jobs       *jobs.Pool // optional: runs rescans off the request path (nil → synchronous)
+	Jobs       *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
 	Desk       Decider          // optional: the HITL desk (approvals decide)
 	GRC        Posturer         // optional: the compliance system-of-record (posture)
 	Vault      Sealer           // optional: seals OAuth tokens before persistence

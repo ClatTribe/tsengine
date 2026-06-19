@@ -215,8 +215,8 @@ func main() {
 	log.Print("[platform] draining…")
 	sctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_ = srv.Shutdown(sctx)        // stop accepting requests
-	_ = scanJobs.Shutdown(sctx)   // let in-flight scans finish (or the deadline cut them off)
+	_ = srv.Shutdown(sctx)      // stop accepting requests
+	_ = scanJobs.Shutdown(sctx) // let in-flight scans finish (or the deadline cut them off)
 }
 
 // scanWorkers is how many tenant re-scans run concurrently off the request path.
