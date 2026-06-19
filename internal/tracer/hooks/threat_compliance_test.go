@@ -80,6 +80,28 @@ func TestCompliance_MapsCWE(t *testing.T) {
 	}
 }
 
+// The expanded framework set (CLAUDE.md §8) must actually map, not just exist as struct
+// fields — a finding's CWE has to land on the new privacy/government controls.
+func TestCompliance_MapsExpandedFrameworks(t *testing.T) {
+	h := NewCompliance()
+	// CWE-200 (data exposure) is the broadest privacy nexus: GDPR, CCPA, NIST 800-53,
+	// FedRAMP, DPDP, SOX, ISO 27701 all apply.
+	out, _, _ := h.Apply(mkFinding("f-1", "nuclei::info-exposure", types.SeverityHigh, "CWE-200"))
+	if out.Compliance == nil {
+		t.Fatal("CWE-200 produced no compliance annotation")
+	}
+	c := out.Compliance
+	checks := map[string][]string{
+		"GDPR": c.GDPR, "NIST 800-53": c.NIST80053, "NIST 800-171": c.NIST800171,
+		"CCPA": c.CCPA, "FedRAMP": c.FedRAMP, "DPDP": c.DPDP, "SOX": c.SOX, "ISO 27701": c.ISO27701,
+	}
+	for name, ids := range checks {
+		if len(ids) == 0 {
+			t.Errorf("CWE-200 should map to %s, got none: %+v", name, c)
+		}
+	}
+}
+
 func TestCompliance_MergesMultipleCWE(t *testing.T) {
 	h := NewCompliance()
 	// CWE-89 + CWE-200 both map; controls should union without dupes.

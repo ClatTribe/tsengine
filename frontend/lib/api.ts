@@ -105,4 +105,4 @@ export const api = {
 // Re-exported from the neutral module so existing server-side imports keep working while
 // client components import the constants directly from "@/lib/frameworks" (this file is
 // server-only and can't be pulled into a client bundle).
-export { FRAMEWORKS, FRAMEWORK_LABEL } from "./frameworks";
+export { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "./frameworks";

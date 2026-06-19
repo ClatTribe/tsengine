@@ -26,13 +26,29 @@ import (
 
 // Frameworks the GRC layer tracks (keys match the EvidencePack + Posture API).
 const (
-	FrameworkSOC2     = "soc2"
-	FrameworkISO27001 = "iso27001"
-	FrameworkPCI      = "pci"
-	FrameworkHIPAA    = "hipaa"
-	FrameworkCISv8    = "cis_v8"
-	FrameworkNISTCSF  = "nist_csf"
+	FrameworkSOC2       = "soc2"
+	FrameworkISO27001   = "iso27001"
+	FrameworkPCI        = "pci"
+	FrameworkHIPAA      = "hipaa"
+	FrameworkCISv8      = "cis_v8"
+	FrameworkNISTCSF    = "nist_csf"
+	FrameworkGDPR       = "gdpr"
+	FrameworkISO27701   = "iso27701"
+	FrameworkNIST80053  = "nist_800_53"
+	FrameworkNIST800171 = "nist_800_171"
+	FrameworkCCPA       = "ccpa"
+	FrameworkSOX        = "sox"
+	FrameworkFedRAMP    = "fedramp"
+	FrameworkDPDP       = "dpdp"
 )
+
+// Frameworks is the ordered set of frameworks the GRC layer tracks — the single source
+// of truth the API/console iterate so a new framework surfaces everywhere at once.
+var Frameworks = []string{
+	FrameworkSOC2, FrameworkISO27001, FrameworkPCI, FrameworkHIPAA, FrameworkCISv8,
+	FrameworkNISTCSF, FrameworkGDPR, FrameworkISO27701, FrameworkNIST80053,
+	FrameworkNIST800171, FrameworkCCPA, FrameworkSOX, FrameworkFedRAMP, FrameworkDPDP,
+}
 
 // GRC maintains the control-state registry over the store.
 type GRC struct {
@@ -183,5 +199,13 @@ func frameworkControls(c *types.Compliance) map[string][]string {
 	add(FrameworkHIPAA, c.HIPAA)
 	add(FrameworkCISv8, c.CISv8)
 	add(FrameworkNISTCSF, c.NISTCSF)
+	add(FrameworkGDPR, c.GDPR)
+	add(FrameworkISO27701, c.ISO27701)
+	add(FrameworkNIST80053, c.NIST80053)
+	add(FrameworkNIST800171, c.NIST800171)
+	add(FrameworkCCPA, c.CCPA)
+	add(FrameworkSOX, c.SOX)
+	add(FrameworkFedRAMP, c.FedRAMP)
+	add(FrameworkDPDP, c.DPDP)
 	return out
 }

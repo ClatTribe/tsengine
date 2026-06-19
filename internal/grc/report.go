@@ -14,12 +14,20 @@ import (
 
 // frameworkTitle maps a framework key to its auditor-facing display name.
 var frameworkTitle = map[string]string{
-	FrameworkSOC2:     "SOC 2",
-	FrameworkISO27001: "ISO 27001:2022",
-	FrameworkPCI:      "PCI-DSS v4.0",
-	FrameworkHIPAA:    "HIPAA Security Rule",
-	FrameworkCISv8:    "CIS Controls v8",
-	FrameworkNISTCSF:  "NIST CSF 2.0",
+	FrameworkSOC2:       "SOC 2",
+	FrameworkISO27001:   "ISO 27001:2022",
+	FrameworkPCI:        "PCI-DSS v4.0",
+	FrameworkHIPAA:      "HIPAA Security Rule",
+	FrameworkCISv8:      "CIS Controls v8",
+	FrameworkNISTCSF:    "NIST CSF 2.0",
+	FrameworkGDPR:       "EU GDPR",
+	FrameworkISO27701:   "ISO 27701:2019",
+	FrameworkNIST80053:  "NIST SP 800-53 r5",
+	FrameworkNIST800171: "NIST SP 800-171 r2",
+	FrameworkCCPA:       "CCPA / CPRA",
+	FrameworkSOX:        "SOX (ITGC)",
+	FrameworkFedRAMP:    "FedRAMP Moderate",
+	FrameworkDPDP:       "India DPDP Act 2023",
 }
 
 // FrameworkTitle returns the display name for a framework key (the key itself if unknown).
