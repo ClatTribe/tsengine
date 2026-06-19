@@ -71,6 +71,38 @@ func TestKillSwitchFreezesWritePath(t *testing.T) {
 	}
 }
 
+// T3 (irreversible/legal) actions never auto-apply: Submit queues them, a direct
+// auto-apply is refused with ErrNeedsHumanSignature, and only a NAMED human approval lands.
+func TestTier3NeverAutoApplies(t *testing.T) {
+	ctx := context.Background()
+	app := &recordingApplier{}
+	d, _, _ := newDesk(app)
+
+	got, err := d.Submit(ctx, platform.Action{ID: "t3", TenantID: "t", Tier: platform.TierIrreversible, Status: platform.ActProposed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != platform.ActPendingApproval || len(app.applied) != 0 {
+		t.Fatalf("a T3 action must queue, never auto-apply: status=%s applied=%v", got.Status, app.applied)
+	}
+
+	// a direct apply with the auto marker is refused (defense-in-depth)
+	if _, err := d.apply(ctx, platform.Action{ID: "t3b", TenantID: "t", Tier: platform.TierIrreversible}, autoApprover); !errors.Is(err, ErrNeedsHumanSignature) {
+		t.Fatalf("auto-applying a T3 action must return ErrNeedsHumanSignature, got %v", err)
+	}
+	if len(app.applied) != 0 {
+		t.Fatalf("no T3 action may apply without a human, applied=%v", app.applied)
+	}
+
+	// a NAMED human approval applies it (the human signed)
+	if _, err := d.Decide(ctx, "t", "t3", Verdict{Approver: "ciso@acme.com", Approve: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(app.applied) != 1 || app.applied[0] != "t3" {
+		t.Fatalf("a human-signed T3 action must apply, applied=%v", app.applied)
+	}
+}
+
 func TestTier1AutoApplies(t *testing.T) {
 	app := &recordingApplier{}
 	d, rec, _ := newDesk(app)

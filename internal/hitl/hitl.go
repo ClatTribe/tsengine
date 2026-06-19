@@ -22,6 +22,15 @@ import (
 // closed. A human disengages the switch before any action executes.
 var ErrHalted = errors.New("hitl: agent actions are halted (kill-switch engaged) — disengage to apply")
 
+// ErrNeedsHumanSignature is returned when an irreversible (T3) action would apply without a
+// named human approver — the agentic-SMB spec (§3 / AGT-3 / TS-2) forbids it. The agent
+// prepares; a human decides and signs.
+var ErrNeedsHumanSignature = errors.New("hitl: an irreversible (T3) action requires a named human signature — it cannot auto-apply")
+
+// autoApprover is the recorded approver for a tier-0/1 auto-applied action — i.e. NOT a
+// human. A T3 action carrying this (or an empty approver) is refused.
+const autoApprover = "auto"
+
 // Applier executes an approved (or auto-approved) action against the real world — the
 // remediate.Deliverer in production, a fake in tests. The desk never applies directly;
 // it decides, then delegates, keeping the gate and the side-effect separate.
@@ -80,7 +89,7 @@ func (d *Desk) Submit(ctx context.Context, a platform.Action) (platform.Action, 
 		}
 		return a, nil
 	}
-	return d.apply(ctx, a, "auto")
+	return d.apply(ctx, a, autoApprover)
 }
 
 // Pending lists the tenant's actions awaiting a human decision (the desk queue).
@@ -135,6 +144,16 @@ func (d *Desk) Decide(ctx context.Context, tenantID, actionID string, v Verdict)
 
 // apply executes an approved action and persists the applied state.
 func (d *Desk) apply(ctx context.Context, a platform.Action, approver string) (platform.Action, error) {
+	// T3 invariant (agentic-SMB spec §3 / AGT-3 / TS-2): an irreversible / legal action
+	// NEVER auto-applies — only a named human can sign it. Defense-in-depth: Submit already
+	// queues tier ≥ GateTier, but this guarantees the rule even if a future path (e.g. a
+	// break-glass auto-apply added for low tiers) ever reaches apply without a human.
+	if a.NeedsHumanSignature() && (approver == "" || approver == autoApprover) {
+		a.Status = platform.ActPendingApproval
+		_ = d.Store.PutAction(ctx, a)
+		d.record("blocked_t3_needs_signature", a, approver)
+		return a, ErrNeedsHumanSignature
+	}
 	// Backstop: no write path executes under an engaged kill-switch, whatever called us.
 	if d.halted(ctx, a.TenantID) {
 		a.Status = platform.ActPendingApproval
