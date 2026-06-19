@@ -46,7 +46,7 @@ const TIERS = [
     cadence: "for larger teams",
     blurb: "Advanced controls, expert review, and the support to match.",
     cta: "Contact sales",
-    href: "/signup",
+    href: "/demo",
     highlight: false,
     features: [
       "Everything in Growth",
