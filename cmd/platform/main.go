@@ -30,6 +30,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -61,9 +63,20 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
+// newID returns a collision-resistant random id (48 bits of entropy, hex-encoded). A
+// monotonic counter would reset to 0 on every restart and, against the persistent file
+// store, silently overwrite existing tenants/users — a data-loss + isolation hazard now
+// that self-serve signup creates tenants at runtime. Random ids never collide across
+// restarts. The atomic counter remains a never-taken fallback if the RNG ever errors.
 var seq uint64
 
-func newID() string { return fmt.Sprintf("%d", atomic.AddUint64(&seq, 1)) }
+func newID() string {
+	var b [6]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%d", atomic.AddUint64(&seq, 1))
+	}
+	return hex.EncodeToString(b[:])
+}
 
 func main() {
 	token := os.Getenv("TSENGINE_PLATFORM_TOKEN")
