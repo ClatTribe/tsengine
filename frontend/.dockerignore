@@ -1,0 +1,8 @@
+# Keep the frontend build context small + reproducible — let `npm ci` + `next build`
+# regenerate these inside the image instead of copying host artifacts in.
+node_modules
+.next
+.env*
+Dockerfile
+.dockerignore
+npm-debug.log*

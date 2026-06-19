@@ -4,6 +4,37 @@ How to run tsengine as a service in production. The engine is two cooperating
 processes — the **host** (`tsengine serve`, orchestrates) and the **sandbox** (the
 `tsengine/sandbox` image, runs the OSS tools) — connected over the docker daemon.
 
+## Quick start — the product stack (docker compose)
+
+The multi-tenant **platform** (`cmd/platform`, API + `/ui` on :8090) and the **frontend**
+(Next.js UX on :3000) come up together:
+
+```sh
+cp .env.example .env
+# set TSENGINE_SECRET_KEY:  openssl rand -base64 32
+docker compose up --build       # or: make up
+# → console  http://localhost:3000   (create a workspace at /signup)
+# → API/ui   http://localhost:8090
+```
+
+Images: `docker/platform/Dockerfile` (Go, ~108MB) + `frontend/Dockerfile` (Next standalone,
+~105MB). The platform persists to a named volume (`platform-data:/data`).
+
+By default the stack runs **without the sandbox engine** (`TSENGINE_PLATFORM_NO_ENGINE=1`):
+auth, dashboard, approvals, compliance, and identity/workspace ("operate") scanning all
+work; **tech-asset (repo/web/cloud) scanning needs the engine**. To enable it, build the
+sandbox (`make sandbox-image`), set `TSENGINE_PLATFORM_NO_ENGINE=0` on the `platform`
+service, and uncomment the Docker-socket mount in `docker-compose.yml` (the platform shells
+out to `docker run` to spawn per-scan sandboxes — see below).
+
+**Not yet production-grade** (tracked): the store is single-node file-backed (sqlite/Postgres
+is the successor behind the `store.Store` interface); secrets use an env AES key (cloud-KMS
+is the successor behind `secret.Vault`); there is no bundled TLS/reverse-proxy or HA
+orchestration. Put the stack behind a TLS-terminating proxy and back up the `platform-data`
+volume.
+
+---
+
 ## Architecture at runtime
 
 ```
