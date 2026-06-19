@@ -35,7 +35,7 @@ export function Sidebar({ pending }: { pending: number }) {
         <div className="grid h-8 w-8 place-items-center rounded-lg border border-accent/40 bg-accent-soft text-accent">
           <ShieldCheck className="h-4 w-4" />
         </div>
-        <span className="text-sm font-semibold">Sentinel</span>
+        <span className="text-sm font-semibold">TensorShield</span>
       </Link>
 
       <nav className="flex flex-col gap-0.5">

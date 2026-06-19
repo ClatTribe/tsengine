@@ -1,5 +1,5 @@
 {
-  "name": "sentinel-console",
+  "name": "tensorshield-console",
   "version": "0.1.0",
   "private": true,
   "description": "Agentic security command-center — the world-class UX for the autonomous security team (Go /v1 API backend).",

@@ -1,4 +1,4 @@
-# Competitive proof sheet — tsengine / Sentinel
+# Competitive proof sheet — tsengine / TensorShield
 
 **One line:** a *fractional autonomous security team for the SMB* — it wraps the same
 best-in-class OSS the category leaders are built on (so detection is at-par **by

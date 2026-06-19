@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 
-// Sentinel design system — light, warm, premium (DESIGN.md §3). Built for the SMB buyer:
+// TensorShield design system — light, warm, premium (DESIGN.md §3). Built for the SMB buyer:
 // calm and trustworthy, not a dark "hacker" console. Off-white canvas so white cards lift,
 // soft layered shadows (not heavy borders) for depth, one confident indigo accent used
 // sparingly, emerald for "handled / live". The same semantic tokens the dark theme used —

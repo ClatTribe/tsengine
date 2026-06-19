@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 
 export const metadata = {
-  title: "Product — how Sentinel works",
+  title: "Product — how TensorShield works",
   description: "Connect a system and a fractional security team goes to work: detect, triage, fix, and prove — with you in the loop where it matters.",
 };
 
@@ -34,7 +34,7 @@ export default function Product() {
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">The product</span>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">A security team in a loop, not a tool in a tab.</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            Connect a system once. Sentinel runs the whole loop — detect, triage, fix, and prove — and pulls you in
+            Connect a system once. TensorShield runs the whole loop — detect, triage, fix, and prove — and pulls you in
             only where human judgment matters.
           </p>
         </div>
@@ -65,7 +65,7 @@ export default function Product() {
             <span className="text-xs font-semibold uppercase tracking-wider text-accent">Under the hood</span>
             <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">Best-in-class detection, plus an AI engineer to make sense of it.</h2>
             <p className="mt-4 text-base leading-relaxed text-muted">
-              Most tools give you a scanner and a 400-row report. Sentinel pairs a complete detection layer with an AI
+              Most tools give you a scanner and a 400-row report. TensorShield pairs a complete detection layer with an AI
               security engineer that triages, chains, and explains — turning raw findings into decisions a non-expert
               can act on.
             </p>

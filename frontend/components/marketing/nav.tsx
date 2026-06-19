@@ -24,7 +24,7 @@ export function MarketingNav() {
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
             <ShieldCheck className="h-4 w-4" />
           </span>
-          <span className="text-base font-semibold tracking-tight">Sentinel</span>
+          <span className="text-base font-semibold tracking-tight">TensorShield</span>
         </Link>
 
         {/* Desktop section links */}

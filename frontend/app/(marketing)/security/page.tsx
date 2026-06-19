@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ShieldCheck, Lock, FileCheck2, KeyRound, EyeOff, Fingerprint, ArrowRight, CheckCircle2 } from "lucide-react";
 
 export const metadata = {
-  title: "Security & Trust — Sentinel",
+  title: "Security & Trust — TensorShield",
   description: "Signed, reproducible, grounded evidence. Least-privilege by default, human-gated writes, encrypted at rest. The trust layer SMBs and their auditors need.",
 };
 
@@ -28,7 +28,7 @@ export default function Security() {
           </span>
           <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">Security you can prove.</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            A security product you can&apos;t verify is just another thing to trust. Sentinel is built so your evidence is
+            A security product you can&apos;t verify is just another thing to trust. TensorShield is built so your evidence is
             signed, reproducible, and grounded in fact — for you, and for your auditors.
           </p>
         </div>
@@ -70,7 +70,7 @@ export default function Security() {
 
       {/* We practice what we preach */}
       <section className="mx-auto max-w-3xl px-5 py-20 text-center">
-        <h2 className="text-2xl font-semibold tracking-tight">We run Sentinel on Sentinel.</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">We run TensorShield on TensorShield.</h2>
         <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-muted">
           Our own posture is continuously monitored by the same engine, on the same signed loop. The trust we ask you to
           extend is trust we hold ourselves to first.

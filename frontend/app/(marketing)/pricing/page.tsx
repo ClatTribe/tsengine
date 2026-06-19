@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Check, ArrowRight, Sparkles } from "lucide-react";
 
 export const metadata = {
-  title: "Pricing — Sentinel",
+  title: "Pricing — TensorShield",
   description: "Simple, transparent pricing for your fractional security team. Start free.",
 };
 
@@ -60,7 +60,7 @@ const TIERS = [
 ];
 
 const FAQ = [
-  ["Do I need a security engineer to use Sentinel?", "No — that's the point. Sentinel does the engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. The whole experience is built for a non-technical founder or ops lead."],
+  ["Do I need a security engineer to use TensorShield?", "No — that's the point. TensorShield does the engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. The whole experience is built for a non-technical founder or ops lead."],
   ["What does \"human in the loop\" actually mean?", "Low-risk fixes apply automatically. Anything consequential (a config change, an identity action) waits for one tap of your approval — and every decision, automated or human, is signed into a tamper-evident ledger."],
   ["Is the free plan really free?", "Yes. Connect a system, see your real posture and compliance gaps, and get your first fixes prepared — no credit card. Upgrade when you're ready for the full team."],
   ["How fast is setup?", "Minutes. Connect a system via OAuth and the agent discovers your assets and starts scanning immediately. No agents to install, no playbooks to write."],

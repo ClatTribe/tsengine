@@ -48,7 +48,7 @@ export default async function TrustCenter({
             The link may be incomplete or has been revoked. Ask whoever shared it for a fresh link.
           </p>
           <Link href="/" className="mt-5 inline-block text-sm font-semibold text-accent hover:underline">
-            What is Sentinel? →
+            What is TensorShield? →
           </Link>
         </div>
       </main>
@@ -66,7 +66,7 @@ export default async function TrustCenter({
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
               <ShieldCheck className="h-4 w-4" />
             </span>
-            <span className="text-sm font-semibold tracking-tight">Sentinel</span>
+            <span className="text-sm font-semibold tracking-tight">TensorShield</span>
           </Link>
           <span className="text-xs font-medium uppercase tracking-wider text-faint">Trust Center</span>
         </div>
@@ -132,7 +132,7 @@ export default async function TrustCenter({
               Generated live from {data.org}&apos;s security posture on {generated}.
             </p>
             <Link href="/" className="mt-3 inline-block text-xs font-semibold text-accent hover:underline">
-              Secured by Sentinel — see how it works →
+              Secured by TensorShield — see how it works →
             </Link>
           </div>
         </div>

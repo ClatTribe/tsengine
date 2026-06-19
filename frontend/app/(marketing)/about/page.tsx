@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Target, Heart, Sparkles } from "lucide-react";
 
 export const metadata = {
-  title: "About — Sentinel",
+  title: "About — TensorShield",
   description: "Security shouldn't require a security hire. We're building the fractional security team every SMB deserves.",
 };
 
@@ -24,7 +24,7 @@ export default function About() {
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted">
             Small and growing companies are the most targeted and the least resourced. A first security hire costs more
-            than most can spare — so the work doesn&apos;t happen, and the risk piles up. We built Sentinel to change
+            than most can spare — so the work doesn&apos;t happen, and the risk piles up. We built TensorShield to change
             that: a fractional security team that runs itself, and asks for you only when it counts.
           </p>
         </div>

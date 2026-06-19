@@ -40,7 +40,7 @@ export default function LoginPage() {
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-white shadow-sm">
               <ShieldCheck className="h-5 w-5" />
             </span>
-            <span className="text-base font-semibold tracking-tight">Sentinel</span>
+            <span className="text-base font-semibold tracking-tight">TensorShield</span>
           </Link>
 
           <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
@@ -85,7 +85,7 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-5 text-sm text-muted">
-            New to Sentinel?{" "}
+            New to TensorShield?{" "}
             <Link href="/signup" className="font-medium text-accent hover:underline">Create your workspace →</Link>
           </p>
 
@@ -112,7 +112,7 @@ export default function LoginPage() {
               Your fractional security team, running while you build.
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-white/70">
-              Sentinel finds, triages, and fixes — and pulls you in only where judgment is needed. No security
+              TensorShield finds, triages, and fixes — and pulls you in only where judgment is needed. No security
               hire required.
             </p>
 

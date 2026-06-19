@@ -6,9 +6,9 @@ import {
 } from "lucide-react";
 
 export const metadata = {
-  title: "Sentinel — your fractional security team",
+  title: "TensorShield — your fractional security team",
   description:
-    "AI security + compliance for SMBs. Sentinel finds, triages, and fixes — with a human in the loop where it matters. No security hire required.",
+    "AI security + compliance for SMBs. TensorShield finds, triages, and fixes — with a human in the loop where it matters. No security hire required.",
 };
 
 export default function Landing() {
@@ -30,7 +30,7 @@ export default function Landing() {
             <span className="text-accent">running while you build.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted">
-            Sentinel continuously finds, triages, and fixes security &amp; compliance issues across your code,
+            TensorShield continuously finds, triages, and fixes security &amp; compliance issues across your code,
             cloud, and identity — and pulls you in only where judgment is needed. No security hire required.
           </p>
 
@@ -60,10 +60,10 @@ export default function Landing() {
           <div className="mx-auto mb-10 max-w-2xl text-center">
             <span className="text-xs font-semibold uppercase tracking-wider text-accent">The difference</span>
             <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
-              Most tools stop at the finding. Sentinel ships the fix.
+              Most tools stop at the finding. TensorShield ships the fix.
             </h2>
             <p className="mt-3 text-base leading-relaxed text-muted">
-              A dashboard full of risks is still your problem to solve. Sentinel prepares the actual remediation —
+              A dashboard full of risks is still your problem to solve. TensorShield prepares the actual remediation —
               and applies it the moment you approve.
             </p>
           </div>
@@ -82,7 +82,7 @@ export default function Landing() {
             </div>
             <div className="card border-accent/40 bg-accent-soft/30 p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-accent">
-                <Wrench className="h-4 w-4" /> Sentinel
+                <Wrench className="h-4 w-4" /> TensorShield
               </div>
               <ul className="mt-4 space-y-2.5 text-sm text-ink">
                 {["Opens the pull request with the fix", "Applies the cloud / identity change on approval", "Auto-handles the low-risk work; gates the rest", "Signs the evidence pack automatically"].map((x) => (
@@ -223,7 +223,7 @@ function Section({ eyebrow, title, sub, children }: { eyebrow: string; title: st
   );
 }
 
-// The hero pipeline: your stack → Sentinel → outcomes. Communicates the value prop at
+// The hero pipeline: your stack → TensorShield → outcomes. Communicates the value prop at
 // a glance — and leads with the wedge (we ship fixes, not just findings).
 function StackPipeline() {
   const stack = [
@@ -251,13 +251,13 @@ function StackPipeline() {
 
         <Connector />
 
-        {/* Sentinel */}
+        {/* TensorShield */}
         <div className="flex items-center">
           <div className="w-full rounded-2xl border border-accent/40 bg-accent-soft/40 p-5 text-center">
             <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-accent text-white shadow-sm">
               <ShieldCheck className="h-5 w-5" />
             </span>
-            <div className="mt-3 text-base font-semibold">Sentinel</div>
+            <div className="mt-3 text-base font-semibold">TensorShield</div>
             <div className="mt-1 text-xs font-medium text-accent">Detect · Triage · Fix · Prove</div>
             <div className="mt-2 text-[11px] leading-relaxed text-muted">automated, with a human in the loop</div>
           </div>

@@ -1,4 +1,4 @@
-# Sentinel — the agentic security console
+# TensorShield — the agentic security console
 
 > The world-class, **light & premium** UX for the fractional autonomous security team —
 > calm and trustworthy for the SMB buyer, not a dark "hacker" console (redesigned 2026-06).

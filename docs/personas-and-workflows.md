@@ -1,13 +1,13 @@
 # Personas & workflows — the fractional autonomous security team for SMB
 
-**Status: design of record.** This file defines *who* Sentinel serves and *what loop each
+**Status: design of record.** This file defines *who* TensorShield serves and *what loop each
 of them runs*, then maps every persona-workflow to the implemented surface and names the
 gaps. It is the yardstick for "does the implementation match the design" (the audit lives
 in [§5](#5-implementation-audit--design-vs-built)).
 
 The product thesis: an **SMB cannot hire a security team**, but it has the same attack
 surface (code, cloud, SaaS identity) and the same compliance pressure (a SOC 2 in the
-sales cycle) as a company 10× its size. Sentinel is that team — it **detects, triages,
+sales cycle) as a company 10× its size. TensorShield is that team — it **detects, triages,
 and fixes** autonomously, and **stops for a human only where a human must decide.** "With
 human in the loop" is not a disclaimer; it is the product's safety model (§4).
 
@@ -123,7 +123,7 @@ signed (ledger).` Runs on a schedule (`TSENGINE_MONITOR_INTERVAL`) and on provid
 1. A user **requests expert review** on a finding or a proposed action (`/findings/[id]` → Reviews).
 2. The reviewer resolves with a verdict, signed into the ledger (`/reviews`, `POST /v1/reviews/{id}/resolve`).
    *Success = there is always a human a non-expert can escalate to.* **Open design question:**
-   who is the reviewer — a teammate, or a Sentinel-side security expert (the true "fractional
+   who is the reviewer — a teammate, or a TensorShield-side security expert (the true "fractional
    team")? Today the resolve path is any tenant user; a vendor-side expert tier is a
    business decision, not a code gap (§5).
 
@@ -194,7 +194,7 @@ Legend: ✅ built & wired · ◐ partial / honest-stub · ○ design only.
   top-level `/change-password` route + the `(app)` layout redirect. So the owner-issued temp
   password can't remain the standing credential. API-level E2E test:
   `TestAuth_ForcedPasswordRotation`.
-- **Open design question (P7):** is the human expert a teammate or a Sentinel-side analyst?
+- **Open design question (P7):** is the human expert a teammate or a TensorShield-side analyst?
   This is the literal "fractional team" promise; it's a go-to-market decision to record,
   not a code defect.
 

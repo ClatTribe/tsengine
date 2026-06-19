@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 
 export const metadata = {
-  title: "Integrations — Sentinel",
+  title: "Integrations — TensorShield",
   description:
     "Connect your stack in minutes: GitHub, GitLab, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Slack and PagerDuty for delivery. Read-only by default, write-back only on approval.",
 };
