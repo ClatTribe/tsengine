@@ -102,11 +102,11 @@ export default async function TrustCenter({
           </div>
 
           {/* framework coverage */}
-          {data.frameworks.length > 0 && (
+          {(data.frameworks ?? []).length > 0 && (
             <div className="mx-auto mt-12 max-w-2xl">
               <h2 className="mb-4 text-center text-xs font-semibold uppercase tracking-wider text-faint">Framework coverage</h2>
               <div className="space-y-3">
-                {data.frameworks.map((f) => (
+                {(data.frameworks ?? []).map((f) => (
                   <div key={f.framework} className="card p-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{FRAMEWORK_LABEL[f.framework] ?? f.framework}</span>
