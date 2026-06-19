@@ -34,3 +34,6 @@ scan_runs/
 *.key
 attestation-private.bin
 .claude/launch.json
+
+# compiled platform binary (built locally; never commit)
+/platform
