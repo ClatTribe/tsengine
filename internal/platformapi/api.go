@@ -54,6 +54,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/auth/login", d.handleLogin)
 	mux.HandleFunc("POST /v1/auth/logout", d.sessionAuth(d.handleLogout))
 	mux.HandleFunc("GET /v1/auth/me", d.sessionAuth(d.handleMe))
+	mux.HandleFunc("GET /v1/auth/team", d.sessionAuth(d.handleTeam))
+	mux.HandleFunc("POST /v1/auth/invite", d.sessionAuth(d.handleInvite))
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))

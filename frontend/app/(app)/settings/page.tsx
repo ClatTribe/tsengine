@@ -9,6 +9,7 @@ import { kindLabel } from "@/lib/connectors";
 import { Card, SectionTitle } from "@/components/ui/primitives";
 import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
+import { TeamSection } from "@/components/settings/team-section";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,9 @@ const STATUS_CLS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const [tenant, connections, trust] = await Promise.all([api.tenant(), api.connections(), api.trustLink()]);
+  const [tenant, connections, trust, team, me] = await Promise.all([
+    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(),
+  ]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -47,6 +50,16 @@ export default async function SettingsPage() {
           )}
         </Card>
       </div>
+
+      {/* Team */}
+      {team.length > 0 && (
+        <div>
+          <SectionTitle action={me?.role === "owner" ? <span className="text-[11px] text-faint">owner can invite</span> : undefined}>
+            Team
+          </SectionTitle>
+          <TeamSection members={team} currentEmail={me?.email} canInvite={me?.role === "owner"} />
+        </div>
+      )}
 
       {/* Connected systems */}
       <div>
