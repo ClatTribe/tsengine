@@ -105,6 +105,11 @@ const (
 	ActApplyConfig = "apply_config"
 	ActRevokeToken = "revoke_token"
 	ActFileTicket  = "file_ticket"
+	// ActDraftNotification is the A-RSP incident-response artifact: a DRAFT breach /
+	// disclosure communication the agent prepares for a confirmed critical incident. It is
+	// always tier-3 (irreversible/legal) — a named human edits and signs it before it is
+	// filed or sent; the agent never sends regulatory/customer comms on its own.
+	ActDraftNotification = "draft_notification"
 )
 
 // Action statuses.

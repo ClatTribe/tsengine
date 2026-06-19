@@ -12,15 +12,88 @@ import (
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/internal/remediate"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// criticalScanner surfaces one CRITICAL finding (what would open a critical incident).
+type criticalScanner struct{}
+
+func (criticalScanner) Scan(context.Context, platform.Asset) ([]types.Finding, error) {
+	return []types.Finding{{
+		ID: "f-rce", RuleID: "nuclei::rce", Tool: "nuclei", Severity: types.SeverityCritical,
+		Title: "Remote code execution on /api/exec", Endpoint: "https://acme.example/api/exec",
+	}}, nil
+}
+
+// The full A-RSP "respond" loop: a critical finding → detect opens a critical incident →
+// the agent drafts a T3 breach disclosure that QUEUES for a human signature (never
+// auto-applies, per the T3 invariant) → a named human signs → it is delivered.
+func TestARSP_CriticalIncidentDraftsBreachDisclosureForSignature(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "w1", TenantID: "t1", Type: "repository", Target: "acme-repo"})
+
+	app := &capApplier{}
+	desk := &hitl.Desk{Store: st, Apply: app}
+	n := 0
+	gen := func() string { n++; return string(rune('a' + n)) }
+	svc := &runner.Service{
+		Store: st, Connectors: connector.NewRegistry(), Tokens: noTokens{},
+		Scanner: criticalScanner{}, NewID: gen, Desk: desk,
+		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), NewID: gen},
+		ProposeIncidentResponse: func(inc platform.Incident) (platform.Action, bool) {
+			return remediate.ProposeIncidentResponse(inc, gen)
+		},
+	}
+
+	if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1) a T3 breach-disclosure draft QUEUED for a human — it did NOT auto-apply
+	pending, _ := desk.Pending(ctx, "t1")
+	var draft *platform.Action
+	for i := range pending {
+		if pending[i].Kind == platform.ActDraftNotification {
+			draft = &pending[i]
+		}
+	}
+	if draft == nil {
+		t.Fatalf("a critical incident must queue a T3 breach-disclosure draft; pending=%+v", pending)
+	}
+	if draft.Tier != platform.TierIrreversible || !draft.NeedsHumanSignature() {
+		t.Errorf("the draft must be tier-3 / needs-signature, got tier %d", draft.Tier)
+	}
+	for _, a := range app.got {
+		if a.Kind == platform.ActDraftNotification {
+			t.Fatal("a T3 breach draft must NEVER auto-apply")
+		}
+	}
+
+	// 2) a named human signs it → it is delivered
+	if _, err := desk.Decide(ctx, "t1", draft.ID, hitl.Verdict{Approver: "ciso@acme.com", Approve: true}); err != nil {
+		t.Fatal(err)
+	}
+	delivered := false
+	for _, a := range app.got {
+		if a.Kind == platform.ActDraftNotification {
+			delivered = true
+		}
+	}
+	if !delivered {
+		t.Error("after a named human signs, the disclosure draft must be delivered")
+	}
+}
 
 // workspaceScanner runs the REAL operate posture engine over a deliberately weak
 // workspace (an admin with no MFA + a domain with no DMARC) — exactly what a live
