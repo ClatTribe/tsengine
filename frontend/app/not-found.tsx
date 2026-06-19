@@ -14,7 +14,7 @@ export default function NotFound() {
           That page doesn&apos;t exist, or the resource is no longer tracked.
         </p>
         <Link
-          href="/"
+          href="/dashboard"
           className="mt-5 inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-muted transition hover:border-border-strong hover:text-ink"
         >
           Back to Overview
