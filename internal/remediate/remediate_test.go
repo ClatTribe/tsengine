@@ -193,3 +193,22 @@ func TestDeliverer_FileTicketRoutesToFiler(t *testing.T) {
 		t.Errorf("file_ticket should route to the filer, got %v", f.filed)
 	}
 }
+
+// A SIGNED incident-disclosure draft (A-RSP) files to the issue tracker for the human to
+// actually send — and is a graceful no-op when no tracker is configured.
+func TestDeliverer_SignedDraftRoutesToFiler(t *testing.T) {
+	ctx := context.Background()
+	f := &recordingFiler{}
+	d := &Deliverer{Store: store.NewMemory(), Connectors: connector.NewRegistry(), Tokens: fakeTokens{}, Ticket: f}
+	if err := d.Apply(ctx, platform.Action{ID: "draft-1", TenantID: "t", Kind: platform.ActDraftNotification, Title: "Breach disclosure"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.filed) != 1 || f.filed[0] != "draft-1" {
+		t.Errorf("a signed draft should file to the tracker, got %v", f.filed)
+	}
+	// no tracker → recorded no-op, never an error
+	d2 := &Deliverer{Store: store.NewMemory(), Connectors: connector.NewRegistry(), Tokens: fakeTokens{}}
+	if err := d2.Apply(ctx, platform.Action{ID: "draft-2", TenantID: "t", Kind: platform.ActDraftNotification}); err != nil {
+		t.Errorf("no-filer draft delivery must be a graceful no-op, got %v", err)
+	}
+}

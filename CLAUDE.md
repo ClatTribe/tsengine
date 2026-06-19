@@ -761,7 +761,14 @@ scheduled `RescanTenant` pass reconciles the tenant's current findings into dura
 it when the issue is fixed (keyed `rule_id|endpoint`, signed into the ledger, LLM-free).
 Surfaced at `GET /v1/incidents` and a dashboard "New since last scan" section. This is the
 deterministic **detect** half of detect-&-respond; the **respond** half is the existing
-remediate + HITL path. (The open-ended LLM-driven SOC reasoning remains future.)
+remediate + HITL path **plus the A-RSP incident-response slice**: when `Reconcile` opens a
+**critical** incident, `runner` calls `remediate.ProposeIncidentResponse`, which drafts a
+**T3 breach/disclosure communication** (`ActDraftNotification`) and queues it for a **named
+human signature** — it can never auto-apply (the T3 invariant, §18.3), and a signed draft
+files to the issue tracker for the human to actually send (the agent never sends regulatory
+/ customer comms itself). The draft is grounded (cites the incident's rule + finding) and
+explicit that its claims are unverified until a human confirms them. The deeper, open-ended
+LLM-driven SOC triage (playbooks, containment, forensics) remains future.
 
 **Identity findings now get specific fixes, not generic tickets** (`remediate/identity.go`):
 each operate rule maps to a copy-pasteable runbook ticket naming the offending entity —

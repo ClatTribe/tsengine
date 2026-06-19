@@ -101,7 +101,10 @@ type Deliverer struct {
 // MR), else falls back to any active connection of the kind the action implies.
 // File-ticket actions are a recorded no-op delivery for the MVP.
 func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
-	if a.Kind == platform.ActFileTicket {
+	// File-ticket and a SIGNED incident-disclosure draft both deliver to the issue tracker
+	// (the draft, now human-signed, is filed for the human to actually send — the agent
+	// never sends regulatory/customer comms itself). No tracker → recorded no-op.
+	if a.Kind == platform.ActFileTicket || a.Kind == platform.ActDraftNotification {
 		if d.Ticket == nil {
 			return nil // no issue tracker configured → recorded no-op (graceful)
 		}
