@@ -40,26 +40,49 @@ func pathCompliance(p cloudgraph.Path, target *cloudgraph.Node) *types.Complianc
 		add(&c.PCI, "1.3")
 		add(&c.CISv8, "13.4")
 		add(&c.NISTCSF, "PR.AC-5")
+		add(&c.GDPR, "Art. 32")
+		add(&c.NIST80053, "SC-7", "AC-4")
+		add(&c.NIST800171, "3.13.1", "3.1.3")
+		add(&c.FedRAMP, "SC-7", "AC-4")
+		add(&c.DPDP, "Sec. 8(5)")
 	}
 	if sensitive { // sensitive-data exposure / protection failure
 		add(&c.SOC2, "CC6.1")
 		add(&c.PCI, "3.4")
 		add(&c.CISv8, "3.3")
 		add(&c.NISTCSF, "PR.DS-1")
+		add(&c.GDPR, "Art. 32", "Art. 5(1)(f)")
+		add(&c.ISO27701, "6.11")
+		add(&c.NIST80053, "SC-28", "SC-8")
+		add(&c.NIST800171, "3.13.16", "3.13.8")
+		add(&c.CCPA, "1798.150", "1798.100")
+		add(&c.FedRAMP, "SC-28", "SC-8")
+		add(&c.DPDP, "Sec. 8(5)")
 	}
 	if privileged || privesc { // least-privilege failure
 		add(&c.SOC2, "CC6.3")
 		add(&c.PCI, "7.2")
 		add(&c.CISv8, "5.4")
 		add(&c.NISTCSF, "PR.AC-4")
+		add(&c.GDPR, "Art. 32")
+		add(&c.NIST80053, "AC-6")
+		add(&c.NIST800171, "3.1.5")
+		add(&c.FedRAMP, "AC-6")
+		add(&c.DPDP, "Sec. 8(5)")
 	}
 	if assume { // cross-identity lateral movement / access control
 		add(&c.SOC2, "CC6.1")
 		add(&c.CISv8, "6.8")
 		add(&c.NISTCSF, "PR.AC-1")
+		add(&c.GDPR, "Art. 32")
+		add(&c.NIST80053, "AC-3", "AC-4")
+		add(&c.NIST800171, "3.1.3")
+		add(&c.FedRAMP, "AC-3", "AC-4")
+		add(&c.DPDP, "Sec. 8(5)")
 	}
 
-	if len(c.SOC2)+len(c.PCI)+len(c.CISv8)+len(c.NISTCSF) == 0 {
+	if len(c.SOC2)+len(c.PCI)+len(c.CISv8)+len(c.NISTCSF)+len(c.GDPR)+len(c.NIST80053)+
+		len(c.NIST800171)+len(c.CCPA)+len(c.FedRAMP)+len(c.DPDP)+len(c.ISO27701) == 0 {
 		return nil
 	}
 	return c
