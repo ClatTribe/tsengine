@@ -58,7 +58,7 @@ export default async function SettingsPage() {
         <SectionTitle>Automation</SectionTitle>
         <div className="space-y-3">
           <KillSwitch halted={tenant?.agents_halted ?? false} canToggle={me?.role === "owner"} />
-          <AIBomPanel bom={aiBom} />
+          <AIBomPanel bom={aiBom} canQuarantine={me?.role === "owner"} />
         </div>
       </div>
 

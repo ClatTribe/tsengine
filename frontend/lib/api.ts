@@ -85,6 +85,11 @@ export const api = {
   killSwitch: (halted: boolean) =>
     call<Tenant>("/v1/killswitch", { method: "POST", body: JSON.stringify({ halted }) }),
 
+  // Quarantine (or restore) ONE connection — the per-agent kill-switch (WRD-4). A
+  // quarantined connection is skipped for scans and refused for writes.
+  quarantineConnection: (id: string, quarantined: boolean) =>
+    call<Connection>(`/v1/connections/${id}/quarantine`, { method: "POST", body: JSON.stringify({ quarantined }) }),
+
   // Request a human-expert review on a finding or action (the AI + human escalation).
   requestReview: (subject: string, subjectId: string, note: string) =>
     call<ReviewRequest>("/v1/reviews", {
