@@ -92,7 +92,7 @@ func TestDashboard_RendersPosture(t *testing.T) {
 		"Critical",                     // risk rating (a critical finding present)
 		"SQL injection",                // top finding
 		"Patch SQLi in search handler", // pending approval
-		"SOC2",                         // framework posture
+		"SOC 2",                        // framework posture (grc.FrameworkTitle display name)
 		"1 met",                        // CC6.1 met
 		"1 gap",                        // CC6.6 gap
 		`action="/ui/approvals/a1"`,    // the approve/reject forms are wired
