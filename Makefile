@@ -98,6 +98,16 @@ platform-image: ## build the platform server image
 frontend-image: ## build the frontend image
 	docker build -t tsengine/frontend:dev frontend/
 
+.PHONY: dev
+dev: ## run the local demo stack (platform + frontend) with a CLEAN Next cache — fixes "unstyled" app
+	./scripts/dev.sh
+
+.PHONY: dev-down
+dev-down: ## stop the local dev stack (frees :3000 and :8090)
+	@pkill -f 'next dev' 2>/dev/null || true; pkill -f 'next-server' 2>/dev/null || true
+	@for p in 8090 3000; do pids=$$(lsof -nP -iTCP:$$p -sTCP:LISTEN -t 2>/dev/null); [ -n "$$pids" ] && kill -9 $$pids 2>/dev/null || true; done
+	@echo "→ dev stack stopped"
+
 .PHONY: clean
 clean: ## remove build artifacts
 	rm -rf bin/ runs/
