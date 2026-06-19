@@ -10,11 +10,14 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
@@ -27,6 +30,7 @@ type Deps struct {
 	Store      store.Store
 	Connectors *connector.Registry
 	Runner     *runner.Service
+	Jobs       *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
 	Desk       Decider          // optional: the HITL desk (approvals decide)
 	GRC        Posturer         // optional: the compliance system-of-record (posture)
 	Vault      Sealer           // optional: seals OAuth tokens before persistence
@@ -70,6 +74,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents)) // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
+	mux.HandleFunc("GET /v1/jobs", d.auth(d.handleJobs))
+	mux.HandleFunc("GET /v1/jobs/{id}", d.auth(d.handleJob))
 	mux.HandleFunc("POST /v1/approvals/{id}", d.auth(d.handleApprovalDecide))
 	mux.HandleFunc("GET /v1/connect/{kind}", d.auth(d.handleConnectURL))
 	mux.HandleFunc("GET /v1/connect/{kind}/callback", d.handleConnectCallback) // OAuth redirect; tenant in state
@@ -229,19 +235,60 @@ func (d Deps) handleApps(w http.ResponseWriter, r *http.Request, tenantID string
 	respond(w, apps, err)
 }
 
-// handleRescan triggers an immediate re-scan of all the tenant's assets (the API behind
-// the dashboard's "Scan now"). Returns how many assets were scanned.
+// handleRescan triggers a re-scan of all the tenant's assets (the API behind the
+// dashboard's "Scan now"). With a job pool configured it enqueues the scan and returns
+// 202 + a job id to poll (scans can be long — they must not block the request); without
+// one it runs synchronously and returns the asset count (back-compat, used by tests).
 func (d Deps) handleRescan(w http.ResponseWriter, r *http.Request, tenantID string) {
 	if d.Runner == nil {
 		writeJSON(w, http.StatusNotImplemented, errBody("scanning not configured"))
 		return
 	}
-	n, err := d.Runner.RescanTenant(r.Context(), tenantID)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, errBody(err.Error()))
+	if d.Jobs == nil {
+		n, err := d.Runner.RescanTenant(r.Context(), tenantID)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, errBody(err.Error()))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"assets_scanned": n})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"assets_scanned": n})
+	job, err := d.Jobs.Enqueue("rescan", tenantID, func(ctx context.Context) (any, error) {
+		n, err := d.Runner.RescanTenant(ctx, tenantID)
+		return map[string]any{"assets_scanned": n}, err
+	})
+	if errors.Is(err, jobs.ErrBusy) {
+		writeJSON(w, http.StatusTooManyRequests, errBody(err.Error()))
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, errBody(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+// handleJob returns a single job's status — tenant-scoped (a tenant can only read its own).
+func (d Deps) handleJob(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.Jobs == nil {
+		writeJSON(w, http.StatusNotFound, errBody("no job runner"))
+		return
+	}
+	job, ok := d.Jobs.Get(r.PathValue("id"))
+	if !ok || job.TenantID != tenantID {
+		writeJSON(w, http.StatusNotFound, errBody("job not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+// handleJobs lists the tenant's recent jobs (newest first).
+func (d Deps) handleJobs(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.Jobs == nil {
+		writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	writeJSON(w, http.StatusOK, d.Jobs.List(tenantID))
 }
 
 // handleIncidents returns the tenant's OPEN incidents (the continuous-monitoring view:
