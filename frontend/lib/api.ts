@@ -32,10 +32,14 @@ async function call<T>(path: string, init?: RequestInit, session?: Session): Pro
   return (ct.includes("application/json") ? await res.json() : await res.text()) as T;
 }
 
-/** Like call() but never throws — returns a fallback. For non-critical dashboard widgets. */
+/** Like call() but never throws — returns a fallback. For non-critical dashboard widgets.
+ * Also coerces a null/undefined body to the fallback: the Go API serializes an empty slice
+ * (no findings, no pending approvals — a normal "all clear" state) as JSON `null`, and a
+ * null reaching `.length`/`.map` in a Server Component would 500 the page. */
 async function safe<T>(path: string, fallback: T): Promise<T> {
   try {
-    return await call<T>(path);
+    const r = await call<T>(path);
+    return r ?? fallback;
   } catch {
     return fallback;
   }
@@ -74,6 +78,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ current_password: current, new_password: next }),
     }),
+
+  // Engage/disengage the global kill-switch — halts (or resumes) ALL autonomous agent
+  // action for the tenant. Returns the updated tenant.
+  killSwitch: (halted: boolean) =>
+    call<Tenant>("/v1/killswitch", { method: "POST", body: JSON.stringify({ halted }) }),
 
   // Request a human-expert review on a finding or action (the AI + human escalation).
   requestReview: (subject: string, subjectId: string, note: string) =>

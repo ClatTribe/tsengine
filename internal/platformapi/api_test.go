@@ -79,6 +79,29 @@ func do2(h http.Handler, method, path string) *httptest.ResponseRecorder {
 	return rec
 }
 
+// The kill-switch endpoint toggles Tenant.AgentsHalted and the tenant read reflects it.
+func TestKillSwitchToggle(t *testing.T) {
+	h, st := setup(t)
+	ctx := context.Background()
+
+	if rec := do(h, "POST", "/v1/killswitch", "t1", `{"halted":true}`); rec.Code != http.StatusOK {
+		t.Fatalf("engage kill-switch: want 200, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if tn, _ := st.GetTenant(ctx, "t1"); !tn.AgentsHalted {
+		t.Fatal("tenant should be halted after engage")
+	}
+	if g := do(h, "GET", "/v1/tenant", "t1", ""); !strings.Contains(g.Body.String(), `"agents_halted":true`) {
+		t.Fatalf("GET /v1/tenant should report halted: %s", g.Body.String())
+	}
+
+	if rec := do(h, "POST", "/v1/killswitch", "t1", `{"halted":false}`); rec.Code != http.StatusOK {
+		t.Fatalf("disengage kill-switch: want 200, got %d", rec.Code)
+	}
+	if tn, _ := st.GetTenant(ctx, "t1"); tn.AgentsHalted {
+		t.Fatal("tenant should be resumed after disengage")
+	}
+}
+
 func TestWebhookTriggersScanThenFindingsQueryable(t *testing.T) {
 	h, _ := setup(t)
 

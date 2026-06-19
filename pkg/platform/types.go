@@ -19,6 +19,12 @@ type Tenant struct {
 	Name      string    `json:"name"`
 	Plan      string    `json:"plan,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// AgentsHalted is the global kill-switch (agentic-SMB spec OM-3 / TS-5): when true,
+	// the platform performs NO autonomous agent action for this tenant — no new scans and
+	// no remediation writes (auto-applied or human-approved alike). It fails closed: a
+	// halted tenant's actions queue instead of executing until a human disengages it. The
+	// one human "on the loop" can freeze the whole roster instantly.
+	AgentsHalted bool `json:"agents_halted,omitempty"`
 }
 
 // Connection kinds — the external systems the platform can link via OAuth.

@@ -8,6 +8,7 @@ package hitl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,6 +16,11 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
+
+// ErrHalted is returned when the tenant's kill-switch (Tenant.AgentsHalted, agentic-SMB
+// spec OM-3 / TS-5) is engaged: no remediation is applied while halted, so the desk fails
+// closed. A human disengages the switch before any action executes.
+var ErrHalted = errors.New("hitl: agent actions are halted (kill-switch engaged) — disengage to apply")
 
 // Applier executes an approved (or auto-approved) action against the real world — the
 // remediate.Deliverer in production, a fake in tests. The desk never applies directly;
@@ -45,13 +51,23 @@ func (d *Desk) now() time.Time {
 	return time.Now().UTC()
 }
 
+// halted reports whether the tenant's kill-switch is engaged. A read error is treated as
+// NOT halted — the switch must be deliberately set; a transient store error must not
+// silently freeze a tenant (and the apply path stays gated by the human tier anyway).
+func (d *Desk) halted(ctx context.Context, tenantID string) bool {
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	return err == nil && t.AgentsHalted
+}
+
 // Submit routes a freshly proposed action: tier-gated actions queue for a human;
 // everything else is applied immediately. Returns the action in its resulting state.
 func (d *Desk) Submit(ctx context.Context, a platform.Action) (platform.Action, error) {
 	if a.CreatedAt.IsZero() {
 		a.CreatedAt = d.now()
 	}
-	if a.NeedsApproval() {
+	// Kill-switch: while halted, even a tier-0/1 auto-apply does NOT execute — it queues
+	// for a human, so nothing is lost and nothing acts. Disengaging + approving applies it.
+	if a.NeedsApproval() || d.halted(ctx, a.TenantID) {
 		a.Status = platform.ActPendingApproval
 		if err := d.Store.PutAction(ctx, a); err != nil {
 			return a, err
@@ -108,11 +124,24 @@ func (d *Desk) Decide(ctx context.Context, tenantID, actionID string, v Verdict)
 		d.record("rejected", a, v.Approver)
 		return a, nil
 	}
+	// A rejection is safe while halted (no write); an approval-to-apply is not — the
+	// kill-switch wins over the verdict. The action stays pending so the human can re-approve
+	// once they disengage.
+	if d.halted(ctx, tenantID) {
+		return a, ErrHalted
+	}
 	return d.apply(ctx, a, v.Approver)
 }
 
 // apply executes an approved action and persists the applied state.
 func (d *Desk) apply(ctx context.Context, a platform.Action, approver string) (platform.Action, error) {
+	// Backstop: no write path executes under an engaged kill-switch, whatever called us.
+	if d.halted(ctx, a.TenantID) {
+		a.Status = platform.ActPendingApproval
+		_ = d.Store.PutAction(ctx, a)
+		d.record("blocked_killswitch", a, approver)
+		return a, ErrHalted
+	}
 	if d.Apply != nil {
 		if err := d.Apply.Apply(ctx, a); err != nil {
 			// keep it visible: the action stays pending/approved-but-failed, not silently lost
