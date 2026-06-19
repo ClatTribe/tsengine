@@ -49,6 +49,9 @@ export default function Landing() {
             </Link>
           </div>
           <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +10 more · No credit card to start</p>
+          <Link href="/scan" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+            Or check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
 
           <StackPipeline />
         </div>
