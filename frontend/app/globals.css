@@ -37,6 +37,17 @@
     outline-offset: 2px;
     border-radius: 6px;
   }
+  /* respect users who prefer less motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {
@@ -55,7 +66,11 @@
   }
   /* a soft, premium CTA gradient used on marketing + key buttons */
   .btn-accent {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-150 hover:bg-accent-hover active:translate-y-px;
+  }
+  /* interactive lift: clickable cards/rows feel responsive on hover + press */
+  .lift {
+    @apply transition duration-150 hover:-translate-y-0.5 hover:shadow-card-hover active:translate-y-0 active:shadow-card;
   }
   .skeleton {
     @apply relative overflow-hidden rounded-md bg-surface-2;

@@ -110,7 +110,7 @@ export default async function OverviewPage() {
       {/* Needs you */}
       {approvals.length > 0 && (
         <Link href="/inbox" className="block">
-          <Card className="flex items-center gap-4 border-accent/40 bg-accent-soft/40 p-5 transition hover:border-accent/70">
+          <Card className="lift flex items-center gap-4 border-accent/40 bg-accent-soft/40 p-5 hover:border-accent/70">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-white shadow-sm">
               <InboxIcon className="h-5 w-5" />
             </div>

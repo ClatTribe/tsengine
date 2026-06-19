@@ -49,7 +49,7 @@ export function MarketingNav() {
           </Link>
           <Link
             href="/login"
-            className="rounded-xl bg-accent px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover"
+            className="rounded-xl bg-accent px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
           >
             Start free
           </Link>
@@ -59,7 +59,7 @@ export function MarketingNav() {
         <div className="ml-auto flex items-center gap-2 md:hidden">
           <Link
             href="/login"
-            className="rounded-xl bg-accent px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover"
+            className="rounded-xl bg-accent px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
           >
             Start free
           </Link>
