@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Github, GitBranch, Mail, KeyRound, Users, Plug, ScanLine, CheckCircle2, ShieldCheck, ArrowRight, Cloud } from "lucide-react";
 import { CONNECTORS, CATEGORY_LABEL, type ConnectorCategory } from "@/lib/connectors";
 
@@ -80,9 +81,9 @@ export function FirstRun() {
       </div>
 
       <div className="text-center">
-        <a href="/assets" className="text-xs text-accent transition hover:underline">
+        <Link href="/assets" className="text-xs text-accent transition hover:underline">
           See all connection options →
-        </a>
+        </Link>
       </div>
     </div>
   );
