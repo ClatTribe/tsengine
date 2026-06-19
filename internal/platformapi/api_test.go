@@ -79,6 +79,35 @@ func do2(h http.Handler, method, path string) *httptest.ResponseRecorder {
 	return rec
 }
 
+// The quarantine endpoint (WRD-4) flips one connection's status active↔quarantined and
+// never leaks the sealed secret ref.
+func TestQuarantineConnection(t *testing.T) {
+	h, st := setup(t)
+	ctx := context.Background()
+
+	rec := do(h, "POST", "/v1/connections/c1/quarantine", "t1", `{"quarantined":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("quarantine: want 200, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "vault:") || strings.Contains(rec.Body.String(), "SECRET") {
+		t.Errorf("quarantine response leaked the secret ref: %s", rec.Body.String())
+	}
+	if cs, _ := st.ListConnections(ctx, "t1"); cs[0].Status != platform.ConnQuarantined {
+		t.Errorf("connection should be quarantined, got %q", cs[0].Status)
+	}
+
+	if rec := do(h, "POST", "/v1/connections/c1/quarantine", "t1", `{"quarantined":false}`); rec.Code != http.StatusOK {
+		t.Fatalf("restore: want 200, got %d", rec.Code)
+	}
+	if cs, _ := st.ListConnections(ctx, "t1"); cs[0].Status != platform.ConnActive {
+		t.Errorf("restore should set active, got %q", cs[0].Status)
+	}
+
+	if rec := do(h, "POST", "/v1/connections/ghost/quarantine", "t1", `{"quarantined":true}`); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown connection: want 404, got %d", rec.Code)
+	}
+}
+
 // The kill-switch endpoint toggles Tenant.AgentsHalted and the tenant read reflects it.
 func TestKillSwitchToggle(t *testing.T) {
 	h, st := setup(t)

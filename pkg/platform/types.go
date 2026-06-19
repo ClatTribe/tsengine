@@ -44,6 +44,11 @@ const (
 	ConnActive   = "active"
 	ConnDegraded = "degraded"
 	ConnRevoked  = "revoked"
+	// ConnQuarantined is a human-set, per-connection kill-switch (agentic-SMB spec WRD-4):
+	// the agent takes NO action through this one connection (no scans, no writes) while the
+	// rest of the roster keeps running. Like every non-active status it fails the connection
+	// closed in the runner + deliverer.
+	ConnQuarantined = "quarantined"
 )
 
 // Connection is an OAuth-linked external system the agent watches and (for gated

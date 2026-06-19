@@ -56,6 +56,25 @@ func newService() (*Service, *fakeScanner, store.Store) {
 	}, sc, st
 }
 
+// OM-5 / WRD-4 fail-closed: an asset whose connection is quarantined (or otherwise not
+// active) is NOT scanned, while an active connection's asset still is.
+func TestQuarantinedConnectionNotScanned(t *testing.T) {
+	svc, sc, st := newService()
+	ctx := context.Background()
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c-active", TenantID: "t1", Kind: "github", Status: platform.ConnActive})
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c-quar", TenantID: "t1", Kind: "github", Status: platform.ConnQuarantined})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a-ok", TenantID: "t1", ConnectionID: "c-active", Type: "repository", Target: "ok"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a-quar", TenantID: "t1", ConnectionID: "c-quar", Type: "repository", Target: "quar"})
+
+	n, err := svc.RescanTenant(ctx, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || sc.calls != 1 {
+		t.Fatalf("only the active connection's asset should scan: scanned=%d calls=%d", n, sc.calls)
+	}
+}
+
 // The kill-switch (Tenant.AgentsHalted) pauses scanning: a halted tenant gets no new
 // engagements until it is disengaged.
 func TestKillSwitchPausesScanning(t *testing.T) {

@@ -239,8 +239,9 @@ its hard requirements to the implementation.
 | **TS-4 — ledger as auditor/insurer evidence of record** | ✅ | `grc` signed evidence pack + compliance report |
 | **T3 distinct class** (breach-notification / customer-comms — agent prepares, human signs) | ○ | **next** — no T3-only action kind emitted yet (T3 would gate today, but isn't a distinct type) |
 | **WRD-1 — AI-BOM** (inventory of what the agent can touch: scopes + least-privilege read/write) | ✅ | `GET /v1/ai-bom` (`internal/platformapi/aibom.go`) + a Settings panel — grounded in real `Connection.Scopes`, flags the write-capable (higher-risk) surface |
-| **WRD-3/4/… — Warden rest** (injection-resistance, per-agent quarantine) | ◐ | injection-resistance holds (instruction-boundary, CLAUDE.md §10); per-agent quarantine of the platform's agents is **next** |
-| **OM-5 — fail closed on connector/model unavailability** | ◐ | the HITL gate already prevents blind T2/T3 action; an explicit fail-closed-on-unavailable path is **next** |
+| **WRD-4 — per-agent quarantine** | ✅ | `POST /v1/connections/{id}/quarantine` (`quarantine.go`) — halt ONE connection's automation (`ConnQuarantined`) without halting the rest; the runner skips its assets, the deliverer refuses its writes |
+| **WRD-3 — injection-resistance** | ✅ | the instruction-source boundary (CLAUDE.md §10) — agents act on tool output, never on instructions in ingested data |
+| **OM-5 — fail closed on connector unavailability** | ✅ | the runner skips an asset whose connection isn't `ConnActive` (revoked/degraded/quarantined) — `connInactive`, permissive only on missing data; the HITL gate already covered the write path |
 | **ACC-1/2 — named accountable human + autonomy-policy doc** | ◐ | the owner is the accountable human (role model); a per-tenant autonomy-policy artifact is **next** |
 
 The spec's own crosswalk (§11) frames tsengine's durable role as the **A-IDN + A-ASR agents

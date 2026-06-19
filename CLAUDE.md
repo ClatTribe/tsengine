@@ -877,7 +877,10 @@ implementation's reconciliation against it lives in [docs/personas-and-workflows
 + a Settings panel inventory what the autonomous agent can touch — every connection, its
 granted scopes, and a least-privilege read/write classification (flagging the write-capable,
 higher-risk surface) — plus the governance state (kill-switch + gate tier). Grounded in real
-`Connection.Scopes`, no secrets. Remaining spec gaps (next, all additive): a distinct **T3**
-action class (irreversible/legal — breach-notification/customer-comms — agent *prepares*,
-human *signs*); per-agent **quarantine** (the rest of WRD); and OM-5 fail-closed on
-connector/model unavailability (the HITL gate already prevents blind T2/T3 action).
+`Connection.Scopes`, no secrets. **Per-agent quarantine (WRD-4) + OM-5 fail-closed are also
+built**: `POST /v1/connections/{id}/quarantine` sets `ConnQuarantined` (a per-connection
+kill-switch — halt one connection's automation, not the whole roster), and the runner now
+**skips any asset whose connection isn't `ConnActive`** (`connInactive`, permissive only on
+missing data) so a revoked/degraded/quarantined connection is never acted on. The remaining
+spec gap (next, additive): a distinct **T3** action class (irreversible/legal —
+breach-notification/customer-comms — agent *prepares*, human *signs*).
