@@ -164,7 +164,7 @@ export interface ComplianceReport {
   Title: string;
   Framework: string;
   GeneratedAt: string;
-  Rows: ReportRow[];
+  Rows: ReportRow[] | null; // Go marshals an empty slice as null — callers must guard
   MetCount: number;
   GapCount: number;
   Signer?: string;
