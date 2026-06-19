@@ -11,6 +11,7 @@ import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
+import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,8 @@ const STATUS_CLS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const [tenant, connections, trust, team, me] = await Promise.all([
-    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(),
+  const [tenant, connections, trust, team, me, aiBom] = await Promise.all([
+    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(),
   ]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
@@ -52,10 +53,13 @@ export default async function SettingsPage() {
         </Card>
       </div>
 
-      {/* Automation control — the global kill-switch (the human "on the loop") */}
+      {/* Automation control — the global kill-switch + what the agent can touch (WRD-1) */}
       <div>
         <SectionTitle>Automation</SectionTitle>
-        <KillSwitch halted={tenant?.agents_halted ?? false} canToggle={me?.role === "owner"} />
+        <div className="space-y-3">
+          <KillSwitch halted={tenant?.agents_halted ?? false} canToggle={me?.role === "owner"} />
+          <AIBomPanel bom={aiBom} />
+        </div>
       </div>
 
       {/* Team */}

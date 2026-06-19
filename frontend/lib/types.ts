@@ -57,6 +57,21 @@ export interface Tenant {
   agents_halted?: boolean; // global kill-switch: when true, no autonomous agent action runs
 }
 
+// AI-BOM (agent capability manifest, WRD-1): what the autonomous agent can touch.
+export interface AIBomConnection {
+  kind: string;
+  account?: string;
+  status: string;
+  scopes?: string[];
+  write_scopes?: string[];
+  capability: "read-only" | "read-write";
+}
+export interface AIBom {
+  governance: { kill_switch_engaged: boolean; gate_tier: number };
+  connections: AIBomConnection[];
+  summary: { connections: number; write_capable: number; read_only: number };
+}
+
 // A user account within a tenant (password hash never sent by the API).
 export interface User {
   id: string;
