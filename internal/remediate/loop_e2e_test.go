@@ -95,6 +95,69 @@ func TestARSP_CriticalIncidentDraftsBreachDisclosureForSignature(t *testing.T) {
 	}
 }
 
+// The full A-RSP "respond" loop, containment half: a critical incident → the agent proposes
+// a tier-2 GATED containment action that QUEUES (never auto-applies) → a human approves →
+// it is delivered, and the runbook names the affected entity from the incident key.
+func TestARSP_CriticalIncidentProposesGatedContainment(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "w1", TenantID: "t1", Type: "repository", Target: "acme-repo"})
+
+	app := &capApplier{}
+	desk := &hitl.Desk{Store: st, Apply: app}
+	n := 0
+	gen := func() string { n++; return string(rune('a' + n)) }
+	svc := &runner.Service{
+		Store: st, Connectors: connector.NewRegistry(), Tokens: noTokens{},
+		Scanner: criticalScanner{}, NewID: gen, Desk: desk,
+		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), NewID: gen},
+		ProposeIncidentResponse: func(inc platform.Incident) ([]platform.Action, bool) {
+			return remediate.ProposeIncidentResponse(inc, gen)
+		},
+	}
+	if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1) a tier-2 containment action QUEUED — it did NOT auto-apply
+	pending, _ := desk.Pending(ctx, "t1")
+	var con *platform.Action
+	for i := range pending {
+		if pending[i].Payload["remediation_type"] == "containment" {
+			con = &pending[i]
+		}
+	}
+	if con == nil {
+		t.Fatalf("a critical incident must queue a gated containment action; pending=%+v", pending)
+	}
+	if con.Tier != platform.GateTier || !con.NeedsApproval() {
+		t.Errorf("containment must be tier-2 human-gated, got tier %d", con.Tier)
+	}
+	for _, a := range app.got {
+		if a.Payload["remediation_type"] == "containment" {
+			t.Fatal("containment must NEVER auto-apply — it is human-gated")
+		}
+	}
+
+	// 2) a human approves → it is delivered, runbook names the endpoint from the incident key
+	if _, err := desk.Decide(ctx, "t1", con.ID, hitl.Verdict{Approver: "ops@acme.com", Approve: true}); err != nil {
+		t.Fatal(err)
+	}
+	delivered := false
+	for _, a := range app.got {
+		if a.Payload["remediation_type"] == "containment" {
+			delivered = true
+			if rb, _ := a.Payload["runbook"].(string); !strings.Contains(rb, "acme.example/api/exec") {
+				t.Errorf("delivered containment runbook should name the affected endpoint: %s", rb)
+			}
+		}
+	}
+	if !delivered {
+		t.Error("after a human approves, the containment action must be delivered")
+	}
+}
+
 // workspaceScanner runs the REAL operate posture engine over a deliberately weak
 // workspace (an admin with no MFA + a domain with no DMARC) — exactly what a live
 // Okta/Workspace fetch would surface.
