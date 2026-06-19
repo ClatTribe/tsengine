@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   ShieldCheck, Sparkles, ArrowRight, Plug, ScanLine, CheckCircle2, Bug, FileCheck2,
   UserCheck, Lock, Radar, Github, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
-  Activity, ChevronDown, GitBranch, XCircle,
+  Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
 } from "lucide-react";
 
 export const metadata = {
@@ -48,7 +48,7 @@ export default function Landing() {
               See how it works
             </Link>
           </div>
-          <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · PCI-DSS · HIPAA · No credit card to start</p>
+          <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +10 more · No credit card to start</p>
 
           <StackPipeline />
         </div>
@@ -100,10 +100,10 @@ export default function Landing() {
       <section className="border-y border-border bg-surface">
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-5 py-10 text-center sm:grid-cols-4">
           {[
-            ["6", "systems connect in minutes"],
+            ["14", "compliance frameworks"],
+            ["30+", "OSS scanners wrapped"],
             ["24/7", "autonomous monitoring"],
-            ["80%+", "fixes auto-prepared"],
-            ["6", "frameworks mapped"],
+            ["1-tap", "approval, fully signed"],
           ].map(([n, l]) => (
             <div key={l}>
               <div className="text-3xl font-semibold tracking-tight text-ink">{n}</div>
@@ -156,6 +156,9 @@ export default function Landing() {
           ))}
         </div>
       </Section>
+
+      {/* Compare — the category wedge */}
+      <Compare />
 
       {/* Trust / signed evidence */}
       <section className="bg-surface">
@@ -210,6 +213,109 @@ export default function Landing() {
   );
 }
 
+// Compare — the category wedge. SMB buyers are choosing between a compliance platform, a
+// point scanner, and hiring. We're the one box that does all three, autonomously. Honest
+// category comparison (capabilities vary by vendor/plan — footnoted), no fabricated metrics.
+function Compare() {
+  const cols = [
+    { name: "TensorShield", sub: "the autonomous team", highlight: true },
+    { name: "Compliance platforms", sub: "Vanta · Drata", highlight: false },
+    { name: "Point scanners", sub: "Snyk · Dependabot", highlight: false },
+    { name: "Hire an engineer", sub: "$150k+/yr", highlight: false },
+  ];
+  // cell value: "yes" | "no" | "part" | a literal string (rendered as text)
+  const rows: { label: string; cells: (string)[] }[] = [
+    { label: "Deep detection — code, cloud, web, identity", cells: ["yes", "part", "part", "yes"] },
+    { label: "Ships the actual fix (PR / config change)", cells: ["yes", "no", "no", "yes"] },
+    { label: "Compliance evidence — 14 frameworks, signed", cells: ["yes", "yes", "no", "part"] },
+    { label: "Identity & email-spoofing posture", cells: ["yes", "part", "no", "yes"] },
+    { label: "Runs 24/7, autonomous, human-gated", cells: ["yes", "no", "no", "no"] },
+    { label: "Cost for an SMB", cells: ["$/mo", "$$/mo", "$/mo", "$$$$/yr"] },
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-5 py-20">
+      <div className="mx-auto mb-12 max-w-2xl text-center">
+        <span className="text-xs font-semibold uppercase tracking-wider text-accent">Why TensorShield</span>
+        <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
+          One platform where you&apos;d otherwise stitch three — or hire.
+        </h2>
+        <p className="mt-3 text-base leading-relaxed text-muted">
+          Most SMBs end up paying for a compliance tool, a scanner, and the engineer to run both. TensorShield is the one
+          box that detects, fixes, and proves — with you approving anything that matters.
+        </p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr>
+              <th className="w-[34%] p-0" />
+              {cols.map((c) => (
+                <th
+                  key={c.name}
+                  className={`rounded-t-xl px-4 py-3 text-center align-bottom ${c.highlight ? "bg-accent-soft/60 ring-1 ring-accent/30" : ""}`}
+                >
+                  <div className={`text-sm font-semibold ${c.highlight ? "text-accent" : "text-ink"}`}>{c.name}</div>
+                  <div className="mt-0.5 text-[11px] font-normal text-faint">{c.sub}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => (
+              <tr key={r.label}>
+                <td className="border-t border-border py-3 pr-4 text-sm text-ink">{r.label}</td>
+                {r.cells.map((v, ci) => (
+                  <td
+                    key={ci}
+                    className={`border-t border-border px-4 py-3 text-center ${
+                      cols[ci].highlight ? "bg-accent-soft/30" : ""
+                    } ${ri === rows.length - 1 ? "rounded-b-xl" : ""}`}
+                  >
+                    <CompareCell v={v} highlight={cols[ci].highlight} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-4 text-center text-[11px] text-faint">
+        Category comparison — capabilities vary by vendor and plan. Vanta &amp; Drata are compliance-automation platforms;
+        Snyk &amp; Dependabot are code/dependency scanners.
+      </p>
+
+      {/* ROI band */}
+      <div className="mt-10 flex flex-col items-center gap-4 rounded-2xl border border-accent/30 bg-accent-soft/30 px-6 py-8 text-center sm:flex-row sm:text-left">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-accent text-white shadow-sm">
+          <Wallet className="h-6 w-6" />
+        </span>
+        <div className="flex-1">
+          <div className="text-lg font-semibold tracking-tight">A fraction of a hire — that never sleeps, takes PTO, or quits.</div>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            A mid-level security engineer runs $150k+/yr and can&apos;t cover detection, compliance, and identity alone.
+            TensorShield does all three continuously, and only pulls in a human for the calls that need judgment.
+          </p>
+        </div>
+        <Link
+          href="/pricing"
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
+        >
+          See pricing <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function CompareCell({ v, highlight }: { v: string; highlight: boolean }) {
+  if (v === "yes") return <CheckCircle2 className={`mx-auto h-5 w-5 ${highlight ? "text-pulse" : "text-pulse/80"}`} />;
+  if (v === "no") return <XCircle className="mx-auto h-5 w-5 text-faint/60" />;
+  if (v === "part") return <Minus className="mx-auto h-5 w-5 text-amber-500/70" />;
+  // literal text (e.g. cost)
+  return <span className={`text-sm font-semibold ${highlight ? "text-accent" : "text-muted"}`}>{v}</span>;
+}
+
 function Section({ eyebrow, title, sub, children }: { eyebrow: string; title: string; sub: string; children: React.ReactNode }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20">
@@ -234,7 +340,7 @@ function StackPipeline() {
   ];
   const outcomes = [
     { icon: Wrench, label: "Fixes shipped", sub: "PRs & configs, gated", strong: true },
-    { icon: FileCheck2, label: "6 frameworks mapped", sub: "SOC 2 · ISO · PCI · HIPAA" },
+    { icon: FileCheck2, label: "14 frameworks mapped", sub: "SOC 2 · ISO · GDPR · +11" },
     { icon: Lock, label: "Signed evidence pack", sub: "reproducible, not screenshots" },
     { icon: ClipboardCheck, label: "Auditor-ready report", sub: "PDF · Markdown · CSV" },
     { icon: Activity, label: "Live posture dashboard", sub: "continuous, 24/7" },
