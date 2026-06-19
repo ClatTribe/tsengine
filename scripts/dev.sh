@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# dev.sh — bring up the full Sentinel demo stack locally, reliably.  →  `make dev`
+# dev.sh — bring up the full TensorShield demo stack locally, reliably.  →  `make dev`
 #
 # Starts the platform API (seeded with demo data) + the Next.js frontend, and ALWAYS
 # clears the Next build cache first so styling can never go stale. Idempotent: re-run any

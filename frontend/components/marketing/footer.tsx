@@ -37,7 +37,7 @@ export function MarketingFooter() {
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
                 <ShieldCheck className="h-4 w-4" />
               </span>
-              <span className="text-base font-semibold tracking-tight">Sentinel</span>
+              <span className="text-base font-semibold tracking-tight">TensorShield</span>
             </Link>
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
               The fractional security team for SMBs — automated, with a human in the loop.
@@ -59,7 +59,7 @@ export function MarketingFooter() {
           ))}
         </div>
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-faint sm:flex-row">
-          <span>© {2026} Sentinel. All rights reserved.</span>
+          <span>© {2026} TensorShield. All rights reserved.</span>
           <span className="inline-flex items-center gap-1.5">
             <span className="pulse-dot" /> All systems operational
           </span>

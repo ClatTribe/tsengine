@@ -51,10 +51,10 @@ export default async function OverviewPage() {
   const protectedNow = risk === "Clear";
 
   const sub = protectedNow
-    ? "Sentinel is monitoring your systems continuously — nothing needs you right now."
+    ? "TensorShield is monitoring your systems continuously — nothing needs you right now."
     : approvals.length > 0
-      ? `Sentinel is on it — ${approvals.length} fix${approvals.length === 1 ? "" : "es"} prepared and waiting for your approval.`
-      : "Sentinel is triaging these and will prepare fixes you can approve.";
+      ? `TensorShield is on it — ${approvals.length} fix${approvals.length === 1 ? "" : "es"} prepared and waiting for your approval.`
+      : "TensorShield is triaging these and will prepare fixes you can approve.";
 
   // Synthesize the agent activity feed.
   const events: Event[] = [];
@@ -125,7 +125,7 @@ export default async function OverviewPage() {
         </Link>
       )}
 
-      {/* What Sentinel is handling for you */}
+      {/* What TensorShield is handling for you */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <HandledStat icon={Plug} n={connections.length} label="systems connected" />
         <HandledStat icon={Boxes} n={assets.length} label="assets monitored" />

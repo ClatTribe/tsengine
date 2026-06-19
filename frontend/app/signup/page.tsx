@@ -42,7 +42,7 @@ export default function SignupPage() {
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-white shadow-sm">
               <ShieldCheck className="h-5 w-5" />
             </span>
-            <span className="text-base font-semibold tracking-tight">Sentinel</span>
+            <span className="text-base font-semibold tracking-tight">TensorShield</span>
           </Link>
 
           <h1 className="text-2xl font-semibold tracking-tight">Create your workspace</h1>

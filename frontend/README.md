@@ -1,4 +1,4 @@
-# Sentinel — agentic security console
+# TensorShield — agentic security console
 
 The world-class dark **command-center** UX for the autonomous security team. A Next.js
 (App Router / RSC) app that consumes the Go `/v1` JSON API. See **[DESIGN.md](DESIGN.md)**
