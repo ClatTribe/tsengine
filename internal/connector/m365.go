@@ -108,7 +108,9 @@ func (m *M365) Exchange(ctx context.Context, code, redirectURI string) (platform
 func (m *M365) Discover(_ context.Context, c platform.Connection, _ string) ([]platform.Asset, error) {
 	return []platform.Asset{{
 		TenantID: c.TenantID, ConnectionID: c.ID,
-		Type: "workspace", Target: nz(c.Account, "m365"), DiscoveredAt: time.Now().UTC(),
+		Type: "workspace", Target: nz(c.Account, "m365"),
+		Meta:         map[string]string{"provider": platform.ConnM365}, // gates which identity remediations have a live write path
+		DiscoveredAt: time.Now().UTC(),
 	}}, nil
 }
 

@@ -103,6 +103,7 @@ func (g *GWorkspace) Discover(_ context.Context, c platform.Connection, _ string
 		TenantID: c.TenantID, ConnectionID: c.ID,
 		Type:         "workspace",
 		Target:       nz(c.Account, "google-workspace"),
+		Meta:         map[string]string{"provider": platform.ConnGWorkspace}, // gates which identity remediations have a live write path
 		DiscoveredAt: time.Now().UTC(),
 	}}, nil
 }

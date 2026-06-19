@@ -6,32 +6,56 @@ import (
 )
 
 // proposeIdentity turns an operate (workspace) identity/email finding into a SPECIFIC,
-// copy-pasteable remediation ticket — a runbook a non-technical owner can execute in
-// minutes, not a generic "review this". Operate cites the offending entity (user /
-// domain / app) in the finding's Endpoint, so the runbook names exactly what to fix.
+// copy-pasteable remediation — a runbook a non-technical owner can execute in minutes,
+// not a generic "review this". Operate cites the offending entity (user / domain / app)
+// in the finding's Endpoint, so the remediation names exactly what to fix.
 //
-// These stay file_ticket / tier 1: a ticket is reversible + informational, so it
-// auto-delivers (the actual identity mutation — enforce MFA, revoke a grant — has no live
-// write path yet; the connector Apply is a documented stub pending admin creds). The
-// structured `remediation_type` + `target` are carried so a future live Apply has the
-// machine-readable fix ready. Returns false for any non-identity rule so Propose falls
-// back to the generic ticket.
+// Two shapes, chosen by whether a LIVE connector write path exists for the (remediation,
+// provider) pair (liveIdentityMutation):
+//
+//   - Live path  → a tier-2 ActApplyConfig: the human approves it in the inbox, then the
+//     agent applies it through the connector (e.g. Okta suspends the stale account). This
+//     is the autonomous-with-approval loop for non-tech identity — the gate (§18.2 inv. 3)
+//     still holds; the connector is reached only after a HITL verdict.
+//   - No live path → a tier-1 file_ticket runbook (reversible + informational, auto-
+//     delivers): the connector Apply is a documented stub, or the fix is a DNS / console
+//     action the human performs, so a ticket — not a falsely-confident auto-apply — is the
+//     honest artifact. The machine-readable remediation_type + target ride along either
+//     way, so the moment that provider's write path lands it promotes with one line.
+//
+// Returns false for any non-identity rule so Propose falls back to the generic ticket.
 func proposeIdentity(f types.Finding, asset platform.Asset, idgen func() string) (platform.Action, bool) {
 	target := nz(f.Endpoint, asset.Target) // the cited user / domain / app
 	r, ok := identityRunbook(f.RuleID, target)
 	if !ok {
 		return platform.Action{}, false
 	}
-	return platform.Action{
+	payload := map[string]any{
+		"summary":          r.body + "\n\n— cites finding " + f.ID + " (" + string(f.Severity) + ")",
+		"remediation_type": r.kind,
+		"target":           target,
+	}
+	act := platform.Action{
 		ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
-		Kind: platform.ActFileTicket, Tier: 1, Status: platform.ActProposed,
-		Title: "tsengine: " + r.title,
-		Payload: map[string]any{
-			"summary":          r.body + "\n\n— cites finding " + f.ID + " (" + string(f.Severity) + ")",
-			"remediation_type": r.kind,
-			"target":           target,
-		},
-	}, true
+		Status: platform.ActProposed, Title: "tsengine: " + r.title, Payload: payload,
+	}
+	if liveIdentityMutation(r.kind, asset.Meta["provider"]) {
+		act.Kind, act.Tier = platform.ActApplyConfig, tierApplyConfig // gated mutation
+	} else {
+		act.Kind, act.Tier = platform.ActFileTicket, 1 // runbook ticket
+	}
+	return act, true
+}
+
+// liveIdentityMutation reports whether an identity remediation has a live, reversible
+// connector write path for the asset's provider — making it safe to propose as a
+// HITL-gated auto-remediation instead of a runbook ticket. Conservative by design: only
+// Okta account-suspend is wired today (connector.Okta.Apply, the only reversible identity
+// lifecycle transition with a live path), so only it promotes; every other (type,
+// provider) stays a ticket until its connector Apply lands. Extend as write paths ship
+// (e.g. GWorkspace/M365 suspend, Okta oauth_revoke).
+func liveIdentityMutation(remediationType, provider string) bool {
+	return remediationType == "account_suspend" && provider == platform.ConnOkta
 }
 
 type runbook struct {

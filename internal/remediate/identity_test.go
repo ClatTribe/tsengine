@@ -9,7 +9,50 @@ import (
 )
 
 func workspaceAsset() platform.Asset {
-	return platform.Asset{TenantID: "t1", ConnectionID: "conn-okta", Type: "workspace", Target: "acme-okta"}
+	return platform.Asset{TenantID: "t1", ConnectionID: "conn-okta", Type: "workspace", Target: "acme-okta",
+		Meta: map[string]string{"provider": platform.ConnOkta}}
+}
+
+// A stale Okta account has a LIVE write path (connector.Okta.Apply suspends it), so it is
+// proposed as a tier-2 ActApplyConfig — a gated auto-remediation the human approves, not a
+// runbook ticket. This is the non-tech autonomous-with-approval loop (GAP-1).
+func TestPropose_OktaStaleAccountIsGatedMutation(t *testing.T) {
+	f := types.Finding{ID: "op-7", RuleID: "operate::stale-account", Severity: types.SeverityHigh,
+		Title: "Stale active account: bob@acme.com", Endpoint: "bob@acme.com"}
+	act, ok := Propose(f, workspaceAsset(), func() string { return "1" })
+	if !ok {
+		t.Fatal("stale-account should produce an action")
+	}
+	if act.Kind != platform.ActApplyConfig || act.Tier != tierApplyConfig {
+		t.Fatalf("a live identity mutation must be a tier-2 ActApplyConfig, got %s tier %d", act.Kind, act.Tier)
+	}
+	if !act.NeedsApproval() {
+		t.Error("a live account suspend must be human-gated")
+	}
+	if act.ConnectionID != "conn-okta" {
+		t.Errorf("gated action must route to the Okta connection, got %q", act.ConnectionID)
+	}
+	if act.Payload["remediation_type"] != "account_suspend" || act.Payload["target"] != "bob@acme.com" {
+		t.Errorf("payload must carry the machine-readable suspend + target: %+v", act.Payload)
+	}
+}
+
+// The SAME stale-account finding on a provider with no live suspend path (Google
+// Workspace today) stays a tier-1 runbook ticket — no falsely-confident gated mutation
+// that would error after a human approves it.
+func TestPropose_StaleAccountStaysTicketWithoutLivePath(t *testing.T) {
+	gw := platform.Asset{TenantID: "t1", ConnectionID: "conn-gw", Type: "workspace", Target: "acme.com",
+		Meta: map[string]string{"provider": platform.ConnGWorkspace}}
+	f := types.Finding{ID: "op-8", RuleID: "operate::stale-account", Severity: types.SeverityHigh,
+		Title: "Stale active account: bob@acme.com", Endpoint: "bob@acme.com"}
+	act, ok := Propose(f, gw, func() string { return "1" })
+	if !ok || act.Kind != platform.ActFileTicket || act.Tier != 1 {
+		t.Fatalf("without a live write path the suspend must stay a tier-1 ticket, got %s tier %d", act.Kind, act.Tier)
+	}
+	// the structured fields still ride along so it promotes the moment GWorkspace suspend lands
+	if act.Payload["remediation_type"] != "account_suspend" {
+		t.Errorf("ticket should still carry the machine-readable remediation: %+v", act.Payload)
+	}
 }
 
 // A DMARC finding becomes a ticket carrying the EXACT TXT record to publish.
