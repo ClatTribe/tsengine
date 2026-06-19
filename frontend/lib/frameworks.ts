@@ -35,6 +35,25 @@ export const FRAMEWORK_LABEL: Record<string, string> = {
   dpdp: "DPDP",
 };
 
+// FRAMEWORK_DESC — one-line plain-English descriptions, shown on the per-framework drill so
+// a non-specialist owner knows what each standard is for.
+export const FRAMEWORK_DESC: Record<string, string> = {
+  soc2: "Trust Services Criteria — security & confidentiality for service organizations.",
+  iso27001: "International standard for an information security management system (ISMS).",
+  pci: "Payment Card Industry Data Security Standard — protecting cardholder data.",
+  hipaa: "US healthcare Security Rule — safeguards for electronic protected health information.",
+  cis_v8: "CIS Critical Security Controls — a prioritized set of defensive safeguards.",
+  nist_csf: "NIST Cybersecurity Framework 2.0 — govern, identify, protect, detect, respond, recover.",
+  gdpr: "EU General Data Protection Regulation — security of personal-data processing (Art. 32).",
+  iso27701: "Privacy extension to ISO 27001 — a Privacy Information Management System (PIMS).",
+  nist_800_53: "US federal control catalog for information systems (Rev. 5).",
+  nist_800_171: "Protecting Controlled Unclassified Information (CUI) in non-federal systems.",
+  ccpa: "California Consumer Privacy Act / CPRA — consumer data rights & reasonable security.",
+  sox: "Sarbanes-Oxley IT general controls over financial-reporting systems.",
+  fedramp: "US government cloud authorization baseline (Moderate), built on NIST 800-53.",
+  dpdp: "India's Digital Personal Data Protection Act 2023 — safeguards for personal data.",
+};
+
 // FRAMEWORK_CATEGORY groups frameworks for the compliance grid's section headers, so a
 // 14-framework list stays scannable instead of a flat wall of cards.
 export const FRAMEWORK_CATEGORY: Record<string, string> = {
