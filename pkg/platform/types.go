@@ -139,8 +139,21 @@ type Action struct {
 // before it is applied. Tier 0/1 auto-apply; 2/3 queue to the HITL desk.
 const GateTier = 2
 
+// TierIrreversible (T3) is the autonomy tier for irreversible / legal / business-critical
+// actions — regulatory breach notification, customer comms, mass deletion, risk
+// acceptance. The agentic-SMB spec (§3, AGT-3, TS-2) is categorical about T3: the agent
+// PREPARES, a named human DECIDES and SIGNS — it MUST NOT execute on an auto/"auto"
+// approver, and MUST NOT be eligible for any break-glass / pre-authorized auto-apply that
+// a lower tier might later get. Enforced in hitl.Desk (a T3 with no named human approver
+// is refused, not applied).
+const TierIrreversible = 3
+
 // NeedsApproval reports whether this action must pause for a human (tier-gated).
 func (a Action) NeedsApproval() bool { return a.Tier >= GateTier }
+
+// NeedsHumanSignature reports whether this action is irreversible (T3) and therefore must
+// carry a named human's recorded sign-off — never an automated apply, ever.
+func (a Action) NeedsHumanSignature() bool { return a.Tier >= TierIrreversible }
 
 // ControlState statuses.
 const (

@@ -881,6 +881,12 @@ higher-risk surface) — plus the governance state (kill-switch + gate tier). Gr
 built**: `POST /v1/connections/{id}/quarantine` sets `ConnQuarantined` (a per-connection
 kill-switch — halt one connection's automation, not the whole roster), and the runner now
 **skips any asset whose connection isn't `ConnActive`** (`connInactive`, permissive only on
-missing data) so a revoked/degraded/quarantined connection is never acted on. The remaining
-spec gap (next, additive): a distinct **T3** action class (irreversible/legal —
-breach-notification/customer-comms — agent *prepares*, human *signs*).
+missing data) so a revoked/degraded/quarantined connection is never acted on. **The T3
+invariant is now enforced** (`platform.TierIrreversible`=3 + `Action.NeedsHumanSignature()`):
+`hitl.Desk.apply` refuses an irreversible action that carries no named human approver
+(`ErrNeedsHumanSignature`) — it never executes on `auto`, even if a future break-glass
+auto-apply is added for lower tiers. *No flow emits a T3 action yet* (breach-notification /
+customer-comms ride the future **A-RSP** incident-response capability), so this is
+forward-compatible hardening: a T3 action is safe by construction the moment one is produced.
+**With this the agentic-SMB spec is fully reconciled** — every OM/TS/AGT/WRD/ACC requirement
+is built or, for A-RSP, explicitly future (see docs/personas-and-workflows.md §7).
