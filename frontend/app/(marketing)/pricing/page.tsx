@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, ArrowRight, Sparkles } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 
 export const metadata = {
   title: "Pricing — TensorShield",
@@ -13,7 +13,7 @@ const TIERS = [
     cadence: "forever",
     blurb: "See your posture and your first fixes — no card required.",
     cta: "Start free",
-    href: "/login",
+    href: "/signup",
     highlight: false,
     features: [
       "Connect 1 system",
@@ -29,11 +29,11 @@ const TIERS = [
     cadence: "/ month, billed annually",
     blurb: "The full fractional security team for a growing company.",
     cta: "Start free",
-    href: "/login",
+    href: "/signup",
     highlight: true,
     features: [
       "Unlimited systems (code · cloud · identity)",
-      "All frameworks — SOC 2 · ISO · PCI · HIPAA",
+      "All 14 frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …",
       "Signed evidence packs + Trust Center",
       "Questionnaire automation",
       "Human-in-the-loop approvals + remediation",
@@ -46,7 +46,7 @@ const TIERS = [
     cadence: "for larger teams",
     blurb: "Advanced controls, expert review, and the support to match.",
     cta: "Contact sales",
-    href: "/login",
+    href: "/signup",
     highlight: false,
     features: [
       "Everything in Growth",
@@ -66,6 +66,106 @@ const FAQ = [
   ["How fast is setup?", "Minutes. Connect a system via OAuth and the agent discovers your assets and starts scanning immediately. No agents to install, no playbooks to write."],
   ["Can auditors trust the evidence?", "Every finding cites the tool that proves it, and every compliance pack is ed25519-signed and pinned to the exact state it was assessed against — reproducible proof, not screenshots."],
 ];
+
+// ComparePlans — the at-a-glance feature matrix every buyer expects below the tier cards.
+// Cell value: "yes" | "no" | a literal string. Mirrors the TIERS feature lists, no new claims.
+const COMPARE: { section: string; rows: { label: string; cells: [string, string, string] }[] }[] = [
+  {
+    section: "Coverage",
+    rows: [
+      { label: "Connected systems", cells: ["1", "Unlimited", "Unlimited"] },
+      { label: "Continuous scanning + live dashboard", cells: ["yes", "yes", "yes"] },
+      { label: "Asset types (code · cloud · web · identity)", cells: ["All", "All", "All"] },
+      { label: "OSS scanners wrapped", cells: ["30+", "30+", "30+"] },
+    ],
+  },
+  {
+    section: "Compliance",
+    rows: [
+      { label: "Frameworks mapped", cells: ["1", "All 14", "All 14"] },
+      { label: "Signed evidence packs + Trust Center", cells: ["no", "yes", "yes"] },
+      { label: "Questionnaire automation", cells: ["no", "yes", "yes"] },
+      { label: "Audit-firm-ready exports", cells: ["no", "yes", "yes"] },
+    ],
+  },
+  {
+    section: "Autonomy & remediation",
+    rows: [
+      { label: "Fixes prepared / month", cells: ["3", "Unlimited", "Unlimited"] },
+      { label: "Human-in-the-loop approvals", cells: ["no", "yes", "yes"] },
+      { label: "Signed decision ledger", cells: ["yes", "yes", "yes"] },
+      { label: "On-demand human expert review", cells: ["no", "no", "yes"] },
+    ],
+  },
+  {
+    section: "Platform",
+    rows: [
+      { label: "Integrations (Slack · Jira · PagerDuty)", cells: ["no", "yes", "yes"] },
+      { label: "SSO / SAML + role-based access", cells: ["no", "no", "yes"] },
+      { label: "Dedicated success engineer", cells: ["no", "no", "yes"] },
+      { label: "Custom integrations + SLAs", cells: ["no", "no", "yes"] },
+    ],
+  },
+];
+
+function ComparePlans() {
+  const tiers = ["Free", "Growth", "Scale"];
+  return (
+    <section className="mx-auto max-w-4xl px-5 pb-4 pt-14">
+      <h2 className="text-center text-2xl font-semibold tracking-tight">Compare plans</h2>
+      <div className="mt-8 overflow-x-auto">
+        <table className="w-full min-w-[560px] border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr>
+              <th className="w-[40%] p-0" />
+              {tiers.map((t, i) => (
+                <th
+                  key={t}
+                  className={`px-4 py-2.5 text-center text-sm font-semibold ${i === 1 ? "rounded-t-xl bg-accent-soft/60 text-accent ring-1 ring-accent/30" : "text-ink"}`}
+                >
+                  {t}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {COMPARE.map((grp) => (
+              <FragmentGroup key={grp.section} grp={grp} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function FragmentGroup({ grp }: { grp: (typeof COMPARE)[number] }) {
+  return (
+    <>
+      <tr>
+        <td colSpan={4} className="border-t border-border pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-faint">
+          {grp.section}
+        </td>
+      </tr>
+      {grp.rows.map((r) => (
+        <tr key={r.label}>
+          <td className="border-t border-border py-2.5 pr-4 text-sm text-ink">{r.label}</td>
+          {r.cells.map((v, ci) => (
+            <td key={ci} className={`border-t border-border px-4 py-2.5 text-center ${ci === 1 ? "bg-accent-soft/25" : ""}`}>
+              <PlanCell v={v} highlight={ci === 1} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function PlanCell({ v, highlight }: { v: string; highlight: boolean }) {
+  if (v === "yes") return <Check className={`mx-auto h-4 w-4 ${highlight ? "text-pulse" : "text-pulse/80"}`} />;
+  if (v === "no") return <Minus className="mx-auto h-4 w-4 text-faint/50" />;
+  return <span className={`text-xs font-medium ${highlight ? "text-accent" : "text-muted"}`}>{v}</span>;
+}
 
 export default function Pricing() {
   return (
@@ -129,6 +229,9 @@ export default function Pricing() {
           Prices in USD. Annual billing saves ~20% vs monthly. All plans include continuous monitoring and the signed ledger.
         </p>
       </section>
+
+      {/* Compare plans */}
+      <ComparePlans />
 
       {/* FAQ */}
       <section className="mx-auto max-w-3xl px-5 py-20">
