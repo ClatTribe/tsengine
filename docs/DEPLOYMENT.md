@@ -114,6 +114,32 @@ curl -fsS -X POST localhost:8080/replay \
 `/healthz` is liveness (process up). `/readyz` is readiness (runs dir writable);
 it returns `503` if storage is unavailable so a load balancer drains the instance.
 
+## Observability (platform)
+
+The platform server (`cmd/platform`, `:8090`) emits structured logs and Prometheus
+metrics with no external infrastructure required.
+
+- **Logs** go to stderr. `TSENGINE_LOG_FORMAT=json` (recommended in prod) switches the
+  default handler from human-readable text to JSON; `TSENGINE_LOG_LEVEL` sets the floor
+  (`debug`/`info`/`warn`/`error`, default `info`). Every request is logged as a
+  `http_request` line (method, path, status, `dur_ms`); 4xx → warn, 5xx → error. Setting
+  the default handler also routes the existing `log.Print` startup/operational lines
+  through the same structured output.
+- **Metrics** are exposed at `GET /metrics` in Prometheus text format:
+  - `tsengine_http_requests_total{method,code}` — request counts
+  - `tsengine_http_request_duration_seconds{method}` — latency histogram
+  - `tsengine_scan_jobs_inflight` — background scans queued + running (watch for backlog)
+  - the standard Go runtime + process collectors (`go_goroutines`, `go_memstats_*`,
+    process CPU/FDs) — the leak/saturation signals for a long-running single box
+
+```bash
+curl -fsS localhost:8090/metrics | grep tsengine_
+```
+
+`/metrics` is **not** auth-gated (standard Prometheus practice) — keep it on a private
+network/interface or behind a reverse-proxy ACL. It and `/healthz` are excluded from the
+access log to avoid scrape/health-check noise.
+
 ## Scaling & state
 
 The host is **stateless** apart from the `runs` directory. Run N replicas behind a
