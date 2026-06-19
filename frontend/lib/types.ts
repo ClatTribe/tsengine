@@ -56,6 +56,21 @@ export interface Tenant {
   created_at?: string;
 }
 
+// Public Trust Center aggregate (safe projection — coverage only, never findings).
+export interface TrustView {
+  org: string;
+  monitored: boolean;
+  signed: boolean;
+  frameworks: { framework: string; coverage: number; met: number; total: number }[];
+  generated_at: string;
+}
+
+export interface TrustLink {
+  tenant: string;
+  token: string;
+  path: string;
+}
+
 export interface Engagement {
   id: string;
   asset_id: string;

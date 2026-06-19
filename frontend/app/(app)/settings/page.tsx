@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth";
 import { kindLabel } from "@/lib/connectors";
 import { Card, SectionTitle } from "@/components/ui/primitives";
 import { SignOutButton } from "@/components/settings/sign-out-button";
+import { TrustShare } from "@/components/settings/trust-share";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ const STATUS_CLS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const [tenant, connections] = await Promise.all([api.tenant(), api.connections()]);
+  const [tenant, connections, trust] = await Promise.all([api.tenant(), api.connections(), api.trustLink()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -80,6 +81,22 @@ export default async function SettingsPage() {
           )}
         </Card>
       </div>
+
+      {/* Public Trust Center */}
+      {trust?.path && (
+        <div>
+          <SectionTitle action={<span className="text-[11px] text-faint">public · token-gated</span>}>
+            Trust Center
+          </SectionTitle>
+          <Card className="space-y-3 p-5">
+            <p className="text-xs text-muted">
+              Share a live, public proof of your security &amp; compliance posture — coverage only, never your findings.
+              The link is non-guessable; revoke it by rotating your platform secret.
+            </p>
+            <TrustShare path={trust.path} />
+          </Card>
+        </div>
+      )}
 
       {/* Notifications */}
       <div>

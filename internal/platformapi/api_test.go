@@ -71,6 +71,14 @@ func do(h http.Handler, method, path, tenant string, body string) *httptest.Resp
 	return rec
 }
 
+// do2 issues a request with NO auth headers — for public endpoints (the Trust Center).
+func do2(h http.Handler, method, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
 func TestWebhookTriggersScanThenFindingsQueryable(t *testing.T) {
 	h, _ := setup(t)
 
@@ -171,6 +179,45 @@ func TestGetTenant_ReturnsOwnOrg(t *testing.T) {
 	if ten.ID != "t1" || ten.Name != "Acme" {
 		t.Fatalf("want the t1/Acme tenant, got %+v", ten)
 	}
+}
+
+func TestTrustCenter_TokenGatedAndSafe(t *testing.T) {
+	h, d := setup(t)
+
+	// wrong / missing token → 404 (no enumeration by tenant id)
+	if rec := do2(h, "GET", "/v1/trust/t1?token=wrong"); rec.Code != http.StatusNotFound {
+		t.Fatalf("bad token must 404, got %d", rec.Code)
+	}
+	if rec := do2(h, "GET", "/v1/trust/t1"); rec.Code != http.StatusNotFound {
+		t.Fatalf("missing token must 404, got %d", rec.Code)
+	}
+
+	// the owner can fetch their own share token (authed)
+	rec := do(h, "GET", "/v1/trust-link", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("trust-link: want 200, got %d", rec.Code)
+	}
+	var link struct{ Token string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &link)
+	if link.Token == "" {
+		t.Fatal("trust-link returned no token")
+	}
+
+	// the correct token → 200 with safe aggregates and NO leaked findings/endpoints
+	rec = do2(h, "GET", "/v1/trust/t1?token="+link.Token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("valid token: want 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Acme") {
+		t.Errorf("trust view should carry the org name, got %s", body)
+	}
+	for _, leak := range []string{"endpoint", "rule_id", "finding", "github.com/acme/web"} {
+		if strings.Contains(body, leak) {
+			t.Errorf("PRIVACY: trust view leaked %q: %s", leak, body)
+		}
+	}
+	_ = d
 }
 
 func TestCreateTenant_Provisions(t *testing.T) {
