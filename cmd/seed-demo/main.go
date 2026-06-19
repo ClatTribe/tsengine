@@ -9,6 +9,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/authn"
@@ -146,11 +147,42 @@ func main() {
 		{"iso27001", "A.9.4", "gap"}, {"iso27001", "A.12.6", "met"}, {"iso27001", "A.5.15", "met"},
 		{"pci", "1.2.1", "gap"}, {"pci", "6.2.4", "gap"}, {"pci", "8.3.1", "met"}, {"pci", "10.2.1", "met"},
 		{"hipaa", "164.312(a)(1)", "met"}, {"hipaa", "164.312(b)", "gap"}, {"hipaa", "164.308(a)(5)", "met"},
+		{"cis_v8", "16.11", "gap"}, {"cis_v8", "6.5", "gap"}, {"cis_v8", "9.5", "gap"}, {"cis_v8", "5.3", "met"}, {"cis_v8", "3.3", "met"},
+		{"nist_csf", "PR.IP-12", "gap"}, {"nist_csf", "PR.AA-01", "gap"}, {"nist_csf", "PR.DS-1", "gap"}, {"nist_csf", "DE.CM-8", "met"}, {"nist_csf", "ID.AM-2", "met"},
+		// Privacy + government + financial frameworks (the expanded set, #172/#182/#183) — a
+		// realistic met/gap mix so the demo's compliance posture spans the breadth, not just 4.
+		{"gdpr", "Art. 32", "gap"}, {"gdpr", "Art. 5(1)(f)", "gap"}, {"gdpr", "Art. 28", "met"}, {"gdpr", "Art. 25", "met"},
+		{"iso27701", "6.11", "gap"}, {"iso27701", "6.12", "met"}, {"iso27701", "7.2", "met"},
+		{"nist_800_53", "SI-10", "gap"}, {"nist_800_53", "IA-2", "gap"}, {"nist_800_53", "SC-7", "gap"},
+		{"nist_800_53", "SC-28", "gap"}, {"nist_800_53", "AC-6", "met"}, {"nist_800_53", "AC-2", "met"},
+		{"nist_800_53", "AU-2", "met"}, {"nist_800_53", "CM-6", "met"},
+		{"nist_800_171", "3.14.1", "gap"}, {"nist_800_171", "3.5.3", "gap"}, {"nist_800_171", "3.1.5", "met"}, {"nist_800_171", "3.13.1", "met"},
+		{"ccpa", "1798.150", "gap"}, {"ccpa", "1798.100", "met"}, {"ccpa", "1798.140", "met"},
+		{"sox", "ITGC: Access to Programs & Data", "gap"}, {"sox", "ITGC: Program Changes", "met"}, {"sox", "ITGC: Computer Operations", "met"},
+		{"fedramp", "SI-10", "gap"}, {"fedramp", "IA-2", "gap"}, {"fedramp", "SC-7", "met"}, {"fedramp", "AU-2", "met"}, {"fedramp", "CM-6", "met"},
+		{"dpdp", "Sec. 8(5)", "gap"}, {"dpdp", "Sec. 8(7)", "met"}, {"dpdp", "Sec. 9", "met"},
+	}
+	// gapRef picks a plausible evidence finding for a gap so the drill-down isn't every gap
+	// citing the same SQLi: access/MFA gaps → the admin-MFA finding; cloud/data → the public
+	// S3 bucket; audit → CloudTrail; email-auth → DMARC; everything else → the SQLi.
+	gapRef := func(fw, id string) string {
+		switch {
+		case id == "IA-2" || id == "3.5.3" || fw == "gdpr" && id == "Art. 28":
+			return "f-004"
+		case id == "SC-7" || id == "SC-28" || id == "1798.150" || id == "3.13.1" || strings.HasPrefix(id, "ITGC: Access"):
+			return "f-005"
+		case strings.HasPrefix(id, "AU-"):
+			return "f-010"
+		case id == "SI-8":
+			return "f-007"
+		default:
+			return "f-001"
+		}
 	}
 	for _, c := range controls {
 		refs := []string(nil)
 		if c.state == "gap" {
-			refs = []string{"f-001"}
+			refs = []string{gapRef(c.fw, c.id)}
 		}
 		must(st.UpsertControlState(ctx, platform.ControlState{TenantID: tid, Framework: c.fw, ControlID: c.id, State: c.state, EvidenceRefs: refs, UpdatedAt: ago(time.Hour)}))
 	}
