@@ -1,7 +1,8 @@
 import Link from "next/link";
 import {
   ShieldCheck, Sparkles, ArrowRight, Plug, ScanLine, CheckCircle2, Bug, FileCheck2,
-  UserCheck, Lock, Radar, Github, Cloud, KeyRound, Star,
+  UserCheck, Lock, Radar, Github, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
+  Activity, ChevronDown, GitBranch, XCircle,
 } from "lucide-react";
 
 export const metadata = {
@@ -49,7 +50,49 @@ export default function Landing() {
           </div>
           <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · PCI-DSS · HIPAA · No credit card to start</p>
 
-          <HeroPreview />
+          <StackPipeline />
+        </div>
+      </section>
+
+      {/* Differentiator — we fix, not just flag (vs advise-only tools) */}
+      <section className="border-y border-border bg-surface">
+        <div className="mx-auto max-w-5xl px-5 py-16">
+          <div className="mx-auto mb-10 max-w-2xl text-center">
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent">The difference</span>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
+              Most tools stop at the finding. Sentinel ships the fix.
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-muted">
+              A dashboard full of risks is still your problem to solve. Sentinel prepares the actual remediation —
+              and applies it the moment you approve.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="card p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-muted">
+                <XCircle className="h-4 w-4 text-faint" /> Advise-only tools
+              </div>
+              <ul className="mt-4 space-y-2.5 text-sm text-muted">
+                {["Hand you a list of risks", "“Remediation guidance” you implement yourself", "You still need an engineer to act", "Evidence you assemble by hand"].map((x) => (
+                  <li key={x} className="flex items-start gap-2.5">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-faint" /> {x}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="card border-accent/40 bg-accent-soft/30 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-accent">
+                <Wrench className="h-4 w-4" /> Sentinel
+              </div>
+              <ul className="mt-4 space-y-2.5 text-sm text-ink">
+                {["Opens the pull request with the fix", "Applies the cloud / identity change on approval", "Auto-handles the low-risk work; gates the rest", "Signs the evidence pack automatically"].map((x) => (
+                  <li key={x} className="flex items-start gap-2.5">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-pulse" /> {x}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -180,54 +223,95 @@ function Section({ eyebrow, title, sub, children }: { eyebrow: string; title: st
   );
 }
 
-// A stylized product preview under the hero — the posture dashboard, light.
-function HeroPreview() {
+// The hero pipeline: your stack → Sentinel → outcomes. Communicates the value prop at
+// a glance — and leads with the wedge (we ship fixes, not just findings).
+function StackPipeline() {
+  const stack = [
+    { icon: Cloud, label: "Cloud", sub: "AWS · GCP · Azure" },
+    { icon: Mail, label: "Workspace", sub: "Google · M365" },
+    { icon: GitBranch, label: "Code", sub: "GitHub · GitLab" },
+    { icon: KeyRound, label: "Identity & MFA", sub: "Okta · SSO" },
+  ];
+  const outcomes = [
+    { icon: Wrench, label: "Fixes shipped", sub: "PRs & configs, gated", strong: true },
+    { icon: FileCheck2, label: "6 frameworks mapped", sub: "SOC 2 · ISO · PCI · HIPAA" },
+    { icon: Lock, label: "Signed evidence pack", sub: "reproducible, not screenshots" },
+    { icon: ClipboardCheck, label: "Auditor-ready report", sub: "PDF · Markdown · CSV" },
+    { icon: Activity, label: "Live posture dashboard", sub: "continuous, 24/7" },
+  ];
   return (
-    <div className="mx-auto mt-14 max-w-4xl">
-      <div className="rounded-2xl border border-border bg-surface p-2 shadow-elevated">
-        <div className="rounded-xl bg-bg p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white">
-                <ShieldCheck className="h-4 w-4" />
-              </span>
-              <div className="text-left">
-                <div className="text-sm font-semibold leading-none">Posture</div>
-                <div className="mt-1 text-[11px] text-faint">Demo Corp · live</div>
-              </div>
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-pulse-soft px-2.5 py-1 text-xs font-medium text-pulse">
-              <span className="pulse-dot" /> Protected
+    <div className="mx-auto mt-16 max-w-5xl">
+      <div className="card grid items-stretch gap-4 p-5 shadow-elevated md:grid-cols-[1fr_auto_1fr_auto_1.15fr] md:gap-2 md:p-6">
+        {/* Your stack */}
+        <Column heading="Your stack">
+          {stack.map(({ icon: Icon, label, sub }) => (
+            <Node key={label} Icon={Icon} label={label} sub={sub} />
+          ))}
+        </Column>
+
+        <Connector />
+
+        {/* Sentinel */}
+        <div className="flex items-center">
+          <div className="w-full rounded-2xl border border-accent/40 bg-accent-soft/40 p-5 text-center">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-accent text-white shadow-sm">
+              <ShieldCheck className="h-5 w-5" />
             </span>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              ["Risk", "Low", "text-pulse"],
-              ["Open issues", "2", "text-medium"],
-              ["SOC 2", "94%", "text-ink"],
-              ["Fixes queued", "1", "text-accent"],
-            ].map(([l, v, c]) => (
-              <div key={l} className="rounded-xl border border-border bg-surface p-3.5 text-left">
-                <div className={`text-2xl font-semibold ${c}`}>{v}</div>
-                <div className="mt-0.5 text-[11px] text-muted">{l}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 rounded-xl border border-border bg-surface p-3.5 text-left">
-            <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">Agent activity</div>
-            {[
-              ["Scanned acme/api · 0 new criticals", "text-pulse"],
-              ["Prepared fix: enforce MFA for 1 admin — awaiting you", "text-accent"],
-              ["Resolved: open S3 bucket", "text-muted"],
-            ].map(([t, c], i) => (
-              <div key={i} className="flex items-center gap-2 py-1 text-xs">
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${c.replace("text-", "bg-")}`} />
-                <span className="truncate text-muted">{t}</span>
-              </div>
-            ))}
+            <div className="mt-3 text-base font-semibold">Sentinel</div>
+            <div className="mt-1 text-xs font-medium text-accent">Detect · Triage · Fix · Prove</div>
+            <div className="mt-2 text-[11px] leading-relaxed text-muted">automated, with a human in the loop</div>
           </div>
         </div>
+
+        <Connector />
+
+        {/* Outcomes */}
+        <Column heading="What you get">
+          {outcomes.map(({ icon: Icon, label, sub, strong }) => (
+            <Node key={label} Icon={Icon} label={label} sub={sub} strong={strong} />
+          ))}
+        </Column>
       </div>
+      <p className="mt-4 text-center text-xs text-faint">
+        Read-only by default · write-back only on your approval · per-tenant isolation · ed25519-signed evidence
+      </p>
+    </div>
+  );
+}
+
+function Column({ heading, children }: { heading: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col">
+      <div className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wider text-faint md:text-left">{heading}</div>
+      <div className="flex flex-1 flex-col gap-2">{children}</div>
+    </div>
+  );
+}
+
+function Node({ Icon, label, sub, strong }: { Icon: typeof Cloud; label: string; sub: string; strong?: boolean }) {
+  return (
+    <div
+      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left ${
+        strong ? "border-accent/40 bg-accent-soft/40" : "border-border bg-surface"
+      }`}
+    >
+      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${strong ? "bg-accent text-white" : "bg-surface-2 text-muted"}`}>
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <span className="min-w-0">
+        <span className={`block truncate text-xs font-semibold ${strong ? "text-accent" : "text-ink"}`}>{label}</span>
+        <span className="block truncate text-[10px] text-faint">{sub}</span>
+      </span>
+    </div>
+  );
+}
+
+// Arrow between columns — horizontal on desktop, down-chevron on mobile.
+function Connector() {
+  return (
+    <div className="flex items-center justify-center text-faint">
+      <ArrowRight className="hidden h-5 w-5 md:block" />
+      <ChevronDown className="h-5 w-5 md:hidden" />
     </div>
   );
 }
