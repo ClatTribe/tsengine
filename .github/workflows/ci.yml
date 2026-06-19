@@ -32,17 +32,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Pin Go to 1.24 specifically for the lint job: golangci-lint's "latest"
-      # release binary is built with go1.24 and can't typecheck the stdlib of a
-      # newer Go runtime (it chokes on forward-compat shims like
-      # x/crypto/.../fips140only_go1.26.go). Test/vet/vulncheck still use
-      # 'stable'.
+      # Build golangci-lint FROM SOURCE with the job's Go (install-mode: goinstall) so its
+      # build-Go always matches the module — a prebuilt "latest" binary is built with an
+      # older Go and refuses a module whose go directive (now 1.25, pulled by the pure-Go
+      # sqlite driver) is newer than its build-Go. Pin the v1 line (the .golangci.yml is v1
+      # format). Mirrors the local toolchain.
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: 'stable'
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.64.8
+          install-mode: goinstall
 
   vulncheck:
     name: vulncheck
