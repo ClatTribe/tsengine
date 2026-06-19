@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -24,6 +25,8 @@ type Memory struct {
 	incidents   map[string]map[string]platform.Incident      // tenantID → incidentID → incident
 	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
 	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
+	users       map[string]platform.User                     // userID → user (email globally unique)
+	sessions    map[string]platform.Session                  // token → session
 }
 
 // NewMemory returns an empty in-memory store.
@@ -39,7 +42,78 @@ func NewMemory() *Memory {
 		incidents:   map[string]map[string]platform.Incident{},
 		reviews:     map[string]map[string]platform.ReviewRequest{},
 		apps:        map[string][]platform.ThirdPartyApp{},
+		users:       map[string]platform.User{},
+		sessions:    map[string]platform.Session{},
 	}
+}
+
+// --- users & sessions (real account auth) ---
+
+func (m *Memory) PutUser(_ context.Context, u platform.User) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.users[u.ID] = u
+	return nil
+}
+
+func (m *Memory) GetUser(_ context.Context, id string) (platform.User, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	u, ok := m.users[id]
+	if !ok {
+		return platform.User{}, ErrNotFound
+	}
+	return u, nil
+}
+
+// GetUserByEmail looks a user up by email (case-insensitive). Email is globally unique.
+func (m *Memory) GetUserByEmail(_ context.Context, email string) (platform.User, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	want := strings.ToLower(strings.TrimSpace(email))
+	for _, u := range m.users {
+		if strings.ToLower(u.Email) == want {
+			return u, nil
+		}
+	}
+	return platform.User{}, ErrNotFound
+}
+
+// ListUsers returns the members of a tenant.
+func (m *Memory) ListUsers(_ context.Context, tenantID string) ([]platform.User, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []platform.User
+	for _, u := range m.users {
+		if u.TenantID == tenantID {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
+func (m *Memory) PutSession(_ context.Context, s platform.Session) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sessions[s.Token] = s
+	return nil
+}
+
+func (m *Memory) GetSession(_ context.Context, token string) (platform.Session, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, ok := m.sessions[token]
+	if !ok {
+		return platform.Session{}, ErrNotFound
+	}
+	return s, nil
+}
+
+func (m *Memory) DeleteSession(_ context.Context, token string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.sessions, token)
+	return nil
 }
 
 func (m *Memory) PutTenant(_ context.Context, t platform.Tenant) error {
@@ -264,6 +338,8 @@ type Snapshot struct {
 	Incidents   map[string]map[string]platform.Incident      `json:"incidents"`
 	Reviews     map[string]map[string]platform.ReviewRequest `json:"reviews"`
 	Apps        map[string][]platform.ThirdPartyApp          `json:"apps"`
+	Users       map[string]platform.User                     `json:"users"`
+	Sessions    map[string]platform.Session                  `json:"sessions"`
 }
 
 // Export returns a deep-enough copy of the store's data for persistence (taken under
@@ -282,6 +358,8 @@ func (m *Memory) Export() Snapshot {
 		Incidents:   m.incidents,
 		Reviews:     m.reviews,
 		Apps:        m.apps,
+		Users:       m.users,
+		Sessions:    m.sessions,
 	}
 }
 
@@ -299,6 +377,14 @@ func (m *Memory) load(s Snapshot) {
 	m.incidents = orEmptyIncidents(s.Incidents)
 	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)
+	m.users = s.Users
+	if m.users == nil {
+		m.users = map[string]platform.User{}
+	}
+	m.sessions = s.Sessions
+	if m.sessions == nil {
+		m.sessions = map[string]platform.Session{}
+	}
 }
 
 func orEmptyMap(m map[string]platform.Tenant) map[string]platform.Tenant {

@@ -68,4 +68,13 @@ type Store interface {
 	// --- third-party app inventory (refreshed per operate scan, per provider) ---
 	ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error
 	ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error)
+
+	// --- users & sessions (real account auth) ---
+	PutUser(ctx context.Context, u platform.User) error
+	GetUser(ctx context.Context, id string) (platform.User, error)
+	GetUserByEmail(ctx context.Context, email string) (platform.User, error)
+	ListUsers(ctx context.Context, tenantID string) ([]platform.User, error)
+	PutSession(ctx context.Context, s platform.Session) error
+	GetSession(ctx context.Context, token string) (platform.Session, error)
+	DeleteSession(ctx context.Context, token string) error
 }

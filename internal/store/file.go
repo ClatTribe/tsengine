@@ -131,6 +131,27 @@ func (f *File) PutReviewRequest(ctx context.Context, r platform.ReviewRequest) e
 	return f.persist()
 }
 
+func (f *File) PutUser(ctx context.Context, u platform.User) error {
+	if err := f.Memory.PutUser(ctx, u); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutSession(ctx context.Context, s platform.Session) error {
+	if err := f.Memory.PutSession(ctx, s); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) DeleteSession(ctx context.Context, token string) error {
+	if err := f.Memory.DeleteSession(ctx, token); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error {
 	if err := f.Memory.ReplaceThirdPartyApps(ctx, tenantID, provider, apps); err != nil {
 		return err
