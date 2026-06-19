@@ -51,7 +51,7 @@ func TestARSP_CriticalIncidentDraftsBreachDisclosureForSignature(t *testing.T) {
 		Store: st, Connectors: connector.NewRegistry(), Tokens: noTokens{},
 		Scanner: criticalScanner{}, NewID: gen, Desk: desk,
 		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), NewID: gen},
-		ProposeIncidentResponse: func(inc platform.Incident) (platform.Action, bool) {
+		ProposeIncidentResponse: func(inc platform.Incident) ([]platform.Action, bool) {
 			return remediate.ProposeIncidentResponse(inc, gen)
 		},
 	}

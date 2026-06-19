@@ -16,7 +16,14 @@ const KIND_META: Record<string, { icon: typeof Check; label: string }> = {
 
 function payloadSummary(a: Action): string | undefined {
   const p = a.payload ?? {};
-  return (p.summary as string) || (p.draft as string) || (p.body as string) || (p.remediation as string) || undefined;
+  return (p.summary as string) || (p.draft as string) || (p.runbook as string) || (p.body as string) || (p.remediation as string) || undefined;
+}
+
+// A containment action is a file_ticket carrying remediation_type=containment — label it as
+// such (it's a gated "stop the bleeding" recommendation, not a generic ticket).
+function metaFor(a: Action): { icon: typeof Check; label: string } {
+  if (a.payload?.remediation_type === "containment") return { icon: ShieldQuestion, label: "Containment — approve to act" };
+  return KIND_META[a.kind] ?? { icon: ShieldQuestion, label: a.kind };
 }
 
 // Tier-3 (irreversible/legal — e.g. a breach disclosure) requires a named human signature;
@@ -88,7 +95,7 @@ export function InboxClient({ actions, findings }: { actions: Action[]; findings
       <div className="w-80 shrink-0 overflow-y-auto pr-1">
         <ul className="space-y-1.5">
           {items.map((a, i) => {
-            const meta = KIND_META[a.kind] ?? { icon: ShieldQuestion, label: a.kind };
+            const meta = metaFor(a);
             const Icon = meta.icon;
             const f = findings[a.finding_id];
             return (
@@ -134,7 +141,7 @@ function DetailPane({
   pending: boolean;
   onDecide: (id: string, approve: boolean) => void;
 }) {
-  const meta = KIND_META[action.kind] ?? { icon: ShieldQuestion, label: action.kind };
+  const meta = metaFor(action);
   const Icon = meta.icon;
   const summary = payloadSummary(action);
   const target = action.payload?.target as string | undefined;
