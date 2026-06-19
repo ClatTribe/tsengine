@@ -38,6 +38,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -268,13 +270,23 @@ func monitorInterval() time.Duration {
 // (survives restarts), else an in-memory store.
 func openStore() store.Store {
 	if path := os.Getenv("TSENGINE_PLATFORM_DB"); path != "" {
+		// A *.db / *.sqlite path → the durable SQLite store (ACID, indexed, the production
+		// single-box backend). A *.json path → the legacy whole-snapshot file store.
+		if ext := strings.ToLower(filepath.Ext(path)); ext == ".db" || ext == ".sqlite" || ext == ".sqlite3" {
+			s, err := store.OpenSQLite(path)
+			if err != nil {
+				log.Fatalf("[platform] open sqlite store %s: %v", path, err)
+			}
+			log.Printf("[platform] sqlite store at %s", path)
+			return s
+		}
 		f, err := store.OpenFile(path)
 		if err != nil {
 			log.Fatalf("[platform] open store %s: %v", path, err)
 		}
-		log.Printf("[platform] persistent store at %s", path)
+		log.Printf("[platform] file store at %s", path)
 		return f
 	}
-	log.Print("[platform] in-memory store (set TSENGINE_PLATFORM_DB to persist)")
+	log.Print("[platform] in-memory store (set TSENGINE_PLATFORM_DB=/data/platform.db to persist)")
 	return store.NewMemory()
 }

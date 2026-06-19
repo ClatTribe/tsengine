@@ -18,7 +18,7 @@ services:
     environment:
       TSENGINE_PLATFORM_TOKEN: ${TSENGINE_PLATFORM_TOKEN:-dev-token} # operator/API bearer (users sign in with email/password)
       TSENGINE_SECRET_KEY: ${TSENGINE_SECRET_KEY:?set TSENGINE_SECRET_KEY in .env (see .env.example)} # AES-256 key sealing OAuth tokens
-      TSENGINE_PLATFORM_DB: /data/platform.json # persisted on the named volume below
+      TSENGINE_PLATFORM_DB: /data/platform.db # SQLite (ACID, indexed) on the named volume below
       TSENGINE_PLATFORM_NO_ENGINE: "1"          # 0 + the docker socket mount below to enable tech-asset scanning
       TSENGINE_MONITOR_INTERVAL: ${TSENGINE_MONITOR_INTERVAL:-12h}
       TSENGINE_WEBHOOK_SECRET: ${TSENGINE_WEBHOOK_SECRET:-}
