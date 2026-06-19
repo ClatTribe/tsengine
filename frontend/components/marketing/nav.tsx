@@ -49,7 +49,7 @@ export function MarketingNav() {
             Sign in
           </Link>
           <Link
-            href="/login"
+            href="/signup"
             className="rounded-xl bg-accent px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
           >
             Start free
@@ -59,7 +59,7 @@ export function MarketingNav() {
         {/* Mobile: keep the primary CTA + a menu toggle */}
         <div className="ml-auto flex items-center gap-2 md:hidden">
           <Link
-            href="/login"
+            href="/signup"
             className="rounded-xl bg-accent px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
           >
             Start free

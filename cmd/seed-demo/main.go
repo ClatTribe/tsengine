@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/authn"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -37,6 +38,17 @@ func main() {
 	}
 
 	must(st.PutTenant(ctx, platform.Tenant{ID: tid, Name: "Northwind Labs", Plan: "growth", CreatedAt: ago(45 * 24 * time.Hour)}))
+
+	// a demo owner account so you can sign in to the seeded workspace with the new
+	// email/password auth (login: founder@northwind.io / sentinel123).
+	hash, err := authn.HashPassword("sentinel123")
+	if err != nil {
+		log.Fatal(err)
+	}
+	must(st.PutUser(ctx, platform.User{
+		ID: "usr-demo", TenantID: tid, Email: "founder@northwind.io", Name: "Ada Founder",
+		Role: platform.RoleOwner, PasswordHash: hash, CreatedAt: ago(45 * 24 * time.Hour),
+	}))
 
 	// --- connections ---
 	conns := []platform.Connection{

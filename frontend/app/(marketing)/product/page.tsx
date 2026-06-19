@@ -130,7 +130,7 @@ function CTABand() {
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">See it run on your own systems.</h2>
         <p className="mx-auto mt-3 max-w-md text-white/75">Connect one system free and watch the loop work in minutes.</p>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/login" className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-accent shadow-sm transition hover:bg-white/90">
+          <Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-accent shadow-sm transition hover:bg-white/90">
             Start free <ArrowRight className="h-4 w-4" />
           </Link>
           <Link href="/pricing" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/15">

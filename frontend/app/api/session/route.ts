@@ -1,33 +1,45 @@
 import { NextResponse } from "next/server";
-import { apiBase, TOKEN_COOKIE, TENANT_COOKIE } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { apiBase, TOKEN_COOKIE, TENANT_COOKIE, sessionCookieOptions } from "@/lib/auth";
 
-// POST { token, tenant } → validate against the Go API, then set httpOnly cookies.
+// POST { email, password } → verify with the platform's auth endpoint, then store the
+// returned session token (+ tenant) in httpOnly cookies. The browser never sees the token.
 export async function POST(req: Request) {
-  const { token, tenant } = await req.json().catch(() => ({}));
-  if (!token || !tenant) {
-    return NextResponse.json({ error: "token and tenant are required" }, { status: 400 });
+  const { email, password } = await req.json().catch(() => ({}));
+  if (!email || !password) {
+    return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
   }
-  // Validate the credentials by making one authed call before persisting them.
-  const probe = await fetch(`${apiBase()}/v1/approvals`, {
-    headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": tenant },
+  const res = await fetch(`${apiBase()}/v1/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
     cache: "no-store",
   }).catch(() => null);
-  if (!probe || probe.status === 401) {
-    return NextResponse.json({ error: "Invalid token or tenant." }, { status: 401 });
-  }
-  if (!probe.ok && probe.status !== 200) {
-    return NextResponse.json({ error: `API unreachable (HTTP ${probe.status}).` }, { status: 502 });
-  }
-  const res = NextResponse.json({ ok: true });
-  const secure = process.env.NODE_ENV === "production";
-  const opts = { httpOnly: true, sameSite: "strict" as const, secure, path: "/" };
-  res.cookies.set(TOKEN_COOKIE, token, opts);
-  res.cookies.set(TENANT_COOKIE, tenant, opts);
-  return res;
+  if (!res) return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 502 });
+  if (res.status === 401) return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+  if (!res.ok) return NextResponse.json({ error: `Sign-in failed (HTTP ${res.status}).` }, { status: 502 });
+
+  const data = await res.json().catch(() => ({}));
+  if (!data.token || !data.tenant) return NextResponse.json({ error: "Sign-in failed." }, { status: 502 });
+
+  const out = NextResponse.json({ ok: true });
+  const opts = sessionCookieOptions();
+  out.cookies.set(TOKEN_COOKIE, data.token, opts);
+  out.cookies.set(TENANT_COOKIE, data.tenant, opts);
+  return out;
 }
 
-// DELETE → sign out.
+// DELETE → sign out: revoke the session server-side, then clear the cookies.
 export async function DELETE() {
+  const jar = await cookies();
+  const token = jar.get(TOKEN_COOKIE)?.value;
+  if (token) {
+    await fetch(`${apiBase()}/v1/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    }).catch(() => {});
+  }
   const res = NextResponse.json({ ok: true });
   res.cookies.delete(TOKEN_COOKIE);
   res.cookies.delete(TENANT_COOKIE);

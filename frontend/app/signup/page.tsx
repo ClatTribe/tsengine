@@ -3,10 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Loader2, Lock, BadgeCheck, Sparkles, ArrowRight } from "lucide-react";
+import { ShieldCheck, Loader2, Lock, BadgeCheck, Sparkles, ArrowRight, CheckCircle2 } from "lucide-react";
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
+  const [workspace, setWorkspace] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -16,17 +18,17 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setErr("");
-    const res = await fetch("/api/session", {
+    const res = await fetch("/api/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ workspace, name, email, password }),
     });
     if (res.ok) {
       router.push("/dashboard");
       router.refresh();
     } else {
       const b = await res.json().catch(() => ({}));
-      setErr(b.error ?? "Sign-in failed.");
+      setErr(b.error ?? "Sign-up failed.");
       setBusy(false);
     }
   }
@@ -43,15 +45,36 @@ export default function LoginPage() {
             <span className="text-base font-semibold tracking-tight">Sentinel</span>
           </Link>
 
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-          <p className="mt-1.5 text-sm text-muted">Your security team is standing by. Sign in to your workspace.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Create your workspace</h1>
+          <p className="mt-1.5 text-sm text-muted">Start free — no credit card. Your security team goes to work in minutes.</p>
 
           <form onSubmit={submit} className="mt-8 space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">Workspace name</label>
+              <input
+                type="text"
+                autoFocus
+                value={workspace}
+                onChange={(e) => setWorkspace(e.target.value)}
+                className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
+                placeholder="Acme Inc"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">Your name</label>
+              <input
+                type="text"
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
+                placeholder="Ada Lovelace"
+              />
+            </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted">Work email</label>
               <input
                 type="email"
-                autoFocus
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -63,11 +86,11 @@ export default function LoginPage() {
               <label className="mb-1.5 block text-xs font-medium text-muted">Password</label>
               <input
                 type="password"
-                autoComplete="current-password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
-                placeholder="••••••••••••"
+                placeholder="At least 8 characters"
               />
             </div>
             <button
@@ -76,7 +99,7 @@ export default function LoginPage() {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px disabled:opacity-60"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? "Creating…" : "Create workspace"}
               {!busy && <ArrowRight className="h-4 w-4" />}
             </button>
             {err && (
@@ -85,13 +108,13 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-5 text-sm text-muted">
-            New to Sentinel?{" "}
-            <Link href="/signup" className="font-medium text-accent hover:underline">Create your workspace →</Link>
+            Already have an account?{" "}
+            <Link href="/login" className="font-medium text-accent hover:underline">Sign in →</Link>
           </p>
 
           <div className="mt-4 flex items-center gap-2 text-[11px] text-faint">
             <Lock className="h-3.5 w-3.5" />
-            Your session is held server-side in an httpOnly cookie — never exposed to the browser.
+            Passwords are hashed (PBKDF2); your session lives in an httpOnly cookie, never in the browser.
           </div>
         </div>
       </div>
@@ -99,51 +122,35 @@ export default function LoginPage() {
       {/* Brand panel */}
       <div className="relative hidden overflow-hidden lg:block">
         <div className="absolute inset-0 bg-gradient-to-br from-accent via-[#4338CA] to-[#3730A3]" />
-        {/* soft glow accents */}
         <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-pulse/20 blur-3xl" />
 
         <div className="relative flex h-full flex-col justify-center px-14 text-white">
           <div className="max-w-md">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15">
-              <Sparkles className="h-3.5 w-3.5" /> AI security + compliance, with a human in the loop
+              <Sparkles className="h-3.5 w-3.5" /> Set up in minutes
             </span>
             <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight">
               Your fractional security team, running while you build.
             </h2>
-            <p className="mt-3 text-sm leading-relaxed text-white/70">
-              Sentinel finds, triages, and fixes — and pulls you in only where judgment is needed. No security
-              hire required.
-            </p>
-
-            {/* frosted posture preview */}
-            <div className="mt-8 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15 backdrop-blur">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-white/70">Security posture</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-pulse/20 px-2 py-0.5 text-xs font-medium text-white ring-1 ring-pulse/30">
-                  <span className="h-1.5 w-1.5 rounded-full bg-pulse" /> Protected
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                {[
-                  ["0", "open issues"],
-                  ["94%", "SOC 2"],
-                  ["24/7", "monitored"],
-                ].map(([n, l]) => (
-                  <div key={l} className="rounded-xl bg-white/5 py-2.5">
-                    <div className="text-lg font-semibold">{n}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-white/60">{l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
+            <ul className="mt-7 space-y-3 text-sm text-white/85">
+              {[
+                "Connect a system — the agent discovers and scans it",
+                "It triages real risk and prepares the fix",
+                "You approve anything consequential; it ships the rest",
+                "Compliance evidence is signed and auditor-ready",
+              ].map((x) => (
+                <li key={x} className="flex items-start gap-2.5">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-white" /> {x}
+                </li>
+              ))}
+            </ul>
             <div className="mt-8 flex items-center gap-5 text-xs text-white/70">
               <span className="inline-flex items-center gap-1.5">
                 <BadgeCheck className="h-4 w-4" /> SOC 2 · ISO 27001 · PCI
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <Lock className="h-4 w-4" /> Signed, tamper-evident evidence
+                <Lock className="h-4 w-4" /> Signed evidence
               </span>
             </div>
           </div>

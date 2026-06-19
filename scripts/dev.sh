@@ -8,7 +8,7 @@
 # re-run it any time the local app looks broken or "unstyled".
 #
 #   ./scripts/dev.sh
-#   → sign in at http://localhost:3000/login  ·  token: dev-token  ·  tenant: ten-1
+#   → sign in at http://localhost:3000/login  ·  founder@northwind.io / sentinel123  (or /signup)
 #
 # Dev-only. NO_ENGINE mode (no Docker sandbox); the seeded store shows the full UX.
 set -euo pipefail
@@ -40,7 +40,8 @@ rm -rf frontend/.next
 echo
 echo "  ┌──────────────────────────────────────────────────────────────┐"
 echo "  │  Sign in:  http://localhost:3000/login                        │"
-echo "  │  token: dev-token   ·   tenant: ten-1                         │"
+echo "  │  email: founder@northwind.io   ·   password: sentinel123      │"
+echo "  │  …or create a fresh workspace at /signup                      │"
 echo "  └──────────────────────────────────────────────────────────────┘"
 echo
 exec npm --prefix frontend run dev
