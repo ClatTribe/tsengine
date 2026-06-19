@@ -123,6 +123,49 @@ func TestDeliverer_RoutesToActionsOwnConnection(t *testing.T) {
 	}
 }
 
+// fakeOkta records the action it was asked to apply (the live identity write path).
+type fakeOkta struct{ applied *platform.Action }
+
+func (fakeOkta) Kind() string                   { return platform.ConnOkta }
+func (fakeOkta) OAuthURL(string, string) string { return "" }
+func (fakeOkta) Exchange(context.Context, string, string) (platform.Connection, error) {
+	return platform.Connection{}, nil
+}
+func (fakeOkta) Discover(context.Context, platform.Connection, string) ([]platform.Asset, error) {
+	return nil, nil
+}
+func (fakeOkta) Watch(context.Context, platform.Connection, []byte) ([]connector.Trigger, error) {
+	return nil, nil
+}
+func (f fakeOkta) Apply(_ context.Context, _ platform.Connection, tok string, a platform.Action) error {
+	if tok != "tok" {
+		return context.Canceled
+	}
+	*f.applied = a
+	return nil
+}
+
+// The tier-2 gated suspend that proposeIdentity emits for an Okta stale account must,
+// once approved, route through the Deliverer to the Okta connector's Apply — completing
+// the non-tech autonomous-with-approval loop (GAP-1).
+func TestDeliverer_RoutesGatedSuspendToOktaConnection(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutConnection(ctx, platform.Connection{ID: "conn-okta", TenantID: "t", Kind: platform.ConnOkta, Status: platform.ConnActive})
+	var applied platform.Action
+	d := &Deliverer{Store: st, Connectors: connector.NewRegistry(fakeOkta{applied: &applied}), Tokens: fakeTokens{}}
+
+	act := platform.Action{ID: "a-sus", TenantID: "t", ConnectionID: "conn-okta",
+		Kind: platform.ActApplyConfig, Tier: 2,
+		Payload: map[string]any{"remediation_type": "account_suspend", "target": "bob@acme.com"}}
+	if err := d.Apply(ctx, act); err != nil {
+		t.Fatal(err)
+	}
+	if applied.ID != "a-sus" || applied.Payload["remediation_type"] != "account_suspend" {
+		t.Errorf("gated suspend must route to the Okta connector carrying its payload, got %+v", applied)
+	}
+}
+
 func TestDeliverer_TicketNoopWhenNoFiler(t *testing.T) {
 	ctx := context.Background()
 	d := &Deliverer{Store: store.NewMemory(), Connectors: connector.NewRegistry(), Tokens: fakeTokens{}}

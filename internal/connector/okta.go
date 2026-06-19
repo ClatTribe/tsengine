@@ -105,6 +105,7 @@ func (o *Okta) Discover(_ context.Context, c platform.Connection, _ string) ([]p
 		TenantID: c.TenantID, ConnectionID: c.ID,
 		Type:         "workspace",
 		Target:       nz(c.Account, "okta"),
+		Meta:         map[string]string{"provider": platform.ConnOkta}, // gates which identity remediations have a live write path
 		DiscoveredAt: time.Now().UTC(),
 	}}, nil
 }

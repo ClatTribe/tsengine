@@ -162,7 +162,7 @@ Legend: ✅ built & wired · ◐ partial / honest-stub · ○ design only.
 | P2 finding evidence drill | ✅ | `/findings/[id]` | tool/CWE/confidence |
 | P3 identity posture (MFA/DMARC/OAuth/stale) | ✅ | `operate` (GWorkspace/M365/Okta all live) | grounded, snapshot-testable |
 | P3 specific runbook ticket | ✅ | `remediate/identity.go` | names the entity + the fix |
-| P3 **live identity remediation** (Okta suspend) | ◐ | `connector.Okta.Apply` live, **but** not yet reached by a proposed tier-2 action | **GAP-1** — see below |
+| P3 **live identity remediation** (Okta suspend) | ✅ | `proposeIdentity`+`liveIdentityMutation` → tier-2 `ActApplyConfig` → `Okta.Apply` | **GAP-1 closed** — finding → gated action → approve → live suspend, E2E-tested |
 | P3 GWorkspace / M365 live *write* | ◐ | connector `Apply` honest stubs | **GAP-2** — pending admin-write creds (documented) |
 | P4 compliance posture + drill | ✅ | `grc`, `/compliance/[framework]` | gaps cite findings |
 | P4 questionnaire auto-answer | ✅ | `grc`, `/compliance/questionnaire` | grounded |
@@ -175,14 +175,15 @@ Legend: ✅ built & wired · ◐ partial / honest-stub · ○ design only.
 
 ### The real, *fixable-now* gaps (not credential-gated)
 
-- **GAP-1 — operate → tier-2 `ActApplyConfig` wiring (highest value).** The pieces exist
-  but aren't connected: `operate` emits identity findings, `remediate/identity.go` attaches
-  a `remediation_type`+`target`, and `connector.Okta.Apply` performs a **live** suspend
-  behind the gate — but `remediate.Propose` routes identity findings only to a **tier-1
-  ticket**, never to a **tier-2 `ActApplyConfig`** that the Deliverer would route to
-  `Okta.Apply`. Closing this makes the identity loop **end-to-end autonomous-with-approval**
-  for the non-tech SMB audience (P3) — the single most design-aligned fix. *This is the
-  next implementation iteration.*
+- **GAP-1 — operate → tier-2 `ActApplyConfig` wiring — ✅ CLOSED.** `remediate.proposeIdentity`
+  now promotes a remediation to a **tier-2 `ActApplyConfig`** (gated) whenever a live,
+  reversible connector write path exists for the asset's provider (`liveIdentityMutation`;
+  today only Okta `account_suspend`), keeping every other (remediation, provider) a tier-1
+  runbook ticket so nothing falsely auto-applies. A stale-Okta-account finding now flows
+  finding → gated action → HITL approve → `connector.Okta.Apply` suspend → signed ledger.
+  Provider is carried in `Asset.Meta["provider"]`. E2E-tested
+  (`TestNonTechLoop_StaleAccountGatedThenApprovedSuspends`). Promotion of the next pair
+  (GWorkspace/M365 suspend, Okta `oauth_revoke`) is one line once its connector `Apply` lands.
 - **GAP-3 — forced first-login password rotation** for invited members (P2/P3 onboarding).
   Temp passwords are issued but not force-rotated. Smaller, security-hygiene.
 - **Open design question (P7):** is the human expert a teammate or a Sentinel-side analyst?

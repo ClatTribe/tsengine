@@ -775,8 +775,17 @@ tested against a fake org (injectable `HTTP` client). It needs the `okta.users.m
 (onboarding scopes are read-only by design), so a real mutation requires an admin to grant
 it — until then Okta answers 403 and `Apply` surfaces it as an error (never falsely "done").
 The GWorkspace/M365 connector `Apply` (and the other Okta `remediation_type`s) remain honest
-stubs pending admin-write creds; the operate→tier-2-`ActApplyConfig` action wiring is the
-remaining step to route a finding into this path end to end.
+stubs pending admin-write creds. **The operate→tier-2 wiring now closes that loop end to
+end** (`remediate.proposeIdentity` + `liveIdentityMutation`): when a remediation has a live,
+reversible connector write path for the asset's provider — today only Okta `account_suspend`
+— the proposer emits a **tier-2 `ActApplyConfig`** (gated) instead of a tier-1 ticket, so a
+stale-Okta-account finding flows finding → gated action → HITL approve → `connector.Okta.Apply`
+suspend → signed ledger. Every other (remediation, provider) pair stays a tier-1 runbook
+ticket (no falsely-confident auto-apply) until its connector `Apply` lands — promotion is one
+line in `liveIdentityMutation`. The asset's provider is carried in `Asset.Meta["provider"]`
+(set by the GWorkspace/M365/Okta connector `Discover`). The full loop is E2E-tested
+(`remediate.TestNonTechLoop_StaleAccountGatedThenApprovedSuspends`: queues, does NOT
+auto-apply, suspends only after approval).
 
 **M365 OAuth grants are live too** (`operate.M365.fetchGrants`): Microsoft Graph
 `oauth2PermissionGrants` (delegated scopes + admin-vs-per-user consent) joined to
