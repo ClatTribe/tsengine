@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -16,8 +17,10 @@ import (
 // an attacker's roadmap. Access is gated by an HMAC share token so a tenant id alone can't
 // enumerate it; the token is stateless (keyed by the platform secret), so no extra storage.
 
-// trustFrameworks is the set surfaced on the public Trust Center.
-var trustFrameworks = []string{"soc2", "iso27001", "pci", "hipaa", "cis_v8", "nist_csf"}
+// trustFrameworks is the set surfaced on the public Trust Center — the full framework set
+// (grc.Frameworks), so the public coverage page reflects everything the tenant has posture
+// for, not a stale six. Frameworks with no control state are skipped at render time.
+var trustFrameworks = grc.Frameworks
 
 // trustToken derives a tenant's non-guessable Trust Center share token.
 func (d Deps) trustToken(tenant string) string {
