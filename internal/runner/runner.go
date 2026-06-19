@@ -146,10 +146,14 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	if err != nil {
 		return 0, err
 	}
+	statuses := s.connStatuses(ctx, tenantID)
 	scanned := 0
 	var firstErr error
 	var current []types.Finding
 	for _, a := range assets {
+		if connInactive(statuses, a) {
+			continue // OM-5 fail-closed: an asset whose connection is unavailable/quarantined is not scanned
+		}
 		_, fs, err := s.scanAsset(ctx, a, platform.TriggerSchedule)
 		if err != nil {
 			if firstErr == nil {
@@ -182,13 +186,45 @@ func (s *Service) OnTrigger(ctx context.Context, t connector.Trigger) (*platform
 	if err != nil {
 		return nil, err
 	}
+	statuses := s.connStatuses(ctx, t.TenantID)
 	for _, a := range assets {
 		if a.Target == t.AssetTarget {
+			if connInactive(statuses, a) {
+				return nil, nil // OM-5 fail-closed: the matched asset's connection is unavailable/quarantined
+			}
 			eng, _, err := s.scanAsset(ctx, a, t.Kind)
 			return eng, err
 		}
 	}
 	return nil, fmt.Errorf("runner: no asset matches trigger target %q", t.AssetTarget)
+}
+
+// connStatuses maps the tenant's connection ids to their status. A nil result (a store
+// read error) means "don't know" and is treated as permissive by connInactive — the
+// kill-switch (OM-3) is the hard stop; this is the softer per-connection fail-closed.
+func (s *Service) connStatuses(ctx context.Context, tenantID string) map[string]string {
+	conns, err := s.Store.ListConnections(ctx, tenantID)
+	if err != nil {
+		return nil
+	}
+	m := map[string]string{}
+	for _, c := range conns {
+		m[c.ID] = c.Status
+	}
+	return m
+}
+
+// connInactive reports whether an asset must be skipped because its connection is KNOWN to
+// be unavailable (revoked/degraded/quarantined) — the OM-5 / WRD-4 fail-closed check.
+// Permissive on missing data: no connection id, an unreadable connection set (nil), or a
+// connection the store doesn't know about is NOT blocked (only a deliberate non-active
+// status fails closed; an absent record might be a discovery-time race).
+func connInactive(statuses map[string]string, a platform.Asset) bool {
+	if a.ConnectionID == "" || statuses == nil {
+		return false
+	}
+	st, found := statuses[a.ConnectionID]
+	return found && st != platform.ConnActive
 }
 
 // halted reports whether the tenant's kill-switch is engaged (Tenant.AgentsHalted). A
