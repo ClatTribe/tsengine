@@ -873,7 +873,11 @@ Settings toggle (owner-gated) + a persistent halted banner across the app shell.
 **§18.2 invariant 7**. The design source is the (untracked) `sec_lifecycle_agentic_smb.md` —
 the formal RFC-2119 spec for the fractional-autonomous-security-team-for-SMB product; the
 implementation's reconciliation against it lives in [docs/personas-and-workflows.md](docs/personas-and-workflows.md)
-§7. Remaining spec gaps (next, all additive): a distinct **T3** action class (irreversible/
-legal — breach-notification/customer-comms — agent *prepares*, human *signs*); the **Warden**
-phase (WRD: AI-BOM of the platform's own agents, per-agent quarantine); and OM-5 fail-closed
-on connector/model unavailability (the HITL gate already prevents blind T2/T3 action).
+§7. **The Warden's AI-BOM (WRD-1) is built**: `GET /v1/ai-bom` (`internal/platformapi/aibom.go`)
++ a Settings panel inventory what the autonomous agent can touch — every connection, its
+granted scopes, and a least-privilege read/write classification (flagging the write-capable,
+higher-risk surface) — plus the governance state (kill-switch + gate tier). Grounded in real
+`Connection.Scopes`, no secrets. Remaining spec gaps (next, all additive): a distinct **T3**
+action class (irreversible/legal — breach-notification/customer-comms — agent *prepares*,
+human *signs*); per-agent **quarantine** (the rest of WRD); and OM-5 fail-closed on
+connector/model unavailability (the HITL gate already prevents blind T2/T3 action).

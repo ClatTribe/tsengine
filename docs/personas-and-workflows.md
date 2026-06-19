@@ -238,7 +238,8 @@ its hard requirements to the implementation.
 | **A-GOV — compliance/governance** | ◐ | `grc` (control state, evidence, questionnaire); risk-register/policy drafting not built |
 | **TS-4 — ledger as auditor/insurer evidence of record** | ✅ | `grc` signed evidence pack + compliance report |
 | **T3 distinct class** (breach-notification / customer-comms — agent prepares, human signs) | ○ | **next** — no T3-only action kind emitted yet (T3 would gate today, but isn't a distinct type) |
-| **WRD — the Warden** (AI-BOM of the platform's *own* agents, per-agent quarantine, injection-resistance audit) | ◐ | injection-resistance holds (instruction-boundary); a formal AI-BOM + quarantine of the platform's agents is not built |
+| **WRD-1 — AI-BOM** (inventory of what the agent can touch: scopes + least-privilege read/write) | ✅ | `GET /v1/ai-bom` (`internal/platformapi/aibom.go`) + a Settings panel — grounded in real `Connection.Scopes`, flags the write-capable (higher-risk) surface |
+| **WRD-3/4/… — Warden rest** (injection-resistance, per-agent quarantine) | ◐ | injection-resistance holds (instruction-boundary, CLAUDE.md §10); per-agent quarantine of the platform's agents is **next** |
 | **OM-5 — fail closed on connector/model unavailability** | ◐ | the HITL gate already prevents blind T2/T3 action; an explicit fail-closed-on-unavailable path is **next** |
 | **ACC-1/2 — named accountable human + autonomy-policy doc** | ◐ | the owner is the accountable human (role model); a per-tenant autonomy-policy artifact is **next** |
 

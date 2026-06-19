@@ -69,6 +69,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
 	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))       // the current tenant (org name/plan) for Settings
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch)) // global kill-switch: halt/resume all agent action
+	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))           // agent capability manifest (WRD-1): what the automation can touch
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))   // owner's shareable Trust Center token
 	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)           // PUBLIC, HMAC-token-gated; safe aggregates only
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))

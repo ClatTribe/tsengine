@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { Action, Asset, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -52,6 +52,7 @@ export const api = {
   approvals: () => safe<Action[]>("/v1/approvals", []),
   connections: () => safe<Connection[]>("/v1/connections", []),
   tenant: () => safe<Tenant | null>("/v1/tenant", null),
+  aiBom: () => safe<AIBom | null>("/v1/ai-bom", null), // agent capability manifest (what the automation can touch)
   trustLink: () => safe<TrustLink | null>("/v1/trust-link", null),
   assets: () => safe<Asset[]>("/v1/assets", []),
   engagements: () => safe<Engagement[]>("/v1/engagements", []),
