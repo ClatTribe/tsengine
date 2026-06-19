@@ -64,9 +64,10 @@ type Service struct {
 	Desk     *hitl.Desk       // gate/auto-apply the proposed Action
 	Detector *detect.Detector // open/resolve incidents from change between monitoring passes
 	// ProposeIncidentResponse is the A-RSP "respond" half: turn a newly-opened incident into
-	// a response Action (e.g. a T3 breach-disclosure draft for a critical incident). Wired to
-	// remediate.ProposeIncidentResponse by the caller; nil → incidents just open + alert.
-	ProposeIncidentResponse func(platform.Incident) (platform.Action, bool)
+	// response Actions (a tier-2 gated containment runbook + a T3 breach-disclosure draft for
+	// a critical incident). Wired to remediate.ProposeIncidentResponse by the caller; nil →
+	// incidents just open + alert.
+	ProposeIncidentResponse func(platform.Incident) ([]platform.Action, bool)
 
 	// optional webhook auto-registration (event-driven re-scans on connect)
 	WebhookSecret string // shared secret stamped on registered hooks (and verified inbound)
@@ -183,9 +184,11 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		// proposer and incidents just open + alert as before.
 		if s.ProposeIncidentResponse != nil && s.Desk != nil {
 			for _, inc := range res.Opened {
-				if act, ok := s.ProposeIncidentResponse(inc); ok {
-					if _, err := s.Desk.Submit(ctx, act); err != nil && firstErr == nil {
-						firstErr = err
+				if acts, ok := s.ProposeIncidentResponse(inc); ok {
+					for _, act := range acts {
+						if _, err := s.Desk.Submit(ctx, act); err != nil && firstErr == nil {
+							firstErr = err
+						}
 					}
 				}
 			}

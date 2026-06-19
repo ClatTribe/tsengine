@@ -150,8 +150,9 @@ func main() {
 		Propose: func(f types.Finding, a platform.Asset) (platform.Action, bool) {
 			return remediate.Propose(f, a, newID)
 		},
-		// A-RSP: a newly-opened critical incident → a T3 breach-disclosure draft for a human to sign.
-		ProposeIncidentResponse: func(inc platform.Incident) (platform.Action, bool) {
+		// A-RSP: a newly-opened critical incident → a tier-2 gated containment runbook + a T3
+		// breach-disclosure draft for a human to sign.
+		ProposeIncidentResponse: func(inc platform.Incident) ([]platform.Action, bool) {
 			return remediate.ProposeIncidentResponse(inc, newID)
 		},
 		WebhookSecret: os.Getenv("TSENGINE_WEBHOOK_SECRET"), PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),

@@ -9,31 +9,93 @@ import (
 )
 
 // ProposeIncidentResponse is the A-RSP "respond" half of detect-&-respond (agentic-SMB
-// spec A-RSP / AGT-3): when a CRITICAL incident opens, the agent PREPARES a breach /
-// disclosure communication — a tier-3 (irreversible/legal) DRAFT that a NAMED human must
-// edit and sign before it is filed or sent. Because it is T3 it can never auto-apply
-// (hitl enforces this), so the agent never sends a regulatory/customer notice on its own.
+// spec A-RSP / AGT-3). When a CRITICAL incident opens, the agent prepares TWO responses:
 //
-// Non-critical incidents return false: they flow through the normal per-finding remediation
-// path, not breach comms. The draft is grounded in the real incident (its rule + the
-// finding that opened it) and is explicit that its claims are unverified until a human
-// confirms them — no hallucinated breach facts.
-func ProposeIncidentResponse(inc platform.Incident, idgen func() string) (platform.Action, bool) {
+//  1. CONTAINMENT — a tier-2 (consequential, human-gated) action recommending how to stop
+//     the bleeding now (suspend the account, restrict the resource, block the endpoint),
+//     targeting the affected entity. It is gated, so a human approves before anything is
+//     applied — the autonomous team proposes containment; a person decides.
+//  2. DISCLOSURE — a tier-3 (irreversible/legal) breach-comms DRAFT a NAMED human must edit
+//     and sign before it is filed or sent. T3 can never auto-apply, so the agent never
+//     sends a regulatory/customer notice on its own.
+//
+// Non-critical incidents return (nil,false): they flow through the normal per-finding
+// remediation path. Both responses are grounded in the real incident (its rule + the
+// finding that opened it + the entity in its key) — no hallucinated facts; containment is a
+// recommendation a human gates, disclosure is explicitly unverified until a human confirms.
+func ProposeIncidentResponse(inc platform.Incident, idgen func() string) ([]platform.Action, bool) {
 	if !strings.EqualFold(inc.Severity, string(types.SeverityCritical)) {
-		return platform.Action{}, false
+		return nil, false
 	}
+	return []platform.Action{
+		proposeContainment(inc, idgen),
+		{
+			ID: id("act", idgen), TenantID: inc.TenantID, FindingID: inc.FindingID,
+			Kind: platform.ActDraftNotification, Tier: platform.TierIrreversible, Status: platform.ActProposed,
+			Title: "Draft breach disclosure: " + inc.Title,
+			Payload: map[string]any{
+				"incident_id":      inc.ID,
+				"rule_id":          inc.RuleID,
+				"severity":         inc.Severity,
+				"remediation_type": "breach_notification",
+				"draft":            draftDisclosure(inc),
+			},
+		},
+	}, true
+}
+
+// proposeContainment builds the tier-2 gated containment recommendation for a critical
+// incident. It is GATED (tier-2 → a human approves before anything happens) and delivered
+// as a containment-runbook ticket: it carries a machine-readable remediation_type+target
+// (so a future live containment connector can promote it to a real apply, exactly like the
+// identity runbooks promote to an Okta suspend) plus a human-readable runbook. Filed via the
+// ticket path so it delivers gracefully without an incident-level connection. The step is
+// chosen from the incident's class (identity / cloud / web-api) and names the affected entity
+// (the endpoint half of inc.Key).
+func proposeContainment(inc platform.Incident, idgen func() string) platform.Action {
+	target := entityFromKey(inc.Key)
 	return platform.Action{
 		ID: id("act", idgen), TenantID: inc.TenantID, FindingID: inc.FindingID,
-		Kind: platform.ActDraftNotification, Tier: platform.TierIrreversible, Status: platform.ActProposed,
-		Title: "Draft breach disclosure: " + inc.Title,
+		Kind: platform.ActFileTicket, Tier: platform.GateTier, Status: platform.ActProposed,
+		Title: "Contain: " + inc.Title,
 		Payload: map[string]any{
 			"incident_id":      inc.ID,
 			"rule_id":          inc.RuleID,
 			"severity":         inc.Severity,
-			"remediation_type": "breach_notification",
-			"draft":            draftDisclosure(inc),
+			"remediation_type": "containment",
+			"target":           target,
+			"runbook":          containmentRunbook(inc.RuleID, target),
 		},
-	}, true
+	}
+}
+
+// entityFromKey extracts the affected entity from an incident key ("<rule_id>|<endpoint>"),
+// falling back to a generic phrase when the key carries no endpoint.
+func entityFromKey(key string) string {
+	if i := strings.Index(key, "|"); i >= 0 && i+1 < len(key) {
+		if ep := strings.TrimSpace(key[i+1:]); ep != "" {
+			return ep
+		}
+	}
+	return "the affected asset"
+}
+
+// containmentRunbook returns the class-specific containment step, grounded by the rule id.
+func containmentRunbook(ruleID, target string) string {
+	r := strings.ToLower(ruleID)
+	switch {
+	case strings.Contains(r, "operate") || strings.Contains(r, "okta") || strings.Contains(r, "mfa") ||
+		strings.Contains(r, "oauth") || strings.Contains(r, "account"):
+		return "Suspend the affected account and revoke its active sessions/tokens, then require re-enrollment: " + target
+	case strings.Contains(r, "prowler") || strings.Contains(r, "scoutsuite") || strings.Contains(r, "s3") ||
+		strings.Contains(r, "iam") || strings.Contains(r, "aws") || strings.Contains(r, "gcp") || strings.Contains(r, "azure"):
+		return "Restrict the exposed resource — remove public/over-broad grants and quarantine it — pending remediation: " + target
+	case strings.Contains(r, "nuclei") || strings.Contains(r, "sqlmap") || strings.Contains(r, "dalfox") ||
+		strings.Contains(r, "xss") || strings.Contains(r, "sqli") || strings.Contains(r, "rce") || strings.Contains(r, "http"):
+		return "Block the affected endpoint (a WAF rule or take it offline) until the fix ships: " + target
+	default:
+		return "Isolate or restrict access to the affected asset pending remediation: " + target
+	}
 }
 
 // draftDisclosure renders the human-reviewable disclosure draft from a confirmed incident.
