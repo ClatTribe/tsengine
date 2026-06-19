@@ -1,16 +1,21 @@
 import Link from "next/link";
-import { ArrowRight, ScanLine, ShieldAlert, ShieldCheck, Wrench, Inbox as InboxIcon } from "lucide-react";
+import {
+  ArrowRight, ScanLine, ShieldAlert, ShieldCheck, Wrench, Inbox as InboxIcon,
+  Boxes, Radar, Plug, CheckCircle2,
+} from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
 import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
 import { Card, SectionTitle, SeverityBadge, Empty } from "@/components/ui/primitives";
 import { FirstRun } from "@/components/onboarding/first-run";
 
-const RISK_COPY: Record<string, string> = {
-  Critical: "Critical issues are open. The agent has queued fixes for your approval.",
-  High: "High-severity issues need attention. Review the agent's proposals.",
-  Medium: "A few medium issues remain. Nothing urgent.",
-  Low: "Only low-severity items left. You're in good shape.",
-  Clear: "No open issues. The agent is watching continuously.",
+export const dynamic = "force-dynamic";
+
+const VERDICT: Record<string, string> = {
+  Clear: "You're protected",
+  Low: "You're in good shape",
+  Medium: "A few things to review",
+  High: "Some issues need your attention",
+  Critical: "Action needed now",
 };
 const RISK_TONE: Record<string, string> = {
   Critical: "text-critical",
@@ -19,34 +24,45 @@ const RISK_TONE: Record<string, string> = {
   Low: "text-low",
   Clear: "text-pulse",
 };
+const RISK_RING: Record<string, string> = {
+  Critical: "bg-critical/10 text-critical",
+  High: "bg-high/10 text-high",
+  Medium: "bg-medium/10 text-medium",
+  Low: "bg-low/10 text-low",
+  Clear: "bg-pulse-soft text-pulse",
+};
 
 type Event = { at: string; kind: "detected" | "resolved" | "scanned"; title: string; meta?: string };
 
 export default async function OverviewPage() {
-  // Cold start: with nothing connected the dashboard is empty and meaningless — lead the
-  // user straight into onboarding instead.
   const connections = await api.connections();
   if (connections.length === 0) return <FirstRun />;
 
-  const [findings, incidents, approvals, engagements] = await Promise.all([
+  const [findings, incidents, approvals, engagements, assets] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
     api.engagements(),
+    api.assets(),
   ]);
 
   const counts = severityCounts(findings);
   const risk = riskRating(counts);
+  const protectedNow = risk === "Clear";
 
-  // Synthesize the agent activity feed from what the agent actually did.
+  const sub = protectedNow
+    ? "Sentinel is monitoring your systems continuously — nothing needs you right now."
+    : approvals.length > 0
+      ? `Sentinel is on it — ${approvals.length} fix${approvals.length === 1 ? "" : "es"} prepared and waiting for your approval.`
+      : "Sentinel is triaging these and will prepare fixes you can approve.";
+
+  // Synthesize the agent activity feed.
   const events: Event[] = [];
   for (const i of incidents) {
-    if (i.status === "resolved" && i.resolved_at)
-      events.push({ at: i.resolved_at, kind: "resolved", title: i.title, meta: i.rule_id });
+    if (i.status === "resolved" && i.resolved_at) events.push({ at: i.resolved_at, kind: "resolved", title: i.title, meta: i.rule_id });
     else events.push({ at: i.opened_at, kind: "detected", title: i.title, meta: i.rule_id });
   }
-  for (const e of engagements)
-    if (e.completed_at) events.push({ at: e.completed_at, kind: "scanned", title: `Scanned an asset`, meta: e.trigger });
+  for (const e of engagements) if (e.completed_at) events.push({ at: e.completed_at, kind: "scanned", title: "Scanned an asset", meta: e.trigger });
   events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   const posture = await Promise.all(
@@ -58,63 +74,77 @@ export default async function OverviewPage() {
     }),
   );
   const frameworks = posture.filter(Boolean) as { f: string; met: number; gap: number }[];
+  const resolvedCount = incidents.filter((i) => i.status === "resolved").length;
 
   return (
     <div className="space-y-6">
-      {/* Risk hero */}
-      <Card className="flex flex-col gap-5 md:flex-row md:items-center">
+      {/* Posture hero — reassurance first */}
+      <Card className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center">
         <div className="flex items-center gap-4">
-          <div className={`grid h-14 w-14 place-items-center rounded-2xl border border-border bg-surface-2 ${RISK_TONE[risk]}`}>
-            {risk === "Clear" ? <ShieldCheck className="h-7 w-7" /> : <ShieldAlert className="h-7 w-7" />}
+          <div className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl ${RISK_RING[risk]}`}>
+            {protectedNow ? <ShieldCheck className="h-8 w-8" /> : <ShieldAlert className="h-8 w-8" />}
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wider text-muted">Posture</div>
-            <div className={`text-3xl font-semibold leading-tight ${RISK_TONE[risk]}`}>{risk}</div>
+            <div className="text-xs font-medium uppercase tracking-wider text-faint">Your security posture</div>
+            <div className={`mt-0.5 text-2xl font-semibold tracking-tight ${RISK_TONE[risk]}`}>{VERDICT[risk] ?? risk}</div>
+            <p className="mt-1 max-w-md text-sm text-muted">{sub}</p>
           </div>
         </div>
-        <p className="max-w-md text-sm text-muted">{RISK_COPY[risk]}</p>
-        <div className="ml-auto grid grid-cols-4 gap-2">
-          {(["critical", "high", "medium", "low"] as const).map((s) => (
-            <div key={s} className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-center">
-              <div className={`text-xl font-semibold ${RISK_TONE[s === "critical" ? "Critical" : s === "high" ? "High" : s === "medium" ? "Medium" : "Low"]}`}>
-                {counts[s]}
+        <div className="sm:ml-auto">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-pulse-soft px-2.5 py-1 text-xs font-medium text-pulse">
+            <span className="pulse-dot" /> Monitoring 24/7
+          </div>
+          <div className="mt-3 flex gap-1.5">
+            {(["critical", "high", "medium", "low"] as const).map((s) => (
+              <div key={s} className="min-w-[3.25rem] rounded-xl border border-border bg-surface-2 px-2.5 py-1.5 text-center">
+                <div className={`text-base font-semibold ${counts[s] ? RISK_TONE[s === "critical" ? "Critical" : s === "high" ? "High" : s === "medium" ? "Medium" : "Low"] : "text-faint"}`}>
+                  {counts[s]}
+                </div>
+                <div className="text-[9px] uppercase tracking-wide text-faint">{s}</div>
               </div>
-              <div className="text-[10px] uppercase tracking-wide text-faint">{s}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </Card>
 
       {/* Needs you */}
       {approvals.length > 0 && (
         <Link href="/inbox" className="block">
-          <Card className="flex items-center gap-4 border-accent/30 transition hover:border-accent/60">
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-accent-soft text-accent">
+          <Card className="flex items-center gap-4 border-accent/40 bg-accent-soft/40 p-5 transition hover:border-accent/70">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-white shadow-sm">
               <InboxIcon className="h-5 w-5" />
             </div>
-            <div>
-              <div className="text-sm font-medium">
-                {approvals.length} fix{approvals.length > 1 ? "es" : ""} awaiting your approval
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">
+                {approvals.length} fix{approvals.length > 1 ? "es" : ""} ready for your approval
               </div>
-              <div className="text-xs text-muted">The agent prepared these and is holding for your decision.</div>
+              <div className="text-xs text-muted">The agent prepared these and is holding for your decision — review in the Inbox.</div>
             </div>
-            <ArrowRight className="ml-auto h-4 w-4 text-accent" />
+            <ArrowRight className="ml-auto h-5 w-5 shrink-0 text-accent" />
           </Card>
         </Link>
       )}
 
+      {/* What Sentinel is handling for you */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <HandledStat icon={Plug} n={connections.length} label="systems connected" />
+        <HandledStat icon={Boxes} n={assets.length} label="assets monitored" />
+        <HandledStat icon={ScanLine} n={engagements.length} label="scans run" />
+        <HandledStat icon={Wrench} n={resolvedCount} label="issues resolved" tone="text-pulse" />
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Activity feed (2 cols) */}
+        {/* Agent activity */}
         <div className="lg:col-span-2">
-          <SectionTitle action={<span className="text-[11px] text-faint">live</span>}>Agent activity</SectionTitle>
+          <SectionTitle action={<span className="inline-flex items-center gap-1 text-[11px] text-pulse"><span className="pulse-dot" /> live</span>}>
+            What the agent is doing
+          </SectionTitle>
           <Card className="p-0">
             {events.length === 0 ? (
-              <div className="p-5">
-                <Empty>No activity yet — connect a system to put the agent to work.</Empty>
-              </div>
+              <div className="p-5"><Empty>No activity yet — the agent will start as soon as a scan completes.</Empty></div>
             ) : (
               <ul className="divide-y divide-border">
-                {events.slice(0, 12).map((e, i) => (
+                {events.slice(0, 10).map((e, i) => (
                   <li key={i} className="flex items-center gap-3 px-5 py-3">
                     <EventIcon kind={e.kind} />
                     <div className="min-w-0 flex-1">
@@ -131,20 +161,22 @@ export default async function OverviewPage() {
 
         {/* Compliance posture */}
         <div>
-          <SectionTitle action={<Link href="/compliance" className="text-[11px] text-accent hover:underline">all →</Link>}>
+          <SectionTitle action={<Link href="/compliance" className="text-[11px] font-medium text-accent hover:underline">all →</Link>}>
             Compliance
           </SectionTitle>
-          <Card className="space-y-2.5">
+          <Card className="space-y-2 p-3">
             {frameworks.length === 0 ? (
-              <Empty>No control state yet.</Empty>
+              <div className="p-2"><Empty>No control state yet.</Empty></div>
             ) : (
               frameworks.map(({ f, met, gap }) => (
-                <Link key={f} href={`/compliance/${f}`} className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm transition hover:border-border-strong">
-                  <span>{FRAMEWORK_LABEL[f] ?? f}</span>
-                  <span className="text-xs">
-                    <span className="text-low">{met} met</span>
-                    <span className="text-faint"> · </span>
-                    <span className="text-high">{gap} gap</span>
+                <Link key={f} href={`/compliance/${f}`} className="flex items-center justify-between rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm transition hover:border-border-strong">
+                  <span className="font-medium">{FRAMEWORK_LABEL[f] ?? f}</span>
+                  <span className="inline-flex items-center gap-2 text-xs">
+                    {gap === 0 ? (
+                      <span className="inline-flex items-center gap-1 text-pulse"><CheckCircle2 className="h-3.5 w-3.5" /> on track</span>
+                    ) : (
+                      <span className="text-high">{gap} gap{gap > 1 ? "s" : ""}</span>
+                    )}
                   </span>
                 </Link>
               ))
@@ -153,15 +185,13 @@ export default async function OverviewPage() {
         </div>
       </div>
 
-      {/* Top findings preview */}
-      <div>
-        <SectionTitle action={<Link href="/findings" className="text-[11px] text-accent hover:underline">all →</Link>}>Top findings</SectionTitle>
-        <Card className="p-0">
-          {findings.length === 0 ? (
-            <div className="p-5">
-              <Empty>No open findings.</Empty>
-            </div>
-          ) : (
+      {/* Top findings — for the security-minded, de-emphasized */}
+      {findings.length > 0 && (
+        <div>
+          <SectionTitle action={<Link href="/findings" className="text-[11px] font-medium text-accent hover:underline">all findings →</Link>}>
+            <span className="inline-flex items-center gap-1.5"><Radar className="h-3.5 w-3.5 text-faint" /> Top findings · for your security team</span>
+          </SectionTitle>
+          <Card className="p-0">
             <ul className="divide-y divide-border">
               {[...findings]
                 .sort((a, b) => (sevRank[a.severity] ?? 9) - (sevRank[b.severity] ?? 9))
@@ -176,17 +206,31 @@ export default async function OverviewPage() {
                   </li>
                 ))}
             </ul>
-          )}
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
     </div>
+  );
+}
+
+function HandledStat({ icon: Icon, n, label, tone }: { icon: typeof Plug; n: number; label: string; tone?: string }) {
+  return (
+    <Card className="flex items-center gap-3 p-4">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-muted">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <div className={`text-xl font-semibold leading-none ${tone ?? "text-ink"}`}>{n}</div>
+        <div className="mt-1 truncate text-xs text-muted">{label}</div>
+      </div>
+    </Card>
   );
 }
 
 function EventIcon({ kind }: { kind: Event["kind"] }) {
   const map = {
     detected: { Icon: ShieldAlert, cls: "text-high bg-high/10" },
-    resolved: { Icon: Wrench, cls: "text-pulse bg-pulse/10" },
+    resolved: { Icon: Wrench, cls: "text-pulse bg-pulse-soft" },
     scanned: { Icon: ScanLine, cls: "text-accent bg-accent-soft" },
   } as const;
   const { Icon, cls } = map[kind];
