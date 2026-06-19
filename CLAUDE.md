@@ -795,14 +795,31 @@ Okta has no publisher-verification). **So OAuth-grant detection is live across a
 non-tech IdPs — Google Workspace, Microsoft 365, and Okta** — completing the operate
 live-detection trio (users · email-auth · grants) everywhere.
 
+**Single-box production hardening is in** (the "pure Docker, one box, reliable, but
+architected to scale" track). Durable persistence: a dependency-free **SQLite `Store`**
+(`store.OpenSQLite`, `modernc.org/sqlite` — no cgo, static binary; WAL, JSON-blob rows)
+behind the same `Store` interface and the same table-driven conformance suite as the
+memory/file impls — `TSENGINE_PLATFORM_DB=/data/platform.db` (a `.db`/`.sqlite` path) picks
+it; a `.json` path still gets the snapshot file store. Async scans: **`internal/jobs`** is
+a bounded in-process worker pool (back-pressure → 429) so `POST /v1/rescan` returns `202` +
+a pollable `Job` (`GET /v1/jobs/{id}`, tenant-scoped) instead of blocking the request for a
+minutes-long scan; `Jobs==nil` falls back to synchronous (test back-compat). Observability:
+**`internal/obsv`** installs a structured **slog** default (text, or JSON via
+`TSENGINE_LOG_FORMAT=json`; level via `TSENGINE_LOG_LEVEL`) — which also routes the existing
+`log.Print` lines — and a Prometheus **`GET /metrics`** (request count/latency,
+`tsengine_scan_jobs_inflight`, plus the free Go runtime collectors). A `Middleware` wraps
+the platform mux for per-request metrics + an access log (SSE/`/metrics`/`/healthz`
+excluded from skew/noise). All three sit behind today's interfaces so the scale-out
+successors (Postgres store, durable queue, OTel) swap in without touching call sites.
+
 Remaining is **next-phase breadth/scale, not core-loop gaps**: the live identity-mutation
 `Apply`
 (`operate *.Apply` — the GWorkspace/M365 connector `Apply` are honest stubs pending live
 admin-write creds), the **open-ended LLM-driven** SOC reasoning (the deterministic
 detect/incident backbone now exists in `internal/detect`; what's left is agentic triage/
-response beyond the threshold rules), and the infra successors — a sqlite/Postgres `Store`
-+ a cloud-KMS
-`secret.Vault` (both behind today's interfaces).
+response beyond the threshold rules), and the infra successors — a **Postgres `Store`** (the
+SQLite single-box backend now exists) + a cloud-KMS `secret.Vault` (both behind today's
+interfaces).
 
 **Real per-user account auth is now built** (was the deferred "self-serve signup" item).
 `internal/authn` hashes passwords with stdlib `crypto/pbkdf2` (PBKDF2-HMAC-SHA256, 600k

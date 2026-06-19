@@ -53,6 +53,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/notify"
+	"github.com/ClatTribe/tsengine/internal/obsv"
 	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/platformapi"
@@ -83,6 +84,7 @@ func newID() string {
 }
 
 func main() {
+	obsv.SetupLogging() // structured logs (slog); set TSENGINE_LOG_FORMAT=json in prod
 	token := os.Getenv("TSENGINE_PLATFORM_TOKEN")
 	if token == "" {
 		log.Fatal("TSENGINE_PLATFORM_TOKEN is required")
@@ -179,6 +181,7 @@ func main() {
 	// re-scans never block the API (a scan can take minutes). Single-box; swap for a
 	// durable queue to scale out.
 	scanJobs := jobs.NewPool(scanWorkers(), 256, 2000, scanJobTimeout(), newID)
+	obsv.RegisterScanJobsInflight(func() float64 { return float64(scanJobs.Inflight()) })
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
@@ -191,10 +194,12 @@ func main() {
 	ui := console.Handler(console.Deps{Store: st, Token: token, Desk: desk, Report: g,
 		Connectors: reg, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"), Rescan: svc})
 	mux := http.NewServeMux()
+	mux.Handle("/metrics", obsv.MetricsHandler()) // Prometheus scrape target (network-restrict in prod)
 	mux.Handle("/ui", ui)
 	mux.Handle("/ui/", ui)
 	mux.Handle("/", api)
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	// obsv.Middleware is the outermost wrapper: per-request metrics + a structured access log.
+	srv := &http.Server{Addr: addr, Handler: obsv.Middleware(mux), ReadHeaderTimeout: 10 * time.Second}
 
 	// continuous monitoring: re-scan every tenant on a cadence (the "autonomous" loop).
 	monitorCtx, stopMonitor := context.WithCancel(context.Background())

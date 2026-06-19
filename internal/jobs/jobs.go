@@ -152,6 +152,20 @@ func (p *Pool) update(id string, f func(*Job)) {
 	}
 }
 
+// Inflight is the number of jobs currently queued or running — the operational signal
+// for whether scans are backing up (exposed as a Prometheus gauge by the platform).
+func (p *Pool) Inflight() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	n := 0
+	for _, id := range p.order {
+		if j := p.jobs[id]; j != nil && (j.Status == StatusQueued || j.Status == StatusRunning) {
+			n++
+		}
+	}
+	return n
+}
+
 // Get returns a copy of the job, or false if unknown.
 func (p *Pool) Get(id string) (Job, bool) {
 	p.mu.RLock()
