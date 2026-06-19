@@ -282,9 +282,11 @@ The compliance team's primary asset. Without it, tsengine doesn't serve the comp
 > (different rule sets → corroboration, the cloud analog of trivy+grype).
 > `cloudfox` is registry-tier, scope-gated read-only IAM attack-path
 > enumeration (the privilege-escalation depth bar). Compliance mapping is
-> honest by construction: only the 6 frameworks with catalogs are annotated
-> — unmapped frameworks (FedRAMP, AWS-FSBP) are dropped, never mis-claimed
-> (§8). Fixture: `fixtures/cloud/baseline`.
+> honest by construction: a path maps to a framework only where a real control
+> nexus exists across the 14-framework set (CLAUDE.md §8) — e.g. an
+> internet-exposed sensitive-data path cites NIST 800-53 SC-7/SC-28 + GDPR
+> Art. 32 + CCPA; unmapped frameworks are dropped, never mis-claimed.
+> Fixture: `fixtures/cloud/baseline`.
 
 **Authentication**: scan config carries `cloud.credentials` (assumed-role ARN or scoped read-only keys). Sandbox container receives credentials via short-lived env vars + scope-limited IAM session. Credentials never written to disk inside the container; rotated per-scan.
 

@@ -201,7 +201,7 @@ Auth: every `/v1/*` call (except the OAuth callback + Slack endpoint) needs
 | `GET /v1/compliance/{framework}/report` | Auditor report — Markdown (`?format=json` for the structured report). |
 | `POST /v1/slack/interactive` | Slack button callback (Slack-signed, not bearer). |
 
-Frameworks: `soc2`, `iso27001`, `pci`, `hipaa`, `cis_v8`, `nist_csf`.
+Frameworks (14, defined in `grc.Frameworks`): `soc2`, `iso27001`, `pci`, `hipaa`, `cis_v8`, `nist_csf`, `gdpr`, `iso27701`, `nist_800_53`, `nist_800_171`, `ccpa`, `sox`, `fedramp`, `dpdp`.
 
 ---
 
