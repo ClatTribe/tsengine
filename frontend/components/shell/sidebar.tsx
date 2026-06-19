@@ -11,12 +11,14 @@ import {
   Boxes,
   ScrollText,
   FileText,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "pending" as const },
+  { href: "/reviews", label: "Reviews", icon: UserCheck },
   { href: "/findings", label: "Findings", icon: Bug },
   { href: "/incidents", label: "Incidents", icon: Activity },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
