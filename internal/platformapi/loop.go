@@ -24,6 +24,7 @@ type Posturer interface {
 	Posture(ctx context.Context, tenantID, framework string) ([]platform.ControlState, error)
 	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
 	Questionnaire(ctx context.Context, tenantID string) (*grc.Questionnaire, error)
+	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
 }
 
 // Sealer seals a raw OAuth token before it is persisted (satisfied by the secret
@@ -140,6 +141,26 @@ func (d Deps) handleComplianceReport(w http.ResponseWriter, r *http.Request, ten
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	_, _ = io.WriteString(w, grc.RenderMarkdown(rep))
+}
+
+// handleVAPTReport renders the customer-facing VAPT / pentest report — Markdown by default
+// (the attachable deliverable an SMB hands a customer/insurer), JSON with ?format=json.
+func (d Deps) handleVAPTReport(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.GRC == nil {
+		writeJSON(w, http.StatusNotImplemented, errBody("grc not configured"))
+		return
+	}
+	rep, err := d.GRC.VAPTReport(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	if r.URL.Query().Get("format") == "json" {
+		writeJSON(w, http.StatusOK, rep)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	_, _ = io.WriteString(w, grc.RenderVAPTMarkdown(rep))
 }
 
 // handleQuestionnaire auto-answers the standardized security questionnaire from the

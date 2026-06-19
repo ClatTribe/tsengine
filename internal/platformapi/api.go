@@ -86,6 +86,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
 	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))
 	mux.HandleFunc("GET /v1/questionnaire", d.auth(d.handleQuestionnaire))
+	mux.HandleFunc("GET /v1/vapt/report", d.auth(d.handleVAPTReport))
 	mux.HandleFunc("POST /v1/reviews", d.auth(d.handleCreateReview))
 	mux.HandleFunc("GET /v1/reviews", d.auth(d.handleListReviews))
 	mux.HandleFunc("POST /v1/reviews/{id}/resolve", d.auth(d.handleResolveReview))
