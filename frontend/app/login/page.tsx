@@ -48,25 +48,26 @@ export default function LoginPage() {
 
           <form onSubmit={submit} className="mt-8 space-y-4">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted">Workspace token</label>
+              <label className="mb-1.5 block text-xs font-medium text-muted">Workspace</label>
+              <input
+                type="text"
+                autoFocus
+                autoComplete="organization"
+                value={tenant}
+                onChange={(e) => setTenant(e.target.value)}
+                className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
+                placeholder="your-workspace"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">Access key</label>
               <input
                 type="password"
-                autoFocus
                 autoComplete="current-password"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
-                placeholder="platform bearer token"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted">Tenant</label>
-              <input
-                type="text"
-                value={tenant}
-                onChange={(e) => setTenant(e.target.value)}
-                className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
-                placeholder="tenant id"
+                placeholder="••••••••••••"
               />
             </div>
             <button
@@ -83,9 +84,14 @@ export default function LoginPage() {
             )}
           </form>
 
-          <div className="mt-6 flex items-center gap-2 text-[11px] text-faint">
+          <p className="mt-4 text-[11px] leading-relaxed text-faint">
+            Your workspace and access key are issued during onboarding. Don&apos;t have them yet?{" "}
+            <Link href="/" className="font-medium text-accent hover:underline">Get started →</Link>
+          </p>
+
+          <div className="mt-4 flex items-center gap-2 text-[11px] text-faint">
             <Lock className="h-3.5 w-3.5" />
-            Your token is held server-side in an httpOnly cookie — never exposed to the browser.
+            Your access key is held server-side in an httpOnly cookie — never exposed to the browser.
           </div>
 
           <p className="mt-8 text-xs text-faint">
