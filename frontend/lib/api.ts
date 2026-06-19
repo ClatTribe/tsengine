@@ -64,7 +64,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ approver, approve }),
     }),
-  rescan: () => call<{ assets_scanned: number }>("/v1/rescan", { method: "POST" }),
+  // 202 + a job (async, the platform default) or { assets_scanned } (synchronous fallback).
+  rescan: () => call<{ assets_scanned?: number; id?: string; status?: string; kind?: string }>("/v1/rescan", { method: "POST" }),
 
   // Request a human-expert review on a finding or action (the AI + human escalation).
   requestReview: (subject: string, subjectId: string, note: string) =>

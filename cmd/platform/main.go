@@ -39,6 +39,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -50,6 +51,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/notify"
 	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
@@ -173,8 +175,12 @@ func main() {
 		svc.Scanner = &runner.MuxRunner{Workspace: workspaceRunner}
 	}
 
+	// Scans run off the request path on a bounded worker pool, so "Scan now" / webhook
+	// re-scans never block the API (a scan can take minutes). Single-box; swap for a
+	// durable queue to scale out.
+	scanJobs := jobs.NewPool(scanWorkers(), 256, 2000, scanJobTimeout(), newID)
 	api := platformapi.NewHandler(platformapi.Deps{
-		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault,
+		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
 		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID,
@@ -207,9 +213,30 @@ func main() {
 	defer stop()
 	<-ctx.Done()
 	log.Print("[platform] draining…")
-	sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	sctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_ = srv.Shutdown(sctx)
+	_ = srv.Shutdown(sctx)        // stop accepting requests
+	_ = scanJobs.Shutdown(sctx)   // let in-flight scans finish (or the deadline cut them off)
+}
+
+// scanWorkers is how many tenant re-scans run concurrently off the request path.
+func scanWorkers() int {
+	if v := os.Getenv("TSENGINE_SCAN_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 2
+}
+
+// scanJobTimeout bounds a single tenant re-scan job. Default 30m.
+func scanJobTimeout() time.Duration {
+	if v := os.Getenv("TSENGINE_SCAN_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 30 * time.Minute
 }
 
 // sandboxDispatcher returns a factory that spawns a per-asset sandbox and hands back
