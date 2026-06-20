@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, CheckCircle2, ShieldCheck, FileCheck2, Radar, Lock } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
-import { SITE_URL } from "@/lib/site";
+import { pageMeta } from "@/lib/seo";
 
 // Programmatic SEO: one landing page per supported framework, statically generated. The URL
 // (/frameworks/soc2 …) and per-framework <title>/description target the high-intent
@@ -39,13 +39,7 @@ export async function generateMetadata({ params }: { params: Promise<{ framework
   if (!i) return {};
   const title = `${i.label} Compliance Automation for SMBs — TensorShield`;
   const description = `Get ${i.label}-ready without a security hire. TensorShield continuously maps your findings to ${i.label} controls, prepares fixes, and produces signed, auditor-ready evidence. ${i.desc}`;
-  const url = `${SITE_URL}/frameworks/${framework}`;
-  return {
-    title,
-    description,
-    alternates: { canonical: url },
-    openGraph: { title, description, url, type: "website" },
-  };
+  return pageMeta({ title, description, path: `/frameworks/${framework}` });
 }
 
 export default async function FrameworkLanding({ params }: { params: Promise<{ framework: string }> }) {
