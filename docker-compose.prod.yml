@@ -12,6 +12,31 @@
 # (P3 adds a TLS edge in front; P4 adds the one-command deploy + backup scripts.)
 
 services:
+  # --- TLS edge (threat T7) — the ONLY published surface ---
+  # Terminates HTTPS + security headers; routes /v1,/ui,/healthz → platform, the rest →
+  # frontend. Default uses Caddy's internal CA (localhost); set TSENGINE_SITE_ADDRESS to a
+  # real domain (+ TSENGINE_ACME_EMAIL, drop `tls internal` in the Caddyfile) for public ACME.
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    environment:
+      TSENGINE_SITE_ADDRESS: ${TSENGINE_SITE_ADDRESS:-localhost}
+      TSENGINE_ACME_EMAIL: ${TSENGINE_ACME_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data    # provisioned certs (persist across restarts)
+      - caddy-config:/config
+    networks:
+      - edge
+    depends_on:
+      - platform
+      - frontend
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
   # --- de-privileged Docker API (threat T3) ---
   # The platform spawns sandboxes via THIS, not /var/run/docker.sock. The proxy holds the
   # socket but exposes only a filtered HTTP API on an internal network. Pin a digest in
@@ -66,10 +91,10 @@ services:
       TSENGINE_SANDBOX_READONLY: "1"
       TSENGINE_MONITOR_INTERVAL: ${TSENGINE_MONITOR_INTERVAL:-12h}
       TSENGINE_WEBHOOK_SECRET: ${TSENGINE_WEBHOOK_SECRET:-}
-      TSENGINE_PLATFORM_PUBLIC: ${TSENGINE_PLATFORM_PUBLIC:-http://localhost:8090}
+      # Public base URL is the TLS edge (OAuth redirect_uri, webhook callbacks).
+      TSENGINE_PLATFORM_PUBLIC: ${TSENGINE_PLATFORM_PUBLIC:-https://localhost}
       TSENGINE_LOG_FORMAT: json
-    ports:
-      - "8090:8090" # P3 replaces this with a TLS edge; keep for first bring-up
+    # No published ports — reachable only via the caddy edge on the internal `edge` network.
     volumes:
       - platform-data:/data
     networks:
@@ -87,8 +112,7 @@ services:
     environment:
       TSENGINE_API_URL: http://platform:8090 # server-side only; the browser never sees it
       NODE_ENV: production
-    ports:
-      - "3000:3000"
+    # No published ports — the browser reaches it only via the caddy TLS edge.
     networks:
       - edge
     depends_on:
@@ -113,3 +137,5 @@ networks:
 
 volumes:
   platform-data:
+  caddy-data:   # provisioned TLS certs (internal CA root / ACME)
+  caddy-config:

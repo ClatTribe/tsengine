@@ -90,6 +90,15 @@ up: ## bring up the full product stack (platform API + frontend) via docker comp
 down: ## stop the product stack
 	docker compose down
 
+.PHONY: prod-validate
+prod-validate: ## validate the hardened single-box stack (compose + Caddyfile) without secrets
+	@TSENGINE_SECRET_KEY=validate TSENGINE_PLATFORM_TOKEN=validate \
+		docker compose -f docker-compose.prod.yml config -q && echo "✓ docker-compose.prod.yml valid"
+	@docker run --rm -e TSENGINE_SITE_ADDRESS=localhost \
+		-v "$(PWD)/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+		caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
+		&& echo "✓ Caddyfile valid"
+
 .PHONY: platform-image
 platform-image: ## build the platform server image
 	docker build -t tsengine/platform:dev -f docker/platform/Dockerfile .
