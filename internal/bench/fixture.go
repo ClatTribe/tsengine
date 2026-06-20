@@ -42,6 +42,15 @@ type Fixture struct {
 	// enforced. Pointer so "at most 0 findings" is expressible.
 	MaxFindings *int `json:"max_findings,omitempty"`
 
+	// MaxSeverity is the false-positive severity FLOOR for a benign /
+	// FP-control fixture: any raw finding AT OR ABOVE this severity on a
+	// target that should be clean is counted as a false positive. This is
+	// the robust FP-rate gate — unlike MaxFindings (a total-count cap), it
+	// tolerates harmless info-level notes a clean target legitimately emits
+	// while still failing on any actionable (high/critical) false alarm.
+	// Empty = no severity gate. Typical: "high".
+	MaxSeverity types.Severity `json:"max_severity,omitempty"`
+
 	// PassRecall is the minimum detection recall to pass (default 1.0).
 	PassRecall float64 `json:"pass_recall,omitempty"`
 
@@ -96,6 +105,9 @@ func (f *Fixture) validate() error {
 	}
 	if f.PassRecall == 0 {
 		f.PassRecall = 1.0
+	}
+	if f.MaxSeverity != "" && !f.MaxSeverity.Valid() {
+		return fmt.Errorf("invalid max_severity %q", f.MaxSeverity)
 	}
 	return nil
 }

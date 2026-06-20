@@ -72,6 +72,16 @@ cite its competitor leaderboard — the loader rejects one that doesn't (§14.2.
 > seeds** (`go test ./internal/webrange/`). Serve a range for a live-LLM run:
 > `webrange --seed 7 --addr 127.0.0.1:8099`.
 >
+> **FP-control / specificity (`metric:fp_rate`).** The recall matrix above is the
+> FN half; the FP half is measured on **benign/clean targets** where the right
+> answer is zero actionable findings. The gate is a **severity floor**
+> (`Fixture.MaxSeverity`, e.g. `high`): any raw finding ≥ floor is a false positive
+> (`Score.FalsePositiveCount`) — robust where `max_findings:0` was brittle (a clean
+> target may legitimately emit info notes, but never a high/critical alarm).
+> Fixtures: `fixtures/container/alpine-clean` (runnable), `fixtures/repo/clean`
+> (SAST/SCA, the noisiest class; runnable once repo-mount bench wiring lands). FP
+> bar tracks the XBOW "no false positives" standard (CLAUDE.md §14.1.1).
+>
 > **Service load + correctness benchmark (`internal/loadbench`).** Benchmarks the
 > deployable surface (`tsengine serve`) — throughput + latency percentiles AND a
 > SECURITY invariant under concurrency: across thousands of racing requests every

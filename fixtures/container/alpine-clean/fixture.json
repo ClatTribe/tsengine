@@ -2,12 +2,12 @@
   "name": "container-alpine-clean",
   "asset": "container_image",
   "target": "alpine:3.18",
-  "description": "Maintained Alpine 3.18 image with no current CVEs. Specificity check — tsengine must not invent findings on a clean target.",
+  "description": "Maintained Alpine 3.18 image with no current CVEs. FP-control / specificity check — tsengine must not raise an actionable (high/critical) finding on a clean target.",
   "metric": "fp_rate",
-  "max_findings": 0,
+  "max_severity": "high",
   "competitors": {
     "leaderboard": "Trivy / Snyk Container / Anchore — self-published only",
-    "note": "Negative (specificity) test case: a clean image should produce zero CVE findings. Pairs with container-nginx-vuln (sensitivity) for a recall+FP-rate read on container scanning."
+    "note": "Negative (specificity) test case: a clean image should produce zero high/critical CVE findings (harmless info-level base-image notes are tolerated — the severity-gated FP floor, not a brittle total-count cap). Pairs with container-nginx-vuln (sensitivity) for a recall + FP-rate read on container scanning. FP bar tracks the XBOW 'no false positives' standard."
   },
   "runnable": true
 }

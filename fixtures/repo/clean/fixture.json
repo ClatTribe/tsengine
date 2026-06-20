@@ -1,0 +1,13 @@
+{
+  "name": "repo-clean",
+  "asset": "repository",
+  "target": "/fixtures/repo-clean",
+  "description": "A deliberately benign source tree (no injection sinks, secrets, unsafe deserialization, or vulnerable deps). FP-control for the SAST/SCA/secret pipeline — the noisiest detection class — where a correct scan raises zero high/critical findings.",
+  "metric": "fp_rate",
+  "max_severity": "high",
+  "competitors": {
+    "leaderboard": "Veracode / Checkmarx / Fortify / SonarQube (OWASP Benchmark SAST cohort)",
+    "note": "Specificity / false-positive companion to repo-owasp-benchmark (sensitivity). SAST tools are judged on Youden = sensitivity + specificity − 1, so a low FP rate on benign code is half the score. FP bar tracks the XBOW 'no false positives' standard. runnable=false until the bench mounts a repo source tree into the sandbox (same blocker as repo-owasp-benchmark)."
+  },
+  "runnable": false
+}

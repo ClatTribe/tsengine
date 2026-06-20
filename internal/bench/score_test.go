@@ -83,6 +83,51 @@ func TestScoreScan_BenignMaxFindings(t *testing.T) {
 	}
 }
 
+func TestScoreScan_SeverityGatedFP(t *testing.T) {
+	// FP-control fixture: a clean target may emit harmless info notes, but
+	// any finding at/above the severity floor (high) is a false positive.
+	f := &Fixture{Name: "clean", Metric: MetricFPRate, MaxSeverity: types.SeverityHigh}
+
+	// A high finding on a "clean" target → false positive, fails.
+	sc := ScoreScan(f, scan([]types.Finding{
+		{RuleID: "trivy::CVE-2099-0001", Severity: types.SeverityHigh},
+		{RuleID: "nuclei::info-note", Severity: types.SeverityInfo},
+	}, nil))
+	if sc.Pass {
+		t.Error("a high finding on a clean target must be flagged FP and fail")
+	}
+	if sc.FalsePositiveCount != 1 {
+		t.Errorf("FalsePositiveCount = %d, want 1 (only the high finding)", sc.FalsePositiveCount)
+	}
+
+	// Info/low-only output → no actionable FP, passes (the robustness win
+	// over the brittle MaxFindings:0 gate).
+	sc = ScoreScan(f, scan([]types.Finding{
+		{RuleID: "nuclei::info-note", Severity: types.SeverityInfo},
+		{RuleID: "dockle::low-note", Severity: types.SeverityLow},
+	}, nil))
+	if !sc.Pass {
+		t.Errorf("info/low-only output should pass the high FP floor: %s", sc.FailReason)
+	}
+	if sc.FalsePositiveCount != 0 {
+		t.Errorf("FalsePositiveCount = %d, want 0", sc.FalsePositiveCount)
+	}
+
+	// Critical also trips the high floor (>= floor).
+	sc = ScoreScan(f, scan([]types.Finding{{RuleID: "trivy::CVE-2099-0002", Severity: types.SeverityCritical}}, nil))
+	if sc.Pass || sc.FalsePositiveCount != 1 {
+		t.Errorf("critical must trip the high floor: pass=%v count=%d", sc.Pass, sc.FalsePositiveCount)
+	}
+}
+
+func TestFixture_RejectsInvalidMaxSeverity(t *testing.T) {
+	f := &Fixture{Name: "x", Asset: "container_image", MaxSeverity: "spicy",
+		Competitors: Competitors{Note: "n"}}
+	if err := f.validate(); err == nil {
+		t.Error("validate must reject an unknown max_severity")
+	}
+}
+
 func TestScoreScan_EnrichmentCoverage(t *testing.T) {
 	f := &Fixture{Name: "x", Metric: MetricMustFindRecall}
 	// 2 of 3 enriched findings carry annotations → 0.66.

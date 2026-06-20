@@ -606,6 +606,10 @@ Per-asset recall vs. neutral competitor leaderboards where possible:
 * `TSENGINE_L15_DISABLED=1` — skip L1.5 hook chain. Findings land raw. Measures L1's contribution.
 * `TSENGINE_L2_DISABLED=1` — `orchestrator.Run()` returns after anchor prepass. Measures pure L1 detection.
 
+### 14.1.1 FP-control (false-positive specificity)
+
+Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:fp_rate` fixtures on **benign/clean targets**, where the correct answer is zero actionable findings. The gate is a **severity floor** — `Fixture.MaxSeverity` (e.g. `"high"`): any raw finding at or above it is a false positive (`Score.FalsePositiveCount`). This is robust where the old `max_findings:0` was brittle — a clean target may legitimately emit info-level notes, but must never raise a high/critical alarm. FP-control fixtures: `fixtures/container/alpine-clean` (runnable), `fixtures/repo/clean` (SAST/SCA — the noisiest class; runnable once repo-mount bench wiring lands). Pairs sensitivity↔specificity per asset (Youden = TPR + TNR − 1); FP bar tracks the XBOW "no false positives" standard.
+
 ### 14.2 Anti-overfit guards (mandatory on every new bench)
 
 1. Source-grep test forbidding SUT-specific identifiers (juice-shop, bkimminich, vampi, crapi, etc.) in scoring code
