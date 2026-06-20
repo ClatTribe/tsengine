@@ -10,10 +10,10 @@
 // testability invariant) and every finding cites the offending setting/entity.
 //
 // Top SaaS apps to support (priority, see docs/adr/0004): GitHub org (built
-// here — highest value for a dev SMB), then Slack, Atlassian (Jira/Confluence),
-// Zoom, Salesforce. Google Workspace / Microsoft 365 / Okta identity posture is
-// already covered by internal/operate. Each new app is one snapshot type + its
-// Assess* function, exactly like adding a check to operate.
+// here) + Slack (slack.go) — highest value for a dev SMB — then Atlassian
+// (Jira/Confluence), Zoom, Salesforce. Google Workspace / Microsoft 365 / Okta
+// identity posture is already covered by internal/operate. Each new app is one
+// snapshot type + its Assess* function, exactly like adding a check to operate.
 package sspm
 
 import (
