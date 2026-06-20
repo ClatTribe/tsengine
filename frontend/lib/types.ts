@@ -29,6 +29,29 @@ export interface CodeProvenance {
   confidence: string; // "high" | "medium"
 }
 
+// Cross-surface attack path (GET /v1/attack-paths) — a finding on one surface
+// that bridges, via a concrete shared identifier, to a crown jewel on another.
+export interface AttackStep {
+  asset_type: string;
+  asset_target: string;
+  finding_id: string;
+  title: string;
+  severity: string;
+  verified?: boolean;
+  via_entity?: string; // the shared identifier that leads to the NEXT step
+  crown_jewel?: boolean;
+}
+
+export interface AttackPath {
+  severity: string;
+  steps: AttackStep[];
+}
+
+export interface AttackPaths {
+  attack_paths: AttackPath[];
+  count: number;
+}
+
 export interface Action {
   id: string;
   tenant_id: string;
