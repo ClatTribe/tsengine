@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   ArrowRight, ScanLine, ShieldAlert, ShieldCheck, Wrench, Inbox as InboxIcon,
-  Boxes, Radar, Plug, CheckCircle2, Spline,
+  Boxes, Radar, Plug, CheckCircle2, Spline, Layers,
 } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
 import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
@@ -39,18 +39,22 @@ export default async function OverviewPage() {
   const connections = await api.connections();
   if (connections.length === 0) return <FirstRun />;
 
-  const [findings, incidents, approvals, engagements, assets, attackPaths] = await Promise.all([
+  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
     api.engagements(),
     api.assets(),
     api.attackPaths(),
+    api.issues(),
   ]);
 
   const counts = severityCounts(findings);
   const byCategory = categoryBreakdown(findings);
   const risk = riskRating(counts);
+  // Noise-reduction: how many duplicate findings the unified-issues layer collapsed.
+  const merged = Math.max(0, issuesResp.raw_findings - issuesResp.count);
+  const noisePct = issuesResp.raw_findings > 0 ? Math.round((merged / issuesResp.raw_findings) * 100) : 0;
   const protectedNow = risk === "Clear";
 
   const sub = protectedNow
@@ -187,6 +191,21 @@ export default async function OverviewPage() {
           </Card>
         </div>
       </div>
+
+      {/* Noise reduction — the unified-platform value made concrete: duplicate
+          findings across scanners collapsed into single issues. Shown when it helped. */}
+      {merged > 0 && (
+        <Link href="/issues" className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-5 py-3.5 transition hover:border-border-strong">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-pulse-soft text-pulse">
+            <Layers className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1 text-sm">
+            <span className="font-semibold">{issuesResp.raw_findings} findings unified into {issuesResp.count} issues</span>
+            <span className="text-muted"> — {noisePct}% less duplicate noise to triage.</span>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
+        </Link>
+      )}
 
       {/* Cross-surface attack paths — the unified cross-detection signal: a single
           weakness chaining across surfaces to a crown jewel. Only shown when present. */}
