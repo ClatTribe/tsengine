@@ -19,6 +19,6 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 
 - **Web app · DAST** — Shay Chen WAVSEP comparison, sectoolmarket.com (Acunetix 87% / Burp-Active 78% / HP-WebInspect 76% / IBM-AppScan 69% / Netsparker 87% / OWASP-ZAP 56%)
 - **Repository · SAST** — OWASP Benchmark v1.2 (SAST cohort) (Checkmarx 47% / Fortify 35% / SonarQube 6% / Veracode 51%)
-- **L2 agent · autonomy** — agentic-offensive leaders, exploitation-verified: XBOW (HackerOne US #1), strix (OSS), Horizon3 NodeZero (GOAD) (NodeZero attack-path proven / XBOW PoC-validated, ~0 FP / strix PoC-validated multi-agent)
+- **L2 agent · autonomy** — agentic-offensive leaders, exploitation-verified: Aikido (Doyensec head-to-head), XBOW (HackerOne US #1), strix (OSS), Horizon3 NodeZero (GOAD) (Aikido 49 verified vs XBOW 31 (Doyensec, $4k tier) — white-box, 4% FP / NodeZero attack-path proven / XBOW PoC-validated, ~0 FP (3% FP vs Aikido per Doyensec) / strix PoC-validated multi-agent)
 - **Cloud account · CSPM** — CIS AWS Foundations Benchmark (mock-account recall)
 - **API · recall parity** — standalone OSS tool (per-tool recall parity, CLAUDE.md §2.4)
