@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 const SEVS = ["critical", "high", "medium", "low"] as const;
 const GROUPS = [
   { key: "none", label: "Flat" },
+  { key: "category", label: "By category" },
   { key: "asset", label: "By asset" },
   { key: "tool", label: "By tool" },
 ] as const;
@@ -26,6 +27,35 @@ function assetKey(f: Finding): string {
   } catch {
     return ep.split(/[?#]/)[0].split("/").slice(0, 3).join("/") || ep;
   }
+}
+
+// CATEGORY_TOOLS maps a scanner/engine to the security domain a user thinks in,
+// so "By category" groups the 30+ tools into a handful of meaningful buckets.
+const CATEGORY_TOOLS: Record<string, string> = {
+  // Supply chain (dependencies)
+  trivy: "Supply chain", grype: "Supply chain", "osv-scanner": "Supply chain", syft: "Supply chain", govulncheck: "Supply chain",
+  // Code (SAST · secrets · IaC)
+  semgrep: "Code", gitleaks: "Code", trufflehog: "Code", codeql: "Code", mobsfscan: "Code", checkov: "Code", hadolint: "Code", bandit: "Code",
+  // Web & API
+  nuclei: "Web & API", sqlmap: "Web & API", dalfox: "Web & API", wpscan: "Web & API", ffuf: "Web & API", hydra: "Web & API", httpx: "Web & API", katana: "Web & API", kiterunner: "Web & API", inql: "Web & API", schemathesis: "Web & API",
+  // Cloud
+  prowler: "Cloud", scoutsuite: "Cloud", "scout-suite": "Cloud", cloudfox: "Cloud",
+  // Network & domain
+  nmap: "Network & domain", naabu: "Network & domain", subfinder: "Network & domain", amass: "Network & domain", checkdmarc: "Network & domain", dnstwist: "Network & domain", crtsh: "Network & domain",
+  // Container
+  dockle: "Container", cosign: "Container",
+  // Identity & SaaS posture
+  operate: "Identity & SaaS", sspm: "Identity & SaaS",
+};
+
+// categoryOf classifies a finding by its security domain. The new dependency
+// checks carry a distinctive rule_id namespace, so they map precisely regardless
+// of how the finding's tool field is set.
+function categoryOf(f: Finding): string {
+  const r = (f.rule_id ?? "").toLowerCase();
+  if (/^(malicious-packages|eol|deprecated|license)::/.test(r)) return "Supply chain";
+  if (r.startsWith("sspm::") || r.startsWith("operate")) return "Identity & SaaS";
+  return CATEGORY_TOOLS[(f.tool ?? "").toLowerCase()] ?? "Other";
 }
 
 function frameworkCount(f: Finding): number {
@@ -59,7 +89,7 @@ export function FindingsTable({ findings, pendingFindingIds = [] }: { findings: 
     if (group === "none") return [{ key: "", rows }] as { key: string; rows: Finding[] }[];
     const m = new Map<string, Finding[]>();
     for (const f of rows) {
-      const k = group === "asset" ? assetKey(f) : f.tool;
+      const k = group === "asset" ? assetKey(f) : group === "category" ? categoryOf(f) : f.tool;
       (m.get(k) ?? m.set(k, []).get(k)!).push(f);
     }
     return [...m.entries()]
