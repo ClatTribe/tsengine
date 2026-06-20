@@ -99,6 +99,18 @@ export interface PentestEngagement {
   completed_at?: string;
 }
 
+export interface PentestStats {
+  engagements: number;
+  active_engagements: number;
+  completed_runs: number;
+  total_findings: number;
+  high_plus: number;
+  exploitation_proven: number;
+  high_plus_proven: number;
+  verified_rate: number; // 0..1
+  high_plus_found: boolean;
+}
+
 export interface Action {
   id: string;
   tenant_id: string;

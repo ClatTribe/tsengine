@@ -89,6 +89,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))    // restore a suppressed issue
 	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))            // create + authorize a pentest engagement
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))              // list engagements
+	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))        // portfolio scorecard (verified_rate, SLA)
 	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))           // one engagement + findings
 	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))      // run/retest the engagement (passive, RoE-gated)
 	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport)) // the engagement's VAPT report (md/json)
