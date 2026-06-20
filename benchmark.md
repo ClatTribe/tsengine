@@ -4,6 +4,11 @@ How each of the 7 asset types is detected and benchmarked. This is the
 operational companion to [arch.md](arch.md) §benchmark-infrastructure and
 [CLAUDE.md](CLAUDE.md) §14.
 
+> **Head-to-head vs Aikido** (the closest commercial analogue): see
+> [docs/benchmark-vs-aikido.md](docs/benchmark-vs-aikido.md) — per-asset
+> benchmark landscape, the Doyensec *Aikido vs XBOW* triangulation, the
+> noise-reduction axis, and a capability-coverage matrix.
+
 `✓` marks tools **wrapped + installed in the sandbox image today**. Other
 tools are the documented target set — **anchor tier** fires on every scan,
 **registry tier** is on-demand via the tool-replay API (CLAUDE.md §4).
