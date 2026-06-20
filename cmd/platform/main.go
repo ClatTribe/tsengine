@@ -158,6 +158,11 @@ func main() {
 		Propose: func(f types.Finding, a platform.Asset) (platform.Action, bool) {
 			return remediate.Propose(f, a, newID)
 		},
+		// Bulk fix: group an asset's related alerts into one PR per fix unit (supersedes
+		// the per-finding Propose above).
+		ProposeBatch: func(fs []types.Finding, a platform.Asset) []platform.Action {
+			return remediate.ProposeBulk(fs, a, newID)
+		},
 		// A-RSP: a newly-opened critical incident → a tier-2 gated containment runbook + a T3
 		// breach-disclosure draft for a human to sign.
 		ProposeIncidentResponse: func(inc platform.Incident) ([]platform.Action, bool) {

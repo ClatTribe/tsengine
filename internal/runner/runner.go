@@ -46,6 +46,12 @@ type IDGen func() string
 // so runner does not import remediate (which imports runner.Tokens → would cycle).
 type Proposer func(types.Finding, platform.Asset) (platform.Action, bool)
 
+// BatchProposer maps an asset's whole finding set to the MINIMAL set of remediation
+// Actions — grouping related alerts into one bulk fix (Aikido "bulk fix" parity).
+// Wired to remediate.ProposeBulk by the caller. When set it supersedes the per-finding
+// Proposer so the desk receives one action per fix group, not per finding.
+type BatchProposer func([]types.Finding, platform.Asset) []platform.Action
+
 // Service ties connectors + the engine + the store together, and (optionally) runs the
 // full autonomous loop per finding: GRC control-state update → propose a fix → gate it
 // at the HITL desk. The loop collaborators are nil-safe — omit them and Service just
@@ -59,10 +65,11 @@ type Service struct {
 	NewID      IDGen
 
 	// optional autonomous-loop collaborators
-	GRC      *grc.GRC         // fold each finding into the compliance system-of-record
-	Propose  Proposer         // generate a remediation Action per finding
-	Desk     *hitl.Desk       // gate/auto-apply the proposed Action
-	Detector *detect.Detector // open/resolve incidents from change between monitoring passes
+	GRC          *grc.GRC         // fold each finding into the compliance system-of-record
+	Propose      Proposer         // generate a remediation Action per finding
+	ProposeBatch BatchProposer    // bulk fix: one Action per fix group (supersedes Propose when set)
+	Desk         *hitl.Desk       // gate/auto-apply the proposed Action
+	Detector     *detect.Detector // open/resolve incidents from change between monitoring passes
 	// ProposeIncidentResponse is the A-RSP "respond" half: turn a newly-opened incident into
 	// response Actions (a tier-2 gated containment runbook + a T3 breach-disclosure draft for
 	// a critical incident). Wired to remediate.ProposeIncidentResponse by the caller; nil →
@@ -276,6 +283,16 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 			return nil, nil, err
 		}
 	}
+	// Bulk fix: propose the minimal set of remediation Actions for the whole asset
+	// (one PR per fix group) instead of one per finding. Supersedes the per-finding
+	// Propose (skipped in processFinding when ProposeBatch is set).
+	if s.ProposeBatch != nil && s.Desk != nil {
+		for _, act := range s.ProposeBatch(findings, a) {
+			if _, err := s.Desk.Submit(ctx, act); err != nil {
+				return nil, nil, fmt.Errorf("runner: desk submit (bulk): %w", err)
+			}
+		}
+	}
 	eng.CompletedAt = s.now()
 	if err := s.Store.PutEngagement(ctx, eng); err != nil {
 		return nil, nil, err
@@ -292,7 +309,9 @@ func (s *Service) processFinding(ctx context.Context, a platform.Asset, f types.
 			return fmt.Errorf("runner: grc apply: %w", err)
 		}
 	}
-	if s.Propose != nil && s.Desk != nil {
+	// Per-finding propose — skipped when a batch (bulk-fix) proposer is set; the asset's
+	// findings are then proposed together in scanAsset.
+	if s.ProposeBatch == nil && s.Propose != nil && s.Desk != nil {
 		act, ok := s.Propose(f, a)
 		if ok {
 			if _, err := s.Desk.Submit(ctx, act); err != nil {

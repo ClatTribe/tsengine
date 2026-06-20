@@ -114,6 +114,11 @@ export function InboxClient({ actions, findings }: { actions: Action[]; findings
                   <div className="mt-1 flex items-center gap-2">
                     {f && <SeverityBadge severity={f.severity} className="scale-90" />}
                     <span className="mono text-[11px] text-faint">tier {a.tier}</span>
+                    {a.finding_ids && a.finding_ids.length > 1 && (
+                      <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                        bulk · fixes {a.finding_ids.length}
+                      </span>
+                    )}
                   </div>
                 </button>
               </li>
