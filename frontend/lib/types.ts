@@ -149,6 +149,7 @@ export interface Incident {
   severity: string;
   status: string; // open | resolved
   finding_id: string;
+  attacked?: boolean; // escalated because the issue is under attack in production
   opened_at: string;
   resolved_at?: string;
 }

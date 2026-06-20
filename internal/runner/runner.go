@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
@@ -181,7 +182,13 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// authoritative present state. Only when every asset scanned cleanly, so a partial
 	// pass never falsely resolves an incident on an asset that errored.
 	if s.Detector != nil && firstErr == nil {
-		res, err := s.Detector.Reconcile(ctx, tenantID, current)
+		// Runtime-protection escalation (ADR-0007 Phase 0b): a finding whose endpoint is
+		// being attacked in production opens an incident regardless of severity floor.
+		var attacked map[string]bool
+		if evs, err := s.Store.ListRuntimeEvents(ctx, tenantID); err == nil {
+			attacked = crossdetect.AttackedKeys(current, evs)
+		}
+		res, err := s.Detector.Reconcile(ctx, tenantID, current, attacked)
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}

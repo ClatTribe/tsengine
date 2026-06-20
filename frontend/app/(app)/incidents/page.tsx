@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldAlert, CheckCircle2, Wrench, ArrowRight } from "lucide-react";
+import { ShieldAlert, CheckCircle2, Wrench, ArrowRight, Flame } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Incident } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -108,6 +108,11 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
         <div className="flex items-center gap-2">
           <SeverityBadge severity={i.severity} className="scale-90" />
           <span className="truncate text-sm">{i.title}</span>
+          {i.attacked && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[10px] font-semibold text-critical">
+              <Flame className="h-2.5 w-2.5" /> under attack
+            </span>
+          )}
           {respondPending && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30">
               <Wrench className="h-2.5 w-2.5" /> fix ready
