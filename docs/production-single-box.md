@@ -127,7 +127,7 @@ Each phase = one PR with tests; this table is the source of truth for status.
 | **P2** | **De-privilege the daemon + isolate the sandbox net** | runtime: on an isolated network the sandbox publishes no host port — the platform connects by container IP (`containerIP`), which is also the T4 control; `docker-compose.prod.yml` adds a `docker-socket-proxy` (internal net, `CONTAINERS/IMAGES/NETWORKS/POST` only), platform via `DOCKER_HOST` (no raw socket), sandboxes on the named `tsengine-sandbox` bridge, `TSENGINE_SANDBOX_READONLY=1`. Compose `config`-validated; runtime unit-tested | **done (#261)** |
 | **P3** | **TLS edge** | Caddy service (`docker/caddy/Caddyfile`) terminates HTTPS (internal CA for localhost / ACME for a real domain) + security headers (HSTS, nosniff, frame-deny, referrer); routes `/v1`,`/ui`,`/healthz` → platform and the rest → frontend; **platform + frontend ports unpublished** (only the edge `:80`/`:443`). `make prod-validate` lints compose + Caddyfile | **done (#262)** |
 | **P4** | **Secrets + backups + deploy script** | `cmd/platform` supports the Docker-secret `*_FILE` convention (`TSENGINE_SECRET_KEY_FILE`, `TSENGINE_PLATFORM_TOKEN_FILE`, …) so secrets ride as mounted files not inline env; `scripts/backup.sh`/`restore.sh` for the `platform-data` volume; **`scripts/deploy-single-box.sh`** (prereqs → gen secrets → validate → build incl. sandbox → up → smoke test, with a `--check` dry-run); `make deploy-prod`/`backup` | **done (#263)** |
-| **P5** | **Verify + docs finalize** | end-to-end smoke on the hardened stack incl. a real sandbox scan; finalize this doc's deploy runbook (§7); CLAUDE.md + DEPLOYMENT.md cross-links | planned |
+| **P5** | **Verify + docs finalize** | live-verified the socket-proxy filtering (T3) + config/deploy dry-run; runbook §7 finalized; CLAUDE.md §18.3 + DEPLOYMENT.md cross-linked. Full live-scan validation runs via `make deploy-prod` on the target box (§8) | **done (#264)** |
 
 ### 5.1 Sandbox hardening knobs (P1, shipped)
 
@@ -206,3 +206,17 @@ key). Back it up (cron it for off-box copies) and restore on a fresh box:
 make backup                                   # → ./backups/tsengine-<ts>.tar.gz
 scripts/restore.sh ./backups/tsengine-<ts>.tar.gz   # (stack stopped first)
 ```
+
+---
+
+## 8. Verification status
+
+| Check | How | Result |
+|---|---|---|
+| Sandbox confinement flags (P1) | `go test ./internal/sandbox` | every `--read-only`/`--user`/`--memory`/`--cpus`/`--pids-limit`/`--ulimit`/`--network`/`--tmpfs` flag asserted; env overlay + defaults |
+| Network-native sandbox connection (P2) | unit | no host port on a dedicated net; connect by container IP; dev path unchanged |
+| **Socket-proxy filtering (P2/T3)** | live: ran the proxy with the prod env | `/containers/json` + `/images/json` → **200** (allowed); `/info` → **403** (denied). The host-takeover API surface is cut. |
+| `*_FILE` secrets (P4) | `go test ./cmd/platform` | loads+trims from file; inline wins; missing file non-fatal |
+| Hardened stack config (P2/P3) | `make prod-validate` | `docker-compose.prod.yml` + `Caddyfile` both valid; only the edge `:80`/`:443` published |
+| Deploy script (P4) | `scripts/deploy-single-box.sh --check` | prereqs + config validation pass |
+| **Full live scan in a hardened sandbox** | `make deploy-prod` then run a repo/web scan | run on the target box — the OSS-tool sandbox image build is heavy (minutes); the deploy script smoke-tests the edge, and a scan then exercises the spawn path end-to-end. (Not run in CI; it needs the built sandbox image + a reachable Docker daemon.) |

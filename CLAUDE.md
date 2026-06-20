@@ -893,9 +893,26 @@ Dockerfile` (the `cmd/platform` server, Go, ~108MB) + `frontend/Dockerfile` (Nex
 `NO_ENGINE` (operate/identity assets + the whole loop work; tech-asset scanning needs the
 sandbox image + the commented Docker-socket mount). Both images build + run + sign-up E2E
 verified. The detection **engine** has its own image (`docker/host/Dockerfile`, released to
-GHCR by `release.yml`). **Not yet production-grade:** single-node file store (Postgres is the
-`store.Store` successor), env-key secrets (cloud-KMS is the `secret.Vault` successor), no
-bundled TLS/HA — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+GHCR by `release.yml`).
+
+**Single-box production deployment is built + hardened** ([docs/production-single-box.md](docs/production-single-box.md)
+— threat model + phased plan + runbook): `docker-compose.prod.yml` + `docker/caddy/Caddyfile`
+run the whole product, **engine ON**, safely on one box. Hardening: per-scan sandboxes get
+resource/PID/file limits + a writable tmpfs by default and opt-in read-only-rootfs/non-root/
+isolated-network (`internal/sandbox.Hardening`, `TSENGINE_SANDBOX_*`); the platform reaches
+the Docker API through a **docker-socket-proxy** (no raw socket = no host-root on compromise —
+live-verified: container/image API allowed, `/info` denied) and spawns sandboxes on a
+dedicated network reached by container IP (off the platform/frontend net); a **Caddy TLS edge**
+is the only published surface (HTTPS + security headers; raw `:8090`/`:3000` unpublished);
+secrets via the Docker-secret `*_FILE` convention; `scripts/backup.sh`/`restore.sh` for the
+`platform-data` volume; one-command **`make deploy-prod`** (`scripts/deploy-single-box.sh`,
+`--check` dry-run) + `make prod-validate`. Threats T1–T8 each have a shipped mitigation (#259–264).
+
+**Still single-box, not scale-grade** (the multi-machine gaps, each behind an existing seam —
+docs/production-single-box.md §6): single-node file/SQLite store (Postgres is the `store.Store`
+successor), env/file secrets (cloud-KMS is the `secret.Vault` successor), no HA/multi-node
+sandbox pool + durable queue, container (not microVM) isolation. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) + [docs/production-single-box.md](docs/production-single-box.md).
 
 **The global kill-switch is built** (agentic-SMB spec OM-3 / TS-5 — the "one human, one pane,
 kill-switch" operating-model primitive). `Tenant.AgentsHalted`, toggled by the owner via
