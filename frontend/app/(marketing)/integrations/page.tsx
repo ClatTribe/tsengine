@@ -23,7 +23,7 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
   },
   {
     title: "Cloud",
-    blurb: "Misconfig, public exposure and IAM blast-radius across your accounts.",
+    blurb: "Misconfig, public exposure and IAM blast-radius — each traced back to the Terraform line that provisioned it (Cloud-to-Code).",
     items: [
       { icon: Cloud, name: "AWS", role: "CSPM, IAM, exposed resources", status: "live" },
       { icon: Cloud, name: "Google Cloud", role: "CSPM & IAM posture", status: "soon" },
