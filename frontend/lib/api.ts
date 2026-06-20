@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, IssuesResponse, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -50,6 +50,7 @@ export const api = {
   finding: async (id: string) => (await safe<Finding[]>("/v1/findings", [])).find((f) => f.id === id) ?? null,
   incidents: (status?: "all") => safe<Incident[]>(`/v1/incidents${status ? "?status=all" : ""}`, []),
   attackPaths: () => safe<AttackPaths>("/v1/attack-paths", { attack_paths: [], count: 0 }),
+  issues: () => safe<IssuesResponse>("/v1/issues", { issues: [], count: 0, raw_findings: 0, confirmed: 0 }),
   approvals: () => safe<Action[]>("/v1/approvals", []),
   connections: () => safe<Connection[]>("/v1/connections", []),
   tenant: () => safe<Tenant | null>("/v1/tenant", null),
