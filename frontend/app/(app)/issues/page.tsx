@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight } from "lucide-react";
+import { ShieldCheck, ArrowRight, Flame } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function IssuesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const showingIgnored = (await searchParams).show === "ignored";
-  const [{ issues, count, raw_findings, confirmed, ignored, excluded }, exclResp] = await Promise.all([
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked }, exclResp] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
   ]);
@@ -29,6 +29,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
         </div>
         <div className="flex gap-4 text-sm">
           <Stat n={count} label={showingIgnored ? "ignored" : "issues"} tone="text-ink" />
+          {!showingIgnored && (attacked ?? 0) > 0 && <Stat n={attacked ?? 0} label="under attack" tone="text-critical" />}
           {!showingIgnored && <Stat n={confirmed} label="multi-tool confirmed" tone="text-pulse" />}
           {!showingIgnored && collapsed > 0 && <Stat n={collapsed} label="duplicates merged" tone="text-faint" />}
         </div>
@@ -116,6 +117,14 @@ function IssueRow({ issue, ignored }: { issue: Issue; ignored: boolean }) {
           {issue.confirmed && (
             <span className="inline-flex items-center gap-0.5 rounded-full bg-pulse-soft px-1.5 py-0.5 text-[10px] font-medium text-pulse">
               <ShieldCheck className="h-3 w-3" /> confirmed
+            </span>
+          )}
+          {issue.attacked && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full bg-critical/10 px-1.5 py-0.5 text-[10px] font-semibold text-critical"
+              title={`Observed under attack in production${issue.attack_count ? ` — ${issue.attack_count} event${issue.attack_count === 1 ? "" : "s"}` : ""}`}
+            >
+              <Flame className="h-3 w-3" /> under attack
             </span>
           )}
         </div>

@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS controls    (tenant_id TEXT, framework TEXT, control_
 CREATE TABLE IF NOT EXISTS incidents   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
 CREATE TABLE IF NOT EXISTS exclusions  (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS runtimeevts (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS pentests    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
@@ -245,6 +246,13 @@ func (s *SQLite) ListExclusionRules(ctx context.Context, tenantID string) ([]pla
 func (s *SQLite) DeleteExclusionRule(ctx context.Context, tenantID, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM exclusions WHERE tenant_id=? AND id=?`, tenantID, id)
 	return err
+}
+
+func (s *SQLite) PutRuntimeEvent(ctx context.Context, ev platform.RuntimeEvent) error {
+	return s.upsertTID(ctx, `INSERT INTO runtimeevts(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, ev.TenantID, ev.ID, ev)
+}
+func (s *SQLite) ListRuntimeEvents(ctx context.Context, tenantID string) ([]platform.RuntimeEvent, error) {
+	return listJSON[platform.RuntimeEvent](ctx, s.db, `SELECT data FROM runtimeevts WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 
 func (s *SQLite) PutPentest(ctx context.Context, eng pentest.Engagement) error {

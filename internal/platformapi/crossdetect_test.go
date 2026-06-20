@@ -225,3 +225,53 @@ func TestExclusions_FilterIssuesAndCRUD(t *testing.T) {
 		t.Error("tenant isolation breached on /v1/exclusions")
 	}
 }
+
+func TestRuntimeEvents_IngestAndCorrelate(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	// A web finding on /search.
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "f1", Tool: "nuclei", RuleID: "nuclei::sqli",
+		Severity: types.SeverityHigh, Title: "SQLi", Endpoint: "https://app.acme.com/search?q="})
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok",
+		NewID: func() string { return "x" }})
+
+	// Baseline: the issue is not attacked.
+	if b := do(h, "GET", "/v1/issues", "t1", "").Body.String(); strings.Contains(b, `"attacked":1`) {
+		t.Fatalf("baseline should have 0 attacked: %s", b)
+	}
+
+	// Ingest a runtime attack event on the same route (single object).
+	ing := do(h, "POST", "/v1/runtime/events", "t1",
+		`{"attack_kind":"sql_injection","endpoint":"/search","blocked":true,"source":"zen"}`)
+	if ing.Code != 200 || !strings.Contains(ing.Body.String(), `"stored":1`) {
+		t.Fatalf("ingest: %d %s", ing.Code, ing.Body.String())
+	}
+
+	// A batch ingest also works.
+	if b := do(h, "POST", "/v1/runtime/events", "t1",
+		`[{"attack_kind":"sql_injection","endpoint":"/search","blocked":true},{"attack_kind":"xss","endpoint":"/other"}]`); !strings.Contains(b.Body.String(), `"stored":2`) {
+		t.Errorf("batch ingest should store 2: %s", b.Body.String())
+	}
+
+	// Now the /search issue is flagged attacked-in-the-wild.
+	body := do(h, "GET", "/v1/issues", "t1", "").Body.String()
+	if !strings.Contains(body, `"attacked":1`) {
+		t.Errorf("the /search issue should be attacked: %s", body)
+	}
+	if !strings.Contains(body, `"attack_count":2`) {
+		t.Errorf("two events hit /search, expected attack_count 2: %s", body)
+	}
+
+	// The events list reflects them (3 total, 2 blocked).
+	ev := do(h, "GET", "/v1/runtime/events", "t1", "").Body.String()
+	if !strings.Contains(ev, `"count":3`) || !strings.Contains(ev, `"blocked":2`) {
+		t.Errorf("events list wrong: %s", ev)
+	}
+
+	// Tenant isolation: t2 sees no events, and a body-supplied tenant is ignored.
+	_ = do(h, "POST", "/v1/runtime/events", "t2", `{"tenant_id":"t1","endpoint":"/x"}`)
+	if e1 := do(h, "GET", "/v1/runtime/events", "t1", "").Body.String(); !strings.Contains(e1, `"count":3`) {
+		t.Errorf("a body-supplied tenant must not cross tenants: %s", e1)
+	}
+}

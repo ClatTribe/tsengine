@@ -153,6 +153,13 @@ func (f *File) DeleteExclusionRule(ctx context.Context, tenantID, id string) err
 	return f.persist()
 }
 
+func (f *File) PutRuntimeEvent(ctx context.Context, ev platform.RuntimeEvent) error {
+	if err := f.Memory.PutRuntimeEvent(ctx, ev); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutPentest(ctx context.Context, eng pentest.Engagement) error {
 	if err := f.Memory.PutPentest(ctx, eng); err != nil {
 		return err
