@@ -13,6 +13,7 @@ import (
 	containerasset "github.com/ClatTribe/tsengine/internal/asset/container"
 	domainasset "github.com/ClatTribe/tsengine/internal/asset/domain"
 	ipasset "github.com/ClatTribe/tsengine/internal/asset/ip"
+	mobileasset "github.com/ClatTribe/tsengine/internal/asset/mobile"
 	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
 	webasset "github.com/ClatTribe/tsengine/internal/asset/web"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -35,6 +36,8 @@ func HandlerFor(at types.AssetType) (asset.Handler, error) {
 		return domainasset.NewHandler(), nil
 	case types.AssetCloudAccount:
 		return cloudasset.NewHandler(), nil
+	case types.AssetMobileApplication:
+		return mobileasset.NewHandler(), nil
 	default:
 		return nil, fmt.Errorf("assetregistry: unhandled asset type %q", at)
 	}

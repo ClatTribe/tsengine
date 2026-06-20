@@ -25,11 +25,13 @@ import (
 	containerasset "github.com/ClatTribe/tsengine/internal/asset/container"
 	domainasset "github.com/ClatTribe/tsengine/internal/asset/domain"
 	ipasset "github.com/ClatTribe/tsengine/internal/asset/ip"
+	mobileasset "github.com/ClatTribe/tsengine/internal/asset/mobile"
 	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
 	webasset "github.com/ClatTribe/tsengine/internal/asset/web"
 
 	// Register every tool wrapper so the handlers resolve their anchors.
 	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
+	_ "github.com/ClatTribe/tsengine/internal/tool/mobsfscan"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"
 	_ "github.com/ClatTribe/tsengine/internal/tool/cloudfox"
@@ -93,6 +95,8 @@ func cases() []assetCase {
 			types.Asset{Type: types.AssetRepository, Target: "/workspace"}, nil},
 		{"container", containerasset.NewHandler(),
 			types.Asset{Type: types.AssetContainerImage, Target: "nginx:latest"}, nil},
+		{"mobile", mobileasset.NewHandler(),
+			types.Asset{Type: types.AssetMobileApplication, Target: "/workspace"}, nil},
 	}
 }
 

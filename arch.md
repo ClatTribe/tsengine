@@ -1,7 +1,7 @@
 # arch.md — tsengine L1 architecture map
 
 This document is the architecture map for tsengine's L1 + L1.5 + L2 detection
-stack across all 7 asset types. It is the source of truth for "what tool
+stack across all 8 asset types. It is the source of truth for "what tool
 runs where, what filter applies, what the dashboard surfaces, what we
 benchmark against." Keep this updated when you change anchor lists,
 registry tools, filter rules, or compliance mappings.
@@ -289,6 +289,35 @@ The compliance team's primary asset. Without it, tsengine doesn't serve the comp
 > Fixture: `fixtures/cloud/baseline`.
 
 **Authentication**: scan config carries `cloud.credentials` (assumed-role ARN or scoped read-only keys). Sandbox container receives credentials via short-lived env vars + scope-limited IAM session. Credentials never written to disk inside the container; rotated per-scan.
+
+---
+
+### `mobile_application` — Mobile app SAST + secrets + SCA
+
+The mobile-app team's asset. Single-stage like `repository` (the app bundle / source tree *is* the surface — no recon → fan-out). The CLI bind-mounts the unpacked Android/iOS app (APK contents / source tree / IPA payload) read-only at `/workspace`; every tool scans that path. Its own asset (not a `repository` sub-mode) because the audience, tool set, and bench are mobile-specific.
+
+| Layer | Element | Detail |
+|---|---|---|
+| **Anchor tier** | Mobile SAST | mobsfscan — Android/iOS insecure-storage, weak-crypto, exported-component, WebView, deep-link rules |
+| | Secrets | gitleaks — hardcoded API keys / tokens (different engine → corroborates mobsfscan's secret rules); the #1 real-world mobile leak |
+| | SCA | trivy fs — CVEs in bundled dependency manifests (`mode=fs`) |
+| **Registry tier** | (on-demand) | semgrep (Kotlin/Swift/Java mobile packs), trufflehog (deep verified-secret scan); apkid (packer/obfuscator fingerprint) + a full MobSF dynamic pass are the documented next additions |
+| **L1 filtration** | Bundle wholesale | anchors scan the mounted bundle; per-tool exclude wiring lives in the wrappers |
+| **L1.5 enrichment** | Same chain as other assets | mobsfscan findings carry CWEs → `compliance.map` annotates controls like any SAST finding |
+| **Bench** | Headline | `bench/mobile_app` (planted Android/iOS insecure patterns — next addition) |
+| | Comparator | MobSF / NowSecure self-published; no neutral public leaderboard |
+
+> **Implemented (assets Phase 3a).** New first-class asset type
+> (`pkg/types.AssetMobileApplication`) + Handler (`internal/asset/mobile`).
+> Anchors are mobsfscan + gitleaks + trivy — all already baked into the
+> sandbox image (shared with `repository`), so mobile adds reach without a
+> new sandbox tool. `mobsfscan` already existed as a `repository` escalation
+> (mobile-file finding → mobsfscan); the mobile asset promotes it to an
+> anchor and routes the whole scan around the mobile threat model. Grounded
+> (no in-house detector — §13); the depth tools (apkid, MobSF dynamic) are a
+> documented backlog item, never a silent in-house build.
+
+**Note**: scanning a built binary (APK/IPA) requires decompilation first — today the asset expects an unpacked bundle / source tree at `/workspace`; an automatic `apktool`/`jadx` decompile prepass is the documented next addition.
 
 ---
 

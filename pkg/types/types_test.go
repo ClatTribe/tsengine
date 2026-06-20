@@ -17,9 +17,9 @@ func TestAssetType_AllValid(t *testing.T) {
 	}
 }
 
-func TestAssetType_SevenTypes(t *testing.T) {
-	// CLAUDE.md §3 promises exactly 7 asset types. Pin it.
-	const want = 7
+func TestAssetType_AllTypes(t *testing.T) {
+	// CLAUDE.md §3 promises exactly 8 asset types. Pin it.
+	const want = 8
 	if got := len(AllAssetTypes()); got != want {
 		t.Errorf("AllAssetTypes(): got %d, want %d (CLAUDE.md §3)", got, want)
 	}

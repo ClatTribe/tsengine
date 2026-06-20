@@ -39,6 +39,7 @@ import (
 	containerasset "github.com/ClatTribe/tsengine/internal/asset/container"
 	domainasset "github.com/ClatTribe/tsengine/internal/asset/domain"
 	ipasset "github.com/ClatTribe/tsengine/internal/asset/ip"
+	mobileasset "github.com/ClatTribe/tsengine/internal/asset/mobile"
 	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
 	webasset "github.com/ClatTribe/tsengine/internal/asset/web"
 	"github.com/ClatTribe/tsengine/internal/attest"
@@ -396,6 +397,18 @@ func runScan(argv []string) error {
 		}
 		spawnOpts.Mounts = []sandbox.Mount{{HostPath: abs, ContainerPath: repoasset.WorkspacePath}}
 		fmt.Fprintf(os.Stderr, "[%s] mounting %s -> %s (ro)\n", scanID, abs, repoasset.WorkspacePath)
+	case types.AssetMobileApplication:
+		// Bind-mount the app bundle / source tree read-only at /workspace;
+		// the mobile Handler scans that path regardless of the host path.
+		abs, aerr := filepath.Abs(*target)
+		if aerr != nil {
+			return fmt.Errorf("resolve mobile app path: %w", aerr)
+		}
+		if fi, serr := os.Stat(abs); serr != nil || !fi.IsDir() {
+			return fmt.Errorf("mobile_application target must be an existing directory (unpacked app bundle / source tree): %s", *target)
+		}
+		spawnOpts.Mounts = []sandbox.Mount{{HostPath: abs, ContainerPath: mobileasset.WorkspacePath}}
+		fmt.Fprintf(os.Stderr, "[%s] mounting %s -> %s (ro)\n", scanID, abs, mobileasset.WorkspacePath)
 	case types.AssetCloudAccount:
 		// Forward scoped, short-lived cloud credentials into the sandbox.
 		spawnOpts.Env = cloudCredentialEnv()
@@ -1827,9 +1840,7 @@ func runVerify(argv []string) error {
 // --- shared ------------------------------------------------------
 
 // handlerFor resolves the Handler implementation for an asset type.
-// All 7 asset types route to a Handler — some (repository, cloud_account)
-// are skeleton Handlers in Phase 3 that produce an empty (valid) scan
-// until their anchor wrappers land in Phase 3.x.
+// All 8 asset types route to a Handler.
 func handlerFor(at types.AssetType) (asset.Handler, error) {
 	switch at {
 	case types.AssetWebApplication:
@@ -1846,6 +1857,8 @@ func handlerFor(at types.AssetType) (asset.Handler, error) {
 		return domainasset.NewHandler(), nil
 	case types.AssetCloudAccount:
 		return cloudasset.NewHandler(), nil
+	case types.AssetMobileApplication:
+		return mobileasset.NewHandler(), nil
 	default:
 		return nil, fmt.Errorf("unhandled asset type %q", at)
 	}
