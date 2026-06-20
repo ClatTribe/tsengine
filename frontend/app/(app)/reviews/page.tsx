@@ -3,6 +3,7 @@ import { UserCheck, CheckCircle2, Clock, Bug, Wrench } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ReviewRequest } from "@/lib/types";
 import { Card, SectionTitle, Empty } from "@/components/ui/primitives";
+import { PageIntro } from "@/components/ui/page-intro";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -14,15 +15,16 @@ export default async function ReviewsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Expert reviews</h1>
-          <p className="text-xs text-muted">Findings &amp; fixes you&apos;ve escalated for a human expert — the AI-plus-a-human safety net.</p>
-        </div>
-        {open.length > 0 && (
-          <span className="rounded-full border border-accent/30 bg-accent-soft px-2.5 py-1 text-xs text-accent">{open.length} open</span>
-        )}
-      </div>
+      <PageIntro
+        icon={UserCheck}
+        title="Expert reviews"
+        description="Want a second opinion from a human? Escalate any finding or fix here and a security expert weighs in — the AI does the heavy lifting, a person has your back on the calls that matter."
+        right={
+          open.length > 0 ? (
+            <span className="rounded-full border border-accent/30 bg-accent-soft px-2.5 py-1 text-xs text-accent">{open.length} open</span>
+          ) : undefined
+        }
+      />
 
       <div>
         <SectionTitle>Awaiting an expert</SectionTitle>

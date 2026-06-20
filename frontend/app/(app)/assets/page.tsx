@@ -4,6 +4,7 @@ import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
+import { PageIntro } from "@/components/ui/page-intro";
 import { timeAgo, cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -39,13 +40,12 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Assets &amp; connections</h1>
-          <p className="text-xs text-muted">Connect a system once — the agent discovers its assets and keeps scanning them.</p>
-        </div>
-        <ScanNow disabled={assets.length === 0} />
-      </div>
+      <PageIntro
+        icon={Boxes}
+        title="Assets & connections"
+        description="Everything we watch for you, in one place. Connect a system once — your code, cloud, identity provider, or SaaS — and the agent finds every asset inside it and keeps scanning them automatically."
+        right={<ScanNow disabled={assets.length === 0} />}
+      />
 
       {connect_error && (
         <div className="flex items-center gap-2 rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-sm text-critical">
