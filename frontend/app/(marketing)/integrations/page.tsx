@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   Github, GitBranch, Cloud, Mail, Users, KeyRound, Ticket, ClipboardList,
-  MessageSquare, BellRing, ArrowRight, Plug,
+  MessageSquare, MessagesSquare, BellRing, ArrowRight, Plug,
 } from "lucide-react";
 
 export const metadata = {
@@ -46,6 +46,7 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
       { icon: Ticket, name: "Jira", role: "Remediation tickets with evidence", status: "live" },
       { icon: ClipboardList, name: "ServiceNow", role: "Remediation tickets with evidence", status: "live" },
       { icon: MessageSquare, name: "Slack", role: "Approve/reject fixes in-channel", status: "live" },
+      { icon: MessagesSquare, name: "Microsoft Teams", role: "New critical issues posted to your channel", status: "live" },
       { icon: BellRing, name: "PagerDuty", role: "New critical issues page on-call", status: "live" },
     ],
   },
