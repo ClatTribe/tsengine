@@ -90,6 +90,14 @@ up: ## bring up the full product stack (platform API + frontend) via docker comp
 down: ## stop the product stack
 	docker compose down
 
+.PHONY: deploy-prod
+deploy-prod: ## production single-box deploy (hardened stack: TLS edge + socket-proxy + engine)
+	./scripts/deploy-single-box.sh
+
+.PHONY: backup
+backup: ## back up the platform-data volume to ./backups
+	./scripts/backup.sh
+
 .PHONY: prod-validate
 prod-validate: ## validate the hardened single-box stack (compose + Caddyfile) without secrets
 	@TSENGINE_SECRET_KEY=validate TSENGINE_PLATFORM_TOKEN=validate \

@@ -87,7 +87,8 @@ func newID() string {
 }
 
 func main() {
-	obsv.SetupLogging() // structured logs (slog); set TSENGINE_LOG_FORMAT=json in prod
+	obsv.SetupLogging()  // structured logs (slog); set TSENGINE_LOG_FORMAT=json in prod
+	hydrateFileSecrets() // Docker-secret *_FILE convention → load file-backed secrets into env
 	token := os.Getenv("TSENGINE_PLATFORM_TOKEN")
 	if token == "" {
 		log.Fatal("TSENGINE_PLATFORM_TOKEN is required")
@@ -306,6 +307,38 @@ func envOr(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// fileSecretKeys are the sensitive env vars that may be supplied as a mounted file via the
+// Docker-secret "<KEY>_FILE" convention instead of an inline env value.
+var fileSecretKeys = []string{
+	"TSENGINE_SECRET_KEY", "TSENGINE_PLATFORM_TOKEN", "TSENGINE_WEBHOOK_SECRET",
+	"GITHUB_CLIENT_SECRET", "GITLAB_CLIENT_SECRET", "OKTA_CLIENT_SECRET",
+	"GWORKSPACE_CLIENT_SECRET", "M365_CLIENT_SECRET",
+}
+
+// hydrateFileSecrets implements the Docker-secret "*_FILE" convention: for each sensitive
+// key, if KEY is unset but KEY_FILE points at a readable file, load the file's trimmed
+// contents into KEY. This keeps secrets (the AES sealing key, the platform token) out of
+// inline compose env — they ride as mounted files / Docker secrets instead. An already-set
+// KEY always wins; an unreadable KEY_FILE is warned and skipped (never fatal here — the
+// downstream required-secret checks still apply).
+func hydrateFileSecrets() {
+	for _, key := range fileSecretKeys {
+		if os.Getenv(key) != "" {
+			continue // an explicit inline value wins
+		}
+		path := os.Getenv(key + "_FILE")
+		if path == "" {
+			continue
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			log.Printf("[platform] WARNING: %s_FILE=%q unreadable: %v", key, path, err)
+			continue
+		}
+		_ = os.Setenv(key, strings.TrimSpace(string(b)))
+	}
 }
 
 // monitorInterval is the continuous re-scan cadence (TSENGINE_MONITOR_INTERVAL, e.g.
