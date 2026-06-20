@@ -50,7 +50,8 @@ export const api = {
   finding: async (id: string) => (await safe<Finding[]>("/v1/findings", [])).find((f) => f.id === id) ?? null,
   incidents: (status?: "all") => safe<Incident[]>(`/v1/incidents${status ? "?status=all" : ""}`, []),
   attackPaths: () => safe<AttackPaths>("/v1/attack-paths", { attack_paths: [], count: 0 }),
-  issues: () => safe<IssuesResponse>("/v1/issues", { issues: [], count: 0, raw_findings: 0, confirmed: 0 }),
+  issues: (showIgnored?: boolean) =>
+    safe<IssuesResponse>(`/v1/issues${showIgnored ? "?show=ignored" : ""}`, { issues: [], count: 0, raw_findings: 0, confirmed: 0, ignored: 0 }),
   approvals: () => safe<Action[]>("/v1/approvals", []),
   connections: () => safe<Connection[]>("/v1/connections", []),
   tenant: () => safe<Tenant | null>("/v1/tenant", null),
@@ -91,6 +92,12 @@ export const api = {
   // quarantined connection is skipped for scans and refused for writes.
   quarantineConnection: (id: string, quarantined: boolean) =>
     call<Connection>(`/v1/connections/${id}/quarantine`, { method: "POST", body: JSON.stringify({ quarantined }) }),
+
+  // Suppress (ignore / accept-risk) a unified issue, or restore a suppressed one.
+  ignoreIssue: (key: string, reason: string, note?: string) =>
+    call<unknown>("/v1/issues/ignore", { method: "POST", body: JSON.stringify({ key, reason, note: note ?? "" }) }),
+  unignoreIssue: (key: string) =>
+    call<unknown>("/v1/issues/unignore", { method: "POST", body: JSON.stringify({ key }) }),
 
   // Request a human-expert review on a finding or action (the AI + human escalation).
   requestReview: (subject: string, subjectId: string, note: string) =>

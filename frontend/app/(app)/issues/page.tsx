@@ -3,11 +3,14 @@ import { ShieldCheck, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
+import { IssueActions } from "@/components/issues/issue-actions";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-export default async function IssuesPage() {
-  const { issues, count, raw_findings, confirmed } = await api.issues();
+export default async function IssuesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
+  const showingIgnored = (await searchParams).show === "ignored";
+  const { issues, count, raw_findings, confirmed, ignored } = await api.issues(showingIgnored);
   const collapsed = Math.max(0, raw_findings - count);
 
   return (
@@ -21,16 +24,25 @@ export default async function IssuesPage() {
           </p>
         </div>
         <div className="flex gap-4 text-sm">
-          <Stat n={count} label="issues" tone="text-ink" />
-          <Stat n={confirmed} label="multi-tool confirmed" tone="text-pulse" />
-          {collapsed > 0 && <Stat n={collapsed} label="duplicates merged" tone="text-faint" />}
+          <Stat n={count} label={showingIgnored ? "ignored" : "issues"} tone="text-ink" />
+          {!showingIgnored && <Stat n={confirmed} label="multi-tool confirmed" tone="text-pulse" />}
+          {!showingIgnored && collapsed > 0 && <Stat n={collapsed} label="duplicates merged" tone="text-faint" />}
         </div>
+      </div>
+
+      {/* Active / Ignored toggle */}
+      <div className="flex items-center rounded-lg border border-border bg-surface p-0.5 text-sm w-fit">
+        <Tab href="/issues" active={!showingIgnored}>Active</Tab>
+        <Tab href="/issues?show=ignored" active={showingIgnored}>
+          Ignored{typeof ignored === "number" && ignored > 0 ? ` (${ignored})` : ""}
+        </Tab>
       </div>
 
       {issues.length === 0 ? (
         <Empty>
-          No open issues. As scanners run across your code, cloud, and surfaces, their findings are
-          de-duplicated here into one row per real problem.
+          {showingIgnored
+            ? "No ignored issues. Suppressed issues (false-positive / accepted-risk) appear here and can be restored."
+            : "No open issues. As scanners run across your code, cloud, and surfaces, their findings are de-duplicated here into one row per real problem."}
         </Empty>
       ) : (
         <div className="card p-0">
@@ -40,12 +52,12 @@ export default async function IssuesPage() {
                 <th className="py-2.5 pl-5 pr-2 font-medium">Severity</th>
                 <th className="px-2 py-2.5 font-medium">Issue</th>
                 <th className="px-2 py-2.5 font-medium">Detected by</th>
-                <th className="py-2.5 pr-5 font-medium" />
+                <th className="py-2.5 pr-5 font-medium text-right">Action</th>
               </tr>
             </thead>
             <tbody>
               {issues.map((it) => (
-                <IssueRow key={it.key} issue={it} />
+                <IssueRow key={it.key} issue={it} ignored={showingIgnored} />
               ))}
             </tbody>
           </table>
@@ -55,7 +67,18 @@ export default async function IssuesPage() {
   );
 }
 
-function IssueRow({ issue }: { issue: Issue }) {
+function Tab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={cn("rounded-md px-3 py-1 text-xs transition", active ? "bg-accent-soft text-accent" : "text-muted hover:text-ink")}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function IssueRow({ issue, ignored }: { issue: Issue; ignored: boolean }) {
   // The issue links to one of its underlying findings (the evidence).
   const href = issue.finding_ids[0] ? `/findings/${issue.finding_ids[0]}` : undefined;
   const title = <span className="truncate text-sm">{issue.title}</span>;
@@ -91,11 +114,14 @@ function IssueRow({ issue }: { issue: Issue }) {
         </div>
       </td>
       <td className="py-3 pr-5 align-top text-right">
-        {href && (
-          <Link href={href} className="inline-block text-faint transition group-hover:text-accent">
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        )}
+        <div className="flex items-center justify-end gap-2">
+          <IssueActions issueKey={issue.key} ignored={ignored} />
+          {href && (
+            <Link href={href} className="hidden text-faint transition group-hover:text-accent sm:inline-block">
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
+        </div>
       </td>
     </tr>
   );
