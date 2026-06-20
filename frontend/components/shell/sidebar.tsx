@@ -12,6 +12,7 @@ import {
   ScrollText,
   FileText,
   UserCheck,
+  Spline,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "pending" as const },
   { href: "/reviews", label: "Reviews", icon: UserCheck },
   { href: "/findings", label: "Findings", icon: Bug },
+  { href: "/attack-paths", label: "Attack paths", icon: Spline },
   { href: "/incidents", label: "Incidents", icon: Activity },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
   { href: "/reports", label: "Reports", icon: FileText },
