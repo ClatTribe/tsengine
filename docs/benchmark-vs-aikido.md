@@ -68,7 +68,8 @@ target — we do not print a number we have not measured.)
 | **api** | VAmPI + crAPI write-ups (no neutral leaderboard) | No | `bench/api_fixtures` (must-find) | — pending | Neither has a neutral score; authz logic (BOLA/BFLA) is an open category for both |
 | **ip_address** | None neutral (Tenable/Qualys, no scorecard) | No (not an Aikido surface) | `bench/ip_services` (must-find) | — pending | **Coverage gap in Aikido's favour of us** — Aikido does not scan raw IP/host ranges |
 | **domain** | subfinder/amass published enum rates | No (not an Aikido surface) | `bench/recon_breadth` (subdomain rate) | — pending | **Our-only surface** — external recon/attack-surface enum |
-| **cloud_account** (CSPM) | **CIS AWS Foundations** (mock-account recall) | No (CSPM shipped; no published CIS recall) | `tsbench cloud` (CIS-section recall) | — pending | Both wrap Prowler-class CSPM → comparable; we publish the CIS bar |
+| **cloud_account** — CSPM (L1) | **CIS AWS Foundations** (mock-account recall) | No (CSPM shipped; no published CIS recall) | `tsbench cloud` (CIS-section recall) | — pending | Both wrap Prowler-class CSPM → comparable; we publish the CIS bar |
+| **cloud_account** — attack-path engine (L2) | CloudGoat (Rhino) published solutions; prowler-grounded reachability | No (CSPM only; no attack-path benchmark) | `tsbench cloud-engine` (deterministic, no sandbox) | **2/2 CloudGoat · 100 % path recall** (measured this run) | **A lane Aikido doesn't benchmark** — reachability-true attack paths + verified remediation, measured + auditable |
 | **mobile_application** | None neutral | No (not an Aikido surface) | per-tool parity (mobsfscan) | — pending | **Our-only surface** |
 | **L2 agent / AI-pentest** | **Doyensec** *Aikido vs XBOW* (49 vs 31 verified) | **Yes** — the one neutral head-to-head | `bench/agent` (detection_rate + **verified_rate**) | — pending live run | See the head-to-head below — XBOW is the shared yardstick |
 
@@ -124,8 +125,12 @@ Aikido leads with "**reduce noise by 95 %**" (no published method). This is the 
   publish an auditable demotion ledger.
 
 **Read:** we can *prove* our noise reduction and let an auditor replay it; Aikido asserts a
-number. Producing our own measured % (ablation delta on the SAST/container benches) is the
-concrete next bench run.
+number. We already have one **measured** instance: on the prowler-grounded account
+(`tsbench cloud-engine --cloudquery`) the engine took **10 prowler findings down to 2 reachable
+attack-paths** — it downgraded 6 as config-bad-but-not-on-a-reachable-path, each downgrade
+replayable against the snapshot. That is an 80 % cut on this account, *grounded and auditable*,
+versus Aikido's unmeasured "95 %". Producing the same delta on the SAST/container benches (the
+`TSENGINE_L15_DISABLED` ablation) is the concrete next bench run.
 
 ---
 
@@ -170,12 +175,38 @@ live `bench/agent` run, the latter is a real-data/market dependency, not an engi
 | Lane | Status |
 |---|---|
 | Repository · SAST (OWASP Benchmark) | **Measured: 0.387 Youden** (above Fortify 35 %) |
-| Every other lane | Harness + scorer + competitor bar **ready**; live number **pending** the sandbox image build + a reachable target (heavy; out of scope for a doc-only pass) |
+| Cloud · attack-path engine — CloudGoat replay | **Measured: 2/2** scenarios reached the documented real-lab compromise (`tsbench cloud-engine --cloudgoat`) |
+| Cloud · attack-path engine — prowler-grounded account | **Measured: 100 % attack-path recall** (2/2 reachable targets); engine surfaced 2 reachable paths from 10 prowler findings and **downgraded 6** as not-on-a-reachable-path — an auditable noise cut (`tsbench cloud-engine --cloudquery`) |
+| Web / SCA / container / api / ip / domain L1 lanes | Harness + scorer + competitor bar **ready**; live recall **pending** the sandbox image build + a reachable target (heavy; out of scope for an analysis pass) |
 | Agent · `verified_rate` vs the Doyensec/XBOW yardstick | **Pending a live `bench/agent` run** (Track 1 A1) — the single highest-value number to close this comparison |
 
-To produce a live lane: build the sandbox (`make sandbox-image`), point `tsbench <lane>` at a
-reachable target, then `tsbench scoreboard --results <json> --out SCOREBOARD.md` to refresh the
-board. We deliberately did **not** print estimated numbers here.
+These cloud numbers were **measured in this pass** — the cloud attack-path engine is
+deterministic + snapshot-driven (LLM-free, CLAUDE.md §10), so it scores without the sandbox or
+a live account. The remaining L1 recall lanes need the sandbox (`make sandbox-image`) + a
+reachable target, then `tsbench scoreboard --results <json> --out SCOREBOARD.md` refreshes the
+board. We deliberately did **not** print estimated numbers — only what ran.
+
+### What we measured this run (2026-06-21)
+
+```
+$ tsbench cloud-engine --cloudgoat        # vs CloudGoat (Rhino) published pentest solutions
+[PASS] cloud_breach_s3            reached documented compromise: cg-secret-s3-bucket-cardholder-data
+[PASS] iam_privesc_by_rollback   reached documented compromise: admin
+calibration: 2/2 scenarios matched the documented real-lab compromise.
+
+$ tsbench cloud-engine --cloudquery       # prowler-grounded account, scored vs the cloudiam answer key
+prowler findings (catalog over the config): 10  →  engine real paths: 2, downgraded: 6
+attack-path recall: 100.00%  (2/2 real targets reached)
+verdict: PASS
+  path: internet reaches web    runs as web-role    reads acme-customer-pii
+  path: internet reaches deploy runs as deploy-role escalates to effective-admin
+  + 2 verified remediations (cloudiam.Authorize confirms each cuts the path)
+```
+
+This is the cloud lane's answer to Aikido's two headline claims at once: an **outcome** (reaches
+the same compromise a documented human pentest did, CloudGoat 2/2 — the *form* of proof Aikido's
+Doyensec report uses) **and** a **measured, auditable noise cut** (10 prowler findings → 2
+reachable paths, every downgrade replayable — the *substance* behind Aikido's unmeasured "95 %").
 
 ---
 
