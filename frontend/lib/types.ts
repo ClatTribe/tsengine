@@ -52,6 +52,27 @@ export interface AttackPaths {
   count: number;
 }
 
+// Unified issue (GET /v1/issues) — the same weakness reported by one or more
+// scanners across surfaces, collapsed into one row ("one issue, many signals").
+export interface Issue {
+  key: string;
+  title: string;
+  severity: string;
+  cve?: string;
+  endpoint?: string;
+  tools: string[];
+  count: number;
+  confirmed: boolean; // ≥2 independent scanners agree
+  finding_ids: string[];
+}
+
+export interface IssuesResponse {
+  issues: Issue[];
+  count: number;
+  raw_findings: number;
+  confirmed: number;
+}
+
 export interface Action {
   id: string;
   tenant_id: string;

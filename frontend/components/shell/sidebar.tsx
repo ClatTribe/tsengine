@@ -13,6 +13,7 @@ import {
   FileText,
   UserCheck,
   Spline,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "pending" as const },
   { href: "/reviews", label: "Reviews", icon: UserCheck },
+  { href: "/issues", label: "Issues", icon: Layers },
   { href: "/findings", label: "Findings", icon: Bug },
   { href: "/attack-paths", label: "Attack paths", icon: Spline },
   { href: "/incidents", label: "Incidents", icon: Activity },
