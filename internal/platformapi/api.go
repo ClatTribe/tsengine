@@ -81,6 +81,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                  // findings de-duplicated into unified issues (one issue, many signals)
 	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))     // suppress an issue (false-positive / accepted-risk)
 	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue)) // restore a suppressed issue
+	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))         // create + authorize a pentest engagement
+	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))           // list engagements
+	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))        // one engagement + findings
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                  // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))

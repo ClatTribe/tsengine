@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -87,6 +88,11 @@ type Store interface {
 	PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error
 	ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error)
 	DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error
+
+	// --- pentest engagements (the productized AI-pentest lifecycle) ---
+	PutPentest(ctx context.Context, eng pentest.Engagement) error
+	ListPentests(ctx context.Context, tenantID string) ([]pentest.Engagement, error)
+	GetPentest(ctx context.Context, tenantID, id string) (pentest.Engagement, error)
 
 	// --- human-expert review requests (the AI + human escalation) ---
 	PutReviewRequest(ctx context.Context, r platform.ReviewRequest) error
