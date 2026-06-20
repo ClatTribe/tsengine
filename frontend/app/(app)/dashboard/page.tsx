@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
 import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
+import { categoryBreakdown } from "@/lib/categories";
 import { Card, SectionTitle, SeverityBadge, Empty } from "@/components/ui/primitives";
 import { FirstRun } from "@/components/onboarding/first-run";
 
@@ -47,6 +48,7 @@ export default async function OverviewPage() {
   ]);
 
   const counts = severityCounts(findings);
+  const byCategory = categoryBreakdown(findings);
   const risk = riskRating(counts);
   const protectedNow = risk === "Clear";
 
@@ -184,6 +186,33 @@ export default async function OverviewPage() {
           </Card>
         </div>
       </div>
+
+      {/* Risk by category — where the risk lives, at a glance */}
+      {byCategory.length > 0 && (
+        <div>
+          <SectionTitle action={<Link href="/findings" className="text-[11px] font-medium text-accent hover:underline">all findings →</Link>}>
+            <span className="inline-flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-faint" /> Risk by category</span>
+          </SectionTitle>
+          <Card className="p-0">
+            <ul className="divide-y divide-border">
+              {byCategory.map((c) => (
+                <li key={c.category}>
+                  <Link href="/findings" className="flex items-center gap-3 px-5 py-3 transition hover:bg-surface-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{c.category}</span>
+                    <span className="flex items-center gap-2.5 text-xs">
+                      {c.critical > 0 && <span className="font-semibold text-critical">{c.critical} critical</span>}
+                      {c.high > 0 && <span className="font-semibold text-high">{c.high} high</span>}
+                      {c.medium > 0 && <span className="text-medium">{c.medium} med</span>}
+                      {c.low > 0 && <span className="text-faint">{c.low} low</span>}
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-faint">{c.total}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      )}
 
       {/* Top findings — for the security-minded, de-emphasized */}
       {findings.length > 0 && (
