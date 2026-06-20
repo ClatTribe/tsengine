@@ -100,7 +100,7 @@ export const api = {
   createPentest: (body: {
     name: string;
     mode: string;
-    rules_of_engagement: { authorized_targets: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string };
+    rules_of_engagement: { authorized_targets: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string; consent?: string };
   }) => call<PentestEngagement>("/v1/pentest", { method: "POST", body: JSON.stringify(body) }),
   runPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/run`, { method: "POST" }),
 
