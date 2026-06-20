@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
+import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
 import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 
 export const metadata = pageMeta({
@@ -237,6 +238,8 @@ export default function Pricing() {
 
       {/* FAQ */}
       <section className="mx-auto max-w-3xl px-5 py-20">
+        {/* schema.org FAQPage — same array as below, so the markup matches the visible Q&A. */}
+        <FaqJsonLd items={FAQ} />
         <h2 className="text-center text-2xl font-semibold tracking-tight">Frequently asked</h2>
         <div className="mt-8 divide-y divide-border rounded-2xl border border-border bg-surface">
           {FAQ.map(([q, a]) => (
