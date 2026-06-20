@@ -227,6 +227,19 @@ const (
 )
 
 // ReviewRequest is a human-expert review the tenant asks for on a finding or a
+// IgnoreRule suppresses a unified issue from the active list — the issue-lifecycle
+// "ignore / accept-risk / false-positive" control. Keyed by the issue's dedup key
+// (so it survives re-scans). Carries who suppressed it, when, and why, so the
+// suppression is itself auditable (and reversible via un-ignore).
+type IgnoreRule struct {
+	TenantID string    `json:"tenant_id"`
+	IssueKey string    `json:"issue_key"`
+	Reason   string    `json:"reason"`         // "false_positive" | "accepted_risk" | free text
+	Note     string    `json:"note,omitempty"` // optional human explanation
+	By       string    `json:"by,omitempty"`   // who suppressed it
+	At       time.Time `json:"at"`
+}
+
 // proposed action — the "AI + a human" trust model SMB security buyers expect
 // (a managed-SOC / vCISO escalation). It is request-and-resolve, tenant-scoped,
 // and signed into the ledger like every other decision (§18.2 inv. 4). The agent

@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -82,6 +83,68 @@ func TestIssues_DedupesSameCVEAcrossScanners(t *testing.T) {
 	}
 	if strings.Contains(body, "OTHER-TENANT") {
 		t.Error("tenant isolation breached in /v1/issues")
+	}
+}
+
+func TestIssues_IgnoreSuppressesThenUnignoreRestores(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	// Two distinct issues for t1.
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "1", RuleID: "trivy::CVE-2021-44228", Tool: "trivy", Severity: types.SeverityCritical, Title: "Log4Shell"})
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "2", RuleID: "semgrep::sqli", Tool: "semgrep", Severity: types.SeverityHigh, Title: "SQLi", Endpoint: "app.go:9"})
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	// Find the CVE issue's key from the default list.
+	var resp struct {
+		Issues []struct {
+			Key   string `json:"key"`
+			Title string `json:"title"`
+		} `json:"issues"`
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal(do(h, "GET", "/v1/issues", "t1", "").Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Count != 2 {
+		t.Fatalf("want 2 issues initially, got %d", resp.Count)
+	}
+	var key string
+	for _, i := range resp.Issues {
+		if strings.Contains(i.Title, "Log4Shell") {
+			key = i.Key
+		}
+	}
+	if key == "" {
+		t.Fatal("could not find the Log4Shell issue key")
+	}
+
+	// Ignore it.
+	ig := do(h, "POST", "/v1/issues/ignore", "t1", `{"key":"`+key+`","reason":"accepted_risk","by":"alice"}`)
+	if ig.Code != 200 {
+		t.Fatalf("ignore failed: %d %s", ig.Code, ig.Body.String())
+	}
+	// Default list now hides it (1 left); ?show=ignored shows exactly it.
+	def := do(h, "GET", "/v1/issues", "t1", "").Body.String()
+	if strings.Contains(def, "Log4Shell") {
+		t.Error("ignored issue should be hidden from the default list")
+	}
+	shown := do(h, "GET", "/v1/issues?show=ignored", "t1", "").Body.String()
+	if !strings.Contains(shown, "Log4Shell") {
+		t.Error("?show=ignored should reveal the suppressed issue")
+	}
+
+	// Tenant isolation: another tenant cannot see t1's ignore rule effect.
+	if rules, _ := st.ListIgnoreRules(ctx, "t2"); len(rules) != 0 {
+		t.Error("ignore rule leaked across tenants")
+	}
+
+	// Unignore restores it.
+	un := do(h, "POST", "/v1/issues/unignore", "t1", `{"key":"`+key+`"}`)
+	if un.Code != 200 {
+		t.Fatalf("unignore failed: %d", un.Code)
+	}
+	if !strings.Contains(do(h, "GET", "/v1/issues", "t1", "").Body.String(), "Log4Shell") {
+		t.Error("unignored issue should return to the default list")
 	}
 }
 

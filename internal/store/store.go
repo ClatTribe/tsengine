@@ -83,6 +83,11 @@ type Store interface {
 	PutIncident(ctx context.Context, i platform.Incident) error
 	ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error)
 
+	// --- issue suppression (ignore / accept-risk), keyed by issue dedup key ---
+	PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error
+	ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error)
+	DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error
+
 	// --- human-expert review requests (the AI + human escalation) ---
 	PutReviewRequest(ctx context.Context, r platform.ReviewRequest) error
 	ListReviewRequests(ctx context.Context, tenantID string) ([]platform.ReviewRequest, error)
