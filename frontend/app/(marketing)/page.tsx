@@ -142,20 +142,23 @@ export default function Landing() {
       <Section eyebrow="One platform" title="Security and compliance, handled." sub="The work a security engineer and a compliance manager would do — automated, on one auditable loop.">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { icon: Bug, t: "Best-in-class detection", d: "Wraps the leading OSS scanners across web, APIs, code, containers, cloud & identity — recall on par with standalone tools." },
-            { icon: FileCheck2, t: "Compliance on autopilot", d: "Findings map to SOC 2 / ISO / PCI / HIPAA controls automatically, with a signed evidence pack and an auto-answered questionnaire." },
-            { icon: Radar, t: "Continuous monitoring", d: "Re-scans on every change and on a schedule — new high-severity issues page on-call, resolved ones close themselves." },
-            { icon: UserCheck, t: "Human in the loop", d: "The agent proposes; you approve. Tier-gated, signed into a tamper-evident ledger — autonomy where it's earned." },
-            { icon: KeyRound, t: "Identity posture", d: "MFA gaps, risky OAuth grants, stale accounts, email spoofing (DMARC/SPF/DKIM) — fixed across Google, M365 & Okta." },
-            { icon: Lock, t: "Provable evidence", d: "Every claim is backed by a tool and ed25519-signed. Auditors get reproducible proof, not screenshots." },
-          ].map(({ icon: Icon, t, d }) => (
-            <div key={t} className="card p-5">
+            { icon: Bug, t: "Best-in-class detection", d: "Wraps the leading OSS scanners across web, APIs, code, containers, cloud & identity — recall on par with standalone tools.", href: "/supply-chain" },
+            { icon: FileCheck2, t: "Compliance on autopilot", d: "Findings map to SOC 2 / ISO / PCI / HIPAA controls automatically, with a signed evidence pack and an auto-answered questionnaire.", href: "/frameworks" },
+            { icon: Radar, t: "Continuous monitoring", d: "Re-scans on every change and on a schedule — new high-severity issues page on-call, resolved ones close themselves.", href: "/ai-security-engineer" },
+            { icon: UserCheck, t: "Human in the loop", d: "The agent proposes; you approve. Tier-gated, signed into a tamper-evident ledger — autonomy where it's earned.", href: "/ai-security-engineer" },
+            { icon: KeyRound, t: "Identity posture", d: "MFA gaps, risky OAuth grants, stale accounts, email spoofing (DMARC/SPF/DKIM) — fixed across Google, M365 & Okta.", href: "/saas-posture" },
+            { icon: Lock, t: "Provable evidence", d: "Every claim is backed by a tool and ed25519-signed. Auditors get reproducible proof, not screenshots.", href: "/security" },
+          ].map(({ icon: Icon, t, d, href }) => (
+            <Link key={t} href={href} className="card group p-5 transition hover:border-accent/40 hover:shadow-card-hover">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
                 <Icon className="h-4 w-4" />
               </span>
-              <h3 className="mt-3.5 text-sm font-semibold">{t}</h3>
+              <h3 className="mt-3.5 flex items-center gap-1 text-sm font-semibold">
+                {t}
+                <ArrowRight className="h-3.5 w-3.5 -translate-x-1 text-faint opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" />
+              </h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
-            </div>
+            </Link>
           ))}
         </div>
       </Section>
