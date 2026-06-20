@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/product", label: "Product" },
+  { href: "/ai-security-engineer", label: "AI engineer" },
   { href: "/vapt", label: "VAPT" },
-  { href: "/supply-chain", label: "Supply chain" },
   { href: "/pricing", label: "Pricing" },
   { href: "/security", label: "Security" },
 ];
