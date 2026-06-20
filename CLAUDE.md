@@ -266,7 +266,9 @@ Invariants:
    normalized together.
 4. **Current trigger tables** (signal → depth tool):
    - web: param URL → nuclei DAST/OAST (blind, interactsh); login URL →
-     nuclei default-logins; thin surface → ffuf content discovery.
+     nuclei default-logins; thin surface → ffuf content discovery;
+     WordPress surface (wp-login/wp-content/xmlrpc) → wpscan (CMS-specialist
+     DAST — vulnerable plugins/themes, user enum, exposed wp-config).
    - ip: open auth port (22/3306/…) → hydra default-cred check.
    - api: spec ingested → kiterunner (shadow routes); `/graphql` → inql.
    - repository: semgrep injection finding → CodeQL on that language

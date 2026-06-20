@@ -54,7 +54,7 @@ shape, bench.
 | | Deep exploit | sqlmap, dalfox, nuclei (template corpus), smuggler, ffuf, hydra (default creds) |
 | | DOM-aware | scan_xss, dom_xss_static_probe, scan_cache_deception, scan_websocket_auth, scan_prototype_pollution |
 | | Hygiene | http_security_headers_audit, tls_audit, cors_deep_check, csrf_check, open_redirect_check |
-| **Registry tier** | (on-demand via /replay) | wapiti, nikto, jaeles, arachni, w3af, skipfish, ZAP active, gobuster |
+| **Registry tier** | (on-demand via /replay) | wpscan (WordPress CMS DAST — also escalation-fired), wapiti, nikto, jaeles, arachni, w3af, skipfish, ZAP active, gobuster |
 | **L1 filtration** | Static-asset drop | `.css`, `.png`, `.woff`, bundled JS — extension filter |
 | | Destructive drop | `/admin/delete-*`, `/logout` — destructive-class filter |
 | | Scope | Same host or subdomain only; off-host (twitter, CDN) dropped. `scope.scope_hosts` whitelists extras |
@@ -123,6 +123,7 @@ open-ended reasoning stays L2 (Phase 6).
 | web | param URL | nuclei DAST/OAST (interactsh) | blind/out-of-band SSRF/XXE/RCE |
 | web | login URL | nuclei `default-logins` | default creds |
 | web | thin crawl surface | ffuf | hidden paths katana can't reach |
+| web | WordPress surface (wp-login/wp-content/xmlrpc) | wpscan | vulnerable plugins/themes, user enum, exposed wp-config — CMS-specific gap generic DAST misses |
 | ip | open auth port (22/3306/…) | hydra | default/weak service creds |
 | api | spec ingested | kiterunner | undocumented/shadow routes |
 | api | `/graphql` endpoint | inql | GraphQL introspection/schema |

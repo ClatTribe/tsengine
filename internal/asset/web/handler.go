@@ -243,7 +243,33 @@ func (h *Handler) PlanEscalation(target types.Asset, surface []string, _ []types
 				EscalatedFrom: "thin-surface→ffuf"})
 		}
 	}
+	// CMS-specialist depth: if the crawl surface looks like WordPress, fire
+	// wpscan on the site root — generic DAST under-covers vulnerable
+	// plugins/themes, user enumeration, and exposed wp-config/db backups.
+	if isWordPress(surface) {
+		if wp, ok := tool.Get("wpscan"); ok {
+			out = append(out, asset.Dispatch{Tool: wp, Args: tool.Args{"target": target.Target},
+				EscalatedFrom: "wordpress→wpscan"})
+		}
+	}
 	return out
+}
+
+// wordpressHints are URL fragments that reliably indicate a WordPress site
+// in the crawled surface (asset paths, login, XML-RPC endpoint).
+var wordpressHints = []string{"/wp-content/", "/wp-includes/", "/wp-login.php", "/wp-admin/", "/xmlrpc.php", "/wp-json/"}
+
+// isWordPress reports whether any crawled URL carries a WordPress marker.
+func isWordPress(surface []string) bool {
+	for _, u := range surface {
+		low := strings.ToLower(u)
+		for _, h := range wordpressHints {
+			if strings.Contains(low, h) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Filter applies Q5.34-style filtration rules (URL shape dedup, scope,
@@ -277,6 +303,11 @@ var anchorNames = []string{
 // surfaces. They're wrapped (so the tool-replay API can dispatch them)
 // but never fire from the orchestrator.
 var registryNames = []string{
+	// CMS-specialist DAST. wpscan fires from PlanEscalation when the surface
+	// looks like WordPress (signal-gated depth), and is reachable on-demand
+	// via the tool-replay API. droopescan (Drupal) + joomscan (Joomla) are
+	// the documented next CMS additions.
+	"wpscan",
 	// Phase 2.x: wapiti, nikto, jaeles, arachni, gobuster, ZAP active.
 }
 
