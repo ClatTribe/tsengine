@@ -31,12 +31,13 @@ type VAPTReport struct {
 
 // VAPTSummary is the executive-summary roll-up.
 type VAPTSummary struct {
-	Total      int            `json:"total"`
-	BySeverity map[string]int `json:"by_severity"` // critical/high/medium/low/info
-	Verified   int            `json:"verified"`    // exploitation/tool-confirmed (not pattern-only)
-	KEV        int            `json:"kev"`         // actively exploited in the wild (CISA KEV)
-	FixesReady int            `json:"fixes_ready"` // findings with a remediation already prepared
-	RiskRating string         `json:"risk_rating"` // Critical | High | Medium | Low | Clear
+	Total       int            `json:"total"`
+	BySeverity  map[string]int `json:"by_severity"` // critical/high/medium/low/info
+	Verified    int            `json:"verified"`    // exploitation/tool-confirmed (not pattern-only)
+	Unconfirmed int            `json:"unconfirmed"` // pattern-match only — leads to validate (FP-exposed)
+	KEV         int            `json:"kev"`         // actively exploited in the wild (CISA KEV)
+	FixesReady  int            `json:"fixes_ready"` // findings with a remediation already prepared
+	RiskRating  string         `json:"risk_rating"` // Critical | High | Medium | Low | Clear
 }
 
 // VAPTFinding is one assessed vulnerability, grounded in its scanner evidence.
@@ -54,6 +55,8 @@ type VAPTFinding struct {
 	OWASP        []string `json:"owasp,omitempty"`        // OWASP Top 10 (2021) category mapping
 	Remediation  string   `json:"remediation,omitempty"`  // the recommended fix (CWE-class standard)
 	Verification string   `json:"verification,omitempty"` // verified | corroborated | pattern_match
+	Confidence   float64  `json:"confidence,omitempty"`   // 0–1 grounded confidence (per-tool base + corroboration)
+	Unconfirmed  bool     `json:"unconfirmed,omitempty"`  // pattern-match only — a lead to validate, not a confirmed exploit
 	KEV          bool     `json:"kev,omitempty"`          // actively exploited
 	FixReady     bool     `json:"fix_ready,omitempty"`    // a remediation is prepared/queued
 }
@@ -93,8 +96,11 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 		sev := string(f.Severity)
 		r.Summary.Total++
 		r.Summary.BySeverity[sev]++
-		if isVerified(f) {
+		confirmed := isVerified(f)
+		if confirmed {
 			r.Summary.Verified++
+		} else {
+			r.Summary.Unconfirmed++
 		}
 		kev := f.ThreatIntel != nil && f.ThreatIntel.KEV != nil
 		if kev {
@@ -107,7 +113,8 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 			ID: f.ID, Title: f.Title, Severity: sev, Tool: f.Tool, RuleID: f.RuleID,
 			Endpoint: f.Endpoint, CWE: f.CWE, MITRE: f.MITRETechniques, Description: f.Description,
 			OWASP: owaspFor(f.CWE, f.Tool), Remediation: remediationFor(f.CWE, f.Tool),
-			Verification: string(f.VerificationStatus), KEV: kev, FixReady: fixReady[f.ID],
+			Verification: string(f.VerificationStatus), Confidence: f.Confidence,
+			Unconfirmed: !confirmed, KEV: kev, FixReady: fixReady[f.ID],
 		}
 		if f.ThreatIntel != nil {
 			vf.CVSS = f.ThreatIntel.CVSS
@@ -118,6 +125,14 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 		ri, rj := types.Severity(r.Findings[i].Severity).Rank(), types.Severity(r.Findings[j].Severity).Rank()
 		if ri != rj {
 			return ri > rj // higher rank = worse severity → worst first
+		}
+		// Within a severity, confirmed (verified/corroborated) leads unconfirmed
+		// (pattern-match) — the report fronts what's proven, not the FP-exposed leads.
+		if r.Findings[i].Unconfirmed != r.Findings[j].Unconfirmed {
+			return !r.Findings[i].Unconfirmed
+		}
+		if r.Findings[i].Confidence != r.Findings[j].Confidence {
+			return r.Findings[i].Confidence > r.Findings[j].Confidence
 		}
 		return r.Findings[i].ID < r.Findings[j].ID
 	})
@@ -161,15 +176,18 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	fmt.Fprintf(&b, "- **Overall risk rating: %s**\n", s.RiskRating)
 	fmt.Fprintf(&b, "- **%d findings** — Critical %d · High %d · Medium %d · Low %d · Info %d\n",
 		s.Total, s.BySeverity["critical"], s.BySeverity["high"], s.BySeverity["medium"], s.BySeverity["low"], s.BySeverity["info"])
-	fmt.Fprintf(&b, "- **%d tool-confirmed** (verified/corroborated, not pattern-only) · **%d actively exploited** (CISA KEV) · **%d with a fix already prepared**\n",
-		s.Verified, s.KEV, s.FixesReady)
+	fmt.Fprintf(&b, "- **%d tool-confirmed** (verified/corroborated) · **%d unconfirmed** (pattern-match — validate before action) · **%d actively exploited** (CISA KEV) · **%d with a fix already prepared**\n",
+		s.Verified, s.Unconfirmed, s.KEV, s.FixesReady)
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
-	b.WriteString("\n## Methodology\n\n")
+	b.WriteString("\n## Methodology & confidence\n\n")
 	b.WriteString("Assessment is performed by the TensorShield engine, which wraps best-in-class open-source " +
 		"scanners across every asset class (web, API, code, containers, cloud, identity) and verifies exploitable " +
 		"findings through an evidence-grounded agent. **Every finding below cites the tool and rule that proves it** — " +
 		"no result is asserted that a tool did not demonstrate (anti-hallucination grounding). The assessment is " +
 		"continuous, so this report reflects the current state, not a point-in-time snapshot.\n\n")
+	b.WriteString("Each finding carries a **confidence tier** so you can triage accurately:\n\n" +
+		"- **Confirmed** — independently corroborated by ≥1 other tool, or actively re-verified. Treat as real.\n" +
+		"- **Unconfirmed** — a single-tool pattern match. A credible lead to validate, not a proven exploit — listed after the confirmed findings of the same severity and labelled inline, so a false positive can never masquerade as a confirmed result.\n\n")
 
 	b.WriteString("## Scope\n\n")
 	if len(r.Scope) == 0 {
@@ -207,6 +225,12 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		status := f.Verification
 		if status == "" {
 			status = "detected"
+		}
+		if f.Confidence > 0 {
+			status += fmt.Sprintf(" · confidence %.0f%%", f.Confidence*100)
+		}
+		if f.Unconfirmed {
+			status += " · **unconfirmed (pattern match — validate before action)**"
 		}
 		if f.KEV {
 			status += " · **actively exploited (CISA KEV)**"

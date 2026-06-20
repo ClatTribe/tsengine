@@ -42,6 +42,10 @@ func TestVAPTReport_GroundedSummaryAndMarkdown(t *testing.T) {
 	if r.Summary.Verified != 1 {
 		t.Errorf("verified count = %d, want 1", r.Summary.Verified)
 	}
+	// f-2 (HSTS) is pattern_match-only → the unconfirmed (FP-exposed) lead count.
+	if r.Summary.Unconfirmed != 1 {
+		t.Errorf("unconfirmed count = %d, want 1 (the pattern_match HSTS finding)", r.Summary.Unconfirmed)
+	}
 	if r.Summary.KEV != 1 {
 		t.Errorf("KEV count = %d, want 1", r.Summary.KEV)
 	}
@@ -75,11 +79,47 @@ func TestVAPTReport_GroundedSummaryAndMarkdown(t *testing.T) {
 		"parameterized",          // the actual fix text
 		"awaiting your approval", // fix-ready tie-in
 		"actively exploited (CISA KEV)",
-		"cites the tool and rule that proves it", // the grounding statement
+		"cites the tool and rule that proves it",               // the grounding statement
+		"1 unconfirmed",                                        // summary FP-exposure count
+		"unconfirmed (pattern match — validate before action)", // per-finding label on f-2
+		"Methodology & confidence",                             // the confidence-tier explainer
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q", want)
 		}
+	}
+}
+
+func TestVAPTReport_ConfirmedLeadsUnconfirmed(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme"})
+	// Two HIGH findings: one corroborated (confirmed), one pattern_match (unconfirmed).
+	// The confirmed one must lead within the severity tier, so a false positive
+	// never fronts a proven result.
+	_ = st.PutFinding(ctx, "t1", types.Finding{
+		ID: "b-unconfirmed", RuleID: "nuclei::reflected", Tool: "nuclei", Severity: types.SeverityHigh,
+		Title: "Reflected value", VerificationStatus: "pattern_match", Confidence: 0.55,
+	})
+	_ = st.PutFinding(ctx, "t1", types.Finding{
+		ID: "a-confirmed", RuleID: "nuclei::sqli", Tool: "nuclei", Severity: types.SeverityHigh,
+		Title: "SQL injection", VerificationStatus: "corroborated", Confidence: 0.9,
+	})
+
+	g := &GRC{Store: st}
+	r, err := g.VAPTReport(ctx, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) != 2 || r.Findings[0].ID != "a-confirmed" || r.Findings[1].ID != "b-unconfirmed" {
+		t.Fatalf("confirmed finding must lead the same-severity unconfirmed one, got %+v", r.Findings)
+	}
+	if r.Findings[0].Unconfirmed || !r.Findings[1].Unconfirmed {
+		t.Errorf("Unconfirmed flags wrong: %+v", r.Findings)
+	}
+	md := RenderVAPTMarkdown(r)
+	if !strings.Contains(md, "confidence 90%") || !strings.Contains(md, "confidence 55%") {
+		t.Errorf("per-finding confidence%% should render:\n%s", md)
 	}
 }
 
