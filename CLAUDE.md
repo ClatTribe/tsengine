@@ -95,7 +95,7 @@ Reasoning over data already in context, reformatting, and decisions encoded inli
 
 ---
 
-## 3. Asset types (7)
+## 3. Asset types (8)
 
 Every scan target maps to exactly one asset type. The asset type determines which anchor tools fire, which filter rules apply, and which competitor leaderboard the bench compares against.
 
@@ -108,8 +108,9 @@ Every scan target maps to exactly one asset type. The asset type determines whic
 | `ip_address` | IP / CIDR / range | security |
 | `domain` | Domain + subdomains | security + compliance |
 | `cloud_account` | AWS / GCP / Azure account | compliance |
+| `mobile_application` | Android (APK / source) or iOS (IPA / source) app bundle | security |
 
-The `cloud_account` asset is what makes tsengine usable for SOC2/PCI compliance teams. Without it, the engine only covers infrastructure surfaces.
+The `cloud_account` asset is what makes tsengine usable for SOC2/PCI compliance teams. Without it, the engine only covers infrastructure surfaces. The `mobile_application` asset (single-stage, like `repository`: the bundle *is* the surface) covers the mobile-app-team audience competitors carve out as a separate offering — anchored on mobsfscan (mobile SAST) + gitleaks (hardcoded secrets) + trivy fs (bundled-dep SCA), all already in the sandbox image, so it adds reach without a new sandbox tool. Count invariant: `pkg/types.AllAssetTypes()` + its test pin the count (now 8).
 
 For the per-asset anchor + registry tool lists, filter rules, and bench targets, see [arch.md](arch.md).
 
@@ -656,7 +657,7 @@ tsengine inherits from strix:
 tsengine **diverges** from strix:
 
 * Go, not Python — different idioms, library bindings where strix uses subprocess
-* 7 assets, not 6 — adds `cloud_account` for the compliance audience
+* 8 assets, not 6 — adds `cloud_account` for the compliance audience and `mobile_application` for mobile-app teams
 * Anchor + registry tier — strix has only anchors + a 99-tool legacy catalog flag
 * Threat intel + compliance mapping happen at L1 emission (in addition to being L2 tools for arbitrary lookups)
 * L1 dashboard JSON is a frozen schema spec'd in Phase 0, not implicit

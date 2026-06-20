@@ -5,17 +5,18 @@
 package types
 
 // AssetType is the kind of target being scanned. See CLAUDE.md §3 for the
-// seven asset types and their primary audience.
+// eight asset types and their primary audience.
 type AssetType string
 
 const (
-	AssetWebApplication AssetType = "web_application"
-	AssetAPI            AssetType = "api"
-	AssetRepository     AssetType = "repository"
-	AssetContainerImage AssetType = "container_image"
-	AssetIPAddress      AssetType = "ip_address"
-	AssetDomain         AssetType = "domain"
-	AssetCloudAccount   AssetType = "cloud_account"
+	AssetWebApplication    AssetType = "web_application"
+	AssetAPI               AssetType = "api"
+	AssetRepository        AssetType = "repository"
+	AssetContainerImage    AssetType = "container_image"
+	AssetIPAddress         AssetType = "ip_address"
+	AssetDomain            AssetType = "domain"
+	AssetCloudAccount      AssetType = "cloud_account"
+	AssetMobileApplication AssetType = "mobile_application"
 )
 
 // AllAssetTypes returns every supported asset type in stable order.
@@ -28,6 +29,7 @@ func AllAssetTypes() []AssetType {
 		AssetIPAddress,
 		AssetDomain,
 		AssetCloudAccount,
+		AssetMobileApplication,
 	}
 }
 
