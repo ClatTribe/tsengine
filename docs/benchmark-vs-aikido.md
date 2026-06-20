@@ -208,6 +208,33 @@ the same compromise a documented human pentest did, CloudGoat 2/2 — the *form*
 Doyensec report uses) **and** a **measured, auditable noise cut** (10 prowler findings → 2
 reachable paths, every downgrade replayable — the *substance* behind Aikido's unmeasured "95 %").
 
+### The honesty probe: a held-out generalization test (and what it found)
+
+We also ran the **anti-overfit holdout** (`tsbench cloud-engine --holdout 30`) — 30 freshly
+*generated* accounts whose ground truth is labelled **independently** by `cloudiam` (full
+permission-boundary + trust-policy evaluation), not by the engine's own oracle:
+
+```
+attack-path recall:             100.00%  (60/60 genuinely-reachable paths)
+FP-reduction (known shapes):    100.00%  (120/120)   ← in-distribution
+FP-reduction (HELD-OUT shapes):   0.00%  (0/120)     ← the generalization probe → verdict FAIL
+```
+
+**We report this, we don't hide it.** Recall generalises (100 %), but on *novel* trust/boundary
+shapes the graph ingest **over-approximates reachability** — it adds an assume-role / privesc
+edge from the inventory without re-checking that the target's trust policy or the principal's
+permission boundary actually permits the move, so it can report a *blocked* path as real. The
+fix is known and scoped: **wire `cloudiam.Authorize` (which already evaluates boundaries + trust
+policies) into the `cloudgraph` ingest edge-builder** (`internal/cloudgraph/ingest.go` — the
+`EdgeAssumeRole` / `EdgePrivesc` adds) so an edge is only created when the move is actually
+authorized. Tracked as the cloud-engine precision follow-up.
+
+The point for this comparison: **we run a held-out probe that can fail us, and publish the
+result.** Aikido publishes a single commissioned head-to-head and a round "95 %" with no
+precision/generalization data at all. Surfacing our own over-approximation is the grounding
+discipline (CLAUDE.md §10) working as intended — the bar is an *honest* number, not a flattering
+one.
+
 ---
 
 ## Sources
