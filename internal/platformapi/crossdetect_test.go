@@ -160,3 +160,68 @@ func TestAttackPaths_EmptyTenantReturnsEmptyNotNull(t *testing.T) {
 		t.Errorf("empty tenant should return an empty array, got: %s", rec.Body.String())
 	}
 }
+
+func TestExclusions_FilterIssuesAndCRUD(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	// Two findings: a lodash CVE (noise the tenant wants gone) + a real app SQLi.
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "f1", Tool: "trivy", RuleID: "trivy::CVE-2021-23337",
+		Severity: types.SeverityHigh, Title: "lodash flaw", ToolArgs: map[string]string{"pkg": "lodash"}})
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "f2", Tool: "semgrep", RuleID: "semgrep::js::sqli",
+		Severity: types.SeverityHigh, Title: "SQLi", Endpoint: "src/db.js"})
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok",
+		NewID: func() string { return "x" }})
+
+	// Baseline: both issues present.
+	if b := do(h, "GET", "/v1/issues", "t1", "").Body.String(); !strings.Contains(b, "lodash") || !strings.Contains(b, "SQLi") {
+		t.Fatalf("baseline should show both issues: %s", b)
+	}
+
+	// Add an exclusion for the lodash package.
+	add := do(h, "POST", "/v1/exclusions", "t1", `{"field":"package","pattern":"lodash","reason":"dev-only dep"}`)
+	if add.Code != 200 {
+		t.Fatalf("add exclusion: %d %s", add.Code, add.Body.String())
+	}
+	var created platform.ExclusionRule
+	_ = json.Unmarshal(add.Body.Bytes(), &created)
+	if created.ID == "" {
+		t.Fatal("exclusion should get an id")
+	}
+
+	// Now the lodash issue is gone, the SQLi remains, and excluded=1 is reported.
+	body := do(h, "GET", "/v1/issues", "t1", "").Body.String()
+	if strings.Contains(body, "lodash") {
+		t.Errorf("excluded package should not appear: %s", body)
+	}
+	if !strings.Contains(body, "SQLi") {
+		t.Errorf("non-excluded finding should remain: %s", body)
+	}
+	if !strings.Contains(body, `"excluded":1`) {
+		t.Errorf("excluded count should be 1: %s", body)
+	}
+
+	// It's listed; an invalid field is rejected.
+	if l := do(h, "GET", "/v1/exclusions", "t1", "").Body.String(); !strings.Contains(l, "lodash") {
+		t.Errorf("exclusion not listed: %s", l)
+	}
+	if bad := do(h, "POST", "/v1/exclusions", "t1", `{"field":"nope","pattern":"x"}`); bad.Code != 400 {
+		t.Errorf("invalid field should be 400, got %d", bad.Code)
+	}
+	if empty := do(h, "POST", "/v1/exclusions", "t1", `{"field":"package","pattern":""}`); empty.Code != 400 {
+		t.Errorf("empty pattern should be 400, got %d", empty.Code)
+	}
+
+	// Delete restores the issue.
+	if del := do(h, "POST", "/v1/exclusions/delete", "t1", `{"id":"`+created.ID+`"}`); del.Code != 200 {
+		t.Fatalf("delete: %d %s", del.Code, del.Body.String())
+	}
+	if b := do(h, "GET", "/v1/issues", "t1", "").Body.String(); !strings.Contains(b, "lodash") {
+		t.Errorf("after delete the issue should reappear: %s", b)
+	}
+
+	// Tenant isolation: t2 sees no exclusions.
+	if l := do(h, "GET", "/v1/exclusions", "t2", "").Body.String(); strings.Contains(l, "lodash") {
+		t.Error("tenant isolation breached on /v1/exclusions")
+	}
+}

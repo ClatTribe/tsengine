@@ -244,6 +244,32 @@ type IgnoreRule struct {
 	At       time.Time `json:"at"`
 }
 
+// ExclusionRule is a PATTERN-based noise filter (Aikido "custom rules": exclude
+// specific paths, packages, conditions). Unlike IgnoreRule (which suppresses one
+// exact issue by its dedup key), an ExclusionRule drops every finding whose chosen
+// attribute matches a glob — applied before findings are unified, so excluded noise
+// disappears from the issue list entirely. Carries who/why/when, so it's auditable
+// and reversible like a suppression.
+type ExclusionRule struct {
+	ID       string    `json:"id"`
+	TenantID string    `json:"tenant_id"`
+	Field    string    `json:"field"`   // rule_id | package | path | cve | any
+	Pattern  string    `json:"pattern"` // glob with '*' wildcards (case-insensitive), e.g. "trivy::CVE-2021-*", "lodash", "*/test/*"
+	Reason   string    `json:"reason,omitempty"`
+	Note     string    `json:"note,omitempty"`
+	By       string    `json:"by,omitempty"`
+	At       time.Time `json:"at"`
+}
+
+// Exclusion field constants (the attribute an ExclusionRule.Pattern matches against).
+const (
+	ExclByRule    = "rule_id"
+	ExclByPackage = "package"
+	ExclByPath    = "path"
+	ExclByCVE     = "cve"
+	ExclByAny     = "any"
+)
+
 // proposed action — the "AI + a human" trust model SMB security buyers expect
 // (a managed-SOC / vCISO escalation). It is request-and-resolve, tenant-scoped,
 // and signed into the ledger like every other decision (§18.2 inv. 4). The agent

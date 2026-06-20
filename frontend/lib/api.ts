@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -114,6 +114,13 @@ export const api = {
     call<unknown>("/v1/issues/ignore", { method: "POST", body: JSON.stringify({ key, reason, note: note ?? "" }) }),
   unignoreIssue: (key: string) =>
     call<unknown>("/v1/issues/unignore", { method: "POST", body: JSON.stringify({ key }) }),
+
+  // Custom exclusion rules (path/package/rule-id/cve glob noise filters).
+  exclusions: () => safe<{ exclusions: ExclusionRule[]; count: number }>("/v1/exclusions", { exclusions: [], count: 0 }),
+  addExclusion: (field: string, pattern: string, reason?: string) =>
+    call<ExclusionRule>("/v1/exclusions", { method: "POST", body: JSON.stringify({ field, pattern, reason: reason ?? "" }) }),
+  deleteExclusion: (id: string) =>
+    call<unknown>("/v1/exclusions/delete", { method: "POST", body: JSON.stringify({ id }) }),
 
   // Request a human-expert review on a finding or action (the AI + human escalation).
   requestReview: (subject: string, subjectId: string, note: string) =>

@@ -25,6 +25,7 @@ type Memory struct {
 	controls    map[string]map[string]platform.ControlState  // tenantID → "framework/control" → state
 	incidents   map[string]map[string]platform.Incident      // tenantID → incidentID → incident
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
+	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
 	pentests    map[string]map[string]pentest.Engagement     // tenantID → engagementID → pentest
 	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
 	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
@@ -44,6 +45,7 @@ func NewMemory() *Memory {
 		controls:    map[string]map[string]platform.ControlState{},
 		incidents:   map[string]map[string]platform.Incident{},
 		ignores:     map[string]map[string]platform.IgnoreRule{},
+		exclusions:  map[string]map[string]platform.ExclusionRule{},
 		pentests:    map[string]map[string]pentest.Engagement{},
 		reviews:     map[string]map[string]platform.ReviewRequest{},
 		apps:        map[string][]platform.ThirdPartyApp{},
@@ -316,6 +318,33 @@ func (m *Memory) DeleteIgnoreRule(_ context.Context, tenantID, issueKey string) 
 	return nil
 }
 
+func (m *Memory) PutExclusionRule(_ context.Context, er platform.ExclusionRule) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.exclusions[er.TenantID] == nil {
+		m.exclusions[er.TenantID] = map[string]platform.ExclusionRule{}
+	}
+	m.exclusions[er.TenantID][er.ID] = er
+	return nil
+}
+
+func (m *Memory) ListExclusionRules(_ context.Context, tenantID string) ([]platform.ExclusionRule, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.ExclusionRule, 0, len(m.exclusions[tenantID]))
+	for _, er := range m.exclusions[tenantID] {
+		out = append(out, er)
+	}
+	return out, nil
+}
+
+func (m *Memory) DeleteExclusionRule(_ context.Context, tenantID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.exclusions[tenantID], id)
+	return nil
+}
+
 func (m *Memory) PutPentest(_ context.Context, eng pentest.Engagement) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -399,6 +428,7 @@ type Snapshot struct {
 	Controls    map[string]map[string]platform.ControlState  `json:"controls"`
 	Incidents   map[string]map[string]platform.Incident      `json:"incidents"`
 	Ignores     map[string]map[string]platform.IgnoreRule    `json:"ignores,omitempty"`
+	Exclusions  map[string]map[string]platform.ExclusionRule `json:"exclusions,omitempty"`
 	Pentests    map[string]map[string]pentest.Engagement     `json:"pentests,omitempty"`
 	Reviews     map[string]map[string]platform.ReviewRequest `json:"reviews"`
 	Apps        map[string][]platform.ThirdPartyApp          `json:"apps"`
@@ -421,6 +451,7 @@ func (m *Memory) Export() Snapshot {
 		Controls:    m.controls,
 		Incidents:   m.incidents,
 		Ignores:     m.ignores,
+		Exclusions:  m.exclusions,
 		Pentests:    m.pentests,
 		Reviews:     m.reviews,
 		Apps:        m.apps,
@@ -442,6 +473,7 @@ func (m *Memory) load(s Snapshot) {
 	m.controls = orEmptyControls(s.Controls)
 	m.incidents = orEmptyIncidents(s.Incidents)
 	m.ignores = orEmptyIgnores(s.Ignores)
+	m.exclusions = orEmptyExclusions(s.Exclusions)
 	m.pentests = orEmptyPentests(s.Pentests)
 	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)
@@ -482,6 +514,12 @@ func orEmptyControls(m map[string]map[string]platform.ControlState) map[string]m
 func orEmptyIncidents(m map[string]map[string]platform.Incident) map[string]map[string]platform.Incident {
 	if m == nil {
 		return map[string]map[string]platform.Incident{}
+	}
+	return m
+}
+func orEmptyExclusions(m map[string]map[string]platform.ExclusionRule) map[string]map[string]platform.ExclusionRule {
+	if m == nil {
+		return map[string]map[string]platform.ExclusionRule{}
 	}
 	return m
 }

@@ -4,13 +4,17 @@ import { api } from "@/lib/api";
 import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { IssueActions } from "@/components/issues/issue-actions";
+import { ExclusionRules } from "@/components/issues/exclusion-rules";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function IssuesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const showingIgnored = (await searchParams).show === "ignored";
-  const { issues, count, raw_findings, confirmed, ignored } = await api.issues(showingIgnored);
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded }, exclResp] = await Promise.all([
+    api.issues(showingIgnored),
+    api.exclusions(),
+  ]);
   const collapsed = Math.max(0, raw_findings - count);
 
   return (
@@ -37,6 +41,9 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
           Ignored{typeof ignored === "number" && ignored > 0 ? ` (${ignored})` : ""}
         </Tab>
       </div>
+
+      {/* Custom exclusion rules (path/package/rule noise filters) */}
+      {!showingIgnored && <ExclusionRules rules={exclResp.exclusions} excluded={excluded ?? 0} />}
 
       {issues.length === 0 ? (
         <Empty>
