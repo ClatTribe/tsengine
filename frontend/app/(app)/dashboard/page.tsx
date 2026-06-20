@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   ArrowRight, ScanLine, ShieldAlert, ShieldCheck, Wrench, Inbox as InboxIcon,
-  Boxes, Radar, Plug, CheckCircle2,
+  Boxes, Radar, Plug, CheckCircle2, Spline,
 } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
 import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
@@ -39,12 +39,13 @@ export default async function OverviewPage() {
   const connections = await api.connections();
   if (connections.length === 0) return <FirstRun />;
 
-  const [findings, incidents, approvals, engagements, assets] = await Promise.all([
+  const [findings, incidents, approvals, engagements, assets, attackPaths] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
     api.engagements(),
     api.assets(),
+    api.attackPaths(),
   ]);
 
   const counts = severityCounts(findings);
@@ -186,6 +187,28 @@ export default async function OverviewPage() {
           </Card>
         </div>
       </div>
+
+      {/* Cross-surface attack paths — the unified cross-detection signal: a single
+          weakness chaining across surfaces to a crown jewel. Only shown when present. */}
+      {attackPaths.count > 0 && (
+        <Link
+          href="/attack-paths"
+          className="group flex items-center gap-3 rounded-xl border border-high/40 bg-high/5 px-5 py-4 transition hover:border-high/60"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-high/10 text-high">
+            <Spline className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">
+              {attackPaths.count} cross-surface attack path{attackPaths.count === 1 ? "" : "s"}
+            </div>
+            <p className="text-xs text-muted">
+              A weakness on one surface chains, through a shared identifier, to a crown jewel on another.
+            </p>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-high transition group-hover:translate-x-0.5" />
+        </Link>
+      )}
 
       {/* Risk by category — where the risk lives, at a glance */}
       {byCategory.length > 0 && (
