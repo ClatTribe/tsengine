@@ -102,6 +102,7 @@ export const api = {
     mode: string;
     rules_of_engagement: { authorized_targets: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string };
   }) => call<PentestEngagement>("/v1/pentest", { method: "POST", body: JSON.stringify(body) }),
+  runPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/run`, { method: "POST" }),
 
   // Suppress (ignore / accept-risk) a unified issue, or restore a suppressed one.
   ignoreIssue: (key: string, reason: string, note?: string) =>
