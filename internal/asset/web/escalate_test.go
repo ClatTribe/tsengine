@@ -4,10 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/pkg/types"
 
 	_ "github.com/ClatTribe/tsengine/internal/tool/ffuf"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
+	_ "github.com/ClatTribe/tsengine/internal/tool/wpscan"
 )
 
 // A rich surface: param URLs → nuclei DAST/OAST; a login URL →
@@ -49,6 +51,40 @@ func TestPlanEscalation_ParamAndLogin(t *testing.T) {
 	if ffufFired {
 		t.Error("ffuf should NOT fire on a rich (non-thin) surface")
 	}
+}
+
+// A WordPress-looking surface → wpscan fires (CMS-specialist depth); a
+// generic surface does not.
+func TestPlanEscalation_WordPressTriggersWPScan(t *testing.T) {
+	h := NewHandler()
+	target := types.Asset{Type: types.AssetWebApplication, Target: "https://blog.x/"}
+
+	wp := []string{"https://blog.x/", "https://blog.x/wp-login.php", "https://blog.x/wp-content/themes/x/style.css"}
+	if !hasTool(h.PlanEscalation(target, wp, nil), "wpscan") {
+		t.Error("a WordPress surface (wp-login/wp-content) should trigger wpscan")
+	}
+	for _, d := range h.PlanEscalation(target, wp, nil) {
+		if d.Tool.Name() == "wpscan" {
+			if d.Args["target"] != "https://blog.x/" || d.EscalatedFrom == "" {
+				t.Errorf("wpscan dispatch = %+v", d)
+			}
+		}
+	}
+
+	// A non-WordPress surface must NOT fire wpscan (signal-gated, not blanket).
+	generic := []string{"https://app.x/", "https://app.x/dashboard", "https://app.x/api/v1/users"}
+	if hasTool(h.PlanEscalation(target, generic, nil), "wpscan") {
+		t.Error("wpscan must NOT fire on a non-WordPress surface")
+	}
+}
+
+func hasTool(ds []asset.Dispatch, name string) bool {
+	for _, d := range ds {
+		if d.Tool.Name() == name {
+			return true
+		}
+	}
+	return false
 }
 
 // Thin surface → ffuf content discovery fires.

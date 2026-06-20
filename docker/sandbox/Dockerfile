@@ -133,6 +133,14 @@ RUN for p in "semgrep==1.96.0" sqlmap checkdmarc dnstwist "prowler==4.6.0" \
         || echo "WARN: pip install $p failed (tool will be unavailable)"; \
     done
 
+# wpscan (WordPress CMS-specialist DAST — web registry/escalation tool).
+# Ruby gem; best-effort so a build-time failure degrades to "unavailable"
+# at runtime rather than failing the whole image.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ruby ruby-dev build-essential \
+    && (gem install wpscan --no-document || echo "WARN: gem install wpscan failed (tool will be unavailable)") \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
         "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH}.zip" \

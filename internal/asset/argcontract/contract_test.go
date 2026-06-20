@@ -31,7 +31,6 @@ import (
 
 	// Register every tool wrapper so the handlers resolve their anchors.
 	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
-	_ "github.com/ClatTribe/tsengine/internal/tool/mobsfscan"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"
 	_ "github.com/ClatTribe/tsengine/internal/tool/cloudfox"
@@ -49,6 +48,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/inql"
 	_ "github.com/ClatTribe/tsengine/internal/tool/katana"
 	_ "github.com/ClatTribe/tsengine/internal/tool/kiterunner"
+	_ "github.com/ClatTribe/tsengine/internal/tool/mobsfscan"
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
@@ -64,6 +64,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/syft"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trivy"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trufflehog"
+	_ "github.com/ClatTribe/tsengine/internal/tool/wpscan"
 )
 
 type assetCase struct {
@@ -79,7 +80,8 @@ func cases() []assetCase {
 			types.Asset{Type: types.AssetWebApplication, Target: "http://localhost:8080/",
 				// Set Auth so PlanFanout also emits the seed_auth dispatch.
 				Auth: &types.AuthConfig{LoginURL: "http://localhost:8080/login", Username: "u", Password: "p"}},
-			[]string{"http://localhost:8080/", "http://localhost:8080/x?id=1"}},
+			// wp-login.php in the surface exercises the wordpress→wpscan escalation.
+			[]string{"http://localhost:8080/", "http://localhost:8080/x?id=1", "http://localhost:8080/wp-login.php"}},
 		{"api", apiasset.NewHandler(),
 			types.Asset{Type: types.AssetAPI, Target: "http://localhost:8080/"},
 			[]string{"SPEC http://localhost:8080/openapi.json", "GET http://localhost:8080/users/{id}", "POST http://localhost:8080/users"}},
