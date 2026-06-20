@@ -77,6 +77,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                // PUBLIC: book-a-demo / talk-to-sales lead capture
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
+	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths)) // cross-surface correlation (unified cross-detection)
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents)) // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
