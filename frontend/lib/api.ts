@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, IssuesResponse, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, IssuesResponse, PentestEngagement, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -52,6 +52,8 @@ export const api = {
   attackPaths: () => safe<AttackPaths>("/v1/attack-paths", { attack_paths: [], count: 0 }),
   issues: (showIgnored?: boolean) =>
     safe<IssuesResponse>(`/v1/issues${showIgnored ? "?show=ignored" : ""}`, { issues: [], count: 0, raw_findings: 0, confirmed: 0, ignored: 0 }),
+  pentests: () => safe<PentestEngagement[]>("/v1/pentest", []),
+  pentest: (id: string) => safe<PentestEngagement | null>(`/v1/pentest/${id}`, null),
   approvals: () => safe<Action[]>("/v1/approvals", []),
   connections: () => safe<Connection[]>("/v1/connections", []),
   tenant: () => safe<Tenant | null>("/v1/tenant", null),
@@ -92,6 +94,14 @@ export const api = {
   // quarantined connection is skipped for scans and refused for writes.
   quarantineConnection: (id: string, quarantined: boolean) =>
     call<Connection>(`/v1/connections/${id}/quarantine`, { method: "POST", body: JSON.stringify({ quarantined }) }),
+
+  // Create + authorize a pentest engagement (the API enforces the active-mode
+  // authorization gate; an unauthorized active engagement / empty scope → 400).
+  createPentest: (body: {
+    name: string;
+    mode: string;
+    rules_of_engagement: { authorized_targets: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string };
+  }) => call<PentestEngagement>("/v1/pentest", { method: "POST", body: JSON.stringify(body) }),
 
   // Suppress (ignore / accept-risk) a unified issue, or restore a suppressed one.
   ignoreIssue: (key: string, reason: string, note?: string) =>
