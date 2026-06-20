@@ -12,6 +12,7 @@ import { TrustShare } from "@/components/settings/trust-share";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
+import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
 
@@ -35,10 +36,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">Settings</h1>
-        <p className="text-xs text-muted">Your organization, connected systems, and how the agent reaches you.</p>
-      </div>
+      <PageIntro
+        icon={Building2}
+        title="Settings"
+        description="Your organization, connected systems, team, and how the agent reaches you — plus the safety controls: the kill-switch, what the agent is allowed to touch, and your public trust link."
+      />
 
       {/* Organization */}
       <div>
