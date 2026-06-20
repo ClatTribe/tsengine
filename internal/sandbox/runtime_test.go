@@ -81,6 +81,23 @@ func TestBuildRunArgs_HardeningFlags(t *testing.T) {
 	}
 }
 
+func TestBuildRunArgs_NetworkOmitsHostPort(t *testing.T) {
+	// On an isolated network we must NOT publish a host port (a containerized platform
+	// can't reach the host's 127.0.0.1); the platform connects by container IP instead.
+	netArgs := argsString(buildRunArgs(SpawnOptions{Image: "img:1", Hardening: Hardening{Network: "iso"}}, 9999, "t"))
+	if strings.Contains(netArgs, "-p ") || strings.Contains(netArgs, "127.0.0.1:9999") {
+		t.Errorf("network mode must not publish a host port: %s", netArgs)
+	}
+	if !strings.Contains(netArgs, "--network iso") {
+		t.Errorf("network mode should join the network: %s", netArgs)
+	}
+	// Without a network (dev / host-run), the host port IS published.
+	noNet := argsString(buildRunArgs(SpawnOptions{Image: "img:1"}, 9999, "t"))
+	if !strings.Contains(noNet, "-p 127.0.0.1:9999:8080") {
+		t.Errorf("no-network mode must publish the loopback host port: %s", noNet)
+	}
+}
+
 func TestBuildRunArgs_ZeroHardeningOmitsFlags(t *testing.T) {
 	// A zero Hardening (buildRunArgs is pure; Spawn fills env defaults upstream) must
 	// add no confinement flags — keeps the dev/test path unchanged.
