@@ -51,6 +51,8 @@ type VAPTFinding struct {
 	CWE          []string `json:"cwe,omitempty"`
 	MITRE        []string `json:"mitre,omitempty"`
 	Description  string   `json:"description,omitempty"`
+	OWASP        []string `json:"owasp,omitempty"`        // OWASP Top 10 (2021) category mapping
+	Remediation  string   `json:"remediation,omitempty"`  // the recommended fix (CWE-class standard)
 	Verification string   `json:"verification,omitempty"` // verified | corroborated | pattern_match
 	KEV          bool     `json:"kev,omitempty"`          // actively exploited
 	FixReady     bool     `json:"fix_ready,omitempty"`    // a remediation is prepared/queued
@@ -104,6 +106,7 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 		vf := VAPTFinding{
 			ID: f.ID, Title: f.Title, Severity: sev, Tool: f.Tool, RuleID: f.RuleID,
 			Endpoint: f.Endpoint, CWE: f.CWE, MITRE: f.MITRETechniques, Description: f.Description,
+			OWASP: owaspFor(f.CWE, f.Tool), Remediation: remediationFor(f.CWE, f.Tool),
 			Verification: string(f.VerificationStatus), KEV: kev, FixReady: fixReady[f.ID],
 		}
 		if f.ThreatIntel != nil {
@@ -160,6 +163,7 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		s.Total, s.BySeverity["critical"], s.BySeverity["high"], s.BySeverity["medium"], s.BySeverity["low"], s.BySeverity["info"])
 	fmt.Fprintf(&b, "- **%d tool-confirmed** (verified/corroborated, not pattern-only) · **%d actively exploited** (CISA KEV) · **%d with a fix already prepared**\n",
 		s.Verified, s.KEV, s.FixesReady)
+	b.WriteString("\n" + narrativeSummary(r) + "\n")
 	b.WriteString("\n## Methodology\n\n")
 	b.WriteString("Assessment is performed by the TensorShield engine, which wraps best-in-class open-source " +
 		"scanners across every asset class (web, API, code, containers, cloud, identity) and verifies exploitable " +
@@ -191,6 +195,9 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		if len(f.CWE) > 0 {
 			fmt.Fprintf(&b, "- **CWE:** %s\n", strings.Join(f.CWE, ", "))
 		}
+		if len(f.OWASP) > 0 {
+			fmt.Fprintf(&b, "- **OWASP Top 10:** %s\n", strings.Join(f.OWASP, "; "))
+		}
 		if len(f.MITRE) > 0 {
 			fmt.Fprintf(&b, "- **MITRE ATT&CK:** %s\n", strings.Join(f.MITRE, ", "))
 		}
@@ -205,11 +212,15 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 			status += " · **actively exploited (CISA KEV)**"
 		}
 		fmt.Fprintf(&b, "- **Evidence strength:** %s\n", status)
-		if f.FixReady {
-			b.WriteString("- **Remediation:** a fix has been prepared and is awaiting approval.\n")
-		}
 		if f.Description != "" {
 			fmt.Fprintf(&b, "\n%s\n", f.Description)
+		}
+		if f.Remediation != "" {
+			fmt.Fprintf(&b, "\n**Recommended fix:** %s", f.Remediation)
+			if f.FixReady {
+				b.WriteString(" _(TensorShield has already prepared this fix — it's awaiting your approval.)_")
+			}
+			b.WriteString("\n")
 		}
 		b.WriteString("\n")
 	}
