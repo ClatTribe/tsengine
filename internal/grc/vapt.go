@@ -79,19 +79,31 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 		}
 	}
 
-	r := &VAPTReport{
-		TenantName: tenantID, GeneratedAt: g.now(), Engine: "tsengine (TensorShield)",
-		Summary: VAPTSummary{BySeverity: map[string]int{}},
-	}
+	name := tenantID
 	if t, terr := g.Store.GetTenant(ctx, tenantID); terr == nil && t.Name != "" {
-		r.TenantName = t.Name
+		name = t.Name
 	}
+	var scope []string
 	for _, a := range assets {
 		if a.Target != "" {
-			r.Scope = append(r.Scope, a.Target)
+			scope = append(scope, a.Target)
 		}
 	}
+	return ReportFromFindings(findings, scope, name, g.now(), fixReady), nil
+}
 
+// ReportFromFindings builds a VAPT report from an explicit findings set + scope —
+// the pure core shared by the tenant-wide VAPTReport and the per-pentest-engagement
+// report (which passes the engagement's scoped findings + Rules-of-Engagement scope).
+// fixReady marks findings with a prepared remediation (may be nil). Pure (no I/O).
+func ReportFromFindings(findings []types.Finding, scope []string, name string, now time.Time, fixReady map[string]bool) *VAPTReport {
+	if fixReady == nil {
+		fixReady = map[string]bool{}
+	}
+	r := &VAPTReport{
+		TenantName: name, GeneratedAt: now, Engine: "tsengine (TensorShield)", Scope: scope,
+		Summary: VAPTSummary{BySeverity: map[string]int{}},
+	}
 	for _, f := range findings {
 		sev := string(f.Severity)
 		r.Summary.Total++
@@ -137,7 +149,7 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 		return r.Findings[i].ID < r.Findings[j].ID
 	})
 	r.Summary.RiskRating = vaptRisk(r.Summary.BySeverity)
-	return r, nil
+	return r
 }
 
 func isVerified(f types.Finding) bool {

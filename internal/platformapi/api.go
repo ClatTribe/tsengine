@@ -77,15 +77,16 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                // PUBLIC: book-a-demo / talk-to-sales lead capture
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
-	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))       // cross-surface correlation (unified cross-detection)
-	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                  // findings de-duplicated into unified issues (one issue, many signals)
-	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))     // suppress an issue (false-positive / accepted-risk)
-	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue)) // restore a suppressed issue
-	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))         // create + authorize a pentest engagement
-	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))           // list engagements
-	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))        // one engagement + findings
-	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))   // run/retest the engagement (passive, RoE-gated)
-	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                  // SSE live state feed
+	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))          // cross-surface correlation (unified cross-detection)
+	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                     // findings de-duplicated into unified issues (one issue, many signals)
+	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))        // suppress an issue (false-positive / accepted-risk)
+	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))    // restore a suppressed issue
+	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))            // create + authorize a pentest engagement
+	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))              // list engagements
+	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))           // one engagement + findings
+	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))      // run/retest the engagement (passive, RoE-gated)
+	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport)) // the engagement's VAPT report (md/json)
+	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                     // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
 	mux.HandleFunc("GET /v1/jobs", d.auth(d.handleJobs))
