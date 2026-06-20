@@ -34,3 +34,26 @@ func (d Deps) handleAttackPaths(w http.ResponseWriter, r *http.Request, tenantID
 	}
 	respond(w, map[string]any{"attack_paths": chains, "count": len(chains)}, nil)
 }
+
+// handleIssues returns the tenant's findings de-duplicated into unified issues —
+// the "one issue, many signals" view: the same CVE flagged by trivy, grype, and
+// govulncheck is ONE confirmed issue, not three rows of noise. Grounded: an
+// issue claims only the scanners that actually reported it. Tenant-scoped.
+func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID string) {
+	findings, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	issues := crossdetect.UnifiedIssues(findings)
+	if issues == nil {
+		issues = []crossdetect.Issue{}
+	}
+	confirmed := 0
+	for _, i := range issues {
+		if i.Confirmed {
+			confirmed++
+		}
+	}
+	respond(w, map[string]any{"issues": issues, "count": len(issues), "raw_findings": len(findings), "confirmed": confirmed}, nil)
+}

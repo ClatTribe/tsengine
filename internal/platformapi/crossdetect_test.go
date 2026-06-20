@@ -58,6 +58,33 @@ func TestAttackPaths_CorrelatesCrossSurfaceAndIsolatesTenants(t *testing.T) {
 	}
 }
 
+func TestIssues_DedupesSameCVEAcrossScanners(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "1", RuleID: "trivy::CVE-2021-44228", Tool: "trivy", Severity: types.SeverityCritical, Title: "Log4Shell"})
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "2", RuleID: "grype::CVE-2021-44228", Tool: "grype", Severity: types.SeverityCritical, Title: "log4j RCE"})
+	_ = st.PutFinding(ctx, "t2", types.Finding{ID: "9", RuleID: "trivy::CVE-2021-44228", Tool: "trivy", Severity: types.SeverityCritical, Title: "OTHER-TENANT"})
+
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/issues", "t1", "")
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "\"count\":1") && !strings.Contains(body, "\"count\": 1") {
+		t.Errorf("two CVE findings should collapse to one issue, got: %s", body)
+	}
+	if !strings.Contains(body, "\"confirmed\":1") && !strings.Contains(body, "\"confirmed\": 1") {
+		t.Errorf("the merged issue should be confirmed (2 tools), got: %s", body)
+	}
+	if !strings.Contains(body, "trivy") || !strings.Contains(body, "grype") {
+		t.Errorf("issue should list both source scanners, got: %s", body)
+	}
+	if strings.Contains(body, "OTHER-TENANT") {
+		t.Error("tenant isolation breached in /v1/issues")
+	}
+}
+
 func TestAttackPaths_EmptyTenantReturnsEmptyNotNull(t *testing.T) {
 	st := store.NewMemory()
 	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})

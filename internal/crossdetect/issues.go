@@ -1,0 +1,112 @@
+package crossdetect
+
+import (
+	"regexp"
+	"sort"
+	"strings"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
+
+// Issue is a unified, de-duplicated risk: the same underlying weakness reported
+// by one or more scanners across the tenant's surfaces, collapsed into a single
+// row. This is the "one issue, many signals" model — a CVE that trivy, grype,
+// AND govulncheck all flag is ONE issue confirmed by three sources, not three
+// rows of noise.
+type Issue struct {
+	Key        string   `json:"key"`           // the dedup key (CVE, else rule_id|endpoint)
+	Title      string   `json:"title"`         // a representative title
+	Severity   string   `json:"severity"`      // the worst severity across the group
+	CVE        string   `json:"cve,omitempty"` // the CVE, when the group is keyed by one
+	Endpoint   string   `json:"endpoint,omitempty"`
+	Tools      []string `json:"tools"`       // distinct scanners that reported it (the corroboration)
+	Count      int      `json:"count"`       // how many raw findings collapsed in
+	Confirmed  bool     `json:"confirmed"`   // ≥2 independent tools agree
+	FindingIDs []string `json:"finding_ids"` // the raw findings this issue rolls up
+}
+
+var cveRe = regexp.MustCompile(`CVE-\d{4}-\d{4,7}`)
+
+// UnifiedIssues collapses a tenant's flat finding list into de-duplicated issues.
+// Findings sharing a CVE (across any scanner / surface) merge into one issue;
+// otherwise they key on rule_id|endpoint. Grounded: an issue only claims the
+// tools that actually reported it, and "confirmed" means ≥2 independent scanners
+// genuinely agreed — never inflated.
+func UnifiedIssues(findings []types.Finding) []Issue {
+	groups := map[string]*Issue{}
+	var order []string
+
+	for _, f := range findings {
+		key, cve := dedupKey(f)
+		g := groups[key]
+		if g == nil {
+			g = &Issue{Key: key, Title: firstNonEmpty(f.Title, f.RuleID), CVE: cve, Endpoint: f.Endpoint, Severity: string(f.Severity)}
+			groups[key] = g
+			order = append(order, key)
+		}
+		g.Count++
+		g.FindingIDs = appendUniqueStr(g.FindingIDs, f.ID)
+		if t := strings.TrimSpace(f.Tool); t != "" {
+			g.Tools = appendUniqueStr(g.Tools, t)
+		}
+		if sevRank(string(f.Severity)) < sevRank(g.Severity) {
+			g.Severity = string(f.Severity)
+			if f.Title != "" {
+				g.Title = f.Title
+			}
+		}
+	}
+
+	out := make([]Issue, 0, len(order))
+	for _, k := range order {
+		g := groups[k]
+		sort.Strings(g.Tools)
+		g.Confirmed = len(g.Tools) >= 2
+		out = append(out, *g)
+	}
+	// Worst severity first; within a severity, the most-corroborated first.
+	sort.SliceStable(out, func(i, j int) bool {
+		if si, sj := sevRank(out[i].Severity), sevRank(out[j].Severity); si != sj {
+			return si < sj
+		}
+		return len(out[i].Tools) > len(out[j].Tools)
+	})
+	return out
+}
+
+// dedupKey returns the grouping key for a finding and the CVE if it has one. A
+// CVE bridges across scanners + surfaces (the whole point of dedup); otherwise
+// we fall back to the rule + location, which is conservative (won't merge
+// genuinely different issues).
+func dedupKey(f types.Finding) (key, cve string) {
+	if m := cveRe.FindString(f.RuleID + " " + f.Title); m != "" {
+		return "cve|" + strings.ToUpper(m), strings.ToUpper(m)
+	}
+	return "rule|" + strings.ToLower(f.RuleID) + "|" + strings.ToLower(f.Endpoint), ""
+}
+
+// sevRank mirrors the engine severity order (lower = worse).
+func sevRank(s string) int {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "critical":
+		return 0
+	case "high":
+		return 1
+	case "medium":
+		return 2
+	case "low":
+		return 3
+	case "info":
+		return 4
+	}
+	return 5
+}
+
+func appendUniqueStr(xs []string, v string) []string {
+	for _, x := range xs {
+		if x == v {
+			return xs
+		}
+	}
+	return append(xs, v)
+}
