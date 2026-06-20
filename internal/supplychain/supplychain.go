@@ -1,7 +1,14 @@
-// Package supplychain detects MALICIOUS dependencies — typosquatted,
-// backdoored, or hijacked packages in a project's dependency set. This is a
-// distinct threat from a *vulnerable* dependency (a CVE in legitimate code,
-// which the SCA tools trivy/grype/osv-scanner cover): a malicious package is
+// Package supplychain assesses dependency-set risk that the SCA tools (CVE
+// scanners) do not: MALICIOUS packages (this file — typosquatted, backdoored,
+// or hijacked, hostile by design and usually no CVE) and END-OF-LIFE runtimes /
+// frameworks (eol.go — past their published support date, unpatched and growing).
+// Both are grounded in authoritative corpora (OSSF malicious-packages / OSV MAL-
+// and endoflife.date), matched against the dependency set the SBOM (syft)
+// produces — never a heuristic guess; a clean dependency set yields zero.
+//
+// --- malicious packages ---
+// A malicious package is a distinct threat from a *vulnerable* dependency (a CVE
+// in legitimate code, which the SCA tools trivy/grype/osv-scanner cover):
 // hostile by design (credential stealers, crypto-miners, protestware), often
 // carries no CVE, and is the supply-chain attack vector behind incidents like
 // ua-parser-js (2021), node-ipc (2022), and the ctx / typosquat PyPI campaigns.
