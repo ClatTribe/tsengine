@@ -110,8 +110,8 @@ func narrativeSummary(r *VAPTReport) string {
 		lead = "no critical or high-severity issues were found; the remaining items are lower-risk hardening opportunities"
 	}
 	return fmt.Sprintf(
-		"This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**. %s. Of these, %d are tool-confirmed (not pattern-match alone)%s, and a remediation is already prepared for %d. Each finding below is grounded in the scanner evidence that proves it, mapped to its CWE and OWASP Top 10 category, with a recommended fix.",
-		r.TenantName, s.Total, s.RiskRating, capitalize(lead), s.Verified, kevClause(s.KEV), s.FixesReady)
+		"This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**. %s. Of these, %d are tool-confirmed (corroborated or re-verified)%s and %d are unconfirmed single-tool pattern matches to validate before action — the latter are listed after the confirmed findings of the same severity and labelled inline, so no false positive is presented as a proven result. A remediation is already prepared for %d. Each finding below is grounded in the scanner evidence that proves it, mapped to its CWE and OWASP Top 10 category, with a recommended fix.",
+		r.TenantName, s.Total, s.RiskRating, capitalize(lead), s.Verified, kevClause(s.KEV), s.Unconfirmed, s.FixesReady)
 }
 
 func kevClause(kev int) string {
