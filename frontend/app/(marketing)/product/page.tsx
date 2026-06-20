@@ -2,8 +2,10 @@ import Link from "next/link";
 import {
   Plug, ScanLine, Filter, Wrench, CheckCircle2, FileCheck2, ArrowRight,
   Building2, Wallet, Code2, ClipboardCheck, Bot, UserCheck,
+  Globe, Webhook, Box, Cloud, Smartphone, Network, Radar, KeyRound,
 } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
+import { ASSET_SURFACES } from "@/lib/assets";
 
 export const metadata = {
   title: "Product — how TensorShield works",
@@ -72,7 +74,7 @@ export default function Product() {
             </p>
             <ul className="mt-6 space-y-3 text-sm text-ink">
               {[
-                ["Detection layer", "Wraps the leading OSS scanners — recall on par with running each tool yourself, across 7 asset types."],
+                ["Detection layer", "Wraps the leading OSS scanners — recall on par with running each tool yourself, across every asset you run."],
                 ["AI security engineer", "Verifies what's real, chains issues into attack paths, writes the fix and the plain-English why."],
                 ["Human in the loop", "Tier-gated approvals on anything consequential, every decision signed into a tamper-evident ledger."],
               ].map(([h, d]) => (
@@ -98,6 +100,9 @@ export default function Product() {
           </div>
         </div>
       </section>
+
+      {/* Asset coverage */}
+      <AssetCoverageBand />
 
       {/* Compliance coverage */}
       <ComplianceBand />
@@ -162,6 +167,58 @@ function ComplianceBand() {
             </div>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+// AssetCoverageBand — the buyer-facing "what we scan" matrix. Single-sourced
+// from lib/assets.ts so it never drifts from the engine's real asset coverage.
+const SURFACE_ICON: Record<string, typeof Globe> = {
+  web_application: Globe,
+  api: Webhook,
+  repository: Code2,
+  container_image: Box,
+  cloud_account: Cloud,
+  mobile_application: Smartphone,
+  ip_address: Network,
+  domain: Radar,
+  workspace: KeyRound,
+};
+
+function AssetCoverageBand() {
+  return (
+    <section className="mx-auto max-w-6xl px-5 py-20">
+      <div className="mx-auto mb-12 max-w-2xl text-center">
+        <span className="text-xs font-semibold uppercase tracking-wider text-accent">Everything you run</span>
+        <h2 className="mt-3 text-3xl font-semibold tracking-tight">One agent across your whole attack surface.</h2>
+        <p className="mt-3 text-base leading-relaxed text-muted">
+          Code, cloud, web, APIs, containers, mobile, network, and identity — each assessed by the leading open-source
+          scanner for that surface, continuously.
+        </p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {ASSET_SURFACES.map((s) => {
+          const Icon = SURFACE_ICON[s.key] ?? Globe;
+          return (
+            <div key={s.key} className="card p-5">
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <h3 className="text-sm font-semibold">{s.label}</h3>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-muted">{s.scans}</p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {s.tools.map((t) => (
+                  <span key={t} className="mono inline-flex items-center rounded-md border border-border bg-bg px-2 py-0.5 text-[11px] text-faint">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

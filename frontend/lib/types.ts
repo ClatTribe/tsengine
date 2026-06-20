@@ -143,7 +143,7 @@ export interface Questionnaire {
 export interface Asset {
   id: string;
   connection_id: string;
-  type: string; // repository | cloud_account | web_application | domain | workspace | ...
+  type: string; // repository | cloud_account | web_application | api | container_image | ip_address | domain | mobile_application | workspace
   target: string;
   meta?: Record<string, string>;
   discovered_at?: string;
