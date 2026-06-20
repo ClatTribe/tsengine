@@ -1,0 +1,37 @@
+# tsengine production TLS edge (docs/production-single-box.md §5 P3, threat T7).
+#
+# The ONLY publicly-exposed surface. Terminates HTTPS, sets security headers, and routes:
+#   /v1/*, /ui, /healthz  → the platform API/console (internal :8090)
+#   everything else (/, /api/*, assets) → the Next.js console (internal :3000)
+# The platform + frontend ports are NOT published — they're reachable only on the internal
+# `edge` network. /metrics is deliberately NOT routed here (ops-only; scrape it internally).
+#
+# For a PUBLIC domain: set TSENGINE_SITE_ADDRESS=your.domain, comment out `tls internal`
+# below, and (optionally) add `email you@your.domain` here for ACME contact.
+
+{$TSENGINE_SITE_ADDRESS:localhost} {
+	# Default single-box: Caddy's internal CA (a self-signed root trusted on this box).
+	# For a real domain, set TSENGINE_SITE_ADDRESS=your.domain AND comment out `tls
+	# internal` to get automatic public HTTPS.
+	tls internal
+
+	# Security headers on every response (T7 + general hardening).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Platform API + server-rendered console + health.
+	@platform path /v1/* /ui /ui/* /healthz
+	handle @platform {
+		reverse_proxy platform:8090
+	}
+
+	# Everything else → the Next.js console (it proxies /api/* to the platform server-side).
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
