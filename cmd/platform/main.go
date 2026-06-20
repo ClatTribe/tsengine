@@ -25,6 +25,7 @@
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
 //	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
 //	PAGERDUTY_ROUTING_KEY      PagerDuty Events API v2 key — pages on-call for new high/critical incidents
+//	TSENGINE_TEAMS_WEBHOOK     Microsoft Teams Incoming Webhook — posts new high/critical incidents
 //	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
 package main
 
@@ -134,6 +135,10 @@ func main() {
 	if rk := os.Getenv("PAGERDUTY_ROUTING_KEY"); rk != "" {
 		alerters = append(alerters, notify.NewPagerDuty(rk)) // new high/critical → on-call page
 		log.Print("[platform] PagerDuty on-call paging enabled (high/critical)")
+	}
+	if hook := os.Getenv("TSENGINE_TEAMS_WEBHOOK"); hook != "" {
+		alerters = append(alerters, notify.NewTeams(hook)) // new high/critical → Microsoft Teams heads-up
+		log.Print("[platform] Microsoft Teams incident notifications enabled (high/critical)")
 	}
 	var incidentAlerter detect.Alerter
 	if len(alerters) > 0 {
