@@ -166,11 +166,22 @@ func Spawn(ctx context.Context, opts SpawnOptions) (*Info, error) {
 
 	info := &Info{
 		ContainerID: containerID,
-		APIURL:      fmt.Sprintf("http://127.0.0.1:%d", port),
 		AuthToken:   token,
 		ImageDigest: digest,
 		Image:       opts.Image,
 		Port:        port,
+	}
+	// Pick the connection URL per the model in buildRunArgs. On an isolated network the
+	// host port isn't published, so resolve the container's IP and connect there.
+	if net := opts.Hardening.Network; net != "" {
+		ip, ipErr := containerIP(ctx, containerID, net)
+		if ipErr != nil {
+			_ = Destroy(context.Background(), info)
+			return nil, fmt.Errorf("sandbox.Spawn: resolve container ip on %q: %w", net, ipErr)
+		}
+		info.APIURL = fmt.Sprintf("http://%s:%d", ip, sandboxToolServerPort)
+	} else {
+		info.APIURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	}
 
 	if err := waitHealthy(ctx, info, opts.HealthTimeout); err != nil {
@@ -232,7 +243,6 @@ func waitHealthy(ctx context.Context, info *Info, timeout time.Duration) error {
 func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	args := []string{
 		"run", "-d", "--rm",
-		"-p", fmt.Sprintf("127.0.0.1:%d:8080", port),
 		"-e", "TSENGINE_AUTH_TOKEN=" + token,
 		"--cap-drop=ALL",
 		"--security-opt", "no-new-privileges",
@@ -250,6 +260,17 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	// writable /tmp tmpfs apply by default; read-only rootfs / non-root user /
 	// isolated network are opt-in (empty by default).
 	h := opts.Hardening
+
+	// Connection model:
+	//   - no isolated network (dev / host-run platform): publish the tool-server on the
+	//     host loopback and connect at 127.0.0.1:port.
+	//   - isolated network (containerized platform, prod): DON'T publish a host port — a
+	//     containerized platform can't reach the host's 127.0.0.1; instead the platform
+	//     joins the same network and reaches the sandbox at <container-ip>:8080. This is
+	//     also the T4 isolation control (the sandbox is off the platform/DB/frontend net).
+	if h.Network == "" {
+		args = append(args, "-p", fmt.Sprintf("127.0.0.1:%d:8080", port))
+	}
 	if h.ReadOnly {
 		args = append(args, "--read-only")
 	}
@@ -315,6 +336,28 @@ func imageDigest(ctx context.Context, image string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// sandboxToolServerPort is the in-container port the tool-server listens on. On an
+// isolated network we connect to <container-ip>:8080 directly (no host publish).
+const sandboxToolServerPort = 8080
+
+// containerIP returns the sandbox container's IP address on the given docker network.
+// Used when the sandbox joins a dedicated network instead of publishing a host port:
+// a containerized platform reaches it container-to-container at <ip>:8080. The sandbox
+// joins exactly one network, so we range over its networks and take the first IP.
+func containerIP(ctx context.Context, containerID, network string) (string, error) {
+	out, err := exec.CommandContext(ctx, "docker", "inspect", //nolint:gosec // literal "docker"; id from our own run
+		"-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", containerID).Output()
+	if err != nil {
+		return "", fmt.Errorf("inspect container ip: %w (%s)", err, exitStderr(err))
+	}
+	for _, ip := range strings.Fields(string(out)) {
+		if ip != "" {
+			return ip, nil
+		}
+	}
+	return "", fmt.Errorf("no IP for container %s on network %q", containerID, network)
 }
 
 func exitStderr(err error) string {

@@ -1,0 +1,115 @@
+# tsengine — PRODUCTION single-box stack (docs/production-single-box.md).
+#
+# Hardened variant of docker-compose.yml: the engine is ON (tech-asset scans run), but the
+# platform NEVER holds the raw Docker socket. Instead it reaches the Docker API through a
+# restricted docker-socket-proxy (only the container-lifecycle calls it needs), and the
+# per-scan sandboxes run on a dedicated isolated network with the P1 hardening knobs on.
+#
+#   cp .env.example .env            # set TSENGINE_SECRET_KEY + TSENGINE_PLATFORM_TOKEN
+#   make sandbox-image              # build tsengine/sandbox:<tag> (the OSS-tool image)
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# (P3 adds a TLS edge in front; P4 adds the one-command deploy + backup scripts.)
+
+services:
+  # --- de-privileged Docker API (threat T3) ---
+  # The platform spawns sandboxes via THIS, not /var/run/docker.sock. The proxy holds the
+  # socket but exposes only a filtered HTTP API on an internal network. Pin a digest in
+  # production (DOCKER_SOCKET_PROXY_IMAGE in .env).
+  docker-socket-proxy:
+    image: ${DOCKER_SOCKET_PROXY_IMAGE:-tecnativa/docker-socket-proxy:latest}
+    environment:
+      # Allow ONLY what sandbox spawn needs: inspect images, create/start/stop/remove
+      # containers, inspect/attach the sandbox network. Everything else stays denied (0).
+      CONTAINERS: "1" # GET/inspect containers
+      IMAGES: "1"     # inspect the sandbox image (digest)
+      NETWORKS: "1"   # attach to the sandbox network
+      POST: "1"       # create / start / stop / remove
+      # Explicitly deny the dangerous surface (defaults are 0, set for auditability):
+      EXEC: "0"
+      VOLUMES: "0"
+      INFO: "0"
+      AUTH: "0"
+      SECRETS: "0"
+      SWARM: "0"
+      NODES: "0"
+      SERVICES: "0"
+      TASKS: "0"
+      CONFIGS: "0"
+      SYSTEM: "0"
+      PLUGINS: "0"
+      DISTRIBUTION: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - dockerproxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  platform:
+    build:
+      context: .
+      dockerfile: docker/platform/Dockerfile
+    environment:
+      TSENGINE_PLATFORM_TOKEN: ${TSENGINE_PLATFORM_TOKEN:?set TSENGINE_PLATFORM_TOKEN in .env}
+      TSENGINE_SECRET_KEY: ${TSENGINE_SECRET_KEY:?set TSENGINE_SECRET_KEY in .env (openssl rand -base64 32)}
+      TSENGINE_PLATFORM_DB: /data/platform.db # SQLite (ACID) on the named volume
+      # Engine ON — but via the proxy, NOT a mounted socket:
+      TSENGINE_PLATFORM_NO_ENGINE: "0"
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+      TSENGINE_SANDBOX_IMAGE: ${TSENGINE_SANDBOX_IMAGE:-tsengine/sandbox:latest}
+      # Per-scan sandbox isolation (P1 hardening; docs §5.1). The sandbox joins THIS
+      # network (no host port published — the platform reaches it by container IP) and
+      # gets a read-only rootfs. Resource/PID/file limits apply by default.
+      TSENGINE_SANDBOX_NETWORK: tsengine-sandbox
+      TSENGINE_SANDBOX_READONLY: "1"
+      TSENGINE_MONITOR_INTERVAL: ${TSENGINE_MONITOR_INTERVAL:-12h}
+      TSENGINE_WEBHOOK_SECRET: ${TSENGINE_WEBHOOK_SECRET:-}
+      TSENGINE_PLATFORM_PUBLIC: ${TSENGINE_PLATFORM_PUBLIC:-http://localhost:8090}
+      TSENGINE_LOG_FORMAT: json
+    ports:
+      - "8090:8090" # P3 replaces this with a TLS edge; keep for first bring-up
+    volumes:
+      - platform-data:/data
+    networks:
+      - edge        # ↔ frontend
+      - dockerproxy # ↔ docker-socket-proxy (no raw socket here)
+      - sandbox     # ↔ the sandboxes it spawns
+    depends_on:
+      - docker-socket-proxy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      TSENGINE_API_URL: http://platform:8090 # server-side only; the browser never sees it
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    networks:
+      - edge
+    depends_on:
+      platform:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  edge: {}
+  # The platform↔proxy link carries the Docker API only; no internet egress needed.
+  dockerproxy:
+    internal: true
+  # Dedicated, named (so TSENGINE_SANDBOX_NETWORK is deterministic regardless of the
+  # compose project name) bridge for the ephemeral sandboxes. NOT internal — scans need
+  # egress to reach customer targets — but it is OFF the frontend network, and the
+  # sandbox carries no host port. Residual platform↔sandbox L3 reachability on this
+  # bridge is an accepted single-box risk (mitigated by the tool-server bearer token +
+  # the P1 sandbox hardening); the strong fix (per-tenant net policy / microVM) is a
+  # scale-tier item (docs §6).
+  sandbox:
+    name: tsengine-sandbox
+
+volumes:
+  platform-data:
