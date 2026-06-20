@@ -397,13 +397,14 @@ Example annotation:
 
 No L1 tool **decides** whether something violates SOC2. The tool emits the technical finding; the mapping layer annotates.
 
-**Three emission paths feed the framework set** (all grounded, all annotation-only) — keep them in sync when adding a framework or control:
+**Four emission paths feed the framework set** (all grounded, all annotation-only) — keep them in sync when adding a framework or control:
 
 1. **CWE crosswalk** — `internal/tracer/hooks/data/compliance.json` (the `compliance.map` hook) maps a finding's CWE → controls. Covers appsec/SAST/SCA findings.
 2. **Identity findings** — `internal/operate/operate.go` annotates each check inline (MFA gaps, OAuth grants, email-auth, stale/over-privileged accounts) — the non-tech / IdP posture.
 3. **Cloud attack-paths** — `internal/cloudengine/compliance.go` (`pathCompliance`) maps an attack-path's characteristics (internet exposure, sensitive-data access, privilege/privesc, lateral movement) → controls.
+4. **SaaS posture (SSPM)** — `internal/sspm` annotates each SaaS-config check inline (GitHub org: 2FA enforcement, repo perms, secret scanning, third-party apps, webhooks; Slack/Atlassian/Zoom/Salesforce next) — the SaaS-configuration posture, sibling to `operate`. Snapshot-driven, LLM-free, grounded (a hardened app yields zero findings). See ADR 0004.
 
-So a connected repo, Workspace/M365/Okta, *or* cloud account each contribute evidence to the full 14-framework set, not just the original six. A control maps only where a real nexus exists for that path (grounding §10).
+So a connected repo, Workspace/M365/Okta, cloud account, *or* SaaS app (GitHub org) each contribute evidence to the full 14-framework set, not just the original six. A control maps only where a real nexus exists for that path (grounding §10).
 
 ---
 
