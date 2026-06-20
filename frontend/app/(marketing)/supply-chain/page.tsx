@@ -1,14 +1,16 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   Boxes, ArrowRight, Skull, CalendarX, Archive, Scale, GitBranch, Wrench,
   Fingerprint, CheckCircle2, XCircle, Minus, Bot, ShieldCheck,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Supply-chain security — malware, EOL, license & reachability | TensorShield",
   description:
     "Your dependencies are the attack surface. TensorShield checks every package for malicious code, end-of-life runtimes, abandoned packages, risky licenses, and reachable CVEs — grounded, low-noise, and fixed on approval.",
-};
+  path: "/supply-chain",
+});
 
 // The five dependency-risk checks (the supply-chain composition story).
 const CHECKS = [

@@ -1,14 +1,16 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   Github, GitBranch, Cloud, Mail, Users, KeyRound, Ticket, ClipboardList,
   MessageSquare, MessagesSquare, BellRing, ArrowRight, Plug,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Integrations — TensorShield",
   description:
     "Connect your stack in minutes: GitHub, GitLab, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Slack and PagerDuty for delivery. Read-only by default, write-back only on approval.",
-};
+  path: "/integrations",
+});
 
 type Item = { icon: typeof Github; name: string; role: string; status: "live" | "soon" };
 

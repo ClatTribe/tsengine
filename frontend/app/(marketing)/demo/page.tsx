@@ -1,13 +1,12 @@
-import type { Metadata } from "next";
 import { CheckCircle2 } from "lucide-react";
+import { pageMeta } from "@/lib/seo";
 import { DemoForm } from "@/components/marketing/demo-form";
-import { SITE_URL } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata = pageMeta({
   title: "Book a Demo — TensorShield",
   description: "See TensorShield run on your stack. Talk to our team about VAPT, compliance (SOC 2, ISO 27001, and 12 more), and autonomous remediation for your SMB.",
-  alternates: { canonical: `${SITE_URL}/demo` },
-};
+  path: "/demo",
+});
 
 const POINTS = [
   "A walkthrough on your real stack — code, cloud, and identity.",

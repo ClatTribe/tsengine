@@ -1,15 +1,14 @@
 import Link from "next/link";
-import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
-import { SITE_URL } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata = pageMeta({
   title: "Compliance Frameworks — SOC 2, ISO 27001, GDPR & 11 more | TensorShield",
   description:
     "TensorShield automates 14 compliance frameworks — SOC 2, ISO 27001, PCI-DSS, HIPAA, CIS, NIST CSF, GDPR, ISO 27701, NIST 800-53/171, CCPA, SOX, FedRAMP, and India DPDP — with continuous monitoring and signed evidence.",
-  alternates: { canonical: `${SITE_URL}/frameworks` },
-};
+  path: "/frameworks",
+});
 
 const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government"];
 

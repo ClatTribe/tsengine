@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   Plug, ScanLine, Filter, Wrench, CheckCircle2, FileCheck2, ArrowRight,
   Building2, Wallet, Code2, ClipboardCheck, Bot, UserCheck,
@@ -7,10 +8,11 @@ import {
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 import { ASSET_SURFACES } from "@/lib/assets";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Product — how TensorShield works",
   description: "Connect a system and a fractional security team goes to work: detect, triage, fix, and prove — with you in the loop where it matters.",
-};
+  path: "/product",
+});
 
 const LOOP = [
   { icon: Plug, t: "Connect", d: "OAuth into GitHub, AWS, Google Workspace, M365, or Okta. The agent discovers your assets — repos, accounts, identities — and starts immediately." },

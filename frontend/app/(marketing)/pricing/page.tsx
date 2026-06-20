@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Pricing — TensorShield",
   description: "Simple, transparent pricing for your fractional security team. Start free.",
-};
+  path: "/pricing",
+});
 
 const TIERS = [
   {

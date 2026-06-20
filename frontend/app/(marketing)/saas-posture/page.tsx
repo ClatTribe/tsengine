@@ -1,14 +1,16 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   KeyRound, ArrowRight, Github, MessageSquare, Mail, UserX, AppWindow, Webhook,
   Fingerprint, Radar, Bot, CheckCircle2, XCircle, Minus,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "SaaS & identity posture (SSPM) — Google, M365, Okta, GitHub, Slack | TensorShield",
   description:
     "Most breaches start with a misconfigured SaaS app or a missing MFA. TensorShield continuously checks your identity providers and SaaS apps for risky settings — grounded, compliance-mapped, and fixed with you in the loop.",
-};
+  path: "/saas-posture",
+});
 
 // The posture checks across identity + SaaS apps.
 const CHECKS = [

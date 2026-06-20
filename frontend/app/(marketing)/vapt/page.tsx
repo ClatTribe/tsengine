@@ -1,14 +1,16 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   ShieldCheck, ArrowRight, FileCheck2, Bug, Crosshair, Fingerprint, ListChecks,
   Wrench, Radar, CheckCircle2, XCircle, Minus, ScrollText, BadgeCheck, ClipboardCheck,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "VAPT report — continuous, evidence-grounded penetration testing | TensorShield",
   description:
     "An always-current VAPT / pentest report: every finding grounded in scanner evidence, mapped to CWE, OWASP Top 10 & MITRE ATT&CK, with a recommended fix and a signed attestation. Not a point-in-time PDF that goes stale.",
-};
+  path: "/vapt",
+});
 
 // What a single finding in the report carries — the "are we at par on quality" answer made concrete.
 const FINDING_FIELDS = [

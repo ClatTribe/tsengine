@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import { ArrowRight, Target, Heart, Sparkles } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "About — TensorShield",
   description: "Security shouldn't require a security hire. We're building the fractional security team every SMB deserves.",
-};
+  path: "/about",
+});
 
 const VALUES = [
   { icon: Target, t: "Outcomes, not dashboards", d: "We measure ourselves by issues fixed and audits passed — not by how many charts we can show you." },
