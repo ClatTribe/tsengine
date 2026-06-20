@@ -19,7 +19,14 @@ func PackagesFromSBOM(output any) []Package {
 	}
 	var doc struct {
 		Components []struct {
-			Purl string `json:"purl"`
+			Purl     string `json:"purl"`
+			Licenses []struct {
+				License struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"license"`
+				Expression string `json:"expression"`
+			} `json:"licenses"`
 		} `json:"components"`
 	}
 	if json.Unmarshal([]byte(s), &doc) != nil {
@@ -28,10 +35,32 @@ func PackagesFromSBOM(output any) []Package {
 	out := make([]Package, 0, len(doc.Components))
 	for _, c := range doc.Components {
 		if eco, name, ver, ok := parsePURL(c.Purl); ok {
-			out = append(out, Package{Ecosystem: eco, Name: name, Version: ver})
+			out = append(out, Package{Ecosystem: eco, Name: name, Version: ver, License: firstLicense(c.Licenses)})
 		}
 	}
 	return out
+}
+
+// firstLicense pulls the first usable SPDX id / name / expression from a
+// CycloneDX component's licenses[] (the field is irregular across producers).
+func firstLicense(licenses []struct {
+	License struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"license"`
+	Expression string `json:"expression"`
+}) string {
+	for _, l := range licenses {
+		switch {
+		case l.License.ID != "":
+			return l.License.ID
+		case l.Expression != "":
+			return l.Expression
+		case l.License.Name != "":
+			return l.License.Name
+		}
+	}
+	return ""
 }
 
 // parsePURL parses a Package URL — pkg:<type>/[<namespace>/]<name>@<version>

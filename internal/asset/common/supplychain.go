@@ -38,5 +38,6 @@ func SupplyChainFindings(results []tool.Result) []types.Finding {
 	out := supplychain.Scan(pkgs, supplychain.DefaultCorpus(), supplychain.Options{})
 	out = append(out, supplychain.ScanEOL(pkgs, supplychain.DefaultEOLCorpus(), now)...)
 	out = append(out, supplychain.ScanDeprecated(pkgs, supplychain.DefaultDeprecatedCorpus(), now)...)
+	out = append(out, supplychain.ScanLicenses(pkgs, now)...)
 	return out
 }

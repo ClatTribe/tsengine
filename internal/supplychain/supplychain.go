@@ -49,6 +49,7 @@ type Package struct {
 	Ecosystem string `json:"ecosystem"`
 	Name      string `json:"name"`
 	Version   string `json:"version"`
+	License   string `json:"license,omitempty"` // SPDX id/expression from the SBOM (optional; used by ScanLicenses)
 }
 
 // Options tunes the scan.
