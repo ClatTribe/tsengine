@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, Flame } from "lucide-react";
+import { ShieldCheck, ArrowRight, Flame, Layers } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { IssueActions } from "@/components/issues/issue-actions";
 import { ExclusionRules } from "@/components/issues/exclusion-rules";
+import { PageIntro } from "@/components/ui/page-intro";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -19,21 +20,19 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold">Issues</h1>
-          <p className="max-w-2xl text-xs text-muted">
-            One issue, many signals. The same weakness reported by multiple scanners across your surfaces is
-            collapsed into a single row — so you triage real problems, not duplicate noise.
-          </p>
-        </div>
-        <div className="flex gap-4 text-sm">
-          <Stat n={count} label={showingIgnored ? "ignored" : "issues"} tone="text-ink" />
-          {!showingIgnored && (attacked ?? 0) > 0 && <Stat n={attacked ?? 0} label="under attack" tone="text-critical" />}
-          {!showingIgnored && <Stat n={confirmed} label="multi-tool confirmed" tone="text-pulse" />}
-          {!showingIgnored && collapsed > 0 && <Stat n={collapsed} label="duplicates merged" tone="text-faint" />}
-        </div>
-      </div>
+      <PageIntro
+        icon={Layers}
+        title="Issues"
+        description="One issue, many signals. The same weakness flagged by several scanners across your code, cloud, and apps is merged into a single row — so you fix real problems instead of wading through duplicate alerts."
+        right={
+          <div className="flex gap-4 text-sm">
+            <Stat n={count} label={showingIgnored ? "ignored" : "issues"} tone="text-ink" />
+            {!showingIgnored && (attacked ?? 0) > 0 && <Stat n={attacked ?? 0} label="under attack" tone="text-critical" />}
+            {!showingIgnored && <Stat n={confirmed} label="multi-tool confirmed" tone="text-pulse" />}
+            {!showingIgnored && collapsed > 0 && <Stat n={collapsed} label="duplicates merged" tone="text-faint" />}
+          </div>
+        }
+      />
 
       {/* Active / Ignored toggle */}
       <div className="flex items-center rounded-lg border border-border bg-surface p-0.5 text-sm w-fit">

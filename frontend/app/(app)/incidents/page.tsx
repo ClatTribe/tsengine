@@ -3,6 +3,7 @@ import { ShieldAlert, CheckCircle2, Wrench, ArrowRight, Flame } from "lucide-rea
 import { api } from "@/lib/api";
 import type { Incident } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
+import { PageIntro } from "@/components/ui/page-intro";
 import { timeAgo, duration } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -18,17 +19,18 @@ export default async function IncidentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold">Incidents</h1>
-          <p className="text-xs text-muted">Detect → respond. The agent watches continuously — here&apos;s what changed and what it did.</p>
-        </div>
-        <div className="flex gap-4 text-sm">
-          <Stat n={open.length} label="open" tone="text-high" />
-          <Stat n={resolved.length} label="resolved" tone="text-pulse" />
-          {mttr !== null && <Stat n={fmtMs(mttr)} label="avg time to resolve" tone="text-ink" />}
-        </div>
-      </div>
+      <PageIntro
+        icon={ShieldAlert}
+        title="Incidents"
+        description="What changed since the last scan. The agent watches your stack around the clock, opens an incident the moment a serious new issue appears, and tracks it until it's fixed — so nothing slips through unnoticed."
+        right={
+          <div className="flex gap-4 text-sm">
+            <Stat n={open.length} label="open" tone="text-high" />
+            <Stat n={resolved.length} label="resolved" tone="text-pulse" />
+            {mttr !== null && <Stat n={fmtMs(mttr)} label="avg time to resolve" tone="text-ink" />}
+          </div>
+        }
+      />
 
       <section>
         <SubHead>Open · needs attention</SubHead>

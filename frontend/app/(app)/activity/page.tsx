@@ -1,5 +1,7 @@
+import { Radio } from "lucide-react";
 import { api } from "@/lib/api";
 import { ActivityTimeline, type ActivityEvent } from "@/components/activity/activity-timeline";
+import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
 
@@ -46,5 +48,14 @@ export default async function ActivityPage() {
   const now = new Date();
   for (const ev of events) ev.day = dayLabel(ev.at, now);
 
-  return <ActivityTimeline events={events} />;
+  return (
+    <div className="space-y-5">
+      <PageIntro
+        icon={Radio}
+        title="Activity"
+        description="A live, plain-English log of everything the agent has done for you — every weakness it found, every fix it queued, and every scan it ran. Watch it work in real time."
+      />
+      <ActivityTimeline events={events} />
+    </div>
+  );
 }

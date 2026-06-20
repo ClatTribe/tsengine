@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ShieldAlert, Wrench, ScanLine, Inbox, Radio } from "lucide-react";
+import { ShieldAlert, Wrench, ScanLine, Inbox } from "lucide-react";
 import { SeverityBadge } from "@/components/ui/primitives";
 import { timeAgo, cn } from "@/lib/utils";
 
@@ -71,15 +71,6 @@ export function ActivityTimeline({ events }: { events: ActivityEvent[] }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Activity</h1>
-          <p className="flex items-center gap-1.5 text-xs text-muted">
-            <Radio className="h-3 w-3 text-pulse" /> Everything the agent did — live.
-          </p>
-        </div>
-      </div>
-
       {/* Filter chips */}
       <div className="flex flex-wrap items-center gap-1.5">
         {KINDS.map(({ key, label }) => (
