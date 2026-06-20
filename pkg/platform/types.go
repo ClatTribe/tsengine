@@ -211,14 +211,18 @@ const (
 // timestamped. Key is the stable issue identity (rule + cited entity) so the same issue
 // re-detected across scans maps to the same incident.
 type Incident struct {
-	ID         string    `json:"id"`
-	TenantID   string    `json:"tenant_id"`
-	Key        string    `json:"key"` // stable identity: "<rule_id>|<endpoint>"
-	RuleID     string    `json:"rule_id"`
-	Title      string    `json:"title"`
-	Severity   string    `json:"severity"`
-	Status     string    `json:"status"`     // IncidentOpen | IncidentResolved
-	FindingID  string    `json:"finding_id"` // the finding that opened it
+	ID        string `json:"id"`
+	TenantID  string `json:"tenant_id"`
+	Key       string `json:"key"` // stable identity: "<rule_id>|<endpoint>"
+	RuleID    string `json:"rule_id"`
+	Title     string `json:"title"`
+	Severity  string `json:"severity"`
+	Status    string `json:"status"`     // IncidentOpen | IncidentResolved
+	FindingID string `json:"finding_id"` // the finding that opened it
+	// Attacked marks an incident opened/escalated because the issue is observed under
+	// attack in production (a runtime-protection signal, ADR-0007 Phase 0b) — escalated
+	// regardless of the severity floor, since a live exploit attempt is itself urgent.
+	Attacked   bool      `json:"attacked,omitempty"`
 	OpenedAt   time.Time `json:"opened_at"`
 	ResolvedAt time.Time `json:"resolved_at,omitempty"`
 	LedgerRef  string    `json:"ledger_ref,omitempty"`

@@ -57,14 +57,19 @@ type Result struct {
 // Idempotent: re-running with the same findings opens/resolves nothing. The current
 // findings are the authoritative present state (the caller passes the freshly-scanned
 // set, not the lingering finding store), so a now-empty scan correctly resolves.
-func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []types.Finding) (Result, error) {
+// attacked is the set of finding keys (rule_id|endpoint) observed under attack in
+// production (runtime-protection signal, ADR-0007 Phase 0b). Those open an incident
+// REGARDLESS of the severity floor — a live exploit attempt is itself urgent — and the
+// incident is marked Attacked. Pass nil when there is no runtime signal.
+func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []types.Finding, attacked map[string]bool) (Result, error) {
 	var res Result
 
-	// present issues at/above the threshold, keyed by stable identity
+	// present issues: at/above the threshold, OR observed under attack (any severity).
 	present := map[string]types.Finding{}
 	for _, f := range current {
-		if d.atOrAbove(f.Severity) {
-			present[Key(f)] = f
+		k := Key(f)
+		if d.atOrAbove(f.Severity) || attacked[k] {
+			present[k] = f
 		}
 	}
 
@@ -84,10 +89,14 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 		if _, already := openByKey[key]; already {
 			continue
 		}
+		title := f.Title
+		if attacked[key] {
+			title = "[under active attack] " + title
+		}
 		inc := platform.Incident{
 			ID: d.id("inc"), TenantID: tenantID, Key: key, RuleID: f.RuleID,
-			Title: f.Title, Severity: string(f.Severity), Status: platform.IncidentOpen,
-			FindingID: f.ID, OpenedAt: d.now(),
+			Title: title, Severity: string(f.Severity), Status: platform.IncidentOpen,
+			FindingID: f.ID, Attacked: attacked[key], OpenedAt: d.now(),
 		}
 		d.record("incident_opened", inc)
 		if err := d.Store.PutIncident(ctx, inc); err != nil {

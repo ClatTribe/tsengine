@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // runtime.go is the Runtime Protection correlation (ADR-0007 Phase 0). It joins
@@ -43,6 +44,29 @@ func AnnotateRuntime(issues []Issue, events []platform.RuntimeEvent) int {
 		}
 	}
 	return flagged
+}
+
+// AttackedKeys returns the set of finding identities (rule_id|endpoint — the same key
+// the incident detector uses) whose endpoint is being attacked in production per a
+// runtime event. The platform escalates these into incidents regardless of the
+// severity floor (ADR-0007 Phase 0b: a live exploit attempt is itself urgent).
+func AttackedKeys(findings []types.Finding, events []platform.RuntimeEvent) map[string]bool {
+	if len(events) == 0 {
+		return nil
+	}
+	underAttack := map[string]bool{}
+	for _, e := range events {
+		if p := httpPath(e.Endpoint); p != "" {
+			underAttack[p] = true
+		}
+	}
+	out := map[string]bool{}
+	for _, f := range findings {
+		if p := httpPath(f.Endpoint); p != "" && underAttack[p] {
+			out[f.RuleID+"|"+f.Endpoint] = true
+		}
+	}
+	return out
 }
 
 // httpPath normalizes a URL or route to its host-less path ("/search"), lower-cased,

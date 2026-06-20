@@ -1,10 +1,13 @@
 # ADR 0007 — Runtime Protection (in-app firewall / RASP), "Zen" parity
 
-- **Status:** **Phase 0 Accepted + built (2026-06-20)** — the un-gated ingestion +
-  correlation slice shipped (`internal/crossdetect/runtime.go`, `platform.RuntimeEvent`,
-  `POST/GET /v1/runtime/events`, the `attacked` issue annotation). **Phase 1 (the managed
-  in-app sensor) remains Proposed — decision required**; do not ship the runtime agent
-  until accepted.
+- **Status:** **Phase 0 + 0b Accepted + built (2026-06-20)** — the un-gated slices
+  shipped: Phase 0 (ingestion + correlation — `internal/crossdetect/runtime.go`,
+  `platform.RuntimeEvent`, `POST/GET /v1/runtime/events`, the `attacked` issue
+  annotation) and Phase 0b (an observed-under-attack finding escalates into a
+  `platform.Incident` regardless of severity floor — `crossdetect.AttackedKeys` →
+  `Detector.Reconcile` → `Incident.Attacked`, so detect→respond fires for live attacks).
+  **Phase 1 (the managed in-app sensor) remains Proposed — decision required**; do not
+  ship the runtime agent until accepted.
 - **Date:** 2026-06-20
 - **Affects:** §1 (repository identity — "orchestrator over OSS scanners"), §13 (no in-house detection engines), §3 (asset types), the platform (`internal/runner`, `internal/detect`, `internal/crossdetect`), a potential NEW artifact (a runtime sensor that lives inside the customer's app)
 

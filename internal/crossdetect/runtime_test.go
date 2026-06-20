@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 func TestHttpPath(t *testing.T) {
@@ -48,5 +49,21 @@ func TestAnnotateRuntime(t *testing.T) {
 	fresh := []Issue{{Key: "x", Endpoint: "/search"}}
 	if n := AnnotateRuntime(fresh, nil); n != 0 || fresh[0].Attacked {
 		t.Error("no events should flag nothing")
+	}
+}
+
+func TestAttackedKeys(t *testing.T) {
+	findings := []types.Finding{
+		{ID: "f1", RuleID: "nuclei::sqli", Endpoint: "https://app.acme.com/search?q="},
+		{ID: "f2", RuleID: "nuclei::xss", Endpoint: "https://app.acme.com/profile"},
+		{ID: "f3", RuleID: "trivy::CVE-2021-1", Endpoint: "pkg:npm/lodash@4.17.0"}, // SCA, not a route
+	}
+	events := []platform.RuntimeEvent{{Endpoint: "/search", Blocked: true}}
+	keys := AttackedKeys(findings, events)
+	if len(keys) != 1 || !keys["nuclei::sqli|https://app.acme.com/search?q="] {
+		t.Errorf("only the /search finding should be attacked-keyed, got %v", keys)
+	}
+	if AttackedKeys(findings, nil) != nil {
+		t.Error("no events → nil key set")
 	}
 }
