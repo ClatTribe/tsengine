@@ -56,16 +56,25 @@ func TestVAPTReport_GroundedSummaryAndMarkdown(t *testing.T) {
 		t.Errorf("findings should be severity-sorted (critical first): %+v", r.Findings)
 	}
 
+	// finding-level enrichment: SQLi (CWE-89) → OWASP A03 + parameterized-query remediation.
+	if f := r.Findings[0]; len(f.OWASP) == 0 || !strings.Contains(f.OWASP[0], "A03") || !strings.Contains(f.Remediation, "parameterized") {
+		t.Errorf("SQLi finding should carry OWASP A03 + a parameterized-query fix, got owasp=%v rem=%q", f.OWASP, f.Remediation)
+	}
+
 	md := RenderVAPTMarkdown(r)
 	for _, want := range []string{
 		"Vulnerability Assessment & Penetration Test — Acme Inc",
 		"Overall risk rating: Critical",
-		"https://acme.example", // scope
+		"This assessment of Acme Inc identified", // the narrative executive summary
+		"https://acme.example",                   // scope
 		"SQL injection in /search",
 		"`nuclei` · `nuclei::sqli`", // tool/rule evidence
 		"CWE-89",
+		"A03:2021 Injection",     // OWASP mapping
+		"Recommended fix:",       // per-finding remediation guidance
+		"parameterized",          // the actual fix text
+		"awaiting your approval", // fix-ready tie-in
 		"actively exploited (CISA KEV)",
-		"a fix has been prepared",
 		"cites the tool and rule that proves it", // the grounding statement
 	} {
 		if !strings.Contains(md, want) {
