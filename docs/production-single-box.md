@@ -123,11 +123,34 @@ Each phase = one PR with tests; this table is the source of truth for status.
 | Phase | Scope | Key deliverables | Status |
 |---|---|---|---|
 | **P0** | **Design** (this doc) | threat model + target arch + phased plan + scale-gaps | **this PR** |
-| **P1** | **Sandbox hardening** | `buildRunArgs` adds `--read-only` + `--tmpfs` scratch, `--user`, `--pids-limit`, `--memory`, `--cpus`, `--ulimit`, `--network` policy; all env-tunable (`TSENGINE_SANDBOX_*`) with safe defaults; unit tests assert every flag | planned |
+| **P1** | **Sandbox hardening** | `buildRunArgs` adds `--read-only` + `--tmpfs` scratch, `--user`, `--pids-limit`, `--memory`, `--cpus`, `--ulimit`, `--network` policy; all env-tunable (`TSENGINE_SANDBOX_*`, §5.1) with safe defaults; unit tests assert every flag | **done (#260)** |
 | **P2** | **De-privilege the daemon** | `docker-compose.prod.yml` with a `docker-socket-proxy` (internal net, create/start/stop/rm only); platform uses `DOCKER_HOST`; sandbox runs on an isolated network; nothing publishes the docker socket | planned |
 | **P3** | **TLS edge** | Caddy service (auto-cert / local CA), security headers (HSTS, CSP-frame, nosniff), platform+frontend unpublished; only `:443` exposed | planned |
 | **P4** | **Secrets + backups + deploy script** | secrets from file/Docker-secret (not inline env) + rotation note; `scripts/backup.sh`/`restore.sh` for `platform-data`; **`scripts/deploy-single-box.sh`** (prereq check → gen secrets → build images incl. sandbox → up hardened stack → smoke test) | planned |
 | **P5** | **Verify + docs finalize** | end-to-end smoke on the hardened stack incl. a real sandbox scan; finalize this doc's deploy runbook (§7); CLAUDE.md + DEPLOYMENT.md cross-links | planned |
+
+### 5.1 Sandbox hardening knobs (P1, shipped)
+
+Every per-scan sandbox is confined by `internal/sandbox.Hardening`, filled from the
+environment (`HardeningFromEnv`) when the caller leaves it unset. **Defaults confine
+without breaking scans** (resource/PID/file limits + a writable `/tmp` apply to every
+sandbox — DoS protection T5); the stricter controls are **opt-in** so the prod profile
+(P2/P4) turns them on after validating against the shipped sandbox image.
+
+| Env | Default | Flag | Notes |
+|---|---|---|---|
+| `TSENGINE_SANDBOX_MEMORY` | `4g` | `--memory` | RAM cap; `off`/`none`/`0` disables |
+| `TSENGINE_SANDBOX_CPUS` | `2` | `--cpus` | CPU cap |
+| `TSENGINE_SANDBOX_PIDS` | `1024` | `--pids-limit` | fork-bomb guard |
+| `TSENGINE_SANDBOX_NOFILE` | `4096` | `--ulimit nofile=` | open-file cap |
+| `TSENGINE_SANDBOX_TMPFS_TMP` | `512m` | `--tmpfs /tmp:rw,nosuid,nodev,size=` | writable scratch |
+| `TSENGINE_SANDBOX_READONLY` | *(off)* | `--read-only` | read-only rootfs; opt-in — relies on the `/tmp` tmpfs |
+| `TSENGINE_SANDBOX_USER` | *(image default)* | `--user` | e.g. `65534:65534` (nobody); opt-in |
+| `TSENGINE_SANDBOX_NETWORK` | *(docker default)* | `--network` | an isolated bridge; set by the prod profile (P2) |
+
+Already-present (unconditional): `--rm`, `--cap-drop=ALL`, `--security-opt
+no-new-privileges`, the tool-server port bound to `127.0.0.1`, and every bind-mount forced
+`:ro`. The sandbox is **never** given the Docker socket.
 
 ---
 
