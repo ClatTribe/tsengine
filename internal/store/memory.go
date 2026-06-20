@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -24,6 +25,7 @@ type Memory struct {
 	controls    map[string]map[string]platform.ControlState  // tenantID → "framework/control" → state
 	incidents   map[string]map[string]platform.Incident      // tenantID → incidentID → incident
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
+	pentests    map[string]map[string]pentest.Engagement     // tenantID → engagementID → pentest
 	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
 	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
 	users       map[string]platform.User                     // userID → user (email globally unique)
@@ -42,6 +44,7 @@ func NewMemory() *Memory {
 		controls:    map[string]map[string]platform.ControlState{},
 		incidents:   map[string]map[string]platform.Incident{},
 		ignores:     map[string]map[string]platform.IgnoreRule{},
+		pentests:    map[string]map[string]pentest.Engagement{},
 		reviews:     map[string]map[string]platform.ReviewRequest{},
 		apps:        map[string][]platform.ThirdPartyApp{},
 		users:       map[string]platform.User{},
@@ -313,6 +316,36 @@ func (m *Memory) DeleteIgnoreRule(_ context.Context, tenantID, issueKey string) 
 	return nil
 }
 
+func (m *Memory) PutPentest(_ context.Context, eng pentest.Engagement) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pentests[eng.TenantID] == nil {
+		m.pentests[eng.TenantID] = map[string]pentest.Engagement{}
+	}
+	m.pentests[eng.TenantID][eng.ID] = eng
+	return nil
+}
+
+func (m *Memory) ListPentests(_ context.Context, tenantID string) ([]pentest.Engagement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]pentest.Engagement, 0, len(m.pentests[tenantID]))
+	for _, e := range m.pentests[tenantID] {
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (m *Memory) GetPentest(_ context.Context, tenantID, id string) (pentest.Engagement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	e, ok := m.pentests[tenantID][id]
+	if !ok {
+		return pentest.Engagement{}, ErrNotFound
+	}
+	return e, nil
+}
+
 func (m *Memory) PutReviewRequest(_ context.Context, r platform.ReviewRequest) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -366,6 +399,7 @@ type Snapshot struct {
 	Controls    map[string]map[string]platform.ControlState  `json:"controls"`
 	Incidents   map[string]map[string]platform.Incident      `json:"incidents"`
 	Ignores     map[string]map[string]platform.IgnoreRule    `json:"ignores,omitempty"`
+	Pentests    map[string]map[string]pentest.Engagement     `json:"pentests,omitempty"`
 	Reviews     map[string]map[string]platform.ReviewRequest `json:"reviews"`
 	Apps        map[string][]platform.ThirdPartyApp          `json:"apps"`
 	Users       map[string]platform.User                     `json:"users"`
@@ -387,6 +421,7 @@ func (m *Memory) Export() Snapshot {
 		Controls:    m.controls,
 		Incidents:   m.incidents,
 		Ignores:     m.ignores,
+		Pentests:    m.pentests,
 		Reviews:     m.reviews,
 		Apps:        m.apps,
 		Users:       m.users,
@@ -407,6 +442,7 @@ func (m *Memory) load(s Snapshot) {
 	m.controls = orEmptyControls(s.Controls)
 	m.incidents = orEmptyIncidents(s.Incidents)
 	m.ignores = orEmptyIgnores(s.Ignores)
+	m.pentests = orEmptyPentests(s.Pentests)
 	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)
 	m.users = s.Users
@@ -452,6 +488,12 @@ func orEmptyIncidents(m map[string]map[string]platform.Incident) map[string]map[
 func orEmptyIgnores(m map[string]map[string]platform.IgnoreRule) map[string]map[string]platform.IgnoreRule {
 	if m == nil {
 		return map[string]map[string]platform.IgnoreRule{}
+	}
+	return m
+}
+func orEmptyPentests(m map[string]map[string]pentest.Engagement) map[string]map[string]pentest.Engagement {
+	if m == nil {
+		return map[string]map[string]pentest.Engagement{}
 	}
 	return m
 }

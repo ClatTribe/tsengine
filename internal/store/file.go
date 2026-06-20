@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -133,6 +134,13 @@ func (f *File) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error 
 
 func (f *File) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error {
 	if err := f.Memory.DeleteIgnoreRule(ctx, tenantID, issueKey); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutPentest(ctx context.Context, eng pentest.Engagement) error {
+	if err := f.Memory.PutPentest(ctx, eng); err != nil {
 		return err
 	}
 	return f.persist()
