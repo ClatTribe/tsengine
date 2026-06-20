@@ -10,17 +10,18 @@ import (
 
 // Score is the outcome of scoring one scan against one fixture.
 type Score struct {
-	Fixture         string   `json:"fixture"`
-	Metric          string   `json:"metric"`
-	RawFindings     int      `json:"raw_findings"`
-	EnrichedCount   int      `json:"enriched_findings"`
-	DetectionRecall float64  `json:"detection_recall"`
-	Matched         []string `json:"matched,omitempty"`
-	Missed          []string `json:"missed,omitempty"`
-	FalsePositives  []string `json:"false_positives,omitempty"`
-	EnrichmentCov   float64  `json:"enrichment_coverage"`
-	Pass            bool     `json:"pass"`
-	FailReason      string   `json:"fail_reason,omitempty"`
+	Fixture            string   `json:"fixture"`
+	Metric             string   `json:"metric"`
+	RawFindings        int      `json:"raw_findings"`
+	EnrichedCount      int      `json:"enriched_findings"`
+	DetectionRecall    float64  `json:"detection_recall"`
+	Matched            []string `json:"matched,omitempty"`
+	Missed             []string `json:"missed,omitempty"`
+	FalsePositives     []string `json:"false_positives,omitempty"`
+	FalsePositiveCount int      `json:"false_positive_count"`
+	EnrichmentCov      float64  `json:"enrichment_coverage"`
+	Pass               bool     `json:"pass"`
+	FailReason         string   `json:"fail_reason,omitempty"`
 }
 
 // ScoreScan evaluates a scan against a fixture. Detection is scored on
@@ -57,12 +58,26 @@ func ScoreScan(f *Fixture, scan *types.Scan) Score {
 		s.DetectionRecall = 1.0 // nothing required → trivially complete
 	}
 
-	// False positives over must_not_find.
+	// False positives over must_not_find (specific rule_ids that must not appear).
 	for _, bad := range f.MustNotFind {
 		if anyContains(detected, bad) {
 			s.FalsePositives = append(s.FalsePositives, bad)
 		}
 	}
+
+	// Severity-gated false positives (FP-control / benign fixtures): on a
+	// target that should be clean, any raw finding at or above the fixture's
+	// FP severity floor is an unexpected actionable alarm. Robust where
+	// MaxFindings is brittle — a clean target may legitimately emit info notes.
+	if f.MaxSeverity != "" {
+		floor := f.MaxSeverity.Rank()
+		for _, fnd := range scan.FindingsRaw {
+			if fnd.Severity.Rank() >= floor {
+				s.FalsePositives = append(s.FalsePositives, fmt.Sprintf("%s [%s]", fnd.RuleID, fnd.Severity))
+			}
+		}
+	}
+	s.FalsePositiveCount = len(s.FalsePositives)
 
 	s.EnrichmentCov = enrichmentCoverage(scan.FindingsEnriched)
 
