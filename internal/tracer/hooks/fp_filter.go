@@ -27,6 +27,12 @@ type demoteRule struct {
 	pattern *regexp.Regexp
 	to      types.Severity
 	reason  string
+	// requireNoCWE makes the rule fire ONLY when the finding carries no CWE.
+	// This is the structural recall guard for the broad fingerprint patterns
+	// (`-detect`, favicon): a real vulnerability is CWE-classified, so a
+	// CWE-bearing finding is never demoted by a fingerprint rule even if its
+	// rule_id happens to match.
+	requireNoCWE bool
 }
 
 // NewFPFilter builds the default filter. The rule sets are deliberately
@@ -44,7 +50,17 @@ func NewFPFilter() *FPFilter {
 		demote: []demoteRule{
 			// WAF detection is useful context but not a finding to action
 			// on its own — demote to info if a scanner rated it higher.
-			{regexp.MustCompile(`(?i)waf-detect`), types.SeverityInfo, "waf detection is informational context"},
+			{regexp.MustCompile(`(?i)waf-detect`), types.SeverityInfo, "waf detection is informational context", false},
+			// Technology / service FINGERPRINTS (nuclei's `-detect` convention:
+			// nginx-detect, wordpress-detect, jira-detect, …) are inventory /
+			// recon, not vulnerabilities — yet a scanner may rate them low/medium,
+			// inflating the actionable finding count (a false positive in the
+			// "is this a real issue?" sense). Demote to info. Guarded by
+			// requireNoCWE so a CWE-classified vulnerability is never touched
+			// (the recall-safety invariant — pre-L1.5 findings_raw keeps full
+			// severity regardless; this only shapes the enriched/L2/VAPT view).
+			{regexp.MustCompile(`(?i)-detect$`), types.SeverityInfo, "technology/service fingerprint (nuclei -detect) — inventory, not a vulnerability", true},
+			{regexp.MustCompile(`(?i)favicon`), types.SeverityInfo, "favicon-hash fingerprint — inventory, not a vulnerability", true},
 		},
 	}
 }
@@ -65,6 +81,9 @@ func (h *FPFilter) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bo
 	}
 
 	for _, d := range h.demote {
+		if d.requireNoCWE && len(f.CWE) > 0 {
+			continue // CWE-classified → a real vulnerability, never a fingerprint
+		}
 		if d.pattern.MatchString(f.RuleID) && f.Severity.Rank() > d.to.Rank() {
 			from := f.Severity
 			f.Severity = d.to
