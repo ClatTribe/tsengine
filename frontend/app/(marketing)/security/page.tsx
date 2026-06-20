@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import { ShieldCheck, Lock, FileCheck2, KeyRound, EyeOff, Fingerprint, ArrowRight, CheckCircle2 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Security & Trust — TensorShield",
   description: "Signed, reproducible, grounded evidence. Least-privilege by default, human-gated writes, encrypted at rest. The trust layer SMBs and their auditors need.",
-};
+  path: "/security",
+});
 
 const FRAMEWORKS = [
   "SOC 2", "ISO 27001", "PCI-DSS v4", "HIPAA", "CIS v8", "NIST CSF 2.0", "GDPR",

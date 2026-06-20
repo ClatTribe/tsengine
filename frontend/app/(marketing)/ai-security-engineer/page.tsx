@@ -1,14 +1,16 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   Bot, ArrowRight, ScanLine, Filter, Wrench, FileCheck2, Fingerprint,
   UserCheck, ShieldCheck, GitPullRequest, Power, ScrollText, CheckCircle2, XCircle, Minus,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Your AI security engineer — detects, triages, fixes, with you in the loop | TensorShield",
   description:
     "Not another scanner. An AI security engineer that runs the whole loop on best-in-class OSS — detect, triage real risk from noise, prepare the fix, and prove it — applying anything consequential only after you approve.",
-};
+  path: "/ai-security-engineer",
+});
 
 // What the agent actually does, end to end.
 const LOOP = [

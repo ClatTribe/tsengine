@@ -1,14 +1,16 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   GitMerge, ArrowRight, ShieldCheck, GitBranch, FileCode2, GaugeCircle,
   Layers, Webhook, Terminal, CircleSlash, Crosshair, Import,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Security in your CI/CD pipeline — block the PR, not the team | TensorShield",
   description:
     "Run TensorShield in your pipeline: a build gate that fails only on NEW issues over your threshold, native SARIF into GitHub's Security tab, and a one-command import for the scanners you already run. Best-in-class OSS underneath.",
-};
+  path: "/ci-cd",
+});
 
 // The three things the pipeline integration actually does — each maps to a real CLI command.
 const STEPS = [

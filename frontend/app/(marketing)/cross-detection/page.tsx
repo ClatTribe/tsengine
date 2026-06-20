@@ -1,13 +1,15 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   Spline, ArrowRight, Layers, GitMerge, EyeOff, ShieldCheck, Crown, Boxes, Workflow,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "One platform, every surface — cross-detection that connects the dots | TensorShield",
   description:
     "Most tools hand you a pile of findings per scanner. TensorShield unifies them: the same issue from many scanners becomes one, weaknesses chain across surfaces into attack paths, and you triage real risk — not duplicate noise.",
-};
+  path: "/cross-detection",
+});
 
 // What the unified platform actually does — each maps to a shipped capability.
 const PILLARS = [

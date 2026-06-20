@@ -1,13 +1,12 @@
-import type { Metadata } from "next";
 import { ScanForm } from "@/components/marketing/scan-form";
-import { SITE_URL } from "@/lib/site";
+import { pageMeta } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = pageMeta({
   title: "Free Email Security Check — Is Your Domain Spoofable? | TensorShield",
   description:
     "Instantly check your domain's email-auth posture (DMARC, SPF, DKIM) for free — no signup. See if attackers can spoof your domain for phishing, and get a security grade in seconds.",
-  alternates: { canonical: `${SITE_URL}/scan` },
-};
+  path: "/scan",
+});
 
 export default function ScanPage() {
   return (
