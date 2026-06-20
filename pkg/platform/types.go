@@ -125,9 +125,13 @@ const (
 // agentic-SMB spec): 0=observe, 1=reversible/low, 2=consequential, 3=irreversible/
 // legal. Tier ≥ 2 must be human-gated before it is applied.
 type Action struct {
-	ID           string         `json:"id"`
-	TenantID     string         `json:"tenant_id"`
-	FindingID    string         `json:"finding_id"`
+	ID        string `json:"id"`
+	TenantID  string `json:"tenant_id"`
+	FindingID string `json:"finding_id"` // the representative finding (always set — grounding)
+	// FindingIDs is the full set a *bulk* action resolves (≥2). Empty for a single-
+	// finding action; when set, FindingID is the first/representative of this set. A
+	// bulk fix (one PR addressing many related alerts) carries every finding it fixes.
+	FindingIDs   []string       `json:"finding_ids,omitempty"`
 	ConnectionID string         `json:"connection_id,omitempty"` // the connection that delivers this action
 	Kind         string         `json:"kind"`                    // ActOpenPR | ActApplyConfig | ...
 	Tier         int            `json:"tier"`                    // 0..3

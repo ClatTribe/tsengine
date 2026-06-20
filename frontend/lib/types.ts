@@ -115,6 +115,7 @@ export interface Action {
   id: string;
   tenant_id: string;
   finding_id: string;
+  finding_ids?: string[]; // a bulk action resolves >1 finding (one PR, many alerts)
   connection_id?: string;
   kind: string;
   tier: number;
