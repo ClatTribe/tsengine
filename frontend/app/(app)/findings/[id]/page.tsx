@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ShieldAlert, Flame, Wrench, GitPullRequest, Settings2, Ticket, FileWarning, ArrowRight, Radar } from "lucide-react";
+import { ArrowLeft, ShieldAlert, Flame, Wrench, GitPullRequest, Settings2, Ticket, FileWarning, ArrowRight, Radar, FileCode2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import { SeverityBadge, Tag } from "@/components/ui/primitives";
@@ -72,6 +72,38 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
         <section>
           <div className="mb-2 text-xs uppercase tracking-wider text-muted">Description</div>
           <div className="card p-5 text-sm leading-relaxed text-muted">{f.description}</div>
+        </section>
+      )}
+
+      {f.code_provenance && (
+        <section>
+          <div className="mb-2 text-xs uppercase tracking-wider text-muted">Fix in code (Cloud-to-Code)</div>
+          <div className="card border-accent/40 bg-accent-soft/30 p-5">
+            <div className="flex items-start gap-3">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-white shadow-sm">
+                <FileCode2 className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold">This runtime issue was provisioned by Infrastructure-as-Code</div>
+                <p className="mt-1 text-sm leading-relaxed text-muted">
+                  Fix it at the source — patching the live resource will be undone by the next deploy.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <code className="mono rounded border border-border bg-bg px-2 py-1 text-xs">
+                    {f.code_provenance.file}:{f.code_provenance.line}
+                  </code>
+                  <Tag>{f.code_provenance.iac_resource}</Tag>
+                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">
+                    {f.code_provenance.confidence} confidence
+                  </span>
+                </div>
+                <p className="mt-3 text-xs leading-relaxed text-faint">
+                  {f.code_provenance.match_basis} — matched on{" "}
+                  <code className="mono">{f.code_provenance.matched_on}</code>
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
       )}
 
