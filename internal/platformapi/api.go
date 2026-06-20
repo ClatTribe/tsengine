@@ -84,6 +84,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))         // create + authorize a pentest engagement
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))           // list engagements
 	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))        // one engagement + findings
+	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))   // run/retest the engagement (passive, RoE-gated)
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                  // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
