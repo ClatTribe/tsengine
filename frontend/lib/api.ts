@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, IssuesResponse, PentestEngagement, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, Questionnaire, ReviewRequest, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -54,6 +54,11 @@ export const api = {
     safe<IssuesResponse>(`/v1/issues${showIgnored ? "?show=ignored" : ""}`, { issues: [], count: 0, raw_findings: 0, confirmed: 0, ignored: 0 }),
   pentests: () => safe<PentestEngagement[]>("/v1/pentest", []),
   pentest: (id: string) => safe<PentestEngagement | null>(`/v1/pentest/${id}`, null),
+  pentestStats: () =>
+    safe<PentestStats>("/v1/pentest/stats", {
+      engagements: 0, active_engagements: 0, completed_runs: 0, total_findings: 0,
+      high_plus: 0, exploitation_proven: 0, high_plus_proven: 0, verified_rate: 0, high_plus_found: false,
+    }),
   approvals: () => safe<Action[]>("/v1/approvals", []),
   connections: () => safe<Connection[]>("/v1/connections", []),
   tenant: () => safe<Tenant | null>("/v1/tenant", null),
