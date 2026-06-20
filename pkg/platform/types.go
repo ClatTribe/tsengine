@@ -270,6 +270,25 @@ const (
 	ExclByAny     = "any"
 )
 
+// RuntimeEvent is a single attack observation from an in-app firewall / RASP sensor
+// (Runtime Protection, ADR-0007 Phase 0 — e.g. the OSS "Zen" firewall running in the
+// customer's app). tsengine consumes it as a signal; it does NOT block — the sensor
+// does. The platform's value is correlating these with scan-time findings: a finding
+// on an endpoint that is ALSO being attacked in production is observed-in-the-wild,
+// the strongest exploitability signal there is.
+type RuntimeEvent struct {
+	ID         string    `json:"id"`
+	TenantID   string    `json:"tenant_id"`
+	App        string    `json:"app,omitempty"`         // the app/service that reported it
+	AttackKind string    `json:"attack_kind,omitempty"` // sql_injection | ssrf | path_traversal | xss | ...
+	Endpoint   string    `json:"endpoint,omitempty"`    // the route the attack hit
+	Sink       string    `json:"sink,omitempty"`        // the dangerous sink reached, if known
+	SourceIP   string    `json:"source_ip,omitempty"`   // the attacker IP (informational)
+	Blocked    bool      `json:"blocked"`               // did the sensor block it (vs monitor-only)
+	Source     string    `json:"source,omitempty"`      // sensor name (e.g. "zen")
+	OccurredAt time.Time `json:"occurred_at"`
+}
+
 // proposed action — the "AI + a human" trust model SMB security buyers expect
 // (a managed-SOC / vCISO escalation). It is request-and-resolve, tenant-scoped,
 // and signed into the ledger like every other decision (§18.2 inv. 4). The agent

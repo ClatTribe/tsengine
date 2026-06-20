@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -87,10 +88,83 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 			confirmed++
 		}
 	}
+
+	// Runtime-protection correlation (ADR-0007 Phase 0): flag issues whose endpoint is
+	// being attacked in production per an in-app-firewall signal — observed-in-the-wild.
+	events, err := d.Store.ListRuntimeEvents(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	attacked := crossdetect.AnnotateRuntime(issues, events)
+
 	respond(w, map[string]any{
 		"issues": issues, "count": len(issues), "raw_findings": rawCount,
-		"confirmed": confirmed, "ignored": len(ignored), "excluded": excludedCount,
+		"confirmed": confirmed, "ignored": len(ignored), "excluded": excludedCount, "attacked": attacked,
 	}, nil)
+}
+
+// handleIngestRuntimeEvents accepts attack observations from an in-app firewall / RASP
+// sensor (ADR-0007 Phase 0). It STORES them as a signal — it never blocks (the sensor
+// does). Accepts a single event or a batch. Tenant-scoped; each event is stamped with
+// the tenant + an id + an arrival time when absent. This is the seam an OSS runtime
+// firewall (e.g. Zen) streams its block events into.
+func (d Deps) handleIngestRuntimeEvents(w http.ResponseWriter, r *http.Request, tenantID string) {
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<20))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	// Accept either a single event object or an array of them.
+	var batch []platform.RuntimeEvent
+	if err := json.Unmarshal(raw, &batch); err != nil {
+		var one platform.RuntimeEvent
+		if err2 := json.Unmarshal(raw, &one); err2 != nil {
+			writeJSON(w, http.StatusBadRequest, errBody("body must be a runtime event or an array of them"))
+			return
+		}
+		batch = []platform.RuntimeEvent{one}
+	}
+	now := time.Now().UTC()
+	stored := 0
+	for _, ev := range batch {
+		ev.TenantID = tenantID // never trust a body-supplied tenant (isolation)
+		if ev.ID == "" {
+			ev.ID = d.newID("rte")
+		}
+		if ev.OccurredAt.IsZero() {
+			ev.OccurredAt = now
+		}
+		if err := d.Store.PutRuntimeEvent(r.Context(), ev); err != nil {
+			respond(w, nil, err)
+			return
+		}
+		stored++
+	}
+	if d.Recorder != nil && stored > 0 {
+		d.Recorder.Record("runtime events ingested", "runtime_ingest",
+			map[string]any{"tenant_id": tenantID, "count": stored}, "in-app firewall signal")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"stored": stored})
+}
+
+// handleListRuntimeEvents returns the tenant's stored runtime-protection events.
+func (d Deps) handleListRuntimeEvents(w http.ResponseWriter, r *http.Request, tenantID string) {
+	events, err := d.Store.ListRuntimeEvents(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if events == nil {
+		events = []platform.RuntimeEvent{}
+	}
+	blocked := 0
+	for _, e := range events {
+		if e.Blocked {
+			blocked++
+		}
+	}
+	respond(w, map[string]any{"events": events, "count": len(events), "blocked": blocked}, nil)
 }
 
 // handleListExclusions returns the tenant's custom exclusion rules.

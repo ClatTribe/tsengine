@@ -26,6 +26,7 @@ type Memory struct {
 	incidents   map[string]map[string]platform.Incident      // tenantID → incidentID → incident
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
 	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
+	runtimeEvts map[string][]platform.RuntimeEvent           // tenantID → runtime-protection events (append-only)
 	pentests    map[string]map[string]pentest.Engagement     // tenantID → engagementID → pentest
 	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
 	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
@@ -46,6 +47,7 @@ func NewMemory() *Memory {
 		incidents:   map[string]map[string]platform.Incident{},
 		ignores:     map[string]map[string]platform.IgnoreRule{},
 		exclusions:  map[string]map[string]platform.ExclusionRule{},
+		runtimeEvts: map[string][]platform.RuntimeEvent{},
 		pentests:    map[string]map[string]pentest.Engagement{},
 		reviews:     map[string]map[string]platform.ReviewRequest{},
 		apps:        map[string][]platform.ThirdPartyApp{},
@@ -345,6 +347,19 @@ func (m *Memory) DeleteExclusionRule(_ context.Context, tenantID, id string) err
 	return nil
 }
 
+func (m *Memory) PutRuntimeEvent(_ context.Context, ev platform.RuntimeEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.runtimeEvts[ev.TenantID] = append(m.runtimeEvts[ev.TenantID], ev)
+	return nil
+}
+
+func (m *Memory) ListRuntimeEvents(_ context.Context, tenantID string) ([]platform.RuntimeEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]platform.RuntimeEvent(nil), m.runtimeEvts[tenantID]...), nil
+}
+
 func (m *Memory) PutPentest(_ context.Context, eng pentest.Engagement) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -429,6 +444,7 @@ type Snapshot struct {
 	Incidents   map[string]map[string]platform.Incident      `json:"incidents"`
 	Ignores     map[string]map[string]platform.IgnoreRule    `json:"ignores,omitempty"`
 	Exclusions  map[string]map[string]platform.ExclusionRule `json:"exclusions,omitempty"`
+	RuntimeEvts map[string][]platform.RuntimeEvent           `json:"runtime_events,omitempty"`
 	Pentests    map[string]map[string]pentest.Engagement     `json:"pentests,omitempty"`
 	Reviews     map[string]map[string]platform.ReviewRequest `json:"reviews"`
 	Apps        map[string][]platform.ThirdPartyApp          `json:"apps"`
@@ -452,6 +468,7 @@ func (m *Memory) Export() Snapshot {
 		Incidents:   m.incidents,
 		Ignores:     m.ignores,
 		Exclusions:  m.exclusions,
+		RuntimeEvts: m.runtimeEvts,
 		Pentests:    m.pentests,
 		Reviews:     m.reviews,
 		Apps:        m.apps,
@@ -474,6 +491,7 @@ func (m *Memory) load(s Snapshot) {
 	m.incidents = orEmptyIncidents(s.Incidents)
 	m.ignores = orEmptyIgnores(s.Ignores)
 	m.exclusions = orEmptyExclusions(s.Exclusions)
+	m.runtimeEvts = orEmpty(s.RuntimeEvts)
 	m.pentests = orEmptyPentests(s.Pentests)
 	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)

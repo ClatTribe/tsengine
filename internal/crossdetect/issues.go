@@ -23,6 +23,11 @@ type Issue struct {
 	Count      int      `json:"count"`       // how many raw findings collapsed in
 	Confirmed  bool     `json:"confirmed"`   // ≥2 independent tools agree
 	FindingIDs []string `json:"finding_ids"` // the raw findings this issue rolls up
+	// Runtime correlation (ADR-0007 Phase 0): this issue's endpoint is ALSO being
+	// attacked in production per an in-app-firewall signal — observed-in-the-wild,
+	// the strongest exploitability evidence. Set by AnnotateRuntime.
+	Attacked    bool `json:"attacked,omitempty"`
+	AttackCount int  `json:"attack_count,omitempty"`
 }
 
 var cveRe = regexp.MustCompile(`CVE-\d{4}-\d{4,7}`)

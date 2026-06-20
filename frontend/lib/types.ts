@@ -64,6 +64,8 @@ export interface Issue {
   count: number;
   confirmed: boolean; // ≥2 independent scanners agree
   finding_ids: string[];
+  attacked?: boolean; // endpoint observed under attack in production (runtime signal)
+  attack_count?: number;
 }
 
 export interface IssuesResponse {
@@ -73,6 +75,7 @@ export interface IssuesResponse {
   confirmed: number;
   ignored?: number;
   excluded?: number; // findings dropped by custom exclusion rules
+  attacked?: number; // issues observed under attack in production
 }
 
 // A custom noise-filter rule (Aikido "custom rules": exclude paths/packages/conditions).

@@ -94,6 +94,10 @@ type Store interface {
 	ListExclusionRules(ctx context.Context, tenantID string) ([]platform.ExclusionRule, error)
 	DeleteExclusionRule(ctx context.Context, tenantID, id string) error
 
+	// --- runtime-protection events (in-app firewall / RASP signal; append-only) ---
+	PutRuntimeEvent(ctx context.Context, ev platform.RuntimeEvent) error
+	ListRuntimeEvents(ctx context.Context, tenantID string) ([]platform.RuntimeEvent, error)
+
 	// --- pentest engagements (the productized AI-pentest lifecycle) ---
 	PutPentest(ctx context.Context, eng pentest.Engagement) error
 	ListPentests(ctx context.Context, tenantID string) ([]pentest.Engagement, error)
