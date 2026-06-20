@@ -9,6 +9,7 @@ export const metadata = {
   title: "TensorShield — your fractional security team",
   description:
     "AI security + compliance for SMBs. TensorShield finds, triages, and fixes — with a human in the loop where it matters. No security hire required.",
+  alternates: { canonical: "/" },
 };
 
 export default function Landing() {
