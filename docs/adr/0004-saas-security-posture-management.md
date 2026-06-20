@@ -40,8 +40,8 @@ Ranked by SMB prevalence × security-control density × API availability:
 
 | # | App | Status | Why |
 |---|---|---|---|
-| 1 | **GitHub org** | ✅ built (this ADR) | Highest value for a dev SMB; org 2FA, repo perms, secret scanning, third-party apps, webhooks. Connector already exists. |
-| 2 | Slack | next | Workspace 2FA, guest/external accounts, app governance, retention, DLP. |
+| 1 | **GitHub org** | ✅ built | Highest value for a dev SMB; org 2FA, repo perms, secret scanning, third-party apps, webhooks. Connector already exists. |
+| 2 | **Slack** | ✅ built | Workspace 2FA, SSO, app governance + third-party app scopes, public link sharing, guests, admin sprawl, invite allowlist. |
 | 3 | Atlassian (Jira/Confluence) | planned | Public spaces, app tokens, external sharing, admin sprawl. |
 | 4 | Zoom | planned | Meeting security defaults, recording/retention, SSO. |
 | 5 | Salesforce | planned | Profiles/permission sets, connected apps, session policy. |
