@@ -44,6 +44,12 @@ type Finding struct {
 	VerificationStatus VerificationState `json:"verification_status,omitempty"`
 	Confidence         float64           `json:"confidence,omitempty"`
 
+	// CodeProvenance ties a runtime cloud finding back to the IaC resource +
+	// file:line that provisioned it (the "Cloud-to-Code" capability). Populated
+	// only on cloud findings that the IaC correlator confidently linked to a
+	// source resource; nil otherwise (no guessed links — §10 grounding).
+	CodeProvenance *CodeProvenance `json:"code_provenance,omitempty"`
+
 	// DiscoveryMethod tracks how this finding was produced. Replay-sourced
 	// findings carry the original replay_id.
 	DiscoveryMethod *DiscoveryMethod `json:"discovery_method,omitempty"`
