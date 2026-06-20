@@ -89,6 +89,11 @@ type Store interface {
 	ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error)
 	DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error
 
+	// --- custom exclusion rules (pattern-based noise filter), keyed by rule id ---
+	PutExclusionRule(ctx context.Context, er platform.ExclusionRule) error
+	ListExclusionRules(ctx context.Context, tenantID string) ([]platform.ExclusionRule, error)
+	DeleteExclusionRule(ctx context.Context, tenantID, id string) error
+
 	// --- pentest engagements (the productized AI-pentest lifecycle) ---
 	PutPentest(ctx context.Context, eng pentest.Engagement) error
 	ListPentests(ctx context.Context, tenantID string) ([]pentest.Engagement, error)

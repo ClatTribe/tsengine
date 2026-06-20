@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS actions     (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS controls    (tenant_id TEXT, framework TEXT, control_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,framework,control_id));
 CREATE TABLE IF NOT EXISTS incidents   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
+CREATE TABLE IF NOT EXISTS exclusions  (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS pentests    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
@@ -232,6 +233,17 @@ func (s *SQLite) ListIgnoreRules(ctx context.Context, tenantID string) ([]platfo
 }
 func (s *SQLite) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM ignores WHERE tenant_id=? AND issue_key=?`, tenantID, issueKey)
+	return err
+}
+
+func (s *SQLite) PutExclusionRule(ctx context.Context, er platform.ExclusionRule) error {
+	return s.upsertTID(ctx, `INSERT INTO exclusions(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, er.TenantID, er.ID, er)
+}
+func (s *SQLite) ListExclusionRules(ctx context.Context, tenantID string) ([]platform.ExclusionRule, error) {
+	return listJSON[platform.ExclusionRule](ctx, s.db, `SELECT data FROM exclusions WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) DeleteExclusionRule(ctx context.Context, tenantID, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM exclusions WHERE tenant_id=? AND id=?`, tenantID, id)
 	return err
 }
 

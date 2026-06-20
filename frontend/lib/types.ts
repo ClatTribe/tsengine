@@ -72,6 +72,19 @@ export interface IssuesResponse {
   raw_findings: number;
   confirmed: number;
   ignored?: number;
+  excluded?: number; // findings dropped by custom exclusion rules
+}
+
+// A custom noise-filter rule (Aikido "custom rules": exclude paths/packages/conditions).
+export interface ExclusionRule {
+  id: string;
+  tenant_id: string;
+  field: string; // rule_id | package | path | cve | any
+  pattern: string;
+  reason?: string;
+  note?: string;
+  by?: string;
+  at?: string;
 }
 
 // Pentest engagement (GET/POST /v1/pentest) — the productized AI-pentest lifecycle.

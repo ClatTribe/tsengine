@@ -60,6 +60,18 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 		ignored[ir.IssueKey] = ir
 	}
 
+	// Custom exclusion rules (path/package/rule-id globs) drop matching findings BEFORE
+	// they're unified — so excluded noise never becomes an issue at all. Count what was
+	// removed so the UI can show "N findings excluded by your rules".
+	excl, err := d.Store.ListExclusionRules(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	rawCount := len(findings)
+	findings = crossdetect.ApplyExclusions(findings, excl)
+	excludedCount := rawCount - len(findings)
+
 	all := crossdetect.UnifiedIssues(findings)
 	showIgnored := r.URL.Query().Get("show") == "ignored"
 
@@ -76,9 +88,92 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 		}
 	}
 	respond(w, map[string]any{
-		"issues": issues, "count": len(issues), "raw_findings": len(findings),
-		"confirmed": confirmed, "ignored": len(ignored),
+		"issues": issues, "count": len(issues), "raw_findings": rawCount,
+		"confirmed": confirmed, "ignored": len(ignored), "excluded": excludedCount,
 	}, nil)
+}
+
+// handleListExclusions returns the tenant's custom exclusion rules.
+func (d Deps) handleListExclusions(w http.ResponseWriter, r *http.Request, tenantID string) {
+	rules, err := d.Store.ListExclusionRules(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if rules == nil {
+		rules = []platform.ExclusionRule{}
+	}
+	respond(w, map[string]any{"exclusions": rules, "count": len(rules)}, nil)
+}
+
+// validExclField is the allowed set of exclusion match fields.
+func validExclField(f string) bool {
+	switch f {
+	case platform.ExclByRule, platform.ExclByPackage, platform.ExclByPath, platform.ExclByCVE, platform.ExclByAny:
+		return true
+	}
+	return false
+}
+
+// handleAddExclusion creates a custom exclusion rule (path/package/rule-id/cve glob).
+// Ledger-recorded as a governance decision; reversible via delete. Tenant-scoped.
+func (d Deps) handleAddExclusion(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		Field   string `json:"field"`
+		Pattern string `json:"pattern"`
+		Reason  string `json:"reason"`
+		Note    string `json:"note"`
+		By      string `json:"by"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	body.Field = strings.TrimSpace(body.Field)
+	if body.Field == "" {
+		body.Field = platform.ExclByAny
+	}
+	if !validExclField(body.Field) {
+		writeJSON(w, http.StatusBadRequest, errBody("field must be one of: rule_id, package, path, cve, any"))
+		return
+	}
+	if strings.TrimSpace(body.Pattern) == "" {
+		writeJSON(w, http.StatusBadRequest, errBody("a non-empty 'pattern' is required"))
+		return
+	}
+	er := platform.ExclusionRule{
+		ID: d.newID("excl"), TenantID: tenantID, Field: body.Field, Pattern: body.Pattern,
+		Reason: strings.TrimSpace(body.Reason), Note: body.Note, By: body.By, At: time.Now().UTC(),
+	}
+	if err := d.Store.PutExclusionRule(r.Context(), er); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("exclusion rule added", "exclusion_add",
+			map[string]any{"tenant_id": tenantID, "id": er.ID, "field": er.Field, "pattern": er.Pattern, "by": er.By}, "noise-filter rule added")
+	}
+	writeJSON(w, http.StatusOK, er)
+}
+
+// handleDeleteExclusion removes a custom exclusion rule (so its findings reappear).
+func (d Deps) handleDeleteExclusion(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil || strings.TrimSpace(body.ID) == "" {
+		writeJSON(w, http.StatusBadRequest, errBody("a non-empty 'id' is required"))
+		return
+	}
+	if err := d.Store.DeleteExclusionRule(r.Context(), tenantID, body.ID); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("exclusion rule removed", "exclusion_delete",
+			map[string]any{"tenant_id": tenantID, "id": body.ID}, "noise-filter rule removed")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": body.ID})
 }
 
 // handleIgnoreIssue suppresses a unified issue (false-positive / accepted-risk) —

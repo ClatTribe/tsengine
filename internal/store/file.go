@@ -139,6 +139,20 @@ func (f *File) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) 
 	return f.persist()
 }
 
+func (f *File) PutExclusionRule(ctx context.Context, er platform.ExclusionRule) error {
+	if err := f.Memory.PutExclusionRule(ctx, er); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) DeleteExclusionRule(ctx context.Context, tenantID, id string) error {
+	if err := f.Memory.DeleteExclusionRule(ctx, tenantID, id); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutPentest(ctx context.Context, eng pentest.Engagement) error {
 	if err := f.Memory.PutPentest(ctx, eng); err != nil {
 		return err

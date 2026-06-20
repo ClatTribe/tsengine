@@ -17,3 +17,18 @@ export async function unignoreIssue(key: string) {
   revalidatePath("/issues");
   revalidatePath("/dashboard");
 }
+
+// Add a custom exclusion rule (path/package/rule-id/cve glob). Matching findings
+// drop out before they're unified, so the noise never becomes an issue.
+export async function addExclusion(field: string, pattern: string, reason: string) {
+  await api.addExclusion(field, pattern, reason);
+  revalidatePath("/issues");
+  revalidatePath("/dashboard");
+}
+
+// Remove an exclusion rule (its findings reappear).
+export async function deleteExclusion(id: string) {
+  await api.deleteExclusion(id);
+  revalidatePath("/issues");
+  revalidatePath("/dashboard");
+}
