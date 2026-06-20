@@ -18,6 +18,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/jobs"
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
@@ -44,6 +45,11 @@ type Deps struct {
 	// Empty → verification is skipped (a startup warning is logged; dev only).
 	WebhookSecret string
 	NewID         func() string
+	// Prober drives live active-exploitation probes (the Phase-1 ActiveDriver). Nil →
+	// active engagements fall back to the passive driver (no live exploitation). Set
+	// only when the operator has enabled live active exploitation; per-engagement
+	// explicit consent still gates every probe.
+	Prober pentest.Prober
 }
 
 // NewHandler returns the platform's HTTP handler.

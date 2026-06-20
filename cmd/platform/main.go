@@ -24,6 +24,8 @@
 //	TSENGINE_MONITOR_INTERVAL  continuous re-scan cadence (e.g. 6h; default 12h; 0 disables)
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
 //	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
+//	TSENGINE_ACTIVE_EXPLOIT    1 → wire the live active-exploitation Prober (still
+//	                           consent-gated per engagement; absent → passive only)
 //	PAGERDUTY_ROUTING_KEY      PagerDuty Events API v2 key — pages on-call for new high/critical incidents
 //	TSENGINE_TEAMS_WEBHOOK     Microsoft Teams Incoming Webhook — posts new high/critical incidents
 //	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
@@ -56,6 +58,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/obsv"
 	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/platformapi"
 	"github.com/ClatTribe/tsengine/internal/remediate"
 	"github.com/ClatTribe/tsengine/internal/runner"
@@ -191,11 +194,19 @@ func main() {
 	// durable queue to scale out.
 	scanJobs := jobs.NewPool(scanWorkers(), 256, 2000, scanJobTimeout(), newID)
 	obsv.RegisterScanJobsInflight(func() float64 { return float64(scanJobs.Inflight()) })
+	// Live active-exploitation is opt-in at the operator level (belt-and-suspenders on
+	// top of per-engagement explicit consent): only wire a live Prober when
+	// TSENGINE_ACTIVE_EXPLOIT=1. Absent → active engagements run the passive driver.
+	var prober pentest.Prober
+	if os.Getenv("TSENGINE_ACTIVE_EXPLOIT") == "1" {
+		prober = pentest.NewHTTPProber()
+		log.Print("[platform] live active-exploitation ENABLED (TSENGINE_ACTIVE_EXPLOIT=1) — consent-gated per engagement")
+	}
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
-		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID,
+		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober,
 	})
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
