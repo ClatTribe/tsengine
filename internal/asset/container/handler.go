@@ -60,7 +60,10 @@ func (h *Handler) Filter(_ context.Context, _ types.Asset, in []asset.Dispatch) 
 }
 
 func (h *Handler) Normalize(results []tool.Result) []types.Finding {
-	return common.Normalize(results)
+	out := common.Normalize(results)
+	// Supply-chain malware: match the syft SBOM's package set against the
+	// known-malicious corpus (malicious images ship hostile packages too).
+	return append(out, common.SupplyChainFindings(results)...)
 }
 
 // anchorNames: trivy (CVE+misconfig+secret), grype (second CVE DB →

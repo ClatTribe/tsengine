@@ -76,7 +76,10 @@ func (h *Handler) Filter(_ context.Context, _ types.Asset, in []asset.Dispatch) 
 }
 
 func (h *Handler) Normalize(results []tool.Result) []types.Finding {
-	return common.Normalize(results)
+	out := common.Normalize(results)
+	// Supply-chain malware: match the syft SBOM's dependency set against the
+	// known-malicious corpus (distinct from the SCA tools' CVE findings).
+	return append(out, common.SupplyChainFindings(results)...)
 }
 
 // SkipDirs is the file-tree exclusion set (arch.md "repository" filter).
