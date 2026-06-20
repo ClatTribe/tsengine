@@ -71,6 +71,7 @@ export interface IssuesResponse {
   count: number;
   raw_findings: number;
   confirmed: number;
+  ignored?: number;
 }
 
 export interface Action {
