@@ -27,11 +27,16 @@ sandbox (`make sandbox-image`), set `TSENGINE_PLATFORM_NO_ENGINE=0` on the `plat
 service, and uncomment the Docker-socket mount in `docker-compose.yml` (the platform shells
 out to `docker run` to spawn per-scan sandboxes — see below).
 
-**Not yet production-grade** (tracked): the store is single-node file-backed (sqlite/Postgres
-is the successor behind the `store.Store` interface); secrets use an env AES key (cloud-KMS
-is the successor behind `secret.Vault`); there is no bundled TLS/reverse-proxy or HA
-orchestration. Put the stack behind a TLS-terminating proxy and back up the `platform-data`
-volume.
+> **For a hardened single-box production deploy** (TLS edge, de-privileged Docker daemon,
+> isolated per-scan sandboxes, secrets-from-file, backups, one-command `make deploy-prod`)
+> use **`docker-compose.prod.yml`** — see **[docs/production-single-box.md](production-single-box.md)**
+> (threat model + runbook). The quick-start above is the unhardened **dev** stack.
+
+**Still single-box, not scale-grade** (tracked, each behind an existing code seam — see
+production-single-box.md §6): the store is single-node file/sqlite-backed (Postgres is the
+successor behind `store.Store`); secrets use an env/file AES key (cloud-KMS is the successor
+behind `secret.Vault`); there is no HA / multi-node sandbox pool + durable queue; sandboxes are
+containers, not microVMs.
 
 ---
 
