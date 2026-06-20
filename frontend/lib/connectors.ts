@@ -48,5 +48,6 @@ export const ASSET_TYPE_LABEL: Record<string, string> = {
   ip_address: "IP / host",
   domain: "Domain",
   cloud_account: "Cloud account",
+  mobile_application: "Mobile app",
   workspace: "Workspace",
 };
