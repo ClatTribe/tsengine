@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileText, Download, ShieldCheck, FileCode2, Sheet, Lock, ArrowUpRight } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
 import { Card, SectionTitle, Empty } from "@/components/ui/primitives";
+import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,11 @@ export default async function ReportsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">Reports &amp; evidence</h1>
-        <p className="text-xs text-muted">Signed, auditor-ready exports of your posture and findings — generated from real data, not screenshots.</p>
-      </div>
+      <PageIntro
+        icon={FileText}
+        title="Reports & evidence"
+        description="The documents you hand to a customer, auditor, or your board — a VAPT report, compliance evidence, and posture summaries. Each one is generated from your real, signed scan data, so it's audit-ready, not a screenshot."
+      />
 
       {/* VAPT / pentest report — the headline deliverable for a customer security review */}
       <div>
