@@ -325,7 +325,7 @@ The webappsec handoff. **This schema is load-bearing — every wrapper written b
   ],
   "findings_enriched": [
     /* same shape + L1.5 annotations: surface_priority, exploitability,
-       corroborated_by, threat_intel, compliance */
+       corroborated_by, threat_intel, compliance, code_provenance */
   ],
   "l15_audit_log": [
     {
@@ -347,6 +347,8 @@ The webappsec handoff. **This schema is load-bearing — every wrapper written b
 ```
 
 **Two views, both shipped.** Security-engineer audience reads `findings_raw`; compliance auditor reads `findings_enriched` + `attestation`; L2 reads `findings_enriched`.
+
+**Cloud-to-Code** (`internal/cloudtocode`, `tsengine cloud-to-code --in <cloud-scan> --iac <tf-dir>`): `code_provenance` traces a runtime cloud finding (prowler) back to the Terraform resource + `file:line` that provisioned it. A dependency-free `.tf` resource indexer + a grounded matcher — a link requires BOTH a service↔TF-type nexus (the prowler check-id prefix → the TF types that provision it) AND a concrete shared identifier (physical name / ARN tail / normalized logical name). No matched token → no link (never guessed, §10). Correlation glue — adds provenance, never findings (§13 holds). Residual: platform-runner auto-wiring (annotate a cloud scan with the tenant's connected-repo IaC tree).
 
 ---
 
