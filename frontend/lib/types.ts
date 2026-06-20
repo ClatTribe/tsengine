@@ -14,6 +14,19 @@ export interface Finding {
   confidence?: number;
   threat_intel?: { kev?: unknown; epss?: unknown } | null;
   compliance?: Record<string, string[]> | null;
+  // Cloud-to-Code: a runtime cloud finding traced back to the IaC resource +
+  // file:line that provisioned it. Present only on cloud findings the
+  // correlator confidently linked to source; absent otherwise.
+  code_provenance?: CodeProvenance | null;
+}
+
+export interface CodeProvenance {
+  file: string;
+  line: number;
+  iac_resource: string;
+  matched_on: string;
+  match_basis: string;
+  confidence: string; // "high" | "medium"
 }
 
 export interface Action {
