@@ -126,7 +126,7 @@ Each phase = one PR with tests; this table is the source of truth for status.
 | **P1** | **Sandbox hardening** | `buildRunArgs` adds `--read-only` + `--tmpfs` scratch, `--user`, `--pids-limit`, `--memory`, `--cpus`, `--ulimit`, `--network` policy; all env-tunable (`TSENGINE_SANDBOX_*`, §5.1) with safe defaults; unit tests assert every flag | **done (#260)** |
 | **P2** | **De-privilege the daemon + isolate the sandbox net** | runtime: on an isolated network the sandbox publishes no host port — the platform connects by container IP (`containerIP`), which is also the T4 control; `docker-compose.prod.yml` adds a `docker-socket-proxy` (internal net, `CONTAINERS/IMAGES/NETWORKS/POST` only), platform via `DOCKER_HOST` (no raw socket), sandboxes on the named `tsengine-sandbox` bridge, `TSENGINE_SANDBOX_READONLY=1`. Compose `config`-validated; runtime unit-tested | **done (#261)** |
 | **P3** | **TLS edge** | Caddy service (`docker/caddy/Caddyfile`) terminates HTTPS (internal CA for localhost / ACME for a real domain) + security headers (HSTS, nosniff, frame-deny, referrer); routes `/v1`,`/ui`,`/healthz` → platform and the rest → frontend; **platform + frontend ports unpublished** (only the edge `:80`/`:443`). `make prod-validate` lints compose + Caddyfile | **done (#262)** |
-| **P4** | **Secrets + backups + deploy script** | secrets from file/Docker-secret (not inline env) + rotation note; `scripts/backup.sh`/`restore.sh` for `platform-data`; **`scripts/deploy-single-box.sh`** (prereq check → gen secrets → build images incl. sandbox → up hardened stack → smoke test) | planned |
+| **P4** | **Secrets + backups + deploy script** | `cmd/platform` supports the Docker-secret `*_FILE` convention (`TSENGINE_SECRET_KEY_FILE`, `TSENGINE_PLATFORM_TOKEN_FILE`, …) so secrets ride as mounted files not inline env; `scripts/backup.sh`/`restore.sh` for the `platform-data` volume; **`scripts/deploy-single-box.sh`** (prereqs → gen secrets → validate → build incl. sandbox → up → smoke test, with a `--check` dry-run); `make deploy-prod`/`backup` | **done (#263)** |
 | **P5** | **Verify + docs finalize** | end-to-end smoke on the hardened stack incl. a real sandbox scan; finalize this doc's deploy runbook (§7); CLAUDE.md + DEPLOYMENT.md cross-links | planned |
 
 ### 5.1 Sandbox hardening knobs (P1, shipped)
@@ -176,10 +176,33 @@ without touching call sites:
 
 ## 7. Single-box deploy runbook (filled in as phases land)
 
-> Populated by P4/P5. The short version it builds toward:
-> ```sh
-> ./scripts/deploy-single-box.sh        # prereqs, secrets, build (incl. sandbox), up, smoke
-> # → https://<host>/   (create the first workspace at /signup)
-> ```
-> with the hardened `docker-compose.prod.yml` (edge TLS, socket-proxy, isolated sandbox
-> network, engine ON), the `platform-data` volume backed up by `scripts/backup.sh`.
+One command brings up the hardened stack (`docker-compose.prod.yml` — TLS edge, socket-proxy,
+isolated sandbox network, engine ON):
+
+```sh
+# optional: a real domain (else defaults to localhost + Caddy internal CA)
+export TSENGINE_SITE_ADDRESS=scan.example.com
+
+make deploy-prod            # = ./scripts/deploy-single-box.sh
+#   prereqs → generate .env secrets (once) → validate → build (incl. the sandbox image)
+#   → docker compose -f docker-compose.prod.yml up -d → smoke-test the edge
+# → https://<site>/   (create the first workspace at /signup)
+
+scripts/deploy-single-box.sh --check   # dry-run: prereqs + config validation only
+```
+
+**Secrets.** `deploy-single-box.sh` generates `.env` (chmod 600) with a random
+`TSENGINE_SECRET_KEY` (AES sealing key) + `TSENGINE_PLATFORM_TOKEN` on first run. For
+externally-managed secrets, mount them as files and point `cmd/platform` at them with the
+Docker-secret convention — `TSENGINE_SECRET_KEY_FILE`, `TSENGINE_PLATFORM_TOKEN_FILE` (and
+the `*_CLIENT_SECRET_FILE` connector keys) — so nothing sensitive sits in inline env. Rotate
+by replacing the value/file and re-running `make deploy-prod` (token sealing is per-value;
+rotating the AES key requires re-sealing stored OAuth tokens — a documented re-connect).
+
+**Backups.** The single stateful volume is `platform-data` (SQLite DB + the ed25519 signing
+key). Back it up (cron it for off-box copies) and restore on a fresh box:
+
+```sh
+make backup                                   # → ./backups/tsengine-<ts>.tar.gz
+scripts/restore.sh ./backups/tsengine-<ts>.tar.gz   # (stack stopped first)
+```
