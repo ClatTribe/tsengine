@@ -50,6 +50,10 @@ type Deps struct {
 	// only when the operator has enabled live active exploitation; per-engagement
 	// explicit consent still gates every probe.
 	Prober pentest.Prober
+	// Interactor observes out-of-band (OAST) callbacks so the deep (autonomous) driver can
+	// prove blind classes (ADR-0008 D2). Nil → blind classes stay unproven leads (never a
+	// false positive). Set when the operator wired a collaborator (TSENGINE_OAST_POLL_URL).
+	Interactor pentest.Interactor
 }
 
 // NewHandler returns the platform's HTTP handler.
