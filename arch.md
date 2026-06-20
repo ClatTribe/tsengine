@@ -129,6 +129,7 @@ open-ended reasoning stays L2 (Phase 6).
 | api | `/graphql` endpoint | inql | GraphQL introspection/schema |
 | repository | semgrep injection finding | CodeQL (that language) | interprocedural taint past semgrep's ceiling |
 | repository | mobile-file finding | mobsfscan | Android/iOS-specific SAST |
+| repository | Go-project finding (`.go` / `go.mod`) | govulncheck | call-graph REACHABILITY — only the SCA CVEs whose vulnerable symbol is actually called (SCA FP-killer; ADR 0003) |
 
 Unconditional breadth tools (dnstwist on domain, cosign on container) are
 NOT escalation — they fan out / anchor every scan.

@@ -6,8 +6,42 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/types"
 
 	_ "github.com/ClatTribe/tsengine/internal/tool/codeql"
+	_ "github.com/ClatTribe/tsengine/internal/tool/govulncheck"
 	_ "github.com/ClatTribe/tsengine/internal/tool/mobsfscan"
 )
+
+// A Go-project signal (a .go file or a go.mod/go.sum SCA finding) → exactly
+// one govulncheck reachability pass; a non-Go repo does not trigger it.
+func TestPlanEscalation_GoProjectTriggersGovulncheck(t *testing.T) {
+	h := NewHandler()
+	fired := func(findings []types.Finding) int {
+		n := 0
+		for _, d := range h.PlanEscalation(types.Asset{Type: types.AssetRepository, Target: "/r"}, nil, findings) {
+			if d.Tool.Name() == "govulncheck" {
+				n++
+				if d.Args["target"] != WorkspacePath || d.EscalatedFrom == "" {
+					t.Errorf("govulncheck dispatch malformed: %+v", d)
+				}
+			}
+		}
+		return n
+	}
+	// .go source findings → fires once (deduped across multiple Go findings).
+	if got := fired([]types.Finding{
+		{Tool: "semgrep", RuleID: "go.sqli", Endpoint: "internal/db.go"},
+		{Tool: "semgrep", RuleID: "go.xss", Endpoint: "internal/web.go"},
+	}); got != 1 {
+		t.Errorf("Go source findings should fire govulncheck once, got %d", got)
+	}
+	// SCA finding located in go.mod → fires.
+	if got := fired([]types.Finding{{Tool: "trivy", RuleID: "trivy::CVE-2023-1", Endpoint: "go.mod"}}); got != 1 {
+		t.Errorf("a go.mod SCA finding should fire govulncheck, got %d", got)
+	}
+	// Non-Go repo → does not fire.
+	if got := fired([]types.Finding{{Tool: "semgrep", RuleID: "py.cmdi", Endpoint: "app/run.py"}}); got != 0 {
+		t.Errorf("a non-Go repo must NOT fire govulncheck, got %d", got)
+	}
+}
 
 // A semgrep injection finding per language → one CodeQL run per language
 // (deduped); a mobile-file finding → one mobsfscan.

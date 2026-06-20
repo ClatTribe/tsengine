@@ -104,5 +104,9 @@ var anchorNames = []string{
 }
 
 var registryNames = []string{
+	// govulncheck — Go call-graph reachability (SCA false-positive killer).
+	// Escalation-fired when the tree looks like a Go project; reports only
+	// reachable vulnerabilities, corroborating the SCA tools' raw CVE list.
+	"govulncheck",
 	// Phase 3.x: CodeQL, brakeman, gosec, staticcheck, snyk-code, kics, terrascan
 }
