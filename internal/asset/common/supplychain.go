@@ -34,7 +34,9 @@ func SupplyChainFindings(results []tool.Result) []types.Finding {
 	if len(pkgs) == 0 {
 		return nil
 	}
+	now := time.Now()
 	out := supplychain.Scan(pkgs, supplychain.DefaultCorpus(), supplychain.Options{})
-	out = append(out, supplychain.ScanEOL(pkgs, supplychain.DefaultEOLCorpus(), time.Now())...)
+	out = append(out, supplychain.ScanEOL(pkgs, supplychain.DefaultEOLCorpus(), now)...)
+	out = append(out, supplychain.ScanDeprecated(pkgs, supplychain.DefaultDeprecatedCorpus(), now)...)
 	return out
 }
