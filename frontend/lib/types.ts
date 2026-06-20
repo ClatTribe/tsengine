@@ -74,6 +74,30 @@ export interface IssuesResponse {
   ignored?: number;
 }
 
+// Pentest engagement (GET/POST /v1/pentest) — the productized AI-pentest lifecycle.
+export interface RulesOfEngagement {
+  authorized_targets: string[];
+  out_of_scope?: string[];
+  max_requests: number;
+  rate_per_minute?: number;
+  allow_active?: boolean;
+  authorized_by?: string;
+}
+
+export interface PentestEngagement {
+  id: string;
+  tenant_id: string;
+  name: string;
+  mode: string; // "passive" | "active"
+  status: string; // draft|authorized|running|reporting|complete|retesting|halted
+  rules_of_engagement: RulesOfEngagement;
+  findings?: Finding[] | null;
+  requests_used: number;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
 export interface Action {
   id: string;
   tenant_id: string;
