@@ -1,11 +1,15 @@
 package platformapi
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 // handleAttackPaths returns the tenant's cross-surface attack paths — the unified
@@ -40,20 +44,90 @@ func (d Deps) handleAttackPaths(w http.ResponseWriter, r *http.Request, tenantID
 // govulncheck is ONE confirmed issue, not three rows of noise. Grounded: an
 // issue claims only the scanners that actually reported it. Tenant-scoped.
 func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID string) {
-	findings, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})
+	ctx := r.Context()
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
-	issues := crossdetect.UnifiedIssues(findings)
-	if issues == nil {
-		issues = []crossdetect.Issue{}
+	rules, err := d.Store.ListIgnoreRules(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
 	}
+	ignored := map[string]platform.IgnoreRule{}
+	for _, ir := range rules {
+		ignored[ir.IssueKey] = ir
+	}
+
+	all := crossdetect.UnifiedIssues(findings)
+	showIgnored := r.URL.Query().Get("show") == "ignored"
+
+	issues := []crossdetect.Issue{}
 	confirmed := 0
-	for _, i := range issues {
+	for _, i := range all {
+		_, supp := ignored[i.Key]
+		if supp != showIgnored {
+			continue // default view hides ignored; ?show=ignored shows only those
+		}
+		issues = append(issues, i)
 		if i.Confirmed {
 			confirmed++
 		}
 	}
-	respond(w, map[string]any{"issues": issues, "count": len(issues), "raw_findings": len(findings), "confirmed": confirmed}, nil)
+	respond(w, map[string]any{
+		"issues": issues, "count": len(issues), "raw_findings": len(findings),
+		"confirmed": confirmed, "ignored": len(ignored),
+	}, nil)
+}
+
+// handleIgnoreIssue suppresses a unified issue (false-positive / accepted-risk) —
+// the issue-lifecycle control. Keyed by the issue's dedup key so it persists across
+// re-scans. Recorded into the ledger as a governance decision (§18.2 inv. 4) and
+// reversible via unignore. Tenant-scoped.
+func (d Deps) handleIgnoreIssue(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		Key    string `json:"key"`
+		Reason string `json:"reason"`
+		Note   string `json:"note"`
+		By     string `json:"by"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil || strings.TrimSpace(body.Key) == "" {
+		writeJSON(w, http.StatusBadRequest, errBody("a non-empty issue 'key' is required"))
+		return
+	}
+	reason := strings.TrimSpace(body.Reason)
+	if reason == "" {
+		reason = "accepted_risk"
+	}
+	ir := platform.IgnoreRule{TenantID: tenantID, IssueKey: body.Key, Reason: reason, Note: body.Note, By: body.By, At: time.Now().UTC()}
+	if err := d.Store.PutIgnoreRule(r.Context(), ir); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("issue ignored", "issue_ignore",
+			map[string]any{"tenant_id": tenantID, "issue_key": body.Key, "reason": reason, "by": body.By}, "issue suppressed")
+	}
+	writeJSON(w, http.StatusOK, ir)
+}
+
+// handleUnignoreIssue restores a previously-suppressed issue to the active list.
+func (d Deps) handleUnignoreIssue(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		Key string `json:"key"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil || strings.TrimSpace(body.Key) == "" {
+		writeJSON(w, http.StatusBadRequest, errBody("a non-empty issue 'key' is required"))
+		return
+	}
+	if err := d.Store.DeleteIgnoreRule(r.Context(), tenantID, body.Key); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("issue restored", "issue_unignore",
+			map[string]any{"tenant_id": tenantID, "issue_key": body.Key}, "issue suppression removed")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "key": body.Key})
 }

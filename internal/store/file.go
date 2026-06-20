@@ -124,6 +124,20 @@ func (f *File) PutIncident(ctx context.Context, i platform.Incident) error {
 	return f.persist()
 }
 
+func (f *File) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error {
+	if err := f.Memory.PutIgnoreRule(ctx, ir); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error {
+	if err := f.Memory.DeleteIgnoreRule(ctx, tenantID, issueKey); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutReviewRequest(ctx context.Context, r platform.ReviewRequest) error {
 	if err := f.Memory.PutReviewRequest(ctx, r); err != nil {
 		return err
