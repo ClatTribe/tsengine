@@ -82,6 +82,7 @@ export interface RulesOfEngagement {
   rate_per_minute?: number;
   allow_active?: boolean;
   authorized_by?: string;
+  consent?: string; // explicit recorded consent statement (required for active mode)
 }
 
 export interface PentestEngagement {
