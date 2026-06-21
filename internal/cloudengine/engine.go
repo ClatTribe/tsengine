@@ -103,6 +103,12 @@ func Assess(snap *cloudgraph.Snapshot, prowler []types.Finding, v Validator, opt
 		rep.Paths = append(rep.Paths, buildFinding(snap, fmt.Sprintf("acp-%03d", id), p, rung, ev))
 	}
 
+	// 5b. DSPM (ADR 0009 Phase 1): a public, sensitivity-classified data store is a direct
+	// exposure even with no onward attack path — the zero-hop case the multi-hop finder
+	// misses (Wiz/Aikido flag "public bucket with PII" on its own). Emit a one-hop
+	// internet→store exposure for each such store not already on a discovered path.
+	rep.Paths = append(rep.Paths, DSPMExposures(snap, onRealPath)...)
+
 	// 6. Correlate prowler: a finding on a real path corroborates it; a prowler
 	// finding touching no real path is a downgrade candidate (config-bad, inert).
 	correlateProwler(rep, prowler, onRealPath)
