@@ -1,0 +1,10 @@
+{
+  "violations": [
+    {"control_id":"1.4","resource":"111122223333:root","title":"Ensure MFA is enabled for the root account","severity":"high"},
+    {"control_id":"2.1.1","resource":"arn:aws:s3:::cust-data","title":"Ensure S3 buckets are encrypted at rest","severity":"high"},
+    {"control_id":"5.2","resource":"sg-public-ssh","title":"Ensure no security group allows 0.0.0.0/0 to port 22","severity":"high"},
+    {"control_id":"3.1","resource":"111122223333:cloudtrail","title":"Ensure CloudTrail is enabled in all regions","severity":"high"},
+    {"control_id":"1.14","resource":"iam-user-ci","title":"Ensure access keys are rotated every 90 days","severity":"medium"},
+    {"control_id":"3.3","resource":"arn:aws:s3:::cust-pii","title":"Ensure sensitive data is protected (not publicly exposed) at rest","severity":"high"}
+  ]
+}
