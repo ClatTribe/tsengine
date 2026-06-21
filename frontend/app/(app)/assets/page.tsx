@@ -4,6 +4,7 @@ import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
+import { DataTierSelect } from "@/components/assets/data-tier-select";
 import { PageIntro } from "@/components/ui/page-intro";
 import { timeAgo, cn } from "@/lib/utils";
 
@@ -115,6 +116,13 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         <SectionTitle action={<span className="text-[11px] text-faint">{assets.length} monitored</span>}>
           Monitored assets
         </SectionTitle>
+        {assets.length > 0 && (
+          <p className="mb-2 text-xs leading-relaxed text-muted">
+            Tag each asset by how sensitive its data is. A finding on a{" "}
+            <span className="text-critical">customer-data</span> asset is prioritized over the same
+            finding on a low-sensitivity one — so triage starts where a breach would hurt most.
+          </p>
+        )}
         {assets.length === 0 ? (
           <Empty>No assets discovered yet. Connect a system and the agent enumerates what to watch.</Empty>
         ) : (
@@ -124,6 +132,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="py-2.5 pl-5 pr-2 font-medium">Asset</th>
                   <th className="px-2 py-2.5 font-medium">Type</th>
+                  <th className="px-2 py-2.5 font-medium">Data tier</th>
                   <th className="px-2 py-2.5 font-medium">Via</th>
                   <th className="py-2.5 pr-5 font-medium text-right">Last scanned</th>
                 </tr>
@@ -172,6 +181,9 @@ function AssetRow({ asset: a, connections, last }: { asset: Asset; connections: 
       </td>
       <td className="px-2 py-2.5 align-middle">
         <Tag>{ASSET_TYPE_LABEL[a.type] ?? a.type}</Tag>
+      </td>
+      <td className="px-2 py-2.5 align-middle">
+        <DataTierSelect assetId={a.id} tier={a.data_tier ?? 2} />
       </td>
       <td className="px-2 py-2.5 align-middle text-xs text-muted">{via ? kindLabel(via.kind) : "—"}</td>
       <td className="py-2.5 pr-5 align-middle text-right text-xs">
