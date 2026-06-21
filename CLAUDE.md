@@ -584,6 +584,26 @@ In-house code is reserved for orchestration logic only:
 
 **Adding a new in-house `scan_*` detection scanner requires an explicit architectural ADR** explaining why the leading OSS tool doesn't suffice. Default is no.
 
+### 13.1 SMB per-asset parity packages (ADR 0010)
+
+To be THE SMB product per asset (coverage/depth + FP/FN accuracy vs the SMB category leader),
+six deterministic, offline-tested cores were added — each closes a named gap, each pairs with an
+honest credential/sandbox gate for live execution (full design + per-asset plan:
+[docs/adr/0010-smb-per-asset-parity.md](docs/adr/0010-smb-per-asset-parity.md)):
+
+| Package | Asset · gap (vs leader) | What it is |
+|---|---|---|
+| `internal/apiauthz` | **api** · BOLA/BFLA authz (vs Akto) | The §13 **no-OSS exception** (authz is business logic): a differential test — replay the victim's request as the attacker; `Evaluate` flags a bypass only on a proven 2xx-with-victim-data (BOLA) / undenied privileged call (BFLA), so a hit is `verification: verified`. Live prober gated (active + consent). |
+| `internal/prbot` | **repository** · PR-inline review bot (vs Aikido/Snyk) | `Build(findings, changedFiles, blockAt)` → inline comments **only on PR-changed lines** + a check-run `success/neutral/failure`. Live GitHub post gated on the App PR scope. |
+| `internal/webauth` | **web** · authenticated-scan reliability (vs Probely/Detectify) | `LoginFlow{form/token/recorded}` + `ValidateSession` ("am I authed?") + `IsLoginWall` ("session expired → re-auth") — the FN guard against silently scanning logged-out. Live replay gated (sandbox seed_auth). |
+| `internal/registrywatch` | **container** · scan-on-push (vs Aikido/Snyk) | `Reconcile(current, seen)` digest-diff → scan only new/re-pushed images. Live registry listing gated (connector). |
+| `internal/identitythreat` | **identity** · real-time ITDR (vs Nudge/Push) | `Detect(events)` rules: impossible_travel, privileged_grant, mfa_removed, password_spray — LLM-free, grounded. Live IdP-audit ingestion gated. |
+| `internal/shadowit` | **SaaS posture** · shadow-IT discovery (vs Nudge/Wing) | `Inventory`/`Summarize` → SaaS-app inventory + portfolio summary; **wired live** via `operate.SaaSInventory(ws)` over the existing cross-IdP OAuth grants (no shadow-IT verdict without consent data — honest). |
+
+cloud_account's parity is the prior **ADR 0009** campaign (DSPM/CWPP/CIS-scoreboard/multi-cloud/
+remediation). These cores feed the same unified-issues / auto-triage / consensus / grc-hitl
+machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on.
+
 ---
 
 ## 14. Benchmark framework
