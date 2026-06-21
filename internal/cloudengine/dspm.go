@@ -3,7 +3,6 @@ package cloudengine
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -27,17 +26,8 @@ func isDataStore(n *cloudgraph.Node) bool {
 	if n == nil {
 		return false
 	}
-	if n.Kind == cloudgraph.KindData {
-		return true
-	}
-	t := strings.ToLower(n.Type)
-	for _, store := range []string{"::s3::", "::rds::", "::dynamodb::", "::efs::", "::redshift::",
-		"::elasticache::", "::documentdb::", "storage", "bucket", "database", "sqldatabase", "cosmos"} {
-		if strings.Contains(t, store) {
-			return true
-		}
-	}
-	return false
+	// KindData always qualifies; otherwise classify the type across AWS/GCP/Azure (Phase 4).
+	return n.Kind == cloudgraph.KindData || cloudgraph.IsDataStoreType(n.Type)
 }
 
 // publicSensitive reports the DSPM trigger: an internet-exposed, sensitivity-classified data
