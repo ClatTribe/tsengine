@@ -29,12 +29,21 @@ type Grant struct {
 // App is the aggregated inventory entry for one SaaS app across the org.
 type App struct {
 	Name         string   `json:"name"`
-	Users        []string `json:"users"`
+	Users        []string `json:"users,omitempty"`
+	Count        int      `json:"count"` // user count (== len(Users) when names are known)
 	Scopes       []string `json:"scopes"`
 	AdminConsent bool     `json:"admin_consent"` // any grant org-admin-consented → sanctioned
 	Verified     bool     `json:"verified"`
 	Sensitive    bool     `json:"sensitive"` // holds a high-risk scope
-	ShadowIT     bool     `json:"shadow_it"` // employee-connected, no admin consent
+	ShadowIT     bool     `json:"shadow_it"` // employee-connected, no admin consent (only when known)
+}
+
+// NumUsers returns the user count whether names or a count were supplied.
+func (a App) NumUsers() int {
+	if len(a.Users) > 0 {
+		return len(a.Users)
+	}
+	return a.Count
 }
 
 // sensitiveScope substrings mark a high-risk grant (mail/drive/admin/full access across IdPs).
@@ -84,12 +93,82 @@ func Inventory(grants []Grant) []App {
 	out := make([]App, 0, len(byApp))
 	for _, a := range byApp {
 		a.ShadowIT = !a.AdminConsent // no org admin consent → employee-connected (shadow IT)
+		a.Count = len(a.Users)
 		sort.Strings(a.Users)
 		sort.Strings(a.Scopes)
 		out = append(out, *a)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// AggregatedGrant is an already-per-app grant (e.g. operate's OAuthGrant shape — providers that
+// aggregate upstream, with a user COUNT not names). ConsentKnown is the honesty flag: true only
+// when we actually know whether the org admin-consented; false → inventory only, NO shadow-IT
+// verdict (we never label an app "shadow IT" from data that can't prove consent — FN-safe over
+// a false alarm).
+type AggregatedGrant struct {
+	App          string
+	Scopes       []string
+	Users        int
+	Sensitive    bool // caller already knows it holds an admin/sensitive scope (operate.AdminScope)
+	Verified     bool
+	AdminConsent bool
+	ConsentKnown bool
+}
+
+// InventoryFromAggregated builds the inventory from already-aggregated grants (the bridge for
+// operate's live cross-IdP OAuth-grant data). Shadow-IT is asserted only when consent is known.
+func InventoryFromAggregated(gs []AggregatedGrant) []App {
+	out := make([]App, 0, len(gs))
+	for _, g := range gs {
+		if strings.TrimSpace(g.App) == "" {
+			continue
+		}
+		a := App{
+			Name: g.App, Count: g.Users, Scopes: append([]string(nil), g.Scopes...),
+			AdminConsent: g.AdminConsent, Verified: g.Verified, Sensitive: g.Sensitive,
+		}
+		for _, s := range g.Scopes {
+			if isSensitive(s) {
+				a.Sensitive = true
+			}
+		}
+		a.ShadowIT = g.ConsentKnown && !g.AdminConsent
+		sort.Strings(a.Scopes)
+		out = append(out, a)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// Summary is the portfolio-discovery headline (the Nudge/Wing "you have N SaaS apps" surface).
+type Summary struct {
+	TotalApps      int `json:"total_apps"`
+	SensitiveApps  int `json:"sensitive_apps"`
+	UnverifiedApps int `json:"unverified_apps"`
+	ShadowITApps   int `json:"shadow_it_apps"`
+	MultiUserApps  int `json:"multi_user_apps"` // adopted by ≥2 users (spreading)
+}
+
+// Summarize rolls the inventory into the portfolio summary.
+func Summarize(apps []App) Summary {
+	s := Summary{TotalApps: len(apps)}
+	for _, a := range apps {
+		if a.Sensitive {
+			s.SensitiveApps++
+		}
+		if !a.Verified {
+			s.UnverifiedApps++
+		}
+		if a.ShadowIT {
+			s.ShadowITApps++
+		}
+		if a.NumUsers() >= 2 {
+			s.MultiUserApps++
+		}
+	}
+	return s
 }
 
 // Findings flags the risky apps in the inventory. Grounded: only fires on a real signal —
@@ -130,7 +209,7 @@ func describe(a App) string {
 	if a.Verified {
 		v = "verified publisher"
 	}
-	return "(" + plural(len(a.Users), "user") + ", " + plural(len(a.Scopes), "scope") + ", " + v + ")."
+	return "(" + plural(a.NumUsers(), "user") + ", " + plural(len(a.Scopes), "scope") + ", " + v + ")."
 }
 
 func isSensitive(scope string) bool {
