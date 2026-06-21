@@ -100,6 +100,17 @@ export const api = {
   quarantineConnection: (id: string, quarantined: boolean) =>
     call<Connection>(`/v1/connections/${id}/quarantine`, { method: "POST", body: JSON.stringify({ quarantined }) }),
 
+  // Per-tenant LLM config for the engine agent / autonomous pentest. GET reports provider +
+  // model + whether a key is set (never the key). PUT sets provider/model and seals the key
+  // server-side (an empty api_key keeps the existing key).
+  llmSettings: () =>
+    safe<{ provider: string; model: string; has_key: boolean }>("/v1/settings/llm", { provider: "", model: "", has_key: false }),
+  setLLMConfig: (provider: string, model: string, apiKey: string) =>
+    call<{ provider: string; model: string; has_key: boolean }>("/v1/settings/llm", {
+      method: "PUT",
+      body: JSON.stringify({ provider, model, api_key: apiKey }),
+    }),
+
   // Create + authorize a pentest engagement (the API enforces the active-mode
   // authorization gate; an unauthorized active engagement / empty scope → 400).
   createPentest: (body: {

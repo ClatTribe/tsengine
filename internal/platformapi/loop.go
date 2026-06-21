@@ -27,10 +27,12 @@ type Posturer interface {
 	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
 }
 
-// Sealer seals a raw OAuth token before it is persisted (satisfied by the secret
-// vault). When unset, the callback stores the token unsealed (dev only).
+// Sealer seals a raw secret (an OAuth token, an LLM API key) before it is persisted, and
+// opens it back (satisfied by the secret vault — secret.Vault has both). When unset, the
+// callback stores the value unsealed (dev only).
 type Sealer interface {
 	Seal(plaintext string) (string, error)
+	Open(ref string) (string, error)
 }
 
 // handleApprovalDecide records a human's verdict on a pending action — the endpoint a

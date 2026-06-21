@@ -82,6 +82,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
 	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection)) // per-connection kill-switch (WRD-4)
 	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                  // the current tenant (org name/plan) for Settings
+	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                       // per-tenant LLM config (provider/model + has_key)
+	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                       // set provider/model + seal the API key
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                            // global kill-switch: halt/resume all agent action
 	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                      // agent capability manifest (WRD-1): what the automation can touch
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                              // owner's shareable Trust Center token
@@ -255,7 +257,11 @@ func (d Deps) handleConnections(w http.ResponseWriter, r *http.Request, tenantID
 // Settings screen. Tenant-scoped: a tenant can only read itself.
 func (d Deps) handleGetTenant(w http.ResponseWriter, r *http.Request, tenantID string) {
 	t, err := d.Store.GetTenant(r.Context(), tenantID)
-	respond(w, t, err)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	respond(w, t.Redacted(), nil) // never leak the sealed LLM key ref
 }
 
 // handleKillSwitch engages/disengages the tenant's global kill-switch (agentic-SMB spec
@@ -288,7 +294,7 @@ func (d Deps) handleKillSwitch(w http.ResponseWriter, r *http.Request, tenantID 
 		d.Recorder.Record("kill-switch toggled", "kill_switch",
 			map[string]any{"tenant_id": tenantID, "halted": body.Halted}, "agent automation "+state)
 	}
-	writeJSON(w, http.StatusOK, t)
+	writeJSON(w, http.StatusOK, t.Redacted())
 }
 
 // handleAssets returns the tenant's monitored assets (what the agent continuously scans:
