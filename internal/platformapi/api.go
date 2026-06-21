@@ -111,6 +111,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))   // the engagement's VAPT report (md/json)
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                       // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
+	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps)) // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
 	mux.HandleFunc("GET /v1/jobs", d.auth(d.handleJobs))
 	mux.HandleFunc("GET /v1/jobs/{id}", d.auth(d.handleJob))
