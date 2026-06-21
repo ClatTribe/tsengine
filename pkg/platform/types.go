@@ -25,7 +25,28 @@ type Tenant struct {
 	// halted tenant's actions queue instead of executing until a human disengages it. The
 	// one human "on the loop" can freeze the whole roster instantly.
 	AgentsHalted bool `json:"agents_halted,omitempty"`
+	// LLM is the tenant's bring-your-own-LLM config for the agent / autonomous pentest. The
+	// API key is sealed (LLMConfig.KeyRef holds only the sealed ref); it is NEVER returned to
+	// the client — Redacted() strips it, and every tenant response uses that.
+	LLM *LLMConfig `json:"llm,omitempty"`
 }
+
+// LLMConfig is a tenant's configured LLM for engine agent work (the L2 agent, ModeDeep
+// pentest, the live bench). Provider/Model are plain; KeyRef is the secret.Vault-sealed ref
+// for the API key (never plaintext at rest, never returned to the client — §18.2 inv. 6).
+type LLMConfig struct {
+	Provider string `json:"provider"` // anthropic | openai | gemini
+	Model    string `json:"model"`    // e.g. claude-opus-4-8, gpt-4o, gemini-2.0-flash
+	KeyRef   string `json:"key_ref,omitempty"`
+}
+
+// HasKey reports whether an API key is configured (without exposing it).
+func (c *LLMConfig) HasKey() bool { return c != nil && c.KeyRef != "" }
+
+// Redacted returns a copy of the tenant safe to return to a client: the LLM block (which
+// carries the sealed key ref) is dropped. LLM provider/model are served only by the dedicated
+// GET /v1/settings/llm endpoint.
+func (t Tenant) Redacted() Tenant { t.LLM = nil; return t }
 
 // Connection kinds — the external systems the platform can link via OAuth.
 const (

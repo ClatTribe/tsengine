@@ -19,3 +19,15 @@ export async function setQuarantine(id: string, quarantined: boolean): Promise<{
   revalidatePath("/settings");
   return { status: c.status };
 }
+
+// Set the tenant's LLM provider/model and (optionally) seal a new API key. An empty key keeps
+// the existing one. The key is sealed server-side and never returned.
+export async function setLLMConfig(
+  provider: string,
+  model: string,
+  apiKey: string,
+): Promise<{ provider: string; model: string; has_key: boolean }> {
+  const r = await api.setLLMConfig(provider, model, apiKey);
+  revalidatePath("/settings");
+  return r;
+}
