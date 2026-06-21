@@ -23,6 +23,11 @@ import (
 type Options struct {
 	MaxHypotheses int // worklist cap (top-K prioritized paths validated). Default 20.
 	MaxDepth      int // path length cap. Default 8.
+	// WorkloadVulns are agentless workload-scan results (ADR 0009 Phase 2): the trivy run
+	// over WorkloadScanPlan, keyed by image. Optional — nil → no workload toxic-combos
+	// (back-compat). When set, Assess emits an exposure for each internet-reachable workload
+	// running a vulnerable image.
+	WorkloadVulns []WorkloadVuln
 }
 
 func (o Options) withDefaults() Options {
@@ -108,6 +113,12 @@ func Assess(snap *cloudgraph.Snapshot, prowler []types.Finding, v Validator, opt
 	// misses (Wiz/Aikido flag "public bucket with PII" on its own). Emit a one-hop
 	// internet→store exposure for each such store not already on a discovered path.
 	rep.Paths = append(rep.Paths, DSPMExposures(snap, onRealPath)...)
+
+	// 5c. Agentless workload coverage (ADR 0009 Phase 2): an internet-reachable workload
+	// running a critically-vulnerable image is a remotely-exploitable entry point (the Wiz
+	// toxic combination). Emitted from the WorkloadScanPlan→trivy results threaded in via
+	// opts; deduped against nodes already on a discovered path.
+	rep.Paths = append(rep.Paths, WorkloadExposures(snap, opts.WorkloadVulns, onRealPath)...)
 
 	// 6. Correlate prowler: a finding on a real path corroborates it; a prowler
 	// finding touching no real path is a downgrade candidate (config-bad, inert).
