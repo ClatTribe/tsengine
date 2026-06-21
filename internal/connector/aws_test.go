@@ -68,3 +68,55 @@ func TestAWS_Discover_YieldsCloudAccountAsset(t *testing.T) {
 		t.Errorf("asset meta should mark provider=aws, got %v", assets[0].Meta)
 	}
 }
+
+// fakeS3Writer records BlockS3PublicAccess calls (ADR 0009 Phase 5 — the injectable write
+// path, tested without live AWS creds, mirroring the Okta fake-org pattern).
+type fakeS3Writer struct {
+	blocked []string
+	err     error
+}
+
+func (f *fakeS3Writer) BlockS3PublicAccess(_ context.Context, bucket string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.blocked = append(f.blocked, bucket)
+	return nil
+}
+
+func TestAWS_Apply_S3BlockPublicAccess(t *testing.T) {
+	w := &fakeS3Writer{}
+	a := NewAWS("", "", "")
+	a.Writer = w
+	act := platform.Action{ID: "act-1", Payload: map[string]any{
+		"remediation_type": "s3_block_public_access",
+		"target":           "arn:aws:s3:::cust-pii/some/key",
+	}}
+	if err := a.Apply(context.Background(), platform.Connection{}, "tok", act); err != nil {
+		t.Fatalf("approved s3 block should apply: %v", err)
+	}
+	// The ARN (with an object key) is reduced to the bucket name.
+	if len(w.blocked) != 1 || w.blocked[0] != "cust-pii" {
+		t.Errorf("expected BlockS3PublicAccess(\"cust-pii\"), got %v", w.blocked)
+	}
+}
+
+func TestAWS_Apply_HonestErrors(t *testing.T) {
+	a := NewAWS("", "", "")
+	// No Writer configured → honest "not configured" error (never falsely done).
+	act := platform.Action{ID: "a", Payload: map[string]any{"remediation_type": "s3_block_public_access", "target": "b"}}
+	if err := a.Apply(context.Background(), platform.Connection{}, "", act); err == nil || !strings.Contains(err.Error(), "no live AWS write path") {
+		t.Errorf("nil Writer must error honestly, got %v", err)
+	}
+	// Unknown remediation_type → error, not a silent success.
+	a.Writer = &fakeS3Writer{}
+	unknown := platform.Action{ID: "a", Payload: map[string]any{"remediation_type": "delete_everything", "target": "b"}}
+	if err := a.Apply(context.Background(), platform.Connection{}, "", unknown); err == nil {
+		t.Error("unknown remediation_type must error")
+	}
+	// No remediation_type at all → error (the account-scoped runbook has no live write path).
+	none := platform.Action{ID: "a", Payload: map[string]any{"target": "b"}}
+	if err := a.Apply(context.Background(), platform.Connection{}, "", none); err == nil {
+		t.Error("missing remediation_type must error")
+	}
+}
