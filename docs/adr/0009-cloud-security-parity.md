@@ -59,10 +59,20 @@ sandbox-gated like the rest. (§13 holds — reuses tools, adds no scanner.)
 A neutral CIS-baseline fixture (mock account → expected CIS findings) + a scorer reporting our
 **CIS recall vs Prowler/Scout** so we can publish a defensible number (anti-overfit guards §14.2).
 
-### Phase 4 — Multi-cloud reasoning (GCP/Azure)
-Teach `cloudgraph` ingest + `cloudiam` the GCP (IAM bindings, org policy) and Azure (RBAC, mgmt
-groups) shapes so attack-path reasoning + the effective-permission evaluator are provider-parity,
-not AWS-only.
+### Phase 4 — Multi-cloud reasoning (GCP/Azure) · *done (attack-path + DSPM/CWPP parity)*
+The attack-path reasoning was ALREADY provider-agnostic — `FindPaths`, the attack-edge set, and
+the jewel predicate run over the *normalized* graph (`Inventory` is provider-neutral: resources +
+trusts + grants + reaches), not over AWS shapes. What was AWS-shaped was resource-TYPE
+recognition. `internal/cloudgraph/classify.go` (`IsDataStoreType` / `IsComputeType` / `ComputeKind`)
+classifies a type across AWS / GCP / Azure, and DSPM + CWPP now use it — so a public GCS bucket or
+Azure Blob is a DSPM exposure and a public Cloud Run / AKS / GCE workload is a CWPP toxic combo,
+tested on GCP + Azure fixtures.
+
+**Honest depth caveat:** the *effective-permission evaluator* (`cloudiam.Authorize`) still models
+AWS IAM semantics (SCP / permission-boundary / resource-policy). GCP IAM-binding + org-policy and
+Azure RBAC + management-group evaluation are a documented **follow-on (Phase 4b)** — until then,
+the IAM-eval pruning degrades gracefully on non-AWS (absent trust policy → edge kept), so the
+graph reasoning is parity while the deep per-provider authz eval is AWS-primary.
 
 ### Phase 5 — Live AWS remediation Apply (gated)
 A reversible AWS write-path (block-public-access / restrict resource policy) reached only after

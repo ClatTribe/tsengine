@@ -144,14 +144,9 @@ func imageRef(n *cloudgraph.Node) string {
 	return strings.TrimSpace(n.Attrs[imageAttrKey])
 }
 
-// computeType pulls a short workload kind from an "AWS::ECS::TaskDefinition"-style type.
-func computeType(t string) string {
-	parts := strings.Split(t, "::")
-	if len(parts) >= 2 {
-		return parts[1] // AWS::ECS::… → ECS
-	}
-	return t
-}
+// computeType pulls a short, provider-normalized workload kind from the resource type
+// (AWS ECS/EKS/Lambda, GCP CloudRun/GKE, Azure AKS/ACI/…) — Phase 4 multi-cloud.
+func computeType(t string) string { return cloudgraph.ComputeKind(t) }
 
 func vulnSummary(v WorkloadVuln) string {
 	var b strings.Builder
