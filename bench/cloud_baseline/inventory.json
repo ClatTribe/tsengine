@@ -1,0 +1,10 @@
+{
+  "account_id": "111122223333", "provider": "aws",
+  "resources": [
+    {"id":"arn:aws:s3:::cust-pii","kind":"data","type":"AWS::S3::Bucket","name":"cust-pii","public":true,"sensitive":"high"},
+    {"id":"arn:aws:s3:::cust-data","kind":"data","type":"AWS::S3::Bucket","name":"cust-data","sensitive":"high"},
+    {"id":"sg-public-ssh","kind":"resource","type":"AWS::EC2::SecurityGroup","name":"public-ssh","public":true},
+    {"id":"iam-user-ci","kind":"principal","type":"AWS::IAM::User","name":"ci"},
+    {"id":"111122223333:root","kind":"principal","type":"AWS::IAM::Root","name":"root","privileged":true}
+  ]
+}

@@ -600,6 +600,7 @@ Per-asset recall vs. neutral competitor leaderboards where possible:
 | ip_address | `bench/ip_services` | Must-find recall | Tenable/Qualys — no scorecard |
 | domain | `bench/recon_breadth` | Subdomain discovery rate | subfinder/amass published |
 | cloud_account | `bench/cloud_baseline` | CIS recall vs. mock AWS account | Prowler/scout-suite self-published |
+| cloud_account (offline) | `tsbench cloud-baseline` (`internal/cloudbench`) | CIS-control recall over a fixture account, prowler-only vs. tsengine (engine+DSPM/CWPP lift) — laptop/CI, no sandbox | Prowler/Scout (no neutral baseline exists) |
 | L1.5 ablation | (any L1 bench) + `TSENGINE_L15_DISABLED=1` | Δ-metric = L1.5 lift | Internal |
 | L2 agent | `bench/agent` (scorer + `tsbench agent`); live targets `bench/webgoat_dual` + `bench/juiceshop_full` | detection_rate, **verified_rate** (PoC/evidence-grounded — the XBOW no-FP bar), completion_rate, FP-control | vs XBOW / strix / NodeZero (exploitation-verified) |
 | Multi-trial | `bench/multi_trial` wrapper | median + p10/p90 over N=5 | — |
