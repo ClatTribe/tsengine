@@ -54,6 +54,9 @@ type Deps struct {
 	// prove blind classes (ADR-0008 D2). Nil → blind classes stay unproven leads (never a
 	// false positive). Set when the operator wired a collaborator (TSENGINE_OAST_POLL_URL).
 	Interactor pentest.Interactor
+	// Browser renders DOM-XSS / client-side demonstrations in a headless browser (ADR-0008
+	// D3). Nil → those classes stay unproven leads (the chromedp impl is sandbox-gated).
+	Browser pentest.Prober
 }
 
 // NewHandler returns the platform's HTTP handler.
