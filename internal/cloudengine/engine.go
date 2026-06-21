@@ -48,6 +48,11 @@ func Assess(snap *cloudgraph.Snapshot, prowler []types.Finding, v Validator, opt
 	opts = opts.withDefaults()
 	rep := &types.AIAssessment{SnapshotHash: snap.Hash()}
 
+	// 0. Prune over-approximated identity edges the effective IAM actually denies (an
+	// assume-role edge blocked by the target's trust policy), so reachability isn't
+	// over-stated — the held-out FP fix (cloudiam consulted before enumeration, §10).
+	snap.PruneUnauthorized()
+
 	// 1–2. Orient + hypothesize: from every entry point (internet + public
 	// resources) find paths to a crown jewel (sensitive data OR privileged id).
 	jewel := func(n *cloudgraph.Node) bool {
