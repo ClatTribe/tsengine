@@ -214,11 +214,14 @@ func main() {
 	if interactor != nil {
 		log.Print("[platform] OAST collaborator wired (TSENGINE_OAST_POLL_URL) — blind-class proof enabled for deep pentests")
 	}
+	// Headless-browser channel for DOM-XSS / client-side proof in deep mode (ADR-0008 D3).
+	// Nil (the chromedp impl is sandbox-gated) → those classes stay leads.
+	browser := pentest.NewBrowserFromEnv()
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
-		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor,
+		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser,
 	})
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
