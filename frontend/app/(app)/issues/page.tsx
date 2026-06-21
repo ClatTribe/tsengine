@@ -5,6 +5,7 @@ import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { IssueActions } from "@/components/issues/issue-actions";
 import { ExclusionRules } from "@/components/issues/exclusion-rules";
+import { TriageFunnel } from "@/components/issues/triage-funnel";
 import { PageIntro } from "@/components/ui/page-intro";
 import { cn } from "@/lib/utils";
 
@@ -12,9 +13,10 @@ export const dynamic = "force-dynamic";
 
 export default async function IssuesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const showingIgnored = (await searchParams).show === "ignored";
-  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked }, exclResp] = await Promise.all([
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked }, exclResp, funnel] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
+    api.triageFunnel(),
   ]);
   const collapsed = Math.max(0, raw_findings - count);
 
@@ -41,6 +43,9 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
           Ignored{typeof ignored === "number" && ignored > 0 ? ` (${ignored})` : ""}
         </Tab>
       </div>
+
+      {/* Auto-triage funnel — the quantified noise reduction (% the engine handled for you) */}
+      {!showingIgnored && <TriageFunnel f={funnel} />}
 
       {/* Custom exclusion rules (path/package/rule noise filters) */}
       {!showingIgnored && <ExclusionRules rules={exclResp.exclusions} excluded={excluded ?? 0} />}

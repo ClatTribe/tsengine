@@ -40,6 +40,34 @@ func (d Deps) handleAttackPaths(w http.ResponseWriter, r *http.Request, tenantID
 	respond(w, map[string]any{"attack_paths": chains, "count": len(chains)}, nil)
 }
 
+// handleTriageFunnel returns the auto-triage funnel — the quantified noise reduction: of all
+// raw findings, how many the engine handled automatically (exclusion / dedup / suppression)
+// before a human had to look. The "% auto-triaged" metric, grounded in the same machinery as
+// the issues view. Tenant-scoped.
+func (d Deps) handleTriageFunnel(w http.ResponseWriter, r *http.Request, tenantID string) {
+	ctx := r.Context()
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	excl, err := d.Store.ListExclusionRules(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	rules, err := d.Store.ListIgnoreRules(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	ignored := make(map[string]bool, len(rules))
+	for _, ir := range rules {
+		ignored[ir.IssueKey] = true
+	}
+	respond(w, crossdetect.TriageStats(findings, excl, ignored), nil)
+}
+
 // handleIssues returns the tenant's findings de-duplicated into unified issues —
 // the "one issue, many signals" view: the same CVE flagged by trivy, grype, and
 // govulncheck is ONE confirmed issue, not three rows of noise. Grounded: an

@@ -103,6 +103,14 @@ export const api = {
   // Per-tenant LLM config for the engine agent / autonomous pentest. GET reports provider +
   // model + whether a key is set (never the key). PUT sets provider/model and seals the key
   // server-side (an empty api_key keeps the existing key).
+  // Auto-triage funnel: of all raw findings, how many the engine handled automatically
+  // (excluded / deduped / suppressed) before a human had to look — the "% auto-triaged" metric.
+  triageFunnel: () =>
+    safe<{ raw_findings: number; excluded: number; deduped: number; suppressed: number; actionable_issues: number; confirmed_issues: number; auto_triaged: number; auto_triage_rate: number }>(
+      "/v1/triage-funnel",
+      { raw_findings: 0, excluded: 0, deduped: 0, suppressed: 0, actionable_issues: 0, confirmed_issues: 0, auto_triaged: 0, auto_triage_rate: 0 },
+    ),
+
   llmSettings: () =>
     safe<{ provider: string; model: string; has_key: boolean }>("/v1/settings/llm", { provider: "", model: "", has_key: false }),
   setLLMConfig: (provider: string, model: string, apiKey: string) =>
