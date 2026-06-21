@@ -74,10 +74,28 @@ Azure RBAC + management-group evaluation are a documented **follow-on (Phase 4b)
 the IAM-eval pruning degrades gracefully on non-AWS (absent trust policy → edge kept), so the
 graph reasoning is parity while the deep per-provider authz eval is AWS-primary.
 
-### Phase 5 — Live AWS remediation Apply (gated)
-A reversible AWS write-path (block-public-access / restrict resource policy) reached only after
-the HITL gate, tested against a fake AWS client (the Okta-suspend pattern) — promotes the
-read-only runbook to a real apply.
+### Phase 5 — Live AWS remediation Apply (gated) · *done (write path + gate + test; live SDK call gated)*
+`connector.AWS.Apply` now routes an approved (HITL-gated) action on its machine-readable
+`remediation_type` — today `s3_block_public_access` (the fix for a public-bucket DSPM/CSPM
+finding) — through an **injectable `AWSWriter`** (`BlockS3PublicAccess`), fake-tested without live
+creds (the Okta-suspend pattern). `remediate.proposeCloud` promotes a public-S3 finding from an
+account-scoped runbook to a tier-2 `ActApplyConfig` carrying the resource-level bucket target, so
+the loop is end-to-end: DSPM finding → gated action → human approve → `AWS.Apply` blocks public
+access. **Honest gate:** the real `AWSWriter` impl assumes the onboarded cross-account role and
+signs the call (SigV4) — that needs runtime write creds + the AWS SDK (no SDK dep today), so the
+production `Writer` is nil and `Apply` returns an honest "no live write path configured" error
+rather than a false "done" (exactly as Okta returned 403 until the `users.manage` scope landed).
+
+---
+
+## Status (2026-06-22): all 5 phases shipped
+
+DSPM-lite (#292) · agentless workload CWPP (#293) · offline CIS scoreboard (#294, measured engine
+lift +0.17) · multi-cloud GCP/Azure reasoning (#295) · live AWS remediation write-path (this).
+Remaining depth is explicitly named, not hidden: **full DSPM** data classification (§13 ADR + a
+data-classification tool), **Phase 4b** GCP/Azure effective-permission eval (`cloudiam`), and the
+**SigV4/SDK-backed `AWSWriter`** (creds-gated). The reasoning, posture lenses, proof scoreboard,
+multi-cloud classification, and the gated remediation write-path are all built + tested.
 
 ## Honest framing
 

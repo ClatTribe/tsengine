@@ -29,6 +29,20 @@ type AWS struct {
 	TemplateURL    string // S3 URL of the cross-account-role CloudFormation template
 	TrustAccountID string // tsengine's AWS account id (the provisioned role trusts it)
 	Region         string // console region for the launch URL
+	// Writer is the live, reversible AWS write path (ADR 0009 Phase 5). Nil → no live cloud
+	// remediation is configured, so Apply returns an honest "not configured" error (never a
+	// false "done"). The real impl assumes the onboarded cross-account role and signs the call
+	// (SigV4) — that needs runtime write creds + the AWS SDK, the deployment step. Injectable
+	// so the write path is unit-tested against a fake without live creds (the Okta pattern).
+	Writer AWSWriter
+}
+
+// AWSWriter performs the reversible cloud mutations tsengine remediates to. Today only S3
+// public-access block (the fix for a public-bucket DSPM/CSPM finding).
+type AWSWriter interface {
+	// BlockS3PublicAccess enables S3 Block Public Access on the bucket — the reversible
+	// remediation for a publicly-exposed bucket (PutPublicAccessBlock, all four flags on).
+	BlockS3PublicAccess(ctx context.Context, bucket string) error
 }
 
 // NewAWS builds the connector. Region defaults to us-east-1.
@@ -82,8 +96,41 @@ func (a *AWS) Watch(context.Context, platform.Connection, []byte) ([]Trigger, er
 }
 
 // Apply: cloud remediation has no live write path yet (honest stub, pending write creds).
-func (a *AWS) Apply(context.Context, platform.Connection, string, platform.Action) error {
-	return fmt.Errorf("aws apply: cloud remediation not wired yet")
+// Apply executes an approved (HITL-gated) cloud remediation. It routes on the action's
+// machine-readable remediation_type + target (set by remediate.proposeCloud). Reached only
+// after the desk approves (§18.2 inv. 3); the connector never writes on its own. An unknown
+// remediation_type or an unconfigured Writer surfaces as an error — the action stays
+// un-applied, never falsely "done".
+func (a *AWS) Apply(ctx context.Context, _ platform.Connection, _ string, act platform.Action) error {
+	rt, _ := act.Payload["remediation_type"].(string)
+	target, _ := act.Payload["target"].(string)
+	switch rt {
+	case "s3_block_public_access":
+		bucket := bucketFromTarget(target)
+		if bucket == "" {
+			return fmt.Errorf("aws apply: s3_block_public_access action %s has no target bucket", act.ID)
+		}
+		if a.Writer == nil {
+			return fmt.Errorf("aws apply: no live AWS write path configured (needs assume-role write creds); "+
+				"action %s (block public access on %s) left un-applied", act.ID, bucket)
+		}
+		return a.Writer.BlockS3PublicAccess(ctx, bucket)
+	case "":
+		return fmt.Errorf("aws apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
+	default:
+		return fmt.Errorf("aws apply: remediation_type %q has no live AWS write path yet (target %s)", rt, target)
+	}
+}
+
+// bucketFromTarget extracts the bucket name from an S3 ARN ("arn:aws:s3:::name/key") or a bare
+// name. Object keys / a trailing path are dropped — Block Public Access is bucket-scoped.
+func bucketFromTarget(t string) string {
+	t = strings.TrimSpace(t)
+	t = strings.TrimPrefix(t, "arn:aws:s3:::")
+	if i := strings.IndexByte(t, '/'); i >= 0 {
+		t = t[:i]
+	}
+	return t
 }
 
 // accountIDFromRoleARN extracts the 12-digit account id from an IAM role ARN
