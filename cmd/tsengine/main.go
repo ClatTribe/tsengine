@@ -601,6 +601,7 @@ func runCloudAssess(argv []string) error {
 	llmFlag := fs.String("llm", "auto", "L2 LLM translator: auto (on if LLM_API_KEY set) | on | off")
 	remediate := fs.Bool("remediate", false, "emit applyable, self-verified remediation artifacts (SCP / IAM Deny / SG revoke) for each attack path")
 	maxHyp := fs.Int("max-hypotheses", 0, "engine worklist budget (0 = default 20); raise for accounts with many real attack paths")
+	workloadVulns := fs.String("workload-vulns", "", "optional path to agentless workload-scan results JSON ([]WorkloadVuln from trivy over the inventory's images) — enables internet-exposed-vulnerable-workload toxic-combo findings (ADR 0009 Phase 2)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -624,7 +625,25 @@ func runCloudAssess(argv []string) error {
 		}
 	}
 
-	assessment := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: *maxHyp})
+	// Agentless workload coverage (ADR 0009 Phase 2): surface the images the inventory's
+	// running workloads reference (the plan the orchestrator routes through trivy), and feed
+	// any provided scan results in so internet-exposed vulnerable workloads become toxic-combo
+	// findings.
+	if plan := cloudengine.WorkloadScanPlan(snap); len(plan) > 0 {
+		fmt.Fprintf(os.Stderr, "[cloud-assess] agentless workload scan plan: %d unique image(s) across the inventory's workloads\n", len(plan))
+	}
+	var wvulns []cloudengine.WorkloadVuln
+	if *workloadVulns != "" {
+		b, rerr := os.ReadFile(*workloadVulns) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read workload-vulns: %w", rerr)
+		}
+		if jerr := json.Unmarshal(b, &wvulns); jerr != nil {
+			return fmt.Errorf("parse workload-vulns: %w", jerr)
+		}
+	}
+
+	assessment := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: *maxHyp, WorkloadVulns: wvulns})
 
 	// L2 translator: refine the deterministic findings into developer-facing
 	// prose + an executive summary (graceful — leaves the deterministic output
