@@ -639,15 +639,24 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 
 ## 16. Build phases — current status
 
+> **Status note (2026-06-21):** phases 0–6 are **built + CI-green**; the platform layer
+> (§18) is built on top. What remains is **live/scale verification gated on infra,
+> credentials, or product decisions** — tracked in [docs/competitive-roadmap.md](docs/competitive-roadmap.md)
+> (Tracks 1–3) and §18.3, not here. Concretely open: per-asset **live** benchmark numbers
+> (need the sandbox image + deployed targets; SAST 0.387 Youden is the one measured so far),
+> the L2 agent **live `verified_rate`** (needs a target + `LLM_API_KEY`), scale-grade infra
+> (Postgres store, cloud-KMS vault, HA/sandbox-pool — all behind today's interfaces), the
+> per-tenant **LLM-config-in-UX**, and self-serve **billing**.
+
 | Phase | Scope | Status |
 |---|---|---|
-| **0. Foundation** | Repo skeleton, core types (`pkg/types`), `Tool`/`Handler` interfaces, L1 dashboard JSON schema, evidence/attestation grounding (§10), CI (go test + golangci-lint + govulncheck) | not started |
-| **1. Sandbox + E2E** | Docker sandbox image (nuclei baked), `cmd/tool-server` HTTP API, host-side `internal/sandbox` client, run nuclei against one fixture target end-to-end | not started |
-| **2. web_application asset** | Anchor + registry tiers, filter rules, WAVSEP fixture + scorer, tool-replay API | not started |
-| **3. Other 6 assets** | api, repo, container, ip, domain, cloud_account — anchor + registry tiers, per-asset filter, per-asset normalize | not started |
-| **4. L1.5 + dashboard + threat intel + compliance** | Hook chain, vulnerabilities.json renderer, threat_intel.enrich, compliance.map | not started |
-| **5. Template refresh + attestation** | Versioned corpora, pin-per-scan, cron refresh, delta-verify, signed evidence bundle | not started |
-| **6. L2 layer** | LLM Lead agent over ≤12-tool catalog, OODA, bench rigs | future |
+| **0. Foundation** | Repo skeleton, core types (`pkg/types`), `Tool`/`Handler` interfaces, L1 dashboard JSON schema, evidence/attestation grounding (§10), CI (go test + golangci-lint + govulncheck) | ✅ built |
+| **1. Sandbox + E2E** | Docker sandbox image (nuclei baked), `cmd/tool-server` HTTP API, host-side `internal/sandbox` client, run nuclei against one fixture target end-to-end | ✅ built |
+| **2. web_application asset** | Anchor + registry tiers, filter rules, WAVSEP fixture + scorer, tool-replay API | ✅ built (live WAVSEP Youden pending a deployed target) |
+| **3. Other 6 assets** | api, repo, container, ip, domain, cloud_account — anchor + registry tiers, per-asset filter, per-asset normalize | ✅ built (8 assets incl. mobile; live per-asset recall pending targets) |
+| **4. L1.5 + dashboard + threat intel + compliance** | Hook chain, vulnerabilities.json renderer, threat_intel.enrich, compliance.map | ✅ built |
+| **5. Template refresh + attestation** | Versioned corpora, pin-per-scan, cron refresh, delta-verify, signed evidence bundle | ✅ built |
+| **6. L2 layer** | LLM Lead agent over ≤12-tool catalog, OODA, bench rigs | ✅ built (incl. ADR-0008 autonomous pentest; live `verified_rate` pending a target + LLM key) |
 
 ---
 
