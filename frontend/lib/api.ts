@@ -100,6 +100,11 @@ export const api = {
   quarantineConnection: (id: string, quarantined: boolean) =>
     call<Connection>(`/v1/connections/${id}/quarantine`, { method: "POST", body: JSON.stringify({ quarantined }) }),
 
+  // Tier an asset by customer-data exposure (1 = customer data, 2 = standard, 3 = low). The
+  // tier raises/lowers the risk-adjusted ranking of that asset's findings.
+  setAssetDataTier: (id: string, tier: number) =>
+    call<Asset>(`/v1/assets/${id}/data-tier`, { method: "POST", body: JSON.stringify({ tier }) }),
+
   // Per-tenant LLM config for the engine agent / autonomous pentest. GET reports provider +
   // model + whether a key is set (never the key). PUT sets provider/model and seals the key
   // server-side (an empty api_key keeps the existing key).

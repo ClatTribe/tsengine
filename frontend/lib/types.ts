@@ -260,6 +260,8 @@ export interface Asset {
   target: string;
   meta?: Record<string, string>;
   discovered_at?: string;
+  data_tier?: number; // 1 = customer data, 2 = standard, 3 = low sensitivity
+  data_tier_label?: string;
 }
 
 export interface ControlState {

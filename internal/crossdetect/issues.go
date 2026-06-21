@@ -28,6 +28,12 @@ type Issue struct {
 	// the strongest exploitability evidence. Set by AnnotateRuntime.
 	Attacked    bool `json:"attacked,omitempty"`
 	AttackCount int  `json:"attack_count,omitempty"`
+	// Data-tier prioritization (PrioritizeByDataTier): DataTier is the customer-data
+	// sensitivity of the asset this issue was attributed to (1 = customer data … 3 = low);
+	// RiskRank is the tier-adjusted priority (severity × tier) the issue list is sorted by.
+	// Both omitempty — zero until an owner tiers the asset and the issue is attributable.
+	DataTier int `json:"data_tier,omitempty"`
+	RiskRank int `json:"risk_rank,omitempty"`
 }
 
 var cveRe = regexp.MustCompile(`CVE-\d{4}-\d{4,7}`)

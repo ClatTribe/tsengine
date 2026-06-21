@@ -79,6 +79,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
 	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))
+	mux.HandleFunc("POST /v1/assets/{id}/data-tier", d.auth(d.handleSetAssetDataTier)) // tier a repo by customer-data exposure
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
 	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection)) // per-connection kill-switch (WRD-4)
 	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                  // the current tenant (org name/plan) for Settings
@@ -303,7 +304,15 @@ func (d Deps) handleKillSwitch(w http.ResponseWriter, r *http.Request, tenantID 
 // view joins these against engagements for last-scanned time.
 func (d Deps) handleAssets(w http.ResponseWriter, r *http.Request, tenantID string) {
 	a, err := d.Store.ListAssets(r.Context(), tenantID)
-	respond(w, a, err)
+	if err != nil {
+		respond(w, a, err)
+		return
+	}
+	views := make([]assetView, len(a))
+	for i := range a {
+		views[i] = viewAsset(a[i]) // surface data_tier + label without the UX parsing Meta
+	}
+	respond(w, views, nil)
 }
 
 func (d Deps) handleApprovals(w http.ResponseWriter, r *http.Request, tenantID string) {
