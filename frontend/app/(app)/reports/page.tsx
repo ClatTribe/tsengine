@@ -1,23 +1,22 @@
 import Link from "next/link";
 import { FileText, Download, ShieldCheck, FileCode2, Sheet, Lock, ArrowUpRight } from "lucide-react";
-import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
+import { api, FRAMEWORK_LABEL } from "@/lib/api";
 import { Card, SectionTitle, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
-  const frameworks = (
-    await Promise.all(
-      FRAMEWORKS.map(async (f) => {
-        const cs = await api.posture(f);
-        if (cs.length === 0) return null;
-        const gap = cs.filter((c) => c.state === "gap").length;
-        const pct = Math.round(((cs.length - gap) / cs.length) * 100);
-        return { f, total: cs.length, met: cs.length - gap, gap, pct };
-      }),
-    )
-  ).filter(Boolean) as { f: string; total: number; met: number; gap: number; pct: number }[];
+  // One batched posture call (only tracked frameworks come back) instead of fanning out 14
+  // per-framework requests.
+  const summary = await api.postureSummary();
+  const frameworks = summary.frameworks.map((p) => ({
+    f: p.framework,
+    total: p.total,
+    met: p.met,
+    gap: p.gap,
+    pct: p.total > 0 ? Math.round((p.met / p.total) * 100) : 0,
+  }));
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
