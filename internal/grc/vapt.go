@@ -31,13 +31,14 @@ type VAPTReport struct {
 
 // VAPTSummary is the executive-summary roll-up.
 type VAPTSummary struct {
-	Total       int            `json:"total"`
-	BySeverity  map[string]int `json:"by_severity"` // critical/high/medium/low/info
-	Verified    int            `json:"verified"`    // exploitation/tool-confirmed (not pattern-only)
-	Unconfirmed int            `json:"unconfirmed"` // pattern-match only — leads to validate (FP-exposed)
-	KEV         int            `json:"kev"`         // actively exploited in the wild (CISA KEV)
-	FixesReady  int            `json:"fixes_ready"` // findings with a remediation already prepared
-	RiskRating  string         `json:"risk_rating"` // Critical | High | Medium | Low | Clear
+	Total         int            `json:"total"`
+	BySeverity    map[string]int `json:"by_severity"`    // critical/high/medium/low/info
+	Verified      int            `json:"verified"`       // exploitation/tool-confirmed (not pattern-only)
+	ExploitProven int            `json:"exploit_proven"` // a benign PoC was captured (active-driver proof — the strongest tier)
+	Unconfirmed   int            `json:"unconfirmed"`    // pattern-match only — leads to validate (FP-exposed)
+	KEV           int            `json:"kev"`            // actively exploited in the wild (CISA KEV)
+	FixesReady    int            `json:"fixes_ready"`    // findings with a remediation already prepared
+	RiskRating    string         `json:"risk_rating"`    // Critical | High | Medium | Low | Clear
 }
 
 // VAPTFinding is one assessed vulnerability, grounded in its scanner evidence.
@@ -52,6 +53,7 @@ type VAPTFinding struct {
 	CWE          []string `json:"cwe,omitempty"`
 	MITRE        []string `json:"mitre,omitempty"`
 	Description  string   `json:"description,omitempty"`
+	PoC          string   `json:"poc,omitempty"`          // captured exploitation proof (active-driver PoC), if any
 	OWASP        []string `json:"owasp,omitempty"`        // OWASP Top 10 (2021) category mapping
 	Remediation  string   `json:"remediation,omitempty"`  // the recommended fix (CWE-class standard)
 	Verification string   `json:"verification,omitempty"` // verified | corroborated | pattern_match
@@ -121,9 +123,16 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 		if fixReady[f.ID] {
 			r.Summary.FixesReady++
 		}
+		// Pull the active-driver exploitation proof out of the description so the report can
+		// render it as distinguished, reproducible evidence (the exploitation-proven tier) rather
+		// than burying it in prose — the XBOW "we proved it" differentiator.
+		poc, descBody := extractPoC(f.Description)
+		if poc != "" {
+			r.Summary.ExploitProven++
+		}
 		vf := VAPTFinding{
 			ID: f.ID, Title: f.Title, Severity: sev, Tool: f.Tool, RuleID: f.RuleID,
-			Endpoint: f.Endpoint, CWE: f.CWE, MITRE: f.MITRETechniques, Description: f.Description,
+			Endpoint: f.Endpoint, CWE: f.CWE, MITRE: f.MITRETechniques, Description: descBody, PoC: poc,
 			OWASP: owaspFor(f.CWE, f.Tool), Remediation: remediationFor(f.CWE, f.Tool),
 			Verification: string(f.VerificationStatus), Confidence: f.Confidence,
 			Unconfirmed: !confirmed, KEV: kev, FixReady: fixReady[f.ID],
@@ -154,6 +163,17 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 
 func isVerified(f types.Finding) bool {
 	return f.VerificationStatus == "verified" || f.VerificationStatus == "corroborated"
+}
+
+// extractPoC splits the active-driver "[Exploitation PoC ...]" proof line out of a finding's
+// description (the active driver appends it on a proven exploit). Returns (poc, descriptionBody);
+// poc is "" when the description carries no captured proof. Mirrors the dashboard UI's pocOf.
+func extractPoC(desc string) (poc, body string) {
+	i := strings.Index(desc, "[Exploitation PoC")
+	if i < 0 {
+		return "", desc
+	}
+	return strings.TrimSpace(desc[i:]), strings.TrimSpace(desc[:i])
 }
 
 // vaptRisk derives an overall risk rating from the severity mix (matches the dashboard's
@@ -188,8 +208,8 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	fmt.Fprintf(&b, "- **Overall risk rating: %s**\n", s.RiskRating)
 	fmt.Fprintf(&b, "- **%d findings** — Critical %d · High %d · Medium %d · Low %d · Info %d\n",
 		s.Total, s.BySeverity["critical"], s.BySeverity["high"], s.BySeverity["medium"], s.BySeverity["low"], s.BySeverity["info"])
-	fmt.Fprintf(&b, "- **%d tool-confirmed** (verified/corroborated) · **%d unconfirmed** (pattern-match — validate before action) · **%d actively exploited** (CISA KEV) · **%d with a fix already prepared**\n",
-		s.Verified, s.Unconfirmed, s.KEV, s.FixesReady)
+	fmt.Fprintf(&b, "- **%d exploitation-proven** (a benign proof-of-concept was captured — the strongest evidence tier) · **%d tool-confirmed** (verified/corroborated) · **%d unconfirmed** (pattern-match — validate before action) · **%d actively exploited** (CISA KEV) · **%d with a fix already prepared**\n",
+		s.ExploitProven, s.Verified, s.Unconfirmed, s.KEV, s.FixesReady)
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
 	b.WriteString("\n## Methodology & confidence\n\n")
 	b.WriteString("Assessment is performed by the TensorShield engine, which wraps best-in-class open-source " +
@@ -247,9 +267,16 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		if f.KEV {
 			status += " · **actively exploited (CISA KEV)**"
 		}
+		if f.PoC != "" {
+			status = "**exploitation-proven** · " + status
+		}
 		fmt.Fprintf(&b, "- **Evidence strength:** %s\n", status)
 		if f.Description != "" {
 			fmt.Fprintf(&b, "\n%s\n", f.Description)
+		}
+		if f.PoC != "" {
+			b.WriteString("\n**✓ Exploitation-proven — reproducible proof of concept:**\n\n")
+			fmt.Fprintf(&b, "```\n%s\n```\n", f.PoC)
 		}
 		if f.Remediation != "" {
 			fmt.Fprintf(&b, "\n**Recommended fix:** %s", f.Remediation)
