@@ -101,3 +101,18 @@ func TestMutableTagFindings(t *testing.T) {
 		t.Errorf("immutable tags must yield no findings (FP), got %d", len(fs))
 	}
 }
+
+func TestAccuracy_MutableTagCorpus(t *testing.T) {
+	s := ScoreTags(TagCorpus())
+	t.Logf("mutable-tag accuracy: recall=%.2f precision=%.2f (TP=%d FN=%d FP=%d TN=%d)",
+		s.Recall(), s.Precision(), s.TP, s.FN, s.FP, s.TN)
+
+	// The bar: every rolling tag is flagged (recall 1.0) and no immutable tag — semver, date,
+	// sha, custom build id — is flagged (precision 1.0, the FP guard).
+	if s.Recall() != 1.0 {
+		t.Errorf("mutable-tag recall must be 1.0, got %.2f (FN=%d)", s.Recall(), s.FN)
+	}
+	if s.Precision() != 1.0 {
+		t.Errorf("mutable-tag precision must be 1.0 (no immutable tag flagged), got %.2f (FP=%d)", s.Precision(), s.FP)
+	}
+}
