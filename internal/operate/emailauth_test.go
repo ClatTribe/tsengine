@@ -169,3 +169,19 @@ func TestEmailAuthDepthChecks(t *testing.T) {
 		}
 	}
 }
+
+func TestAccuracy_EmailAuthCorpus(t *testing.T) {
+	s := ScoreDomains(EmailAuthCorpus())
+	t.Logf("email-auth accuracy: %d domains (%d hardened) — recall=%.2f precision=%.2f (TP=%d FN=%d FP=%d)",
+		s.Cases, s.Hardened, s.Recall(), s.Precision(), s.TP, s.FN, s.FP)
+
+	// The bar: every weak config is flagged (recall 1.0 — incl. the #323 depth checks) and every
+	// hardened domain emits nothing (precision 1.0 — the FP-control invariant, incl. a legacy
+	// snapshot with no depth fields).
+	if s.Recall() != 1.0 {
+		t.Errorf("email-auth recall must be 1.0, got %.2f (FN=%d)", s.Recall(), s.FN)
+	}
+	if s.Precision() != 1.0 {
+		t.Errorf("email-auth precision must be 1.0 (hardened domains emit nothing), got %.2f (FP=%d)", s.Precision(), s.FP)
+	}
+}
