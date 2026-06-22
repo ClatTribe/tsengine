@@ -17,7 +17,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SANDBOX_IMAGE="${TSENGINE_SANDBOX_IMAGE:-tsengine/sandbox:latest}"
+# Default matches `make sandbox-image` (Makefile SANDBOX_IMAGE) so an already-built image is found
+# and not needlessly rebuilt (the build is ~15 min / 5.8 GB).
+SANDBOX_IMAGE="${TSENGINE_SANDBOX_IMAGE:-tsengine/sandbox:0.1.0}"
 SANDBOX_NET="${TSENGINE_SANDBOX_NETWORK:-tsengine-sandbox}"
 DB="${TSENGINE_PLATFORM_DB:-/tmp/tsengine-demo-secure.json}"
 API_PORT="${API_PORT:-8090}"
