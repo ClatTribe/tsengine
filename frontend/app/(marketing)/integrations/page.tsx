@@ -2,7 +2,7 @@ import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import {
   Github, GitBranch, Cloud, Mail, Users, KeyRound, Ticket, ClipboardList,
-  MessageSquare, MessagesSquare, MessageCircle, BellRing, ArrowRight, Plug, Webhook,
+  MessageSquare, MessagesSquare, MessageCircle, BellRing, ArrowRight, Plug, Webhook, Container,
 } from "lucide-react";
 
 export const metadata = pageMeta({
@@ -31,6 +31,15 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
       { icon: Cloud, name: "AWS", role: "CSPM, IAM, exposed resources", status: "live" },
       { icon: Cloud, name: "Google Cloud", role: "CSPM & IAM posture", status: "soon" },
       { icon: Cloud, name: "Azure", role: "CSPM & IAM posture", status: "soon" },
+    ],
+  },
+  {
+    title: "Container registries",
+    blurb: "Scan on push — only new or re-pushed image digests get scanned, never the whole registry every cycle.",
+    items: [
+      { icon: Container, name: "Docker Hub", role: "Auto-discover images, scan on push (digest-diff)", status: "live" },
+      { icon: Container, name: "GitHub Container Registry", role: "Auto-discover images, scan on push", status: "soon" },
+      { icon: Container, name: "Amazon ECR", role: "Auto-discover images, scan on push", status: "soon" },
     ],
   },
   {
