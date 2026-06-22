@@ -42,12 +42,23 @@ func (d Deps) handleSetAuthzTest(w http.ResponseWriter, r *http.Request, tenantI
 		writeJSON(w, http.StatusNotFound, errBody("asset not found"))
 		return
 	}
+	// The config holds the identities' auth headers (credentials), so it must be sealed before
+	// it touches the store — never plaintext at rest (§18.2 inv. 6).
+	if d.Vault == nil {
+		writeJSON(w, http.StatusBadRequest, errBody("secret vault not configured — cannot securely store the identities' credentials"))
+		return
+	}
 	blob, _ := json.Marshal(cfg)
+	sealed, serr := d.Vault.Seal(string(blob))
+	if serr != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody("seal authz-test config: "+serr.Error()))
+		return
+	}
 	m := make(map[string]string, len(found.Meta)+1)
 	for k, v := range found.Meta {
 		m[k] = v
 	}
-	m["authz_test"] = string(blob)
+	m["authz_test"] = sealed // a sealed ref, not the plaintext config
 	found.Meta = m
 	if err := d.Store.PutAsset(r.Context(), *found); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))

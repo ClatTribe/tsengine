@@ -14,7 +14,8 @@ func TestSetAuthzTest_StoresValidatedConfig(t *testing.T) {
 	st := store.NewMemory()
 	ctx := context.Background()
 	_ = st.PutAsset(ctx, platform.Asset{ID: "a-api", TenantID: "t1", Type: "api", Target: "https://api.acme.com"})
-	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	sealer := &recordingSealer{}
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", Vault: sealer})
 
 	cfg := `{
 	  "victim":   {"name":"victim","headers":{"Authorization":"Bearer A"}},
@@ -30,10 +31,14 @@ func TestSetAuthzTest_StoresValidatedConfig(t *testing.T) {
 	if stored == "" {
 		t.Fatal("the authz-test config should be persisted in the asset")
 	}
-	// The persisted blob holds the operation but the API response must not echo headers.
-	if !strings.Contains(stored, "invoices/42") {
-		t.Error("the operation should be persisted")
+	// Persisted SEALED — the identities' auth headers must never sit plaintext in Meta.
+	if strings.Contains(stored, "Bearer") || strings.Contains(stored, "invoices/42") {
+		t.Errorf("the config must be sealed, not plaintext at rest, got %q", stored)
 	}
+	if len(sealer.sealed) != 1 || !strings.Contains(sealer.sealed[0], "Bearer A") {
+		t.Error("the full config (incl. auth headers) should have been sealed before persistence")
+	}
+	// The API response must not echo headers either.
 	if strings.Contains(rec.Body.String(), "Bearer") {
 		t.Error("the API response must NOT echo the identities' auth headers")
 	}
