@@ -63,15 +63,16 @@ func (t Tenant) Redacted() Tenant { t.LLM = nil; return t }
 
 // Connection kinds — the external systems the platform can link via OAuth.
 const (
-	ConnGitHub     = "github"
-	ConnGitLab     = "gitlab"
-	ConnBitbucket  = "bitbucket"
-	ConnAWS        = "aws"
-	ConnGCP        = "gcp"
-	ConnGWorkspace = "gworkspace"
-	ConnM365       = "m365"
-	ConnOkta       = "okta"
-	ConnSlack      = "slack"
+	ConnGitHub      = "github"
+	ConnGitLab      = "gitlab"
+	ConnBitbucket   = "bitbucket"
+	ConnAzureDevOps = "azuredevops"
+	ConnAWS         = "aws"
+	ConnGCP         = "gcp"
+	ConnGWorkspace  = "gworkspace"
+	ConnM365        = "m365"
+	ConnOkta        = "okta"
+	ConnSlack       = "slack"
 )
 
 // Connection statuses.

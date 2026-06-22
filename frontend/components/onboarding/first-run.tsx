@@ -6,6 +6,7 @@ const KIND_ICON: Record<string, typeof Github> = {
   github: Github,
   gitlab: GitBranch,
   bitbucket: GitBranch,
+  azuredevops: GitBranch,
   gworkspace: Mail,
   m365: Users,
   okta: KeyRound,

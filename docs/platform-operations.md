@@ -79,6 +79,7 @@ provider (§5–§6).
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub |
 | `GITLAB_CLIENT_ID` / `GITLAB_CLIENT_SECRET` | GitLab |
 | `BITBUCKET_CLIENT_ID` / `BITBUCKET_CLIENT_SECRET` | Bitbucket Cloud (OAuth consumer key/secret; grant repository + pullrequest scopes) |
+| `AZURE_DEVOPS_CLIENT_ID` / `AZURE_DEVOPS_CLIENT_SECRET` / `AZURE_DEVOPS_ORG` | Azure DevOps (App ID + client secret; `vso.code`/`vso.code_write` scopes). `ORG` is the organization (`dev.azure.com/{ORG}`) — required, since the org isn't carried in the OAuth flow. |
 | `GWORKSPACE_CLIENT_ID` / `GWORKSPACE_CLIENT_SECRET` | Google Workspace |
 | `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | Microsoft 365 |
 | `OKTA_ORG_URL` / `OKTA_CLIENT_ID` / `OKTA_CLIENT_SECRET` | Okta (org URL e.g. `https://dev-123.okta.com`) |
