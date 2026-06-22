@@ -732,6 +732,11 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 > the L2 agent **live `verified_rate`** (needs a target + `LLM_API_KEY`), scale-grade infra
 > (Postgres store, cloud-KMS vault, HA/sandbox-pool — all behind today's interfaces), the
 > per-tenant **LLM-config-in-UX**, and self-serve **billing**.
+>
+> **Per-asset gate/bucket status** (what runs securely via Docker on one machine, what we fixed
+> vs. what's customer-config vs. operator, and the honest credential-gated boundary):
+> [docs/per-asset-gates.md](docs/per-asset-gates.md). Reproduce the no-creds proofs with
+> `make demo-scan-asset` (container + repository + web_application).
 
 | Phase | Scope | Status |
 |---|---|---|
