@@ -47,7 +47,7 @@ to `host.docker.internal` so a scan can reach a local target.
 | **repository** | ✅ **proven** — single-stage (gitleaks/semgrep/trivy/grype/osv/checkov/hadolint/syft); planted secret caught by 4 tools + command-injection by semgrep (#387) | PR-review bot (`internal/prbot`) builds inline comments + merge-gating check-run | PR-bot policy `GET/PUT /v1/settings/pr-bot` | live GitHub **post** needs the GitHub App PR-write scope |
 | **container_image** | ✅ **proven** — single-stage (trivy/grype/dockle/syft/cosign); `alpine:3.18` → 27 real CVEs (#383) | registry scan-on-push reconcile (`internal/registrywatch`) | registry connection | live registry listing (e.g. ECR) needs the registry/cloud creds |
 | **web_application** | ✅ **proven** — recon→fan-out (katana→nuclei/dalfox/sqlmap/httpx→OAST/ffuf); local exposed-`/.git/` target (#392) | authenticated-scan reliability core (`internal/webauth`) | login-flow `POST /v1/assets/{id}/login-flow` (sealed) | a reachable **target URL** (provide it); live authed replay |
-| **api** | ✅ same sandbox path (spec-ingest → per-method fan-out: schemathesis/nuclei/inql/kiterunner) | BOLA/BFLA authz differential (`internal/apiauthz`) | authz-test `POST /v1/assets/{id}/authz-test` (sealed) | a reachable API + OpenAPI spec; active authz prober |
+| **api** | ✅ **proven** — spec-ingest → per-method fan-out; scanned a local VAmPI (16-operation OpenAPI spec) → `openapi_spec_ingest` + schemathesis + nuclei + kiterunner all fanned out in the sandbox | BOLA/BFLA authz differential (`internal/apiauthz`) | authz-test `POST /v1/assets/{id}/authz-test` (sealed) | a reachable API + OpenAPI spec; the deeper **business-logic** authz vulns (BOLA/BFLA) need the gated `apiauthz` active prober — generic schemathesis/nuclei fuzzing surfaces only spec/conformance issues |
 | **ip_address** | ✅ same sandbox path (naabu port discovery → per-port nuclei) | — | — | a reachable **target IP/CIDR** |
 | **domain** | ✅ same sandbox path (subfinder/amass/crt.sh → child-asset pivot) | — | — | a real **domain** (DNS reachable) |
 | **cloud_account** | ⛔ needs read-only cloud creds (prowler) | live remediation writers **AWS/GCP/Azure** public-storage (`*remediate` SDK packages) | **cloud-remediation role** `POST /v1/connections/{id}/cloud-remediation` (#386) + the cloud connection (read-only scan creds) | the customer's **cloud account + cross-account role** |
@@ -75,7 +75,15 @@ to `host.docker.internal` so a scan can reach a local target.
   exposed path but no injectable backend, so the engine reports what's there and **invents no
   high-severity finding** (grounded — detection *and* no false positives).
 
-`api`/`ip_address`/`domain` use the **same** recon→fan-out orchestrator path as `web_application`; they
+- `api` — a local **VAmPI** (a deliberately-vulnerable API) → `openapi_spec_ingest` fetched its OpenAPI
+  spec and ingested **16 operations** as the surface, then schemathesis (spec-driven fuzz) + nuclei +
+  kiterunner all fanned out per-method in the sandbox. The L1 anchors surfaced info-level findings (the
+  exposed spec); VAmPI's headline **BOLA/auth** bugs are business-logic authz issues that the gated
+  `apiauthz` differential test handles, not generic fuzzing — so the *pipeline* is proven end-to-end
+  even though a high-severity finding needs the consent-gated active path. VAmPI is a heavy image, so
+  this proof is run ad-hoc (not baked into `make demo-scan-asset`).
+
+`ip_address`/`domain` use the **same** recon→fan-out orchestrator path as `web_application`/`api`; they
 differ only in the recon shape and need a reachable target of that kind.
 
 ---
