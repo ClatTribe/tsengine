@@ -42,6 +42,11 @@ type DomainConfig struct {
 	DMARC string `json:"dmarc"` // none | quarantine | reject | "" (absent)
 	SPF   bool   `json:"spf"`
 	DKIM  bool   `json:"dkim"`
+	// Depth signals (populated by the live resolver; absent/zero in snapshots → not asserted, so
+	// the partial-strength checks never fire on a domain that didn't supply them).
+	SPFAll   string `json:"spf_all,omitempty"`   // qualifier on the SPF `all` mechanism: - ~ ? + ("" = none/absent); + or ? is permissive
+	DMARCPct int    `json:"dmarc_pct,omitempty"` // DMARC pct= (live: 100 when enforcing without an explicit pct); 0 = unknown
+	DMARCSub string `json:"dmarc_sp,omitempty"`  // DMARC sp= subdomain policy ("" = inherits p)
 }
 
 // OAuthGrant is a third-party app granted access to the workspace.
@@ -180,6 +185,31 @@ func checkEmailAuth(ws Workspace, now time.Time, id func() string) []types.Findi
 				fmt.Sprintf("Domain %s: SPF=%t DKIM=%t. Both are prerequisites for DMARC enforcement.", d.Name, d.SPF, d.DKIM),
 				now, comp(types.Compliance{CISv8: []string{"9.5"},
 					GDPR: []string{"Art. 32"}, NIST80053: []string{"SI-8"}, FedRAMP: []string{"SI-8"}, DPDP: []string{"Sec. 8(5)"}})))
+		}
+		// Depth: a permissive SPF `all` qualifier (+all / ?all) lets anyone pass SPF — present
+		// but ineffective. Fires only on an explicitly-parsed permissive qualifier (FP-safe for
+		// snapshot domains that don't supply SPFAll).
+		if d.SPFAll == "+" || d.SPFAll == "?" {
+			out = append(out, finding(id(), "operate::spf-permissive-all", types.SeverityMedium,
+				"SPF permits any sender: "+d.Name, d.Name,
+				fmt.Sprintf("Domain %s publishes SPF ending in %sall — it passes any sender, defeating SPF. Use -all (or ~all with DMARC).", d.Name, d.SPFAll),
+				now, comp(types.Compliance{CISv8: []string{"9.5"}, GDPR: []string{"Art. 32"}, NIST80053: []string{"SI-8"}, FedRAMP: []string{"SI-8"}, DPDP: []string{"Sec. 8(5)"}})))
+		}
+		// Depth: DMARC enforcing but only on a fraction of mail (pct<100) — partial enforcement
+		// that reads as "enforced". Fires only when pct was explicitly parsed (1..99).
+		if (d.DMARC == "reject" || d.DMARC == "quarantine") && d.DMARCPct > 0 && d.DMARCPct < 100 {
+			out = append(out, finding(id(), "operate::dmarc-partial-enforcement", types.SeverityMedium,
+				"DMARC only partially enforced: "+d.Name, d.Name,
+				fmt.Sprintf("Domain %s has p=%s but pct=%d — only %d%% of spoofed mail is acted on; the rest is delivered. Raise pct to 100.", d.Name, d.DMARC, d.DMARCPct, d.DMARCPct),
+				now, comp(types.Compliance{PCI: []string{"5.4.1"}, CISv8: []string{"9.5"}, GDPR: []string{"Art. 32"}, NIST80053: []string{"SI-8"}, FedRAMP: []string{"SI-8"}, DPDP: []string{"Sec. 8(5)"}})))
+		}
+		// Depth: an enforcing p= but sp=none leaves SUBDOMAINS spoofable (a common BEC vector).
+		// Fires only on an explicitly-parsed sp=none (FP-safe; absent sp inherits p).
+		if (d.DMARC == "reject" || d.DMARC == "quarantine") && d.DMARCSub == "none" {
+			out = append(out, finding(id(), "operate::dmarc-subdomain-unprotected", types.SeverityMedium,
+				"DMARC subdomains unprotected: "+d.Name, d.Name,
+				fmt.Sprintf("Domain %s enforces p=%s but sp=none — attackers can still spoof any subdomain (e.g. mail.%s). Set sp=reject.", d.Name, d.DMARC, d.Name),
+				now, comp(types.Compliance{PCI: []string{"5.4.1"}, CISv8: []string{"9.5"}, GDPR: []string{"Art. 32"}, NIST80053: []string{"SI-8"}, FedRAMP: []string{"SI-8"}, DPDP: []string{"Sec. 8(5)"}})))
 		}
 	}
 	return out
