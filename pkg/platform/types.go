@@ -29,6 +29,19 @@ type Tenant struct {
 	// API key is sealed (LLMConfig.KeyRef holds only the sealed ref); it is NEVER returned to
 	// the client — Redacted() strips it, and every tenant response uses that.
 	LLM *LLMConfig `json:"llm,omitempty"`
+	// PRBot is the per-tenant policy for the repository PR-review bot (ADR 0010). nil = the
+	// default (disabled). The live GitHub post is separately gated on the GitHub App PR scope.
+	PRBot *PRBotPolicy `json:"pr_bot,omitempty"`
+}
+
+// PRBotPolicy is the per-tenant repository PR-review-bot policy: whether to post inline review
+// comments + a merge-gating check-run on a pull request, and the severity at/above which the
+// check-run FAILS (blocks merge). No secret material — safe to return to the client.
+type PRBotPolicy struct {
+	Enabled bool `json:"enabled"`
+	// BlockSeverity is the merge-gating floor: a finding at/above it fails the check-run.
+	// "" or "off" = comment-only (advisory, never blocks). Else: critical|high|medium|low.
+	BlockSeverity string `json:"block_severity"`
 }
 
 // LLMConfig is a tenant's configured LLM for engine agent work (the L2 agent, ModeDeep

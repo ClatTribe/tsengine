@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, Questionnaire, ReviewRequest, SaaSAppsResponse, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PRBotSettings, Questionnaire, ReviewRequest, SaaSAppsResponse, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -145,6 +145,16 @@ export const api = {
     call<{ provider: string; model: string; has_key: boolean }>("/v1/settings/llm", {
       method: "PUT",
       body: JSON.stringify({ provider, model, api_key: apiKey }),
+    }),
+
+  // Repository PR-review-bot policy: enable inline review + a merge-gating check-run, and the
+  // severity floor that fails the check. github_connected reports whether the live post is wired.
+  prBotSettings: () =>
+    safe<PRBotSettings>("/v1/settings/pr-bot", { enabled: false, block_severity: "off", github_connected: false }),
+  setPRBotSettings: (enabled: boolean, blockSeverity: string) =>
+    call<{ enabled: boolean; block_severity: string; saved: boolean }>("/v1/settings/pr-bot", {
+      method: "PUT",
+      body: JSON.stringify({ enabled, block_severity: blockSeverity }),
     }),
 
   // Create + authorize a pentest engagement (the API enforces the active-mode
