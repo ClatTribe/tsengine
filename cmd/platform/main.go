@@ -101,6 +101,7 @@ func main() {
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 		connector.NewGitLab(os.Getenv("GITLAB_CLIENT_ID"), os.Getenv("GITLAB_CLIENT_SECRET")),
 		connector.NewBitbucket(os.Getenv("BITBUCKET_CLIENT_ID"), os.Getenv("BITBUCKET_CLIENT_SECRET")),
+		connector.NewAzureDevOps(os.Getenv("AZURE_DEVOPS_CLIENT_ID"), os.Getenv("AZURE_DEVOPS_CLIENT_SECRET"), os.Getenv("AZURE_DEVOPS_ORG")),
 		connector.NewGWorkspace(os.Getenv("GWORKSPACE_CLIENT_ID"), os.Getenv("GWORKSPACE_CLIENT_SECRET")),
 		connector.NewM365(os.Getenv("M365_CLIENT_ID"), os.Getenv("M365_CLIENT_SECRET")),
 		connector.NewOkta(os.Getenv("OKTA_ORG_URL"), os.Getenv("OKTA_CLIENT_ID"), os.Getenv("OKTA_CLIENT_SECRET")),
