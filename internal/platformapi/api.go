@@ -110,6 +110,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents)) // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
 	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile)) // container scan-on-push decision (ADR 0010 Phase 4)
 	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))          // api: Postman collection → endpoint inventory
+	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot)) // SaaS posture (SSPM) snapshot → findings
 	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))      // list runtime-protection events
 	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                // create + authorize a pentest engagement
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                  // list engagements
