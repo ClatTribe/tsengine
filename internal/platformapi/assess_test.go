@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -74,5 +75,23 @@ func TestAssessLimiter(t *testing.T) {
 	// after the window rolls, the IP is allowed again
 	if !l.allow("1.2.3.4", now.Add(61*time.Second)) {
 		t.Error("after the minute window, the IP should be allowed again")
+	}
+}
+
+func TestAssessEmailAuth_DKIMMessageIsHonest(t *testing.T) {
+	// DKIM selectors can't be enumerated, so a "not found" result must NOT falsely assert the
+	// domain's mail is unsigned (grounding §10) — it states the best-effort limitation instead.
+	res := assessEmailAuth(operate.DomainConfig{Name: "x.com", DMARC: "reject", SPF: true, DKIM: false})
+	var dkim string
+	for _, c := range res.Checks {
+		if c.Name == "DKIM" {
+			dkim = c.Detail
+		}
+	}
+	if strings.Contains(dkim, "aren't cryptographically signed") {
+		t.Errorf("DKIM-absent detail must not falsely assert mail is unsigned: %q", dkim)
+	}
+	if !strings.Contains(dkim, "selector") {
+		t.Errorf("DKIM-absent detail should explain the selector limitation: %q", dkim)
 	}
 }
