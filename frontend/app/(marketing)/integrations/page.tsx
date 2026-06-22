@@ -2,7 +2,7 @@ import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import {
   Github, GitBranch, Cloud, Mail, Users, KeyRound, Ticket, ClipboardList,
-  MessageSquare, MessagesSquare, MessageCircle, BellRing, ArrowRight, Plug, Webhook, Container,
+  MessageSquare, MessagesSquare, MessageCircle, BellRing, ArrowRight, Plug, Webhook, Container, FileJson,
 } from "lucide-react";
 
 export const metadata = pageMeta({
@@ -31,6 +31,14 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
       { icon: Cloud, name: "AWS", role: "CSPM, IAM, exposed resources", status: "live" },
       { icon: Cloud, name: "Google Cloud", role: "CSPM & IAM posture", status: "soon" },
       { icon: Cloud, name: "Azure", role: "CSPM & IAM posture", status: "soon" },
+    ],
+  },
+  {
+    title: "API specs",
+    blurb: "Import your API surface so every endpoint gets tested — from an OpenAPI spec or a Postman collection.",
+    items: [
+      { icon: FileJson, name: "OpenAPI / Swagger", role: "Spec ingest → per-endpoint DAST", status: "live" },
+      { icon: FileJson, name: "Postman", role: "Import a collection → per-endpoint inventory", status: "live" },
     ],
   },
   {
