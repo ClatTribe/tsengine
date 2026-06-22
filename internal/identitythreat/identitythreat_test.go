@@ -175,3 +175,42 @@ func TestMFAFatigue(t *testing.T) {
 		t.Error("MFA prompts spread an hour apart must not fire mfa_fatigue (FP)")
 	}
 }
+
+func TestDistributedSpray(t *testing.T) {
+	// 6 distinct users each failing once from the same IP within the window → distributed spray.
+	var evs []Event
+	for i, u := range []string{"a", "b", "c", "d", "e", "f"} {
+		evs = append(evs, Event{User: u, Type: EventLoginFail, Time: at(i), IP: "203.0.113.9"})
+	}
+	r := rulesFor(Detect(evs, Config{}))
+	if !r["distributed_spray"] {
+		t.Error("6 distinct users failing from one IP should fire distributed_spray")
+	}
+	// The per-user spray must NOT fire (no single user hit the per-user threshold).
+	if r["password_spray"] {
+		t.Error("no single user reached the per-user threshold; password_spray should not fire")
+	}
+
+	// FP guard 1: the same FEW users failing many times from one IP is per-user spray, not
+	// distributed (only 2 distinct users < threshold 5).
+	var fewUsers []Event
+	for i := 0; i < 8; i++ {
+		u := "a"
+		if i%2 == 1 {
+			u = "b"
+		}
+		fewUsers = append(fewUsers, Event{User: u, Type: EventLoginFail, Time: at(i), IP: "198.51.100.2"})
+	}
+	if rulesFor(Detect(fewUsers, Config{}))["distributed_spray"] {
+		t.Error("only 2 distinct users must not fire distributed_spray (FP)")
+	}
+
+	// FP guard 2: failures with no source IP can't be attributed → no distributed finding.
+	var noIP []Event
+	for _, u := range []string{"a", "b", "c", "d", "e", "f"} {
+		noIP = append(noIP, Event{User: u, Type: EventLoginFail, Time: at(0)})
+	}
+	if rulesFor(Detect(noIP, Config{}))["distributed_spray"] {
+		t.Error("failures without a source IP must not fire distributed_spray (FP)")
+	}
+}
