@@ -46,11 +46,30 @@ func (a App) NumUsers() int {
 	return a.Count
 }
 
-// sensitiveScope substrings mark a high-risk grant (mail/drive/admin/full access across IdPs).
+// sensitiveScope substrings mark a high-risk grant (data access / admin / full access across
+// IdPs). Tokens are matched case-insensitively as substrings of the scope.
 var sensitiveScope = []string{
+	// data access (Google / M365)
 	"mail", "gmail", "drive", "files", "documents", "spreadsheet", "calendar", "contacts",
 	"directory", "admin", "full_access", "fullaccess", "offline_access",
-	"repo", "read:org", "channels:history", "users:read", "chat:write", "groups:history",
+	// M365 high-risk app/role/site management (User.ReadWrite.All, Sites.FullControl.All,
+	// Application.ReadWrite.All — app-secret minting, RoleManagement.ReadWrite.Directory)
+	"readwrite.all", "fullcontrol", "application.readwrite", "rolemanagement", "mailboxsettings",
+	// GCP full-surface scopes (cloud-platform = god-mode; compute/bigquery/storage = broad)
+	"cloud-platform", "compute", "bigquery", "devstorage", "iam",
+	// GitHub high-risk (org admin, repo deletion, CI tampering, package/hook write)
+	"repo", "read:org", "admin:org", "write:org", "delete_repo", "admin:repo_hook", "workflow", "write:packages",
+	// Slack (incl. DM / private-channel history = im:history / mpim:history)
+	"channels:history", "users:read", "chat:write", "groups:history", "im:history", "mpim:history", "files:read",
+}
+
+// benignScope are identity-only scopes that must NEVER count as sensitive even though they may
+// substring-match a token above — e.g. the OIDC `email` scope and GitHub `user:email` both
+// contain "mail". This is the FP guard (matched on the scope's last path segment too, so the
+// Google URL form `.../auth/userinfo.email` is covered).
+var benignScope = map[string]bool{
+	"openid": true, "profile": true, "email": true, "user:email": true,
+	"users:read.email": true, "userinfo.email": true, "userinfo.profile": true,
 }
 
 // Inventory aggregates grants into the SaaS-app inventory: one entry per app, users + scopes
@@ -213,7 +232,16 @@ func describe(a App) string {
 }
 
 func isSensitive(scope string) bool {
-	s := strings.ToLower(scope)
+	s := strings.ToLower(strings.TrimSpace(scope))
+	// Identity-only scopes are never sensitive (FP guard) — check the full scope and its last
+	// path segment (Google's URL-form scopes, e.g. ".../auth/userinfo.email").
+	base := s
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	if benignScope[s] || benignScope[base] {
+		return false
+	}
 	for _, kw := range sensitiveScope {
 		if strings.Contains(s, kw) {
 			return true

@@ -76,3 +76,40 @@ func TestFindings_GroundedNoSignalNoFinding(t *testing.T) {
 		t.Errorf("a clean sanctioned app must produce no finding, got %+v", f)
 	}
 }
+
+func TestIsSensitive_Taxonomy(t *testing.T) {
+	// FN expansion: these high-risk scopes must now classify as sensitive.
+	sensitive := []string{
+		"https://www.googleapis.com/auth/cloud-platform", // GCP god-mode
+		"https://www.googleapis.com/auth/bigquery",
+		"Application.ReadWrite.All", // M365 app-secret minting
+		"User.ReadWrite.All",
+		"Sites.FullControl.All",
+		"RoleManagement.ReadWrite.Directory",
+		"admin:org",                // GitHub org admin
+		"delete_repo",              // GitHub repo deletion
+		"workflow",                 // GitHub CI tampering
+		"im:history",               // Slack DMs
+		"https://mail.google.com/", // full mailbox
+		"Mail.Read",
+	}
+	for _, s := range sensitive {
+		if !isSensitive(s) {
+			t.Errorf("scope %q should be classified sensitive (FN)", s)
+		}
+	}
+}
+
+func TestIsSensitive_BenignFPGuard(t *testing.T) {
+	// FP guard: identity-only scopes must NOT be sensitive even though some contain "mail".
+	benign := []string{
+		"openid", "profile", "email", "user:email", "users:read.email",
+		"https://www.googleapis.com/auth/userinfo.email",
+		"https://www.googleapis.com/auth/userinfo.profile",
+	}
+	for _, s := range benign {
+		if isSensitive(s) {
+			t.Errorf("identity scope %q must NOT be classified sensitive (FP)", s)
+		}
+	}
+}
