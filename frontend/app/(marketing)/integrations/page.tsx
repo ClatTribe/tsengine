@@ -2,13 +2,13 @@ import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import {
   Github, GitBranch, Cloud, Mail, Users, KeyRound, Ticket, ClipboardList,
-  MessageSquare, MessagesSquare, BellRing, ArrowRight, Plug, Webhook,
+  MessageSquare, MessagesSquare, MessageCircle, BellRing, ArrowRight, Plug, Webhook,
 } from "lucide-react";
 
 export const metadata = pageMeta({
   title: "Integrations — TensorShield",
   description:
-    "Connect your stack in minutes: GitHub, GitLab, Bitbucket, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Slack, PagerDuty and signed outbound webhooks for delivery. Read-only by default, write-back only on approval.",
+    "Connect your stack in minutes: GitHub, GitLab, Bitbucket, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Slack, Microsoft Teams, Discord, PagerDuty and signed outbound webhooks for delivery. Read-only by default, write-back only on approval.",
   path: "/integrations",
 });
 
@@ -51,6 +51,7 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
       { icon: MessageSquare, name: "Slack", role: "Approve/reject fixes in-channel", status: "live" },
       { icon: MessagesSquare, name: "Microsoft Teams", role: "New critical issues posted to your channel", status: "live" },
       { icon: BellRing, name: "PagerDuty", role: "New critical issues page on-call", status: "live" },
+      { icon: MessageCircle, name: "Discord", role: "New critical issues posted to your channel", status: "live" },
       { icon: Webhook, name: "Webhooks", role: "Signed JSON event per new issue — wire into Zapier, n8n, a SIEM, anything", status: "live" },
     ],
   },

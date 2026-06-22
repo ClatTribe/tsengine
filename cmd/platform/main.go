@@ -145,6 +145,10 @@ func main() {
 		alerters = append(alerters, notify.NewTeams(hook)) // new high/critical → Microsoft Teams heads-up
 		log.Print("[platform] Microsoft Teams incident notifications enabled (high/critical)")
 	}
+	if hook := os.Getenv("TSENGINE_DISCORD_WEBHOOK"); hook != "" {
+		alerters = append(alerters, notify.NewDiscord(hook)) // new high/critical → Discord channel embed
+		log.Print("[platform] Discord incident notifications enabled (high/critical)")
+	}
 	if url := os.Getenv("TSENGINE_WEBHOOK_URL"); url != "" {
 		// The generic outbound webhook — a signed JSON event per new incident, so a tenant can
 		// wire TensorShield into anything (Zapier/Make/n8n/SIEM/custom) without a bespoke connector.
