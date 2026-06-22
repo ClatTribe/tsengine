@@ -55,6 +55,7 @@ type Config struct {
 	SprayWindow            time.Duration
 	MFAFatigueThreshold    int // MFA challenges within MFAFatigueWindow that trip a fatigue/bombing alert
 	MFAFatigueWindow       time.Duration
+	DistributedSprayUsers  int // distinct users failing from one IP within SprayWindow → distributed spray
 }
 
 func (c Config) withDefaults() Config {
@@ -72,6 +73,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.MFAFatigueWindow <= 0 {
 		c.MFAFatigueWindow = 5 * time.Minute
+	}
+	if c.DistributedSprayUsers <= 0 {
+		c.DistributedSprayUsers = 5
 	}
 	return c
 }
@@ -109,6 +113,9 @@ func Detect(events []Event, cfg Config) []Threat {
 			}
 		}
 	}
+	// Cross-account rules run over the whole stream, not per user.
+	threats = append(threats, distributedSpray(events, cfg)...)
+
 	sort.SliceStable(threats, func(i, j int) bool {
 		if threats[i].User != threats[j].User {
 			return threats[i].User < threats[j].User
@@ -116,6 +123,54 @@ func Detect(events []Event, cfg Config) []Threat {
 		return threats[i].Rule < threats[j].Rule
 	})
 	return threats
+}
+
+// distributedSpray: the canonical low-and-slow password spray hits MANY accounts with a FEW
+// attempts each — so the per-user passwordSpray rule (≥threshold fails for ONE user) misses it.
+// This is the cross-account pass: ≥ DistributedSprayUsers DISTINCT users failing from the SAME
+// source IP within SprayWindow. FP guards: requires a source IP (no IP → can't attribute);
+// requires distinct USERS (many fails for one user is the per-user rule, not this); requires the
+// window. Fires once per offending IP.
+func distributedSpray(events []Event, cfg Config) []Threat {
+	byIP := map[string][]Event{}
+	for _, e := range events {
+		if e.Type == EventLoginFail && e.IP != "" {
+			byIP[e.IP] = append(byIP[e.IP], e)
+		}
+	}
+	ips := make([]string, 0, len(byIP))
+	for ip := range byIP {
+		ips = append(ips, ip)
+	}
+	sort.Strings(ips)
+
+	var out []Threat
+	for _, ip := range ips {
+		evs := byIP[ip]
+		sort.SliceStable(evs, func(i, j int) bool { return evs[i].Time.Before(evs[j].Time) })
+		for i := range evs {
+			users := map[string]bool{evs[i].User: true}
+			last := i
+			for j := i + 1; j < len(evs); j++ {
+				if evs[j].Time.Sub(evs[i].Time) <= cfg.SprayWindow {
+					users[evs[j].User] = true
+					last = j
+				} else {
+					break
+				}
+			}
+			if len(users) >= cfg.DistributedSprayUsers {
+				out = append(out, Threat{
+					Rule: "distributed_spray", User: ip, Severity: types.SeverityHigh,
+					Title: fmt.Sprintf("%d distinct accounts failed login from %s within %s — distributed password spray",
+						len(users), ip, cfg.SprayWindow),
+					Evidence: []string{ev(evs[i]), ev(evs[last])},
+				})
+				break // one finding per IP
+			}
+		}
+	}
+	return out
 }
 
 // impossibleTravel: two consecutive SUCCESSFUL logins from DIFFERENT non-empty countries within
@@ -267,12 +322,13 @@ var ruleMeta = map[string]struct {
 	cwe   string
 	mitre string
 }{
-	"impossible_travel": {"CWE-1248", "T1078"}, // valid-account abuse
-	"privileged_grant":  {"CWE-269", "T1098"},  // improper privilege mgmt / account manipulation
-	"mfa_removed":       {"CWE-1390", "T1556"}, // weak auth / modify authentication process
-	"password_spray":    {"CWE-307", "T1110"},  // improper auth-attempt restriction / brute force
-	"spray_success":     {"CWE-307", "T1078"},  // brute force succeeded → valid-account abuse (takeover)
-	"mfa_fatigue":       {"CWE-307", "T1621"},  // multi-factor authentication request generation (MFA bombing)
+	"impossible_travel": {"CWE-1248", "T1078"},    // valid-account abuse
+	"privileged_grant":  {"CWE-269", "T1098"},     // improper privilege mgmt / account manipulation
+	"mfa_removed":       {"CWE-1390", "T1556"},    // weak auth / modify authentication process
+	"password_spray":    {"CWE-307", "T1110"},     // improper auth-attempt restriction / brute force
+	"spray_success":     {"CWE-307", "T1078"},     // brute force succeeded → valid-account abuse (takeover)
+	"mfa_fatigue":       {"CWE-307", "T1621"},     // multi-factor authentication request generation (MFA bombing)
+	"distributed_spray": {"CWE-307", "T1110.003"}, // password spraying (cross-account, low-and-slow)
 }
 
 // Findings converts detected threats into platform findings so identity threats flow through the
