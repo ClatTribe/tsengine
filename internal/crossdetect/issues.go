@@ -57,7 +57,10 @@ func UnifiedIssues(findings []types.Finding) []Issue {
 		}
 		g.Count++
 		g.FindingIDs = appendUniqueStr(g.FindingIDs, f.ID)
-		if t := strings.TrimSpace(f.Tool); t != "" {
+		// Normalize the tool name (lower + trim) so casing/whitespace variants of the same
+		// scanner ("Trivy" vs "trivy ") count as ONE tool — else they'd falsely flip Confirmed
+		// (≥2 independent tools) on a single tool's output.
+		if t := strings.ToLower(strings.TrimSpace(f.Tool)); t != "" {
 			g.Tools = appendUniqueStr(g.Tools, t)
 		}
 		if sevRank(string(f.Severity)) < sevRank(g.Severity) {
@@ -90,7 +93,10 @@ func UnifiedIssues(findings []types.Finding) []Issue {
 // we fall back to the rule + location, which is conservative (won't merge
 // genuinely different issues).
 func dedupKey(f types.Finding) (key, cve string) {
-	if m := cveRe.FindString(f.RuleID + " " + f.Title); m != "" {
+	// Look for the CVE in the rule, title AND description — different scanners surface the same
+	// CVE in different fields (one in the title, another only in the body). Searching all three
+	// lets the same CVE from two tools merge into one issue instead of two (correlation FN fix).
+	if m := cveRe.FindString(f.RuleID + " " + f.Title + " " + f.Description); m != "" {
 		return "cve|" + strings.ToUpper(m), strings.ToUpper(m)
 	}
 	return "rule|" + strings.ToLower(f.RuleID) + "|" + strings.ToLower(f.Endpoint), ""

@@ -67,3 +67,35 @@ func TestUnifiedIssues_CorroborationAcrossToolsOnSameLocation(t *testing.T) {
 		t.Errorf("expected confirmed by gitleaks+trufflehog, got %+v", issues[0])
 	}
 }
+
+func TestUnifiedIssues_MergesCVEFoundInDescription(t *testing.T) {
+	// One scanner names the CVE in the title, another only in the description. They must merge
+	// into ONE issue (the correlation FN fix), not two.
+	findings := []types.Finding{
+		{ID: "a", Tool: "trivy", Severity: types.SeverityHigh, RuleID: "trivy::CVE-2024-1234", Title: "CVE-2024-1234 in libfoo"},
+		{ID: "b", Tool: "grype", Severity: types.SeverityHigh, RuleID: "grype::vuln", Title: "vulnerable libfoo", Description: "Matches CVE-2024-1234 in libfoo 1.2.3."},
+	}
+	issues := UnifiedIssues(findings)
+	if len(issues) != 1 {
+		t.Fatalf("the same CVE (one in title, one in description) should merge to 1 issue, got %d", len(issues))
+	}
+	if !issues[0].Confirmed || len(issues[0].Tools) != 2 {
+		t.Errorf("the merged issue should be confirmed by 2 tools, got %+v", issues[0].Tools)
+	}
+}
+
+func TestUnifiedIssues_CasingVariantToolNotFalselyConfirmed(t *testing.T) {
+	// The SAME tool reported under two casings must NOT flip Confirmed (which means ≥2 INDEPENDENT
+	// tools). Same rule+endpoint so they group together.
+	findings := []types.Finding{
+		{ID: "a", Tool: "Trivy", Severity: types.SeverityHigh, RuleID: "r", Endpoint: "img:1"},
+		{ID: "b", Tool: "trivy ", Severity: types.SeverityHigh, RuleID: "r", Endpoint: "img:1"},
+	}
+	issues := UnifiedIssues(findings)
+	if len(issues) != 1 {
+		t.Fatalf("same rule+endpoint should be one issue, got %d", len(issues))
+	}
+	if issues[0].Confirmed || len(issues[0].Tools) != 1 {
+		t.Errorf("casing variants of one tool must count as 1 tool, not confirmed; got tools=%v confirmed=%v", issues[0].Tools, issues[0].Confirmed)
+	}
+}
