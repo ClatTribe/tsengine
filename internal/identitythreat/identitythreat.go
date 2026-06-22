@@ -20,10 +20,11 @@ import (
 type EventType string
 
 const (
-	EventLogin      EventType = "login"              // a successful authentication
-	EventLoginFail  EventType = "login_failed"       // a failed authentication
-	EventRoleGrant  EventType = "role_grant"         // a role/privilege was granted
-	EventMFARemoved EventType = "mfa_factor_removed" // an MFA factor was removed (security downgrade)
+	EventLogin        EventType = "login"              // a successful authentication
+	EventLoginFail    EventType = "login_failed"       // a failed authentication
+	EventRoleGrant    EventType = "role_grant"         // a role/privilege was granted
+	EventMFARemoved   EventType = "mfa_factor_removed" // an MFA factor was removed (security downgrade)
+	EventMFAChallenge EventType = "mfa_challenge"      // an MFA push/prompt was issued (bombing signal)
 )
 
 // Event is one normalized identity audit event.
@@ -52,6 +53,8 @@ type Config struct {
 	ImpossibleTravelWindow time.Duration // two diff-country logins within this → impossible travel
 	SprayThreshold         int           // failed logins within SprayWindow that trip a spray alert
 	SprayWindow            time.Duration
+	MFAFatigueThreshold    int // MFA challenges within MFAFatigueWindow that trip a fatigue/bombing alert
+	MFAFatigueWindow       time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -63,6 +66,12 @@ func (c Config) withDefaults() Config {
 	}
 	if c.SprayWindow <= 0 {
 		c.SprayWindow = 10 * time.Minute
+	}
+	if c.MFAFatigueThreshold <= 0 {
+		c.MFAFatigueThreshold = 5
+	}
+	if c.MFAFatigueWindow <= 0 {
+		c.MFAFatigueWindow = 5 * time.Minute
 	}
 	return c
 }
@@ -81,6 +90,8 @@ func Detect(events []Event, cfg Config) []Threat {
 		sort.SliceStable(evs, func(i, j int) bool { return evs[i].Time.Before(evs[j].Time) })
 		threats = append(threats, impossibleTravel(user, evs, cfg)...)
 		threats = append(threats, passwordSpray(user, evs, cfg)...)
+		threats = append(threats, spraySuccess(user, evs, cfg)...)
+		threats = append(threats, mfaFatigue(user, evs, cfg)...)
 		for _, e := range evs {
 			if e.Type == EventRoleGrant && e.Admin {
 				threats = append(threats, Threat{
@@ -161,6 +172,81 @@ func passwordSpray(user string, evs []Event, cfg Config) []Threat {
 	return nil
 }
 
+// spraySuccess: a successful login that lands WITHIN the spray window of ≥ threshold failed
+// logins — the brute/spray worked → a likely account takeover (critical, escalates the spray
+// alert from "attempt" to "compromise"). FP guards: requires the full spray threshold of fails
+// AND a success inside the window; a lone failed-then-eventually-succeeded (normal fat-finger
+// then correct password) never reaches the threshold, so it never fires.
+func spraySuccess(user string, evs []Event, cfg Config) []Threat {
+	for i, e := range evs {
+		if e.Type != EventLogin {
+			continue
+		}
+		// Count fails in the window immediately preceding this success.
+		var first Event
+		count := 0
+		for j := i - 1; j >= 0; j-- {
+			if evs[j].Type != EventLoginFail {
+				continue
+			}
+			if e.Time.Sub(evs[j].Time) > cfg.SprayWindow {
+				break
+			}
+			count++
+			first = evs[j]
+		}
+		if count >= cfg.SprayThreshold {
+			return []Threat{{
+				Rule: "spray_success", User: user, Severity: types.SeverityCritical,
+				Title:    fmt.Sprintf("%s: a successful login followed %d failed attempts within %s — likely account takeover", user, count, cfg.SprayWindow),
+				Evidence: []string{ev(first), ev(e)},
+			}}
+		}
+	}
+	return nil
+}
+
+// mfaFatigue: ≥ threshold MFA challenges (push prompts) issued within the window — classic MFA
+// push-bombing, where an attacker with the password spams prompts hoping the user approves one.
+// Escalated to critical if a successful login lands inside the burst (the user likely caved). FP
+// guards: sub-threshold bursts never fire; challenges spread beyond the window (normal periodic
+// re-auth) never fire — only a tight burst does.
+func mfaFatigue(user string, evs []Event, cfg Config) []Threat {
+	var ch []Event
+	for _, e := range evs {
+		if e.Type == EventMFAChallenge {
+			ch = append(ch, e)
+		}
+	}
+	for i := range ch {
+		count, last := 1, i
+		for j := i + 1; j < len(ch); j++ {
+			if ch[j].Time.Sub(ch[i].Time) <= cfg.MFAFatigueWindow {
+				count++
+				last = j
+			} else {
+				break
+			}
+		}
+		if count >= cfg.MFAFatigueThreshold {
+			sev, suffix := types.SeverityHigh, ""
+			// Did a successful login land inside the burst? Then the bombing likely succeeded.
+			for _, e := range evs {
+				if e.Type == EventLogin && !e.Time.Before(ch[i].Time) && !e.Time.After(ch[last].Time) {
+					sev, suffix = types.SeverityCritical, " — and a login succeeded mid-burst (prompt likely approved under pressure)"
+					break
+				}
+			}
+			return []Threat{{
+				Rule: "mfa_fatigue", User: user, Severity: sev,
+				Title:    fmt.Sprintf("%s: %d MFA prompts within %s — possible MFA fatigue / push-bombing%s", user, count, cfg.MFAFatigueWindow, suffix),
+				Evidence: []string{ev(ch[i]), ev(ch[last])},
+			}}
+		}
+	}
+	return nil
+}
+
 func ev(e Event) string {
 	t := e.Time.UTC().Format(time.RFC3339)
 	if e.IP != "" {
@@ -185,6 +271,8 @@ var ruleMeta = map[string]struct {
 	"privileged_grant":  {"CWE-269", "T1098"},  // improper privilege mgmt / account manipulation
 	"mfa_removed":       {"CWE-1390", "T1556"}, // weak auth / modify authentication process
 	"password_spray":    {"CWE-307", "T1110"},  // improper auth-attempt restriction / brute force
+	"spray_success":     {"CWE-307", "T1078"},  // brute force succeeded → valid-account abuse (takeover)
+	"mfa_fatigue":       {"CWE-307", "T1621"},  // multi-factor authentication request generation (MFA bombing)
 }
 
 // Findings converts detected threats into platform findings so identity threats flow through the
