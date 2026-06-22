@@ -78,6 +78,7 @@ provider (§5–§6).
 |---|---|
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub |
 | `GITLAB_CLIENT_ID` / `GITLAB_CLIENT_SECRET` | GitLab |
+| `BITBUCKET_CLIENT_ID` / `BITBUCKET_CLIENT_SECRET` | Bitbucket Cloud (OAuth consumer key/secret; grant repository + pullrequest scopes) |
 | `GWORKSPACE_CLIENT_ID` / `GWORKSPACE_CLIENT_SECRET` | Google Workspace |
 | `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | Microsoft 365 |
 | `OKTA_ORG_URL` / `OKTA_CLIENT_ID` / `OKTA_CLIENT_SECRET` | Okta (org URL e.g. `https://dev-123.okta.com`) |

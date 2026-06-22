@@ -8,7 +8,7 @@ import {
 export const metadata = pageMeta({
   title: "Integrations — TensorShield",
   description:
-    "Connect your stack in minutes: GitHub, GitLab, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Slack, PagerDuty and signed outbound webhooks for delivery. Read-only by default, write-back only on approval.",
+    "Connect your stack in minutes: GitHub, GitLab, Bitbucket, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Slack, PagerDuty and signed outbound webhooks for delivery. Read-only by default, write-back only on approval.",
   path: "/integrations",
 });
 
@@ -21,6 +21,7 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
     items: [
       { icon: Github, name: "GitHub", role: "Repos, SCA, secret scanning, fix PRs", status: "live" },
       { icon: GitBranch, name: "GitLab", role: "Repos, SCA, secret scanning, fix MRs", status: "live" },
+      { icon: GitBranch, name: "Bitbucket", role: "Repos, SCA, secret scanning, fix PRs", status: "live" },
     ],
   },
   {

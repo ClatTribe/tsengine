@@ -65,6 +65,7 @@ func (t Tenant) Redacted() Tenant { t.LLM = nil; return t }
 const (
 	ConnGitHub     = "github"
 	ConnGitLab     = "gitlab"
+	ConnBitbucket  = "bitbucket"
 	ConnAWS        = "aws"
 	ConnGCP        = "gcp"
 	ConnGWorkspace = "gworkspace"
