@@ -214,3 +214,25 @@ func TestDistributedSpray(t *testing.T) {
 		t.Error("failures without a source IP must not fire distributed_spray (FP)")
 	}
 }
+
+func TestAccuracy_ITDRCorpus(t *testing.T) {
+	clock := func(min int) time.Time { return t0.Add(time.Duration(min) * time.Minute) }
+	s := ScoreCorpus(Corpus(clock), Config{})
+
+	t.Logf("ITDR accuracy: %d cases (%d benign) — recall=%.2f precision=%.2f (TP=%d FN=%d FP=%d)",
+		s.Cases, s.Benign, s.Recall(), s.Precision(), s.TP, s.FN, s.FP)
+	for _, r := range s.Rules() {
+		rs := s.ByRule[r]
+		t.Logf("  %-20s TP=%d FN=%d FP=%d", r, rs.TP, rs.FN, rs.FP)
+	}
+
+	// The bar: every planted attack is found (recall 1.0) and no benign stream trips a rule, nor
+	// does any case fire a rule it didn't expect (FP 0). This MEASURES the FP/FN claims + guards
+	// against regressions in any of the 7 rules at once.
+	if s.Recall() != 1.0 {
+		t.Errorf("ITDR recall must be 1.0 (every planted attack found), got %.2f (FN=%d)", s.Recall(), s.FN)
+	}
+	if s.FP != 0 {
+		t.Errorf("ITDR must have zero false positives across the corpus, got FP=%d", s.FP)
+	}
+}
