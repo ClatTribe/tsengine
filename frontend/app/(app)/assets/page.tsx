@@ -1,10 +1,11 @@
-import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2, Cloud } from "lucide-react";
+import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2, Cloud, Lock } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
 import { DataTierSelect } from "@/components/assets/data-tier-select";
+import { LoginFlowConfig } from "@/components/assets/login-flow-config";
 import { PageIntro } from "@/components/ui/page-intro";
 import { timeAgo, cn } from "@/lib/utils";
 
@@ -177,6 +178,16 @@ function AssetRow({ asset: a, connections, last }: { asset: Asset; connections: 
         <div className="flex items-center gap-2">
           <Boxes className="h-3.5 w-3.5 shrink-0 text-faint" />
           <span className="mono truncate text-sm">{a.target}</span>
+          {a.type === "web_application" &&
+            (a.meta?.login_flow ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-pulse/30 bg-pulse/5 px-1.5 py-0.5 text-[11px] text-pulse">
+                <Lock className="h-3 w-3" /> Authed
+              </span>
+            ) : (
+              <span className="shrink-0">
+                <LoginFlowConfig assetId={a.id} />
+              </span>
+            ))}
         </div>
       </td>
       <td className="px-2 py-2.5 align-middle">

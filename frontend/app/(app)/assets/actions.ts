@@ -23,3 +23,30 @@ export async function setAssetDataTier(id: string, tier: number): Promise<void> 
   revalidatePath("/assets");
   revalidatePath("/issues"); // risk-adjusted ordering may shift
 }
+
+// Configures authenticated scanning for a web asset from the common form-login inputs: a single
+// login POST + a validate URL + a success marker. The scanner replays this and confirms the
+// session each scan so it never silently scans logged-out (the FN guard). Credentials are sealed
+// server-side. Returns an error string on failure (e.g. no secret vault configured).
+export async function setLoginFlow(id: string, f: {
+  loginUrl: string;
+  userField: string;
+  username: string;
+  passField: string;
+  password: string;
+  validateUrl: string;
+  successMarker: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await api.setLoginFlow(id, {
+      type: "form",
+      steps: [{ method: "POST", url: f.loginUrl, fields: { [f.userField || "username"]: f.username, [f.passField || "password"]: f.password } }],
+      validate_url: f.validateUrl,
+      success_marker: f.successMarker,
+    });
+    revalidatePath("/assets");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "failed to save" };
+  }
+}
