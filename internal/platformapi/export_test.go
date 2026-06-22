@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -36,6 +37,47 @@ func TestExport_SARIFDefault(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, `"$schema"`) || !strings.Contains(body, "SQL injection") {
 		t.Errorf("SARIF should contain the schema + the finding, got: %s", body[:min(200, len(body))])
+	}
+}
+
+func TestExport_JSON(t *testing.T) {
+	h, _ := exportHandler(t)
+	rec := do(h, "GET", "/v1/findings/export?format=json", "t1", "")
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("want json content-type, got %q", ct)
+	}
+	var out struct {
+		Tenant   string `json:"tenant"`
+		Count    int    `json:"count"`
+		Findings []struct {
+			ID       string `json:"id"`
+			Severity string `json:"severity"`
+			Title    string `json:"title"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("export not valid JSON: %v", err)
+	}
+	if out.Tenant != "t1" || out.Count != 1 || len(out.Findings) != 1 {
+		t.Fatalf("want tenant t1 + 1 finding, got %+v", out)
+	}
+	if out.Findings[0].ID != "f1" || out.Findings[0].Severity != "critical" || out.Findings[0].Title != "SQL injection" {
+		t.Errorf("finding payload wrong: %+v", out.Findings[0])
+	}
+}
+
+func TestExport_JSONEmptyIsArrayNotNull(t *testing.T) {
+	st := store.NewMemory() // no findings
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/findings/export?format=json", "empty-tenant", "")
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `"findings": []`) {
+		t.Errorf("zero findings must serialize as [] not null, got: %s", body)
 	}
 }
 

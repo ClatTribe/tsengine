@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Download, ShieldCheck, FileCode2, Sheet, Lock, ArrowUpRight } from "lucide-react";
+import { FileText, Download, ShieldCheck, FileCode2, Sheet, Braces, Lock, ArrowUpRight } from "lucide-react";
 import { api, FRAMEWORK_LABEL } from "@/lib/api";
 import { Card, SectionTitle, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
