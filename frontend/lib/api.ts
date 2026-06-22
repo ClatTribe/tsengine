@@ -45,9 +45,25 @@ async function safe<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
+/** Like call() but returns null on a GENUINE 404 (the entity truly doesn't exist) and RE-THROWS
+ * any other failure (transient / 5xx / API unreachable). A detail page can then notFound() on
+ * null but let a transient error hit the recoverable error boundary — so an API hiccup never
+ * masquerades as "this page doesn't exist" (the bug class behind the compliance 404). */
+async function getOr404<T>(path: string): Promise<T | null> {
+  try {
+    return await call<T>(path);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
 export const api = {
   findings: () => safe<Finding[]>("/v1/findings", []),
-  finding: async (id: string) => (await safe<Finding[]>("/v1/findings", [])).find((f) => f.id === id) ?? null,
+  // Uses call() (not safe()) so a transient list-fetch failure THROWS → the recoverable error
+  // boundary, rather than silently yielding [] → "finding not found" → a wrong 404. A successful
+  // fetch with the id genuinely absent still returns null → the page's notFound().
+  finding: async (id: string) => (await call<Finding[]>("/v1/findings")).find((f) => f.id === id) ?? null,
   incidents: (status?: "all") => safe<Incident[]>(`/v1/incidents${status ? "?status=all" : ""}`, []),
   attackPaths: () => safe<AttackPaths>("/v1/attack-paths", { attack_paths: [], count: 0 }),
 
@@ -60,7 +76,9 @@ export const api = {
   issues: (showIgnored?: boolean) =>
     safe<IssuesResponse>(`/v1/issues${showIgnored ? "?show=ignored" : ""}`, { issues: [], count: 0, raw_findings: 0, confirmed: 0, ignored: 0 }),
   pentests: () => safe<PentestEngagement[]>("/v1/pentest", []),
-  pentest: (id: string) => safe<PentestEngagement | null>(`/v1/pentest/${id}`, null),
+  // getOr404 → null only when the engagement genuinely doesn't exist (page notFound()); a
+  // transient/5xx error throws to the recoverable error boundary instead of a false 404.
+  pentest: (id: string) => getOr404<PentestEngagement>(`/v1/pentest/${id}`),
   pentestStats: () =>
     safe<PentestStats>("/v1/pentest/stats", {
       engagements: 0, active_engagements: 0, completed_runs: 0, total_findings: 0,
