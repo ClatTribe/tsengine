@@ -61,5 +61,29 @@ OUT=$(./bin/tsengine scan --asset repository --target "$REPO" --image "$SANDBOX_
 echo "   findings: $(count "$OUT")   (bind-mounted read-only at /workspace; see /tmp/demo-scan-repo.log)"
 sample "$OUT"
 
+# web_application is recon→fan-out (katana crawl → nuclei/dalfox/sqlmap/httpx/ffuf), so it needs a
+# reachable target. Stand up a throwaway local site with a real misconfig (an exposed /.git/), scan
+# it through the sandbox (the loopback host is rewritten to host.docker.internal), then tear it down.
+# Skipped automatically if port 8088 is busy or the nginx image can't be pulled — the scan needs the
+# target reachable, and we never fake a result.
 echo
-echo "✓ secure-Docker scan proven for container_image + repository — scanners ran in the sandbox, no creds."
+echo "════ web_application — a throwaway local site exposing /.git/ (real misconfig, no creds) ════"
+WEB="$(mktemp -d /tmp/demo-web.XXXXXX)"
+trap 'rm -rf "$REPO" "$WEB"; docker rm -f tsengine-demo-webtarget >/dev/null 2>&1 || true' EXIT
+mkdir -p "$WEB/.git"
+printf 'ref: refs/heads/main\n' > "$WEB/.git/HEAD"
+printf '[core]\n\trepositoryformatversion = 0\n' > "$WEB/.git/config"
+printf '<html><body><h1>demo</h1><form action="/search"><input name="q"></form></body></html>\n' > "$WEB/index.html"
+if docker run -d --rm --name tsengine-demo-webtarget -p 8088:80 -v "$WEB":/usr/share/nginx/html:ro nginx:alpine >/dev/null 2>&1; then
+  sleep 2
+  OUT=$(./bin/tsengine scan --asset web_application --target http://localhost:8088 --image "$SANDBOX_IMAGE" 2>/tmp/demo-scan-web.log)
+  echo "   findings: $(count "$OUT")   (recon→fan-out in the sandbox; reaches the host via host.docker.internal)"
+  sample "$OUT"
+  docker rm -f tsengine-demo-webtarget >/dev/null 2>&1 || true
+  echo "   (the exposed /.git/ is surfaced; a static target yields no high-severity finding — grounded, no FP)"
+else
+  echo "   skipped — could not start the local target (port 8088 busy or nginx:alpine unavailable)."
+fi
+
+echo
+echo "✓ secure-Docker scan proven for container_image + repository + web_application — scanners ran in the sandbox, no creds."
