@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/llmretry"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 )
 
@@ -164,6 +165,9 @@ func generateWithRetry(ctx context.Context, llm cloudengine.LLM, prompt string, 
 		var out string
 		if out, err = llm.Generate(ctx, prompt); err == nil {
 			return out, nil
+		}
+		if !llmretry.IsTransient(err) {
+			return "", err // a permanent fault (bad request / auth) won't succeed on retry — fail fast
 		}
 	}
 	return "", err

@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/llmretry"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -166,7 +166,7 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 func (a *Agent) generate(ctx context.Context, system string, history []Message, tools []ToolSchema) (Response, error) {
 	for attempt := 0; ; attempt++ {
 		resp, err := a.client.Generate(ctx, system, history, tools)
-		if err == nil || !isTransient(err) || attempt >= transientRetries {
+		if err == nil || !llmretry.IsTransient(err) || attempt >= transientRetries {
 			return resp, err // success, a permanent error, or out of retries
 		}
 		// Exponential backoff: 0.5s, 1s, 2s (capped at 4s), ctx-aware.
@@ -192,27 +192,6 @@ func (a *Agent) backoff(ctx context.Context, d time.Duration) error {
 	case <-t.C:
 		return nil
 	}
-}
-
-// transientSignals are substrings of an LLM-client error that mean "retry might help":
-// provider rate-limits / overload (HTTP 429/5xx, anthropic 529) and transient network
-// faults. A permanent fault (400/401/403, "no such host") is NOT here — it fails fast.
-var transientSignals = []string{
-	"429", "rate limit", "overloaded", "status 500", "status 502", "status 503", "status 504", "status 529",
-	"timeout", "i/o timeout", "deadline exceeded", "connection reset", "connection refused", "eof", "temporarily",
-}
-
-func isTransient(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := strings.ToLower(err.Error())
-	for _, sig := range transientSignals {
-		if strings.Contains(s, sig) {
-			return true
-		}
-	}
-	return false
 }
 
 // dispatch executes one tool call against state, applying phase gating with

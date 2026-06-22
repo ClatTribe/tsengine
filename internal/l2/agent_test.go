@@ -236,17 +236,6 @@ func TestAgent_PermanentLLMErrorFailsFast(t *testing.T) {
 	}
 }
 
-func TestIsTransient(t *testing.T) {
-	transient := []string{"anthropic: status 429: x", "status 503", "overloaded", "context deadline exceeded", "connection reset by peer", "status 529"}
-	for _, s := range transient {
-		if !isTransient(errors.New(s)) {
-			t.Errorf("%q should be transient (retryable)", s)
-		}
-	}
-	permanent := []string{"anthropic: status 400: bad request", "status 401: unauthorized", "no such host", "invalid model"}
-	for _, s := range permanent {
-		if isTransient(errors.New(s)) {
-			t.Errorf("%q should NOT be transient (must fail fast)", s)
-		}
-	}
-}
+// The transient/permanent classifier itself is tested in internal/llmretry (shared by every
+// agent loop — l2, cloudagent, llmredteam). Here we only assert the l2 loop's retry BEHAVIOUR
+// (TestAgent_RetriesTransientLLMError / TestAgent_PermanentLLMErrorFailsFast above).
