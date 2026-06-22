@@ -22,6 +22,7 @@ const KIND_ICON: Record<string, typeof Github> = {
   okta: KeyRound,
   aws: Cloud,
   gcp: Cloud,
+  azure: Cloud,
 };
 
 const STATUS_CLS: Record<string, string> = {

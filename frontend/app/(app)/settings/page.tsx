@@ -19,7 +19,7 @@ import { PageIntro } from "@/components/ui/page-intro";
 export const dynamic = "force-dynamic";
 
 const KIND_ICON: Record<string, typeof Github> = {
-  github: Github, gitlab: GitBranch, bitbucket: GitBranch, azuredevops: GitBranch, gworkspace: Mail, m365: Users, okta: KeyRound, aws: Cloud, gcp: Cloud,
+  github: Github, gitlab: GitBranch, bitbucket: GitBranch, azuredevops: GitBranch, gworkspace: Mail, m365: Users, okta: KeyRound, aws: Cloud, gcp: Cloud, azure: Cloud,
 };
 
 const STATUS_CLS: Record<string, string> = {
