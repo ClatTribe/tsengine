@@ -604,6 +604,19 @@ cloud_account's parity is the prior **ADR 0009** campaign (DSPM/CWPP/CIS-scorebo
 remediation). These cores feed the same unified-issues / auto-triage / consensus / grc-hitl
 machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on.
 
+**Live wiring shipped so far** (each core's gated half is stated honestly):
+- **SaaS posture** — fully end-to-end: `operate.SaaSInventory(ws)` → `GET /v1/saas-apps` (inventory
+  + portfolio summary) → the `/saas-apps` frontend discovery page. Over the already-persisted
+  cross-IdP OAuth grants; no shadow-IT verdict without consent data.
+- **identity** — live via `POST /v1/identity/events`: an IdP-audit event stream → `identitythreat.Detect`
+  → findings stored in the same store (flow through issues/incidents/grc). The IdP-audit connector is the gate.
+- **container** — `POST /v1/registry/reconcile`: a connector posts current images + last-seen digests →
+  `registrywatch.Reconcile` → the scan-on-push plan (stateless; the connector runs the sandbox scan).
+- **repository** — `prbot.Submit` builds the GitHub PR-review + merge-gating check-run; the live POST is
+  gated on the GitHub App PR-write scope. **cloud** — `connector.AWS.Apply` S3 block-public-access via an
+  injectable writer (gated on assume-role write creds). **api/web** — apiauthz/webauth live execution is
+  active testing → behind the explicit-consent + sandbox gate.
+
 ---
 
 ## 14. Benchmark framework
