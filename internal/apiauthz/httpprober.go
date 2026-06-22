@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/ClatTribe/tsengine/internal/nettransient"
 )
 
 // HTTPProber is the live Prober for the BOLA/BFLA differential test (ADR 0010 Phase 1 wiring).
@@ -18,16 +20,41 @@ import (
 type HTTPProber struct {
 	Client  *http.Client
 	MaxBody int64 // cap on bytes read from the response (default 64 KiB)
+	// Retries is how many extra times a request is re-sent on a TRANSIENT transport fault.
+	// The BOLA/BFLA test is a DIFFERENTIAL over two responses (victim then attacker); a single
+	// network blip on either would silently produce a wrong verdict — almost always a
+	// false-negative (a real authz bypass missed). 0 → no retry. A permanent fault fails fast.
+	Retries int
 }
 
-// NewHTTPProber returns a prober with safe defaults (8s timeout, 64 KiB read cap). Redirects are
-// followed (an authz check cares about the final status+body, unlike the open-redirect proof).
+// NewHTTPProber returns a prober with safe defaults (8s timeout, 64 KiB read cap, 2 transient
+// retries). Redirects are followed (an authz check cares about the final status+body, unlike the
+// open-redirect proof).
 func NewHTTPProber() *HTTPProber {
-	return &HTTPProber{Client: &http.Client{Timeout: 8 * time.Second}, MaxBody: 64 << 10}
+	return &HTTPProber{Client: &http.Client{Timeout: 8 * time.Second}, MaxBody: 64 << 10, Retries: 2}
 }
 
-// Do issues one request with the identity's headers and returns the status + (capped) body.
+// Do issues one request (with bounded transient-transport retry) with the identity's headers and
+// returns the status + (capped) body. A transient blip is retried so it can't flip a differential
+// verdict; a permanent fault fails fast.
 func (h *HTTPProber) Do(ctx context.Context, r Request) (Response, error) {
+	for attempt := 0; ; attempt++ {
+		res, err := h.do1(ctx, r)
+		if err == nil || !nettransient.IsTransient(err) || attempt >= h.Retries {
+			return res, err
+		}
+		t := time.NewTimer(time.Duration(200<<attempt) * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return Response{}, ctx.Err()
+		case <-t.C:
+		}
+	}
+}
+
+// do1 issues a single request (no retry).
+func (h *HTTPProber) do1(ctx context.Context, r Request) (Response, error) {
 	method := r.Method
 	if method == "" {
 		method = http.MethodGet
