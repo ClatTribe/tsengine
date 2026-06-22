@@ -2,7 +2,7 @@ package platformapi
 
 import (
 	"context"
-	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
@@ -14,23 +14,36 @@ func TestSetLoginFlow_StoresValidatedFlow(t *testing.T) {
 	st := store.NewMemory()
 	ctx := context.Background()
 	_ = st.PutAsset(ctx, platform.Asset{ID: "a-web", TenantID: "t1", Type: "web_application", Target: "https://app.acme.com"})
-	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	sealer := &recordingSealer{}
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", Vault: sealer})
 
-	// A valid recorded flow → stored.
-	flow := `{"type":"recorded","steps":[{"method":"POST","url":"https://app.acme.com/login","fields":{"u":"x","p":"y"}}],"validate_url":"https://app.acme.com/me","success_marker":"Sign out"}`
+	// A valid recorded flow (with a password) → stored SEALED.
+	flow := `{"type":"recorded","steps":[{"method":"POST","url":"https://app.acme.com/login","fields":{"u":"x","password":"s3cret"}}],"validate_url":"https://app.acme.com/me","success_marker":"Sign out"}`
 	rec := do(h, "POST", "/v1/assets/a-web/login-flow", "t1", flow)
 	if rec.Code != 200 {
 		t.Fatalf("valid flow should be accepted, got %d: %s", rec.Code, rec.Body.String())
 	}
-	// Persisted in the asset Meta as JSON.
+	// Persisted as a SEALED ref — never the plaintext flow (the password must not sit in Meta).
 	assets, _ := st.ListAssets(ctx, "t1")
-	if assets[0].Meta["login_flow"] == "" {
-		t.Error("the login flow should be persisted in the asset")
+	stored := assets[0].Meta["login_flow"]
+	if stored == "" {
+		t.Fatal("the login flow should be persisted in the asset")
 	}
-	var stored map[string]any
-	_ = json.Unmarshal([]byte(assets[0].Meta["login_flow"]), &stored)
-	if stored["type"] != "recorded" {
-		t.Errorf("stored flow type wrong: %v", stored["type"])
+	if strings.Contains(stored, "s3cret") || strings.Contains(stored, "recorded") {
+		t.Errorf("the login flow must be sealed, not plaintext at rest, got %q", stored)
+	}
+	if len(sealer.sealed) != 1 || !strings.Contains(sealer.sealed[0], "s3cret") {
+		t.Error("the full flow (incl. the password) should have been sealed before persistence")
+	}
+}
+
+func TestSetLoginFlow_RejectsWithoutVault(t *testing.T) {
+	st := store.NewMemory()
+	_ = st.PutAsset(context.Background(), platform.Asset{ID: "a-web", TenantID: "t1", Type: "web_application"})
+	// No Vault → cannot securely store credentials → 400 (never plaintext).
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	if rec := do(h, "POST", "/v1/assets/a-web/login-flow", "t1", `{"type":"token","token":"t"}`); rec.Code != 400 {
+		t.Errorf("without a vault the setter must refuse (400), got %d", rec.Code)
 	}
 }
 
