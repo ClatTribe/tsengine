@@ -622,9 +622,14 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
   `internal/connector/gcpremediate.GCSWriter` (cloud.google.com/go storage SDK, its own package) impersonates a
   scoped write SA and enforces GCS **Public Access Prevention** on a bucket; wired when
   `GCP_REMEDIATION_IMPERSONATE_SA` (or `GCP_REMEDIATION_ENABLED=1`) is set. The proposer
-  (`remediate.liveCloudMutation`) emits `s3_block_public_access` for AWS + `gcs_public_access_prevention` for GCP
-  on a public-bucket finding. **Azure** `Apply` remains an honest stub (no live writer yet). **api/web** —
-  apiauthz/webauth live execution is active testing → behind the explicit-consent + sandbox gate.
+  (`remediate.liveCloudMutation`) emits `s3_block_public_access` (AWS) / `gcs_public_access_prevention` (GCP) /
+  `azure_storage_disable_public_access` (Azure) on a public-bucket/storage finding. **Azure** completes the
+  trio: `internal/connector/azremediate.StorageWriter` (azure-sdk-for-go armstorage, its own package) sets
+  `AllowBlobPublicAccess=false` on a storage account via the platform's service principal
+  (DefaultAzureCredential, scoped to the connection's subscription); wired when `AZURE_REMEDIATION_ENABLED=1`.
+  So all three clouds now have a live, HITL-gated, SDK-backed public-storage remediation; each SDK is isolated
+  in its own `*remediate` package so the core `connector` stays SDK-free. **api/web** — apiauthz/webauth live
+  execution is active testing → behind the explicit-consent + sandbox gate.
 
 **Config surfaces (the per-asset setup half, end-to-end UX + API)** — each stores its config + drives the
 core; the live *execution* stays each core's gated half:
