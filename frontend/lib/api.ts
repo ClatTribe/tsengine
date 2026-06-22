@@ -120,6 +120,14 @@ export const api = {
       body: JSON.stringify(flow),
     }),
 
+  // Configure the BOLA/BFLA authorization test for an api asset — two identities + the
+  // object-bearing operations to test (auth headers are sealed server-side; never returned).
+  setAuthzTest: (id: string, cfg: unknown) =>
+    call<{ asset_id: string; operations: number; configured: boolean }>(`/v1/assets/${id}/authz-test`, {
+      method: "POST",
+      body: JSON.stringify(cfg),
+    }),
+
   // Per-tenant LLM config for the engine agent / autonomous pentest. GET reports provider +
   // model + whether a key is set (never the key). PUT sets provider/model and seals the key
   // server-side (an empty api_key keeps the existing key).

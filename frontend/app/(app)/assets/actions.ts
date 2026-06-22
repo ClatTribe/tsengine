@@ -50,3 +50,28 @@ export async function setLoginFlow(id: string, f: {
     return { ok: false, error: e instanceof Error ? e.message : "failed to save" };
   }
 }
+
+// Configures the BOLA/BFLA authorization test for an api asset: two identities (a victim that
+// owns an object, an attacker that's a different lower-privilege principal) + the object-bearing
+// operations to test. The engine replays the victim's request as the attacker and flags only a
+// proven bypass (verified, no-FP). Auth headers are sealed server-side. Returns an error string
+// on failure (e.g. no secret vault configured).
+export async function setAuthzTest(id: string, c: {
+  victimAuth: string;
+  attackerAuth: string;
+  operations: { method: string; url: string; class: string; marker: string }[];
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await api.setAuthzTest(id, {
+      victim: { name: "victim", headers: { Authorization: c.victimAuth } },
+      attacker: { name: "attacker", headers: { Authorization: c.attackerAuth } },
+      operations: c.operations
+        .filter((o) => o.url.trim() !== "")
+        .map((o) => ({ method: o.method, url: o.url, class: o.class, marker: o.marker })),
+    });
+    revalidatePath("/assets");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "failed to save" };
+  }
+}
