@@ -50,6 +50,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
+	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
@@ -107,6 +108,14 @@ func main() {
 			os.Getenv("AWS_REMEDIATION_ROLE_ARN"), os.Getenv("AWS_REMEDIATION_EXTERNAL_ID"))
 		log.Print("[platform] AWS live remediation enabled (S3 Block Public Access)")
 	}
+	// GCP: read-only onboarding + the live, reversible remediation write path (GCS Public Access
+	// Prevention). The writer is wired ONLY when remediation is configured — else Apply stays the
+	// honest stub. The write impersonates a scoped SA, distinct from the read-only onboarding grant.
+	gcpConn := connector.NewGCP(os.Getenv("GCP_TRUST_SERVICE_ACCOUNT"))
+	if os.Getenv("GCP_REMEDIATION_IMPERSONATE_SA") != "" || os.Getenv("GCP_REMEDIATION_ENABLED") == "1" {
+		gcpConn.Writer = gcpremediate.NewGCSWriter(os.Getenv("GCP_REMEDIATION_IMPERSONATE_SA"))
+		log.Print("[platform] GCP live remediation enabled (GCS Public Access Prevention)")
+	}
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 		connector.NewGitLab(os.Getenv("GITLAB_CLIENT_ID"), os.Getenv("GITLAB_CLIENT_SECRET")),
@@ -116,7 +125,7 @@ func main() {
 		connector.NewM365(os.Getenv("M365_CLIENT_ID"), os.Getenv("M365_CLIENT_SECRET")),
 		connector.NewOkta(os.Getenv("OKTA_ORG_URL"), os.Getenv("OKTA_CLIENT_ID"), os.Getenv("OKTA_CLIENT_SECRET")),
 		awsConn,
-		connector.NewGCP(os.Getenv("GCP_TRUST_SERVICE_ACCOUNT")),
+		gcpConn,
 		connector.NewAzure(os.Getenv("AZURE_TRUST_APP_ID")),
 	)
 	vault, encrypted, verr := secret.FromEnv()

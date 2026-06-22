@@ -13,20 +13,28 @@ import (
 // liveIdentityMutation; promotion to a new (finding-class, provider) is one entry here once its
 // connector.Apply lands. Grounded: the target is the finding's own resource, never guessed.
 func liveCloudMutation(f types.Finding, provider string) (rtype, target string) {
-	// Only AWS has a live cloud write path today (connector.AWS.Apply). An explicit non-AWS
-	// provider has none; empty provider is treated as AWS (the only cloud connector wired).
-	if provider != "" && !strings.EqualFold(provider, "aws") {
+	if f.Endpoint == "" {
 		return "", ""
 	}
-	if isS3PublicFinding(f) && f.Endpoint != "" {
-		return "s3_block_public_access", f.Endpoint
+	switch {
+	// Empty provider is treated as AWS (the original single cloud connector).
+	case provider == "" || strings.EqualFold(provider, "aws"):
+		if isPublicStorageFinding(f) {
+			return "s3_block_public_access", f.Endpoint
+		}
+	case strings.EqualFold(provider, "gcp"):
+		if isPublicStorageFinding(f) {
+			return "gcs_public_access_prevention", f.Endpoint
+		}
 	}
 	return "", ""
 }
 
-// isS3PublicFinding reports whether a finding is a publicly-exposed S3 bucket (the only class
-// with a live AWS remediation today). Matches on the finding's own text — public + S3/bucket.
-func isS3PublicFinding(f types.Finding) bool {
+// isPublicStorageFinding reports whether a finding is a publicly-exposed object-storage bucket — the
+// class with a live remediation (S3 Block Public Access / GCS Public Access Prevention). Matches on
+// the finding's own text — public + a storage-bucket keyword.
+func isPublicStorageFinding(f types.Finding) bool {
 	hay := strings.ToLower(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
-	return strings.Contains(hay, "public") && (strings.Contains(hay, "s3") || strings.Contains(hay, "bucket"))
+	return strings.Contains(hay, "public") &&
+		(strings.Contains(hay, "s3") || strings.Contains(hay, "bucket") || strings.Contains(hay, "gcs") || strings.Contains(hay, "storage"))
 }

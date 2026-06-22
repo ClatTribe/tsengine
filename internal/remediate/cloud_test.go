@@ -51,14 +51,19 @@ func TestProposeCloud_NonS3StaysAccountRunbook(t *testing.T) {
 }
 
 func TestLiveCloudMutation_ProviderGating(t *testing.T) {
-	f := types.Finding{Title: "public S3 bucket exposed", Endpoint: "arn:aws:s3:::b"}
-	if rt, _ := liveCloudMutation(f, "gcp"); rt != "" {
-		t.Error("a non-AWS provider has no live cloud write path yet")
-	}
+	f := types.Finding{Title: "public storage bucket exposed", Endpoint: "arn:aws:s3:::b"}
 	if rt, _ := liveCloudMutation(f, "aws"); rt != "s3_block_public_access" {
-		t.Errorf("AWS S3-public should map to the live block, got %q", rt)
+		t.Errorf("AWS public-bucket should map to the live block, got %q", rt)
 	}
 	if rt, _ := liveCloudMutation(f, ""); rt != "s3_block_public_access" {
-		t.Error("empty provider is treated as AWS (the only wired cloud connector)")
+		t.Error("empty provider is treated as AWS")
+	}
+	// GCP now has a live write path too (GCS Public Access Prevention).
+	if rt, tgt := liveCloudMutation(f, "gcp"); rt != "gcs_public_access_prevention" || tgt != "arn:aws:s3:::b" {
+		t.Errorf("GCP public-bucket should map to PAP enforce, got rt=%q tgt=%q", rt, tgt)
+	}
+	// Azure has no live write path yet (added in a follow-on).
+	if rt, _ := liveCloudMutation(f, "azure"); rt != "" {
+		t.Errorf("azure should have no live write path yet, got %q", rt)
 	}
 }

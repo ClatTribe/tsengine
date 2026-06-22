@@ -84,6 +84,7 @@ provider (§5–§6).
 | `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | Microsoft 365 |
 | `OKTA_ORG_URL` / `OKTA_CLIENT_ID` / `OKTA_CLIENT_SECRET` | Okta (org URL e.g. `https://dev-123.okta.com`) |
 | `AWS_REMEDIATION_ROLE_ARN` / `AWS_REMEDIATION_EXTERNAL_ID` / `AWS_REGION` | Enables the **live AWS remediation write path** (`connector.AWS.Apply` → S3 Block Public Access). `ROLE_ARN` is a scoped, cross-account **write** role the platform assumes via STS (distinct from the read-only onboarding role); `EXTERNAL_ID` is its tenant-binding ExternalId. Unset (and `AWS_REMEDIATION_ENABLED≠1`) → `Apply` stays an honest stub. The write is reached only after the HITL approval gate. |
+| `GCP_REMEDIATION_IMPERSONATE_SA` | Enables the **live GCP remediation write path** (`connector.GCP.Apply` → GCS Public Access Prevention). The platform impersonates this scoped **write** service account in the customer project (distinct from the read-only Security Reviewer grant). Unset (and `GCP_REMEDIATION_ENABLED≠1`) → `Apply` stays an honest stub. HITL-gated. |
 
 ### Notifications + ticketing (optional)
 | Var | Purpose |

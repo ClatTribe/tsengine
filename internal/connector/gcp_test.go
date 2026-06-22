@@ -70,6 +70,30 @@ func TestGCP_WatchNoop(t *testing.T) {
 	}
 }
 
+type fakeGCPWriter struct {
+	project, bucket string
+}
+
+func (f *fakeGCPWriter) EnforceBucketPublicAccessPrevention(_ context.Context, project, bucket string) error {
+	f.project, f.bucket = project, bucket
+	return nil
+}
+
+func TestGCP_ApplyEnforcesPublicAccessPrevention(t *testing.T) {
+	w := &fakeGCPWriter{}
+	g := NewGCP("sa@x")
+	g.Writer = w
+	act := platform.Action{Kind: platform.ActApplyConfig, Payload: map[string]any{
+		"remediation_type": "gcs_public_access_prevention", "target": "gs://acme-public/obj.txt",
+	}}
+	if err := g.Apply(context.Background(), platform.Connection{Account: "acme-proj"}, "", act); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if w.project != "acme-proj" || w.bucket != "acme-public" { // project from connection, bucket from gs:// target
+		t.Errorf("writer called with project=%q bucket=%q", w.project, w.bucket)
+	}
+}
+
 func TestGCP_ApplyIsHonestStub(t *testing.T) {
 	g := NewGCP("sa@x")
 	// no remediation_type → honest error, never a false "done"
