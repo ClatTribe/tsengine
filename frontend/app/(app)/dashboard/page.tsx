@@ -39,7 +39,11 @@ export default async function OverviewPage() {
   const connections = await api.connections();
   if (connections.length === 0) return <FirstRun />;
 
-  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp] = await Promise.all([
+  // One concurrent wave for the whole dashboard. The per-framework compliance posture
+  // (one call each) is nested into the SAME Promise.all rather than awaited in a second wave,
+  // so all of these fan out together instead of paying two sequential round-trip waves on the
+  // app's most-loaded page.
+  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, posture] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
@@ -47,6 +51,14 @@ export default async function OverviewPage() {
     api.assets(),
     api.attackPaths(),
     api.issues(),
+    Promise.all(
+      FRAMEWORKS.map(async (f) => {
+        const cs = await api.posture(f);
+        if (cs.length === 0) return null;
+        const gap = cs.filter((c) => c.state === "gap").length;
+        return { f, met: cs.length - gap, gap };
+      }),
+    ),
   ]);
 
   const counts = severityCounts(findings);
@@ -72,14 +84,6 @@ export default async function OverviewPage() {
   for (const e of engagements) if (e.completed_at) events.push({ at: e.completed_at, kind: "scanned", title: "Scanned an asset", meta: e.trigger });
   events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
-  const posture = await Promise.all(
-    FRAMEWORKS.map(async (f) => {
-      const cs = await api.posture(f);
-      if (cs.length === 0) return null;
-      const gap = cs.filter((c) => c.state === "gap").length;
-      return { f, met: cs.length - gap, gap };
-    }),
-  );
   const frameworks = posture.filter(Boolean) as { f: string; met: number; gap: number }[];
   const resolvedCount = incidents.filter((i) => i.status === "resolved").length;
 
