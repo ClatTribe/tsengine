@@ -46,7 +46,7 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
     blurb: "Scan on push — only new or re-pushed image digests get scanned, never the whole registry every cycle.",
     items: [
       { icon: Container, name: "Docker Hub", role: "Auto-discover images, scan on push (digest-diff)", status: "live" },
-      { icon: Container, name: "GitHub Container Registry", role: "Auto-discover images, scan on push", status: "soon" },
+      { icon: Container, name: "GitHub Container Registry", role: "Auto-discover images, scan on push — reuses your GitHub token", status: "live" },
       { icon: Container, name: "Amazon ECR", role: "Auto-discover images, scan on push", status: "soon" },
     ],
   },
