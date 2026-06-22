@@ -69,7 +69,10 @@ func (d Deps) handleTrust(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errBody("not found"))
 		return
 	}
-	view := trustView{Org: t.Name, Monitored: true, Signed: true, GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	// Frameworks starts as a non-nil empty slice so it serializes as [] not null when the tenant
+	// has no posture data yet (the common fresh-tenant case) — a null would crash the PUBLIC
+	// Trust Center page's .map (the Go nil-slice → JSON-null footgun, on a customer-shared URL).
+	view := trustView{Org: t.Name, Monitored: true, Signed: true, Frameworks: []trustFramework{}, GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
 	if d.GRC != nil {
 		for _, fw := range trustFrameworks {
 			cs, err := d.GRC.Posture(r.Context(), tenant, fw)
