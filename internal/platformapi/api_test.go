@@ -374,3 +374,26 @@ func TestWebhook_VerifiesSignature(t *testing.T) {
 		t.Error("a verified webhook should trigger the re-scan")
 	}
 }
+
+func TestRespond_NilSliceSerializesAsEmptyArray(t *testing.T) {
+	// A nil slice must serialize as [] not null — a null crashes a frontend .map/.filter
+	// (the Go nil-slice → JSON-null footgun). Every list endpoint goes through respond().
+	rec := httptest.NewRecorder()
+	var nilSlice []platform.Action
+	respond(rec, nilSlice, nil)
+	if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
+		t.Errorf("a nil slice must serialize as [], got %q", got)
+	}
+	// A non-empty slice is unchanged.
+	rec2 := httptest.NewRecorder()
+	respond(rec2, []platform.Action{{ID: "a1"}}, nil)
+	if !strings.Contains(rec2.Body.String(), "a1") {
+		t.Errorf("a populated slice must serialize its elements, got %q", rec2.Body.String())
+	}
+	// A non-slice (object) passes through untouched.
+	rec3 := httptest.NewRecorder()
+	respond(rec3, map[string]int{"n": 1}, nil)
+	if !strings.Contains(rec3.Body.String(), "\"n\":1") {
+		t.Errorf("a map must serialize untouched, got %q", rec3.Body.String())
+	}
+}

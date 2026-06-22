@@ -15,6 +15,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/jobs"
@@ -97,25 +98,25 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                // PUBLIC: book-a-demo / talk-to-sales lead capture
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
-	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))            // cross-surface correlation (unified cross-detection)
-	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                       // findings de-duplicated into unified issues (one issue, many signals)
-	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))          // auto-triage funnel: % of raw findings the engine handled automatically
-	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))          // suppress an issue (false-positive / accepted-risk)
-	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))      // restore a suppressed issue
-	mux.HandleFunc("GET /v1/exclusions", d.auth(d.handleListExclusions))           // custom noise-filter rules (path/package/rule globs)
-	mux.HandleFunc("POST /v1/exclusions", d.auth(d.handleAddExclusion))            // add an exclusion rule
-	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))  // remove an exclusion rule
-	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents)) // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
+	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))              // cross-surface correlation (unified cross-detection)
+	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                         // findings de-duplicated into unified issues (one issue, many signals)
+	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))            // auto-triage funnel: % of raw findings the engine handled automatically
+	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))            // suppress an issue (false-positive / accepted-risk)
+	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))        // restore a suppressed issue
+	mux.HandleFunc("GET /v1/exclusions", d.auth(d.handleListExclusions))             // custom noise-filter rules (path/package/rule globs)
+	mux.HandleFunc("POST /v1/exclusions", d.auth(d.handleAddExclusion))              // add an exclusion rule
+	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))    // remove an exclusion rule
+	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents))   // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
 	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents)) // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
 	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile)) // container scan-on-push decision (ADR 0010 Phase 4)
-	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))    // list runtime-protection events
-	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))              // create + authorize a pentest engagement
-	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                // list engagements
-	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))          // portfolio scorecard (verified_rate, SLA)
-	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))             // one engagement + findings
-	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))        // run/retest the engagement (passive, RoE-gated)
-	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))   // the engagement's VAPT report (md/json)
-	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                       // SSE live state feed
+	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))      // list runtime-protection events
+	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                // create + authorize a pentest engagement
+	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                  // list engagements
+	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))            // portfolio scorecard (verified_rate, SLA)
+	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))               // one engagement + findings
+	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))          // run/retest the engagement (passive, RoE-gated)
+	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))     // the engagement's VAPT report (md/json)
+	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                         // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps)) // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
@@ -418,7 +419,18 @@ func respond(w http.ResponseWriter, v any, err error) {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
-	writeJSON(w, http.StatusOK, v)
+	writeJSON(w, http.StatusOK, emptyIfNilSlice(v))
+}
+
+// emptyIfNilSlice replaces a nil slice with a non-nil empty one so it serializes as [] not null.
+// A JSON null crashes a frontend that does .map/.filter on the response (the Go nil-slice →
+// JSON-null footgun); every list endpoint must return [] when empty, like the rest already do.
+func emptyIfNilSlice(v any) any {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Slice && rv.IsNil() {
+		return reflect.MakeSlice(rv.Type(), 0, 0).Interface()
+	}
+	return v
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
