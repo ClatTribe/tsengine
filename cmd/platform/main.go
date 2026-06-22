@@ -49,6 +49,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
@@ -97,6 +98,15 @@ func main() {
 	image := envOr("TSENGINE_SANDBOX_IMAGE", "tsengine/sandbox:latest")
 
 	st := openStore()
+	// AWS: read-only onboarding + the live, reversible remediation write path. The S3 writer is
+	// wired ONLY when a remediation role/creds are configured — else Apply stays the honest stub.
+	// (S3 Block Public Access needs WRITE creds, distinct from the read-only onboarding role.)
+	awsConn := connector.NewAWS(os.Getenv("AWS_CFN_TEMPLATE_URL"), os.Getenv("AWS_TRUST_ACCOUNT_ID"), os.Getenv("AWS_REGION"))
+	if os.Getenv("AWS_REMEDIATION_ROLE_ARN") != "" || os.Getenv("AWS_REMEDIATION_ENABLED") == "1" {
+		awsConn.Writer = awsremediate.NewS3Writer(os.Getenv("AWS_REGION"),
+			os.Getenv("AWS_REMEDIATION_ROLE_ARN"), os.Getenv("AWS_REMEDIATION_EXTERNAL_ID"))
+		log.Print("[platform] AWS live remediation enabled (S3 Block Public Access)")
+	}
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 		connector.NewGitLab(os.Getenv("GITLAB_CLIENT_ID"), os.Getenv("GITLAB_CLIENT_SECRET")),
@@ -105,7 +115,7 @@ func main() {
 		connector.NewGWorkspace(os.Getenv("GWORKSPACE_CLIENT_ID"), os.Getenv("GWORKSPACE_CLIENT_SECRET")),
 		connector.NewM365(os.Getenv("M365_CLIENT_ID"), os.Getenv("M365_CLIENT_SECRET")),
 		connector.NewOkta(os.Getenv("OKTA_ORG_URL"), os.Getenv("OKTA_CLIENT_ID"), os.Getenv("OKTA_CLIENT_SECRET")),
-		connector.NewAWS(os.Getenv("AWS_CFN_TEMPLATE_URL"), os.Getenv("AWS_TRUST_ACCOUNT_ID"), os.Getenv("AWS_REGION")),
+		awsConn,
 		connector.NewGCP(os.Getenv("GCP_TRUST_SERVICE_ACCOUNT")),
 		connector.NewAzure(os.Getenv("AZURE_TRUST_APP_ID")),
 	)
