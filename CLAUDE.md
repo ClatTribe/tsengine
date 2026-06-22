@@ -656,6 +656,12 @@ core; the live *execution* stays each core's gated half:
   multi-tenant, not one shared channel. Approval *buttons* stay the operator Slack app (those need its
   interactive endpoint). Operator-env channels (`TSENGINE_SLACK_WEBHOOK`/Teams/Discord/PagerDuty/webhook)
   remain the Bucket-C fallback.
+- **ticketing (Jira)** — `GET/PUT /v1/settings/jira` + the Settings "Jira" control: stores the tenant's
+  OWN Jira (`Tenant.Jira` — BaseURL/Email/Project plain, API token sealed via `d.Vault`; GET reports
+  has_token only). `remediate.TenantFiler` (mirrors `notify.TenantRouter`) routes a `file_ticket`
+  action to the tenant's own Jira (resolver opens the sealed token → `connector.NewJira`), falling
+  back to the operator tracker (`JIRA_BASE_URL`/ServiceNow/Linear env — the Bucket-C fallback). So
+  remediation tickets are multi-tenant, not one shared project.
 - **CREDENTIAL SEALING (§18.2 inv. 6)** — the login-flow + authz-test configs carry secrets (passwords /
   tokens / auth headers), so the setters **seal the config blob via `d.Vault`** before it touches the store
   (`Asset.Meta["login_flow"]`/`["authz_test"]` hold a sealed ref, never plaintext); no vault → the setter

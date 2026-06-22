@@ -14,6 +14,7 @@ import { KillSwitch } from "@/components/settings/kill-switch";
 import { CloudRemediationControl } from "@/components/settings/cloud-remediation-control";
 import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
 import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
+import { JiraControl } from "@/components/settings/jira-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
 import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
@@ -33,8 +34,8 @@ const STATUS_CLS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify] = await Promise.all([
-    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(),
+  const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira] = await Promise.all([
+    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(),
   ]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
@@ -160,6 +161,7 @@ export default async function SettingsPage() {
         <Card className="space-y-3 p-5">
           <p className="text-xs text-muted">Where the agent reaches a human. Connect your own Slack below; other channels are provisioned by your administrator.</p>
           <SlackWebhookControl configured={notify.has_slack_webhook} />
+          <JiraControl config={jira} />
           {[
             { icon: BellRing, name: "PagerDuty", role: "New critical issues page on-call" },
             { icon: Mail, name: "Email", role: "Digest of pending approvals" },
