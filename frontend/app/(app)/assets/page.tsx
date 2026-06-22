@@ -1,4 +1,4 @@
-import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2, Cloud, Lock } from "lucide-react";
+import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2, Cloud, Lock, ShieldAlert } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
@@ -6,6 +6,7 @@ import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
 import { DataTierSelect } from "@/components/assets/data-tier-select";
 import { LoginFlowConfig } from "@/components/assets/login-flow-config";
+import { AuthzTestConfig } from "@/components/assets/authz-test-config";
 import { PageIntro } from "@/components/ui/page-intro";
 import { timeAgo, cn } from "@/lib/utils";
 
@@ -186,6 +187,16 @@ function AssetRow({ asset: a, connections, last }: { asset: Asset; connections: 
             ) : (
               <span className="shrink-0">
                 <LoginFlowConfig assetId={a.id} />
+              </span>
+            ))}
+          {a.type === "api" &&
+            (a.meta?.authz_test ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-pulse/30 bg-pulse/5 px-1.5 py-0.5 text-[11px] text-pulse">
+                <ShieldAlert className="h-3 w-3" /> Authz test
+              </span>
+            ) : (
+              <span className="shrink-0">
+                <AuthzTestConfig assetId={a.id} />
               </span>
             ))}
         </div>
