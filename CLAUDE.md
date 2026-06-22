@@ -879,11 +879,18 @@ suspends a stale account** via the Okta user-lifecycle API (`POST
 tested against a fake org (injectable `HTTP` client). It needs the `okta.users.manage` scope
 (onboarding scopes are read-only by design), so a real mutation requires an admin to grant
 it — until then Okta answers 403 and `Apply` surfaces it as an error (never falsely "done").
-The GWorkspace/M365 connector `Apply` (and the other Okta `remediation_type`s) remain honest
-stubs pending admin-write creds. **The operate→tier-2 wiring now closes that loop end to
+**Google Workspace + Microsoft 365 now have the same live suspend path**: `connector.GWorkspace.Apply`
+suspends a stale account (Admin SDK `PUT /admin/directory/v1/users/{key}` → `suspended:true`) and
+`connector.M365.Apply` disables sign-in (Graph `PATCH /users/{id}` → `accountEnabled:false`), both
+reached only after the HITL gate and tested against a fake server (injectable `HTTP`). Each needs
+its IdP's write scope (`admin.directory.user` / `User.ReadWrite.All`) — read-only by onboarding
+default — so a real mutation requires an admin to grant it; until then the provider answers 403 and
+`Apply` surfaces it honestly. The other Okta/GW/M365 `remediation_type`s (oauth_revoke, etc.) remain
+honest stubs pending their write path. **The operate→tier-2 wiring closes the loop end to
 end** (`remediate.proposeIdentity` + `liveIdentityMutation`): when a remediation has a live,
-reversible connector write path for the asset's provider — today only Okta `account_suspend`
-— the proposer emits a **tier-2 `ActApplyConfig`** (gated) instead of a tier-1 ticket, so a
+reversible connector write path for the asset's provider — `account_suspend` on **Okta, Google
+Workspace, or Microsoft 365** today — the proposer emits a **tier-2 `ActApplyConfig`** (gated)
+instead of a tier-1 ticket, so a
 stale-Okta-account finding flows finding → gated action → HITL approve → `connector.Okta.Apply`
 suspend → signed ledger. Every other (remediation, provider) pair stays a tier-1 runbook
 ticket (no falsely-confident auto-apply) until its connector `Apply` lands — promotion is one
@@ -926,10 +933,10 @@ the platform mux for per-request metrics + an access log (SSE/`/metrics`/`/healt
 excluded from skew/noise). All three sit behind today's interfaces so the scale-out
 successors (Postgres store, durable queue, OTel) swap in without touching call sites.
 
-Remaining is **next-phase breadth/scale, not core-loop gaps**: the live identity-mutation
-`Apply`
-(`operate *.Apply` — the GWorkspace/M365 connector `Apply` are honest stubs pending live
-admin-write creds), the **open-ended LLM-driven** SOC reasoning (the deterministic
+Remaining is **next-phase breadth/scale, not core-loop gaps**: the identity-mutation `Apply`
+write paths are now wired for all three IdPs (Okta suspend, GWorkspace suspend, M365 disable),
+each gated on the customer granting its write scope (read-only by onboarding default), the
+**open-ended LLM-driven** SOC reasoning (the deterministic
 detect/incident backbone now exists in `internal/detect`; what's left is agentic triage/
 response beyond the threshold rules), and the infra successors — a **Postgres `Store`** (the
 SQLite single-box backend now exists) + a cloud-KMS `secret.Vault` (both behind today's

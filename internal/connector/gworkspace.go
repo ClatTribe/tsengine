@@ -24,6 +24,7 @@ type GWorkspace struct {
 	ClientSecret string
 	OAuthBase    string // default https://accounts.google.com
 	TokenBase    string // default https://oauth2.googleapis.com
+	APIBase      string // Admin SDK base; default https://admin.googleapis.com (overridable for tests)
 	HTTP         *http.Client
 }
 
@@ -32,8 +33,16 @@ func NewGWorkspace(clientID, clientSecret string) *GWorkspace {
 	return &GWorkspace{
 		ClientID: clientID, ClientSecret: clientSecret,
 		OAuthBase: "https://accounts.google.com", TokenBase: "https://oauth2.googleapis.com",
-		HTTP: &http.Client{Timeout: 20 * time.Second},
+		APIBase: "https://admin.googleapis.com",
+		HTTP:    &http.Client{Timeout: 20 * time.Second},
 	}
+}
+
+func (g *GWorkspace) apiBase() string {
+	if g.APIBase == "" {
+		return "https://admin.googleapis.com"
+	}
+	return strings.TrimRight(g.APIBase, "/")
 }
 
 func (g *GWorkspace) Kind() string { return platform.ConnGWorkspace }
@@ -114,6 +123,43 @@ func (g *GWorkspace) Watch(context.Context, platform.Connection, []byte) ([]Trig
 }
 
 // Apply is unsupported today (autonomous identity remediation is future work).
-func (g *GWorkspace) Apply(context.Context, platform.Connection, string, platform.Action) error {
-	return fmt.Errorf("gworkspace: apply not supported yet")
+// Apply executes a gated identity remediation against Google Workspace. Reached only after the
+// HITL gate (§18.2 inv. 3); the connector never writes on its own. Today: account_suspend (the fix
+// for a stale/over-privileged account). It needs the admin.directory.user WRITE scope — the
+// onboarding scope is read-only by design, so a real suspend requires an admin to grant the write
+// scope; until then Google returns 403 and Apply surfaces it honestly (never falsely "done").
+func (g *GWorkspace) Apply(ctx context.Context, _ platform.Connection, token string, a platform.Action) error {
+	rt, _ := a.Payload["remediation_type"].(string)
+	target := strFrom(a.Payload, "target")
+	switch rt {
+	case "account_suspend":
+		if strings.TrimSpace(target) == "" {
+			return fmt.Errorf("gworkspace apply: action %s has no target user", a.ID)
+		}
+		return g.suspendUser(ctx, token, target)
+	default:
+		return fmt.Errorf("gworkspace apply: remediation_type %q has no live write path yet (target %s)", rt, target)
+	}
+}
+
+// suspendUser sets suspended=true on a Workspace user (Admin SDK Directory API). userKey accepts
+// the user's primary email directly.
+func (g *GWorkspace) suspendUser(ctx context.Context, token, userKey string) error {
+	endpoint := g.apiBase() + "/admin/directory/v1/users/" + url.PathEscape(userKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, strings.NewReader(`{"suspended":true}`))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := g.client().Do(req)
+	if err != nil {
+		return fmt.Errorf("gworkspace suspend %s: %w", userKey, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+		return fmt.Errorf("gworkspace suspend %s: HTTP %d: %s (needs the admin.directory.user write scope)", userKey, resp.StatusCode, body)
+	}
+	return nil
 }

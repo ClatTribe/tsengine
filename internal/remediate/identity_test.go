@@ -37,19 +37,43 @@ func TestPropose_OktaStaleAccountIsGatedMutation(t *testing.T) {
 	}
 }
 
-// The SAME stale-account finding on a provider with no live suspend path (Google
-// Workspace today) stays a tier-1 runbook ticket — no falsely-confident gated mutation
-// that would error after a human approves it.
-func TestPropose_StaleAccountStaysTicketWithoutLivePath(t *testing.T) {
-	gw := platform.Asset{TenantID: "t1", ConnectionID: "conn-gw", Type: "workspace", Target: "acme.com",
-		Meta: map[string]string{"provider": platform.ConnGWorkspace}}
-	f := types.Finding{ID: "op-8", RuleID: "operate::stale-account", Severity: types.SeverityHigh,
+// Google Workspace + Microsoft 365 now have a LIVE, reversible suspend path
+// (connector.GWorkspace.Apply suspends; connector.M365.Apply disables sign-in), so a stale
+// account on either is also proposed as a gated tier-2 ActApplyConfig — not a runbook ticket.
+func TestPropose_GWorkspaceAndM365StaleAccountAreGatedMutations(t *testing.T) {
+	for _, tc := range []struct{ provider, conn string }{
+		{platform.ConnGWorkspace, "conn-gw"},
+		{platform.ConnM365, "conn-m365"},
+	} {
+		asset := platform.Asset{TenantID: "t1", ConnectionID: tc.conn, Type: "workspace", Target: "acme.com",
+			Meta: map[string]string{"provider": tc.provider}}
+		f := types.Finding{ID: "op-8", RuleID: "operate::stale-account", Severity: types.SeverityHigh,
+			Title: "Stale active account: bob@acme.com", Endpoint: "bob@acme.com"}
+		act, ok := Propose(f, asset, func() string { return "1" })
+		if !ok || act.Kind != platform.ActApplyConfig || act.Tier != tierApplyConfig {
+			t.Fatalf("%s stale-account must be a gated tier-2 ActApplyConfig, got %s tier %d", tc.provider, act.Kind, act.Tier)
+		}
+		if !act.NeedsApproval() || act.ConnectionID != tc.conn {
+			t.Errorf("%s mutation must be human-gated + route to its connection: %+v", tc.provider, act)
+		}
+		if act.Payload["remediation_type"] != "account_suspend" || act.Payload["target"] != "bob@acme.com" {
+			t.Errorf("%s payload must carry suspend + target: %+v", tc.provider, act.Payload)
+		}
+	}
+}
+
+// A stale-account finding on an IdP whose connector.Apply has NO live suspend path yet stays a
+// tier-1 runbook ticket — no falsely-confident gated mutation that would error after approval.
+func TestPropose_StaleAccountStaysTicketForUnwiredProvider(t *testing.T) {
+	other := platform.Asset{TenantID: "t1", ConnectionID: "conn-x", Type: "workspace", Target: "acme.com",
+		Meta: map[string]string{"provider": "jumpcloud"}} // an IdP we haven't wired Apply for
+	f := types.Finding{ID: "op-9", RuleID: "operate::stale-account", Severity: types.SeverityHigh,
 		Title: "Stale active account: bob@acme.com", Endpoint: "bob@acme.com"}
-	act, ok := Propose(f, gw, func() string { return "1" })
+	act, ok := Propose(f, other, func() string { return "1" })
 	if !ok || act.Kind != platform.ActFileTicket || act.Tier != 1 {
 		t.Fatalf("without a live write path the suspend must stay a tier-1 ticket, got %s tier %d", act.Kind, act.Tier)
 	}
-	// the structured fields still ride along so it promotes the moment GWorkspace suspend lands
+	// the structured fields still ride along so it promotes the moment that IdP's suspend lands
 	if act.Payload["remediation_type"] != "account_suspend" {
 		t.Errorf("ticket should still carry the machine-readable remediation: %+v", act.Payload)
 	}
