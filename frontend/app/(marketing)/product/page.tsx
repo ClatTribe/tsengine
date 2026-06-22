@@ -10,14 +10,14 @@ import { ASSET_SURFACES } from "@/lib/assets";
 
 export const metadata = pageMeta({
   title: "Product — how TensorShield works",
-  description: "Connect a system and a fractional security team goes to work: detect, triage, fix, and prove — with you in the loop where it matters.",
+  description: "Connect a system and a fractional security team goes to work: detect across every surface, prove what's exploitable with a captured PoC, fix it, and prove your compliance — with you in the loop where it matters.",
   path: "/product",
 });
 
 const LOOP = [
   { icon: Plug, t: "Connect", d: "OAuth into GitHub, AWS, Google Workspace, M365, or Okta. The agent discovers your assets — repos, accounts, identities — and starts immediately." },
   { icon: ScanLine, t: "Detect", d: "It runs the leading open-source scanners across every surface continuously, so coverage matches what a standalone security tool would find." },
-  { icon: Filter, t: "Triage", d: "An AI security engineer separates real, exploitable risk from noise — verifying findings rather than dumping a raw scanner report on you." },
+  { icon: Filter, t: "Triage & prove", d: "An AI security engineer separates real, exploitable risk from scanner noise — and, where you authorize active testing, proves the exploit with a captured proof-of-concept. A finding is confirmed, not just flagged." },
   { icon: Wrench, t: "Fix", d: "It prepares the actual remediation — a pull request, a config change, an identity action, or a ticket — ready to ship." },
   { icon: UserCheck, t: "Approve", d: "Low-risk fixes apply automatically; anything consequential waits for one tap of your approval. Autonomy where it's earned." },
   { icon: FileCheck2, t: "Prove", d: "Every finding maps to controls across 14 frameworks and lands in a signed, auditor-ready evidence pack — automatically." },
