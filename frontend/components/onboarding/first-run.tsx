@@ -11,6 +11,7 @@ const KIND_ICON: Record<string, typeof Github> = {
   m365: Users,
   okta: KeyRound,
   aws: Cloud,
+  gcp: Cloud,
 };
 
 const STEPS = [

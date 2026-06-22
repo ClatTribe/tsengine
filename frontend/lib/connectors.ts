@@ -20,6 +20,7 @@ export const CONNECTORS: ConnectorDef[] = [
   { kind: "bitbucket", label: "Bitbucket", category: "code", blurb: "Repos, lockfiles & secrets", monitors: "SAST, dependency CVEs, leaked secrets across your Bitbucket repositories" },
   { kind: "azuredevops", label: "Azure DevOps", category: "code", blurb: "Repos, lockfiles & secrets", monitors: "SAST, dependency CVEs, leaked secrets across your Azure DevOps repos" },
   { kind: "aws", label: "AWS", category: "code", blurb: "Cloud posture (CIS, IAM)", monitors: "CIS misconfigurations, public exposure, over-broad IAM via a read-only role" },
+  { kind: "gcp", label: "Google Cloud", category: "code", blurb: "Cloud posture (CIS, IAM)", monitors: "CIS misconfigurations, public exposure, over-broad IAM via a read-only Security Reviewer grant" },
   // Identity & email — the non-tech / compliance audience (MFA, OAuth grants, email auth).
   { kind: "gworkspace", label: "Google Workspace", category: "identity", blurb: "Identity, MFA & OAuth grants", monitors: "MFA gaps, risky OAuth apps, stale accounts, DMARC/SPF" },
   { kind: "m365", label: "Microsoft 365", category: "identity", blurb: "Identity, MFA & OAuth grants", monitors: "MFA gaps, risky OAuth apps, stale accounts, email auth" },
