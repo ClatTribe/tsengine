@@ -617,6 +617,20 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
   injectable writer (gated on assume-role write creds). **api/web** — apiauthz/webauth live execution is
   active testing → behind the explicit-consent + sandbox gate.
 
+**Config surfaces (the per-asset setup half, end-to-end UX + API)** — each stores its config + drives the
+core; the live *execution* stays each core's gated half:
+- **web** — `POST /v1/assets/{id}/login-flow` + the `/assets` "Authenticated scanning" modal: stores a
+  `webauth.LoginFlow` (validated) so the scanner replays + validates the session each scan (the FN guard).
+- **api** — `POST /v1/assets/{id}/authz-test` + the `/assets` "BOLA/BFLA test" modal (two identities +
+  operations editor): stores an `apiauthz.TestConfig` (validated) for the differential authz test.
+- **repository** — `platform.PRBotPolicy` on the Tenant via `GET/PUT /v1/settings/pr-bot` + the Settings
+  "Pull-request review" panel (enable + merge-gating severity floor; `github_connected` honesty flag).
+- **CREDENTIAL SEALING (§18.2 inv. 6)** — the login-flow + authz-test configs carry secrets (passwords /
+  tokens / auth headers), so the setters **seal the config blob via `d.Vault`** before it touches the store
+  (`Asset.Meta["login_flow"]`/`["authz_test"]` hold a sealed ref, never plaintext); no vault → the setter
+  refuses (400). Each configured asset row shows a reconfigure badge (rotate creds → overwrite). The
+  PR-bot policy carries no secret, so it is stored plain.
+
 ---
 
 ## 14. Benchmark framework
