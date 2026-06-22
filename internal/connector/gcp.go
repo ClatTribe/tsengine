@@ -29,11 +29,25 @@ import (
 type GCP struct {
 	TrustServiceAccount string // tsengine's SA email the customer grants Security Reviewer to
 	ConsoleBase         string // default https://console.cloud.google.com
-	// Writer is the live, reversible GCP write path. Nil → no live remediation is configured, so
-	// Apply returns an honest "not configured" error (never a false "done"). The real impl
-	// (gcpremediate.GCSWriter) impersonates a write SA + calls the storage SDK; injectable so the
-	// write path is unit-tested against a fake without live creds (the AWS/Okta pattern).
+	// Writer is the operator-default live write path (wired from operator env). Nil → no operator
+	// default. The real impl (gcpremediate.GCSWriter) impersonates a write SA + calls the storage
+	// SDK; injectable so the write path is unit-tested against a fake without live creds.
 	Writer GCPWriter
+	// WriterForConfig builds a PER-TENANT write path from the customer's own write SA
+	// (Connection.Config[remediation_impersonate_sa]). Injected in cmd/platform
+	// (gcpremediate.NewGCSWriter) so package connector stays SDK-free. Nil → only the operator default.
+	WriterForConfig func(impersonateSA string) GCPWriter
+}
+
+// writerFor picks the per-tenant write path when the connection carries an enabled remediation
+// config (the customer's own impersonation SA); else falls back to the operator-default Writer.
+func (g *GCP) writerFor(conn platform.Connection) GCPWriter {
+	if g.WriterForConfig != nil && conn.Config[platform.CfgRemediationEnabled] == "true" {
+		if sa := conn.Config[platform.CfgRemediationSA]; sa != "" {
+			return g.WriterForConfig(sa)
+		}
+	}
+	return g.Writer
 }
 
 // GCPWriter performs the reversible GCP mutations tsengine remediates to. Today only GCS Public
@@ -112,11 +126,12 @@ func (g *GCP) Apply(ctx context.Context, c platform.Connection, _ string, act pl
 		if bucket == "" {
 			return fmt.Errorf("gcp apply: %s action %s has no target bucket", rt, act.ID)
 		}
-		if g.Writer == nil {
-			return fmt.Errorf("gcp apply: no live GCP write path configured (needs impersonation write creds); "+
-				"action %s (enforce public-access-prevention on %s) left un-applied", act.ID, bucket)
+		writer := g.writerFor(c)
+		if writer == nil {
+			return fmt.Errorf("gcp apply: no live GCP write path configured (set this connection's remediation "+
+				"SA, or the operator default); action %s (enforce public-access-prevention on %s) left un-applied", act.ID, bucket)
 		}
-		return g.Writer.EnforceBucketPublicAccessPrevention(ctx, c.Account, bucket)
+		return writer.EnforceBucketPublicAccessPrevention(ctx, c.Account, bucket)
 	case "":
 		return fmt.Errorf("gcp apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
 	default:

@@ -128,6 +128,14 @@ export const api = {
   quarantineConnection: (id: string, quarantined: boolean) =>
     call<Connection>(`/v1/connections/${id}/quarantine`, { method: "POST", body: JSON.stringify({ quarantined }) }),
 
+  // Set this cloud connection's per-tenant remediation write role (Bucket B — the customer's
+  // OWN cross-account role/SA, used at HITL-approved remediation time). AWS needs role_arn;
+  // GCP needs impersonate_sa; Azure just the enable flag (subscription = the connection's account).
+  setCloudRemediation: (
+    id: string,
+    cfg: { enabled: boolean; role_arn?: string; region?: string; impersonate_sa?: string },
+  ) => call<Connection>(`/v1/connections/${id}/cloud-remediation`, { method: "POST", body: JSON.stringify(cfg) }),
+
   // Tier an asset by customer-data exposure (1 = customer data, 2 = standard, 3 = low). The
   // tier raises/lowers the risk-adjusted ranking of that asset's findings.
   setAssetDataTier: (id: string, tier: number) =>

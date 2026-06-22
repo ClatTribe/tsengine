@@ -109,6 +109,12 @@ func main() {
 			os.Getenv("AWS_REMEDIATION_ROLE_ARN"), os.Getenv("AWS_REMEDIATION_EXTERNAL_ID"))
 		log.Print("[platform] AWS live remediation enabled (S3 Block Public Access)")
 	}
+	// Per-tenant write path: each customer brings their OWN cross-account role (set via UX →
+	// Connection.Config). The factory is just an SDK-free constructor (the STS assume-role + write
+	// only fire at Apply, behind the HITL gate), so it's always wired.
+	awsConn.WriterForConfig = func(region, roleARN string) connector.AWSWriter {
+		return awsremediate.NewS3Writer(region, roleARN, "")
+	}
 	// GCP: read-only onboarding + the live, reversible remediation write path (GCS Public Access
 	// Prevention). The writer is wired ONLY when remediation is configured — else Apply stays the
 	// honest stub. The write impersonates a scoped SA, distinct from the read-only onboarding grant.
@@ -117,6 +123,7 @@ func main() {
 		gcpConn.Writer = gcpremediate.NewGCSWriter(os.Getenv("GCP_REMEDIATION_IMPERSONATE_SA"))
 		log.Print("[platform] GCP live remediation enabled (GCS Public Access Prevention)")
 	}
+	gcpConn.WriterForConfig = func(sa string) connector.GCPWriter { return gcpremediate.NewGCSWriter(sa) }
 	// Azure: read-only onboarding + the live remediation write path (disable storage public access).
 	// The writer uses the platform's service-principal creds (DefaultAzureCredential), scoped to the
 	// subscription on the connection. Wired only when remediation is enabled — else honest stub.
@@ -125,6 +132,7 @@ func main() {
 		azureConn.Writer = azremediate.NewStorageWriter()
 		log.Print("[platform] Azure live remediation enabled (disable storage public access)")
 	}
+	azureConn.WriterForConfig = func() connector.AzureWriter { return azremediate.NewStorageWriter() }
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 		connector.NewGitLab(os.Getenv("GITLAB_CLIENT_ID"), os.Getenv("GITLAB_CLIENT_SECRET")),

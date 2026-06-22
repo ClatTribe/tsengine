@@ -11,6 +11,7 @@ import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
+import { CloudRemediationControl } from "@/components/settings/cloud-remediation-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
 import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
@@ -106,18 +107,26 @@ export default async function SettingsPage() {
             <ul className="divide-y divide-border">
               {connections.map((c) => {
                 const Icon = KIND_ICON[c.kind] ?? Plug;
+                const isCloud = c.kind === "aws" || c.kind === "gcp" || c.kind === "azure";
                 return (
-                  <li key={c.id} className="flex items-center gap-3 px-5 py-3">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-ink">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium">{kindLabel(c.kind)}</div>
-                      {c.account && <div className="mono truncate text-xs text-faint">{c.account}</div>}
+                  <li key={c.id} className="px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-ink">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium">{kindLabel(c.kind)}</div>
+                        {c.account && <div className="mono truncate text-xs text-faint">{c.account}</div>}
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_CLS[c.status] ?? "text-muted bg-surface-2"}`}>
+                        {c.status}
+                      </span>
                     </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_CLS[c.status] ?? "text-muted bg-surface-2"}`}>
-                      {c.status}
-                    </span>
+                    {isCloud && (
+                      <div className="mt-2 pl-11">
+                        <CloudRemediationControl id={c.id} kind={c.kind} config={c.config} />
+                      </div>
+                    )}
                   </li>
                 );
               })}

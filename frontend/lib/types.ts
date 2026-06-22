@@ -159,6 +159,7 @@ export interface Connection {
   kind: string;
   status: string;
   account?: string;
+  config?: Record<string, string>;
   created_at?: string;
 }
 
