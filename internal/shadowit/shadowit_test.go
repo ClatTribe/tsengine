@@ -113,3 +113,19 @@ func TestIsSensitive_BenignFPGuard(t *testing.T) {
 		}
 	}
 }
+
+func TestAccuracy_ScopeCorpus(t *testing.T) {
+	s := ScoreScopes(ScopeCorpus())
+	t.Logf("shadow-IT sensitive-scope accuracy: recall=%.2f precision=%.2f (TP=%d FN=%d FP=%d TN=%d)",
+		s.Recall(), s.Precision(), s.TP, s.FN, s.FP, s.TN)
+
+	// The bar: every high-risk scope is flagged (recall 1.0 — the FN-expansion in #322) and no
+	// identity/narrow scope is flagged (precision 1.0 — the OIDC-`email` FP guard). Measures both
+	// axes + regression-guards the whole taxonomy.
+	if s.Recall() != 1.0 {
+		t.Errorf("sensitive-scope recall must be 1.0, got %.2f (FN=%d)", s.Recall(), s.FN)
+	}
+	if s.Precision() != 1.0 {
+		t.Errorf("sensitive-scope precision must be 1.0 (no identity-scope FP), got %.2f (FP=%d)", s.Precision(), s.FP)
+	}
+}
