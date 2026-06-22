@@ -22,6 +22,11 @@ func (d Deps) handleRegistryReconcile(w http.ResponseWriter, r *http.Request, _ 
 			Namespace string `json:"namespace"`
 			Token     string `json:"token,omitempty"`
 		} `json:"dockerhub,omitempty"`
+		GHCR *struct {
+			Owner  string `json:"owner"`
+			IsUser bool   `json:"is_user,omitempty"`
+			Token  string `json:"token,omitempty"`
+		} `json:"ghcr,omitempty"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("body must be {images:[{repo,tag,digest}] | dockerhub:{namespace,token}, seen:{ref:digest}}"))
@@ -34,6 +39,17 @@ func (d Deps) handleRegistryReconcile(w http.ResponseWriter, r *http.Request, _ 
 		listed, err := registrywatch.NewDockerHub(body.DockerHub.Namespace, body.DockerHub.Token).ListImages(r.Context())
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, errBody("dockerhub list: "+err.Error()))
+			return
+		}
+		images = append(images, listed...)
+	}
+	// Built-in source: a GitHub Container Registry owner — enumerate it live with a read:packages token.
+	if body.GHCR != nil && body.GHCR.Owner != "" {
+		g := registrywatch.NewGHCR(body.GHCR.Owner, body.GHCR.Token)
+		g.IsUser = body.GHCR.IsUser
+		listed, err := g.ListImages(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, errBody("ghcr list: "+err.Error()))
 			return
 		}
 		images = append(images, listed...)
