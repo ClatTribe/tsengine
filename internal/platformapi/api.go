@@ -87,6 +87,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                  // the current tenant (org name/plan) for Settings
 	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                       // per-tenant LLM config (provider/model + has_key)
 	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                       // set provider/model + seal the API key
+	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                  // repository PR-review-bot policy (ADR 0010)
+	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                  // set enable + merge-gating block severity
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                            // global kill-switch: halt/resume all agent action
 	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                      // agent capability manifest (WRD-1): what the automation can touch
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                              // owner's shareable Trust Center token

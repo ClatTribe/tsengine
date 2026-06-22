@@ -31,3 +31,15 @@ export async function setLLMConfig(
   revalidatePath("/settings");
   return r;
 }
+
+// Set the repository PR-review-bot policy: enable inline review + a merge-gating check-run, and
+// the severity floor that fails the check ("off" = comment-only). The live GitHub post stays
+// gated on a connected GitHub App with the PR scope.
+export async function setPRBotPolicy(
+  enabled: boolean,
+  blockSeverity: string,
+): Promise<{ enabled: boolean; block_severity: string }> {
+  const r = await api.setPRBotSettings(enabled, blockSeverity);
+  revalidatePath("/settings");
+  return { enabled: r.enabled, block_severity: r.block_severity };
+}

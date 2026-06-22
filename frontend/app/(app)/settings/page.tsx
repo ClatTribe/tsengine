@@ -13,6 +13,7 @@ import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
+import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
 import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +30,8 @@ const STATUS_CLS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const [tenant, connections, trust, team, me, aiBom, llm] = await Promise.all([
-    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(),
+  const [tenant, connections, trust, team, me, aiBom, llm, prBot] = await Promise.all([
+    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(),
   ]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
@@ -61,6 +62,14 @@ export default async function SettingsPage() {
         <SectionTitle>AI engine</SectionTitle>
         <Card className="p-5">
           <LLMSettings initial={llm} />
+        </Card>
+      </div>
+
+      {/* Repository PR-review bot — inline review + merge-gating check-run (ADR 0010) */}
+      <div>
+        <SectionTitle>Pull-request review</SectionTitle>
+        <Card className="p-5">
+          <PRBotSettingsPanel initial={prBot} />
         </Card>
       </div>
 

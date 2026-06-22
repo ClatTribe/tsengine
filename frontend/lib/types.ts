@@ -296,6 +296,14 @@ export interface SaaSApp {
   shadow_it: boolean;
 }
 
+// PRBotSettings is the repository PR-review-bot policy. block_severity is the merge-gating floor
+// ("off" = comment-only); github_connected reports whether the live post is wired to a GitHub App.
+export interface PRBotSettings {
+  enabled: boolean;
+  block_severity: string;
+  github_connected: boolean;
+}
+
 export interface SaaSAppsResponse {
   apps: SaaSApp[];
   summary: {
