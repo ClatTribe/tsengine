@@ -104,3 +104,74 @@ func TestEvidenceGrounded(t *testing.T) {
 		}
 	}
 }
+
+func TestSpraySuccess(t *testing.T) {
+	// 5 fails then a success within the window → spray_success (takeover), critical.
+	var evs []Event
+	for i := 0; i < 5; i++ {
+		evs = append(evs, Event{User: "eve", Type: EventLoginFail, Time: at(i)})
+	}
+	evs = append(evs, Event{User: "eve", Type: EventLogin, Time: at(6), Country: "US"})
+	r := rulesFor(Detect(evs, Config{}))
+	if !r["spray_success"] {
+		t.Error("5 fails then a success in-window should fire spray_success")
+	}
+	for _, th := range Detect(evs, Config{}) {
+		if th.Rule == "spray_success" && th.Severity != "critical" {
+			t.Errorf("spray_success should be critical, got %s", th.Severity)
+		}
+	}
+
+	// FP guard: a single fail then a success (normal fat-finger) must NOT fire.
+	ok := []Event{
+		{User: "eve", Type: EventLoginFail, Time: at(0)},
+		{User: "eve", Type: EventLogin, Time: at(1), Country: "US"},
+	}
+	if rulesFor(Detect(ok, Config{}))["spray_success"] {
+		t.Error("one fail then success must not fire spray_success (FP)")
+	}
+
+	// FP guard: 5 fails but the success is OUTSIDE the window must not fire.
+	var late []Event
+	for i := 0; i < 5; i++ {
+		late = append(late, Event{User: "eve", Type: EventLoginFail, Time: at(i)})
+	}
+	late = append(late, Event{User: "eve", Type: EventLogin, Time: at(120), Country: "US"}) // 2h later
+	if rulesFor(Detect(late, Config{}))["spray_success"] {
+		t.Error("a success well outside the spray window must not fire spray_success (FP)")
+	}
+}
+
+func TestMFAFatigue(t *testing.T) {
+	// 5 MFA prompts within the window → mfa_fatigue.
+	var evs []Event
+	for i := 0; i < 5; i++ {
+		evs = append(evs, Event{User: "fin", Type: EventMFAChallenge, Time: at(i)})
+	}
+	r := rulesFor(Detect(evs, Config{}))
+	if !r["mfa_fatigue"] {
+		t.Error("5 MFA prompts in-window should fire mfa_fatigue")
+	}
+
+	// Escalation: a login mid-burst → critical (the prompt was likely approved).
+	withLogin := append([]Event{}, evs...)
+	withLogin = append(withLogin, Event{User: "fin", Type: EventLogin, Time: at(3), Country: "US"})
+	crit := false
+	for _, th := range Detect(withLogin, Config{}) {
+		if th.Rule == "mfa_fatigue" && th.Severity == "critical" {
+			crit = true
+		}
+	}
+	if !crit {
+		t.Error("a login mid-burst should escalate mfa_fatigue to critical")
+	}
+
+	// FP guard: prompts spread beyond the window (normal periodic re-auth) must not fire.
+	var spread []Event
+	for i := 0; i < 5; i++ {
+		spread = append(spread, Event{User: "fin", Type: EventMFAChallenge, Time: at(i * 60)}) // 1h apart
+	}
+	if rulesFor(Detect(spread, Config{}))["mfa_fatigue"] {
+		t.Error("MFA prompts spread an hour apart must not fire mfa_fatigue (FP)")
+	}
+}
