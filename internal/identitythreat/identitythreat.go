@@ -10,6 +10,7 @@ package identitythreat
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -173,4 +174,38 @@ func nz(s, dflt string) string {
 		return dflt
 	}
 	return s
+}
+
+// ruleMeta maps a threat rule to its CWE + MITRE technique (grounded attribution).
+var ruleMeta = map[string]struct {
+	cwe   string
+	mitre string
+}{
+	"impossible_travel": {"CWE-1248", "T1078"}, // valid-account abuse
+	"privileged_grant":  {"CWE-269", "T1098"},  // improper privilege mgmt / account manipulation
+	"mfa_removed":       {"CWE-1390", "T1556"}, // weak auth / modify authentication process
+	"password_spray":    {"CWE-307", "T1110"},  // improper auth-attempt restriction / brute force
+}
+
+// Findings converts detected threats into platform findings so identity threats flow through the
+// same issues / incident / grc machinery as every other finding. Each cites its source events
+// (§10). RuleID/Tool are namespaced so they de-dupe and route cleanly.
+func Findings(threats []Threat) []types.Finding {
+	out := make([]types.Finding, 0, len(threats))
+	for _, t := range threats {
+		m := ruleMeta[t.Rule]
+		f := types.Finding{
+			RuleID: "identitythreat::" + t.Rule, Tool: "identitythreat",
+			Severity: t.Severity, Endpoint: "identity:" + t.User, Title: t.Title,
+			Description: strings.Join(t.Evidence, "; "),
+		}
+		if m.cwe != "" {
+			f.CWE = []string{m.cwe}
+		}
+		if m.mitre != "" {
+			f.MITRETechniques = []string{m.mitre}
+		}
+		out = append(out, f)
+	}
+	return out
 }

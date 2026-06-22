@@ -102,6 +102,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/exclusions", d.auth(d.handleAddExclusion))            // add an exclusion rule
 	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))  // remove an exclusion rule
 	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents)) // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
+	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents)) // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
 	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))    // list runtime-protection events
 	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))              // create + authorize a pentest engagement
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                // list engagements
