@@ -53,6 +53,39 @@ type AuthzTest struct {
 	Attacker Identity
 }
 
+// TestConfig is the per-asset BOLA/BFLA test setup an owner configures once: the two identities
+// + the object-bearing operations to test. Plan(config.Operations, victim, attacker) drives Run.
+type TestConfig struct {
+	Victim     Identity    `json:"victim"`
+	Attacker   Identity    `json:"attacker"`
+	Operations []Operation `json:"operations"`
+}
+
+// Valid checks the config is runnable: both identities carry auth, and every operation is a
+// concrete BOLA/BFLA target. Returns a descriptive error for the config API.
+func (c TestConfig) Valid() error {
+	if len(c.Victim.Headers) == 0 || len(c.Attacker.Headers) == 0 {
+		return cfgErr("both the victim and attacker identities need auth headers")
+	}
+	if len(c.Operations) == 0 {
+		return cfgErr("at least one operation to test is required")
+	}
+	for i, op := range c.Operations {
+		if strings.TrimSpace(op.Method) == "" || strings.TrimSpace(op.URL) == "" {
+			return cfgErr("operation " + strconv.Itoa(i) + " needs a method + url")
+		}
+		if op.Class != ClassBOLA && op.Class != ClassBFLA {
+			return cfgErr("operation " + strconv.Itoa(i) + " class must be bola or bfla")
+		}
+	}
+	return nil
+}
+
+type configError string
+
+func (e configError) Error() string { return string(e) }
+func cfgErr(s string) error         { return configError("authz test: " + s) }
+
 // Request / Response / Prober: the minimal live surface. Kept local (not pentest.Probe) because
 // the authz test needs per-identity headers. The live impl is gated exactly like the
 // active-exploit prober (off unless the operator enables it + consent); tests inject a fake.
