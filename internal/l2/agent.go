@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -20,6 +22,13 @@ const maxToolResultBytes = 2048
 // if it ignores that this many times, we do it for it rather than spin.
 const autoBypassThreshold = 3
 
+// transientRetries is how many extra attempts a TRANSIENT LLM error (rate-limit /
+// 5xx / network blip) gets before the agent run aborts. A single transient blip must
+// not discard a long pentest/translation's progress — that was the agent's weakest
+// reliability link (one Generate error returned from Run, losing every finding so
+// far). Permanent errors (bad request / auth) still fail fast.
+const transientRetries = 3
+
 // Agent is the single L2 Lead. It runs a ReAct loop (generate → act →
 // observe) over a phase-gated, ≤12-tool catalog, bounded by a Budget and a
 // progress watchdog. One Agent per scan.
@@ -27,6 +36,9 @@ type Agent struct {
 	client  Client
 	catalog Catalog
 	budget  Budget
+	// sleep waits d (honoring ctx) between transient-error retries. nil → a real
+	// ctx-aware sleep; tests inject a no-op so the retry path doesn't actually wait.
+	sleep func(ctx context.Context, d time.Duration) error
 }
 
 // New builds an Agent. It enforces the ≤12 cap up front — a catalog that
@@ -87,7 +99,7 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 		}
 
 		tools := a.catalog.exposedIn(st.Phase)
-		resp, err := a.client.Generate(ctx, system, history, tools)
+		resp, err := a.generate(ctx, system, history, tools)
 		if err != nil {
 			return Outcome{}, fmt.Errorf("l2: generate: %w", err)
 		}
@@ -145,6 +157,62 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 		Compactions: compactions,
 		Model:       a.client.Model(),
 	}, nil
+}
+
+// generate calls the LLM with bounded retry-with-backoff on TRANSIENT errors only
+// (rate-limit / 5xx / network). A permanent error (bad request / auth) fails fast — no
+// point retrying it. ctx cancellation is honored between attempts. This is the agent's
+// reliability backstop: a transient API blip retries instead of discarding the run.
+func (a *Agent) generate(ctx context.Context, system string, history []Message, tools []ToolSchema) (Response, error) {
+	for attempt := 0; ; attempt++ {
+		resp, err := a.client.Generate(ctx, system, history, tools)
+		if err == nil || !isTransient(err) || attempt >= transientRetries {
+			return resp, err // success, a permanent error, or out of retries
+		}
+		// Exponential backoff: 0.5s, 1s, 2s (capped at 4s), ctx-aware.
+		d := time.Duration(500<<attempt) * time.Millisecond
+		if d > 4*time.Second {
+			d = 4 * time.Second
+		}
+		if e := a.backoff(ctx, d); e != nil {
+			return Response{}, e // ctx cancelled during backoff
+		}
+	}
+}
+
+func (a *Agent) backoff(ctx context.Context, d time.Duration) error {
+	if a.sleep != nil {
+		return a.sleep(ctx, d)
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// transientSignals are substrings of an LLM-client error that mean "retry might help":
+// provider rate-limits / overload (HTTP 429/5xx, anthropic 529) and transient network
+// faults. A permanent fault (400/401/403, "no such host") is NOT here — it fails fast.
+var transientSignals = []string{
+	"429", "rate limit", "overloaded", "status 500", "status 502", "status 503", "status 504", "status 529",
+	"timeout", "i/o timeout", "deadline exceeded", "connection reset", "connection refused", "eof", "temporarily",
+}
+
+func isTransient(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	for _, sig := range transientSignals {
+		if strings.Contains(s, sig) {
+			return true
+		}
+	}
+	return false
 }
 
 // dispatch executes one tool call against state, applying phase gating with
