@@ -639,6 +639,15 @@ core; the live *execution* stays each core's gated half:
   operations editor): stores an `apiauthz.TestConfig` (validated) for the differential authz test.
 - **repository** — `platform.PRBotPolicy` on the Tenant via `GET/PUT /v1/settings/pr-bot` + the Settings
   "Pull-request review" panel (enable + merge-gating severity floor; `github_connected` honesty flag).
+- **cloud_account** — `POST /v1/connections/{id}/cloud-remediation` + the Settings "Auto-remediation"
+  control on each aws/gcp/azure connection: stores the customer's OWN cross-account write role on
+  `Connection.Config` (`remediation_enabled` + `remediation_role_arn`/`region` for AWS,
+  `remediation_impersonate_sa` for GCP; Azure = enable flag, subscription from the connection account).
+  The connector's Apply uses it at remediation time (`connector.{AWS,GCP,Azure}.writerFor` → an injected
+  per-tenant writer factory, keeping `package connector` SDK-free), falling back to the operator-default
+  `Writer`. Non-secret identifiers (like `Account`) → stored plain, not sealed. Still HITL-gated; a wrong
+  role surfaces honestly at Apply. This is the per-TENANT half; whether the deployment can do live cloud
+  writes at all stays the operator's `*_REMEDIATION_*` env (Bucket C).
 - **CREDENTIAL SEALING (§18.2 inv. 6)** — the login-flow + authz-test configs carry secrets (passwords /
   tokens / auth headers), so the setters **seal the config blob via `d.Vault`** before it touches the store
   (`Asset.Meta["login_flow"]`/`["authz_test"]` hold a sealed ref, never plaintext); no vault → the setter

@@ -29,12 +29,32 @@ type AWS struct {
 	TemplateURL    string // S3 URL of the cross-account-role CloudFormation template
 	TrustAccountID string // tsengine's AWS account id (the provisioned role trusts it)
 	Region         string // console region for the launch URL
-	// Writer is the live, reversible AWS write path (ADR 0009 Phase 5). Nil → no live cloud
-	// remediation is configured, so Apply returns an honest "not configured" error (never a
-	// false "done"). The real impl assumes the onboarded cross-account role and signs the call
-	// (SigV4) — that needs runtime write creds + the AWS SDK, the deployment step. Injectable
-	// so the write path is unit-tested against a fake without live creds (the Okta pattern).
+	// Writer is the operator-default live write path (ADR 0009 Phase 5) — wired from operator env
+	// for single-tenant / global setups. Nil → no operator default. The real impl assumes the
+	// onboarded cross-account role and signs the call (SigV4). Injectable so the write path is
+	// unit-tested against a fake without live creds (the Okta pattern).
 	Writer AWSWriter
+	// WriterForConfig builds a PER-TENANT write path from the customer's own cross-account role
+	// (Connection.Config[remediation_role_arn/region]). Injected in cmd/platform
+	// (awsremediate.NewS3Writer) so package connector stays SDK-free. Lets each tenant remediate
+	// into their OWN account instead of one operator-global role. Nil → only the operator default.
+	WriterForConfig func(region, roleARN string) AWSWriter
+}
+
+// writerFor picks the per-tenant write path when the connection carries an enabled remediation
+// config (the customer's own role); else falls back to the operator-default Writer (which may be
+// nil → Apply surfaces the honest "not configured" error).
+func (a *AWS) writerFor(conn platform.Connection) AWSWriter {
+	if a.WriterForConfig != nil && conn.Config[platform.CfgRemediationEnabled] == "true" {
+		if role := conn.Config[platform.CfgRemediationRole]; role != "" {
+			region := conn.Config[platform.CfgRemediationRegion]
+			if region == "" {
+				region = a.Region
+			}
+			return a.WriterForConfig(region, role)
+		}
+	}
+	return a.Writer
 }
 
 // AWSWriter performs the reversible cloud mutations tsengine remediates to. Today only S3
@@ -101,7 +121,7 @@ func (a *AWS) Watch(context.Context, platform.Connection, []byte) ([]Trigger, er
 // after the desk approves (§18.2 inv. 3); the connector never writes on its own. An unknown
 // remediation_type or an unconfigured Writer surfaces as an error — the action stays
 // un-applied, never falsely "done".
-func (a *AWS) Apply(ctx context.Context, _ platform.Connection, _ string, act platform.Action) error {
+func (a *AWS) Apply(ctx context.Context, conn platform.Connection, _ string, act platform.Action) error {
 	rt, _ := act.Payload["remediation_type"].(string)
 	target, _ := act.Payload["target"].(string)
 	switch rt {
@@ -110,11 +130,12 @@ func (a *AWS) Apply(ctx context.Context, _ platform.Connection, _ string, act pl
 		if bucket == "" {
 			return fmt.Errorf("aws apply: s3_block_public_access action %s has no target bucket", act.ID)
 		}
-		if a.Writer == nil {
-			return fmt.Errorf("aws apply: no live AWS write path configured (needs assume-role write creds); "+
-				"action %s (block public access on %s) left un-applied", act.ID, bucket)
+		writer := a.writerFor(conn)
+		if writer == nil {
+			return fmt.Errorf("aws apply: no live AWS write path configured (set this connection's remediation "+
+				"role, or the operator default); action %s (block public access on %s) left un-applied", act.ID, bucket)
 		}
-		return a.Writer.BlockS3PublicAccess(ctx, bucket)
+		return writer.BlockS3PublicAccess(ctx, bucket)
 	case "":
 		return fmt.Errorf("aws apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
 	default:

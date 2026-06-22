@@ -20,6 +20,17 @@ export async function setQuarantine(id: string, quarantined: boolean): Promise<{
   return { status: c.status };
 }
 
+// Set a cloud connection's per-tenant remediation write role (Bucket B). The role/SA is the
+// customer's own — used at HITL-approved remediation time. Returns the stored config.
+export async function setCloudRemediation(
+  id: string,
+  cfg: { enabled: boolean; role_arn?: string; region?: string; impersonate_sa?: string },
+): Promise<{ config?: Record<string, string> }> {
+  const c = await api.setCloudRemediation(id, cfg);
+  revalidatePath("/settings");
+  return { config: c.config };
+}
+
 // Set the tenant's LLM provider/model and (optionally) seal a new API key. An empty key keeps
 // the existing one. The key is sealed server-side and never returned.
 export async function setLLMConfig(

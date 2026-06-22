@@ -30,10 +30,24 @@ import (
 type Azure struct {
 	TrustAppID string // tsengine's Entra ID application (client) id the customer grants Reader to
 	PortalBase string // default https://portal.azure.com
-	// Writer is the live, reversible Azure write path. Nil → no live remediation is configured, so
-	// Apply returns an honest "not configured" error. The real impl (azremediate.StorageWriter)
-	// uses the ARM-storage SDK; injectable so the write path is unit-tested without live creds.
+	// Writer is the operator-default live write path (wired from operator env). Nil → no operator
+	// default. The real impl (azremediate.StorageWriter) uses the ARM-storage SDK; injectable so
+	// the write path is unit-tested without live creds.
 	Writer AzureWriter
+	// WriterForConfig builds a PER-TENANT write path when the connection opts into remediation.
+	// Azure scopes the write by the subscription on the connection (c.Account), so the factory
+	// takes no args — the per-tenant knob is just the enable flag. Injected in cmd/platform
+	// (azremediate.NewStorageWriter) so package connector stays SDK-free. Nil → operator default only.
+	WriterForConfig func() AzureWriter
+}
+
+// writerFor picks the per-tenant write path when the connection enables remediation; else falls
+// back to the operator-default Writer.
+func (a *Azure) writerFor(conn platform.Connection) AzureWriter {
+	if a.WriterForConfig != nil && conn.Config[platform.CfgRemediationEnabled] == "true" {
+		return a.WriterForConfig()
+	}
+	return a.Writer
 }
 
 // AzureWriter performs the reversible Azure mutations tsengine remediates to. Today only disabling
@@ -112,11 +126,12 @@ func (a *Azure) Apply(ctx context.Context, c platform.Connection, _ string, act 
 		if rg == "" || account == "" {
 			return fmt.Errorf("azure apply: %s action %s target must resolve a resource group + storage account", rt, act.ID)
 		}
-		if a.Writer == nil {
-			return fmt.Errorf("azure apply: no live Azure write path configured (needs service-principal write creds); "+
-				"action %s (disable public access on %s/%s) left un-applied", act.ID, rg, account)
+		writer := a.writerFor(c)
+		if writer == nil {
+			return fmt.Errorf("azure apply: no live Azure write path configured (enable this connection's "+
+				"remediation, or the operator default); action %s (disable public access on %s/%s) left un-applied", act.ID, rg, account)
 		}
-		return a.Writer.DisableStoragePublicAccess(ctx, c.Account, rg, account)
+		return writer.DisableStoragePublicAccess(ctx, c.Account, rg, account)
 	case "":
 		return fmt.Errorf("azure apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
 	default:

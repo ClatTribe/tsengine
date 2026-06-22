@@ -99,8 +99,22 @@ type Connection struct {
 	Scopes    []string  `json:"scopes,omitempty"`
 	SecretRef string    `json:"secret_ref"` // → secret store, opaque to the platform
 	Account   string    `json:"account,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	// Config holds per-connection, NON-secret configuration the customer sets via UX — today the
+	// cloud-remediation knobs (remediation_enabled + the customer's own cross-account write role:
+	// remediation_role_arn/region for AWS, remediation_impersonate_sa for GCP). These are
+	// identifiers, not credentials (like Account), so they live here in the clear; anything
+	// actually secret goes through SecretRef/the Vault. Nil for connections that need none.
+	Config    map[string]string `json:"config,omitempty"`
+	CreatedAt time.Time         `json:"created_at"`
 }
+
+// CloudRemediationConfig keys (Connection.Config) — the per-tenant, customer-set cloud write role.
+const (
+	CfgRemediationEnabled = "remediation_enabled"      // "true" → use the per-tenant write path
+	CfgRemediationRole    = "remediation_role_arn"     // AWS: the customer's cross-account write role
+	CfgRemediationRegion  = "remediation_region"       // AWS: region for the write call (optional)
+	CfgRemediationSA      = "remediation_impersonate_sa" // GCP: the write SA to impersonate
+)
 
 // Asset is something discovered under a Connection — a repo, a cloud account, a
 // domain. Type uses the engine's asset-type vocabulary (pkg/types.AssetType) so the
