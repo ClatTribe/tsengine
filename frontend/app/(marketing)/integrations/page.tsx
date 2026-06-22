@@ -8,7 +8,7 @@ import {
 export const metadata = pageMeta({
   title: "Integrations — TensorShield",
   description:
-    "Connect your stack in minutes: GitHub, GitLab, Bitbucket, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Slack, Microsoft Teams, Discord, PagerDuty and signed outbound webhooks for delivery. Read-only by default, write-back only on approval.",
+    "Connect your stack in minutes: GitHub, GitLab, Bitbucket, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Linear, Slack, Microsoft Teams, Discord, PagerDuty and signed outbound webhooks for delivery. Read-only by default, write-back only on approval.",
   path: "/integrations",
 });
 
@@ -48,6 +48,7 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
     items: [
       { icon: Ticket, name: "Jira", role: "Remediation tickets with evidence", status: "live" },
       { icon: ClipboardList, name: "ServiceNow", role: "Remediation tickets with evidence", status: "live" },
+      { icon: Ticket, name: "Linear", role: "Remediation issues filed to your team", status: "live" },
       { icon: MessageSquare, name: "Slack", role: "Approve/reject fixes in-channel", status: "live" },
       { icon: MessagesSquare, name: "Microsoft Teams", role: "New critical issues posted to your channel", status: "live" },
       { icon: BellRing, name: "PagerDuty", role: "New critical issues page on-call", status: "live" },

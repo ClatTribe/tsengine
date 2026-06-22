@@ -93,6 +93,7 @@ provider (§5–§6).
 | `TSENGINE_WEBHOOK_URL` | Generic **outbound** webhook — POSTs a signed JSON event (`incident.opened`) per new incident, so a tenant can wire TensorShield into anything (Zapier / n8n / a SIEM / a custom endpoint) without a bespoke connector. Unset → no outbound webhook. |
 | `TSENGINE_WEBHOOK_SIGNING_SECRET` | HMAC-SHA256 key for the outbound webhook above; the receiver recomputes it over the raw body to verify the `X-TensorShield-Signature: sha256=<hex>` header. Unset → events are sent unsigned (the header is omitted). |
 | `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` / `JIRA_PROJECT` | Files `file_ticket` remediations as Jira issues. |
+| `LINEAR_API_KEY` / `LINEAR_TEAM_ID` | Files `file_ticket` remediations as Linear issues (GraphQL `issueCreate`). One ticket filer is active per platform — precedence is Jira → ServiceNow → Linear, by whichever env set is present. |
 
 ---
 
