@@ -168,3 +168,20 @@ func TestSynthetic_PrivescChainDetected(t *testing.T) {
 		t.Error("a path to the effective-admin node should be reported")
 	}
 }
+
+func TestScore_InternetRootedOutranksInternal(t *testing.T) {
+	snap := handBuilt()
+	// Two paths to the SAME high-sensitivity target (pii): one internet-rooted, one internal.
+	internet := cloudgraph.Path{
+		Nodes: []string{cloudgraph.InternetID, "alb", "ec2", "web", "data", "pii"},
+		Edges: []cloudgraph.Edge{{}, {}, {}, {}, {}},
+	}
+	internal := cloudgraph.Path{
+		Nodes: []string{"ec2", "web", "data", "pii"},
+		Edges: []cloudgraph.Edge{{}, {}, {}},
+	}
+	si, sn := score(snap, internet), score(snap, internal)
+	if si <= sn {
+		t.Errorf("an internet-rooted path to the crown jewel must outrank an internal one: internet=%.1f internal=%.1f", si, sn)
+	}
+}

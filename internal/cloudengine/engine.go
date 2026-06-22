@@ -161,6 +161,12 @@ func score(snap *cloudgraph.Snapshot, p cloudgraph.Path) float64 {
 			s += 8
 		}
 	}
+	// Internet-rooted paths need no prior foothold — the attacker starts outside — so an
+	// externally-reachable chain to a crown jewel is the toxic combination Wiz/Orca lead with,
+	// and must be prioritized for validation over an internal-only path to the same target.
+	if len(p.Nodes) > 0 && p.Nodes[0] == cloudgraph.InternetID {
+		s += 6
+	}
 	s -= float64(len(p.Edges)) * 0.5 // prefer shorter chains
 	if p.Conditional() {
 		s -= 2 // conditions may block at runtime
