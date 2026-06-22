@@ -117,3 +117,31 @@ func TestPrioritizeByDataTier_ReordersAndAttributes(t *testing.T) {
 		t.Errorf("k2 risk (%d) must exceed k1 risk (%d)", k2.RiskRank, k1.RiskRank)
 	}
 }
+
+func TestPrioritize_ExploitabilityTiebreaker(t *testing.T) {
+	// All high severity, no asset tiering → the exploitability tiebreaker is the only re-ordering:
+	// attacked > confirmed > unproven.
+	issues := []Issue{
+		{Key: "plain", Severity: "high"},
+		{Key: "confirmed", Severity: "high", Confirmed: true},
+		{Key: "attacked", Severity: "high", Attacked: true},
+	}
+	out := PrioritizeByDataTier(issues, nil)
+	got := []string{out[0].Key, out[1].Key, out[2].Key}
+	want := []string{"attacked", "confirmed", "plain"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("exploitability order wrong: got %v want %v", got, want)
+		}
+	}
+
+	// The tiebreaker is within-severity: a critical (even unproven) still leads an attacked high
+	// (the boost is < the severity gap, so it never inflates a lesser issue past a worse one).
+	mixed := PrioritizeByDataTier([]Issue{
+		{Key: "attacked-high", Severity: "high", Attacked: true},
+		{Key: "plain-critical", Severity: "critical"},
+	}, nil)
+	if mixed[0].Key != "plain-critical" {
+		t.Errorf("a critical must still outrank an attacked high, got %s first", mixed[0].Key)
+	}
+}
