@@ -16,10 +16,17 @@ type Resolver interface {
 
 // defaultDKIMSelectors are the selectors the big providers publish under. DKIM keys live
 // at <selector>._domainkey.<domain> and DNS can't enumerate selectors, so we probe the
-// well-known ones: google (Google Workspace), selector1/selector2 (Microsoft 365),
-// k1/k2/k3 (Mailchimp/Mandrill, SendGrid via "s1"/"s2"), plus the generic defaults.
+// well-known stable ones. NOTE: some providers (notably Google for its own domains) rotate
+// DATE-based selectors (e.g. 20230601) that can't be guessed — so a "no DKIM" result from this
+// probe is best-effort/inconclusive, never proof of absence (the assess message says so).
 var defaultDKIMSelectors = []string{
 	"google", "selector1", "selector2", "default", "dkim", "mail", "k1", "k2", "k3", "s1", "s2",
+	"amazonses",         // AWS SES
+	"fm1", "fm2", "fm3", // Fastmail
+	"protonmail", "protonmail2", "protonmail3", // Proton Mail
+	"scph0", "smtp", // SendGrid / generic
+	"zmail",                // Zoho Mail
+	"sig1", "key1", "key2", // common generics
 }
 
 // EmailAuth resolves a domain's live email-auth posture (DMARC / SPF / DKIM) from public

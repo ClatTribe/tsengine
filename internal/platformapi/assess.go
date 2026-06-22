@@ -69,7 +69,7 @@ func assessEmailAuth(dc operate.DomainConfig) assessResult {
 	res.Checks = []assessCheck{
 		{Name: "DMARC enforcement", OK: enforced, Detail: dmarcDetail(dc.DMARC)},
 		{Name: "SPF", OK: dc.SPF, Detail: ternary(dc.SPF, "Sender Policy Framework record present.", "No SPF record — senders can't be validated.")},
-		{Name: "DKIM", OK: dc.DKIM, Detail: ternary(dc.DKIM, "DKIM signing key published.", "No DKIM selector found — messages aren't cryptographically signed.")},
+		{Name: "DKIM", OK: dc.DKIM, Detail: ternary(dc.DKIM, "DKIM signing key published.", "No DKIM key at the common selectors we check. DKIM uses domain-specific selectors DNS can't enumerate, so your provider may publish one we couldn't see — confirm in your mail settings.")},
 	}
 	// Penalise from the grounded operate findings so the score reflects the same engine logic.
 	for _, f := range operate.Assess(operate.Workspace{Org: dc.Name, Domains: []operate.DomainConfig{dc}}, operate.Options{}) {
