@@ -103,3 +103,18 @@ func TestIsLoginWall_JSONAuthError(t *testing.T) {
 		}
 	}
 }
+
+func TestAccuracy_LoginWallCorpus(t *testing.T) {
+	s := ScoreLoginWall(LoginWallCorpus(), LoginFlow{})
+	t.Logf("login-wall accuracy: recall=%.2f precision=%.2f (TP=%d FN=%d FP=%d TN=%d)",
+		s.Recall(), s.Precision(), s.TP, s.FN, s.FP, s.TN)
+
+	// The bar: every real login wall is detected (recall 1.0 — incl. the #325 JSON paths) and no
+	// normal authenticated response is mistaken for one (precision 1.0 — the FP guards).
+	if s.Recall() != 1.0 {
+		t.Errorf("login-wall recall must be 1.0, got %.2f (FN=%d)", s.Recall(), s.FN)
+	}
+	if s.Precision() != 1.0 {
+		t.Errorf("login-wall precision must be 1.0, got %.2f (FP=%d)", s.Precision(), s.FP)
+	}
+}
