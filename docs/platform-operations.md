@@ -88,6 +88,8 @@ provider (§5–§6).
 | `TSENGINE_SLACK_WEBHOOK` | Slack Incoming Webhook — posts approvals (with buttons) + new-incident alerts. |
 | `TSENGINE_SLACK_SIGNING_SECRET` | Verifies Slack approve/reject button callbacks (`POST /v1/slack/interactive`). |
 | `TSENGINE_WEBHOOK_SECRET` | Verifies inbound provider webhooks (GitHub HMAC-SHA256 / GitLab token) before any re-scan. **Unset → webhooks are NOT verified** (a startup warning is logged); set it and configure the same secret on the provider's webhook. |
+| `TSENGINE_WEBHOOK_URL` | Generic **outbound** webhook — POSTs a signed JSON event (`incident.opened`) per new incident, so a tenant can wire TensorShield into anything (Zapier / n8n / a SIEM / a custom endpoint) without a bespoke connector. Unset → no outbound webhook. |
+| `TSENGINE_WEBHOOK_SIGNING_SECRET` | HMAC-SHA256 key for the outbound webhook above; the receiver recomputes it over the raw body to verify the `X-TensorShield-Signature: sha256=<hex>` header. Unset → events are sent unsigned (the header is omitted). |
 | `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` / `JIRA_PROJECT` | Files `file_ticket` remediations as Jira issues. |
 
 ---
