@@ -613,9 +613,14 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
 - **container** — `POST /v1/registry/reconcile`: a connector posts current images + last-seen digests →
   `registrywatch.Reconcile` → the scan-on-push plan (stateless; the connector runs the sandbox scan).
 - **repository** — `prbot.Submit` builds the GitHub PR-review + merge-gating check-run; the live POST is
-  gated on the GitHub App PR-write scope. **cloud** — `connector.AWS.Apply` S3 block-public-access via an
-  injectable writer (gated on assume-role write creds). **api/web** — apiauthz/webauth live execution is
-  active testing → behind the explicit-consent + sandbox gate.
+  gated on the GitHub App PR-write scope. **cloud** — `connector.AWS.Apply` S3 block-public-access is now a
+  **live, SDK-backed write path**: `internal/connector/awsremediate.S3Writer` (aws-sdk-go-v2 — the project's
+  one cloud SDK, isolated in its own package so the core `connector` stays SDK-free) assumes a scoped
+  cross-account WRITE role via STS and calls `PutPublicAccessBlock` (all four flags). Wired in `cmd/platform`
+  only when `AWS_REMEDIATION_ROLE_ARN` (or `AWS_REMEDIATION_ENABLED=1`) is set — else `Apply` stays the honest
+  stub; reached only after the HITL gate (§18.2 inv. 3). GCP/Azure `Apply` remain honest stubs (no live
+  writer yet). **api/web** — apiauthz/webauth live execution is active testing → behind the explicit-consent
+  + sandbox gate.
 
 **Config surfaces (the per-asset setup half, end-to-end UX + API)** — each stores its config + drives the
 core; the live *execution* stays each core's gated half:
