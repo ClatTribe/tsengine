@@ -126,9 +126,44 @@ func IsLoginWall(status int, location, body string, f LoginFlow) bool {
 	if m := strings.TrimSpace(f.FailureMarker); m != "" && strings.Contains(body, m) {
 		return true
 	}
+	// An API / SPA auth wall: a JSON error body signalling unauthenticated (the FN gap for
+	// non-HTML apps that return 200/4xx with {"error":"unauthorized"} instead of a login page).
+	if looksLikeAuthErrorBody(body) {
+		return true
+	}
 	// A login form served inline (a password input) is a strong logged-out signal.
 	lb := strings.ToLower(body)
 	return strings.Contains(lb, `type="password"`) || strings.Contains(lb, "type='password'")
+}
+
+// authErrorValues are the auth-failure values an API/SPA returns in a JSON error body.
+var authErrorValues = []string{
+	"unauthorized", "unauthenticated", "authentication required", "not authenticated",
+	"login required", "token_expired", "token expired", "invalid_token", "invalid token",
+	"authentication credentials were not provided", // Django REST Framework
+	"jwt expired", "session expired", "missing authentication",
+}
+
+// looksLikeAuthErrorBody reports whether the body is a JSON auth-error response. FP-guarded: it
+// fires ONLY when the body is JSON-ish (starts with { or [) AND carries a recognised error key
+// (error/message/code/detail/title) AND an auth-failure value — so an HTML page that merely
+// mentions "unauthorized" (e.g. docs about HTTP 401) does not trip it.
+func looksLikeAuthErrorBody(body string) bool {
+	b := strings.TrimSpace(body)
+	if b == "" || (b[0] != '{' && b[0] != '[') {
+		return false
+	}
+	lb := strings.ToLower(b)
+	if !strings.Contains(lb, `"error"`) && !strings.Contains(lb, `"message"`) &&
+		!strings.Contains(lb, `"code"`) && !strings.Contains(lb, `"detail"`) && !strings.Contains(lb, `"title"`) {
+		return false
+	}
+	for _, v := range authErrorValues {
+		if strings.Contains(lb, v) {
+			return true
+		}
+	}
+	return false
 }
 
 func isRedirect(status int) bool {

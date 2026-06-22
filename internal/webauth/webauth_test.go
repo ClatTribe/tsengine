@@ -71,3 +71,35 @@ func TestPlanAndAuthHeaders(t *testing.T) {
 		t.Error("a cookie/recorded flow carries no auth header")
 	}
 }
+
+func TestIsLoginWall_JSONAuthError(t *testing.T) {
+	f := LoginFlow{}
+	// FN fixes: API/SPA auth walls returned as a JSON body (status alone wouldn't reveal these
+	// — e.g. a 200 with a JSON error, which the old check missed).
+	walls := []string{
+		`{"error":"unauthorized"}`,
+		`{"message":"Authentication required"}`,
+		`{"code":"token_expired","message":"please re-login"}`,
+		`{"error":"invalid_token"}`,
+		`{"detail":"Authentication credentials were not provided."}`, // DRF
+		`  {"title":"Unauthenticated"}  `,                            // leading space + title key
+	}
+	for _, body := range walls {
+		if !IsLoginWall(200, "", body, f) {
+			t.Errorf("a JSON auth-error body should be a login wall: %s", body)
+		}
+	}
+
+	// FP guards: must NOT fire on...
+	noFire := []string{
+		`<html><body>The page returned 401 Unauthorized earlier. Read more.</body></html>`, // HTML mentioning the word
+		`{"data":{"article":"how to handle unauthorized access in your API"}}`,             // JSON without an error key
+		`{"status":"ok","user":"alice"}`,                                                   // a normal authed JSON response
+		`{"error":"validation failed","field":"email"}`,                                    // a non-auth error
+	}
+	for _, body := range noFire {
+		if IsLoginWall(200, "", body, f) {
+			t.Errorf("must NOT flag as a login wall (FP): %s", body)
+		}
+	}
+}
