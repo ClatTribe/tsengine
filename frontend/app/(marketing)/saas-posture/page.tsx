@@ -2,11 +2,11 @@ import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import {
   KeyRound, ArrowRight, Github, MessageSquare, Mail, UserX, AppWindow, Webhook,
-  Fingerprint, Radar, Bot, CheckCircle2, XCircle, Minus, Video,
+  Fingerprint, Radar, Bot, CheckCircle2, XCircle, Minus, Video, LayoutGrid,
 } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "SaaS & identity posture (SSPM) — Google, M365, Okta, GitHub, Slack, Zoom | TensorShield",
+  title: "SaaS & identity posture (SSPM) — Google, M365, Okta, GitHub, Slack, Zoom, Atlassian | TensorShield",
   description:
     "Most breaches start with a misconfigured SaaS app or a missing MFA. TensorShield continuously checks your identity providers and SaaS apps for risky settings — grounded, compliance-mapped, and fixed with you in the loop.",
   path: "/saas-posture",
@@ -21,6 +21,7 @@ const CHECKS = [
   { icon: Github, t: "GitHub org hardening", d: "Org-wide 2FA enforcement, default repo permissions, secret scanning / push protection, outside collaborators, and insecure webhooks." },
   { icon: MessageSquare, t: "Slack workspace hardening", d: "2FA / SSO enforcement, app-approval governance, public file-link sharing, guest accounts, and admin sprawl." },
   { icon: Video, t: "Zoom account hardening", d: "2FA / SSO enforcement, meeting passcodes and waiting rooms, cloud-recording protection and retention, app-approval governance, and admin sprawl." },
+  { icon: LayoutGrid, t: "Atlassian (Jira/Confluence) hardening", d: "2FA / SSO enforcement, public Confluence spaces, SSO-bypassing user API tokens, open sign-up, Marketplace app governance, and admin sprawl." },
 ];
 
 const DIFF = [
@@ -29,7 +30,7 @@ const DIFF = [
   { icon: Bot, t: "Fixed with you in the loop", d: "The agent prepares the fix — enforce MFA, revoke the grant, suspend the stale account — and applies it the moment you approve (live today for Okta; runbooks for the rest)." },
 ];
 
-const APPS = ["Google Workspace", "Microsoft 365", "Okta", "GitHub", "Slack", "Zoom"];
+const APPS = ["Google Workspace", "Microsoft 365", "Okta", "GitHub", "Slack", "Zoom", "Atlassian"];
 
 const COMPARE: { label: string; cells: string[] }[] = [
   { label: "Identity MFA / OAuth / stale-account posture", cells: ["yes", "part"] },
@@ -37,6 +38,7 @@ const COMPARE: { label: string; cells: string[] }[] = [
   { label: "GitHub org configuration posture", cells: ["yes", "part"] },
   { label: "Slack workspace configuration posture", cells: ["yes", "no"] },
   { label: "Zoom account configuration posture", cells: ["yes", "no"] },
+  { label: "Atlassian (Jira/Confluence) configuration posture", cells: ["yes", "no"] },
   { label: "Compliance-mapped into one evidence pack", cells: ["yes", "part"] },
   { label: "Fixes the misconfiguration on approval", cells: ["yes", "no"] },
 ];
@@ -128,7 +130,7 @@ export default function SaaSPosture() {
         </div>
         <div className="grid gap-5 md:grid-cols-4">
           {[
-            { step: "1", icon: KeyRound, t: "Connect", d: "One-click, read-only OAuth into Google, M365, Okta, GitHub, Slack, or Zoom. Tokens sealed at rest; never a password." },
+            { step: "1", icon: KeyRound, t: "Connect", d: "One-click, read-only OAuth into Google, M365, Okta, GitHub, Slack, Zoom, or Atlassian. Tokens sealed at rest; never a password." },
             { step: "2", icon: Fingerprint, t: "Snapshot", d: "A grounded snapshot of every relevant setting and account — MFA, OAuth grants, org/workspace config, DNS." },
             { step: "3", icon: Webhook, t: "Assess", d: "Deterministic checks map each gap to its compliance controls. A hardened workspace produces zero findings." },
             { step: "4", icon: Bot, t: "Fix on approval", d: "The agent prepares — and on your tap, applies — the fix. Every decision signed into a tamper-evident ledger." },
