@@ -186,6 +186,13 @@ export const api = {
       body: JSON.stringify({ enabled, block_severity: blockSeverity }),
     }),
 
+  // Live GitHub-org SaaS-posture sync — runs the SSPM checks via the onboarded GitHub token (no
+  // posted snapshot). Returns how many posture findings were stored (they flow into issues/incidents).
+  syncGitHubPosture: () =>
+    call<{ provider: string; source: string; org: string; findings_detected: number }>(
+      "/v1/saas/github_org/sync", { method: "POST" },
+    ),
+
   // Per-tenant Slack incident webhook (Bucket B). GET reports only presence; PUT seals the URL
   // server-side and never returns it. An empty string clears it (revert to the operator fallback).
   notifySettings: () => safe<{ has_slack_webhook: boolean }>("/v1/settings/notifications", { has_slack_webhook: false }),

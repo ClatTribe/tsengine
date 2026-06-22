@@ -13,6 +13,7 @@ import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
 import { CloudRemediationControl } from "@/components/settings/cloud-remediation-control";
 import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
+import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
 import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
@@ -128,6 +129,7 @@ export default async function SettingsPage() {
                         <CloudRemediationControl id={c.id} kind={c.kind} config={c.config} />
                       </div>
                     )}
+                    {c.kind === "github" && <GitHubPostureSync />}
                   </li>
                 );
               })}

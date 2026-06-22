@@ -46,6 +46,9 @@ type Deps struct {
 	// Empty → verification is skipped (a startup warning is logged; dev only).
 	WebhookSecret string
 	NewID         func() string
+	// GitHubAPIBase overrides the GitHub REST base for the live SaaS-posture sync (default
+	// https://api.github.com). Set only in tests (a fake API server).
+	GitHubAPIBase string
 	// Prober drives live active-exploitation probes (the Phase-1 ActiveDriver). Nil →
 	// active engagements fall back to the passive driver (no live exploitation). Set
 	// only when the operator has enabled live active exploitation; per-engagement
@@ -114,6 +117,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile)) // container scan-on-push decision (ADR 0010 Phase 4)
 	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))          // api: Postman collection → endpoint inventory
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot)) // SaaS posture (SSPM) snapshot → findings
+	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))         // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
 	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))      // list runtime-protection events
 	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                // create + authorize a pentest engagement
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                  // list engagements

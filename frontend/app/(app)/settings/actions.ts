@@ -20,6 +20,15 @@ export async function setQuarantine(id: string, quarantined: boolean): Promise<{
   return { status: c.status };
 }
 
+// Run the live GitHub-org SaaS-posture sync via the onboarded GitHub token. Returns the number
+// of posture findings stored (they appear in Issues/Incidents).
+export async function syncGitHubPosture(): Promise<{ findings: number }> {
+  const r = await api.syncGitHubPosture();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  return { findings: r.findings_detected };
+}
+
 // Set (or clear) the tenant's own Slack incident webhook (Bucket B). The URL is a bearer
 // capability, so it is sealed server-side and never returned; we get back only presence.
 export async function setSlackWebhook(slackWebhook: string): Promise<{ has_slack_webhook: boolean }> {
