@@ -70,7 +70,7 @@ func Build(findings []types.Finding, changed []ChangedFile, blockAt types.Severi
 	}
 
 	var comments []Comment
-	worst := 0
+	seen := map[string]bool{}
 	for _, f := range findings {
 		path, line, ok := FileLine(f.Endpoint)
 		if !ok {
@@ -80,12 +80,36 @@ func Build(findings []types.Finding, changed []ChangedFile, blockAt types.Severi
 		if lines == nil || !lines[line] {
 			continue // the finding isn't on a line this PR changed — leave it on the dashboard
 		}
+		// Dedup: the same rule on the same file:line (e.g. two tools agreeing, or a re-run) is
+		// one issue, not two comments. Keeps the PR readable without dropping a distinct rule.
+		key := normPath(path) + "\x00" + strconv.Itoa(line) + "\x00" + f.RuleID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
 		comments = append(comments, Comment{
 			Path: path, Line: line, Severity: f.Severity, RuleID: f.RuleID, Body: commentBody(f),
 		})
-		if r := f.Severity.Rank(); r > worst {
+	}
+
+	// worst reflects ALL deduped comments (even any later capped off), so a capped-out high
+	// finding still blocks the merge.
+	worst := 0
+	for _, c := range comments {
+		if r := c.Severity.Rank(); r > worst {
 			worst = r
 		}
+	}
+
+	// The full deduped set drives the summary counts (accurate even after the inline cap).
+	all := append([]Comment(nil), comments...)
+	dropped := 0
+	if MaxComments > 0 && len(comments) > MaxComments {
+		// Keep the most severe comments inline; the rest roll up into the summary (so a noisy
+		// file doesn't bury the PR in hundreds of comments — Aikido/Snyk parity).
+		sort.SliceStable(comments, func(i, j int) bool { return comments[i].Severity.Rank() > comments[j].Severity.Rank() })
+		dropped = len(comments) - MaxComments
+		comments = comments[:MaxComments]
 	}
 	sort.SliceStable(comments, func(i, j int) bool {
 		if comments[i].Path != comments[j].Path {
@@ -96,10 +120,15 @@ func Build(findings []types.Finding, changed []ChangedFile, blockAt types.Severi
 
 	return Review{
 		Comments:   comments,
-		Conclusion: conclusion(comments, worst, blockAt),
-		Summary:    summary(comments, blockAt),
+		Conclusion: conclusion(all, worst, blockAt),
+		Summary:    summary(all, dropped, blockAt),
 	}
 }
+
+// MaxComments caps how many inline comments the bot posts on one PR; the rest are rolled up into
+// the summary. 0 disables the cap. Default 30 — high enough for a real review, low enough that a
+// noisy file can't flood the PR.
+var MaxComments = 30
 
 func conclusion(comments []Comment, worst int, blockAt types.Severity) string {
 	if len(comments) == 0 {
@@ -111,18 +140,32 @@ func conclusion(comments []Comment, worst int, blockAt types.Severity) string {
 	return "neutral" // findings present but below the block floor → informational, non-blocking
 }
 
-func summary(comments []Comment, blockAt types.Severity) string {
-	if len(comments) == 0 {
+func summary(all []Comment, dropped int, blockAt types.Severity) string {
+	if len(all) == 0 {
 		return "tsengine: no new security findings on the changed lines. ✅"
 	}
+	// Severity breakdown over all deduped findings on changed lines (critical → info).
+	order := []types.Severity{types.SeverityCritical, types.SeverityHigh, types.SeverityMedium, types.SeverityLow, types.SeverityInfo}
+	count := map[types.Severity]int{}
 	blocking := 0
-	for _, c := range comments {
+	for _, c := range all {
+		count[c.Severity]++
 		if c.Severity.Rank() >= blockAt.Rank() {
 			blocking++
 		}
 	}
-	return fmt.Sprintf("tsengine: %d finding(s) on changed lines, %d at or above %s (the merge-block floor).",
-		len(comments), blocking, blockAt)
+	var parts []string
+	for _, s := range order {
+		if count[s] > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", count[s], s))
+		}
+	}
+	out := fmt.Sprintf("tsengine: %d finding(s) on changed lines (%s); %d at or above %s (the merge-block floor).",
+		len(all), strings.Join(parts, ", "), blocking, blockAt)
+	if dropped > 0 {
+		out += fmt.Sprintf(" Showing the %d most severe inline; %d more rolled up here.", MaxComments, dropped)
+	}
+	return out
 }
 
 func commentBody(f types.Finding) string {

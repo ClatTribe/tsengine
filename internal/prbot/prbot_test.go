@@ -1,6 +1,7 @@
 package prbot
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -81,5 +82,68 @@ func TestBuild_Conclusions(t *testing.T) {
 	medBlock := Build([]types.Finding{{Severity: types.SeverityMedium, Endpoint: "a.go:5", RuleID: "r"}}, changed, types.SeverityMedium)
 	if medBlock.Conclusion != "failure" {
 		t.Errorf("lowering the block floor to medium should fail, got %q", medBlock.Conclusion)
+	}
+}
+
+func TestBuild_DedupesSameRuleSameLine(t *testing.T) {
+	changed := []ChangedFile{{Path: "a.go", Lines: map[int]bool{5: true}}}
+	findings := []types.Finding{
+		{Severity: types.SeverityHigh, Endpoint: "a.go:5", RuleID: "sqli"},
+		{Severity: types.SeverityHigh, Endpoint: "a.go:5", RuleID: "sqli"}, // exact dup (re-run / two tools)
+		{Severity: types.SeverityHigh, Endpoint: "a.go:5", RuleID: "xss"},  // different rule, same line → kept
+	}
+	r := Build(findings, changed, types.SeverityHigh)
+	if len(r.Comments) != 2 {
+		t.Fatalf("the duplicate (same rule+line) should collapse to 2 comments, got %d", len(r.Comments))
+	}
+}
+
+func TestBuild_CapsAndRollsUp(t *testing.T) {
+	old := MaxComments
+	MaxComments = 3
+	defer func() { MaxComments = old }()
+
+	changed := []ChangedFile{{Path: "a.go", Lines: map[int]bool{}}}
+	var findings []types.Finding
+	for i := 1; i <= 10; i++ {
+		changed[0].Lines[i] = true
+		sev := types.SeverityLow
+		if i <= 2 {
+			sev = types.SeverityCritical // 2 criticals must survive the cap (most severe kept)
+		}
+		findings = append(findings, types.Finding{Severity: sev, Endpoint: "a.go:" + strconv.Itoa(i), RuleID: "r" + strconv.Itoa(i)})
+	}
+	r := Build(findings, changed, types.SeverityHigh)
+	if len(r.Comments) != 3 {
+		t.Fatalf("comments should be capped at MaxComments=3, got %d", len(r.Comments))
+	}
+	// The 2 criticals must be among the kept (cap keeps the most severe).
+	crit := 0
+	for _, c := range r.Comments {
+		if c.Severity == types.SeverityCritical {
+			crit++
+		}
+	}
+	if crit != 2 {
+		t.Errorf("the cap must keep the most-severe comments (2 criticals), got %d", crit)
+	}
+	// The check still fails (a critical is present) and the summary rolls up the dropped 7.
+	if r.Conclusion != "failure" {
+		t.Errorf("a capped-but-present critical should still fail the check, got %s", r.Conclusion)
+	}
+	if !strings.Contains(r.Summary, "7 more") {
+		t.Errorf("summary should roll up the 7 dropped comments, got %q", r.Summary)
+	}
+}
+
+func TestBuild_SummaryBreakdown(t *testing.T) {
+	changed := []ChangedFile{{Path: "a.go", Lines: map[int]bool{5: true, 6: true}}}
+	findings := []types.Finding{
+		{Severity: types.SeverityCritical, Endpoint: "a.go:5", RuleID: "r1"},
+		{Severity: types.SeverityMedium, Endpoint: "a.go:6", RuleID: "r2"},
+	}
+	r := Build(findings, changed, types.SeverityHigh)
+	if !strings.Contains(r.Summary, "1 critical") || !strings.Contains(r.Summary, "1 medium") {
+		t.Errorf("summary should carry the severity breakdown, got %q", r.Summary)
 	}
 }
