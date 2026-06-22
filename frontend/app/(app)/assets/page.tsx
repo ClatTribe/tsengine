@@ -1,4 +1,4 @@
-import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2, Cloud, Lock, ShieldAlert } from "lucide-react";
+import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2, Cloud } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
@@ -179,26 +179,16 @@ function AssetRow({ asset: a, connections, last }: { asset: Asset; connections: 
         <div className="flex items-center gap-2">
           <Boxes className="h-3.5 w-3.5 shrink-0 text-faint" />
           <span className="mono truncate text-sm">{a.target}</span>
-          {a.type === "web_application" &&
-            (a.meta?.login_flow ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-pulse/30 bg-pulse/5 px-1.5 py-0.5 text-[11px] text-pulse">
-                <Lock className="h-3 w-3" /> Authed
-              </span>
-            ) : (
-              <span className="shrink-0">
-                <LoginFlowConfig assetId={a.id} />
-              </span>
-            ))}
-          {a.type === "api" &&
-            (a.meta?.authz_test ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-pulse/30 bg-pulse/5 px-1.5 py-0.5 text-[11px] text-pulse">
-                <ShieldAlert className="h-3 w-3" /> Authz test
-              </span>
-            ) : (
-              <span className="shrink-0">
-                <AuthzTestConfig assetId={a.id} />
-              </span>
-            ))}
+          {a.type === "web_application" && (
+            <span className="shrink-0">
+              <LoginFlowConfig assetId={a.id} configured={!!a.meta?.login_flow} />
+            </span>
+          )}
+          {a.type === "api" && (
+            <span className="shrink-0">
+              <AuthzTestConfig assetId={a.id} configured={!!a.meta?.authz_test} />
+            </span>
+          )}
         </div>
       </td>
       <td className="px-2 py-2.5 align-middle">

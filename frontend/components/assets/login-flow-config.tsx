@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Lock, X, Check, Loader2 } from "lucide-react";
+import { Lock, X, Check, Loader2, Pencil } from "lucide-react";
 import { setLoginFlow } from "@/app/(app)/assets/actions";
 import { cn } from "@/lib/utils";
 
 // LoginFlowConfig configures authenticated scanning for a web asset (the common form-login case):
 // the owner enters the login POST + a validate URL + a success marker; the scanner replays it and
 // confirms the session each scan so it never silently scans logged-out (the FN guard). Credentials
-// are sealed server-side and never returned.
-export function LoginFlowConfig({ assetId }: { assetId: string }) {
+// are sealed server-side and never returned. When `configured`, the trigger is a badge that
+// reopens the form to rotate credentials (saving overwrites the stored flow).
+export function LoginFlowConfig({ assetId, configured = false }: { assetId: string; configured?: boolean }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null);
@@ -33,12 +34,22 @@ export function LoginFlowConfig({ assetId }: { assetId: string }) {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted transition hover:border-accent/40 hover:text-ink"
-      >
-        <Lock className="h-3 w-3" /> Auth
-      </button>
+      {configured ? (
+        <button
+          onClick={() => setOpen(true)}
+          title="Reconfigure authenticated scanning"
+          className="group inline-flex items-center gap-1 rounded-md border border-pulse/30 bg-pulse/5 px-1.5 py-0.5 text-[11px] text-pulse transition hover:border-pulse/60"
+        >
+          <Lock className="h-3 w-3" /> Authed <Pencil className="h-2.5 w-2.5 opacity-50 transition group-hover:opacity-100" />
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted transition hover:border-accent/40 hover:text-ink"
+        >
+          <Lock className="h-3 w-3" /> Auth
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setOpen(false)}>
