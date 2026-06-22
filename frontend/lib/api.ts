@@ -112,6 +112,14 @@ export const api = {
   setAssetDataTier: (id: string, tier: number) =>
     call<Asset>(`/v1/assets/${id}/data-tier`, { method: "POST", body: JSON.stringify({ tier }) }),
 
+  // Configure authenticated scanning for a web asset — a login flow the scanner replays +
+  // validates each scan (credentials are sealed server-side; never returned).
+  setLoginFlow: (id: string, flow: unknown) =>
+    call<{ asset_id: string; auth_type: string; configured: boolean }>(`/v1/assets/${id}/login-flow`, {
+      method: "POST",
+      body: JSON.stringify(flow),
+    }),
+
   // Per-tenant LLM config for the engine agent / autonomous pentest. GET reports provider +
   // model + whether a key is set (never the key). PUT sets provider/model and seals the key
   // server-side (an empty api_key keeps the existing key).
