@@ -3,7 +3,7 @@ import {
   ArrowRight, ScanLine, ShieldAlert, ShieldCheck, Wrench, Inbox as InboxIcon,
   Boxes, Radar, Plug, CheckCircle2, Spline, Layers,
 } from "lucide-react";
-import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
+import { api, FRAMEWORK_LABEL } from "@/lib/api";
 import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
 import { categoryBreakdown } from "@/lib/categories";
 import { Card, SectionTitle, SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -39,11 +39,10 @@ export default async function OverviewPage() {
   const connections = await api.connections();
   if (connections.length === 0) return <FirstRun />;
 
-  // One concurrent wave for the whole dashboard. The per-framework compliance posture
-  // (one call each) is nested into the SAME Promise.all rather than awaited in a second wave,
-  // so all of these fan out together instead of paying two sequential round-trip waves on the
-  // app's most-loaded page.
-  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, posture] = await Promise.all([
+  // One concurrent wave for the whole dashboard. Compliance posture for every framework arrives
+  // in a SINGLE batched call (postureSummary) instead of fanning out 14 per-framework requests,
+  // and it rides in the same Promise.all as everything else.
+  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, postureResp] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
@@ -51,14 +50,7 @@ export default async function OverviewPage() {
     api.assets(),
     api.attackPaths(),
     api.issues(),
-    Promise.all(
-      FRAMEWORKS.map(async (f) => {
-        const cs = await api.posture(f);
-        if (cs.length === 0) return null;
-        const gap = cs.filter((c) => c.state === "gap").length;
-        return { f, met: cs.length - gap, gap };
-      }),
-    ),
+    api.postureSummary(),
   ]);
 
   const counts = severityCounts(findings);
@@ -84,7 +76,7 @@ export default async function OverviewPage() {
   for (const e of engagements) if (e.completed_at) events.push({ at: e.completed_at, kind: "scanned", title: "Scanned an asset", meta: e.trigger });
   events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
-  const frameworks = posture.filter(Boolean) as { f: string; met: number; gap: number }[];
+  const frameworks = postureResp.frameworks;
   const resolvedCount = incidents.filter((i) => i.status === "resolved").length;
 
   return (
@@ -179,9 +171,9 @@ export default async function OverviewPage() {
             {frameworks.length === 0 ? (
               <div className="p-2"><Empty>No control state yet.</Empty></div>
             ) : (
-              frameworks.map(({ f, met, gap }) => (
-                <Link key={f} href={`/compliance/${f}`} className="flex items-center justify-between rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm transition hover:border-border-strong">
-                  <span className="font-medium">{FRAMEWORK_LABEL[f] ?? f}</span>
+              frameworks.map(({ framework, gap }) => (
+                <Link key={framework} href={`/compliance/${framework}`} className="flex items-center justify-between rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm transition hover:border-border-strong">
+                  <span className="font-medium">{FRAMEWORK_LABEL[framework] ?? framework}</span>
                   <span className="inline-flex items-center gap-2 text-xs">
                     {gap === 0 ? (
                       <span className="inline-flex items-center gap-1 text-pulse"><CheckCircle2 className="h-3.5 w-3.5" /> on track</span>

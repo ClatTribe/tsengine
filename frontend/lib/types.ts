@@ -271,6 +271,18 @@ export interface ControlState {
   evidence_refs?: string[];
 }
 
+// One framework's compliance summary (met/gap/total). Returned in a batch by GET /v1/posture so
+// the dashboard/compliance/reports pages fetch all frameworks in one call instead of 14.
+export interface FrameworkPosture {
+  framework: string;
+  total: number;
+  met: number;
+  gap: number;
+}
+export interface PostureSummary {
+  frameworks: FrameworkPosture[];
+}
+
 // grc.Report JSON (no json tags on the Go struct → PascalCase keys).
 export interface ReportEvidence { FindingID: string; Title: string; Severity: string }
 export interface ReportRow { ControlID: string; State: string; Gap: boolean; Evidence?: ReportEvidence[] }

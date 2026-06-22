@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PRBotSettings, Questionnaire, ReviewRequest, SaaSAppsResponse, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, SaaSAppsResponse, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -74,6 +74,9 @@ export const api = {
   assets: () => safe<Asset[]>("/v1/assets", []),
   engagements: () => safe<Engagement[]>("/v1/engagements", []),
   posture: (framework: string) => safe<ControlState[]>(`/v1/posture/${framework}`, []),
+  // All-framework posture summary in ONE call (replaces fanning out 14 per-framework posture
+  // requests on the dashboard/compliance/reports pages).
+  postureSummary: () => safe<PostureSummary>("/v1/posture", { frameworks: [] }),
   report: (framework: string) => safe<ComplianceReport | null>(`/v1/compliance/${framework}/report?format=json`, null),
   questionnaire: () => safe<Questionnaire | null>("/v1/questionnaire", null),
   reviews: () => safe<ReviewRequest[]>("/v1/reviews", []),

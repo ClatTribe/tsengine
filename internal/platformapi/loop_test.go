@@ -69,6 +69,35 @@ func TestPostureEndpoint(t *testing.T) {
 	}
 }
 
+// TestPostureSummaryEndpoint: the batched GET /v1/posture returns every TRACKED framework's
+// summary in one call (only soc2 has control state here → one entry), omitting untracked
+// frameworks, with a non-null frameworks array (the nil-slice→null guard).
+func TestPostureSummaryEndpoint(t *testing.T) {
+	h, _ := setupLoop(t)
+	rec := do(h, "GET", "/v1/posture", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("posture summary: code %d body %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), ":null") {
+		t.Errorf("frameworks must serialize as [] not null: %s", rec.Body.String())
+	}
+	var out struct {
+		Frameworks []struct {
+			Framework       string `json:"framework"`
+			Total, Met, Gap int
+		} `json:"frameworks"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Frameworks) != 1 {
+		t.Fatalf("want only the 1 tracked framework, got %d: %s", len(out.Frameworks), rec.Body.String())
+	}
+	if f := out.Frameworks[0]; f.Framework != "soc2" || f.Total != 1 || f.Gap != 1 || f.Met != 0 {
+		t.Errorf("soc2 summary wrong: %+v", f)
+	}
+}
+
 func TestConnectURLCarriesTenantInState(t *testing.T) {
 	h, _ := setupLoop(t)
 	rec := do(h, "GET", "/v1/connect/github", "t1", "")
