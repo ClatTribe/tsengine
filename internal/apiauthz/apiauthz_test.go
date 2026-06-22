@@ -18,11 +18,53 @@ func TestPlan_OnlyAuthzClasses(t *testing.T) {
 	ops := []Operation{
 		{Method: "GET", URL: "/invoices/42", Class: ClassBOLA},
 		{Method: "DELETE", URL: "/admin/users/7", Class: ClassBFLA},
-		{Method: "POST", URL: "/users", Class: "mass_assignment"}, // not an authz test here
+		{Method: "PATCH", URL: "/users/me", Class: ClassMass, Body: `{"role":"admin"}`, Marker: "admin"},
+		{Method: "GET", URL: "/health", Class: "unknown"}, // not a testable authz class → skipped
 	}
 	plan := Plan(ops, victim(), attacker())
-	if len(plan) != 2 {
-		t.Fatalf("only BOLA+BFLA ops are planned, got %d", len(plan))
+	if len(plan) != 3 {
+		t.Fatalf("BOLA+BFLA+mass_assignment ops are planned (unknown skipped), got %d", len(plan))
+	}
+}
+
+// massProber answers a write (non-GET) with a fixed status, and a GET read-back with a body that
+// either contains the privileged marker (the field stuck) or not (rejected).
+type massProber struct {
+	writeStatus int
+	readBack    string
+}
+
+func (m massProber) Do(_ context.Context, r Request) (Response, error) {
+	if r.Method == "GET" {
+		return Response{Status: 200, Body: m.readBack}, nil
+	}
+	return Response{Status: m.writeStatus, Body: "{}"}, nil
+}
+
+func TestRun_MassAssignment(t *testing.T) {
+	op := Operation{Method: "PATCH", URL: "/users/me", Class: ClassMass, Body: `{"name":"me","role":"admin"}`, Marker: "admin"}
+	plan := Plan([]Operation{op}, victim(), attacker())
+
+	// Vulnerable: write accepted (200) AND the privileged value stuck on read-back.
+	vuln := massProber{writeStatus: 200, readBack: `{"name":"me","role":"admin"}`}
+	fs := Run(context.Background(), plan, vuln, nil)
+	if len(fs) != 1 {
+		t.Fatalf("a persisted privileged field should yield 1 finding, got %d", len(fs))
+	}
+	if fs[0].CWE[0] != "CWE-915" || fs[0].VerificationStatus != "verified" {
+		t.Errorf("mass-assignment finding should be CWE-915 + verified, got %s/%s", fs[0].CWE[0], fs[0].VerificationStatus)
+	}
+
+	// FP guard 1: the server IGNORED the field (read-back has no admin) → no finding.
+	ignored := massProber{writeStatus: 200, readBack: `{"name":"me","role":"user"}`}
+	if fs := Run(context.Background(), plan, ignored, nil); len(fs) != 0 {
+		t.Errorf("an ignored privileged field must not fire (FP), got %d", len(fs))
+	}
+
+	// FP guard 2: the write was REJECTED (4xx) → no finding even if the marker appears elsewhere.
+	rejected := massProber{writeStatus: 403, readBack: `{"name":"me","role":"admin"}`}
+	if fs := Run(context.Background(), plan, rejected, nil); len(fs) != 0 {
+		t.Errorf("a rejected write must not fire (FP), got %d", len(fs))
 	}
 }
 
