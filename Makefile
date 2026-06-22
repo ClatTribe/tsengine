@@ -124,6 +124,10 @@ dev-reseed: ## refresh demo data to current code, then (re)start the stack — d
 	@$(MAKE) dev-down
 	@RESEED=1 ./scripts/dev.sh
 
+.PHONY: demo-secure
+demo-secure: ## run the demo with the ENGINE ON + hardened Docker sandboxes (one asset of every type)
+	./scripts/demo-secure.sh
+
 .PHONY: dev-down
 dev-down: ## stop the local dev stack (frees :3000 and :8090)
 	@pkill -f 'next dev' 2>/dev/null || true; pkill -f 'next-server' 2>/dev/null || true
