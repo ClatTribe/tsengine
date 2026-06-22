@@ -145,3 +145,18 @@ func TestRun_EmitsVerifiedFindings(t *testing.T) {
 		t.Error("a nil prober must run nothing")
 	}
 }
+
+func TestAccuracy_AuthzCorpus(t *testing.T) {
+	s := ScoreAuthz(AuthzCorpus())
+	t.Logf("authz-predicate accuracy: recall=%.2f precision=%.2f (TP=%d FN=%d FP=%d TN=%d)",
+		s.Recall(), s.Precision(), s.TP, s.FN, s.FP, s.TN)
+
+	// The bar: every real bypass is detected (recall 1.0) and NO secure outcome / FP trap is
+	// flagged (precision 1.0 — the no-FP bar; a false bypass = a falsely-confident "verified").
+	if s.Recall() != 1.0 {
+		t.Errorf("authz recall must be 1.0, got %.2f (FN=%d)", s.Recall(), s.FN)
+	}
+	if s.Precision() != 1.0 {
+		t.Errorf("authz precision must be 1.0 (the no-FP bar), got %.2f (FP=%d)", s.Precision(), s.FP)
+	}
+}
