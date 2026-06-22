@@ -342,7 +342,7 @@ function StackPipeline() {
   const stack = [
     { icon: Cloud, label: "Cloud", sub: "AWS · GCP · Azure" },
     { icon: Mail, label: "Workspace", sub: "Google · M365" },
-    { icon: GitBranch, label: "Code", sub: "GitHub · GitLab" },
+    { icon: GitBranch, label: "Code", sub: "GitHub · GitLab · Bitbucket · Azure DevOps" },
     { icon: KeyRound, label: "Identity & MFA", sub: "Okta · SSO" },
   ];
   const outcomes = [
