@@ -47,10 +47,12 @@ func RiskWeight(sev types.Severity, tier int) int {
 }
 
 // PrioritizeByDataTier attributes each issue to a tiered asset, annotates it with that asset's
-// DataTier + the resulting RiskRank (severity × tier), and re-sorts the list so the
-// highest-risk issues lead — the Synthesia "tier repos by customer-data exposure → its findings
-// jump the queue" behavior. With every asset at the default Standard tier the ranking reduces
-// to severity-first (today's order), so this is a no-op until an owner tiers an asset.
+// DataTier + the resulting RiskRank (severity × tier + an exploitability tiebreaker), and re-sorts
+// the list so the highest-risk issues lead — the Synthesia "tier repos by customer-data exposure →
+// its findings jump the queue" behavior, plus the Wiz/Synthesia "prioritize by real
+// exploitability" lens. With every asset at the default Standard tier the ranking reduces to
+// severity-first, then attacked-first, then confirmed-first within a severity (the exploitability
+// tiebreaker is the only re-ordering until an owner tiers an asset).
 //
 // Attribution is BEST-EFFORT and grounded (§10 — never guessed): an issue maps to an asset only
 // when that asset's non-empty Target literally appears in the issue's Endpoint (the longest
@@ -61,10 +63,26 @@ func PrioritizeByDataTier(issues []Issue, assets []platform.Asset) []Issue {
 	for i := range issues {
 		tier := tierForEndpoint(issues[i].Endpoint, assets)
 		issues[i].DataTier = tier
-		issues[i].RiskRank = RiskWeight(types.Severity(issues[i].Severity), tier)
+		issues[i].RiskRank = RiskWeight(types.Severity(issues[i].Severity), tier) + exploitabilityBoost(issues[i])
 	}
 	sort.SliceStable(issues, func(a, b int) bool { return issues[a].RiskRank > issues[b].RiskRank })
 	return issues
+}
+
+// exploitabilityBoost is the within-severity tiebreaker for how PROVEN an issue is — the
+// "prioritize by real exploitability" lens (Wiz/Synthesia). Additive + modest (< the 100-point
+// severity gap), so it orders issues inside a severity band without inflating a lesser issue past
+// a worse one: an Attacked issue (observed exploited in the wild — the strongest fix-first signal)
+// leads a Confirmed one (≥2 independent tools agree → more likely a true positive), which leads an
+// unproven one. Attacked supersedes Confirmed (it's the stronger evidence), so they don't stack.
+func exploitabilityBoost(i Issue) int {
+	switch {
+	case i.Attacked:
+		return 60
+	case i.Confirmed:
+		return 20
+	}
+	return 0
 }
 
 // tierForEndpoint returns the data tier of the asset whose Target best matches the endpoint,
