@@ -1,15 +1,18 @@
-// Package apiauthz is the API object/function-level authorization specialist (ADR 0010 Phase 1) —
-// the BOLA (OWASP API1) / BFLA (OWASP API5) detector that has no standalone OSS equivalent (§5.2:
-// authorization is business logic, not a fuzzable pattern). `classifyOp` (internal/asset/api)
-// already routes operations to idor/bfla classes; this is the specialist those routes waited for.
+// Package apiauthz is the API authorization specialist (ADR 0010 Phase 1) — the OWASP-API-top-10
+// authorization detectors that have no standalone OSS equivalent (§5.2: authorization is business
+// logic, not a fuzzable pattern). `classifyOp` (internal/asset/api) routes operations to these
+// classes; this is the specialist those routes waited for. Three classes:
 //
-// It is a DIFFERENTIAL test: with two authenticated identities — a victim that owns an object (or
-// is privileged) and an attacker that is a different, lower-privilege principal — it replays the
-// victim's request as the attacker and checks, with a machine-checkable predicate, whether
-// authorization was bypassed. Benign by construction: it only reads the victim's OWN object to
-// prove access, never writes or exfiltrates. Low-FP by construction: it fires only on a proven
-// bypass (a 2xx attacker response carrying the victim's data, or an undenied privileged call),
-// so a confirmed finding is `verification: verified` — never a maybe (§10, the XBOW no-FP bar).
+//   - BOLA (API1) — object-level: replay the VICTIM's request as the ATTACKER; a bypass is proven
+//     by a 2xx attacker response carrying the victim's data. Benign — reads the victim's own object.
+//   - BFLA (API5) — function-level: a low-privilege caller invokes a privileged op and is not denied.
+//   - mass_assignment (API3/API6) — the attacker writes its OWN object with a privileged field it
+//     shouldn't control, then reads it back; a bypass is proven only when the field PERSISTED.
+//     Benign — it only modifies the caller's own object, never another principal's.
+//
+// Low-FP by construction: every class fires only on a machine-checkable proof (data leak / undenied
+// privileged call / persisted privileged field), so a confirmed finding is `verification: verified`
+// — never a maybe (§10, the XBOW no-FP bar).
 package apiauthz
 
 import (
@@ -24,8 +27,9 @@ import (
 type Class string
 
 const (
-	ClassBOLA Class = "bola" // object-level: can the attacker read the victim's object? (API1)
-	ClassBFLA Class = "bfla" // function-level: can a low-priv caller invoke a privileged op? (API5)
+	ClassBOLA Class = "bola"            // object-level: can the attacker read the victim's object? (API1)
+	ClassBFLA Class = "bfla"            // function-level: can a low-priv caller invoke a privileged op? (API5)
+	ClassMass Class = "mass_assignment" // can a caller set a privileged field on its OWN object? (API3/API6)
 )
 
 // Identity is one authenticated principal in the differential test (its auth material).
@@ -43,7 +47,12 @@ type Operation struct {
 	// Marker is a string from the victim's object that proves data leakage if it appears in
 	// the attacker's response (e.g. the victim's email/account id). Optional but strongly
 	// raises specificity — without it the test falls back to a body-equality differential.
+	// For mass_assignment it is the privileged VALUE (e.g. "admin") that, if it appears in the
+	// post-write read-back, proves the server accepted a field the caller shouldn't control.
 	Marker string
+	// Body is the write payload for a mass_assignment test — the caller's own object plus a
+	// privileged field it shouldn't be able to set (e.g. {"name":"me","role":"admin"}).
+	Body string
 }
 
 // AuthzTest is a planned differential test case.
@@ -74,8 +83,14 @@ func (c TestConfig) Valid() error {
 		if strings.TrimSpace(op.Method) == "" || strings.TrimSpace(op.URL) == "" {
 			return cfgErr("operation " + strconv.Itoa(i) + " needs a method + url")
 		}
-		if op.Class != ClassBOLA && op.Class != ClassBFLA {
-			return cfgErr("operation " + strconv.Itoa(i) + " class must be bola or bfla")
+		switch op.Class {
+		case ClassBOLA, ClassBFLA:
+		case ClassMass:
+			if strings.TrimSpace(op.Body) == "" || strings.TrimSpace(op.Marker) == "" {
+				return cfgErr("mass_assignment operation " + strconv.Itoa(i) + " needs a write body + a privileged-value marker")
+			}
+		default:
+			return cfgErr("operation " + strconv.Itoa(i) + " class must be bola, bfla or mass_assignment")
 		}
 	}
 	return nil
@@ -105,12 +120,13 @@ type Prober interface {
 	Do(ctx context.Context, r Request) (Response, error)
 }
 
-// Plan builds the differential test set from classified operations + the two identities. Only
-// operations classed BOLA or BFLA are testable here (mass-assignment is a separate specialist).
+// Plan builds the test set from classified operations + the two identities. BOLA/BFLA are
+// differential (victim vs attacker); mass_assignment is a self-test (the attacker writes to its
+// own object), so it carries only the attacker identity.
 func Plan(ops []Operation, victim, attacker Identity) []AuthzTest {
 	out := make([]AuthzTest, 0, len(ops))
 	for _, op := range ops {
-		if op.Class != ClassBOLA && op.Class != ClassBFLA {
+		if op.Class != ClassBOLA && op.Class != ClassBFLA && op.Class != ClassMass {
 			continue
 		}
 		out = append(out, AuthzTest{Op: op, Victim: victim, Attacker: attacker})
@@ -169,6 +185,22 @@ func Run(ctx context.Context, plan []AuthzTest, prober Prober, idgen func() stri
 	}
 	var findings []types.Finding
 	for _, t := range plan {
+		if t.Op.Class == ClassMass {
+			// Self-test: the attacker writes its OWN object with a privileged field, then reads
+			// it back. Benign — it never touches another principal's data.
+			write, err := prober.Do(ctx, Request{Method: t.Op.Method, URL: t.Op.URL, Headers: t.Attacker.Headers, Body: t.Op.Body})
+			if err != nil {
+				continue
+			}
+			confirm, err := prober.Do(ctx, Request{Method: "GET", URL: t.Op.URL, Headers: t.Attacker.Headers})
+			if err != nil {
+				continue
+			}
+			if v := evaluateMassAssignment(t.Op, write, confirm); v.Bypassed {
+				findings = append(findings, finding(t, v, write, confirm, idgen))
+			}
+			continue
+		}
 		baseline, err := prober.Do(ctx, Request{Method: t.Op.Method, URL: t.Op.URL, Headers: t.Victim.Headers})
 		if err != nil {
 			continue
@@ -184,10 +216,33 @@ func Run(ctx context.Context, plan []AuthzTest, prober Prober, idgen func() stri
 	return findings
 }
 
-func finding(t AuthzTest, v Verdict, baseline, attacker Response, idgen func() string) types.Finding {
-	cwe, title := "CWE-639", "Broken Object Level Authorization (BOLA)"
-	if v.Class == ClassBFLA {
+// evaluateMassAssignment is the mass-assignment predicate (offline-testable). A bypass is proven
+// only when the write SUCCEEDED (2xx) AND the privileged value (op.Marker) appears in the
+// read-back — i.e. the server persisted a field the caller should not control. A rejected or
+// ignored field (marker absent on read-back) is the secure outcome → no finding.
+func evaluateMassAssignment(op Operation, write, confirm Response) Verdict {
+	if write.Status/100 == 2 && strings.Contains(confirm.Body, op.Marker) {
+		return Verdict{true, ClassMass,
+			"a privileged field (\"" + op.Marker + "\") set by the caller persisted on read-back: HTTP " +
+				strconv.Itoa(write.Status) + " write accepted an attribute the caller should not control"}
+	}
+	return Verdict{}
+}
+
+func finding(t AuthzTest, v Verdict, a, b Response, idgen func() string) types.Finding {
+	var cwe, title, desc string
+	switch v.Class {
+	case ClassBFLA:
 		cwe, title = "CWE-285", "Broken Function Level Authorization (BFLA)"
+		desc = v.Reason + " (victim baseline HTTP " + strconv.Itoa(a.Status) + ", attacker HTTP " + strconv.Itoa(b.Status) +
+			"). Authorization must be enforced server-side per object/function, not inferred from the caller."
+	case ClassMass:
+		cwe, title = "CWE-915", "Mass Assignment (unsafe object attribute binding)"
+		desc = v.Reason + ". The write must allow-list bindable fields; never bind the request body straight onto the model."
+	default:
+		cwe, title = "CWE-639", "Broken Object Level Authorization (BOLA)"
+		desc = v.Reason + " (victim baseline HTTP " + strconv.Itoa(a.Status) + ", attacker HTTP " + strconv.Itoa(b.Status) +
+			"). Authorization must be enforced server-side per object/function, not inferred from the caller."
 	}
 	id := "apiauthz-" + string(v.Class)
 	if idgen != nil {
@@ -197,9 +252,8 @@ func finding(t AuthzTest, v Verdict, baseline, attacker Response, idgen func() s
 		ID: id, RuleID: "apiauthz::" + string(v.Class), Tool: "apiauthz",
 		Severity: types.SeverityHigh, CWE: []string{cwe},
 		Endpoint: t.Op.Method + " " + t.Op.URL, Title: title,
-		Description: v.Reason + " (victim baseline HTTP " + strconv.Itoa(baseline.Status) +
-			", attacker HTTP " + strconv.Itoa(attacker.Status) + "). Authorization must be enforced server-side per object/function, not inferred from the caller.",
-		// A confirmed differential bypass is a live proof, not a pattern match.
+		Description: desc,
+		// A confirmed bypass is a live proof, not a pattern match.
 		VerificationStatus: types.VerificationVerified,
 		MITRETechniques:    []string{"T1190"},
 	}
