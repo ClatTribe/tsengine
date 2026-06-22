@@ -12,13 +12,12 @@ const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Gov
 type Posture = { total: number; met: number; gap: number } | null;
 
 export default async function CompliancePage() {
-  const entries = await Promise.all(
-    FRAMEWORKS.map(async (f) => {
-      const cs = await api.posture(f);
-      const posture: Posture = cs.length === 0 ? null : { total: cs.length, met: cs.length - cs.filter((c) => c.state === "gap").length, gap: cs.filter((c) => c.state === "gap").length };
-      return { f, posture };
-    }),
-  );
+  // One batched call for every framework's posture, then merged against the full FRAMEWORKS list
+  // so untracked frameworks still render (as "monitored, no gaps yet") — replaces fanning out 14
+  // per-framework requests.
+  const summary = await api.postureSummary();
+  const byFramework = new Map(summary.frameworks.map((p) => [p.framework, { total: p.total, met: p.met, gap: p.gap } as Posture]));
+  const entries = FRAMEWORKS.map((f) => ({ f, posture: byFramework.get(f) ?? null }));
 
   const withGaps = entries.filter((e) => (e.posture?.gap ?? 0) > 0).length;
   const tracked = entries.filter((e) => e.posture !== null).length;
