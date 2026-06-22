@@ -285,3 +285,24 @@ export interface ComplianceReport {
   Signer?: string;
   SHA256?: string;
 }
+
+export interface SaaSApp {
+  name: string;
+  count: number;
+  scopes: string[];
+  admin_consent: boolean;
+  verified: boolean;
+  sensitive: boolean;
+  shadow_it: boolean;
+}
+
+export interface SaaSAppsResponse {
+  apps: SaaSApp[];
+  summary: {
+    total_apps: number;
+    sensitive_apps: number;
+    unverified_apps: number;
+    shadow_it_apps: number;
+    multi_user_apps: number;
+  };
+}
