@@ -271,7 +271,13 @@ func (d Deps) compliance(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing tenant (?tenant=<id>)", http.StatusBadRequest)
 		return
 	}
-	rep, err := d.Report.Report(r.Context(), tenantID, r.PathValue("framework"))
+	framework := r.PathValue("framework")
+	if !grc.IsFramework(framework) {
+		// An unknown framework must 404, never render a fabricated empty report (grounding §10).
+		http.Error(w, "unknown compliance framework: "+framework, http.StatusNotFound)
+		return
+	}
+	rep, err := d.Report.Report(r.Context(), tenantID, framework)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

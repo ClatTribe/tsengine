@@ -132,7 +132,14 @@ func (d Deps) handleComplianceReport(w http.ResponseWriter, r *http.Request, ten
 		writeJSON(w, http.StatusNotImplemented, errBody("grc not configured"))
 		return
 	}
-	rep, err := d.GRC.Report(r.Context(), tenantID, r.PathValue("framework"))
+	framework := r.PathValue("framework")
+	if !grc.IsFramework(framework) {
+		// An unknown framework must 404, never render a fabricated empty report titled with the
+		// bogus key (grounding §10).
+		writeJSON(w, http.StatusNotFound, errBody("unknown compliance framework: "+framework))
+		return
+	}
+	rep, err := d.GRC.Report(r.Context(), tenantID, framework)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return

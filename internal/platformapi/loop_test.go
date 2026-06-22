@@ -94,3 +94,19 @@ func TestPostureNotConfigured(t *testing.T) {
 		t.Errorf("missing GRC should be 501, got %d", rec.Code)
 	}
 }
+
+func TestComplianceReport_UnknownFrameworkIs404(t *testing.T) {
+	h, _ := setupLoop(t)
+	// A valid framework reports (200).
+	if rec := do(h, "GET", "/v1/compliance/soc2/report?format=json", "t1", ""); rec.Code != 200 {
+		t.Fatalf("a tracked framework should report, got %d", rec.Code)
+	}
+	// An unknown framework must 404 — never a fabricated empty report titled with the bogus key.
+	rec := do(h, "GET", "/v1/compliance/bogus/report?format=json", "t1", "")
+	if rec.Code != 404 {
+		t.Errorf("an unknown framework must 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "\"Framework\":\"bogus\"") {
+		t.Error("must not render a report body for an unknown framework (grounding §10)")
+	}
+}

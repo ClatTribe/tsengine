@@ -50,6 +50,19 @@ var Frameworks = []string{
 	FrameworkNIST800171, FrameworkCCPA, FrameworkSOX, FrameworkFedRAMP, FrameworkDPDP,
 }
 
+// IsFramework reports whether key is one of the tracked frameworks. Callers (the report API)
+// validate against this so an unknown framework is a clean 404, never a fabricated empty report
+// titled with the bogus key (grounding §10 — we don't render a "compliance report" for a
+// framework that doesn't exist).
+func IsFramework(key string) bool {
+	for _, f := range Frameworks {
+		if f == key {
+			return true
+		}
+	}
+	return false
+}
+
 // GRC maintains the control-state registry over the store.
 type GRC struct {
 	Store store.Store
