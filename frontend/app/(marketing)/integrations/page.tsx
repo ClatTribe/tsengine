@@ -31,7 +31,7 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
     items: [
       { icon: Cloud, name: "AWS", role: "CSPM, IAM, exposed resources", status: "live" },
       { icon: Cloud, name: "Google Cloud", role: "CSPM & IAM posture — read-only Security Reviewer grant", status: "live" },
-      { icon: Cloud, name: "Azure", role: "CSPM & IAM posture", status: "soon" },
+      { icon: Cloud, name: "Azure", role: "CSPM & IAM posture — read-only Reader grant", status: "live" },
     ],
   },
   {

@@ -69,6 +69,7 @@ const (
 	ConnAzureDevOps = "azuredevops"
 	ConnAWS         = "aws"
 	ConnGCP         = "gcp"
+	ConnAzure       = "azure"
 	ConnGWorkspace  = "gworkspace"
 	ConnM365        = "m365"
 	ConnOkta        = "okta"

@@ -107,6 +107,7 @@ func main() {
 		connector.NewOkta(os.Getenv("OKTA_ORG_URL"), os.Getenv("OKTA_CLIENT_ID"), os.Getenv("OKTA_CLIENT_SECRET")),
 		connector.NewAWS(os.Getenv("AWS_CFN_TEMPLATE_URL"), os.Getenv("AWS_TRUST_ACCOUNT_ID"), os.Getenv("AWS_REGION")),
 		connector.NewGCP(os.Getenv("GCP_TRUST_SERVICE_ACCOUNT")),
+		connector.NewAzure(os.Getenv("AZURE_TRUST_APP_ID")),
 	)
 	vault, encrypted, verr := secret.FromEnv()
 	if verr != nil {
