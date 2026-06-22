@@ -91,6 +91,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                       // set provider/model + seal the API key
 	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                  // repository PR-review-bot policy (ADR 0010)
 	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                  // set enable + merge-gating block severity
+	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))          // per-tenant Slack incident webhook (has_slack_webhook)
+	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))          // set + seal the tenant's Slack incident webhook (Bucket B)
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                            // global kill-switch: halt/resume all agent action
 	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                      // agent capability manifest (WRD-1): what the automation can touch
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                              // owner's shareable Trust Center token

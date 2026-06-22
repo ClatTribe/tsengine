@@ -648,6 +648,14 @@ core; the live *execution* stays each core's gated half:
   `Writer`. Non-secret identifiers (like `Account`) → stored plain, not sealed. Still HITL-gated; a wrong
   role surfaces honestly at Apply. This is the per-TENANT half; whether the deployment can do live cloud
   writes at all stays the operator's `*_REMEDIATION_*` env (Bucket C).
+- **notifications** — `GET/PUT /v1/settings/notifications` + the Settings "Notifications" Slack control:
+  stores the tenant's OWN Slack Incoming Webhook (sealed via `d.Vault` — a webhook URL is a bearer
+  capability, so unlike the cloud role it MUST seal; GET reports only `has_slack_webhook`). The incident
+  alerter is a `notify.TenantRouter` that routes each new incident to its OWN tenant's webhook (resolver
+  opens the sealed ref) AND the operator-global `MultiAlerter` fallback — so incident heads-ups are
+  multi-tenant, not one shared channel. Approval *buttons* stay the operator Slack app (those need its
+  interactive endpoint). Operator-env channels (`TSENGINE_SLACK_WEBHOOK`/Teams/Discord/PagerDuty/webhook)
+  remain the Bucket-C fallback.
 - **CREDENTIAL SEALING (§18.2 inv. 6)** — the login-flow + authz-test configs carry secrets (passwords /
   tokens / auth headers), so the setters **seal the config blob via `d.Vault`** before it touches the store
   (`Asset.Meta["login_flow"]`/`["authz_test"]` hold a sealed ref, never plaintext); no vault → the setter

@@ -32,7 +32,15 @@ type Tenant struct {
 	// PRBot is the per-tenant policy for the repository PR-review bot (ADR 0010). nil = the
 	// default (disabled). The live GitHub post is separately gated on the GitHub App PR scope.
 	PRBot *PRBotPolicy `json:"pr_bot,omitempty"`
+	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
+	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
+	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
+	// and never returned to the client — Redacted() strips it; HasSlackWebhook() reports presence.
+	SlackWebhookRef string `json:"slack_webhook_ref,omitempty"`
 }
+
+// HasSlackWebhook reports whether the tenant has configured its own Slack incident webhook.
+func (t Tenant) HasSlackWebhook() bool { return t.SlackWebhookRef != "" }
 
 // PRBotPolicy is the per-tenant repository PR-review-bot policy: whether to post inline review
 // comments + a merge-gating check-run on a pull request, and the severity at/above which the
@@ -59,7 +67,7 @@ func (c *LLMConfig) HasKey() bool { return c != nil && c.KeyRef != "" }
 // Redacted returns a copy of the tenant safe to return to a client: the LLM block (which
 // carries the sealed key ref) is dropped. LLM provider/model are served only by the dedicated
 // GET /v1/settings/llm endpoint.
-func (t Tenant) Redacted() Tenant { t.LLM = nil; return t }
+func (t Tenant) Redacted() Tenant { t.LLM = nil; t.SlackWebhookRef = ""; return t }
 
 // Connection kinds — the external systems the platform can link via OAuth.
 const (

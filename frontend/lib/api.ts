@@ -186,6 +186,15 @@ export const api = {
       body: JSON.stringify({ enabled, block_severity: blockSeverity }),
     }),
 
+  // Per-tenant Slack incident webhook (Bucket B). GET reports only presence; PUT seals the URL
+  // server-side and never returns it. An empty string clears it (revert to the operator fallback).
+  notifySettings: () => safe<{ has_slack_webhook: boolean }>("/v1/settings/notifications", { has_slack_webhook: false }),
+  setNotifySettings: (slackWebhook: string) =>
+    call<{ has_slack_webhook: boolean }>("/v1/settings/notifications", {
+      method: "PUT",
+      body: JSON.stringify({ slack_webhook: slackWebhook }),
+    }),
+
   // Create + authorize a pentest engagement (the API enforces the active-mode
   // authorization gate; an unauthorized active engagement / empty scope → 400).
   createPentest: (body: {

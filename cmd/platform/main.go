@@ -197,10 +197,25 @@ func main() {
 		alerters = append(alerters, notify.NewWebhook(url, os.Getenv("TSENGINE_WEBHOOK_SIGNING_SECRET")))
 		log.Print("[platform] generic outbound webhook enabled (signed incident events)")
 	}
-	var incidentAlerter detect.Alerter
-	if len(alerters) > 0 {
-		incidentAlerter = alerters
-	}
+	// Per-tenant Slack routing (Bucket B): each tenant's new-incident heads-up goes to its OWN
+	// configured Slack webhook (sealed, set via Settings → Notifications), with the operator
+	// MultiAlerter as the fallback. The resolver opens the sealed ref per incident; a miss falls
+	// through to the operator channels. So incident notifications are multi-tenant, not one shared
+	// channel. (Approval buttons stay the operator Slack app — those need its interactive endpoint.)
+	incidentAlerter := detect.Alerter(notify.TenantRouter{
+		Resolve: func(ctx context.Context, tenantID string) (string, bool) {
+			t, gerr := st.GetTenant(ctx, tenantID)
+			if gerr != nil || !t.HasSlackWebhook() {
+				return "", false
+			}
+			url, oerr := vault.Open(t.SlackWebhookRef)
+			if oerr != nil || url == "" {
+				return "", false
+			}
+			return url, true
+		},
+		Fallback: alerters, // operator-global channels (may be empty → fallback is a no-op)
+	})
 	if os.Getenv("TSENGINE_WEBHOOK_SECRET") == "" {
 		log.Print("[platform] WARNING: inbound webhooks are NOT verified — set TSENGINE_WEBHOOK_SECRET to reject spoofed events")
 	}

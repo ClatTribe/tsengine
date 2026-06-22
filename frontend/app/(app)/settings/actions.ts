@@ -20,6 +20,14 @@ export async function setQuarantine(id: string, quarantined: boolean): Promise<{
   return { status: c.status };
 }
 
+// Set (or clear) the tenant's own Slack incident webhook (Bucket B). The URL is a bearer
+// capability, so it is sealed server-side and never returned; we get back only presence.
+export async function setSlackWebhook(slackWebhook: string): Promise<{ has_slack_webhook: boolean }> {
+  const r = await api.setNotifySettings(slackWebhook);
+  revalidatePath("/settings");
+  return { has_slack_webhook: r.has_slack_webhook };
+}
+
 // Set a cloud connection's per-tenant remediation write role (Bucket B). The role/SA is the
 // customer's own — used at HITL-approved remediation time. Returns the stored config.
 export async function setCloudRemediation(
