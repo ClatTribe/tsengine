@@ -11,7 +11,10 @@
 // steps, capturing the session) wires into the sandbox seed_auth path.
 package webauth
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // AuthType is how a session is obtained.
 type AuthType string
@@ -43,6 +46,34 @@ type LoginFlow struct {
 	SuccessMarker string `json:"success_marker,omitempty"`
 	FailureMarker string `json:"failure_marker,omitempty"`
 }
+
+// Valid checks a configured flow is runnable: a known type with the minimum it needs (steps with
+// URLs for form/recorded, a token for token). Returns a descriptive error for the config API.
+func (f LoginFlow) Valid() error {
+	switch f.Type {
+	case AuthToken:
+		if strings.TrimSpace(f.Token) == "" {
+			return errMissing("token flow requires a non-empty token")
+		}
+	case AuthForm, AuthRecorded:
+		if len(f.Steps) == 0 {
+			return errMissing("form/recorded flow requires at least one step")
+		}
+		for i, s := range f.Steps {
+			if strings.TrimSpace(s.URL) == "" {
+				return errMissing("step " + strconv.Itoa(i) + " has no url")
+			}
+		}
+	default:
+		return errMissing("type must be form, token, or recorded")
+	}
+	return nil
+}
+
+type validationError string
+
+func (e validationError) Error() string { return string(e) }
+func errMissing(s string) error         { return validationError("login flow: " + s) }
 
 // Plan returns the ordered requests to obtain the session — what the live replayer executes.
 // Token flows have no steps (the header is applied directly); form/recorded return their steps.
