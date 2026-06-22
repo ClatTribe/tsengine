@@ -126,6 +126,9 @@ func main() {
 	} else if inst := os.Getenv("SERVICENOW_INSTANCE_URL"); inst != "" {
 		deliverer.Ticket = connector.NewServiceNow(inst, os.Getenv("SERVICENOW_USER"), os.Getenv("SERVICENOW_PASSWORD"))
 		log.Print("[platform] ServiceNow ticket delivery enabled")
+	} else if key := os.Getenv("LINEAR_API_KEY"); key != "" {
+		deliverer.Ticket = connector.NewLinear(key, os.Getenv("LINEAR_TEAM_ID"))
+		log.Print("[platform] Linear ticket delivery enabled")
 	}
 	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
 	// new-incident alerts fan out to every configured channel (Slack heads-up +
