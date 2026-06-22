@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import {
-  Spline, ArrowRight, Layers, GitMerge, EyeOff, ShieldCheck, Crown, Boxes, Workflow,
+  Spline, ArrowRight, Layers, GitMerge, EyeOff, ShieldCheck, Crown, Boxes, Workflow, Radar,
 } from "lucide-react";
 
 export const metadata = pageMeta({
   title: "One platform, every surface — cross-detection that connects the dots | TensorShield",
   description:
-    "Most tools hand you a pile of findings per scanner. TensorShield unifies them: the same issue from many scanners becomes one, weaknesses chain across surfaces into attack paths, and you triage real risk — not duplicate noise.",
+    "Most tools hand you a pile of findings per scanner. TensorShield unifies them: the same issue from many scanners becomes one, weaknesses chain across surfaces into attack paths, runtime attacks observed in production flag what's under active attack, and you triage real risk — not duplicate noise.",
   path: "/cross-detection",
 });
 
@@ -24,6 +24,10 @@ const PILLARS = [
   {
     icon: EyeOff, t: "Triage, not noise",
     d: "Multi-tool-confirmed issues rise to the top; the rest is de-duplicated away. Ignore a false positive or accept a risk with a reason — it's recorded, reversible, and off your queue.",
+  },
+  {
+    icon: Radar, t: "What's under attack right now",
+    d: "When an in-app firewall / RASP sensor observes an attack hit one of your endpoints in production, TensorShield matches it to the finding behind it and flags the issue under active attack — observed-in-the-wild is the strongest exploitability signal, so what's actually being hit jumps the queue.",
   },
 ];
 
@@ -71,7 +75,7 @@ export default function CrossDetection() {
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Cross-detection</span>
           <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">Findings are data. Connections are insight.</h2>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {PILLARS.map(({ icon: Icon, t, d }) => (
             <div key={t} className="card p-6">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent">
