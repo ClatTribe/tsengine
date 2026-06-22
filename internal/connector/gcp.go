@@ -29,6 +29,19 @@ import (
 type GCP struct {
 	TrustServiceAccount string // tsengine's SA email the customer grants Security Reviewer to
 	ConsoleBase         string // default https://console.cloud.google.com
+	// Writer is the live, reversible GCP write path. Nil → no live remediation is configured, so
+	// Apply returns an honest "not configured" error (never a false "done"). The real impl
+	// (gcpremediate.GCSWriter) impersonates a write SA + calls the storage SDK; injectable so the
+	// write path is unit-tested against a fake without live creds (the AWS/Okta pattern).
+	Writer GCPWriter
+}
+
+// GCPWriter performs the reversible GCP mutations tsengine remediates to. Today only GCS Public
+// Access Prevention (the fix for a publicly-exposed bucket).
+type GCPWriter interface {
+	// EnforceBucketPublicAccessPrevention sets the bucket's Public Access Prevention to "enforced"
+	// (the GCS equivalent of S3 Block Public Access). project scopes the credentials/impersonation.
+	EnforceBucketPublicAccessPrevention(ctx context.Context, project, bucket string) error
 }
 
 // NewGCP builds the connector.
@@ -87,14 +100,40 @@ func (g *GCP) Watch(context.Context, platform.Connection, []byte) ([]Trigger, er
 	return nil, nil
 }
 
-// Apply: GCP remediation has no live write path yet (honest stub, pending write creds) — an action
-// is never falsely reported "done".
-func (g *GCP) Apply(_ context.Context, _ platform.Connection, _ string, act platform.Action) error {
+// Apply executes an approved (HITL-gated) GCP remediation, routing on the action's machine-readable
+// remediation_type. Reached only after the desk approves (§18.2 inv. 3); the connector never writes
+// on its own. An unknown type or an unconfigured Writer surfaces as an error — the action stays
+// un-applied, never falsely "done".
+func (g *GCP) Apply(ctx context.Context, c platform.Connection, _ string, act platform.Action) error {
 	rt, _ := act.Payload["remediation_type"].(string)
-	if rt == "" {
+	switch rt {
+	case "gcs_public_access_prevention":
+		bucket := gcsBucketFromTarget(strFrom(act.Payload, "target"))
+		if bucket == "" {
+			return fmt.Errorf("gcp apply: %s action %s has no target bucket", rt, act.ID)
+		}
+		if g.Writer == nil {
+			return fmt.Errorf("gcp apply: no live GCP write path configured (needs impersonation write creds); "+
+				"action %s (enforce public-access-prevention on %s) left un-applied", act.ID, bucket)
+		}
+		return g.Writer.EnforceBucketPublicAccessPrevention(ctx, c.Account, bucket)
+	case "":
 		return fmt.Errorf("gcp apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
+	default:
+		return fmt.Errorf("gcp apply: remediation_type %q has no live GCP write path yet (target %s)", rt, strFrom(act.Payload, "target"))
 	}
-	return fmt.Errorf("gcp apply: remediation_type %q has no live GCP write path yet (needs impersonation write creds)", rt)
+}
+
+// gcsBucketFromTarget extracts the GCS bucket name from a finding target — a "gs://bucket/obj" URL,
+// a bare "bucket", or a "bucket/path". Object keys / trailing path are dropped (PAP is bucket-scoped).
+func gcsBucketFromTarget(t string) string {
+	t = strings.TrimSpace(t)
+	t = strings.TrimPrefix(t, "gs://")
+	t = strings.TrimPrefix(t, "https://storage.googleapis.com/")
+	if i := strings.IndexByte(t, '/'); i >= 0 {
+		t = t[:i]
+	}
+	return t
 }
 
 // validateGCPProjectID checks the GCP project-ID rules: 6–30 chars, lowercase letters/digits/

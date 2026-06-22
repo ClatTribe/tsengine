@@ -618,9 +618,13 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
   one cloud SDK, isolated in its own package so the core `connector` stays SDK-free) assumes a scoped
   cross-account WRITE role via STS and calls `PutPublicAccessBlock` (all four flags). Wired in `cmd/platform`
   only when `AWS_REMEDIATION_ROLE_ARN` (or `AWS_REMEDIATION_ENABLED=1`) is set — else `Apply` stays the honest
-  stub; reached only after the HITL gate (§18.2 inv. 3). GCP/Azure `Apply` remain honest stubs (no live
-  writer yet). **api/web** — apiauthz/webauth live execution is active testing → behind the explicit-consent
-  + sandbox gate.
+  stub; reached only after the HITL gate (§18.2 inv. 3). **GCP** has the parallel live path:
+  `internal/connector/gcpremediate.GCSWriter` (cloud.google.com/go storage SDK, its own package) impersonates a
+  scoped write SA and enforces GCS **Public Access Prevention** on a bucket; wired when
+  `GCP_REMEDIATION_IMPERSONATE_SA` (or `GCP_REMEDIATION_ENABLED=1`) is set. The proposer
+  (`remediate.liveCloudMutation`) emits `s3_block_public_access` for AWS + `gcs_public_access_prevention` for GCP
+  on a public-bucket finding. **Azure** `Apply` remains an honest stub (no live writer yet). **api/web** —
+  apiauthz/webauth live execution is active testing → behind the explicit-consent + sandbox gate.
 
 **Config surfaces (the per-asset setup half, end-to-end UX + API)** — each stores its config + drives the
 core; the live *execution* stays each core's gated half:
