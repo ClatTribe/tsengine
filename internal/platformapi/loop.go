@@ -125,6 +125,48 @@ func (d Deps) handlePosture(w http.ResponseWriter, r *http.Request, tenantID str
 	respond(w, cs, err)
 }
 
+// frameworkPosture is one framework's compliance summary (met/gap/total) — the shape the
+// dashboard / compliance / reports pages actually use (they discard the full control-state list
+// and just count it).
+type frameworkPosture struct {
+	Framework string `json:"framework"`
+	Total     int    `json:"total"`
+	Met       int    `json:"met"`
+	Gap       int    `json:"gap"`
+}
+
+// handlePostureSummary (GET /v1/posture) returns every framework's posture summary the tenant has
+// control state for, in ONE call. The dashboard, compliance, and reports pages each used to fan out
+// 14 per-framework GET /v1/posture/{framework} requests — pulling the full control-state list only
+// to count met-vs-gap. This collapses that to a single request returning just the counts (fewer
+// round-trips AND less payload). `frameworks` is always a non-nil array so the UI can .map it
+// safely (the nil-slice → JSON-null crash guard, TestGETEndpoints_NoNullArrays).
+func (d Deps) handlePostureSummary(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.GRC == nil {
+		writeJSON(w, http.StatusNotImplemented, errBody("grc not configured"))
+		return
+	}
+	out := []frameworkPosture{}
+	for _, f := range grc.Frameworks {
+		cs, err := d.GRC.Posture(r.Context(), tenantID, f)
+		if err != nil {
+			respond(w, nil, err)
+			return
+		}
+		if len(cs) == 0 {
+			continue // a framework with no control state is omitted (consumers want only tracked ones)
+		}
+		gap := 0
+		for _, c := range cs {
+			if c.State == platform.ControlGap {
+				gap++
+			}
+		}
+		out = append(out, frameworkPosture{Framework: f, Total: len(cs), Met: len(cs) - gap, Gap: gap})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"frameworks": out})
+}
+
 // handleComplianceReport renders the auditor-facing compliance report for a framework —
 // Markdown by default (the attachable deliverable), JSON with ?format=json.
 func (d Deps) handleComplianceReport(w http.ResponseWriter, r *http.Request, tenantID string) {
