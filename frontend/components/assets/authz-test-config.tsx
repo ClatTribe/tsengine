@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ShieldAlert, X, Check, Loader2, Plus, Trash2 } from "lucide-react";
+import { ShieldAlert, X, Check, Loader2, Plus, Trash2, Pencil } from "lucide-react";
 import { setAuthzTest } from "@/app/(app)/assets/actions";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,9 @@ const emptyOp: Op = { method: "GET", url: "", class: "bola", marker: "" };
 // victim that owns an object, an attacker that's a different lower-privilege principal) + the
 // object-bearing operations to test. The engine replays the victim's request as the attacker and
 // flags only a PROVEN bypass (verified, no false positives). Auth headers are sealed server-side.
-export function AuthzTestConfig({ assetId }: { assetId: string }) {
+// When `configured`, the trigger is a badge that reopens the form to update the test (saving
+// overwrites the stored config).
+export function AuthzTestConfig({ assetId, configured = false }: { assetId: string; configured?: boolean }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null);
@@ -34,12 +36,22 @@ export function AuthzTestConfig({ assetId }: { assetId: string }) {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted transition hover:border-accent/40 hover:text-ink"
-      >
-        <ShieldAlert className="h-3 w-3" /> Authz test
-      </button>
+      {configured ? (
+        <button
+          onClick={() => setOpen(true)}
+          title="Reconfigure the authorization test"
+          className="group inline-flex items-center gap-1 rounded-md border border-pulse/30 bg-pulse/5 px-1.5 py-0.5 text-[11px] text-pulse transition hover:border-pulse/60"
+        >
+          <ShieldAlert className="h-3 w-3" /> Authz test <Pencil className="h-2.5 w-2.5 opacity-50 transition group-hover:opacity-100" />
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted transition hover:border-accent/40 hover:text-ink"
+        >
+          <ShieldAlert className="h-3 w-3" /> Authz test
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setOpen(false)}>
