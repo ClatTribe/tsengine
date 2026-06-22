@@ -193,6 +193,18 @@ export const api = {
       "/v1/saas/github_org/sync", { method: "POST" },
     ),
 
+  // Per-tenant Jira ticketing destination (Bucket B). GET reports base/email/project + has_token
+  // (never the token); PUT seals the token server-side. An empty base_url clears it.
+  jiraSettings: () =>
+    safe<{ base_url: string; email: string; project: string; has_token: boolean }>(
+      "/v1/settings/jira", { base_url: "", email: "", project: "", has_token: false },
+    ),
+  setJiraSettings: (cfg: { base_url: string; email: string; project: string; api_token: string }) =>
+    call<{ base_url: string; email: string; project: string; has_token: boolean }>("/v1/settings/jira", {
+      method: "PUT",
+      body: JSON.stringify(cfg),
+    }),
+
   // Per-tenant Slack incident webhook (Bucket B). GET reports only presence; PUT seals the URL
   // server-side and never returns it. An empty string clears it (revert to the operator fallback).
   notifySettings: () => safe<{ has_slack_webhook: boolean }>("/v1/settings/notifications", { has_slack_webhook: false }),

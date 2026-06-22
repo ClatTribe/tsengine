@@ -169,6 +169,23 @@ func main() {
 		deliverer.Ticket = connector.NewLinear(key, os.Getenv("LINEAR_TEAM_ID"))
 		log.Print("[platform] Linear ticket delivery enabled")
 	}
+	// Per-tenant Jira routing (Bucket B): a file_ticket lands in the tenant's OWN Jira (sealed
+	// config set via Settings → Jira), falling back to the operator tracker above. The resolver
+	// opens the sealed token per ticket; a miss falls through. So ticketing is multi-tenant.
+	deliverer.Ticket = remediate.TenantFiler{
+		Resolve: func(ctx context.Context, tenantID string) (base, email, token, project string, ok bool) {
+			t, gerr := st.GetTenant(ctx, tenantID)
+			if gerr != nil || !t.Jira.HasToken() {
+				return "", "", "", "", false
+			}
+			tok, oerr := vault.Open(t.Jira.TokenRef)
+			if oerr != nil || tok == "" {
+				return "", "", "", "", false
+			}
+			return t.Jira.BaseURL, t.Jira.Email, tok, t.Jira.Project, true
+		},
+		Fallback: deliverer.Ticket, // operator-global tracker (may be nil → no-destination no-op)
+	}
 	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
 	// new-incident alerts fan out to every configured channel (Slack heads-up +
 	// PagerDuty on-call page); best-effort, so one failing never blocks the others.

@@ -29,6 +29,16 @@ export async function syncGitHubPosture(): Promise<{ findings: number }> {
   return { findings: r.findings_detected };
 }
 
+// Set (or clear) the tenant's own Jira ticketing destination (Bucket B). The API token is sealed
+// server-side and never returned; we get back base/email/project + whether a token is set.
+export async function setJira(
+  cfg: { base_url: string; email: string; project: string; api_token: string },
+): Promise<{ base_url: string; email: string; project: string; has_token: boolean }> {
+  const r = await api.setJiraSettings(cfg);
+  revalidatePath("/settings");
+  return r;
+}
+
 // Set (or clear) the tenant's own Slack incident webhook (Bucket B). The URL is a bearer
 // capability, so it is sealed server-side and never returned; we get back only presence.
 export async function setSlackWebhook(slackWebhook: string): Promise<{ has_slack_webhook: boolean }> {

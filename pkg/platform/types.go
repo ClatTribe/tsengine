@@ -37,10 +37,28 @@ type Tenant struct {
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
 	// and never returned to the client — Redacted() strips it; HasSlackWebhook() reports presence.
 	SlackWebhookRef string `json:"slack_webhook_ref,omitempty"`
+	// Jira is the tenant's OWN Jira instance where file_ticket remediations land (per-tenant; the
+	// operator-env Jira is the fallback). BaseURL/Email/Project are plain identifiers; the API token
+	// is sealed (TokenRef). Redacted() drops the whole block.
+	Jira *JiraConfig `json:"jira,omitempty"`
 }
 
 // HasSlackWebhook reports whether the tenant has configured its own Slack incident webhook.
 func (t Tenant) HasSlackWebhook() bool { return t.SlackWebhookRef != "" }
+
+// JiraConfig is a tenant's own Jira ticketing destination. BaseURL/Email/Project are plain;
+// TokenRef is the secret.Vault-sealed ref for the API token (never plaintext, never returned).
+type JiraConfig struct {
+	BaseURL  string `json:"base_url"`
+	Email    string `json:"email"`
+	Project  string `json:"project"`
+	TokenRef string `json:"token_ref,omitempty"`
+}
+
+// HasToken reports whether a usable Jira destination is configured (without exposing the token).
+func (j *JiraConfig) HasToken() bool {
+	return j != nil && j.BaseURL != "" && j.Email != "" && j.Project != "" && j.TokenRef != ""
+}
 
 // PRBotPolicy is the per-tenant repository PR-review-bot policy: whether to post inline review
 // comments + a merge-gating check-run on a pull request, and the severity at/above which the
@@ -67,7 +85,7 @@ func (c *LLMConfig) HasKey() bool { return c != nil && c.KeyRef != "" }
 // Redacted returns a copy of the tenant safe to return to a client: the LLM block (which
 // carries the sealed key ref) is dropped. LLM provider/model are served only by the dedicated
 // GET /v1/settings/llm endpoint.
-func (t Tenant) Redacted() Tenant { t.LLM = nil; t.SlackWebhookRef = ""; return t }
+func (t Tenant) Redacted() Tenant { t.LLM = nil; t.SlackWebhookRef = ""; t.Jira = nil; return t }
 
 // Connection kinds — the external systems the platform can link via OAuth.
 const (
