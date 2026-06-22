@@ -128,6 +128,10 @@ dev-reseed: ## refresh demo data to current code, then (re)start the stack — d
 demo-secure: ## run the demo with the ENGINE ON + hardened Docker sandboxes (one asset of every type)
 	./scripts/demo-secure.sh
 
+.PHONY: demo-scan-asset
+demo-scan-asset: ## prove the secure-Docker scan path per asset type (container + repo, no creds)
+	./scripts/demo-scan-asset.sh
+
 .PHONY: dev-down
 dev-down: ## stop the local dev stack (frees :3000 and :8090)
 	@pkill -f 'next dev' 2>/dev/null || true; pkill -f 'next-server' 2>/dev/null || true
