@@ -26,6 +26,10 @@ func liveCloudMutation(f types.Finding, provider string) (rtype, target string) 
 		if isPublicStorageFinding(f) {
 			return "gcs_public_access_prevention", f.Endpoint
 		}
+	case strings.EqualFold(provider, "azure"):
+		if isPublicStorageFinding(f) {
+			return "azure_storage_disable_public_access", f.Endpoint
+		}
 	}
 	return "", ""
 }

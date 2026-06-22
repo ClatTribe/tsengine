@@ -70,6 +70,36 @@ func TestAzure_DiscoverYieldsCloudAccount(t *testing.T) {
 	}
 }
 
+type fakeAzureWriter struct {
+	sub, rg, account string
+}
+
+func (f *fakeAzureWriter) DisableStoragePublicAccess(_ context.Context, sub, rg, account string) error {
+	f.sub, f.rg, f.account = sub, rg, account
+	return nil
+}
+
+func TestAzure_ApplyDisablesStoragePublicAccess(t *testing.T) {
+	w := &fakeAzureWriter{}
+	a := NewAzure("app")
+	a.Writer = w
+	// target as a full ARM resource ID
+	rid := "/subscriptions/" + goodSub + "/resourceGroups/rg-prod/providers/Microsoft.Storage/storageAccounts/acmestg"
+	act := platform.Action{Kind: platform.ActApplyConfig, Payload: map[string]any{
+		"remediation_type": "azure_storage_disable_public_access", "target": rid,
+	}}
+	if err := a.Apply(context.Background(), platform.Connection{Account: goodSub}, "", act); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if w.sub != goodSub || w.rg != "rg-prod" || w.account != "acmestg" {
+		t.Errorf("writer called with sub=%q rg=%q account=%q", w.sub, w.rg, w.account)
+	}
+	// the compact "rg/account" target form also resolves
+	if rg, acct := azureStorageTarget("rg-x/acct-y"); rg != "rg-x" || acct != "acct-y" {
+		t.Errorf("compact target parse wrong: rg=%q acct=%q", rg, acct)
+	}
+}
+
 func TestAzure_WatchNoopAndApplyStub(t *testing.T) {
 	a := NewAzure("app")
 	if trigs, _ := a.Watch(context.Background(), platform.Connection{}, []byte(`{}`)); len(trigs) != 0 {

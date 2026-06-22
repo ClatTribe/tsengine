@@ -62,8 +62,12 @@ func TestLiveCloudMutation_ProviderGating(t *testing.T) {
 	if rt, tgt := liveCloudMutation(f, "gcp"); rt != "gcs_public_access_prevention" || tgt != "arn:aws:s3:::b" {
 		t.Errorf("GCP public-bucket should map to PAP enforce, got rt=%q tgt=%q", rt, tgt)
 	}
-	// Azure has no live write path yet (added in a follow-on).
-	if rt, _ := liveCloudMutation(f, "azure"); rt != "" {
-		t.Errorf("azure should have no live write path yet, got %q", rt)
+	// Azure now has a live write path too (disable storage public access).
+	if rt, _ := liveCloudMutation(f, "azure"); rt != "azure_storage_disable_public_access" {
+		t.Errorf("azure public-storage should map to disable-public-access, got %q", rt)
+	}
+	// an unsupported provider still has none.
+	if rt, _ := liveCloudMutation(f, "oracle"); rt != "" {
+		t.Errorf("an unsupported provider must have no live write path, got %q", rt)
 	}
 }

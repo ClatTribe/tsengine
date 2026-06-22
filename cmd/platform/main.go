@@ -50,6 +50,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
+	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/detect"
@@ -116,6 +117,14 @@ func main() {
 		gcpConn.Writer = gcpremediate.NewGCSWriter(os.Getenv("GCP_REMEDIATION_IMPERSONATE_SA"))
 		log.Print("[platform] GCP live remediation enabled (GCS Public Access Prevention)")
 	}
+	// Azure: read-only onboarding + the live remediation write path (disable storage public access).
+	// The writer uses the platform's service-principal creds (DefaultAzureCredential), scoped to the
+	// subscription on the connection. Wired only when remediation is enabled — else honest stub.
+	azureConn := connector.NewAzure(os.Getenv("AZURE_TRUST_APP_ID"))
+	if os.Getenv("AZURE_REMEDIATION_ENABLED") == "1" {
+		azureConn.Writer = azremediate.NewStorageWriter()
+		log.Print("[platform] Azure live remediation enabled (disable storage public access)")
+	}
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 		connector.NewGitLab(os.Getenv("GITLAB_CLIENT_ID"), os.Getenv("GITLAB_CLIENT_SECRET")),
@@ -126,7 +135,7 @@ func main() {
 		connector.NewOkta(os.Getenv("OKTA_ORG_URL"), os.Getenv("OKTA_CLIENT_ID"), os.Getenv("OKTA_CLIENT_SECRET")),
 		awsConn,
 		gcpConn,
-		connector.NewAzure(os.Getenv("AZURE_TRUST_APP_ID")),
+		azureConn,
 	)
 	vault, encrypted, verr := secret.FromEnv()
 	if verr != nil {

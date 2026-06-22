@@ -30,6 +30,18 @@ import (
 type Azure struct {
 	TrustAppID string // tsengine's Entra ID application (client) id the customer grants Reader to
 	PortalBase string // default https://portal.azure.com
+	// Writer is the live, reversible Azure write path. Nil → no live remediation is configured, so
+	// Apply returns an honest "not configured" error. The real impl (azremediate.StorageWriter)
+	// uses the ARM-storage SDK; injectable so the write path is unit-tested without live creds.
+	Writer AzureWriter
+}
+
+// AzureWriter performs the reversible Azure mutations tsengine remediates to. Today only disabling
+// blob public access on a storage account (the fix for a publicly-exposed account).
+type AzureWriter interface {
+	// DisableStoragePublicAccess sets AllowBlobPublicAccess=false on the storage account (the Azure
+	// equivalent of S3 Block Public Access). The subscription scopes the ARM client.
+	DisableStoragePublicAccess(ctx context.Context, subscriptionID, resourceGroup, account string) error
 }
 
 // NewAzure builds the connector.
@@ -89,14 +101,51 @@ func (a *Azure) Watch(context.Context, platform.Connection, []byte) ([]Trigger, 
 	return nil, nil
 }
 
-// Apply: Azure remediation has no live write path yet (honest stub, pending write creds) — an
-// action is never falsely reported "done".
-func (a *Azure) Apply(_ context.Context, _ platform.Connection, _ string, act platform.Action) error {
+// Apply executes an approved (HITL-gated) Azure remediation, routing on the action's machine-
+// readable remediation_type. Reached only after the desk approves (§18.2 inv. 3). An unknown type
+// or an unconfigured Writer surfaces as an error — the action stays un-applied, never falsely "done".
+func (a *Azure) Apply(ctx context.Context, c platform.Connection, _ string, act platform.Action) error {
 	rt, _ := act.Payload["remediation_type"].(string)
-	if rt == "" {
+	switch rt {
+	case "azure_storage_disable_public_access":
+		rg, account := azureStorageTarget(strFrom(act.Payload, "target"))
+		if rg == "" || account == "" {
+			return fmt.Errorf("azure apply: %s action %s target must resolve a resource group + storage account", rt, act.ID)
+		}
+		if a.Writer == nil {
+			return fmt.Errorf("azure apply: no live Azure write path configured (needs service-principal write creds); "+
+				"action %s (disable public access on %s/%s) left un-applied", act.ID, rg, account)
+		}
+		return a.Writer.DisableStoragePublicAccess(ctx, c.Account, rg, account)
+	case "":
 		return fmt.Errorf("azure apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
+	default:
+		return fmt.Errorf("azure apply: remediation_type %q has no live Azure write path yet (target %s)", rt, strFrom(act.Payload, "target"))
 	}
-	return fmt.Errorf("azure apply: remediation_type %q has no live Azure write path yet (needs service-principal write creds)", rt)
+}
+
+// azureStorageTarget resolves (resourceGroup, account) from a finding target — a full ARM resource
+// ID ("/subscriptions/.../resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{acct}")
+// or the compact "{rg}/{acct}" form. Case-insensitive on the ARM segment names.
+func azureStorageTarget(target string) (resourceGroup, account string) {
+	t := strings.TrimSpace(target)
+	if strings.HasPrefix(t, "/") || strings.Contains(strings.ToLower(t), "/resourcegroups/") {
+		parts := strings.Split(strings.Trim(t, "/"), "/")
+		for i := 0; i+1 < len(parts); i++ {
+			switch strings.ToLower(parts[i]) {
+			case "resourcegroups":
+				resourceGroup = parts[i+1]
+			case "storageaccounts":
+				account = parts[i+1]
+			}
+		}
+		return resourceGroup, account
+	}
+	// compact "rg/account"
+	if i := strings.IndexByte(t, '/'); i > 0 && i < len(t)-1 {
+		return t[:i], t[i+1:]
+	}
+	return "", ""
 }
 
 // validateAzureSubscriptionID checks the subscription-id GUID shape (8-4-4-4-12 hex). Grounded — we
