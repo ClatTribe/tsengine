@@ -64,12 +64,29 @@ func main() {
 		must(st.PutConnection(ctx, c))
 	}
 
-	// --- assets ---
+	// --- assets: one of EVERY scannable asset type, so the demo account exercises each surface.
+	// Targets are benign/own-domain placeholders; for a live local scan (make demo-secure) the
+	// operator points the web/api/repository targets at a local sibling container reachable via the
+	// loopback rewrite (host.docker.internal). container_image uses a real public image so trivy/
+	// grype produce findings with no credentials.
 	assets := []platform.Asset{
-		{ID: "ast-api", TenantID: tid, ConnectionID: "conn-gh", Type: "repository", Target: "github.com/northwind-labs/payments-api", DiscoveredAt: ago(45 * 24 * time.Hour)},
-		{ID: "ast-web", TenantID: tid, ConnectionID: "conn-gh", Type: "repository", Target: "github.com/northwind-labs/storefront", DiscoveredAt: ago(45 * 24 * time.Hour)},
-		{ID: "ast-ws", TenantID: tid, ConnectionID: "conn-gw", Type: "workspace", Target: "northwind.io", DiscoveredAt: ago(40 * 24 * time.Hour)},
+		// repository — SAST + SCA + secret scanning (gitleaks/semgrep/trivy-fs)
+		{ID: "ast-repo", TenantID: tid, ConnectionID: "conn-gh", Type: "repository", Target: "github.com/northwind-labs/payments-api", DiscoveredAt: ago(45 * 24 * time.Hour)},
+		{ID: "ast-repo2", TenantID: tid, ConnectionID: "conn-gh", Type: "repository", Target: "github.com/northwind-labs/storefront", DiscoveredAt: ago(45 * 24 * time.Hour)},
+		// web_application — DAST (katana → nuclei/dalfox/sqlmap)
+		{ID: "ast-web", TenantID: tid, ConnectionID: "conn-gh", Type: "web_application", Target: "https://app.northwind.io", DiscoveredAt: ago(30 * 24 * time.Hour)},
+		// api — spec-ingest → per-endpoint DAST (openapi_spec_ingest, schemathesis)
+		{ID: "ast-api", TenantID: tid, ConnectionID: "conn-gh", Type: "api", Target: "https://api.northwind.io", Meta: map[string]string{"spec_url": "https://api.northwind.io/openapi.json"}, DiscoveredAt: ago(30 * 24 * time.Hour)},
+		// container_image — image SCA + misconfig (trivy/grype/dockle); a real public image scans with no creds
+		{ID: "ast-container", TenantID: tid, ConnectionID: "conn-gh", Type: "container_image", Target: "alpine:3.18", DiscoveredAt: ago(20 * 24 * time.Hour)},
+		// ip_address — port discovery → per-port nuclei (naabu/nmap/nuclei)
+		{ID: "ast-ip", TenantID: tid, ConnectionID: "conn-aws", Type: "ip_address", Target: "203.0.113.10", DiscoveredAt: ago(20 * 24 * time.Hour)},
+		// domain — subdomain enum + child-asset pivot (subfinder/dnstwist)
+		{ID: "ast-domain", TenantID: tid, ConnectionID: "conn-gw", Type: "domain", Target: "northwind.io", DiscoveredAt: ago(40 * 24 * time.Hour)},
+		// cloud_account — CSPM/IAM posture (prowler); live scan needs read-only cloud creds
 		{ID: "ast-cloud", TenantID: tid, ConnectionID: "conn-aws", Type: "cloud_account", Target: "aws:4417-2290-1180", DiscoveredAt: ago(30 * 24 * time.Hour)},
+		// workspace — identity/email posture (operate; host-side, no sandbox needed)
+		{ID: "ast-ws", TenantID: tid, ConnectionID: "conn-gw", Type: "workspace", Target: "northwind.io", DiscoveredAt: ago(40 * 24 * time.Hour)},
 	}
 	for _, a := range assets {
 		must(st.PutAsset(ctx, a))
