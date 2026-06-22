@@ -1,0 +1,138 @@
+import { AppWindow, ShieldAlert, BadgeCheck, Users, ScanSearch } from "lucide-react";
+import { api } from "@/lib/api";
+import type { SaaSApp } from "@/lib/types";
+import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
+import { PageIntro } from "@/components/ui/page-intro";
+import { cn } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
+
+export default async function SaaSAppsPage() {
+  const { apps, summary } = await api.saasApps();
+  // Risky-first ordering: sensitive, then unverified, then by adoption.
+  const sorted = [...apps].sort((a, b) => {
+    if (a.sensitive !== b.sensitive) return a.sensitive ? -1 : 1;
+    if (a.verified !== b.verified) return a.verified ? 1 : -1;
+    return b.count - a.count;
+  });
+
+  return (
+    <div className="space-y-8">
+      <PageIntro
+        icon={AppWindow}
+        title="SaaS apps"
+        description="Every third-party app your team connected to its identity providers (Google Workspace, Microsoft 365, Okta) — discovered automatically from OAuth grants. Find the unsanctioned, over-permissioned, and unverified apps before they become an incident."
+      />
+
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat icon={AppWindow} label="Discovered apps" value={summary.total_apps} />
+        <Stat icon={ShieldAlert} label="Sensitive access" value={summary.sensitive_apps} tone="critical" />
+        <Stat icon={BadgeCheck} label="Unverified publisher" value={summary.unverified_apps} tone="medium" />
+        <Stat icon={Users} label="Adopted by ≥2 users" value={summary.multi_user_apps} />
+      </section>
+
+      <section>
+        <SectionTitle action={<span className="text-[11px] text-faint">{apps.length} apps</span>}>
+          Discovered SaaS inventory
+        </SectionTitle>
+        {apps.length === 0 ? (
+          <Empty>
+            <div className="flex flex-col items-center gap-2 py-4 text-center">
+              <ScanSearch className="h-5 w-5 text-faint" />
+              No third-party apps discovered yet. Connect an identity provider (Google Workspace,
+              Microsoft 365, or Okta) and we enumerate every OAuth-granted app automatically.
+            </div>
+          </Empty>
+        ) : (
+          <div className="card p-0">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
+                  <th className="py-2.5 pl-5 pr-2 font-medium">App</th>
+                  <th className="px-2 py-2.5 font-medium">Access</th>
+                  <th className="px-2 py-2.5 font-medium">Publisher</th>
+                  <th className="px-2 py-2.5 font-medium text-right">Users</th>
+                  <th className="py-2.5 pr-5 font-medium text-right">Scopes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((a) => (
+                  <AppRow key={a.name} app={a} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-2 text-xs leading-relaxed text-muted">
+          Discovery is grounded in real OAuth grants across your connected IdPs. &ldquo;Sensitive&rdquo;
+          means the app holds an admin/directory or broad data scope. Shadow-IT (employee-connected,
+          un-sanctioned) classification activates once a provider exposes admin-consent state.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof AppWindow;
+  label: string;
+  value: number;
+  tone?: "critical" | "medium";
+}) {
+  return (
+    <div className="card flex flex-col gap-1 p-4">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-faint">
+        <Icon className="h-3.5 w-3.5" /> {label}
+      </div>
+      <div
+        className={cn(
+          "text-2xl font-semibold tabular-nums",
+          tone === "critical" && value > 0 && "text-critical",
+          tone === "medium" && value > 0 && "text-medium",
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function AppRow({ app }: { app: SaaSApp }) {
+  return (
+    <tr className="border-b border-border last:border-0 transition hover:bg-surface-2">
+      <td className="py-2.5 pl-5 pr-2 align-middle">
+        <div className="flex items-center gap-2">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-[11px] font-semibold uppercase text-muted">
+            {app.name.slice(0, 2)}
+          </span>
+          <span className="truncate text-sm font-medium">{app.name}</span>
+        </div>
+      </td>
+      <td className="px-2 py-2.5 align-middle">
+        {app.sensitive ? (
+          <span className="inline-flex items-center gap-1 rounded-md border border-critical/30 bg-critical/10 px-1.5 py-0.5 text-[11px] font-medium text-critical">
+            <ShieldAlert className="h-3 w-3" /> Sensitive
+          </span>
+        ) : (
+          <Tag>Standard</Tag>
+        )}
+      </td>
+      <td className="px-2 py-2.5 align-middle">
+        {app.verified ? (
+          <span className="inline-flex items-center gap-1 text-[11px] text-pulse">
+            <BadgeCheck className="h-3.5 w-3.5" /> Verified
+          </span>
+        ) : (
+          <span className="text-[11px] text-medium">Unverified</span>
+        )}
+      </td>
+      <td className="px-2 py-2.5 align-middle text-right text-sm tabular-nums">{app.count}</td>
+      <td className="py-2.5 pr-5 align-middle text-right text-xs text-muted">{app.scopes.length}</td>
+    </tr>
+  );
+}

@@ -12,6 +12,7 @@ import {
   ScrollText,
   FileText,
   UserCheck,
+  AppWindow,
   Spline,
   Layers,
   Crosshair,
@@ -30,6 +31,7 @@ const NAV = [
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/assets", label: "Assets", icon: Boxes },
+  { href: "/saas-apps", label: "SaaS apps", icon: AppWindow },
   { href: "/activity", label: "Activity", icon: ScrollText },
 ];
 
