@@ -9,7 +9,12 @@
 // half; the scan dispatch routes to our existing trivy/grype container scan (§13 — no new tool).
 package registrywatch
 
-import "sort"
+import (
+	"sort"
+	"strings"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
 
 // Image is one tag in a registry at a point in time. Digest is the immutable content id — the
 // same ref:tag can point at a new digest after a re-push, which is exactly what we must catch.
@@ -22,6 +27,23 @@ type Image struct {
 // Ref is the mutable name (repo:tag); Pinned is the immutable repo@digest the scanner runs on.
 func (i Image) Ref() string    { return i.Repo + ":" + i.Tag }
 func (i Image) Pinned() string { return i.Repo + "@" + i.Digest }
+
+// mutableTags are well-known rolling tags whose digest drifts over time — a clean scan of
+// repo:latest silently goes stale when latest is re-pushed. The conservative, FP-safe set: only
+// unambiguously-rolling names (a semver / date / git-sha tag is treated as immutable, never flagged).
+var mutableTags = map[string]bool{
+	"latest": true, "stable": true, "main": true, "master": true, "dev": true, "develop": true,
+	"edge": true, "nightly": true, "prod": true, "production": true, "canary": true,
+	"release": true, "current": true, "testing": true,
+}
+
+// MutableTag reports whether the image is referenced by a rolling/mutable tag (so its scanned
+// digest can change under you). A bare/empty tag is an implicit :latest. Anything not in the
+// well-known rolling set is treated as immutable (FP-safe — we don't guess about custom tags).
+func (i Image) MutableTag() bool {
+	t := strings.ToLower(strings.TrimSpace(i.Tag))
+	return t == "" || mutableTags[t]
+}
 
 // Result is the reconcile outcome: which images to (re)scan + the seen-state to persist.
 type Result struct {
@@ -59,4 +81,33 @@ func Reconcile(current []Image, seen map[string]string) Result {
 	}
 	sort.Slice(r.ToScan, func(i, j int) bool { return r.ToScan[i].Ref() < r.ToScan[j].Ref() })
 	return r
+}
+
+// MutableTagFindings flags every image deployed by a mutable/rolling tag — a container
+// supply-chain hygiene gap (the scanned digest can change under you, so a past clean scan
+// silently goes stale). Grounded: each finding cites the exact repo:tag and the digest it
+// currently resolves to. FP-safe: an image referenced by an immutable tag (semver/date/sha)
+// yields nothing. Severity is low (advisory best-practice, not an active vuln); the fix is to
+// deploy by digest (Pinned()). Deterministic + sorted.
+func MutableTagFindings(images []Image) []types.Finding {
+	var out []types.Finding
+	for _, img := range images {
+		if img.Repo == "" || !img.MutableTag() {
+			continue
+		}
+		desc := "Image " + img.Ref() + " is deployed by a mutable tag; its digest can change on the next push, so a clean scan can silently go stale. Pin to the digest instead"
+		if img.Digest != "" {
+			desc += " (currently " + img.Pinned() + ")"
+		}
+		desc += "."
+		out = append(out, types.Finding{
+			RuleID: "registrywatch::mutable-tag", Tool: "registrywatch",
+			Severity: types.SeverityLow, CWE: []string{"CWE-494"}, // download of code without integrity check
+			Endpoint: img.Ref(), Title: "Container deployed by a mutable tag: " + img.Ref(),
+			Description:     desc,
+			MITRETechniques: []string{"T1195.001"}, // supply-chain compromise of software dependencies
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Endpoint < out[j].Endpoint })
+	return out
 }

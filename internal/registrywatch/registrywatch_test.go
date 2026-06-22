@@ -67,3 +67,37 @@ func TestReconcile_Idempotent(t *testing.T) {
 		t.Errorf("a steady registry should produce no rescans, got %+v", second)
 	}
 }
+
+func TestMutableTagFindings(t *testing.T) {
+	imgs := []Image{
+		{Repo: "acme/api", Tag: "latest", Digest: "sha256:aaa"}, // mutable
+		{Repo: "acme/web", Tag: "", Digest: "sha256:bbb"},       // implicit :latest → mutable
+		{Repo: "acme/job", Tag: "STABLE", Digest: "sha256:ccc"}, // case-insensitive mutable
+		{Repo: "acme/db", Tag: "1.2.3", Digest: "sha256:ddd"},   // semver → immutable, no finding
+		{Repo: "acme/cache", Tag: "2026-06-22", Digest: ""},     // date → immutable
+		{Repo: "", Tag: "latest"},                               // no repo → skipped
+	}
+	fs := MutableTagFindings(imgs)
+	if len(fs) != 3 {
+		t.Fatalf("expected 3 mutable-tag findings (latest, bare, STABLE), got %d", len(fs))
+	}
+	for _, f := range fs {
+		if f.RuleID != "registrywatch::mutable-tag" || f.Severity != "low" || f.CWE[0] != "CWE-494" {
+			t.Errorf("unexpected finding shape: %+v", f)
+		}
+	}
+	// Sorted by endpoint (deterministic).
+	if fs[0].Endpoint != "acme/api:latest" {
+		t.Errorf("findings should be sorted by endpoint, got first=%s", fs[0].Endpoint)
+	}
+
+	// FP-safety: a registry of only immutable (semver/date/sha) tags yields nothing.
+	clean := []Image{
+		{Repo: "acme/api", Tag: "1.0.0", Digest: "sha256:x"},
+		{Repo: "acme/web", Tag: "v2.3.4-rc1", Digest: "sha256:y"},
+		{Repo: "acme/db", Tag: "20260622", Digest: "sha256:z"},
+	}
+	if fs := MutableTagFindings(clean); len(fs) != 0 {
+		t.Errorf("immutable tags must yield no findings (FP), got %d", len(fs))
+	}
+}
