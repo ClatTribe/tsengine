@@ -34,6 +34,15 @@ type Issue struct {
 	// Both omitempty — zero until an owner tiers the asset and the issue is attributable.
 	DataTier int `json:"data_tier,omitempty"`
 	RiskRank int `json:"risk_rank,omitempty"`
+	// Live-exploitable fusion (the ACSP "distinguish theoretical from active/reachable/exploitable"
+	// lens — set by AnnotateLiveRisk). Live = this issue is genuinely live, not just present:
+	// observed under attack, OR internet-exposed AND on an attack path to a crown jewel, OR
+	// internet-exposed + serious + corroborated. Exposed/InAttackPath are the grounded sub-signals;
+	// LiveReason is the plain-English why. All omitempty — zero until the signals are present.
+	Live         bool   `json:"live,omitempty"`
+	LiveReason   string `json:"live_reason,omitempty"`
+	Exposed      bool   `json:"exposed,omitempty"`
+	InAttackPath bool   `json:"in_attack_path,omitempty"`
 }
 
 var cveRe = regexp.MustCompile(`CVE-\d{4}-\d{4,7}`)
