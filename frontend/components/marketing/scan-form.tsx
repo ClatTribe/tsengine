@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Search, Loader2, ShieldCheck, ShieldAlert, Check, X, ArrowRight, Code, Copy } from "lucide-react";
+import { Search, Loader2, ShieldCheck, ShieldAlert, Check, X, ArrowRight, Code, Copy, Wrench, ChevronDown } from "lucide-react";
 
-type Check = { name: string; ok: boolean; detail: string };
+type FixSnippet = { label: string; lang: string; code: string };
+type Fix = { summary: string; snippets: FixSnippet[] };
+type Check = { name: string; ok: boolean; detail: string; fix?: Fix };
 type Finding = { title: string; severity: string };
 type Questionnaire = { failed: number; total: number; headline: string };
 type Result = { domain: string; score: number; grade: string; questionnaire?: Questionnaire; checks: Check[]; findings: Finding[] };
@@ -109,15 +111,7 @@ export function ScanForm({ initialDomain }: { initialDomain?: string }) {
 
           <div className="card divide-y divide-border p-0">
             {result.checks.map((c) => (
-              <div key={c.name} className="flex items-start gap-3 px-5 py-3">
-                <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full ${c.ok ? "bg-pulse/15 text-pulse" : "bg-critical/10 text-critical"}`}>
-                  {c.ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                </span>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{c.name}</div>
-                  <div className="text-xs text-muted">{c.detail}</div>
-                </div>
-              </div>
+              <CheckRow key={c.name} check={c} />
             ))}
           </div>
 
@@ -136,6 +130,43 @@ export function ScanForm({ initialDomain }: { initialDomain?: string }) {
           </div>
 
           {origin && <EmbedBadge origin={origin} domain={result.domain} grade={result.grade} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// CheckRow renders one check; a failed check with a fix gets a "Fix it" expander showing the exact
+// copy-paste remediation (the free "give the fix" tool).
+function CheckRow({ check: c }: { check: Check }) {
+  const [open, setOpen] = useState(false);
+  const hasFix = !c.ok && !!c.fix && c.fix.snippets.length > 0;
+  return (
+    <div className="px-5 py-3">
+      <div className="flex items-start gap-3">
+        <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full ${c.ok ? "bg-pulse/15 text-pulse" : "bg-critical/10 text-critical"}`}>
+          {c.ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium">{c.name}</div>
+          <div className="text-xs text-muted">{c.detail}</div>
+        </div>
+        {hasFix && (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted transition hover:border-accent/40 hover:text-accent"
+          >
+            <Wrench className="h-3 w-3" /> Fix it
+            <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+        )}
+      </div>
+      {hasFix && open && c.fix && (
+        <div className="mt-3 space-y-2 rounded-lg bg-surface-2/60 p-3 pl-11">
+          <p className="text-xs text-muted">{c.fix.summary}</p>
+          {c.fix.snippets.map((s, i) => (
+            <CopyRow key={i} label={s.label} value={s.code} mono />
+          ))}
         </div>
       )}
     </div>
@@ -174,13 +205,17 @@ function EmbedBadge({ origin, domain, grade }: { origin: string; domain: string;
   );
 }
 
-function CopyRow({ label, value }: { label: string; value: string }) {
+function CopyRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const [copied, setCopied] = useState(false);
   return (
     <div>
       <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-faint">{label}</div>
       <div className="flex items-stretch gap-2">
-        <code className="mono min-w-0 flex-1 truncate rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted">{value}</code>
+        {mono ? (
+          <pre className="mono min-w-0 flex-1 overflow-x-auto whitespace-pre rounded-lg border border-border bg-surface px-3 py-2 text-xs leading-relaxed text-ink">{value}</pre>
+        ) : (
+          <code className="mono min-w-0 flex-1 truncate rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted">{value}</code>
+        )}
         <button
           onClick={() => {
             navigator.clipboard.writeText(value).then(() => {
