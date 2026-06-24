@@ -362,6 +362,31 @@ type Incident struct {
 	OpenedAt   time.Time `json:"opened_at"`
 	ResolvedAt time.Time `json:"resolved_at,omitempty"`
 	LedgerRef  string    `json:"ledger_ref,omitempty"`
+	// AcknowledgedAt/By record that a human took ownership of the incident (the MDR "I'm on it").
+	// An acknowledged incident is never auto-escalated. Zero = unacknowledged.
+	AcknowledgedAt time.Time `json:"acknowledged_at,omitempty"`
+	AcknowledgedBy string    `json:"acknowledged_by,omitempty"`
+	// LastEscalatedAt is when the timed auto-escalation last re-alerted this incident, so it
+	// re-pings at most once per AckWindowMins instead of every monitoring pass.
+	LastEscalatedAt time.Time `json:"last_escalated_at,omitempty"`
+}
+
+// Acknowledged reports whether a human has taken ownership of the incident.
+func (i Incident) Acknowledged() bool { return !i.AcknowledgedAt.IsZero() }
+
+// Overdue reports whether an OPEN, UNACKNOWLEDGED incident has gone past the ack window and is due
+// for a timed auto-escalation re-alert. ackWindowMins ≤ 0 disables timed escalation. It re-pings at
+// most once per window (tracked by LastEscalatedAt). now is injected so it's testable.
+func (i Incident) Overdue(ackWindowMins int, now time.Time) bool {
+	if ackWindowMins <= 0 || i.Status != IncidentOpen || i.Acknowledged() {
+		return false
+	}
+	window := time.Duration(ackWindowMins) * time.Minute
+	if now.Sub(i.OpenedAt) < window {
+		return false // still within the first response window
+	}
+	// re-ping only if we haven't escalated yet, or the last escalation is itself a window old
+	return i.LastEscalatedAt.IsZero() || now.Sub(i.LastEscalatedAt) >= window
 }
 
 // ReviewRequest statuses.

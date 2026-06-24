@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import type { Incident } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { AckButton } from "@/components/incidents/ack-button";
 import { timeAgo, duration } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -120,6 +121,7 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
               <Wrench className="h-2.5 w-2.5" /> fix ready
             </span>
           )}
+          {!resolved && <AckButton id={i.id} acknowledged={!!i.acknowledged_at} by={i.acknowledged_by} />}
         </div>
         <div className="mono mt-0.5 truncate text-[11px] text-faint">{i.rule_id}</div>
       </div>

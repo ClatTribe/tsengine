@@ -152,6 +152,8 @@ export interface Incident {
   attacked?: boolean; // escalated because the issue is under attack in production
   opened_at: string;
   resolved_at?: string;
+  acknowledged_at?: string; // a human took ownership → stops timed auto-escalation
+  acknowledged_by?: string;
 }
 
 export interface Connection {

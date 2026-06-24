@@ -216,6 +216,14 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 				}
 			}
 		}
+		// Timed auto-escalation (escalation matrix Phase 4): each pass, re-alert OPEN,
+		// UNACKNOWLEDGED incidents that have sat past the tenant's ack window — the MDR
+		// "page again if no one's on it". No policy / window off → no-op.
+		if t, terr := s.Store.GetTenant(ctx, tenantID); terr == nil && t.Escalation != nil && t.Escalation.Enabled && t.Escalation.AckWindowMins > 0 {
+			if _, err := s.Detector.EscalateOverdue(ctx, tenantID, t.Escalation.AckWindowMins); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
 	}
 	return scanned, firstErr
 }

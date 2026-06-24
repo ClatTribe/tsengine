@@ -65,6 +65,9 @@ export const api = {
   // fetch with the id genuinely absent still returns null → the page's notFound().
   finding: async (id: string) => (await call<Finding[]>("/v1/findings")).find((f) => f.id === id) ?? null,
   incidents: (status?: "all") => safe<Incident[]>(`/v1/incidents${status ? "?status=all" : ""}`, []),
+  // Take ownership of an open incident → stops the timed auto-escalation (the MDR "I'm on it").
+  ackIncident: (id: string, by?: string) =>
+    call<Incident>(`/v1/incidents/${id}/ack`, { method: "POST", body: JSON.stringify({ by: by ?? "" }) }),
   attackPaths: () => safe<AttackPaths>("/v1/attack-paths", { attack_paths: [], count: 0 }),
 
   // SaaS-app discovery view (SSPM) — inventory + portfolio summary over the connected IdPs' grants.

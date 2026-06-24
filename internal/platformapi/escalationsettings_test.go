@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -71,5 +72,47 @@ func TestEscalationSettings_GetDefaultsDisabled(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"tiers":[]`) {
 		t.Errorf("empty tiers must serialize as [] not null, got %s", rec.Body.String())
+	}
+}
+
+func ackReq(d Deps, tenant, id, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+id+"/ack", strings.NewReader(body))
+	req.SetPathValue("id", id)
+	rec := httptest.NewRecorder()
+	d.handleAckIncident(rec, req, tenant)
+	return rec
+}
+
+func TestAckIncident_SetsAcknowledgedAndStopsEscalation(t *testing.T) {
+	d := escalationDeps(t)
+	ctx := context.Background()
+	_ = d.Store.PutIncident(ctx, platform.Incident{ID: "inc-1", TenantID: "ten-1", Status: platform.IncidentOpen, OpenedAt: time.Now().Add(-2 * time.Hour)})
+
+	if rec := ackReq(d, "ten-1", "inc-1", `{"by":"alice@acme.com"}`); rec.Code != http.StatusOK {
+		t.Fatalf("ack want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	all, _ := d.Store.ListIncidents(ctx, "ten-1")
+	if len(all) != 1 || !all[0].Acknowledged() || all[0].AcknowledgedBy != "alice@acme.com" {
+		t.Fatalf("incident not acknowledged: %+v", all)
+	}
+	// once acked, it is no longer overdue (timed escalation stops)
+	if all[0].Overdue(30, time.Now()) {
+		t.Error("an acknowledged incident must not be overdue")
+	}
+}
+
+func TestAckIncident_TenantIsolationAnd404(t *testing.T) {
+	d := escalationDeps(t)
+	ctx := context.Background()
+	_ = d.Store.PutTenant(ctx, platform.Tenant{ID: "ten-2"})
+	_ = d.Store.PutIncident(ctx, platform.Incident{ID: "inc-x", TenantID: "ten-2", Status: platform.IncidentOpen})
+
+	// ten-1 cannot ack ten-2's incident
+	if rec := ackReq(d, "ten-1", "inc-x", "{}"); rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-tenant ack want 404, got %d", rec.Code)
+	}
+	// unknown id → 404
+	if rec := ackReq(d, "ten-1", "nope", "{}"); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown incident want 404, got %d", rec.Code)
 	}
 }

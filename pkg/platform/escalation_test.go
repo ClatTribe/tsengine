@@ -1,6 +1,9 @@
 package platform
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestEscalationPolicy_ChannelsFor(t *testing.T) {
 	pol := &EscalationPolicy{
@@ -49,4 +52,51 @@ func TestEscalationPolicy_ChannelsFor_DisabledOrEmpty(t *testing.T) {
 	if _, m := (&EscalationPolicy{Enabled: true}).ChannelsFor("critical"); m {
 		t.Error("empty-tiers policy must not match")
 	}
+}
+
+func TestIncident_Overdue(t *testing.T) {
+	base := time.Date(2026, 6, 24, 10, 0, 0, 0, time.UTC)
+	open := func() Incident { return Incident{Status: IncidentOpen, OpenedAt: base} }
+
+	t.Run("window off → never overdue", func(t *testing.T) {
+		if open().Overdue(0, base.Add(time.Hour)) {
+			t.Error("ackWindowMins=0 must disable timed escalation")
+		}
+	})
+	t.Run("within window → not yet", func(t *testing.T) {
+		if open().Overdue(30, base.Add(20*time.Minute)) {
+			t.Error("20m < 30m window — should not be overdue")
+		}
+	})
+	t.Run("past window, never escalated → overdue", func(t *testing.T) {
+		if !open().Overdue(30, base.Add(31*time.Minute)) {
+			t.Error("31m > 30m window — should be overdue")
+		}
+	})
+	t.Run("acknowledged → never overdue", func(t *testing.T) {
+		inc := open()
+		inc.AcknowledgedAt = base.Add(5 * time.Minute)
+		if inc.Overdue(30, base.Add(2*time.Hour)) {
+			t.Error("an acknowledged incident must not auto-escalate")
+		}
+	})
+	t.Run("resolved → never overdue", func(t *testing.T) {
+		inc := open()
+		inc.Status = IncidentResolved
+		if inc.Overdue(30, base.Add(2*time.Hour)) {
+			t.Error("a resolved incident must not auto-escalate")
+		}
+	})
+	t.Run("re-pings at most once per window", func(t *testing.T) {
+		inc := open()
+		inc.LastEscalatedAt = base.Add(31 * time.Minute)
+		// 10 min after last escalation, still inside the next window → no re-ping
+		if inc.Overdue(30, base.Add(41*time.Minute)) {
+			t.Error("should not re-ping within a window of the last escalation")
+		}
+		// a full window after last escalation → re-ping
+		if !inc.Overdue(30, base.Add(62*time.Minute)) {
+			t.Error("should re-ping a full window after the last escalation")
+		}
+	})
 }
