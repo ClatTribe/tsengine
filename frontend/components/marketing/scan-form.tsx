@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Search, Loader2, ShieldCheck, ShieldAlert, Check, X, ArrowRight } from "lucide-react";
+import { Search, Loader2, ShieldCheck, ShieldAlert, Check, X, ArrowRight, Code, Copy } from "lucide-react";
 
 type Check = { name: string; ok: boolean; detail: string };
 type Finding = { title: string; severity: string };
@@ -13,31 +13,41 @@ const GRADE_TONE: Record<string, string> = {
   A: "text-pulse", B: "text-pulse", C: "text-medium", D: "text-high", F: "text-critical",
 };
 
-export function ScanForm() {
-  const [domain, setDomain] = useState("");
+export function ScanForm({ initialDomain }: { initialDomain?: string }) {
+  const [domain, setDomain] = useState(initialDomain ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const [origin, setOrigin] = useState("");
 
-  async function run(e: React.FormEvent) {
-    e.preventDefault();
-    if (!domain.trim()) return;
+  useEffect(() => setOrigin(window.location.origin), []);
+
+  const scan = useCallback(async (raw: string) => {
+    const d = raw.trim();
+    if (!d) return;
     setLoading(true);
     setError("");
     setResult(null);
     try {
-      const res = await fetch(`/api/assess?domain=${encodeURIComponent(domain.trim())}`);
+      const res = await fetch(`/api/assess?domain=${encodeURIComponent(d)}`);
       const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error ?? "Couldn't assess that domain.");
-      } else {
-        setResult(data as Result);
-      }
+      if (!res.ok) setError(data?.error ?? "Couldn't assess that domain.");
+      else setResult(data as Result);
     } catch {
       setError("Something went wrong — try again.");
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Shareable permalink: /scan?domain=acme.com auto-runs, so a shared link shows the grade directly.
+  useEffect(() => {
+    if (initialDomain && initialDomain.trim()) scan(initialDomain);
+  }, [initialDomain, scan]);
+
+  function run(e: React.FormEvent) {
+    e.preventDefault();
+    scan(domain);
   }
 
   return (
@@ -124,8 +134,66 @@ export function ScanForm() {
               See your full posture — free <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
+
+          {origin && <EmbedBadge origin={origin} domain={result.domain} grade={result.grade} />}
         </div>
       )}
+    </div>
+  );
+}
+
+// EmbedBadge is the viral loop: a founder drops this badge on their site/README/trust page as proof
+// for their own enterprise buyers — and every render is a branded backlink to /scan.
+function EmbedBadge({ origin, domain, grade }: { origin: string; domain: string; grade: string }) {
+  const badgeUrl = `${origin}/api/assess/badge?domain=${encodeURIComponent(domain)}`;
+  const scanUrl = `${origin}/scan?domain=${encodeURIComponent(domain)}`;
+  const md = `[![Security questionnaire readiness — TensorShield](${badgeUrl})](${scanUrl})`;
+  const html = `<a href="${scanUrl}"><img src="${badgeUrl}" alt="Security questionnaire readiness — TensorShield"></a>`;
+  const good = grade === "A" || grade === "B";
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <Code className="h-4 w-4 text-accent" /> Embed your badge
+      </div>
+      <p className="mt-1 text-sm text-muted">
+        {good
+          ? "Show enterprise buyers you take security seriously — add this to your site, README, or trust page."
+          : "Track your progress publicly — embed this badge and it updates as you fix the gaps below."}
+      </p>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={badgeUrl} alt={`Security questionnaire readiness — Grade ${grade}`} className="mt-3 h-5" />
+      <div className="mt-3 space-y-2">
+        <CopyRow label="Markdown" value={md} />
+        <CopyRow label="HTML" value={html} />
+      </div>
+      <a href={scanUrl} className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+        Shareable link to this result <ArrowRight className="h-3 w-3" />
+      </a>
+    </div>
+  );
+}
+
+function CopyRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div>
+      <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-faint">{label}</div>
+      <div className="flex items-stretch gap-2">
+        <code className="mono min-w-0 flex-1 truncate rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted">{value}</code>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(value).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted transition hover:border-accent/40 hover:text-accent"
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-pulse" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
     </div>
   );
 }
