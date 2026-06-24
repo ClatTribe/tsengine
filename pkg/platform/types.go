@@ -438,6 +438,9 @@ type Incident struct {
 	// LastEscalatedAt is when the timed auto-escalation last re-alerted this incident, so it
 	// re-pings at most once per AckWindowMins instead of every monitoring pass.
 	LastEscalatedAt time.Time `json:"last_escalated_at,omitempty"`
+	// SLABreach is a TRANSIENT, read-time annotation (the incident's state vs. the tenant's SLA
+	// policy) — populated by the API when returning incidents, NEVER persisted. nil = not tracked.
+	SLABreach *SLABreach `json:"sla_breach,omitempty"`
 }
 
 // Acknowledged reports whether a human has taken ownership of the incident.
