@@ -174,6 +174,15 @@ export interface SLABreach {
   resolve_breached: boolean;
 }
 
+export interface MaintenanceWindow {
+  id: string;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  reason?: string;
+  created_by?: string;
+}
+
 export interface Connection {
   id: string;
   kind: string;
