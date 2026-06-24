@@ -76,6 +76,7 @@ tsbench: ## build the bench harness binary into ./bin/
 bench: cli tsbench sandbox-image ## run the runnable L1 benchmarks
 	./bin/tsbench run --fixture fixtures/container/nginx-vuln
 	./bin/tsbench run --fixture fixtures/container/alpine-clean
+	./bin/tsbench run --fixture fixtures/repo/sca-vuln
 
 .PHONY: bench-ablation
 bench-ablation: cli tsbench sandbox-image ## run the L1.5 ablation on the container fixture

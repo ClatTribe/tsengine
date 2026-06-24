@@ -1,0 +1,19 @@
+{
+  "name": "repo-sca-vuln",
+  "asset": "repository",
+  "target": "fixtures/repo/sca-vuln",
+  "description": "A Python requirements.txt pinning known-vulnerable dependency versions (Django 2.2.0, PyYAML 5.1, Jinja2 2.10, urllib3 1.24.1, requests 2.19.0). The SCA tools (trivy fs / grype / osv-scanner) must surface their well-known CVEs — the repository asset's runnable, no-download SCA benchmark (the OWASP-Benchmark SAST fixture needs a heavy source clone).",
+  "metric": "must_find_recall",
+  "pass_recall": 1.0,
+  "must_find": [
+    "CVE-2020-1747",
+    "CVE-2018-18074",
+    "CVE-2019-11236",
+    "CVE-2019-10906"
+  ],
+  "competitors": {
+    "leaderboard": "Snyk / Dependabot / Trivy — self-published only (no neutral SCA leaderboard)",
+    "note": "SCA recall is measured against a curated must-find CVE set drawn from the exact pinned dependency versions in requirements.txt: CVE-2020-1747 (PyYAML 5.1 arbitrary code execution), CVE-2018-18074 (requests 2.19.0 credential leak on redirect), CVE-2019-11236 (urllib3 1.24.1 CRLF injection), CVE-2019-10906 (Jinja2 2.10 sandbox escape). Each is detected by multiple SCA tools, so recall is robust to a single tool's DB drift."
+  },
+  "runnable": true
+}
