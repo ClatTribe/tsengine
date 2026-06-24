@@ -105,6 +105,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))        // planned change-freeze windows (suppress alerting)
 	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))         // schedule a window
 	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow)) // cancel a window
+	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                             // on-call escalation roster (names + numbers)
+	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                              // add a contact
+	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                    // remove a contact
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                            // global kill-switch: halt/resume all agent action
 	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                      // agent capability manifest (WRD-1): what the automation can touch
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                              // owner's shareable Trust Center token

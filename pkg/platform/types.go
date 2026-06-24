@@ -55,6 +55,22 @@ type Tenant struct {
 	// opens no new incidents and the escalation matrix pages no one (so a planned deploy doesn't
 	// trip the SOC). Resolves still flow. Empty = always-on monitoring.
 	MaintenanceWindows []MaintenanceWindow `json:"maintenance_windows,omitempty"`
+	// Contacts is the on-call roster — the people the escalation matrix names (the contractual
+	// "escalation matrix with contact number"). Ordered by escalation precedence. Contact PII
+	// (email/phone), not a bearer secret, so stored plain like team-member emails.
+	Contacts []Contact `json:"contacts,omitempty"`
+}
+
+// Contact is one entry in the on-call escalation roster — who to reach, in what order. Phone is the
+// PO's literal "contact number"; live SMS/voice paging is gated (Bucket C), but the roster + numbers
+// are first-class so the escalation matrix names real people.
+type Contact struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Role  string `json:"role,omitempty"`  // e.g. "Security Lead", "On-call engineer"
+	Email string `json:"email,omitempty"`
+	Phone string `json:"phone,omitempty"` // contact number (SMS/voice delivery is Bucket-C)
+	Order int    `json:"order"`           // escalation precedence (lower = contacted first)
 }
 
 // MaintenanceWindow is a planned period during which alerting is suppressed (a change-freeze /
