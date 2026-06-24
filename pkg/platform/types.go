@@ -51,6 +51,37 @@ type Tenant struct {
 	// SLA is the per-tenant remediation SLA policy (per-severity time-to-acknowledge +
 	// time-to-resolve targets). nil/disabled = no SLA tracking. No secret material.
 	SLA *SLAPolicy `json:"sla,omitempty"`
+	// MaintenanceWindows are planned change-freeze periods. While one is active, the detector
+	// opens no new incidents and the escalation matrix pages no one (so a planned deploy doesn't
+	// trip the SOC). Resolves still flow. Empty = always-on monitoring.
+	MaintenanceWindows []MaintenanceWindow `json:"maintenance_windows,omitempty"`
+}
+
+// MaintenanceWindow is a planned period during which alerting is suppressed (a change-freeze /
+// deploy window — standard MDR/SOC operations). No secret material.
+type MaintenanceWindow struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	StartsAt  time.Time `json:"starts_at"`
+	EndsAt    time.Time `json:"ends_at"`
+	Reason    string    `json:"reason,omitempty"`
+	CreatedBy string    `json:"created_by,omitempty"`
+}
+
+// Active reports whether now falls within the window ([StartsAt, EndsAt)).
+func (w MaintenanceWindow) Active(now time.Time) bool {
+	return !now.Before(w.StartsAt) && now.Before(w.EndsAt)
+}
+
+// InMaintenance reports whether the tenant has any maintenance window active at now (so alerting
+// should be suppressed). Returns the first active window for context.
+func (t Tenant) InMaintenance(now time.Time) (MaintenanceWindow, bool) {
+	for _, w := range t.MaintenanceWindows {
+		if w.Active(now) {
+			return w, true
+		}
+	}
+	return MaintenanceWindow{}, false
 }
 
 // HasSlackWebhook reports whether the tenant has configured its own Slack incident webhook.
