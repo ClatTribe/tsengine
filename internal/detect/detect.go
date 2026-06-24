@@ -42,6 +42,10 @@ type Detector struct {
 	Threshold types.Severity   // minimum severity to open an incident (default high)
 	Now       func() time.Time
 	NewID     func() string
+	// Suppressed reports whether alerting is suppressed for a tenant at a moment (a maintenance
+	// window is active). When true, Reconcile opens NO new incidents and EscalateOverdue pages no
+	// one — but resolves still flow. Optional: nil → never suppressed (today's behaviour).
+	Suppressed func(ctx context.Context, tenantID string, now time.Time) bool
 }
 
 // Result summarizes one reconcile pass.
@@ -84,9 +88,17 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 		}
 	}
 
+	// Maintenance window active → suppress OPENING new incidents (resolves below still flow, so a
+	// fix landing during the window still closes its incident). A planned change-freeze shouldn't
+	// trip the SOC.
+	suppressed := d.Suppressed != nil && d.Suppressed(ctx, tenantID, d.now())
+
 	// open incidents for newly-present issues
 	for key, f := range present {
 		if _, already := openByKey[key]; already {
+			continue
+		}
+		if suppressed {
 			continue
 		}
 		title := f.Title
@@ -134,6 +146,10 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 // elapses). Best-effort, like the open-time alert: a delivery error never blocks the others.
 func (d *Detector) EscalateOverdue(ctx context.Context, tenantID string, ackWindowMins int) ([]platform.Incident, error) {
 	if d == nil || ackWindowMins <= 0 {
+		return nil, nil
+	}
+	// Don't page anyone during a maintenance window — the clock keeps running, but no re-alert fires.
+	if d.Suppressed != nil && d.Suppressed(ctx, tenantID, d.now()) {
 		return nil, nil
 	}
 	all, err := d.Store.ListIncidents(ctx, tenantID)

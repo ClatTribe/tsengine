@@ -266,3 +266,47 @@ func TestEscalateOverdue_NoOpWhenWindowOff(t *testing.T) {
 		t.Fatalf("window off → no escalation, got %+v", esc)
 	}
 }
+
+func TestReconcile_MaintenanceSuppressesOpensNotResolves(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := newDetector(st)
+	d.Suppressed = func(context.Context, string, time.Time) bool { return true }
+
+	// During maintenance: a new critical must NOT open an incident.
+	res, err := d.Reconcile(ctx, "t1", []types.Finding{crit("rule::x", "a.com")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Opened) != 0 || len(openIncidents(t, st, "t1")) != 0 {
+		t.Fatalf("maintenance window must suppress opening, got opened=%d", len(res.Opened))
+	}
+
+	// But an EXISTING open incident must still resolve when its issue disappears, even in maintenance.
+	_ = st.PutIncident(ctx, platform.Incident{ID: "inc-1", TenantID: "t1", Key: "rule::y|b.com", Status: platform.IncidentOpen})
+	res2, err := d.Reconcile(ctx, "t1", []types.Finding{}, nil) // issue gone
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res2.Resolved) != 1 {
+		t.Fatalf("resolves must still flow during maintenance, got %+v", res2.Resolved)
+	}
+}
+
+func TestEscalateOverdue_NoPageDuringMaintenance(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	now := time.Unix(1700000000, 0).UTC()
+	alerter := &captureAlerter{}
+	d := &Detector{Store: st, Alerter: alerter, Now: func() time.Time { return now },
+		Suppressed: func(context.Context, string, time.Time) bool { return true }}
+	_ = st.PutIncident(ctx, platform.Incident{ID: "inc-1", TenantID: "t1", Status: platform.IncidentOpen, OpenedAt: now.Add(-2 * time.Hour)})
+
+	esc, err := d.EscalateOverdue(ctx, "t1", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(esc) != 0 || len(alerter.alerts) != 0 {
+		t.Fatalf("no escalation should fire during a maintenance window, got esc=%d alerts=%d", len(esc), len(alerter.alerts))
+	}
+}
