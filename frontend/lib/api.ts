@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, SaaSAppsResponse, SLAPolicy, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -218,6 +218,14 @@ export const api = {
   slaSettings: () => safe<SLAPolicy>("/v1/settings/sla", { enabled: false, targets: [] }),
   setSLASettings: (pol: SLAPolicy) =>
     call<SLAPolicy>("/v1/settings/sla", { method: "PUT", body: JSON.stringify(pol) }),
+
+  // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging) over the tenant's incidents.
+  socMetrics: () =>
+    safe<SOCMetrics>("/v1/soc-metrics", {
+      generated_at: "", open_incidents: 0, resolved_incidents: 0, acknowledged: 0, unacknowledged: 0,
+      sla_tracked: 0, sla_compliant: 0, sla_breached: 0, sla_compliance_pct: 0, mtta_hours: 0, mttr_hours: 0,
+      aging_under_1d: 0, aging_1_7d: 0, aging_over_7d: 0,
+    }),
 
   // Planned change-freeze windows (suppress alerting while active).
   maintenanceWindows: () => safe<MaintenanceWindow[]>("/v1/maintenance-windows", []),
