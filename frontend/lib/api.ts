@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, SaaSAppsResponse, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, SaaSAppsResponse, SLAPolicy, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -213,6 +213,11 @@ export const api = {
     safe<EscalationPolicy>("/v1/settings/escalation", { enabled: false, ack_window_mins: 0, tiers: [] }),
   setEscalationSettings: (pol: EscalationPolicy) =>
     call<EscalationPolicy>("/v1/settings/escalation", { method: "PUT", body: JSON.stringify(pol) }),
+
+  // Per-tenant remediation SLA policy: per-severity time-to-acknowledge + time-to-resolve targets.
+  slaSettings: () => safe<SLAPolicy>("/v1/settings/sla", { enabled: false, targets: [] }),
+  setSLASettings: (pol: SLAPolicy) =>
+    call<SLAPolicy>("/v1/settings/sla", { method: "PUT", body: JSON.stringify(pol) }),
 
   // Per-tenant Slack incident webhook (Bucket B). GET reports only presence; PUT seals the URL
   // server-side and never returns it. An empty string clears it (revert to the operator fallback).

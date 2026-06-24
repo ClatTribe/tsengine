@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { api } from "@/lib/api";
-import type { EscalationPolicy } from "@/lib/types";
+import type { EscalationPolicy, SLAPolicy } from "@/lib/types";
 
 // Engage/disengage the global kill-switch (agentic-SMB spec OM-3 / TS-5). When engaged the
 // platform takes no autonomous agent action — no scans, no remediation writes — until a
@@ -34,6 +34,14 @@ export async function syncGitHubPosture(): Promise<{ findings: number }> {
 export async function setEscalation(pol: EscalationPolicy): Promise<EscalationPolicy> {
   const r = await api.setEscalationSettings(pol);
   revalidatePath("/settings");
+  return r;
+}
+
+// Set the tenant's remediation SLA policy (per-severity ack/resolve hour targets).
+export async function setSLA(pol: SLAPolicy): Promise<SLAPolicy> {
+  const r = await api.setSLASettings(pol);
+  revalidatePath("/settings");
+  revalidatePath("/incidents");
   return r;
 }
 
