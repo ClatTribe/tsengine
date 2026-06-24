@@ -114,6 +114,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
+	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))          // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
 	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))              // cross-surface correlation (unified cross-detection)
 	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                         // findings de-duplicated into unified issues (one issue, many signals)
 	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))            // auto-triage funnel: % of raw findings the engine handled automatically
