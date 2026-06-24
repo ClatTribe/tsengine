@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, SaaSAppsResponse, SLAPolicy, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, SaaSAppsResponse, SLAPolicy, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -218,6 +218,13 @@ export const api = {
   slaSettings: () => safe<SLAPolicy>("/v1/settings/sla", { enabled: false, targets: [] }),
   setSLASettings: (pol: SLAPolicy) =>
     call<SLAPolicy>("/v1/settings/sla", { method: "PUT", body: JSON.stringify(pol) }),
+
+  // Planned change-freeze windows (suppress alerting while active).
+  maintenanceWindows: () => safe<MaintenanceWindow[]>("/v1/maintenance-windows", []),
+  addMaintenanceWindow: (w: { name: string; starts_at: string; ends_at: string; reason?: string }) =>
+    call<MaintenanceWindow>("/v1/maintenance-windows", { method: "POST", body: JSON.stringify(w) }),
+  deleteMaintenanceWindow: (id: string) =>
+    call<{ deleted: string }>(`/v1/maintenance-windows/${id}`, { method: "DELETE" }),
 
   // Per-tenant Slack incident webhook (Bucket B). GET reports only presence; PUT seals the URL
   // server-side and never returns it. An empty string clears it (revert to the operator fallback).

@@ -45,6 +45,20 @@ export async function setSLA(pol: SLAPolicy): Promise<SLAPolicy> {
   return r;
 }
 
+// Schedule a maintenance / change-freeze window (suppresses alerting while active).
+export async function addMaintenanceWindow(w: { name: string; starts_at: string; ends_at: string; reason?: string }): Promise<void> {
+  await api.addMaintenanceWindow(w);
+  revalidatePath("/settings");
+  revalidatePath("/incidents");
+}
+
+// Cancel a maintenance window.
+export async function deleteMaintenanceWindow(id: string): Promise<void> {
+  await api.deleteMaintenanceWindow(id);
+  revalidatePath("/settings");
+  revalidatePath("/incidents");
+}
+
 // Set (or clear) the tenant's own Jira ticketing destination (Bucket B). The API token is sealed
 // server-side and never returned; we get back base/email/project + whether a token is set.
 export async function setJira(
