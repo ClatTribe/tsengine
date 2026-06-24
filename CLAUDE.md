@@ -679,6 +679,23 @@ core; the live *execution* stays each core's gated half:
   breaches, 0-hours disables a clock). `GET /v1/incidents` annotates each incident with a TRANSIENT
   `SLABreach` (read-time via `Deps.annotateSLA`, never persisted); `/incidents` shows an "SLA
   breached" badge + count. Pure-compute, grounded, LLM-free.
+- **maintenance windows (MDR change-freeze parity)** — `GET/POST/DELETE /v1/maintenance-windows` +
+  the Settings "Maintenance windows" control: stores `Tenant.MaintenanceWindows`
+  (`platform.MaintenanceWindow{Name, StartsAt, EndsAt}` + `Active(now)` / `Tenant.InMaintenance(now)`;
+  no secret → plain). While a window is active, `detect.Detector` (via an injected `Suppressed`
+  predicate wired in `cmd/platform` to `Tenant.InMaintenance`) opens NO new incidents and
+  `EscalateOverdue` pages no one — but resolves still flow. `/incidents` shows an "in maintenance"
+  banner. So a planned deploy doesn't trip the SOC.
+- **SOC-performance reporting (MDR scorecard)** — `GET /v1/soc-metrics` (`internal/socmetrics.Compute`)
+  + the `/incidents` scorecard: SLA-compliance % (resolved → historical outcome, open → current
+  state), MTTA (open→ack) + MTTR (open→resolve), open-incident aging buckets. Pure-compute over the
+  incidents + SLA policy, grounded on real timestamps, LLM-free. The "how is the SOC performing" view.
+- **on-call escalation roster (the PO's "escalation matrix with contact number")** —
+  `GET/POST/DELETE /v1/contacts` + the Settings "Escalation contacts" control: stores `Tenant.Contacts`
+  (`platform.Contact{Name, Role, Email, Phone, Order}`, ordered by escalation precedence; contact PII
+  not a bearer secret → plain, like team-member emails). Names the real humans + numbers the
+  escalation matrix reaches. Live SMS/voice paging stays the honest Bucket-C gate (needs an SMS
+  connector); the roster + numbers are first-class.
 - **CREDENTIAL SEALING (§18.2 inv. 6)** — the login-flow + authz-test configs carry secrets (passwords /
   tokens / auth headers), so the setters **seal the config blob via `d.Vault`** before it touches the store
   (`Asset.Meta["login_flow"]`/`["authz_test"]` hold a sealed ref, never plaintext); no vault → the setter
