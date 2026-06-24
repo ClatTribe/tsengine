@@ -24,6 +24,7 @@ const assessUA = "TensorShield-Assess/1.0 (+https://tensorshield.ai/scan; read-o
 
 // webPosture is the read-only web observation. Reachable=false → contributes nothing.
 type webPosture struct {
+	Domain           string
 	Reachable        bool
 	RedirectsToHTTPS bool
 	TLSVersion       uint16
@@ -46,7 +47,8 @@ func assessWeb(wp webPosture) (checks []assessCheck, findings []assessFinding, p
 	https := wp.RedirectsToHTTPS && wp.TLSVersion >= tls.VersionTLS12
 	checks = append(checks, assessCheck{Name: "HTTPS enforced", OK: https,
 		Detail: ternary(https, "Served over modern TLS with an HTTP→HTTPS redirect.",
-			"HTTP isn't redirected to HTTPS, or TLS is older than 1.2 — traffic can be intercepted.")})
+			"HTTP isn't redirected to HTTPS, or TLS is older than 1.2 — traffic can be intercepted."),
+		Fix: ifFail(!https, httpsFix())})
 	if !https {
 		findings = append(findings, assessFinding{Title: "HTTP not forced to HTTPS / weak TLS", Severity: "high"})
 		penalty += severityPenalty(types.SeverityHigh)
@@ -54,7 +56,8 @@ func assessWeb(wp webPosture) (checks []assessCheck, findings []assessFinding, p
 
 	hsts := hasHeader(h, "Strict-Transport-Security")
 	checks = append(checks, assessCheck{Name: "HSTS", OK: hsts,
-		Detail: ternary(hsts, "Strict-Transport-Security header present.", "No HSTS header — browsers will still try HTTP first.")})
+		Detail: ternary(hsts, "Strict-Transport-Security header present.", "No HSTS header — browsers will still try HTTP first."),
+		Fix: ifFail(!hsts, hstsFix())})
 	if !hsts {
 		findings = append(findings, assessFinding{Title: "Missing HSTS header", Severity: "low"})
 		penalty += severityPenalty(types.SeverityLow)
@@ -62,7 +65,8 @@ func assessWeb(wp webPosture) (checks []assessCheck, findings []assessFinding, p
 
 	csp := hasHeader(h, "Content-Security-Policy")
 	checks = append(checks, assessCheck{Name: "Content-Security-Policy", OK: csp,
-		Detail: ternary(csp, "CSP header present.", "No Content-Security-Policy — weaker defense against XSS/injection.")})
+		Detail: ternary(csp, "CSP header present.", "No Content-Security-Policy — weaker defense against XSS/injection."),
+		Fix: ifFail(!csp, cspFix())})
 	if !csp {
 		findings = append(findings, assessFinding{Title: "Missing Content-Security-Policy", Severity: "low"})
 		penalty += severityPenalty(types.SeverityLow)
@@ -74,7 +78,8 @@ func assessWeb(wp webPosture) (checks []assessCheck, findings []assessFinding, p
 	prot := clickjack && mime
 	checks = append(checks, assessCheck{Name: "Clickjacking & MIME protections", OK: prot,
 		Detail: ternary(prot, "X-Frame-Options/frame-ancestors + X-Content-Type-Options set.",
-			"Missing X-Frame-Options (or CSP frame-ancestors) and/or X-Content-Type-Options.")})
+			"Missing X-Frame-Options (or CSP frame-ancestors) and/or X-Content-Type-Options."),
+		Fix: ifFail(!prot, clickjackFix())})
 	if !prot {
 		findings = append(findings, assessFinding{Title: "Missing clickjacking / MIME-sniffing protections", Severity: "low"})
 		penalty += severityPenalty(types.SeverityLow)
@@ -82,7 +87,8 @@ func assessWeb(wp webPosture) (checks []assessCheck, findings []assessFinding, p
 
 	checks = append(checks, assessCheck{Name: "Security contact (security.txt)", OK: wp.SecurityTxt,
 		Detail: ternary(wp.SecurityTxt, "Publishes /.well-known/security.txt with a disclosure contact.",
-			"No security.txt — enterprise questionnaires expect a documented security/vuln-disclosure contact.")})
+			"No security.txt — enterprise questionnaires expect a documented security/vuln-disclosure contact."),
+		Fix: ifFail(!wp.SecurityTxt, securityTxtFix(wp.Domain))})
 	if !wp.SecurityTxt {
 		findings = append(findings, assessFinding{Title: "No security.txt / vulnerability-disclosure contact", Severity: "low"})
 		penalty += severityPenalty(types.SeverityLow)
@@ -164,7 +170,7 @@ func safeHTTPClient(timeout time.Duration) *http.Client {
 // security.txt. Best-effort: any failure on the homepage → Reachable=false (web checks omitted).
 func probeWeb(ctx context.Context, domain string) webPosture {
 	client := safeHTTPClient(4 * time.Second)
-	var wp webPosture
+	wp := webPosture{Domain: domain}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+domain+"/", nil)
 	if err != nil {
