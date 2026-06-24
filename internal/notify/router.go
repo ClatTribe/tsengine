@@ -20,7 +20,7 @@ type WebhookResolver func(ctx context.Context, tenantID string) (webhookURL stri
 // the operator's single channel. Implements detect.Alerter (IncidentOpened) structurally.
 type TenantRouter struct {
 	Resolve  WebhookResolver // per-tenant webhook lookup (sealed → opened by the caller)
-	Fallback alerter         // operator-global channels (MultiAlerter); may be nil
+	Fallback Alerter         // operator-global channels (MultiAlerter); may be nil
 	HTTP     *http.Client    // shared client for the per-tenant Slack post; nil → a default
 }
 
