@@ -20,13 +20,40 @@ import (
 // unauthenticated. "Sign up to fix" is the conversion. The full multi-surface assessment is
 // gated behind connecting a system.
 
-// assessResult is the public-safe response: a score + the email-auth checks + teaser findings.
+// assessResult is the public-safe response: a score + the questionnaire-readiness checks + teaser
+// findings. The Questionnaire summary reframes the checks in the founder's language ("you'd fail N
+// of M checks an enterprise security questionnaire asks") — the conversion hook for the SOC2 ICP.
 type assessResult struct {
-	Domain   string          `json:"domain"`
-	Score    int             `json:"score"` // 0-100
-	Grade    string          `json:"grade"` // A | B | C | D | F
-	Checks   []assessCheck   `json:"checks"`
-	Findings []assessFinding `json:"findings"`
+	Domain        string               `json:"domain"`
+	Score         int                  `json:"score"` // 0-100
+	Grade         string               `json:"grade"` // A | B | C | D | F
+	Questionnaire questionnaireSummary `json:"questionnaire"`
+	Checks        []assessCheck        `json:"checks"`
+	Findings      []assessFinding      `json:"findings"`
+}
+
+// questionnaireSummary is the founder-facing reframing of the check set.
+type questionnaireSummary struct {
+	Failed   int    `json:"failed"`
+	Total    int    `json:"total"`
+	Headline string `json:"headline"`
+}
+
+// assess combines the email-auth posture (public DNS) with the web posture (public HTTPS) into the
+// full questionnaire-readiness report. Pure given its inputs (the I/O happens in the handler), so the
+// scoring is deterministic + testable.
+func assess(dc operate.DomainConfig, wp webPosture) assessResult {
+	res := assessEmailAuth(dc)
+	wc, wf, penalty := assessWeb(wp)
+	res.Checks = append(res.Checks, wc...)
+	res.Findings = append(res.Findings, wf...)
+	res.Score -= penalty
+	if res.Score < 0 {
+		res.Score = 0
+	}
+	res.Grade = grade(res.Score)
+	res.Questionnaire = summarize(res.Checks)
+	return res
 }
 
 type assessCheck struct {
@@ -176,8 +203,16 @@ func (d Deps) handlePublicAssess(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusTooManyRequests, errBody("too many requests — try again in a minute"))
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 9*time.Second)
 	defer cancel()
-	dc := operate.NewEmailAuth().FetchDomain(ctx, domain)
-	writeJSON(w, http.StatusOK, assessEmailAuth(dc))
+	// Email-auth (DNS) and web posture (HTTPS) are independent — run them concurrently to keep the
+	// public endpoint snappy. Both are read-only and public-safe.
+	var dc operate.DomainConfig
+	var wp webPosture
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); dc = operate.NewEmailAuth().FetchDomain(ctx, domain) }()
+	go func() { defer wg.Done(); wp = probeWeb(ctx, domain) }()
+	wg.Wait()
+	writeJSON(w, http.StatusOK, assess(dc, wp))
 }
