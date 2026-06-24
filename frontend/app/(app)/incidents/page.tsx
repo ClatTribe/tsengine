@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldAlert, CheckCircle2, Wrench, ArrowRight, Flame } from "lucide-react";
+import { ShieldAlert, CheckCircle2, Wrench, ArrowRight, Flame, TimerOff } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Incident } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -17,6 +17,7 @@ export default async function IncidentsPage() {
   const open = all.filter((i) => i.status === "open").sort(byTime("opened_at"));
   const resolved = all.filter((i) => i.status === "resolved").sort(byTime("resolved_at"));
   const mttr = meanResolveMs(resolved);
+  const slaBreached = open.filter((i) => i.sla_breach && (i.sla_breach.ack_breached || i.sla_breach.resolve_breached)).length;
 
   return (
     <div className="space-y-6">
@@ -27,6 +28,7 @@ export default async function IncidentsPage() {
         right={
           <div className="flex gap-4 text-sm">
             <Stat n={open.length} label="open" tone="text-high" />
+            {slaBreached > 0 && <Stat n={slaBreached} label="SLA breached" tone="text-critical" />}
             <Stat n={resolved.length} label="resolved" tone="text-pulse" />
             {mttr !== null && <Stat n={fmtMs(mttr)} label="avg time to resolve" tone="text-ink" />}
           </div>
@@ -122,6 +124,11 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
             </span>
           )}
           {!resolved && <AckButton id={i.id} acknowledged={!!i.acknowledged_at} by={i.acknowledged_by} />}
+          {!resolved && i.sla_breach && (i.sla_breach.ack_breached || i.sla_breach.resolve_breached) && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[10px] font-semibold text-critical">
+              <TimerOff className="h-2.5 w-2.5" /> SLA {i.sla_breach.resolve_breached ? "resolve" : "ack"} breached
+            </span>
+          )}
         </div>
         <div className="mono mt-0.5 truncate text-[11px] text-faint">{i.rule_id}</div>
       </div>

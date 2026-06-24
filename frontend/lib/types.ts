@@ -154,6 +154,24 @@ export interface Incident {
   resolved_at?: string;
   acknowledged_at?: string; // a human took ownership → stops timed auto-escalation
   acknowledged_by?: string;
+  sla_breach?: SLABreach; // read-time SLA state vs the tenant's policy (absent = not tracked)
+}
+
+export interface SLATarget {
+  severity: string; // critical | high | medium | low
+  ack_hours: number;
+  resolve_hours: number;
+}
+export interface SLAPolicy {
+  enabled: boolean;
+  targets: SLATarget[];
+}
+export interface SLABreach {
+  severity: string;
+  ack_due_at?: string;
+  resolve_due_at?: string;
+  ack_breached: boolean;
+  resolve_breached: boolean;
 }
 
 export interface Connection {

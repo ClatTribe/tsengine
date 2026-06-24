@@ -16,6 +16,7 @@ import { SlackWebhookControl } from "@/components/settings/slack-webhook-control
 import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
 import { JiraControl } from "@/components/settings/jira-control";
 import { EscalationControl } from "@/components/settings/escalation-control";
+import { SLAControl } from "@/components/settings/sla-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
 import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
@@ -38,6 +39,7 @@ export default async function SettingsPage() {
   const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation] = await Promise.all([
     api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(),
   ]);
+  const sla = await api.slaSettings();
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -164,6 +166,7 @@ export default async function SettingsPage() {
           <SlackWebhookControl configured={notify.has_slack_webhook} />
           <JiraControl config={jira} />
           <EscalationControl policy={escalation} />
+          <SLAControl policy={sla} />
           {[
             { icon: BellRing, name: "PagerDuty", role: "New critical issues page on-call" },
             { icon: Mail, name: "Email", role: "Digest of pending approvals" },
