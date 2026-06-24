@@ -53,9 +53,9 @@ harness ready, target not wired; **✗ none** = no fixture.
 | **container_image** | CVE / misconfig | must-find CVE set (nginx:1.14) | Trivy / Snyk / Anchore (self) | ✅ `nginx` images | **✓ live** — recall 1.0 on must-find CVEs, 0 FP on clean alpine |
 | **ip_address** | network / services | vulnerable-services host | Tenable / Qualys / Rapid7 (no scorecard) | ⚠ compose (ex-strix `vulnerable-services`) | **⚠ stub** — naabu open-port must-find |
 | **domain** | recon breadth | subdomain-enum corpus | subfinder vs amass (published rates) | ✗ (needs a target domain) | **⚠ stub** — subdomain-found must-find |
-| **cloud_account** | CSPM / CIS | CIS Benchmark vs mock AWS | Prowler / scout-suite (self) · CIS AWS Foundations recall | ✗ **strix had none** (tsengine-only asset) | **✅ scorer-ready** — `tsbench cloud` + per-CIS-section recall scorer (`internal/bench/cloud.go`) + ground-truth CSV (`fixtures/cloud/baseline/expected-controls.csv`, 22 controls × 5 sections). Blocked only on a seeded mock account (no code gap); creds forwarded short-lived via env, never on disk |
+| **cloud_account** | CSPM / CIS | CIS Benchmark vs mock AWS | Prowler / scout-suite (self) · CIS AWS Foundations recall | ✗ **strix had none** (tsengine-only asset) | **✅ live offline** — `tsbench cloud-baseline` (fixture account, no sandbox, no AWS creds) measured **CIS recall 1.00 (6/6) vs prowler-only 0.83 (5/6)**, engine+DSPM/CWPP lift **+0.17**. The *live-account* variant `tsbench cloud` is scorer-ready (`internal/bench/cloud.go` + `fixtures/cloud/baseline/expected-controls.csv`, 22 controls × 5 sections), blocked only on a seeded mock account (no code gap; creds forwarded short-lived via env, never on disk) |
 
-**Status: 2 of 7 live** (container_image — recall 1.0 / 0 FP; **repository/SAST — Youden 47.86%, ≈ Checkmarx**);
+**Status: 3 of 7 live** (container_image — recall 1.0 / 0 FP, Youden 1.0; **repository/SAST — Youden 47.86%, ≈ Checkmarx**; **cloud_account — offline CIS recall 1.00 vs prowler 0.83**);
 web (WAVSEP) is scorer-ready but the full-corpus fan-out times out at 50m
 (detection proven on focused scans; scaling fix tracked). The rest are
 harness-ready stubs blocked on a target, not on tsengine code. Per CLAUDE.md §14, every fixture **must**
