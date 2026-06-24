@@ -10,7 +10,10 @@
 // cycle.
 package platform
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Tenant is one customer organization. Every other entity is scoped to a TenantID;
 // the store enforces isolation on that key.
@@ -41,10 +44,66 @@ type Tenant struct {
 	// operator-env Jira is the fallback). BaseURL/Email/Project are plain identifiers; the API token
 	// is sealed (TokenRef). Redacted() drops the whole block.
 	Jira *JiraConfig `json:"jira,omitempty"`
+	// Escalation is the per-tenant incident escalation matrix (the MDR/SOC "who is alerted, how
+	// urgently" for a new incident). nil/disabled = today's behaviour (alert every configured
+	// channel). No secret material — channel names only.
+	Escalation *EscalationPolicy `json:"escalation,omitempty"`
 }
 
 // HasSlackWebhook reports whether the tenant has configured its own Slack incident webhook.
 func (t Tenant) HasSlackWebhook() bool { return t.SlackWebhookRef != "" }
+
+// EscalationPolicy is the per-tenant incident escalation matrix — the MDR/SOC "who is alerted, and
+// how urgently" for a newly-opened incident (PagerDuty/Opsgenie parity + the contractual
+// "escalation matrix with contact number"). When Enabled, the incident alerter routes a new
+// incident to the channels of the FIRST tier whose MinSeverity the incident meets; if it is not
+// acknowledged within AckWindowMins, it escalates to the next tier (timed auto-escalation —
+// Phase 2). Disabled/nil = today's behaviour (alert every configured channel on every incident).
+type EscalationPolicy struct {
+	Enabled       bool             `json:"enabled"`
+	AckWindowMins int              `json:"ack_window_mins,omitempty"` // 0 = no timed auto-escalation
+	Tiers         []EscalationTier `json:"tiers"`
+}
+
+// EscalationTier routes incidents at/above MinSeverity to Channels. Tiers are ordered: tier 0 is
+// the first responder; later tiers are escalation targets.
+type EscalationTier struct {
+	MinSeverity string   `json:"min_severity"` // critical | high | medium | low
+	Channels    []string `json:"channels"`     // slack | pagerduty | teams | email | webhook
+}
+
+// severityRank orders severities so a tier's MinSeverity floor can be compared. Higher = worse.
+func severityRank(s string) int {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "critical":
+		return 4
+	case "high":
+		return 3
+	case "medium":
+		return 2
+	case "low":
+		return 1
+	default:
+		return 0
+	}
+}
+
+// ChannelsFor returns the channels the FIRST matching tier routes a new incident of the given
+// severity to (tiers evaluated in order; a tier matches when the incident severity ≥ its
+// MinSeverity). Returns (nil, false) when the policy is nil/disabled/empty or nothing matches —
+// the caller then falls back to its default alerting. Pure, so it's unit-tested directly.
+func (p *EscalationPolicy) ChannelsFor(severity string) (channels []string, matched bool) {
+	if p == nil || !p.Enabled || len(p.Tiers) == 0 {
+		return nil, false
+	}
+	sev := severityRank(severity)
+	for _, t := range p.Tiers {
+		if sev >= severityRank(t.MinSeverity) && len(t.Channels) > 0 {
+			return t.Channels, true
+		}
+	}
+	return nil, false
+}
 
 // JiraConfig is a tenant's own Jira ticketing destination. BaseURL/Email/Project are plain;
 // TokenRef is the secret.Vault-sealed ref for the API token (never plaintext, never returned).
