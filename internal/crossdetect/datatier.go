@@ -77,6 +77,8 @@ func PrioritizeByDataTier(issues []Issue, assets []platform.Asset) []Issue {
 // unproven one. Attacked supersedes Confirmed (it's the stronger evidence), so they don't stack.
 func exploitabilityBoost(i Issue) int {
 	switch {
+	case i.Live: // genuinely live-exploitable (ACSP fusion) — the strongest fix-first signal
+		return 80
 	case i.Attacked:
 		return 60
 	case i.Confirmed:

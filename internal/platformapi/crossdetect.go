@@ -126,16 +126,22 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 	}
 	attacked := crossdetect.AnnotateRuntime(issues, events)
 
+	// Live-exploitable fusion (the ACSP "active / reachable / exploitable" lens): combine the
+	// runtime-attacked signal with internet-exposure + cross-surface attack-path reachability so the
+	// few genuinely-live issues surface above the static-posture noise. Grounded; prioritization
+	// only — never blocks (§13).
+	assets, _ := d.Store.ListAssets(ctx, tenantID)
+	live := crossdetect.AnnotateLiveRisk(issues, crossdetect.Correlate(assets, findings))
+
 	// Data-tier prioritization: attribute each issue to a tiered asset and re-rank so the
-	// highest-risk issues lead (a finding on a customer-data asset jumps a finding on a
-	// low-sensitivity one). No-op while every asset is at the default Standard tier.
-	if assets, aerr := d.Store.ListAssets(ctx, tenantID); aerr == nil {
-		issues = crossdetect.PrioritizeByDataTier(issues, assets)
-	}
+	// highest-risk issues lead (live first, then a finding on a customer-data asset jumps a finding
+	// on a low-sensitivity one). No-op on ranking while every asset is at the default Standard tier.
+	issues = crossdetect.PrioritizeByDataTier(issues, assets)
 
 	respond(w, map[string]any{
 		"issues": issues, "count": len(issues), "raw_findings": rawCount,
-		"confirmed": confirmed, "ignored": len(ignored), "excluded": excludedCount, "attacked": attacked,
+		"confirmed": confirmed, "ignored": len(ignored), "excluded": excludedCount,
+		"attacked": attacked, "live": live,
 	}, nil)
 }
 
