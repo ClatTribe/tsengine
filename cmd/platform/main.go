@@ -284,7 +284,18 @@ func main() {
 		WebhookSecret: os.Getenv("TSENGINE_WEBHOOK_SECRET"), PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// continuous-monitoring: open/resolve incidents from change between passes,
 		// alerting a human the moment a new at/above-threshold issue appears.
-		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), Alerter: incidentAlerter, NewID: newID},
+		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), Alerter: incidentAlerter, NewID: newID,
+			// Maintenance-window suppression: during an active change-freeze, open no incidents and
+			// page no one (resolves still flow). Reads the tenant's windows at evaluation time.
+			Suppressed: func(ctx context.Context, tenantID string, now time.Time) bool {
+				t, err := st.GetTenant(ctx, tenantID)
+				if err != nil {
+					return false
+				}
+				_, active := t.InMaintenance(now)
+				return active
+			},
+		},
 	}
 	// The operate backend serves non-tech "workspace" assets (identity/email posture):
 	// a snapshot file if the asset names one, else a LIVE fetch from the connected
