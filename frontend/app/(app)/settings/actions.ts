@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { api } from "@/lib/api";
+import type { EscalationPolicy } from "@/lib/types";
 
 // Engage/disengage the global kill-switch (agentic-SMB spec OM-3 / TS-5). When engaged the
 // platform takes no autonomous agent action — no scans, no remediation writes — until a
@@ -27,6 +28,13 @@ export async function syncGitHubPosture(): Promise<{ findings: number }> {
   revalidatePath("/settings");
   revalidatePath("/issues");
   return { findings: r.findings_detected };
+}
+
+// Set the tenant's incident escalation matrix (severity-tiered routing to alert channels).
+export async function setEscalation(pol: EscalationPolicy): Promise<EscalationPolicy> {
+  const r = await api.setEscalationSettings(pol);
+  revalidatePath("/settings");
+  return r;
 }
 
 // Set (or clear) the tenant's own Jira ticketing destination (Bucket B). The API token is sealed
