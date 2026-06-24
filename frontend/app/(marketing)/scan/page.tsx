@@ -8,7 +8,8 @@ export const metadata = pageMeta({
   path: "/scan",
 });
 
-export default function ScanPage() {
+export default async function ScanPage({ searchParams }: { searchParams: Promise<{ domain?: string }> }) {
+  const { domain } = await searchParams;
   return (
     <section className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
@@ -22,7 +23,7 @@ export default function ScanPage() {
           buyer&apos;s questionnaire look at first — email auth (DMARC/SPF/DKIM), HTTPS/TLS, and security headers. Get a grade in seconds.
         </p>
         <div className="mt-8">
-          <ScanForm />
+          <ScanForm initialDomain={domain} />
         </div>
       </div>
     </section>
