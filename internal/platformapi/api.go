@@ -114,6 +114,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                      // PUBLIC, HMAC-token-gated; safe aggregates only
 	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                       // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
 	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                // PUBLIC: book-a-demo / talk-to-sales lead capture
+	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                  // PUBLIC: embeddable SVG grade badge (viral loop)
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
