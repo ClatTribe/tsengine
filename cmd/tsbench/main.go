@@ -672,7 +672,11 @@ func runCmd(argv []string, ablation bool) error {
 	trials := fs.Int("trials", 1, "trial count (median + p10/p90 over N)")
 	binary := fs.String("binary", "./bin/tsengine", "tsengine binary path")
 	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox image")
-	timeout := fs.String("timeout", "300s", "per-scan timeout")
+	// 600s, not 300s: a COLD container_image bench (trivy DB download + the image pull happening
+	// INSIDE the sandbox on the first run) doesn't finish in 300s, which truncated the scan and
+	// produced a false FAIL (recall 0.000 with only the fast tools' findings). 600s covers a cold
+	// run; warm runs still finish early (it's a cap, not a fixed wait).
+	timeout := fs.String("timeout", "600s", "per-scan timeout")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
