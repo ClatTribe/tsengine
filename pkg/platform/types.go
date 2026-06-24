@@ -48,6 +48,9 @@ type Tenant struct {
 	// urgently" for a new incident). nil/disabled = today's behaviour (alert every configured
 	// channel). No secret material — channel names only.
 	Escalation *EscalationPolicy `json:"escalation,omitempty"`
+	// SLA is the per-tenant remediation SLA policy (per-severity time-to-acknowledge +
+	// time-to-resolve targets). nil/disabled = no SLA tracking. No secret material.
+	SLA *SLAPolicy `json:"sla,omitempty"`
 }
 
 // HasSlackWebhook reports whether the tenant has configured its own Slack incident webhook.
@@ -70,6 +73,72 @@ type EscalationPolicy struct {
 type EscalationTier struct {
 	MinSeverity string   `json:"min_severity"` // critical | high | medium | low
 	Channels    []string `json:"channels"`     // slack | pagerduty | teams | email | webhook
+}
+
+// SLAPolicy is the per-tenant remediation SLA — the time-to-acknowledge + time-to-resolve targets
+// a managed-security buyer expects (and the AAI-PO "24x7 SOC" implies: a serious issue must be
+// owned and fixed inside a contracted window). Every MDR / vuln-mgmt competitor ships per-severity
+// SLAs; this is that, grounded on the incident timestamps (OpenedAt / AcknowledgedAt / ResolvedAt).
+type SLAPolicy struct {
+	Enabled bool        `json:"enabled"`
+	Targets []SLATarget `json:"targets"`
+}
+
+// SLATarget is the per-severity window. Hours (not minutes) — SLAs are coarse. 0 = no target for
+// that clock (e.g. AckHours 0 → acknowledgement is not SLA-tracked for this severity).
+type SLATarget struct {
+	Severity     string `json:"severity"`      // critical | high | medium | low
+	AckHours     int    `json:"ack_hours"`     // hours from open to acknowledge
+	ResolveHours int    `json:"resolve_hours"` // hours from open to resolve
+}
+
+// SLABreach is the evaluated SLA state of one incident against the policy.
+type SLABreach struct {
+	Severity        string    `json:"severity"`
+	AckDueAt        time.Time `json:"ack_due_at,omitempty"`
+	ResolveDueAt    time.Time `json:"resolve_due_at,omitempty"`
+	AckBreached     bool      `json:"ack_breached"`     // not acknowledged in time
+	ResolveBreached bool      `json:"resolve_breached"` // not resolved in time
+}
+
+// Breached reports whether either clock is breached.
+func (b SLABreach) Breached() bool { return b.AckBreached || b.ResolveBreached }
+
+// TargetFor returns the SLA target for a severity (exact match). ok=false when there is no target.
+func (p *SLAPolicy) TargetFor(severity string) (SLATarget, bool) {
+	if p == nil || !p.Enabled {
+		return SLATarget{}, false
+	}
+	for _, t := range p.Targets {
+		if t.Severity == severity {
+			return t, true
+		}
+	}
+	return SLATarget{}, false
+}
+
+// Evaluate computes the SLA state of an incident against the policy. ok=false when SLA tracking does
+// not apply (no policy / disabled / no target for the severity). Grounded on the incident clocks:
+//   - ack breach: the incident is not yet acknowledged AND now is past OpenedAt+AckHours;
+//   - resolve breach: the incident is not resolved AND now is past OpenedAt+ResolveHours.
+//
+// A met clock never breaches (an acknowledged incident has no ack breach; a resolved one has no
+// resolve breach). A 0-hour target disables that clock. now is injected so it is testable.
+func (p *SLAPolicy) Evaluate(inc Incident, now time.Time) (SLABreach, bool) {
+	tgt, ok := p.TargetFor(inc.Severity)
+	if !ok {
+		return SLABreach{}, false
+	}
+	b := SLABreach{Severity: inc.Severity}
+	if tgt.AckHours > 0 {
+		b.AckDueAt = inc.OpenedAt.Add(time.Duration(tgt.AckHours) * time.Hour)
+		b.AckBreached = !inc.Acknowledged() && now.After(b.AckDueAt)
+	}
+	if tgt.ResolveHours > 0 {
+		b.ResolveDueAt = inc.OpenedAt.Add(time.Duration(tgt.ResolveHours) * time.Hour)
+		b.ResolveBreached = inc.Status != IncidentResolved && now.After(b.ResolveDueAt)
+	}
+	return b, true
 }
 
 // severityRank orders severities so a tier's MinSeverity floor can be compared. Higher = worse.

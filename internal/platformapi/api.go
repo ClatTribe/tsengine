@@ -100,6 +100,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                     // set + seal the tenant's Jira API token (Bucket B)
 	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))         // per-tenant incident escalation matrix (MDR/SOC)
 	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))         // set the escalation tiers (severity → channels)
+	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                       // per-tenant remediation SLA policy (ack/resolve targets)
+	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                       // set the per-severity SLA targets
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                            // global kill-switch: halt/resume all agent action
 	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                      // agent capability manifest (WRD-1): what the automation can touch
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                              // owner's shareable Trust Center token
