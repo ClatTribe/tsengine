@@ -163,6 +163,16 @@ export interface Connection {
   created_at?: string;
 }
 
+export interface EscalationTier {
+  min_severity: string; // critical | high | medium | low
+  channels: string[]; // slack | pagerduty | teams | discord | webhook
+}
+export interface EscalationPolicy {
+  enabled: boolean;
+  ack_window_mins: number;
+  tiers: EscalationTier[];
+}
+
 export interface Tenant {
   id: string;
   name: string;
