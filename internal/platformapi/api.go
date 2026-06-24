@@ -416,6 +416,7 @@ func (d Deps) handleIncidents(w http.ResponseWriter, r *http.Request, tenantID s
 		respond(w, nil, err)
 		return
 	}
+	d.annotateSLA(r.Context(), tenantID, all) // transient sla_breach per incident (read-time)
 	if r.URL.Query().Get("status") == "all" {
 		respond(w, all, nil)
 		return

@@ -1,10 +1,12 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -93,4 +95,21 @@ func (d Deps) handlePutSLASettings(w http.ResponseWriter, r *http.Request, tenan
 			"remediation SLA policy set")
 	}
 	writeJSON(w, http.StatusOK, t.SLA)
+}
+
+// annotateSLA stamps each incident's transient SLABreach against the tenant's SLA policy (read-time
+// only — never persisted). No policy / disabled → leaves every incident's sla_breach nil. The slice
+// is the caller's own copy from ListIncidents, so mutating elements here doesn't touch stored state.
+func (d Deps) annotateSLA(ctx context.Context, tenantID string, incs []platform.Incident) {
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil || t.SLA == nil || !t.SLA.Enabled {
+		return
+	}
+	now := time.Now().UTC()
+	for i := range incs {
+		if b, ok := t.SLA.Evaluate(incs[i], now); ok {
+			b := b // capture per-iteration
+			incs[i].SLABreach = &b
+		}
+	}
 }
