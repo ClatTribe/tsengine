@@ -6,7 +6,8 @@ import { Search, Loader2, ShieldCheck, ShieldAlert, Check, X, ArrowRight } from 
 
 type Check = { name: string; ok: boolean; detail: string };
 type Finding = { title: string; severity: string };
-type Result = { domain: string; score: number; grade: string; checks: Check[]; findings: Finding[] };
+type Questionnaire = { failed: number; total: number; headline: string };
+type Result = { domain: string; score: number; grade: string; questionnaire?: Questionnaire; checks: Check[]; findings: Finding[] };
 
 const GRADE_TONE: Record<string, string> = {
   A: "text-pulse", B: "text-pulse", C: "text-medium", D: "text-high", F: "text-critical",
@@ -64,7 +65,8 @@ export function ScanForm() {
         </button>
       </form>
       <p className="mt-2 text-center text-xs text-faint">
-        Read-only check of your domain&apos;s email-auth (DMARC/SPF/DKIM) via public DNS. No signup, nothing intrusive.
+        Read-only check of your domain — email-auth (DMARC/SPF/DKIM), HTTPS/TLS, and security headers. Public DNS plus one
+        request to your homepage. No signup, nothing intrusive.
       </p>
 
       {error && (
@@ -73,22 +75,27 @@ export function ScanForm() {
 
       {result && (
         <div className="mt-6 animate-fade-rise space-y-4 text-left">
-          <div className="card flex items-center gap-5 p-6">
-            <div className={`grid h-20 w-20 shrink-0 place-items-center rounded-2xl border-2 ${result.grade === "A" || result.grade === "B" ? "border-pulse/40 bg-pulse-soft" : "border-high/40 bg-high/10"}`}>
-              <span className={`text-4xl font-bold ${GRADE_TONE[result.grade] ?? "text-ink"}`}>{result.grade}</span>
-            </div>
-            <div className="min-w-0">
-              <div className="mono truncate text-xs text-faint">{result.domain}</div>
-              <div className="mt-0.5 text-2xl font-semibold tracking-tight">
-                Email-auth score: <span className={GRADE_TONE[result.grade] ?? "text-ink"}>{result.score}/100</span>
+          {(() => {
+            const q = result.questionnaire ?? { failed: result.findings.length, total: result.checks.length, headline: "" };
+            const passed = q.total - q.failed;
+            const good = result.grade === "A" || result.grade === "B";
+            return (
+              <div className="card flex items-center gap-5 p-6">
+                <div className={`grid h-20 w-20 shrink-0 place-items-center rounded-2xl border-2 ${good ? "border-pulse/40 bg-pulse-soft" : "border-high/40 bg-high/10"}`}>
+                  <span className={`text-4xl font-bold ${GRADE_TONE[result.grade] ?? "text-ink"}`}>{result.grade}</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="mono truncate text-xs text-faint">{result.domain}</div>
+                  <div className="mt-0.5 text-lg font-semibold leading-snug tracking-tight">
+                    {q.headline || (q.failed === 0 ? "You pass the basic enterprise-questionnaire checks." : `You'd fail ${q.failed} of ${q.total} basic security-questionnaire checks.`)}
+                  </div>
+                  <p className="mt-1 text-sm text-muted">
+                    Security-questionnaire readiness · <span className={GRADE_TONE[result.grade] ?? "text-ink"}>{passed}/{q.total} checks pass</span> · score {result.score}/100
+                  </p>
+                </div>
               </div>
-              <p className="mt-1 text-sm text-muted">
-                {result.findings.length === 0
-                  ? "No email-spoofing gaps found — strong setup."
-                  : `${result.findings.length} gap${result.findings.length > 1 ? "s" : ""} let attackers spoof your domain for phishing.`}
-              </p>
-            </div>
-          </div>
+            );
+          })()}
 
           <div className="card divide-y divide-border p-0">
             {result.checks.map((c) => (
@@ -104,14 +111,14 @@ export function ScanForm() {
             ))}
           </div>
 
-          {/* Conversion: this is just one surface — sign up for the full picture */}
+          {/* Conversion: this is the surface a questionnaire checks first — sign up for the full picture */}
           <div className="rounded-2xl border border-accent/30 bg-accent-soft/30 p-5 text-center">
             <div className="flex items-center justify-center gap-2 text-sm font-semibold">
-              <ShieldAlert className="h-4 w-4 text-accent" /> This is just your email surface.
+              <ShieldAlert className="h-4 w-4 text-accent" /> This is what an enterprise buyer&apos;s security review sees first.
             </div>
             <p className="mx-auto mt-1.5 max-w-md text-sm text-muted">
-              Connect a system free and TensorShield assesses your code, cloud, and identity too — then fixes what it finds,
-              with you approving anything that matters.
+              It&apos;s the externally-visible surface. Connect a system free and TensorShield assesses your code, cloud, and
+              identity too — maps every gap to its SOC 2 control, then fixes what it finds with you approving anything that matters.
             </p>
             <Link href="/signup" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px">
               See your full posture — free <ArrowRight className="h-4 w-4" />
