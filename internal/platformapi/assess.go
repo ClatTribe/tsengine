@@ -57,9 +57,10 @@ func assess(dc operate.DomainConfig, wp webPosture) assessResult {
 }
 
 type assessCheck struct {
-	Name   string `json:"name"`
-	OK     bool   `json:"ok"`
-	Detail string `json:"detail"`
+	Name   string    `json:"name"`
+	OK     bool      `json:"ok"`
+	Detail string    `json:"detail"`
+	Fix    *checkFix `json:"fix,omitempty"` // copy-paste remediation; present only when !OK
 }
 
 type assessFinding struct {
@@ -94,9 +95,9 @@ func assessEmailAuth(dc operate.DomainConfig) assessResult {
 	enforced := dc.DMARC == "reject" || dc.DMARC == "quarantine"
 	res := assessResult{Domain: dc.Name, Score: 100}
 	res.Checks = []assessCheck{
-		{Name: "DMARC enforcement", OK: enforced, Detail: dmarcDetail(dc.DMARC)},
-		{Name: "SPF", OK: dc.SPF, Detail: ternary(dc.SPF, "Sender Policy Framework record present.", "No SPF record — senders can't be validated.")},
-		{Name: "DKIM", OK: dc.DKIM, Detail: ternary(dc.DKIM, "DKIM signing key published.", "No DKIM key at the common selectors we check. DKIM uses domain-specific selectors DNS can't enumerate, so your provider may publish one we couldn't see — confirm in your mail settings.")},
+		{Name: "DMARC enforcement", OK: enforced, Detail: dmarcDetail(dc.DMARC), Fix: ifFail(!enforced, dmarcFix(dc.Name))},
+		{Name: "SPF", OK: dc.SPF, Detail: ternary(dc.SPF, "Sender Policy Framework record present.", "No SPF record — senders can't be validated."), Fix: ifFail(!dc.SPF, spfFix(dc.Name))},
+		{Name: "DKIM", OK: dc.DKIM, Detail: ternary(dc.DKIM, "DKIM signing key published.", "No DKIM key at the common selectors we check. DKIM uses domain-specific selectors DNS can't enumerate, so your provider may publish one we couldn't see — confirm in your mail settings."), Fix: ifFail(!dc.DKIM, dkimFix())},
 	}
 	// Penalise from the grounded operate findings so the score reflects the same engine logic.
 	for _, f := range operate.Assess(operate.Workspace{Org: dc.Name, Domains: []operate.DomainConfig{dc}}, operate.Options{}) {
