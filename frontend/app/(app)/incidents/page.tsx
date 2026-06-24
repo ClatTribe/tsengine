@@ -5,6 +5,7 @@ import type { Incident } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { AckButton } from "@/components/incidents/ack-button";
+import { SOCScorecard } from "@/components/incidents/soc-scorecard";
 import { timeAgo, duration } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function IncidentsPage() {
   // Join incidents to the gated actions so an OPEN incident can show the agent's response
   // (the detect→respond half) — a queued fix awaiting approval, not just the detection.
-  const [all, approvals, windows] = await Promise.all([api.incidents("all"), api.approvals(), api.maintenanceWindows()]);
+  const [all, approvals, windows, soc] = await Promise.all([api.incidents("all"), api.approvals(), api.maintenanceWindows(), api.socMetrics()]);
   const now = Date.now();
   const activeWindow = windows.find((w) => new Date(w.starts_at).getTime() <= now && now < new Date(w.ends_at).getTime());
   const pending = new Set(approvals.map((a) => a.finding_id).filter(Boolean));
@@ -36,6 +37,8 @@ export default async function IncidentsPage() {
           </div>
         }
       />
+
+      <SOCScorecard m={soc} />
 
       {activeWindow && (
         <div className="flex items-center gap-2.5 rounded-lg border border-medium/30 bg-medium/10 px-3.5 py-2.5 text-sm text-ink">

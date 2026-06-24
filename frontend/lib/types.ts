@@ -183,6 +183,24 @@ export interface MaintenanceWindow {
   created_by?: string;
 }
 
+// SOC-performance scorecard (GET /v1/soc-metrics) — grounded in incident timestamps.
+export interface SOCMetrics {
+  generated_at: string;
+  open_incidents: number;
+  resolved_incidents: number;
+  acknowledged: number;
+  unacknowledged: number;
+  sla_tracked: number;
+  sla_compliant: number;
+  sla_breached: number;
+  sla_compliance_pct: number;
+  mtta_hours: number;
+  mttr_hours: number;
+  aging_under_1d: number;
+  aging_1_7d: number;
+  aging_over_7d: number;
+}
+
 export interface Connection {
   id: string;
   kind: string;
