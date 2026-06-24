@@ -215,3 +215,54 @@ func TestReconcile_AttackedEscalatesBelowThreshold(t *testing.T) {
 		t.Errorf("not-attacked medium finding must not open an incident, got %+v", res2)
 	}
 }
+
+func TestEscalateOverdue_RealertsOverdueOnly(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	now := time.Unix(1700000000, 0).UTC()
+	alerter := &captureAlerter{}
+	d := &Detector{Store: st, Alerter: alerter, Now: func() time.Time { return now }}
+
+	mk := func(id, key string, openedAgo, ackedAgo time.Duration) platform.Incident {
+		inc := platform.Incident{ID: id, TenantID: "t1", Key: key, RuleID: "r", Title: key,
+			Severity: "critical", Status: platform.IncidentOpen, OpenedAt: now.Add(-openedAgo)}
+		if ackedAgo > 0 {
+			inc.AcknowledgedAt = now.Add(-ackedAgo)
+		}
+		return inc
+	}
+	_ = st.PutIncident(ctx, mk("inc-1", "r|e1", 60*time.Minute, 0))  // overdue (open 60m, window 30m)
+	_ = st.PutIncident(ctx, mk("inc-2", "r|e2", 5*time.Minute, 0))   // fresh (within window)
+	_ = st.PutIncident(ctx, mk("inc-3", "r|e3", 60*time.Minute, 10*time.Minute)) // acked → skip
+
+	esc, err := d.EscalateOverdue(ctx, "t1", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(esc) != 1 || esc[0].ID != "inc-1" {
+		t.Fatalf("only the overdue, unacked incident should escalate, got %+v", esc)
+	}
+	if len(alerter.alerts) != 1 || alerter.alerts[0].ID != "inc-1" {
+		t.Fatalf("only inc-1 should re-alert, got %+v", alerter.alerts)
+	}
+	// LastEscalatedAt was stamped → an immediate second pass must not re-ping (≤ 1 per window)
+	esc2, _ := d.EscalateOverdue(ctx, "t1", 30)
+	if len(esc2) != 0 {
+		t.Fatalf("should not re-escalate within the same window, got %+v", esc2)
+	}
+}
+
+func TestEscalateOverdue_NoOpWhenWindowOff(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	now := time.Unix(1700000000, 0).UTC()
+	d := &Detector{Store: st, Now: func() time.Time { return now }}
+	_ = st.PutIncident(ctx, platform.Incident{ID: "inc-1", TenantID: "t1", Status: platform.IncidentOpen, OpenedAt: now.Add(-2 * time.Hour)})
+	esc, err := d.EscalateOverdue(ctx, "t1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(esc) != 0 {
+		t.Fatalf("window off → no escalation, got %+v", esc)
+	}
+}

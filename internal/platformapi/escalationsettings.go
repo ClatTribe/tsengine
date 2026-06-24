@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -98,4 +99,45 @@ func (d Deps) handlePutEscalationSettings(w http.ResponseWriter, r *http.Request
 			"incident escalation matrix set")
 	}
 	writeJSON(w, http.StatusOK, t.Escalation)
+}
+
+// handleAckIncident records that a human has taken ownership of an OPEN incident (the MDR "I'm on
+// it"). An acknowledged incident is excluded from timed auto-escalation (Incident.Overdue is false
+// once AcknowledgedAt is set), so the "page again if unacknowledged" loop stops. Tenant-scoped: an
+// incident id belonging to another tenant is not found (the isolation boundary, §18.2 inv. 2).
+// Idempotent — acking an already-acked incident returns it unchanged. Ledger-recorded.
+func (d Deps) handleAckIncident(w http.ResponseWriter, r *http.Request, tenantID string) {
+	id := r.PathValue("id")
+	all, err := d.Store.ListIncidents(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	var body struct {
+		By string `json:"by"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body) // optional; who acknowledged
+	for _, inc := range all {
+		if inc.ID != id {
+			continue
+		}
+		if inc.Acknowledged() {
+			respond(w, inc, nil) // idempotent
+			return
+		}
+		inc.AcknowledgedAt = time.Now().UTC()
+		inc.AcknowledgedBy = body.By
+		if err := d.Store.PutIncident(r.Context(), inc); err != nil {
+			respond(w, nil, err)
+			return
+		}
+		if d.Recorder != nil {
+			d.Recorder.Record("incident acknowledged", "incident",
+				map[string]any{"tenant_id": tenantID, "incident_id": inc.ID, "by": body.By},
+				"incident ownership taken")
+		}
+		respond(w, inc, nil)
+		return
+	}
+	http.Error(w, "incident not found", http.StatusNotFound)
 }

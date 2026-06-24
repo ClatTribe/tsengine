@@ -124,6 +124,40 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 	return res, nil
 }
 
+// EscalateOverdue re-alerts the tenant's OPEN, UNACKNOWLEDGED incidents that have passed the
+// escalation ack window (timed auto-escalation — the MDR "if no one acks within N minutes, page
+// again"). It re-fires the Alerter and stamps LastEscalatedAt so each incident re-pings at most
+// once per window. ackWindowMins ≤ 0 (no policy / window off) is a no-op. Returns what it re-alerted.
+//
+// It runs each monitoring pass after Reconcile, so the window is checked at the scan cadence
+// (sub-cadence precision isn't promised — an incident escalates on the first pass after its window
+// elapses). Best-effort, like the open-time alert: a delivery error never blocks the others.
+func (d *Detector) EscalateOverdue(ctx context.Context, tenantID string, ackWindowMins int) ([]platform.Incident, error) {
+	if d == nil || ackWindowMins <= 0 {
+		return nil, nil
+	}
+	all, err := d.Store.ListIncidents(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var escalated []platform.Incident
+	for _, inc := range all {
+		if !inc.Overdue(ackWindowMins, d.now()) {
+			continue
+		}
+		if d.Alerter != nil {
+			_ = d.Alerter.IncidentOpened(ctx, inc) // best-effort re-alert (the "page again")
+		}
+		inc.LastEscalatedAt = d.now()
+		d.record("incident_escalated", inc)
+		if err := d.Store.PutIncident(ctx, inc); err != nil {
+			return escalated, err
+		}
+		escalated = append(escalated, inc)
+	}
+	return escalated, nil
+}
+
 // Key is the stable cross-scan identity of an issue: its rule on its cited entity. Finding
 // IDs regenerate per scan, so they can't be used; rule+endpoint is the natural dedup key
 // (and matches the GRC/runbook grounding — the same entity, the same issue).
