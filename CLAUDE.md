@@ -662,6 +662,23 @@ core; the live *execution* stays each core's gated half:
   action to the tenant's own Jira (resolver opens the sealed token → `connector.NewJira`), falling
   back to the operator tracker (`JIRA_BASE_URL`/ServiceNow/Linear env — the Bucket-C fallback). So
   remediation tickets are multi-tenant, not one shared project.
+- **escalation matrix (24×7-SOC parity)** — `GET/PUT /v1/settings/escalation` + the Settings
+  "Escalation matrix" control: stores `Tenant.Escalation` (`platform.EscalationPolicy` — ordered
+  tiers of `MinSeverity → Channels` + an `AckWindowMins`; channel names only, no secret → plain).
+  Drives **two** runtime behaviours: (1) **severity routing** — `notify.PolicyRouter` (wraps a
+  channel-name→`notify.Alerter` map + the per-tenant `TenantRouter` as `Default`) routes a new
+  incident to the FIRST matching tier's channels, never-drop fallback to Default; wired as the
+  incident alerter in `cmd/platform`. (2) **timed auto-escalation** — `Incident.Overdue(ackWindowMins,
+  now)` (open + unacked + past window, ≤1 re-ping/window) drives `detect.Detector.EscalateOverdue`,
+  called each pass by `runner.RescanTenant`; `POST /v1/incidents/{id}/ack` (a human takes ownership →
+  `Overdue` goes false → stops) + the `/incidents` Acknowledge button. PagerDuty/Opsgenie parity.
+- **remediation SLAs (MDR/vuln-mgmt parity)** — `GET/PUT /v1/settings/sla` + the Settings
+  "Remediation SLAs" control: stores `Tenant.SLA` (`platform.SLAPolicy` — per-severity `AckHours` +
+  `ResolveHours`; no secret → plain). `SLAPolicy.Evaluate(inc, now) → SLABreach` (ack/resolve breach
+  grounded on the incident clocks `OpenedAt`/`AcknowledgedAt`/`ResolvedAt`; a met clock never
+  breaches, 0-hours disables a clock). `GET /v1/incidents` annotates each incident with a TRANSIENT
+  `SLABreach` (read-time via `Deps.annotateSLA`, never persisted); `/incidents` shows an "SLA
+  breached" badge + count. Pure-compute, grounded, LLM-free.
 - **CREDENTIAL SEALING (§18.2 inv. 6)** — the login-flow + authz-test configs carry secrets (passwords /
   tokens / auth headers), so the setters **seal the config blob via `d.Vault`** before it touches the store
   (`Asset.Meta["login_flow"]`/`["authz_test"]` hold a sealed ref, never plaintext); no vault → the setter
