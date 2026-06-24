@@ -183,6 +183,16 @@ export interface MaintenanceWindow {
   created_by?: string;
 }
 
+// On-call escalation roster entry (GET /v1/contacts) — who the escalation matrix names.
+export interface Contact {
+  id: string;
+  name: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+  order: number;
+}
+
 // SOC-performance scorecard (GET /v1/soc-metrics) — grounded in incident timestamps.
 export interface SOCMetrics {
   generated_at: string;

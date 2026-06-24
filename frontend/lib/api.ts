@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -226,6 +226,12 @@ export const api = {
       sla_tracked: 0, sla_compliant: 0, sla_breached: 0, sla_compliance_pct: 0, mtta_hours: 0, mttr_hours: 0,
       aging_under_1d: 0, aging_1_7d: 0, aging_over_7d: 0,
     }),
+
+  // On-call escalation roster (names + numbers the escalation matrix references).
+  contacts: () => safe<Contact[]>("/v1/contacts", []),
+  addContact: (c: { name: string; role?: string; email?: string; phone?: string; order: number }) =>
+    call<Contact>("/v1/contacts", { method: "POST", body: JSON.stringify(c) }),
+  deleteContact: (id: string) => call<{ deleted: string }>(`/v1/contacts/${id}`, { method: "DELETE" }),
 
   // Planned change-freeze windows (suppress alerting while active).
   maintenanceWindows: () => safe<MaintenanceWindow[]>("/v1/maintenance-windows", []),

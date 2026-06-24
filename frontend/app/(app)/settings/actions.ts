@@ -59,6 +59,16 @@ export async function deleteMaintenanceWindow(id: string): Promise<void> {
   revalidatePath("/incidents");
 }
 
+// Add / remove an on-call escalation contact (the roster the escalation matrix names).
+export async function addContact(c: { name: string; role?: string; email?: string; phone?: string; order: number }): Promise<void> {
+  await api.addContact(c);
+  revalidatePath("/settings");
+}
+export async function deleteContact(id: string): Promise<void> {
+  await api.deleteContact(id);
+  revalidatePath("/settings");
+}
+
 // Set (or clear) the tenant's own Jira ticketing destination (Bucket B). The API token is sealed
 // server-side and never returned; we get back base/email/project + whether a token is set.
 export async function setJira(
