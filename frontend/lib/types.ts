@@ -108,6 +108,15 @@ export interface RulesOfEngagement {
   consent?: string; // explicit recorded consent statement (required for active mode)
 }
 
+// Signoff is a named human's review attestation on the pentest report (named accountability).
+export interface Signoff {
+  signer: string;
+  role?: string;
+  statement?: string;
+  signed_at: string;
+  ledger_ref?: string;
+}
+
 export interface PentestEngagement {
   id: string;
   tenant_id: string;
@@ -120,6 +129,7 @@ export interface PentestEngagement {
   created_at: string;
   started_at?: string;
   completed_at?: string;
+  signoff?: Signoff | null; // named human sign-off on the report (the HITL accountability)
 }
 
 export interface PentestStats {

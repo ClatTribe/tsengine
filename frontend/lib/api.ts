@@ -283,6 +283,9 @@ export const api = {
     rules_of_engagement: { authorized_targets: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string; consent?: string };
   }) => call<PentestEngagement>("/v1/pentest", { method: "POST", body: JSON.stringify(body) }),
   runPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/run`, { method: "POST" }),
+  // Named human sign-off on the VAPT report (the HITL accountability layer).
+  signoffPentest: (id: string, body: { signer: string; role?: string; statement?: string }) =>
+    call<PentestEngagement>(`/v1/pentest/${id}/signoff`, { method: "POST", body: JSON.stringify(body) }),
 
   // Suppress (ignore / accept-risk) a unified issue, or restore a suppressed one.
   ignoreIssue: (key: string, reason: string, note?: string) =>
