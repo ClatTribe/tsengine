@@ -103,6 +103,9 @@ export default function Product() {
         </div>
       </section>
 
+      {/* Open-source engines — trust through transparency */}
+      <OSSBand />
+
       {/* Asset coverage */}
       <AssetCoverageBand />
 
@@ -130,6 +133,58 @@ export default function Product() {
 
       <CTABand />
     </>
+  );
+}
+
+// OSSBand — trust through transparency. We don't ask you to trust a black-box scanner: under the
+// hood TensorShield runs the same open-source engines the best security teams already rely on, in
+// one place, with an AI security engineer on top. Every tool listed is wrapped in the engine today.
+const OSS_GROUPS: { icon: typeof Globe; title: string; blurb: string; tools: string[] }[] = [
+  { icon: Globe, title: "Web & API testing", blurb: "Dynamic scanning, crawling, and injection testing of your live app.", tools: ["nuclei", "sqlmap", "dalfox", "katana", "httpx", "ffuf", "wpscan"] },
+  { icon: Code2, title: "Code & secrets", blurb: "Static analysis, taint tracking, and leaked-secret detection in your repos.", tools: ["semgrep", "CodeQL", "gitleaks", "trufflehog", "govulncheck"] },
+  { icon: Box, title: "Dependencies & supply chain", blurb: "Known-CVE scanning and SBOM generation across your dependency tree.", tools: ["trivy", "grype", "osv-scanner", "syft"] },
+  { icon: Network, title: "Containers & IaC", blurb: "Image, Dockerfile, and infrastructure-as-code misconfiguration checks.", tools: ["dockle", "hadolint", "checkov", "trivy"] },
+  { icon: Cloud, title: "Cloud posture", blurb: "CIS-benchmark and misconfiguration coverage across AWS, GCP, and Azure.", tools: ["prowler", "scoutsuite", "cloudfox"] },
+  { icon: Radar, title: "Network, recon & mobile", blurb: "Port and service discovery, subdomain enumeration, and mobile SAST.", tools: ["nmap", "naabu", "subfinder", "amass", "mobsfscan"] },
+];
+
+function OSSBand() {
+  return (
+    <section className="bg-surface">
+      <div className="mx-auto max-w-6xl px-5 py-20">
+        <div className="mx-auto mb-12 max-w-2xl text-center">
+          <span className="text-xs font-semibold uppercase tracking-wider text-accent">No black box</span>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight">Built on the tools the best security teams already trust.</h2>
+          <p className="mt-4 text-base leading-relaxed text-muted">
+            We don&apos;t reinvent detection — and we don&apos;t hide what runs under the hood. TensorShield orchestrates
+            the leading open-source security engines so your recall matches running each one yourself, then layers an AI
+            security engineer on top to triage, prove, and fix. Best-in-class coverage, one place, fully transparent.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {OSS_GROUPS.map(({ icon: Icon, title, blurb, tools }) => (
+            <div key={title} className="card p-5">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <h3 className="text-sm font-semibold">{title}</h3>
+              </div>
+              <p className="mt-2.5 text-sm leading-relaxed text-muted">{blurb}</p>
+              <div className="mt-3.5 flex flex-wrap gap-1.5">
+                {tools.map((t) => (
+                  <span key={t} className="mono rounded-md border border-border bg-bg px-2 py-0.5 text-[11px] text-ink">{t}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mx-auto mt-8 max-w-2xl text-center text-xs text-faint">
+          All trademarks belong to their respective open-source projects. TensorShield orchestrates these tools; it is
+          not affiliated with or endorsed by them.
+        </p>
+      </div>
+    </section>
   );
 }
 

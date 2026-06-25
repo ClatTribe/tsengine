@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, BookOpen } from "lucide-react";
 import { pageMeta } from "@/lib/seo";
-import { POSTS, STAGE_META, type FunnelStage } from "@/lib/blog";
+import { POSTS } from "@/lib/blog";
 
 export const metadata = pageMeta({
   title: "Blog — Security & SOC 2 for startups | TensorShield",
@@ -10,11 +10,11 @@ export const metadata = pageMeta({
   path: "/blog",
 });
 
-const STAGE_ORDER: FunnelStage[] = ["ToFu", "MoFu", "BoFu"];
-
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
+
+const sortedPosts = [...POSTS].sort((a, b) => b.date.localeCompare(a.date));
 
 export default function BlogIndex() {
   return (
@@ -32,36 +32,22 @@ export default function BlogIndex() {
         </p>
       </div>
 
-      <div className="mt-14 space-y-12">
-        {STAGE_ORDER.map((stage) => {
-          const posts = POSTS.filter((p) => p.stage === stage);
-          if (posts.length === 0) return null;
-          return (
-            <div key={stage}>
-              <div className="mb-4 flex items-baseline gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-ink">{STAGE_META[stage].label}</h2>
-                <span className="text-xs text-faint">{STAGE_META[stage].blurb}</span>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {posts.map((p) => (
-                  <Link
-                    key={p.slug}
-                    href={`/blog/${p.slug}`}
-                    className="group card flex flex-col p-5 transition hover:border-border-strong"
-                  >
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-accent">{STAGE_META[stage].label}</div>
-                    <h3 className="mt-1.5 text-lg font-semibold leading-snug tracking-tight group-hover:text-accent">{p.title}</h3>
-                    <p className="mt-2 flex-1 text-sm leading-relaxed text-muted">{p.description}</p>
-                    <div className="mt-4 flex items-center justify-between text-xs text-faint">
-                      <span>{fmtDate(p.date)} · {p.readMins} min read</span>
-                      <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5 group-hover:text-accent" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
+      <div className="mt-14 grid gap-4 sm:grid-cols-2">
+        {sortedPosts.map((p) => (
+          <Link
+            key={p.slug}
+            href={`/blog/${p.slug}`}
+            className="group card flex flex-col p-5 transition hover:border-border-strong"
+          >
+            <div className="text-[11px] font-medium uppercase tracking-wide text-accent">{p.category}</div>
+            <h2 className="mt-1.5 text-lg font-semibold leading-snug tracking-tight group-hover:text-accent">{p.title}</h2>
+            <p className="mt-2 flex-1 text-sm leading-relaxed text-muted">{p.description}</p>
+            <div className="mt-4 flex items-center justify-between text-xs text-faint">
+              <span>{fmtDate(p.date)} · {p.readMins} min read</span>
+              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5 group-hover:text-accent" />
             </div>
-          );
-        })}
+          </Link>
+        ))}
       </div>
     </section>
   );
