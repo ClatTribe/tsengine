@@ -50,10 +50,25 @@ const config: Config = {
           "50%": { opacity: "0.45", transform: "scale(0.82)" },
         },
         shimmer: { "100%": { transform: "translateX(100%)" } },
+        aurora: {
+          "0%,100%": { transform: "translate3d(0,0,0) scale(1)", opacity: "0.55" },
+          "50%": { transform: "translate3d(2%,-3%,0) scale(1.12)", opacity: "0.8" },
+        },
+        "row-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        scanline: {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(900%)" },
+        },
       },
       animation: {
         "fade-rise": "fade-rise 240ms cubic-bezier(0.16,1,0.3,1) both",
         breathe: "breathe 2.2s ease-in-out infinite",
+        aurora: "aurora 14s ease-in-out infinite",
+        "row-in": "row-in 360ms cubic-bezier(0.16,1,0.3,1) both",
+        scanline: "scanline 2.6s linear infinite",
       },
     },
   },
