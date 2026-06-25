@@ -1,14 +1,18 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/osint"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -52,14 +56,98 @@ func (d Deps) handleIngestOSINT(w http.ResponseWriter, r *http.Request, tenantID
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
+	// Detection lift: an OSINT-discovered internet-exposed host on the ORG'S OWN domains becomes a
+	// monitored asset, so the engine actively scans the shadow surface next pass (OSINT → scan loop).
+	pivoted := d.pivotExposedHosts(r.Context(), tenantID, snap)
 	if d.Recorder != nil && stored > 0 {
 		d.Recorder.Record("osint assessed", "osint",
-			map[string]any{"tenant_id": tenantID, "org": snap.Org, "findings": stored}, "OSINT snapshot ingest")
+			map[string]any{"tenant_id": tenantID, "org": snap.Org, "findings": stored, "assets_pivoted": pivoted}, "OSINT snapshot ingest")
 	}
 	if findings == nil {
 		findings = []types.Finding{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"org": snap.Org, "findings_detected": stored, "findings": findings})
+	writeJSON(w, http.StatusOK, map[string]any{"org": snap.Org, "findings_detected": stored, "assets_pivoted": pivoted, "findings": findings})
+}
+
+// pivotExposedHosts promotes OSINT-discovered, internet-exposed, UNMONITORED hosts to monitored assets
+// so the engine actively scans them. Grounded guard (§10): only hosts that are at/under one of the
+// org's declared snapshot domains are pivoted (we never auto-scan infra the org didn't claim), and the
+// host is public-screened. Idempotent (skips an existing (type,target)). Returns the count created.
+func (d Deps) pivotExposedHosts(ctx context.Context, tenantID string, snap osint.Snapshot) int {
+	if len(snap.ExposedHosts) == 0 || len(snap.Domains) == 0 {
+		return 0
+	}
+	existing, err := d.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		return 0
+	}
+	have := map[string]bool{}
+	for _, a := range existing {
+		have[strings.ToLower(a.Type+"|"+strings.TrimRight(strings.TrimPrefix(strings.TrimPrefix(a.Target, "https://"), "http://"), "/"))] = true
+	}
+	created := 0
+	for _, h := range snap.ExposedHosts {
+		host := strings.ToLower(strings.TrimSpace(h.Host))
+		if host == "" || h.InScope || !hostUnderDomains(host, snap.Domains) {
+			continue
+		}
+		if err := screenPublicHost(host); err != nil {
+			continue // never auto-monitor a private/reserved host
+		}
+		if ip := net.ParseIP(strings.TrimSpace(h.IP)); ip != nil && !isPublicIP(ip) {
+			continue // the observed IP is private/internal — not a public scan target
+		}
+		// A web service → a web_application target; otherwise track the host as a domain asset.
+		at := types.AssetDomain
+		target := host
+		if hasWebService(h.Services) {
+			at = types.AssetWebApplication
+			target = "https://" + host
+		}
+		key := string(at) + "|" + host
+		if have[key] {
+			continue
+		}
+		asset := platform.Asset{
+			ID: d.newID("ast"), TenantID: tenantID, Type: string(at), Target: target,
+			Meta: map[string]string{"source": "osint", "discovered_via": nz(h.Source, "osint")}, DiscoveredAt: time.Now().UTC(),
+		}
+		if err := d.Store.PutAsset(ctx, asset); err == nil {
+			have[key] = true
+			created++
+		}
+	}
+	return created
+}
+
+func hostUnderDomains(host string, domains []string) bool {
+	for _, dn := range domains {
+		dn = strings.ToLower(strings.TrimSpace(dn))
+		if dn == "" {
+			continue
+		}
+		if host == dn || strings.HasSuffix(host, "."+dn) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasWebService(services []string) bool {
+	for _, s := range services {
+		switch strings.ToLower(s) {
+		case "http", "https", "http-alt", "ssl/http":
+			return true
+		}
+	}
+	return false
+}
+
+func nz(s, dflt string) string {
+	if strings.TrimSpace(s) == "" {
+		return dflt
+	}
+	return s
 }
 
 // osintClassLabel maps an osint:: rule to a human class for the UX summary.
