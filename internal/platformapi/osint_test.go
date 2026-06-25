@@ -3,6 +3,7 @@ package platformapi
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
@@ -49,6 +50,48 @@ func TestIngestOSINT_StoresAndViews(t *testing.T) {
 	_ = json.Unmarshal(view.Body.Bytes(), &vr)
 	if vr.Total != 3 || len(vr.Summary) == 0 {
 		t.Errorf("view should list 3 OSINT findings with a summary, got total=%d summary=%v", vr.Total, vr.Summary)
+	}
+}
+
+func TestIngestOSINT_PivotsExposedHostsOnOwnDomains(t *testing.T) {
+	st := store.NewMemory()
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	// legacy.acme.com (web) is under the org's domain → pivot to a monitored web asset.
+	// evil.attacker.com is NOT under the org's domains → never auto-monitored (grounding guard).
+	// 10.0.0.5 is private → screened out.
+	snap := `{"org":"acme","domains":["acme.com"],
+	  "exposed_hosts":[
+	    {"host":"legacy.acme.com","services":["http"],"source":"shodan"},
+	    {"host":"evil.attacker.com","services":["http"],"source":"shodan"},
+	    {"host":"internal.acme.com","ip":"10.0.0.5","services":["http"],"source":"x"},
+	    {"host":"app.acme.com","in_scope":true,"source":"crtsh"}]}`
+	rec := do(h, "POST", "/v1/osint/ingest", "t1", snap)
+	if rec.Code != 200 {
+		t.Fatalf("ingest 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var res struct {
+		AssetsPivoted int `json:"assets_pivoted"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &res)
+	if res.AssetsPivoted != 1 {
+		t.Errorf("only legacy.acme.com should pivot (own-domain + public + not in-scope), got %d", res.AssetsPivoted)
+	}
+	assets, _ := st.ListAssets(context.Background(), "t1")
+	var got *string
+	for i := range assets {
+		if assets[i].Meta["source"] == "osint" {
+			got = &assets[i].Target
+		}
+	}
+	if got == nil || *got != "https://legacy.acme.com" {
+		t.Errorf("expected a monitored web asset https://legacy.acme.com from the pivot, got %v", got)
+	}
+	// the off-domain attacker host must NOT have become an asset
+	for _, a := range assets {
+		if strings.Contains(a.Target, "attacker.com") {
+			t.Error("must never auto-monitor a host outside the org's declared domains")
+		}
 	}
 }
 
