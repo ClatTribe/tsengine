@@ -163,6 +163,7 @@ func (d Deps) handleDecideRisk(w http.ResponseWriter, r *http.Request, tenantID 
 	rk.Proposed = false // a human owns it now
 	rk.DecidedBy = owner
 	rk.DecidedAt = time.Now().UTC()
+	rk.Capacity, rk.Firm = d.practitionerCapacity(r, tenantID, owner) // who the decider works for
 	if body.Likelihood != 0 {
 		rk.Likelihood = body.Likelihood
 	}

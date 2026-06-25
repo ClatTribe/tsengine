@@ -581,6 +581,11 @@ type Risk struct {
 	Rationale   string   `json:"rationale,omitempty"` // why this treatment (the human's judgment)
 	FindingIDs  []string `json:"finding_ids,omitempty"`
 	Proposed    bool     `json:"proposed,omitempty"` // true = agent-seeded candidate, awaiting human triage
+	// Capacity + Firm record WHO the deciding human works for (resolved from the practitioner roster):
+	// internal | msp | managed, and their firm. Makes the decision honest about who accepted the risk
+	// and in what capacity (the tenant's own owner vs the MSP's vCISO vs our managed expert).
+	Capacity string `json:"capacity,omitempty"`
+	Firm     string `json:"firm,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 	DecidedAt time.Time `json:"decided_at,omitempty"`
