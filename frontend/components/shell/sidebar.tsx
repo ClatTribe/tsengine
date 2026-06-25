@@ -16,6 +16,7 @@ import {
   Spline,
   Layers,
   Crosshair,
+  Scale,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/attack-paths", label: "Attack paths", icon: Spline },
   { href: "/incidents", label: "Incidents", icon: Activity },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+  { href: "/risks", label: "Risks", icon: Scale },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/assets", label: "Assets", icon: Boxes },
   { href: "/saas-apps", label: "SaaS apps", icon: AppWindow },
