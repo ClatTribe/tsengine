@@ -32,6 +32,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
     title: "Company",
     links: [
       { href: "/about", label: "About" },
+      { href: "/partners", label: "For MSPs & consultancies" },
       { href: "/demo", label: "Book a demo" },
       { href: "/login", label: "Sign in" },
     ],
