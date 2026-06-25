@@ -2,9 +2,10 @@ import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import {
-  KeyRound, ArrowRight, Github, MessageSquare, Mail, UserX, AppWindow, Webhook,
-  Fingerprint, Radar, Bot, CheckCircle2, XCircle, Minus, Video, LayoutGrid, Cloud,
+  KeyRound, ArrowRight, Mail, UserX, AppWindow, Webhook,
+  Fingerprint, Radar, Bot, CheckCircle2, XCircle, Minus, Cloud,
 } from "lucide-react";
+import { ProviderIcon } from "@/components/brand/provider-icon";
 
 export const metadata = pageMeta({
   title: "SaaS & identity posture (SSPM) — Google, M365, Okta, GitHub, Slack, Zoom, Atlassian, Salesforce | TensorShield",
@@ -13,16 +14,17 @@ export const metadata = pageMeta({
   path: "/saas-posture",
 });
 
-// The posture checks across identity + SaaS apps.
-const CHECKS = [
+// The posture checks across identity + SaaS apps. A row carries either a topic `icon` (lucide) or a
+// `brand` key (real provider logo via ProviderIcon).
+const CHECKS: { icon?: typeof KeyRound; brand?: string; t: string; d: string }[] = [
   { icon: KeyRound, t: "MFA enforcement gaps", d: "Admins and members without a second factor across Google Workspace, Microsoft 365, and Okta — the single highest-leverage identity risk." },
   { icon: AppWindow, t: "Risky OAuth / third-party apps", d: "Shadow-admin grants and unverified-publisher apps that can read your data — surfaced live across Google, M365, Okta, and GitHub/Slack app installs." },
   { icon: UserX, t: "Stale & over-privileged accounts", d: "Dormant logins and excess owners/admins — the lateral-movement surface an attacker inherits after a single phish." },
   { icon: Mail, t: "Email spoofing (DMARC/SPF/DKIM)", d: "Your sending domains resolved from public DNS — a weak or missing DMARC record is open season for phishing in your name." },
-  { icon: Github, t: "GitHub org hardening", d: "Org-wide 2FA enforcement, default repo permissions, secret scanning / push protection, outside collaborators, and insecure webhooks." },
-  { icon: MessageSquare, t: "Slack workspace hardening", d: "2FA / SSO enforcement, app-approval governance, public file-link sharing, guest accounts, and admin sprawl." },
-  { icon: Video, t: "Zoom account hardening", d: "2FA / SSO enforcement, meeting passcodes and waiting rooms, cloud-recording protection and retention, app-approval governance, and admin sprawl." },
-  { icon: LayoutGrid, t: "Atlassian (Jira/Confluence) hardening", d: "2FA / SSO enforcement, public Confluence spaces, SSO-bypassing user API tokens, open sign-up, Marketplace app governance, and admin sprawl." },
+  { brand: "github", t: "GitHub org hardening", d: "Org-wide 2FA enforcement, default repo permissions, secret scanning / push protection, outside collaborators, and insecure webhooks." },
+  { brand: "slack", t: "Slack workspace hardening", d: "2FA / SSO enforcement, app-approval governance, public file-link sharing, guest accounts, and admin sprawl." },
+  { brand: "zoom", t: "Zoom account hardening", d: "2FA / SSO enforcement, meeting passcodes and waiting rooms, cloud-recording protection and retention, app-approval governance, and admin sprawl." },
+  { brand: "atlassian", t: "Atlassian (Jira/Confluence) hardening", d: "2FA / SSO enforcement, public Confluence spaces, SSO-bypassing user API tokens, open sign-up, Marketplace app governance, and admin sprawl." },
   { icon: Cloud, t: "Salesforce org hardening", d: "MFA / SSO enforcement, public Experience Cloud guest access (the well-known data-leak path), broad-scope connected apps, Modify-All-Data sprawl, login IP restrictions, and admin sprawl." },
 ];
 
@@ -75,7 +77,7 @@ export default function SaaSPosture() {
           <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
             {APPS.map((a) => (
               <span key={a} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-bg px-3 py-1 text-xs font-medium text-ink shadow-sm">
-                <CheckCircle2 className="h-3.5 w-3.5 text-pulse" /> {a}
+                <ProviderIcon kind={a} className="h-3.5 w-3.5" /> {a}
               </span>
             ))}
           </div>
@@ -92,10 +94,10 @@ export default function SaaSPosture() {
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {CHECKS.map(({ icon: Icon, t, d }) => (
+          {CHECKS.map(({ icon: Icon, brand, t, d }) => (
             <div key={t} className="card p-5">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
-                <Icon className="h-4 w-4" />
+                {brand ? <ProviderIcon kind={brand} className="h-4 w-4" /> : Icon ? <Icon className="h-4 w-4" /> : null}
               </span>
               <h3 className="mt-3.5 text-sm font-semibold">{t}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>

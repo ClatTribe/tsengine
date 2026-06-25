@@ -1,19 +1,7 @@
 import Link from "next/link";
-import { Github, GitBranch, Mail, KeyRound, Users, Plug, ScanLine, CheckCircle2, ShieldCheck, ArrowRight, Cloud } from "lucide-react";
+import { Plug, ScanLine, CheckCircle2, ShieldCheck, ArrowRight } from "lucide-react";
 import { CONNECTORS, CATEGORY_LABEL, type ConnectorCategory } from "@/lib/connectors";
-
-const KIND_ICON: Record<string, typeof Github> = {
-  github: Github,
-  gitlab: GitBranch,
-  bitbucket: GitBranch,
-  azuredevops: GitBranch,
-  gworkspace: Mail,
-  m365: Users,
-  okta: KeyRound,
-  aws: Cloud,
-  gcp: Cloud,
-  azure: Cloud,
-};
+import { ProviderIcon } from "@/components/brand/provider-icon";
 
 const STEPS = [
   { Icon: Plug, title: "Connect a system", body: "GitHub, Google Workspace, Okta — one click of OAuth." },
@@ -61,7 +49,6 @@ export function FirstRun() {
             <div className="mb-2 text-[11px] uppercase tracking-wider text-faint">{CATEGORY_LABEL[cat]}</div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {CONNECTORS.filter((c) => c.category === cat).map((c) => {
-                const Icon = KIND_ICON[c.kind] ?? Plug;
                 return (
                   <a
                     key={c.kind}
@@ -70,7 +57,7 @@ export function FirstRun() {
                   >
                     <div className="flex items-center gap-2.5">
                       <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-surface-2 text-ink">
-                        <Icon className="h-4 w-4" />
+                        <ProviderIcon kind={c.kind} className="h-4 w-4" />
                       </span>
                       <span className="flex-1 text-sm font-medium">{c.label}</span>
                       <ArrowRight className="h-4 w-4 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
