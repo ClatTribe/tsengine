@@ -59,6 +59,44 @@ type Tenant struct {
 	// "escalation matrix with contact number"). Ordered by escalation precedence. Contact PII
 	// (email/phone), not a bearer secret, so stored plain like team-member emails.
 	Contacts []Contact `json:"contacts,omitempty"`
+	// ServiceModel records WHO provides the human-in-the-loop expertise for this tenant — the only
+	// difference between the two product GTM models. self_serve = the tenant's own team; msp = a
+	// partner firm's expert (the MSP runs the product, their expert does HITL); managed = our hired
+	// expert acting on the tenant's behalf. Empty = self_serve.
+	ServiceModel string `json:"service_model,omitempty"`
+	// Practitioners are the named experts of record who provide the HITL acts (risk decisions,
+	// attestations, sign-offs, policy publishing) for this tenant. Each carries a Capacity matching
+	// the service model. No bearer secret → stored plain (like Contacts).
+	Practitioners []Practitioner `json:"practitioners,omitempty"`
+}
+
+// Service models — who employs the human-in-the-loop.
+const (
+	ServiceSelfServe = "self_serve" // the tenant's own team runs the HITL (default)
+	ServiceMSP       = "msp"        // a partner firm's expert runs the HITL (the MSP uses our product)
+	ServiceManaged   = "managed"    // our hired expert runs the HITL on the tenant's behalf
+)
+
+// Practitioner capacities (who the named expert works for).
+const (
+	CapacityInternal = "internal" // the tenant's own person
+	CapacityMSP      = "msp"      // a partner firm's expert
+	CapacityManaged  = "managed"  // our delivery expert, acting for the tenant
+)
+
+// Practitioner is a named human who provides the human-in-the-loop expertise for a tenant. The
+// Capacity (who employs them) is the load-bearing field: it's the only thing that differs between the
+// "MSP runs our product" model and the "we provide the expert" model. Recording the practitioner of
+// record makes the HITL artifacts honest about who acted and in what capacity (independence for
+// audits, accountability for pentests).
+type Practitioner struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Firm       string   `json:"firm,omitempty"`       // the practitioner's firm (the MSP, our delivery org, or the tenant)
+	Credential string   `json:"credential,omitempty"` // e.g. "CPA", "OSCP", "CISSP", "vCISO"
+	Capacity   string   `json:"capacity"`             // internal | msp | managed
+	Email      string   `json:"email,omitempty"`
+	Scope      []string `json:"scope,omitempty"` // deliverables they cover: vciso|audit|pentest|risk (empty = all)
 }
 
 // Contact is one entry in the on-call escalation roster — who to reach, in what order. Phone is the
