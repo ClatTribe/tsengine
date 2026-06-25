@@ -322,7 +322,7 @@ var ruleMeta = map[string]struct {
 	cwe   string
 	mitre string
 }{
-	"impossible_travel": {"CWE-1248", "T1078"},    // valid-account abuse
+	"impossible_travel": {"CWE-287", "T1078"},    // valid-account abuse
 	"privileged_grant":  {"CWE-269", "T1098"},     // improper privilege mgmt / account manipulation
 	"mfa_removed":       {"CWE-1390", "T1556"},    // weak auth / modify authentication process
 	"password_spray":    {"CWE-307", "T1110"},     // improper auth-attempt restriction / brute force
