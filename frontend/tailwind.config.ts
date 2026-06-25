@@ -6,28 +6,32 @@ import type { Config } from "tailwindcss";
 // sparingly, emerald for "handled / live". The same semantic tokens the dark theme used —
 // only their VALUES change — so the whole app re-themes from here.
 const config: Config = {
+  darkMode: "class",
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        bg: "#F6F7F9", // app canvas — cool off-white so white surfaces pop
-        surface: "#FFFFFF", // cards / panels
-        "surface-2": "#F1F3F7", // subtle raised / hover / skeleton
-        "surface-3": "#E8EBF1", // deeper fill
-        border: "#E7E9EF", // soft hairline
-        "border-strong": "#D3D8E2",
-        ink: "#171A21", // primary text — near-black, faintly cool
-        muted: "#5A6473", // secondary text
-        faint: "#8B95A6", // tertiary / placeholder
-        accent: "#4F46E5", // "the agent" — indigo, primary + focus
-        "accent-hover": "#4338CA",
-        "accent-soft": "#EEF0FE", // light indigo wash for chips/CTAs
-        pulse: "#059669", // live / working / fixed — emerald
-        "pulse-soft": "#E7F6EF",
-        critical: "#DC2626",
-        high: "#EA580C",
-        medium: "#D97706",
-        low: "#2563EB",
+        // Tokens resolve from CSS variables (globals.css :root / .dark) as RGB channels, so the
+        // whole app re-themes by toggling the `.dark` class on <html>, and opacity modifiers still
+        // work (e.g. bg-accent/40). The semantic names are unchanged — only their source moved.
+        bg: "rgb(var(--c-bg) / <alpha-value>)", // app canvas
+        surface: "rgb(var(--c-surface) / <alpha-value>)", // cards / panels
+        "surface-2": "rgb(var(--c-surface-2) / <alpha-value>)", // subtle raised / hover / skeleton
+        "surface-3": "rgb(var(--c-surface-3) / <alpha-value>)", // deeper fill
+        border: "rgb(var(--c-border) / <alpha-value>)", // soft hairline
+        "border-strong": "rgb(var(--c-border-strong) / <alpha-value>)",
+        ink: "rgb(var(--c-ink) / <alpha-value>)", // primary text
+        muted: "rgb(var(--c-muted) / <alpha-value>)", // secondary text
+        faint: "rgb(var(--c-faint) / <alpha-value>)", // tertiary / placeholder
+        accent: "rgb(var(--c-accent) / <alpha-value>)", // "the agent" — indigo, primary + focus
+        "accent-hover": "rgb(var(--c-accent-hover) / <alpha-value>)",
+        "accent-soft": "rgb(var(--c-accent-soft) / <alpha-value>)", // indigo wash for chips/CTAs
+        pulse: "rgb(var(--c-pulse) / <alpha-value>)", // live / working / fixed — emerald
+        "pulse-soft": "rgb(var(--c-pulse-soft) / <alpha-value>)",
+        critical: "rgb(var(--c-critical) / <alpha-value>)",
+        high: "rgb(var(--c-high) / <alpha-value>)",
+        medium: "rgb(var(--c-medium) / <alpha-value>)",
+        low: "rgb(var(--c-low) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],

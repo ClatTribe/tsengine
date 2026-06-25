@@ -8,6 +8,7 @@ import {
   AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; desc: string; icon: typeof Bot };
@@ -105,6 +106,7 @@ export function MarketingNav() {
 
         {/* Desktop CTAs */}
         <div className="ml-auto hidden items-center gap-2 md:flex">
+          <ThemeToggle />
           <Link href="/login" className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition hover:text-ink">
             Sign in
           </Link>

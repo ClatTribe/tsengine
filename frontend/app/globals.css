@@ -3,8 +3,49 @@
 @tailwind utilities;
 
 @layer base {
+  /* Design tokens as RGB channels so Tailwind colors can apply opacity (rgb(var(--x) / <alpha>)).
+     Light is the default; .dark (set on <html>) swaps the values and the whole app re-themes. */
   :root {
     color-scheme: light;
+    --c-bg: 246 247 249;
+    --c-surface: 255 255 255;
+    --c-surface-2: 241 243 247;
+    --c-surface-3: 232 235 241;
+    --c-border: 231 233 239;
+    --c-border-strong: 211 216 226;
+    --c-ink: 23 26 33;
+    --c-muted: 90 100 115;
+    --c-faint: 139 149 166;
+    --c-accent: 79 70 229;
+    --c-accent-hover: 67 56 202;
+    --c-accent-soft: 238 240 254;
+    --c-pulse: 5 150 105;
+    --c-pulse-soft: 231 246 239;
+    --c-critical: 220 38 38;
+    --c-high: 234 88 12;
+    --c-medium: 217 119 6;
+    --c-low: 37 99 235;
+  }
+  .dark {
+    color-scheme: dark;
+    --c-bg: 11 14 20; /* deep slate canvas */
+    --c-surface: 19 23 34; /* panels lift off the canvas */
+    --c-surface-2: 28 34 49; /* raised / hover */
+    --c-surface-3: 38 45 63;
+    --c-border: 39 46 61; /* subtle hairline — depth comes from borders on dark */
+    --c-border-strong: 57 67 86;
+    --c-ink: 230 233 240; /* near-white primary text */
+    --c-muted: 154 164 181;
+    --c-faint: 110 120 140;
+    --c-accent: 129 140 248; /* indigo-400 — pops on dark */
+    --c-accent-hover: 165 173 251;
+    --c-accent-soft: 33 33 64; /* dark indigo wash for chips */
+    --c-pulse: 52 211 153; /* emerald-400 */
+    --c-pulse-soft: 16 41 33;
+    --c-critical: 248 113 113;
+    --c-high: 251 146 60;
+    --c-medium: 251 191 36;
+    --c-low: 96 165 250;
   }
   html,
   body {
@@ -16,6 +57,17 @@
   }
   ::selection {
     background: rgba(79, 70, 229, 0.16);
+  }
+  .dark ::selection {
+    background: rgba(129, 140, 248, 0.28);
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #2a3346;
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #3a4560;
+    background-clip: content-box;
   }
   /* light, unobtrusive scrollbars */
   ::-webkit-scrollbar {
