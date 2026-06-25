@@ -115,6 +115,8 @@ export interface Signoff {
   statement?: string;
   signed_at: string;
   ledger_ref?: string;
+  capacity?: string; // who the signer works for: internal | msp | managed
+  firm?: string;
 }
 
 export interface PentestEngagement {
@@ -178,6 +180,8 @@ export interface Risk {
   decided_at?: string;
   decided_by?: string;
   ledger_ref?: string;
+  capacity?: string; // who the deciding human works for: internal | msp | managed
+  firm?: string;
 }
 
 export interface RiskSummary {

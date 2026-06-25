@@ -4,6 +4,7 @@ import type { Risk } from "@/lib/types";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { DecideRisk } from "@/components/risks/decide-risk";
+import { CapacityBadge } from "@/components/ui/capacity-badge";
 import { seedRisks } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -115,6 +116,7 @@ function RiskRow({ r }: { r: Risk }) {
             <span className={`font-medium capitalize ${STATUS_TONE[r.status] ?? "text-muted"}`}>{r.status}</span>
             {r.treatment && <span className="capitalize">treatment: {r.treatment}</span>}
             {r.owner && <span>owner: {r.owner}</span>}
+            <CapacityBadge capacity={r.capacity} firm={r.firm} />
             {r.ledger_ref && (
               <span className="inline-flex items-center gap-1 text-pulse">
                 <ShieldCheck className="h-3 w-3" /> signed
