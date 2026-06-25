@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS users       (id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (token TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS operators   (id TEXT PRIMARY KEY, email TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS opsessions  (token TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_users_email  ON users(email);
 `
@@ -380,5 +382,43 @@ func (s *SQLite) GetSession(ctx context.Context, token string) (platform.Session
 }
 func (s *SQLite) DeleteSession(ctx context.Context, token string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token=?`, token)
+	return err
+}
+
+func (s *SQLite) PutOperator(ctx context.Context, o platform.Operator) error {
+	d, err := enc(o)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO operators(id,email,data) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET email=excluded.email, data=excluded.data`,
+		o.ID, o.Email, d)
+	return err
+}
+func (s *SQLite) GetOperator(ctx context.Context, id string) (platform.Operator, error) {
+	var o platform.Operator
+	err := getJSON(ctx, s.db, &o, `SELECT data FROM operators WHERE id=?`, id)
+	return o, err
+}
+func (s *SQLite) GetOperatorByEmail(ctx context.Context, email string) (platform.Operator, error) {
+	var o platform.Operator
+	err := getJSON(ctx, s.db, &o, `SELECT data FROM operators WHERE lower(email)=lower(?) LIMIT 1`, email)
+	return o, err
+}
+func (s *SQLite) PutOperatorSession(ctx context.Context, sess platform.OperatorSession) error {
+	d, err := enc(sess)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO opsessions(token,data) VALUES(?,?) ON CONFLICT(token) DO UPDATE SET data=excluded.data`, sess.Token, d)
+	return err
+}
+func (s *SQLite) GetOperatorSession(ctx context.Context, token string) (platform.OperatorSession, error) {
+	var sess platform.OperatorSession
+	err := getJSON(ctx, s.db, &sess, `SELECT data FROM opsessions WHERE token=?`, token)
+	return sess, err
+}
+func (s *SQLite) DeleteOperatorSession(ctx context.Context, token string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM opsessions WHERE token=?`, token)
 	return err
 }

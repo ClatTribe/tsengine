@@ -36,6 +36,8 @@ type Memory struct {
 	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
 	users       map[string]platform.User                     // userID → user (email globally unique)
 	sessions    map[string]platform.Session                  // token → session
+	operators   map[string]platform.Operator                 // operatorID → operator (cross-tenant; global)
+	opSessions  map[string]platform.OperatorSession          // token → operator session
 }
 
 // NewMemory returns an empty in-memory store.
@@ -60,7 +62,62 @@ func NewMemory() *Memory {
 		apps:        map[string][]platform.ThirdPartyApp{},
 		users:       map[string]platform.User{},
 		sessions:    map[string]platform.Session{},
+		operators:   map[string]platform.Operator{},
+		opSessions:  map[string]platform.OperatorSession{},
 	}
+}
+
+func (m *Memory) PutOperator(_ context.Context, o platform.Operator) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.operators[o.ID] = o
+	return nil
+}
+
+func (m *Memory) GetOperator(_ context.Context, id string) (platform.Operator, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	o, ok := m.operators[id]
+	if !ok {
+		return platform.Operator{}, ErrNotFound
+	}
+	return o, nil
+}
+
+func (m *Memory) GetOperatorByEmail(_ context.Context, email string) (platform.Operator, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	want := strings.ToLower(strings.TrimSpace(email))
+	for _, o := range m.operators {
+		if strings.ToLower(o.Email) == want {
+			return o, nil
+		}
+	}
+	return platform.Operator{}, ErrNotFound
+}
+
+func (m *Memory) PutOperatorSession(_ context.Context, s platform.OperatorSession) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.opSessions[s.Token] = s
+	return nil
+}
+
+func (m *Memory) GetOperatorSession(_ context.Context, token string) (platform.OperatorSession, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, ok := m.opSessions[token]
+	if !ok {
+		return platform.OperatorSession{}, ErrNotFound
+	}
+	return s, nil
+}
+
+func (m *Memory) DeleteOperatorSession(_ context.Context, token string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.opSessions, token)
+	return nil
 }
 
 // --- users & sessions (real account auth) ---
@@ -520,6 +577,8 @@ type Snapshot struct {
 	Apps        map[string][]platform.ThirdPartyApp            `json:"apps"`
 	Users       map[string]platform.User                       `json:"users"`
 	Sessions    map[string]platform.Session                    `json:"sessions"`
+	Operators   map[string]platform.Operator                   `json:"operators,omitempty"`
+	OpSessions  map[string]platform.OperatorSession            `json:"op_sessions,omitempty"`
 }
 
 // Export returns a deep-enough copy of the store's data for persistence (taken under
@@ -547,6 +606,8 @@ func (m *Memory) Export() Snapshot {
 		Apps:        m.apps,
 		Users:       m.users,
 		Sessions:    m.sessions,
+		Operators:   m.operators,
+		OpSessions:  m.opSessions,
 	}
 }
 
@@ -578,6 +639,14 @@ func (m *Memory) load(s Snapshot) {
 	m.sessions = s.Sessions
 	if m.sessions == nil {
 		m.sessions = map[string]platform.Session{}
+	}
+	m.operators = s.Operators
+	if m.operators == nil {
+		m.operators = map[string]platform.Operator{}
+	}
+	m.opSessions = s.OpSessions
+	if m.opSessions == nil {
+		m.opSessions = map[string]platform.OperatorSession{}
 	}
 }
 
