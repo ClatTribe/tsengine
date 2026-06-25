@@ -66,6 +66,12 @@ export interface Issue {
   finding_ids: string[];
   attacked?: boolean; // endpoint observed under attack in production (runtime signal)
   attack_count?: number;
+  // Live-exploitable fusion (the ACSP "active/reachable/exploitable" lens): genuinely live, not
+  // just present — under attack, OR internet-exposed on an attack path, OR exposed+serious+corroborated.
+  live?: boolean;
+  live_reason?: string;
+  exposed?: boolean;
+  in_attack_path?: boolean;
 }
 
 export interface IssuesResponse {
@@ -76,6 +82,7 @@ export interface IssuesResponse {
   ignored?: number;
   excluded?: number; // findings dropped by custom exclusion rules
   attacked?: number; // issues observed under attack in production
+  live?: number; // issues that are genuinely live-exploitable (the ACSP fusion)
 }
 
 // A custom noise-filter rule (Aikido "custom rules": exclude paths/packages/conditions).
