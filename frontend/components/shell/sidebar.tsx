@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -19,6 +20,7 @@ import {
   Crosshair,
   Scale,
   History,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -67,8 +69,33 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   },
 ];
 
+const COLLAPSE_KEY = "ts.nav.collapsed";
+
 export function Sidebar({ pending }: { pending: number }) {
   const path = usePathname();
+  // which group headers are collapsed — persisted so a founder's tidied-up nav sticks across sessions.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSE_KEY);
+      if (raw) setCollapsed(JSON.parse(raw));
+    } catch {
+      /* ignore malformed/absent state */
+    }
+    setReady(true);
+  }, []);
+  const toggle = (header: string) =>
+    setCollapsed((prev) => {
+      const next = { ...prev, [header]: !prev[header] };
+      try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next));
+      } catch {
+        /* storage may be unavailable */
+      }
+      return next;
+    });
+
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-bg/60 px-3 py-4">
       <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
@@ -78,36 +105,48 @@ export function Sidebar({ pending }: { pending: number }) {
         <span className="text-sm font-semibold">TensorShield</span>
       </Link>
 
-      <nav className="flex flex-1 flex-col gap-4 overflow-y-auto">
-        {NAV_GROUPS.map((group, gi) => (
-          <div key={group.header ?? `g${gi}`} className="flex flex-col gap-0.5">
-            {group.header && (
-              <div className="px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
-                {group.header}
-              </div>
-            )}
-            {group.items.map(({ href, label, icon: Icon, badgeKey }) => {
-              const active = path === href || path.startsWith(href + "/");
-              const badge = badgeKey === "pending" && pending > 0 ? pending : null;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition",
-                    active ? "bg-surface-2 text-ink" : "text-muted hover:bg-surface hover:text-ink",
-                  )}
+      <nav className="flex flex-1 flex-col gap-3 overflow-y-auto">
+        {NAV_GROUPS.map((group, gi) => {
+          // an active route inside a collapsed group forces it open (never hide where you are)
+          const hasActive = group.items.some((it) => path === it.href || path.startsWith(it.href + "/"));
+          const isCollapsed = ready && !!group.header && !!collapsed[group.header] && !hasActive;
+          return (
+            <div key={group.header ?? `g${gi}`} className="flex flex-col gap-0.5">
+              {group.header && (
+                <button
+                  type="button"
+                  onClick={() => toggle(group.header!)}
+                  className="group/header flex items-center gap-1 px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-faint transition hover:text-muted"
+                  aria-expanded={!isCollapsed}
                 >
-                  <Icon className={cn("h-4 w-4 transition", active ? "text-accent" : "text-faint group-hover:text-muted")} />
-                  <span className="flex-1">{label}</span>
-                  {badge != null && (
-                    <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-bg">{badge}</span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", isCollapsed && "-rotate-90")} />
+                  <span className="flex-1 text-left">{group.header}</span>
+                </button>
+              )}
+              {!isCollapsed &&
+                group.items.map(({ href, label, icon: Icon, badgeKey }) => {
+                  const active = path === href || path.startsWith(href + "/");
+                  const badge = badgeKey === "pending" && pending > 0 ? pending : null;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={cn(
+                        "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition",
+                        active ? "bg-surface-2 text-ink" : "text-muted hover:bg-surface hover:text-ink",
+                      )}
+                    >
+                      <Icon className={cn("h-4 w-4 transition", active ? "text-accent" : "text-faint group-hover:text-muted")} />
+                      <span className="flex-1">{label}</span>
+                      {badge != null && (
+                        <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-bg">{badge}</span>
+                      )}
+                    </Link>
+                  );
+                })}
+            </div>
+          );
+        })}
       </nav>
 
       <div className="mt-4 px-2 pt-2 text-[11px] text-faint">
