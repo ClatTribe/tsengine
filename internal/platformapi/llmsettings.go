@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -102,4 +104,17 @@ func (d Deps) ResolveTenantLLM(ctx context.Context, tenantID string) (provider, 
 		return "", "", "", false
 	}
 	return t.LLM.Provider, t.LLM.Model, key, true
+}
+
+// resolveAgentLLM returns the LLM that drives an L2 agent for this tenant: the tenant's OWN configured
+// model (the §18.5 "bring your own brain" — an MSP/customer key opened from the vault) when set +
+// buildable, else the operator-global model (d.AgentLLM, from cloudengine.LLMFromEnv). nil when neither
+// is configured. This is what makes the per-tenant LLM config LIVE instead of dormant.
+func (d Deps) resolveAgentLLM(ctx context.Context, tenantID string) pentest.SpecLLM {
+	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
+		if c, ok := cloudengine.ClientFor(provider, model, key); ok {
+			return c // cloudengine.LLM satisfies pentest.SpecLLM (same Generate method)
+		}
+	}
+	return d.AgentLLM
 }

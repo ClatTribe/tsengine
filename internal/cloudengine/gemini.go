@@ -49,6 +49,15 @@ func GeminiFromEnv() (*Gemini, bool) {
 	return &Gemini{apiKey: key, model: model, http: &http.Client{Timeout: 90 * time.Second}}, true
 }
 
+// NewGemini builds a Gemini client from an explicit key + model (the per-tenant path — the customer's
+// OWN key, opened from the vault, not the env). Empty model → a current flash default.
+func NewGemini(apiKey, model string) *Gemini {
+	if strings.TrimSpace(model) == "" {
+		model = "gemini-2.0-flash"
+	}
+	return &Gemini{apiKey: apiKey, model: model, http: &http.Client{Timeout: 90 * time.Second}}
+}
+
 type geminiReq struct {
 	Contents         []geminiContent `json:"contents"`
 	GenerationConfig geminiGenCfg    `json:"generationConfig"`

@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -81,15 +82,27 @@ func (d Deps) handleCreateRisk(w http.ResponseWriter, r *http.Request, tenantID 
 // upserts a candidate ONLY when no risk with that id has already been decided by a human — a human
 // decision is never clobbered by a re-seed.
 func (d Deps) handleSeedRisks(w http.ResponseWriter, r *http.Request, tenantID string) {
-	findings, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})
+	seeded, err := d.seedRisks(r.Context(), tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
-	existing, err := d.Store.ListRisks(r.Context(), tenantID)
+	writeJSON(w, http.StatusOK, map[string]any{"seeded": seeded, "count": len(seeded)})
+}
+
+// seedRisks clusters the tenant's high+ findings into candidate Risks for the named vCISO to judge,
+// persisting only NEW candidates (a human's decision is never clobbered). Idempotent. Shared by the
+// on-demand POST /v1/risks/seed AND the L2-agent investigations (cloud-investigate) — so when an agent
+// proves an attack path, a candidate risk lands on the vCISO desk automatically (agent proposes → named
+// human disposes, §18.4). Grounded: a risk exists only because real findings cite it (§10).
+func (d Deps) seedRisks(ctx context.Context, tenantID string) ([]platform.Risk, error) {
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
+		return nil, err
+	}
+	existing, err := d.Store.ListRisks(ctx, tenantID)
+	if err != nil {
+		return nil, err
 	}
 	decided := map[string]bool{}
 	for _, e := range existing {
@@ -103,13 +116,12 @@ func (d Deps) handleSeedRisks(w http.ResponseWriter, r *http.Request, tenantID s
 		if decided[c.ID] {
 			continue // never overwrite a human's decision
 		}
-		if err := d.Store.PutRisk(r.Context(), c); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-			return
+		if err := d.Store.PutRisk(ctx, c); err != nil {
+			return nil, err
 		}
 		seeded = append(seeded, c)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"seeded": seeded, "count": len(seeded)})
+	return seeded, nil
 }
 
 // handleDecideRisk is the HUMAN-IN-THE-LOOP treatment decision. A named owner accepts/mitigates/

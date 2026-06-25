@@ -58,6 +58,36 @@ func OpenAICompatFromEnv() (*OpenAICompat, bool) {
 	}, true
 }
 
+// NewOpenAICompat builds the client from an explicit key + model + base URL (the per-tenant path — the
+// customer's OWN key from the vault). Empty baseURL → OpenAI; a localhost/Ollama base → free (no key).
+func NewOpenAICompat(apiKey, model, baseURL string) *OpenAICompat {
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	if strings.TrimSpace(model) == "" {
+		model = "gpt-4o-mini"
+	}
+	low := strings.ToLower(baseURL)
+	local := strings.Contains(low, "localhost") || strings.Contains(low, "127.0.0.1") || strings.Contains(low, "host.docker.internal") || strings.Contains(low, ":11434")
+	return &OpenAICompat{apiKey: apiKey, model: model, baseURL: baseURL, local: local, http: &http.Client{Timeout: 300 * time.Second}}
+}
+
+// ClientFor builds a text LLM from a per-tenant provider/model/key (the §18.5 "bring your own brain" —
+// each MSP/tenant can drive the agents with its own model). Supports gemini + the OpenAI-compatible
+// family (openai/ollama/vllm/openrouter); returns (nil,false) for an unsupported provider so the caller
+// falls back to the operator-global LLM. Anthropic in the text seam is the documented follow-on.
+func ClientFor(provider, model, apiKey string) (LLM, bool) {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "gemini", "google":
+		return NewGemini(apiKey, model), true
+	case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
+		return NewOpenAICompat(apiKey, model, ""), true
+	default:
+		return nil, false
+	}
+}
+
 // LLMFromEnv selects the investigate-agent LLM from the environment: an OpenAI-compatible backend
 // (LLM_BASE_URL/LLM_PROVIDER — including a LOCAL Ollama) takes precedence, else Gemini (LLM_API_KEY).
 // Returns (nil, false) when neither is configured, so callers degrade to deterministic output.
