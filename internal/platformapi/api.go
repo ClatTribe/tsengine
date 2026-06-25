@@ -29,16 +29,17 @@ import (
 
 // Deps are the API's collaborators.
 type Deps struct {
-	Store      store.Store
-	Connectors *connector.Registry
-	Runner     *runner.Service
-	Jobs       *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
-	Desk       Decider          // optional: the HITL desk (approvals decide)
-	GRC        Posturer         // optional: the compliance system-of-record (posture)
-	Vault      Sealer           // optional: seals OAuth tokens before persistence
-	Recorder   *ledger.Recorder // optional: signs review request/resolve into the ledger
-	Token      string           // static platform bearer token (required)
-	PublicURL  string           // base URL for OAuth redirect_uri (e.g. https://app.example)
+	Store          store.Store
+	Connectors     *connector.Registry
+	Runner         *runner.Service
+	Jobs           *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
+	Desk           Decider          // optional: the HITL desk (approvals decide)
+	GRC            Posturer         // optional: the compliance system-of-record (posture)
+	IncidentOpener IncidentOpener   // optional: opens incidents for event-driven ingest (identity/SaaS)
+	Vault          Sealer           // optional: seals OAuth tokens before persistence
+	Recorder       *ledger.Recorder // optional: signs review request/resolve into the ledger
+	Token          string           // static platform bearer token (required)
+	PublicURL      string           // base URL for OAuth redirect_uri (e.g. https://app.example)
 	// SlackSigningSecret verifies Slack interactive (approve/reject) callbacks. Empty
 	// → the Slack endpoint returns 501.
 	SlackSigningSecret string

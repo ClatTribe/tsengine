@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/identitythreat"
 	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // handleIngestIdentityEvents is the real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5
@@ -40,6 +41,7 @@ func (d Deps) handleIngestIdentityEvents(w http.ResponseWriter, r *http.Request,
 	// Without this they'd carry no control mapping and never surface in the founder's compliance posture.
 	comp := hooks.NewCompliance()
 	stored := 0
+	saved := make([]types.Finding, 0, len(findings))
 	for _, f := range findings {
 		f.ID = d.newID("idt")
 		if c, ok := comp.Lookup(f.CWE); ok {
@@ -54,7 +56,14 @@ func (d Deps) handleIngestIdentityEvents(w http.ResponseWriter, r *http.Request,
 		if d.GRC != nil {
 			_ = d.GRC.Apply(r.Context(), tenantID, f)
 		}
+		saved = append(saved, f)
 		stored++
+	}
+	// Open an incident for any high-severity threat right now — the scan-pass reconcile never sees
+	// these ingested findings, so without this a new MFA-removed / privileged-grant would never raise
+	// a "new since last scan" incident. Open-only (no resolve sweep). Best-effort.
+	if d.IncidentOpener != nil && stored > 0 {
+		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
 	if d.Recorder != nil && stored > 0 {
 		d.Recorder.Record("identity threats detected", "identity_threat",

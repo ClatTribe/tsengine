@@ -231,8 +231,8 @@ func TestEscalateOverdue_RealertsOverdueOnly(t *testing.T) {
 		}
 		return inc
 	}
-	_ = st.PutIncident(ctx, mk("inc-1", "r|e1", 60*time.Minute, 0))  // overdue (open 60m, window 30m)
-	_ = st.PutIncident(ctx, mk("inc-2", "r|e2", 5*time.Minute, 0))   // fresh (within window)
+	_ = st.PutIncident(ctx, mk("inc-1", "r|e1", 60*time.Minute, 0))              // overdue (open 60m, window 30m)
+	_ = st.PutIncident(ctx, mk("inc-2", "r|e2", 5*time.Minute, 0))               // fresh (within window)
 	_ = st.PutIncident(ctx, mk("inc-3", "r|e3", 60*time.Minute, 10*time.Minute)) // acked → skip
 
 	esc, err := d.EscalateOverdue(ctx, "t1", 30)
@@ -308,5 +308,33 @@ func TestEscalateOverdue_NoPageDuringMaintenance(t *testing.T) {
 	}
 	if len(esc) != 0 || len(alerter.alerts) != 0 {
 		t.Fatalf("no escalation should fire during a maintenance window, got esc=%d alerts=%d", len(esc), len(alerter.alerts))
+	}
+}
+
+// TestOpenFor_OpensWithoutResolving proves the event-driven ingest path: OpenFor opens incidents for
+// present high findings but NEVER resolves an existing incident whose key is absent — so an
+// identity/SaaS ingest can't wipe a scan incident it doesn't carry.
+func TestOpenFor_OpensWithoutResolving(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := newDetector(st)
+
+	// a scan incident already exists (from a web finding)
+	if _, err := d.Reconcile(ctx, "t1", []types.Finding{crit("nuclei::sqli", "https://app/x")}, nil); err != nil {
+		t.Fatal(err)
+	}
+	// an identity threat is ingested via OpenFor — carries NONE of the scan keys
+	res, err := d.OpenFor(ctx, "t1", []types.Finding{crit("identitythreat::mfa_removed", "alice@acme.com")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Opened) != 1 {
+		t.Fatalf("OpenFor should open the identity incident, got %+v", res)
+	}
+	if len(res.Resolved) != 0 {
+		t.Fatalf("OpenFor must NEVER resolve — the scan incident's key is absent but must survive, got resolved=%+v", res.Resolved)
+	}
+	if n := len(openIncidents(t, st, "t1")); n != 2 {
+		t.Fatalf("both the scan AND the identity incident must be open, got %d", n)
 	}
 }

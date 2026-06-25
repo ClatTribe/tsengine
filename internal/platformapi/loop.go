@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -30,6 +31,14 @@ type Posturer interface {
 	// each cited control a gap). The scan path calls this; the non-scan ingest paths (identity, SaaS,
 	// runtime) must too, or their findings never reach the founder's compliance posture.
 	Apply(ctx context.Context, tenantID string, f types.Finding) error
+}
+
+// IncidentOpener opens incidents for freshly-ingested high findings WITHOUT a resolve sweep (satisfied
+// by *detect.Detector.OpenFor). The event-driven ingest paths (identity / SaaS) use it so a new threat
+// raises a "new since last scan" incident immediately — the scan-pass Reconcile only sees scan output,
+// never the ingested findings, so without this they'd never become incidents.
+type IncidentOpener interface {
+	OpenFor(ctx context.Context, tenantID string, current []types.Finding, attacked map[string]bool) (detect.Result, error)
 }
 
 // Sealer seals a raw secret (an OAuth token, an LLM API key) before it is persisted, and

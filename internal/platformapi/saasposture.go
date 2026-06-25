@@ -37,6 +37,7 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 	}
 
 	stored := 0
+	saved := make([]types.Finding, 0, len(findings))
 	for _, f := range findings {
 		f.ID = d.newID("sspm")
 		if serr := d.Store.PutFinding(r.Context(), tenantID, f); serr != nil {
@@ -49,7 +50,13 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 		if d.GRC != nil {
 			_ = d.GRC.Apply(r.Context(), tenantID, f)
 		}
+		saved = append(saved, f)
 		stored++
+	}
+	// Open an incident for any high-severity SaaS misconfig now (the scan-pass reconcile never sees
+	// these ingested findings). Open-only, best-effort.
+	if d.IncidentOpener != nil && stored > 0 {
+		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
 	if d.Recorder != nil && stored > 0 {
 		d.Recorder.Record("saas posture assessed", "saas_posture",
