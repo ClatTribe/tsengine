@@ -26,6 +26,7 @@ type Memory struct {
 	incidents   map[string]map[string]platform.Incident        // tenantID → incidentID → incident
 	risks       map[string]map[string]platform.Risk            // tenantID → riskID → risk
 	audits      map[string]map[string]platform.AuditEngagement // tenantID → engagementID → audit
+	policies    map[string]map[string]platform.Policy          // tenantID → policyID → policy
 
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
 	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
@@ -50,6 +51,7 @@ func NewMemory() *Memory {
 		incidents:   map[string]map[string]platform.Incident{},
 		risks:       map[string]map[string]platform.Risk{},
 		audits:      map[string]map[string]platform.AuditEngagement{},
+		policies:    map[string]map[string]platform.Policy{},
 		ignores:     map[string]map[string]platform.IgnoreRule{},
 		exclusions:  map[string]map[string]platform.ExclusionRule{},
 		runtimeEvts: map[string][]platform.RuntimeEvent{},
@@ -338,6 +340,26 @@ func (m *Memory) ListAuditEngagements(_ context.Context, tenantID string) ([]pla
 	return out, nil
 }
 
+func (m *Memory) PutPolicy(_ context.Context, p platform.Policy) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.policies[p.TenantID] == nil {
+		m.policies[p.TenantID] = map[string]platform.Policy{}
+	}
+	m.policies[p.TenantID][p.ID] = p
+	return nil
+}
+
+func (m *Memory) ListPolicies(_ context.Context, tenantID string) ([]platform.Policy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Policy, 0, len(m.policies[tenantID]))
+	for _, p := range m.policies[tenantID] {
+		out = append(out, p)
+	}
+	return out, nil
+}
+
 func (m *Memory) PutIgnoreRule(_ context.Context, ir platform.IgnoreRule) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -489,6 +511,7 @@ type Snapshot struct {
 	Incidents   map[string]map[string]platform.Incident        `json:"incidents"`
 	Risks       map[string]map[string]platform.Risk            `json:"risks,omitempty"`
 	Audits      map[string]map[string]platform.AuditEngagement `json:"audits,omitempty"`
+	Policies    map[string]map[string]platform.Policy          `json:"policies,omitempty"`
 	Ignores     map[string]map[string]platform.IgnoreRule      `json:"ignores,omitempty"`
 	Exclusions  map[string]map[string]platform.ExclusionRule   `json:"exclusions,omitempty"`
 	RuntimeEvts map[string][]platform.RuntimeEvent             `json:"runtime_events,omitempty"`
@@ -515,6 +538,7 @@ func (m *Memory) Export() Snapshot {
 		Incidents:   m.incidents,
 		Risks:       m.risks,
 		Audits:      m.audits,
+		Policies:    m.policies,
 		Ignores:     m.ignores,
 		Exclusions:  m.exclusions,
 		RuntimeEvts: m.runtimeEvts,
@@ -540,6 +564,7 @@ func (m *Memory) load(s Snapshot) {
 	m.incidents = orEmptyIncidents(s.Incidents)
 	m.risks = orEmptyRisks(s.Risks)
 	m.audits = orEmptyAudits(s.Audits)
+	m.policies = orEmptyPolicies(s.Policies)
 	m.ignores = orEmptyIgnores(s.Ignores)
 	m.exclusions = orEmptyExclusions(s.Exclusions)
 	m.runtimeEvts = orEmpty(s.RuntimeEvts)
@@ -607,6 +632,12 @@ func orEmptyRisks(m map[string]map[string]platform.Risk) map[string]map[string]p
 func orEmptyAudits(m map[string]map[string]platform.AuditEngagement) map[string]map[string]platform.AuditEngagement {
 	if m == nil {
 		return map[string]map[string]platform.AuditEngagement{}
+	}
+	return m
+}
+func orEmptyPolicies(m map[string]map[string]platform.Policy) map[string]map[string]platform.Policy {
+	if m == nil {
+		return map[string]map[string]platform.Policy{}
 	}
 	return m
 }

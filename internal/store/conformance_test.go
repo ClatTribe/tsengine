@@ -61,6 +61,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.PutIncident(ctx, platform.Incident{ID: tid + "-i", TenantID: tid, Status: platform.IncidentOpen}))
 	must(s.PutRisk(ctx, platform.Risk{ID: tid + "-rk", TenantID: tid, Title: "r", Status: platform.RiskOpen}))
 	must(s.PutAuditEngagement(ctx, platform.AuditEngagement{ID: tid + "-au", TenantID: tid, Framework: "soc2", Status: platform.AuditPlanning}))
+	must(s.PutPolicy(ctx, platform.Policy{ID: tid + "-pol", TenantID: tid, Name: "p", Status: platform.PolicyDraft}))
 	must(s.PutReviewRequest(ctx, platform.ReviewRequest{ID: tid + "-r", TenantID: tid, Status: platform.ReviewOpen}))
 	must(s.ReplaceThirdPartyApps(ctx, tid, "gworkspace", []platform.ThirdPartyApp{{TenantID: tid, Provider: "gworkspace", AppID: tid + "-app"}}))
 }
@@ -125,6 +126,10 @@ func TestStoreConformance(t *testing.T) {
 				aus, err := s.ListAuditEngagements(ctx, tid)
 				orFail(t, err)
 				isolated("audits", tid, ids(aus, func(a platform.AuditEngagement) string { return a.ID }))
+
+				pols, err := s.ListPolicies(ctx, tid)
+				orFail(t, err)
+				isolated("policies", tid, ids(pols, func(p platform.Policy) string { return p.ID }))
 
 				revs, err := s.ListReviewRequests(ctx, tid)
 				orFail(t, err)
