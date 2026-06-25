@@ -121,3 +121,26 @@ export async function setPRBotPolicy(
   revalidatePath("/settings");
   return { enabled: r.enabled, block_severity: r.block_severity };
 }
+
+// Practitioner layer — set who provides the human-in-the-loop (self_serve | msp | managed) and the
+// named experts of record.
+export async function setServiceModel(model: string): Promise<void> {
+  await api.setServiceModel(model);
+  revalidatePath("/settings");
+}
+
+export async function addPractitioner(body: {
+  name: string;
+  firm: string;
+  credential: string;
+  capacity: string;
+  email: string;
+}): Promise<void> {
+  await api.addPractitioner(body);
+  revalidatePath("/settings");
+}
+
+export async function deletePractitioner(id: string): Promise<void> {
+  await api.deletePractitioner(id);
+  revalidatePath("/settings");
+}

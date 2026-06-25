@@ -273,6 +273,23 @@ export interface ProgramResponse {
   summary: ProgramSummary;
 }
 
+// Practitioner — the named human who provides the human-in-the-loop for a tenant. Capacity (who
+// employs them) is the only thing that differs between the MSP-channel and managed-service models.
+export interface Practitioner {
+  id: string;
+  name: string;
+  firm?: string;
+  credential?: string;
+  capacity: string; // internal | msp | managed
+  email?: string;
+  scope?: string[];
+}
+
+export interface PractitionersResponse {
+  service_model: string; // self_serve | msp | managed
+  practitioners: Practitioner[];
+}
+
 export interface Incident {
   id: string;
   key: string;
