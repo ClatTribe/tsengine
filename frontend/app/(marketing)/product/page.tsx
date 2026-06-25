@@ -145,6 +145,7 @@ const OSS_GROUPS: { name: string; title: string; blurb: string; tools: string[] 
   { name: "containers", title: "Containers & IaC", blurb: "Image, Dockerfile, and infrastructure-as-code misconfiguration checks.", tools: ["dockle", "hadolint", "checkov", "trivy"] },
   { name: "cloud", title: "Cloud posture", blurb: "CIS-benchmark and misconfiguration coverage across AWS, GCP, and Azure.", tools: ["prowler", "scoutsuite", "cloudfox"] },
   { name: "recon", title: "Network, recon & mobile", blurb: "Port and service discovery, subdomain enumeration, and mobile SAST.", tools: ["nmap", "naabu", "subfinder", "amass", "mobsfscan"] },
+  { name: "watch", title: "OSINT & external exposure", blurb: "The attacker's-eye view: leaked credentials, public secret leaks, forgotten internet-exposed hosts, and look-alike phishing domains.", tools: ["theHarvester", "SpiderFoot", "dnstwist", "HaveIBeenPwned", "taranis-ai"] },
 ];
 
 function OSSBand() {
