@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Check, AlertTriangle, Gavel } from "lucide-react";
 import type { ControlAttestation } from "@/lib/types";
+import { CapacityBadge } from "@/components/ui/capacity-badge";
 import { attestControl } from "@/app/(app)/audits/actions";
 
 // AttestControl renders one control + the auditor's HITL verdict form. The verdict is the independent
@@ -25,6 +26,7 @@ export function AttestControl({ id, c, auditorName }: { id: string; c: ControlAt
           <span className="text-[11px] text-faint">pending</span>
         )}
         {c.attested_by && <span className="text-[11px] text-faint">· {c.attested_by}</span>}
+        <CapacityBadge capacity={c.capacity} firm={c.firm} />
         <button onClick={() => setOpen((v) => !v)} className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted transition hover:border-accent/40 hover:text-accent">
           <Gavel className="h-3 w-3" /> {attested ? "Re-attest" : "Attest"}
         </button>
