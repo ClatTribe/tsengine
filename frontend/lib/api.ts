@@ -109,6 +109,11 @@ export const api = {
   ackPolicy: (id: string, user: string) =>
     call<Policy>(`/v1/program/${id}/ack`, { method: "POST", body: JSON.stringify({ user }) }),
 
+  // Add a standalone scan target (web app / API / domain / IP / container image) — the input the
+  // connectors don't cover. The caller must attest authorization; the server SSRF-screens the target.
+  addAsset: (type: string, target: string, authorized: boolean) =>
+    call<Asset>("/v1/assets", { method: "POST", body: JSON.stringify({ type, target, authorized }) }),
+
   // SaaS-app discovery view (SSPM) — inventory + portfolio summary over the connected IdPs' grants.
   saasApps: () =>
     safe<SaaSAppsResponse>("/v1/saas-apps", {

@@ -2,6 +2,7 @@ import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, Arr
 import { api } from "@/lib/api";
 import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
+import { AddTarget } from "@/components/assets/add-target";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
 import { DataTierSelect } from "@/components/assets/data-tier-select";
@@ -59,6 +60,12 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
           <CircleAlert className="h-4 w-4" /> Couldn&apos;t start the {kindLabel(connect_error)} connection — it may not be configured on this deployment.
         </div>
       )}
+
+      {/* Add a standalone target — the input the connectors don't cover (web/api/domain/ip/image) */}
+      <section>
+        <SectionTitle>Add a target</SectionTitle>
+        <AddTarget />
+      </section>
 
       {/* Connect a system */}
       <section>
