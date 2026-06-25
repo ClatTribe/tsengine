@@ -7,6 +7,7 @@ import {
 import { LiveConsole } from "@/components/marketing/live-console";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
+import { EngageModels } from "@/components/marketing/engage-models";
 
 export const metadata = {
   title: "TensorShield — pass the security review, close the deal",
@@ -138,6 +139,9 @@ export default function Landing() {
           ))}
         </Reveal>
       </section>
+
+      {/* Two ways to engage — the two-sided GTM (bring your own expert, or use ours) */}
+      <EngageModels />
 
       {/* How it works */}
       <Section eyebrow="How it works" title="Set up once. It runs itself." sub="Connect a system and the agent takes it from there — you stay in control of anything risky.">
