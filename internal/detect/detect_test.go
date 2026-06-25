@@ -338,3 +338,39 @@ func TestOpenFor_OpensWithoutResolving(t *testing.T) {
 		t.Fatalf("both the scan AND the identity incident must be open, got %d", n)
 	}
 }
+
+// countingAlerter tallies how many incident-opened pages fire.
+type countingAlerter struct{ n int }
+
+func (c *countingAlerter) IncidentOpened(_ context.Context, _ platform.Incident) error {
+	c.n++
+	return nil
+}
+
+// TestAlertCap_BoundsPagingButOpensAll proves a bulk event opens every incident (all in the UI) but
+// pages the on-call at most AlertCap times — no alert storm for a mid-size org.
+func TestAlertCap_BoundsPagingButOpensAll(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	ca := &countingAlerter{}
+	d := newDetector(st)
+	d.Alerter = ca
+	d.AlertCap = 5
+
+	// 50 distinct high findings (e.g. 50 users lose MFA in one IdP export)
+	var fs []types.Finding
+	for i := 0; i < 50; i++ {
+		fs = append(fs, types.Finding{ID: string(rune('A' + i)), RuleID: "identitythreat::mfa_removed",
+			Endpoint: "user" + string(rune('0'+i)), Severity: types.SeverityHigh, Title: "mfa removed"})
+	}
+	res, err := d.OpenFor(ctx, "t1", fs, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Opened) != 50 {
+		t.Fatalf("every incident must open (UI triage), got %d", len(res.Opened))
+	}
+	if ca.n != 5 {
+		t.Fatalf("paging must be capped at AlertCap=5, got %d pages", ca.n)
+	}
+}
