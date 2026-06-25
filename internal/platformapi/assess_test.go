@@ -22,6 +22,12 @@ func TestNormalizeDomain(t *testing.T) {
 		"not a domain": "",
 		"":             "",
 		"acme":         "",
+		// reserved/internal namespaces → "" (SSRF defense-in-depth, refuse before connect)
+		"metadata.google.internal": "",
+		"foo.internal":             "",
+		"printer.local":            "",
+		"host.intranet":            "",
+		"db.corp":                  "",
 	}
 	for in, want := range cases {
 		if got := normalizeDomain(in); got != want {
