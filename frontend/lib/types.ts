@@ -237,6 +237,42 @@ export interface AuditsResponse {
   audits: AuditEngagement[];
 }
 
+// Security program (vCISO) — the policy register + acknowledgments. The engine seeds the standard set;
+// a named owner publishes (HITL), and each member acknowledges.
+export interface PolicyAck {
+  user: string;
+  acked_at: string;
+}
+
+export interface Policy {
+  id: string;
+  tenant_id: string;
+  name: string;
+  category?: string;
+  summary?: string;
+  status: string; // draft | published
+  owner?: string;
+  version: number;
+  acks?: PolicyAck[];
+  created_at: string;
+  published_at?: string;
+  ledger_ref?: string;
+}
+
+export interface ProgramSummary {
+  total: number;
+  published: number;
+  draft: number;
+  team_size: number;
+  fully_acked: number;
+  ack_coverage_pct: number;
+}
+
+export interface ProgramResponse {
+  policies: Policy[];
+  summary: ProgramSummary;
+}
+
 export interface Incident {
   id: string;
   key: string;
