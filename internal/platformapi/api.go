@@ -134,6 +134,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/practitioners", d.auth(d.handleAddPractitioner))               // add a named practitioner (capacity: internal|msp|managed)
 	mux.HandleFunc("DELETE /v1/practitioners/{id}", d.auth(d.handleDeletePractitioner))     // remove a practitioner
 	mux.HandleFunc("PUT /v1/settings/service-model", d.auth(d.handleSetServiceModel))       // set who provides the HITL (self_serve|msp|managed)
+	mux.HandleFunc("GET /v1/practitioner/queue", d.platformAuth(d.handlePractitionerQueue)) // cross-tenant practitioner desk (operator-token gated)
 	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))                       // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
 	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))                     // cross-surface correlation (unified cross-detection)
 	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                                // findings de-duplicated into unified issues (one issue, many signals)
