@@ -186,6 +186,47 @@ export interface RisksResponse {
   summary: RiskSummary;
 }
 
+// Audit engagement — the SOC2/ISO audit run WITH an external auditor. The product seeds the controls
+// to attest from posture; a named independent auditor renders each verdict (the legal layer).
+export interface ControlAttestation {
+  framework: string;
+  control_id: string;
+  verdict: string; // pending | passed | exception
+  note?: string;
+  attested_by?: string;
+  attested_at?: string;
+}
+
+export interface AuditSummary {
+  total: number;
+  attested: number;
+  passed: number;
+  exceptions: number;
+  pending: number;
+  percent: number;
+  ready: boolean;
+}
+
+export interface AuditEngagement {
+  id: string;
+  tenant_id: string;
+  framework: string;
+  audit_type: string; // type_i | type_ii
+  auditor_name?: string;
+  auditor_firm?: string;
+  auditor_email?: string;
+  status: string; // planning | fieldwork | issued
+  attestations?: ControlAttestation[];
+  created_at: string;
+  issued_at?: string;
+  ledger_ref?: string;
+  summary: AuditSummary; // the API embeds the per-engagement summary
+}
+
+export interface AuditsResponse {
+  audits: AuditEngagement[];
+}
+
 export interface Incident {
   id: string;
   key: string;

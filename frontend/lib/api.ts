@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -80,6 +80,15 @@ export const api = {
   seedRisks: () => call<{ seeded: Risk[]; count: number }>("/v1/risks/seed", { method: "POST" }),
   decideRisk: (id: string, body: { treatment: string; owner: string; rationale?: string }) =>
     call<Risk>(`/v1/risks/${id}/decision`, { method: "POST", body: JSON.stringify(body) }),
+
+  // Audit engagements — "audit-ready, not the audit". The external auditor's per-control attestation
+  // is the HITL; the product seeds the controls to attest from posture.
+  audits: () => safe<AuditsResponse>("/v1/audits", { audits: [] }),
+  createAudit: (body: { framework: string; audit_type: string; auditor_name: string; auditor_firm?: string; auditor_email?: string }) =>
+    call<AuditEngagement>("/v1/audits", { method: "POST", body: JSON.stringify(body) }),
+  attestControl: (id: string, body: { control_id: string; verdict: string; note?: string; attested_by: string }) =>
+    call<AuditEngagement>(`/v1/audits/${id}/attest`, { method: "POST", body: JSON.stringify(body) }),
+  issueAudit: (id: string) => call<AuditEngagement>(`/v1/audits/${id}/issue`, { method: "POST" }),
 
   // SaaS-app discovery view (SSPM) — inventory + portfolio summary over the connected IdPs' grants.
   saasApps: () =>
