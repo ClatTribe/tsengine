@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -75,6 +75,12 @@ export const api = {
     safe<SaaSAppsResponse>("/v1/saas-apps", {
       apps: [],
       summary: { total_apps: 0, sensitive_apps: 0, unverified_apps: 0, shadow_it_apps: 0, multi_user_apps: 0 },
+    }),
+  // Non-human / AI-agent identity posture (the ACSP agentic identity lens) over the OAuth grants.
+  identities: () =>
+    safe<IdentitiesResponse>("/v1/identities", {
+      identities: [],
+      summary: { total: 0, ai_agents: 0, automations: 0, write_or_admin: 0, risky: 0 },
     }),
   issues: (showIgnored?: boolean) =>
     safe<IssuesResponse>(`/v1/issues${showIgnored ? "?show=ignored" : ""}`, { issues: [], count: 0, raw_findings: 0, confirmed: 0, ignored: 0 }),

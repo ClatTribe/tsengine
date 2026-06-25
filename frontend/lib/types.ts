@@ -391,6 +391,22 @@ export interface PRBotSettings {
   github_connected: boolean;
 }
 
+// Non-human / AI-agent identity posture (GET /v1/identities) — the ACSP agentic identity lens.
+export interface NonHumanIdentity {
+  name: string;
+  class: string; // ai_agent | automation | integration
+  privilege: string; // admin | write | read
+  scopes: string[];
+  users: number;
+  verified: boolean;
+  risk: string; // high | medium | low
+  risk_reason?: string;
+}
+export interface IdentitiesResponse {
+  identities: NonHumanIdentity[];
+  summary: { total: number; ai_agents: number; automations: number; write_or_admin: number; risky: number };
+}
+
 export interface SaaSAppsResponse {
   apps: SaaSApp[];
   summary: {
