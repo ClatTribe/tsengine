@@ -14,7 +14,7 @@ export default async function ScanPage({ searchParams }: { searchParams: Promise
   return (
     <section className="relative overflow-hidden">
       <AuroraBackdrop />
-      <div className="relative mx-auto max-w-3xl px-5 pb-24 pt-20 text-center">
+      <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-24 pt-20 text-center">
         <span className="text-xs font-semibold uppercase tracking-wider text-accent">Free · no signup</span>
         <h1 className="mx-auto mt-3 max-w-2xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
           Would you pass an enterprise security questionnaire?

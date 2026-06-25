@@ -21,7 +21,7 @@ export default function About() {
     <>
       <section className="relative overflow-hidden">
         <AuroraBackdrop />
-        <div className="relative mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
+        <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Our mission</span>
           <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
             Security shouldn&apos;t require a security hire.
