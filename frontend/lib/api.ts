@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -97,6 +97,13 @@ export const api = {
       summary: { total: 0, published: 0, draft: 0, team_size: 0, fully_acked: 0, ack_coverage_pct: 0 },
     }),
   seedProgram: () => call<{ seeded: Policy[]; count: number }>("/v1/program/seed", { method: "POST" }),
+
+  // Practitioner layer — who provides the human-in-the-loop (service model + named experts of record).
+  practitioners: () => safe<PractitionersResponse>("/v1/practitioners", { service_model: "self_serve", practitioners: [] }),
+  setServiceModel: (model: string) => call("/v1/settings/service-model", { method: "PUT", body: JSON.stringify({ service_model: model }) }),
+  addPractitioner: (body: { name: string; firm?: string; credential?: string; capacity: string; email?: string; scope?: string[] }) =>
+    call<Practitioner>("/v1/practitioners", { method: "POST", body: JSON.stringify(body) }),
+  deletePractitioner: (id: string) => call(`/v1/practitioners/${id}`, { method: "DELETE" }),
   publishPolicy: (id: string, owner: string) =>
     call<Policy>(`/v1/program/${id}/publish`, { method: "POST", body: JSON.stringify({ owner }) }),
   ackPolicy: (id: string, user: string) =>

@@ -19,6 +19,7 @@ import { EscalationControl } from "@/components/settings/escalation-control";
 import { SLAControl } from "@/components/settings/sla-control";
 import { MaintenanceControl } from "@/components/settings/maintenance-control";
 import { ContactsControl } from "@/components/settings/contacts-control";
+import { PractitionersControl } from "@/components/settings/practitioners-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
 import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
@@ -41,7 +42,7 @@ export default async function SettingsPage() {
   const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation] = await Promise.all([
     api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(),
   ]);
-  const [sla, maintenance, contacts] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts()]);
+  const [sla, maintenance, contacts, practitioners] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -169,6 +170,7 @@ export default async function SettingsPage() {
           <JiraControl config={jira} />
           <EscalationControl policy={escalation} />
           <ContactsControl contacts={contacts} />
+          <PractitionersControl serviceModel={practitioners.service_model} practitioners={practitioners.practitioners} />
           <SLAControl policy={sla} />
           <MaintenanceControl windows={maintenance} />
           {[
