@@ -62,6 +62,12 @@ type Deps struct {
 	// Browser renders DOM-XSS / client-side demonstrations in a headless browser (ADR-0008
 	// D3). Nil → those classes stay unproven leads (the chromedp impl is sandbox-gated).
 	Browser pentest.Prober
+	// AgentLLM is the ModeDeep "D-agent" (ADR-0008): when set, the open-ended driver asks the model
+	// to PROPOSE benign demonstration specs (validated deterministically downstream), instead of only
+	// the heuristic generator. Wired from cloudengine.LLMFromEnv (cloud key OR a local Ollama). Nil →
+	// the deterministic HeuristicSpecGen (today's behaviour). The model widens discovery only; the
+	// deterministic predicate + the RoE Guard still gate every probe, so no LLM false positives.
+	AgentLLM pentest.SpecLLM
 }
 
 // NewHandler returns the platform's HTTP handler.
