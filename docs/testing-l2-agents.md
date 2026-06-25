@@ -29,6 +29,24 @@ The **scorer is identical** across eval layers (`internal/bench` → `AgentScore
 verified_rate, completion_rate, false_positives). Local Ollama lets you iterate on prompts/tools/flow on
 the cheap; the cloud run produces the number you publish.
 
+### Measured: all five L2 agents on a local qwen3:8b (Apple M4, 16 GB)
+
+Each has a CI-safe live test (skips without `LLM_BASE_URL`). qwen3:8b drives every agent's loop; whether
+it *proves* depends on task structure + the small model's pace (~2 min/turn):
+
+| Agent | Live test | qwen3:8b result |
+|---|---|---|
+| cloud (cloudagent) | `tsengine cloud-investigate --snapshot fixtures/cloud/sample-inventory.json` | **proved** a real attack path `internet→alb→ec2→role→role→bucket-pii` + a re-verified IAM fix (6 tool calls) |
+| pentest D-agent | `internal/pentest.TestLLMSpecGen_Live` | **proved** — proposed a valid open-redirect DemoSpec (`predicate=redirect_to`) the library validates |
+| L2 Lead | `internal/l2.TestLeadAgent_Live` | drove the translator, authored **2 reports** (bounded to 4 iters) |
+| llmredteam | `internal/llmredteam.TestRedteam_Live` (Ollama-backed target) | red-teamed a live target, **3 attack turns** (target resisted → 0 breaches) |
+| webagent | `internal/webagent.TestWebAgent_Live` (httptest open-redirect) | drove the loop, **sent real probes** (didn't land a proven finding in 5 iters) |
+
+Takeaway: the agents that prove via **structured deterministic tools** (cloud's graph tools, the D-agent's
+predicate library) succeed end-to-end on an 8B model; the **open-ended exploitation** agents (webagent)
+drive the loop correctly but need a larger model / more budget to land a proof. Use qwen3:8b to iterate on
+prompt/tool/flow for free; confirm the published `verified_rate` on a cloud model.
+
 ## 3. Local runbook (Ollama)
 
 ```bash
