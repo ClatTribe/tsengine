@@ -22,6 +22,8 @@
 //	TSENGINE_SANDBOX_IMAGE      sandbox image ref (default tsengine/sandbox:latest)
 //	TSENGINE_PLATFORM_NO_ENGINE 1 → boot without the sandbox engine
 //	TSENGINE_MONITOR_INTERVAL  continuous re-scan cadence (e.g. 6h; default 12h; 0 disables)
+//	TSENGINE_THREAT_INTEL_CORPUS  path to the GLOBAL KEV/EPSS corpus file (else embedded snapshot)
+//	TSENGINE_CORPUS_REFRESH_INTERVAL  global threat-intel refresh cadence (default 24h; 0 disables)
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
 //	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
 //	TSENGINE_ACTIVE_EXPLOIT    1 → wire the live active-exploitation Prober (still
@@ -380,6 +382,15 @@ func main() {
 	sched := &scheduler.Scheduler{Store: st, Runner: svc, Interval: monitorInterval()}
 	go func() { _ = sched.Run(monitorCtx) }()
 
+	// GLOBAL threat-intel auto-refresh: keep the shared KEV/EPSS corpus current on its own (slower)
+	// clock, so "continuously updating" intel doesn't depend on an external ops cron. Disabled unless
+	// TSENGINE_THREAT_INTEL_CORPUS points at a corpus file (else the engine uses its embedded snapshot).
+	corpusRefresher := &scheduler.CorpusRefresher{
+		DataPath: os.Getenv("TSENGINE_THREAT_INTEL_CORPUS"),
+		Interval: corpusRefreshInterval(),
+	}
+	go func() { _ = corpusRefresher.Run(monitorCtx) }()
+
 	go func() {
 		log.Printf("[platform] listening on %s", addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -499,6 +510,22 @@ func monitorInterval() time.Duration {
 	if err != nil {
 		log.Printf("[platform] bad TSENGINE_MONITOR_INTERVAL %q, using 12h", v)
 		return 12 * time.Hour
+	}
+	return d
+}
+
+// corpusRefreshInterval is the GLOBAL threat-intel refresh cadence (TSENGINE_CORPUS_REFRESH_INTERVAL,
+// e.g. "24h"). Default 24h (KEV/EPSS update at most daily); "0" disables the in-process refresher
+// (rely on an external `tsengine corpus refresh` cron instead).
+func corpusRefreshInterval() time.Duration {
+	v := os.Getenv("TSENGINE_CORPUS_REFRESH_INTERVAL")
+	if v == "" {
+		return 24 * time.Hour
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		log.Printf("[platform] bad TSENGINE_CORPUS_REFRESH_INTERVAL %q, using 24h", v)
+		return 24 * time.Hour
 	}
 	return d
 }
