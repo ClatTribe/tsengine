@@ -40,8 +40,13 @@ type Detector struct {
 	Recorder  *ledger.Recorder // optional: signs every open/resolve into the ledger
 	Alerter   Alerter          // optional: alerts a human when an incident opens
 	Threshold types.Severity   // minimum severity to open an incident (default high)
-	Now       func() time.Time
-	NewID     func() string
+	// AlertCap bounds how many per-pass incident-opened alerts the Alerter fires. A bulk event (e.g.
+	// 300 accounts lose MFA in one IdP export) still OPENS every incident — they're all in the UI for
+	// triage — but pages the human at most AlertCap times so a mid-size org isn't hit by an alert
+	// storm. 0 = unlimited (back-compat / tests). The incidents beyond the cap open silently.
+	AlertCap int
+	Now      func() time.Time
+	NewID    func() string
 	// Suppressed reports whether alerting is suppressed for a tenant at a moment (a maintenance
 	// window is active). When true, Reconcile opens NO new incidents and EscalateOverdue pages no
 	// one — but resolves still flow. Optional: nil → never suppressed (today's behaviour).
@@ -149,6 +154,7 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 	if d.Suppressed != nil && d.Suppressed(ctx, tenantID, d.now()) {
 		return res, nil
 	}
+	alerted := 0 // per-pass alert count — bounded by AlertCap to avoid a bulk-event alert storm
 	for key, f := range present {
 		if _, already := openByKey[key]; already {
 			continue
@@ -166,8 +172,12 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 		if err := d.Store.PutIncident(ctx, inc); err != nil {
 			return res, err
 		}
-		if d.Alerter != nil {
+		// Every incident OPENS (visible in the UI for triage); the pager fires at most AlertCap times
+		// per pass so a bulk ingest doesn't storm the on-call. An under-active-attack incident always
+		// pages (it's the strongest signal) regardless of the cap.
+		if d.Alerter != nil && (d.AlertCap == 0 || alerted < d.AlertCap || attacked[key]) {
 			_ = d.Alerter.IncidentOpened(ctx, inc) // best-effort; never fails the pass
+			alerted++
 		}
 		res.Opened = append(res.Opened, inc)
 	}

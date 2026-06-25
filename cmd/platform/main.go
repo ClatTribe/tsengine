@@ -274,6 +274,9 @@ func main() {
 	// API's event-driven ingest paths (identity / SaaS), which call detector.OpenFor to open incidents
 	// for a freshly-ingested high threat WITHOUT the resolve sweep.
 	detector := &detect.Detector{Store: st, Recorder: rec, Alerter: incidentAlerter, NewID: newID,
+		// Bound per-pass paging so a bulk event (e.g. a whole org's MFA export) doesn't storm the
+		// on-call. Every incident still opens + shows in the UI; under-attack incidents always page.
+		AlertCap: 25,
 		// Maintenance-window suppression: during an active change-freeze, open no incidents and page
 		// no one (resolves still flow). Reads the tenant's windows at evaluation time.
 		Suppressed: func(ctx context.Context, tenantID string, now time.Time) bool {
