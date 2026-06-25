@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/ci-cd", label: "CI/CD" },
   { href: "/vapt", label: "VAPT" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/blog", label: "Blog" },
   { href: "/security", label: "Security" },
 ];
 
