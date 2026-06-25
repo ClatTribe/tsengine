@@ -4,6 +4,7 @@ import {
   UserCheck, Lock, Radar, Github, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
 } from "lucide-react";
+import { LiveConsole } from "@/components/marketing/live-console";
 
 export const metadata = {
   title: "TensorShield — your fractional security team",
@@ -17,42 +18,57 @@ export default function Landing() {
     <>
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-20 text-center">
-          <Link
-            href="/product"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm transition hover:border-accent/40"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-accent" /> AI security + compliance, human-in-the-loop
-          </Link>
+        {/* animated aurora backdrop — modern depth, subtle motion */}
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 left-[20%] h-[26rem] w-[26rem] -translate-x-1/2 rounded-full bg-accent/20 blur-[110px] animate-aurora" />
+          <div className="absolute -top-16 right-[16%] h-[22rem] w-[22rem] translate-x-1/2 rounded-full bg-pulse/15 blur-[110px] animate-aurora [animation-delay:-7s]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(16,24,40,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(16,24,40,0.025)_1px,transparent_1px)] bg-[size:44px_44px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_72%)]" />
+        </div>
+        <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-16 lg:pt-24">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            {/* copy */}
+            <div className="text-center lg:text-left">
+              <Link
+                href="/product"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur transition hover:border-accent/40"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-accent" /> AI security + compliance, human-in-the-loop
+              </Link>
 
-          <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-6xl">
-            Your fractional security team,{" "}
-            <span className="text-accent">running while you build.</span>
-          </h1>
-          <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted">
-            TensorShield continuously finds, triages, and fixes security &amp; compliance issues across your code,
-            cloud, and identity — and pulls you in only where judgment is needed. No security hire required.
-          </p>
+              <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
+                Your fractional security team,{" "}
+                <span className="text-accent">running while you build.</span>
+              </h1>
+              <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
+                TensorShield continuously finds, triages, and fixes security &amp; compliance issues across your code,
+                cloud, and identity — and pulls you in only where judgment is needed. No security hire required.
+              </p>
 
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
-            >
-              Start free <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/product"
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-border-strong"
-            >
-              See how it works
-            </Link>
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
+                >
+                  Start free <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/product"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-border-strong"
+                >
+                  See how it works
+                </Link>
+              </div>
+              <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +10 more · No credit card to start</p>
+              <Link href="/scan" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+                Or check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            {/* live product preview */}
+            <div className="animate-fade-rise">
+              <LiveConsole />
+            </div>
           </div>
-          <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +10 more · No credit card to start</p>
-          <Link href="/scan" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
-            Or check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
 
           <StackPipeline />
         </div>
