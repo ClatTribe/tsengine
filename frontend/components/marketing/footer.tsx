@@ -6,6 +6,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
     title: "Product",
     links: [
       { href: "/product", label: "How it works" },
+      { href: "/vs-consulting", label: "vs. a consultant" },
       { href: "/cross-detection", label: "Unified platform" },
       { href: "/ai-security-engineer", label: "AI security engineer" },
       { href: "/ai-pentest", label: "AI pentesting" },
