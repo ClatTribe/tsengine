@@ -5,6 +5,7 @@ import {
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
 } from "lucide-react";
 import { LiveConsole } from "@/components/marketing/live-console";
+import { Reveal } from "@/components/marketing/reveal";
 
 export const metadata = {
   title: "TensorShield — your fractional security team",
@@ -77,7 +78,7 @@ export default function Landing() {
       {/* Differentiator — we fix, not just flag (vs advise-only tools) */}
       <section className="border-y border-border bg-surface">
         <div className="mx-auto max-w-5xl px-5 py-16">
-          <div className="mx-auto mb-10 max-w-2xl text-center">
+          <Reveal className="mx-auto mb-10 max-w-2xl text-center">
             <span className="text-xs font-semibold uppercase tracking-wider text-accent">The difference</span>
             <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
               Most tools stop at the finding. TensorShield ships the fix.
@@ -86,8 +87,8 @@ export default function Landing() {
               A dashboard full of risks is still your problem to solve. TensorShield prepares the actual remediation —
               and applies it the moment you approve.
             </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          </Reveal>
+          <Reveal delay={90} className="grid gap-4 sm:grid-cols-2">
             <div className="card p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-muted">
                 <XCircle className="h-4 w-4 text-faint" /> Advise-only tools
@@ -112,13 +113,13 @@ export default function Landing() {
                 ))}
               </ul>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* Social proof / stats */}
       <section className="border-y border-border bg-surface">
-        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-5 py-10 text-center sm:grid-cols-4">
+        <Reveal className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-5 py-10 text-center sm:grid-cols-4">
           {[
             ["14", "compliance frameworks"],
             ["30+", "OSS scanners wrapped"],
@@ -130,7 +131,7 @@ export default function Landing() {
               <div className="mt-1 text-xs text-muted">{l}</div>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* How it works */}
@@ -342,12 +343,12 @@ function CompareCell({ v, highlight }: { v: string; highlight: boolean }) {
 function Section({ eyebrow, title, sub, children }: { eyebrow: string; title: string; sub: string; children: React.ReactNode }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20">
-      <div className="mx-auto mb-12 max-w-2xl text-center">
+      <Reveal className="mx-auto mb-12 max-w-2xl text-center">
         <span className="text-xs font-semibold uppercase tracking-wider text-accent">{eyebrow}</span>
         <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">{title}</h2>
         <p className="mt-3 text-base leading-relaxed text-muted">{sub}</p>
-      </div>
-      {children}
+      </Reveal>
+      <Reveal delay={90}>{children}</Reveal>
     </section>
   );
 }
