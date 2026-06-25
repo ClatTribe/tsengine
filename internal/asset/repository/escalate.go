@@ -22,9 +22,11 @@ func (h *Handler) PlanEscalation(_ types.Asset, _ []string, findings []types.Fin
 	var out []asset.Dispatch
 	langSeen := map[string]bool{}
 	mobsfFired := false
+	govulnFired := false
 
 	codeql, hasCodeQL := tool.Get("codeql")
 	mob, hasMob := tool.Get("mobsfscan")
+	gov, hasGov := tool.Get("govulncheck")
 
 	for _, f := range findings {
 		if hasCodeQL && isInjectionFinding(f) {
@@ -40,8 +42,24 @@ func (h *Handler) PlanEscalation(_ types.Asset, _ []string, findings []types.Fin
 			out = append(out, asset.Dispatch{Tool: mob, Args: tool.Args{"target": WorkspacePath},
 				EscalatedFrom: "mobile→mobsfscan"})
 		}
+		// Go project → reachability-aware SCA. govulncheck reports only the
+		// CVEs whose vulnerable symbol is actually called, separating the
+		// reachable (real) SCA findings from the unreachable (FP) majority.
+		if hasGov && !govulnFired && isGoProjectFinding(f) {
+			govulnFired = true
+			out = append(out, asset.Dispatch{Tool: gov, Args: tool.Args{"target": WorkspacePath},
+				EscalatedFrom: "go-project→govulncheck"})
+		}
 	}
 	return out
+}
+
+// isGoProjectFinding reports whether a finding indicates a Go project — a Go
+// source file, or an SCA finding located in a Go module manifest. The signal
+// that warrants the (Go-toolchain-heavy) reachability pass.
+func isGoProjectFinding(f types.Finding) bool {
+	p := strings.ToLower(f.Endpoint)
+	return strings.HasSuffix(p, ".go") || strings.Contains(p, "go.mod") || strings.Contains(p, "go.sum")
 }
 
 // injectionCWEs are the taint-class CWEs worth a CodeQL dataflow confirm.

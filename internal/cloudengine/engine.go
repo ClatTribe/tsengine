@@ -23,6 +23,11 @@ import (
 type Options struct {
 	MaxHypotheses int // worklist cap (top-K prioritized paths validated). Default 20.
 	MaxDepth      int // path length cap. Default 8.
+	// WorkloadVulns are agentless workload-scan results (ADR 0009 Phase 2): the trivy run
+	// over WorkloadScanPlan, keyed by image. Optional — nil → no workload toxic-combos
+	// (back-compat). When set, Assess emits an exposure for each internet-reachable workload
+	// running a vulnerable image.
+	WorkloadVulns []WorkloadVuln
 }
 
 func (o Options) withDefaults() Options {
@@ -47,6 +52,11 @@ type Validator interface {
 func Assess(snap *cloudgraph.Snapshot, prowler []types.Finding, v Validator, opts Options) *types.AIAssessment {
 	opts = opts.withDefaults()
 	rep := &types.AIAssessment{SnapshotHash: snap.Hash()}
+
+	// 0. Prune over-approximated identity edges the effective IAM actually denies (an
+	// assume-role edge blocked by the target's trust policy), so reachability isn't
+	// over-stated — the held-out FP fix (cloudiam consulted before enumeration, §10).
+	snap.PruneUnauthorized()
 
 	// 1–2. Orient + hypothesize: from every entry point (internet + public
 	// resources) find paths to a crown jewel (sensitive data OR privileged id).
@@ -98,6 +108,18 @@ func Assess(snap *cloudgraph.Snapshot, prowler []types.Finding, v Validator, opt
 		rep.Paths = append(rep.Paths, buildFinding(snap, fmt.Sprintf("acp-%03d", id), p, rung, ev))
 	}
 
+	// 5b. DSPM (ADR 0009 Phase 1): a public, sensitivity-classified data store is a direct
+	// exposure even with no onward attack path — the zero-hop case the multi-hop finder
+	// misses (Wiz/Aikido flag "public bucket with PII" on its own). Emit a one-hop
+	// internet→store exposure for each such store not already on a discovered path.
+	rep.Paths = append(rep.Paths, DSPMExposures(snap, onRealPath)...)
+
+	// 5c. Agentless workload coverage (ADR 0009 Phase 2): an internet-reachable workload
+	// running a critically-vulnerable image is a remotely-exploitable entry point (the Wiz
+	// toxic combination). Emitted from the WorkloadScanPlan→trivy results threaded in via
+	// opts; deduped against nodes already on a discovered path.
+	rep.Paths = append(rep.Paths, WorkloadExposures(snap, opts.WorkloadVulns, onRealPath)...)
+
 	// 6. Correlate prowler: a finding on a real path corroborates it; a prowler
 	// finding touching no real path is a downgrade candidate (config-bad, inert).
 	correlateProwler(rep, prowler, onRealPath)
@@ -138,6 +160,12 @@ func score(snap *cloudgraph.Snapshot, p cloudgraph.Path) float64 {
 		if target.Privileged {
 			s += 8
 		}
+	}
+	// Internet-rooted paths need no prior foothold — the attacker starts outside — so an
+	// externally-reachable chain to a crown jewel is the toxic combination Wiz/Orca lead with,
+	// and must be prioritized for validation over an internal-only path to the same target.
+	if len(p.Nodes) > 0 && p.Nodes[0] == cloudgraph.InternetID {
+		s += 6
 	}
 	s -= float64(len(p.Edges)) * 0.5 // prefer shorter chains
 	if p.Conditional() {

@@ -69,6 +69,35 @@ func TestPostureEndpoint(t *testing.T) {
 	}
 }
 
+// TestPostureSummaryEndpoint: the batched GET /v1/posture returns every TRACKED framework's
+// summary in one call (only soc2 has control state here → one entry), omitting untracked
+// frameworks, with a non-null frameworks array (the nil-slice→null guard).
+func TestPostureSummaryEndpoint(t *testing.T) {
+	h, _ := setupLoop(t)
+	rec := do(h, "GET", "/v1/posture", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("posture summary: code %d body %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), ":null") {
+		t.Errorf("frameworks must serialize as [] not null: %s", rec.Body.String())
+	}
+	var out struct {
+		Frameworks []struct {
+			Framework       string `json:"framework"`
+			Total, Met, Gap int
+		} `json:"frameworks"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Frameworks) != 1 {
+		t.Fatalf("want only the 1 tracked framework, got %d: %s", len(out.Frameworks), rec.Body.String())
+	}
+	if f := out.Frameworks[0]; f.Framework != "soc2" || f.Total != 1 || f.Gap != 1 || f.Met != 0 {
+		t.Errorf("soc2 summary wrong: %+v", f)
+	}
+}
+
 func TestConnectURLCarriesTenantInState(t *testing.T) {
 	h, _ := setupLoop(t)
 	rec := do(h, "GET", "/v1/connect/github", "t1", "")
@@ -92,5 +121,21 @@ func TestPostureNotConfigured(t *testing.T) {
 	rec := do(h, "GET", "/v1/posture/soc2", "t1", "")
 	if rec.Code != http.StatusNotImplemented {
 		t.Errorf("missing GRC should be 501, got %d", rec.Code)
+	}
+}
+
+func TestComplianceReport_UnknownFrameworkIs404(t *testing.T) {
+	h, _ := setupLoop(t)
+	// A valid framework reports (200).
+	if rec := do(h, "GET", "/v1/compliance/soc2/report?format=json", "t1", ""); rec.Code != 200 {
+		t.Fatalf("a tracked framework should report, got %d", rec.Code)
+	}
+	// An unknown framework must 404 — never a fabricated empty report titled with the bogus key.
+	rec := do(h, "GET", "/v1/compliance/bogus/report?format=json", "t1", "")
+	if rec.Code != 404 {
+		t.Errorf("an unknown framework must 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "\"Framework\":\"bogus\"") {
+		t.Error("must not render a report body for an unknown framework (grounding §10)")
 	}
 }

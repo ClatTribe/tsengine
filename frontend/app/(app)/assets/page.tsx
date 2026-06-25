@@ -4,6 +4,10 @@ import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
+import { DataTierSelect } from "@/components/assets/data-tier-select";
+import { LoginFlowConfig } from "@/components/assets/login-flow-config";
+import { AuthzTestConfig } from "@/components/assets/authz-test-config";
+import { PageIntro } from "@/components/ui/page-intro";
 import { timeAgo, cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +15,14 @@ export const dynamic = "force-dynamic";
 const KIND_ICON: Record<string, typeof Github> = {
   github: Github,
   gitlab: GitBranch,
+  bitbucket: GitBranch,
+  azuredevops: GitBranch,
   gworkspace: Mail,
   m365: Users,
   okta: KeyRound,
   aws: Cloud,
+  gcp: Cloud,
+  azure: Cloud,
 };
 
 const STATUS_CLS: Record<string, string> = {
@@ -39,13 +47,12 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Assets &amp; connections</h1>
-          <p className="text-xs text-muted">Connect a system once — the agent discovers its assets and keeps scanning them.</p>
-        </div>
-        <ScanNow disabled={assets.length === 0} />
-      </div>
+      <PageIntro
+        icon={Boxes}
+        title="Assets & connections"
+        description="Everything we watch for you, in one place. Connect a system once — your code, cloud, identity provider, or SaaS — and the agent finds every asset inside it and keeps scanning them automatically."
+        right={<ScanNow disabled={assets.length === 0} />}
+      />
 
       {connect_error && (
         <div className="flex items-center gap-2 rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-sm text-critical">
@@ -115,6 +122,13 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         <SectionTitle action={<span className="text-[11px] text-faint">{assets.length} monitored</span>}>
           Monitored assets
         </SectionTitle>
+        {assets.length > 0 && (
+          <p className="mb-2 text-xs leading-relaxed text-muted">
+            Tag each asset by how sensitive its data is. A finding on a{" "}
+            <span className="text-critical">customer-data</span> asset is prioritized over the same
+            finding on a low-sensitivity one — so triage starts where a breach would hurt most.
+          </p>
+        )}
         {assets.length === 0 ? (
           <Empty>No assets discovered yet. Connect a system and the agent enumerates what to watch.</Empty>
         ) : (
@@ -124,6 +138,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="py-2.5 pl-5 pr-2 font-medium">Asset</th>
                   <th className="px-2 py-2.5 font-medium">Type</th>
+                  <th className="px-2 py-2.5 font-medium">Data tier</th>
                   <th className="px-2 py-2.5 font-medium">Via</th>
                   <th className="py-2.5 pr-5 font-medium text-right">Last scanned</th>
                 </tr>
@@ -168,10 +183,23 @@ function AssetRow({ asset: a, connections, last }: { asset: Asset; connections: 
         <div className="flex items-center gap-2">
           <Boxes className="h-3.5 w-3.5 shrink-0 text-faint" />
           <span className="mono truncate text-sm">{a.target}</span>
+          {a.type === "web_application" && (
+            <span className="shrink-0">
+              <LoginFlowConfig assetId={a.id} configured={!!a.meta?.login_flow} />
+            </span>
+          )}
+          {a.type === "api" && (
+            <span className="shrink-0">
+              <AuthzTestConfig assetId={a.id} configured={!!a.meta?.authz_test} />
+            </span>
+          )}
         </div>
       </td>
       <td className="px-2 py-2.5 align-middle">
         <Tag>{ASSET_TYPE_LABEL[a.type] ?? a.type}</Tag>
+      </td>
+      <td className="px-2 py-2.5 align-middle">
+        <DataTierSelect assetId={a.id} tier={a.data_tier ?? 2} />
       </td>
       <td className="px-2 py-2.5 align-middle text-xs text-muted">{via ? kindLabel(via.kind) : "—"}</td>
       <td className="py-2.5 pr-5 align-middle text-right text-xs">

@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -12,9 +13,10 @@ import (
 )
 
 // handleFindingsExport renders the tenant's findings as a portable artifact for an
-// auditor / pipeline / another tool: SARIF (default — GitHub code-scanning ingestible) or
-// CSV (`?format=csv`). It reuses the engine's report→SARIF path so platform exports match
-// the engine's exactly.
+// auditor / pipeline / another tool: SARIF (default — GitHub code-scanning ingestible),
+// CSV (`?format=csv`, for spreadsheets/ticketing), or JSON (`?format=json`, the full
+// normalized findings for any programmatic consumer). It reuses the engine's report→SARIF
+// path so platform exports match the engine's exactly.
 func (d Deps) handleFindingsExport(w http.ResponseWriter, r *http.Request, tenantID string) {
 	findings, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})
 	if err != nil {
@@ -37,6 +39,24 @@ func (d Deps) handleFindingsExport(w http.ResponseWriter, r *http.Request, tenan
 			_ = cw.Write([]string{f.ID, f.Severity, f.Status, f.Tool, f.Title, f.Endpoint})
 		}
 		cw.Flush()
+	case "json":
+		// The full normalized findings — the richest, most universally consumable export
+		// (a homegrown dashboard, a SIEM ingest, a data pipeline). findings is non-nil so it
+		// serializes as [] not null (the frontend-crash footgun), even with zero findings.
+		out := struct {
+			Tenant     string           `json:"tenant"`
+			ExportedAt time.Time        `json:"exported_at"`
+			Count      int              `json:"count"`
+			Findings   []report.Finding `json:"findings"`
+		}{Tenant: tenantID, ExportedAt: time.Now().UTC(), Count: len(rep.Findings), Findings: rep.Findings}
+		if out.Findings == nil {
+			out.Findings = []report.Finding{}
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="findings.json"`)
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(out)
 	default: // sarif
 		b, serr := exporter.ToSARIF(rep)
 		if serr != nil {

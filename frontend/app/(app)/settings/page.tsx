@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   Building2, Plug, Bell, ShieldCheck, ArrowUpRight, Github, GitBranch, Mail, Users,
-  KeyRound, Cloud, MessageSquare, BellRing, Lock, CheckCircle2,
+  KeyRound, Cloud, BellRing, Lock, CheckCircle2,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { getSession } from "@/lib/auth";
@@ -11,12 +11,23 @@ import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
+import { CloudRemediationControl } from "@/components/settings/cloud-remediation-control";
+import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
+import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
+import { JiraControl } from "@/components/settings/jira-control";
+import { EscalationControl } from "@/components/settings/escalation-control";
+import { SLAControl } from "@/components/settings/sla-control";
+import { MaintenanceControl } from "@/components/settings/maintenance-control";
+import { ContactsControl } from "@/components/settings/contacts-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
+import { LLMSettings } from "@/components/settings/llm-settings";
+import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
+import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
 
 const KIND_ICON: Record<string, typeof Github> = {
-  github: Github, gitlab: GitBranch, gworkspace: Mail, m365: Users, okta: KeyRound, aws: Cloud,
+  github: Github, gitlab: GitBranch, bitbucket: GitBranch, azuredevops: GitBranch, gworkspace: Mail, m365: Users, okta: KeyRound, aws: Cloud, gcp: Cloud, azure: Cloud,
 };
 
 const STATUS_CLS: Record<string, string> = {
@@ -27,18 +38,20 @@ const STATUS_CLS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const [tenant, connections, trust, team, me, aiBom] = await Promise.all([
-    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(),
+  const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation] = await Promise.all([
+    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(),
   ]);
+  const [sla, maintenance, contacts] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">Settings</h1>
-        <p className="text-xs text-muted">Your organization, connected systems, and how the agent reaches you.</p>
-      </div>
+      <PageIntro
+        icon={Building2}
+        title="Settings"
+        description="Your organization, connected systems, team, and how the agent reaches you — plus the safety controls: the kill-switch, what the agent is allowed to touch, and your public trust link."
+      />
 
       {/* Organization */}
       <div>
@@ -50,6 +63,22 @@ export default async function SettingsPage() {
           {tenant?.created_at && (
             <Row icon={CheckCircle2} label="Member since" value={<span className="text-sm text-muted">{new Date(tenant.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>} />
           )}
+        </Card>
+      </div>
+
+      {/* AI engine — bring-your-own-LLM for the agent + autonomous pentest */}
+      <div>
+        <SectionTitle>AI engine</SectionTitle>
+        <Card className="p-5">
+          <LLMSettings initial={llm} />
+        </Card>
+      </div>
+
+      {/* Repository PR-review bot — inline review + merge-gating check-run (ADR 0010) */}
+      <div>
+        <SectionTitle>Pull-request review</SectionTitle>
+        <Card className="p-5">
+          <PRBotSettingsPanel initial={prBot} />
         </Card>
       </div>
 
@@ -86,18 +115,27 @@ export default async function SettingsPage() {
             <ul className="divide-y divide-border">
               {connections.map((c) => {
                 const Icon = KIND_ICON[c.kind] ?? Plug;
+                const isCloud = c.kind === "aws" || c.kind === "gcp" || c.kind === "azure";
                 return (
-                  <li key={c.id} className="flex items-center gap-3 px-5 py-3">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-ink">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium">{kindLabel(c.kind)}</div>
-                      {c.account && <div className="mono truncate text-xs text-faint">{c.account}</div>}
+                  <li key={c.id} className="px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-ink">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium">{kindLabel(c.kind)}</div>
+                        {c.account && <div className="mono truncate text-xs text-faint">{c.account}</div>}
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_CLS[c.status] ?? "text-muted bg-surface-2"}`}>
+                        {c.status}
+                      </span>
                     </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${STATUS_CLS[c.status] ?? "text-muted bg-surface-2"}`}>
-                      {c.status}
-                    </span>
+                    {isCloud && (
+                      <div className="mt-2 pl-11">
+                        <CloudRemediationControl id={c.id} kind={c.kind} config={c.config} />
+                      </div>
+                    )}
+                    {c.kind === "github" && <GitHubPostureSync />}
                   </li>
                 );
               })}
@@ -126,9 +164,14 @@ export default async function SettingsPage() {
       <div>
         <SectionTitle>Notifications</SectionTitle>
         <Card className="space-y-3 p-5">
-          <p className="text-xs text-muted">Where the agent reaches a human. Channels are provisioned by your administrator.</p>
+          <p className="text-xs text-muted">Where the agent reaches a human. Connect your own Slack below; other channels are provisioned by your administrator.</p>
+          <SlackWebhookControl configured={notify.has_slack_webhook} />
+          <JiraControl config={jira} />
+          <EscalationControl policy={escalation} />
+          <ContactsControl contacts={contacts} />
+          <SLAControl policy={sla} />
+          <MaintenanceControl windows={maintenance} />
           {[
-            { icon: MessageSquare, name: "Slack", role: "Approve or reject fixes in-channel" },
             { icon: BellRing, name: "PagerDuty", role: "New critical issues page on-call" },
             { icon: Mail, name: "Email", role: "Digest of pending approvals" },
           ].map(({ icon: Icon, name, role }) => (

@@ -5,10 +5,14 @@ import { CONNECTORS, CATEGORY_LABEL, type ConnectorCategory } from "@/lib/connec
 const KIND_ICON: Record<string, typeof Github> = {
   github: Github,
   gitlab: GitBranch,
+  bitbucket: GitBranch,
+  azuredevops: GitBranch,
   gworkspace: Mail,
   m365: Users,
   okta: KeyRound,
   aws: Cloud,
+  gcp: Cloud,
+  azure: Cloud,
 };
 
 const STEPS = [

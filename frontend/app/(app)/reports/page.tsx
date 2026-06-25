@@ -1,29 +1,30 @@
 import Link from "next/link";
-import { FileText, Download, ShieldCheck, FileCode2, Sheet, Lock, ArrowUpRight } from "lucide-react";
-import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
+import { FileText, Download, ShieldCheck, FileCode2, Sheet, Braces, Lock, ArrowUpRight } from "lucide-react";
+import { api, FRAMEWORK_LABEL } from "@/lib/api";
 import { Card, SectionTitle, Empty } from "@/components/ui/primitives";
+import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
-  const frameworks = (
-    await Promise.all(
-      FRAMEWORKS.map(async (f) => {
-        const cs = await api.posture(f);
-        if (cs.length === 0) return null;
-        const gap = cs.filter((c) => c.state === "gap").length;
-        const pct = Math.round(((cs.length - gap) / cs.length) * 100);
-        return { f, total: cs.length, met: cs.length - gap, gap, pct };
-      }),
-    )
-  ).filter(Boolean) as { f: string; total: number; met: number; gap: number; pct: number }[];
+  // One batched posture call (only tracked frameworks come back) instead of fanning out 14
+  // per-framework requests.
+  const summary = await api.postureSummary();
+  const frameworks = summary.frameworks.map((p) => ({
+    f: p.framework,
+    total: p.total,
+    met: p.met,
+    gap: p.gap,
+    pct: p.total > 0 ? Math.round((p.met / p.total) * 100) : 0,
+  }));
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">Reports &amp; evidence</h1>
-        <p className="text-xs text-muted">Signed, auditor-ready exports of your posture and findings — generated from real data, not screenshots.</p>
-      </div>
+      <PageIntro
+        icon={FileText}
+        title="Reports & evidence"
+        description="The documents you hand to a customer, auditor, or your board — a VAPT report, compliance evidence, and posture summaries. Each one is generated from your real, signed scan data, so it's audit-ready, not a screenshot."
+      />
 
       {/* VAPT / pentest report — the headline deliverable for a customer security review */}
       <div>

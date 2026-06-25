@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -137,5 +138,44 @@ func TestVAPTReport_CleanTenant(t *testing.T) {
 	}
 	if md := RenderVAPTMarkdown(r); !strings.Contains(md, "every monitored asset is currently clean") {
 		t.Errorf("clean report should say so:\n%s", md)
+	}
+}
+
+// TestVAPT_ExploitationProvenSurfaced: a finding carrying the active-driver PoC line is counted as
+// exploitation-proven, the PoC is split out of the description into its own distinguished block,
+// and the summary reflects it — the XBOW "we proved it" evidence, not buried in prose.
+func TestVAPT_ExploitationProvenSurfaced(t *testing.T) {
+	poc := "[Exploitation PoC · cors-misconfiguration] GET https://api/data → reflected Origin with credentials (HTTP 200)"
+	findings := []types.Finding{{
+		ID: "f1", Title: "CORS Misconfiguration", Severity: types.SeverityHigh, Tool: "pentest",
+		RuleID: "cors", Endpoint: "https://api/data", VerificationStatus: "verified",
+		Description: "The API trusts arbitrary origins.\n\n" + poc,
+	}}
+	r := ReportFromFindings(findings, []string{"https://api"}, "Acme", time.Now().UTC(), nil)
+	if r.Summary.ExploitProven != 1 {
+		t.Fatalf("ExploitProven = %d, want 1", r.Summary.ExploitProven)
+	}
+	vf := r.Findings[0]
+	if vf.PoC != poc {
+		t.Errorf("PoC not extracted: %q", vf.PoC)
+	}
+	if strings.Contains(vf.Description, "[Exploitation PoC") {
+		t.Error("PoC must be split OUT of the description body (not duplicated)")
+	}
+	md := RenderVAPTMarkdown(r)
+	if !strings.Contains(md, "exploitation-proven") {
+		t.Error("report must surface the exploitation-proven tier")
+	}
+	if !strings.Contains(md, "reproducible proof of concept") || !strings.Contains(md, poc) {
+		t.Error("report must render the captured PoC as a distinguished, reproducible block")
+	}
+}
+
+// TestVAPT_NoPoCWhenNoneCaptured: a plain finding (no captured proof) is not mislabeled proven.
+func TestVAPT_NoPoCWhenNoneCaptured(t *testing.T) {
+	findings := []types.Finding{{ID: "f2", Title: "Info leak", Severity: types.SeverityLow, Tool: "nuclei", RuleID: "x", Description: "A header disclosed the server version."}}
+	r := ReportFromFindings(findings, nil, "Acme", time.Now().UTC(), nil)
+	if r.Summary.ExploitProven != 0 || r.Findings[0].PoC != "" {
+		t.Error("a finding with no captured PoC must not be marked exploitation-proven")
 	}
 }

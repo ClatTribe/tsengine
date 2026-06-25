@@ -76,6 +76,7 @@ tsbench: ## build the bench harness binary into ./bin/
 bench: cli tsbench sandbox-image ## run the runnable L1 benchmarks
 	./bin/tsbench run --fixture fixtures/container/nginx-vuln
 	./bin/tsbench run --fixture fixtures/container/alpine-clean
+	./bin/tsbench run --fixture fixtures/repo/sca-vuln
 
 .PHONY: bench-ablation
 bench-ablation: cli tsbench sandbox-image ## run the L1.5 ablation on the container fixture
@@ -89,6 +90,23 @@ up: ## bring up the full product stack (platform API + frontend) via docker comp
 .PHONY: down
 down: ## stop the product stack
 	docker compose down
+
+.PHONY: deploy-prod
+deploy-prod: ## production single-box deploy (hardened stack: TLS edge + socket-proxy + engine)
+	./scripts/deploy-single-box.sh
+
+.PHONY: backup
+backup: ## back up the platform-data volume to ./backups
+	./scripts/backup.sh
+
+.PHONY: prod-validate
+prod-validate: ## validate the hardened single-box stack (compose + Caddyfile) without secrets
+	@TSENGINE_SECRET_KEY=validate TSENGINE_PLATFORM_TOKEN=validate \
+		docker compose -f docker-compose.prod.yml config -q && echo "✓ docker-compose.prod.yml valid"
+	@docker run --rm -e TSENGINE_SITE_ADDRESS=localhost \
+		-v "$(PWD)/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+		caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
+		&& echo "✓ Caddyfile valid"
 
 .PHONY: platform-image
 platform-image: ## build the platform server image
@@ -106,6 +124,14 @@ dev: ## run the local demo stack (platform + frontend) with a CLEAN Next cache �
 dev-reseed: ## refresh demo data to current code, then (re)start the stack — drops + re-seeds the DB
 	@$(MAKE) dev-down
 	@RESEED=1 ./scripts/dev.sh
+
+.PHONY: demo-secure
+demo-secure: ## run the demo with the ENGINE ON + hardened Docker sandboxes (one asset of every type)
+	./scripts/demo-secure.sh
+
+.PHONY: demo-scan-asset
+demo-scan-asset: ## prove the secure-Docker scan path per asset type (container + repo, no creds)
+	./scripts/demo-scan-asset.sh
 
 .PHONY: dev-down
 dev-down: ## stop the local dev stack (frees :3000 and :8090)

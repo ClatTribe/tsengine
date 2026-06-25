@@ -9,6 +9,7 @@ import (
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no cgo → keeps the static binary)
 
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -56,6 +57,13 @@ CREATE TABLE IF NOT EXISTS findings    (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS actions     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS controls    (tenant_id TEXT, framework TEXT, control_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,framework,control_id));
 CREATE TABLE IF NOT EXISTS incidents   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS risks       (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS audits      (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS policies    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
+CREATE TABLE IF NOT EXISTS exclusions  (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS runtimeevts (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS pentests    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS users       (id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
@@ -219,6 +227,65 @@ func (s *SQLite) PutIncident(ctx context.Context, i platform.Incident) error {
 }
 func (s *SQLite) ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error) {
 	return listJSON[platform.Incident](ctx, s.db, `SELECT data FROM incidents WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) PutRisk(ctx context.Context, r platform.Risk) error {
+	return s.upsertTID(ctx, `INSERT INTO risks(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, r.TenantID, r.ID, r)
+}
+func (s *SQLite) ListRisks(ctx context.Context, tenantID string) ([]platform.Risk, error) {
+	return listJSON[platform.Risk](ctx, s.db, `SELECT data FROM risks WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error {
+	return s.upsertTID(ctx, `INSERT INTO audits(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, e.TenantID, e.ID, e)
+}
+func (s *SQLite) ListAuditEngagements(ctx context.Context, tenantID string) ([]platform.AuditEngagement, error) {
+	return listJSON[platform.AuditEngagement](ctx, s.db, `SELECT data FROM audits WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) PutPolicy(ctx context.Context, p platform.Policy) error {
+	return s.upsertTID(ctx, `INSERT INTO policies(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, p.TenantID, p.ID, p)
+}
+func (s *SQLite) ListPolicies(ctx context.Context, tenantID string) ([]platform.Policy, error) {
+	return listJSON[platform.Policy](ctx, s.db, `SELECT data FROM policies WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+func (s *SQLite) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error {
+	return s.upsertTID(ctx, `INSERT INTO ignores(tenant_id,issue_key,data) VALUES(?,?,?) ON CONFLICT(tenant_id,issue_key) DO UPDATE SET data=excluded.data`, ir.TenantID, ir.IssueKey, ir)
+}
+func (s *SQLite) ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error) {
+	return listJSON[platform.IgnoreRule](ctx, s.db, `SELECT data FROM ignores WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM ignores WHERE tenant_id=? AND issue_key=?`, tenantID, issueKey)
+	return err
+}
+
+func (s *SQLite) PutExclusionRule(ctx context.Context, er platform.ExclusionRule) error {
+	return s.upsertTID(ctx, `INSERT INTO exclusions(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, er.TenantID, er.ID, er)
+}
+func (s *SQLite) ListExclusionRules(ctx context.Context, tenantID string) ([]platform.ExclusionRule, error) {
+	return listJSON[platform.ExclusionRule](ctx, s.db, `SELECT data FROM exclusions WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) DeleteExclusionRule(ctx context.Context, tenantID, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM exclusions WHERE tenant_id=? AND id=?`, tenantID, id)
+	return err
+}
+
+func (s *SQLite) PutRuntimeEvent(ctx context.Context, ev platform.RuntimeEvent) error {
+	return s.upsertTID(ctx, `INSERT INTO runtimeevts(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, ev.TenantID, ev.ID, ev)
+}
+func (s *SQLite) ListRuntimeEvents(ctx context.Context, tenantID string) ([]platform.RuntimeEvent, error) {
+	return listJSON[platform.RuntimeEvent](ctx, s.db, `SELECT data FROM runtimeevts WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+func (s *SQLite) PutPentest(ctx context.Context, eng pentest.Engagement) error {
+	return s.upsertTID(ctx, `INSERT INTO pentests(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, eng.TenantID, eng.ID, eng)
+}
+func (s *SQLite) ListPentests(ctx context.Context, tenantID string) ([]pentest.Engagement, error) {
+	return listJSON[pentest.Engagement](ctx, s.db, `SELECT data FROM pentests WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) GetPentest(ctx context.Context, tenantID, id string) (pentest.Engagement, error) {
+	var e pentest.Engagement
+	err := getJSON(ctx, s.db, &e, `SELECT data FROM pentests WHERE tenant_id=? AND id=?`, tenantID, id)
+	return e, err
 }
 
 func (s *SQLite) PutReviewRequest(ctx context.Context, r platform.ReviewRequest) error {

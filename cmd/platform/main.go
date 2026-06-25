@@ -24,7 +24,10 @@
 //	TSENGINE_MONITOR_INTERVAL  continuous re-scan cadence (e.g. 6h; default 12h; 0 disables)
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
 //	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
+//	TSENGINE_ACTIVE_EXPLOIT    1 → wire the live active-exploitation Prober (still
+//	                           consent-gated per engagement; absent → passive only)
 //	PAGERDUTY_ROUTING_KEY      PagerDuty Events API v2 key — pages on-call for new high/critical incidents
+//	TSENGINE_TEAMS_WEBHOOK     Microsoft Teams Incoming Webhook — posts new high/critical incidents
 //	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
 package main
 
@@ -46,6 +49,9 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
+	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
+	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
@@ -55,6 +61,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/obsv"
 	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/platformapi"
 	"github.com/ClatTribe/tsengine/internal/remediate"
 	"github.com/ClatTribe/tsengine/internal/runner"
@@ -83,7 +90,8 @@ func newID() string {
 }
 
 func main() {
-	obsv.SetupLogging() // structured logs (slog); set TSENGINE_LOG_FORMAT=json in prod
+	obsv.SetupLogging()  // structured logs (slog); set TSENGINE_LOG_FORMAT=json in prod
+	hydrateFileSecrets() // Docker-secret *_FILE convention → load file-backed secrets into env
 	token := os.Getenv("TSENGINE_PLATFORM_TOKEN")
 	if token == "" {
 		log.Fatal("TSENGINE_PLATFORM_TOKEN is required")
@@ -92,13 +100,50 @@ func main() {
 	image := envOr("TSENGINE_SANDBOX_IMAGE", "tsengine/sandbox:latest")
 
 	st := openStore()
+	// AWS: read-only onboarding + the live, reversible remediation write path. The S3 writer is
+	// wired ONLY when a remediation role/creds are configured — else Apply stays the honest stub.
+	// (S3 Block Public Access needs WRITE creds, distinct from the read-only onboarding role.)
+	awsConn := connector.NewAWS(os.Getenv("AWS_CFN_TEMPLATE_URL"), os.Getenv("AWS_TRUST_ACCOUNT_ID"), os.Getenv("AWS_REGION"))
+	if os.Getenv("AWS_REMEDIATION_ROLE_ARN") != "" || os.Getenv("AWS_REMEDIATION_ENABLED") == "1" {
+		awsConn.Writer = awsremediate.NewS3Writer(os.Getenv("AWS_REGION"),
+			os.Getenv("AWS_REMEDIATION_ROLE_ARN"), os.Getenv("AWS_REMEDIATION_EXTERNAL_ID"))
+		log.Print("[platform] AWS live remediation enabled (S3 Block Public Access)")
+	}
+	// Per-tenant write path: each customer brings their OWN cross-account role (set via UX →
+	// Connection.Config). The factory is just an SDK-free constructor (the STS assume-role + write
+	// only fire at Apply, behind the HITL gate), so it's always wired.
+	awsConn.WriterForConfig = func(region, roleARN string) connector.AWSWriter {
+		return awsremediate.NewS3Writer(region, roleARN, "")
+	}
+	// GCP: read-only onboarding + the live, reversible remediation write path (GCS Public Access
+	// Prevention). The writer is wired ONLY when remediation is configured — else Apply stays the
+	// honest stub. The write impersonates a scoped SA, distinct from the read-only onboarding grant.
+	gcpConn := connector.NewGCP(os.Getenv("GCP_TRUST_SERVICE_ACCOUNT"))
+	if os.Getenv("GCP_REMEDIATION_IMPERSONATE_SA") != "" || os.Getenv("GCP_REMEDIATION_ENABLED") == "1" {
+		gcpConn.Writer = gcpremediate.NewGCSWriter(os.Getenv("GCP_REMEDIATION_IMPERSONATE_SA"))
+		log.Print("[platform] GCP live remediation enabled (GCS Public Access Prevention)")
+	}
+	gcpConn.WriterForConfig = func(sa string) connector.GCPWriter { return gcpremediate.NewGCSWriter(sa) }
+	// Azure: read-only onboarding + the live remediation write path (disable storage public access).
+	// The writer uses the platform's service-principal creds (DefaultAzureCredential), scoped to the
+	// subscription on the connection. Wired only when remediation is enabled — else honest stub.
+	azureConn := connector.NewAzure(os.Getenv("AZURE_TRUST_APP_ID"))
+	if os.Getenv("AZURE_REMEDIATION_ENABLED") == "1" {
+		azureConn.Writer = azremediate.NewStorageWriter()
+		log.Print("[platform] Azure live remediation enabled (disable storage public access)")
+	}
+	azureConn.WriterForConfig = func() connector.AzureWriter { return azremediate.NewStorageWriter() }
 	reg := connector.NewRegistry(
 		connector.NewGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
 		connector.NewGitLab(os.Getenv("GITLAB_CLIENT_ID"), os.Getenv("GITLAB_CLIENT_SECRET")),
+		connector.NewBitbucket(os.Getenv("BITBUCKET_CLIENT_ID"), os.Getenv("BITBUCKET_CLIENT_SECRET")),
+		connector.NewAzureDevOps(os.Getenv("AZURE_DEVOPS_CLIENT_ID"), os.Getenv("AZURE_DEVOPS_CLIENT_SECRET"), os.Getenv("AZURE_DEVOPS_ORG")),
 		connector.NewGWorkspace(os.Getenv("GWORKSPACE_CLIENT_ID"), os.Getenv("GWORKSPACE_CLIENT_SECRET")),
 		connector.NewM365(os.Getenv("M365_CLIENT_ID"), os.Getenv("M365_CLIENT_SECRET")),
 		connector.NewOkta(os.Getenv("OKTA_ORG_URL"), os.Getenv("OKTA_CLIENT_ID"), os.Getenv("OKTA_CLIENT_SECRET")),
-		connector.NewAWS(os.Getenv("AWS_CFN_TEMPLATE_URL"), os.Getenv("AWS_TRUST_ACCOUNT_ID"), os.Getenv("AWS_REGION")),
+		awsConn,
+		gcpConn,
+		azureConn,
 	)
 	vault, encrypted, verr := secret.FromEnv()
 	if verr != nil {
@@ -120,25 +165,101 @@ func main() {
 	} else if inst := os.Getenv("SERVICENOW_INSTANCE_URL"); inst != "" {
 		deliverer.Ticket = connector.NewServiceNow(inst, os.Getenv("SERVICENOW_USER"), os.Getenv("SERVICENOW_PASSWORD"))
 		log.Print("[platform] ServiceNow ticket delivery enabled")
+	} else if key := os.Getenv("LINEAR_API_KEY"); key != "" {
+		deliverer.Ticket = connector.NewLinear(key, os.Getenv("LINEAR_TEAM_ID"))
+		log.Print("[platform] Linear ticket delivery enabled")
+	}
+	// Per-tenant Jira routing (Bucket B): a file_ticket lands in the tenant's OWN Jira (sealed
+	// config set via Settings → Jira), falling back to the operator tracker above. The resolver
+	// opens the sealed token per ticket; a miss falls through. So ticketing is multi-tenant.
+	deliverer.Ticket = remediate.TenantFiler{
+		Resolve: func(ctx context.Context, tenantID string) (base, email, token, project string, ok bool) {
+			t, gerr := st.GetTenant(ctx, tenantID)
+			if gerr != nil || !t.Jira.HasToken() {
+				return "", "", "", "", false
+			}
+			tok, oerr := vault.Open(t.Jira.TokenRef)
+			if oerr != nil || tok == "" {
+				return "", "", "", "", false
+			}
+			return t.Jira.BaseURL, t.Jira.Email, tok, t.Jira.Project, true
+		},
+		Fallback: deliverer.Ticket, // operator-global tracker (may be nil → no-destination no-op)
 	}
 	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
 	// new-incident alerts fan out to every configured channel (Slack heads-up +
 	// PagerDuty on-call page); best-effort, so one failing never blocks the others.
 	var alerters notify.MultiAlerter
+	// channelMap is the channel-name → destination map the escalation PolicyRouter routes through
+	// (so a policy tier "critical → pagerduty,slack" reaches the right channels). Populated only
+	// with the channels the operator actually configured.
+	channelMap := map[string]notify.Alerter{}
 	if hook := os.Getenv("TSENGINE_SLACK_WEBHOOK"); hook != "" {
 		slack := notify.NewSlack(hook)
 		desk.Notify = slack                // tier-gated approvals → Slack with buttons
 		alerters = append(alerters, slack) // new incidents → Slack heads-up
+		channelMap["slack"] = slack
 		log.Print("[platform] Slack approval + incident notifications enabled")
 	}
 	if rk := os.Getenv("PAGERDUTY_ROUTING_KEY"); rk != "" {
-		alerters = append(alerters, notify.NewPagerDuty(rk)) // new high/critical → on-call page
+		pd := notify.NewPagerDuty(rk)
+		alerters = append(alerters, pd) // new high/critical → on-call page
+		channelMap["pagerduty"] = pd
 		log.Print("[platform] PagerDuty on-call paging enabled (high/critical)")
 	}
-	var incidentAlerter detect.Alerter
-	if len(alerters) > 0 {
-		incidentAlerter = alerters
+	if hook := os.Getenv("TSENGINE_TEAMS_WEBHOOK"); hook != "" {
+		teams := notify.NewTeams(hook)
+		alerters = append(alerters, teams) // new high/critical → Microsoft Teams heads-up
+		channelMap["teams"] = teams
+		log.Print("[platform] Microsoft Teams incident notifications enabled (high/critical)")
 	}
+	if hook := os.Getenv("TSENGINE_DISCORD_WEBHOOK"); hook != "" {
+		disc := notify.NewDiscord(hook)
+		alerters = append(alerters, disc) // new high/critical → Discord channel embed
+		channelMap["discord"] = disc
+		log.Print("[platform] Discord incident notifications enabled (high/critical)")
+	}
+	if url := os.Getenv("TSENGINE_WEBHOOK_URL"); url != "" {
+		// The generic outbound webhook — a signed JSON event per new incident, so a tenant can
+		// wire TensorShield into anything (Zapier/Make/n8n/SIEM/custom) without a bespoke connector.
+		wh := notify.NewWebhook(url, os.Getenv("TSENGINE_WEBHOOK_SIGNING_SECRET"))
+		alerters = append(alerters, wh)
+		channelMap["webhook"] = wh
+		log.Print("[platform] generic outbound webhook enabled (signed incident events)")
+	}
+	// Per-tenant Slack routing (Bucket B): each tenant's new-incident heads-up goes to its OWN
+	// configured Slack webhook (sealed, set via Settings → Notifications), with the operator
+	// MultiAlerter as the fallback. The resolver opens the sealed ref per incident; a miss falls
+	// through to the operator channels. So incident notifications are multi-tenant, not one shared
+	// channel. (Approval buttons stay the operator Slack app — those need its interactive endpoint.)
+	tenantRouter := notify.TenantRouter{
+		Resolve: func(ctx context.Context, tenantID string) (string, bool) {
+			t, gerr := st.GetTenant(ctx, tenantID)
+			if gerr != nil || !t.HasSlackWebhook() {
+				return "", false
+			}
+			url, oerr := vault.Open(t.SlackWebhookRef)
+			if oerr != nil || url == "" {
+				return "", false
+			}
+			return url, true
+		},
+		Fallback: alerters, // operator-global channels (may be empty → fallback is a no-op)
+	}
+	// Escalation matrix (Phase 2): when a tenant has an enabled escalation policy, a new incident is
+	// routed by severity to the channels named in the matching tier; otherwise it falls back to the
+	// per-tenant Slack + operator channels (tenantRouter). So routing is policy-driven, not fixed.
+	incidentAlerter := detect.Alerter(notify.PolicyRouter{
+		Resolve: func(ctx context.Context, tenantID string) *platform.EscalationPolicy {
+			t, gerr := st.GetTenant(ctx, tenantID)
+			if gerr != nil {
+				return nil
+			}
+			return t.Escalation
+		},
+		Channels: channelMap,
+		Default:  tenantRouter,
+	})
 	if os.Getenv("TSENGINE_WEBHOOK_SECRET") == "" {
 		log.Print("[platform] WARNING: inbound webhooks are NOT verified — set TSENGINE_WEBHOOK_SECRET to reject spoofed events")
 	}
@@ -150,6 +271,11 @@ func main() {
 		Propose: func(f types.Finding, a platform.Asset) (platform.Action, bool) {
 			return remediate.Propose(f, a, newID)
 		},
+		// Bulk fix: group an asset's related alerts into one PR per fix unit (supersedes
+		// the per-finding Propose above).
+		ProposeBatch: func(fs []types.Finding, a platform.Asset) []platform.Action {
+			return remediate.ProposeBulk(fs, a, newID)
+		},
 		// A-RSP: a newly-opened critical incident → a tier-2 gated containment runbook + a T3
 		// breach-disclosure draft for a human to sign.
 		ProposeIncidentResponse: func(inc platform.Incident) ([]platform.Action, bool) {
@@ -158,7 +284,18 @@ func main() {
 		WebhookSecret: os.Getenv("TSENGINE_WEBHOOK_SECRET"), PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// continuous-monitoring: open/resolve incidents from change between passes,
 		// alerting a human the moment a new at/above-threshold issue appears.
-		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), Alerter: incidentAlerter, NewID: newID},
+		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), Alerter: incidentAlerter, NewID: newID,
+			// Maintenance-window suppression: during an active change-freeze, open no incidents and
+			// page no one (resolves still flow). Reads the tenant's windows at evaluation time.
+			Suppressed: func(ctx context.Context, tenantID string, now time.Time) bool {
+				t, err := st.GetTenant(ctx, tenantID)
+				if err != nil {
+					return false
+				}
+				_, active := t.InMaintenance(now)
+				return active
+			},
+		},
 	}
 	// The operate backend serves non-tech "workspace" assets (identity/email posture):
 	// a snapshot file if the asset names one, else a LIVE fetch from the connected
@@ -186,11 +323,28 @@ func main() {
 	// durable queue to scale out.
 	scanJobs := jobs.NewPool(scanWorkers(), 256, 2000, scanJobTimeout(), newID)
 	obsv.RegisterScanJobsInflight(func() float64 { return float64(scanJobs.Inflight()) })
+	// Live active-exploitation is opt-in at the operator level (belt-and-suspenders on
+	// top of per-engagement explicit consent): only wire a live Prober when
+	// TSENGINE_ACTIVE_EXPLOIT=1. Absent → active engagements run the passive driver.
+	var prober pentest.Prober
+	if os.Getenv("TSENGINE_ACTIVE_EXPLOIT") == "1" {
+		prober = pentest.NewHTTPProber()
+		log.Print("[platform] live active-exploitation ENABLED (TSENGINE_ACTIVE_EXPLOIT=1) — consent-gated per engagement")
+	}
+	// OAST collaborator for blind-class proof in deep (autonomous) mode (ADR-0008 D2). Absent
+	// (TSENGINE_OAST_POLL_URL unset) → blind classes stay unproven leads, never false positives.
+	interactor := pentest.NewInteractorFromEnv()
+	if interactor != nil {
+		log.Print("[platform] OAST collaborator wired (TSENGINE_OAST_POLL_URL) — blind-class proof enabled for deep pentests")
+	}
+	// Headless-browser channel for DOM-XSS / client-side proof in deep mode (ADR-0008 D3).
+	// Nil (the chromedp impl is sandbox-gated) → those classes stay leads.
+	browser := pentest.NewBrowserFromEnv()
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
-		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID,
+		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser,
 	})
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
@@ -285,6 +439,38 @@ func envOr(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// fileSecretKeys are the sensitive env vars that may be supplied as a mounted file via the
+// Docker-secret "<KEY>_FILE" convention instead of an inline env value.
+var fileSecretKeys = []string{
+	"TSENGINE_SECRET_KEY", "TSENGINE_PLATFORM_TOKEN", "TSENGINE_WEBHOOK_SECRET",
+	"GITHUB_CLIENT_SECRET", "GITLAB_CLIENT_SECRET", "OKTA_CLIENT_SECRET",
+	"GWORKSPACE_CLIENT_SECRET", "M365_CLIENT_SECRET",
+}
+
+// hydrateFileSecrets implements the Docker-secret "*_FILE" convention: for each sensitive
+// key, if KEY is unset but KEY_FILE points at a readable file, load the file's trimmed
+// contents into KEY. This keeps secrets (the AES sealing key, the platform token) out of
+// inline compose env — they ride as mounted files / Docker secrets instead. An already-set
+// KEY always wins; an unreadable KEY_FILE is warned and skipped (never fatal here — the
+// downstream required-secret checks still apply).
+func hydrateFileSecrets() {
+	for _, key := range fileSecretKeys {
+		if os.Getenv(key) != "" {
+			continue // an explicit inline value wins
+		}
+		path := os.Getenv(key + "_FILE")
+		if path == "" {
+			continue
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			log.Printf("[platform] WARNING: %s_FILE=%q unreadable: %v", key, path, err)
+			continue
+		}
+		_ = os.Setenv(key, strings.TrimSpace(string(b)))
+	}
 }
 
 // monitorInterval is the continuous re-scan cadence (TSENGINE_MONITOR_INTERVAL, e.g.

@@ -104,15 +104,16 @@ func pdSeverity(sev string) string {
 	}
 }
 
-// alerter is the structural shape of a detect.Alerter (kept local so notify needn't import
-// detect — avoids a cycle).
-type alerter interface {
+// Alerter is the structural shape of a detect.Alerter (kept local so notify needn't import
+// detect — avoids a cycle). Exported so callers can build a channel-name→destination map for
+// the PolicyRouter (the escalation matrix).
+type Alerter interface {
 	IncidentOpened(context.Context, platform.Incident) error
 }
 
 // MultiAlerter fans a new-incident alert out to several alerters, best-effort: one failing
 // never blocks the others (so Slack + PagerDuty both fire). Nil/empty is a no-op.
-type MultiAlerter []alerter
+type MultiAlerter []Alerter
 
 // IncidentOpened delivers to every child; returns the first error (callers treat alerting
 // as best-effort, so this never fails the monitoring pass).

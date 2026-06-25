@@ -2,20 +2,26 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, ShieldCheck, FileSignature, Radar } from "lucide-react";
 import { api } from "@/lib/api";
-import { FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
+import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
 
 export default async function FrameworkPage({ params }: { params: Promise<{ framework: string }> }) {
   const { framework } = await params;
+  // Only a genuinely UNKNOWN framework 404s. A known framework must NEVER 404 just because the
+  // report fetch hiccuped (the API momentarily unreachable made api.report() return null, which
+  // hard-404'd a valid page → "/compliance/soc2 doesn't exist"). On a transient miss we still
+  // render the page; it shows the "not yet assessed" state and a refresh (force-dynamic) picks
+  // up the data once the API is back.
+  if (!(FRAMEWORKS as readonly string[]).includes(framework)) notFound();
   const rep = await api.report(framework);
-  if (!rep) notFound();
 
-  // Go marshals an empty slice as JSON `null`, so Rows is null for a not-yet-mapped
-  // framework — guard it (a raw .filter would crash the page). This is exactly the case
-  // the 14-framework index now links to.
-  const rows = rep.Rows ?? [];
+  // Go marshals an empty slice as JSON `null`, so Rows is null for a not-yet-mapped framework —
+  // guard it (a raw .filter would crash the page). rep itself may be null on a transient fetch
+  // miss; the page degrades to the not-yet-assessed state rather than 404.
+  const rows = rep?.Rows ?? [];
+  const title = rep?.Title ?? FRAMEWORK_LABEL[framework] ?? framework;
   const gaps = rows.filter((r) => r.Gap);
   const met = rows.filter((r) => !r.Gap);
   const total = rows.length;
@@ -35,13 +41,13 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold">{rep.Title}</h1>
+              <h1 className="text-xl font-semibold">{title}</h1>
               {category && (
                 <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-faint">
                   {category}
                 </span>
               )}
-              {rep.Signer ? (
+              {rep?.Signer ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-pulse-soft px-2 py-0.5 text-[10px] font-medium text-pulse">
                   <FileSignature className="h-3 w-3" /> signed
                 </span>
@@ -83,7 +89,7 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
           </div>
           <div className="text-sm font-medium">No controls assessed yet</div>
           <p className="max-w-sm text-sm text-muted">
-            TensorShield maps controls for {rep.Title} as it detects issues. As findings appear, the controls they
+            TensorShield maps controls for {title} as it detects issues. As findings appear, the controls they
             touch show up here — gaps first — each backed by the finding that proves it.
           </p>
           <Link href="/findings" className="text-xs font-medium text-accent hover:underline">

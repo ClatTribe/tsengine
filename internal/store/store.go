@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -82,6 +83,37 @@ type Store interface {
 	// --- incidents (the continuous-monitoring system-of-record) ---
 	PutIncident(ctx context.Context, i platform.Incident) error
 	ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error)
+
+	// --- risk register (the vCISO judgment artifact; treatment decisions are HITL) ---
+	PutRisk(ctx context.Context, r platform.Risk) error
+	ListRisks(ctx context.Context, tenantID string) ([]platform.Risk, error)
+
+	// --- audit engagements (external-auditor attestation; the legal layer) ---
+	PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error
+	ListAuditEngagements(ctx context.Context, tenantID string) ([]platform.AuditEngagement, error)
+
+	// --- security-program policies (vCISO program; publish/acknowledge are HITL) ---
+	PutPolicy(ctx context.Context, p platform.Policy) error
+	ListPolicies(ctx context.Context, tenantID string) ([]platform.Policy, error)
+
+	// --- issue suppression (ignore / accept-risk), keyed by issue dedup key ---
+	PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error
+	ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error)
+	DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error
+
+	// --- custom exclusion rules (pattern-based noise filter), keyed by rule id ---
+	PutExclusionRule(ctx context.Context, er platform.ExclusionRule) error
+	ListExclusionRules(ctx context.Context, tenantID string) ([]platform.ExclusionRule, error)
+	DeleteExclusionRule(ctx context.Context, tenantID, id string) error
+
+	// --- runtime-protection events (in-app firewall / RASP signal; append-only) ---
+	PutRuntimeEvent(ctx context.Context, ev platform.RuntimeEvent) error
+	ListRuntimeEvents(ctx context.Context, tenantID string) ([]platform.RuntimeEvent, error)
+
+	// --- pentest engagements (the productized AI-pentest lifecycle) ---
+	PutPentest(ctx context.Context, eng pentest.Engagement) error
+	ListPentests(ctx context.Context, tenantID string) ([]pentest.Engagement, error)
+	GetPentest(ctx context.Context, tenantID, id string) (pentest.Engagement, error)
 
 	// --- human-expert review requests (the AI + human escalation) ---
 	PutReviewRequest(ctx context.Context, r platform.ReviewRequest) error

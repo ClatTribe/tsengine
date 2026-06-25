@@ -51,11 +51,20 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 			},
 		}, true
 	case "cloud_account":
+		// Account-scoped runbook by default; when the finding has a live, reversible
+		// connector write path (today: AWS S3 public-access block), carry the
+		// machine-readable remediation_type + the resource-level target so connector.Apply
+		// can promote it from a runbook to a real, HITL-gated mutation (ADR 0009 Phase 5).
+		payload := map[string]any{"target": asset.Target, "remediation": fixBody(f)}
+		if rt, tgt := liveCloudMutation(f, asset.Meta["provider"]); rt != "" {
+			payload["remediation_type"] = rt
+			payload["target"] = tgt // the specific bucket, not the whole account
+		}
 		return platform.Action{
 			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 			Kind: platform.ActApplyConfig, Tier: tierApplyConfig, Status: platform.ActProposed,
 			Title:   "tsengine: remediate " + f.Title,
-			Payload: map[string]any{"target": asset.Target, "remediation": fixBody(f)},
+			Payload: payload,
 		}, true
 	case "workspace":
 		// identity/email posture: a specific runbook ticket per operate rule. Unknown

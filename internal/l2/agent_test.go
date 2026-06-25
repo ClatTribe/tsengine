@@ -2,7 +2,9 @@ package l2
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -177,3 +179,63 @@ func contains(s, sub string) bool {
 		return false
 	})()
 }
+
+// flakyClient wraps a Client, failing the first failN Generate calls with a fixed error.
+type flakyClient struct {
+	Client
+	failN int
+	err   error
+	calls int
+}
+
+func (f *flakyClient) Generate(ctx context.Context, s string, h []Message, t []ToolSchema) (Response, error) {
+	f.calls++
+	if f.calls <= f.failN {
+		return Response{}, f.err
+	}
+	return f.Client.Generate(ctx, s, h, t)
+}
+
+func TestAgent_RetriesTransientLLMError(t *testing.T) {
+	mc := &MockClient{ModelName: "mock", Script: []Response{
+		scriptCall("advance_phase", nil, 0.001), // triage→investigate
+		scriptCall("advance_phase", nil, 0.001), // investigate→chain
+		scriptCall("advance_phase", nil, 0.001), // chain→report
+		scriptCall("finish_scan", map[string]any{"executive_summary": "ok"}, 0.001),
+	}}
+	flaky := &flakyClient{Client: mc, failN: 2, err: errors.New("anthropic: status 429: rate limited")}
+	a, err := New(flaky, CoreTools(), DefaultBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.sleep = func(context.Context, time.Duration) error { return nil } // no real backoff in the test
+
+	out, err := a.Run(context.Background(), webTarget(), nil)
+	if err != nil {
+		t.Fatalf("two transient 429s should be retried, the run should succeed: %v", err)
+	}
+	if out.StopReason != StopFinished {
+		t.Errorf("expected the run to finish after retries, got %v", out.StopReason)
+	}
+	if flaky.calls < 3 {
+		t.Errorf("expected the transient errors to be retried (>=3 Generate calls), got %d", flaky.calls)
+	}
+}
+
+func TestAgent_PermanentLLMErrorFailsFast(t *testing.T) {
+	mc := &MockClient{Script: []Response{scriptCall("finish_scan", map[string]any{"executive_summary": "ok"}, 0.001)}}
+	flaky := &flakyClient{Client: mc, failN: 1, err: errors.New("anthropic: status 400: bad request")}
+	a, _ := New(flaky, CoreTools(), DefaultBudget())
+	a.sleep = func(context.Context, time.Duration) error { return nil }
+
+	if _, err := a.Run(context.Background(), webTarget(), nil); err == nil {
+		t.Error("a permanent (400) error must fail fast, not retry")
+	}
+	if flaky.calls != 1 {
+		t.Errorf("a permanent error must NOT be retried, got %d Generate calls", flaky.calls)
+	}
+}
+
+// The transient/permanent classifier itself is tested in internal/llmretry (shared by every
+// agent loop — l2, cloudagent, llmredteam). Here we only assert the l2 loop's retry BEHAVIOUR
+// (TestAgent_RetriesTransientLLMError / TestAgent_PermanentLLMErrorFailsFast above).

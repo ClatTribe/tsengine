@@ -49,13 +49,22 @@ func proposeIdentity(f types.Finding, asset platform.Asset, idgen func() string)
 
 // liveIdentityMutation reports whether an identity remediation has a live, reversible
 // connector write path for the asset's provider — making it safe to propose as a
-// HITL-gated auto-remediation instead of a runbook ticket. Conservative by design: only
-// Okta account-suspend is wired today (connector.Okta.Apply, the only reversible identity
-// lifecycle transition with a live path), so only it promotes; every other (type,
-// provider) stays a ticket until its connector Apply lands. Extend as write paths ship
-// (e.g. GWorkspace/M365 suspend, Okta oauth_revoke).
+// HITL-gated auto-remediation instead of a runbook ticket. Conservative by design: only the
+// reversible account-suspend lifecycle transition promotes, and only for the IdPs whose
+// connector.Apply has a live write path — Okta (suspend), Google Workspace (suspend), and
+// Microsoft 365 (disable sign-in). Every other (type, provider) stays a ticket until its
+// connector Apply lands. Each live path still needs the IdP's write scope (read-only by
+// onboarding default); without it the Apply returns the provider's 403 honestly.
 func liveIdentityMutation(remediationType, provider string) bool {
-	return remediationType == "account_suspend" && provider == platform.ConnOkta
+	if remediationType != "account_suspend" {
+		return false
+	}
+	switch provider {
+	case platform.ConnOkta, platform.ConnGWorkspace, platform.ConnM365:
+		return true
+	default:
+		return false
+	}
 }
 
 type runbook struct {

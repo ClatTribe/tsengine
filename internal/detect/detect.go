@@ -42,6 +42,10 @@ type Detector struct {
 	Threshold types.Severity   // minimum severity to open an incident (default high)
 	Now       func() time.Time
 	NewID     func() string
+	// Suppressed reports whether alerting is suppressed for a tenant at a moment (a maintenance
+	// window is active). When true, Reconcile opens NO new incidents and EscalateOverdue pages no
+	// one — but resolves still flow. Optional: nil → never suppressed (today's behaviour).
+	Suppressed func(ctx context.Context, tenantID string, now time.Time) bool
 }
 
 // Result summarizes one reconcile pass.
@@ -57,14 +61,19 @@ type Result struct {
 // Idempotent: re-running with the same findings opens/resolves nothing. The current
 // findings are the authoritative present state (the caller passes the freshly-scanned
 // set, not the lingering finding store), so a now-empty scan correctly resolves.
-func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []types.Finding) (Result, error) {
+// attacked is the set of finding keys (rule_id|endpoint) observed under attack in
+// production (runtime-protection signal, ADR-0007 Phase 0b). Those open an incident
+// REGARDLESS of the severity floor — a live exploit attempt is itself urgent — and the
+// incident is marked Attacked. Pass nil when there is no runtime signal.
+func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []types.Finding, attacked map[string]bool) (Result, error) {
 	var res Result
 
-	// present issues at/above the threshold, keyed by stable identity
+	// present issues: at/above the threshold, OR observed under attack (any severity).
 	present := map[string]types.Finding{}
 	for _, f := range current {
-		if d.atOrAbove(f.Severity) {
-			present[Key(f)] = f
+		k := Key(f)
+		if d.atOrAbove(f.Severity) || attacked[k] {
+			present[k] = f
 		}
 	}
 
@@ -79,15 +88,27 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 		}
 	}
 
+	// Maintenance window active → suppress OPENING new incidents (resolves below still flow, so a
+	// fix landing during the window still closes its incident). A planned change-freeze shouldn't
+	// trip the SOC.
+	suppressed := d.Suppressed != nil && d.Suppressed(ctx, tenantID, d.now())
+
 	// open incidents for newly-present issues
 	for key, f := range present {
 		if _, already := openByKey[key]; already {
 			continue
 		}
+		if suppressed {
+			continue
+		}
+		title := f.Title
+		if attacked[key] {
+			title = "[under active attack] " + title
+		}
 		inc := platform.Incident{
 			ID: d.id("inc"), TenantID: tenantID, Key: key, RuleID: f.RuleID,
-			Title: f.Title, Severity: string(f.Severity), Status: platform.IncidentOpen,
-			FindingID: f.ID, OpenedAt: d.now(),
+			Title: title, Severity: string(f.Severity), Status: platform.IncidentOpen,
+			FindingID: f.ID, Attacked: attacked[key], OpenedAt: d.now(),
 		}
 		d.record("incident_opened", inc)
 		if err := d.Store.PutIncident(ctx, inc); err != nil {
@@ -113,6 +134,44 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 		res.Resolved = append(res.Resolved, inc)
 	}
 	return res, nil
+}
+
+// EscalateOverdue re-alerts the tenant's OPEN, UNACKNOWLEDGED incidents that have passed the
+// escalation ack window (timed auto-escalation — the MDR "if no one acks within N minutes, page
+// again"). It re-fires the Alerter and stamps LastEscalatedAt so each incident re-pings at most
+// once per window. ackWindowMins ≤ 0 (no policy / window off) is a no-op. Returns what it re-alerted.
+//
+// It runs each monitoring pass after Reconcile, so the window is checked at the scan cadence
+// (sub-cadence precision isn't promised — an incident escalates on the first pass after its window
+// elapses). Best-effort, like the open-time alert: a delivery error never blocks the others.
+func (d *Detector) EscalateOverdue(ctx context.Context, tenantID string, ackWindowMins int) ([]platform.Incident, error) {
+	if d == nil || ackWindowMins <= 0 {
+		return nil, nil
+	}
+	// Don't page anyone during a maintenance window — the clock keeps running, but no re-alert fires.
+	if d.Suppressed != nil && d.Suppressed(ctx, tenantID, d.now()) {
+		return nil, nil
+	}
+	all, err := d.Store.ListIncidents(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	var escalated []platform.Incident
+	for _, inc := range all {
+		if !inc.Overdue(ackWindowMins, d.now()) {
+			continue
+		}
+		if d.Alerter != nil {
+			_ = d.Alerter.IncidentOpened(ctx, inc) // best-effort re-alert (the "page again")
+		}
+		inc.LastEscalatedAt = d.now()
+		d.record("incident_escalated", inc)
+		if err := d.Store.PutIncident(ctx, inc); err != nil {
+			return escalated, err
+		}
+		escalated = append(escalated, inc)
+	}
+	return escalated, nil
 }
 
 // Key is the stable cross-scan identity of an issue: its rule on its cited entity. Finding

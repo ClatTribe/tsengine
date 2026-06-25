@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -16,13 +17,21 @@ type Memory struct {
 	mu sync.RWMutex
 
 	tenants     map[string]platform.Tenant
-	connections map[string][]platform.Connection             // tenantID → connections
-	assets      map[string][]platform.Asset                  // tenantID → assets
-	engagements map[string][]platform.Engagement             // tenantID → engagements
-	findings    map[string][]types.Finding                   // tenantID → findings
-	actions     map[string]map[string]platform.Action        // tenantID → actionID → action
-	controls    map[string]map[string]platform.ControlState  // tenantID → "framework/control" → state
-	incidents   map[string]map[string]platform.Incident      // tenantID → incidentID → incident
+	connections map[string][]platform.Connection               // tenantID → connections
+	assets      map[string][]platform.Asset                    // tenantID → assets
+	engagements map[string][]platform.Engagement               // tenantID → engagements
+	findings    map[string][]types.Finding                     // tenantID → findings
+	actions     map[string]map[string]platform.Action          // tenantID → actionID → action
+	controls    map[string]map[string]platform.ControlState    // tenantID → "framework/control" → state
+	incidents   map[string]map[string]platform.Incident        // tenantID → incidentID → incident
+	risks       map[string]map[string]platform.Risk            // tenantID → riskID → risk
+	audits      map[string]map[string]platform.AuditEngagement // tenantID → engagementID → audit
+	policies    map[string]map[string]platform.Policy          // tenantID → policyID → policy
+
+	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
+	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
+	runtimeEvts map[string][]platform.RuntimeEvent           // tenantID → runtime-protection events (append-only)
+	pentests    map[string]map[string]pentest.Engagement     // tenantID → engagementID → pentest
 	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
 	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
 	users       map[string]platform.User                     // userID → user (email globally unique)
@@ -40,6 +49,13 @@ func NewMemory() *Memory {
 		actions:     map[string]map[string]platform.Action{},
 		controls:    map[string]map[string]platform.ControlState{},
 		incidents:   map[string]map[string]platform.Incident{},
+		risks:       map[string]map[string]platform.Risk{},
+		audits:      map[string]map[string]platform.AuditEngagement{},
+		policies:    map[string]map[string]platform.Policy{},
+		ignores:     map[string]map[string]platform.IgnoreRule{},
+		exclusions:  map[string]map[string]platform.ExclusionRule{},
+		runtimeEvts: map[string][]platform.RuntimeEvent{},
+		pentests:    map[string]map[string]pentest.Engagement{},
 		reviews:     map[string]map[string]platform.ReviewRequest{},
 		apps:        map[string][]platform.ThirdPartyApp{},
 		users:       map[string]platform.User{},
@@ -284,6 +300,163 @@ func (m *Memory) ListIncidents(_ context.Context, tenantID string) ([]platform.I
 	return out, nil
 }
 
+func (m *Memory) PutRisk(_ context.Context, r platform.Risk) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.risks[r.TenantID] == nil {
+		m.risks[r.TenantID] = map[string]platform.Risk{}
+	}
+	m.risks[r.TenantID][r.ID] = r
+	return nil
+}
+
+func (m *Memory) ListRisks(_ context.Context, tenantID string) ([]platform.Risk, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Risk, 0, len(m.risks[tenantID]))
+	for _, r := range m.risks[tenantID] {
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func (m *Memory) PutAuditEngagement(_ context.Context, e platform.AuditEngagement) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.audits[e.TenantID] == nil {
+		m.audits[e.TenantID] = map[string]platform.AuditEngagement{}
+	}
+	m.audits[e.TenantID][e.ID] = e
+	return nil
+}
+
+func (m *Memory) ListAuditEngagements(_ context.Context, tenantID string) ([]platform.AuditEngagement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.AuditEngagement, 0, len(m.audits[tenantID]))
+	for _, e := range m.audits[tenantID] {
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (m *Memory) PutPolicy(_ context.Context, p platform.Policy) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.policies[p.TenantID] == nil {
+		m.policies[p.TenantID] = map[string]platform.Policy{}
+	}
+	m.policies[p.TenantID][p.ID] = p
+	return nil
+}
+
+func (m *Memory) ListPolicies(_ context.Context, tenantID string) ([]platform.Policy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Policy, 0, len(m.policies[tenantID]))
+	for _, p := range m.policies[tenantID] {
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func (m *Memory) PutIgnoreRule(_ context.Context, ir platform.IgnoreRule) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.ignores[ir.TenantID] == nil {
+		m.ignores[ir.TenantID] = map[string]platform.IgnoreRule{}
+	}
+	m.ignores[ir.TenantID][ir.IssueKey] = ir
+	return nil
+}
+
+func (m *Memory) ListIgnoreRules(_ context.Context, tenantID string) ([]platform.IgnoreRule, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.IgnoreRule, 0, len(m.ignores[tenantID]))
+	for _, ir := range m.ignores[tenantID] {
+		out = append(out, ir)
+	}
+	return out, nil
+}
+
+func (m *Memory) DeleteIgnoreRule(_ context.Context, tenantID, issueKey string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.ignores[tenantID], issueKey)
+	return nil
+}
+
+func (m *Memory) PutExclusionRule(_ context.Context, er platform.ExclusionRule) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.exclusions[er.TenantID] == nil {
+		m.exclusions[er.TenantID] = map[string]platform.ExclusionRule{}
+	}
+	m.exclusions[er.TenantID][er.ID] = er
+	return nil
+}
+
+func (m *Memory) ListExclusionRules(_ context.Context, tenantID string) ([]platform.ExclusionRule, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.ExclusionRule, 0, len(m.exclusions[tenantID]))
+	for _, er := range m.exclusions[tenantID] {
+		out = append(out, er)
+	}
+	return out, nil
+}
+
+func (m *Memory) DeleteExclusionRule(_ context.Context, tenantID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.exclusions[tenantID], id)
+	return nil
+}
+
+func (m *Memory) PutRuntimeEvent(_ context.Context, ev platform.RuntimeEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.runtimeEvts[ev.TenantID] = append(m.runtimeEvts[ev.TenantID], ev)
+	return nil
+}
+
+func (m *Memory) ListRuntimeEvents(_ context.Context, tenantID string) ([]platform.RuntimeEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]platform.RuntimeEvent(nil), m.runtimeEvts[tenantID]...), nil
+}
+
+func (m *Memory) PutPentest(_ context.Context, eng pentest.Engagement) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pentests[eng.TenantID] == nil {
+		m.pentests[eng.TenantID] = map[string]pentest.Engagement{}
+	}
+	m.pentests[eng.TenantID][eng.ID] = eng
+	return nil
+}
+
+func (m *Memory) ListPentests(_ context.Context, tenantID string) ([]pentest.Engagement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]pentest.Engagement, 0, len(m.pentests[tenantID]))
+	for _, e := range m.pentests[tenantID] {
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (m *Memory) GetPentest(_ context.Context, tenantID, id string) (pentest.Engagement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	e, ok := m.pentests[tenantID][id]
+	if !ok {
+		return pentest.Engagement{}, ErrNotFound
+	}
+	return e, nil
+}
+
 func (m *Memory) PutReviewRequest(_ context.Context, r platform.ReviewRequest) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -328,18 +501,25 @@ func (m *Memory) ListThirdPartyApps(_ context.Context, tenantID string) ([]platf
 // Snapshot is the serializable form of a Memory store — what the file-backed store
 // persists. Fields are exported so encoding/json can round-trip them.
 type Snapshot struct {
-	Tenants     map[string]platform.Tenant                   `json:"tenants"`
-	Connections map[string][]platform.Connection             `json:"connections"`
-	Assets      map[string][]platform.Asset                  `json:"assets"`
-	Engagements map[string][]platform.Engagement             `json:"engagements"`
-	Findings    map[string][]types.Finding                   `json:"findings"`
-	Actions     map[string]map[string]platform.Action        `json:"actions"`
-	Controls    map[string]map[string]platform.ControlState  `json:"controls"`
-	Incidents   map[string]map[string]platform.Incident      `json:"incidents"`
-	Reviews     map[string]map[string]platform.ReviewRequest `json:"reviews"`
-	Apps        map[string][]platform.ThirdPartyApp          `json:"apps"`
-	Users       map[string]platform.User                     `json:"users"`
-	Sessions    map[string]platform.Session                  `json:"sessions"`
+	Tenants     map[string]platform.Tenant                     `json:"tenants"`
+	Connections map[string][]platform.Connection               `json:"connections"`
+	Assets      map[string][]platform.Asset                    `json:"assets"`
+	Engagements map[string][]platform.Engagement               `json:"engagements"`
+	Findings    map[string][]types.Finding                     `json:"findings"`
+	Actions     map[string]map[string]platform.Action          `json:"actions"`
+	Controls    map[string]map[string]platform.ControlState    `json:"controls"`
+	Incidents   map[string]map[string]platform.Incident        `json:"incidents"`
+	Risks       map[string]map[string]platform.Risk            `json:"risks,omitempty"`
+	Audits      map[string]map[string]platform.AuditEngagement `json:"audits,omitempty"`
+	Policies    map[string]map[string]platform.Policy          `json:"policies,omitempty"`
+	Ignores     map[string]map[string]platform.IgnoreRule      `json:"ignores,omitempty"`
+	Exclusions  map[string]map[string]platform.ExclusionRule   `json:"exclusions,omitempty"`
+	RuntimeEvts map[string][]platform.RuntimeEvent             `json:"runtime_events,omitempty"`
+	Pentests    map[string]map[string]pentest.Engagement       `json:"pentests,omitempty"`
+	Reviews     map[string]map[string]platform.ReviewRequest   `json:"reviews"`
+	Apps        map[string][]platform.ThirdPartyApp            `json:"apps"`
+	Users       map[string]platform.User                       `json:"users"`
+	Sessions    map[string]platform.Session                    `json:"sessions"`
 }
 
 // Export returns a deep-enough copy of the store's data for persistence (taken under
@@ -356,6 +536,13 @@ func (m *Memory) Export() Snapshot {
 		Actions:     m.actions,
 		Controls:    m.controls,
 		Incidents:   m.incidents,
+		Risks:       m.risks,
+		Audits:      m.audits,
+		Policies:    m.policies,
+		Ignores:     m.ignores,
+		Exclusions:  m.exclusions,
+		RuntimeEvts: m.runtimeEvts,
+		Pentests:    m.pentests,
 		Reviews:     m.reviews,
 		Apps:        m.apps,
 		Users:       m.users,
@@ -375,6 +562,13 @@ func (m *Memory) load(s Snapshot) {
 	m.actions = orEmptyNested(s.Actions)
 	m.controls = orEmptyControls(s.Controls)
 	m.incidents = orEmptyIncidents(s.Incidents)
+	m.risks = orEmptyRisks(s.Risks)
+	m.audits = orEmptyAudits(s.Audits)
+	m.policies = orEmptyPolicies(s.Policies)
+	m.ignores = orEmptyIgnores(s.Ignores)
+	m.exclusions = orEmptyExclusions(s.Exclusions)
+	m.runtimeEvts = orEmpty(s.RuntimeEvts)
+	m.pentests = orEmptyPentests(s.Pentests)
 	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)
 	m.users = s.Users
@@ -414,6 +608,42 @@ func orEmptyControls(m map[string]map[string]platform.ControlState) map[string]m
 func orEmptyIncidents(m map[string]map[string]platform.Incident) map[string]map[string]platform.Incident {
 	if m == nil {
 		return map[string]map[string]platform.Incident{}
+	}
+	return m
+}
+func orEmptyExclusions(m map[string]map[string]platform.ExclusionRule) map[string]map[string]platform.ExclusionRule {
+	if m == nil {
+		return map[string]map[string]platform.ExclusionRule{}
+	}
+	return m
+}
+func orEmptyIgnores(m map[string]map[string]platform.IgnoreRule) map[string]map[string]platform.IgnoreRule {
+	if m == nil {
+		return map[string]map[string]platform.IgnoreRule{}
+	}
+	return m
+}
+func orEmptyRisks(m map[string]map[string]platform.Risk) map[string]map[string]platform.Risk {
+	if m == nil {
+		return map[string]map[string]platform.Risk{}
+	}
+	return m
+}
+func orEmptyAudits(m map[string]map[string]platform.AuditEngagement) map[string]map[string]platform.AuditEngagement {
+	if m == nil {
+		return map[string]map[string]platform.AuditEngagement{}
+	}
+	return m
+}
+func orEmptyPolicies(m map[string]map[string]platform.Policy) map[string]map[string]platform.Policy {
+	if m == nil {
+		return map[string]map[string]platform.Policy{}
+	}
+	return m
+}
+func orEmptyPentests(m map[string]map[string]pentest.Engagement) map[string]map[string]pentest.Engagement {
+	if m == nil {
+		return map[string]map[string]pentest.Engagement{}
 	}
 	return m
 }

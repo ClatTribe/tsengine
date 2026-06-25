@@ -46,6 +46,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudagent"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/cloudtocode"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
@@ -227,6 +228,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine correlate: %v\n", err)
 			os.Exit(1)
 		}
+	case "cloud-to-code":
+		if err := runCloudToCode(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine cloud-to-code: %v\n", err)
+			os.Exit(1)
+		}
 	case "export":
 		if err := runExport(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsengine export: %v\n", err)
@@ -276,6 +282,8 @@ Usage:
                   # normalize SARIF / Snyk / GHAS-Dependabot into the engine (then report/findings/gate/reachability)
   tsengine correlate --in <scan1.json> --in <scan2.json> ...
                   # cross-asset attack chains: a finding HERE → a crown jewel THERE (e.g. web leak → cloud admin)
+  tsengine cloud-to-code --in <cloud-scan.json> --iac <terraform-dir> [--out <annotated.json>]
+                  # trace each runtime cloud misconfig back to the IaC resource + file:line that provisioned it
   tsengine export --in <scan|evidence.json> [--format sarif|json] [--out <file>]
                   [--webhook <url> --webhook-token <t> --hmac-secret <s>]   # emit findings OUT (code-scanning / SIEM / SOC)
   tsengine ledger verify [--pubkey <hex>] <ledger.json>          # check the signed agent decision ledger is intact
@@ -593,6 +601,7 @@ func runCloudAssess(argv []string) error {
 	llmFlag := fs.String("llm", "auto", "L2 LLM translator: auto (on if LLM_API_KEY set) | on | off")
 	remediate := fs.Bool("remediate", false, "emit applyable, self-verified remediation artifacts (SCP / IAM Deny / SG revoke) for each attack path")
 	maxHyp := fs.Int("max-hypotheses", 0, "engine worklist budget (0 = default 20); raise for accounts with many real attack paths")
+	workloadVulns := fs.String("workload-vulns", "", "optional path to agentless workload-scan results JSON ([]WorkloadVuln from trivy over the inventory's images) — enables internet-exposed-vulnerable-workload toxic-combo findings (ADR 0009 Phase 2)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -616,7 +625,25 @@ func runCloudAssess(argv []string) error {
 		}
 	}
 
-	assessment := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: *maxHyp})
+	// Agentless workload coverage (ADR 0009 Phase 2): surface the images the inventory's
+	// running workloads reference (the plan the orchestrator routes through trivy), and feed
+	// any provided scan results in so internet-exposed vulnerable workloads become toxic-combo
+	// findings.
+	if plan := cloudengine.WorkloadScanPlan(snap); len(plan) > 0 {
+		fmt.Fprintf(os.Stderr, "[cloud-assess] agentless workload scan plan: %d unique image(s) across the inventory's workloads\n", len(plan))
+	}
+	var wvulns []cloudengine.WorkloadVuln
+	if *workloadVulns != "" {
+		b, rerr := os.ReadFile(*workloadVulns) //nolint:gosec // operator-provided path
+		if rerr != nil {
+			return fmt.Errorf("read workload-vulns: %w", rerr)
+		}
+		if jerr := json.Unmarshal(b, &wvulns); jerr != nil {
+			return fmt.Errorf("parse workload-vulns: %w", jerr)
+		}
+	}
+
+	assessment := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: *maxHyp, WorkloadVulns: wvulns})
 
 	// L2 translator: refine the deterministic findings into developer-facing
 	// prose + an executive summary (graceful — leaves the deterministic output
@@ -1563,6 +1590,75 @@ func runCorrelate(argv []string) error {
 	}
 	fmt.Print(correlate.Render(chains))
 	return nil
+}
+
+// runCloudToCode is the "Cloud-to-Code" handoff: take a cloud scan's findings
+// (what prowler/CSPM saw running) plus the Terraform source tree, and link each
+// runtime misconfiguration to the IaC resource + file:line that provisioned it —
+// so the fix lands at the source, not on the live resource. Grounded: a link is
+// reported only on a concrete shared identifier (CLAUDE.md §10); unmatched
+// findings are passed through, never guessed.
+func runCloudToCode(argv []string) error {
+	fs := flag.NewFlagSet("cloud-to-code", flag.ContinueOnError)
+	in := fs.String("in", "", "a cloud vulnerabilities.json scan (prowler findings) (REQUIRED)")
+	iac := fs.String("iac", "", "path to the Terraform/IaC source tree (REQUIRED)")
+	out := fs.String("out", "", "write the annotated scan JSON here (default: text report to stdout)")
+	jsonOut := fs.Bool("json", false, "emit the annotated scan as JSON to stdout")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *in == "" || *iac == "" {
+		return fmt.Errorf("both --in <scan.json> and --iac <dir> are required")
+	}
+
+	data, err := os.ReadFile(*in) //nolint:gosec // operator-provided path
+	if err != nil {
+		return fmt.Errorf("read --in: %w", err)
+	}
+	var scan types.Scan
+	if jerr := json.Unmarshal(data, &scan); jerr != nil {
+		return fmt.Errorf("parse --in: %w", jerr)
+	}
+
+	idx, err := cloudtocode.IndexDir(*iac)
+	if err != nil {
+		return fmt.Errorf("index IaC tree: %w", err)
+	}
+
+	// Annotate both views so the dashboard's raw + enriched stay consistent.
+	cloudtocode.Annotate(scan.FindingsRaw, idx)
+	linked := cloudtocode.Annotate(scan.FindingsEnriched, idx)
+	cloudCount := countCloudFindings(scan.FindingsEnriched)
+	fmt.Fprintf(os.Stderr, "[cloud-to-code] indexed %d IaC resource(s); linked %d of %d cloud finding(s)\n",
+		len(idx), linked, cloudCount)
+
+	if *out != "" || *jsonOut {
+		b, _ := json.MarshalIndent(scan, "", "  ")
+		if *jsonOut {
+			fmt.Println(string(b))
+		}
+		if *out != "" {
+			if werr := os.WriteFile(*out, append(b, '\n'), 0o600); werr != nil {
+				return werr
+			}
+		}
+		return nil
+	}
+
+	fmt.Print(cloudtocode.Render(scan.FindingsEnriched, cloudCount))
+	return nil
+}
+
+// countCloudFindings counts the prowler/cloud findings in a set (the
+// Cloud-to-Code denominator).
+func countCloudFindings(findings []types.Finding) int {
+	n := 0
+	for _, f := range findings {
+		if f.Tool == "prowler" || strings.HasPrefix(f.RuleID, "prowler::") {
+			n++
+		}
+	}
+	return n
 }
 
 // runExport is the OUTBOUND handoff (roadmap §9): emit tsengine's proven findings

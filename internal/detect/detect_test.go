@@ -37,7 +37,7 @@ func TestReconcile_OpensIncidentForNewCritical(t *testing.T) {
 	st := store.NewMemory()
 	d := newDetector(st)
 
-	res, err := d.Reconcile(ctx, "t1", []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")})
+	res, err := d.Reconcile(ctx, "t1", []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,8 +56,8 @@ func TestReconcile_Idempotent(t *testing.T) {
 	d := newDetector(st)
 	fs := []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}
 
-	_, _ = d.Reconcile(ctx, "t1", fs)
-	res, _ := d.Reconcile(ctx, "t1", fs) // same input again
+	_, _ = d.Reconcile(ctx, "t1", fs, nil)
+	res, _ := d.Reconcile(ctx, "t1", fs, nil) // same input again
 	if len(res.Opened) != 0 || len(res.Resolved) != 0 {
 		t.Fatalf("re-running with the same findings should be a no-op, got %+v", res)
 	}
@@ -72,9 +72,9 @@ func TestReconcile_ResolvesWhenIssueGone(t *testing.T) {
 	d := newDetector(st)
 	fs := []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}
 
-	_, _ = d.Reconcile(ctx, "t1", fs)
+	_, _ = d.Reconcile(ctx, "t1", fs, nil)
 	// next pass: the issue is fixed → no findings
-	res, _ := d.Reconcile(ctx, "t1", nil)
+	res, _ := d.Reconcile(ctx, "t1", nil, nil)
 	if len(res.Resolved) != 1 {
 		t.Fatalf("a disappeared issue should resolve its incident, got %+v", res)
 	}
@@ -89,9 +89,9 @@ func TestReconcile_ReopensAfterRegression(t *testing.T) {
 	d := newDetector(st)
 	fs := []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}
 
-	_, _ = d.Reconcile(ctx, "t1", fs)    // open
-	_, _ = d.Reconcile(ctx, "t1", nil)   // resolve
-	res, _ := d.Reconcile(ctx, "t1", fs) // regression → a NEW incident
+	_, _ = d.Reconcile(ctx, "t1", fs, nil)    // open
+	_, _ = d.Reconcile(ctx, "t1", nil, nil)   // resolve
+	res, _ := d.Reconcile(ctx, "t1", fs, nil) // regression → a NEW incident
 	if len(res.Opened) != 1 {
 		t.Fatalf("a regression should open a fresh incident, got %+v", res)
 	}
@@ -106,7 +106,7 @@ func TestReconcile_BelowThresholdIgnored(t *testing.T) {
 	d := newDetector(st) // default threshold = high
 	low := types.Finding{ID: "f1", RuleID: "operate::spf-dkim-missing", Endpoint: "acme.com", Severity: types.SeverityMedium}
 
-	res, _ := d.Reconcile(ctx, "t1", []types.Finding{low})
+	res, _ := d.Reconcile(ctx, "t1", []types.Finding{low}, nil)
 	if len(res.Opened) != 0 {
 		t.Fatalf("a medium finding should not open an incident at the high threshold, got %+v", res)
 	}
@@ -119,7 +119,7 @@ func TestReconcile_ThresholdConfigurable(t *testing.T) {
 	d.Threshold = types.SeverityMedium
 	med := types.Finding{ID: "f1", RuleID: "operate::spf-dkim-missing", Endpoint: "acme.com", Severity: types.SeverityMedium, Title: "x"}
 
-	res, _ := d.Reconcile(ctx, "t1", []types.Finding{med})
+	res, _ := d.Reconcile(ctx, "t1", []types.Finding{med}, nil)
 	if len(res.Opened) != 1 {
 		t.Fatalf("at a medium threshold a medium finding should open an incident, got %+v", res)
 	}
@@ -130,8 +130,8 @@ func TestReconcile_TenantIsolation(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
 	d := newDetector(st)
-	_, _ = d.Reconcile(ctx, "t1", []types.Finding{crit("r", "e")})
-	_, _ = d.Reconcile(ctx, "t2", nil) // t2 empty pass must not resolve t1's incident
+	_, _ = d.Reconcile(ctx, "t1", []types.Finding{crit("r", "e")}, nil)
+	_, _ = d.Reconcile(ctx, "t2", nil, nil) // t2 empty pass must not resolve t1's incident
 	if len(openIncidents(t, st, "t1")) != 1 {
 		t.Error("t2's pass must not affect t1's incidents")
 	}
@@ -153,12 +153,12 @@ func TestReconcile_AlertsOnOpenOnly(t *testing.T) {
 	d.Alerter = al
 	fs := []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}
 
-	_, _ = d.Reconcile(ctx, "t1", fs) // open → one alert
+	_, _ = d.Reconcile(ctx, "t1", fs, nil) // open → one alert
 	if len(al.alerts) != 1 || al.alerts[0].Severity != "critical" {
 		t.Fatalf("opening an incident should alert once with the severity, got %+v", al.alerts)
 	}
-	_, _ = d.Reconcile(ctx, "t1", fs)  // idempotent → no new alert
-	_, _ = d.Reconcile(ctx, "t1", nil) // resolve → no alert (it's a heads-up for NEW issues)
+	_, _ = d.Reconcile(ctx, "t1", fs, nil)  // idempotent → no new alert
+	_, _ = d.Reconcile(ctx, "t1", nil, nil) // resolve → no alert (it's a heads-up for NEW issues)
 	if len(al.alerts) != 1 {
 		t.Errorf("only a newly-opened incident should alert; idempotent/resolve must not, got %d", len(al.alerts))
 	}
@@ -176,11 +176,137 @@ func TestReconcile_AlerterErrorIsSwallowed(t *testing.T) {
 	st := store.NewMemory()
 	d := newDetector(st)
 	d.Alerter = failAlerter{}
-	res, err := d.Reconcile(ctx, "t1", []types.Finding{crit("r", "e")})
+	res, err := d.Reconcile(ctx, "t1", []types.Finding{crit("r", "e")}, nil)
 	if err != nil {
 		t.Fatalf("a failing alerter must not fail the pass, got %v", err)
 	}
 	if len(res.Opened) != 1 {
 		t.Error("the incident should still open even if the alert failed")
+	}
+}
+
+func TestReconcile_AttackedEscalatesBelowThreshold(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := newDetector(st) // default threshold = high
+	// A MEDIUM finding — normally ignored at the high threshold — but it is under attack.
+	low := types.Finding{ID: "f1", RuleID: "nuclei::xss", Endpoint: "https://app.acme.com/search", Severity: types.SeverityMedium, Title: "Reflected XSS"}
+	attacked := map[string]bool{Key(low): true}
+
+	res, err := d.Reconcile(ctx, "t1", []types.Finding{low}, attacked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Opened) != 1 {
+		t.Fatalf("an under-attack finding should open an incident regardless of severity, got %+v", res)
+	}
+	inc := res.Opened[0]
+	if !inc.Attacked {
+		t.Error("the incident should be marked Attacked")
+	}
+	if inc.Title[:1] != "[" {
+		t.Errorf("the title should be prefixed with the under-attack marker, got %q", inc.Title)
+	}
+
+	// Without the attacked set, the same medium finding opens nothing.
+	st2 := store.NewMemory()
+	d2 := newDetector(st2)
+	if res2, _ := d2.Reconcile(ctx, "t1", []types.Finding{low}, nil); len(res2.Opened) != 0 {
+		t.Errorf("not-attacked medium finding must not open an incident, got %+v", res2)
+	}
+}
+
+func TestEscalateOverdue_RealertsOverdueOnly(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	now := time.Unix(1700000000, 0).UTC()
+	alerter := &captureAlerter{}
+	d := &Detector{Store: st, Alerter: alerter, Now: func() time.Time { return now }}
+
+	mk := func(id, key string, openedAgo, ackedAgo time.Duration) platform.Incident {
+		inc := platform.Incident{ID: id, TenantID: "t1", Key: key, RuleID: "r", Title: key,
+			Severity: "critical", Status: platform.IncidentOpen, OpenedAt: now.Add(-openedAgo)}
+		if ackedAgo > 0 {
+			inc.AcknowledgedAt = now.Add(-ackedAgo)
+		}
+		return inc
+	}
+	_ = st.PutIncident(ctx, mk("inc-1", "r|e1", 60*time.Minute, 0))  // overdue (open 60m, window 30m)
+	_ = st.PutIncident(ctx, mk("inc-2", "r|e2", 5*time.Minute, 0))   // fresh (within window)
+	_ = st.PutIncident(ctx, mk("inc-3", "r|e3", 60*time.Minute, 10*time.Minute)) // acked → skip
+
+	esc, err := d.EscalateOverdue(ctx, "t1", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(esc) != 1 || esc[0].ID != "inc-1" {
+		t.Fatalf("only the overdue, unacked incident should escalate, got %+v", esc)
+	}
+	if len(alerter.alerts) != 1 || alerter.alerts[0].ID != "inc-1" {
+		t.Fatalf("only inc-1 should re-alert, got %+v", alerter.alerts)
+	}
+	// LastEscalatedAt was stamped → an immediate second pass must not re-ping (≤ 1 per window)
+	esc2, _ := d.EscalateOverdue(ctx, "t1", 30)
+	if len(esc2) != 0 {
+		t.Fatalf("should not re-escalate within the same window, got %+v", esc2)
+	}
+}
+
+func TestEscalateOverdue_NoOpWhenWindowOff(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	now := time.Unix(1700000000, 0).UTC()
+	d := &Detector{Store: st, Now: func() time.Time { return now }}
+	_ = st.PutIncident(ctx, platform.Incident{ID: "inc-1", TenantID: "t1", Status: platform.IncidentOpen, OpenedAt: now.Add(-2 * time.Hour)})
+	esc, err := d.EscalateOverdue(ctx, "t1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(esc) != 0 {
+		t.Fatalf("window off → no escalation, got %+v", esc)
+	}
+}
+
+func TestReconcile_MaintenanceSuppressesOpensNotResolves(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := newDetector(st)
+	d.Suppressed = func(context.Context, string, time.Time) bool { return true }
+
+	// During maintenance: a new critical must NOT open an incident.
+	res, err := d.Reconcile(ctx, "t1", []types.Finding{crit("rule::x", "a.com")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Opened) != 0 || len(openIncidents(t, st, "t1")) != 0 {
+		t.Fatalf("maintenance window must suppress opening, got opened=%d", len(res.Opened))
+	}
+
+	// But an EXISTING open incident must still resolve when its issue disappears, even in maintenance.
+	_ = st.PutIncident(ctx, platform.Incident{ID: "inc-1", TenantID: "t1", Key: "rule::y|b.com", Status: platform.IncidentOpen})
+	res2, err := d.Reconcile(ctx, "t1", []types.Finding{}, nil) // issue gone
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res2.Resolved) != 1 {
+		t.Fatalf("resolves must still flow during maintenance, got %+v", res2.Resolved)
+	}
+}
+
+func TestEscalateOverdue_NoPageDuringMaintenance(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	now := time.Unix(1700000000, 0).UTC()
+	alerter := &captureAlerter{}
+	d := &Detector{Store: st, Alerter: alerter, Now: func() time.Time { return now },
+		Suppressed: func(context.Context, string, time.Time) bool { return true }}
+	_ = st.PutIncident(ctx, platform.Incident{ID: "inc-1", TenantID: "t1", Status: platform.IncidentOpen, OpenedAt: now.Add(-2 * time.Hour)})
+
+	esc, err := d.EscalateOverdue(ctx, "t1", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(esc) != 0 || len(alerter.alerts) != 0 {
+		t.Fatalf("no escalation should fire during a maintenance window, got esc=%d alerts=%d", len(esc), len(alerter.alerts))
 	}
 }

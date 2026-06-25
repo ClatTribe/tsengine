@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/authn"
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -63,12 +64,29 @@ func main() {
 		must(st.PutConnection(ctx, c))
 	}
 
-	// --- assets ---
+	// --- assets: one of EVERY scannable asset type, so the demo account exercises each surface.
+	// Targets are benign/own-domain placeholders; for a live local scan (make demo-secure) the
+	// operator points the web/api/repository targets at a local sibling container reachable via the
+	// loopback rewrite (host.docker.internal). container_image uses a real public image so trivy/
+	// grype produce findings with no credentials.
 	assets := []platform.Asset{
-		{ID: "ast-api", TenantID: tid, ConnectionID: "conn-gh", Type: "repository", Target: "github.com/northwind-labs/payments-api", DiscoveredAt: ago(45 * 24 * time.Hour)},
-		{ID: "ast-web", TenantID: tid, ConnectionID: "conn-gh", Type: "repository", Target: "github.com/northwind-labs/storefront", DiscoveredAt: ago(45 * 24 * time.Hour)},
-		{ID: "ast-ws", TenantID: tid, ConnectionID: "conn-gw", Type: "workspace", Target: "northwind.io", DiscoveredAt: ago(40 * 24 * time.Hour)},
+		// repository — SAST + SCA + secret scanning (gitleaks/semgrep/trivy-fs)
+		{ID: "ast-repo", TenantID: tid, ConnectionID: "conn-gh", Type: "repository", Target: "github.com/northwind-labs/payments-api", DiscoveredAt: ago(45 * 24 * time.Hour)},
+		{ID: "ast-repo2", TenantID: tid, ConnectionID: "conn-gh", Type: "repository", Target: "github.com/northwind-labs/storefront", DiscoveredAt: ago(45 * 24 * time.Hour)},
+		// web_application — DAST (katana → nuclei/dalfox/sqlmap)
+		{ID: "ast-web", TenantID: tid, ConnectionID: "conn-gh", Type: "web_application", Target: "https://app.northwind.io", DiscoveredAt: ago(30 * 24 * time.Hour)},
+		// api — spec-ingest → per-endpoint DAST (openapi_spec_ingest, schemathesis)
+		{ID: "ast-api", TenantID: tid, ConnectionID: "conn-gh", Type: "api", Target: "https://api.northwind.io", Meta: map[string]string{"spec_url": "https://api.northwind.io/openapi.json"}, DiscoveredAt: ago(30 * 24 * time.Hour)},
+		// container_image — image SCA + misconfig (trivy/grype/dockle); a real public image scans with no creds
+		{ID: "ast-container", TenantID: tid, ConnectionID: "conn-gh", Type: "container_image", Target: "alpine:3.18", DiscoveredAt: ago(20 * 24 * time.Hour)},
+		// ip_address — port discovery → per-port nuclei (naabu/nmap/nuclei)
+		{ID: "ast-ip", TenantID: tid, ConnectionID: "conn-aws", Type: "ip_address", Target: "203.0.113.10", DiscoveredAt: ago(20 * 24 * time.Hour)},
+		// domain — subdomain enum + child-asset pivot (subfinder/dnstwist)
+		{ID: "ast-domain", TenantID: tid, ConnectionID: "conn-gw", Type: "domain", Target: "northwind.io", DiscoveredAt: ago(40 * 24 * time.Hour)},
+		// cloud_account — CSPM/IAM posture (prowler); live scan needs read-only cloud creds
 		{ID: "ast-cloud", TenantID: tid, ConnectionID: "conn-aws", Type: "cloud_account", Target: "aws:4417-2290-1180", DiscoveredAt: ago(30 * 24 * time.Hour)},
+		// workspace — identity/email posture (operate; host-side, no sandbox needed)
+		{ID: "ast-ws", TenantID: tid, ConnectionID: "conn-gw", Type: "workspace", Target: "northwind.io", DiscoveredAt: ago(40 * 24 * time.Hour)},
 	}
 	for _, a := range assets {
 		must(st.PutAsset(ctx, a))
@@ -108,6 +126,12 @@ func main() {
 		{ID: "f-008", RuleID: "gitleaks::generic-api-key", Tool: "gitleaks", Severity: types.SeverityMedium, Endpoint: "storefront/.env.example:12", Title: "Possible API key committed to source", Description: "A high-entropy string matching an API-key shape was found in tracked source.", Confidence: 0.6, VerificationStatus: "pattern_match", DiscoveredAt: ago(time.Hour)},
 		{ID: "f-009", RuleID: "nuclei::tech-detect", Tool: "nuclei", Severity: types.SeverityLow, Endpoint: "https://storefront.northwind.io", Title: "Server version disclosed in headers", Description: "The `Server` header reveals an exact version, aiding targeted exploitation.", Confidence: 0.5, VerificationStatus: "pattern_match", DiscoveredAt: ago(time.Hour)},
 		{ID: "f-010", RuleID: "prowler::cloudtrail-not-multiregion", Tool: "prowler", Severity: types.SeverityLow, Endpoint: "aws:cloudtrail", Title: "CloudTrail is not multi-region", Description: "Audit logging is single-region; activity in other regions is not captured.", Compliance: &types.Compliance{SOC2: []string{"CC7.2"}, NISTCSF: []string{"DE.CM-1"}, GDPR: []string{"Art. 32"}, NIST80053: []string{"AU-2", "AU-12"}, FedRAMP: []string{"AU-2"}, DPDP: []string{"Sec. 8(5)"}}, Confidence: 0.8, VerificationStatus: "verified", DiscoveredAt: ago(49 * time.Hour)},
+		// f-011 + f-012 are a CROSS-SURFACE attack chain: a verified SSRF on the API leaks an AWS
+		// access key (web entry point), and that SAME key (the bridge entity AKIAIOSFODNN7EXAMPLE)
+		// belongs to an IAM role with *:* admin on the cloud account (the crown jewel). crossdetect
+		// correlates them into one internet→crown-jewel path on /attack-paths.
+		{ID: "f-011", RuleID: "nuclei::ssrf-metadata", Tool: "nuclei", Severity: types.SeverityCritical, CWE: []string{"CWE-918"}, Endpoint: "https://api.northwind.io/v2/fetch?url=", Title: "SSRF to cloud metadata — AWS credentials exposed", Description: "An SSRF on the `url` parameter reaches the EC2 instance-metadata service (169.254.169.254) and returns IAM role credentials. The leaked access key AKIAIOSFODNN7EXAMPLE belongs to a role with broad permissions.", MITRETechniques: []string{"T1190", "T1552.005"}, Compliance: mkComp(), Confidence: 0.95, VerificationStatus: "verified", DiscoveredAt: ago(24 * time.Hour)},
+		{ID: "f-012", RuleID: "prowler::iam-overprivileged-role", Tool: "prowler", Severity: types.SeverityCritical, Endpoint: "arn:aws:iam::441722901180:role/payments-api-task", Title: "IAM role grants administrator access (*:* on all resources)", Description: "The role reached via access key AKIAIOSFODNN7EXAMPLE has an attached policy allowing Action `*` on Resource `*` — full administrator access to the AWS account. Compromise of this key is full cloud-account takeover.", Compliance: &types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, PCI: []string{"7.2.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-6", "IA-2"}, FedRAMP: []string{"AC-6"}}, Confidence: 0.95, VerificationStatus: "verified", DiscoveredAt: ago(24 * time.Hour)},
 	}
 	for _, f := range findings {
 		must(st.PutFinding(ctx, tid, f))
@@ -134,6 +158,43 @@ func main() {
 	for _, i := range incidents {
 		must(st.PutIncident(ctx, i))
 	}
+
+	// --- a completed pentest engagement (the XBOW-style exploitation-proven VAPT) ---
+	// Two findings are exploitation-PROVEN (a captured PoC line → verification "verified"); one
+	// stays an unproven lead. So /pentest shows a real scorecard (verified_rate 2/3) + the per-
+	// engagement VAPT report renders the distinguished PoC blocks.
+	ptFindings := []types.Finding{
+		{ID: "pt-f1", RuleID: "pentest::sqli-boolean", Tool: "pentest", Severity: types.SeverityCritical, CWE: []string{"CWE-89"}, Endpoint: "https://api.northwind.io/v2/search?q=", Title: "SQL injection — exploitation-proven", Description: "Boolean-based blind SQL injection proven by a true/false differential that extracts no data.\n\n[Exploitation PoC · sql-injection] GET /v2/search?q=1%20AND%201=1 vs q=1%20AND%201=2 → result set differs (boolean injection confirmed) (HTTP 200)", VerificationStatus: types.VerificationVerified, Confidence: 1, DiscoveredAt: ago(20 * time.Hour)},
+		{ID: "pt-f2", RuleID: "pentest::cors-misconfiguration", Tool: "pentest", Severity: types.SeverityHigh, CWE: []string{"CWE-942"}, Endpoint: "https://api.northwind.io/v2/account", Title: "CORS misconfiguration — exploitation-proven", Description: "The API reflects an arbitrary attacker Origin with credentials, so any site can read authenticated responses.\n\n[Exploitation PoC · cors-misconfiguration] GET /v2/account (Origin: https://evil.example) → Access-Control-Allow-Origin reflects the attacker origin AND Access-Control-Allow-Credentials: true (HTTP 200)", VerificationStatus: types.VerificationVerified, Confidence: 1, DiscoveredAt: ago(20 * time.Hour)},
+		{ID: "pt-f3", RuleID: "pentest::open-redirect", Tool: "pentest", Severity: types.SeverityMedium, CWE: []string{"CWE-601"}, Endpoint: "https://storefront.northwind.io/go?next=", Title: "Open redirect — lead (unproven)", Description: "A possible open redirect on the `next` parameter; the benign canary did not confirm it this run, so it is reported as a lead, not a proven exploit.", VerificationStatus: "pattern_match", Confidence: 0.55, DiscoveredAt: ago(20 * time.Hour)},
+	}
+	must(st.PutPentest(ctx, pentest.Engagement{
+		ID: "pt-eng-1", TenantID: tid, Name: "Q2 external pentest — payments-api + storefront",
+		Mode: pentest.ModeActive, Status: pentest.StatusComplete,
+		RoE: pentest.RulesOfEngagement{
+			AuthorizedTargets: []string{"https://api.northwind.io", "https://storefront.northwind.io"},
+			MaxRequests:       500, RatePerMinute: 60, AllowActive: true, AuthorizedBy: "Ada Founder",
+			Consent: "I, Ada Founder, on behalf of Northwind Labs, authorize active exploitation testing of the scope above.",
+		},
+		Findings: ptFindings, RequestsUsed: 143,
+		CreatedAt: ago(22 * time.Hour), StartedAt: ago(21 * time.Hour), CompletedAt: ago(20 * time.Hour),
+	}))
+
+	// --- third-party SaaS apps (SSPM inventory) — one shadow-admin (admin scope) + two unverified ---
+	must(st.ReplaceThirdPartyApps(ctx, tid, "gworkspace", []platform.ThirdPartyApp{
+		{TenantID: tid, Provider: "gworkspace", AppID: "Slack", Scopes: []string{"openid", "email", "profile"}, Users: 48, Verified: true},
+		{TenantID: tid, Provider: "gworkspace", AppID: "Notion", Scopes: []string{"drive.readonly", "email"}, Users: 31, Verified: true},
+		{TenantID: tid, Provider: "gworkspace", AppID: "Zapier", Scopes: []string{"admin.directory.user", "gmail.modify"}, Users: 2, AdminScope: true, Verified: false},
+		{TenantID: tid, Provider: "gworkspace", AppID: "pdf-merge-free.app", Scopes: []string{"drive"}, Users: 7, Verified: false},
+	}))
+
+	// --- a runtime attack observation (in-app firewall / RASP) that matches the SQLi endpoint, so
+	// the issue is flagged "under active attack" on the dashboard + /issues (the strongest exploit signal).
+	must(st.PutRuntimeEvent(ctx, platform.RuntimeEvent{
+		ID: "rt-1", TenantID: tid, App: "payments-api", AttackKind: "sql_injection",
+		Endpoint: "https://api.northwind.io/v2/search?q=", Sink: "db.Query", SourceIP: "203.0.113.44",
+		Blocked: true, Source: "zen", OccurredAt: ago(3 * time.Hour),
+	}))
 
 	// --- compliance control state ---
 	type cs struct {
@@ -187,5 +248,5 @@ func main() {
 		must(st.UpsertControlState(ctx, platform.ControlState{TenantID: tid, Framework: c.fw, ControlID: c.id, State: c.state, EvidenceRefs: refs, UpdatedAt: ago(time.Hour)}))
 	}
 
-	log.Printf("seeded demo tenant %q → %s (%d findings, %d actions, %d incidents)", tid, path, len(findings), len(actions), len(incidents))
+	log.Printf("seeded demo tenant %q → %s (%d findings, %d actions, %d incidents, 1 pentest, 4 saas apps, 1 runtime event)", tid, path, len(findings), len(actions), len(incidents))
 }

@@ -1,13 +1,14 @@
-import type { Metadata } from "next";
 import { CheckCircle2 } from "lucide-react";
-import { DemoForm } from "@/components/marketing/demo-form";
-import { SITE_URL } from "@/lib/site";
+import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
 
-export const metadata: Metadata = {
+import { DemoForm } from "@/components/marketing/demo-form";
+
+export const metadata = pageMeta({
   title: "Book a Demo — TensorShield",
   description: "See TensorShield run on your stack. Talk to our team about VAPT, compliance (SOC 2, ISO 27001, and 12 more), and autonomous remediation for your SMB.",
-  alternates: { canonical: `${SITE_URL}/demo` },
-};
+  path: "/demo",
+});
 
 const POINTS = [
   "A walkthrough on your real stack — code, cloud, and identity.",
@@ -19,8 +20,8 @@ const POINTS = [
 export default function DemoPage() {
   return (
     <section className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-      <div className="relative mx-auto grid max-w-5xl items-start gap-10 px-5 pb-24 pt-20 lg:grid-cols-2">
+      <AuroraBackdrop />
+      <div className="relative animate-fade-rise mx-auto grid max-w-5xl items-start gap-10 px-5 pb-24 pt-20 lg:grid-cols-2">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Talk to sales</span>
           <h1 className="mt-3 text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">Book a demo</h1>

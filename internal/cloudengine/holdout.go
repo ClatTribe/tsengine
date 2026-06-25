@@ -175,8 +175,8 @@ func plantHeldOutTrust(scn *HoldoutScenario, i int) error {
 	otherArn := "arn:aws:iam::111111111111:role/someone-else"
 
 	// priv-role's trust policy permits ONLY otherArn to assume it — NOT srcArn.
-	trust, err := cloudiam.Parse([]byte(fmt.Sprintf(
-		`{"Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Resource":%q}]}`, otherArn)))
+	trustJSON := fmt.Sprintf(`{"Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Resource":%q}]}`, otherArn)
+	trust, err := cloudiam.Parse([]byte(trustJSON))
 	if err != nil {
 		return fmt.Errorf("holdout trust parse: %w", err)
 	}
@@ -188,8 +188,10 @@ func plantHeldOutTrust(scn *HoldoutScenario, i int) error {
 	}
 
 	s.AddNode(&cloudgraph.Node{ID: alb, Kind: cloudgraph.KindResource, Type: "AWS::ELB::LB", Name: alb, Public: true})
-	s.AddNode(&cloudgraph.Node{ID: role, Kind: cloudgraph.KindPrincipal, Type: "AWS::IAM::Role", Name: role})
-	s.AddNode(&cloudgraph.Node{ID: priv, Kind: cloudgraph.KindPrincipal, Type: "AWS::IAM::Role", Name: priv})
+	// The source role carries its ARN; the priv role carries its trust policy — so the engine's
+	// PruneUnauthorized pass can evaluate (and reject) the assume the way the oracle does.
+	s.AddNode(&cloudgraph.Node{ID: role, Kind: cloudgraph.KindPrincipal, Type: "AWS::IAM::Role", Name: role, Attrs: map[string]string{"arn": srcArn}})
+	s.AddNode(&cloudgraph.Node{ID: priv, Kind: cloudgraph.KindPrincipal, Type: "AWS::IAM::Role", Name: priv, Attrs: map[string]string{"trust_policy": trustJSON}})
 	s.AddNode(&cloudgraph.Node{ID: bucket, Kind: cloudgraph.KindData, Type: "AWS::S3::Bucket", Name: bucket, Sensitive: cloudgraph.SensHigh})
 	s.AddEdge(cloudgraph.Edge{From: cloudgraph.InternetID, To: alb, Kind: cloudgraph.EdgeNetworkReach})
 	s.AddEdge(cloudgraph.Edge{From: alb, To: role, Kind: cloudgraph.EdgeRunsAs})

@@ -31,12 +31,18 @@ import (
 // agentCompetitors is the mandatory competitor cite (§14.2.2) for the agentic
 // bench: the offensive-AI leaders that publish exploitation-verified results.
 var agentCompetitors = Competitors{
-	Leaderboard: "agentic-offensive leaders, exploitation-verified: XBOW (HackerOne US #1), strix (OSS), Horizon3 NodeZero (GOAD)",
+	Leaderboard: "agentic-offensive leaders, exploitation-verified: Aikido (Doyensec head-to-head), XBOW (HackerOne US #1), strix (OSS), Horizon3 NodeZero (GOAD)",
 	Scores: map[string]string{
-		"XBOW":     "PoC-validated, ~0 FP",
+		"Aikido":   "49 verified vs XBOW 31 (Doyensec, $4k tier) — white-box, 4% FP",
+		"XBOW":     "PoC-validated, ~0 FP (3% FP vs Aikido per Doyensec)",
 		"strix":    "PoC-validated multi-agent",
 		"NodeZero": "attack-path proven",
 	},
+	// Aikido is the closest commercial analogue (AI pentest + OSS-engine detection + HITL).
+	// The only neutral head-to-head it publishes is Doyensec's commissioned Aikido-vs-XBOW
+	// (May 2026): 49 vs 31 manually-verified vulns on 2 OSS apps at the same $4k tier, FP
+	// near-identical (4% vs 3%). XBOW is our shared reference, so it triangulates us against
+	// Aikido. See docs/benchmark-vs-aikido.md.
 	Note: "Agentic bar is VERIFIED findings (a working PoC / evidence-grounded), not pattern matches (CLAUDE.md §10). " +
 		"Target: detection_rate at OSS parity AND a competitive verified_rate, with HITL gating on any action.",
 }

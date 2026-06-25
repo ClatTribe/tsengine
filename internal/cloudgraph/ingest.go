@@ -43,6 +43,10 @@ type InvResource struct {
 	Sensitive  Sensitivity       `json:"sensitive,omitempty"`
 	Privileged bool              `json:"privileged,omitempty"`
 	Tags       map[string]string `json:"tags,omitempty"`
+	// Image is the container image a compute workload runs (ECR uri:tag / registry/repo:tag).
+	// Set on ECS/EKS/Lambda-image/etc. resources; drives the agentless workload scan
+	// (ADR 0009 Phase 2 — cloudengine.WorkloadScanPlan). Carried into Node.Attrs["image"].
+	Image string `json:"image,omitempty"`
 }
 
 type InvTrust struct {
@@ -116,6 +120,7 @@ func (s *Snapshot) ToInventory() Inventory {
 		inv.Resources = append(inv.Resources, InvResource{
 			ID: n.ID, Kind: n.Kind, Type: n.Type, Name: n.Name, Region: n.Region,
 			Public: n.Public, Sensitive: n.Sensitive, Privileged: n.Privileged, Tags: n.Tags,
+			Image: n.Attrs["image"], // round-trip the workload image (Phase 2)
 		})
 	}
 	for _, e := range s.Edges {
@@ -142,10 +147,14 @@ func Ingest(inv Inventory) *Snapshot {
 	s := New(inv.AccountID, inv.Provider)
 	s.CapturedAt = inv.CapturedAt
 	for _, r := range inv.Resources {
-		s.AddNode(&Node{
+		n := &Node{
 			ID: r.ID, Kind: r.Kind, Type: r.Type, Name: r.Name, Region: r.Region,
 			Public: r.Public, Sensitive: r.Sensitive, Privileged: r.Privileged, Tags: r.Tags,
-		})
+		}
+		if r.Image != "" { // the container image a workload runs (agentless scan, Phase 2)
+			n.Attrs = map[string]string{"image": r.Image}
+		}
+		s.AddNode(n)
 	}
 	// The internet pseudo-node always exists so reachability from "the outside"
 	// is expressible.

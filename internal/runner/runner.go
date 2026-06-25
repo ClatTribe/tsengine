@@ -15,9 +15,11 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/sspm"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -46,6 +48,12 @@ type IDGen func() string
 // so runner does not import remediate (which imports runner.Tokens → would cycle).
 type Proposer func(types.Finding, platform.Asset) (platform.Action, bool)
 
+// BatchProposer maps an asset's whole finding set to the MINIMAL set of remediation
+// Actions — grouping related alerts into one bulk fix (Aikido "bulk fix" parity).
+// Wired to remediate.ProposeBulk by the caller. When set it supersedes the per-finding
+// Proposer so the desk receives one action per fix group, not per finding.
+type BatchProposer func([]types.Finding, platform.Asset) []platform.Action
+
 // Service ties connectors + the engine + the store together, and (optionally) runs the
 // full autonomous loop per finding: GRC control-state update → propose a fix → gate it
 // at the HITL desk. The loop collaborators are nil-safe — omit them and Service just
@@ -57,12 +65,16 @@ type Service struct {
 	Scanner    ScanRunner
 	Now        Clock
 	NewID      IDGen
+	// GitHubAPIBase overrides the GitHub REST base for the autonomous SaaS-posture sync
+	// (default https://api.github.com). Set only in tests (a fake API server).
+	GitHubAPIBase string
 
 	// optional autonomous-loop collaborators
-	GRC      *grc.GRC         // fold each finding into the compliance system-of-record
-	Propose  Proposer         // generate a remediation Action per finding
-	Desk     *hitl.Desk       // gate/auto-apply the proposed Action
-	Detector *detect.Detector // open/resolve incidents from change between monitoring passes
+	GRC          *grc.GRC         // fold each finding into the compliance system-of-record
+	Propose      Proposer         // generate a remediation Action per finding
+	ProposeBatch BatchProposer    // bulk fix: one Action per fix group (supersedes Propose when set)
+	Desk         *hitl.Desk       // gate/auto-apply the proposed Action
+	Detector     *detect.Detector // open/resolve incidents from change between monitoring passes
 	// ProposeIncidentResponse is the A-RSP "respond" half: turn a newly-opened incident into
 	// response Actions (a tier-2 gated containment runbook + a T3 breach-disclosure draft for
 	// a critical incident). Wired to remediate.ProposeIncidentResponse by the caller; nil →
@@ -169,12 +181,23 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		current = append(current, fs...)
 		scanned++
 	}
+	// Autonomous SaaS-posture: if the tenant has a GitHub connection, run the SSPM checks live
+	// via its onboarded token each pass (read-only, grounded — a hardened org adds nothing), so
+	// posture findings flow into incidents like any other. Best-effort: a fetch failure (e.g.
+	// insufficient scope) is logged + skipped, never failing the pass or falsely resolving.
+	current = append(current, s.syncSaaSPosture(ctx, tenantID)...)
 	// continuous-monitoring: reconcile this pass's findings into incidents (what's NEW,
 	// what's RESOLVED since last pass). Runs over the whole tenant — a full pass is the
 	// authoritative present state. Only when every asset scanned cleanly, so a partial
 	// pass never falsely resolves an incident on an asset that errored.
 	if s.Detector != nil && firstErr == nil {
-		res, err := s.Detector.Reconcile(ctx, tenantID, current)
+		// Runtime-protection escalation (ADR-0007 Phase 0b): a finding whose endpoint is
+		// being attacked in production opens an incident regardless of severity floor.
+		var attacked map[string]bool
+		if evs, err := s.Store.ListRuntimeEvents(ctx, tenantID); err == nil {
+			attacked = crossdetect.AttackedKeys(current, evs)
+		}
+		res, err := s.Detector.Reconcile(ctx, tenantID, current, attacked)
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -193,8 +216,56 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 				}
 			}
 		}
+		// Timed auto-escalation (escalation matrix Phase 4): each pass, re-alert OPEN,
+		// UNACKNOWLEDGED incidents that have sat past the tenant's ack window — the MDR
+		// "page again if no one's on it". No policy / window off → no-op.
+		if t, terr := s.Store.GetTenant(ctx, tenantID); terr == nil && t.Escalation != nil && t.Escalation.Enabled && t.Escalation.AckWindowMins > 0 {
+			if _, err := s.Detector.EscalateOverdue(ctx, tenantID, t.Escalation.AckWindowMins); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
 	}
 	return scanned, firstErr
+}
+
+// syncSaaSPosture runs the live GitHub-org SSPM checks for the tenant each monitoring pass,
+// reusing the onboarded GitHub connection's token (no extra credential). Read-only + grounded —
+// a hardened org adds nothing. Best-effort: any failure (no GitHub connection, insufficient
+// scope, transient API error) yields nil so the pass continues uninterrupted. Findings are both
+// persisted (so they appear in Issues like the manual /v1/saas/github_org/sync) and returned so
+// the detector reconciles them into incidents this pass.
+func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) []types.Finding {
+	if s.Store == nil || s.Tokens == nil || s.NewID == nil {
+		return nil
+	}
+	conns, err := s.Store.ListConnections(ctx, tenantID)
+	if err != nil {
+		return nil
+	}
+	var gh *platform.Connection
+	for i := range conns {
+		if conns[i].Kind == platform.ConnGitHub && conns[i].Status == platform.ConnActive {
+			gh = &conns[i]
+			break
+		}
+	}
+	if gh == nil {
+		return nil
+	}
+	token, terr := s.Tokens.Resolve(ctx, *gh)
+	if terr != nil || token == "" {
+		return nil
+	}
+	snap, ferr := sspm.FetchGitHubOrg(ctx, s.GitHubAPIBase, gh.Account, token, nil)
+	if ferr != nil {
+		return nil // honestly skipped (logged by the caller's monitoring); never a false finding
+	}
+	findings := sspm.AssessGitHubOrg(snap, sspm.Options{})
+	for i := range findings {
+		findings[i].ID = s.NewID()
+		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
+	}
+	return findings
 }
 
 // OnTrigger handles a single provider event (a push) — find the matching asset and
@@ -276,6 +347,16 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 			return nil, nil, err
 		}
 	}
+	// Bulk fix: propose the minimal set of remediation Actions for the whole asset
+	// (one PR per fix group) instead of one per finding. Supersedes the per-finding
+	// Propose (skipped in processFinding when ProposeBatch is set).
+	if s.ProposeBatch != nil && s.Desk != nil {
+		for _, act := range s.ProposeBatch(findings, a) {
+			if _, err := s.Desk.Submit(ctx, act); err != nil {
+				return nil, nil, fmt.Errorf("runner: desk submit (bulk): %w", err)
+			}
+		}
+	}
 	eng.CompletedAt = s.now()
 	if err := s.Store.PutEngagement(ctx, eng); err != nil {
 		return nil, nil, err
@@ -292,7 +373,9 @@ func (s *Service) processFinding(ctx context.Context, a platform.Asset, f types.
 			return fmt.Errorf("runner: grc apply: %w", err)
 		}
 	}
-	if s.Propose != nil && s.Desk != nil {
+	// Per-finding propose — skipped when a batch (bulk-fix) proposer is set; the asset's
+	// findings are then proposed together in scanAsset.
+	if s.ProposeBatch == nil && s.Propose != nil && s.Desk != nil {
 		act, ok := s.Propose(f, a)
 		if ok {
 			if _, err := s.Desk.Submit(ctx, act); err != nil {

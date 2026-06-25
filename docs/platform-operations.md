@@ -78,9 +78,14 @@ provider (§5–§6).
 |---|---|
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub |
 | `GITLAB_CLIENT_ID` / `GITLAB_CLIENT_SECRET` | GitLab |
+| `BITBUCKET_CLIENT_ID` / `BITBUCKET_CLIENT_SECRET` | Bitbucket Cloud (OAuth consumer key/secret; grant repository + pullrequest scopes) |
+| `AZURE_DEVOPS_CLIENT_ID` / `AZURE_DEVOPS_CLIENT_SECRET` / `AZURE_DEVOPS_ORG` | Azure DevOps (App ID + client secret; `vso.code`/`vso.code_write` scopes). `ORG` is the organization (`dev.azure.com/{ORG}`) — required, since the org isn't carried in the OAuth flow. |
 | `GWORKSPACE_CLIENT_ID` / `GWORKSPACE_CLIENT_SECRET` | Google Workspace |
 | `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | Microsoft 365 |
 | `OKTA_ORG_URL` / `OKTA_CLIENT_ID` / `OKTA_CLIENT_SECRET` | Okta (org URL e.g. `https://dev-123.okta.com`) |
+| `AWS_REMEDIATION_ROLE_ARN` / `AWS_REMEDIATION_EXTERNAL_ID` / `AWS_REGION` | Enables the **live AWS remediation write path** (`connector.AWS.Apply` → S3 Block Public Access). `ROLE_ARN` is a scoped, cross-account **write** role the platform assumes via STS (distinct from the read-only onboarding role); `EXTERNAL_ID` is its tenant-binding ExternalId. Unset (and `AWS_REMEDIATION_ENABLED≠1`) → `Apply` stays an honest stub. The write is reached only after the HITL approval gate. |
+| `GCP_REMEDIATION_IMPERSONATE_SA` | Enables the **live GCP remediation write path** (`connector.GCP.Apply` → GCS Public Access Prevention). The platform impersonates this scoped **write** service account in the customer project (distinct from the read-only Security Reviewer grant). Unset (and `GCP_REMEDIATION_ENABLED≠1`) → `Apply` stays an honest stub. HITL-gated. |
+| `AZURE_REMEDIATION_ENABLED` | `1` enables the **live Azure remediation write path** (`connector.Azure.Apply` → disable storage `AllowBlobPublicAccess`). Uses the platform's service principal (`DefaultAzureCredential` — env / managed identity / Azure CLI), which must hold a scoped storage-write role (e.g. Storage Account Contributor) on the target subscription. Unset → `Apply` stays an honest stub. HITL-gated. |
 
 ### Notifications + ticketing (optional)
 | Var | Purpose |
@@ -88,7 +93,11 @@ provider (§5–§6).
 | `TSENGINE_SLACK_WEBHOOK` | Slack Incoming Webhook — posts approvals (with buttons) + new-incident alerts. |
 | `TSENGINE_SLACK_SIGNING_SECRET` | Verifies Slack approve/reject button callbacks (`POST /v1/slack/interactive`). |
 | `TSENGINE_WEBHOOK_SECRET` | Verifies inbound provider webhooks (GitHub HMAC-SHA256 / GitLab token) before any re-scan. **Unset → webhooks are NOT verified** (a startup warning is logged); set it and configure the same secret on the provider's webhook. |
+| `TSENGINE_DISCORD_WEBHOOK` | Discord Incoming Webhook — posts a colour-coded embed for each new high/critical incident to a Discord channel. Unset → off. |
+| `TSENGINE_WEBHOOK_URL` | Generic **outbound** webhook — POSTs a signed JSON event (`incident.opened`) per new incident, so a tenant can wire TensorShield into anything (Zapier / n8n / a SIEM / a custom endpoint) without a bespoke connector. Unset → no outbound webhook. |
+| `TSENGINE_WEBHOOK_SIGNING_SECRET` | HMAC-SHA256 key for the outbound webhook above; the receiver recomputes it over the raw body to verify the `X-TensorShield-Signature: sha256=<hex>` header. Unset → events are sent unsigned (the header is omitted). |
 | `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` / `JIRA_PROJECT` | Files `file_ticket` remediations as Jira issues. |
+| `LINEAR_API_KEY` / `LINEAR_TEAM_ID` | Files `file_ticket` remediations as Linear issues (GraphQL `issueCreate`). One ticket filer is active per platform — precedence is Jira → ServiceNow → Linear, by whichever env set is present. |
 
 ---
 

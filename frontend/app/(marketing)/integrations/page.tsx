@@ -1,14 +1,18 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+
 import {
   Github, GitBranch, Cloud, Mail, Users, KeyRound, Ticket, ClipboardList,
-  MessageSquare, BellRing, ArrowRight, Plug,
+  MessageSquare, MessagesSquare, MessageCircle, BellRing, ArrowRight, Plug, Webhook, Container, FileJson,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Integrations — TensorShield",
   description:
-    "Connect your stack in minutes: GitHub, GitLab, AWS, Google Workspace, Microsoft 365, Okta — plus Jira, ServiceNow, Slack and PagerDuty for delivery. Read-only by default, write-back only on approval.",
-};
+    "Connect your stack in minutes: GitHub, GitLab, Bitbucket, Azure DevOps, AWS, Google Workspace, Microsoft 365, Okta, Docker Hub & GHCR — plus Jira, ServiceNow, Linear, Slack, Microsoft Teams, Discord, PagerDuty and signed outbound webhooks for delivery. Read-only by default, write-back only on approval.",
+  path: "/integrations",
+});
 
 type Item = { icon: typeof Github; name: string; role: string; status: "live" | "soon" };
 
@@ -19,15 +23,34 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
     items: [
       { icon: Github, name: "GitHub", role: "Repos, SCA, secret scanning, fix PRs", status: "live" },
       { icon: GitBranch, name: "GitLab", role: "Repos, SCA, secret scanning, fix MRs", status: "live" },
+      { icon: GitBranch, name: "Bitbucket", role: "Repos, SCA, secret scanning, fix PRs", status: "live" },
+      { icon: GitBranch, name: "Azure DevOps", role: "Repos, SCA, secret scanning, fix PRs", status: "live" },
     ],
   },
   {
     title: "Cloud",
-    blurb: "Misconfig, public exposure and IAM blast-radius across your accounts.",
+    blurb: "Misconfig, public exposure and IAM blast-radius — each traced back to the Terraform line that provisioned it (Cloud-to-Code).",
     items: [
       { icon: Cloud, name: "AWS", role: "CSPM, IAM, exposed resources", status: "live" },
-      { icon: Cloud, name: "Google Cloud", role: "CSPM & IAM posture", status: "soon" },
-      { icon: Cloud, name: "Azure", role: "CSPM & IAM posture", status: "soon" },
+      { icon: Cloud, name: "Google Cloud", role: "CSPM & IAM posture — read-only Security Reviewer grant", status: "live" },
+      { icon: Cloud, name: "Azure", role: "CSPM & IAM posture — read-only Reader grant", status: "live" },
+    ],
+  },
+  {
+    title: "API specs",
+    blurb: "Import your API surface so every endpoint gets tested — from an OpenAPI spec or a Postman collection.",
+    items: [
+      { icon: FileJson, name: "OpenAPI / Swagger", role: "Spec ingest → per-endpoint DAST", status: "live" },
+      { icon: FileJson, name: "Postman", role: "Import a collection → per-endpoint inventory", status: "live" },
+    ],
+  },
+  {
+    title: "Container registries",
+    blurb: "Scan on push — only new or re-pushed image digests get scanned, never the whole registry every cycle.",
+    items: [
+      { icon: Container, name: "Docker Hub", role: "Auto-discover images, scan on push (digest-diff)", status: "live" },
+      { icon: Container, name: "GitHub Container Registry", role: "Auto-discover images, scan on push — reuses your GitHub token", status: "live" },
+      { icon: Container, name: "Amazon ECR", role: "Auto-discover images, scan on push", status: "soon" },
     ],
   },
   {
@@ -45,8 +68,12 @@ const GROUPS: { title: string; blurb: string; items: Item[] }[] = [
     items: [
       { icon: Ticket, name: "Jira", role: "Remediation tickets with evidence", status: "live" },
       { icon: ClipboardList, name: "ServiceNow", role: "Remediation tickets with evidence", status: "live" },
+      { icon: Ticket, name: "Linear", role: "Remediation issues filed to your team", status: "live" },
       { icon: MessageSquare, name: "Slack", role: "Approve/reject fixes in-channel", status: "live" },
+      { icon: MessagesSquare, name: "Microsoft Teams", role: "New critical issues posted to your channel", status: "live" },
       { icon: BellRing, name: "PagerDuty", role: "New critical issues page on-call", status: "live" },
+      { icon: MessageCircle, name: "Discord", role: "New critical issues posted to your channel", status: "live" },
+      { icon: Webhook, name: "Webhooks", role: "Signed JSON event per new issue — wire into Zapier, n8n, a SIEM, anything", status: "live" },
     ],
   },
 ];
@@ -55,8 +82,8 @@ export default function Integrations() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
+        <AuroraBackdrop />
+        <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
             <Plug className="h-3.5 w-3.5 text-accent" /> Connect in minutes
           </span>

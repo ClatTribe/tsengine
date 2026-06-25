@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
 import {
   Plug, ScanLine, Filter, Wrench, CheckCircle2, FileCheck2, ArrowRight,
   Building2, Wallet, Code2, ClipboardCheck, Bot, UserCheck,
@@ -6,16 +7,19 @@ import {
 } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 import { ASSET_SURFACES } from "@/lib/assets";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+import { Reveal } from "@/components/marketing/reveal";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Product — how TensorShield works",
-  description: "Connect a system and a fractional security team goes to work: detect, triage, fix, and prove — with you in the loop where it matters.",
-};
+  description: "Connect a system and a fractional security team goes to work: detect across every surface, prove what's exploitable with a captured PoC, fix it, and prove your compliance — with you in the loop where it matters.",
+  path: "/product",
+});
 
 const LOOP = [
   { icon: Plug, t: "Connect", d: "OAuth into GitHub, AWS, Google Workspace, M365, or Okta. The agent discovers your assets — repos, accounts, identities — and starts immediately." },
   { icon: ScanLine, t: "Detect", d: "It runs the leading open-source scanners across every surface continuously, so coverage matches what a standalone security tool would find." },
-  { icon: Filter, t: "Triage", d: "An AI security engineer separates real, exploitable risk from noise — verifying findings rather than dumping a raw scanner report on you." },
+  { icon: Filter, t: "Triage & prove", d: "An AI security engineer separates real, exploitable risk from scanner noise — and, where you authorize active testing, proves the exploit with a captured proof-of-concept. A finding is confirmed, not just flagged." },
   { icon: Wrench, t: "Fix", d: "It prepares the actual remediation — a pull request, a config change, an identity action, or a ticket — ready to ship." },
   { icon: UserCheck, t: "Approve", d: "Low-risk fixes apply automatically; anything consequential waits for one tap of your approval. Autonomy where it's earned." },
   { icon: FileCheck2, t: "Prove", d: "Every finding maps to controls across 14 frameworks and lands in a signed, auditor-ready evidence pack — automatically." },
@@ -32,20 +36,20 @@ export default function Product() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
+        <AuroraBackdrop />
+        <Reveal as="div" className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">The product</span>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">A security team in a loop, not a tool in a tab.</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
             Connect a system once. TensorShield runs the whole loop — detect, triage, fix, and prove — and pulls you in
             only where human judgment matters.
           </p>
-        </div>
+        </Reveal>
       </section>
 
       {/* The loop */}
       <section className="mx-auto max-w-5xl px-5 pb-12">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Reveal delay={70} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {LOOP.map(({ icon: Icon, t, d }, i) => (
             <div key={t} className="card p-6">
               <div className="flex items-center gap-3">
@@ -58,7 +62,7 @@ export default function Product() {
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* Two layers */}
@@ -101,6 +105,9 @@ export default function Product() {
         </div>
       </section>
 
+      {/* Open-source engines — trust through transparency */}
+      <OSSBand />
+
       {/* Asset coverage */}
       <AssetCoverageBand />
 
@@ -109,11 +116,11 @@ export default function Product() {
 
       {/* Personas */}
       <section className="mx-auto max-w-6xl px-5 py-20">
-        <div className="mx-auto mb-12 max-w-2xl text-center">
+        <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Built for your whole team</span>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight">Everyone gets what they need.</h2>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        </Reveal>
+        <Reveal delay={70} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {PERSONAS.map(({ icon: Icon, who, v }) => (
             <div key={who} className="card p-5">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
@@ -123,11 +130,63 @@ export default function Product() {
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{v}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       <CTABand />
     </>
+  );
+}
+
+// OSSBand — trust through transparency. We don't ask you to trust a black-box scanner: under the
+// hood TensorShield runs the same open-source engines the best security teams already rely on, in
+// one place, with an AI security engineer on top. Every tool listed is wrapped in the engine today.
+const OSS_GROUPS: { icon: typeof Globe; title: string; blurb: string; tools: string[] }[] = [
+  { icon: Globe, title: "Web & API testing", blurb: "Dynamic scanning, crawling, and injection testing of your live app.", tools: ["nuclei", "sqlmap", "dalfox", "katana", "httpx", "ffuf", "wpscan"] },
+  { icon: Code2, title: "Code & secrets", blurb: "Static analysis, taint tracking, and leaked-secret detection in your repos.", tools: ["semgrep", "CodeQL", "gitleaks", "trufflehog", "govulncheck"] },
+  { icon: Box, title: "Dependencies & supply chain", blurb: "Known-CVE scanning and SBOM generation across your dependency tree.", tools: ["trivy", "grype", "osv-scanner", "syft"] },
+  { icon: Network, title: "Containers & IaC", blurb: "Image, Dockerfile, and infrastructure-as-code misconfiguration checks.", tools: ["dockle", "hadolint", "checkov", "trivy"] },
+  { icon: Cloud, title: "Cloud posture", blurb: "CIS-benchmark and misconfiguration coverage across AWS, GCP, and Azure.", tools: ["prowler", "scoutsuite", "cloudfox"] },
+  { icon: Radar, title: "Network, recon & mobile", blurb: "Port and service discovery, subdomain enumeration, and mobile SAST.", tools: ["nmap", "naabu", "subfinder", "amass", "mobsfscan"] },
+];
+
+function OSSBand() {
+  return (
+    <section className="bg-surface">
+      <div className="mx-auto max-w-6xl px-5 py-20">
+        <div className="mx-auto mb-12 max-w-2xl text-center">
+          <span className="text-xs font-semibold uppercase tracking-wider text-accent">No black box</span>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight">Built on the tools the best security teams already trust.</h2>
+          <p className="mt-4 text-base leading-relaxed text-muted">
+            We don&apos;t reinvent detection — and we don&apos;t hide what runs under the hood. TensorShield orchestrates
+            the leading open-source security engines so your recall matches running each one yourself, then layers an AI
+            security engineer on top to triage, prove, and fix. Best-in-class coverage, one place, fully transparent.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {OSS_GROUPS.map(({ icon: Icon, title, blurb, tools }) => (
+            <div key={title} className="card p-5">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <h3 className="text-sm font-semibold">{title}</h3>
+              </div>
+              <p className="mt-2.5 text-sm leading-relaxed text-muted">{blurb}</p>
+              <div className="mt-3.5 flex flex-wrap gap-1.5">
+                {tools.map((t) => (
+                  <span key={t} className="mono rounded-md border border-border bg-bg px-2 py-0.5 text-[11px] text-ink">{t}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mx-auto mt-8 max-w-2xl text-center text-xs text-faint">
+          All trademarks belong to their respective open-source projects. TensorShield orchestrates these tools; it is
+          not affiliated with or endorsed by them.
+        </p>
+      </div>
+    </section>
   );
 }
 

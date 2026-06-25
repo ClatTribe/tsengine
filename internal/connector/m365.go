@@ -23,6 +23,7 @@ type M365 struct {
 	ClientSecret string
 	Tenant       string // Entra tenant id or "common"
 	OAuthBase    string // default https://login.microsoftonline.com
+	GraphBase    string // Microsoft Graph base; default https://graph.microsoft.com/v1.0 (overridable for tests)
 	HTTP         *http.Client
 }
 
@@ -31,8 +32,16 @@ func NewM365(clientID, clientSecret string) *M365 {
 	return &M365{
 		ClientID: clientID, ClientSecret: clientSecret, Tenant: "common",
 		OAuthBase: "https://login.microsoftonline.com",
+		GraphBase: "https://graph.microsoft.com/v1.0",
 		HTTP:      &http.Client{Timeout: 20 * time.Second},
 	}
+}
+
+func (m *M365) graphBase() string {
+	if m.GraphBase == "" {
+		return "https://graph.microsoft.com/v1.0"
+	}
+	return strings.TrimRight(m.GraphBase, "/")
 }
 
 func (m *M365) Kind() string { return platform.ConnM365 }
@@ -120,6 +129,43 @@ func (m *M365) Watch(context.Context, platform.Connection, []byte) ([]Trigger, e
 }
 
 // Apply is unsupported today (autonomous identity remediation is future work).
-func (m *M365) Apply(context.Context, platform.Connection, string, platform.Action) error {
-	return fmt.Errorf("m365: apply not supported yet")
+// Apply executes a gated identity remediation against Microsoft 365 / Entra ID. Reached only after
+// the HITL gate (§18.2 inv. 3). Today: account_suspend → disable sign-in (accountEnabled=false), the
+// reversible fix for a stale/over-privileged account. It needs the User.ReadWrite.All WRITE scope —
+// the onboarding scope is read-only by design, so a real disable requires an admin to grant the write
+// scope; until then Graph returns 403 and Apply surfaces it honestly (never falsely "done").
+func (m *M365) Apply(ctx context.Context, _ platform.Connection, token string, a platform.Action) error {
+	rt, _ := a.Payload["remediation_type"].(string)
+	target := strFrom(a.Payload, "target")
+	switch rt {
+	case "account_suspend":
+		if strings.TrimSpace(target) == "" {
+			return fmt.Errorf("m365 apply: action %s has no target user", a.ID)
+		}
+		return m.disableUser(ctx, token, target)
+	default:
+		return fmt.Errorf("m365 apply: remediation_type %q has no live write path yet (target %s)", rt, target)
+	}
+}
+
+// disableUser sets accountEnabled=false on an Entra user (Microsoft Graph). userID accepts the
+// object id or the userPrincipalName (email) directly.
+func (m *M365) disableUser(ctx context.Context, token, userID string) error {
+	endpoint := m.graphBase() + "/users/" + url.PathEscape(userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint, strings.NewReader(`{"accountEnabled":false}`))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := m.client().Do(req)
+	if err != nil {
+		return fmt.Errorf("m365 disable %s: %w", userID, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+		return fmt.Errorf("m365 disable %s: HTTP %d: %s (needs the User.ReadWrite.All write scope)", userID, resp.StatusCode, body)
+	}
+	return nil
 }

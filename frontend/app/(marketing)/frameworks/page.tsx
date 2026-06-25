@@ -1,15 +1,16 @@
 import Link from "next/link";
-import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
-import { SITE_URL } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata = pageMeta({
   title: "Compliance Frameworks — SOC 2, ISO 27001, GDPR & 11 more | TensorShield",
   description:
     "TensorShield automates 14 compliance frameworks — SOC 2, ISO 27001, PCI-DSS, HIPAA, CIS, NIST CSF, GDPR, ISO 27701, NIST 800-53/171, CCPA, SOX, FedRAMP, and India DPDP — with continuous monitoring and signed evidence.",
-  alternates: { canonical: `${SITE_URL}/frameworks` },
-};
+  path: "/frameworks",
+});
 
 const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government"];
 
@@ -22,8 +23,8 @@ export default function FrameworksIndex() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
+        <AuroraBackdrop />
+        <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">{FRAMEWORKS.length} frameworks, automated</span>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">Compliance frameworks we automate</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">

@@ -6,7 +6,13 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
     title: "Product",
     links: [
       { href: "/product", label: "How it works" },
+      { href: "/cross-detection", label: "Unified platform" },
+      { href: "/ai-security-engineer", label: "AI security engineer" },
+      { href: "/ai-pentest", label: "AI pentesting" },
       { href: "/vapt", label: "VAPT reports" },
+      { href: "/supply-chain", label: "Supply-chain security" },
+      { href: "/saas-posture", label: "SaaS & identity posture" },
+      { href: "/ci-cd", label: "CI/CD pipeline" },
       { href: "/integrations", label: "Integrations" },
       { href: "/frameworks", label: "Frameworks" },
       { href: "/pricing", label: "Pricing" },
@@ -14,11 +20,19 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
     ],
   },
   {
+    title: "Free tools",
+    links: [
+      { href: "/scan", label: "Questionnaire scan" },
+      { href: "/soc2-readiness", label: "SOC 2 self-assessment" },
+      { href: "/sample-report", label: "Sample report" },
+      { href: "/blog", label: "Blog" },
+    ],
+  },
+  {
     title: "Company",
     links: [
       { href: "/about", label: "About" },
       { href: "/demo", label: "Book a demo" },
-      { href: "/scan", label: "Free domain scan" },
       { href: "/login", label: "Sign in" },
     ],
   },
@@ -35,7 +49,7 @@ export function MarketingFooter() {
   return (
     <footer className="border-t border-border bg-surface">
       <div className="mx-auto max-w-6xl px-5 py-14">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div>
             <Link href="/" className="flex items-center gap-2.5">
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import {
   ArrowRight, ScanLine, ShieldAlert, ShieldCheck, Wrench, Inbox as InboxIcon,
-  Boxes, Radar, Plug, CheckCircle2,
+  Boxes, Radar, Plug, CheckCircle2, Spline, Layers,
 } from "lucide-react";
-import { api, FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/api";
+import { api, FRAMEWORK_LABEL } from "@/lib/api";
 import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
+import { categoryBreakdown } from "@/lib/categories";
 import { Card, SectionTitle, SeverityBadge, Empty } from "@/components/ui/primitives";
 import { FirstRun } from "@/components/onboarding/first-run";
 
@@ -38,16 +39,26 @@ export default async function OverviewPage() {
   const connections = await api.connections();
   if (connections.length === 0) return <FirstRun />;
 
-  const [findings, incidents, approvals, engagements, assets] = await Promise.all([
+  // One concurrent wave for the whole dashboard. Compliance posture for every framework arrives
+  // in a SINGLE batched call (postureSummary) instead of fanning out 14 per-framework requests,
+  // and it rides in the same Promise.all as everything else.
+  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, postureResp] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
     api.engagements(),
     api.assets(),
+    api.attackPaths(),
+    api.issues(),
+    api.postureSummary(),
   ]);
 
   const counts = severityCounts(findings);
+  const byCategory = categoryBreakdown(findings);
   const risk = riskRating(counts);
+  // Noise-reduction: how many duplicate findings the unified-issues layer collapsed.
+  const merged = Math.max(0, issuesResp.raw_findings - issuesResp.count);
+  const noisePct = issuesResp.raw_findings > 0 ? Math.round((merged / issuesResp.raw_findings) * 100) : 0;
   const protectedNow = risk === "Clear";
 
   const sub = protectedNow
@@ -65,15 +76,7 @@ export default async function OverviewPage() {
   for (const e of engagements) if (e.completed_at) events.push({ at: e.completed_at, kind: "scanned", title: "Scanned an asset", meta: e.trigger });
   events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
-  const posture = await Promise.all(
-    FRAMEWORKS.map(async (f) => {
-      const cs = await api.posture(f);
-      if (cs.length === 0) return null;
-      const gap = cs.filter((c) => c.state === "gap").length;
-      return { f, met: cs.length - gap, gap };
-    }),
-  );
-  const frameworks = posture.filter(Boolean) as { f: string; met: number; gap: number }[];
+  const frameworks = postureResp.frameworks;
   const resolvedCount = incidents.filter((i) => i.status === "resolved").length;
 
   return (
@@ -168,9 +171,9 @@ export default async function OverviewPage() {
             {frameworks.length === 0 ? (
               <div className="p-2"><Empty>No control state yet.</Empty></div>
             ) : (
-              frameworks.map(({ f, met, gap }) => (
-                <Link key={f} href={`/compliance/${f}`} className="flex items-center justify-between rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm transition hover:border-border-strong">
-                  <span className="font-medium">{FRAMEWORK_LABEL[f] ?? f}</span>
+              frameworks.map(({ framework, gap }) => (
+                <Link key={framework} href={`/compliance/${framework}`} className="flex items-center justify-between rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm transition hover:border-border-strong">
+                  <span className="font-medium">{FRAMEWORK_LABEL[framework] ?? framework}</span>
                   <span className="inline-flex items-center gap-2 text-xs">
                     {gap === 0 ? (
                       <span className="inline-flex items-center gap-1 text-pulse"><CheckCircle2 className="h-3.5 w-3.5" /> on track</span>
@@ -184,6 +187,70 @@ export default async function OverviewPage() {
           </Card>
         </div>
       </div>
+
+      {/* Noise reduction — the unified-platform value made concrete: duplicate
+          findings across scanners collapsed into single issues. Shown when it helped. */}
+      {merged > 0 && (
+        <Link href="/issues" className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-5 py-3.5 transition hover:border-border-strong">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-pulse-soft text-pulse">
+            <Layers className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1 text-sm">
+            <span className="font-semibold">{issuesResp.raw_findings} findings unified into {issuesResp.count} issues</span>
+            <span className="text-muted"> — {noisePct}% less duplicate noise to triage.</span>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
+        </Link>
+      )}
+
+      {/* Cross-surface attack paths — the unified cross-detection signal: a single
+          weakness chaining across surfaces to a crown jewel. Only shown when present. */}
+      {attackPaths.count > 0 && (
+        <Link
+          href="/attack-paths"
+          className="group flex items-center gap-3 rounded-xl border border-high/40 bg-high/5 px-5 py-4 transition hover:border-high/60"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-high/10 text-high">
+            <Spline className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">
+              {attackPaths.count} cross-surface attack path{attackPaths.count === 1 ? "" : "s"}
+            </div>
+            <p className="text-xs text-muted">
+              A weakness on one surface chains, through a shared identifier, to a crown jewel on another.
+            </p>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-high transition group-hover:translate-x-0.5" />
+        </Link>
+      )}
+
+      {/* Risk by category — where the risk lives, at a glance */}
+      {byCategory.length > 0 && (
+        <div>
+          <SectionTitle action={<Link href="/findings" className="text-[11px] font-medium text-accent hover:underline">all findings →</Link>}>
+            <span className="inline-flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-faint" /> Risk by category</span>
+          </SectionTitle>
+          <Card className="p-0">
+            <ul className="divide-y divide-border">
+              {byCategory.map((c) => (
+                <li key={c.category}>
+                  <Link href="/findings" className="flex items-center gap-3 px-5 py-3 transition hover:bg-surface-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{c.category}</span>
+                    <span className="flex items-center gap-2.5 text-xs">
+                      {c.critical > 0 && <span className="font-semibold text-critical">{c.critical} critical</span>}
+                      {c.high > 0 && <span className="font-semibold text-high">{c.high} high</span>}
+                      {c.medium > 0 && <span className="text-medium">{c.medium} med</span>}
+                      {c.low > 0 && <span className="text-faint">{c.low} low</span>}
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-faint">{c.total}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      )}
 
       {/* Top findings — for the security-minded, de-emphasized */}
       {findings.length > 0 && (

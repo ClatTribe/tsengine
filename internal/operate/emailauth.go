@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -15,10 +16,17 @@ type Resolver interface {
 
 // defaultDKIMSelectors are the selectors the big providers publish under. DKIM keys live
 // at <selector>._domainkey.<domain> and DNS can't enumerate selectors, so we probe the
-// well-known ones: google (Google Workspace), selector1/selector2 (Microsoft 365),
-// k1/k2/k3 (Mailchimp/Mandrill, SendGrid via "s1"/"s2"), plus the generic defaults.
+// well-known stable ones. NOTE: some providers (notably Google for its own domains) rotate
+// DATE-based selectors (e.g. 20230601) that can't be guessed — so a "no DKIM" result from this
+// probe is best-effort/inconclusive, never proof of absence (the assess message says so).
 var defaultDKIMSelectors = []string{
 	"google", "selector1", "selector2", "default", "dkim", "mail", "k1", "k2", "k3", "s1", "s2",
+	"amazonses",         // AWS SES
+	"fm1", "fm2", "fm3", // Fastmail
+	"protonmail", "protonmail2", "protonmail3", // Proton Mail
+	"scph0", "smtp", // SendGrid / generic
+	"zmail",                // Zoho Mail
+	"sig1", "key1", "key2", // common generics
 }
 
 // EmailAuth resolves a domain's live email-auth posture (DMARC / SPF / DKIM) from public
@@ -67,13 +75,21 @@ func (e *EmailAuth) FetchDomain(ctx context.Context, domain string) DomainConfig
 	dc := DomainConfig{Name: domain}
 	r := e.resolver()
 
-	// DMARC: _dmarc.<domain>, record with v=DMARC1; p= tag is the policy.
+	// DMARC: _dmarc.<domain>, record with v=DMARC1; p= tag is the policy. pct/sp are depth
+	// signals (partial enforcement / subdomain gap).
 	if recs, err := r.LookupTXT(ctx, "_dmarc."+domain); err == nil {
 		dc.DMARC = parseDMARC(recs)
+		if dc.DMARC != "" {
+			dc.DMARCPct = dmarcPct(recs)
+			dc.DMARCSub = dmarcSubPolicy(recs)
+		}
 	}
-	// SPF: a TXT on the apex starting v=spf1.
+	// SPF: a TXT on the apex starting v=spf1; the `all` qualifier tells us if it's enforcing.
 	if recs, err := r.LookupTXT(ctx, domain); err == nil {
 		dc.SPF = hasSPF(recs)
+		if dc.SPF {
+			dc.SPFAll = spfAllQualifier(recs)
+		}
 	}
 	// DKIM: any known selector publishing a v=DKIM1 / p= record.
 	for _, sel := range e.selectors() {
@@ -113,6 +129,69 @@ func hasSPF(recs []string) bool {
 		}
 	}
 	return false
+}
+
+// spfAllQualifier returns the qualifier on the SPF `all` mechanism: "-" (fail, strict), "~"
+// (softfail), "?" (neutral), "+" (pass — permits anyone). "" when there is no `all` mechanism.
+// "+" and "?" are permissive: they defeat SPF by letting any sender pass.
+func spfAllQualifier(recs []string) string {
+	for _, rec := range recs {
+		l := strings.ToLower(strings.TrimSpace(rec))
+		if !strings.HasPrefix(l, "v=spf1") {
+			continue
+		}
+		for _, tok := range strings.Fields(l) {
+			switch tok {
+			case "-all":
+				return "-"
+			case "~all":
+				return "~"
+			case "?all":
+				return "?"
+			case "+all", "all":
+				return "+" // a bare `all` mechanism defaults to the "+" (pass) qualifier
+			}
+		}
+	}
+	return ""
+}
+
+// dmarcPct returns the DMARC pct= value (the % of mail the policy is applied to). Defaults to
+// 100 when a DMARC record is present without an explicit pct (the RFC default).
+func dmarcPct(recs []string) int {
+	for _, rec := range recs {
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(rec)), "v=dmarc1") {
+			continue
+		}
+		for _, tag := range strings.Split(rec, ";") {
+			if v, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(tag)), "pct="); ok {
+				if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n >= 0 && n <= 100 {
+					return n
+				}
+			}
+		}
+		return 100 // DMARC present, no explicit pct → RFC default
+	}
+	return 0
+}
+
+// dmarcSubPolicy returns the DMARC sp= (subdomain policy) value, or "" when absent (subdomains
+// then inherit the main p= policy).
+func dmarcSubPolicy(recs []string) string {
+	for _, rec := range recs {
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(rec)), "v=dmarc1") {
+			continue
+		}
+		for _, tag := range strings.Split(rec, ";") {
+			if v, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(tag)), "sp="); ok {
+				switch p := strings.TrimSpace(v); p {
+				case "reject", "quarantine", "none":
+					return p
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func hasDKIM(recs []string) bool {

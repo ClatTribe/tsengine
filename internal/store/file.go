@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -119,6 +120,69 @@ func (f *File) UpsertControlState(ctx context.Context, cs platform.ControlState)
 
 func (f *File) PutIncident(ctx context.Context, i platform.Incident) error {
 	if err := f.Memory.PutIncident(ctx, i); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutRisk(ctx context.Context, r platform.Risk) error {
+	if err := f.Memory.PutRisk(ctx, r); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error {
+	if err := f.Memory.PutAuditEngagement(ctx, e); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutPolicy(ctx context.Context, p platform.Policy) error {
+	if err := f.Memory.PutPolicy(ctx, p); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error {
+	if err := f.Memory.PutIgnoreRule(ctx, ir); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error {
+	if err := f.Memory.DeleteIgnoreRule(ctx, tenantID, issueKey); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutExclusionRule(ctx context.Context, er platform.ExclusionRule) error {
+	if err := f.Memory.PutExclusionRule(ctx, er); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) DeleteExclusionRule(ctx context.Context, tenantID, id string) error {
+	if err := f.Memory.DeleteExclusionRule(ctx, tenantID, id); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutRuntimeEvent(ctx context.Context, ev platform.RuntimeEvent) error {
+	if err := f.Memory.PutRuntimeEvent(ctx, ev); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutPentest(ctx context.Context, eng pentest.Engagement) error {
+	if err := f.Memory.PutPentest(ctx, eng); err != nil {
 		return err
 	}
 	return f.persist()

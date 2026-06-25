@@ -76,7 +76,10 @@ func (h *Handler) Filter(_ context.Context, _ types.Asset, in []asset.Dispatch) 
 }
 
 func (h *Handler) Normalize(results []tool.Result) []types.Finding {
-	return common.Normalize(results)
+	out := common.Normalize(results)
+	// Supply-chain malware: match the syft SBOM's dependency set against the
+	// known-malicious corpus (distinct from the SCA tools' CVE findings).
+	return append(out, common.SupplyChainFindings(results)...)
 }
 
 // SkipDirs is the file-tree exclusion set (arch.md "repository" filter).
@@ -104,5 +107,9 @@ var anchorNames = []string{
 }
 
 var registryNames = []string{
+	// govulncheck — Go call-graph reachability (SCA false-positive killer).
+	// Escalation-fired when the tree looks like a Go project; reports only
+	// reachable vulnerabilities, corroborating the SCA tools' raw CVE list.
+	"govulncheck",
 	// Phase 3.x: CodeQL, brakeman, gosec, staticcheck, snyk-code, kics, terrascan
 }

@@ -1,10 +1,14 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+
 import { ArrowRight, Target, Heart, Sparkles } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "About — TensorShield",
   description: "Security shouldn't require a security hire. We're building the fractional security team every SMB deserves.",
-};
+  path: "/about",
+});
 
 const VALUES = [
   { icon: Target, t: "Outcomes, not dashboards", d: "We measure ourselves by issues fixed and audits passed — not by how many charts we can show you." },
@@ -16,8 +20,8 @@ export default function About() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
+        <AuroraBackdrop />
+        <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Our mission</span>
           <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
             Security shouldn&apos;t require a security hire.

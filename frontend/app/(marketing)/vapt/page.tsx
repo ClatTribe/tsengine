@@ -1,21 +1,24 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
 import {
   ShieldCheck, ArrowRight, FileCheck2, Bug, Crosshair, Fingerprint, ListChecks,
   Wrench, Radar, CheckCircle2, XCircle, Minus, ScrollText, BadgeCheck, ClipboardCheck,
 } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "VAPT report — continuous, evidence-grounded penetration testing | TensorShield",
   description:
-    "An always-current VAPT / pentest report: every finding grounded in scanner evidence, mapped to CWE, OWASP Top 10 & MITRE ATT&CK, with a recommended fix and a signed attestation. Not a point-in-time PDF that goes stale.",
-};
+    "An always-current VAPT / pentest report: the strongest findings are exploitation-proven with a captured proof-of-concept, every finding grounded in scanner evidence and mapped to CWE, OWASP Top 10 & MITRE ATT&CK, with a recommended fix and a signed attestation. Not a point-in-time PDF that goes stale.",
+  path: "/vapt",
+});
 
 // What a single finding in the report carries — the "are we at par on quality" answer made concrete.
 const FINDING_FIELDS = [
   { icon: Crosshair, t: "Severity + CVSS", d: "Risk-rated and ordered worst-first, with the CVSS base score where the finding carries a CVE." },
   { icon: Bug, t: "CWE + OWASP Top 10", d: "Every finding maps to its CWE and its OWASP Top 10 (2021) category — the taxonomy an enterprise reviewer expects." },
   { icon: Crosshair, t: "MITRE ATT&CK", d: "Techniques attributed per finding, so the report speaks the language of a SOC and a red team." },
-  { icon: Fingerprint, t: "Evidence strength", d: "Tool-confirmed (verified / corroborated) vs pattern-match — and a CISA KEV flag when it's actively exploited in the wild." },
+  { icon: Fingerprint, t: "Evidence strength — incl. captured PoC", d: "Three tiers labelled inline: exploitation-proven (a reproducible proof-of-concept was captured), tool-confirmed (verified / corroborated), and pattern-match — plus a CISA KEV flag when it's actively exploited in the wild. The strongest tier carries the proof." },
   { icon: Wrench, t: "Recommended fix", d: "An actionable remediation for the finding's class — and where TensorShield has already prepared the fix, it says so." },
   { icon: ScrollText, t: "Tool & rule evidence", d: "The exact scanner and rule that proves it. Nothing is asserted that a tool did not demonstrate." },
 ];
@@ -34,7 +37,7 @@ const COMPARE_ROWS: { label: string; cells: string[] }[] = [
 
 const QUALITY = [
   { icon: Fingerprint, t: "Grounded — never guessed", d: "The engine can't record a vulnerability no tool supports. Every line in the report cites the scanner and rule that proves it (the anti-hallucination guard) — so there are no invented findings inflating the count." },
-  { icon: BadgeCheck, t: "Tool-confirmed, not pattern-only", d: "Findings are labelled verified / corroborated vs pattern-match, and actively-exploited issues are flagged against CISA KEV — the accuracy signals a manual pentester earns by hand." },
+  { icon: BadgeCheck, t: "Exploitation-proven, not pattern-only", d: "The strongest findings carry a captured, reproducible proof-of-concept (exploitation-proven); others are labelled verified / corroborated vs pattern-match, and actively-exploited issues are flagged against CISA KEV — the accuracy signals a manual pentester earns by hand." },
   { icon: ListChecks, t: "Standards-complete", d: "CWE, OWASP Top 10 (2021) and MITRE ATT&CK on every finding, via the published crosswalks — the same taxonomy a $20k engagement deliverable uses." },
   { icon: Radar, t: "Best-in-class detection underneath", d: "The report is built on 30+ wrapped OSS scanners with recall on par with the standalone tools — depth that matches a human team's toolkit, run continuously." },
 ];
@@ -44,8 +47,8 @@ export default function VAPT() {
     <>
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
+        <AuroraBackdrop />
+        <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
             <FileCheck2 className="h-3.5 w-3.5 text-accent" /> VAPT &amp; penetration-test reporting
           </span>

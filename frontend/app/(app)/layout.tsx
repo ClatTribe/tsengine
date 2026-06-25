@@ -12,11 +12,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getSession();
   if (!session) redirect("/login");
 
-  // An invited member with a temporary password is gated out of the app (the API returns
-  // 403 password_change_required) until they set their own — send them to the rotation
-  // screen, which lives outside (app) so this check can't loop.
+  // getSession() only checks the cookie EXISTS — not that its token still authenticates. A cookie
+  // can outlive its server-side session (the platform was reset/re-seeded, or the session expired),
+  // in which case every authed API call silently 401s and the app renders EMPTY — no findings, no
+  // account info — which reads as "my data vanished". If the token no longer resolves to a user,
+  // the session is stale: send them to /login to re-authenticate instead of a hollow app. (/login
+  // is outside (app), so this can't loop.)
   const me = await api.me();
-  if (me?.must_change_password) redirect("/change-password");
+  if (!me) redirect("/login");
+
+  // An invited member with a temporary password is gated out of the app until they set their own
+  // — send them to the rotation screen, which also lives outside (app) so this check can't loop.
+  if (me.must_change_password) redirect("/change-password");
 
   const [findings, approvals, tenant] = await Promise.all([api.findings(), api.approvals(), api.tenant()]);
   const risk = riskRating(severityCounts(findings));

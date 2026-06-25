@@ -1,10 +1,14 @@
 import Link from "next/link";
+import { pageMeta } from "@/lib/seo";
+import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
+import { Reveal } from "@/components/marketing/reveal";
 import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "Pricing — TensorShield",
   description: "Simple, transparent pricing for your fractional security team. Start free.",
-};
+  path: "/pricing",
+});
 
 const TIERS = [
   {
@@ -50,6 +54,7 @@ const TIERS = [
     highlight: false,
     features: [
       "Everything in Growth",
+      "Autonomous AI pentest — exploitation-proven (XBOW-class)",
       "SSO / SAML + role-based access",
       "On-demand human expert review",
       "Dedicated success engineer",
@@ -94,6 +99,7 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
       { label: "Fixes prepared / month", cells: ["3", "Unlimited", "Unlimited"] },
       { label: "Human-in-the-loop approvals", cells: ["no", "yes", "yes"] },
       { label: "Signed decision ledger", cells: ["yes", "yes", "yes"] },
+      { label: "Autonomous AI pentest — exploitation-proven (XBOW-class)", cells: ["no", "Add-on", "yes"] },
       { label: "On-demand human expert review", cells: ["no", "no", "yes"] },
     ],
   },
@@ -113,7 +119,7 @@ function ComparePlans() {
   return (
     <section className="mx-auto max-w-4xl px-5 pb-4 pt-14">
       <h2 className="text-center text-2xl font-semibold tracking-tight">Compare plans</h2>
-      <div className="mt-8 overflow-x-auto">
+      <Reveal delay={60} className="mt-8 overflow-x-auto">
         <table className="w-full min-w-[560px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
@@ -134,7 +140,7 @@ function ComparePlans() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -171,27 +177,31 @@ export default function Pricing() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-3xl px-5 pb-6 pt-20 text-center">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
+        {/* animated aurora backdrop — consistent with the landing */}
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 left-1/2 h-[24rem] w-[34rem] -translate-x-1/2 rounded-full bg-accent/15 blur-[110px] animate-aurora" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(16,24,40,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(16,24,40,0.025)_1px,transparent_1px)] bg-[size:44px_44px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
+        </div>
+        <Reveal as="div" className="relative mx-auto max-w-3xl px-5 pb-6 pt-20 text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-accent" /> Start free · upgrade when you grow
           </span>
           <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">Pricing that grows with you</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
             One fractional security team, one simple plan. No per-seat surprises, no security hire.
           </p>
-        </div>
+        </Reveal>
       </section>
 
       <section className="mx-auto max-w-6xl px-5 pb-8">
-        <div className="grid gap-5 lg:grid-cols-3">
+        <Reveal delay={80} className="grid items-stretch gap-5 lg:grid-cols-3">
           {TIERS.map((t) => (
             <div
               key={t.name}
               className={
                 t.highlight
-                  ? "relative rounded-2xl border-2 border-accent bg-surface p-6 shadow-card-hover"
-                  : "relative rounded-2xl border border-border bg-surface p-6 shadow-card"
+                  ? "relative flex flex-col rounded-2xl border-2 border-accent bg-surface p-6 shadow-elevated transition hover:-translate-y-1 hover:shadow-card-hover"
+                  : "relative flex flex-col rounded-2xl border border-border bg-surface p-6 shadow-card transition hover:-translate-y-1 hover:border-accent/40 hover:shadow-card-hover"
               }
             >
               {t.highlight && (
@@ -224,7 +234,7 @@ export default function Pricing() {
               </ul>
             </div>
           ))}
-        </div>
+        </Reveal>
         <p className="mt-6 text-center text-xs text-faint">
           Prices in USD. Annual billing saves ~20% vs monthly. All plans include continuous monitoring and the signed ledger.
         </p>
@@ -235,15 +245,17 @@ export default function Pricing() {
 
       {/* FAQ */}
       <section className="mx-auto max-w-3xl px-5 py-20">
+        {/* schema.org FAQPage — same array as below, so the markup matches the visible Q&A. */}
+        <FaqJsonLd items={FAQ} />
         <h2 className="text-center text-2xl font-semibold tracking-tight">Frequently asked</h2>
-        <div className="mt-8 divide-y divide-border rounded-2xl border border-border bg-surface">
+        <Reveal delay={60} className="mt-8 divide-y divide-border rounded-2xl border border-border bg-surface">
           {FAQ.map(([q, a]) => (
             <div key={q} className="p-5">
               <h3 className="text-sm font-semibold text-ink">{q}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{a}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* CTA */}

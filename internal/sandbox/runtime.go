@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -37,6 +38,12 @@ type SpawnOptions struct {
 	// credentials. Values live only for the container's lifetime
 	// (--rm) and are never written to disk inside the sandbox.
 	Env []string
+
+	// Hardening is the per-sandbox security + resource confinement
+	// (docs/production-single-box.md, threat model T1/T2/T4/T5). When left
+	// zero, Spawn fills it from the environment (HardeningFromEnv) so the
+	// safe defaults (resource limits + a writable /tmp tmpfs) always apply.
+	Hardening Hardening
 }
 
 // Mount is a read-only bind mount from host into the sandbox container.
@@ -44,6 +51,75 @@ type Mount struct {
 	HostPath      string
 	ContainerPath string
 }
+
+// Hardening captures the security + resource confinement applied to each
+// ephemeral sandbox. It is the single-box isolation control surface
+// (docs/production-single-box.md §5 P1).
+//
+// Defaults (HardeningFromEnv) are chosen to confine WITHOUT breaking scans:
+// resource/PID/file limits + a writable /tmp tmpfs apply to every sandbox
+// (DoS protection, T5). The stricter controls — read-only rootfs, a non-root
+// user, and an isolated network — are OPT-IN (empty/false by default) and are
+// switched on by the production profile (docker-compose.prod.yml / the deploy
+// script) once validated against the shipped sandbox image, so the default
+// `docker run` path keeps working for dev + the existing E2E.
+type Hardening struct {
+	Memory    string // --memory (e.g. "4g"); "" → no limit
+	CPUs      string // --cpus (e.g. "2"); "" → no limit
+	PidsLimit string // --pids-limit (e.g. "1024"); "" → no limit
+	NoFile    string // --ulimit nofile=<N>; "" → unset
+	TmpfsTmp  string // size of a writable /tmp tmpfs (e.g. "512m"); "" → none
+	ReadOnly  bool   // --read-only rootfs (opt-in; relies on the /tmp tmpfs for scratch)
+	User      string // --user (e.g. "65534:65534" = nobody); "" → image default
+	Network   string // --network (e.g. an isolated bridge); "" → docker default
+}
+
+// DefaultHardening returns the safe, non-breaking defaults: confine resources +
+// PIDs + open files and give a writable /tmp, but do NOT force read-only rootfs,
+// a non-root user, or a network (those are opt-in via env / the prod profile).
+func DefaultHardening() Hardening {
+	return Hardening{Memory: "4g", CPUs: "2", PidsLimit: "1024", NoFile: "4096", TmpfsTmp: "512m"}
+}
+
+// HardeningFromEnv overlays TSENGINE_SANDBOX_* env vars on DefaultHardening.
+// A value of "off"/"none"/"0"/"unlimited" for a limit disables it (sets it "").
+func HardeningFromEnv() Hardening {
+	h := DefaultHardening()
+	if v, ok := os.LookupEnv("TSENGINE_SANDBOX_MEMORY"); ok {
+		h.Memory = unlimitable(v)
+	}
+	if v, ok := os.LookupEnv("TSENGINE_SANDBOX_CPUS"); ok {
+		h.CPUs = unlimitable(v)
+	}
+	if v, ok := os.LookupEnv("TSENGINE_SANDBOX_PIDS"); ok {
+		h.PidsLimit = unlimitable(v)
+	}
+	if v, ok := os.LookupEnv("TSENGINE_SANDBOX_NOFILE"); ok {
+		h.NoFile = unlimitable(v)
+	}
+	if v, ok := os.LookupEnv("TSENGINE_SANDBOX_TMPFS_TMP"); ok {
+		h.TmpfsTmp = unlimitable(v)
+	}
+	if v := os.Getenv("TSENGINE_SANDBOX_READONLY"); v == "1" || v == "true" {
+		h.ReadOnly = true
+	}
+	h.User = strings.TrimSpace(os.Getenv("TSENGINE_SANDBOX_USER"))       // "" = image default
+	h.Network = strings.TrimSpace(os.Getenv("TSENGINE_SANDBOX_NETWORK")) // "" = docker default
+	return h
+}
+
+// unlimitable maps the "disable this limit" sentinels to "".
+func unlimitable(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "off", "none", "0", "unlimited":
+		return ""
+	}
+	return strings.TrimSpace(v)
+}
+
+// isZero reports whether the Hardening is the zero value (caller left it unset →
+// Spawn fills it from the environment).
+func (h Hardening) isZero() bool { return h == Hardening{} }
 
 // Spawn launches a sandbox container, waits for the tool-server's
 // /healthz endpoint to become ready, and returns its Info.
@@ -56,6 +132,9 @@ func Spawn(ctx context.Context, opts SpawnOptions) (*Info, error) {
 	}
 	if opts.HealthTimeout == 0 {
 		opts.HealthTimeout = 30 * time.Second
+	}
+	if opts.Hardening.isZero() {
+		opts.Hardening = HardeningFromEnv()
 	}
 
 	token, err := generateToken()
@@ -87,11 +166,22 @@ func Spawn(ctx context.Context, opts SpawnOptions) (*Info, error) {
 
 	info := &Info{
 		ContainerID: containerID,
-		APIURL:      fmt.Sprintf("http://127.0.0.1:%d", port),
 		AuthToken:   token,
 		ImageDigest: digest,
 		Image:       opts.Image,
 		Port:        port,
+	}
+	// Pick the connection URL per the model in buildRunArgs. On an isolated network the
+	// host port isn't published, so resolve the container's IP and connect there.
+	if net := opts.Hardening.Network; net != "" {
+		ip, ipErr := containerIP(ctx, containerID, net)
+		if ipErr != nil {
+			_ = Destroy(context.Background(), info)
+			return nil, fmt.Errorf("sandbox.Spawn: resolve container ip on %q: %w", net, ipErr)
+		}
+		info.APIURL = fmt.Sprintf("http://%s:%d", ip, sandboxToolServerPort)
+	} else {
+		info.APIURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	}
 
 	if err := waitHealthy(ctx, info, opts.HealthTimeout); err != nil {
@@ -153,7 +243,6 @@ func waitHealthy(ctx context.Context, info *Info, timeout time.Duration) error {
 func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	args := []string{
 		"run", "-d", "--rm",
-		"-p", fmt.Sprintf("127.0.0.1:%d:8080", port),
 		"-e", "TSENGINE_AUTH_TOKEN=" + token,
 		"--cap-drop=ALL",
 		"--security-opt", "no-new-privileges",
@@ -166,6 +255,48 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 		// (recall 1.0→0.0). The alias is harmless where it already exists.
 		"--add-host", "host.docker.internal:host-gateway",
 	}
+
+	// Per-sandbox hardening (docs/production-single-box.md §5 P1). Limits + a
+	// writable /tmp tmpfs apply by default; read-only rootfs / non-root user /
+	// isolated network are opt-in (empty by default).
+	h := opts.Hardening
+
+	// Connection model:
+	//   - no isolated network (dev / host-run platform): publish the tool-server on the
+	//     host loopback and connect at 127.0.0.1:port.
+	//   - isolated network (containerized platform, prod): DON'T publish a host port — a
+	//     containerized platform can't reach the host's 127.0.0.1; instead the platform
+	//     joins the same network and reaches the sandbox at <container-ip>:8080. This is
+	//     also the T4 isolation control (the sandbox is off the platform/DB/frontend net).
+	if h.Network == "" {
+		args = append(args, "-p", fmt.Sprintf("127.0.0.1:%d:8080", port))
+	}
+	if h.ReadOnly {
+		args = append(args, "--read-only")
+	}
+	if h.TmpfsTmp != "" {
+		// nosuid+nodev: a writable scratch dir must not become a privilege vector.
+		args = append(args, "--tmpfs", "/tmp:rw,nosuid,nodev,size="+h.TmpfsTmp)
+	}
+	if h.User != "" {
+		args = append(args, "--user", h.User)
+	}
+	if h.Network != "" {
+		args = append(args, "--network", h.Network)
+	}
+	if h.Memory != "" {
+		args = append(args, "--memory", h.Memory)
+	}
+	if h.CPUs != "" {
+		args = append(args, "--cpus", h.CPUs)
+	}
+	if h.PidsLimit != "" {
+		args = append(args, "--pids-limit", h.PidsLimit)
+	}
+	if h.NoFile != "" {
+		args = append(args, "--ulimit", "nofile="+h.NoFile)
+	}
+
 	for hostname, ip := range opts.ExtraHosts {
 		args = append(args, "--add-host", hostname+":"+ip)
 	}
@@ -205,6 +336,28 @@ func imageDigest(ctx context.Context, image string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// sandboxToolServerPort is the in-container port the tool-server listens on. On an
+// isolated network we connect to <container-ip>:8080 directly (no host publish).
+const sandboxToolServerPort = 8080
+
+// containerIP returns the sandbox container's IP address on the given docker network.
+// Used when the sandbox joins a dedicated network instead of publishing a host port:
+// a containerized platform reaches it container-to-container at <ip>:8080. The sandbox
+// joins exactly one network, so we range over its networks and take the first IP.
+func containerIP(ctx context.Context, containerID, network string) (string, error) {
+	out, err := exec.CommandContext(ctx, "docker", "inspect", //nolint:gosec // literal "docker"; id from our own run
+		"-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", containerID).Output()
+	if err != nil {
+		return "", fmt.Errorf("inspect container ip: %w (%s)", err, exitStderr(err))
+	}
+	for _, ip := range strings.Fields(string(out)) {
+		if ip != "" {
+			return ip, nil
+		}
+	}
+	return "", fmt.Errorf("no IP for container %s on network %q", containerID, network)
 }
 
 func exitStderr(err error) string {

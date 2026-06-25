@@ -1,5 +1,7 @@
+import { Bug } from "lucide-react";
 import { api } from "@/lib/api";
 import { FindingsTable } from "@/components/findings/findings-table";
+import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +13,11 @@ export default async function FindingsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold">Findings</h1>
-        <p className="text-xs text-muted">Everything the agent detected — grounded, prioritized, and acted on.</p>
-      </div>
+      <PageIntro
+        icon={Bug}
+        title="Findings"
+        description="The raw, detailed list of every weakness the agent has detected across your stack — each one backed by tool evidence, ranked by real-world risk, and showing what the agent is already doing about it."
+      />
       <FindingsTable findings={findings} pendingFindingIds={pendingByFinding} />
     </div>
   );

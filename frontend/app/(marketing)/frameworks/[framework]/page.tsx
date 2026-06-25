@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, CheckCircle2, ShieldCheck, FileCheck2, Radar, Lock } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
-import { SITE_URL } from "@/lib/site";
+import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
 
 // Programmatic SEO: one landing page per supported framework, statically generated. The URL
 // (/frameworks/soc2 …) and per-framework <title>/description target the high-intent
@@ -39,13 +40,7 @@ export async function generateMetadata({ params }: { params: Promise<{ framework
   if (!i) return {};
   const title = `${i.label} Compliance Automation for SMBs — TensorShield`;
   const description = `Get ${i.label}-ready without a security hire. TensorShield continuously maps your findings to ${i.label} controls, prepares fixes, and produces signed, auditor-ready evidence. ${i.desc}`;
-  const url = `${SITE_URL}/frameworks/${framework}`;
-  return {
-    title,
-    description,
-    alternates: { canonical: url },
-    openGraph: { title, description, url, type: "website" },
-  };
+  return pageMeta({ title, description, path: `/frameworks/${framework}` });
 }
 
 export default async function FrameworkLanding({ params }: { params: Promise<{ framework: string }> }) {
@@ -59,8 +54,8 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
     <>
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
+        <AuroraBackdrop />
+        <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
             <ShieldCheck className="h-3.5 w-3.5 text-accent" /> {i.category}
           </span>

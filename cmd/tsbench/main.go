@@ -20,6 +20,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/bench"
 	"github.com/ClatTribe/tsengine/internal/cloudagent"
+	"github.com/ClatTribe/tsengine/internal/cloudbench"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudquery"
@@ -78,6 +79,11 @@ func main() {
 	case "cloud-engine":
 		if err := cloudEngineCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench cloud-engine: %v\n", err)
+			os.Exit(1)
+		}
+	case "cloud-baseline":
+		if err := cloudBaselineCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench cloud-baseline: %v\n", err)
 			os.Exit(1)
 		}
 	default:
@@ -193,6 +199,57 @@ func sastCmd(argv []string) error {
 // then score per-CIS-section recall against a mock account seeded with a
 // known-failing posture. Scoped, short-lived credentials are read from the
 // environment by the scan CLI and forwarded into the sandbox — never on disk.
+// cloudBaselineCmd is the OFFLINE CIS scoreboard (ADR 0009 Phase 3): score our cloud lane's
+// CIS-control recall over a fixture account against ground truth, without any sandbox or AWS.
+// It runs the deterministic engine (cloudengine.Assess) over the inventory + provided prowler
+// findings and reports prowler-only vs tsengine (engine+DSPM/CWPP) recall — the laptop/CI proof
+// number that complements the sandbox-gated `tsbench cloud`.
+func cloudBaselineCmd(argv []string) error {
+	fs := flag.NewFlagSet("cloud-baseline", flag.ContinueOnError)
+	dir := fs.String("dir", "bench/cloud_baseline", "fixture dir (inventory.json + prowler.json + ground_truth.json)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	snap, err := cloudgraph.LoadSnapshot(*dir + "/inventory.json")
+	if err != nil {
+		return fmt.Errorf("load inventory: %w", err)
+	}
+	var prowler []types.Finding
+	if b, rerr := os.ReadFile(*dir + "/prowler.json"); rerr == nil {
+		if jerr := json.Unmarshal(b, &prowler); jerr != nil {
+			return fmt.Errorf("parse prowler.json: %w", jerr)
+		}
+	}
+	gtBytes, err := os.ReadFile(*dir + "/ground_truth.json")
+	if err != nil {
+		return fmt.Errorf("read ground_truth.json: %w", err)
+	}
+	var gt struct {
+		Violations []cloudbench.CISExpectation `json:"violations"`
+	}
+	if jerr := json.Unmarshal(gtBytes, &gt); jerr != nil {
+		return fmt.Errorf("parse ground_truth.json: %w", jerr)
+	}
+
+	// prowler-only coverage = the resources its findings touch.
+	var prowlerRes []string
+	for _, f := range prowler {
+		prowlerRes = append(prowlerRes, f.Endpoint)
+	}
+	// tsengine coverage = prowler + everything our engine surfaces (DSPM/CWPP exposures,
+	// attack paths) — the affected resources of every assessment finding.
+	a := cloudengine.Assess(snap, prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{})
+	engineRes := append([]string{}, prowlerRes...)
+	for _, p := range a.Paths {
+		engineRes = append(engineRes, p.Affected...)
+	}
+
+	prowlerScore := cloudbench.ScoreCIS(prowlerRes, gt.Violations)
+	engineScore := cloudbench.ScoreCIS(engineRes, gt.Violations)
+	fmt.Print(cloudbench.RenderCIS(prowlerScore, engineScore))
+	return nil
+}
+
 func cloudCmd(argv []string) error {
 	fs := flag.NewFlagSet("cloud", flag.ContinueOnError)
 	target := fs.String("target", "aws", "cloud provider: aws | gcp | azure")
@@ -615,7 +672,11 @@ func runCmd(argv []string, ablation bool) error {
 	trials := fs.Int("trials", 1, "trial count (median + p10/p90 over N)")
 	binary := fs.String("binary", "./bin/tsengine", "tsengine binary path")
 	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox image")
-	timeout := fs.String("timeout", "300s", "per-scan timeout")
+	// 600s, not 300s: a COLD container_image bench (trivy DB download + the image pull happening
+	// INSIDE the sandbox on the first run) doesn't finish in 300s, which truncated the scan and
+	// produced a false FAIL (recall 0.000 with only the fast tools' findings). 600s covers a cold
+	// run; warm runs still finish early (it's a cap, not a fixed wait).
+	timeout := fs.String("timeout", "600s", "per-scan timeout")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}

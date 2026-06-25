@@ -1,0 +1,7 @@
+[
+  {"id":"p1","rule_id":"prowler::iam_root_mfa","tool":"prowler","severity":"high","title":"Root account MFA not enabled","endpoint":"111122223333:root"},
+  {"id":"p2","rule_id":"prowler::s3_encryption","tool":"prowler","severity":"high","title":"S3 bucket not encrypted at rest","endpoint":"arn:aws:s3:::cust-data"},
+  {"id":"p3","rule_id":"prowler::ec2_sg_ssh_open","tool":"prowler","severity":"high","title":"Security group allows 0.0.0.0/0 on port 22","endpoint":"sg-public-ssh"},
+  {"id":"p4","rule_id":"prowler::cloudtrail_enabled","tool":"prowler","severity":"high","title":"CloudTrail not enabled in all regions","endpoint":"111122223333:cloudtrail"},
+  {"id":"p5","rule_id":"prowler::iam_key_rotation","tool":"prowler","severity":"medium","title":"IAM access key not rotated in 90 days","endpoint":"iam-user-ci"}
+]

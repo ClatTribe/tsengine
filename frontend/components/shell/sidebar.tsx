@@ -12,6 +12,11 @@ import {
   ScrollText,
   FileText,
   UserCheck,
+  AppWindow,
+  Spline,
+  Layers,
+  Crosshair,
+  Scale,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,11 +24,18 @@ const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "pending" as const },
   { href: "/reviews", label: "Reviews", icon: UserCheck },
+  { href: "/issues", label: "Issues", icon: Layers },
   { href: "/findings", label: "Findings", icon: Bug },
+  { href: "/pentest", label: "Pentest", icon: Crosshair },
+  { href: "/attack-paths", label: "Attack paths", icon: Spline },
   { href: "/incidents", label: "Incidents", icon: Activity },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+  { href: "/risks", label: "Risks", icon: Scale },
+  { href: "/audits", label: "Audits", icon: FileText },
+  { href: "/program", label: "Program", icon: ScrollText },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/assets", label: "Assets", icon: Boxes },
+  { href: "/saas-apps", label: "SaaS apps", icon: AppWindow },
   { href: "/activity", label: "Activity", icon: ScrollText },
 ];
 

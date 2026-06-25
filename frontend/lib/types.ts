@@ -14,12 +14,141 @@ export interface Finding {
   confidence?: number;
   threat_intel?: { kev?: unknown; epss?: unknown } | null;
   compliance?: Record<string, string[]> | null;
+  // Cloud-to-Code: a runtime cloud finding traced back to the IaC resource +
+  // file:line that provisioned it. Present only on cloud findings the
+  // correlator confidently linked to source; absent otherwise.
+  code_provenance?: CodeProvenance | null;
+}
+
+export interface CodeProvenance {
+  file: string;
+  line: number;
+  iac_resource: string;
+  matched_on: string;
+  match_basis: string;
+  confidence: string; // "high" | "medium"
+}
+
+// Cross-surface attack path (GET /v1/attack-paths) — a finding on one surface
+// that bridges, via a concrete shared identifier, to a crown jewel on another.
+export interface AttackStep {
+  asset_type: string;
+  asset_target: string;
+  finding_id: string;
+  title: string;
+  severity: string;
+  verified?: boolean;
+  via_entity?: string; // the shared identifier that leads to the NEXT step
+  crown_jewel?: boolean;
+}
+
+export interface AttackPath {
+  severity: string;
+  steps: AttackStep[];
+}
+
+export interface AttackPaths {
+  attack_paths: AttackPath[];
+  count: number;
+}
+
+// Unified issue (GET /v1/issues) — the same weakness reported by one or more
+// scanners across surfaces, collapsed into one row ("one issue, many signals").
+export interface Issue {
+  key: string;
+  title: string;
+  severity: string;
+  cve?: string;
+  endpoint?: string;
+  tools: string[];
+  count: number;
+  confirmed: boolean; // ≥2 independent scanners agree
+  finding_ids: string[];
+  attacked?: boolean; // endpoint observed under attack in production (runtime signal)
+  attack_count?: number;
+  // Live-exploitable fusion (the ACSP "active/reachable/exploitable" lens): genuinely live, not
+  // just present — under attack, OR internet-exposed on an attack path, OR exposed+serious+corroborated.
+  live?: boolean;
+  live_reason?: string;
+  exposed?: boolean;
+  in_attack_path?: boolean;
+}
+
+export interface IssuesResponse {
+  issues: Issue[];
+  count: number;
+  raw_findings: number;
+  confirmed: number;
+  ignored?: number;
+  excluded?: number; // findings dropped by custom exclusion rules
+  attacked?: number; // issues observed under attack in production
+  live?: number; // issues that are genuinely live-exploitable (the ACSP fusion)
+}
+
+// A custom noise-filter rule (Aikido "custom rules": exclude paths/packages/conditions).
+export interface ExclusionRule {
+  id: string;
+  tenant_id: string;
+  field: string; // rule_id | package | path | cve | any
+  pattern: string;
+  reason?: string;
+  note?: string;
+  by?: string;
+  at?: string;
+}
+
+// Pentest engagement (GET/POST /v1/pentest) — the productized AI-pentest lifecycle.
+export interface RulesOfEngagement {
+  authorized_targets: string[];
+  out_of_scope?: string[];
+  max_requests: number;
+  rate_per_minute?: number;
+  allow_active?: boolean;
+  authorized_by?: string;
+  consent?: string; // explicit recorded consent statement (required for active mode)
+}
+
+// Signoff is a named human's review attestation on the pentest report (named accountability).
+export interface Signoff {
+  signer: string;
+  role?: string;
+  statement?: string;
+  signed_at: string;
+  ledger_ref?: string;
+}
+
+export interface PentestEngagement {
+  id: string;
+  tenant_id: string;
+  name: string;
+  mode: string; // "passive" | "active"
+  status: string; // draft|authorized|running|reporting|complete|retesting|halted
+  rules_of_engagement: RulesOfEngagement;
+  findings?: Finding[] | null;
+  requests_used: number;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  signoff?: Signoff | null; // named human sign-off on the report (the HITL accountability)
+}
+
+export interface PentestStats {
+  engagements: number;
+  active_engagements: number;
+  completed_runs: number;
+  total_findings: number;
+  high_plus: number;
+  exploitation_proven: number;
+  high_plus_proven: number;
+  verified_rate: number; // 0..1
+  high_plus_found: boolean;
 }
 
 export interface Action {
   id: string;
   tenant_id: string;
   finding_id: string;
+  finding_ids?: string[]; // a bulk action resolves >1 finding (one PR, many alerts)
   connection_id?: string;
   kind: string;
   tier: number;
@@ -27,6 +156,121 @@ export interface Action {
   title?: string;
   payload?: Record<string, unknown>;
   created_at?: string;
+}
+
+// Risk register — the vCISO judgment artifact. The engine proposes candidates (Proposed); a named
+// human decides treatment (accept/mitigate/transfer/avoid), recorded with owner + rationale + ledger.
+export interface Risk {
+  id: string;
+  tenant_id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  likelihood: number; // 1-5
+  impact: number; // 1-5
+  treatment?: string; // accept | mitigate | transfer | avoid
+  status: string; // open | accepted | treating | closed
+  owner?: string;
+  rationale?: string;
+  finding_ids?: string[];
+  proposed?: boolean; // agent-seeded candidate, awaiting human triage
+  created_at: string;
+  decided_at?: string;
+  decided_by?: string;
+  ledger_ref?: string;
+}
+
+export interface RiskSummary {
+  total: number;
+  open: number;
+  accepted: number;
+  treating: number;
+  closed: number;
+  proposed: number;
+  by_level: Record<string, number>;
+  top_risk_id?: string;
+}
+
+export interface RisksResponse {
+  risks: Risk[];
+  summary: RiskSummary;
+}
+
+// Audit engagement — the SOC2/ISO audit run WITH an external auditor. The product seeds the controls
+// to attest from posture; a named independent auditor renders each verdict (the legal layer).
+export interface ControlAttestation {
+  framework: string;
+  control_id: string;
+  verdict: string; // pending | passed | exception
+  note?: string;
+  attested_by?: string;
+  attested_at?: string;
+}
+
+export interface AuditSummary {
+  total: number;
+  attested: number;
+  passed: number;
+  exceptions: number;
+  pending: number;
+  percent: number;
+  ready: boolean;
+}
+
+export interface AuditEngagement {
+  id: string;
+  tenant_id: string;
+  framework: string;
+  audit_type: string; // type_i | type_ii
+  auditor_name?: string;
+  auditor_firm?: string;
+  auditor_email?: string;
+  status: string; // planning | fieldwork | issued
+  attestations?: ControlAttestation[];
+  created_at: string;
+  issued_at?: string;
+  ledger_ref?: string;
+  summary: AuditSummary; // the API embeds the per-engagement summary
+}
+
+export interface AuditsResponse {
+  audits: AuditEngagement[];
+}
+
+// Security program (vCISO) — the policy register + acknowledgments. The engine seeds the standard set;
+// a named owner publishes (HITL), and each member acknowledges.
+export interface PolicyAck {
+  user: string;
+  acked_at: string;
+}
+
+export interface Policy {
+  id: string;
+  tenant_id: string;
+  name: string;
+  category?: string;
+  summary?: string;
+  status: string; // draft | published
+  owner?: string;
+  version: number;
+  acks?: PolicyAck[];
+  created_at: string;
+  published_at?: string;
+  ledger_ref?: string;
+}
+
+export interface ProgramSummary {
+  total: number;
+  published: number;
+  draft: number;
+  team_size: number;
+  fully_acked: number;
+  ack_coverage_pct: number;
+}
+
+export interface ProgramResponse {
+  policies: Policy[];
+  summary: ProgramSummary;
 }
 
 export interface Incident {
@@ -37,8 +281,66 @@ export interface Incident {
   severity: string;
   status: string; // open | resolved
   finding_id: string;
+  attacked?: boolean; // escalated because the issue is under attack in production
   opened_at: string;
   resolved_at?: string;
+  acknowledged_at?: string; // a human took ownership → stops timed auto-escalation
+  acknowledged_by?: string;
+  sla_breach?: SLABreach; // read-time SLA state vs the tenant's policy (absent = not tracked)
+}
+
+export interface SLATarget {
+  severity: string; // critical | high | medium | low
+  ack_hours: number;
+  resolve_hours: number;
+}
+export interface SLAPolicy {
+  enabled: boolean;
+  targets: SLATarget[];
+}
+export interface SLABreach {
+  severity: string;
+  ack_due_at?: string;
+  resolve_due_at?: string;
+  ack_breached: boolean;
+  resolve_breached: boolean;
+}
+
+export interface MaintenanceWindow {
+  id: string;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  reason?: string;
+  created_by?: string;
+}
+
+// On-call escalation roster entry (GET /v1/contacts) — who the escalation matrix names.
+export interface Contact {
+  id: string;
+  name: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+  order: number;
+}
+
+// SOC-performance scorecard (GET /v1/soc-metrics) — grounded in incident timestamps.
+export interface SOCMetrics {
+  generated_at: string;
+  open_incidents: number;
+  resolved_incidents: number;
+  acknowledged: number;
+  unacknowledged: number;
+  sla_tracked: number;
+  sla_compliant: number;
+  sla_breached: number;
+  sla_compliance_pct: number;
+  mtta_hours: number;
+  mttr_hours: number;
+  aging_under_1d: number;
+  aging_1_7d: number;
+  aging_over_7d: number;
 }
 
 export interface Connection {
@@ -46,7 +348,18 @@ export interface Connection {
   kind: string;
   status: string;
   account?: string;
+  config?: Record<string, string>;
   created_at?: string;
+}
+
+export interface EscalationTier {
+  min_severity: string; // critical | high | medium | low
+  channels: string[]; // slack | pagerduty | teams | discord | webhook
+}
+export interface EscalationPolicy {
+  enabled: boolean;
+  ack_window_mins: number;
+  tiers: EscalationTier[];
 }
 
 export interface Tenant {
@@ -147,6 +460,8 @@ export interface Asset {
   target: string;
   meta?: Record<string, string>;
   discovered_at?: string;
+  data_tier?: number; // 1 = customer data, 2 = standard, 3 = low sensitivity
+  data_tier_label?: string;
 }
 
 export interface ControlState {
@@ -154,6 +469,18 @@ export interface ControlState {
   control_id: string;
   state: string; // met | gap | exception
   evidence_refs?: string[];
+}
+
+// One framework's compliance summary (met/gap/total). Returned in a batch by GET /v1/posture so
+// the dashboard/compliance/reports pages fetch all frameworks in one call instead of 14.
+export interface FrameworkPosture {
+  framework: string;
+  total: number;
+  met: number;
+  gap: number;
+}
+export interface PostureSummary {
+  frameworks: FrameworkPosture[];
 }
 
 // grc.Report JSON (no json tags on the Go struct → PascalCase keys).
@@ -169,4 +496,49 @@ export interface ComplianceReport {
   GapCount: number;
   Signer?: string;
   SHA256?: string;
+}
+
+export interface SaaSApp {
+  name: string;
+  count: number;
+  scopes: string[];
+  admin_consent: boolean;
+  verified: boolean;
+  sensitive: boolean;
+  shadow_it: boolean;
+}
+
+// PRBotSettings is the repository PR-review-bot policy. block_severity is the merge-gating floor
+// ("off" = comment-only); github_connected reports whether the live post is wired to a GitHub App.
+export interface PRBotSettings {
+  enabled: boolean;
+  block_severity: string;
+  github_connected: boolean;
+}
+
+// Non-human / AI-agent identity posture (GET /v1/identities) — the ACSP agentic identity lens.
+export interface NonHumanIdentity {
+  name: string;
+  class: string; // ai_agent | automation | integration
+  privilege: string; // admin | write | read
+  scopes: string[];
+  users: number;
+  verified: boolean;
+  risk: string; // high | medium | low
+  risk_reason?: string;
+}
+export interface IdentitiesResponse {
+  identities: NonHumanIdentity[];
+  summary: { total: number; ai_agents: number; automations: number; write_or_admin: number; risky: number };
+}
+
+export interface SaaSAppsResponse {
+  apps: SaaSApp[];
+  summary: {
+    total_apps: number;
+    sensitive_apps: number;
+    unverified_apps: number;
+    shadow_it_apps: number;
+    multi_user_apps: number;
+  };
 }

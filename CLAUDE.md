@@ -325,7 +325,7 @@ The webappsec handoff. **This schema is load-bearing — every wrapper written b
   ],
   "findings_enriched": [
     /* same shape + L1.5 annotations: surface_priority, exploitability,
-       corroborated_by, threat_intel, compliance */
+       corroborated_by, threat_intel, compliance, code_provenance */
   ],
   "l15_audit_log": [
     {
@@ -347,6 +347,8 @@ The webappsec handoff. **This schema is load-bearing — every wrapper written b
 ```
 
 **Two views, both shipped.** Security-engineer audience reads `findings_raw`; compliance auditor reads `findings_enriched` + `attestation`; L2 reads `findings_enriched`.
+
+**Cloud-to-Code** (`internal/cloudtocode`, `tsengine cloud-to-code --in <cloud-scan> --iac <tf-dir>`): `code_provenance` traces a runtime cloud finding (prowler) back to the Terraform resource + `file:line` that provisioned it. A dependency-free `.tf` resource indexer + a grounded matcher — a link requires BOTH a service↔TF-type nexus (the prowler check-id prefix → the TF types that provision it) AND a concrete shared identifier (physical name / ARN tail / normalized logical name). No matched token → no link (never guessed, §10). Correlation glue — adds provenance, never findings (§13 holds). Residual: platform-runner auto-wiring (annotate a cloud scan with the tenant's connected-repo IaC tree).
 
 ---
 
@@ -397,13 +399,14 @@ Example annotation:
 
 No L1 tool **decides** whether something violates SOC2. The tool emits the technical finding; the mapping layer annotates.
 
-**Three emission paths feed the framework set** (all grounded, all annotation-only) — keep them in sync when adding a framework or control:
+**Four emission paths feed the framework set** (all grounded, all annotation-only) — keep them in sync when adding a framework or control:
 
 1. **CWE crosswalk** — `internal/tracer/hooks/data/compliance.json` (the `compliance.map` hook) maps a finding's CWE → controls. Covers appsec/SAST/SCA findings.
 2. **Identity findings** — `internal/operate/operate.go` annotates each check inline (MFA gaps, OAuth grants, email-auth, stale/over-privileged accounts) — the non-tech / IdP posture.
 3. **Cloud attack-paths** — `internal/cloudengine/compliance.go` (`pathCompliance`) maps an attack-path's characteristics (internet exposure, sensitive-data access, privilege/privesc, lateral movement) → controls.
+4. **SaaS posture (SSPM)** — `internal/sspm` annotates each SaaS-config check inline (GitHub org: 2FA enforcement, repo perms, secret scanning, third-party apps, webhooks; Slack: 2FA/SSO, app governance, public sharing, guests, admin sprawl; Zoom: meeting passcode/waiting-room, recording protection; Atlassian: public Confluence spaces, SSO-bypassing API tokens; Salesforce: Experience-Cloud guest access, Modify-All-Data sprawl) — the SaaS-configuration posture, sibling to `operate`. Snapshot-driven, LLM-free, grounded (a hardened app yields zero findings). See ADR 0004. **Live driver: `POST /v1/saas/{provider}/snapshot`** (`internal/platformapi/saasposture.go`, provider ∈ github_org|slack|zoom|atlassian|salesforce) decodes the provider snapshot, runs the matching `Assess*`, and stores the findings into the same store the rest of the platform reads — so SaaS misconfigs flow through issues/incidents/grc/hitl like any finding (mirrors the identity-events ingest). The admin-API fetcher (snapshot from the provider's API) is the credential-gated half; the posted-snapshot path works today with no external creds. **GitHub org now has a LIVE fetcher: `POST /v1/saas/github_org/sync`** (`internal/platformapi/saassync.go` + `sspm.FetchGitHubOrg`) builds the snapshot from the GitHub API reusing the already-onboarded GitHub connection's token (no new credential) — reads what `read:org` covers (org-wide 2FA, default repo permission, public-repo creation, GHAS secret-scanning default, org webhooks best-effort), runs the same `AssessGitHubOrg`, stores findings. Per-member 2FA / installed-app inventory / outside-collaborators need `admin:org` + heavy pagination, so those checks stay the posted-snapshot path's job (honestly gated, never invented — §10). Surfaced via the Settings "Sync posture" button on the GitHub connection.
 
-So a connected repo, Workspace/M365/Okta, *or* cloud account each contribute evidence to the full 14-framework set, not just the original six. A control maps only where a real nexus exists for that path (grounding §10).
+So a connected repo, Workspace/M365/Okta, cloud account, *or* SaaS app (GitHub org) each contribute evidence to the full 14-framework set, not just the original six. A control maps only where a real nexus exists for that path (grounding §10).
 
 ---
 
@@ -581,6 +584,124 @@ In-house code is reserved for orchestration logic only:
 
 **Adding a new in-house `scan_*` detection scanner requires an explicit architectural ADR** explaining why the leading OSS tool doesn't suffice. Default is no.
 
+### 13.1 SMB per-asset parity packages (ADR 0010)
+
+To be THE SMB product per asset (coverage/depth + FP/FN accuracy vs the SMB category leader),
+six deterministic, offline-tested cores were added — each closes a named gap, each pairs with an
+honest credential/sandbox gate for live execution (full design + per-asset plan:
+[docs/adr/0010-smb-per-asset-parity.md](docs/adr/0010-smb-per-asset-parity.md)):
+
+| Package | Asset · gap (vs leader) | What it is |
+|---|---|---|
+| `internal/apiauthz` | **api** · BOLA/BFLA authz (vs Akto) | The §13 **no-OSS exception** (authz is business logic): a differential test — replay the victim's request as the attacker; `Evaluate` flags a bypass only on a proven 2xx-with-victim-data (BOLA) / undenied privileged call (BFLA), so a hit is `verification: verified`. Live prober gated (active + consent). |
+| `internal/prbot` | **repository** · PR-inline review bot (vs Aikido/Snyk) | `Build(findings, changedFiles, blockAt)` → inline comments **only on PR-changed lines** + a check-run `success/neutral/failure`. Live GitHub post gated on the App PR scope. |
+| `internal/webauth` | **web** · authenticated-scan reliability (vs Probely/Detectify) | `LoginFlow{form/token/recorded}` + `ValidateSession` ("am I authed?") + `IsLoginWall` ("session expired → re-auth") — the FN guard against silently scanning logged-out. Live replay gated (sandbox seed_auth). |
+| `internal/registrywatch` | **container** · scan-on-push (vs Aikido/Snyk) | `Reconcile(current, seen)` digest-diff → scan only new/re-pushed images. Live registry listing gated (connector). |
+| `internal/identitythreat` | **identity** · real-time ITDR (vs Nudge/Push) | `Detect(events)` rules: impossible_travel, privileged_grant, mfa_removed, password_spray — LLM-free, grounded. Live IdP-audit ingestion gated. |
+| `internal/shadowit` | **SaaS posture** · shadow-IT discovery (vs Nudge/Wing) | `Inventory`/`Summarize` → SaaS-app inventory + portfolio summary; **wired live** via `operate.SaaSInventory(ws)` over the existing cross-IdP OAuth grants (no shadow-IT verdict without consent data — honest). |
+
+cloud_account's parity is the prior **ADR 0009** campaign (DSPM/CWPP/CIS-scoreboard/multi-cloud/
+remediation). These cores feed the same unified-issues / auto-triage / consensus / grc-hitl
+machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on.
+
+**Live wiring shipped so far** (each core's gated half is stated honestly):
+- **SaaS posture** — fully end-to-end: `operate.SaaSInventory(ws)` → `GET /v1/saas-apps` (inventory
+  + portfolio summary) → the `/saas-apps` frontend discovery page. Over the already-persisted
+  cross-IdP OAuth grants; no shadow-IT verdict without consent data.
+- **identity** — live via `POST /v1/identity/events`: an IdP-audit event stream → `identitythreat.Detect`
+  → findings stored in the same store (flow through issues/incidents/grc). The IdP-audit connector is the gate.
+- **container** — `POST /v1/registry/reconcile`: a connector posts current images + last-seen digests →
+  `registrywatch.Reconcile` → the scan-on-push plan (stateless; the connector runs the sandbox scan).
+- **repository** — `prbot.Submit` builds the GitHub PR-review + merge-gating check-run; the live POST is
+  gated on the GitHub App PR-write scope. **cloud** — `connector.AWS.Apply` S3 block-public-access is now a
+  **live, SDK-backed write path**: `internal/connector/awsremediate.S3Writer` (aws-sdk-go-v2 — the project's
+  one cloud SDK, isolated in its own package so the core `connector` stays SDK-free) assumes a scoped
+  cross-account WRITE role via STS and calls `PutPublicAccessBlock` (all four flags). Wired in `cmd/platform`
+  only when `AWS_REMEDIATION_ROLE_ARN` (or `AWS_REMEDIATION_ENABLED=1`) is set — else `Apply` stays the honest
+  stub; reached only after the HITL gate (§18.2 inv. 3). **GCP** has the parallel live path:
+  `internal/connector/gcpremediate.GCSWriter` (cloud.google.com/go storage SDK, its own package) impersonates a
+  scoped write SA and enforces GCS **Public Access Prevention** on a bucket; wired when
+  `GCP_REMEDIATION_IMPERSONATE_SA` (or `GCP_REMEDIATION_ENABLED=1`) is set. The proposer
+  (`remediate.liveCloudMutation`) emits `s3_block_public_access` (AWS) / `gcs_public_access_prevention` (GCP) /
+  `azure_storage_disable_public_access` (Azure) on a public-bucket/storage finding. **Azure** completes the
+  trio: `internal/connector/azremediate.StorageWriter` (azure-sdk-for-go armstorage, its own package) sets
+  `AllowBlobPublicAccess=false` on a storage account via the platform's service principal
+  (DefaultAzureCredential, scoped to the connection's subscription); wired when `AZURE_REMEDIATION_ENABLED=1`.
+  So all three clouds now have a live, HITL-gated, SDK-backed public-storage remediation; each SDK is isolated
+  in its own `*remediate` package so the core `connector` stays SDK-free. **api/web** — apiauthz/webauth live
+  execution is active testing → behind the explicit-consent + sandbox gate.
+
+**Config surfaces (the per-asset setup half, end-to-end UX + API)** — each stores its config + drives the
+core; the live *execution* stays each core's gated half:
+- **web** — `POST /v1/assets/{id}/login-flow` + the `/assets` "Authenticated scanning" modal: stores a
+  `webauth.LoginFlow` (validated) so the scanner replays + validates the session each scan (the FN guard).
+- **api** — `POST /v1/assets/{id}/authz-test` + the `/assets` "BOLA/BFLA test" modal (two identities +
+  operations editor): stores an `apiauthz.TestConfig` (validated) for the differential authz test.
+- **repository** — `platform.PRBotPolicy` on the Tenant via `GET/PUT /v1/settings/pr-bot` + the Settings
+  "Pull-request review" panel (enable + merge-gating severity floor; `github_connected` honesty flag).
+- **cloud_account** — `POST /v1/connections/{id}/cloud-remediation` + the Settings "Auto-remediation"
+  control on each aws/gcp/azure connection: stores the customer's OWN cross-account write role on
+  `Connection.Config` (`remediation_enabled` + `remediation_role_arn`/`region` for AWS,
+  `remediation_impersonate_sa` for GCP; Azure = enable flag, subscription from the connection account).
+  The connector's Apply uses it at remediation time (`connector.{AWS,GCP,Azure}.writerFor` → an injected
+  per-tenant writer factory, keeping `package connector` SDK-free), falling back to the operator-default
+  `Writer`. Non-secret identifiers (like `Account`) → stored plain, not sealed. Still HITL-gated; a wrong
+  role surfaces honestly at Apply. This is the per-TENANT half; whether the deployment can do live cloud
+  writes at all stays the operator's `*_REMEDIATION_*` env (Bucket C).
+- **notifications** — `GET/PUT /v1/settings/notifications` + the Settings "Notifications" Slack control:
+  stores the tenant's OWN Slack Incoming Webhook (sealed via `d.Vault` — a webhook URL is a bearer
+  capability, so unlike the cloud role it MUST seal; GET reports only `has_slack_webhook`). The incident
+  alerter is a `notify.TenantRouter` that routes each new incident to its OWN tenant's webhook (resolver
+  opens the sealed ref) AND the operator-global `MultiAlerter` fallback — so incident heads-ups are
+  multi-tenant, not one shared channel. Approval *buttons* stay the operator Slack app (those need its
+  interactive endpoint). Operator-env channels (`TSENGINE_SLACK_WEBHOOK`/Teams/Discord/PagerDuty/webhook)
+  remain the Bucket-C fallback.
+- **ticketing (Jira)** — `GET/PUT /v1/settings/jira` + the Settings "Jira" control: stores the tenant's
+  OWN Jira (`Tenant.Jira` — BaseURL/Email/Project plain, API token sealed via `d.Vault`; GET reports
+  has_token only). `remediate.TenantFiler` (mirrors `notify.TenantRouter`) routes a `file_ticket`
+  action to the tenant's own Jira (resolver opens the sealed token → `connector.NewJira`), falling
+  back to the operator tracker (`JIRA_BASE_URL`/ServiceNow/Linear env — the Bucket-C fallback). So
+  remediation tickets are multi-tenant, not one shared project.
+- **escalation matrix (24×7-SOC parity)** — `GET/PUT /v1/settings/escalation` + the Settings
+  "Escalation matrix" control: stores `Tenant.Escalation` (`platform.EscalationPolicy` — ordered
+  tiers of `MinSeverity → Channels` + an `AckWindowMins`; channel names only, no secret → plain).
+  Drives **two** runtime behaviours: (1) **severity routing** — `notify.PolicyRouter` (wraps a
+  channel-name→`notify.Alerter` map + the per-tenant `TenantRouter` as `Default`) routes a new
+  incident to the FIRST matching tier's channels, never-drop fallback to Default; wired as the
+  incident alerter in `cmd/platform`. (2) **timed auto-escalation** — `Incident.Overdue(ackWindowMins,
+  now)` (open + unacked + past window, ≤1 re-ping/window) drives `detect.Detector.EscalateOverdue`,
+  called each pass by `runner.RescanTenant`; `POST /v1/incidents/{id}/ack` (a human takes ownership →
+  `Overdue` goes false → stops) + the `/incidents` Acknowledge button. PagerDuty/Opsgenie parity.
+- **remediation SLAs (MDR/vuln-mgmt parity)** — `GET/PUT /v1/settings/sla` + the Settings
+  "Remediation SLAs" control: stores `Tenant.SLA` (`platform.SLAPolicy` — per-severity `AckHours` +
+  `ResolveHours`; no secret → plain). `SLAPolicy.Evaluate(inc, now) → SLABreach` (ack/resolve breach
+  grounded on the incident clocks `OpenedAt`/`AcknowledgedAt`/`ResolvedAt`; a met clock never
+  breaches, 0-hours disables a clock). `GET /v1/incidents` annotates each incident with a TRANSIENT
+  `SLABreach` (read-time via `Deps.annotateSLA`, never persisted); `/incidents` shows an "SLA
+  breached" badge + count. Pure-compute, grounded, LLM-free.
+- **maintenance windows (MDR change-freeze parity)** — `GET/POST/DELETE /v1/maintenance-windows` +
+  the Settings "Maintenance windows" control: stores `Tenant.MaintenanceWindows`
+  (`platform.MaintenanceWindow{Name, StartsAt, EndsAt}` + `Active(now)` / `Tenant.InMaintenance(now)`;
+  no secret → plain). While a window is active, `detect.Detector` (via an injected `Suppressed`
+  predicate wired in `cmd/platform` to `Tenant.InMaintenance`) opens NO new incidents and
+  `EscalateOverdue` pages no one — but resolves still flow. `/incidents` shows an "in maintenance"
+  banner. So a planned deploy doesn't trip the SOC.
+- **SOC-performance reporting (MDR scorecard)** — `GET /v1/soc-metrics` (`internal/socmetrics.Compute`)
+  + the `/incidents` scorecard: SLA-compliance % (resolved → historical outcome, open → current
+  state), MTTA (open→ack) + MTTR (open→resolve), open-incident aging buckets. Pure-compute over the
+  incidents + SLA policy, grounded on real timestamps, LLM-free. The "how is the SOC performing" view.
+- **on-call escalation roster (the PO's "escalation matrix with contact number")** —
+  `GET/POST/DELETE /v1/contacts` + the Settings "Escalation contacts" control: stores `Tenant.Contacts`
+  (`platform.Contact{Name, Role, Email, Phone, Order}`, ordered by escalation precedence; contact PII
+  not a bearer secret → plain, like team-member emails). Names the real humans + numbers the
+  escalation matrix reaches. Live SMS/voice paging stays the honest Bucket-C gate (needs an SMS
+  connector); the roster + numbers are first-class.
+- **CREDENTIAL SEALING (§18.2 inv. 6)** — the login-flow + authz-test configs carry secrets (passwords /
+  tokens / auth headers), so the setters **seal the config blob via `d.Vault`** before it touches the store
+  (`Asset.Meta["login_flow"]`/`["authz_test"]` hold a sealed ref, never plaintext); no vault → the setter
+  refuses (400). Each configured asset row shows a reconfigure badge (rotate creds → overwrite). The
+  PR-bot policy carries no secret, so it is stored plain.
+
 ---
 
 ## 14. Benchmark framework
@@ -597,6 +718,7 @@ Per-asset recall vs. neutral competitor leaderboards where possible:
 | ip_address | `bench/ip_services` | Must-find recall | Tenable/Qualys — no scorecard |
 | domain | `bench/recon_breadth` | Subdomain discovery rate | subfinder/amass published |
 | cloud_account | `bench/cloud_baseline` | CIS recall vs. mock AWS account | Prowler/scout-suite self-published |
+| cloud_account (offline) | `tsbench cloud-baseline` (`internal/cloudbench`) | CIS-control recall over a fixture account, prowler-only vs. tsengine (engine+DSPM/CWPP lift) — laptop/CI, no sandbox | Prowler/Scout (no neutral baseline exists) |
 | L1.5 ablation | (any L1 bench) + `TSENGINE_L15_DISABLED=1` | Δ-metric = L1.5 lift | Internal |
 | L2 agent | `bench/agent` (scorer + `tsbench agent`); live targets `bench/webgoat_dual` + `bench/juiceshop_full` | detection_rate, **verified_rate** (PoC/evidence-grounded — the XBOW no-FP bar), completion_rate, FP-control | vs XBOW / strix / NodeZero (exploitation-verified) |
 | Multi-trial | `bench/multi_trial` wrapper | median + p10/p90 over N=5 | — |
@@ -636,15 +758,29 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 
 ## 16. Build phases — current status
 
+> **Status note (2026-06-21):** phases 0–6 are **built + CI-green**; the platform layer
+> (§18) is built on top. What remains is **live/scale verification gated on infra,
+> credentials, or product decisions** — tracked in [docs/competitive-roadmap.md](docs/competitive-roadmap.md)
+> (Tracks 1–3) and §18.3, not here. Concretely open: per-asset **live** benchmark numbers
+> (need the sandbox image + deployed targets; SAST 0.387 Youden is the one measured so far),
+> the L2 agent **live `verified_rate`** (needs a target + `LLM_API_KEY`), scale-grade infra
+> (Postgres store, cloud-KMS vault, HA/sandbox-pool — all behind today's interfaces), the
+> per-tenant **LLM-config-in-UX**, and self-serve **billing**.
+>
+> **Per-asset gate/bucket status** (what runs securely via Docker on one machine, what we fixed
+> vs. what's customer-config vs. operator, and the honest credential-gated boundary):
+> [docs/per-asset-gates.md](docs/per-asset-gates.md). Reproduce the no-creds proofs with
+> `make demo-scan-asset` (container + repository + web_application).
+
 | Phase | Scope | Status |
 |---|---|---|
-| **0. Foundation** | Repo skeleton, core types (`pkg/types`), `Tool`/`Handler` interfaces, L1 dashboard JSON schema, evidence/attestation grounding (§10), CI (go test + golangci-lint + govulncheck) | not started |
-| **1. Sandbox + E2E** | Docker sandbox image (nuclei baked), `cmd/tool-server` HTTP API, host-side `internal/sandbox` client, run nuclei against one fixture target end-to-end | not started |
-| **2. web_application asset** | Anchor + registry tiers, filter rules, WAVSEP fixture + scorer, tool-replay API | not started |
-| **3. Other 6 assets** | api, repo, container, ip, domain, cloud_account — anchor + registry tiers, per-asset filter, per-asset normalize | not started |
-| **4. L1.5 + dashboard + threat intel + compliance** | Hook chain, vulnerabilities.json renderer, threat_intel.enrich, compliance.map | not started |
-| **5. Template refresh + attestation** | Versioned corpora, pin-per-scan, cron refresh, delta-verify, signed evidence bundle | not started |
-| **6. L2 layer** | LLM Lead agent over ≤12-tool catalog, OODA, bench rigs | future |
+| **0. Foundation** | Repo skeleton, core types (`pkg/types`), `Tool`/`Handler` interfaces, L1 dashboard JSON schema, evidence/attestation grounding (§10), CI (go test + golangci-lint + govulncheck) | ✅ built |
+| **1. Sandbox + E2E** | Docker sandbox image (nuclei baked), `cmd/tool-server` HTTP API, host-side `internal/sandbox` client, run nuclei against one fixture target end-to-end | ✅ built |
+| **2. web_application asset** | Anchor + registry tiers, filter rules, WAVSEP fixture + scorer, tool-replay API | ✅ built (live WAVSEP Youden pending a deployed target) |
+| **3. Other 6 assets** | api, repo, container, ip, domain, cloud_account — anchor + registry tiers, per-asset filter, per-asset normalize | ✅ built (8 assets incl. mobile; live per-asset recall pending targets) |
+| **4. L1.5 + dashboard + threat intel + compliance** | Hook chain, vulnerabilities.json renderer, threat_intel.enrich, compliance.map | ✅ built |
+| **5. Template refresh + attestation** | Versioned corpora, pin-per-scan, cron refresh, delta-verify, signed evidence bundle | ✅ built |
+| **6. L2 layer** | LLM Lead agent over ≤12-tool catalog, OODA, bench rigs | ✅ built (incl. ADR-0008 autonomous pentest; live `verified_rate` pending a target + LLM key) |
 
 ---
 
@@ -696,16 +832,18 @@ are presentation only — the gate, ledger, and engines are unchanged.
 |---|---|
 | `pkg/ledger` | the signed, replayable decision ledger (promoted from `internal/` so the platform imports it) |
 | `pkg/platform` | multi-tenant domain model — Tenant, Connection, Asset, Engagement, Action, ControlState |
-| `internal/store` | the tenant-scoped system-of-record (`Store` interface + in-memory impl); now also holds the **third-party app inventory** (`ReplaceThirdPartyApps`/`ListThirdPartyApps`, refreshed per operate scan, per provider) |
+| `internal/store` | the tenant-scoped system-of-record (`Store` interface + Memory / File-snapshot / SQLite impls, table-driven conformance suite); holds the **third-party app inventory** (`ReplaceThirdPartyApps`/`ListThirdPartyApps`, per operate scan) and the **issue-suppression rules** (`Put`/`List`/`DeleteIgnoreRule`, keyed by unified-issue dedup key — the ignore/accept-risk lifecycle) |
 | `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply): GitHub + GitLab (tech SCM), Google Workspace + M365 + Okta (non-tech identity) |
 | `internal/runner` | connector→engine→store glue; `ScanRunner` abstracts the engine, `EngineRunner` is the sandbox adapter; runs the full loop |
 | `internal/hitl` | the human desk — the gate between *propose* and *apply* |
-| `internal/remediate` | `Propose` (finding→Action; repo→PR, cloud→config, **workspace→a per-rule identity runbook** `identity.go`) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
+| `internal/remediate` | `Propose` (finding→Action; repo→PR, cloud→config, **workspace→a per-rule identity runbook** `identity.go`) + **`ProposeBulk`** (`bulk.go` — "Bulk Fix": groups an asset's findings by fix unit — SCA package coordinate from `ToolArgs`, else rule id — and emits ONE PR per group of ≥2 repo findings, citing every finding it resolves via `Action.FindingIDs`; singletons/non-repo fall back to `Propose`; the runner's optional `ProposeBatch` supersedes per-finding `Propose` when set) + `Deliverer` (apply via connector; routes to the action's own connection; `file_ticket` → a `Filer` e.g. Jira) |
 | `internal/grc` | compliance control-state system-of-record + signed evidence pack + the auditor-facing **compliance report** (`Report` resolves each gap to its citing findings; `RenderMarkdown` is the attachable deliverable) + the customer-facing **VAPT/pentest report** (`VAPTReport`/`RenderVAPTMarkdown` — exec summary, scope, and every finding with severity/CWE/CVSS/exploit-status/evidence; grounded, served at `GET /v1/vapt/report`) |
-| `internal/detect` | the continuous-monitoring backbone (deterministic detect half of detect-&-respond): `Detector.Reconcile` diffs a tenant's current findings against its open incidents — opens a `platform.Incident` for a new finding at/above a severity threshold (default high), resolves one when its issue (keyed `rule_id\|endpoint`) stops appearing. Signed into the ledger; LLM-free + grounded. Driven by `runner.RescanTenant` each pass; opening a new incident fires an optional `Alerter` (Slack heads-up) so detect→alert happens in one pass |
+| `internal/detect` | the continuous-monitoring backbone (deterministic detect half of detect-&-respond): `Detector.Reconcile` diffs a tenant's current findings against its open incidents — opens a `platform.Incident` for a new finding at/above a severity threshold (default high), resolves one when its issue (keyed `rule_id\|endpoint`) stops appearing. Signed into the ledger; LLM-free + grounded. `Reconcile` also takes an `attacked` key-set (ADR-0007 Phase 0b): a finding observed under attack in production opens an incident **regardless of the severity floor** + marks it `Incident.Attacked` (title prefixed `[under active attack]`); the runner computes it via `crossdetect.AttackedKeys(current, runtimeEvents)`. Driven by `runner.RescanTenant` each pass; opening a new incident fires an optional `Alerter` (Slack heads-up) so detect→alert happens in one pass |
 | `internal/assetregistry` | shared `HandlerFor(assetType)` (so `cmd/tsengine` + `cmd/platform` don't duplicate routing) |
+| `internal/crossdetect` | the **unified cross-detection** layer (orchestration glue over `correlate` + the flat finding list — adds no detection, §10/§13 hold). Six capabilities: (1) **attack paths** — buckets findings by inferred asset type so `correlate.Correlate` builds cross-surface chains (a finding bridging, via a real shared entity key/ARN/host/IP/bucket, to a crown jewel on another surface); `GET /v1/attack-paths` + `/attack-paths` page + dashboard banner. (2) **unified issues** (`UnifiedIssues`) — "one issue, many signals": collapses findings sharing a CVE (else rule\|endpoint) into one Issue carrying the worst severity + the distinct source scanners + `Confirmed` (≥2 tools agree); `GET /v1/issues` + `/issues` page + dashboard noise-reduction banner. (3) **issue suppression** — `GET /v1/issues` hides issues with a `platform.IgnoreRule` (default) / `?show=ignored`; `POST /v1/issues/ignore`\|`/unignore` (ledger-recorded) + the `/issues` Active/Ignored toggle + per-row ignore/restore. (4) **custom exclusion rules** (`exclude.go` — Aikido "custom rules": exclude paths/packages/conditions) — `platform.ExclusionRule` (field ∈ rule_id/package/path/cve/any + a `*`-glob `Pattern`); `ApplyExclusions` drops matching findings BEFORE `UnifiedIssues`, so excluded noise never becomes an issue (the `excluded` count rides on `GET /v1/issues`); `GET /v1/exclusions` + `POST /v1/exclusions`\|`/exclusions/delete` (ledger-recorded) + the `/issues` exclusion-rules manager. (5) **runtime correlation** (`runtime.go` — Runtime Protection, ADR-0007 Phase 0) — `platform.RuntimeEvent` is an in-app-firewall/RASP attack observation (the OSS "Zen" sensor streams its block events in); `AnnotateRuntime` flags any issue whose endpoint path matches a runtime event → `Attacked`/`AttackCount` = observed-in-the-wild (the strongest exploitability signal). tsengine consumes the signal, never blocks (§13). `POST /v1/runtime/events` (ingest, single or batch; body-tenant ignored for isolation) + `GET /v1/runtime/events` + the `attacked` count on `GET /v1/issues` + an "under attack" badge/stat on `/issues`. Phase 1 (the managed in-app sensor) stays ADR-0007-gated. (6) **data-tier prioritization** (`datatier.go` — the Synthesia "tier repos by customer-data exposure" idea) — an owner classifies each asset's data sensitivity (`platform.DataTier` 1=customer-data … 3=low, stored in `Asset.Meta["data_tier"]`, default Standard; `POST /v1/assets/{id}/data-tier`, surfaced on `GET /v1/assets` as `data_tier`/`data_tier_label`, set via the `/assets` Data-tier control). `RiskWeight(severity, tier)` is the tier-adjusted priority (tier 1 +50%, tier 3 −40%; severity stays dominant within a tier, so a Medium on a customer-data asset can outrank a Medium on a low-sensitivity one or edge a Low on a standard one); `PrioritizeByDataTier` attributes each issue to a tiered asset (BEST-EFFORT + grounded, §10 — only when the asset's Target literally appears in the issue Endpoint; repo file:line endpoints stay Standard until a finding→asset link exists in the data model) and re-ranks `GET /v1/issues` so the highest-risk issues lead (no-op while every asset is Standard). Engine `surface_priority` is untouched (§18.2 inv 1) — this is a platform-layer reordering only |
+| `internal/pentest` | the **productized AI-pentest** layer (Aikido "AI pentesting" parity; ADR 0006). `Engagement` lifecycle (draft→authorized→running→reporting→complete→retesting/halted) + the **Rules-of-Engagement Guard** (`roe.go`): every agent action is gated by the runner — scope → budget → an **absolute destructive ban** → the **active-exploitation gate**. Active exploitation is **explicit-consent-based**: `RoE.ActiveAuthorized()` (the single source of truth) requires `AllowActive` + a named `AuthorizedBy` + a recorded `Consent` statement; `Authorize`, the runner `Check`, and `POST /v1/pentest` all refuse active mode without all three (400), and the consent text is signed into the ledger. The runner inverts control (agent **proposes** an `Attempt`, runner **disposes** via `RoE.Check` before any side effect), enforces the request budget + kill-switch. **Phase 0** runs the **`PassiveDriver`** over in-scope findings; **Phase 1 (built, ADR-0006 accepted)** is the **`ActiveDriver`** (`active.go`) — per-class playbooks (SSRF-canary, boolean-SQLi true/false differential, open-redirect canary-Location, reflected-XSS canary, IDOR-read), each a `Demonstration` of one or more benign `Probe`s + a **machine-checkable success predicate** over the responses, that upgrades a finding to `verification_status: verified` + a captured PoC **only** when its predicate holds (else the lead is reported unchanged). Benign-by-construction (canary probes, true/false differentials that extract no data, no writes/exfil). Live egress is `HTTPProber` (`httpprober.go` — bounded timeout, capped read, no redirect-follow so the 30x Location is the open-redirect proof), wired into `POST /v1/pentest/{id}/run` only when the engagement is active+consented AND the operator set `TSENGINE_ACTIVE_EXPLOIT=1` (else graceful passive fallback — never a falsely-confident exploit). A portfolio scorecard (`ComputeStats`: exploitation-proven count, `verified_rate` = proven/total, high+ proven, the high-plus-found SLA gate) backs the "exploitation-proven, money-back if no High+" claim — grounded tallies, never estimates. API: `POST /v1/pentest` (create+authorize), `GET /v1/pentest[/{id}]`, `GET /v1/pentest/stats` (scorecard), `POST /v1/pentest/{id}/run`, `GET /v1/pentest/{id}/report` (per-engagement VAPT via `grc.ReportFromFindings`); UX: `/pentest` list+create (consent capture) + scorecard + `/pentest/{id}` detail with Run/Retest + recorded-consent + report download |
 | `internal/scheduler` | continuous-monitoring loop — re-scans every tenant on a cadence (`TSENGINE_MONITOR_INTERVAL`); the "autonomous" heartbeat alongside event-driven webhook re-scans |
-| `internal/platformapi` + `cmd/platform` | the multi-tenant HTTP API + server (incl. `POST /v1/tenants` onboarding). Also the **public, unauthenticated PLG lead-magnet** `GET /v1/assess?domain=` (`assess.go`): a grounded, read-only email-auth score (DMARC/SPF/DKIM via public DNS through `operate`; never scans the target's servers) — rate-limited per IP, surfaced at the public `/scan` page |
+| `internal/platformapi` + `cmd/platform` | the multi-tenant HTTP API + server (incl. `POST /v1/tenants` onboarding). Also the **public, unauthenticated PLG lead-magnet** `GET /v1/assess?domain=` (`assess.go` + `assess_web.go` + `assess_fix.go`): a grounded, read-only **security-questionnaire-readiness** scan for the SOC2-founder ICP — email-auth (DMARC/SPF/DKIM via public DNS through `operate`) + web posture (one HTTPS GET: HTTPS-enforced/HSTS/CSP/clickjacking/security.txt) — never scans the target's servers (SSRF-hardened: refuses private IPs), rate-limited per IP. Reframed as "you'd fail N of M questionnaire checks"; every failing check carries a copy-paste **fix** (`checkFix`). The same public API is BOTH the inbound `/scan` lead-magnet AND the $0 outbound signal source (the separate `tsgtm` GTM repo scrapes it). Viral loop: `GET /v1/assess/badge?domain=` (`assess_badge.go`) serves an embeddable SVG grade badge (6h per-domain cache, only a cache-miss runs the probe) a founder puts on their site/trust-page → every render is a branded backlink to `/scan`. The `/scan` page is a shareable `?domain=` permalink (auto-runs) with an "Embed your badge" + "Fix it" UX |
 | `internal/console` | the human-facing web dashboard + login under `/ui` — server-rendered HTML (`html/template`, zero JS). `GET /ui` shows risk rating + severity counts + top findings + pending approvals + compliance posture (cards link to the drill-down); `GET /ui/compliance/{framework}` is the per-control drill-down (gaps backed by their citing findings — the auditor view); `GET /ui/connect` is the first-run onboarding page (lists connectors + status) and `GET /ui/connect/{kind}` 302-redirects the browser into the provider OAuth consent (state = tenant id, reusing the API's `/v1/connect/{kind}/callback` exchange); `POST /ui/login` sets an httpOnly+SameSite=Strict session cookie (a browser can't send the bearer header on navigation); `POST /ui/approvals/{id}` Approve/Reject buttons drive the **same gated `hitl.Desk.Decide`** path as the API/Slack (tier rules + signed ledger still apply — the console is a UI onto the gate, not a second write path); a "Monitored assets" section (with last-scanned time) + a "Scan now" button (`POST /ui/rescan` / `POST /v1/rescan` → `RescanTenant`) give the owner visibility + manual control. Connection `SecretRef`s redacted before render |
 
 ### 18.2 Platform invariants (do not violate)
@@ -803,11 +941,18 @@ suspends a stale account** via the Okta user-lifecycle API (`POST
 tested against a fake org (injectable `HTTP` client). It needs the `okta.users.manage` scope
 (onboarding scopes are read-only by design), so a real mutation requires an admin to grant
 it — until then Okta answers 403 and `Apply` surfaces it as an error (never falsely "done").
-The GWorkspace/M365 connector `Apply` (and the other Okta `remediation_type`s) remain honest
-stubs pending admin-write creds. **The operate→tier-2 wiring now closes that loop end to
+**Google Workspace + Microsoft 365 now have the same live suspend path**: `connector.GWorkspace.Apply`
+suspends a stale account (Admin SDK `PUT /admin/directory/v1/users/{key}` → `suspended:true`) and
+`connector.M365.Apply` disables sign-in (Graph `PATCH /users/{id}` → `accountEnabled:false`), both
+reached only after the HITL gate and tested against a fake server (injectable `HTTP`). Each needs
+its IdP's write scope (`admin.directory.user` / `User.ReadWrite.All`) — read-only by onboarding
+default — so a real mutation requires an admin to grant it; until then the provider answers 403 and
+`Apply` surfaces it honestly. The other Okta/GW/M365 `remediation_type`s (oauth_revoke, etc.) remain
+honest stubs pending their write path. **The operate→tier-2 wiring closes the loop end to
 end** (`remediate.proposeIdentity` + `liveIdentityMutation`): when a remediation has a live,
-reversible connector write path for the asset's provider — today only Okta `account_suspend`
-— the proposer emits a **tier-2 `ActApplyConfig`** (gated) instead of a tier-1 ticket, so a
+reversible connector write path for the asset's provider — `account_suspend` on **Okta, Google
+Workspace, or Microsoft 365** today — the proposer emits a **tier-2 `ActApplyConfig`** (gated)
+instead of a tier-1 ticket, so a
 stale-Okta-account finding flows finding → gated action → HITL approve → `connector.Okta.Apply`
 suspend → signed ledger. Every other (remediation, provider) pair stays a tier-1 runbook
 ticket (no falsely-confident auto-apply) until its connector `Apply` lands — promotion is one
@@ -850,10 +995,10 @@ the platform mux for per-request metrics + an access log (SSE/`/metrics`/`/healt
 excluded from skew/noise). All three sit behind today's interfaces so the scale-out
 successors (Postgres store, durable queue, OTel) swap in without touching call sites.
 
-Remaining is **next-phase breadth/scale, not core-loop gaps**: the live identity-mutation
-`Apply`
-(`operate *.Apply` — the GWorkspace/M365 connector `Apply` are honest stubs pending live
-admin-write creds), the **open-ended LLM-driven** SOC reasoning (the deterministic
+Remaining is **next-phase breadth/scale, not core-loop gaps**: the identity-mutation `Apply`
+write paths are now wired for all three IdPs (Okta suspend, GWorkspace suspend, M365 disable),
+each gated on the customer granting its write scope (read-only by onboarding default), the
+**open-ended LLM-driven** SOC reasoning (the deterministic
 detect/incident backbone now exists in `internal/detect`; what's left is agentic triage/
 response beyond the threshold rules), and the infra successors — a **Postgres `Store`** (the
 SQLite single-box backend now exists) + a cloud-KMS `secret.Vault` (both behind today's
@@ -888,9 +1033,26 @@ Dockerfile` (the `cmd/platform` server, Go, ~108MB) + `frontend/Dockerfile` (Nex
 `NO_ENGINE` (operate/identity assets + the whole loop work; tech-asset scanning needs the
 sandbox image + the commented Docker-socket mount). Both images build + run + sign-up E2E
 verified. The detection **engine** has its own image (`docker/host/Dockerfile`, released to
-GHCR by `release.yml`). **Not yet production-grade:** single-node file store (Postgres is the
-`store.Store` successor), env-key secrets (cloud-KMS is the `secret.Vault` successor), no
-bundled TLS/HA — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+GHCR by `release.yml`).
+
+**Single-box production deployment is built + hardened** ([docs/production-single-box.md](docs/production-single-box.md)
+— threat model + phased plan + runbook): `docker-compose.prod.yml` + `docker/caddy/Caddyfile`
+run the whole product, **engine ON**, safely on one box. Hardening: per-scan sandboxes get
+resource/PID/file limits + a writable tmpfs by default and opt-in read-only-rootfs/non-root/
+isolated-network (`internal/sandbox.Hardening`, `TSENGINE_SANDBOX_*`); the platform reaches
+the Docker API through a **docker-socket-proxy** (no raw socket = no host-root on compromise —
+live-verified: container/image API allowed, `/info` denied) and spawns sandboxes on a
+dedicated network reached by container IP (off the platform/frontend net); a **Caddy TLS edge**
+is the only published surface (HTTPS + security headers; raw `:8090`/`:3000` unpublished);
+secrets via the Docker-secret `*_FILE` convention; `scripts/backup.sh`/`restore.sh` for the
+`platform-data` volume; one-command **`make deploy-prod`** (`scripts/deploy-single-box.sh`,
+`--check` dry-run) + `make prod-validate`. Threats T1–T8 each have a shipped mitigation (#259–264).
+
+**Still single-box, not scale-grade** (the multi-machine gaps, each behind an existing seam —
+docs/production-single-box.md §6): single-node file/SQLite store (Postgres is the `store.Store`
+successor), env/file secrets (cloud-KMS is the `secret.Vault` successor), no HA/multi-node
+sandbox pool + durable queue, container (not microVM) isolation. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) + [docs/production-single-box.md](docs/production-single-box.md).
 
 **The global kill-switch is built** (agentic-SMB spec OM-3 / TS-5 — the "one human, one pane,
 kill-switch" operating-model primitive). `Tenant.AgentsHalted`, toggled by the owner via
@@ -918,3 +1080,24 @@ customer-comms ride the future **A-RSP** incident-response capability), so this 
 forward-compatible hardening: a T3 action is safe by construction the moment one is produced.
 **With this the agentic-SMB spec is fully reconciled** — every OM/TS/AGT/WRD/ACC requirement
 is built or, for A-RSP, explicitly future (see docs/personas-and-workflows.md §7).
+
+### 18.4 The consulting top-layer — HITL judgment / legal / accountability
+
+The platform automates detection→fix→evidence; the **top layer** is the judgment, legal
+independence, and named accountability a security/compliance **consultant** otherwise owns —
+each built so the engine does the grounded prep and a **named human** makes the call that
+can't be automated. Four capabilities, all ledger-signed, all behind the same store + API:
+
+| Capability | Package(s) | What the engine does (grounded) | Where the human is in the loop (HITL) |
+|---|---|---|---|
+| **Risk register** (vCISO judgment) | `pkg/platform.Risk`, `internal/grc/risk.go`, `internal/platformapi/risks.go`, `/risks` | `CandidateRisks` clusters high+ findings by coarse category (CWE→cat, else tool), cites finding ids, sets a *starting* likelihood/impact | `POST /v1/risks/{id}/decision` — a named owner accepts/mitigates/transfers/avoids residual risk with a rationale; the agent never accepts risk |
+| **Audit engagement** (legal attestation) | `pkg/platform.AuditEngagement`/`ControlAttestation`, `internal/grc/audit.go`, `internal/platformapi/audits.go`, `/audits` | seeds the controls-to-attest from the tenant's real posture for the framework | `POST /v1/audits/{id}/attest` — a named **external** auditor renders each control verdict; issue gated on all-attested + named auditor. "Audit-ready, not the audit" |
+| **Pentest sign-off** (named accountability) | `internal/pentest.Signoff`, `internal/platformapi/pentest.go`, `/pentest/{id}` | produces the exploitation-proven VAPT report | `POST /v1/pentest/{id}/signoff` — a named human signs; the rendered report carries the signer line |
+| **vCISO program** (policies) | `pkg/platform.Policy`/`PolicyAck`, `internal/grc/program.go`, `internal/platformapi/program.go`, `/program` | `StarterPolicies` seeds the standard SOC 2 policy set as drafts (idempotent) | `POST /v1/program/{id}/publish` — a named owner publishes; `…/ack` — each member acknowledges |
+
+Invariants: the engine **proposes/seeds**, never **decides/publishes/attests/signs**; every
+human act is required-by-API (400 without the named human) and recorded into `pkg/ledger`
+(reuses §18.2 inv. 4). New store entities follow the 6-place wiring (types · Store iface ·
+Memory field+snapshot+orEmpty · File Put · SQLite table+Put/List · conformance isolation
+test). Grounding (§10) holds: candidate risks cite findings, audit controls come from real
+posture, policy templates are industry-standard names (not invented claims about the tenant).

@@ -4,6 +4,11 @@ How each of the 7 asset types is detected and benchmarked. This is the
 operational companion to [arch.md](arch.md) §benchmark-infrastructure and
 [CLAUDE.md](CLAUDE.md) §14.
 
+> **Head-to-head vs Aikido** (the closest commercial analogue): see
+> [docs/benchmark-vs-aikido.md](docs/benchmark-vs-aikido.md) — per-asset
+> benchmark landscape, the Doyensec *Aikido vs XBOW* triangulation, the
+> noise-reduction axis, and a capability-coverage matrix.
+
 `✓` marks tools **wrapped + installed in the sandbox image today**. Other
 tools are the documented target set — **anchor tier** fires on every scan,
 **registry tier** is on-demand via the tool-replay API (CLAUDE.md §4).
@@ -42,15 +47,15 @@ harness ready, target not wired; **✗ none** = no fixture.
 |---|---|---|---|---|---|
 | **web_application** | DAST | **WAVSEP** (1,133 cases) | Acunetix 87 / Netsparker 87 / Burp 78 / WebInspect 76 / AppScan 69 / ZAP 56 (Shay Chen) | ✅ `zaproxy/wavsep` | **⚠ scorer-ready** — full recon→fan-out + **form-param synthesis** live; per-category Youden run in progress |
 | **repository** | SAST | **OWASP Benchmark v1.2** (BenchmarkJava, 2,740 cases) | Veracode 51 / Checkmarx 47 / Fortify 35 / SonarQube 6 | ✅ `strix-bench/owasp-benchmark:v1.2` | **✅ live — overall Youden 47.86%** (TP=1224 FP=512 TN=813 FN=191). **≈ Checkmarx (47), just behind Veracode (51), ≫ Fortify (35) & SonarQube (6).** Score via `tsbench sast` (sandbox) or `go run ./cmd/sast-score sg.json expectedresults-1.2.csv` (host semgrep, no sandbox) + per-CWE scorer (`internal/bench/sast.go`). Per-cat: crypto/securecookie/weakrand **100**, hash 69, xss 30, xpathi 28, sqli 24. (Was 38.67% — crypto sat at 0 because semgrep emits **CWE-326** for the DES cases, which the scorer's CWE→category map didn't credit; adding `CWE-326→crypto` recovers all 130 crypto TPs at **0 FP**.) |
-| **repository** | SCA | OWASP **NodeGoat** + lockfiles | Snyk / Dependabot (self-published) | ⬇️ git repo (lockfile scan, no image) | **⚠ stub** — trivy-fs/grype/osv wrapped; must-find CVE set |
+| **repository** | SCA | pinned-vuln `requirements.txt` (+ NodeGoat lockfiles) | Snyk / Dependabot (self-published) | ✅ `fixtures/repo/sca-vuln` (no download, no image) | **✅ live — must-find recall 1.000** (228 findings; trivy-fs + grype + osv-scanner each surface CVE-2020-1747 / CVE-2018-18074 / CVE-2019-11236 / CVE-2019-10906 from the pinned versions). Runnable in `make bench` — `tsbench run --fixture fixtures/repo/sca-vuln` |
 | **repository** | IaC | **TerraGoat** / KICS samples | Checkov / tfsec / KICS (self) | ✗ (clone TerraGoat) | **✗ none** — checkov wrapped; corpus not wired |
 | **api** | spec-fuzz / authz | **VAmPI** + **crAPI** | none neutral (Salt / Wallarm commercial) | ✅ `erev0s/vampi` + `crapi/*` | **⚠ stub** — openapi+schemathesis must-find fixture |
 | **container_image** | CVE / misconfig | must-find CVE set (nginx:1.14) | Trivy / Snyk / Anchore (self) | ✅ `nginx` images | **✓ live** — recall 1.0 on must-find CVEs, 0 FP on clean alpine |
 | **ip_address** | network / services | vulnerable-services host | Tenable / Qualys / Rapid7 (no scorecard) | ⚠ compose (ex-strix `vulnerable-services`) | **⚠ stub** — naabu open-port must-find |
 | **domain** | recon breadth | subdomain-enum corpus | subfinder vs amass (published rates) | ✗ (needs a target domain) | **⚠ stub** — subdomain-found must-find |
-| **cloud_account** | CSPM / CIS | CIS Benchmark vs mock AWS | Prowler / scout-suite (self) · CIS AWS Foundations recall | ✗ **strix had none** (tsengine-only asset) | **✅ scorer-ready** — `tsbench cloud` + per-CIS-section recall scorer (`internal/bench/cloud.go`) + ground-truth CSV (`fixtures/cloud/baseline/expected-controls.csv`, 22 controls × 5 sections). Blocked only on a seeded mock account (no code gap); creds forwarded short-lived via env, never on disk |
+| **cloud_account** | CSPM / CIS | CIS Benchmark vs mock AWS | Prowler / scout-suite (self) · CIS AWS Foundations recall | ✗ **strix had none** (tsengine-only asset) | **✅ live offline** — `tsbench cloud-baseline` (fixture account, no sandbox, no AWS creds) measured **CIS recall 1.00 (6/6) vs prowler-only 0.83 (5/6)**, engine+DSPM/CWPP lift **+0.17**. The *live-account* variant `tsbench cloud` is scorer-ready (`internal/bench/cloud.go` + `fixtures/cloud/baseline/expected-controls.csv`, 22 controls × 5 sections), blocked only on a seeded mock account (no code gap; creds forwarded short-lived via env, never on disk) |
 
-**Status: 2 of 7 live** (container_image — recall 1.0 / 0 FP; **repository/SAST — Youden 47.86%, ≈ Checkmarx**);
+**Status: 3 of 7 live** (container_image — recall 1.0 / 0 FP, Youden 1.0; **repository — SAST Youden 47.86% ≈ Checkmarx + SCA recall 1.000 runnable no-download**; **cloud_account — offline CIS recall 1.00 vs prowler 0.83**);
 web (WAVSEP) is scorer-ready but the full-corpus fan-out times out at 50m
 (detection proven on focused scans; scaling fix tracked). The rest are
 harness-ready stubs blocked on a target, not on tsengine code. Per CLAUDE.md §14, every fixture **must**

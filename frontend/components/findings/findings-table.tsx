@@ -2,15 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Download, ChevronRight, ShieldCheck, BadgeCheck, Wrench, FileCheck2 } from "lucide-react";
+import { Search, Download, ChevronRight, ShieldCheck, BadgeCheck, Wrench, FileCheck2, FileCode2 } from "lucide-react";
 import type { Finding } from "@/lib/types";
 import { sevRank } from "@/lib/utils";
+import { categoryOf } from "@/lib/categories";
 import { SeverityBadge } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
 const SEVS = ["critical", "high", "medium", "low"] as const;
 const GROUPS = [
   { key: "none", label: "Flat" },
+  { key: "category", label: "By category" },
   { key: "asset", label: "By asset" },
   { key: "tool", label: "By tool" },
 ] as const;
@@ -59,7 +61,7 @@ export function FindingsTable({ findings, pendingFindingIds = [] }: { findings: 
     if (group === "none") return [{ key: "", rows }] as { key: string; rows: Finding[] }[];
     const m = new Map<string, Finding[]>();
     for (const f of rows) {
-      const k = group === "asset" ? assetKey(f) : f.tool;
+      const k = group === "asset" ? assetKey(f) : group === "category" ? categoryOf(f) : f.tool;
       (m.get(k) ?? m.set(k, []).get(k)!).push(f);
     }
     return [...m.entries()]
@@ -198,6 +200,14 @@ export function FindingsTable({ findings, pendingFindingIds = [] }: { findings: 
                           {frameworkCount(f) > 0 && (
                             <span className="inline-flex items-center gap-1 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted">
                               <FileCheck2 className="h-3 w-3" /> {frameworkCount(f)} frameworks
+                            </span>
+                          )}
+                          {f.code_provenance && (
+                            <span
+                              title={`${f.code_provenance.match_basis} — matched on “${f.code_provenance.matched_on}” (${f.code_provenance.confidence} confidence)`}
+                              className="inline-flex items-center gap-1 rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent"
+                            >
+                              <FileCode2 className="h-3 w-3" /> Fix in code: {f.code_provenance.file}:{f.code_provenance.line}
                             </span>
                           )}
                         </div>

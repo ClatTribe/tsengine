@@ -4,11 +4,14 @@ import {
   UserCheck, Lock, Radar, Github, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
 } from "lucide-react";
+import { LiveConsole } from "@/components/marketing/live-console";
+import { Reveal } from "@/components/marketing/reveal";
 
 export const metadata = {
   title: "TensorShield — your fractional security team",
   description:
     "AI security + compliance for SMBs. TensorShield finds, triages, and fixes — with a human in the loop where it matters. No security hire required.",
+  alternates: { canonical: "/" },
 };
 
 export default function Landing() {
@@ -16,42 +19,57 @@ export default function Landing() {
     <>
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-20 text-center">
-          <Link
-            href="/product"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm transition hover:border-accent/40"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-accent" /> AI security + compliance, human-in-the-loop
-          </Link>
+        {/* animated aurora backdrop — modern depth, subtle motion */}
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 left-[20%] h-[26rem] w-[26rem] -translate-x-1/2 rounded-full bg-accent/20 blur-[110px] animate-aurora" />
+          <div className="absolute -top-16 right-[16%] h-[22rem] w-[22rem] translate-x-1/2 rounded-full bg-pulse/15 blur-[110px] animate-aurora [animation-delay:-7s]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(16,24,40,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(16,24,40,0.025)_1px,transparent_1px)] bg-[size:44px_44px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_72%)]" />
+        </div>
+        <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-16 lg:pt-24">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            {/* copy */}
+            <div className="text-center lg:text-left">
+              <Link
+                href="/product"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur transition hover:border-accent/40"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-accent" /> AI security + compliance, human-in-the-loop
+              </Link>
 
-          <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-6xl">
-            Your fractional security team,{" "}
-            <span className="text-accent">running while you build.</span>
-          </h1>
-          <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted">
-            TensorShield continuously finds, triages, and fixes security &amp; compliance issues across your code,
-            cloud, and identity — and pulls you in only where judgment is needed. No security hire required.
-          </p>
+              <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
+                Your fractional security team,{" "}
+                <span className="text-accent">running while you build.</span>
+              </h1>
+              <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
+                TensorShield continuously finds, triages, and fixes security &amp; compliance issues across your code,
+                cloud, and identity — and pulls you in only where judgment is needed. No security hire required.
+              </p>
 
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
-            >
-              Start free <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/product"
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-border-strong"
-            >
-              See how it works
-            </Link>
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
+                >
+                  Start free <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/product"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-border-strong"
+                >
+                  See how it works
+                </Link>
+              </div>
+              <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +10 more · No credit card to start</p>
+              <Link href="/scan" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+                Or check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            {/* live product preview */}
+            <div className="animate-fade-rise">
+              <LiveConsole />
+            </div>
           </div>
-          <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +10 more · No credit card to start</p>
-          <Link href="/scan" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
-            Or check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
 
           <StackPipeline />
         </div>
@@ -60,7 +78,7 @@ export default function Landing() {
       {/* Differentiator — we fix, not just flag (vs advise-only tools) */}
       <section className="border-y border-border bg-surface">
         <div className="mx-auto max-w-5xl px-5 py-16">
-          <div className="mx-auto mb-10 max-w-2xl text-center">
+          <Reveal className="mx-auto mb-10 max-w-2xl text-center">
             <span className="text-xs font-semibold uppercase tracking-wider text-accent">The difference</span>
             <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
               Most tools stop at the finding. TensorShield ships the fix.
@@ -69,8 +87,8 @@ export default function Landing() {
               A dashboard full of risks is still your problem to solve. TensorShield prepares the actual remediation —
               and applies it the moment you approve.
             </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          </Reveal>
+          <Reveal delay={90} className="grid gap-4 sm:grid-cols-2">
             <div className="card p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-muted">
                 <XCircle className="h-4 w-4 text-faint" /> Advise-only tools
@@ -95,13 +113,13 @@ export default function Landing() {
                 ))}
               </ul>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* Social proof / stats */}
       <section className="border-y border-border bg-surface">
-        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-5 py-10 text-center sm:grid-cols-4">
+        <Reveal className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-5 py-10 text-center sm:grid-cols-4">
           {[
             ["14", "compliance frameworks"],
             ["30+", "OSS scanners wrapped"],
@@ -113,7 +131,7 @@ export default function Landing() {
               <div className="mt-1 text-xs text-muted">{l}</div>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* How it works */}
@@ -142,20 +160,23 @@ export default function Landing() {
       <Section eyebrow="One platform" title="Security and compliance, handled." sub="The work a security engineer and a compliance manager would do — automated, on one auditable loop.">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { icon: Bug, t: "Best-in-class detection", d: "Wraps the leading OSS scanners across web, APIs, code, containers, cloud & identity — recall on par with standalone tools." },
-            { icon: FileCheck2, t: "Compliance on autopilot", d: "Findings map to SOC 2 / ISO / PCI / HIPAA controls automatically, with a signed evidence pack and an auto-answered questionnaire." },
-            { icon: Radar, t: "Continuous monitoring", d: "Re-scans on every change and on a schedule — new high-severity issues page on-call, resolved ones close themselves." },
-            { icon: UserCheck, t: "Human in the loop", d: "The agent proposes; you approve. Tier-gated, signed into a tamper-evident ledger — autonomy where it's earned." },
-            { icon: KeyRound, t: "Identity posture", d: "MFA gaps, risky OAuth grants, stale accounts, email spoofing (DMARC/SPF/DKIM) — fixed across Google, M365 & Okta." },
-            { icon: Lock, t: "Provable evidence", d: "Every claim is backed by a tool and ed25519-signed. Auditors get reproducible proof, not screenshots." },
-          ].map(({ icon: Icon, t, d }) => (
-            <div key={t} className="card p-5">
+            { icon: Bug, t: "Best-in-class detection", d: "Wraps the leading OSS scanners across web, APIs, code, containers, cloud & identity — recall on par with standalone tools.", href: "/supply-chain" },
+            { icon: FileCheck2, t: "Compliance on autopilot", d: "Findings map to SOC 2 / ISO / PCI / HIPAA controls automatically, with a signed evidence pack and an auto-answered questionnaire.", href: "/frameworks" },
+            { icon: Radar, t: "Continuous monitoring", d: "Re-scans on every change and on a schedule — new high-severity issues page on-call, resolved ones close themselves.", href: "/ai-security-engineer" },
+            { icon: UserCheck, t: "Human in the loop", d: "The agent proposes; you approve. Tier-gated, signed into a tamper-evident ledger — autonomy where it's earned.", href: "/ai-security-engineer" },
+            { icon: KeyRound, t: "Identity posture", d: "MFA gaps, risky OAuth grants, stale accounts, email spoofing (DMARC/SPF/DKIM) — fixed across Google, M365 & Okta.", href: "/saas-posture" },
+            { icon: Lock, t: "Provable evidence", d: "Every claim is backed by a tool and ed25519-signed. Auditors get reproducible proof, not screenshots.", href: "/security" },
+          ].map(({ icon: Icon, t, d, href }) => (
+            <Link key={t} href={href} className="card group p-5 transition hover:border-accent/40 hover:shadow-card-hover">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
                 <Icon className="h-4 w-4" />
               </span>
-              <h3 className="mt-3.5 text-sm font-semibold">{t}</h3>
+              <h3 className="mt-3.5 flex items-center gap-1 text-sm font-semibold">
+                {t}
+                <ArrowRight className="h-3.5 w-3.5 -translate-x-1 text-faint opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" />
+              </h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
-            </div>
+            </Link>
           ))}
         </div>
       </Section>
@@ -322,12 +343,12 @@ function CompareCell({ v, highlight }: { v: string; highlight: boolean }) {
 function Section({ eyebrow, title, sub, children }: { eyebrow: string; title: string; sub: string; children: React.ReactNode }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20">
-      <div className="mx-auto mb-12 max-w-2xl text-center">
+      <Reveal className="mx-auto mb-12 max-w-2xl text-center">
         <span className="text-xs font-semibold uppercase tracking-wider text-accent">{eyebrow}</span>
         <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">{title}</h2>
         <p className="mt-3 text-base leading-relaxed text-muted">{sub}</p>
-      </div>
-      {children}
+      </Reveal>
+      <Reveal delay={90}>{children}</Reveal>
     </section>
   );
 }
@@ -338,7 +359,7 @@ function StackPipeline() {
   const stack = [
     { icon: Cloud, label: "Cloud", sub: "AWS · GCP · Azure" },
     { icon: Mail, label: "Workspace", sub: "Google · M365" },
-    { icon: GitBranch, label: "Code", sub: "GitHub · GitLab" },
+    { icon: GitBranch, label: "Code", sub: "GitHub · GitLab · Bitbucket · Azure DevOps" },
     { icon: KeyRound, label: "Identity & MFA", sub: "Okta · SSO" },
   ];
   const outcomes = [

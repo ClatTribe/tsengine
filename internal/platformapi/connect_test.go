@@ -28,6 +28,8 @@ func (s *recordingSealer) Seal(p string) (string, error) {
 	return "enc:OPAQUE-CIPHERTEXT", nil // a real vault never embeds the plaintext
 }
 
+func (s *recordingSealer) Open(string) (string, error) { return "", nil }
+
 func TestConnectCallback_SealsTokenBeforePersist(t *testing.T) {
 	st := store.NewMemory()
 	reg := connector.NewRegistry(exchConn{})

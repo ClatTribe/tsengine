@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ShieldCheck, ArrowRight, FileText, CircleDashed } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/api";
+import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
 
@@ -11,13 +12,12 @@ const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Gov
 type Posture = { total: number; met: number; gap: number } | null;
 
 export default async function CompliancePage() {
-  const entries = await Promise.all(
-    FRAMEWORKS.map(async (f) => {
-      const cs = await api.posture(f);
-      const posture: Posture = cs.length === 0 ? null : { total: cs.length, met: cs.length - cs.filter((c) => c.state === "gap").length, gap: cs.filter((c) => c.state === "gap").length };
-      return { f, posture };
-    }),
-  );
+  // One batched call for every framework's posture, then merged against the full FRAMEWORKS list
+  // so untracked frameworks still render (as "monitored, no gaps yet") — replaces fanning out 14
+  // per-framework requests.
+  const summary = await api.postureSummary();
+  const byFramework = new Map(summary.frameworks.map((p) => [p.framework, { total: p.total, met: p.met, gap: p.gap } as Posture]));
+  const entries = FRAMEWORKS.map((f) => ({ f, posture: byFramework.get(f) ?? null }));
 
   const withGaps = entries.filter((e) => (e.posture?.gap ?? 0) > 0).length;
   const tracked = entries.filter((e) => e.posture !== null).length;
@@ -30,20 +30,19 @@ export default async function CompliancePage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold">Compliance</h1>
-          <p className="text-xs text-muted">
-            {FRAMEWORKS.length} frameworks mapped automatically — control posture grounded in real findings, with a signed, attachable report.
-          </p>
-        </div>
-        <Link
-          href="/compliance/questionnaire"
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
-        >
-          <FileText className="h-3.5 w-3.5" /> Security questionnaire
-        </Link>
-      </div>
+      <PageIntro
+        icon={ShieldCheck}
+        title="Compliance"
+        description={`Know exactly where you stand on SOC 2, ISO 27001, PCI, and ${FRAMEWORKS.length - 3} more — without the spreadsheet. We map your live findings to each control automatically, so your posture is always current and the evidence report is one click away.`}
+        right={
+          <Link
+            href="/compliance/questionnaire"
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
+          >
+            <FileText className="h-3.5 w-3.5" /> Security questionnaire
+          </Link>
+        }
+      />
 
       {/* coverage summary strip */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-border bg-surface px-4 py-3 text-xs">

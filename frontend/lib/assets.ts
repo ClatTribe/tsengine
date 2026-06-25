@@ -16,7 +16,7 @@ export type AssetSurface = {
 export const ASSET_SURFACES: AssetSurface[] = [
   { key: "web_application", label: "Web apps", scans: "DAST — injection, XSS, SSRF, auth, and WordPress/CMS-specific issues", tools: ["nuclei", "sqlmap", "dalfox", "wpscan"] },
   { key: "api", label: "APIs", scans: "REST / GraphQL / gRPC — spec-driven fuzzing and shadow-route discovery", tools: ["nuclei", "kiterunner", "schemathesis"] },
-  { key: "repository", label: "Source code", scans: "SAST, dependency CVEs (SCA), and hardcoded secrets", tools: ["semgrep", "trivy", "gitleaks"] },
+  { key: "repository", label: "Source code", scans: "SAST, dependency CVEs (SCA) with reachability, supply-chain malware, end-of-life & deprecated components, license risk, and hardcoded secrets", tools: ["semgrep", "trivy", "govulncheck", "malicious-packages", "eol", "gitleaks"] },
   { key: "container_image", label: "Containers", scans: "Image CVEs, misconfigurations, and SBOM", tools: ["trivy", "grype", "dockle"] },
   { key: "cloud_account", label: "Cloud accounts", scans: "AWS / GCP / Azure posture and IAM attack paths", tools: ["prowler", "scout-suite"] },
   { key: "mobile_application", label: "Mobile apps", scans: "Android / iOS — insecure storage, weak crypto, hardcoded keys", tools: ["mobsfscan", "gitleaks"] },
