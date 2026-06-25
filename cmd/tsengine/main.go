@@ -57,6 +57,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
 	"github.com/ClatTribe/tsengine/internal/operate"
+	"github.com/ClatTribe/tsengine/internal/osint"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/reachability"
 	"github.com/ClatTribe/tsengine/internal/replay"
@@ -168,6 +169,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine operate: %v\n", err)
 			os.Exit(1)
 		}
+	case "osint":
+		if err := runOSINT(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine osint: %v\n", err)
+			os.Exit(1)
+		}
 	case "cloud-investigate":
 		if err := runCloudInvestigate(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsengine cloud-investigate: %v\n", err)
@@ -261,6 +267,7 @@ Usage:
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
   tsengine cloud-assess --snapshot <inventory.json> [--prowler <findings.json>] [--out <assessment.json>]
   tsengine operate --snapshot <workspace.json> [--out <findings.json>] [--stale-days N] [--max-super-admins N]
+  tsengine osint --snapshot <osint.json> [--out <findings.json>]   # external-exposure (OSINT) → grounded findings
                   # non-tech identity/email posture: MFA gaps, weak DMARC, risky OAuth grants, stale accounts
   tsengine web-investigate --target <url> [--seed <url>,...] [--max-requests N] [--min-interval <dur>] [--max-iters N]
                   [--export-evidence <file.json>] [--ledger <file.json>] [--sign-key <path>] [--signer <id>]
@@ -714,6 +721,45 @@ func runOperate(argv []string) error {
 			return fmt.Errorf("write findings: %w", werr)
 		}
 		fmt.Fprintf(os.Stderr, "[operate] wrote %d finding(s) → %s\n", len(findings), *out)
+	}
+	return nil
+}
+
+// runOSINT assesses an OSINT snapshot (the attacker's-eye external footprint, normalized from
+// theHarvester/SpiderFoot/dnstwist/HIBP/taranis-ai) into grounded findings — the same `osint.Assess`
+// the platform's POST /v1/osint/ingest uses, runnable from the CLI / CI without the platform.
+func runOSINT(argv []string) error {
+	fs := flag.NewFlagSet("osint", flag.ContinueOnError)
+	snapshot := fs.String("snapshot", "", "path to the OSINT snapshot JSON (theHarvester/SpiderFoot/dnstwist/HIBP/taranis-ai output, normalized) (REQUIRED)")
+	out := fs.String("out", "", "optional path to write the findings JSON")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *snapshot == "" {
+		return fmt.Errorf("--snapshot is required")
+	}
+	b, err := os.ReadFile(*snapshot)
+	if err != nil {
+		return fmt.Errorf("read snapshot: %w", err)
+	}
+	var snap osint.Snapshot
+	if err := json.Unmarshal(b, &snap); err != nil {
+		return fmt.Errorf("parse snapshot: %w", err)
+	}
+	findings := osint.Assess(snap, osint.Options{})
+	fmt.Printf("osint — external exposure for %s: %d finding(s)\n", nzStr(snap.Org, "—"), len(findings))
+	for _, f := range findings {
+		fmt.Printf("  [%-8s] %-28s %s\n", f.Severity, f.RuleID, f.Endpoint)
+	}
+	if *out != "" {
+		ob, merr := json.MarshalIndent(findings, "", "  ")
+		if merr != nil {
+			return merr
+		}
+		if werr := os.WriteFile(*out, ob, 0o600); werr != nil {
+			return fmt.Errorf("write findings: %w", werr)
+		}
+		fmt.Fprintf(os.Stderr, "[osint] wrote %d finding(s) → %s\n", len(findings), *out)
 	}
 	return nil
 }

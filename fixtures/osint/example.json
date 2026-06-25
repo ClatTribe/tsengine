@@ -1,0 +1,20 @@
+{
+  "org": "acme",
+  "domains": ["acme.com"],
+  "breached_accounts": [
+    {"email": "ceo@acme.com", "breach": "LinkedIn 2021", "classes": "passwords, emails", "source": "hibp"}
+  ],
+  "leaked_secrets": [
+    {"kind": "AWS access key", "location": "https://github.com/acme-intern/scratch", "source": "trufflehog", "verified": true}
+  ],
+  "exposed_hosts": [
+    {"host": "legacy.acme.com", "services": ["http", "rdp"], "source": "shodan"},
+    {"host": "app.acme.com", "in_scope": true, "source": "crtsh"}
+  ],
+  "typosquats": [
+    {"domain": "acme-login.com", "target": "acme.com", "registered": true, "has_mx": true, "source": "dnstwist"}
+  ],
+  "advisories": [
+    {"title": "Critical RCE in nginx <1.27", "component": "nginx", "severity": "high", "url": "https://nvd.nist.gov/...", "source": "taranis-ai"}
+  ]
+}
