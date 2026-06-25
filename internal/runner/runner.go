@@ -190,7 +190,13 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// what's RESOLVED since last pass). Runs over the whole tenant — a full pass is the
 	// authoritative present state. Only when every asset scanned cleanly, so a partial
 	// pass never falsely resolves an incident on an asset that errored.
-	if s.Detector != nil && firstErr == nil {
+	// Only reconcile (which RESOLVES incidents absent from `current`) when an actual scan established
+	// the authoritative present state — i.e. at least one asset was scanned. A pure event-driven tenant
+	// (identity / SaaS ingest, no scannable assets) has empty scan output every pass; reconciling it
+	// would falsely RESOLVE the incidents the ingest path opened via Detector.OpenFor. Those are
+	// event-driven and stay open until a human resolves them. (Mixed scan+ingest tenants still reconcile
+	// over scan output — the ingest-incident-survives-a-scan-pass case is a documented follow-on.)
+	if s.Detector != nil && firstErr == nil && scanned > 0 {
 		// Runtime-protection escalation (ADR-0007 Phase 0b): a finding whose endpoint is
 		// being attacked in production opens an incident regardless of severity floor.
 		var attacked map[string]bool

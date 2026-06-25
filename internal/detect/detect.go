@@ -66,9 +66,54 @@ type Result struct {
 // REGARDLESS of the severity floor — a live exploit attempt is itself urgent — and the
 // incident is marked Attacked. Pass nil when there is no runtime signal.
 func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []types.Finding, attacked map[string]bool) (Result, error) {
-	var res Result
+	present := d.presentIssues(current, attacked)
 
-	// present issues: at/above the threshold, OR observed under attack (any severity).
+	openByKey, err := d.openIncidentsByKey(ctx, tenantID)
+	if err != nil {
+		return Result{}, err
+	}
+
+	res, err := d.openNew(ctx, tenantID, present, openByKey, attacked)
+	if err != nil {
+		return res, err
+	}
+
+	// resolve incidents whose issue is gone — ONLY valid when `current` is the authoritative present
+	// state (a full scan pass). Event-driven ingests use OpenFor (open-only) instead, so they never
+	// falsely resolve a scan incident whose key they don't carry.
+	for key, inc := range openByKey {
+		if _, still := present[key]; still {
+			continue
+		}
+		inc.Status = platform.IncidentResolved
+		inc.ResolvedAt = d.now()
+		d.record("incident_resolved", inc)
+		if err := d.Store.PutIncident(ctx, inc); err != nil {
+			return res, err
+		}
+		res.Resolved = append(res.Resolved, inc)
+	}
+	return res, nil
+}
+
+// OpenFor opens incidents for the present (at/above-threshold or attacked) findings WITHOUT the
+// resolve sweep — for event-driven ingest paths (identity / SaaS / runtime). Those findings arrive
+// one-shot and are not re-confirmed by a scan pass, so feeding them to Reconcile would falsely resolve
+// every scan incident whose key they don't carry. A high identity/SaaS threat should still open a "new
+// since last scan" incident the moment it's ingested — that's what this does. Idempotent: a finding
+// whose key already has an open incident is skipped.
+func (d *Detector) OpenFor(ctx context.Context, tenantID string, current []types.Finding, attacked map[string]bool) (Result, error) {
+	present := d.presentIssues(current, attacked)
+	openByKey, err := d.openIncidentsByKey(ctx, tenantID)
+	if err != nil {
+		return Result{}, err
+	}
+	return d.openNew(ctx, tenantID, present, openByKey, attacked)
+}
+
+// presentIssues filters findings to the ones that warrant an incident: at/above the severity floor,
+// or observed under attack (any severity).
+func (d *Detector) presentIssues(current []types.Finding, attacked map[string]bool) map[string]types.Finding {
 	present := map[string]types.Finding{}
 	for _, f := range current {
 		k := Key(f)
@@ -76,10 +121,14 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 			present[k] = f
 		}
 	}
+	return present
+}
 
+// openIncidentsByKey indexes the tenant's currently-open incidents by their dedup key.
+func (d *Detector) openIncidentsByKey(ctx context.Context, tenantID string) (map[string]platform.Incident, error) {
 	incidents, err := d.Store.ListIncidents(ctx, tenantID)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
 	openByKey := map[string]platform.Incident{}
 	for _, inc := range incidents {
@@ -87,18 +136,21 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 			openByKey[inc.Key] = inc
 		}
 	}
+	return openByKey, nil
+}
 
-	// Maintenance window active → suppress OPENING new incidents (resolves below still flow, so a
-	// fix landing during the window still closes its incident). A planned change-freeze shouldn't
-	// trip the SOC.
-	suppressed := d.Suppressed != nil && d.Suppressed(ctx, tenantID, d.now())
-
-	// open incidents for newly-present issues
+// openNew opens an incident for each present issue not already open (the shared "open" half of
+// Reconcile + OpenFor). Maintenance-window suppression applies to OPENING only.
+func (d *Detector) openNew(ctx context.Context, tenantID string, present map[string]types.Finding, openByKey map[string]platform.Incident, attacked map[string]bool) (Result, error) {
+	var res Result
+	// Maintenance window active → suppress OPENING new incidents (resolves still flow elsewhere, so a
+	// fix landing during the window still closes its incident). A planned change-freeze shouldn't trip
+	// the SOC.
+	if d.Suppressed != nil && d.Suppressed(ctx, tenantID, d.now()) {
+		return res, nil
+	}
 	for key, f := range present {
 		if _, already := openByKey[key]; already {
-			continue
-		}
-		if suppressed {
 			continue
 		}
 		title := f.Title
@@ -118,20 +170,6 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 			_ = d.Alerter.IncidentOpened(ctx, inc) // best-effort; never fails the pass
 		}
 		res.Opened = append(res.Opened, inc)
-	}
-
-	// resolve incidents whose issue is gone
-	for key, inc := range openByKey {
-		if _, still := present[key]; still {
-			continue
-		}
-		inc.Status = platform.IncidentResolved
-		inc.ResolvedAt = d.now()
-		d.record("incident_resolved", inc)
-		if err := d.Store.PutIncident(ctx, inc); err != nil {
-			return res, err
-		}
-		res.Resolved = append(res.Resolved, inc)
 	}
 	return res, nil
 }

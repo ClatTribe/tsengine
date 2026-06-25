@@ -270,6 +270,22 @@ func main() {
 	}
 	g := &grc.GRC{Store: st}
 
+	// The continuous-monitoring detector — shared by the runner (full open/resolve each pass) AND the
+	// API's event-driven ingest paths (identity / SaaS), which call detector.OpenFor to open incidents
+	// for a freshly-ingested high threat WITHOUT the resolve sweep.
+	detector := &detect.Detector{Store: st, Recorder: rec, Alerter: incidentAlerter, NewID: newID,
+		// Maintenance-window suppression: during an active change-freeze, open no incidents and page
+		// no one (resolves still flow). Reads the tenant's windows at evaluation time.
+		Suppressed: func(ctx context.Context, tenantID string, now time.Time) bool {
+			t, err := st.GetTenant(ctx, tenantID)
+			if err != nil {
+				return false
+			}
+			_, active := t.InMaintenance(now)
+			return active
+		},
+	}
+
 	svc := &runner.Service{
 		Store: st, Connectors: reg, Tokens: tokens, NewID: newID,
 		GRC: g, Desk: desk,
@@ -289,18 +305,7 @@ func main() {
 		WebhookSecret: os.Getenv("TSENGINE_WEBHOOK_SECRET"), PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// continuous-monitoring: open/resolve incidents from change between passes,
 		// alerting a human the moment a new at/above-threshold issue appears.
-		Detector: &detect.Detector{Store: st, Recorder: rec, Alerter: incidentAlerter, NewID: newID,
-			// Maintenance-window suppression: during an active change-freeze, open no incidents and
-			// page no one (resolves still flow). Reads the tenant's windows at evaluation time.
-			Suppressed: func(ctx context.Context, tenantID string, now time.Time) bool {
-				t, err := st.GetTenant(ctx, tenantID)
-				if err != nil {
-					return false
-				}
-				_, active := t.InMaintenance(now)
-				return active
-			},
-		},
+		Detector: detector,
 	}
 	// The operate backend serves non-tech "workspace" assets (identity/email posture):
 	// a snapshot file if the asset names one, else a LIVE fetch from the connected
@@ -347,8 +352,9 @@ func main() {
 	browser := pentest.NewBrowserFromEnv()
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
-		Recorder: rec, // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
-		Token:    token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
+		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
+		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
+		Token:          token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
 		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser,
 	})
