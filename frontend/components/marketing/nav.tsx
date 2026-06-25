@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ShieldCheck, Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
+  Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
   AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles,
 } from "lucide-react";
+import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; desc: string; icon: typeof Bot };
@@ -64,7 +65,7 @@ export function MarketingNav() {
       <nav className="mx-auto flex h-16 max-w-6xl items-center gap-1 px-5">
         <Link href="/" className="mr-2 flex items-center gap-2.5" onClick={() => setOpen(false)}>
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
-            <ShieldCheck className="h-4 w-4" />
+            <LogoMark className="h-5 w-5" />
           </span>
           <span className="text-base font-semibold tracking-tight">TensorShield</span>
         </Link>
