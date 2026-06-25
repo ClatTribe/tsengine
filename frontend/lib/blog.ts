@@ -1,15 +1,6 @@
 // The blog content model + posts. Content lives as structured blocks (no MDX dependency) rendered by
-// the post page with the marketing design system. Each post is tagged to a funnel stage (ToFu /
-// MoFu / BoFu) and links to the matching free tool — so the blog is the SEO/awareness engine that
-// feeds the scanner (ToFu), the readiness self-assessment (MoFu), and the trial (BoFu).
-
-export type FunnelStage = "ToFu" | "MoFu" | "BoFu";
-
-export const STAGE_META: Record<FunnelStage, { label: string; blurb: string }> = {
-  ToFu: { label: "Awareness", blurb: "Find out where you stand" },
-  MoFu: { label: "Consideration", blurb: "Get ready, the right way" },
-  BoFu: { label: "Decision", blurb: "Close the deal" },
-};
+// the post page with the marketing design system. Each post carries a reader-facing topic category
+// and links to the relevant free tool.
 
 export type Block =
   | { t: "p"; text: string }
@@ -21,7 +12,7 @@ export interface Post {
   slug: string;
   title: string;
   description: string;
-  stage: FunnelStage;
+  category: string; // reader-facing topic
   date: string; // ISO
   readMins: number;
   body: Block[];
@@ -33,7 +24,7 @@ export const POSTS: Post[] = [
     title: "Will you pass an enterprise security questionnaire? The checks buyers run first",
     description:
       "Before a big customer signs, their security team runs a checklist against your domain. Here are the externally-visible checks that come first — and how to see your own score for free.",
-    stage: "ToFu",
+    category: "Security questionnaires",
     date: "2026-06-20",
     readMins: 5,
     body: [
@@ -60,7 +51,7 @@ export const POSTS: Post[] = [
     title: "SOC 2 for seed-stage startups: a founder's readiness checklist",
     description:
       "You don't need a compliance team to get SOC 2-ready. Here's the founder's-eye view of what a Type I actually requires, in plain English, with a free self-assessment.",
-    stage: "MoFu",
+    category: "SOC 2",
     date: "2026-06-22",
     readMins: 7,
     body: [
@@ -90,7 +81,7 @@ export const POSTS: Post[] = [
     title: "Security for the sales cycle: fixing the gaps before they block a deal",
     description:
       "Security is cheaper before a deal stalls than during. Here's how a fractional, AI-run security team closes the gaps a buyer's review will find — without a hire.",
-    stage: "BoFu",
+    category: "Sales & security",
     date: "2026-06-24",
     readMins: 6,
     body: [
@@ -117,8 +108,4 @@ export const POSTS: Post[] = [
 
 export function postBySlug(slug: string): Post | undefined {
   return POSTS.find((p) => p.slug === slug);
-}
-
-export function postsByStage(stage: FunnelStage): Post[] {
-  return POSTS.filter((p) => p.stage === stage);
 }
