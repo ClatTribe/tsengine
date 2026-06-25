@@ -656,7 +656,7 @@ func runCloudAssess(argv []string) error {
 	// prose + an executive summary (graceful — leaves the deterministic output
 	// on any error or when no key is set).
 	if *llmFlag != "off" {
-		if g, ok := cloudengine.GeminiFromEnv(); ok {
+		if g, ok := cloudengine.LLMFromEnv(); ok {
 			if terr := cloudengine.EnrichWithLLM(context.Background(), g, assessment); terr != nil {
 				fmt.Fprintf(os.Stderr, "[cloud-assess] L2 translator skipped: %v\n", terr)
 			}
@@ -800,9 +800,9 @@ func runCloudInvestigate(argv []string) error {
 		}
 	}
 
-	llm, ok := cloudengine.GeminiFromEnv()
+	llm, ok := cloudengine.LLMFromEnv()
 	if !ok {
-		return fmt.Errorf("cloud-investigate needs LLM_API_KEY (the agent's brain)")
+		return fmt.Errorf("cloud-investigate needs an LLM (the agent's brain): set LLM_API_KEY (cloud), or LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama")
 	}
 	var rec *ledger.Recorder
 	if *ledgerOut != "" {
@@ -874,9 +874,9 @@ func runWebInvestigate(argv []string) error {
 		}
 	}
 
-	llm, ok := cloudengine.GeminiFromEnv()
+	llm, ok := cloudengine.LLMFromEnv()
 	if !ok {
-		return fmt.Errorf("web-investigate needs LLM_API_KEY (the agent's brain)")
+		return fmt.Errorf("web-investigate needs an LLM (the agent's brain): set LLM_API_KEY (cloud), or LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama")
 	}
 	var rec *ledger.Recorder
 	if *ledgerOut != "" {
