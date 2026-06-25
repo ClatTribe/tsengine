@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Bug, Activity, ShieldCheck, Boxes, ScrollText,
   RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings, FileText, UserCheck,
+  Layers, Crosshair, Spline, AppWindow, Scale,
 } from "lucide-react";
 import { rescanAll } from "@/app/(app)/assets/actions";
 import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
@@ -61,16 +62,20 @@ export function CommandPalette() {
     const nav: Cmd[] = [
       { id: "overview", label: "Overview", group: "Go to", icon: LayoutDashboard, keywords: "home dashboard risk", run: go("/dashboard") },
       { id: "inbox", label: "Inbox", group: "Go to", icon: Inbox, keywords: "approvals hitl triage", run: go("/inbox") },
-      { id: "reviews", label: "Expert reviews", group: "Go to", icon: UserCheck, keywords: "human expert escalation second opinion vciso", run: go("/reviews") },
-      { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities issues", run: go("/findings") },
-      { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved", run: go("/incidents") },
+      { id: "issues", label: "Issues", group: "Go to", icon: Layers, keywords: "unified deduped confirmed prioritized noise", run: go("/issues") },
+      { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities raw scanners", run: go("/findings") },
+      { id: "pentest", label: "Pentest", group: "Go to", icon: Crosshair, keywords: "vapt exploit proven engagement penetration", run: go("/pentest") },
+      { id: "attack-paths", label: "Attack paths", group: "Go to", icon: Spline, keywords: "chain correlation crown jewel lateral", run: go("/attack-paths") },
+      { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved attack", run: go("/incidents") },
       { id: "compliance", label: "Compliance", group: "Go to", icon: ShieldCheck, keywords: "soc2 controls audit posture", run: go("/compliance") },
-      { id: "risks", label: "Risk register", group: "Go to", icon: ShieldCheck, keywords: "vciso risk accept treat mitigate likelihood impact judgment", run: go("/risks") },
+      { id: "risks", label: "Risk register", group: "Go to", icon: Scale, keywords: "vciso risk accept treat mitigate likelihood impact judgment", run: go("/risks") },
       { id: "audits", label: "Audits", group: "Go to", icon: FileText, keywords: "soc2 iso audit engagement auditor attestation external", run: go("/audits") },
       { id: "program", label: "Security program", group: "Go to", icon: FileText, keywords: "vciso policy policies acknowledge publish governance program", run: go("/program") },
       { id: "questionnaire", label: "Security questionnaire", group: "Go to", icon: ShieldCheck, keywords: "caiq sig vendor trust center procurement", run: go("/compliance/questionnaire") },
       { id: "reports", label: "Reports & evidence", group: "Go to", icon: FileText, keywords: "export sarif csv evidence pack signed download auditor", run: go("/reports") },
       { id: "assets", label: "Assets & connections", group: "Go to", icon: Boxes, keywords: "connect systems monitored", run: go("/assets") },
+      { id: "saas-apps", label: "SaaS apps", group: "Go to", icon: AppWindow, keywords: "shadow it oauth grants saas inventory discovery", run: go("/saas-apps") },
+      { id: "reviews", label: "Expert reviews", group: "Go to", icon: UserCheck, keywords: "human expert escalation second opinion vciso", run: go("/reviews") },
       { id: "activity", label: "Activity", group: "Go to", icon: ScrollText, keywords: "feed log agent", run: go("/activity") },
       { id: "settings", label: "Settings", group: "Go to", icon: Settings, keywords: "account organization notifications profile", run: go("/settings") },
     ];
