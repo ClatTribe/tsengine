@@ -15,7 +15,8 @@ import (
 type Pending struct {
 	TenantID   string `json:"tenant_id"`
 	TenantName string `json:"tenant_name"`
-	Kind       string `json:"kind"` // risk | audit | pentest | policy
+	Kind       string `json:"kind"`    // risk | audit | pentest | policy
+	ItemID     string `json:"item_id"` // the underlying entity id — lets the operator act on it from the desk
 	Title      string `json:"title"`
 	Detail     string `json:"detail,omitempty"`
 	Link       string `json:"link"` // the in-app path to act on it
@@ -44,7 +45,7 @@ func Queue(data []TenantData) []Pending {
 		if want("risk") {
 			for _, r := range td.Risks {
 				if r.Proposed || r.Status == platform.RiskOpen {
-					out = append(out, Pending{td.TenantID, td.TenantName, "risk", r.Title, "awaiting a treatment decision", "/risks"})
+					out = append(out, Pending{td.TenantID, td.TenantName, "risk", r.ID, r.Title, "awaiting a treatment decision", "/risks"})
 				}
 			}
 		}
@@ -57,21 +58,21 @@ func Queue(data []TenantData) []Pending {
 					}
 				}
 				if pending > 0 {
-					out = append(out, Pending{td.TenantID, td.TenantName, "audit", a.Framework + " audit", plural(pending, "control") + " awaiting attestation", "/audits"})
+					out = append(out, Pending{td.TenantID, td.TenantName, "audit", a.ID, a.Framework + " audit", plural(pending, "control") + " awaiting attestation", "/audits"})
 				}
 			}
 		}
 		if want("pentest") {
 			for _, e := range td.Pentests {
 				if e.Status == pentest.StatusComplete && !e.Signed() {
-					out = append(out, Pending{td.TenantID, td.TenantName, "pentest", e.Name, "report awaiting sign-off", "/pentest/" + e.ID})
+					out = append(out, Pending{td.TenantID, td.TenantName, "pentest", e.ID, e.Name, "report awaiting sign-off", "/pentest/" + e.ID})
 				}
 			}
 		}
 		if want("policy") {
 			for _, p := range td.Policies {
 				if p.Status == platform.PolicyDraft {
-					out = append(out, Pending{td.TenantID, td.TenantName, "policy", p.Name, "draft awaiting publish", "/program"})
+					out = append(out, Pending{td.TenantID, td.TenantName, "policy", p.ID, p.Name, "draft awaiting publish", "/program"})
 				}
 			}
 		}

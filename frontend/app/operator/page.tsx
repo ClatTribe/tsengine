@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { UserCog, Scale, FileCheck2, Crosshair, ScrollText, LogOut } from "lucide-react";
 import { getOperatorToken, operatorMe, operatorQueue, type QueueItem } from "@/lib/operator";
 import { operatorLogout } from "./actions";
+import { DecideRiskInline } from "@/components/operator/decide-risk-inline";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Practitioner console | TensorShield" };
@@ -65,17 +66,23 @@ export default async function OperatorConsole() {
                 {byTenant.get(tn)!.map((it, i) => {
                   const Icon = KIND_ICON[it.kind] ?? Scale;
                   return (
-                    <div key={`${it.tenant_id}-${i}`} className="card flex items-center gap-3 px-4 py-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-accent">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium">{it.title}</div>
-                        <div className="text-[11px] text-faint">
-                          {KIND_LABEL[it.kind] ?? it.kind}
-                          {it.detail ? ` · ${it.detail}` : ""}
+                    <div key={`${it.tenant_id}-${i}`} className="card px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-accent">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium">{it.title}</div>
+                          <div className="text-[11px] text-faint">
+                            {KIND_LABEL[it.kind] ?? it.kind}
+                            {it.detail ? ` · ${it.detail}` : ""}
+                          </div>
                         </div>
                       </div>
+                      {/* act-on-behalf: decide a risk right here. Other HITL kinds open in the client workspace. */}
+                      {it.kind === "risk" && it.item_id ? (
+                        <DecideRiskInline tenant={it.tenant_id} risk={it.item_id} />
+                      ) : null}
                     </div>
                   );
                 })}
@@ -83,8 +90,9 @@ export default async function OperatorConsole() {
             </section>
           ))}
           <p className="pt-2 text-center text-[11px] text-faint">
-            Read-only across your book of clients. Act on an item from within that client&apos;s workspace, where your
-            decision is recorded with your name + capacity and signed into the ledger.
+            Decide risks right here — your decision is recorded with your name + capacity and signed into the ledger.
+            Attestations, sign-offs, and policy publishing open in the client&apos;s workspace. You only ever see the
+            clients who named you a practitioner of record.
           </p>
         </div>
       )}
