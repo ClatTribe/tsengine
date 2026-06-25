@@ -148,6 +148,44 @@ export interface Action {
   created_at?: string;
 }
 
+// Risk register — the vCISO judgment artifact. The engine proposes candidates (Proposed); a named
+// human decides treatment (accept/mitigate/transfer/avoid), recorded with owner + rationale + ledger.
+export interface Risk {
+  id: string;
+  tenant_id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  likelihood: number; // 1-5
+  impact: number; // 1-5
+  treatment?: string; // accept | mitigate | transfer | avoid
+  status: string; // open | accepted | treating | closed
+  owner?: string;
+  rationale?: string;
+  finding_ids?: string[];
+  proposed?: boolean; // agent-seeded candidate, awaiting human triage
+  created_at: string;
+  decided_at?: string;
+  decided_by?: string;
+  ledger_ref?: string;
+}
+
+export interface RiskSummary {
+  total: number;
+  open: number;
+  accepted: number;
+  treating: number;
+  closed: number;
+  proposed: number;
+  by_level: Record<string, number>;
+  top_risk_id?: string;
+}
+
+export interface RisksResponse {
+  risks: Risk[];
+  summary: RiskSummary;
+}
+
 export interface Incident {
   id: string;
   key: string;

@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -69,6 +69,17 @@ export const api = {
   ackIncident: (id: string, by?: string) =>
     call<Incident>(`/v1/incidents/${id}/ack`, { method: "POST", body: JSON.stringify({ by: by ?? "" }) }),
   attackPaths: () => safe<AttackPaths>("/v1/attack-paths", { attack_paths: [], count: 0 }),
+
+  // Risk register (vCISO artifact) — list + board summary; seed candidates from findings (grounded);
+  // and the HITL treatment decision (a named human accepts/treats → signed ledger).
+  risks: () =>
+    safe<RisksResponse>("/v1/risks", {
+      risks: [],
+      summary: { total: 0, open: 0, accepted: 0, treating: 0, closed: 0, proposed: 0, by_level: {} },
+    }),
+  seedRisks: () => call<{ seeded: Risk[]; count: number }>("/v1/risks/seed", { method: "POST" }),
+  decideRisk: (id: string, body: { treatment: string; owner: string; rationale?: string }) =>
+    call<Risk>(`/v1/risks/${id}/decision`, { method: "POST", body: JSON.stringify(body) }),
 
   // SaaS-app discovery view (SSPM) — inventory + portfolio summary over the connected IdPs' grants.
   saasApps: () =>
