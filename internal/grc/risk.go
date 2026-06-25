@@ -130,6 +130,11 @@ var toolCategory = map[string]string{
 	"trivy": "Vulnerable dependencies", "grype": "Vulnerable dependencies", "osvscanner": "Vulnerable dependencies",
 	"prowler": "Cloud misconfiguration", "scoutsuite": "Cloud misconfiguration", "checkov": "Cloud misconfiguration",
 	"semgrep": "Insecure code", "sqlmap": "Injection", "dalfox": "Injection",
+	// Non-CWE finding sources — the founder ICP's primary surfaces. Without these they all fall to the
+	// vague "Other security" bucket, so a vCISO seeding risk from identity/SaaS threats gets one
+	// meaningless "Other security exposure" instead of a real, actionable category.
+	"identitythreat": "Identity & access", "operate": "Identity & access", "okta": "Identity & access",
+	"sspm": "SaaS configuration",
 }
 
 func normalizeCWE(c string) string {
