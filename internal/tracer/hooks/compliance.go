@@ -3,6 +3,7 @@ package hooks
 import (
 	_ "embed"
 	"encoding/json"
+	"sort"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -49,6 +50,64 @@ func NewCompliance() *Compliance {
 }
 
 func (*Compliance) Name() string { return "compliance" }
+
+// ControlsFor returns the distinct, sorted set of controls a framework defines across the whole
+// crosswalk — i.e. the controls this engine can actually assess for that framework (the ones it maps
+// findings to). Used to seed an audit engagement's control checklist for a tenant that has no posture
+// yet (a fresh account): grounded (§10) — these are real controls the product speaks to, not a guessed
+// or padded catalog. Framework key matches grc.Frameworks (soc2, pci, hipaa, …). Unknown key → nil.
+func (h *Compliance) ControlsFor(framework string) []string {
+	seen := map[string]bool{}
+	for _, cs := range h.corpus {
+		for _, id := range cs.forFramework(framework) {
+			seen[id] = true
+		}
+	}
+	if len(seen) == 0 {
+		return nil // unknown framework / no mapped controls — never a guessed catalog
+	}
+	out := make([]string, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// forFramework selects this CWE's control list for a framework key.
+func (cs controlSet) forFramework(framework string) []string {
+	switch framework {
+	case "soc2":
+		return cs.SOC2
+	case "pci":
+		return cs.PCI
+	case "hipaa":
+		return cs.HIPAA
+	case "cis_v8":
+		return cs.CISv8
+	case "nist_csf":
+		return cs.NISTCSF
+	case "iso27001":
+		return cs.ISO27001
+	case "gdpr":
+		return cs.GDPR
+	case "iso27701":
+		return cs.ISO27701
+	case "nist_800_53":
+		return cs.NIST80053
+	case "nist_800_171":
+		return cs.NIST800171
+	case "ccpa":
+		return cs.CCPA
+	case "sox":
+		return cs.SOX
+	case "fedramp":
+		return cs.FedRAMP
+	case "dpdp":
+		return cs.DPDP
+	}
+	return nil
+}
 
 // Lookup maps a set of CWEs to the union of compliance controls they affect,
 // or (nil,false) if none match. Single corpus access path, shared by the

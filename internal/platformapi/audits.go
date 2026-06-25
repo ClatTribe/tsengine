@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/grc"
+	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -66,6 +67,12 @@ func (d Deps) handleCreateAudit(w http.ResponseWriter, r *http.Request, tenantID
 		for _, c := range post {
 			controlIDs = append(controlIDs, c.ControlID)
 		}
+	}
+	// Fresh tenant with no posture yet → the engagement would otherwise have ZERO controls (a useless
+	// audit). Fall back to the framework's assessable control set from the crosswalk — the controls this
+	// product actually speaks to — so the auditor has a real starting checklist (grounded, §10).
+	if len(controlIDs) == 0 {
+		controlIDs = hooks.NewCompliance().ControlsFor(framework)
 	}
 
 	id := "audit-" + tenantID
