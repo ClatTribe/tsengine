@@ -129,6 +129,10 @@ export const api = {
       { method: "POST", body: "{}" },
     ),
 
+  // AI Cloud Engineer — the cloud-agent's proven attack paths (read-only view) + whether a run is possible.
+  cloudInvestigation: () =>
+    safe<{ total: number; enabled: boolean; paths: Finding[] }>("/v1/cloud/investigate", { total: 0, enabled: false, paths: [] }),
+
   // SaaS-app discovery view (SSPM) — inventory + portfolio summary over the connected IdPs' grants.
   saasApps: () =>
     safe<SaaSAppsResponse>("/v1/saas-apps", {
