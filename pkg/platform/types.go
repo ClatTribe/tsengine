@@ -67,7 +67,7 @@ type Tenant struct {
 type Contact struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
-	Role  string `json:"role,omitempty"`  // e.g. "Security Lead", "On-call engineer"
+	Role  string `json:"role,omitempty"` // e.g. "Security Lead", "On-call engineer"
 	Email string `json:"email,omitempty"`
 	Phone string `json:"phone,omitempty"` // contact number (SMS/voice delivery is Bucket-C)
 	Order int    `json:"order"`           // escalation precedence (lower = contacted first)
@@ -293,13 +293,13 @@ const (
 // write actions) acts on. The OAuth token itself is NEVER stored inline — SecretRef
 // points at the secret store (KMS-envelope for the MVP).
 type Connection struct {
-	ID        string    `json:"id"`
-	TenantID  string    `json:"tenant_id"`
-	Kind      string    `json:"kind"`   // ConnGitHub | ConnAWS | ...
-	Status    string    `json:"status"` // ConnActive | ConnDegraded | ConnRevoked
-	Scopes    []string  `json:"scopes,omitempty"`
-	SecretRef string    `json:"secret_ref"` // → secret store, opaque to the platform
-	Account   string    `json:"account,omitempty"`
+	ID        string   `json:"id"`
+	TenantID  string   `json:"tenant_id"`
+	Kind      string   `json:"kind"`   // ConnGitHub | ConnAWS | ...
+	Status    string   `json:"status"` // ConnActive | ConnDegraded | ConnRevoked
+	Scopes    []string `json:"scopes,omitempty"`
+	SecretRef string   `json:"secret_ref"` // → secret store, opaque to the platform
+	Account   string   `json:"account,omitempty"`
 	// Config holds per-connection, NON-secret configuration the customer sets via UX — today the
 	// cloud-remediation knobs (remediation_enabled + the customer's own cross-account write role:
 	// remediation_role_arn/region for AWS, remediation_impersonate_sa for GCP). These are
@@ -311,9 +311,9 @@ type Connection struct {
 
 // CloudRemediationConfig keys (Connection.Config) — the per-tenant, customer-set cloud write role.
 const (
-	CfgRemediationEnabled = "remediation_enabled"      // "true" → use the per-tenant write path
-	CfgRemediationRole    = "remediation_role_arn"     // AWS: the customer's cross-account write role
-	CfgRemediationRegion  = "remediation_region"       // AWS: region for the write call (optional)
+	CfgRemediationEnabled = "remediation_enabled"        // "true" → use the per-tenant write path
+	CfgRemediationRole    = "remediation_role_arn"       // AWS: the customer's cross-account write role
+	CfgRemediationRegion  = "remediation_region"         // AWS: region for the write call (optional)
 	CfgRemediationSA      = "remediation_impersonate_sa" // GCP: the write SA to impersonate
 )
 
@@ -506,6 +506,76 @@ func (i Incident) Overdue(ackWindowMins int, now time.Time) bool {
 	}
 	// re-ping only if we haven't escalated yet, or the last escalation is itself a window old
 	return i.LastEscalatedAt.IsZero() || now.Sub(i.LastEscalatedAt) >= window
+}
+
+// Risk treatment decisions (the vCISO judgment the agent cannot make on its own).
+const (
+	RiskTreatmentAccept   = "accept"   // accept the risk as-is (residual risk owned)
+	RiskTreatmentMitigate = "mitigate" // reduce via a control / remediation
+	RiskTreatmentTransfer = "transfer" // shift to a third party (insurance, vendor)
+	RiskTreatmentAvoid    = "avoid"    // eliminate by removing the exposed function
+)
+
+// Risk statuses.
+const (
+	RiskOpen     = "open"     // identified, no human treatment decision yet
+	RiskAccepted = "accepted" // a named human accepted the residual risk
+	RiskTreating = "treating" // mitigation/transfer/avoidance in progress
+	RiskClosed   = "closed"   // resolved or no longer applicable
+)
+
+// Risk is a risk-register entry — the core vCISO/GRC artifact a security consultant
+// maintains. The engine can PROPOSE a candidate risk from a real finding (grounded: it
+// cites the finding ids), but the TREATMENT DECISION is a human judgment call: only a
+// named person can accept/transfer/avoid residual risk, and that decision is signed into
+// the ledger (DecidedBy/At/LedgerRef). Likelihood and Impact are 1–5; Score = L×I (1–25).
+type Risk struct {
+	ID          string   `json:"id"`
+	TenantID    string   `json:"tenant_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Category    string   `json:"category,omitempty"` // e.g. "Access control", "Vendor", "Data"
+	Likelihood  int      `json:"likelihood"`         // 1–5
+	Impact      int      `json:"impact"`             // 1–5
+	Treatment   string   `json:"treatment,omitempty"`
+	Status      string   `json:"status"`
+	Owner       string   `json:"owner,omitempty"`     // the accountable human
+	Rationale   string   `json:"rationale,omitempty"` // why this treatment (the human's judgment)
+	FindingIDs  []string `json:"finding_ids,omitempty"`
+	Proposed    bool     `json:"proposed,omitempty"` // true = agent-seeded candidate, awaiting human triage
+
+	CreatedAt time.Time `json:"created_at"`
+	DecidedAt time.Time `json:"decided_at,omitempty"`
+	DecidedBy string    `json:"decided_by,omitempty"`
+	LedgerRef string    `json:"ledger_ref,omitempty"`
+}
+
+// Score is the inherent risk score, Likelihood × Impact (1–25). Clamped to the 1–5 range
+// per factor so a malformed input can't produce a nonsense score.
+func (r Risk) Score() int { return clamp15(r.Likelihood) * clamp15(r.Impact) }
+
+// Level buckets the score into a human label: low (<6), medium (<12), high (<20), critical (≥20).
+func (r Risk) Level() string {
+	switch s := r.Score(); {
+	case s >= 20:
+		return "critical"
+	case s >= 12:
+		return "high"
+	case s >= 6:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func clamp15(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > 5 {
+		return 5
+	}
+	return n
 }
 
 // ReviewRequest statuses.

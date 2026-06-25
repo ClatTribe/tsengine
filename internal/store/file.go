@@ -125,6 +125,13 @@ func (f *File) PutIncident(ctx context.Context, i platform.Incident) error {
 	return f.persist()
 }
 
+func (f *File) PutRisk(ctx context.Context, r platform.Risk) error {
+	if err := f.Memory.PutRisk(ctx, r); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error {
 	if err := f.Memory.PutIgnoreRule(ctx, ir); err != nil {
 		return err

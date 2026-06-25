@@ -24,6 +24,7 @@ type Memory struct {
 	actions     map[string]map[string]platform.Action        // tenantID → actionID → action
 	controls    map[string]map[string]platform.ControlState  // tenantID → "framework/control" → state
 	incidents   map[string]map[string]platform.Incident      // tenantID → incidentID → incident
+	risks       map[string]map[string]platform.Risk          // tenantID → riskID → risk
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
 	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
 	runtimeEvts map[string][]platform.RuntimeEvent           // tenantID → runtime-protection events (append-only)
@@ -45,6 +46,7 @@ func NewMemory() *Memory {
 		actions:     map[string]map[string]platform.Action{},
 		controls:    map[string]map[string]platform.ControlState{},
 		incidents:   map[string]map[string]platform.Incident{},
+		risks:       map[string]map[string]platform.Risk{},
 		ignores:     map[string]map[string]platform.IgnoreRule{},
 		exclusions:  map[string]map[string]platform.ExclusionRule{},
 		runtimeEvts: map[string][]platform.RuntimeEvent{},
@@ -293,6 +295,26 @@ func (m *Memory) ListIncidents(_ context.Context, tenantID string) ([]platform.I
 	return out, nil
 }
 
+func (m *Memory) PutRisk(_ context.Context, r platform.Risk) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.risks[r.TenantID] == nil {
+		m.risks[r.TenantID] = map[string]platform.Risk{}
+	}
+	m.risks[r.TenantID][r.ID] = r
+	return nil
+}
+
+func (m *Memory) ListRisks(_ context.Context, tenantID string) ([]platform.Risk, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Risk, 0, len(m.risks[tenantID]))
+	for _, r := range m.risks[tenantID] {
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 func (m *Memory) PutIgnoreRule(_ context.Context, ir platform.IgnoreRule) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -442,6 +464,7 @@ type Snapshot struct {
 	Actions     map[string]map[string]platform.Action        `json:"actions"`
 	Controls    map[string]map[string]platform.ControlState  `json:"controls"`
 	Incidents   map[string]map[string]platform.Incident      `json:"incidents"`
+	Risks       map[string]map[string]platform.Risk          `json:"risks,omitempty"`
 	Ignores     map[string]map[string]platform.IgnoreRule    `json:"ignores,omitempty"`
 	Exclusions  map[string]map[string]platform.ExclusionRule `json:"exclusions,omitempty"`
 	RuntimeEvts map[string][]platform.RuntimeEvent           `json:"runtime_events,omitempty"`
@@ -466,6 +489,7 @@ func (m *Memory) Export() Snapshot {
 		Actions:     m.actions,
 		Controls:    m.controls,
 		Incidents:   m.incidents,
+		Risks:       m.risks,
 		Ignores:     m.ignores,
 		Exclusions:  m.exclusions,
 		RuntimeEvts: m.runtimeEvts,
@@ -489,6 +513,7 @@ func (m *Memory) load(s Snapshot) {
 	m.actions = orEmptyNested(s.Actions)
 	m.controls = orEmptyControls(s.Controls)
 	m.incidents = orEmptyIncidents(s.Incidents)
+	m.risks = orEmptyRisks(s.Risks)
 	m.ignores = orEmptyIgnores(s.Ignores)
 	m.exclusions = orEmptyExclusions(s.Exclusions)
 	m.runtimeEvts = orEmpty(s.RuntimeEvts)
@@ -544,6 +569,12 @@ func orEmptyExclusions(m map[string]map[string]platform.ExclusionRule) map[strin
 func orEmptyIgnores(m map[string]map[string]platform.IgnoreRule) map[string]map[string]platform.IgnoreRule {
 	if m == nil {
 		return map[string]map[string]platform.IgnoreRule{}
+	}
+	return m
+}
+func orEmptyRisks(m map[string]map[string]platform.Risk) map[string]map[string]platform.Risk {
+	if m == nil {
+		return map[string]map[string]platform.Risk{}
 	}
 	return m
 }
