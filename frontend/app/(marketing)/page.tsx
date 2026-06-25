@@ -1,10 +1,11 @@
 import Link from "next/link";
 import {
-  ShieldCheck, Sparkles, ArrowRight, Plug, ScanLine, CheckCircle2, Bug, FileCheck2,
-  UserCheck, Lock, Radar, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
+  ShieldCheck, Sparkles, ArrowRight, Plug, ScanLine, CheckCircle2, FileCheck2,
+  Lock, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
+import { FeatureIcon } from "@/components/brand/feature-icon";
 import { LiveConsole } from "@/components/marketing/live-console";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
@@ -171,16 +172,16 @@ export default function Landing() {
       <Section eyebrow="One platform" title="Security and compliance, handled." sub="The work a security engineer and a compliance manager would do — automated, on one auditable loop.">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { icon: Bug, t: "Best-in-class detection", d: "Wraps the leading OSS scanners across web, APIs, code, containers, cloud & identity — recall on par with standalone tools.", href: "/supply-chain" },
-            { icon: FileCheck2, t: "Compliance on autopilot", d: "Findings map to SOC 2 / ISO / PCI / HIPAA controls automatically, with a signed evidence pack and an auto-answered questionnaire.", href: "/frameworks" },
-            { icon: Radar, t: "Continuous monitoring", d: "Re-scans on every change and on a schedule — new high-severity issues page on-call, resolved ones close themselves.", href: "/ai-security-engineer" },
-            { icon: UserCheck, t: "Human in the loop", d: "The agent proposes; you approve. Tier-gated, signed into a tamper-evident ledger — autonomy where it's earned.", href: "/ai-security-engineer" },
-            { icon: KeyRound, t: "Identity posture", d: "MFA gaps, risky OAuth grants, stale accounts, email spoofing (DMARC/SPF/DKIM) — fixed across Google, M365 & Okta.", href: "/saas-posture" },
-            { icon: Lock, t: "Provable evidence", d: "Every claim is backed by a tool and ed25519-signed. Auditors get reproducible proof, not screenshots.", href: "/security" },
-          ].map(({ icon: Icon, t, d, href }) => (
+            { name: "detection", t: "Best-in-class detection", d: "Wraps the leading OSS scanners across web, APIs, code, containers, cloud & identity — recall on par with standalone tools.", href: "/supply-chain" },
+            { name: "compliance", t: "Compliance on autopilot", d: "Findings map to SOC 2 / ISO / PCI / HIPAA controls automatically, with a signed evidence pack and an auto-answered questionnaire.", href: "/frameworks" },
+            { name: "monitoring", t: "Continuous monitoring", d: "Re-scans on every change and on a schedule — new high-severity issues page on-call, resolved ones close themselves.", href: "/ai-security-engineer" },
+            { name: "hitl", t: "Human in the loop", d: "The agent proposes; you approve. Tier-gated, signed into a tamper-evident ledger — autonomy where it's earned.", href: "/ai-security-engineer" },
+            { name: "identity", t: "Identity posture", d: "MFA gaps, risky OAuth grants, stale accounts, email spoofing (DMARC/SPF/DKIM) — fixed across Google, M365 & Okta.", href: "/saas-posture" },
+            { name: "evidence", t: "Provable evidence", d: "Every claim is backed by a tool and ed25519-signed. Auditors get reproducible proof, not screenshots.", href: "/security" },
+          ].map(({ name, t, d, href }) => (
             <Link key={t} href={href} className="card group p-5 transition hover:border-accent/40 hover:shadow-card-hover">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
-                <Icon className="h-4 w-4" />
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent ring-1 ring-accent/10">
+                <FeatureIcon name={name} className="h-[22px] w-[22px]" />
               </span>
               <h3 className="mt-3.5 flex items-center gap-1 text-sm font-semibold">
                 {t}
