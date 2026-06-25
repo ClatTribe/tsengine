@@ -41,3 +41,37 @@ func TestBuildSystemPrompt_NoFindings(t *testing.T) {
 		t.Errorf("should note no L1 findings")
 	}
 }
+
+func TestDigestFindings_SurfacesL15AndBoostsWithinBand(t *testing.T) {
+	l1 := []types.Finding{
+		// two HIGH findings: the KEV-listed one must rise within the band.
+		{ID: "f-plain", Severity: types.SeverityHigh, RuleID: "nuclei::x", Endpoint: "https://x/a", Title: "plain high"},
+		{ID: "f-kev", Severity: types.SeverityHigh, RuleID: "nuclei::cve", Endpoint: "https://x/b", Title: "kev high",
+			ThreatIntel: &types.ThreatIntel{
+				KEV:  &types.KEVStatus{Listed: true},
+				EPSS: &types.EPSSScore{Score: 0.94},
+			},
+			Exploitability: &types.Exploitability{Score: 8},
+			CorroboratedBy: []string{"grype", "trivy"},
+		},
+	}
+	lines := digestFindings(l1)
+	if len(lines) != 2 {
+		t.Fatalf("want 2 digest lines, got %d", len(lines))
+	}
+	// within-band boost: KEV finding first.
+	if !strings.Contains(lines[0], "f-kev") {
+		t.Errorf("KEV-listed high should sort before a plain high within the band; got order:\n%v", lines)
+	}
+	// L1.5 signals surfaced inline.
+	for _, want := range []string{"KEV", "EPSS:0.94", "exploit:8", "corrob:2"} {
+		if !strings.Contains(lines[0], want) {
+			t.Errorf("digest line missing L1.5 tag %q: %s", want, lines[0])
+		}
+	}
+	// a bare finding carries no enrichment bracket (the L1.5 suffix is "  […]",
+	// distinct from the always-present "[id]" prefix).
+	if strings.Contains(lines[1], "  [") {
+		t.Errorf("a finding with no L1.5 enrichment should have no enrichment bracket: %s", lines[1])
+	}
+}

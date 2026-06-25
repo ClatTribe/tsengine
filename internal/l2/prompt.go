@@ -41,7 +41,11 @@ Rules:
 
 Target: %s (%s)
 
-L1 findings (%d) — your input:
+L1 findings (%d) — your input. Each line carries the L1.5 enrichment in [brackets]:
+KEV = on CISA's actively-exploited list (treat as urgent); EPSS = exploit probability 0–1;
+exploit:/surface: = L1.5 exploitability + surface-priority (0–10, higher = more reachable/impactful);
+corrob: = independent tools that agree; corroborated/verified = cross-confirmed or PoC-proven.
+Triage by these, not severity alone — a KEV or high-exploit finding outranks a plain one of equal severity.
 `, target.Target, target.Type, len(l1))
 
 	for _, line := range digestFindings(l1) {
@@ -57,12 +61,23 @@ L1 findings (%d) — your input:
 // digestFindings renders a compact, deterministic one-line-per-finding
 // digest (sorted for stable prompt prefix → cache-friendly). Capped so a
 // huge finding set can't blow the prompt.
+//
+// The line carries the L1.5 enrichment INLINE (KEV/EPSS/exploitability/
+// surface-priority/corroboration/verification) so the Lead triages WITH the
+// enrichment at a glance — not despite it. Severity stays the primary sort
+// (the security-engineer expectation + the bench test), but the L1.5 signals
+// break ties WITHIN a band, so a KEV-listed / highly-exploitable finding
+// rises above a plain one of the same severity. Full detail is still one
+// get_finding(id) away; this just stops the digest from throwing L1.5 away.
 func digestFindings(l1 []types.Finding) []string {
 	const cap = 200
 	sorted := append([]types.Finding(nil), l1...)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].Severity.Rank() != sorted[j].Severity.Rank() {
 			return sorted[i].Severity.Rank() > sorted[j].Severity.Rank() // critical (Rank 5) first
+		}
+		if bi, bj := l15Boost(sorted[i]), l15Boost(sorted[j]); bi != bj {
+			return bi > bj // within a severity band, the L1.5-hotter finding first
 		}
 		return sorted[i].ID < sorted[j].ID
 	})
@@ -72,8 +87,63 @@ func digestFindings(l1 []types.Finding) []string {
 			out = append(out, fmt.Sprintf("… (+%d more)", len(sorted)-cap))
 			break
 		}
-		out = append(out, fmt.Sprintf("- [%s] %s %s %s — %s",
-			f.ID, f.Severity, f.RuleID, f.Endpoint, f.Title))
+		line := fmt.Sprintf("- [%s] %s %s %s — %s",
+			f.ID, f.Severity, f.RuleID, f.Endpoint, f.Title)
+		if tags := l15Tags(f); tags != "" {
+			line += "  [" + tags + "]"
+		}
+		out = append(out, line)
 	}
 	return out
+}
+
+// l15Boost is the within-severity-band triage weight from the L1.5 signals:
+// KEV (actively exploited) dominates, then EPSS exploit-probability, then the
+// exploitability + surface-priority hooks, then cross-tool corroboration.
+func l15Boost(f types.Finding) int {
+	boost := 0
+	if ti := f.ThreatIntel; ti != nil {
+		if ti.KEV != nil && ti.KEV.Listed {
+			boost += 1000 // CISA KEV: actively exploited in the wild — always rises
+		}
+		if ti.EPSS != nil {
+			boost += int(ti.EPSS.Score * 100) // 0..100
+		}
+	}
+	if f.Exploitability != nil {
+		boost += f.Exploitability.Score * 10
+	}
+	if f.SurfacePriority != nil {
+		boost += f.SurfacePriority.Score
+	}
+	boost += len(f.CorroboratedBy) * 2
+	return boost
+}
+
+// l15Tags is the compact inline view of a finding's L1.5 enrichment for the
+// digest line. Empty when the finding carries no enrichment (so a bare L1
+// finding reads exactly as before).
+func l15Tags(f types.Finding) string {
+	var t []string
+	if ti := f.ThreatIntel; ti != nil {
+		if ti.KEV != nil && ti.KEV.Listed {
+			t = append(t, "KEV") // actively exploited
+		}
+		if ti.EPSS != nil {
+			t = append(t, fmt.Sprintf("EPSS:%.2f", ti.EPSS.Score))
+		}
+	}
+	if f.Exploitability != nil {
+		t = append(t, fmt.Sprintf("exploit:%d", f.Exploitability.Score))
+	}
+	if f.SurfacePriority != nil {
+		t = append(t, fmt.Sprintf("surface:%d", f.SurfacePriority.Score))
+	}
+	if n := len(f.CorroboratedBy); n > 0 {
+		t = append(t, fmt.Sprintf("corrob:%d", n))
+	}
+	if vs := f.VerificationStatus; vs != "" && string(vs) != "pattern_match" {
+		t = append(t, string(vs)) // e.g. corroborated / verified
+	}
+	return strings.Join(t, " ")
 }
