@@ -95,3 +95,28 @@ func TestSummarize(t *testing.T) {
 		t.Errorf("by_level critical = %d, want 1", s.ByLevel["critical"])
 	}
 }
+
+// TestCandidateRisks_IdentitySourceCategory proves identity/SaaS findings (the founder ICP's main
+// surfaces) get a meaningful risk category, not the vague "Other security" bucket.
+func TestCandidateRisks_IdentitySourceCategory(t *testing.T) {
+	now := time.Now().UTC()
+	findings := []types.Finding{
+		{ID: "f1", Tool: "identitythreat", Severity: types.SeverityHigh, CWE: []string{"CWE-1390"}},
+		{ID: "f2", Tool: "identitythreat", Severity: types.SeverityHigh, CWE: []string{"CWE-269"}},
+		{ID: "f3", Tool: "sspm", Severity: types.SeverityHigh},
+	}
+	risks := CandidateRisks("t1", findings, now)
+	cats := map[string]bool{}
+	for _, r := range risks {
+		cats[r.Category] = true
+		if r.Category == "Other security" {
+			t.Errorf("identity/SaaS finding fell into the vague 'Other security' bucket: %+v", r)
+		}
+	}
+	if !cats["Identity & access"] {
+		t.Errorf("expected an 'Identity & access' risk, got categories %v", cats)
+	}
+	if !cats["SaaS configuration"] {
+		t.Errorf("expected a 'SaaS configuration' risk, got categories %v", cats)
+	}
+}
