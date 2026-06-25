@@ -209,6 +209,8 @@ export interface ControlAttestation {
   note?: string;
   attested_by?: string;
   attested_at?: string;
+  capacity?: string; // who the attester works for: internal | msp | managed
+  firm?: string;
 }
 
 export interface AuditSummary {
@@ -256,6 +258,8 @@ export interface Policy {
   summary?: string;
   status: string; // draft | published
   owner?: string;
+  capacity?: string; // who the publishing owner works for: internal | msp | managed
+  firm?: string;
   version: number;
   acks?: PolicyAck[];
   created_at: string;

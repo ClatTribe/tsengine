@@ -4,6 +4,7 @@ import type { Policy } from "@/lib/types";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { PublishButton, AckButton } from "@/components/program/policy-actions";
+import { CapacityBadge } from "@/components/ui/capacity-badge";
 import { seedProgram } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,7 @@ function PolicyRow({ p, teamSize, acked }: { p: Policy; teamSize: number; acked:
       {p.summary && <p className="mt-1.5 text-xs text-muted">{p.summary}</p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-faint">
         {p.owner && <span>owner: {p.owner}</span>}
+        <CapacityBadge capacity={p.capacity} firm={p.firm} />
         {published && (
           <span>
             {ackCount}

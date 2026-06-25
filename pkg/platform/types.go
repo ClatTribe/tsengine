@@ -650,6 +650,8 @@ type ControlAttestation struct {
 	Note       string    `json:"note,omitempty"`
 	AttestedBy string    `json:"attested_by,omitempty"` // the external auditor, by name
 	AttestedAt time.Time `json:"attested_at,omitempty"`
+	Capacity   string    `json:"capacity,omitempty"` // who the attester works for (resolved from roster)
+	Firm       string    `json:"firm,omitempty"`
 }
 
 // AuditEngagement is a SOC2/ISO (etc.) audit the tenant runs with an EXTERNAL auditor. The product is
@@ -709,7 +711,9 @@ type Policy struct {
 	Category    string      `json:"category,omitempty"` // e.g. "Access Control", "Incident Response"
 	Summary     string      `json:"summary,omitempty"`
 	Status      string      `json:"status"`
-	Owner       string      `json:"owner,omitempty"` // the accountable human
+	Owner       string      `json:"owner,omitempty"`    // the accountable human
+	Capacity    string      `json:"capacity,omitempty"` // who the publishing owner works for (resolved from roster)
+	Firm        string      `json:"firm,omitempty"`
 	Version     int         `json:"version"`
 	Acks        []PolicyAck `json:"acks,omitempty"`
 	CreatedAt   time.Time   `json:"created_at"`

@@ -121,6 +121,7 @@ func (d Deps) handleAttestControl(w http.ResponseWriter, r *http.Request, tenant
 		writeJSON(w, http.StatusNotFound, errBody("audit engagement not found"))
 		return
 	}
+	capacity, firm := d.practitionerCapacity(r, tenantID, attestedBy) // who the auditor works for
 	found := false
 	for i := range e.Attestations {
 		if e.Attestations[i].ControlID == controlID {
@@ -128,6 +129,8 @@ func (d Deps) handleAttestControl(w http.ResponseWriter, r *http.Request, tenant
 			e.Attestations[i].Note = strings.TrimSpace(body.Note)
 			e.Attestations[i].AttestedBy = attestedBy
 			e.Attestations[i].AttestedAt = time.Now().UTC()
+			e.Attestations[i].Capacity = capacity
+			e.Attestations[i].Firm = firm
 			found = true
 			break
 		}

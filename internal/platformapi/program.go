@@ -84,6 +84,7 @@ func (d Deps) handlePublishPolicy(w http.ResponseWriter, r *http.Request, tenant
 		return
 	}
 	p.Owner = owner
+	p.Capacity, p.Firm = d.practitionerCapacity(r, tenantID, owner) // who the publisher works for
 	p.Status = platform.PolicyPublished
 	p.PublishedAt = time.Now().UTC()
 	if d.Recorder != nil {
