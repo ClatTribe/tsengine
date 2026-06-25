@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 
@@ -21,7 +23,7 @@ export default function FrameworksIndex() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
+        <AuroraBackdrop />
         <div className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">{FRAMEWORKS.length} frameworks, automated</span>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">Compliance frameworks we automate</h1>

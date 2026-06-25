@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+
 import { ShieldCheck, Lock, FileCheck2, KeyRound, EyeOff, Fingerprint, ArrowRight, CheckCircle2 } from "lucide-react";
 
 export const metadata = pageMeta({
@@ -26,7 +28,7 @@ export default function Security() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
+        <AuroraBackdrop />
         <div className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
             <ShieldCheck className="h-3.5 w-3.5 text-accent" /> Trust, by construction
