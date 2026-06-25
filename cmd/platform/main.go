@@ -50,6 +50,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
@@ -355,13 +356,20 @@ func main() {
 	// Headless-browser channel for DOM-XSS / client-side proof in deep mode (ADR-0008 D3).
 	// Nil (the chromedp impl is sandbox-gated) → those classes stay leads.
 	browser := pentest.NewBrowserFromEnv()
+	// ModeDeep D-agent: the LLM spec generator. cloudengine.LLMFromEnv resolves a cloud key OR a local
+	// Ollama (LLM_BASE_URL); nil when neither is configured → the deterministic HeuristicSpecGen.
+	var agentLLM pentest.SpecLLM
+	if llm, ok := cloudengine.LLMFromEnv(); ok {
+		agentLLM = llm
+		log.Print("[platform] ModeDeep D-agent wired (LLM spec generator) — open-ended exploitation proposals, deterministically validated")
+	}
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
 		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
 		Token:          token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
-		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser,
+		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser, AgentLLM: agentLLM,
 	})
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
