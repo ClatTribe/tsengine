@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FeatureIcon } from "@/components/brand/feature-icon";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import {
@@ -69,7 +70,7 @@ export default function Partners() {
         <div className="grid gap-4 sm:grid-cols-3">
           {PAINS.map(({ icon: Icon, t, d }) => (
             <div key={t} className="card p-5">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-surface-2 text-muted"><Icon className="h-4 w-4" /></span>
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-surface-2 text-muted"><FeatureIcon name={Icon.displayName} className="h-4 w-4" /></span>
               <h3 className="mt-3 text-sm font-semibold">{t}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
             </div>
@@ -87,7 +88,7 @@ export default function Partners() {
           <div className="grid gap-4 lg:grid-cols-3">
             {GAINS.map(({ icon: Icon, t, d }) => (
               <div key={t} className="card p-6">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent"><Icon className="h-5 w-5" /></span>
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent"><FeatureIcon name={Icon.displayName} className="h-5 w-5" /></span>
                 <h3 className="mt-4 text-base font-semibold">{t}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
               </div>
@@ -124,7 +125,7 @@ export default function Partners() {
             { icon: CheckCircle2, t: "Built on best-in-class OSS", d: "The same open-source security tools the best teams trust, orchestrated — not a black box." },
           ].map(({ icon: Icon, t, d }) => (
             <div key={t} className="flex items-start gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent"><Icon className="h-4 w-4" /></span>
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent"><FeatureIcon name={Icon.displayName} className="h-4 w-4" /></span>
               <div>
                 <div className="text-sm font-semibold">{t}</div>
                 <div className="mt-0.5 text-xs leading-snug text-muted">{d}</div>

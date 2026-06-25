@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FeatureIcon } from "@/components/brand/feature-icon";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import {
@@ -86,7 +87,7 @@ export default function AISecurityEngineer() {
             <div key={t} className="card p-6">
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent">
-                  <Icon className="h-5 w-5" />
+                  <FeatureIcon name={Icon.displayName} className="h-5 w-5" />
                 </span>
                 <span className="text-xs font-semibold text-faint">{String(i + 1).padStart(2, "0")}</span>
               </div>
@@ -111,7 +112,7 @@ export default function AISecurityEngineer() {
             {GUARDRAILS.map(({ icon: Icon, t, d }) => (
               <div key={t} className="card bg-bg p-5">
                 <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
-                  <Icon className="h-4 w-4" />
+                  <FeatureIcon name={Icon.displayName} className="h-4 w-4" />
                 </span>
                 <h3 className="mt-3.5 text-sm font-semibold">{t}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
@@ -137,7 +138,7 @@ export default function AISecurityEngineer() {
             <div key={t} className="card p-6">
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent">
-                  <Icon className="h-5 w-5" />
+                  <FeatureIcon name={Icon.displayName} className="h-5 w-5" />
                 </span>
                 <span className="text-xs font-semibold text-faint">STEP {step}</span>
               </div>

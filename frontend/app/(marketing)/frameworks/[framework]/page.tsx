@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FeatureIcon } from "@/components/brand/feature-icon";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, CheckCircle2, ShieldCheck, FileCheck2, Radar, Lock } from "lucide-react";
@@ -88,7 +89,7 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
             { icon: Lock, t: "Signed evidence", d: `Get an ${i.label}-ready, ed25519-signed evidence pack an auditor can verify — not screenshots.` },
           ].map(({ icon: Icon, t, d }) => (
             <div key={t} className="card p-5">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent"><Icon className="h-4 w-4" /></span>
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent"><FeatureIcon name={Icon.displayName} className="h-4 w-4" /></span>
               <h3 className="mt-3.5 text-sm font-semibold">{t}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
             </div>
