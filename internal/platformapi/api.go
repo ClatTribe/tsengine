@@ -129,6 +129,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))    // remove an exclusion rule
 	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents))   // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
 	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents)) // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
+	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))       // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
 	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile)) // container scan-on-push decision (ADR 0010 Phase 4)
 	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))          // api: Postman collection → endpoint inventory
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot)) // SaaS posture (SSPM) snapshot → findings
