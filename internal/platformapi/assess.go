@@ -70,8 +70,17 @@ type assessFinding struct {
 
 var domainRe = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$`)
 
+// reservedSuffixes are non-public namespaces (RFC 6761/6762 special-use + cloud-metadata internal
+// zones) that an external assessment must never resolve or connect to. Refusing them here is
+// belt-and-suspenders ahead of the connect-time SSRF guard (safeHTTPClient, which already rejects a
+// resolved private/link-local IP) — and turns a misleading "degraded grade" into a clear refusal for
+// inputs like metadata.google.internal (resolves to the 169.254.169.254 metadata IP on GCP).
+var reservedSuffixes = []string{
+	".local", ".localhost", ".internal", ".intranet", ".lan", ".corp", ".private", ".home.arpa",
+}
+
 // normalizeDomain lowercases + strips scheme/path/port, and rejects IPs / localhost / bare
-// hosts. Returns "" when the input isn't a public domain we should look up.
+// hosts / reserved-internal namespaces. Returns "" when the input isn't a public domain we should look up.
 func normalizeDomain(in string) string {
 	d := strings.ToLower(strings.TrimSpace(in))
 	d = strings.TrimPrefix(d, "https://")
@@ -85,6 +94,11 @@ func normalizeDomain(in string) string {
 	}
 	if d == "" || len(d) > 253 || d == "localhost" || net.ParseIP(d) != nil || !domainRe.MatchString(d) {
 		return ""
+	}
+	for _, s := range reservedSuffixes {
+		if strings.HasSuffix(d, s) {
+			return ""
+		}
 	}
 	return d
 }
