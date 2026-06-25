@@ -32,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen overflow-hidden">
       <Sidebar pending={approvals.length} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar tenant={session.tenant} risk={risk} />
+        <TopBar workspace={tenant?.name || session.tenant} risk={risk} />
         {tenant?.agents_halted && (
           <Link
             href="/settings"
