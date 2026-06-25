@@ -1101,3 +1101,33 @@ human act is required-by-API (400 without the named human) and recorded into `pk
 Memory field+snapshot+orEmpty · File Put · SQLite table+Put/List · conformance isolation
 test). Grounding (§10) holds: candidate risks cite findings, audit controls come from real
 posture, policy templates are industry-standard names (not invented claims about the tenant).
+
+### 18.5 The practitioner layer — who employs the human-in-the-loop (two GTM models, one engine)
+
+The §18.4 HITL acts are performed by *a* human; the **practitioner layer** records **who that human
+works for** — the only thing that differs between the two product GTM models. One engine serves both:
+
+* `internal` — the tenant's own team (self-serve)
+* `msp` — a partner firm's expert (the MSP runs our product; *their* expert does the HITL — the channel model)
+* `managed` — our hired expert acting on the tenant's behalf (the founder-ICP managed-service model)
+
+Pieces:
+
+1. **Service model + practitioners of record** (`pkg/platform.Tenant.ServiceModel` +
+   `Tenant.Practitioners[]` `{Name,Firm,Credential,Capacity,Email,Scope}`; `internal/platformapi/
+   practitioners.go`; Settings "Service model & practitioners" panel). Tenant-scoped, stored on the
+   Tenant (no secret), like `Contacts` — **no new store entity**.
+2. **Capacity on every HITL artifact** (`practitionerCapacity` resolver matches the acting human
+   against the roster by name/email → stamps `Capacity`+`Firm` on `Risk`, `pentest.Signoff`,
+   `Policy`, and `ControlAttestation`). §10-grounded: unknown actor → `internal`, never guessed. The
+   `CapacityBadge` surfaces it on `/risks`, `/pentest`, `/program`, `/audits`.
+3. **The cross-tenant practitioner desk** (`internal/practitioner.Queue` + `GET
+   /v1/practitioner/queue?practitioner=<email>`). The MSP's / our expert's single queue of every
+   pending HITL item across their **assigned** client tenants. **This is an OPERATOR capability gated
+   by the platform token (`d.platformAuth`), NOT a tenant session** — it reads ONLY tenants whose
+   roster names the practitioner, so **§18.2 inv. 2 (tenant isolation) is preserved**: a tenant
+   session still cannot cross tenants; only the operator-gated desk aggregates, and only over
+   explicitly-assigned tenants (isolation-proof test in `practitioner_queue_test.go`). The
+   `/practitioner` console UX needs an operator-auth frontend surface (the tenant app uses tenant
+   sessions) — that surface is the documented follow-on; the desk is consumed via the platform token
+   today.
