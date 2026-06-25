@@ -10,6 +10,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // Context is the agent's working memory for one engagement against one target.
@@ -57,9 +58,33 @@ type Report struct {
 // elicit the indicator, record-grounded) rather than rediscover it — "seed from
 // scanners, don't start blind" (docs/design/web-agent.md).
 type SeedFinding struct {
-	Route string `json:"route"` // URL to probe (may carry a param marker)
-	Class string `json:"class"` // suspected class: sqli|xss|open_redirect|path_traversal|command_injection
-	Tool  string `json:"tool"`  // the L1 scanner that raised it (provenance)
+	Route      string `json:"route"`                // URL to probe (may carry a param marker)
+	Class      string `json:"class"`                // suspected class: sqli|xss|open_redirect|path_traversal|command_injection
+	Tool       string `json:"tool"`                 // the L1 scanner that raised it (provenance)
+	Severity   string `json:"severity,omitempty"`   // the L1 severity (so the agent confirms the worst first)
+	Enrichment string `json:"enrichment,omitempty"` // the L1.5 signals (KEV/EPSS/exploit/surface/corrob | compliance)
+}
+
+// SeedFromFinding maps an ENRICHED L1 finding to a confirmation seed, threading the L1.5 enrichment
+// (severity + types.Finding.L15Summary/compliance) so the web agent knows which leads are urgent
+// (KEV/high-exploit) before it spends its request budget confirming them. class is the agent's probe
+// playbook key (sqli/xss/…), derived by the caller from the finding's CWE/rule.
+func SeedFromFinding(f types.Finding, class string) SeedFinding {
+	enr := f.L15Summary()
+	if c := f.ComplianceSummary(); c != "" {
+		if enr != "" {
+			enr += " | " + c
+		} else {
+			enr = c
+		}
+	}
+	return SeedFinding{
+		Route:      f.Endpoint,
+		Class:      class,
+		Tool:       f.Tool,
+		Severity:   string(f.Severity),
+		Enrichment: enr,
+	}
 }
 
 // Options bounds the engagement.

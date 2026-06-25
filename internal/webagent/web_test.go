@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // scriptLLM returns a fixed sequence of JSON actions, ignoring the prompt — lets
@@ -174,5 +176,26 @@ func TestIndicators_Deterministic(t *testing.T) {
 	// a benign 200 with no reflection / error yields no indicators
 	if got := indicators("hello", &Resp{Status: 200, Body: "results for hello"}); len(got) != 0 {
 		t.Errorf("benign response produced indicators: %v", got)
+	}
+}
+
+func TestSeedFromFinding_ThreadsL15(t *testing.T) {
+	f := types.Finding{
+		Tool: "nuclei", Endpoint: "https://x/search?q=", Severity: types.SeverityHigh,
+		ThreatIntel:    &types.ThreatIntel{KEV: &types.KEVStatus{Listed: true}, EPSS: &types.EPSSScore{Score: 0.8}},
+		Exploitability: &types.Exploitability{Score: 9},
+		Compliance:     &types.Compliance{SOC2: []string{"CC6.1"}},
+	}
+	s := SeedFromFinding(f, "sqli")
+	if s.Class != "sqli" || s.Route != "https://x/search?q=" || s.Tool != "nuclei" {
+		t.Errorf("seed base fields wrong: %+v", s)
+	}
+	if s.Severity != "high" {
+		t.Errorf("severity not threaded: %q", s.Severity)
+	}
+	for _, want := range []string{"KEV", "EPSS:0.80", "exploit:9", "soc2"} {
+		if !strings.Contains(s.Enrichment, want) {
+			t.Errorf("seed enrichment missing %q: %s", want, s.Enrichment)
+		}
 	}
 }

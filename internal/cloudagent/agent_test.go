@@ -2,11 +2,13 @@ package cloudagent
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudquery"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // scriptedLLM returns canned JSON actions in order — drives the agent loop in CI
@@ -90,5 +92,31 @@ func TestAgent_RejectsUngroundedFinding(t *testing.T) {
 	}
 	if len(rep.Issues) != 0 {
 		t.Errorf("an ungrounded path must be rejected, but %d issue(s) were recorded", len(rep.Issues))
+	}
+}
+
+func TestDigestProwler_SurfacesL15(t *testing.T) {
+	fs := []types.Finding{
+		{ID: "p-1", Severity: types.SeverityHigh, RuleID: "prowler::s3-public", Endpoint: "arn:aws:s3:::bucket", Title: "public bucket",
+			ThreatIntel:    &types.ThreatIntel{KEV: &types.KEVStatus{Listed: true}},
+			Exploitability: &types.Exploitability{Score: 7},
+			Compliance:     &types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"1.2"}}},
+		{ID: "p-2", Severity: types.SeverityLow, RuleID: "prowler::tag", Endpoint: "arn:aws:ec2", Title: "missing tag"},
+	}
+	lines := digestProwler(fs)
+	if len(lines) != 2 {
+		t.Fatalf("want 2 lines, got %d", len(lines))
+	}
+	// high finding first, with its L1.5 + compliance surfaced.
+	if !strings.Contains(lines[0], "public bucket") {
+		t.Fatalf("first line should be the high finding: %s", lines[0])
+	}
+	for _, want := range []string{"KEV", "exploit:7", "soc2", "pci"} {
+		if !strings.Contains(lines[0], want) {
+			t.Errorf("prowler digest missing L1.5 tag %q: %s", want, lines[0])
+		}
+	}
+	if strings.Contains(lines[1], "  [") {
+		t.Errorf("a bare prowler finding should carry no enrichment bracket: %s", lines[1])
 	}
 }
