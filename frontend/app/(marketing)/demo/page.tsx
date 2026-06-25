@@ -21,7 +21,7 @@ export default function DemoPage() {
   return (
     <section className="relative overflow-hidden">
       <AuroraBackdrop />
-      <div className="relative mx-auto grid max-w-5xl items-start gap-10 px-5 pb-24 pt-20 lg:grid-cols-2">
+      <div className="relative animate-fade-rise mx-auto grid max-w-5xl items-start gap-10 px-5 pb-24 pt-20 lg:grid-cols-2">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Talk to sales</span>
           <h1 className="mt-3 text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">Book a demo</h1>

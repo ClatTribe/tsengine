@@ -45,7 +45,7 @@ export default function SupplyChain() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <AuroraBackdrop />
-        <div className="relative mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
+        <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
             <Boxes className="h-3.5 w-3.5 text-accent" /> Software supply-chain security
           </span>

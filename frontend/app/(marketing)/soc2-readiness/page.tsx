@@ -15,7 +15,7 @@ export default function SOC2ReadinessPage() {
   return (
     <section className="relative overflow-hidden">
       <AuroraBackdrop />
-      <div className="relative mx-auto max-w-3xl px-5 pb-24 pt-16 sm:pt-20">
+      <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-24 pt-16 sm:pt-20">
         <div className="text-center">
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-accent">
             <ClipboardCheck className="h-3.5 w-3.5" /> Free · no signup
