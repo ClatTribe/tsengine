@@ -1,0 +1,88 @@
+package platformapi
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+
+	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/store"
+)
+
+func TestCreateAsset_AddsStandaloneTarget(t *testing.T) {
+	st := store.NewMemory()
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	// A web target the connectors don't cover — the founder's website.
+	rec := do(h, "POST", "/v1/assets", "t1", `{"type":"web_application","target":"app.acme.com","authorized":true}`)
+	if rec.Code != 201 {
+		t.Fatalf("valid web target should be created (201), got %d: %s", rec.Code, rec.Body.String())
+	}
+	var got assetView
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if got.Target != "https://app.acme.com" { // scheme defaulted to https
+		t.Errorf("target should be canonicalized to https://app.acme.com, got %q", got.Target)
+	}
+	if got.Type != "web_application" || got.Meta["source"] != "manual" {
+		t.Errorf("asset not stored as a manual web_application: %+v", got.Asset)
+	}
+	assets, _ := st.ListAssets(context.Background(), "t1")
+	if len(assets) != 1 {
+		t.Fatalf("want 1 asset stored, got %d", len(assets))
+	}
+
+	// Idempotent: re-adding the same (type,target) returns the existing asset, not a dup.
+	if r2 := do(h, "POST", "/v1/assets", "t1", `{"type":"web_application","target":"https://app.acme.com","authorized":true}`); r2.Code != 200 {
+		t.Errorf("re-adding the same target should be idempotent (200), got %d", r2.Code)
+	}
+	if a, _ := st.ListAssets(context.Background(), "t1"); len(a) != 1 {
+		t.Errorf("idempotent re-add must not create a duplicate, got %d assets", len(a))
+	}
+}
+
+func TestCreateAsset_RejectsUnauthorizedAndUnsafe(t *testing.T) {
+	st := store.NewMemory()
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	cases := []struct {
+		name, body string
+		want       int
+	}{
+		{"no authorization attestation", `{"type":"web_application","target":"acme.com","authorized":false}`, 400},
+		{"unsupported type (repo comes from a connector)", `{"type":"repository","target":"acme/app","authorized":true}`, 400},
+		{"SSRF: private host", `{"type":"web_application","target":"http://10.0.0.5/admin","authorized":true}`, 400},
+		{"SSRF: loopback", `{"type":"web_application","target":"http://127.0.0.1","authorized":true}`, 400},
+		{"SSRF: reserved namespace", `{"type":"domain","target":"db.internal","authorized":true}`, 400},
+		{"SSRF: link-local IP", `{"type":"ip_address","target":"169.254.169.254","authorized":true}`, 400},
+		{"private IP target", `{"type":"ip_address","target":"192.168.1.1","authorized":true}`, 400},
+		{"empty target", `{"type":"web_application","target":"  ","authorized":true}`, 400},
+	}
+	for _, c := range cases {
+		if rec := do(h, "POST", "/v1/assets", "t1", c.body); rec.Code != c.want {
+			t.Errorf("%s: want %d, got %d (%s)", c.name, c.want, rec.Code, rec.Body.String())
+		}
+	}
+	if a, _ := st.ListAssets(context.Background(), "t1"); len(a) != 0 {
+		t.Errorf("no invalid/unsafe target should have been stored, got %d assets", len(a))
+	}
+
+	// A public IP + CIDR + image are accepted.
+	for _, ok := range []string{
+		`{"type":"ip_address","target":"203.0.113.10","authorized":true}`,
+		`{"type":"container_image","target":"ghcr.io/acme/api:1.4.2","authorized":true}`,
+	} {
+		if rec := do(h, "POST", "/v1/assets", "t1", ok); rec.Code != 201 {
+			t.Errorf("valid public target should be accepted (201), got %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestCreateAsset_TenantScoped(t *testing.T) {
+	st := store.NewMemory()
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	do(h, "POST", "/v1/assets", "t1", `{"type":"domain","target":"acme.com","authorized":true}`)
+	// t2 must not see t1's asset.
+	if a, _ := st.ListAssets(context.Background(), "t2"); len(a) != 0 {
+		t.Errorf("tenant isolation: t2 must not see t1's asset, got %d", len(a))
+	}
+}

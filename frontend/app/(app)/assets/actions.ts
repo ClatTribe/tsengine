@@ -15,6 +15,25 @@ export async function rescanAll(): Promise<{ scanned?: number; queued?: boolean 
   return { queued: true };
 }
 
+// Adds a standalone scan target — the founder's website / API / domain / IP / container image,
+// the input the connectors (code/cloud/identity) don't cover. The user must attest they're
+// authorized to scan it; the server validates + SSRF-screens the target (no private/reserved hosts).
+// On success the new asset flows into the same scan loop as connector-discovered assets.
+export async function addTarget(
+  type: string,
+  target: string,
+  authorized: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await api.addAsset(type, target, authorized);
+    revalidatePath("/assets");
+    revalidatePath("/dashboard");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not add the target" };
+  }
+}
+
 // Sets an asset's customer-data-sensitivity tier (1 = customer data, 2 = standard, 3 = low).
 // The tier feeds the platform's risk-adjusted ranking so a finding on a customer-data repo is
 // prioritized over the same finding on a low-sensitivity one (the Synthesia repo-tiering idea).
