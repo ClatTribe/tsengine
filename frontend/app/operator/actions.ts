@@ -52,6 +52,30 @@ export async function operatorDecideRisk(_prev: string | null, formData: FormDat
   return null;
 }
 
+// operatorPublishPolicy publishes a client's draft policy ON BEHALF, from the cross-tenant console.
+// Roster-gated server-side (403 if not a practitioner of record); recorded with the operator's name +
+// capacity and signed into the ledger.
+export async function operatorPublishPolicy(_prev: string | null, formData: FormData): Promise<string | null> {
+  const tenant = String(formData.get("tenant") ?? "");
+  const policy = String(formData.get("policy") ?? "");
+  if (!tenant || !policy) return "Missing policy.";
+  const tok = (await cookies()).get(OP_TOKEN_COOKIE)?.value;
+  if (!tok) return "Your session expired — sign in again.";
+  const res = await fetch(apiBase() + `/v1/operator/tenants/${tenant}/policies/${policy}/publish`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+    body: "{}",
+    cache: "no-store",
+  });
+  if (res.status === 403) return "You are not a practitioner of record for this client.";
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    return body.error || "Could not publish the policy.";
+  }
+  revalidatePath("/operator");
+  return null;
+}
+
 export async function operatorLogout(): Promise<void> {
   const jar = await cookies();
   const tok = jar.get(OP_TOKEN_COOKIE)?.value;

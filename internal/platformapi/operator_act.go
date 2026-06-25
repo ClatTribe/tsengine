@@ -61,3 +61,34 @@ func (d Deps) handleOperatorDecideRisk(w http.ResponseWriter, r *http.Request, o
 	}
 	writeJSON(w, status, rk)
 }
+
+// handleOperatorPublishPolicy publishes a draft security policy on behalf of an assigned client, from
+// the cross-tenant console. POST /v1/operator/tenants/{tenant}/policies/{id}/publish. Same isolation
+// rule as the queue (roster match → else 403); the operator is the named publisher, capacity/firm from
+// their roster record, ledger-signed. Together with the risk path this covers the vCISO half of the
+// desk (the "vciso" scope alias = risk + policy).
+func (d Deps) handleOperatorPublishPolicy(w http.ResponseWriter, r *http.Request, op platform.Operator) {
+	tenantID := r.PathValue("tenant")
+	id := r.PathValue("id")
+
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errBody("client not found"))
+		return
+	}
+	pr, ok := matchPractitioner(t, strings.ToLower(strings.TrimSpace(op.Email)))
+	if !ok {
+		writeJSON(w, http.StatusForbidden, errBody("you are not a practitioner of record for this client"))
+		return
+	}
+	owner := strings.TrimSpace(op.Name)
+	if owner == "" {
+		owner = op.Email
+	}
+	p, status, err := d.applyPolicyPublish(r, tenantID, id, owner, pr.Capacity, pr.Firm)
+	if err != nil {
+		writeJSON(w, status, errBody(err.Error()))
+		return
+	}
+	writeJSON(w, status, p)
+}

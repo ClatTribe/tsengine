@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -73,30 +74,42 @@ func (d Deps) handlePublishPolicy(w http.ResponseWriter, r *http.Request, tenant
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
 		return
 	}
-	owner := strings.TrimSpace(body.Owner)
-	if owner == "" {
-		writeJSON(w, http.StatusBadRequest, errBody("a named owner is required to publish a policy"))
+	// the tenant path resolves the publisher's capacity from the roster by their typed name
+	cap, firm := d.practitionerCapacity(r, tenantID, strings.TrimSpace(body.Owner))
+	p, status, err := d.applyPolicyPublish(r, tenantID, r.PathValue("id"), body.Owner, cap, firm)
+	if err != nil {
+		writeJSON(w, status, errBody(err.Error()))
 		return
 	}
-	p, ok := d.findPolicy(r, tenantID, r.PathValue("id"))
+	writeJSON(w, status, p)
+}
+
+// applyPolicyPublish publishes a policy as a NAMED human act and signs it into the ledger. Shared by
+// the tenant-session path (handlePublishPolicy) and the operator act-on-behalf path
+// (handleOperatorPublishPolicy) — they differ only in how capacity/firm are resolved (typed name vs.
+// the operator's roster record). Returns the published policy, or an HTTP status + error to render.
+func (d Deps) applyPolicyPublish(r *http.Request, tenantID, id, owner, capacity, firm string) (platform.Policy, int, error) {
+	owner = strings.TrimSpace(owner)
+	if owner == "" {
+		return platform.Policy{}, http.StatusBadRequest, errors.New("a named owner is required to publish a policy")
+	}
+	p, ok := d.findPolicy(r, tenantID, id)
 	if !ok {
-		writeJSON(w, http.StatusNotFound, errBody("policy not found"))
-		return
+		return platform.Policy{}, http.StatusNotFound, errors.New("policy not found")
 	}
 	p.Owner = owner
-	p.Capacity, p.Firm = d.practitionerCapacity(r, tenantID, owner) // who the publisher works for
+	p.Capacity, p.Firm = capacity, firm // who the publisher works for
 	p.Status = platform.PolicyPublished
 	p.PublishedAt = time.Now().UTC()
 	if d.Recorder != nil {
 		d.Recorder.Record("security policy published (human)", "policy_publish",
-			map[string]any{"tenant_id": tenantID, "policy_id": p.ID, "owner": owner}, "policy "+p.Name+" published by "+owner)
+			map[string]any{"tenant_id": tenantID, "policy_id": p.ID, "owner": owner, "capacity": p.Capacity}, "policy "+p.Name+" published by "+owner)
 		p.LedgerRef = "policy-published-" + p.ID
 	}
 	if err := d.Store.PutPolicy(r.Context(), p); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
+		return platform.Policy{}, http.StatusInternalServerError, err
 	}
-	writeJSON(w, http.StatusOK, p)
+	return p, http.StatusOK, nil
 }
 
 // handleAckPolicy records that a named user acknowledged a published policy (the read-and-accept
