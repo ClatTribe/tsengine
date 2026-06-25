@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FeatureIcon } from "@/components/brand/feature-icon";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 
@@ -39,7 +40,7 @@ export default function About() {
           {VALUES.map(({ icon: Icon, t, d }) => (
             <div key={t} className="card p-6">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent">
-                <Icon className="h-5 w-5" />
+                <FeatureIcon name={Icon.displayName} className="h-5 w-5" />
               </span>
               <h3 className="mt-4 text-base font-semibold">{t}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
