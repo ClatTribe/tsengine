@@ -1,11 +1,11 @@
 import Link from "next/link";
 import {
-  Building2, Plug, Bell, ShieldCheck, ArrowUpRight, Github, GitBranch, Mail, Users,
-  KeyRound, Cloud, BellRing, Lock, CheckCircle2,
+  Building2, ShieldCheck, ArrowUpRight, Mail, BellRing, Lock, CheckCircle2,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { kindLabel } from "@/lib/connectors";
+import { ProviderIcon } from "@/components/brand/provider-icon";
 import { Card, SectionTitle } from "@/components/ui/primitives";
 import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
@@ -26,10 +26,6 @@ import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
 import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
-
-const KIND_ICON: Record<string, typeof Github> = {
-  github: Github, gitlab: GitBranch, bitbucket: GitBranch, azuredevops: GitBranch, gworkspace: Mail, m365: Users, okta: KeyRound, aws: Cloud, gcp: Cloud, azure: Cloud,
-};
 
 const STATUS_CLS: Record<string, string> = {
   active: "text-pulse bg-pulse-soft",
@@ -115,13 +111,12 @@ export default async function SettingsPage() {
           ) : (
             <ul className="divide-y divide-border">
               {connections.map((c) => {
-                const Icon = KIND_ICON[c.kind] ?? Plug;
                 const isCloud = c.kind === "aws" || c.kind === "gcp" || c.kind === "azure";
                 return (
                   <li key={c.id} className="px-5 py-3">
                     <div className="flex items-center gap-3">
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-ink">
-                        <Icon className="h-4 w-4" />
+                        <ProviderIcon kind={c.kind} className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium">{kindLabel(c.kind)}</div>

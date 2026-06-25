@@ -1,9 +1,10 @@
 import Link from "next/link";
 import {
   ShieldCheck, Sparkles, ArrowRight, Plug, ScanLine, CheckCircle2, Bug, FileCheck2,
-  UserCheck, Lock, Radar, Github, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
+  UserCheck, Lock, Radar, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
 } from "lucide-react";
+import { ProviderIcon } from "@/components/brand/provider-icon";
 import { LiveConsole } from "@/components/marketing/live-console";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
@@ -461,20 +462,20 @@ function Connector() {
 
 // The "connects to everything" visual for the trust section.
 function ConnectorsVisual() {
-  const items = [
-    { icon: Github, label: "GitHub" },
-    { icon: Cloud, label: "AWS" },
-    { icon: KeyRound, label: "Okta" },
+  const items: { icon?: typeof FileCheck2; brand?: string; label: string }[] = [
+    { brand: "github", label: "GitHub" },
+    { brand: "aws", label: "AWS" },
+    { brand: "okta", label: "Okta" },
     { icon: FileCheck2, label: "SOC 2" },
     { icon: Lock, label: "Signed" },
     { icon: Star, label: "Trust" },
   ];
   return (
     <div className="card relative grid grid-cols-3 gap-3 p-6">
-      {items.map(({ icon: Icon, label }) => (
+      {items.map(({ icon: Icon, brand, label }) => (
         <div key={label} className="flex flex-col items-center gap-2 rounded-xl border border-border bg-bg py-5 text-center">
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-surface text-ink shadow-sm">
-            <Icon className="h-4 w-4" />
+            {brand ? <ProviderIcon kind={brand} className="h-4 w-4" /> : Icon ? <Icon className="h-4 w-4" /> : null}
           </span>
           <span className="text-[11px] font-medium text-muted">{label}</span>
         </div>
