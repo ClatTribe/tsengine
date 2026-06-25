@@ -97,3 +97,35 @@ func TestCloudIssueToFinding_Maps(t *testing.T) {
 		t.Errorf("raw_output should carry the agent's fix metadata, got %v", raw)
 	}
 }
+
+func TestSeedRisks_AgentFindingsProposeVCISORisks(t *testing.T) {
+	st := store.NewMemory()
+	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"}
+
+	// Two proven cloud-agent attack paths (high+) land as findings...
+	_ = st.PutFinding(context.Background(), "t1", cloudIssueToFinding("ca-1", cloudagentIssueFixture()))
+	_ = st.PutFinding(context.Background(), "t1", cloudIssueToFinding("ca-2", cloudagentIssueFixture()))
+
+	// ...seedRisks clusters them into a candidate Risk for the named vCISO to judge.
+	seeded, err := d.seedRisks(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("seedRisks: %v", err)
+	}
+	if len(seeded) == 0 {
+		t.Fatal("agent attack-path findings should propose at least one candidate risk for the vCISO")
+	}
+	for _, rk := range seeded {
+		if !rk.Proposed || rk.DecidedBy != "" {
+			t.Errorf("a seeded risk must be a PROPOSAL awaiting a human decision, got %+v", rk)
+		}
+	}
+}
+
+func TestResolveAgentLLM_FallsBackToOperatorGlobal(t *testing.T) {
+	st := store.NewMemory()
+	// No per-tenant LLM configured → resolveAgentLLM returns the operator-global d.AgentLLM.
+	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", AgentLLM: fakeCloudLLM{}}
+	if got := d.resolveAgentLLM(context.Background(), "t1"); got == nil {
+		t.Error("with no tenant LLM, resolveAgentLLM should fall back to the operator-global AgentLLM")
+	}
+}

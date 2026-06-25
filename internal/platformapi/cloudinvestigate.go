@@ -23,8 +23,10 @@ import (
 
 // handleCloudInvestigate (POST /v1/cloud/investigate) runs one investigation.
 func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, tenantID string) {
-	if d.AgentLLM == nil {
-		writeJSON(w, http.StatusBadRequest, errBody("cloud investigation needs an LLM (the agent's brain): set LLM_API_KEY (cloud) or LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
+	// The tenant's OWN model (Settings → LLM) takes precedence over the operator-global one (§18.5).
+	llm := d.resolveAgentLLM(r.Context(), tenantID)
+	if llm == nil {
+		writeJSON(w, http.StatusBadRequest, errBody("cloud investigation needs an LLM (the agent's brain): configure one in Settings → LLM, or set LLM_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
 		return
 	}
 	var body struct {
@@ -42,8 +44,8 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 		return
 	}
 	cc := &cloudagent.Context{Snap: cloudgraph.Ingest(inv), Prowler: body.Prowler}
-	// d.AgentLLM (pentest.SpecLLM) satisfies cloudengine.LLM structurally — same Generate method.
-	rep, ierr := cloudagent.Investigate(r.Context(), d.AgentLLM, cc, cloudagent.Options{MaxIters: 24, MaxHyp: 20})
+	// llm (pentest.SpecLLM) satisfies cloudengine.LLM structurally — same Generate method.
+	rep, ierr := cloudagent.Investigate(r.Context(), llm, cc, cloudagent.Options{MaxIters: 24, MaxHyp: 20})
 	if ierr != nil {
 		respond(w, nil, ierr)
 		return
@@ -64,11 +66,19 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
+	// Agent proposes → named vCISO disposes (§18.4): the agent's proven attack paths cluster into
+	// candidate risks on the vCISO desk automatically, so the human judges the agent's discoveries.
+	risksProposed := 0
+	if stored > 0 {
+		if seeded, serr := d.seedRisks(r.Context(), tenantID); serr == nil {
+			risksProposed = len(seeded)
+		}
+	}
 	if d.Recorder != nil {
 		d.Recorder.Record("cloud investigated", "cloudagent",
-			map[string]any{"tenant_id": tenantID, "paths": stored, "calls": rep.Calls}, "AI Cloud Engineer investigation")
+			map[string]any{"tenant_id": tenantID, "paths": stored, "calls": rep.Calls, "risks_proposed": risksProposed}, "AI Cloud Engineer investigation")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"summary": rep.Summary, "paths_found": stored, "calls": rep.Calls, "issues": rep.Issues})
+	writeJSON(w, http.StatusOK, map[string]any{"summary": rep.Summary, "paths_found": stored, "risks_proposed": risksProposed, "calls": rep.Calls, "issues": rep.Issues})
 }
 
 // handleCloudInvestigationView (GET /v1/cloud/investigate) returns the tenant's stored cloud-agent
@@ -88,7 +98,7 @@ func (d Deps) handleCloudInvestigationView(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{
 		"total":   len(paths),
 		"paths":   paths,
-		"enabled": d.AgentLLM != nil, // tells the UX whether a run is possible
+		"enabled": d.resolveAgentLLM(r.Context(), tenantID) != nil, // tenant model OR operator-global → runnable
 	})
 }
 

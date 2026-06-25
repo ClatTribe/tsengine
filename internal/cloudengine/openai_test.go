@@ -50,3 +50,19 @@ func TestLLMFromEnv_PrefersOpenAICompatThenGemini(t *testing.T) {
 		t.Error("no LLM env → LLMFromEnv should return ok=false")
 	}
 }
+
+func TestClientFor_PerTenantProviders(t *testing.T) {
+	if c, ok := ClientFor("gemini", "gemini-2.0-flash", "k"); !ok {
+		t.Error("gemini should be supported")
+	} else if _, isG := c.(*Gemini); !isG {
+		t.Errorf("gemini → *Gemini, got %T", c)
+	}
+	if c, ok := ClientFor("openai", "gpt-4o-mini", "sk-x"); !ok {
+		t.Error("openai should be supported")
+	} else if _, isO := c.(*OpenAICompat); !isO {
+		t.Errorf("openai → *OpenAICompat, got %T", c)
+	}
+	if _, ok := ClientFor("anthropic", "claude", "k"); ok {
+		t.Error("anthropic is not a text-seam provider here → should be unsupported (caller falls back)")
+	}
+}
