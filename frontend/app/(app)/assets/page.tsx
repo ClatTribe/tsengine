@@ -1,4 +1,5 @@
-import { Github, GitBranch, Mail, KeyRound, Users, Plug, Boxes, CircleAlert, ArrowUpRight, CheckCircle2, Cloud } from "lucide-react";
+import { Boxes, CircleAlert, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { ProviderIcon } from "@/components/brand/provider-icon";
 import { api } from "@/lib/api";
 import type { Asset, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
@@ -12,19 +13,6 @@ import { PageIntro } from "@/components/ui/page-intro";
 import { timeAgo, cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-const KIND_ICON: Record<string, typeof Github> = {
-  github: Github,
-  gitlab: GitBranch,
-  bitbucket: GitBranch,
-  azuredevops: GitBranch,
-  gworkspace: Mail,
-  m365: Users,
-  okta: KeyRound,
-  aws: Cloud,
-  gcp: Cloud,
-  azure: Cloud,
-};
 
 const STATUS_CLS: Record<string, string> = {
   active: "text-pulse border-pulse/30 bg-pulse/10",
@@ -76,7 +64,6 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
               <div className="mb-2 text-[11px] uppercase tracking-wider text-faint">{CATEGORY_LABEL[cat]}</div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {CONNECTORS.filter((c) => c.category === cat).map((c) => {
-                  const Icon = KIND_ICON[c.kind] ?? Plug;
                   const connected = connectedKinds.has(c.kind);
                   return (
                     <a
@@ -86,7 +73,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
                     >
                       <div className="flex items-center gap-2.5">
                         <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-surface-2 text-ink">
-                          <Icon className="h-4 w-4" />
+                          <ProviderIcon kind={c.kind} className="h-4 w-4" />
                         </span>
                         <span className="flex-1 text-sm font-medium">{c.label}</span>
                         {connected ? (
@@ -164,11 +151,10 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
 }
 
 function ConnectionRow({ conn }: { conn: Connection }) {
-  const Icon = KIND_ICON[conn.kind] ?? Plug;
   return (
     <div className="flex items-center gap-3 px-5 py-3">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-ink">
-        <Icon className="h-4 w-4" />
+        <ProviderIcon kind={conn.kind} className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium">{kindLabel(conn.kind)}</div>

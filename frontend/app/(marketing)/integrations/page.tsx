@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
+import { ProviderIcon } from "@/components/brand/provider-icon";
 
 import {
   Github, GitBranch, Cloud, Mail, Users, KeyRound, Ticket, ClipboardList,
@@ -104,10 +105,10 @@ export default function Integrations() {
                 <p className="mt-1 text-sm text-muted">{g.blurb}</p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {g.items.map(({ icon: Icon, name, role, status }) => (
+                {g.items.map(({ name, role, status }) => (
                   <div key={name} className="card flex items-start gap-3 p-5">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-surface-2 text-ink">
-                      <Icon className="h-5 w-5" />
+                      <ProviderIcon kind={name} className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
