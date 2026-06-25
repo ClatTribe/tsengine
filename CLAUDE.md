@@ -1080,3 +1080,24 @@ customer-comms ride the future **A-RSP** incident-response capability), so this 
 forward-compatible hardening: a T3 action is safe by construction the moment one is produced.
 **With this the agentic-SMB spec is fully reconciled** — every OM/TS/AGT/WRD/ACC requirement
 is built or, for A-RSP, explicitly future (see docs/personas-and-workflows.md §7).
+
+### 18.4 The consulting top-layer — HITL judgment / legal / accountability
+
+The platform automates detection→fix→evidence; the **top layer** is the judgment, legal
+independence, and named accountability a security/compliance **consultant** otherwise owns —
+each built so the engine does the grounded prep and a **named human** makes the call that
+can't be automated. Four capabilities, all ledger-signed, all behind the same store + API:
+
+| Capability | Package(s) | What the engine does (grounded) | Where the human is in the loop (HITL) |
+|---|---|---|---|
+| **Risk register** (vCISO judgment) | `pkg/platform.Risk`, `internal/grc/risk.go`, `internal/platformapi/risks.go`, `/risks` | `CandidateRisks` clusters high+ findings by coarse category (CWE→cat, else tool), cites finding ids, sets a *starting* likelihood/impact | `POST /v1/risks/{id}/decision` — a named owner accepts/mitigates/transfers/avoids residual risk with a rationale; the agent never accepts risk |
+| **Audit engagement** (legal attestation) | `pkg/platform.AuditEngagement`/`ControlAttestation`, `internal/grc/audit.go`, `internal/platformapi/audits.go`, `/audits` | seeds the controls-to-attest from the tenant's real posture for the framework | `POST /v1/audits/{id}/attest` — a named **external** auditor renders each control verdict; issue gated on all-attested + named auditor. "Audit-ready, not the audit" |
+| **Pentest sign-off** (named accountability) | `internal/pentest.Signoff`, `internal/platformapi/pentest.go`, `/pentest/{id}` | produces the exploitation-proven VAPT report | `POST /v1/pentest/{id}/signoff` — a named human signs; the rendered report carries the signer line |
+| **vCISO program** (policies) | `pkg/platform.Policy`/`PolicyAck`, `internal/grc/program.go`, `internal/platformapi/program.go`, `/program` | `StarterPolicies` seeds the standard SOC 2 policy set as drafts (idempotent) | `POST /v1/program/{id}/publish` — a named owner publishes; `…/ack` — each member acknowledges |
+
+Invariants: the engine **proposes/seeds**, never **decides/publishes/attests/signs**; every
+human act is required-by-API (400 without the named human) and recorded into `pkg/ledger`
+(reuses §18.2 inv. 4). New store entities follow the 6-place wiring (types · Store iface ·
+Memory field+snapshot+orEmpty · File Put · SQLite table+Put/List · conformance isolation
+test). Grounding (§10) holds: candidate risks cite findings, audit controls come from real
+posture, policy templates are industry-standard names (not invented claims about the tenant).
