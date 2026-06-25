@@ -66,6 +66,7 @@ export function CommandPalette() {
       { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved", run: go("/incidents") },
       { id: "compliance", label: "Compliance", group: "Go to", icon: ShieldCheck, keywords: "soc2 controls audit posture", run: go("/compliance") },
       { id: "risks", label: "Risk register", group: "Go to", icon: ShieldCheck, keywords: "vciso risk accept treat mitigate likelihood impact judgment", run: go("/risks") },
+      { id: "audits", label: "Audits", group: "Go to", icon: FileText, keywords: "soc2 iso audit engagement auditor attestation external", run: go("/audits") },
       { id: "questionnaire", label: "Security questionnaire", group: "Go to", icon: ShieldCheck, keywords: "caiq sig vendor trust center procurement", run: go("/compliance/questionnaire") },
       { id: "reports", label: "Reports & evidence", group: "Go to", icon: FileText, keywords: "export sarif csv evidence pack signed download auditor", run: go("/reports") },
       { id: "assets", label: "Assets & connections", group: "Go to", icon: Boxes, keywords: "connect systems monitored", run: go("/assets") },

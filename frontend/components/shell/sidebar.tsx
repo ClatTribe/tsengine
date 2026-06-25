@@ -31,6 +31,7 @@ const NAV = [
   { href: "/incidents", label: "Incidents", icon: Activity },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
   { href: "/risks", label: "Risks", icon: Scale },
+  { href: "/audits", label: "Audits", icon: FileText },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/assets", label: "Assets", icon: Boxes },
   { href: "/saas-apps", label: "SaaS apps", icon: AppWindow },
