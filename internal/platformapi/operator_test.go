@@ -18,7 +18,7 @@ func operatorDeps(t *testing.T) Deps {
 	st := store.NewMemory()
 	ctx := context.Background()
 	// tenant A names dana@x.io as a managed practitioner; tenant B does not.
-	_ = st.PutTenant(ctx, platform.Tenant{ID: "tA", Name: "Acme", Practitioners: []platform.Practitioner{{Name: "Dana", Email: "dana@x.io", Capacity: platform.CapacityManaged}}})
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "tA", Name: "Acme", Practitioners: []platform.Practitioner{{Name: "Dana", Email: "dana@x.io", Capacity: platform.CapacityManaged, Firm: "TS Managed"}}})
 	_ = st.PutTenant(ctx, platform.Tenant{ID: "tB", Name: "Other"})
 	_ = st.PutRisk(ctx, platform.Risk{ID: "ra", TenantID: "tA", Title: "A risk", Status: platform.RiskOpen, Proposed: true})
 	_ = st.PutRisk(ctx, platform.Risk{ID: "rb", TenantID: "tB", Title: "B risk", Status: platform.RiskOpen, Proposed: true})
