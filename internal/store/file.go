@@ -132,6 +132,13 @@ func (f *File) PutRisk(ctx context.Context, r platform.Risk) error {
 	return f.persist()
 }
 
+func (f *File) PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error {
+	if err := f.Memory.PutAuditEngagement(ctx, e); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error {
 	if err := f.Memory.PutIgnoreRule(ctx, ir); err != nil {
 		return err

@@ -17,14 +17,16 @@ type Memory struct {
 	mu sync.RWMutex
 
 	tenants     map[string]platform.Tenant
-	connections map[string][]platform.Connection             // tenantID → connections
-	assets      map[string][]platform.Asset                  // tenantID → assets
-	engagements map[string][]platform.Engagement             // tenantID → engagements
-	findings    map[string][]types.Finding                   // tenantID → findings
-	actions     map[string]map[string]platform.Action        // tenantID → actionID → action
-	controls    map[string]map[string]platform.ControlState  // tenantID → "framework/control" → state
-	incidents   map[string]map[string]platform.Incident      // tenantID → incidentID → incident
-	risks       map[string]map[string]platform.Risk          // tenantID → riskID → risk
+	connections map[string][]platform.Connection               // tenantID → connections
+	assets      map[string][]platform.Asset                    // tenantID → assets
+	engagements map[string][]platform.Engagement               // tenantID → engagements
+	findings    map[string][]types.Finding                     // tenantID → findings
+	actions     map[string]map[string]platform.Action          // tenantID → actionID → action
+	controls    map[string]map[string]platform.ControlState    // tenantID → "framework/control" → state
+	incidents   map[string]map[string]platform.Incident        // tenantID → incidentID → incident
+	risks       map[string]map[string]platform.Risk            // tenantID → riskID → risk
+	audits      map[string]map[string]platform.AuditEngagement // tenantID → engagementID → audit
+
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
 	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
 	runtimeEvts map[string][]platform.RuntimeEvent           // tenantID → runtime-protection events (append-only)
@@ -47,6 +49,7 @@ func NewMemory() *Memory {
 		controls:    map[string]map[string]platform.ControlState{},
 		incidents:   map[string]map[string]platform.Incident{},
 		risks:       map[string]map[string]platform.Risk{},
+		audits:      map[string]map[string]platform.AuditEngagement{},
 		ignores:     map[string]map[string]platform.IgnoreRule{},
 		exclusions:  map[string]map[string]platform.ExclusionRule{},
 		runtimeEvts: map[string][]platform.RuntimeEvent{},
@@ -315,6 +318,26 @@ func (m *Memory) ListRisks(_ context.Context, tenantID string) ([]platform.Risk,
 	return out, nil
 }
 
+func (m *Memory) PutAuditEngagement(_ context.Context, e platform.AuditEngagement) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.audits[e.TenantID] == nil {
+		m.audits[e.TenantID] = map[string]platform.AuditEngagement{}
+	}
+	m.audits[e.TenantID][e.ID] = e
+	return nil
+}
+
+func (m *Memory) ListAuditEngagements(_ context.Context, tenantID string) ([]platform.AuditEngagement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.AuditEngagement, 0, len(m.audits[tenantID]))
+	for _, e := range m.audits[tenantID] {
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 func (m *Memory) PutIgnoreRule(_ context.Context, ir platform.IgnoreRule) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -456,23 +479,24 @@ func (m *Memory) ListThirdPartyApps(_ context.Context, tenantID string) ([]platf
 // Snapshot is the serializable form of a Memory store — what the file-backed store
 // persists. Fields are exported so encoding/json can round-trip them.
 type Snapshot struct {
-	Tenants     map[string]platform.Tenant                   `json:"tenants"`
-	Connections map[string][]platform.Connection             `json:"connections"`
-	Assets      map[string][]platform.Asset                  `json:"assets"`
-	Engagements map[string][]platform.Engagement             `json:"engagements"`
-	Findings    map[string][]types.Finding                   `json:"findings"`
-	Actions     map[string]map[string]platform.Action        `json:"actions"`
-	Controls    map[string]map[string]platform.ControlState  `json:"controls"`
-	Incidents   map[string]map[string]platform.Incident      `json:"incidents"`
-	Risks       map[string]map[string]platform.Risk          `json:"risks,omitempty"`
-	Ignores     map[string]map[string]platform.IgnoreRule    `json:"ignores,omitempty"`
-	Exclusions  map[string]map[string]platform.ExclusionRule `json:"exclusions,omitempty"`
-	RuntimeEvts map[string][]platform.RuntimeEvent           `json:"runtime_events,omitempty"`
-	Pentests    map[string]map[string]pentest.Engagement     `json:"pentests,omitempty"`
-	Reviews     map[string]map[string]platform.ReviewRequest `json:"reviews"`
-	Apps        map[string][]platform.ThirdPartyApp          `json:"apps"`
-	Users       map[string]platform.User                     `json:"users"`
-	Sessions    map[string]platform.Session                  `json:"sessions"`
+	Tenants     map[string]platform.Tenant                     `json:"tenants"`
+	Connections map[string][]platform.Connection               `json:"connections"`
+	Assets      map[string][]platform.Asset                    `json:"assets"`
+	Engagements map[string][]platform.Engagement               `json:"engagements"`
+	Findings    map[string][]types.Finding                     `json:"findings"`
+	Actions     map[string]map[string]platform.Action          `json:"actions"`
+	Controls    map[string]map[string]platform.ControlState    `json:"controls"`
+	Incidents   map[string]map[string]platform.Incident        `json:"incidents"`
+	Risks       map[string]map[string]platform.Risk            `json:"risks,omitempty"`
+	Audits      map[string]map[string]platform.AuditEngagement `json:"audits,omitempty"`
+	Ignores     map[string]map[string]platform.IgnoreRule      `json:"ignores,omitempty"`
+	Exclusions  map[string]map[string]platform.ExclusionRule   `json:"exclusions,omitempty"`
+	RuntimeEvts map[string][]platform.RuntimeEvent             `json:"runtime_events,omitempty"`
+	Pentests    map[string]map[string]pentest.Engagement       `json:"pentests,omitempty"`
+	Reviews     map[string]map[string]platform.ReviewRequest   `json:"reviews"`
+	Apps        map[string][]platform.ThirdPartyApp            `json:"apps"`
+	Users       map[string]platform.User                       `json:"users"`
+	Sessions    map[string]platform.Session                    `json:"sessions"`
 }
 
 // Export returns a deep-enough copy of the store's data for persistence (taken under
@@ -490,6 +514,7 @@ func (m *Memory) Export() Snapshot {
 		Controls:    m.controls,
 		Incidents:   m.incidents,
 		Risks:       m.risks,
+		Audits:      m.audits,
 		Ignores:     m.ignores,
 		Exclusions:  m.exclusions,
 		RuntimeEvts: m.runtimeEvts,
@@ -514,6 +539,7 @@ func (m *Memory) load(s Snapshot) {
 	m.controls = orEmptyControls(s.Controls)
 	m.incidents = orEmptyIncidents(s.Incidents)
 	m.risks = orEmptyRisks(s.Risks)
+	m.audits = orEmptyAudits(s.Audits)
 	m.ignores = orEmptyIgnores(s.Ignores)
 	m.exclusions = orEmptyExclusions(s.Exclusions)
 	m.runtimeEvts = orEmpty(s.RuntimeEvts)
@@ -575,6 +601,12 @@ func orEmptyIgnores(m map[string]map[string]platform.IgnoreRule) map[string]map[
 func orEmptyRisks(m map[string]map[string]platform.Risk) map[string]map[string]platform.Risk {
 	if m == nil {
 		return map[string]map[string]platform.Risk{}
+	}
+	return m
+}
+func orEmptyAudits(m map[string]map[string]platform.AuditEngagement) map[string]map[string]platform.AuditEngagement {
+	if m == nil {
+		return map[string]map[string]platform.AuditEngagement{}
 	}
 	return m
 }

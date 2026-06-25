@@ -88,6 +88,10 @@ type Store interface {
 	PutRisk(ctx context.Context, r platform.Risk) error
 	ListRisks(ctx context.Context, tenantID string) ([]platform.Risk, error)
 
+	// --- audit engagements (external-auditor attestation; the legal layer) ---
+	PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error
+	ListAuditEngagements(ctx context.Context, tenantID string) ([]platform.AuditEngagement, error)
+
 	// --- issue suppression (ignore / accept-risk), keyed by issue dedup key ---
 	PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error
 	ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error)
