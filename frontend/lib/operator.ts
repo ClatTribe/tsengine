@@ -22,6 +22,7 @@ export interface QueueItem {
   tenant_name: string;
   kind: string; // risk | audit | pentest | policy
   item_id: string; // the underlying entity id — for act-on-behalf
+  controls?: string[]; // for audits: the control ids still awaiting attestation
   title: string;
   detail?: string;
   link: string;

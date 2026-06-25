@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -104,29 +105,39 @@ func (d Deps) handleAttestControl(w http.ResponseWriter, r *http.Request, tenant
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
 		return
 	}
-	verdict := strings.ToLower(strings.TrimSpace(body.Verdict))
-	if verdict != platform.AttestPassed && verdict != platform.AttestException {
-		writeJSON(w, http.StatusBadRequest, errBody("verdict must be one of: passed, exception"))
+	// the tenant path resolves the auditor's capacity from the roster by their typed name
+	cap, firm := d.practitionerCapacity(r, tenantID, strings.TrimSpace(body.AttestedBy))
+	e, status, err := d.applyControlAttestation(r, tenantID, id, body.ControlID, body.Verdict, body.Note, body.AttestedBy, cap, firm)
+	if err != nil {
+		writeJSON(w, status, errBody(err.Error()))
 		return
 	}
-	attestedBy := strings.TrimSpace(body.AttestedBy)
-	if attestedBy == "" {
-		writeJSON(w, http.StatusBadRequest, errBody("attested_by (the auditor's name) is required"))
-		return
-	}
-	controlID := strings.TrimSpace(body.ControlID)
+	writeJSON(w, status, auditView{AuditEngagement: e, Summary: grc.SummarizeAudit(e)})
+}
 
+// applyControlAttestation records a NAMED human auditor's verdict on one control and signs it into the
+// ledger. Shared by the tenant-session path (handleAttestControl) and the operator act-on-behalf path
+// (handleOperatorAttestControl) — they differ only in how capacity/firm resolve (typed name vs. the
+// operator's roster record). Returns the engagement, or an HTTP status + error to render.
+func (d Deps) applyControlAttestation(r *http.Request, tenantID, id, controlID, verdict, note, attestedBy, capacity, firm string) (platform.AuditEngagement, int, error) {
+	verdict = strings.ToLower(strings.TrimSpace(verdict))
+	if verdict != platform.AttestPassed && verdict != platform.AttestException {
+		return platform.AuditEngagement{}, http.StatusBadRequest, errors.New("verdict must be one of: passed, exception")
+	}
+	attestedBy = strings.TrimSpace(attestedBy)
+	if attestedBy == "" {
+		return platform.AuditEngagement{}, http.StatusBadRequest, errors.New("attested_by (the auditor's name) is required")
+	}
+	controlID = strings.TrimSpace(controlID)
 	e, ok := d.findAudit(r, tenantID, id)
 	if !ok {
-		writeJSON(w, http.StatusNotFound, errBody("audit engagement not found"))
-		return
+		return platform.AuditEngagement{}, http.StatusNotFound, errors.New("audit engagement not found")
 	}
-	capacity, firm := d.practitionerCapacity(r, tenantID, attestedBy) // who the auditor works for
 	found := false
 	for i := range e.Attestations {
 		if e.Attestations[i].ControlID == controlID {
 			e.Attestations[i].Verdict = verdict
-			e.Attestations[i].Note = strings.TrimSpace(body.Note)
+			e.Attestations[i].Note = strings.TrimSpace(note)
 			e.Attestations[i].AttestedBy = attestedBy
 			e.Attestations[i].AttestedAt = time.Now().UTC()
 			e.Attestations[i].Capacity = capacity
@@ -136,22 +147,20 @@ func (d Deps) handleAttestControl(w http.ResponseWriter, r *http.Request, tenant
 		}
 	}
 	if !found {
-		writeJSON(w, http.StatusNotFound, errBody("control not in this engagement"))
-		return
+		return platform.AuditEngagement{}, http.StatusNotFound, errors.New("control not in this engagement")
 	}
 	if e.Status == platform.AuditPlanning {
 		e.Status = platform.AuditFieldwork // first attestation moves it into fieldwork
 	}
 	if d.Recorder != nil {
 		d.Recorder.Record("control attested (external auditor)", "audit_attest",
-			map[string]any{"tenant_id": tenantID, "audit_id": e.ID, "control_id": controlID, "verdict": verdict, "auditor": attestedBy},
+			map[string]any{"tenant_id": tenantID, "audit_id": e.ID, "control_id": controlID, "verdict": verdict, "auditor": attestedBy, "capacity": capacity},
 			"control "+controlID+" "+verdict+" by "+attestedBy)
 	}
 	if err := d.Store.PutAuditEngagement(r.Context(), e); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
+		return platform.AuditEngagement{}, http.StatusInternalServerError, err
 	}
-	writeJSON(w, http.StatusOK, auditView{AuditEngagement: e, Summary: grc.SummarizeAudit(e)})
+	return e, http.StatusOK, nil
 }
 
 // handleIssueAudit marks the engagement issued — the auditor has rendered their report. Requires the

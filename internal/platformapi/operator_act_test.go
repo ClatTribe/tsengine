@@ -118,6 +118,53 @@ func TestOperator_ActOnBehalf_DecideRisk(t *testing.T) {
 	if ebg.Signoff != nil {
 		t.Errorf("ISOLATION: the unassigned client's report must stay unsigned, got %+v", ebg.Signoff)
 	}
+
+	// (6) act-on-behalf also covers audit control-attestation (independent legal attestation)
+	_ = d.Store.PutAuditEngagement(ctx, platform.AuditEngagement{ID: "aa", TenantID: "tA", Framework: "soc2", Status: platform.AuditPlanning,
+		Attestations: []platform.ControlAttestation{{ControlID: "CC6.1", Verdict: platform.AttestPending}}})
+	_ = d.Store.PutAuditEngagement(ctx, platform.AuditEngagement{ID: "ab", TenantID: "tB", Framework: "soc2", Status: platform.AuditPlanning,
+		Attestations: []platform.ControlAttestation{{ControlID: "CC6.1", Verdict: platform.AttestPending}}})
+	attest := d.operatorAuth(d.handleOperatorAttestControl)
+
+	arec := attestAsOperator(t, attest, login.Token, "tA", "aa", `{"control_id":"CC6.1","verdict":"passed","note":"evidence reviewed"}`)
+	if arec.Code != http.StatusOK {
+		t.Fatalf("attest-on-behalf on assigned client: %d %s", arec.Code, arec.Body.String())
+	}
+	aud, _ := d.findAuditByID(ctx, "tA", "aa")
+	c := aud.Attestations[0]
+	if c.Verdict != platform.AttestPassed || c.AttestedBy != "Dana" || c.Capacity != platform.CapacityManaged {
+		t.Errorf("attest must record verdict + named auditor + managed capacity, got verdict=%q by=%q cap=%q", c.Verdict, c.AttestedBy, c.Capacity)
+	}
+
+	// ISOLATION: dana cannot attest tenant B's control → 403, left pending
+	if f := attestAsOperator(t, attest, login.Token, "tB", "ab", `{"control_id":"CC6.1","verdict":"passed"}`); f.Code != http.StatusForbidden {
+		t.Fatalf("attest-on-behalf on an UNASSIGNED client must be 403, got %d", f.Code)
+	}
+	audB, _ := d.findAuditByID(ctx, "tB", "ab")
+	if audB.Attestations[0].Verdict != platform.AttestPending {
+		t.Errorf("ISOLATION: the unassigned client's control must stay pending, got %q", audB.Attestations[0].Verdict)
+	}
+}
+
+func attestAsOperator(t *testing.T, h http.HandlerFunc, token, tenant, audit, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/v1/operator/tenants/"+tenant+"/audits/"+audit+"/attest", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.SetPathValue("tenant", tenant)
+	req.SetPathValue("id", audit)
+	rec := httptest.NewRecorder()
+	h(rec, req)
+	return rec
+}
+
+func (d Deps) findAuditByID(ctx context.Context, tenantID, id string) (platform.AuditEngagement, bool) {
+	es, _ := d.Store.ListAuditEngagements(ctx, tenantID)
+	for _, e := range es {
+		if e.ID == id {
+			return e, true
+		}
+	}
+	return platform.AuditEngagement{}, false
 }
 
 func signoffAsOperator(t *testing.T, h http.HandlerFunc, token, tenant, eng, body string) *httptest.ResponseRecorder {
