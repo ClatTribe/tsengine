@@ -15,20 +15,32 @@ import (
 // practitioner is in the roster, scoped to their deliverables.
 
 // handlePractitionerQueue returns the pending HITL items for ?practitioner=<email-or-name> across the
-// tenants that named them a practitioner of record. Operator-token gated.
+// tenants that named them a practitioner of record. Operator-platform-token gated.
 func (d Deps) handlePractitionerQueue(w http.ResponseWriter, r *http.Request) {
 	who := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("practitioner")))
 	if who == "" {
 		writeJSON(w, http.StatusBadRequest, errBody("practitioner (email or name) query param is required"))
 		return
 	}
-	ctx := r.Context()
-	tenants, err := d.Store.ListTenants(ctx)
+	resp, err := d.practitionerQueue(r, who)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
+	writeJSON(w, http.StatusOK, resp)
+}
 
+// practitionerQueue aggregates the pending HITL items for a practitioner (by email or name) across the
+// tenants whose roster names them — and ONLY those tenants. Shared by the platform-token endpoint and
+// the operator-session console. Reads a tenant only when the practitioner is assigned to it, so tenant
+// isolation (§18.2 inv. 2) holds.
+func (d Deps) practitionerQueue(r *http.Request, who string) (map[string]any, error) {
+	who = strings.ToLower(strings.TrimSpace(who))
+	ctx := r.Context()
+	tenants, err := d.Store.ListTenants(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var data []practitioner.TenantData
 	served := 0
 	for _, t := range tenants {
@@ -44,7 +56,6 @@ func (d Deps) handlePractitionerQueue(w http.ResponseWriter, r *http.Request) {
 		td.Policies, _ = d.Store.ListPolicies(ctx, t.ID)
 		data = append(data, td)
 	}
-
 	items := practitioner.Queue(data)
 	if items == nil {
 		items = []practitioner.Pending{}
@@ -53,13 +64,13 @@ func (d Deps) handlePractitionerQueue(w http.ResponseWriter, r *http.Request) {
 	for _, it := range items {
 		byKind[it.Kind]++
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	return map[string]any{
 		"practitioner":   who,
 		"tenants_served": served,
 		"count":          len(items),
 		"by_kind":        byKind,
 		"items":          items,
-	})
+	}, nil
 }
 
 // matchPractitioner finds the practitioner of record in a tenant's roster by email or name.

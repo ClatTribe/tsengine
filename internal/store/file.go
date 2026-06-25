@@ -216,6 +216,27 @@ func (f *File) DeleteSession(ctx context.Context, token string) error {
 	return f.persist()
 }
 
+func (f *File) PutOperator(ctx context.Context, o platform.Operator) error {
+	if err := f.Memory.PutOperator(ctx, o); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutOperatorSession(ctx context.Context, s platform.OperatorSession) error {
+	if err := f.Memory.PutOperatorSession(ctx, s); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) DeleteOperatorSession(ctx context.Context, token string) error {
+	if err := f.Memory.DeleteOperatorSession(ctx, token); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error {
 	if err := f.Memory.ReplaceThirdPartyApps(ctx, tenantID, provider, apps); err != nil {
 		return err

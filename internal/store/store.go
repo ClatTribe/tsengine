@@ -131,4 +131,12 @@ type Store interface {
 	PutSession(ctx context.Context, s platform.Session) error
 	GetSession(ctx context.Context, token string) (platform.Session, error)
 	DeleteSession(ctx context.Context, token string) error
+
+	// --- operators (cross-tenant practitioner identities; a SEPARATE namespace from tenant users) ---
+	PutOperator(ctx context.Context, o platform.Operator) error
+	GetOperatorByEmail(ctx context.Context, email string) (platform.Operator, error)
+	GetOperator(ctx context.Context, id string) (platform.Operator, error)
+	PutOperatorSession(ctx context.Context, s platform.OperatorSession) error
+	GetOperatorSession(ctx context.Context, token string) (platform.OperatorSession, error)
+	DeleteOperatorSession(ctx context.Context, token string) error
 }

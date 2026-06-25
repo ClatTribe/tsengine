@@ -34,3 +34,27 @@ type Session struct {
 	TenantID  string    `json:"tenant_id"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
+
+// Operator is a CROSS-TENANT practitioner identity — the MSP's expert or our managed delivery expert
+// who works the human-in-the-loop across a book of client tenants. It is a DELIBERATELY SEPARATE
+// namespace from the tenant-scoped User/Session (different store maps, different sessions, different
+// auth middleware) so an operator credential can never be confused with a tenant session and tenant
+// isolation (§18.2 inv. 2) is untouched. An operator's Email is matched against tenant practitioner
+// rosters to scope what they can see; operator ACCOUNTS are provisioned by the deployment operator
+// (platform token), not self-serve.
+type Operator struct {
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	Name         string    `json:"name,omitempty"`
+	Firm         string    `json:"firm,omitempty"`
+	PasswordHash string    `json:"password_hash,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// OperatorSession authenticates an operator. Stored in a SEPARATE map from tenant Sessions so the two
+// token namespaces never cross.
+type OperatorSession struct {
+	Token      string    `json:"token"`
+	OperatorID string    `json:"operator_id"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
