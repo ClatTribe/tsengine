@@ -1,6 +1,6 @@
-import { AppWindow, ShieldAlert, BadgeCheck, Users, ScanSearch } from "lucide-react";
+import { AppWindow, ShieldAlert, BadgeCheck, Users, ScanSearch, Bot, Workflow, Plug, KeyRound } from "lucide-react";
 import { api } from "@/lib/api";
-import type { SaaSApp } from "@/lib/types";
+import type { SaaSApp, NonHumanIdentity } from "@/lib/types";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function SaaSAppsPage() {
-  const { apps, summary } = await api.saasApps();
+  const [{ apps, summary }, { identities, summary: idSummary }] = await Promise.all([api.saasApps(), api.identities()]);
   // Risky-first ordering: sensitive, then unverified, then by adoption.
   const sorted = [...apps].sort((a, b) => {
     if (a.sensitive !== b.sensitive) return a.sensitive ? -1 : 1;
@@ -30,6 +30,43 @@ export default async function SaaSAppsPage() {
         <Stat icon={BadgeCheck} label="Unverified publisher" value={summary.unverified_apps} tone="medium" />
         <Stat icon={Users} label="Adopted by ≥2 users" value={summary.multi_user_apps} />
       </section>
+
+      {/* Non-human & AI-agent identity posture (the ACSP agentic identity lens) */}
+      {idSummary.total > 0 && (
+        <section>
+          <SectionTitle action={<span className="text-[11px] text-faint">{idSummary.total} non-human identities</span>}>
+            Non-human &amp; AI-agent access
+          </SectionTitle>
+          <p className="mb-3 text-xs leading-relaxed text-muted">
+            The AI agents, automations, and integrations holding delegated access to your data. An AI
+            agent or unverified app with <span className="font-medium text-ink">write or admin</span> permission is the
+            over-privileged, delegated access the agentic era introduces — surfaced here, ranked worst-first.
+          </p>
+          <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat icon={Bot} label="AI agents" value={idSummary.ai_agents} />
+            <Stat icon={Workflow} label="Automations" value={idSummary.automations} />
+            <Stat icon={KeyRound} label="Write / admin access" value={idSummary.write_or_admin} tone="medium" />
+            <Stat icon={ShieldAlert} label="Over-privileged" value={idSummary.risky} tone="critical" />
+          </div>
+          <div className="card p-0">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
+                  <th className="py-2.5 pl-5 pr-2 font-medium">Identity</th>
+                  <th className="px-2 py-2.5 font-medium">Type</th>
+                  <th className="px-2 py-2.5 font-medium">Access</th>
+                  <th className="py-2.5 pr-5 font-medium text-right">Risk</th>
+                </tr>
+              </thead>
+              <tbody>
+                {identities.map((i) => (
+                  <IdentityRow key={i.name} id={i} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section>
         <SectionTitle action={<span className="text-[11px] text-faint">{apps.length} apps</span>}>
@@ -133,6 +170,49 @@ function AppRow({ app }: { app: SaaSApp }) {
       </td>
       <td className="px-2 py-2.5 align-middle text-right text-sm tabular-nums">{app.count}</td>
       <td className="py-2.5 pr-5 align-middle text-right text-xs text-muted">{app.scopes.length}</td>
+    </tr>
+  );
+}
+
+const CLASS_META: Record<string, { icon: typeof Bot; label: string }> = {
+  ai_agent: { icon: Bot, label: "AI agent" },
+  automation: { icon: Workflow, label: "Automation" },
+  integration: { icon: Plug, label: "Integration" },
+};
+const RISK_TONE: Record<string, string> = {
+  high: "border-critical/30 bg-critical/10 text-critical",
+  medium: "border-medium/30 bg-medium/10 text-medium",
+  low: "border-border bg-surface-2 text-muted",
+};
+
+function IdentityRow({ id }: { id: NonHumanIdentity }) {
+  const meta = CLASS_META[id.class] ?? CLASS_META.integration;
+  const Icon = meta.icon;
+  return (
+    <tr className="border-b border-border last:border-0 transition hover:bg-surface-2">
+      <td className="py-2.5 pl-5 pr-2 align-middle">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium">{id.name}</span>
+          {!id.verified && <span className="text-[11px] text-medium">unverified</span>}
+        </div>
+      </td>
+      <td className="px-2 py-2.5 align-middle">
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted">
+          <Icon className="h-3.5 w-3.5" /> {meta.label}
+        </span>
+      </td>
+      <td className="px-2 py-2.5 align-middle">
+        <span className="text-[11px] capitalize text-ink">{id.privilege}</span>
+        {id.users > 0 && <span className="ml-1.5 text-[11px] text-faint">· {id.users} user{id.users === 1 ? "" : "s"}</span>}
+      </td>
+      <td className="py-2.5 pr-5 align-middle text-right">
+        <span
+          className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium capitalize", RISK_TONE[id.risk] ?? RISK_TONE.low)}
+          title={id.risk_reason}
+        >
+          {id.risk}
+        </span>
+      </td>
     </tr>
   );
 }

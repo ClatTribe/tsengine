@@ -3,6 +3,7 @@ package platformapi
 import (
 	"net/http"
 
+	"github.com/ClatTribe/tsengine/internal/nhidentity"
 	"github.com/ClatTribe/tsengine/internal/shadowit"
 )
 
@@ -32,4 +33,26 @@ func (d Deps) handleSaaSApps(w http.ResponseWriter, r *http.Request, tenantID st
 	}
 	apps := shadowit.InventoryFromAggregated(gs)
 	respond(w, map[string]any{"apps": apps, "summary": shadowit.Summarize(apps)}, nil)
+}
+
+// handleNonHumanIdentities is the non-human / AI-agent identity posture (the ACSP "identity-aware
+// policy over human, machine, and agentic actions" lens). Over the SAME persisted OAuth-grant
+// inventory the SaaS-apps view uses, it classifies each non-human identity (AI agent / automation /
+// integration), assigns a least-privilege level, and a risk verdict — surfacing the over-privileged
+// AI-agent / unverified delegated access the inventory view doesn't. Pure presentation; no new scan.
+func (d Deps) handleNonHumanIdentities(w http.ResponseWriter, r *http.Request, tenantID string) {
+	raw, err := d.Store.ListThirdPartyApps(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	gs := make([]nhidentity.Grant, 0, len(raw))
+	for _, a := range raw {
+		gs = append(gs, nhidentity.Grant{App: a.AppID, Scopes: a.Scopes, Users: a.Users, Admin: a.AdminScope, Verified: a.Verified})
+	}
+	ids, sum := nhidentity.Classify(gs)
+	if ids == nil {
+		ids = []nhidentity.Identity{}
+	}
+	respond(w, map[string]any{"identities": ids, "summary": sum}, nil)
 }
