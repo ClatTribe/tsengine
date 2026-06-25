@@ -28,6 +28,22 @@ const TIERS = [
     ],
   },
   {
+    name: "Starter",
+    price: "$199",
+    cadence: "/ month, billed annually",
+    blurb: "Get audit-ready on a budget — posture, evidence, and your fixes.",
+    cta: "Start free",
+    href: "/signup",
+    highlight: false,
+    features: [
+      "Up to 3 systems (code · cloud · identity)",
+      "SOC 2 + one more framework",
+      "Signed evidence pack + Trust Center",
+      "Up to 25 fixes prepared / month",
+      "Email support",
+    ],
+  },
+  {
     name: "Growth",
     price: "$499",
     cadence: "/ month, billed annually",
@@ -68,66 +84,68 @@ const FAQ = [
   ["Do I need a security engineer to use TensorShield?", "No — that's the point. TensorShield does the engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. The whole experience is built for a non-technical founder or ops lead."],
   ["What does \"human in the loop\" actually mean?", "Low-risk fixes apply automatically. Anything consequential (a config change, an identity action) waits for one tap of your approval — and every decision, automated or human, is signed into a tamper-evident ledger."],
   ["Is the free plan really free?", "Yes. Connect a system, see your real posture and compliance gaps, and get your first fixes prepared — no credit card. Upgrade when you're ready for the full team."],
+  ["Starter or Growth — which do I need?", "Starter ($199/mo) is built for a seed-stage team getting audit-ready: up to 3 systems, SOC 2 plus one more framework, and signed evidence packs to hand an auditor. Growth ($499/mo) is the full fractional team — every framework, questionnaire automation, integrations, and the human-in-the-loop apply loop that actually closes findings for you. Most founders start on Starter for their first audit and move to Growth as they scale."],
+  ["What if I'd rather not run it at all?", "Have it fully managed. Our security expert — or your MSP / consultancy partner — operates TensorShield for you: they triage, approve, and sign off, and you get the outcome plus named accountability. It's the same engine and signed evidence, priced per engagement. Talk to us or see the partner program."],
   ["How fast is setup?", "Minutes. Connect a system via OAuth and the agent discovers your assets and starts scanning immediately. No agents to install, no playbooks to write."],
   ["Can auditors trust the evidence?", "Every finding cites the tool that proves it, and every compliance pack is ed25519-signed and pinned to the exact state it was assessed against — reproducible proof, not screenshots."],
 ];
 
 // ComparePlans — the at-a-glance feature matrix every buyer expects below the tier cards.
 // Cell value: "yes" | "no" | a literal string. Mirrors the TIERS feature lists, no new claims.
-const COMPARE: { section: string; rows: { label: string; cells: [string, string, string] }[] }[] = [
+const COMPARE: { section: string; rows: { label: string; cells: [string, string, string, string] }[] }[] = [
   {
     section: "Coverage",
     rows: [
-      { label: "Connected systems", cells: ["1", "Unlimited", "Unlimited"] },
-      { label: "Continuous scanning + live dashboard", cells: ["yes", "yes", "yes"] },
-      { label: "Asset types (code · cloud · web · identity)", cells: ["All", "All", "All"] },
-      { label: "OSS scanners wrapped", cells: ["30+", "30+", "30+"] },
+      { label: "Connected systems", cells: ["1", "Up to 3", "Unlimited", "Unlimited"] },
+      { label: "Continuous scanning + live dashboard", cells: ["yes", "yes", "yes", "yes"] },
+      { label: "Asset types (code · cloud · web · identity)", cells: ["All", "All", "All", "All"] },
+      { label: "OSS scanners wrapped", cells: ["30+", "30+", "30+", "30+"] },
     ],
   },
   {
     section: "Compliance",
     rows: [
-      { label: "Frameworks mapped", cells: ["1", "All 14", "All 14"] },
-      { label: "Signed evidence packs + Trust Center", cells: ["no", "yes", "yes"] },
-      { label: "Questionnaire automation", cells: ["no", "yes", "yes"] },
-      { label: "Audit-firm-ready exports", cells: ["no", "yes", "yes"] },
+      { label: "Frameworks mapped", cells: ["1", "2", "All 14", "All 14"] },
+      { label: "Signed evidence packs + Trust Center", cells: ["no", "yes", "yes", "yes"] },
+      { label: "Questionnaire automation", cells: ["no", "no", "yes", "yes"] },
+      { label: "Audit-firm-ready exports", cells: ["no", "no", "yes", "yes"] },
     ],
   },
   {
     section: "Autonomy & remediation",
     rows: [
-      { label: "Fixes prepared / month", cells: ["3", "Unlimited", "Unlimited"] },
-      { label: "Human-in-the-loop approvals", cells: ["no", "yes", "yes"] },
-      { label: "Signed decision ledger", cells: ["yes", "yes", "yes"] },
-      { label: "Autonomous AI pentest — exploitation-proven (XBOW-class)", cells: ["no", "Add-on", "yes"] },
-      { label: "On-demand human expert review", cells: ["no", "no", "yes"] },
+      { label: "Fixes prepared / month", cells: ["3", "25", "Unlimited", "Unlimited"] },
+      { label: "Human-in-the-loop approvals + apply", cells: ["no", "no", "yes", "yes"] },
+      { label: "Signed decision ledger", cells: ["yes", "yes", "yes", "yes"] },
+      { label: "Autonomous AI pentest — exploitation-proven (XBOW-class)", cells: ["no", "no", "Add-on", "yes"] },
+      { label: "On-demand human expert review", cells: ["no", "no", "no", "yes"] },
     ],
   },
   {
     section: "Platform",
     rows: [
-      { label: "Integrations (Slack · Jira · PagerDuty)", cells: ["no", "yes", "yes"] },
-      { label: "SSO / SAML + role-based access", cells: ["no", "no", "yes"] },
-      { label: "Dedicated success engineer", cells: ["no", "no", "yes"] },
-      { label: "Custom integrations + SLAs", cells: ["no", "no", "yes"] },
+      { label: "Integrations (Slack · Jira · PagerDuty)", cells: ["no", "no", "yes", "yes"] },
+      { label: "SSO / SAML + role-based access", cells: ["no", "no", "no", "yes"] },
+      { label: "Dedicated success engineer", cells: ["no", "no", "no", "yes"] },
+      { label: "Custom integrations + SLAs", cells: ["no", "no", "no", "yes"] },
     ],
   },
 ];
 
 function ComparePlans() {
-  const tiers = ["Free", "Growth", "Scale"];
+  const tiers = ["Free", "Starter", "Growth", "Scale"];
   return (
     <section className="mx-auto max-w-4xl px-5 pb-4 pt-14">
       <h2 className="text-center text-2xl font-semibold tracking-tight">Compare plans</h2>
       <Reveal delay={60} className="mt-8 overflow-x-auto">
-        <table className="w-full min-w-[560px] border-separate border-spacing-0 text-sm">
+        <table className="w-full min-w-[680px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
               <th className="w-[40%] p-0" />
               {tiers.map((t, i) => (
                 <th
                   key={t}
-                  className={`px-4 py-2.5 text-center text-sm font-semibold ${i === 1 ? "rounded-t-xl bg-accent-soft/60 text-accent ring-1 ring-accent/30" : "text-ink"}`}
+                  className={`px-4 py-2.5 text-center text-sm font-semibold ${i === 2 ? "rounded-t-xl bg-accent-soft/60 text-accent ring-1 ring-accent/30" : "text-ink"}`}
                 >
                   {t}
                 </th>
@@ -149,7 +167,7 @@ function FragmentGroup({ grp }: { grp: (typeof COMPARE)[number] }) {
   return (
     <>
       <tr>
-        <td colSpan={4} className="border-t border-border pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-faint">
+        <td colSpan={5} className="border-t border-border pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-faint">
           {grp.section}
         </td>
       </tr>
@@ -157,8 +175,8 @@ function FragmentGroup({ grp }: { grp: (typeof COMPARE)[number] }) {
         <tr key={r.label}>
           <td className="border-t border-border py-2.5 pr-4 text-sm text-ink">{r.label}</td>
           {r.cells.map((v, ci) => (
-            <td key={ci} className={`border-t border-border px-4 py-2.5 text-center ${ci === 1 ? "bg-accent-soft/25" : ""}`}>
-              <PlanCell v={v} highlight={ci === 1} />
+            <td key={ci} className={`border-t border-border px-4 py-2.5 text-center ${ci === 2 ? "bg-accent-soft/25" : ""}`}>
+              <PlanCell v={v} highlight={ci === 2} />
             </td>
           ))}
         </tr>
@@ -188,13 +206,14 @@ export default function Pricing() {
           </span>
           <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">Pricing that grows with you</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            One fractional security team, one simple plan. No per-seat surprises, no security hire.
+            From your first SOC 2 to an enterprise rollout. No per-seat surprises, no security hire —
+            and far less than a single retainer.
           </p>
         </Reveal>
       </section>
 
       <section className="mx-auto max-w-6xl px-5 pb-8">
-        <Reveal delay={80} className="grid items-stretch gap-5 lg:grid-cols-3">
+        <Reveal delay={80} className="grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {TIERS.map((t) => (
             <div
               key={t.name}
@@ -238,6 +257,30 @@ export default function Pricing() {
         <p className="mt-6 text-center text-xs text-faint">
           Prices in USD. Annual billing saves ~20% vs monthly. All plans include continuous monitoring and the signed ledger.
         </p>
+      </section>
+
+      {/* Managed & partner service models — the practitioner layer, surfaced in pricing */}
+      <section className="mx-auto max-w-4xl px-5 pt-6">
+        <Reveal className="rounded-2xl border border-border bg-surface-2/40 p-6 text-center sm:p-8">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-accent">
+            <Sparkles className="h-3.5 w-3.5" /> Don&apos;t want to run it yourself?
+          </span>
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight">Have it fully managed</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+            Prefer not to handle even the approvals? A named security expert — ours, or your own MSP /
+            consultancy partner — runs TensorShield on your behalf: they triage, approve, and sign off,
+            you get the outcome and the accountability. Same engine, same signed evidence — you just
+            don&apos;t lift a finger. Priced per engagement.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/demo" className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover">
+              Talk to us about Managed <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="/partners" className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:border-border-strong">
+              For MSPs &amp; consultancies
+            </Link>
+          </div>
+        </Reveal>
       </section>
 
       {/* Compare plans */}
