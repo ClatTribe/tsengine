@@ -6,11 +6,12 @@ import {
 } from "lucide-react";
 import { LiveConsole } from "@/components/marketing/live-console";
 import { Reveal } from "@/components/marketing/reveal";
+import { TrustBar } from "@/components/marketing/trust-bar";
 
 export const metadata = {
-  title: "TensorShield — your fractional security team",
+  title: "TensorShield — pass the security review, close the deal",
   description:
-    "AI security + compliance for SMBs. TensorShield finds, triages, and fixes — with a human in the loop where it matters. No security hire required.",
+    "Enterprise deals stall on security questionnaires, SOC 2, and pentests. TensorShield handles all of it — finds, fixes, and proves your security, with a named expert in the loop where judgment matters. No security hire required.",
   alternates: { canonical: "/" },
 };
 
@@ -37,12 +38,13 @@ export default function Landing() {
               </Link>
 
               <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
-                Your fractional security team,{" "}
-                <span className="text-accent">running while you build.</span>
+                Enterprise deals stall on security.{" "}
+                <span className="text-accent">Stop losing them.</span>
               </h1>
               <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-                TensorShield continuously finds, triages, and fixes security &amp; compliance issues across your code,
-                cloud, and identity — and pulls you in only where judgment is needed. No security hire required.
+                The questionnaire, the SOC 2, the pentest your biggest customer is asking for — TensorShield handles it.
+                It finds, fixes, and proves your security across code, cloud, and identity, and pulls in a named expert
+                where judgment matters. No security hire required.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
@@ -74,6 +76,9 @@ export default function Landing() {
           <StackPipeline />
         </div>
       </section>
+
+      {/* Trust signals — who built it, what it runs on, how it's built, who it's for */}
+      <TrustBar />
 
       {/* Differentiator — we fix, not just flag (vs advise-only tools) */}
       <section className="border-y border-border bg-surface">
