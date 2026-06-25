@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Search, Settings, Building2 } from "lucide-react";
 import { RiskPill } from "@/components/ui/primitives";
 import { LiveStatus } from "@/components/shell/live-status";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function TopBar({ workspace, risk }: { workspace: string; risk: string }) {
   const router = useRouter();
@@ -34,6 +35,7 @@ export function TopBar({ workspace, risk }: { workspace: string; risk: string })
       <div className="ml-auto flex items-center gap-3">
         <LiveStatus />
         <RiskPill rating={risk} />
+        <ThemeToggle className="h-8 w-8" />
         <Link href="/settings" className="rounded-lg p-2 text-muted transition hover:bg-surface hover:text-ink" title="Settings">
           <Settings className="h-4 w-4" />
         </Link>

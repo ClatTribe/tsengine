@@ -61,9 +61,16 @@ export const metadata: Metadata = {
   },
 };
 
+// Sets the theme class on <html> BEFORE first paint (reads the saved choice, else the OS preference),
+// so there's no light-mode flash on a dark-mode load. Kept inline + tiny for that reason.
+const themeInit = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
       <body className="min-h-screen bg-bg font-sans">{children}</body>
     </html>
   );
