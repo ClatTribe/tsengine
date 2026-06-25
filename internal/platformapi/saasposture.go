@@ -43,6 +43,12 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 			respond(w, nil, serr)
 			return
 		}
+		// Fold the SaaS-config finding into the compliance posture (it already carries its control
+		// mapping inline) — so a SaaS misconfig (no 2FA enforcement, public sharing, …) shows as a real
+		// control gap in the founder's posture, not just a raw finding. Same wiring as the identity path.
+		if d.GRC != nil {
+			_ = d.GRC.Apply(r.Context(), tenantID, f)
+		}
 		stored++
 	}
 	if d.Recorder != nil && stored > 0 {
