@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS controls    (tenant_id TEXT, framework TEXT, control_
 CREATE TABLE IF NOT EXISTS incidents   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS risks       (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS policies    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
 CREATE TABLE IF NOT EXISTS exclusions  (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS runtimeevts (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -238,6 +239,12 @@ func (s *SQLite) PutAuditEngagement(ctx context.Context, e platform.AuditEngagem
 }
 func (s *SQLite) ListAuditEngagements(ctx context.Context, tenantID string) ([]platform.AuditEngagement, error) {
 	return listJSON[platform.AuditEngagement](ctx, s.db, `SELECT data FROM audits WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) PutPolicy(ctx context.Context, p platform.Policy) error {
+	return s.upsertTID(ctx, `INSERT INTO policies(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, p.TenantID, p.ID, p)
+}
+func (s *SQLite) ListPolicies(ctx context.Context, tenantID string) ([]platform.Policy, error) {
+	return listJSON[platform.Policy](ctx, s.db, `SELECT data FROM policies WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 
 func (s *SQLite) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error {

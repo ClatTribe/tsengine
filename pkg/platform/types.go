@@ -641,6 +641,49 @@ func (a AuditEngagement) Progress() (attested, total int) {
 	return attested, total
 }
 
+// Policy statuses — a security policy is the vCISO/program deliverable a consultant writes and the
+// owner adopts. Draft until a named owner publishes it (the HITL judgment act).
+const (
+	PolicyDraft     = "draft"
+	PolicyPublished = "published"
+)
+
+// PolicyAck records that a named team member acknowledged a published policy (the "everyone has read
+// and accepted" evidence auditors ask for).
+type PolicyAck struct {
+	User    string    `json:"user"`
+	AckedAt time.Time `json:"acked_at"`
+}
+
+// Policy is one security policy in the tenant's program. The engine can seed the standard policy set
+// (industry-standard templates, grounded — not invented), but ADOPTING/PUBLISHING one is a named
+// human's call, and each team member's acknowledgment is recorded. Published policies + their acks
+// are the program evidence a SOC 2 audit expects.
+type Policy struct {
+	ID          string      `json:"id"`
+	TenantID    string      `json:"tenant_id"`
+	Name        string      `json:"name"`
+	Category    string      `json:"category,omitempty"` // e.g. "Access Control", "Incident Response"
+	Summary     string      `json:"summary,omitempty"`
+	Status      string      `json:"status"`
+	Owner       string      `json:"owner,omitempty"` // the accountable human
+	Version     int         `json:"version"`
+	Acks        []PolicyAck `json:"acks,omitempty"`
+	CreatedAt   time.Time   `json:"created_at"`
+	PublishedAt time.Time   `json:"published_at,omitempty"`
+	LedgerRef   string      `json:"ledger_ref,omitempty"`
+}
+
+// AckedBy reports whether the given user has acknowledged this policy.
+func (p Policy) AckedBy(user string) bool {
+	for _, a := range p.Acks {
+		if a.User == user {
+			return true
+		}
+	}
+	return false
+}
+
 // ReviewRequest statuses.
 const (
 	ReviewOpen     = "open"

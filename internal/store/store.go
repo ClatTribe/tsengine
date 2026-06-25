@@ -92,6 +92,10 @@ type Store interface {
 	PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error
 	ListAuditEngagements(ctx context.Context, tenantID string) ([]platform.AuditEngagement, error)
 
+	// --- security-program policies (vCISO program; publish/acknowledge are HITL) ---
+	PutPolicy(ctx context.Context, p platform.Policy) error
+	ListPolicies(ctx context.Context, tenantID string) ([]platform.Policy, error)
+
 	// --- issue suppression (ignore / accept-risk), keyed by issue dedup key ---
 	PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error
 	ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error)

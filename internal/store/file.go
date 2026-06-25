@@ -139,6 +139,13 @@ func (f *File) PutAuditEngagement(ctx context.Context, e platform.AuditEngagemen
 	return f.persist()
 }
 
+func (f *File) PutPolicy(ctx context.Context, p platform.Policy) error {
+	if err := f.Memory.PutPolicy(ctx, p); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error {
 	if err := f.Memory.PutIgnoreRule(ctx, ir); err != nil {
 		return err
