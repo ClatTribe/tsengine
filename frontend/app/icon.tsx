@@ -22,15 +22,17 @@ export default function Icon() {
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
           {/* white shield */}
           <path d="M12 2l8 3v6c0 5-3.4 8.4-8 11-4.6-2.6-8-6-8-11V5l8-3z" fill="#ffffff" />
-          {/* growth arrow + a tensor node — the TensorShield mark, legible at 32px */}
+          {/* upward tensor node-chevron — matches the brand mark, legible at 16px */}
           <path
-            d="M8.5 15.5L15 9M11.5 8.5H15.5V12.5"
+            d="M8.2 15L12 9l3.8 6"
             stroke="#6366f1"
-            strokeWidth="2"
+            strokeWidth="1.7"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <circle cx="8.5" cy="15.5" r="1.3" fill="#6366f1" />
+          <circle cx="8.2" cy="15" r="1.35" fill="#6366f1" />
+          <circle cx="15.8" cy="15" r="1.35" fill="#6366f1" />
+          <circle cx="12" cy="9" r="1.6" fill="#6366f1" />
         </svg>
       </div>
     ),
