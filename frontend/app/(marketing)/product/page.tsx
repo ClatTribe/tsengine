@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 import { ASSET_SURFACES } from "@/lib/assets";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+import { Reveal } from "@/components/marketing/reveal";
 
 export const metadata = pageMeta({
   title: "Product — how TensorShield works",
@@ -34,20 +36,20 @@ export default function Product() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
-        <div className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
+        <AuroraBackdrop />
+        <Reveal as="div" className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">The product</span>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">A security team in a loop, not a tool in a tab.</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
             Connect a system once. TensorShield runs the whole loop — detect, triage, fix, and prove — and pulls you in
             only where human judgment matters.
           </p>
-        </div>
+        </Reveal>
       </section>
 
       {/* The loop */}
       <section className="mx-auto max-w-5xl px-5 pb-12">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Reveal delay={70} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {LOOP.map(({ icon: Icon, t, d }, i) => (
             <div key={t} className="card p-6">
               <div className="flex items-center gap-3">
@@ -60,7 +62,7 @@ export default function Product() {
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* Two layers */}
@@ -114,11 +116,11 @@ export default function Product() {
 
       {/* Personas */}
       <section className="mx-auto max-w-6xl px-5 py-20">
-        <div className="mx-auto mb-12 max-w-2xl text-center">
+        <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Built for your whole team</span>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight">Everyone gets what they need.</h2>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        </Reveal>
+        <Reveal delay={70} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {PERSONAS.map(({ icon: Icon, who, v }) => (
             <div key={who} className="card p-5">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
@@ -128,7 +130,7 @@ export default function Product() {
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{v}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       <CTABand />
