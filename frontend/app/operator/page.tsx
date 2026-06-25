@@ -3,6 +3,7 @@ import { UserCog, Scale, FileCheck2, Crosshair, ScrollText, LogOut } from "lucid
 import { getOperatorToken, operatorMe, operatorQueue, type QueueItem } from "@/lib/operator";
 import { operatorLogout } from "./actions";
 import { DecideRiskInline } from "@/components/operator/decide-risk-inline";
+import { PublishPolicyInline } from "@/components/operator/publish-policy-inline";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Practitioner console | TensorShield" };
@@ -79,9 +80,11 @@ export default async function OperatorConsole() {
                           </div>
                         </div>
                       </div>
-                      {/* act-on-behalf: decide a risk right here. Other HITL kinds open in the client workspace. */}
+                      {/* act-on-behalf: decide a risk / publish a policy right here. Attest + sign-off open in the client workspace. */}
                       {it.kind === "risk" && it.item_id ? (
                         <DecideRiskInline tenant={it.tenant_id} risk={it.item_id} />
+                      ) : it.kind === "policy" && it.item_id ? (
+                        <PublishPolicyInline tenant={it.tenant_id} policy={it.item_id} />
                       ) : null}
                     </div>
                   );
@@ -90,9 +93,9 @@ export default async function OperatorConsole() {
             </section>
           ))}
           <p className="pt-2 text-center text-[11px] text-faint">
-            Decide risks right here — your decision is recorded with your name + capacity and signed into the ledger.
-            Attestations, sign-offs, and policy publishing open in the client&apos;s workspace. You only ever see the
-            clients who named you a practitioner of record.
+            Decide risks and publish policies right here — recorded with your name + capacity and signed into the
+            ledger. Control attestations and pentest sign-offs open in the client&apos;s workspace. You only ever see
+            the clients who named you a practitioner of record.
           </p>
         </div>
       )}

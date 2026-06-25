@@ -65,6 +65,45 @@ func TestOperator_ActOnBehalf_DecideRisk(t *testing.T) {
 	if bad := decideAsOperator(t, act, login.Token, "tA", "ra", `{"treatment":"ignore"}`); bad.Code != http.StatusBadRequest {
 		t.Errorf("invalid treatment must be 400, got %d", bad.Code)
 	}
+
+	// (4) act-on-behalf also covers policy publish (the other vCISO deliverable)
+	ctx := context.Background()
+	_ = d.Store.PutPolicy(ctx, platform.Policy{ID: "pa", TenantID: "tA", Name: "Access Control Policy", Status: platform.PolicyDraft})
+	_ = d.Store.PutPolicy(ctx, platform.Policy{ID: "pb", TenantID: "tB", Name: "Other policy", Status: platform.PolicyDraft})
+	pub := d.operatorAuth(d.handleOperatorPublishPolicy)
+
+	// dana publishes tenant A's draft policy → 200, managed capacity, published + ledger-signed
+	prec := publishAsOperator(t, pub, login.Token, "tA", "pa")
+	if prec.Code != http.StatusOK {
+		t.Fatalf("publish-on-behalf on assigned client: %d %s", prec.Code, prec.Body.String())
+	}
+	var pol platform.Policy
+	_ = json.Unmarshal(prec.Body.Bytes(), &pol)
+	if pol.Status != platform.PolicyPublished || pol.Owner != "Dana" || pol.Capacity != platform.CapacityManaged || pol.LedgerRef == "" {
+		t.Errorf("publish must set published + named owner + managed capacity + ledger, got status=%q owner=%q cap=%q ledger=%q", pol.Status, pol.Owner, pol.Capacity, pol.LedgerRef)
+	}
+
+	// ISOLATION: dana cannot publish tenant B's policy → 403, left a draft
+	if f := publishAsOperator(t, pub, login.Token, "tB", "pb"); f.Code != http.StatusForbidden {
+		t.Fatalf("publish-on-behalf on an UNASSIGNED client must be 403, got %d", f.Code)
+	}
+	pbs, _ := d.Store.ListPolicies(ctx, "tB")
+	for _, p := range pbs {
+		if p.ID == "pb" && p.Status != platform.PolicyDraft {
+			t.Errorf("ISOLATION: the unassigned client's policy must stay a draft, got %q", p.Status)
+		}
+	}
+}
+
+func publishAsOperator(t *testing.T, h http.HandlerFunc, token, tenant, policy string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/v1/operator/tenants/"+tenant+"/policies/"+policy+"/publish", strings.NewReader(""))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.SetPathValue("tenant", tenant)
+	req.SetPathValue("id", policy)
+	rec := httptest.NewRecorder()
+	h(rec, req)
+	return rec
 }
 
 func decideAsOperator(t *testing.T, h http.HandlerFunc, token, tenant, risk, body string) *httptest.ResponseRecorder {
