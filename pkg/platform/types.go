@@ -578,6 +578,69 @@ func clamp15(n int) int {
 	return n
 }
 
+// Audit-engagement statuses (the SOC2/ISO audit the tenant runs WITH an external auditor).
+const (
+	AuditPlanning  = "planning"  // scope + auditor named, evidence being assembled
+	AuditFieldwork = "fieldwork" // the auditor is reviewing evidence + attesting controls
+	AuditIssued    = "issued"    // the auditor has issued the report
+)
+
+// Audit types.
+const (
+	AuditTypeI  = "type_i"  // controls designed correctly at a point in time
+	AuditTypeII = "type_ii" // controls operated effectively over a period
+)
+
+// Control-attestation verdicts (the independent auditor's call — NOT the engine's).
+const (
+	AttestPending   = "pending"
+	AttestPassed    = "passed"
+	AttestException = "exception"
+)
+
+// ControlAttestation is the independent auditor's verdict on one control — the legal layer the tool
+// cannot replace. The engine assembles the evidence; a NAMED human auditor reviews it and attests.
+type ControlAttestation struct {
+	Framework  string    `json:"framework"`
+	ControlID  string    `json:"control_id"`
+	Verdict    string    `json:"verdict"` // pending | passed | exception
+	Note       string    `json:"note,omitempty"`
+	AttestedBy string    `json:"attested_by,omitempty"` // the external auditor, by name
+	AttestedAt time.Time `json:"attested_at,omitempty"`
+}
+
+// AuditEngagement is a SOC2/ISO (etc.) audit the tenant runs with an EXTERNAL auditor. The product is
+// "audit-ready, not the audit": it pre-populates the controls to be attested from the tenant's posture
+// and tracks the engagement, but the attestation itself is an independent licensed human's — recorded
+// here per control, signed into the ledger. AuditorName/Firm/Email name that human.
+type AuditEngagement struct {
+	ID           string               `json:"id"`
+	TenantID     string               `json:"tenant_id"`
+	Framework    string               `json:"framework"`
+	AuditType    string               `json:"audit_type"` // type_i | type_ii
+	PeriodStart  time.Time            `json:"period_start,omitempty"`
+	PeriodEnd    time.Time            `json:"period_end,omitempty"`
+	AuditorName  string               `json:"auditor_name,omitempty"`
+	AuditorFirm  string               `json:"auditor_firm,omitempty"`
+	AuditorEmail string               `json:"auditor_email,omitempty"`
+	Status       string               `json:"status"`
+	Attestations []ControlAttestation `json:"attestations,omitempty"`
+	CreatedAt    time.Time            `json:"created_at"`
+	IssuedAt     time.Time            `json:"issued_at,omitempty"`
+	LedgerRef    string               `json:"ledger_ref,omitempty"`
+}
+
+// Progress reports how many controls the auditor has attested (passed or exception) out of the total.
+func (a AuditEngagement) Progress() (attested, total int) {
+	total = len(a.Attestations)
+	for _, c := range a.Attestations {
+		if c.Verdict == AttestPassed || c.Verdict == AttestException {
+			attested++
+		}
+	}
+	return attested, total
+}
+
 // ReviewRequest statuses.
 const (
 	ReviewOpen     = "open"
