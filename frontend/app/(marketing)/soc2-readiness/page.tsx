@@ -1,5 +1,7 @@
 import { ClipboardCheck } from "lucide-react";
 import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+
 import { SOC2Assessment } from "@/components/marketing/soc2-assessment";
 
 export const metadata = pageMeta({
@@ -12,7 +14,7 @@ export const metadata = pageMeta({
 export default function SOC2ReadinessPage() {
   return (
     <section className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
+      <AuroraBackdrop />
       <div className="relative mx-auto max-w-3xl px-5 pb-24 pt-16 sm:pt-20">
         <div className="text-center">
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-accent">

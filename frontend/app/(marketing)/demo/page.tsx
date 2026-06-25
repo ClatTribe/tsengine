@@ -1,5 +1,7 @@
 import { CheckCircle2 } from "lucide-react";
 import { pageMeta } from "@/lib/seo";
+import { AuroraBackdrop } from "@/components/marketing/aurora";
+
 import { DemoForm } from "@/components/marketing/demo-form";
 
 export const metadata = pageMeta({
@@ -18,7 +20,7 @@ const POINTS = [
 export default function DemoPage() {
   return (
     <section className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 -top-40 h-80 bg-gradient-to-b from-accent-soft/60 to-transparent" />
+      <AuroraBackdrop />
       <div className="relative mx-auto grid max-w-5xl items-start gap-10 px-5 pb-24 pt-20 lg:grid-cols-2">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Talk to sales</span>
