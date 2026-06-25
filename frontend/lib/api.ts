@@ -122,6 +122,13 @@ export const api = {
       { total: 0, summary: [], findings: [] },
     ),
 
+  // Run a LIVE keyless OSINT scan (Certificate Transparency / crt.sh) over the tenant's domains.
+  osintScan: () =>
+    call<{ source: string; domains_scanned: number; hosts_discovered: number; findings_detected: number; assets_pivoted: number }>(
+      "/v1/osint/scan",
+      { method: "POST", body: "{}" },
+    ),
+
   // SaaS-app discovery view (SSPM) — inventory + portfolio summary over the connected IdPs' grants.
   saasApps: () =>
     safe<SaaSAppsResponse>("/v1/saas-apps", {

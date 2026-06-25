@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { FeatureIcon } from "@/components/brand/feature-icon";
+import { RunOsintScan } from "@/components/osint/run-scan";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function OSINTPage() {
         icon={Radar}
         title="External exposure (OSINT)"
         description="The attacker's-eye view of your organization, pulled from open-source intelligence — leaked credentials, public secret leaks, forgotten internet-exposed hosts, look-alike phishing domains, and exposed data. Everything here feeds the same issues, attack paths, and compliance posture as your internal scans — and any exposed host we discover on your own domains is added to monitoring automatically, so the engine scans it next pass."
+        right={<RunOsintScan />}
       />
 
       {total === 0 ? (
