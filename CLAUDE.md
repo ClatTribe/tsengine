@@ -1131,3 +1131,24 @@ Pieces:
    `/practitioner` console UX needs an operator-auth frontend surface (the tenant app uses tenant
    sessions) — that surface is the documented follow-on; the desk is consumed via the platform token
    today.
+
+4. **The operator console + auth** (`internal/platformapi/operator.go`, `pkg/platform.Operator`/
+   `OperatorSession`, frontend `/operator`). A DELIBERATELY SEPARATE auth namespace from the tenant
+   `User`/`Session` (own store maps, own `op_token` httpOnly cookie carrying NO tenant header, own
+   `operatorAuth` middleware). Operator accounts are platform-token-provisioned (`POST /v1/operator`),
+   not self-serve. `GET /v1/operator/queue` scopes to the authenticated operator's own book. So a
+   tenant session can never reach an operator endpoint and vice-versa — isolation untouched.
+
+5. **Act-on-behalf** (`internal/platformapi/operator_act.go`). The operator doesn't just VIEW the
+   desk — they MAKE the call. All four top-layer HITL acts are dischargeable from the cross-tenant
+   console: `POST /v1/operator/tenants/{tenant}/risks/{id}/decision` · `…/policies/{id}/publish` ·
+   `…/pentests/{id}/signoff` · `…/audits/{id}/attest`. **Isolation is the SAME rule as the queue**:
+   every act is gated on `matchPractitioner` (the operator must be a practitioner of record on that
+   tenant's roster) → else **403** and the tenant is never mutated (§18.2 inv. 2 holds; an operator
+   acts only on their own book). The operator is the **named human** for the act; capacity/firm come
+   from their **roster record** (grounded §10, not a typed string), and it's ledger-signed exactly
+   like the tenant path. Each act shares ONE helper with its tenant-session handler
+   (`applyRiskDecision`/`applyPolicyPublish`/`applyPentestSignoff`/`applyControlAttestation`) — the two
+   paths differ ONLY in how capacity resolves (typed name vs roster record), so validation + gate +
+   ledger are identical. `practitioner.Pending.ItemID` (+ `Controls` for audits) carries the real
+   entity id so the desk can target a specific item. Isolation-proof tests in `operator_act_test.go`.
