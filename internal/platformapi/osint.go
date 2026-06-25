@@ -34,39 +34,98 @@ func (d Deps) handleIngestOSINT(w http.ResponseWriter, r *http.Request, tenantID
 		return
 	}
 
+	findings, stored, pivoted := d.ingestOSINTSnapshot(r.Context(), tenantID, snap, "OSINT snapshot ingest")
+	writeJSON(w, http.StatusOK, map[string]any{"org": snap.Org, "findings_detected": stored, "assets_pivoted": pivoted, "findings": findings})
+}
+
+// ingestOSINTSnapshot assesses a snapshot → stores findings + folds them into the compliance posture +
+// opens incidents + pivots exposed hosts to monitored assets. Shared by the posted-snapshot ingest and
+// the live keyless scan. Returns the findings (never nil) + counts.
+func (d Deps) ingestOSINTSnapshot(ctx context.Context, tenantID string, snap osint.Snapshot, recLabel string) ([]types.Finding, int, int) {
 	findings := osint.Assess(snap, osint.Options{})
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {
-		// index-suffixed so rapid newID() calls (UnixNano can repeat in a tight loop) never collide
-		f.ID = d.newID("osint") + "-" + strconv.Itoa(i)
-		if serr := d.Store.PutFinding(r.Context(), tenantID, f); serr != nil {
-			respond(w, nil, serr)
-			return
+		f.ID = d.newID("osint") + "-" + strconv.Itoa(i) // index-suffixed so newID() can't collide in a tight loop
+		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
+			continue
 		}
-		// Fold the OSINT finding into the compliance posture — a breached credential, a public leak, or an
-		// exposed host is a real control gap (GDPR/SOC2/PCI), not just a raw finding.
 		if d.GRC != nil {
-			_ = d.GRC.Apply(r.Context(), tenantID, f)
+			_ = d.GRC.Apply(ctx, tenantID, f)
 		}
 		saved = append(saved, f)
 		stored++
 	}
-	// Open incidents for high-severity OSINT now (the scan-pass reconcile never sees ingested findings).
 	if d.IncidentOpener != nil && stored > 0 {
-		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
+		_, _ = d.IncidentOpener.OpenFor(ctx, tenantID, saved, nil)
 	}
-	// Detection lift: an OSINT-discovered internet-exposed host on the ORG'S OWN domains becomes a
-	// monitored asset, so the engine actively scans the shadow surface next pass (OSINT → scan loop).
-	pivoted := d.pivotExposedHosts(r.Context(), tenantID, snap)
+	pivoted := d.pivotExposedHosts(ctx, tenantID, snap)
 	if d.Recorder != nil && stored > 0 {
 		d.Recorder.Record("osint assessed", "osint",
-			map[string]any{"tenant_id": tenantID, "org": snap.Org, "findings": stored, "assets_pivoted": pivoted}, "OSINT snapshot ingest")
+			map[string]any{"tenant_id": tenantID, "org": snap.Org, "findings": stored, "assets_pivoted": pivoted}, recLabel)
 	}
 	if findings == nil {
 		findings = []types.Finding{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"org": snap.Org, "findings_detected": stored, "assets_pivoted": pivoted, "findings": findings})
+	return findings, stored, pivoted
+}
+
+// handleOSINTScan (POST /v1/osint/scan) runs a LIVE, KEYLESS OSINT collection — Certificate Transparency
+// (crt.sh) over the org's domains — and ingests the result. No API key, no sandbox (crt.sh is a public
+// HTTPS JSON API; the fetch is SSRF-screened by the same prober as /v1/assess). Domains come from the
+// request body (`{"domains":[...]}`) else are derived from the tenant's domain assets.
+func (d Deps) handleOSINTScan(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		Domains []string `json:"domains"`
+	}
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body)
+
+	assets, _ := d.Store.ListAssets(r.Context(), tenantID)
+	known := map[string]bool{}
+	domainSet := map[string]bool{}
+	for _, a := range assets {
+		host := strings.ToLower(strings.TrimRight(strings.TrimPrefix(strings.TrimPrefix(a.Target, "https://"), "http://"), "/"))
+		known[host] = true
+		if a.Type == string(types.AssetDomain) {
+			domainSet[host] = true
+		}
+	}
+	for _, dn := range body.Domains {
+		dn = strings.ToLower(strings.TrimSpace(dn))
+		if dn != "" {
+			domainSet[dn] = true
+		}
+	}
+	domains := make([]string, 0, len(domainSet))
+	for dn := range domainSet {
+		domains = append(domains, dn)
+	}
+	if len(domains) == 0 {
+		writeJSON(w, http.StatusBadRequest, errBody("no domains to scan — pass {\"domains\":[...]} or add a domain asset first"))
+		return
+	}
+
+	// SSRF-screened, bounded fetch (crt.sh resolves to a public IP, so the guard permits it).
+	fetch := func(ctx context.Context, url string) ([]byte, error) {
+		client := safeHTTPClient(10 * time.Second)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", assessUA)
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		return io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	}
+	snap := osint.CollectCT(r.Context(), tenantID, domains, known, fetch)
+	findings, stored, pivoted := d.ingestOSINTSnapshot(r.Context(), tenantID, snap, "OSINT live CT scan")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"source": "crtsh", "domains_scanned": len(domains), "hosts_discovered": len(snap.ExposedHosts),
+		"findings_detected": stored, "assets_pivoted": pivoted, "findings": findings,
+	})
 }
 
 // pivotExposedHosts promotes OSINT-discovered, internet-exposed, UNMONITORED hosts to monitored assets
