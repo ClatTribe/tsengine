@@ -11,6 +11,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // Decider is the HITL desk surface the API needs (satisfied by *hitl.Desk).
@@ -25,6 +26,10 @@ type Posturer interface {
 	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
 	Questionnaire(ctx context.Context, tenantID string) (*grc.Questionnaire, error)
 	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
+	// Apply folds a finding's compliance annotation into the tenant's control-state posture (marks
+	// each cited control a gap). The scan path calls this; the non-scan ingest paths (identity, SaaS,
+	// runtime) must too, or their findings never reach the founder's compliance posture.
+	Apply(ctx context.Context, tenantID string, f types.Finding) error
 }
 
 // Sealer seals a raw secret (an OAuth token, an LLM API key) before it is persisted, and

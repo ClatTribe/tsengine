@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/ClatTribe/tsengine/internal/identitythreat"
+	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
 )
 
 // handleIngestIdentityEvents is the real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5
@@ -34,12 +35,24 @@ func (d Deps) handleIngestIdentityEvents(w http.ResponseWriter, r *http.Request,
 
 	threats := identitythreat.Detect(events, identitythreat.Config{})
 	findings := identitythreat.Findings(threats)
+	// Map each identity threat to the compliance controls it affects (§8) — these are access-control /
+	// authentication issues, so an MFA-removed or privileged-grant IS a SOC 2 CC6.x / NIST IA-2 gap.
+	// Without this they'd carry no control mapping and never surface in the founder's compliance posture.
+	comp := hooks.NewCompliance()
 	stored := 0
 	for _, f := range findings {
 		f.ID = d.newID("idt")
+		if c, ok := comp.Lookup(f.CWE); ok {
+			f.Compliance = c
+		}
 		if perr := d.Store.PutFinding(r.Context(), tenantID, f); perr != nil {
 			respond(w, nil, perr)
 			return
+		}
+		// Fold the finding into the compliance posture so the identity threat shows up as a real
+		// control gap (SOC 2 CC6.x / NIST IA-2 …) in the founder's posture — not just a raw finding.
+		if d.GRC != nil {
+			_ = d.GRC.Apply(r.Context(), tenantID, f)
 		}
 		stored++
 	}
