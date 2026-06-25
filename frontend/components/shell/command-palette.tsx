@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Bug, Activity, ShieldCheck, Boxes, ScrollText,
   RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings, FileText, UserCheck,
-  Layers, Crosshair, Spline, AppWindow, Scale, Radar,
+  Layers, Crosshair, Spline, AppWindow, Scale, Radar, Cloud,
 } from "lucide-react";
 import { rescanAll } from "@/app/(app)/assets/actions";
 import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
@@ -65,6 +65,7 @@ export function CommandPalette() {
       { id: "issues", label: "Issues", group: "Go to", icon: Layers, keywords: "unified deduped confirmed prioritized noise", run: go("/issues") },
       { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities raw scanners", run: go("/findings") },
       { id: "pentest", label: "Pentest", group: "Go to", icon: Crosshair, keywords: "vapt exploit proven engagement penetration", run: go("/pentest") },
+      { id: "cloud-engineer", label: "Cloud engineer", group: "Go to", icon: Cloud, keywords: "cloud agent attack path investigate aws gcp azure iam blast radius vulnagent crown jewel", run: go("/cloud-engineer") },
       { id: "attack-paths", label: "Attack paths", group: "Go to", icon: Spline, keywords: "chain correlation crown jewel lateral", run: go("/attack-paths") },
       { id: "osint", label: "External exposure", group: "Go to", icon: Radar, keywords: "osint breach leaked secret exposed host typosquat dark web shodan recon footprint", run: go("/osint") },
       { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved attack", run: go("/incidents") },

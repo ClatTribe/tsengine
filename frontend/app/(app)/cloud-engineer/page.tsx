@@ -1,0 +1,76 @@
+import { Cloud, ShieldAlert, Workflow } from "lucide-react";
+import { api } from "@/lib/api";
+import { SeverityBadge, Empty } from "@/components/ui/primitives";
+import { PageIntro } from "@/components/ui/page-intro";
+
+export const dynamic = "force-dynamic";
+
+// The AI Cloud Security Engineer (cloudagent) surface: the proven, cross-resource attack paths the
+// agent confirmed over a cloud account's inventory — each grounded in the graph tools, each with a
+// verified remediation. Read-only view; an investigation is triggered by POST /v1/cloud/investigate
+// (LLM-gated). Mirrors how /pentest surfaces the productized agent.
+export default async function CloudEngineerPage() {
+  const { total, enabled, paths } = await api.cloudInvestigation();
+  const order = ["critical", "high", "medium", "low", "info"];
+  const sorted = [...paths].sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+
+  return (
+    <div className="space-y-8">
+      <PageIntro
+        icon={Cloud}
+        title="AI Cloud Security Engineer"
+        description="An autonomous agent investigates a cloud account by querying its graph — resolving effective permissions, tracing reachability, and measuring blast radius — to find the attack paths an external attacker could actually use to reach a crown jewel. It tells real, exploitable paths apart from config-bad-but-inert noise, and every path it records is backed by a tool result with a verified fix. Results flow into your issues, attack paths, and compliance posture."
+      />
+
+      {!enabled && (
+        <div className="rounded-xl border border-warn/40 bg-warn/10 px-5 py-4 text-sm text-ink">
+          <div className="flex items-center gap-2 font-medium">
+            <ShieldAlert className="h-4 w-4 text-warn" /> Investigation engine not configured
+          </div>
+          <p className="mt-1.5 text-muted">
+            The cloud engineer needs an LLM. Set <code className="mono text-xs">LLM_API_KEY</code> (cloud) or{" "}
+            <code className="mono text-xs">LLM_BASE_URL=http://localhost:11434/v1</code> with{" "}
+            <code className="mono text-xs">LLM_MODEL=qwen2.5</code> for a local Ollama, then restart the platform.
+            Trigger an investigation by posting a cloud inventory to{" "}
+            <code className="mono text-xs">POST /v1/cloud/investigate</code> (or run <code className="mono text-xs">tsengine cloud-investigate</code>).
+          </p>
+        </div>
+      )}
+
+      {total === 0 ? (
+        <Empty>
+          No attack paths recorded yet. Run an investigation over a cloud inventory snapshot —{" "}
+          <code className="mono text-xs">POST /v1/cloud/investigate</code> with{" "}
+          <code className="mono text-xs">{"{ inventory, prowler }"}</code> — and the agent&apos;s proven,
+          remediated paths will appear here and flow into your issues + compliance posture.
+        </Empty>
+      ) : (
+        <section className="card divide-y divide-border">
+          {sorted.map((f) => (
+            <div key={f.id} className="flex items-start gap-3 px-5 py-3.5">
+              <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+                <Workflow className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-ink">{f.title}</span>
+                  <SeverityBadge severity={f.severity} />
+                  <span className="rounded-md border border-pulse/40 bg-pulse/10 px-1.5 py-0.5 text-[10px] font-medium text-pulse">
+                    verified
+                  </span>
+                </div>
+                {f.description && <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-muted">{f.description}</p>}
+                {f.endpoint && <div className="mono mt-1 truncate text-[11px] text-faint">{f.endpoint}</div>}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <p className="flex items-center gap-1.5 text-xs text-faint">
+        <ShieldAlert className="h-3.5 w-3.5" /> The agent reasons over the cloud graph; every recorded path
+        cites a deterministic tool result (no LLM-asserted findings). Mutations stay human-gated.
+      </p>
+    </div>
+  );
+}

@@ -169,6 +169,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))                                                   // api: Postman collection → endpoint inventory
 	mux.HandleFunc("POST /v1/osint/ingest", d.auth(d.handleIngestOSINT))                                                       // OSINT external-exposure snapshot → findings (ADR 0011)
 	mux.HandleFunc("POST /v1/osint/scan", d.auth(d.handleOSINTScan))                                                           // LIVE keyless OSINT (crt.sh CT) over the tenant's domains
+	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))                                            // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
+	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))                                       // stored cloud-agent attack paths
 	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                                                                 // OSINT "External exposure" view + summary
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
