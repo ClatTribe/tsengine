@@ -84,6 +84,10 @@ type Store interface {
 	PutIncident(ctx context.Context, i platform.Incident) error
 	ListIncidents(ctx context.Context, tenantID string) ([]platform.Incident, error)
 
+	// --- risk register (the vCISO judgment artifact; treatment decisions are HITL) ---
+	PutRisk(ctx context.Context, r platform.Risk) error
+	ListRisks(ctx context.Context, tenantID string) ([]platform.Risk, error)
+
 	// --- issue suppression (ignore / accept-risk), keyed by issue dedup key ---
 	PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error
 	ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error)
