@@ -87,63 +87,67 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/assets/{id}/login-flow", d.auth(d.handleSetLoginFlow))    // configure authenticated web scanning (ADR 0010 Phase 3)
 	mux.HandleFunc("POST /v1/assets/{id}/authz-test", d.auth(d.handleSetAuthzTest))    // configure BOLA/BFLA authz test (ADR 0010 Phase 1)
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
-	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))         // per-connection kill-switch (WRD-4)
+	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))       // per-connection kill-switch (WRD-4)
 	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation)) // per-tenant cloud write role (Bucket B)
-	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                  // the current tenant (org name/plan) for Settings
-	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                       // per-tenant LLM config (provider/model + has_key)
-	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                       // set provider/model + seal the API key
-	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                  // repository PR-review-bot policy (ADR 0010)
-	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                  // set enable + merge-gating block severity
-	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))          // per-tenant Slack incident webhook (has_slack_webhook)
-	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))          // set + seal the tenant's Slack incident webhook (Bucket B)
-	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                     // per-tenant Jira ticketing destination (base/email/project + has_token)
-	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                     // set + seal the tenant's Jira API token (Bucket B)
-	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))         // per-tenant incident escalation matrix (MDR/SOC)
-	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))         // set the escalation tiers (severity → channels)
-	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                       // per-tenant remediation SLA policy (ack/resolve targets)
-	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                       // set the per-severity SLA targets
-	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))        // planned change-freeze windows (suppress alerting)
-	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))         // schedule a window
-	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow)) // cancel a window
-	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                             // on-call escalation roster (names + numbers)
-	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                              // add a contact
-	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                    // remove a contact
-	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                            // global kill-switch: halt/resume all agent action
-	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                      // agent capability manifest (WRD-1): what the automation can touch
-	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                              // owner's shareable Trust Center token
-	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                      // PUBLIC, HMAC-token-gated; safe aggregates only
-	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                       // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
-	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                // PUBLIC: book-a-demo / talk-to-sales lead capture
-	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                  // PUBLIC: embeddable SVG grade badge (viral loop)
+	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                        // the current tenant (org name/plan) for Settings
+	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                             // per-tenant LLM config (provider/model + has_key)
+	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                             // set provider/model + seal the API key
+	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                        // repository PR-review-bot policy (ADR 0010)
+	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                        // set enable + merge-gating block severity
+	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                // per-tenant Slack incident webhook (has_slack_webhook)
+	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                // set + seal the tenant's Slack incident webhook (Bucket B)
+	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                           // per-tenant Jira ticketing destination (base/email/project + has_token)
+	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                           // set + seal the tenant's Jira API token (Bucket B)
+	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))               // per-tenant incident escalation matrix (MDR/SOC)
+	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))               // set the escalation tiers (severity → channels)
+	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                             // per-tenant remediation SLA policy (ack/resolve targets)
+	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                             // set the per-severity SLA targets
+	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))              // planned change-freeze windows (suppress alerting)
+	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))               // schedule a window
+	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow))     // cancel a window
+	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                                   // on-call escalation roster (names + numbers)
+	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                                    // add a contact
+	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                          // remove a contact
+	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                  // global kill-switch: halt/resume all agent action
+	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                            // agent capability manifest (WRD-1): what the automation can touch
+	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                                    // owner's shareable Trust Center token
+	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                            // PUBLIC, HMAC-token-gated; safe aggregates only
+	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                             // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
+	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                      // PUBLIC: book-a-demo / talk-to-sales lead capture
+	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                        // PUBLIC: embeddable SVG grade badge (viral loop)
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
-	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
-	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))          // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
-	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))              // cross-surface correlation (unified cross-detection)
-	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                         // findings de-duplicated into unified issues (one issue, many signals)
-	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))            // auto-triage funnel: % of raw findings the engine handled automatically
-	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))            // suppress an issue (false-positive / accepted-risk)
-	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))        // restore a suppressed issue
-	mux.HandleFunc("GET /v1/exclusions", d.auth(d.handleListExclusions))             // custom noise-filter rules (path/package/rule globs)
-	mux.HandleFunc("POST /v1/exclusions", d.auth(d.handleAddExclusion))              // add an exclusion rule
-	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))    // remove an exclusion rule
-	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents))   // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
-	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents)) // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
-	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))       // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
-	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile)) // container scan-on-push decision (ADR 0010 Phase 4)
-	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))          // api: Postman collection → endpoint inventory
+	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident))              // human takes ownership → stops timed auto-escalation
+	mux.HandleFunc("GET /v1/risks", d.auth(d.handleListRisks))                              // risk register (vCISO artifact) + board summary
+	mux.HandleFunc("POST /v1/risks", d.auth(d.handleCreateRisk))                            // add a manual risk
+	mux.HandleFunc("POST /v1/risks/seed", d.auth(d.handleSeedRisks))                        // propose candidates from findings (grounded)
+	mux.HandleFunc("POST /v1/risks/{id}/decision", d.auth(d.handleDecideRisk))              // HITL: named human accepts/treats → signed ledger
+	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))                       // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
+	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))                     // cross-surface correlation (unified cross-detection)
+	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                                // findings de-duplicated into unified issues (one issue, many signals)
+	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))                   // auto-triage funnel: % of raw findings the engine handled automatically
+	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))                   // suppress an issue (false-positive / accepted-risk)
+	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))               // restore a suppressed issue
+	mux.HandleFunc("GET /v1/exclusions", d.auth(d.handleListExclusions))                    // custom noise-filter rules (path/package/rule globs)
+	mux.HandleFunc("POST /v1/exclusions", d.auth(d.handleAddExclusion))                     // add an exclusion rule
+	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))           // remove an exclusion rule
+	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents))          // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
+	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents))        // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
+	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))              // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
+	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile))        // container scan-on-push decision (ADR 0010 Phase 4)
+	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))                // api: Postman collection → endpoint inventory
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot)) // SaaS posture (SSPM) snapshot → findings
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))         // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
-	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))      // list runtime-protection events
-	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                // create + authorize a pentest engagement
-	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                  // list engagements
-	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))            // portfolio scorecard (verified_rate, SLA)
-	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))               // one engagement + findings
-	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))          // run/retest the engagement (passive, RoE-gated)
-	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))     // the engagement's VAPT report (md/json)
-	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                         // SSE live state feed
+	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))             // list runtime-protection events
+	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                       // create + authorize a pentest engagement
+	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                         // list engagements
+	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))                   // portfolio scorecard (verified_rate, SLA)
+	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))                      // one engagement + findings
+	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                 // run/retest the engagement (passive, RoE-gated)
+	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))            // the engagement's VAPT report (md/json)
+	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                                // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
-	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))    // SaaS-app discovery view (inventory + portfolio summary)
+	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("GET /v1/identities", d.auth(d.handleNonHumanIdentities)) // non-human / AI-agent identity posture (ACSP agentic lens)
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
 	mux.HandleFunc("GET /v1/jobs", d.auth(d.handleJobs))
