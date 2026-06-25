@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -127,21 +128,33 @@ func (d Deps) handleDecideRisk(w http.ResponseWriter, r *http.Request, tenantID 
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
 		return
 	}
-	treatment := strings.ToLower(strings.TrimSpace(body.Treatment))
-	owner := strings.TrimSpace(body.Owner)
-	if !validTreatment(treatment) {
-		writeJSON(w, http.StatusBadRequest, errBody("treatment must be one of: accept, mitigate, transfer, avoid"))
+	// the tenant path resolves the decider's capacity from the roster by their typed name
+	cap, firm := d.practitionerCapacity(r, tenantID, strings.TrimSpace(body.Owner))
+	rk, status, err := d.applyRiskDecision(r, tenantID, id, body.Treatment, body.Owner, body.Rationale, cap, firm, body.Likelihood, body.Impact)
+	if err != nil {
+		writeJSON(w, status, errBody(err.Error()))
 		return
+	}
+	writeJSON(w, status, rk)
+}
+
+// applyRiskDecision applies a HUMAN treatment decision to a risk and signs it into the ledger. Shared
+// by the tenant-session path (handleDecideRisk) and the operator act-on-behalf path
+// (handleOperatorDecideRisk) — the only difference between the two is how capacity/firm are resolved
+// (typed owner name vs. the operator's roster record), so the gate, validation, and ledger are
+// identical. Returns the decided risk, or an HTTP status + error for the caller to render.
+func (d Deps) applyRiskDecision(r *http.Request, tenantID, id, treatment, owner, rationale, capacity, firm string, lOver, iOver int) (platform.Risk, int, error) {
+	treatment = strings.ToLower(strings.TrimSpace(treatment))
+	owner = strings.TrimSpace(owner)
+	if !validTreatment(treatment) {
+		return platform.Risk{}, http.StatusBadRequest, errors.New("treatment must be one of: accept, mitigate, transfer, avoid")
 	}
 	if owner == "" {
-		writeJSON(w, http.StatusBadRequest, errBody("a named owner is required to decide a risk"))
-		return
+		return platform.Risk{}, http.StatusBadRequest, errors.New("a named owner is required to decide a risk")
 	}
-
 	risks, err := d.Store.ListRisks(r.Context(), tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
+		return platform.Risk{}, http.StatusInternalServerError, err
 	}
 	var rk platform.Risk
 	found := false
@@ -153,35 +166,32 @@ func (d Deps) handleDecideRisk(w http.ResponseWriter, r *http.Request, tenantID 
 		}
 	}
 	if !found {
-		writeJSON(w, http.StatusNotFound, errBody("risk not found"))
-		return
+		return platform.Risk{}, http.StatusNotFound, errors.New("risk not found")
 	}
-
 	rk.Treatment = treatment
 	rk.Owner = owner
-	rk.Rationale = strings.TrimSpace(body.Rationale)
+	rk.Rationale = strings.TrimSpace(rationale)
 	rk.Proposed = false // a human owns it now
 	rk.DecidedBy = owner
 	rk.DecidedAt = time.Now().UTC()
-	rk.Capacity, rk.Firm = d.practitionerCapacity(r, tenantID, owner) // who the decider works for
-	if body.Likelihood != 0 {
-		rk.Likelihood = body.Likelihood
+	rk.Capacity, rk.Firm = capacity, firm // who the decider works for
+	if lOver != 0 {
+		rk.Likelihood = lOver
 	}
-	if body.Impact != 0 {
-		rk.Impact = body.Impact
+	if iOver != 0 {
+		rk.Impact = iOver
 	}
 	rk.Status = statusForTreatment(treatment)
 	if d.Recorder != nil {
 		d.Recorder.Record("risk treatment decided (human)", "risk_decision",
-			map[string]any{"tenant_id": tenantID, "risk_id": rk.ID, "treatment": treatment, "owner": owner, "score": rk.Score()},
+			map[string]any{"tenant_id": tenantID, "risk_id": rk.ID, "treatment": treatment, "owner": owner, "capacity": rk.Capacity, "score": rk.Score()},
 			"residual risk "+treatment+" by "+owner)
 		rk.LedgerRef = "risk-decision-" + rk.ID
 	}
 	if err := d.Store.PutRisk(r.Context(), rk); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
+		return platform.Risk{}, http.StatusInternalServerError, err
 	}
-	writeJSON(w, http.StatusOK, rk)
+	return rk, http.StatusOK, nil
 }
 
 func validTreatment(t string) bool {

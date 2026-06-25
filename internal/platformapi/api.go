@@ -141,6 +141,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/operator/logout", d.operatorAuth(d.handleOperatorLogout))      // end the operator session
 	mux.HandleFunc("GET /v1/operator/me", d.operatorAuth(d.handleOperatorMe))               // the current operator
 	mux.HandleFunc("GET /v1/operator/queue", d.operatorAuth(d.handleOperatorQueue))         // the operator's own cross-tenant work queue
+	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/risks/{id}/decision", d.operatorAuth(d.handleOperatorDecideRisk)) // act-on-behalf: decide a risk for an assigned client
 	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))                       // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
 	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))                     // cross-surface correlation (unified cross-detection)
 	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                                // findings de-duplicated into unified issues (one issue, many signals)
