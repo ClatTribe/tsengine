@@ -88,14 +88,6 @@ func badgeSVG(label, message, color string) string {
 		mcx, message, mcx, message)
 }
 
-func clientIP(r *http.Request) string {
-	host := r.RemoteAddr
-	if i := strings.LastIndex(host, ":"); i > 0 {
-		host = host[:i]
-	}
-	return host
-}
-
 func writeBadge(w http.ResponseWriter, label, message, color string, maxAge int) {
 	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
 	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", maxAge))

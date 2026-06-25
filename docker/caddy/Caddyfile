@@ -25,6 +25,9 @@
 	}
 
 	# Platform API + server-rendered console + health.
+	# reverse_proxy sets X-Forwarded-For (the real client IP) automatically — the platform's public
+	# /v1/assess rate limiter reads it (gated by TSENGINE_TRUSTED_PROXY_CIDRS) so each visitor gets
+	# their own per-IP bucket instead of all traffic sharing Caddy's container IP.
 	@platform path /v1/* /ui /ui/* /healthz
 	handle @platform {
 		reverse_proxy platform:8090
