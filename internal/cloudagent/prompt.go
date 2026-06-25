@@ -2,9 +2,11 @@ package cloudagent
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // buildPrompt assembles the system instruction + account summary + tool catalog +
@@ -32,6 +34,18 @@ RULES
 		cc.Snap.AccountID, cc.Snap.Provider, len(cc.Snap.Nodes), len(cc.Prowler))
 	fmt.Fprintf(&b, "Crown jewels (sensitive data / privileged identities): %s\n\n", crownJewels(cc.Snap))
 
+	// Surface the prowler findings WITH their L1.5 enrichment so the agent triages from the
+	// engine's signals (KEV/EPSS/exploitability + compliance), not a bare count. It still must
+	// VERIFY each via the graph tools (config-bad ≠ exploitable), but now it knows where to look first.
+	if d := digestProwler(cc.Prowler); len(d) > 0 {
+		b.WriteString("PROWLER FINDINGS (L1) — config evidence to triage. [brackets] carry the L1.5 enrichment:\n")
+		b.WriteString("KEV=actively exploited, EPSS=exploit prob 0-1, exploit/surface=L1.5 priority 0-10, then the compliance frameworks the finding maps to. Verify the high-priority ones FIRST via find_paths/blast_radius:\n")
+		for _, line := range d {
+			b.WriteString(line + "\n")
+		}
+		b.WriteByte('\n')
+	}
+
 	b.WriteString("TOOLS:\n")
 	for _, t := range tools() {
 		fmt.Fprintf(&b, "- %s\n", t.help)
@@ -46,6 +60,33 @@ RULES
 	}
 	b.WriteString("\n\nYour next action (one JSON object):")
 	return b.String()
+}
+
+// digestProwler renders the prowler findings as a compact, severity-sorted, L1.5-enriched digest
+// (capped so a noisy account can't blow the prompt). The [bracket] suffix is the canonical L1.5 view
+// (types.Finding.L15Tag) shared with the L2 Lead + the web agent.
+func digestProwler(fs []types.Finding) []string {
+	const cap = 40
+	sorted := append([]types.Finding(nil), fs...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Severity.Rank() != sorted[j].Severity.Rank() {
+			return sorted[i].Severity.Rank() > sorted[j].Severity.Rank()
+		}
+		return sorted[i].ID < sorted[j].ID
+	})
+	out := make([]string, 0, len(sorted))
+	for i, f := range sorted {
+		if i >= cap {
+			out = append(out, fmt.Sprintf("  … (+%d more)", len(sorted)-cap))
+			break
+		}
+		res := f.Endpoint
+		if res == "" {
+			res = f.RuleID
+		}
+		out = append(out, fmt.Sprintf("  - [%s] %s %s — %s%s", f.Severity, f.RuleID, res, f.Title, f.L15Tag()))
+	}
+	return out
 }
 
 func crownJewels(snap *cloudgraph.Snapshot) string {

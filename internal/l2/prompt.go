@@ -121,29 +121,8 @@ func l15Boost(f types.Finding) int {
 }
 
 // l15Tags is the compact inline view of a finding's L1.5 enrichment for the
-// digest line. Empty when the finding carries no enrichment (so a bare L1
-// finding reads exactly as before).
+// digest line, delegating to the canonical renderer (types.Finding.L15Summary)
+// so the Lead and the cloud/web investigate agents present L1.5 identically.
 func l15Tags(f types.Finding) string {
-	var t []string
-	if ti := f.ThreatIntel; ti != nil {
-		if ti.KEV != nil && ti.KEV.Listed {
-			t = append(t, "KEV") // actively exploited
-		}
-		if ti.EPSS != nil {
-			t = append(t, fmt.Sprintf("EPSS:%.2f", ti.EPSS.Score))
-		}
-	}
-	if f.Exploitability != nil {
-		t = append(t, fmt.Sprintf("exploit:%d", f.Exploitability.Score))
-	}
-	if f.SurfacePriority != nil {
-		t = append(t, fmt.Sprintf("surface:%d", f.SurfacePriority.Score))
-	}
-	if n := len(f.CorroboratedBy); n > 0 {
-		t = append(t, fmt.Sprintf("corrob:%d", n))
-	}
-	if vs := f.VerificationStatus; vs != "" && string(vs) != "pattern_match" {
-		t = append(t, string(vs)) // e.g. corroborated / verified
-	}
-	return strings.Join(t, " ")
+	return f.L15Summary()
 }
