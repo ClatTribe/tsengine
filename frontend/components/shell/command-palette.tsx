@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Bug, Activity, ShieldCheck, Boxes, ScrollText,
   RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings, FileText, UserCheck,
-  Layers, Crosshair, Spline, AppWindow, Scale,
+  Layers, Crosshair, Spline, AppWindow, Scale, Radar,
 } from "lucide-react";
 import { rescanAll } from "@/app/(app)/assets/actions";
 import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
@@ -66,6 +66,7 @@ export function CommandPalette() {
       { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities raw scanners", run: go("/findings") },
       { id: "pentest", label: "Pentest", group: "Go to", icon: Crosshair, keywords: "vapt exploit proven engagement penetration", run: go("/pentest") },
       { id: "attack-paths", label: "Attack paths", group: "Go to", icon: Spline, keywords: "chain correlation crown jewel lateral", run: go("/attack-paths") },
+      { id: "osint", label: "External exposure", group: "Go to", icon: Radar, keywords: "osint breach leaked secret exposed host typosquat dark web shodan recon footprint", run: go("/osint") },
       { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved attack", run: go("/incidents") },
       { id: "compliance", label: "Compliance", group: "Go to", icon: ShieldCheck, keywords: "soc2 controls audit posture", run: go("/compliance") },
       { id: "risks", label: "Risk register", group: "Go to", icon: Scale, keywords: "vciso risk accept treat mitigate likelihood impact judgment", run: go("/risks") },

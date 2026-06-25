@@ -114,6 +114,14 @@ export const api = {
   addAsset: (type: string, target: string, authorized: boolean) =>
     call<Asset>("/v1/assets", { method: "POST", body: JSON.stringify({ type, target, authorized }) }),
 
+  // OSINT external-exposure view — the attacker's-eye footprint (breaches, leaks, exposed hosts,
+  // typosquats, public exposure, advisories), folded into the same finding graph.
+  osint: () =>
+    safe<{ total: number; summary: { label: string; count: number }[]; findings: Finding[] }>(
+      "/v1/osint",
+      { total: 0, summary: [], findings: [] },
+    ),
+
   // SaaS-app discovery view (SSPM) — inventory + portfolio summary over the connected IdPs' grants.
   saasApps: () =>
     safe<SaaSAppsResponse>("/v1/saas-apps", {

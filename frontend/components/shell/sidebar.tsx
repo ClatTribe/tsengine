@@ -20,6 +20,7 @@ import {
   Crosshair,
   Scale,
   History,
+  Radar,
   ChevronDown,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
@@ -46,6 +47,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
       { href: "/findings", label: "Findings", icon: Bug },
       { href: "/pentest", label: "Pentest", icon: Crosshair },
       { href: "/attack-paths", label: "Attack paths", icon: Spline },
+      { href: "/osint", label: "External exposure", icon: Radar },
       { href: "/incidents", label: "Incidents", icon: Activity },
     ],
   },
