@@ -94,6 +94,12 @@ services:
       # Public base URL is the TLS edge (OAuth redirect_uri, webhook callbacks).
       TSENGINE_PLATFORM_PUBLIC: ${TSENGINE_PLATFORM_PUBLIC:-https://localhost}
       TSENGINE_LOG_FORMAT: json
+      # The public lead-magnet (/v1/assess) rate-limits per CLIENT IP. Behind the Caddy edge the
+      # connection's RemoteAddr is Caddy's container IP for ALL traffic, so the limiter must read the
+      # real client from X-Forwarded-For — but only for connections from a trusted proxy. The platform
+      # port is unpublished (reachable only via Caddy on the private Docker network), so the Docker
+      # private ranges are the trusted proxy set. Override if your proxy sits elsewhere.
+      TSENGINE_TRUSTED_PROXY_CIDRS: ${TSENGINE_TRUSTED_PROXY_CIDRS:-172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,fc00::/7}
     # No published ports — reachable only via the caddy edge on the internal `edge` network.
     volumes:
       - platform-data:/data

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -12,6 +13,79 @@ import (
 	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// trustedProxies is the set of proxy IPs/CIDRs whose forwarded-for header we trust. Parsed once from
+// TSENGINE_TRUSTED_PROXY_CIDRS (comma-separated CIDRs or bare IPs — e.g. the prod Caddy edge's network).
+// Empty → we trust no proxy and always key the rate limiter off RemoteAddr (correct for a directly-
+// exposed deployment). Behind a reverse proxy this MUST be set, or RemoteAddr is the proxy's IP for
+// every request and all public traffic shares one rate-limit bucket.
+var trustedProxies = parseTrustedProxies(os.Getenv("TSENGINE_TRUSTED_PROXY_CIDRS"))
+
+func parseTrustedProxies(s string) []*net.IPNet {
+	var out []*net.IPNet
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if !strings.Contains(p, "/") { // allow a bare IP → /32 or /128
+			if ip := net.ParseIP(p); ip != nil {
+				if ip.To4() != nil {
+					p += "/32"
+				} else {
+					p += "/128"
+				}
+			}
+		}
+		if _, n, err := net.ParseCIDR(p); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func ipInCIDRs(ipStr string, cidrs []*net.IPNet) bool {
+	ip := net.ParseIP(strings.TrimSpace(ipStr))
+	if ip == nil {
+		return false
+	}
+	for _, n := range cidrs {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// clientIP returns the request's real client IP for per-IP rate-limiting. When the connection comes
+// from a trusted proxy (RemoteAddr ∈ trustedProxies), it reads the forwarded client; otherwise it uses
+// RemoteAddr. It NEVER trusts a forwarded header from an untrusted peer — that would let a client forge
+// X-Forwarded-For to spoof another user's limiter key or bypass the limit. With a trusted proxy it
+// takes the RIGHTMOST X-Forwarded-For entry that is not itself a trusted proxy: each proxy appends the
+// peer it actually saw, so any entry to the right of the trusted chain is attacker-uncontrollable.
+func clientIP(r *http.Request) string { return clientIPFrom(r, trustedProxies) }
+
+func clientIPFrom(r *http.Request, trusted []*net.IPNet) string {
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if len(trusted) == 0 || !ipInCIDRs(host, trusted) {
+		return host // direct connection (or no trusted proxy configured) → RemoteAddr is authoritative
+	}
+	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		ip := strings.TrimSpace(parts[i])
+		if net.ParseIP(ip) == nil {
+			continue
+		}
+		if ipInCIDRs(ip, trusted) {
+			continue // skip trusted proxy hops
+		}
+		return ip // rightmost non-trusted entry = the real client
+	}
+	return host // no usable forwarded entry → fall back to the proxy IP
+}
 
 // The public PLG instant assessment (top-of-funnel lead magnet). Anyone, with no account, can
 // enter a domain and get a security score from a GROUNDED, READ-ONLY check: email-auth posture
@@ -210,11 +284,7 @@ func (d Deps) handlePublicAssess(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errBody("enter a valid domain, e.g. acme.com"))
 		return
 	}
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if ip == "" {
-		ip = r.RemoteAddr
-	}
-	if !publicAssessLimiter.allow(ip, time.Now()) {
+	if !publicAssessLimiter.allow(clientIP(r), time.Now()) {
 		writeJSON(w, http.StatusTooManyRequests, errBody("too many requests — try again in a minute"))
 		return
 	}
