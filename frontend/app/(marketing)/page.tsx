@@ -8,6 +8,7 @@ import { LiveConsole } from "@/components/marketing/live-console";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
 import { EngageModels } from "@/components/marketing/engage-models";
+import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 
 export const metadata = {
   title: "TensorShield — pass the security review, close the deal",
@@ -189,6 +190,9 @@ export default function Landing() {
           ))}
         </div>
       </Section>
+
+      {/* Unified platform — every product + asset feeds one finding graph (better detection + compliance) */}
+      <UnifiedPlatform />
 
       {/* Compare — the category wedge */}
       <Compare />
