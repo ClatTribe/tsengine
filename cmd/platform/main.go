@@ -186,7 +186,12 @@ func main() {
 		},
 		Fallback: deliverer.Ticket, // operator-global tracker (may be nil → no-destination no-op)
 	}
-	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: ledger.NewRecorder()}
+	// One shared ledger recorder across the whole platform — the desk, the detector, AND the API's
+	// HITL endpoints (risk decision / policy publish / audit attest / pentest sign-off) all sign into
+	// the SAME ledger, so §18.2 inv. 4 ("every decision is signed") holds end to end. Previously the
+	// API Deps had no recorder, so HITL acts served by the API were silently NOT ledgered.
+	rec := ledger.NewRecorder()
+	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: rec}
 	// new-incident alerts fan out to every configured channel (Slack heads-up +
 	// PagerDuty on-call page); best-effort, so one failing never blocks the others.
 	var alerters notify.MultiAlerter
@@ -284,7 +289,7 @@ func main() {
 		WebhookSecret: os.Getenv("TSENGINE_WEBHOOK_SECRET"), PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// continuous-monitoring: open/resolve incidents from change between passes,
 		// alerting a human the moment a new at/above-threshold issue appears.
-		Detector: &detect.Detector{Store: st, Recorder: ledger.NewRecorder(), Alerter: incidentAlerter, NewID: newID,
+		Detector: &detect.Detector{Store: st, Recorder: rec, Alerter: incidentAlerter, NewID: newID,
 			// Maintenance-window suppression: during an active change-freeze, open no incidents and
 			// page no one (resolves still flow). Reads the tenant's windows at evaluation time.
 			Suppressed: func(ctx context.Context, tenantID string, now time.Time) bool {
@@ -342,7 +347,8 @@ func main() {
 	browser := pentest.NewBrowserFromEnv()
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
-		Token: token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
+		Recorder: rec, // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
+		Token:    token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
 		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser,
 	})
