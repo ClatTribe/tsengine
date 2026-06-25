@@ -122,6 +122,10 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/risks", d.auth(d.handleCreateRisk))                            // add a manual risk
 	mux.HandleFunc("POST /v1/risks/seed", d.auth(d.handleSeedRisks))                        // propose candidates from findings (grounded)
 	mux.HandleFunc("POST /v1/risks/{id}/decision", d.auth(d.handleDecideRisk))              // HITL: named human accepts/treats → signed ledger
+	mux.HandleFunc("GET /v1/audits", d.auth(d.handleListAudits))                            // audit engagements + per-engagement attestation summary
+	mux.HandleFunc("POST /v1/audits", d.auth(d.handleCreateAudit))                          // open an engagement (seeds controls from posture)
+	mux.HandleFunc("POST /v1/audits/{id}/attest", d.auth(d.handleAttestControl))            // HITL: external auditor's per-control verdict → signed ledger
+	mux.HandleFunc("POST /v1/audits/{id}/issue", d.auth(d.handleIssueAudit))                // mark issued (named auditor + all controls attested)
 	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))                       // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
 	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))                     // cross-surface correlation (unified cross-detection)
 	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                                // findings de-duplicated into unified issues (one issue, many signals)
