@@ -1,7 +1,7 @@
 # ADR 0011 — OSINT enrichment (external attacker's-eye view) on the one-platform graph
 
 ## Status
-Accepted — core built (`internal/osint`); API ingest + UX + live collectors are the phased follow-on.
+Accepted — core + ingest API + `/osint` UX + CLI + exposed-host→asset pivot + a LIVE KEYLESS Certificate-Transparency collector (`POST /v1/osint/scan`, no key/sandbox) all shipped. The KEYED collectors (Shodan/HIBP) remain the gated subset.
 
 ## Context
 The one-platform strategy (CLAUDE.md §18.1 `crossdetect`) correlates findings from code, cloud,
