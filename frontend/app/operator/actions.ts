@@ -102,6 +102,33 @@ export async function operatorSignoffPentest(_prev: string | null, formData: For
   return null;
 }
 
+// operatorAttestControl records the auditor verdict on one control of a client's audit ON BEHALF — the
+// independent-attestation act. Roster-gated server-side (403 if not a practitioner of record);
+// recorded with the operator's name + capacity and signed into the ledger.
+export async function operatorAttestControl(_prev: string | null, formData: FormData): Promise<string | null> {
+  const tenant = String(formData.get("tenant") ?? "");
+  const audit = String(formData.get("audit") ?? "");
+  const control = String(formData.get("control_id") ?? "");
+  const verdict = String(formData.get("verdict") ?? "");
+  const note = String(formData.get("note") ?? "").trim();
+  if (!tenant || !audit || !control || !verdict) return "Pick a control and a verdict.";
+  const tok = (await cookies()).get(OP_TOKEN_COOKIE)?.value;
+  if (!tok) return "Your session expired — sign in again.";
+  const res = await fetch(apiBase() + `/v1/operator/tenants/${tenant}/audits/${audit}/attest`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ control_id: control, verdict, note }),
+    cache: "no-store",
+  });
+  if (res.status === 403) return "You are not a practitioner of record for this client.";
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    return body.error || "Could not record the attestation.";
+  }
+  revalidatePath("/operator");
+  return null;
+}
+
 export async function operatorLogout(): Promise<void> {
   const jar = await cookies();
   const tok = jar.get(OP_TOKEN_COOKIE)?.value;

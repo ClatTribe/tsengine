@@ -5,6 +5,7 @@ import { operatorLogout } from "./actions";
 import { DecideRiskInline } from "@/components/operator/decide-risk-inline";
 import { PublishPolicyInline } from "@/components/operator/publish-policy-inline";
 import { SignoffPentestInline } from "@/components/operator/signoff-pentest-inline";
+import { AttestControlInline } from "@/components/operator/attest-control-inline";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Practitioner console | TensorShield" };
@@ -81,13 +82,15 @@ export default async function OperatorConsole() {
                           </div>
                         </div>
                       </div>
-                      {/* act-on-behalf: decide a risk / publish a policy / sign off a pentest right here. Audit attestation opens in the client workspace. */}
+                      {/* act-on-behalf: all four top-layer HITL acts are dischargeable right here. */}
                       {it.kind === "risk" && it.item_id ? (
                         <DecideRiskInline tenant={it.tenant_id} risk={it.item_id} />
                       ) : it.kind === "policy" && it.item_id ? (
                         <PublishPolicyInline tenant={it.tenant_id} policy={it.item_id} />
                       ) : it.kind === "pentest" && it.item_id ? (
                         <SignoffPentestInline tenant={it.tenant_id} engagement={it.item_id} />
+                      ) : it.kind === "audit" && it.item_id ? (
+                        <AttestControlInline tenant={it.tenant_id} audit={it.item_id} controls={it.controls ?? []} />
                       ) : null}
                     </div>
                   );
@@ -96,9 +99,9 @@ export default async function OperatorConsole() {
             </section>
           ))}
           <p className="pt-2 text-center text-[11px] text-faint">
-            Decide risks, publish policies, and sign off pentest reports right here — recorded with your name +
-            capacity and signed into the ledger. Control attestations open in the client&apos;s workspace. You only
-            ever see the clients who named you a practitioner of record.
+            Decide risks, publish policies, sign off pentest reports, and attest audit controls — all from here, each
+            recorded with your name + capacity and signed into the ledger. You only ever see the clients who named you
+            a practitioner of record.
           </p>
         </div>
       )}

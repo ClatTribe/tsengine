@@ -13,13 +13,14 @@ import (
 
 // Pending is one HITL item awaiting the practitioner, across all the tenants they serve.
 type Pending struct {
-	TenantID   string `json:"tenant_id"`
-	TenantName string `json:"tenant_name"`
-	Kind       string `json:"kind"`    // risk | audit | pentest | policy
-	ItemID     string `json:"item_id"` // the underlying entity id — lets the operator act on it from the desk
-	Title      string `json:"title"`
-	Detail     string `json:"detail,omitempty"`
-	Link       string `json:"link"` // the in-app path to act on it
+	TenantID   string   `json:"tenant_id"`
+	TenantName string   `json:"tenant_name"`
+	Kind       string   `json:"kind"`               // risk | audit | pentest | policy
+	ItemID     string   `json:"item_id"`            // the underlying entity id — lets the operator act on it from the desk
+	Controls   []string `json:"controls,omitempty"` // for audits: the control ids still awaiting attestation (act-on-behalf)
+	Title      string   `json:"title"`
+	Detail     string   `json:"detail,omitempty"`
+	Link       string   `json:"link"` // the in-app path to act on it
 }
 
 // TenantData is one assigned tenant's HITL-relevant state. The caller loads it tenant-scoped (it is
@@ -45,34 +46,34 @@ func Queue(data []TenantData) []Pending {
 		if want("risk") {
 			for _, r := range td.Risks {
 				if r.Proposed || r.Status == platform.RiskOpen {
-					out = append(out, Pending{td.TenantID, td.TenantName, "risk", r.ID, r.Title, "awaiting a treatment decision", "/risks"})
+					out = append(out, Pending{TenantID: td.TenantID, TenantName: td.TenantName, Kind: "risk", ItemID: r.ID, Title: r.Title, Detail: "awaiting a treatment decision", Link: "/risks"})
 				}
 			}
 		}
 		if want("audit") {
 			for _, a := range td.Audits {
-				pending := 0
+				var pendingControls []string
 				for _, c := range a.Attestations {
 					if c.Verdict == platform.AttestPending {
-						pending++
+						pendingControls = append(pendingControls, c.ControlID)
 					}
 				}
-				if pending > 0 {
-					out = append(out, Pending{td.TenantID, td.TenantName, "audit", a.ID, a.Framework + " audit", plural(pending, "control") + " awaiting attestation", "/audits"})
+				if len(pendingControls) > 0 {
+					out = append(out, Pending{TenantID: td.TenantID, TenantName: td.TenantName, Kind: "audit", ItemID: a.ID, Controls: pendingControls, Title: a.Framework + " audit", Detail: plural(len(pendingControls), "control") + " awaiting attestation", Link: "/audits"})
 				}
 			}
 		}
 		if want("pentest") {
 			for _, e := range td.Pentests {
 				if e.Status == pentest.StatusComplete && !e.Signed() {
-					out = append(out, Pending{td.TenantID, td.TenantName, "pentest", e.ID, e.Name, "report awaiting sign-off", "/pentest/" + e.ID})
+					out = append(out, Pending{TenantID: td.TenantID, TenantName: td.TenantName, Kind: "pentest", ItemID: e.ID, Title: e.Name, Detail: "report awaiting sign-off", Link: "/pentest/" + e.ID})
 				}
 			}
 		}
 		if want("policy") {
 			for _, p := range td.Policies {
 				if p.Status == platform.PolicyDraft {
-					out = append(out, Pending{td.TenantID, td.TenantName, "policy", p.ID, p.Name, "draft awaiting publish", "/program"})
+					out = append(out, Pending{TenantID: td.TenantID, TenantName: td.TenantName, Kind: "policy", ItemID: p.ID, Title: p.Name, Detail: "draft awaiting publish", Link: "/program"})
 				}
 			}
 		}

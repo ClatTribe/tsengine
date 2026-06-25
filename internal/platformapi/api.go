@@ -144,6 +144,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/risks/{id}/decision", d.operatorAuth(d.handleOperatorDecideRisk))       // act-on-behalf: decide a risk for an assigned client
 	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/policies/{id}/publish", d.operatorAuth(d.handleOperatorPublishPolicy))  // act-on-behalf: publish a policy for an assigned client
 	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/pentests/{id}/signoff", d.operatorAuth(d.handleOperatorSignoffPentest)) // act-on-behalf: sign off a pentest report for an assigned client
+	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/audits/{id}/attest", d.operatorAuth(d.handleOperatorAttestControl))     // act-on-behalf: attest a control for an assigned client
 	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))                                                          // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
 	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))                                                        // cross-surface correlation (unified cross-detection)
 	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                                                                   // findings de-duplicated into unified issues (one issue, many signals)

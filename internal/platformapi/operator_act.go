@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -134,4 +135,45 @@ func (d Deps) handleOperatorSignoffPentest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, status, eng)
+}
+
+// handleOperatorAttestControl records the auditor verdict on one control of a client's audit
+// engagement on behalf — the "independent audit attestation (legal)" HITL act, from the cross-tenant
+// console. POST /v1/operator/tenants/{tenant}/audits/{id}/attest (body: control_id, verdict, note).
+// Same roster-match gate (403 if not a practitioner of record). The operator is a NAMED external
+// person (cross-tenant practitioner, never the tenant's own staff), so their attestation carries real
+// independence; capacity/firm come from the roster record, ledger-signed.
+func (d Deps) handleOperatorAttestControl(w http.ResponseWriter, r *http.Request, op platform.Operator) {
+	tenantID := r.PathValue("tenant")
+	id := r.PathValue("id")
+
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errBody("client not found"))
+		return
+	}
+	pr, ok := matchPractitioner(t, strings.ToLower(strings.TrimSpace(op.Email)))
+	if !ok {
+		writeJSON(w, http.StatusForbidden, errBody("you are not a practitioner of record for this client"))
+		return
+	}
+	var body struct {
+		ControlID string `json:"control_id"`
+		Verdict   string `json:"verdict"`
+		Note      string `json:"note"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	auditor := strings.TrimSpace(op.Name)
+	if auditor == "" {
+		auditor = op.Email
+	}
+	e, status, err := d.applyControlAttestation(r, tenantID, id, body.ControlID, body.Verdict, body.Note, auditor, pr.Capacity, pr.Firm)
+	if err != nil {
+		writeJSON(w, status, errBody(err.Error()))
+		return
+	}
+	writeJSON(w, status, auditView{AuditEngagement: e, Summary: grc.SummarizeAudit(e)})
 }
