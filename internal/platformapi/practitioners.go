@@ -29,6 +29,27 @@ func validCapacity(c string) bool {
 	return false
 }
 
+// practitionerCapacity resolves a HITL actor (by name or email, case-insensitive) to their capacity +
+// firm from the tenant's practitioner roster — so an act is honest about who employs the human who
+// did it. Unknown actor → internal (the tenant's own person), no firm. Grounded: it only reports a
+// capacity that a recorded practitioner-of-record carries; it never guesses.
+func (d Deps) practitionerCapacity(r *http.Request, tenantID, actor string) (capacity, firm string) {
+	actor = strings.ToLower(strings.TrimSpace(actor))
+	if actor == "" {
+		return platform.CapacityInternal, ""
+	}
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		return platform.CapacityInternal, ""
+	}
+	for _, p := range t.Practitioners {
+		if strings.ToLower(p.Name) == actor || (p.Email != "" && strings.ToLower(p.Email) == actor) {
+			return p.Capacity, p.Firm
+		}
+	}
+	return platform.CapacityInternal, ""
+}
+
 // handleGetPractitioners returns the tenant's service model + practitioners of record.
 func (d Deps) handleGetPractitioners(w http.ResponseWriter, r *http.Request, tenantID string) {
 	t, err := d.Store.GetTenant(r.Context(), tenantID)
