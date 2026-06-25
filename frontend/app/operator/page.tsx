@@ -4,6 +4,7 @@ import { getOperatorToken, operatorMe, operatorQueue, type QueueItem } from "@/l
 import { operatorLogout } from "./actions";
 import { DecideRiskInline } from "@/components/operator/decide-risk-inline";
 import { PublishPolicyInline } from "@/components/operator/publish-policy-inline";
+import { SignoffPentestInline } from "@/components/operator/signoff-pentest-inline";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Practitioner console | TensorShield" };
@@ -80,11 +81,13 @@ export default async function OperatorConsole() {
                           </div>
                         </div>
                       </div>
-                      {/* act-on-behalf: decide a risk / publish a policy right here. Attest + sign-off open in the client workspace. */}
+                      {/* act-on-behalf: decide a risk / publish a policy / sign off a pentest right here. Audit attestation opens in the client workspace. */}
                       {it.kind === "risk" && it.item_id ? (
                         <DecideRiskInline tenant={it.tenant_id} risk={it.item_id} />
                       ) : it.kind === "policy" && it.item_id ? (
                         <PublishPolicyInline tenant={it.tenant_id} policy={it.item_id} />
+                      ) : it.kind === "pentest" && it.item_id ? (
+                        <SignoffPentestInline tenant={it.tenant_id} engagement={it.item_id} />
                       ) : null}
                     </div>
                   );
@@ -93,9 +96,9 @@ export default async function OperatorConsole() {
             </section>
           ))}
           <p className="pt-2 text-center text-[11px] text-faint">
-            Decide risks and publish policies right here — recorded with your name + capacity and signed into the
-            ledger. Control attestations and pentest sign-offs open in the client&apos;s workspace. You only ever see
-            the clients who named you a practitioner of record.
+            Decide risks, publish policies, and sign off pentest reports right here — recorded with your name +
+            capacity and signed into the ledger. Control attestations open in the client&apos;s workspace. You only
+            ever see the clients who named you a practitioner of record.
           </p>
         </div>
       )}

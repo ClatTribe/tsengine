@@ -76,6 +76,32 @@ export async function operatorPublishPolicy(_prev: string | null, formData: Form
   return null;
 }
 
+// operatorSignoffPentest signs off a client's pentest report ON BEHALF — the named-accountability act.
+// Roster-gated server-side (403 if not a practitioner of record); recorded with the operator's name,
+// role + capacity, signed into the ledger and stamped onto the report.
+export async function operatorSignoffPentest(_prev: string | null, formData: FormData): Promise<string | null> {
+  const tenant = String(formData.get("tenant") ?? "");
+  const engagement = String(formData.get("engagement") ?? "");
+  const role = String(formData.get("role") ?? "").trim();
+  const statement = String(formData.get("statement") ?? "").trim();
+  if (!tenant || !engagement) return "Missing report.";
+  const tok = (await cookies()).get(OP_TOKEN_COOKIE)?.value;
+  if (!tok) return "Your session expired — sign in again.";
+  const res = await fetch(apiBase() + `/v1/operator/tenants/${tenant}/pentests/${engagement}/signoff`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ role, statement }),
+    cache: "no-store",
+  });
+  if (res.status === 403) return "You are not a practitioner of record for this client.";
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    return body.error || "Could not sign off the report.";
+  }
+  revalidatePath("/operator");
+  return null;
+}
+
 export async function operatorLogout(): Promise<void> {
   const jar = await cookies();
   const tok = jar.get(OP_TOKEN_COOKIE)?.value;

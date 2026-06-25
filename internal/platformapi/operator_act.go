@@ -92,3 +92,46 @@ func (d Deps) handleOperatorPublishPolicy(w http.ResponseWriter, r *http.Request
 	}
 	writeJSON(w, status, p)
 }
+
+// handleOperatorSignoffPentest signs off a client's pentest report on behalf — the "named
+// accountability on a pentest" HITL act, from the cross-tenant console.
+// POST /v1/operator/tenants/{tenant}/pentests/{id}/signoff. Same roster-match gate (403 if not a
+// practitioner of record); the operator is the named signer, capacity/firm from their roster record,
+// ledger-signed + stamped onto the rendered report.
+func (d Deps) handleOperatorSignoffPentest(w http.ResponseWriter, r *http.Request, op platform.Operator) {
+	tenantID := r.PathValue("tenant")
+	id := r.PathValue("id")
+
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errBody("client not found"))
+		return
+	}
+	pr, ok := matchPractitioner(t, strings.ToLower(strings.TrimSpace(op.Email)))
+	if !ok {
+		writeJSON(w, http.StatusForbidden, errBody("you are not a practitioner of record for this client"))
+		return
+	}
+	var body struct {
+		Role      string `json:"role"`
+		Statement string `json:"statement"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	signer := strings.TrimSpace(op.Name)
+	if signer == "" {
+		signer = op.Email
+	}
+	role := strings.TrimSpace(body.Role)
+	if role == "" && pr.Credential != "" {
+		role = pr.Credential // default the signer's role to their recorded credential (e.g. OSCP)
+	}
+	eng, status, err := d.applyPentestSignoff(r, tenantID, id, signer, role, body.Statement, pr.Capacity, pr.Firm)
+	if err != nil {
+		writeJSON(w, status, errBody(err.Error()))
+		return
+	}
+	writeJSON(w, status, eng)
+}

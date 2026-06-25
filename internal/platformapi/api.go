@@ -136,38 +136,39 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("PUT /v1/settings/service-model", d.auth(d.handleSetServiceModel))       // set who provides the HITL (self_serve|msp|managed)
 	mux.HandleFunc("GET /v1/practitioner/queue", d.platformAuth(d.handlePractitionerQueue)) // cross-tenant practitioner desk (platform-token gated)
 	// Operator (cross-tenant practitioner) auth + console — a SEPARATE namespace from tenant auth.
-	mux.HandleFunc("POST /v1/operator", d.platformAuth(d.handleCreateOperator))                                               // provision an operator account (deployment-operator gated)
-	mux.HandleFunc("POST /v1/operator/login", d.handleOperatorLogin)                                                          // operator email+password login
-	mux.HandleFunc("POST /v1/operator/logout", d.operatorAuth(d.handleOperatorLogout))                                        // end the operator session
-	mux.HandleFunc("GET /v1/operator/me", d.operatorAuth(d.handleOperatorMe))                                                 // the current operator
-	mux.HandleFunc("GET /v1/operator/queue", d.operatorAuth(d.handleOperatorQueue))                                           // the operator's own cross-tenant work queue
-	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/risks/{id}/decision", d.operatorAuth(d.handleOperatorDecideRisk))      // act-on-behalf: decide a risk for an assigned client
-	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/policies/{id}/publish", d.operatorAuth(d.handleOperatorPublishPolicy)) // act-on-behalf: publish a policy for an assigned client
-	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))                                                         // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
-	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))                                                       // cross-surface correlation (unified cross-detection)
-	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                                                                  // findings de-duplicated into unified issues (one issue, many signals)
-	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))                                                     // auto-triage funnel: % of raw findings the engine handled automatically
-	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))                                                     // suppress an issue (false-positive / accepted-risk)
-	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))                                                 // restore a suppressed issue
-	mux.HandleFunc("GET /v1/exclusions", d.auth(d.handleListExclusions))                                                      // custom noise-filter rules (path/package/rule globs)
-	mux.HandleFunc("POST /v1/exclusions", d.auth(d.handleAddExclusion))                                                       // add an exclusion rule
-	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))                                             // remove an exclusion rule
-	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents))                                            // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
-	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents))                                          // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
-	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))                                                // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
-	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile))                                          // container scan-on-push decision (ADR 0010 Phase 4)
-	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))                                                  // api: Postman collection → endpoint inventory
-	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                   // SaaS posture (SSPM) snapshot → findings
-	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                           // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
-	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))                                               // list runtime-protection events
-	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                                                         // create + authorize a pentest engagement
-	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                                                           // list engagements
-	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))                                                     // portfolio scorecard (verified_rate, SLA)
-	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))                                                        // one engagement + findings
-	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                                                   // run/retest the engagement (passive, RoE-gated)
-	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))                                              // the engagement's VAPT report (md/json)
-	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))                                           // HITL: named human signs the report → signed ledger
-	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                                                                  // SSE live state feed
+	mux.HandleFunc("POST /v1/operator", d.platformAuth(d.handleCreateOperator))                                                // provision an operator account (deployment-operator gated)
+	mux.HandleFunc("POST /v1/operator/login", d.handleOperatorLogin)                                                           // operator email+password login
+	mux.HandleFunc("POST /v1/operator/logout", d.operatorAuth(d.handleOperatorLogout))                                         // end the operator session
+	mux.HandleFunc("GET /v1/operator/me", d.operatorAuth(d.handleOperatorMe))                                                  // the current operator
+	mux.HandleFunc("GET /v1/operator/queue", d.operatorAuth(d.handleOperatorQueue))                                            // the operator's own cross-tenant work queue
+	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/risks/{id}/decision", d.operatorAuth(d.handleOperatorDecideRisk))       // act-on-behalf: decide a risk for an assigned client
+	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/policies/{id}/publish", d.operatorAuth(d.handleOperatorPublishPolicy))  // act-on-behalf: publish a policy for an assigned client
+	mux.HandleFunc("POST /v1/operator/tenants/{tenant}/pentests/{id}/signoff", d.operatorAuth(d.handleOperatorSignoffPentest)) // act-on-behalf: sign off a pentest report for an assigned client
+	mux.HandleFunc("GET /v1/soc-metrics", d.auth(d.handleSOCMetrics))                                                          // SOC-performance scorecard (SLA compliance %, MTTA/MTTR, aging)
+	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))                                                        // cross-surface correlation (unified cross-detection)
+	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                                                                   // findings de-duplicated into unified issues (one issue, many signals)
+	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))                                                      // auto-triage funnel: % of raw findings the engine handled automatically
+	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))                                                      // suppress an issue (false-positive / accepted-risk)
+	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))                                                  // restore a suppressed issue
+	mux.HandleFunc("GET /v1/exclusions", d.auth(d.handleListExclusions))                                                       // custom noise-filter rules (path/package/rule globs)
+	mux.HandleFunc("POST /v1/exclusions", d.auth(d.handleAddExclusion))                                                        // add an exclusion rule
+	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))                                              // remove an exclusion rule
+	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents))                                             // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
+	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents))                                           // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
+	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))                                                 // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
+	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile))                                           // container scan-on-push decision (ADR 0010 Phase 4)
+	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))                                                   // api: Postman collection → endpoint inventory
+	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
+	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
+	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))                                                // list runtime-protection events
+	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                                                          // create + authorize a pentest engagement
+	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                                                            // list engagements
+	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))                                                      // portfolio scorecard (verified_rate, SLA)
+	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))                                                         // one engagement + findings
+	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                                                    // run/retest the engagement (passive, RoE-gated)
+	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))                                               // the engagement's VAPT report (md/json)
+	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))                                            // HITL: named human signs the report → signed ledger
+	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                                                                   // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("GET /v1/identities", d.auth(d.handleNonHumanIdentities)) // non-human / AI-agent identity posture (ACSP agentic lens)

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -93,6 +94,41 @@ func TestOperator_ActOnBehalf_DecideRisk(t *testing.T) {
 			t.Errorf("ISOLATION: the unassigned client's policy must stay a draft, got %q", p.Status)
 		}
 	}
+
+	// (5) act-on-behalf also covers pentest sign-off (named accountability on a pentest)
+	_ = d.Store.PutPentest(ctx, pentest.Engagement{ID: "ea", TenantID: "tA", Name: "Q3 VAPT", Status: pentest.StatusComplete})
+	_ = d.Store.PutPentest(ctx, pentest.Engagement{ID: "eb", TenantID: "tB", Name: "Other VAPT", Status: pentest.StatusComplete})
+	sign := d.operatorAuth(d.handleOperatorSignoffPentest)
+
+	srec := signoffAsOperator(t, sign, login.Token, "tA", "ea", `{"role":"Lead Pentester","statement":"Reviewed all proven findings."}`)
+	if srec.Code != http.StatusOK {
+		t.Fatalf("signoff-on-behalf on assigned client: %d %s", srec.Code, srec.Body.String())
+	}
+	var eng pentest.Engagement
+	_ = json.Unmarshal(srec.Body.Bytes(), &eng)
+	if eng.Signoff == nil || eng.Signoff.Signer != "Dana" || eng.Signoff.Capacity != platform.CapacityManaged || eng.Signoff.LedgerRef == "" {
+		t.Errorf("signoff must name the operator + record managed capacity + ledger, got %+v", eng.Signoff)
+	}
+
+	// ISOLATION: dana cannot sign off tenant B's report → 403, left unsigned
+	if f := signoffAsOperator(t, sign, login.Token, "tB", "eb", `{}`); f.Code != http.StatusForbidden {
+		t.Fatalf("signoff-on-behalf on an UNASSIGNED client must be 403, got %d", f.Code)
+	}
+	ebg, _ := d.Store.GetPentest(ctx, "tB", "eb")
+	if ebg.Signoff != nil {
+		t.Errorf("ISOLATION: the unassigned client's report must stay unsigned, got %+v", ebg.Signoff)
+	}
+}
+
+func signoffAsOperator(t *testing.T, h http.HandlerFunc, token, tenant, eng, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/v1/operator/tenants/"+tenant+"/pentests/"+eng+"/signoff", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.SetPathValue("tenant", tenant)
+	req.SetPathValue("id", eng)
+	rec := httptest.NewRecorder()
+	h(rec, req)
+	return rec
 }
 
 func publishAsOperator(t *testing.T, h http.HandlerFunc, token, tenant, policy string) *httptest.ResponseRecorder {
