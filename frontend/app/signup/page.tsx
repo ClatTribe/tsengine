@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Loader2, Lock, BadgeCheck, Sparkles, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Loader2, Lock, BadgeCheck, Sparkles, ArrowRight, CheckCircle2 } from "lucide-react";
+import { LogoMark } from "@/components/brand/logo";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function SignupPage() {
         <div className="w-full max-w-sm animate-fade-rise">
           <Link href="/" className="mb-10 inline-flex items-center gap-2.5">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-white shadow-sm">
-              <ShieldCheck className="h-5 w-5" />
+              <LogoMark className="h-6 w-6" />
             </span>
             <span className="text-base font-semibold tracking-tight">TensorShield</span>
           </Link>

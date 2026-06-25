@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { LogoMark } from "@/components/brand/logo";
 
 const COLS: { title: string; links: { href: string; label: string }[] }[] = [
   {
@@ -55,7 +55,7 @@ export function MarketingFooter() {
           <div>
             <Link href="/" className="flex items-center gap-2.5">
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
-                <ShieldCheck className="h-4 w-4" />
+                <LogoMark className="h-5 w-5" />
               </span>
               <span className="text-base font-semibold tracking-tight">TensorShield</span>
             </Link>

@@ -22,6 +22,7 @@ import {
   History,
   ChevronDown,
 } from "lucide-react";
+import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badgeKey?: "pending" };
@@ -100,7 +101,7 @@ export function Sidebar({ pending }: { pending: number }) {
     <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-bg/60 px-3 py-4">
       <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
         <div className="grid h-8 w-8 place-items-center rounded-lg border border-accent/40 bg-accent-soft text-accent">
-          <ShieldCheck className="h-4 w-4" />
+          <LogoMark className="h-5 w-5" />
         </div>
         <span className="text-sm font-semibold">TensorShield</span>
       </Link>

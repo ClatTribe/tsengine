@@ -19,15 +19,18 @@ export default function Icon() {
           borderRadius: "7px",
         }}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+          {/* white shield */}
           <path d="M12 2l8 3v6c0 5-3.4 8.4-8 11-4.6-2.6-8-6-8-11V5l8-3z" fill="#ffffff" />
+          {/* growth arrow + a tensor node — the TensorShield mark, legible at 32px */}
           <path
-            d="M8.5 12.2l2.4 2.4 4.6-4.8"
+            d="M8.5 15.5L15 9M11.5 8.5H15.5V12.5"
             stroke="#6366f1"
-            strokeWidth="2.2"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+          <circle cx="8.5" cy="15.5" r="1.3" fill="#6366f1" />
         </svg>
       </div>
     ),
