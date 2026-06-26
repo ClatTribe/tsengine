@@ -88,7 +88,7 @@ export default async function CompliancePage() {
             ))}
           </div>
           {readiness.connected < readiness.recommended && (
-            <Link href="/connect" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
+            <Link href="/assets" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
               Connect a system <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           )}
