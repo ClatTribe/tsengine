@@ -167,6 +167,13 @@ export const api = {
   // AI Cloud Engineer — the cloud-agent's proven attack paths (read-only view) + whether a run is possible.
   cloudInvestigation: () =>
     safe<{ total: number; enabled: boolean; paths: Finding[] }>("/v1/cloud/investigate", { total: 0, enabled: false, paths: [] }),
+  // Trigger an AI Cloud Engineer investigation over a posted inventory (+ optional prowler findings).
+  // LLM-gated server-side (400 with a clear message if no model is configured).
+  runCloudInvestigation: (inventory: unknown, prowler: unknown[]) =>
+    call<{ summary: string; paths_found: number; risks_proposed: number; calls: number }>(
+      "/v1/cloud/investigate",
+      { method: "POST", body: JSON.stringify({ inventory, prowler }) },
+    ),
 
   // SaaS-app discovery view (SSPM) — inventory + portfolio summary over the connected IdPs' grants.
   saasApps: () =>
