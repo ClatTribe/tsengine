@@ -42,6 +42,11 @@ func TestPathCompliance_SensitiveDataPath(t *testing.T) {
 	if len(c.CCPA) == 0 || len(c.FedRAMP) == 0 || len(c.DPDP) == 0 {
 		t.Errorf("sensitive-data path should also map CCPA/FedRAMP/DPDP, got ccpa=%v fedramp=%v dpdp=%v", c.CCPA, c.FedRAMP, c.DPDP)
 	}
+	// The sector/government frameworks an internet-exposed sensitive-data + privileged path also affects
+	// (the non-CWE-path coverage fix): HIPAA (ePHI access/transmission), ISO 27001, SOX (financial-data ITGC).
+	if len(c.HIPAA) == 0 || len(c.ISO27001) == 0 || len(c.SOX) == 0 {
+		t.Errorf("sensitive-data/privileged path should also map HIPAA/ISO27001/SOX, got hipaa=%v iso=%v sox=%v", c.HIPAA, c.ISO27001, c.SOX)
+	}
 }
 
 func TestPathCompliance_PrivescMapsLeastPrivilege(t *testing.T) {
