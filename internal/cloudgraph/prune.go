@@ -1,6 +1,9 @@
 package cloudgraph
 
-import "github.com/ClatTribe/tsengine/internal/cloudiam"
+import (
+	"github.com/ClatTribe/tsengine/internal/cloudiam"
+	"github.com/ClatTribe/tsengine/internal/gcpiam"
+)
 
 // prune.go closes the held-out false-positive gap the anti-overfit probe exposed: graph ingest
 // over-approximates reachability by adding an assume-role edge from the inventory WITHOUT
@@ -41,6 +44,26 @@ func (s *Snapshot) assumeAuthorized(from, to string) bool {
 	tn := s.Node(to)
 	if tn == nil || tn.Attrs == nil {
 		return true
+	}
+	// GCP: SA impersonation (the assume-role analogue) is gated by the TARGET service account's IAM policy.
+	// The source must hold an impersonation permission (token-creator / actAs). Mirrors the AWS path: only a
+	// DEFINITIVE deny (the policy grants the source NO impersonation perm) drops the over-approximated edge;
+	// an unparseable policy or any conditional/possible grant keeps it (recall preserved, §10).
+	if pol := tn.Attrs["gcp_iam_policy"]; pol != "" {
+		ps, ok := gcpiam.ParseResourcePolicy([]byte(pol))
+		if !ok {
+			return true
+		}
+		member := from
+		if fn := s.Node(from); fn != nil && fn.Attrs != nil && fn.Attrs["member"] != "" {
+			member = fn.Attrs["member"]
+		}
+		for _, perm := range []string{"iam.serviceAccounts.getAccessToken", "iam.serviceAccounts.actAs"} {
+			if allowed, cond := gcpiam.Permits(gcpiam.Request{Member: member, Permission: perm}, ps); allowed || cond {
+				return true
+			}
+		}
+		return false
 	}
 	raw := tn.Attrs["trust_policy"]
 	if raw == "" {
