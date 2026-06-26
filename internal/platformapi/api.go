@@ -446,16 +446,32 @@ func (d Deps) handleRescan(w http.ResponseWriter, r *http.Request, tenantID stri
 	}
 	if d.Jobs == nil {
 		n, err := d.Runner.RescanTenant(r.Context(), tenantID)
-		if err != nil {
+		// Partial success is success: RescanTenant continues past a per-asset error (e.g. one stale/401
+		// connection) and returns how many it DID scan + the first error. A founder's "Scan now" must not
+		// report a total failure because one degraded connection errored — only fail if nothing scanned.
+		if err != nil && n == 0 {
 			writeJSON(w, http.StatusBadGateway, errBody(err.Error()))
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"assets_scanned": n})
+		res := map[string]any{"assets_scanned": n}
+		if err != nil {
+			res["warning"] = err.Error()
+		}
+		writeJSON(w, http.StatusOK, res)
 		return
 	}
 	job, err := d.Jobs.Enqueue("rescan", tenantID, func(ctx context.Context) (any, error) {
-		n, err := d.Runner.RescanTenant(ctx, tenantID)
-		return map[string]any{"assets_scanned": n}, err
+		n, scanErr := d.Runner.RescanTenant(ctx, tenantID)
+		res := map[string]any{"assets_scanned": n}
+		if scanErr != nil {
+			res["warning"] = scanErr.Error()
+		}
+		// Only a total failure (nothing scanned) fails the job; a partial pass succeeds with a warning,
+		// so one stale connection never makes the whole "Scan now" read as failed.
+		if scanErr != nil && n == 0 {
+			return res, scanErr
+		}
+		return res, nil
 	})
 	if errors.Is(err, jobs.ErrBusy) {
 		writeJSON(w, http.StatusTooManyRequests, errBody(err.Error()))
