@@ -588,6 +588,28 @@ export interface ComplianceByAsset {
   attributed: number;
 }
 
+// Per-asset SECURITY posture ("is this asset secure?") — crossdetect.AssetSecurity. FP-aware
+// (confirmed vs unconfirmed) + coverage (scanned) + impact; verdict NEVER a bare "secure".
+export interface AssetSecurity {
+  asset_id: string;
+  target: string;
+  type: string;
+  scanned: boolean;
+  attributed: boolean;
+  findings: number;
+  confirmed: number; // verified or corroborated — act on these
+  unconfirmed: number; // single-tool pattern_match — confirm first
+  critical: number;
+  high: number;
+  worst_severity: string;
+  verdict: string;
+}
+export interface SecurityByAsset {
+  assets: AssetSecurity[];
+  total: number;
+  at_risk: number;
+}
+
 // grc.Report JSON (no json tags on the Go struct → PascalCase keys).
 export interface ReportEvidence { FindingID: string; Title: string; Severity: string }
 export interface ReportRow { ControlID: string; State: string; Gap: boolean; Evidence?: ReportEvidence[] }
