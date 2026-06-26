@@ -18,6 +18,7 @@ package sspm
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -241,11 +242,41 @@ func checkWebhooks(org GitHubOrg, target string, now time.Time, id func() string
 func finding(fid, rule string, sev types.Severity, title, endpoint, desc string, now time.Time, c *types.Compliance) types.Finding {
 	return types.Finding{
 		ID: fid, RuleID: rule, Tool: "sspm", Severity: sev,
+		CWE:   cweForRule(rule),
 		Title: title, Endpoint: endpoint, Description: desc,
 		Compliance: c, DiscoveredAt: now,
 		// grounded by a deterministic config fact, not a re-fired exploit:
 		VerificationStatus: types.VerificationVerified,
 	}
+}
+
+// cweForRule classifies a SaaS-posture check by its rule id so the compliance.map crosswalk supplies the
+// FULL framework set (merged with the SaaS-specific inline mapping) — the non-CWE-path coverage fix. The
+// inline mapping covered SOC2/PCI/CIS/NIST-CSF; attaching the weakness CWE adds the government / privacy /
+// sector frameworks (HIPAA, NIST 800-53/171, FedRAMP, SOX, ISO 27001) the crosswalk maps for that class.
+// Grounded (§10): each class IS a real instance of the weakness (a 2FA gap is broken authentication), and
+// it is conservative — an unrecognized rule gets NO CWE, keeping inline-only (never a guessed mapping).
+func cweForRule(rule string) []string {
+	switch {
+	case containsAny(rule, "2fa", "mfa", "sso", "passcode", "password"):
+		return []string{"CWE-287"} // improper / absent authentication
+	case containsAny(rule, "admin", "sprawl", "broad-scope", "privile", "owner", "modify-all", "perm"):
+		return []string{"CWE-269"} // improper privilege management
+	case containsAny(rule, "public", "guest", "external", "sharing", "anonymous", "allowlist", "recording", "open"):
+		return []string{"CWE-200"} // information exposure
+	case containsAny(rule, "app-", "oauth", "webhook", "token", "unverified", "third-party"):
+		return []string{"CWE-200"} // unsanctioned-integration data exposure
+	}
+	return nil
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 func comp(c types.Compliance) *types.Compliance { return &c }
