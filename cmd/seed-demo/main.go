@@ -7,14 +7,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/authn"
-	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/grc"
+	"github.com/ClatTribe/tsengine/internal/osint"
+	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -267,5 +269,42 @@ func main() {
 		CreatedAt: ago(8 * 24 * time.Hour),
 	}))
 
-	log.Printf("seeded demo tenant %q → %s (%d findings, %d actions, %d incidents, 1 pentest, %d risks, %d policies, 1 audit, 4 saas apps, 1 runtime event)", tid, path, len(findings), len(actions), len(incidents), len(risks), len(policies))
+	// External exposure (OSINT, ADR-0011) — the attacker's-eye view, so the External Exposure tab shows the
+	// real footprint a founder would want to see. Grounded: osint.Assess derives findings from the snapshot.
+	osintFindings := osint.Assess(osint.Snapshot{
+		Org: "Northwind Labs", Domains: []string{"northwind.io"},
+		BreachedAccounts: []osint.BreachedAccount{
+			{Email: "ada@northwind.io", Breach: "LinkedIn 2021", Date: "2021-06", Classes: "emails, passwords", Source: "hibp"},
+			{Email: "ops@northwind.io", Breach: "Collection #1", Date: "2019-01", Classes: "passwords", Source: "hibp"},
+		},
+		LeakedSecrets: []osint.LeakedSecret{
+			{Kind: "AWS access key", Location: "github.com/northwind-labs/legacy-scripts/blob/main/deploy.sh", Source: "trufflehog", Verified: true},
+		},
+		ExposedHosts: []osint.ExposedHost{
+			{Host: "legacy.northwind.io", IP: "203.0.113.7", Ports: []int{3389}, Services: []string{"rdp"}, Source: "shodan"},
+		},
+		Typosquats: []osint.TyposquatDomain{
+			{Domain: "northwlnd.io", Target: "northwind.io", Registered: true, HasMX: true, Source: "dnstwist"},
+		},
+	}, osint.Options{})
+	for i := range osintFindings {
+		osintFindings[i].ID = fmt.Sprintf("osint-%d", i)
+		must(st.PutFinding(ctx, tid, osintFindings[i]))
+	}
+
+	// Expert reviews — the founder asked a security expert to weigh in on the two judgment-call findings
+	// (the human-in-the-loop the consulting/MSP model provides). So the Reviews tab isn't empty.
+	must(st.PutReviewRequest(ctx, platform.ReviewRequest{
+		ID: "rev-1", TenantID: tid, Subject: "finding", SubjectID: "f-012",
+		Note: "Is the admin-access IAM role reachable from the internet, or lower risk than it looks? Want an expert's read before we page on-call.",
+		Requester: "founder@northwind.io", Status: platform.ReviewOpen, CreatedAt: ago(20 * time.Hour),
+	}))
+	must(st.PutReviewRequest(ctx, platform.ReviewRequest{
+		ID: "rev-2", TenantID: tid, Subject: "finding", SubjectID: "f-001",
+		Note: "Confirmed SQLi on the search endpoint — can you sanity-check the suggested parameterized-query fix before we ship?",
+		Requester: "founder@northwind.io", Status: platform.ReviewResolved, Reviewer: "Sam (vCISO)",
+		Resolution: "Fix is correct; also add an allow-list on the sort param. Approved to ship.", CreatedAt: ago(30 * time.Hour), ResolvedAt: ago(18 * time.Hour),
+	}))
+
+	log.Printf("seeded demo tenant %q → %s (%d findings, %d osint, %d actions, %d incidents, 1 pentest, %d risks, %d policies, 1 audit, 2 reviews, 4 saas apps, 1 runtime event)", tid, path, len(findings), len(osintFindings), len(actions), len(incidents), len(risks), len(policies))
 }
