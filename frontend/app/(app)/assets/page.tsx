@@ -20,8 +20,8 @@ const STATUS_CLS: Record<string, string> = {
   revoked: "text-critical border-critical/30 bg-critical/10",
 };
 
-export default async function AssetsPage({ searchParams }: { searchParams: Promise<{ connect_error?: string }> }) {
-  const { connect_error } = await searchParams;
+export default async function AssetsPage({ searchParams }: { searchParams: Promise<{ connect_error?: string; connected?: string; scanned?: string }> }) {
+  const { connect_error, connected, scanned } = await searchParams;
   const [connections, assets, engagements] = await Promise.all([api.connections(), api.assets(), api.engagements()]);
 
   // last-scanned per asset, from the engagement (monitoring-run) history
@@ -46,6 +46,12 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
       {connect_error && (
         <div className="flex items-center gap-2 rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-sm text-critical">
           <CircleAlert className="h-4 w-4" /> Couldn&apos;t start the {kindLabel(connect_error)} connection — it may not be configured on this deployment.
+        </div>
+      )}
+      {connected && (
+        <div className="flex items-center gap-2 rounded-lg border border-pulse/30 bg-pulse/10 px-3 py-2 text-sm text-pulse">
+          <CheckCircle2 className="h-4 w-4" />
+          {kindLabel(connected)} connected — the agent is scanning{Number(scanned) > 0 ? ` ${scanned} ${Number(scanned) === 1 ? "asset" : "assets"}` : " your assets"} now. Your compliance posture updates as findings land.
         </div>
       )}
 

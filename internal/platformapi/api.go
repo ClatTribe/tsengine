@@ -41,6 +41,11 @@ type Deps struct {
 	Recorder       *ledger.Recorder // optional: signs review request/resolve into the ledger
 	Token          string           // static platform bearer token (required)
 	PublicURL      string           // base URL for OAuth redirect_uri (e.g. https://app.example)
+	// AppURL is the browser-facing app base the OAuth callback lands the user back on after a
+	// successful connect. When set, the callback 303-redirects to AppURL/assets?connected=<kind>
+	// instead of writing a raw JSON blob into the browser (the post-connect "aha" moment). Empty
+	// → JSON (back-compat for tests / non-browser callers).
+	AppURL string
 	// SlackSigningSecret verifies Slack interactive (approve/reject) callbacks. Empty
 	// → the Slack endpoint returns 501.
 	SlackSigningSecret string
