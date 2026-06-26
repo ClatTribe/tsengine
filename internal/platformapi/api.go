@@ -177,6 +177,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))                                            // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
 	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))                                       // stored cloud-agent attack paths
 	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                                                      // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
+	mux.HandleFunc("POST /v1/findings/{id}/autofix", d.auth(d.handleAutofix))                                                 // AI autofix — LLM-generated code patch for a finding (LLM-gated)
 	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                                                                 // OSINT "External exposure" view + summary
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
