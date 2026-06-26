@@ -4,6 +4,7 @@ import { ProviderIcon } from "@/components/brand/provider-icon";
 import { api } from "@/lib/api";
 import type { Asset, AssetPosture, AssetSecurity, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
+import { ASSET_SURFACES } from "@/lib/assets";
 import { AddTarget } from "@/components/assets/add-target";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
@@ -20,6 +21,15 @@ const STATUS_CLS: Record<string, string> = {
   degraded: "text-medium border-medium/30 bg-medium/10",
   revoked: "text-critical border-critical/30 bg-critical/10",
 };
+
+// What our scan COVERS per asset type (tools + categories) — so "how much have we covered" is always visible
+// and a clean verdict is honestly scoped to what actually ran, never a blanket "all clear".
+const COVERAGE_BY_TYPE = new Map(ASSET_SURFACES.map((s) => [s.key, s]));
+function coverageNote(type: string): string {
+  const c = COVERAGE_BY_TYPE.get(type);
+  if (!c) return "";
+  return `Covered by ${c.tools.join(", ")} — ${c.scans}`;
+}
 
 export default async function AssetsPage({ searchParams }: { searchParams: Promise<{ connect_error?: string; connected?: string; scanned?: string }> }) {
   const { connect_error, connected, scanned } = await searchParams;
@@ -204,20 +214,20 @@ function AssetRow({ asset: a, connections, last, posture, security }: { asset: A
         </div>
       </td>
       <td className="px-2 py-2.5 align-middle">
-        <Tag>{ASSET_TYPE_LABEL[a.type] ?? a.type}</Tag>
+        <span title={coverageNote(a.type)}><Tag>{ASSET_TYPE_LABEL[a.type] ?? a.type}</Tag></span>
       </td>
       <td className="px-2 py-2.5 align-middle">
         <DataTierSelect assetId={a.id} tier={a.data_tier ?? 2} />
       </td>
       <td className="px-2 py-2.5 align-middle text-xs text-muted">{via ? kindLabel(via.kind) : "—"}</td>
-      <td className="px-2 py-2.5 align-middle text-xs" title={security?.verdict}>
+      <td className="px-2 py-2.5 align-middle text-xs" title={security?.verdict ? `${security.verdict}${coverageNote(a.type) ? `\n${coverageNote(a.type)}` : ""}` : coverageNote(a.type)}>
         {(() => {
           if (!security) return <span className="text-faint">—</span>;
           const atRisk = security.confirmed > 0 && security.critical + security.high > 0;
           if (atRisk) return <Link href="/incidents" className="font-medium text-high hover:underline">{security.critical + security.high} confirmed high+</Link>;
           if (security.confirmed > 0) return <span className="text-medium">{security.confirmed} to review</span>;
           if (security.unconfirmed > 0) return <span className="text-faint">{security.unconfirmed} to confirm</span>;
-          if (security.scanned) return <span className="text-low">clean last scan</span>;
+          if (security.scanned) return <span className="text-low underline decoration-dotted underline-offset-2">clean last scan</span>;
           return <span className="text-faint">not scanned</span>;
         })()}
       </td>
