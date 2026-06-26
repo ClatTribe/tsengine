@@ -106,7 +106,8 @@ func checkAdminMFA(ws Workspace, now time.Time, id func() string) []types.Findin
 			"Admin account "+u.Email+" has no multi-factor authentication. A stolen admin password = full takeover.",
 			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"},
 				GDPR: []string{"Art. 32"}, NIST80053: []string{"IA-2", "AC-6"}, NIST800171: []string{"3.5.3", "3.1.5"},
-				CCPA: []string{"1798.150"}, FedRAMP: []string{"IA-2", "AC-6"}, DPDP: []string{"Sec. 8(5)"}})))
+				CCPA: []string{"1798.150"}, FedRAMP: []string{"IA-2", "AC-6"}, DPDP: []string{"Sec. 8(5)"},
+				HIPAA: []string{"164.312(d)"}, ISO27001: []string{"A.5.17"}, SOX: []string{"ITGC: Access to Programs & Data"}})))
 	}
 	return out
 }
@@ -123,7 +124,8 @@ func checkUserMFA(ws Workspace, now time.Time, id func() string) []types.Finding
 			"Account "+u.Email+" has no MFA; enforce org-wide MFA to close the #1 SMB breach vector.",
 			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"},
 				GDPR: []string{"Art. 32"}, NIST80053: []string{"IA-2"}, NIST800171: []string{"3.5.3"},
-				FedRAMP: []string{"IA-2"}, DPDP: []string{"Sec. 8(5)"}})))
+				FedRAMP: []string{"IA-2"}, DPDP: []string{"Sec. 8(5)"},
+				HIPAA: []string{"164.312(d)"}, ISO27001: []string{"A.5.17"}, SOX: []string{"ITGC: Access to Programs & Data"}})))
 	}
 	return out
 }
@@ -144,7 +146,8 @@ func checkSuperAdmins(ws Workspace, max int, now time.Time, id func() string) []
 		fmt.Sprintf("%d super-admins: %v. Reduce to the minimum and put the rest on least-privilege roles.", len(supers), supers),
 		now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"},
 			GDPR: []string{"Art. 32"}, NIST80053: []string{"AC-6"}, NIST800171: []string{"3.1.5"},
-			FedRAMP: []string{"AC-6"}, DPDP: []string{"Sec. 8(5)"}}))}
+			FedRAMP: []string{"AC-6"}, DPDP: []string{"Sec. 8(5)"},
+			HIPAA: []string{"164.312(a)(1)"}, ISO27001: []string{"A.5.15", "A.8.2"}, SOX: []string{"ITGC: Access to Programs & Data"}}))}
 }
 
 // checkStaleAccounts: a live, idle account is an unguarded door.
@@ -163,7 +166,8 @@ func checkStaleAccounts(ws Workspace, staleDays int, now time.Time, id func() st
 			fmt.Sprintf("%s has not logged in for %d days but is still active. Suspend or deprovision.", u.Email, u.LastLoginDays),
 			now, comp(types.Compliance{SOC2: []string{"CC6.2"}, CISv8: []string{"5.3"},
 				GDPR: []string{"Art. 32"}, NIST80053: []string{"AC-2"}, NIST800171: []string{"3.1.1"},
-				FedRAMP: []string{"AC-2"}, DPDP: []string{"Sec. 8(5)"}})))
+				FedRAMP: []string{"AC-2"}, DPDP: []string{"Sec. 8(5)"},
+				HIPAA: []string{"164.312(a)(1)"}, ISO27001: []string{"A.5.16"}, SOX: []string{"ITGC: Access to Programs & Data"}})))
 	}
 	return out
 }
@@ -226,7 +230,8 @@ func checkOAuthGrants(ws Workspace, now time.Time, id func() string) []types.Fin
 				fmt.Sprintf("App %q holds a directory/admin scope (%v) across %d users — effectively shadow-admin. Review and revoke if unneeded.", g.App, g.Scopes, g.Users),
 				now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"},
 					GDPR: []string{"Art. 32", "Art. 28"}, ISO27701: []string{"6.12"}, NIST80053: []string{"AC-6", "AC-3"},
-					NIST800171: []string{"3.1.5"}, CCPA: []string{"1798.140"}, FedRAMP: []string{"AC-6"}, DPDP: []string{"Sec. 8(5)"}})))
+					NIST800171: []string{"3.1.5"}, CCPA: []string{"1798.140"}, FedRAMP: []string{"AC-6"}, DPDP: []string{"Sec. 8(5)"},
+					HIPAA: []string{"164.312(a)(1)"}, ISO27001: []string{"A.5.15"}, SOX: []string{"ITGC: Access to Programs & Data"}})))
 		case !g.Verified && g.Users > 0:
 			out = append(out, finding(id(), "operate::oauth-unverified-app", types.SeverityMedium,
 				"Unverified third-party app granted access: "+g.App, g.App,
