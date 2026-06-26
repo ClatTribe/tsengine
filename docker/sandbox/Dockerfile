@@ -110,7 +110,7 @@ ARG NUCLEI_VERSION=3.3.7
 # repo for reliable, signed builds).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates curl unzip gnupg lsb-release nmap libpcap0.8 hydra \
+        ca-certificates curl unzip gnupg lsb-release nmap libpcap0.8 hydra nikto \
     && curl -fL https://aquasecurity.github.io/trivy-repo/deb/public.key \
         | gpg --dearmor -o /usr/share/keyrings/trivy.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \

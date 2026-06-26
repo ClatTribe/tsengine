@@ -308,7 +308,10 @@ var registryNames = []string{
 	// via the tool-replay API. droopescan (Drupal) + joomscan (Joomla) are
 	// the documented next CMS additions.
 	"wpscan",
-	// Phase 2.x: wapiti, nikto, jaeles, arachni, gobuster, ZAP active.
+	// nikto: classic web-server scanner (legacy CGIs, default/backup files, outdated
+	// server software, missing headers) — distinct corpus from nuclei, on-demand depth.
+	"nikto",
+	// Phase 2.x: wapiti, jaeles, arachni, gobuster, ZAP active.
 }
 
 func resolveTools(names []string) []tool.Tool {
