@@ -3,10 +3,39 @@ package hooks
 import (
 	_ "embed"
 	"encoding/json"
+	"regexp"
 	"sort"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// cveRe detects a CVE id in a finding's rule_id/title. A finding that names a CVE is, by definition, a known
+// technical vulnerability — every security framework requires you to manage/remediate it — so it maps to the
+// vulnerability-management controls even when it carries no CWE (the case for SCA/container CVE findings from
+// grype/trivy, which surfaced as compliance:none on a real alpine scan).
+var cveRe = regexp.MustCompile(`CVE-\d{4}-\d{4,}`)
+
+func hasCVE(f types.Finding) bool {
+	return cveRe.MatchString(f.RuleID) || cveRe.MatchString(f.Title)
+}
+
+// vulnMgmtControls returns a FRESH copy of the vulnerability/patch-management controls a known CVE grounds to
+// across frameworks (§8 nexus — a CVE ↔ "manage technical vulnerabilities" is a real mapping, not a guess).
+// Privacy/AI frameworks have no direct vuln-mgmt nexus, so they're intentionally absent (honest, never padded).
+func vulnMgmtControls() *types.Compliance {
+	return &types.Compliance{
+		SOC2:       []string{"CC7.1"},
+		PCI:        []string{"6.3.3", "11.3.1"},
+		HIPAA:      []string{"164.308(a)(1)(ii)(A)"},
+		CISv8:      []string{"7.1", "7.5"},
+		NISTCSF:    []string{"ID.RA-1", "PR.IP-12"},
+		ISO27001:   []string{"A.8.8"},
+		NIST80053:  []string{"RA-5", "SI-2"},
+		NIST800171: []string{"3.11.2", "3.14.1"},
+		FedRAMP:    []string{"RA-5", "SI-2"},
+		CMMC:       []string{"RA.L2-3.11.2", "SI.L1-3.14.1"},
+	}
+}
 
 //go:embed data/compliance.json
 var complianceCorpus []byte
@@ -177,6 +206,12 @@ func (h *Compliance) Lookup(cwes []string) (*types.Compliance, bool) {
 
 // Apply maps the finding's CWEs to controls. Annotation-only.
 func (h *Compliance) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bool) {
+	// A CVE-bearing finding maps to vulnerability-management controls even without a CWE (SCA/container CVE
+	// findings carry a CVE but no CWE, so they previously got compliance:none — proven on a real alpine
+	// scan). Grounded §8: a known CVE ↔ "manage/remediate technical vulnerabilities" is a real nexus.
+	if hasCVE(f) {
+		f.Compliance = mergeCompliance(f.Compliance, vulnMgmtControls())
+	}
 	if len(f.CWE) == 0 {
 		return f, nil, true
 	}

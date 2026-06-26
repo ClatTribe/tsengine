@@ -195,3 +195,21 @@ func TestCompliance_UnknownCWENoOp(t *testing.T) {
 		t.Error("unknown CWE → no annotation")
 	}
 }
+
+// A CVE finding with NO CWE (the SCA/container case from grype/trivy) must still map to vulnerability-
+// management controls — proven on a real alpine scan where such findings were getting compliance:none.
+func TestCompliance_CVEWithoutCWEMapsVulnMgmt(t *testing.T) {
+	h := NewCompliance()
+	out, _, _ := h.Apply(mkFinding("f-1", "grype::CVE-2025-60876", types.SeverityHigh)) // no CWE
+	if out.Compliance == nil {
+		t.Fatal("a CVE finding must map to vulnerability-management controls even without a CWE")
+	}
+	// the grounded vuln-mgmt nexus across frameworks
+	if len(out.Compliance.SOC2) == 0 || len(out.Compliance.PCI) == 0 || len(out.Compliance.ISO27001) == 0 || len(out.Compliance.NIST80053) == 0 {
+		t.Errorf("CVE should map to SOC2/PCI/ISO27001/NIST 800-53 vuln-mgmt controls, got %+v", out.Compliance)
+	}
+	// privacy/AI frameworks have no vuln-mgmt nexus → stay empty (honest, never padded)
+	if len(out.Compliance.GDPR) != 0 || len(out.Compliance.ISO42001) != 0 {
+		t.Errorf("vuln-mgmt must not pad privacy/AI frameworks, got GDPR=%v ISO42001=%v", out.Compliance.GDPR, out.Compliance.ISO42001)
+	}
+}
