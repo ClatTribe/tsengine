@@ -85,6 +85,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
                         )}
                       </div>
                       <p className="text-xs leading-relaxed text-muted">{c.monitors}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-faint">{c.evidence}</p>
                       <span className="mt-auto text-[11px] text-accent opacity-0 transition group-hover:opacity-100">
                         {connected ? "Connect another →" : "Connect →"}
                       </span>
