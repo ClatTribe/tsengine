@@ -52,6 +52,16 @@ var serviceMinSafe = map[string]minSafe{
 	"postgresql":   {"12", "PostgreSQL before major 12 is end-of-life"},
 	"isc bind":     {"9.18", "ISC BIND before 9.18 (the current stable) has known DoS CVEs"},
 	"bind":         {"9.18", "ISC BIND before 9.18 (the current stable) has known DoS CVEs"},
+	// Data stores + app servers that are high-impact when exposed and outdated (unauth access / RCE).
+	"redis":         {"7.0", "Redis before 7.0 is past support (6.x EOL); an exposed, outdated Redis is a common unauth-RCE/data-theft path"},
+	"apache tomcat": {"9.0", "Apache Tomcat before 9.0 (8.5 reached EOL) carries known RCE/deserialization CVEs (e.g. Ghostcat)"},
+	"tomcat":        {"9.0", "Apache Tomcat before 9.0 (8.5 reached EOL) carries known RCE/deserialization CVEs (e.g. Ghostcat)"},
+	"mongodb":       {"6.0", "MongoDB before 6.0 is past support (5.0 reached EOL); an exposed, outdated MongoDB risks unauth data access"},
+	"elasticsearch": {"7.17", "Elasticsearch before 7.17 (6.x EOL) has known RCE/info-disclosure CVEs and is dangerous when internet-exposed"},
+	"memcached":     {"1.6", "memcached before 1.6 is dated; an exposed instance enables UDP amplification + plaintext data theft"},
+	"dovecot":       {"2.3", "Dovecot before 2.3 is past mainstream support and has known IMAP/POP3 CVEs"},
+	"squid":         {"6.0", "Squid before 6.0 (5.x EOL) has many request-smuggling / overflow CVEs"},
+	"php":           {"8.1", "PHP before 8.1 is end-of-life (7.x and 8.0 receive no security fixes)"},
 }
 
 // Apply flags + bumps an outdated service. Annotation-only otherwise.
