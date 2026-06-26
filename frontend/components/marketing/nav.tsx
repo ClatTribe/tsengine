@@ -9,9 +9,18 @@ import {
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; desc: string; icon: typeof Bot };
+
+// Frameworks grouped by category for the mega-menu (Sprinto-style). Sourced from the single framework
+// registry, so it stays in lock-step with the 22 supported frameworks.
+const FW_CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government", "AI governance"];
+const FRAMEWORK_GROUPS = FW_CATEGORY_ORDER.map((cat) => ({
+  cat,
+  items: FRAMEWORKS.filter((f) => (FRAMEWORK_CATEGORY[f] ?? "Security & trust") === cat),
+})).filter((g) => g.items.length > 0);
 
 // Grouped product menu — the capability pages, behind one trigger so the header stays calm.
 const PRODUCT: Item[] = [
@@ -40,8 +49,8 @@ const DIRECT = [
 
 export function MarketingNav() {
   const [open, setOpen] = useState(false); // mobile sheet
-  const [menu, setMenu] = useState<"product" | "tools" | null>(null); // desktop dropdown
-  const [acc, setAcc] = useState<"product" | "tools" | null>(null); // mobile accordion
+  const [menu, setMenu] = useState<"product" | "frameworks" | "tools" | null>(null); // desktop dropdown
+  const [acc, setAcc] = useState<"product" | "frameworks" | "tools" | null>(null); // mobile accordion
   const path = usePathname();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -52,7 +61,7 @@ export function MarketingNav() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const openMenu = (m: "product" | "tools") => {
+  const openMenu = (m: "product" | "frameworks" | "tools") => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setMenu(m);
   };
@@ -78,6 +87,12 @@ export function MarketingNav() {
             items={PRODUCT}
             isOpen={menu === "product"}
             onEnter={() => openMenu("product")}
+            onLeave={scheduleClose}
+            path={path}
+          />
+          <FrameworksMenu
+            isOpen={menu === "frameworks"}
+            onEnter={() => openMenu("frameworks")}
             onLeave={scheduleClose}
             path={path}
           />
@@ -155,6 +170,9 @@ export function MarketingNav() {
             onNavigate={() => setOpen(false)}
           />
           <div className="mt-1 flex flex-col gap-0.5 border-t border-border/60 pt-2">
+            <Link href="/frameworks" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2.5 text-sm text-muted transition hover:bg-surface-2 hover:text-ink">
+              Frameworks ({FRAMEWORKS.length})
+            </Link>
             {DIRECT.map((l) => (
               <Link
                 key={l.href}
@@ -224,6 +242,64 @@ function Dropdown({
                 </span>
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// FrameworksMenu — a grouped mega-menu of every supported compliance framework (Sprinto-style), so a
+// buyer can find the framework their customer asks for straight from the header.
+function FrameworksMenu({
+  isOpen, onEnter, onLeave, path,
+}: {
+  isOpen: boolean;
+  onEnter: () => void;
+  onLeave: () => void;
+  path: string;
+}) {
+  const active = path.startsWith("/frameworks");
+  return (
+    <div className="relative" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <button
+        className={cn(
+          "flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition hover:bg-surface-2 hover:text-ink",
+          isOpen || active ? "text-ink" : "text-muted",
+        )}
+        aria-expanded={isOpen}
+      >
+        Frameworks
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
+      </button>
+      {isOpen && (
+        <div className="absolute left-0 top-full pt-2">
+          <div className="w-[44rem] overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-elevated animate-fade-rise">
+            <div className="grid grid-cols-3 gap-x-5 gap-y-4">
+              {FRAMEWORK_GROUPS.map(({ cat, items }) => (
+                <div key={cat}>
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">{cat}</div>
+                  <div className="flex flex-col gap-0.5">
+                    {items.map((f) => (
+                      <Link
+                        key={f}
+                        href={`/frameworks/${f}`}
+                        className={cn(
+                          "rounded-md px-2 py-1 text-sm text-muted transition hover:bg-surface-2 hover:text-ink",
+                          path === `/frameworks/${f}` && "bg-surface-2 text-ink",
+                        )}
+                      >
+                        {FRAMEWORK_LABEL[f] ?? f}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3">
+              <span className="text-xs text-muted">{FRAMEWORKS.length} frameworks + bring your own — mapped to your live findings.</span>
+              <Link href="/frameworks" className="text-xs font-medium text-accent hover:underline">View all frameworks →</Link>
+            </div>
           </div>
         </div>
       )}

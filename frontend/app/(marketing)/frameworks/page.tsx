@@ -6,13 +6,13 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
-  title: "Compliance Frameworks — SOC 2, ISO 27001, GDPR & 11 more | TensorShield",
+  title: "Compliance Frameworks — SOC 2, ISO 27001, HIPAA, CMMC, EU AI Act & more | TensorShield",
   description:
-    "TensorShield automates 14 compliance frameworks — SOC 2, ISO 27001, PCI-DSS, HIPAA, CIS, NIST CSF, GDPR, ISO 27701, NIST 800-53/171, CCPA, SOX, FedRAMP, and India DPDP — with continuous monitoring and signed evidence.",
+    "TensorShield automates 22 compliance frameworks — SOC 2, ISO 27001/27701/27018/22301, PCI-DSS, HIPAA, GLBA, SOX, CIS, NIST CSF/800-53/800-171, FedRAMP, CMMC, GDPR, CCPA, PIPEDA, India DPDP, ISO 42001, NIST AI RMF, and the EU AI Act — plus bring-your-own-framework, with continuous monitoring and signed evidence.",
   path: "/frameworks",
 });
 
-const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government"];
+const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government", "AI governance"];
 
 export default function FrameworksIndex() {
   const groups = CATEGORY_ORDER.map((cat) => ({
