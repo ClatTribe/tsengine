@@ -50,6 +50,16 @@ export default async function IncidentsPage() {
         </div>
       )}
 
+      {open.length > 0 && (
+        <p className="text-xs leading-relaxed text-muted">
+          Badge guide: <span className="font-medium text-pulse">verified</span> = reproduced with a safe
+          proof-of-concept · <span className="font-medium text-accent">corroborated</span> = two or more
+          independent tools agree · <span className="font-medium text-medium">confirm</span> = a single-tool
+          match to sanity-check before acting · <span className="font-medium text-critical">reaches …</span> = it
+          chains to a crown jewel, so the impact is bigger than its own severity.
+        </p>
+      )}
+
       <section>
         <SubHead>Open · needs attention</SubHead>
         {open.length === 0 ? (

@@ -60,6 +60,16 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
         </p>
       )}
 
+      {/* Plain-English legend for the header stats — the ICP is a non-security founder, so the
+          trust signals in the stat row shouldn't be jargon. */}
+      {!showingIgnored && !showingLive && (
+        <p className="text-xs leading-relaxed text-muted">
+          <span className="font-medium text-pulse">Multi-tool confirmed</span> = at least two independent scanners
+          flagged it (the strongest signal it&apos;s real, not a false alarm). <span className="font-medium text-critical">Live · exploitable</span> = we have
+          evidence it&apos;s reachable and abusable right now. <span className="font-medium text-critical">Under attack</span> = seen being exploited in your live traffic.
+        </p>
+      )}
+
       {/* Auto-triage funnel — the quantified noise reduction (% the engine handled for you) */}
       {!showingIgnored && !showingLive && <TriageFunnel f={funnel} />}
 
