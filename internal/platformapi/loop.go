@@ -24,6 +24,9 @@ type Decider interface {
 // state plus the auditor-facing compliance report.
 type Posturer interface {
 	Posture(ctx context.Context, tenantID, framework string) ([]platform.ControlState, error)
+	// Coverage is the honesty layer — how much of the framework automated scanning actually assessed, so
+	// the UI never presents a clean posture as "compliant".
+	Coverage(ctx context.Context, tenantID, framework string) (grc.Coverage, error)
 	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
 	Questionnaire(ctx context.Context, tenantID string) (*grc.Questionnaire, error)
 	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
@@ -144,9 +147,16 @@ func (d Deps) handlePosture(w http.ResponseWriter, r *http.Request, tenantID str
 // and just count it).
 type frameworkPosture struct {
 	Framework string `json:"framework"`
-	Total     int    `json:"total"`
+	Total     int    `json:"total"` // assessed controls (met+gap) — kept for back-compat
 	Met       int    `json:"met"`
 	Gap       int    `json:"gap"`
+	// Coverage honesty fields — so the UI shows "X of Y assessed" and never reads a clean posture as
+	// "compliant" (the no-false-compliant requirement).
+	Assessable  int     `json:"assessable"`   // controls our tooling CAN assess for this framework
+	NotAssessed int     `json:"not_assessed"` // assessable but no scan evidence yet
+	CoveragePct float64 `json:"coverage_pct"` // assessed / assessable, 0..100
+	Certifiable bool    `json:"certifiable"`  // ALWAYS false — automated scanning is not a certification
+	Readiness   string  `json:"readiness"`    // honest status line, never "Compliant"
 }
 
 // handlePostureSummary (GET /v1/posture) returns every framework's posture summary the tenant has
@@ -162,21 +172,19 @@ func (d Deps) handlePostureSummary(w http.ResponseWriter, r *http.Request, tenan
 	}
 	out := []frameworkPosture{}
 	for _, f := range grc.Frameworks {
-		cs, err := d.GRC.Posture(r.Context(), tenantID, f)
+		cov, err := d.GRC.Coverage(r.Context(), tenantID, f)
 		if err != nil {
 			respond(w, nil, err)
 			return
 		}
-		if len(cs) == 0 {
-			continue // a framework with no control state is omitted (consumers want only tracked ones)
+		if cov.AssessedControls == 0 {
+			continue // a framework with no assessed control is omitted (consumers want only tracked ones)
 		}
-		gap := 0
-		for _, c := range cs {
-			if c.State == platform.ControlGap {
-				gap++
-			}
-		}
-		out = append(out, frameworkPosture{Framework: f, Total: len(cs), Met: len(cs) - gap, Gap: gap})
+		out = append(out, frameworkPosture{
+			Framework: f, Total: cov.AssessedControls, Met: cov.Met, Gap: cov.Gaps,
+			Assessable: cov.AssessableControls, NotAssessed: cov.NotAssessed,
+			CoveragePct: cov.AutomatedCoveragePct, Certifiable: cov.Certifiable, Readiness: cov.Readiness,
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"frameworks": out})
 }
