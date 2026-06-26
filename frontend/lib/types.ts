@@ -514,6 +514,22 @@ export interface PostureSummary {
   frameworks: FrameworkPosture[];
 }
 
+// Compliance scoping — the connect-this-first readiness checklist (GET /v1/compliance/readiness).
+export interface IntegrationNeed {
+  category: string;
+  label: string;
+  connectors: string;
+  unlocks: string;
+  connected: boolean;
+}
+export interface ComplianceReadiness {
+  target_frameworks: string[];
+  integrations: IntegrationNeed[];
+  connected: number;
+  recommended: number;
+  note: string;
+}
+
 // grc.Report JSON (no json tags on the Go struct → PascalCase keys).
 export interface ReportEvidence { FindingID: string; Title: string; Severity: string }
 export interface ReportRow { ControlID: string; State: string; Gap: boolean; Evidence?: ReportEvidence[] }
