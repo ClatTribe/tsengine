@@ -308,6 +308,8 @@ export interface Incident {
   finding_id: string;
   verification?: string; // FP-control: verified | corroborated | pattern_match (carried from the finding)
   confidence?: number; // 0..1 quality scalar — so an unconfirmed alert never looks like a confirmed one
+  // blast_radius: read-time impact sizing — does this incident chain to a crown jewel, and how far away?
+  blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
   attacked?: boolean; // escalated because the issue is under attack in production
   opened_at: string;
   resolved_at?: string;

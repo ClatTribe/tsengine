@@ -1,11 +1,38 @@
 package platformapi
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
+
+// annotateBlastRadius stamps each incident with a TRANSIENT, read-time impact signal — whether its finding
+// sits on a cross-surface chain reaching a crown jewel (how big it can get). Computed from the correlate
+// chains (the same as /attack-paths), never persisted. Tenant-scoped + best-effort: a fetch error leaves
+// the incidents un-annotated (impact then reads as just severity), never failing the list.
+func (d Deps) annotateBlastRadius(ctx context.Context, tenantID string, incs []platform.Incident) {
+	if len(incs) == 0 {
+		return
+	}
+	assets, err := d.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		return
+	}
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	if err != nil {
+		return
+	}
+	br := crossdetect.BlastRadiusByFinding(assets, findings)
+	for i := range incs {
+		if r, ok := br[incs[i].FindingID]; ok {
+			rr := r
+			incs[i].BlastRadius = &rr
+		}
+	}
+}
 
 // handleSecurityByAsset returns the per-asset security posture — the "is THIS asset secure?" view a
 // daily-driver user needs. Tenant-scoped (§18.2 inv. 2): reads only this tenant's assets + findings +
