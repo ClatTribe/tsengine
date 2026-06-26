@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ShieldCheck, ArrowRight, FileText, CircleDashed, Plug, CircleCheck, Circle, Layers, Target } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/api";
+import { ASSET_TYPE_LABEL } from "@/lib/connectors";
 import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,8 @@ export default async function CompliancePage() {
   // One batched call for every framework's posture, then merged against the full FRAMEWORKS list
   // so untracked frameworks still render (as "monitored, no gaps yet") — replaces fanning out 14
   // per-framework requests.
-  const [summary, readiness] = await Promise.all([api.postureSummary(), api.complianceReadiness()]);
+  const [summary, readiness, byAsset] = await Promise.all([api.postureSummary(), api.complianceReadiness(), api.complianceByAsset()]);
+  const assetRows = byAsset.assets.filter((a) => a.attributed); // only assets we can ground a signal on
   const byFramework = new Map(summary.frameworks.map((p) => [p.framework, { total: p.total, met: p.met, gap: p.gap, assessable: p.assessable, notAssessed: p.not_assessed, coveragePct: p.coverage_pct, readiness: p.readiness } as Posture]));
   const entries = FRAMEWORKS.map((f) => ({ f, posture: byFramework.get(f) ?? null }));
 
@@ -110,6 +112,30 @@ export default async function CompliancePage() {
               <p className="mt-2 text-[11px] text-faint">We never mark these met from a scan — so the posture is never a false &ldquo;compliant&rdquo;.</p>
             </div>
           )}
+        </section>
+      )}
+
+      {/* Per-asset compliance — "is THIS asset compliant?" Grounded: only assets a finding's endpoint ties
+          to appear; never a fabricated per-asset verdict, never a bare "compliant". */}
+      {assetRows.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-faint">
+            By asset <span className="ml-1 text-faint/70">· {byAsset.attributed} of {byAsset.total} with an asset-level signal</span>
+          </h2>
+          <div className="overflow-hidden rounded-lg border border-border">
+            {assetRows.map((a) => (
+              <div key={a.asset_id} className="flex items-center gap-3 border-b border-border/60 bg-surface px-4 py-2.5 text-sm last:border-b-0">
+                <span className="mono min-w-0 flex-1 truncate text-ink" title={a.target}>{a.target || a.asset_id}</span>
+                <span className="hidden shrink-0 rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-faint sm:inline">{ASSET_TYPE_LABEL[a.type] ?? a.type}</span>
+                {a.gap_controls > 0 ? (
+                  <span className="shrink-0 text-xs text-high">{a.gap_controls} control gap{a.gap_controls === 1 ? "" : "s"}{a.frameworks.length > 0 ? ` · ${a.frameworks.length} framework${a.frameworks.length === 1 ? "" : "s"}` : ""}</span>
+                ) : (
+                  <span className="shrink-0 text-xs text-faint">no automated gaps</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-faint">Per-asset signal is grounded in findings tied to each asset; assets with no tied finding aren&apos;t shown and are never marked compliant.</p>
         </section>
       )}
 

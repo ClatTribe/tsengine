@@ -565,6 +565,25 @@ export interface ComplianceReadiness {
   note: string;
 }
 
+// Per-asset compliance signal ("is this asset compliant?") — grc.AssetPosture. Grounded: an asset is only
+// attributed when a finding's endpoint contains its target; status NEVER says bare "compliant".
+export interface AssetPosture {
+  asset_id: string;
+  target: string;
+  type: string;
+  attributed: boolean;
+  finding_count: number;
+  gap_controls: number;
+  frameworks: string[];
+  worst_severity: string;
+  status: string;
+}
+export interface ComplianceByAsset {
+  assets: AssetPosture[];
+  total: number;
+  attributed: number;
+}
+
 // grc.Report JSON (no json tags on the Go struct → PascalCase keys).
 export interface ReportEvidence { FindingID: string; Title: string; Severity: string }
 export interface ReportRow { ControlID: string; State: string; Gap: boolean; Evidence?: ReportEvidence[] }
