@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/detect"
@@ -129,6 +131,14 @@ func (d Deps) handleConnectCallback(w http.ResponseWriter, r *http.Request) {
 	scanned := 0
 	if d.Runner != nil {
 		scanned, _ = d.Runner.DiscoverAndScan(r.Context(), c)
+	}
+	// Browser-facing OAuth redirect: land the founder back in the app on a "✓ connected, scanning
+	// now" state instead of dumping a raw JSON blob in their browser (the post-connect "aha"). Only
+	// when an app base is configured; otherwise keep the JSON (tests / non-browser callers).
+	if d.AppURL != "" {
+		dest := fmt.Sprintf("%s/assets?connected=%s&scanned=%d", strings.TrimRight(d.AppURL, "/"), url.QueryEscape(kind), scanned)
+		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"connection_id": c.ID, "assets_scanned": scanned})
 }
