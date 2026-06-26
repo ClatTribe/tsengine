@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import type { SaaSApp, NonHumanIdentity } from "@/lib/types";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { FlagForReview } from "@/components/saas/flag-for-review";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +56,8 @@ export default async function SaaSAppsPage() {
                   <th className="py-2.5 pl-5 pr-2 font-medium">Identity</th>
                   <th className="px-2 py-2.5 font-medium">Type</th>
                   <th className="px-2 py-2.5 font-medium">Access</th>
-                  <th className="py-2.5 pr-5 font-medium text-right">Risk</th>
+                  <th className="px-2 py-2.5 font-medium text-right">Risk</th>
+                  <th className="py-2.5 pr-5 font-medium text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -89,7 +91,8 @@ export default async function SaaSAppsPage() {
                   <th className="px-2 py-2.5 font-medium">Access</th>
                   <th className="px-2 py-2.5 font-medium">Publisher</th>
                   <th className="px-2 py-2.5 font-medium text-right">Users</th>
-                  <th className="py-2.5 pr-5 font-medium text-right">Scopes</th>
+                  <th className="px-2 py-2.5 font-medium text-right">Scopes</th>
+                  <th className="py-2.5 pr-5 font-medium text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -169,7 +172,18 @@ function AppRow({ app }: { app: SaaSApp }) {
         )}
       </td>
       <td className="px-2 py-2.5 align-middle text-right text-sm tabular-nums">{app.count}</td>
-      <td className="py-2.5 pr-5 align-middle text-right text-xs text-muted">{app.scopes.length}</td>
+      <td className="px-2 py-2.5 align-middle text-right text-xs text-muted">{app.scopes.length}</td>
+      <td className="py-2.5 pr-5 align-middle text-right">
+        {app.sensitive || !app.verified ? (
+          <FlagForReview
+            subject="saas_app"
+            name={app.name}
+            note={`Third-party app "${app.name}" holds ${app.sensitive ? "sensitive (admin/directory/broad-data) access" : "access"}${app.verified ? "" : " and the publisher is unverified"} across ${app.count} user${app.count === 1 ? "" : "s"}. Please advise: keep, restrict, or revoke?`}
+          />
+        ) : (
+          <span className="text-xs text-faint">—</span>
+        )}
+      </td>
     </tr>
   );
 }
@@ -205,13 +219,24 @@ function IdentityRow({ id }: { id: NonHumanIdentity }) {
         <span className="text-[11px] capitalize text-ink">{id.privilege}</span>
         {id.users > 0 && <span className="ml-1.5 text-[11px] text-faint">· {id.users} user{id.users === 1 ? "" : "s"}</span>}
       </td>
-      <td className="py-2.5 pr-5 align-middle text-right">
+      <td className="px-2 py-2.5 align-middle text-right">
         <span
           className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium capitalize", RISK_TONE[id.risk] ?? RISK_TONE.low)}
           title={id.risk_reason}
         >
           {id.risk}
         </span>
+      </td>
+      <td className="py-2.5 pr-5 align-middle text-right">
+        {id.risk === "high" || id.risk === "medium" ? (
+          <FlagForReview
+            subject="identity"
+            name={id.name}
+            note={`Non-human identity "${id.name}" (${meta.label}) holds ${id.privilege} access${id.risk_reason ? ` — ${id.risk_reason}` : ""}. Please advise: keep, restrict, or revoke?`}
+          />
+        ) : (
+          <span className="text-xs text-faint">—</span>
+        )}
       </td>
     </tr>
   );

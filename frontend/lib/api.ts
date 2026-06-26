@@ -401,7 +401,7 @@ export const api = {
   deleteExclusion: (id: string) =>
     call<unknown>("/v1/exclusions/delete", { method: "POST", body: JSON.stringify({ id }) }),
 
-  // Request a human-expert review on a finding or action (the AI + human escalation).
+  // Request a human-expert review on a finding / action / risky SaaS app / non-human identity (the AI + human escalation).
   requestReview: (subject: string, subjectId: string, note: string) =>
     call<ReviewRequest>("/v1/reviews", {
       method: "POST",

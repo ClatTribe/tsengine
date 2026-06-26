@@ -26,8 +26,13 @@ func (d Deps) handleCreateReview(w http.ResponseWriter, r *http.Request, tenantI
 		writeJSON(w, http.StatusBadRequest, errBody("bad body"))
 		return
 	}
-	if body.Subject != "finding" && body.Subject != "action" {
-		writeJSON(w, http.StatusBadRequest, errBody(`subject must be "finding" or "action"`))
+	// A review can be opened on a finding, a proposed action, or a discovered-posture subject
+	// (a risky third-party SaaS app / non-human identity) so the founder can escalate "is this
+	// over-permissioned app OK?" to a human expert — the MSP/managed HITL the product provides.
+	switch body.Subject {
+	case "finding", "action", "saas_app", "identity":
+	default:
+		writeJSON(w, http.StatusBadRequest, errBody(`subject must be "finding", "action", "saas_app", or "identity"`))
 		return
 	}
 	if body.SubjectID == "" {
