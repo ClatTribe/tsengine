@@ -30,6 +30,7 @@ type Inventory struct {
 	Reaches    []InvReach    `json:"reaches,omitempty"` // network reachability (incl. internet exposure)
 	RunsAs     []InvRunsAs   `json:"runs_as,omitempty"`
 	Privescs   []InvPrivesc  `json:"privescs,omitempty"` // known IAM privesc edges (PMapper-style)
+	Triggers   []InvTrigger  `json:"triggers,omitempty"` // service-coupling: a service can invoke a compute resource
 }
 
 // InvResource is one resource or identity.
@@ -76,6 +77,15 @@ type InvPrivesc struct {
 	Principal string `json:"principal"`
 	Target    string `json:"target"`
 	Detail    string `json:"detail,omitempty"`
+}
+
+// InvTrigger is a service-coupling: Source (an API Gateway, ALB, EventBridge rule, S3 event source,
+// SNS/SQS, etc.) can invoke Compute (a Lambda, ECS task). The ingest source emits one only where the
+// integration/event-source is actually wired in the account, so the edge is config-grounded.
+type InvTrigger struct {
+	Source    string `json:"source"`  // the invoking service/resource (often public-reachable)
+	Compute   string `json:"compute"` // the compute it invokes
+	Condition string `json:"condition,omitempty"`
 }
 
 // ParseInventory decodes a normalized inventory JSON document. This is the
@@ -137,6 +147,8 @@ func (s *Snapshot) ToInventory() Inventory {
 			inv.RunsAs = append(inv.RunsAs, InvRunsAs{Compute: e.From, Principal: e.To})
 		case EdgePrivesc:
 			inv.Privescs = append(inv.Privescs, InvPrivesc{Principal: e.From, Target: e.To, Detail: e.Detail})
+		case EdgeTriggers:
+			inv.Triggers = append(inv.Triggers, InvTrigger{Source: e.From, Compute: e.To, Condition: e.Condition})
 		}
 	}
 	return inv
@@ -178,6 +190,9 @@ func Ingest(inv Inventory) *Snapshot {
 	}
 	for _, pe := range inv.Privescs {
 		s.AddEdge(Edge{From: pe.Principal, To: pe.Target, Kind: EdgePrivesc, Detail: pe.Detail})
+	}
+	for _, tr := range inv.Triggers {
+		s.AddEdge(Edge{From: tr.Source, To: tr.Compute, Kind: EdgeTriggers, Condition: tr.Condition})
 	}
 	return s
 }
