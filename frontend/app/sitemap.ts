@@ -13,6 +13,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // per-asset SEO landing pages (content in lib/asset-marketing.ts)
     "/cloud-security", "/api-security", "/web-application-security", "/code-security", "/container-security",
     "/mobile-app-security", "/network-security", "/dns-domain-security",
+    // free email-gated resources (lead magnets)
+    "/resources", "/resources/soc2-readiness-checklist", "/resources/security-questionnaire-template",
   ];
   const pages = staticPaths.map((p) => ({
     url: `${SITE_URL}${p}`,

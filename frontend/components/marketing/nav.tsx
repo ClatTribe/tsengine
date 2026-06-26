@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
-  AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles,
+  AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -39,6 +39,7 @@ const TOOLS: Item[] = [
   { href: "/scan", label: "Free domain scan", desc: "Spoofable? DMARC/SPF/TLS/headers in seconds", icon: Radar },
   { href: "/soc2-readiness", label: "SOC 2 readiness check", desc: "Where you'd fail the questionnaire — free", icon: ClipboardCheck },
   { href: "/sample-report", label: "Sample VAPT report", desc: "See exactly what you'd hand a buyer", icon: FileText },
+  { href: "/resources", label: "Free resources", desc: "SOC 2 checklist + questionnaire template", icon: BookOpen },
 ];
 
 const DIRECT = [
