@@ -19,8 +19,8 @@ const MODELS = [
     tag: "Done for you",
     title: "We run it for you",
     body: "No security team? We provide the named expert — a vCISO, an auditor liaison, a pentester — who handles the judgment calls on your behalf, every decision signed and accountable.",
-    cta: "Talk to us",
-    href: "/demo",
+    cta: "See managed",
+    href: "/managed",
     highlight: true,
   },
   {

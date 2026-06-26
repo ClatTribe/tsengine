@@ -43,6 +43,7 @@ const TOOLS: Item[] = [
 
 const DIRECT = [
   { href: "/pricing", label: "Pricing" },
+  { href: "/managed", label: "Managed" },
   { href: "/partners", label: "For MSPs" },
   { href: "/blog", label: "Blog" },
 ];
