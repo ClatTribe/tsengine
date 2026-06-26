@@ -480,6 +480,7 @@ When the host tracer's `Add(finding)` is called, hooks fire in this order. Each 
 
 ```
 1. pre_emission_fp_filter      → drops planted-decoy shapes, surfaces in l15_audit_log
+1b. service_eol                → flags an nmap-detected service whose version is below a curated minimum-safe version (OpenSSH/Apache/nginx/OpenSSL/Exim/…); bumps info→medium + annotates upgrade guidance. Grounded: acts only on a real nmap product+version it can match + parse; runs early so the bump reaches surface_priority/exploitability/compliance
 2. fp_filter.demote            → bumps severity per rule
 3. surface_priority.annotate   → annotates surface_priority block
 4. exploitability.annotate     → annotates exploitability block + may bump severity

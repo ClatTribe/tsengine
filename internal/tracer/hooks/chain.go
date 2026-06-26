@@ -16,6 +16,7 @@ import "github.com/ClatTribe/tsengine/internal/tracer"
 func DefaultPerFinding() []tracer.PerFindingHook {
 	return []tracer.PerFindingHook{
 		NewFPFilter(),
+		NewServiceEOL(), // bump outdated nmap-detected services BEFORE priority/exploitability/compliance see the severity
 		NewSurfacePriority(),
 		NewExploitability(),
 		NewThreatIntel(),

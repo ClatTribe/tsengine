@@ -111,8 +111,8 @@ func TestPostEmitVerifier_DisabledByDefault(t *testing.T) {
 
 func TestDefaultChains_Wired(t *testing.T) {
 	pf := DefaultPerFinding()
-	if len(pf) != 5 {
-		t.Errorf("per-finding chain: got %d hooks, want 5", len(pf))
+	if len(pf) != 6 {
+		t.Errorf("per-finding chain: got %d hooks, want 6", len(pf))
 	}
 	fin := DefaultFinalize()
 	if len(fin) != 4 {
@@ -121,7 +121,7 @@ func TestDefaultChains_Wired(t *testing.T) {
 	// Confirm they satisfy the tracer interfaces (compile-time + names).
 	var _ []tracer.PerFindingHook = pf
 	var _ []tracer.FinalizeHook = fin
-	wantPF := []string{"fp_filter", "surface_priority", "exploitability", "threat_intel", "compliance"}
+	wantPF := []string{"fp_filter", "service_eol", "surface_priority", "exploitability", "threat_intel", "compliance"}
 	for i, h := range pf {
 		if h.Name() != wantPF[i] {
 			t.Errorf("per-finding[%d]: got %q, want %q", i, h.Name(), wantPF[i])
