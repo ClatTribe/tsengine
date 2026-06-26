@@ -42,9 +42,11 @@ func TestPlanAnchors_TrivyImageMode(t *testing.T) {
 			if d.Args["mode"] != "image" {
 				t.Errorf("trivy mode: %v, want image", d.Args["mode"])
 			}
-			// Base-layer skip wired (A5).
-			if iu, _ := d.Args["ignore_unfixed"].(bool); !iu {
-				t.Error("trivy should set ignore_unfixed for container base-layer skip")
+			// trivy must NOT skip unfixed — it scans the full set like grype so the two SCA tools agree and
+			// the corroborator can mark container CVEs `corroborated` (a real alpine scan proved ignore_unfixed
+			// made trivy=0 while grype=6, breaking corroboration; grype surfaces unfixed anyway).
+			if iu, _ := d.Args["ignore_unfixed"].(bool); iu {
+				t.Error("trivy should NOT set ignore_unfixed — it breaks trivy↔grype corroboration on container CVEs")
 			}
 		}
 	}

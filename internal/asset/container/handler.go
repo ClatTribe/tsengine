@@ -41,10 +41,13 @@ func (h *Handler) PlanAnchors(target types.Asset) []asset.Dispatch {
 		switch t.Name() {
 		case "trivy":
 			args["mode"] = "image"
-			// Base-layer skip (A5): surface only fixable CVEs so a
-			// customer's app-fixable vulns stand apart from the unfixable
-			// base-image baseline noise (strix Q5.42).
-			args["ignore_unfixed"] = true
+			// trivy scans the FULL vuln set (incl. unfixed), matching grype — so the two SCA tools agree on
+			// the same CVEs and the L1.5 corroborator can mark them `corroborated` (the FP-control signal a
+			// daily-driver user relies on). A real alpine scan proved the old `ignore_unfixed=true` made
+			// trivy report 0 while grype reported 6 — disjoint sets that NEVER corroborated. It also didn't
+			// reduce user-visible noise (grype already surfaces unfixed CVEs); the fixable-vs-unfixed
+			// distinction belongs in surface_priority/FP annotation, not a per-tool scanner drop that breaks
+			// cross-tool agreement.
 		}
 		out = append(out, asset.Dispatch{Tool: t, Args: args})
 	}
