@@ -8,9 +8,10 @@
 # has no security-tool binaries by design), the source tree is bind-mounted READ-ONLY, and nothing
 # leaves the box.
 #
-# Asset types proven here run with no creds: container_image (a public image) + repository (a
-# generated tree). web/api/ip/domain use the same sandbox but need a reachable target; cloud needs
-# read-only cloud creds; identity + SaaS posture are host-side (see operate / the SSPM ingest).
+# Asset types proven here run with no creds: container_image (a public image), repository (a generated
+# tree), web_application (a throwaway local site with a real /.git/ misconfig), and api (a throwaway
+# VAmPI with a 16-operation OpenAPI spec). ip/domain use the same sandbox over a reachable target; cloud
+# needs read-only cloud creds; identity + SaaS posture are host-side (see operate / the SSPM ingest).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -85,5 +86,27 @@ else
   echo "   skipped — could not start the local target (port 8088 busy or nginx:alpine unavailable)."
 fi
 
+# api is spec-ingest→fan-out (openapi_spec_ingest → schemathesis + nuclei per method, kiterunner for shadow
+# routes). It needs a reachable API with an OpenAPI spec. Stand up a throwaway VAmPI (a deliberately-vulnerable
+# API with a 16-operation spec — the proven api target, see docs/per-asset-gates.md), scan it through the
+# sandbox, tear it down. Skipped if the (heavy) VAmPI image can't be pulled — we never fake a result.
 echo
-echo "✓ secure-Docker scan proven for container_image + repository + web_application — scanners ran in the sandbox, no creds."
+echo "════ api — a throwaway VAmPI (16-operation OpenAPI spec, no creds) ════"
+trap 'rm -rf "$REPO" "$WEB"; docker rm -f tsengine-demo-webtarget tsengine-demo-vampi >/dev/null 2>&1 || true' EXIT
+if docker run -d --rm --name tsengine-demo-vampi -p 5077:5000 erev0s/vampi:latest >/dev/null 2>&1; then
+  # wait for the spec to be served before scanning (never scan a not-yet-ready target)
+  for _ in $(seq 1 20); do curl -fsS --max-time 3 http://localhost:5077/openapi.json >/dev/null 2>&1 && break; sleep 2; done
+  OUT=$(./bin/tsengine scan --asset api --target http://localhost:5077 --image "$SANDBOX_IMAGE" --timeout 4m 2>/tmp/demo-scan-api.log)
+  echo "   findings: $(count "$OUT")   (openapi_spec_ingest → schemathesis + nuclei fan-out; see /tmp/demo-scan-api.log)"
+  sample "$OUT"
+  ANCHORS=$(python3 -c "import json,sys;print(','.join(json.load(open(sys.argv[1])).get('anchors_fired') or []))" "$OUT" 2>/dev/null || true)
+  echo "   anchors fired: ${ANCHORS:-?}"
+  docker rm -f tsengine-demo-vampi >/dev/null 2>&1 || true
+  echo "   (the spec-driven fan-out fires; VAmPI's deep BOLA/BFLA vulns need the consent-gated apiauthz prober)"
+else
+  echo "   skipped — could not start VAmPI (erev0s/vampi unavailable or port 5077 busy)."
+fi
+
+echo
+echo "✓ secure-Docker scan proven for container_image + repository + web_application + api — scanners ran in the sandbox, no creds."
+echo "  (ip/domain use the same sandbox over a reachable target; cloud_account needs read-only cloud creds; identity + SaaS posture are host-side.)"
