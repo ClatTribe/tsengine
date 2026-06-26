@@ -343,7 +343,14 @@ func (d Deps) handleFindings(w http.ResponseWriter, r *http.Request, tenantID st
 	f, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{
 		Severity: severityParam(r), Status: r.URL.Query().Get("status"),
 	})
-	respond(w, f, err)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	// Annotate each finding with its blast radius (impact) so the report surface can show "reaches a crown
+	// jewel" — the same signal incidents carry (#563). The FP-control (verification/confidence) is already on
+	// the finding.
+	respond(w, d.annotateFindingsImpact(r.Context(), tenantID, f), nil)
 }
 
 func (d Deps) handleEngagements(w http.ResponseWriter, r *http.Request, tenantID string) {

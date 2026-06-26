@@ -7,7 +7,34 @@ import (
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// findingView is a finding plus its transient impact annotation for the report surface (the /findings list):
+// whether it sits on a chain reaching a crown jewel (how big it can get). Embeds the finding so every native
+// field is preserved; blast_radius is added, omitempty so a contained finding looks unchanged.
+type findingView struct {
+	types.Finding
+	BlastRadius *platform.BlastRadius `json:"blast_radius,omitempty"`
+}
+
+// annotateFindingsImpact wraps each finding with its blast radius (read-time, from the correlate chains —
+// the same as /attack-paths). Best-effort: an assets fetch error just yields un-annotated views.
+func (d Deps) annotateFindingsImpact(ctx context.Context, tenantID string, findings []types.Finding) []findingView {
+	var br map[string]platform.BlastRadius
+	if assets, err := d.Store.ListAssets(ctx, tenantID); err == nil {
+		br = crossdetect.BlastRadiusByFinding(assets, findings)
+	}
+	out := make([]findingView, len(findings))
+	for i := range findings {
+		out[i] = findingView{Finding: findings[i]}
+		if r, ok := br[findings[i].ID]; ok {
+			rr := r
+			out[i].BlastRadius = &rr
+		}
+	}
+	return out
+}
 
 // annotateBlastRadius stamps each incident with a TRANSIENT, read-time impact signal — whether its finding
 // sits on a cross-surface chain reaching a crown jewel (how big it can get). Computed from the correlate
