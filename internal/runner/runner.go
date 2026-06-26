@@ -20,6 +20,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/osint"
 	"github.com/ClatTribe/tsengine/internal/sspm"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -69,6 +70,12 @@ type Service struct {
 	// GitHubAPIBase overrides the GitHub REST base for the autonomous SaaS-posture sync
 	// (default https://api.github.com). Set only in tests (a fake API server).
 	GitHubAPIBase string
+
+	// OSINTFetcher, when set, makes external-exposure OSINT a CONTINUOUSLY-monitored surface:
+	// each monitoring pass runs the keyless Certificate-Transparency collector over the tenant's
+	// domains (the same crt.sh path as POST /v1/osint/scan), so a newly-exposed host appears as a
+	// finding and the Detector opens an incident for it. nil → no continuous OSINT (manual-scan only).
+	OSINTFetcher osint.Fetcher
 
 	// optional autonomous-loop collaborators
 	GRC          *grc.GRC         // fold each finding into the compliance system-of-record
@@ -193,6 +200,11 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// posture findings flow into incidents like any other. Best-effort: a fetch failure (e.g.
 	// insufficient scope) is logged + skipped, never failing the pass or falsely resolving.
 	current = append(current, s.syncSaaSPosture(ctx, tenantID)...)
+	// Autonomous external-exposure (OSINT): each pass, run the keyless Certificate-Transparency
+	// collector over the tenant's domains so a newly-exposed host becomes a finding the Detector
+	// turns into an incident ("new exposed host → alert" — the EASM continuous-monitoring promise).
+	// Best-effort + grounded: nil fetcher / no domains → nil; a clean footprint adds nothing.
+	current = append(current, s.syncOSINT(ctx, tenantID)...)
 	// continuous-monitoring: reconcile this pass's findings into incidents (what's NEW,
 	// what's RESOLVED since last pass). Runs over the whole tenant — a full pass is the
 	// authoritative present state. Only when every asset scanned cleanly, so a partial
@@ -286,6 +298,43 @@ func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) []types.
 	findings := sspm.AssessGitHubOrg(snap, sspm.Options{})
 	for i := range findings {
 		findings[i].ID = s.NewID()
+		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
+	}
+	return findings
+}
+
+// syncOSINT runs the keyless Certificate-Transparency collector (crt.sh) over the tenant's domain
+// assets each monitoring pass and assesses the result into grounded external-exposure findings. This
+// turns OSINT from a manual-button scan into a continuously-monitored surface: the returned findings
+// flow into the Detector, so a host that newly appears in CT (e.g. a forgotten staging subdomain)
+// opens an incident — the EASM "new exposure → alert" behaviour, for free, via the existing machinery.
+// Best-effort + grounded (§10): no fetcher wired, no domain assets, or a clean footprint → no findings.
+func (s *Service) syncOSINT(ctx context.Context, tenantID string) []types.Finding {
+	if s.Store == nil || s.NewID == nil || s.OSINTFetcher == nil {
+		return nil
+	}
+	assets, err := s.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		return nil
+	}
+	known := map[string]bool{}
+	var domains []string
+	for _, a := range assets {
+		host := strings.ToLower(strings.TrimRight(strings.TrimPrefix(strings.TrimPrefix(a.Target, "https://"), "http://"), "/"))
+		if host == "" {
+			continue
+		}
+		known[host] = true
+		if a.Type == string(types.AssetDomain) {
+			domains = append(domains, host)
+		}
+	}
+	if len(domains) == 0 {
+		return nil // nothing to monitor externally (no domain assets) — never a false finding
+	}
+	snap := osint.CollectCT(ctx, tenantID, domains, known, s.OSINTFetcher)
+	findings := osint.Assess(snap, osint.Options{NewID: s.NewID})
+	for i := range findings {
 		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
 	}
 	return findings
