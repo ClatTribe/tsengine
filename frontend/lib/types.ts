@@ -576,6 +576,16 @@ export interface ComplianceReport {
   Rows: ReportRow[] | null; // Go marshals an empty slice as null — callers must guard
   MetCount: number;
   GapCount: number;
+  // Coverage is the honesty layer (Go field has no json tag → PascalCase key; inner fields are snake_case).
+  Coverage?: {
+    assessable_controls: number;
+    assessed_controls: number;
+    not_assessed: number;
+    gaps: number;
+    automated_coverage_pct: number;
+    certifiable: boolean;
+    readiness: string;
+  };
   Signer?: string;
   SHA256?: string;
 }
