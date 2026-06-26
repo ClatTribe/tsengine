@@ -51,17 +51,28 @@ it serve the ICP (founder needing security + compliance; MSP/managed expert owni
    end-to-end on an 8B model; open-ended exploitation (webagent) drives the loop but needs a bigger
    model/budget to land a proof.
 
-## Genuine enhancement gaps (optional LLM lift on a deterministic surface)
+## Per-asset agent coverage (the asset-type lens)
 
-These aren't broken wiring — they're places an agent would *add* founder-facing value:
+| Asset | L2 agent | Status |
+|---|---|---|
+| web_application / api | webagent (XBOW) + ModeDeep D-agent + **apiauthz discovery** | ✓ (#509, #525) |
+| cloud_account | cloudagent | ✓ (#510) |
+| repository | **AI autofix** (LLM code patch) + the L2 Lead translator | ✓ (#523/#524) |
+| container_image / ip_address / domain / mobile_application | L1 detection + the L2 Lead translator (`/brief`) | deterministic-detection assets; the generic translator + autofix cover them (a dedicated deep agent is low-value here) |
 
-1. **Compliance remediation guidance** (most ICP-aligned) — when a control is a GAP, an agent that proposes
-   concrete, tech-stack-aware fix steps grounded in the citing findings. The vCISO "how do I fix CC7.2?".
-2. **Issue triage narrative** — per-issue "why this matters / likely FP / suggested priority" (partly
-   covered by `/brief`).
-3. **Incident root-cause narrative** — the A-RSP future slice (CLAUDE.md notes it).
-4. **API-security discovery** — an LLM that proposes untested BOLA/BFLA operations beyond the configured set.
-5. **Dashboard attack-narrative card** — an LLM "your top attack chain in one paragraph".
+Cross-cutting agents: the L2 Lead translator (`/brief`, all assets), the vCISO compliance-remediation
+agent (all frameworks), AI autofix (any code finding).
 
-All are grounded-by-construction (cite findings/controls) and would ride the same agent-proposes →
-named-human-disposes model.
+## Enhancement gaps — status
+
+These were *optional LLM lifts* on deterministic surfaces; the top ones are now built:
+
+1. ✅ **Compliance remediation guidance** (most ICP-aligned) — built (#521/#522): the vCISO "how do I fix CC7.2?".
+2. ✅ **AI autofix** — built (#523/#524): LLM code patch for a finding (Snyk/Aikido/Copilot parity).
+3. ✅ **API BOLA/BFLA discovery** — built (#525): LLM proposes authz tests, the deterministic validator confirms.
+4. Issue-triage narrative — partly covered by `/brief` (lower value).
+5. Incident root-cause narrative — the A-RSP future slice (CLAUDE.md notes it).
+6. Dashboard attack-narrative card — nice-to-have.
+
+All built agents are grounded-by-construction (cite findings/controls/operations) and ride the
+agent-proposes → named-human-disposes model. The remaining items are genuinely lower-value.
