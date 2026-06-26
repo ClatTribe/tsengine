@@ -794,7 +794,7 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 > **Per-asset gate/bucket status** (what runs securely via Docker on one machine, what we fixed
 > vs. what's customer-config vs. operator, and the honest credential-gated boundary):
 > [docs/per-asset-gates.md](docs/per-asset-gates.md). Reproduce the no-creds proofs with
-> `make demo-scan-asset` (container + repository + web_application).
+> `make demo-scan-asset` (container + repository + web_application + api/VAmPI).
 
 | Phase | Scope | Status |
 |---|---|---|
