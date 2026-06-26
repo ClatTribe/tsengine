@@ -123,6 +123,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/settings/compliance-scope", d.auth(d.handleGetComplianceScope))            // target frameworks + applicability profile (scope before analysis)
 	mux.HandleFunc("PUT /v1/settings/compliance-scope", d.auth(d.handlePutComplianceScope))            // set target frameworks + profile
 	mux.HandleFunc("GET /v1/compliance/readiness", d.auth(d.handleComplianceReadiness))                // connect-this-first checklist for the target frameworks
+	mux.HandleFunc("GET /v1/compliance/by-asset", d.auth(d.handleComplianceByAsset))                   // per-asset compliance signal ("is this asset compliant?") — grounded, never false-compliant
 	mux.HandleFunc("GET /v1/custom-frameworks", d.auth(d.handleListCustomFrameworks))                  // bring-your-own-framework: list
 	mux.HandleFunc("POST /v1/custom-frameworks", d.auth(d.handleAddCustomFramework))                   // define a custom framework (controls map to findings/CWEs/built-in controls)
 	mux.HandleFunc("DELETE /v1/custom-frameworks/{id}", d.auth(d.handleDeleteCustomFramework))         // remove a custom framework
