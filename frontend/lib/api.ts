@@ -195,7 +195,7 @@ export const api = {
   // Compliance scoping (before-analysis): the connect-this-first readiness checklist for the target
   // frameworks — what to wire up so we can actually assess, reinforcing no-false-compliant.
   complianceReadiness: () =>
-    safe<ComplianceReadiness>("/v1/compliance/readiness", { target_frameworks: [], integrations: [], connected: 0, recommended: 0, note: "" }),
+    safe<ComplianceReadiness>("/v1/compliance/readiness", { target_frameworks: [], integrations: [], manual_areas: [], connected: 0, recommended: 0, note: "" }),
   report: (framework: string) => safe<ComplianceReport | null>(`/v1/compliance/${framework}/report?format=json`, null),
   questionnaire: () => safe<Questionnaire | null>("/v1/questionnaire", null),
   reviews: () => safe<ReviewRequest[]>("/v1/reviews", []),

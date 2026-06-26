@@ -37,3 +37,24 @@ func has(xs []string, w string) bool {
 	}
 	return false
 }
+
+func TestScopeReadiness_NamesUnautomatedAssetAreas(t *testing.T) {
+	r := ScopeReadiness([]string{"soc2"}, map[string]bool{"identity": true, "cloud": true, "code": true, "saas": true, "email": true, "web_api": true})
+	// Even fully connected, the manual areas (endpoint/logging/backup/HR) must be named + the note must
+	// disclaim certification — the asset-type-coverage half of no-false-compliant.
+	if len(r.ManualAreas) < 4 {
+		t.Errorf("manual control areas (endpoint/logging/backup/hr) must be surfaced, got %d", len(r.ManualAreas))
+	}
+	if !containsWord(r.Note, "not a certification") {
+		t.Errorf("even fully connected, the note must disclaim certification: %q", r.Note)
+	}
+	cats := map[string]bool{}
+	for _, m := range r.ManualAreas {
+		cats[m.Category] = true
+	}
+	for _, want := range []string{"endpoint", "logging", "backup", "hr"} {
+		if !cats[want] {
+			t.Errorf("manual area %q missing", want)
+		}
+	}
+}

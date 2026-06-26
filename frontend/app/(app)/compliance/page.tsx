@@ -53,11 +53,11 @@ export default async function CompliancePage() {
 
       {/* Connect-this-first readiness checklist — what the customer must integrate before the posture can
           be read as anything close to compliant (the no-false-compliant scoping ask). */}
-      {readiness.recommended > 0 && readiness.connected < readiness.recommended && (
+      {readiness.recommended > 0 && (
         <section className="rounded-lg border border-accent/30 bg-accent-soft/20 p-4">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Plug className="h-4 w-4 text-accent" />
-            Connect your systems to assess compliance
+            What we can assess for compliance
             <span className="ml-auto text-xs text-muted">{readiness.connected} of {readiness.recommended} connected</span>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted">{readiness.note}</p>
@@ -73,9 +73,29 @@ export default async function CompliancePage() {
               </div>
             ))}
           </div>
-          <Link href="/connect" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
-            Connect a system <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          {readiness.connected < readiness.recommended && (
+            <Link href="/connect" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
+              Connect a system <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
+
+          {readiness.manual_areas?.length > 0 && (
+            <div className="mt-4 border-t border-border/60 pt-3">
+              <div className="text-xs font-medium text-muted">Not automated — these require manual evidence + auditor attestation</div>
+              <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                {readiness.manual_areas.map((m) => (
+                  <div key={m.category} className="flex items-start gap-2 text-xs">
+                    <CircleDashed className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint" />
+                    <span>
+                      <span className="text-muted">{m.label}</span>
+                      <span className="block text-[11px] text-faint">{m.unlocks}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-faint">We never mark these met from a scan — so the posture is never a false &ldquo;compliant&rdquo;.</p>
+            </div>
+          )}
         </section>
       )}
 
