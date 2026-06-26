@@ -1,6 +1,7 @@
 package cloudgraph
 
 import (
+	"github.com/ClatTribe/tsengine/internal/azureiam"
 	"github.com/ClatTribe/tsengine/internal/cloudiam"
 	"github.com/ClatTribe/tsengine/internal/gcpiam"
 )
@@ -60,6 +61,26 @@ func (s *Snapshot) assumeAuthorized(from, to string) bool {
 		}
 		for _, perm := range []string{"iam.serviceAccounts.getAccessToken", "iam.serviceAccounts.actAs"} {
 			if allowed, cond := gcpiam.Permits(gcpiam.Request{Member: member, Permission: perm}, ps); allowed || cond {
+				return true
+			}
+		}
+		return false
+	}
+	// Azure: the assume/escalate analogue is "can the source take control of the target identity/scope?" —
+	// gated by the target's attached RBAC policy. We test a representative privileged action (assign a role
+	// on the target = escalate to own it); definitively not granted → drop the over-approximated edge. Same
+	// conservatism as the AWS/GCP paths (unparseable/uncertain → keep).
+	if pol := tn.Attrs["azure_rbac_policy"]; pol != "" {
+		ps, ok := azureiam.ParseScopePolicy([]byte(pol))
+		if !ok {
+			return true
+		}
+		principal := from
+		if fn := s.Node(from); fn != nil && fn.Attrs != nil && fn.Attrs["principal"] != "" {
+			principal = fn.Attrs["principal"]
+		}
+		for _, act := range []string{"Microsoft.Authorization/roleAssignments/write", "Microsoft.ManagedIdentity/userAssignedIdentities/assign/action"} {
+			if allowed, cond := azureiam.Permits(azureiam.Request{Principal: principal, Action: act}, ps); allowed || cond {
 				return true
 			}
 		}

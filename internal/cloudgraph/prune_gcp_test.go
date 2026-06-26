@@ -45,3 +45,30 @@ func TestPrune_GCPNoPolicyKeepsEdge(t *testing.T) {
 		t.Fatalf("no attached policy → edge kept, got %d edges", len(s.Edges))
 	}
 }
+
+// Azure RBAC pruning: an over-approximated assume/escalate edge to a target identity is DROPPED when the
+// target's RBAC policy grants the source no privileged (role-assignment) action, and KEPT when it does.
+func TestPrune_AzureEscalationDeniedDropsEdge(t *testing.T) {
+	// The policy makes the attacker only a Reader on the target → no escalate/assign action.
+	pol := `{"assignments":[{"role":"Reader","principals":["user:attacker@acme.com"]}]}`
+	s := New("sub", "azure")
+	s.AddNode(&Node{ID: "user:attacker@acme.com", Kind: KindPrincipal})
+	s.AddNode(&Node{ID: "mi", Kind: KindPrincipal, Type: "ManagedIdentity", Attrs: map[string]string{"azure_rbac_policy": pol}})
+	s.AddEdge(Edge{From: "user:attacker@acme.com", To: "mi", Kind: EdgeAssumeRole})
+	s.PruneUnauthorized()
+	if len(s.Edges) != 0 {
+		t.Fatalf("a Reader can't escalate to the identity → edge pruned, got %d edges", len(s.Edges))
+	}
+}
+
+func TestPrune_AzureEscalationAllowedKeepsEdge(t *testing.T) {
+	pol := `{"assignments":[{"role":"Owner","principals":["user:attacker@acme.com"]}]}`
+	s := New("sub", "azure")
+	s.AddNode(&Node{ID: "user:attacker@acme.com", Kind: KindPrincipal})
+	s.AddNode(&Node{ID: "mi", Kind: KindPrincipal, Attrs: map[string]string{"azure_rbac_policy": pol}})
+	s.AddEdge(Edge{From: "user:attacker@acme.com", To: "mi", Kind: EdgeAssumeRole})
+	s.PruneUnauthorized()
+	if len(s.Edges) != 1 {
+		t.Fatalf("an Owner can escalate → edge kept, got %d edges", len(s.Edges))
+	}
+}
