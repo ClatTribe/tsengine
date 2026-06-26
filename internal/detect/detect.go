@@ -167,6 +167,9 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 			ID: d.id("inc"), TenantID: tenantID, Key: key, RuleID: f.RuleID,
 			Title: title, Severity: string(f.Severity), Status: platform.IncidentOpen,
 			FindingID: f.ID, Attacked: attacked[key], OpenedAt: d.now(),
+			// Carry the FP-control signal so the alert shows confirmed-vs-unconfirmed, never presenting a
+			// low-confidence pattern_match as a verified incident (the "no high false positive" rule).
+			Verification: string(f.VerificationStatus), Confidence: f.Confidence,
 		}
 		d.record("incident_opened", inc)
 		if err := d.Store.PutIncident(ctx, inc); err != nil {

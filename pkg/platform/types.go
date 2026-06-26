@@ -553,6 +553,13 @@ type Incident struct {
 	Severity  string `json:"severity"`
 	Status    string `json:"status"`     // IncidentOpen | IncidentResolved
 	FindingID string `json:"finding_id"` // the finding that opened it
+	// Verification + Confidence are the FP-control signal carried from the finding that opened this
+	// incident (§11 hook 10). So an alert shows whether it's a verified exploit, corroborated by ≥2
+	// independent tools, or an unconfirmed pattern_match the user should confirm — we never present a
+	// low-confidence finding as a confirmed incident (the "no high false positive" rule). Empty/0 when
+	// the opening finding carried no quality signal.
+	Verification string  `json:"verification,omitempty"`
+	Confidence   float64 `json:"confidence,omitempty"`
 	// Attacked marks an incident opened/escalated because the issue is observed under
 	// attack in production (a runtime-protection signal, ADR-0007 Phase 0b) — escalated
 	// regardless of the severity floor, since a live exploit attempt is itself urgent.
