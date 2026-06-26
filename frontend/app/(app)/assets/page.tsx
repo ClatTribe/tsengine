@@ -65,9 +65,15 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         </div>
       )}
       {connected && (
-        <div className="flex items-center gap-2 rounded-lg border border-pulse/30 bg-pulse/10 px-3 py-2 text-sm text-pulse">
-          <CheckCircle2 className="h-4 w-4" />
-          {kindLabel(connected)} connected — the agent is scanning{Number(scanned) > 0 ? ` ${scanned} ${Number(scanned) === 1 ? "asset" : "assets"}` : " your assets"} now. Your compliance posture updates as findings land.
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border border-pulse/30 bg-pulse/10 px-3 py-2 text-sm text-pulse">
+          <span className="inline-flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            {kindLabel(connected)} connected — the agent is scanning{Number(scanned) > 0 ? ` ${scanned} ${Number(scanned) === 1 ? "asset" : "assets"}` : " your assets"} now. Findings land in a few minutes.
+          </span>
+          <span className="ml-auto inline-flex items-center gap-3 text-[13px] font-medium">
+            <Link href="/issues" className="inline-flex items-center gap-0.5 hover:underline">Review issues <ArrowUpRight className="h-3.5 w-3.5" /></Link>
+            <Link href="/compliance" className="inline-flex items-center gap-0.5 hover:underline">Compliance posture <ArrowUpRight className="h-3.5 w-3.5" /></Link>
+          </span>
         </div>
       )}
 
