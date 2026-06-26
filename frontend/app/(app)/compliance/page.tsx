@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, FileText, CircleDashed } from "lucide-react";
+import { ShieldCheck, ArrowRight, FileText, CircleDashed, Plug, CircleCheck, Circle } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/api";
 import { PageIntro } from "@/components/ui/page-intro";
 
@@ -15,7 +15,7 @@ export default async function CompliancePage() {
   // One batched call for every framework's posture, then merged against the full FRAMEWORKS list
   // so untracked frameworks still render (as "monitored, no gaps yet") — replaces fanning out 14
   // per-framework requests.
-  const summary = await api.postureSummary();
+  const [summary, readiness] = await Promise.all([api.postureSummary(), api.complianceReadiness()]);
   const byFramework = new Map(summary.frameworks.map((p) => [p.framework, { total: p.total, met: p.met, gap: p.gap, assessable: p.assessable, notAssessed: p.not_assessed, coveragePct: p.coverage_pct, readiness: p.readiness } as Posture]));
   const entries = FRAMEWORKS.map((f) => ({ f, posture: byFramework.get(f) ?? null }));
 
@@ -50,6 +50,34 @@ export default async function CompliancePage() {
         <span><span className="text-base font-semibold text-ink">{tracked}</span> <span className="text-muted">with live control state</span></span>
         <span><span className={`text-base font-semibold ${withGaps > 0 ? "text-high" : "text-pulse"}`}>{withGaps}</span> <span className="text-muted">with open gaps</span></span>
       </div>
+
+      {/* Connect-this-first readiness checklist — what the customer must integrate before the posture can
+          be read as anything close to compliant (the no-false-compliant scoping ask). */}
+      {readiness.recommended > 0 && readiness.connected < readiness.recommended && (
+        <section className="rounded-lg border border-accent/30 bg-accent-soft/20 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Plug className="h-4 w-4 text-accent" />
+            Connect your systems to assess compliance
+            <span className="ml-auto text-xs text-muted">{readiness.connected} of {readiness.recommended} connected</span>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted">{readiness.note}</p>
+          <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
+            {readiness.integrations.map((it) => (
+              <div key={it.category} className="flex items-start gap-2 text-xs">
+                {it.connected ? <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-pulse" /> : <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint" />}
+                <span>
+                  <span className={it.connected ? "text-ink" : "text-muted"}>{it.label}</span>
+                  {!it.connected && <span className="text-faint"> — connect {it.connectors}</span>}
+                  <span className="block text-[11px] text-faint">{it.unlocks}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <Link href="/connect" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
+            Connect a system <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </section>
+      )}
 
       {groups.map(({ cat, items }) => (
         <section key={cat} className="space-y-2">
