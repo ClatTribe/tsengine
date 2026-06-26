@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReadiness, ComplianceReport, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -192,6 +192,16 @@ export const api = {
   // All-framework posture summary in ONE call (replaces fanning out 14 per-framework posture
   // requests on the dashboard/compliance/reports pages).
   postureSummary: () => safe<PostureSummary>("/v1/posture", { frameworks: [] }),
+  // Compliance scope (before-analysis): the customer's target frameworks + applicability profile.
+  complianceScope: () =>
+    safe<ComplianceScope>("/v1/settings/compliance-scope", {
+      target_frameworks: [],
+      compliance_profile: { handles_phi: false, processes_cards: false, sells_to_gov: false, eu_data_subjects: false, india_data_subject: false, public_company: false },
+      suggested: [],
+    }),
+  setComplianceScope: (body: { target_frameworks: string[]; compliance_profile: ComplianceProfile }) =>
+    call<ComplianceScope>("/v1/settings/compliance-scope", { method: "PUT", body: JSON.stringify(body) }),
+
   // Bring-your-own-framework — define a custom framework; its posture derives from live findings.
   customFrameworks: () =>
     safe<{ custom_frameworks: CustomFramework[] }>("/v1/custom-frameworks", { custom_frameworks: [] }),

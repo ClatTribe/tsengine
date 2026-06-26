@@ -526,6 +526,21 @@ export interface CustomFramework {
   description?: string;
   controls: CustomControl[];
 }
+// Compliance scope (before-analysis) — what the customer is pursuing + their applicability profile.
+export interface ComplianceProfile {
+  handles_phi: boolean;
+  processes_cards: boolean;
+  sells_to_gov: boolean;
+  eu_data_subjects: boolean;
+  india_data_subject: boolean;
+  public_company: boolean;
+}
+export interface ComplianceScope {
+  target_frameworks: string[];
+  compliance_profile: ComplianceProfile;
+  suggested: string[];
+}
+
 export interface CustomFrameworkPosture {
   framework: CustomFramework;
   controls: ControlState[];
