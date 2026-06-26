@@ -38,10 +38,10 @@ export function EngageModels() {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20">
       <div className="mx-auto mb-12 max-w-2xl text-center">
-        <span className="text-xs font-semibold uppercase tracking-wider text-accent">Two ways to get it handled</span>
-        <h2 className="mt-3 text-3xl font-semibold tracking-tight">Bring your own expert, or use ours.</h2>
+        <span className="text-xs font-semibold uppercase tracking-wider text-accent">Three ways to get it handled</span>
+        <h2 className="mt-3 text-3xl font-semibold tracking-tight">Run it yourself, have us run it, or run it for your clients.</h2>
         <p className="mt-3 text-base leading-relaxed text-muted">
-          The AI does the heavy lifting either way. The only question is who makes the judgment calls a machine
+          The AI does the heavy lifting every way. The only question is who makes the judgment calls a machine
           shouldn&apos;t — your team, our experts, or your consultancy&apos;s.
         </p>
       </div>

@@ -5,13 +5,13 @@ import Link from "next/link";
 import { Loader2, Check, ArrowRight } from "lucide-react";
 
 export function DemoForm() {
-  const [form, setForm] = useState({ name: "", email: "", company: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", company: "", interest: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
   function set(k: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
   }
 
   async function submit(e: React.FormEvent) {
@@ -58,6 +58,19 @@ export function DemoForm() {
         <Field label="Work email" required type="email" value={form.email} onChange={set("email")} placeholder="ada@company.com" />
       </div>
       <Field label="Company" value={form.company} onChange={set("company")} placeholder="Acme Inc" />
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted">How do you want to work with us?</label>
+        <select
+          value={form.interest}
+          onChange={set("interest")}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-accent"
+        >
+          <option value="">Not sure yet — help me decide</option>
+          <option value="managed">Managed — run security &amp; compliance for me (a named expert)</option>
+          <option value="self-serve">Self-serve — my team runs the product</option>
+          <option value="msp-partner">MSP / consultancy — deliver it to my clients</option>
+        </select>
+      </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-muted">What are you looking to solve?</label>
         <textarea
