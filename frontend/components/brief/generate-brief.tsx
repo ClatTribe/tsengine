@@ -35,6 +35,31 @@ export function GenerateBrief() {
         )}
       </div>
 
+      {/* Pre-generation preview — so the founder knows what the button produces before clicking,
+          instead of staring at a bare button (the brief is empty-by-default). */}
+      {!brief && !pending && (
+        <div className="rounded-xl border border-dashed border-border bg-surface p-5">
+          <p className="text-sm font-medium text-ink">What your brief will include</p>
+          <ul className="mt-3 space-y-2.5 text-sm text-muted">
+            <li>
+              <span className="font-medium text-ink">Executive summary</span> — your security posture in a few
+              plain-English sentences, ready to forward to a board, an investor, or a customer.
+            </li>
+            <li>
+              <span className="font-medium text-ink">What to do next</span> — the prioritized actions that
+              actually move the needle, in order.
+            </li>
+            <li>
+              <span className="font-medium text-ink">Prioritized issues</span> — the findings that matter most,
+              each explained without security jargon.
+            </li>
+          </ul>
+          <p className="mt-3 text-xs text-faint">
+            Written from your real findings by the AI security engineer — grounded, nothing invented.
+          </p>
+        </div>
+      )}
+
       {brief?.ok === false && (
         <div className="flex items-center gap-2 rounded-xl border border-critical/40 bg-critical/10 px-4 py-3 text-sm text-critical">
           <CircleAlert className="h-4 w-4" /> {brief.error}
