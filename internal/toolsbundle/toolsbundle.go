@@ -34,6 +34,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/kiterunner"
 	_ "github.com/ClatTribe/tsengine/internal/tool/mobsfscan"
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
+	_ "github.com/ClatTribe/tsengine/internal/tool/nikto"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
 	_ "github.com/ClatTribe/tsengine/internal/tool/openapi"
