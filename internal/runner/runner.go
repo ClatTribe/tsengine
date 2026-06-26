@@ -11,6 +11,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -169,15 +170,21 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	var current []types.Finding
 	for _, a := range assets {
 		if connInactive(statuses, a) {
-			continue // OM-5 fail-closed: an asset whose connection is unavailable/quarantined is not scanned
+			// OM-5 fail-closed: an asset whose connection is unavailable/quarantined is not scanned.
+			slog.Info("[scan] skipped: connection inactive", "asset", a.ID, "type", a.Type, "target", a.Target)
+			continue
 		}
 		_, fs, err := s.scanAsset(ctx, a, platform.TriggerSchedule)
 		if err != nil {
+			// Per-asset outcome is logged so a failed/empty scan is VISIBLE — RescanTenant only surfaces the
+			// first error to the caller, which used to hide why a given asset produced nothing.
+			slog.Warn("[scan] asset errored", "asset", a.ID, "type", a.Type, "target", a.Target, "err", err.Error())
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
+		slog.Info("[scan] asset scanned", "asset", a.ID, "type", a.Type, "target", a.Target, "findings", len(fs))
 		current = append(current, fs...)
 		scanned++
 	}
