@@ -485,7 +485,7 @@ When the host tracer's `Add(finding)` is called, hooks fire in this order. Each 
 3. surface_priority.annotate   → annotates surface_priority block
 4. exploitability.annotate     → annotates exploitability block + may bump severity
 5. corroborator_ledger.check   → cross-source agreement → attaches corroborated_by[]
-6. threat_intel.enrich         → CVSS/KEV/EPSS/advisories for CVE-bearing findings (§7)
+6. threat_intel.enrich         → CVSS(+vector)/KEV/EPSS/advisories for CVE-bearing findings (§7). Annotation-only by default; opt-in KEV-driven severity escalation (TSENGINE_KEV_ESCALATE → a sub-high finding whose CVE is on CISA KEV is bumped to high per BOD 22-01, logged as a promote; grounded — acts only on a real KEV listing, never downgrades)
 7. compliance.map              → SOC2/PCI/HIPAA/CIS/NIST control annotation (§8)
 8. post_emit_verifier          → re-fires via tool-replay to upgrade pattern_match → verified (inert until L2.5)
 9. cross_tool_merge            → cross-tool dedup
