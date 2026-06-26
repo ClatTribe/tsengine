@@ -103,13 +103,24 @@ function PathCard({ path, example }: { path: AttackPath; example?: boolean }) {
         {example && <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-faint">Example</span>}
       </div>
       {/* Plain-English summary of the risk — what an attacker could actually do. */}
-      <p className="mb-4 flex items-start gap-1.5 text-xs text-muted">
+      <p className="mb-3 flex items-start gap-1.5 text-xs text-muted">
         <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-high" />
         <span>
           An attacker who exploits <span className="text-ink">{path.steps[0]?.title}</span> could pivot to{" "}
           <span className="text-ink">{last?.title}</span>. Fixing the first step breaks the chain.
         </span>
       </p>
+
+      {/* The one recommended action: cut the chain at its entry point. Read-only paths gave the founder
+          nowhere to go; this links straight to the entry finding (where the fix is queued for approval). */}
+      {!example && path.steps[0]?.finding_id && (
+        <a
+          href={`/findings/${path.steps[0].finding_id}`}
+          className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-accent-hover"
+        >
+          Fix the entry point — break this chain <ArrowRight className="h-3.5 w-3.5" />
+        </a>
+      )}
 
       {/* The chain, left-to-right, wrapping on small screens. */}
       <div className="flex flex-wrap items-stretch gap-y-3">
