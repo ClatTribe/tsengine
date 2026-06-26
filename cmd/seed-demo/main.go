@@ -14,6 +14,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/authn"
 	"github.com/ClatTribe/tsengine/internal/pentest"
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -248,5 +249,23 @@ func main() {
 		must(st.UpsertControlState(ctx, platform.ControlState{TenantID: tid, Framework: c.fw, ControlID: c.id, State: c.state, EvidenceRefs: refs, UpdatedAt: ago(time.Hour)}))
 	}
 
-	log.Printf("seeded demo tenant %q → %s (%d findings, %d actions, %d incidents, 1 pentest, 4 saas apps, 1 runtime event)", tid, path, len(findings), len(actions), len(incidents))
+	// vCISO consulting top-layer (§18.4) — seed the Risks / Program / Audits tabs so the demo showcases the
+	// full daily-driver experience instead of empty states. All grounded: candidate risks cluster the real
+	// seeded high+ findings; the policy set is the industry-standard SOC 2 starter; the audit engagement is
+	// the tenant's real framework.
+	risks := grc.CandidateRisks(tid, findings, now)
+	for _, r := range risks {
+		must(st.PutRisk(ctx, r))
+	}
+	policies := grc.StarterPolicies(tid, now)
+	for _, p := range policies {
+		must(st.PutPolicy(ctx, p))
+	}
+	must(st.PutAuditEngagement(ctx, platform.AuditEngagement{
+		ID: "aud-soc2", TenantID: tid, Framework: "soc2", AuditType: "type_ii",
+		PeriodStart: ago(90 * 24 * time.Hour), PeriodEnd: now, Status: "scoping",
+		CreatedAt: ago(8 * 24 * time.Hour),
+	}))
+
+	log.Printf("seeded demo tenant %q → %s (%d findings, %d actions, %d incidents, 1 pentest, %d risks, %d policies, 1 audit, 4 saas apps, 1 runtime event)", tid, path, len(findings), len(actions), len(incidents), len(risks), len(policies))
 }
