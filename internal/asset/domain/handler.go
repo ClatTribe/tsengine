@@ -109,18 +109,37 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 // httpx probe. Deduped by host, deterministic order.
 // (asset.ChildAssetExtractor)
 func (h *Handler) ChildAssets(findings []types.Finding) []types.ChildAsset {
+	// Liveness gate (no high false positive): passive enumerators (subfinder/amass/crt.sh) return huge
+	// CT-log + wildcard noise — a real scan of example.com yielded 2921 "subdomains" of which httpx
+	// confirmed ~1 live. Pivoting to EVERY one spawns thousands of dead child scans. So pivot only to
+	// subdomains httpx confirmed live (its http-service findings). When there's no liveness signal (httpx
+	// didn't run, or a unit test passes only enum findings) fall back to ALL — preserving recall + the
+	// prior behavior, never silently dropping when we can't validate.
+	live := map[string]struct{}{}
+	for _, f := range findings {
+		if f.Tool == "httpx" {
+			if host := bareHost(f.Endpoint); host != "" {
+				live[host] = struct{}{}
+			}
+		}
+	}
 	seen := map[string]struct{}{}
 	var out []types.ChildAsset
 	for _, f := range findings {
 		if !strings.Contains(f.RuleID, "subdomain-found") {
 			continue
 		}
-		host := strings.ToLower(strings.TrimSpace(f.Endpoint))
+		host := bareHost(f.Endpoint)
 		if host == "" {
 			continue
 		}
 		if _, dup := seen[host]; dup {
 			continue
+		}
+		if len(live) > 0 {
+			if _, ok := live[host]; !ok {
+				continue // we have liveness data and this host isn't live → don't pivot to a dead target
+			}
 		}
 		seen[host] = struct{}{}
 		out = append(out, types.ChildAsset{
@@ -130,6 +149,25 @@ func (h *Handler) ChildAssets(findings []types.Finding) []types.ChildAsset {
 		})
 	}
 	return out
+}
+
+// bareHost lowercases a host and strips any scheme/path/port so an httpx endpoint
+// (https://sub.example.com) and an enumerator endpoint (sub.example.com) compare equal.
+func bareHost(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return ""
+	}
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	}
+	if i := strings.IndexAny(s, "/?#"); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.LastIndex(s, ":"); i >= 0 { // strip :port (hosts have no colon otherwise)
+		s = s[:i]
+	}
+	return s
 }
 
 func (h *Handler) Filter(_ context.Context, _ types.Asset, in []asset.Dispatch) []asset.Dispatch {

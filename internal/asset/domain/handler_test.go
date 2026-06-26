@@ -110,3 +110,23 @@ func TestChildAssets_FromSubdomainFindings(t *testing.T) {
 		}
 	}
 }
+
+// When httpx provides a liveness signal, only LIVE subdomains pivot to child assets — passive enumerators
+// return huge noise (a real example.com scan: 2921 "subdomains", ~1 live), and spawning a child scan per
+// dead host is a high-false-positive surface. Proven on a real scan; this locks the gate.
+func TestChildAssets_GatedOnHttpxLiveness(t *testing.T) {
+	h := NewHandler()
+	findings := []types.Finding{
+		{RuleID: "subfinder::subdomain-found", Tool: "subfinder", Endpoint: "live.example.com"},
+		{RuleID: "subfinder::subdomain-found", Tool: "subfinder", Endpoint: "dead1.example.com"}, // not live
+		{RuleID: "amass::subdomain-found", Tool: "amass", Endpoint: "dead2.example.com"},          // not live
+		{RuleID: "httpx::http-service", Tool: "httpx", Endpoint: "https://live.example.com"},      // the only live one
+	}
+	kids := h.ChildAssets(findings)
+	if len(kids) != 1 {
+		t.Fatalf("child assets = %d, want 1 (only the httpx-live subdomain)", len(kids))
+	}
+	if kids[0].Host != "live.example.com" {
+		t.Errorf("pivoted to %q, want live.example.com", kids[0].Host)
+	}
+}
