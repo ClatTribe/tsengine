@@ -31,6 +31,11 @@ var frameworkTitle = map[string]string{
 	FrameworkCMMC:       "CMMC 2.0 (Level 2)",
 	FrameworkISO42001:   "ISO 42001:2023 (AI)",
 	FrameworkNISTAIRMF:  "NIST AI RMF 1.0",
+	FrameworkISO27018:   "ISO 27018:2019",
+	FrameworkISO22301:   "ISO 22301:2019 (BCMS)",
+	FrameworkPIPEDA:     "PIPEDA (Canada)",
+	FrameworkGLBA:       "GLBA Safeguards",
+	FrameworkEUAIAct:    "EU AI Act",
 }
 
 // FrameworkTitle returns the display name for a framework key (the key itself if unknown).

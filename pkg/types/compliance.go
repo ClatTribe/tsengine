@@ -26,4 +26,10 @@ type Compliance struct {
 	CMMC      []string `json:"cmmc,omitempty"`        // CMMC 2.0 Level 2 practice IDs (US DoD; 800-171-derived)
 	ISO42001  []string `json:"iso42001,omitempty"`    // ISO/IEC 42001:2023 AI management system (Annex A)
 	NISTAIRMF []string `json:"nist_ai_rmf,omitempty"` // NIST AI Risk Management Framework 1.0 (functions)
+	// Parity batch 2: cloud-PII, business continuity, Canada/US privacy, EU AI regulation.
+	ISO27018 []string `json:"iso27018,omitempty"`  // ISO/IEC 27018:2019 cloud-PII-processor controls
+	ISO22301 []string `json:"iso22301,omitempty"`  // ISO 22301:2019 business-continuity management
+	PIPEDA   []string `json:"pipeda,omitempty"`    // Canada PIPEDA (Schedule 1 fair-information principles)
+	GLBA     []string `json:"glba,omitempty"`      // US GLBA Safeguards Rule (16 CFR 314.4)
+	EUAIAct  []string `json:"eu_ai_act,omitempty"` // EU AI Act (high-risk AI articles)
 }

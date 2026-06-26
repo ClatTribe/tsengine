@@ -41,6 +41,11 @@ type controlSet struct {
 	CMMC       []string `json:"cmmc"`
 	ISO42001   []string `json:"iso42001"`
 	NISTAIRMF  []string `json:"nist_ai_rmf"`
+	ISO27018   []string `json:"iso27018"`
+	ISO22301   []string `json:"iso22301"`
+	PIPEDA     []string `json:"pipeda"`
+	GLBA       []string `json:"glba"`
+	EUAIAct    []string `json:"eu_ai_act"`
 }
 
 // NewCompliance loads the embedded corpus. Panics on malformed data.
@@ -114,6 +119,16 @@ func (cs controlSet) forFramework(framework string) []string {
 		return cs.ISO42001
 	case "nist_ai_rmf":
 		return cs.NISTAIRMF
+	case "iso27018":
+		return cs.ISO27018
+	case "iso22301":
+		return cs.ISO22301
+	case "pipeda":
+		return cs.PIPEDA
+	case "glba":
+		return cs.GLBA
+	case "eu_ai_act":
+		return cs.EUAIAct
 	}
 	return nil
 }
@@ -148,6 +163,11 @@ func (h *Compliance) Lookup(cwes []string) (*types.Compliance, bool) {
 		agg.CMMC = mergeUnique(agg.CMMC, cs.CMMC)
 		agg.ISO42001 = mergeUnique(agg.ISO42001, cs.ISO42001)
 		agg.NISTAIRMF = mergeUnique(agg.NISTAIRMF, cs.NISTAIRMF)
+		agg.ISO27018 = mergeUnique(agg.ISO27018, cs.ISO27018)
+		agg.ISO22301 = mergeUnique(agg.ISO22301, cs.ISO22301)
+		agg.PIPEDA = mergeUnique(agg.PIPEDA, cs.PIPEDA)
+		agg.GLBA = mergeUnique(agg.GLBA, cs.GLBA)
+		agg.EUAIAct = mergeUnique(agg.EUAIAct, cs.EUAIAct)
 	}
 	if !matched {
 		return nil, false
@@ -202,6 +222,11 @@ func mergeCompliance(dst, src *types.Compliance) *types.Compliance {
 	dst.CMMC = mergeUnique(dst.CMMC, src.CMMC)
 	dst.ISO42001 = mergeUnique(dst.ISO42001, src.ISO42001)
 	dst.NISTAIRMF = mergeUnique(dst.NISTAIRMF, src.NISTAIRMF)
+	dst.ISO27018 = mergeUnique(dst.ISO27018, src.ISO27018)
+	dst.ISO22301 = mergeUnique(dst.ISO22301, src.ISO22301)
+	dst.PIPEDA = mergeUnique(dst.PIPEDA, src.PIPEDA)
+	dst.GLBA = mergeUnique(dst.GLBA, src.GLBA)
+	dst.EUAIAct = mergeUnique(dst.EUAIAct, src.EUAIAct)
 	return dst
 }
 
