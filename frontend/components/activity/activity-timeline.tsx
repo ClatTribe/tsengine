@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ShieldAlert, Wrench, ScanLine, Inbox } from "lucide-react";
+import { ShieldAlert, Wrench, ScanLine, Inbox, Search } from "lucide-react";
 import { SeverityBadge } from "@/components/ui/primitives";
 import { timeAgo, cn } from "@/lib/utils";
 
@@ -38,6 +38,7 @@ const ICON: Record<ActivityKind, { Icon: typeof ShieldAlert; cls: string }> = {
 // live SSE connection calls router.refresh() on change — so this updates in real time.
 export function ActivityTimeline({ events }: { events: ActivityEvent[] }) {
   const [active, setActive] = useState<Set<ActivityKind>>(new Set());
+  const [query, setQuery] = useState("");
 
   const counts = useMemo(() => {
     const c = {} as Record<ActivityKind, number>;
@@ -45,10 +46,14 @@ export function ActivityTimeline({ events }: { events: ActivityEvent[] }) {
     return c;
   }, [events]);
 
-  const visible = useMemo(
-    () => (active.size === 0 ? events : events.filter((e) => active.has(e.kind))),
-    [events, active],
-  );
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return events.filter(
+      (e) =>
+        (active.size === 0 || active.has(e.kind)) &&
+        (q === "" || e.title.toLowerCase().includes(q) || (e.meta ?? "").toLowerCase().includes(q)),
+    );
+  }, [events, active, query]);
 
   // preserve order, group by the server-computed day label
   const groups = useMemo(() => {
@@ -71,7 +76,7 @@ export function ActivityTimeline({ events }: { events: ActivityEvent[] }) {
 
   return (
     <div className="space-y-5">
-      {/* Filter chips */}
+      {/* Filter chips + free-text search (so a growing log stays scannable) */}
       <div className="flex flex-wrap items-center gap-1.5">
         {KINDS.map(({ key, label }) => (
           <button
@@ -87,11 +92,22 @@ export function ActivityTimeline({ events }: { events: ActivityEvent[] }) {
             {label} <span className="text-faint">{counts[key] ?? 0}</span>
           </button>
         ))}
+        <div className="relative ml-auto">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search activity…"
+            aria-label="Search activity"
+            className="w-44 rounded-md border border-border bg-surface py-1 pl-8 pr-2 text-xs text-ink outline-none transition focus:border-accent focus:w-56"
+          />
+        </div>
       </div>
 
       {visible.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted">
-          {events.length === 0 ? "No activity yet — connect a system to put the agent to work." : "Nothing matches that filter."}
+          {events.length === 0 ? "No activity yet — connect a system to put the agent to work." : "Nothing matches your filter or search."}
         </div>
       ) : (
         <div className="space-y-6">
