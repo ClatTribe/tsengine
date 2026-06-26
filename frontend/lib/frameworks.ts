@@ -19,6 +19,11 @@ export const FRAMEWORKS = [
   "cmmc",
   "iso42001",
   "nist_ai_rmf",
+  "iso27018",
+  "iso22301",
+  "pipeda",
+  "glba",
+  "eu_ai_act",
 ] as const;
 
 export const FRAMEWORK_LABEL: Record<string, string> = {
@@ -39,6 +44,11 @@ export const FRAMEWORK_LABEL: Record<string, string> = {
   cmmc: "CMMC 2.0",
   iso42001: "ISO 42001 (AI)",
   nist_ai_rmf: "NIST AI RMF",
+  iso27018: "ISO 27018",
+  iso22301: "ISO 22301",
+  pipeda: "PIPEDA",
+  glba: "GLBA",
+  eu_ai_act: "EU AI Act",
 };
 
 // FRAMEWORK_DESC — one-line plain-English descriptions, shown on the per-framework drill so
@@ -61,6 +71,11 @@ export const FRAMEWORK_DESC: Record<string, string> = {
   cmmc: "US DoD Cybersecurity Maturity Model Certification 2.0 (Level 2) — defense supply-chain controls.",
   iso42001: "ISO/IEC 42001:2023 — the AI management-system standard for governing AI risk.",
   nist_ai_rmf: "NIST AI Risk Management Framework 1.0 — govern, map, measure, and manage AI risk.",
+  iso27018: "ISO/IEC 27018:2019 — protecting personally identifiable information in public clouds.",
+  iso22301: "ISO 22301:2019 — business continuity management for resilience and recoverability.",
+  pipeda: "Canada's PIPEDA — fair-information principles for handling personal data.",
+  glba: "US GLBA Safeguards Rule — protecting customer financial information (16 CFR 314).",
+  eu_ai_act: "The EU AI Act — risk-based obligations for high-risk AI systems.",
 };
 
 // FRAMEWORK_CATEGORY groups frameworks for the compliance grid's section headers, so a
@@ -80,6 +95,11 @@ export const FRAMEWORK_CATEGORY: Record<string, string> = {
   cmmc: "Government",
   iso42001: "AI governance",
   nist_ai_rmf: "AI governance",
+  iso27018: "Privacy",
+  iso22301: "Security & trust",
+  pipeda: "Privacy",
+  glba: "Sector & payments",
+  eu_ai_act: "AI governance",
   nist_800_53: "Government",
   nist_800_171: "Government",
   fedramp: "Government",

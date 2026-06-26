@@ -43,6 +43,11 @@ const (
 	FrameworkCMMC       = "cmmc"
 	FrameworkISO42001   = "iso42001"
 	FrameworkNISTAIRMF  = "nist_ai_rmf"
+	FrameworkISO27018   = "iso27018"
+	FrameworkISO22301   = "iso22301"
+	FrameworkPIPEDA     = "pipeda"
+	FrameworkGLBA       = "glba"
+	FrameworkEUAIAct    = "eu_ai_act"
 )
 
 // Frameworks is the ordered set of frameworks the GRC layer tracks — the single source
@@ -52,6 +57,7 @@ var Frameworks = []string{
 	FrameworkNISTCSF, FrameworkGDPR, FrameworkISO27701, FrameworkNIST80053,
 	FrameworkNIST800171, FrameworkCCPA, FrameworkSOX, FrameworkFedRAMP, FrameworkDPDP,
 	FrameworkCMMC, FrameworkISO42001, FrameworkNISTAIRMF,
+	FrameworkISO27018, FrameworkISO22301, FrameworkPIPEDA, FrameworkGLBA, FrameworkEUAIAct,
 }
 
 // IsFramework reports whether key is one of the tracked frameworks. Callers (the report API)
@@ -231,5 +237,10 @@ func frameworkControls(c *types.Compliance) map[string][]string {
 	add(FrameworkCMMC, c.CMMC)
 	add(FrameworkISO42001, c.ISO42001)
 	add(FrameworkNISTAIRMF, c.NISTAIRMF)
+	add(FrameworkISO27018, c.ISO27018)
+	add(FrameworkISO22301, c.ISO22301)
+	add(FrameworkPIPEDA, c.PIPEDA)
+	add(FrameworkGLBA, c.GLBA)
+	add(FrameworkEUAIAct, c.EUAIAct)
 	return out
 }
