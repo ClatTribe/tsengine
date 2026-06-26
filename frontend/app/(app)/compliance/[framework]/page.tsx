@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { FixGuidance } from "@/components/compliance/fix-guidance";
+import { AdvisorRoadmap } from "@/components/compliance/advisor-roadmap";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,10 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
         </div>
       ) : (
         <>
+          <section>
+            <div className="mb-2 text-xs uppercase tracking-wider text-muted">AI vCISO advisor</div>
+            <AdvisorRoadmap framework={framework} />
+          </section>
           <section>
             <div className="mb-2 text-xs uppercase tracking-wider text-muted">Gaps ({gaps.length})</div>
             {gaps.length === 0 ? (
