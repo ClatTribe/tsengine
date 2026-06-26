@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
@@ -42,9 +43,14 @@ func (e *EngineRunner) Scan(ctx context.Context, a platform.Asset) ([]types.Find
 		defer cleanup()
 	}
 	target := types.Asset{Type: at, Target: a.Target}
-	findings, _, err := orchestrator.Run(ctx, target, handler, disp)
+	findings, fired, err := orchestrator.Run(ctx, target, handler, disp)
 	if err != nil {
+		// fired = the tools the orchestrator dispatched. Logging it makes a 0-finding engine scan
+		// diagnosable: no tools fired = a planning/dispatch gap; tools fired but 0 findings = a
+		// sandbox tool-execution / propagation gap (vs the tools genuinely finding nothing).
+		slog.Warn("[engine] scan errored", "type", a.Type, "target", a.Target, "fired", fired, "err", err.Error())
 		return nil, fmt.Errorf("engine: scan %s: %w", a.Target, err)
 	}
+	slog.Info("[engine] scan complete", "type", a.Type, "target", a.Target, "tools_fired", fired, "findings", len(findings))
 	return findings, nil
 }
