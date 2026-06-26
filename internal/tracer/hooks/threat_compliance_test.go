@@ -102,6 +102,29 @@ func TestCompliance_MapsExpandedFrameworks(t *testing.T) {
 	}
 }
 
+// The PROVEN apiauthz findings (BOLA CWE-639, BFLA CWE-285, mass-assignment CWE-915) emit as
+// verification_status=verified — the most-confident findings the engine produces. Before the crosswalk
+// expansion they mapped to ZERO controls, so a proven authz bypass moved no framework to "gap" (a false
+// "compliant"). This guards the fix: each must land on access-control controls across the frameworks.
+func TestCompliance_MapsAuthzFamily(t *testing.T) {
+	h := NewCompliance()
+	for _, cwe := range []string{"CWE-639", "CWE-285", "CWE-915", "CWE-862", "CWE-863"} {
+		out, _, keep := h.Apply(mkFinding("f-1", "apiauthz::"+cwe, types.SeverityHigh, cwe))
+		if !keep || out.Compliance == nil {
+			t.Fatalf("%s: dropped or no compliance annotation", cwe)
+		}
+		c := out.Compliance
+		if len(c.SOC2) == 0 || len(c.PCI) == 0 || len(c.NIST80053) == 0 || len(c.NISTCSF) == 0 {
+			t.Errorf("%s (broken authorization) should map to SOC2+PCI+NIST access controls, got %+v", cwe, c)
+		}
+	}
+	// BOLA additionally exposes data → privacy controls must apply (GDPR/CCPA/DPDP).
+	out, _, _ := h.Apply(mkFinding("f-2", "apiauthz::bola", types.SeverityHigh, "CWE-639"))
+	if len(out.Compliance.GDPR) == 0 || len(out.Compliance.CCPA) == 0 {
+		t.Errorf("CWE-639 (BOLA, data exposure) should map to GDPR + CCPA, got %+v", out.Compliance)
+	}
+}
+
 func TestCompliance_MergesMultipleCWE(t *testing.T) {
 	h := NewCompliance()
 	// CWE-89 + CWE-200 both map; controls should union without dupes.
