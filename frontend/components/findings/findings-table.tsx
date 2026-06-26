@@ -210,6 +210,14 @@ export function FindingsTable({ findings, pendingFindingIds = [] }: { findings: 
                               <FileCode2 className="h-3 w-3" /> Fix in code: {f.code_provenance.file}:{f.code_provenance.line}
                             </span>
                           )}
+                          {f.blast_radius?.reaches_crown_jewel && (
+                            <span
+                              title={`Blast radius: chains to ${(f.blast_radius.crown_jewel_type ?? "a crown jewel").replace(/_/g, " ")} — impact is bigger than its severity`}
+                              className="inline-flex items-center gap-1 rounded bg-critical/10 px-1.5 py-0.5 text-[10px] font-semibold text-critical"
+                            >
+                              reaches {(f.blast_radius.crown_jewel_type ?? "crown jewel").replace(/_/g, " ")}
+                            </span>
+                          )}
                         </div>
                       </td>
                       {group !== "asset" && (

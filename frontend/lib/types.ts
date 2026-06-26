@@ -12,6 +12,8 @@ export interface Finding {
   mitre_techniques?: string[];
   verification_status?: string;
   confidence?: number;
+  // blast_radius: read-time impact sizing — does this finding chain to a crown jewel? (mirrors incidents)
+  blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
   threat_intel?: { kev?: unknown; epss?: unknown } | null;
   compliance?: Record<string, string[]> | null;
   // Cloud-to-Code: a runtime cloud finding traced back to the IaC resource +
