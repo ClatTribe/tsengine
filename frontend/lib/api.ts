@@ -129,6 +129,13 @@ export const api = {
       { method: "POST", body: "{}" },
     ),
 
+  // AI autofix — an LLM-generated code patch for one finding (competitor parity: Snyk/Aikido/Copilot).
+  autofix: (id: string) =>
+    call<{ finding_id: string; title: string; rule_id: string; fix: string }>(
+      `/v1/findings/${id}/autofix`,
+      { method: "POST", body: "{}" },
+    ),
+
   // vCISO remediation guidance — concrete, grounded fix steps for a framework's control gaps.
   complianceRemediation: (framework: string) =>
     call<{ framework: string; title: string; gap_count: number; plan: string }>(
