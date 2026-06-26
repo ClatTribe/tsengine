@@ -514,6 +514,25 @@ export interface PostureSummary {
   frameworks: FrameworkPosture[];
 }
 
+// Bring-your-own-framework — tenant-defined frameworks whose posture is derived from live findings.
+export interface CustomControl {
+  id: string;
+  name?: string;
+  maps_to?: string[]; // "cwe:CWE-89" | "rule:secrets" | "soc2:CC6.1"
+}
+export interface CustomFramework {
+  id: string;
+  name: string;
+  description?: string;
+  controls: CustomControl[];
+}
+export interface CustomFrameworkPosture {
+  framework: CustomFramework;
+  controls: ControlState[];
+  coverage: { assessable_controls: number; assessed_controls: number; not_assessed: number; gaps: number; coverage_pct: number; certifiable: boolean; readiness: string };
+  note: string;
+}
+
 // Compliance scoping — the connect-this-first readiness checklist (GET /v1/compliance/readiness).
 export interface IntegrationNeed {
   category: string;

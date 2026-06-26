@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, Asset, AttackPaths, ComplianceReadiness, ComplianceReport, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, Asset, AttackPaths, ComplianceReadiness, ComplianceReport, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -192,6 +192,15 @@ export const api = {
   // All-framework posture summary in ONE call (replaces fanning out 14 per-framework posture
   // requests on the dashboard/compliance/reports pages).
   postureSummary: () => safe<PostureSummary>("/v1/posture", { frameworks: [] }),
+  // Bring-your-own-framework — define a custom framework; its posture derives from live findings.
+  customFrameworks: () =>
+    safe<{ custom_frameworks: CustomFramework[] }>("/v1/custom-frameworks", { custom_frameworks: [] }),
+  addCustomFramework: (body: { name: string; description?: string; controls: CustomControl[] }) =>
+    call<CustomFramework>("/v1/custom-frameworks", { method: "POST", body: JSON.stringify(body) }),
+  deleteCustomFramework: (id: string) => call(`/v1/custom-frameworks/${id}`, { method: "DELETE" }),
+  customFrameworkPosture: (id: string) =>
+    safe<CustomFrameworkPosture | null>(`/v1/custom-frameworks/${id}/posture`, null),
+
   // Compliance scoping (before-analysis): the connect-this-first readiness checklist for the target
   // frameworks — what to wire up so we can actually assess, reinforcing no-false-compliant.
   complianceReadiness: () =>
