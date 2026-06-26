@@ -427,7 +427,9 @@ export interface TrustView {
   org: string;
   monitored: boolean;
   signed: boolean;
-  frameworks: { framework: string; coverage: number; met: number; total: number }[] | null; // Go nil slice → null
+  // coverage = ASSESSMENT coverage (assessed/assessable %), not a met/total "score" — keeps the public page
+  // honest (never a green "100% compliant" to the tenant's customers).
+  frameworks: { framework: string; coverage: number; assessed: number; assessable: number; gaps: number }[] | null; // Go nil slice → null
   generated_at: string;
 }
 
