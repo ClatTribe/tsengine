@@ -4,6 +4,7 @@ import { ArrowLeft, Download, ShieldCheck, FileSignature, Radar } from "lucide-r
 import { api } from "@/lib/api";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
+import { FixGuidance } from "@/components/compliance/fix-guidance";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,8 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
             {gaps.length === 0 ? (
               <Empty>No open gaps — every control that mapped to a finding is met.</Empty>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
+                <FixGuidance framework={framework} />
                 {gaps.map((r) => (
                   <div key={r.ControlID} className="card p-4 animate-fade-rise">
                     <div className="flex items-center gap-2">

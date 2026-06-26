@@ -129,6 +129,13 @@ export const api = {
       { method: "POST", body: "{}" },
     ),
 
+  // vCISO remediation guidance — concrete, grounded fix steps for a framework's control gaps.
+  complianceRemediation: (framework: string) =>
+    call<{ framework: string; title: string; gap_count: number; plan: string }>(
+      `/v1/compliance/${framework}/remediation`,
+      { method: "POST", body: "{}" },
+    ),
+
   // L2 translator — run the Lead over the tenant's findings → the plain-English consultant brief.
   l2Translate: () =>
     call<{
