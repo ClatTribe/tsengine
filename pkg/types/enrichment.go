@@ -18,10 +18,13 @@ func (f Finding) L15Summary() string {
 	var t []string
 	if ti := f.ThreatIntel; ti != nil {
 		if ti.KEV != nil && ti.KEV.Listed {
-			t = append(t, "KEV") // CISA actively-exploited list
+			t = append(t, "KEV") // CISA actively-exploited list (seen in the wild)
 		}
 		if ti.EPSS != nil {
 			t = append(t, fmt.Sprintf("EPSS:%.2f", ti.EPSS.Score))
+		}
+		if len(ti.Exploits) > 0 {
+			t = append(t, "pub-exploit") // a public exploit/PoC EXISTS (ExploitDB/Metasploit) — patch-priority signal between EPSS and KEV
 		}
 	}
 	if f.Exploitability != nil {

@@ -79,7 +79,7 @@ func TestParseEPSSGzip(t *testing.T) {
 func TestBuild_UnionsKEVAndEPSS(t *testing.T) {
 	kev, kevAsOf, kevVer, _ := ParseKEV(strings.NewReader(kevFixture))
 	epss, epssAsOf, _ := ParseEPSS(strings.NewReader(epssFixture))
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf)
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil)
 
 	// Union: 44228 (both), 5638 (kev only), 0160 (epss only) = 3.
 	if len(entries) != 3 {
@@ -106,7 +106,7 @@ func TestBuild_UnionsKEVAndEPSS(t *testing.T) {
 func TestWriteAndLoadManifest(t *testing.T) {
 	kev, kevAsOf, kevVer, _ := ParseKEV(strings.NewReader(kevFixture))
 	epss, epssAsOf, _ := ParseEPSS(strings.NewReader(epssFixture))
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf)
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil)
 
 	dir := t.TempDir()
 	path, err := Write(dir, entries, m)
@@ -132,20 +132,29 @@ func TestRefresh_OverHTTP(t *testing.T) {
 		_, _ = gz.Write([]byte(epssFixture))
 		_ = gz.Close()
 	})
+	// ExploitDB fixture: references a CVE already in the KEV+EPSS union, so the entry count stays 3
+	// while the public-exploit ref is merged onto Log4Shell.
+	mux.HandleFunc("/exploitdb", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("file,id,description,codes,verified\nx.txt,12345,Log4Shell,CVE-2021-44228,1\n"))
+	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	dir := t.TempDir()
 	m, path, err := Refresh(context.Background(), RefreshOptions{
-		OutDir:  dir,
-		KEVURL:  srv.URL + "/kev",
-		EPSSURL: srv.URL + "/epss",
+		OutDir:       dir,
+		KEVURL:       srv.URL + "/kev",
+		EPSSURL:      srv.URL + "/epss",
+		ExploitDBURL: srv.URL + "/exploitdb",
 	})
 	if err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
 	if m.EntryCount != 3 {
 		t.Errorf("refreshed corpus entry count = %d, want 3", m.EntryCount)
+	}
+	if m.ExploitCount != 1 {
+		t.Errorf("refreshed corpus exploit_count = %d, want 1", m.ExploitCount)
 	}
 	if !strings.HasSuffix(path, DataFileName) {
 		t.Errorf("unexpected data path %q", path)

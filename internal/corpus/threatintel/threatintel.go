@@ -45,21 +45,24 @@ type Entry struct {
 // Manifest is the cheap-to-read provenance sidecar (no entries). resolveCorpus
 // reads it to stamp the scan's corpus block without parsing the full corpus.
 type Manifest struct {
-	Version    string    `json:"version"`
-	KEVAsOf    time.Time `json:"kev_as_of"`
-	EPSSAsOf   time.Time `json:"epss_as_of"`
-	Sources    []string  `json:"sources"`
-	EntryCount int       `json:"entry_count"`
-	KEVCount   int       `json:"kev_count"`
-	EPSSCount  int       `json:"epss_count"`
-	BuiltAt    time.Time `json:"built_at"`
+	Version      string    `json:"version"`
+	KEVAsOf      time.Time `json:"kev_as_of"`
+	EPSSAsOf     time.Time `json:"epss_as_of"`
+	Sources      []string  `json:"sources"`
+	EntryCount   int       `json:"entry_count"`
+	KEVCount     int       `json:"kev_count"`
+	EPSSCount    int       `json:"epss_count"`
+	ExploitCount int       `json:"exploit_count,omitempty"`
+	BuiltAt      time.Time `json:"built_at"`
 }
 
-// Build merges the parsed KEV + EPSS sets into the corpus + manifest. The
-// union is keyed by CVE: a CVE may have EPSS only, KEV only, or both. EPSS
-// dominates coverage (~250k CVEs); KEV is the high-signal overlay (~1.3k).
+// Build merges the parsed KEV + EPSS + ExploitDB sets into the corpus + manifest. The union is keyed
+// by CVE: a CVE may have any subset of {EPSS, KEV, public-exploit refs}. EPSS dominates coverage
+// (~250k CVEs); KEV is the high-signal in-the-wild overlay (~1.3k); ExploitDB is the public-exploit-
+// exists overlay (the patch-priority signal between EPSS probability and KEV exploitation). A nil
+// exploits map is fine — it's a best-effort feed (Refresh keeps going if it can't fetch ExploitDB).
 func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
-	epss map[string]types.EPSSScore, epssAsOf time.Time) (map[string]Entry, Manifest) {
+	epss map[string]types.EPSSScore, epssAsOf time.Time, exploits map[string][]string) (map[string]Entry, Manifest) {
 
 	entries := make(map[string]Entry, len(epss)+len(kev))
 	for cve, e := range epss {
@@ -72,15 +75,30 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 		ent.KEV = &kk
 		entries[cve] = ent
 	}
+	exploitCVEs := 0
+	for cve, refs := range exploits {
+		if len(refs) == 0 {
+			continue
+		}
+		ent := entries[cve] // zero Entry if KEV/EPSS absent — a public exploit alone is still worth pinning
+		ent.Exploits = refs
+		entries[cve] = ent
+		exploitCVEs++
+	}
+	sources := []string{KEVURL, EPSSURL}
+	if exploitCVEs > 0 {
+		sources = append(sources, ExploitDBURL)
+	}
 	m := Manifest{
-		Version:    fmt.Sprintf("kev-%s+epss-%s", sanitize(kevVer), epssAsOf.UTC().Format("2006-01-02")),
-		KEVAsOf:    kevAsOf.UTC(),
-		EPSSAsOf:   epssAsOf.UTC(),
-		Sources:    []string{KEVURL, EPSSURL},
-		EntryCount: len(entries),
-		KEVCount:   len(kev),
-		EPSSCount:  len(epss),
-		BuiltAt:    time.Now().UTC(),
+		Version:      fmt.Sprintf("kev-%s+epss-%s", sanitize(kevVer), epssAsOf.UTC().Format("2006-01-02")),
+		KEVAsOf:      kevAsOf.UTC(),
+		EPSSAsOf:     epssAsOf.UTC(),
+		Sources:      sources,
+		EntryCount:   len(entries),
+		KEVCount:     len(kev),
+		EPSSCount:    len(epss),
+		ExploitCount: exploitCVEs,
+		BuiltAt:      time.Now().UTC(),
 	}
 	return entries, m
 }
