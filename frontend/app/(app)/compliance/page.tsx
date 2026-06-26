@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, FileText, CircleDashed, Plug, CircleCheck, Circle, Layers } from "lucide-react";
+import { ShieldCheck, ArrowRight, FileText, CircleDashed, Plug, CircleCheck, Circle, Layers, Target } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/api";
 import { PageIntro } from "@/components/ui/page-intro";
 
@@ -36,6 +36,12 @@ export default async function CompliancePage() {
         description={`Know exactly where you stand on SOC 2, ISO 27001, PCI, and ${FRAMEWORKS.length - 3} more — without the spreadsheet. We map your live findings to each control automatically, so your posture is always current and the evidence report is one click away.`}
         right={
           <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/compliance/scope"
+              className="inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent transition hover:border-accent"
+            >
+              <Target className="h-3.5 w-3.5" /> Set scope
+            </Link>
             <Link
               href="/compliance/custom"
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
