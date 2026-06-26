@@ -73,6 +73,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/scheduler"
 	"github.com/ClatTribe/tsengine/internal/secret"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -272,7 +273,7 @@ func main() {
 	if os.Getenv("TSENGINE_WEBHOOK_SECRET") == "" {
 		log.Print("[platform] WARNING: inbound webhooks are NOT verified — set TSENGINE_WEBHOOK_SECRET to reject spoofed events")
 	}
-	g := &grc.GRC{Store: st}
+	g := &grc.GRC{Store: st, ControlUniverse: hooks.NewCompliance().ControlsFor}
 
 	// The continuous-monitoring detector — shared by the runner (full open/resolve each pass) AND the
 	// API's event-driven ingest paths (identity / SaaS), which call detector.OpenFor to open incidents

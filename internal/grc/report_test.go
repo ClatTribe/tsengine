@@ -91,11 +91,19 @@ func TestRenderMarkdown_CleanFramework(t *testing.T) {
 	_ = st.UpsertControlState(ctx, platform.ControlState{
 		TenantID: "t1", Framework: "soc2", ControlID: "CC6.1", State: platform.ControlMet, UpdatedAt: fixedClock(),
 	})
-	g := &GRC{Store: st, Now: fixedClock}
+	// a wired control universe → coverage is meaningful (1 of 4 assessed; the report must NOT read compliant)
+	g := &GRC{Store: st, Now: fixedClock, ControlUniverse: func(string) []string { return []string{"CC6.1", "CC6.2", "CC6.6", "CC7.1"} }}
 	r, _ := g.Report(ctx, "t1", "soc2")
 	md := RenderMarkdown(r)
-	if !strings.Contains(md, "No open gaps") {
-		t.Errorf("a clean framework should say so:\n%s", md)
+	// A clean framework must still carry the no-false-compliant disclaimer and NEVER claim compliance.
+	if !strings.Contains(md, "not a compliance certification") {
+		t.Errorf("a clean framework must still carry the non-certification disclaimer:\n%s", md)
+	}
+	if !strings.Contains(md, "No automated gaps") {
+		t.Errorf("a clean framework should say there are no automated gaps:\n%s", md)
+	}
+	if strings.Contains(md, "every tracked control is met") {
+		t.Errorf("must NOT use the old false-compliant phrasing:\n%s", md)
 	}
 }
 

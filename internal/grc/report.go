@@ -50,6 +50,9 @@ type Report struct {
 	Rows        []ReportRow
 	MetCount    int
 	GapCount    int
+	// Coverage is the honesty layer — how much of the framework automated scanning actually assessed, so
+	// a clean posture is never mis-read as a compliance certification (§ no-false-compliant).
+	Coverage Coverage
 	// Attestation, when the underlying pack was signed.
 	Signer string
 	SHA256 string
@@ -113,6 +116,7 @@ func (g *GRC) Report(ctx context.Context, tenantID, framework string) (*Report, 
 		}
 		r.Rows = append(r.Rows, row)
 	}
+	r.Coverage = computeCoverage(framework, g.assessable(framework), r.MetCount, r.GapCount)
 	return r, nil
 }
 
@@ -136,17 +140,29 @@ func RenderMarkdown(r *Report) string {
 	fmt.Fprintf(&b, "# %s Compliance Report — %s\n\n", r.Title, r.TenantName)
 	fmt.Fprintf(&b, "- **Generated:** %s\n", r.GeneratedAt.UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "- **Framework:** %s (`%s`)\n", r.Title, r.Framework)
-	fmt.Fprintf(&b, "- **Controls tracked:** %d · **Met:** %d · **Gap:** %d\n",
-		len(r.Rows), r.MetCount, r.GapCount)
+	cov := r.Coverage
+	fmt.Fprintf(&b, "- **Automated assessment coverage:** %d of %d technical controls assessed (%.0f%%) · **Gap:** %d · **Met:** %d · **Not yet assessed:** %d\n",
+		cov.AssessedControls, cov.AssessableControls, cov.AutomatedCoveragePct, cov.Gaps, cov.Met, cov.NotAssessed)
 	if r.Signer != "" {
 		fmt.Fprintf(&b, "- **Signed:** `%s` · sha256 `%s`\n", r.Signer, r.SHA256)
 	}
 	b.WriteString("\n")
+	// The no-false-compliant disclaimer — ALWAYS present, before any "no gaps" line, so a clean automated
+	// posture can never be mistaken for a compliance certification.
+	b.WriteString("> ⚠️ **This is an automated technical assessment, not a compliance certification.** ")
+	fmt.Fprintf(&b, "It covers only the %d control(s) our scanners can evaluate for %s; %d assessable control(s) have no scan evidence yet, and procedural controls (policies, training, vendor management, BCP) require auditor attestation. A clean automated posture does **not** mean you are compliant.\n\n",
+		cov.AssessableControls, r.Title, cov.NotAssessed)
+	fmt.Fprintf(&b, "**Status:** %s\n\n", cov.Readiness)
 
 	gaps := filterRows(r.Rows, true)
 	fmt.Fprintf(&b, "## Gaps (%d)\n\n", len(gaps))
 	if len(gaps) == 0 {
-		b.WriteString("_No open gaps — every tracked control is met._\n\n")
+		if cov.AssessedControls == 0 {
+			b.WriteString("_No controls assessed yet — connect assets and run a scan. This is NOT \"compliant\"._\n\n")
+		} else {
+			fmt.Fprintf(&b, "_No automated gaps among the %d assessed control(s). The other %d assessable control(s) + all procedural controls still need auditor attestation before this framework can be called compliant._\n\n",
+				cov.AssessedControls, cov.NotAssessed)
+		}
 	}
 	for _, row := range gaps {
 		fmt.Fprintf(&b, "### %s — GAP\n\n", row.ControlID)
