@@ -45,6 +45,8 @@ func pathCompliance(p cloudgraph.Path, target *cloudgraph.Node) *types.Complianc
 		add(&c.NIST800171, "3.13.1", "3.1.3")
 		add(&c.FedRAMP, "SC-7", "AC-4")
 		add(&c.DPDP, "Sec. 8(5)")
+		add(&c.HIPAA, "164.312(e)(1)")
+		add(&c.ISO27001, "A.8.20", "A.8.22")
 	}
 	if sensitive { // sensitive-data exposure / protection failure
 		add(&c.SOC2, "CC6.1")
@@ -58,6 +60,9 @@ func pathCompliance(p cloudgraph.Path, target *cloudgraph.Node) *types.Complianc
 		add(&c.CCPA, "1798.150", "1798.100")
 		add(&c.FedRAMP, "SC-28", "SC-8")
 		add(&c.DPDP, "Sec. 8(5)")
+		add(&c.HIPAA, "164.312(a)(1)", "164.312(e)(1)")
+		add(&c.ISO27001, "A.8.12")
+		add(&c.SOX, "ITGC: Access to Programs & Data")
 	}
 	if privileged || privesc { // least-privilege failure
 		add(&c.SOC2, "CC6.3")
@@ -69,6 +74,9 @@ func pathCompliance(p cloudgraph.Path, target *cloudgraph.Node) *types.Complianc
 		add(&c.NIST800171, "3.1.5")
 		add(&c.FedRAMP, "AC-6")
 		add(&c.DPDP, "Sec. 8(5)")
+		add(&c.HIPAA, "164.312(a)(1)")
+		add(&c.ISO27001, "A.8.2")
+		add(&c.SOX, "ITGC: Access to Programs & Data")
 	}
 	if assume { // cross-identity lateral movement / access control
 		add(&c.SOC2, "CC6.1")
@@ -79,10 +87,14 @@ func pathCompliance(p cloudgraph.Path, target *cloudgraph.Node) *types.Complianc
 		add(&c.NIST800171, "3.1.3")
 		add(&c.FedRAMP, "AC-3", "AC-4")
 		add(&c.DPDP, "Sec. 8(5)")
+		add(&c.HIPAA, "164.312(a)(1)")
+		add(&c.ISO27001, "A.5.15")
+		add(&c.SOX, "ITGC: Access to Programs & Data")
 	}
 
 	if len(c.SOC2)+len(c.PCI)+len(c.CISv8)+len(c.NISTCSF)+len(c.GDPR)+len(c.NIST80053)+
-		len(c.NIST800171)+len(c.CCPA)+len(c.FedRAMP)+len(c.DPDP)+len(c.ISO27701) == 0 {
+		len(c.NIST800171)+len(c.CCPA)+len(c.FedRAMP)+len(c.DPDP)+len(c.ISO27701)+
+		len(c.HIPAA)+len(c.ISO27001)+len(c.SOX) == 0 {
 		return nil
 	}
 	return c
