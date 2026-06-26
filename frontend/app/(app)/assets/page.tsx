@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Boxes, CircleAlert, ArrowUpRight, CheckCircle2 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
 import { api } from "@/lib/api";
-import type { Asset, AssetPosture, Connection, Engagement } from "@/lib/types";
+import type { Asset, AssetPosture, AssetSecurity, Connection, Engagement } from "@/lib/types";
 import { CONNECTORS, CATEGORY_LABEL, ASSET_TYPE_LABEL, kindLabel, type ConnectorCategory } from "@/lib/connectors";
 import { AddTarget } from "@/components/assets/add-target";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
@@ -23,10 +23,12 @@ const STATUS_CLS: Record<string, string> = {
 
 export default async function AssetsPage({ searchParams }: { searchParams: Promise<{ connect_error?: string; connected?: string; scanned?: string }> }) {
   const { connect_error, connected, scanned } = await searchParams;
-  const [connections, assets, engagements, byAsset] = await Promise.all([api.connections(), api.assets(), api.engagements(), api.complianceByAsset()]);
+  const [connections, assets, engagements, byAsset, secByAsset] = await Promise.all([api.connections(), api.assets(), api.engagements(), api.complianceByAsset(), api.securityByAsset()]);
   // per-asset compliance signal (grounded: only assets a finding ties to) — shown inline so "is this asset
   // compliant?" is answered right where assets are managed (#554).
   const postureByAsset = new Map(byAsset.assets.map((p) => [p.asset_id, p]));
+  // per-asset SECURITY signal ("is this asset secure?") — FP-aware, shown inline next to compliance (#561).
+  const securityByAsset = new Map(secByAsset.assets.map((p) => [p.asset_id, p]));
 
   // last-scanned per asset, from the engagement (monitoring-run) history
   const lastScan = new Map<string, string>();
@@ -145,13 +147,14 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
                   <th className="px-2 py-2.5 font-medium">Type</th>
                   <th className="px-2 py-2.5 font-medium">Data tier</th>
                   <th className="px-2 py-2.5 font-medium">Via</th>
+                  <th className="px-2 py-2.5 font-medium">Security</th>
                   <th className="px-2 py-2.5 font-medium">Compliance</th>
                   <th className="py-2.5 pr-5 font-medium text-right">Last scanned</th>
                 </tr>
               </thead>
               <tbody>
                 {assets.map((a) => (
-                  <AssetRow key={a.id} asset={a} connections={connections} last={lastScan.get(a.id)} posture={postureByAsset.get(a.id)} />
+                  <AssetRow key={a.id} asset={a} connections={connections} last={lastScan.get(a.id)} posture={postureByAsset.get(a.id)} security={securityByAsset.get(a.id)} />
                 ))}
               </tbody>
             </table>
@@ -180,7 +183,7 @@ function ConnectionRow({ conn }: { conn: Connection }) {
   );
 }
 
-function AssetRow({ asset: a, connections, last, posture }: { asset: Asset; connections: Connection[]; last?: string; posture?: AssetPosture }) {
+function AssetRow({ asset: a, connections, last, posture, security }: { asset: Asset; connections: Connection[]; last?: string; posture?: AssetPosture; security?: AssetSecurity }) {
   const via = connections.find((c) => c.id === a.connection_id);
   return (
     <tr className="border-b border-border last:border-0 transition hover:bg-surface-2">
@@ -207,6 +210,17 @@ function AssetRow({ asset: a, connections, last, posture }: { asset: Asset; conn
         <DataTierSelect assetId={a.id} tier={a.data_tier ?? 2} />
       </td>
       <td className="px-2 py-2.5 align-middle text-xs text-muted">{via ? kindLabel(via.kind) : "—"}</td>
+      <td className="px-2 py-2.5 align-middle text-xs" title={security?.verdict}>
+        {(() => {
+          if (!security) return <span className="text-faint">—</span>;
+          const atRisk = security.confirmed > 0 && security.critical + security.high > 0;
+          if (atRisk) return <Link href="/incidents" className="font-medium text-high hover:underline">{security.critical + security.high} confirmed high+</Link>;
+          if (security.confirmed > 0) return <span className="text-medium">{security.confirmed} to review</span>;
+          if (security.unconfirmed > 0) return <span className="text-faint">{security.unconfirmed} to confirm</span>;
+          if (security.scanned) return <span className="text-low">clean last scan</span>;
+          return <span className="text-faint">not scanned</span>;
+        })()}
+      </td>
       <td className="px-2 py-2.5 align-middle text-xs">
         {!posture?.attributed ? (
           <span className="text-faint" title="No finding is tied to this asset yet — not assessed at the asset level (never marked compliant)">not assessed</span>
