@@ -33,9 +33,15 @@ export default async function OSINTPage() {
 
       {total === 0 ? (
         <Empty>
-          No external exposure detected yet. Connect an OSINT source or post a snapshot to{" "}
-          <code className="mono text-xs">/v1/osint/ingest</code> — breaches, leaks, exposed hosts, and look-alike
-          domains will appear here and flow into your issues + compliance posture.
+          <div className="space-y-4">
+            <p>
+              No external exposure detected yet. Click <span className="font-medium text-ink">Run scan</span> above to
+              sweep your domains right now (free, keyless Certificate-Transparency discovery — no setup) — breaches,
+              leaks, exposed hosts, and look-alike domains will appear here and flow into your issues + compliance
+              posture.
+            </p>
+            <RunOsintScan />
+          </div>
         </Empty>
       ) : (
         <>
