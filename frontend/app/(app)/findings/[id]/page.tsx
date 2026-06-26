@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ShieldAlert, Flame, Wrench, GitPullRequest, Settings2, Ticket, FileWarning, ArrowRight, Radar, FileCode2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
+import { AutofixButton } from "@/components/findings/autofix-button";
 import { SeverityBadge, Tag } from "@/components/ui/primitives";
 import { RequestReview } from "@/components/reviews/request-review";
 import type { Action } from "@/lib/types";
@@ -74,6 +75,17 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
           <div className="card p-5 text-sm leading-relaxed text-muted">{f.description}</div>
         </section>
       )}
+
+      <section>
+        <div className="mb-2 text-xs uppercase tracking-wider text-muted">AI fix</div>
+        <div className="card p-5">
+          <p className="mb-3 text-sm text-muted">
+            Generate a concrete code patch for this finding, grounded in the evidence above. A named owner reviews
+            and merges it.
+          </p>
+          <AutofixButton id={id} />
+        </div>
+      </section>
 
       {f.code_provenance && (
         <section>
