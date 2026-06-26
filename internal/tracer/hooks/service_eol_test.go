@@ -46,6 +46,30 @@ func TestServiceEOL_ApacheOldBumped(t *testing.T) {
 	}
 }
 
+// The expanded coverage — common data stores / app servers that are high-impact when exposed and outdated —
+// flags an old build and leaves a current one alone.
+func TestServiceEOL_ExpandedServices(t *testing.T) {
+	h := NewServiceEOL()
+	old := map[string]string{ // product → an outdated version that MUST be flagged
+		"Redis":         "6.2.7",
+		"Apache Tomcat": "8.5.50",
+		"MongoDB":       "4.4.0",
+		"Elasticsearch": "6.8.0",
+		"Squid":         "5.7",
+		"PHP":           "7.4.3",
+	}
+	for product, ver := range old {
+		out, audit, _ := h.Apply(nmapSvc(product, ver, types.SeverityInfo))
+		if out.Severity != types.SeverityMedium || len(audit) != 1 {
+			t.Errorf("%s %s should be flagged outdated (medium), got %s", product, ver, out.Severity)
+		}
+	}
+	// a current build is left alone (no false flag).
+	if out, audit, _ := h.Apply(nmapSvc("Redis", "7.2.0", types.SeverityInfo)); out.Severity != types.SeverityInfo || audit != nil {
+		t.Errorf("a current Redis must not be flagged, got %s", out.Severity)
+	}
+}
+
 func TestServiceEOL_IgnoresNonNmapAndUnknown(t *testing.T) {
 	h := NewServiceEOL()
 	// non-nmap finding
