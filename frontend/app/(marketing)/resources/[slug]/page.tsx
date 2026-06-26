@@ -10,14 +10,16 @@ export function generateStaticParams() {
   return RESOURCE_LIST.map((r) => ({ slug: r.slug }));
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }) {
-  const r = RESOURCES[params.slug];
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const r = RESOURCES[slug];
   if (!r) return {};
   return pageMeta({ title: r.seoTitle, description: r.seoDesc, path: `/resources/${r.slug}` });
 }
 
-export default function ResourcePage({ params }: { params: { slug: string } }) {
-  const r = RESOURCES[params.slug];
+export default async function ResourcePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const r = RESOURCES[slug];
   if (!r) notFound();
 
   return (

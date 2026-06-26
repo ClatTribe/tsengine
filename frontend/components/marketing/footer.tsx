@@ -21,6 +21,17 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
     ],
   },
   {
+    title: "Compare",
+    links: [
+      { href: "/vs-vanta", label: "vs. Vanta" },
+      { href: "/vs-drata", label: "vs. Drata" },
+      { href: "/vs-sprinto", label: "vs. Sprinto" },
+      { href: "/vs-secureframe", label: "vs. Secureframe" },
+      { href: "/vs-aikido", label: "vs. Aikido" },
+      { href: "/vs-consulting", label: "vs. a consultant" },
+    ],
+  },
+  {
     title: "By asset",
     links: [
       { href: "/cloud-security", label: "Cloud security" },
