@@ -83,3 +83,31 @@ func contains(s []string, v string) bool {
 	}
 	return false
 }
+
+// A stealer-log with a plaintext password is the highest-severity OSINT signal (critical, verified, dark-web
+// breach-notification controls); without a password it's high (the host is still infected). A clean snapshot
+// yields nothing (grounded).
+func TestAssess_StealerLogIsCriticalWithPassword(t *testing.T) {
+	out := Assess(Snapshot{Org: "acme", StealerLogs: []StealerLog{
+		{Email: "cfo@acme.com", Domain: "okta.acme.com", Malware: "RedLine", Password: true, Source: "hudsonrock"},
+		{Email: "dev@acme.com", Malware: "Vidar", Source: "flare"}, // no plaintext password → high
+	}}, Options{})
+
+	if len(out) != 2 {
+		t.Fatalf("want 2 stealer-log findings, got %d", len(out))
+	}
+	// Sorted by severity desc: the password one (critical) leads.
+	crit := out[0]
+	if crit.RuleID != "osint::stealer-log" || crit.Severity != types.SeverityCritical {
+		t.Errorf("password stealer log should be critical, got %s %s", crit.RuleID, crit.Severity)
+	}
+	if crit.VerificationStatus != types.VerificationVerified {
+		t.Errorf("dark-web record is the proof → verified, got %q", crit.VerificationStatus)
+	}
+	if crit.Compliance == nil || len(crit.Compliance.GDPR) == 0 {
+		t.Errorf("stealer log should map breach-notification controls (GDPR 33/34), got %+v", crit.Compliance)
+	}
+	if out[1].Severity != types.SeverityHigh {
+		t.Errorf("no-password stealer log should be high, got %s", out[1].Severity)
+	}
+}
