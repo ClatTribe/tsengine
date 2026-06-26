@@ -125,6 +125,42 @@ func TestCompliance_MapsAuthzFamily(t *testing.T) {
 	}
 }
 
+// A non-CWE emission path (sspm/operate/cloud) sets an inline, source-specific mapping AND now also
+// carries a weakness CWE. The hook must MERGE the crosswalk into the inline mapping — keep the SaaS-
+// specific control AND gain the framework set the CWE maps to — never clobber it (the coverage fix).
+func TestCompliance_MergesInlineMappingWithCWE(t *testing.T) {
+	h := NewCompliance()
+	in := types.Finding{
+		RuleID:     "sspm::slack::2fa-not-enforced",
+		Tool:       "sspm",
+		Severity:   types.SeverityHigh,
+		CWE:        []string{"CWE-287"}, // authentication
+		Compliance: &types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.4.2"}, CISv8: []string{"6.5"}},
+	}
+	out, _, keep := h.Apply(in)
+	if !keep || out.Compliance == nil {
+		t.Fatal("dropped or no compliance")
+	}
+	c := out.Compliance
+	// the SaaS-specific inline controls survive
+	if !contains(c.PCI, "8.4.2") || !contains(c.CISv8, "6.5") {
+		t.Errorf("inline SaaS controls were clobbered: %+v", c)
+	}
+	// AND the crosswalk's CWE-287 frameworks are now present (HIPAA/ISO27001/NIST/FedRAMP/SOX)
+	if len(c.HIPAA) == 0 || len(c.ISO27001) == 0 || len(c.NIST80053) == 0 || len(c.FedRAMP) == 0 {
+		t.Errorf("CWE-287 crosswalk frameworks not merged in: %+v", c)
+	}
+}
+
+func contains(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestCompliance_MergesMultipleCWE(t *testing.T) {
 	h := NewCompliance()
 	// CWE-89 + CWE-200 both map; controls should union without dupes.

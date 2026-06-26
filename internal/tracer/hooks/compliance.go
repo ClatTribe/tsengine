@@ -152,8 +152,42 @@ func (h *Compliance) Apply(f types.Finding) (types.Finding, []types.AuditEntry, 
 	if !ok {
 		return f, nil, true
 	}
-	f.Compliance = agg
+	// Merge the crosswalk into any inline mapping a non-CWE emission path (operate/sspm/cloud/osint)
+	// already set — never clobber it. So a SaaS/identity finding keeps its source-specific control (e.g.
+	// the exact CIS/PCI SaaS control) AND gains the full framework set the CWE maps to. For a CWE-only
+	// finding (appsec/SAST) there's no inline mapping, so this is identical to the prior assignment.
+	if f.Compliance == nil {
+		f.Compliance = agg
+	} else {
+		f.Compliance = mergeCompliance(f.Compliance, agg)
+	}
 	return f, nil, true
+}
+
+// mergeCompliance unions src into dst field-by-field (dedup, order-preserving) so an inline mapping is
+// enriched by the crosswalk, never replaced.
+func mergeCompliance(dst, src *types.Compliance) *types.Compliance {
+	if src == nil {
+		return dst
+	}
+	if dst == nil {
+		return src
+	}
+	dst.SOC2 = mergeUnique(dst.SOC2, src.SOC2)
+	dst.PCI = mergeUnique(dst.PCI, src.PCI)
+	dst.HIPAA = mergeUnique(dst.HIPAA, src.HIPAA)
+	dst.CISv8 = mergeUnique(dst.CISv8, src.CISv8)
+	dst.NISTCSF = mergeUnique(dst.NISTCSF, src.NISTCSF)
+	dst.ISO27001 = mergeUnique(dst.ISO27001, src.ISO27001)
+	dst.GDPR = mergeUnique(dst.GDPR, src.GDPR)
+	dst.ISO27701 = mergeUnique(dst.ISO27701, src.ISO27701)
+	dst.NIST80053 = mergeUnique(dst.NIST80053, src.NIST80053)
+	dst.NIST800171 = mergeUnique(dst.NIST800171, src.NIST800171)
+	dst.CCPA = mergeUnique(dst.CCPA, src.CCPA)
+	dst.SOX = mergeUnique(dst.SOX, src.SOX)
+	dst.FedRAMP = mergeUnique(dst.FedRAMP, src.FedRAMP)
+	dst.DPDP = mergeUnique(dst.DPDP, src.DPDP)
+	return dst
 }
 
 // mergeUnique appends src into dst, dropping duplicates while preserving
