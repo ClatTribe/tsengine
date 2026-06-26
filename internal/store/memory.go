@@ -229,6 +229,20 @@ func (m *Memory) ListConnections(_ context.Context, tenantID string) ([]platform
 	return clone(m.connections[tenantID]), nil
 }
 
+func (m *Memory) DeleteConnection(_ context.Context, tenantID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	xs := m.connections[tenantID]
+	out := make([]platform.Connection, 0, len(xs))
+	for _, c := range xs {
+		if c.ID != id {
+			out = append(out, c)
+		}
+	}
+	m.connections[tenantID] = out
+	return nil
+}
+
 func (m *Memory) PutAsset(_ context.Context, a platform.Asset) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

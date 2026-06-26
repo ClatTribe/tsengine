@@ -62,6 +62,9 @@ type Store interface {
 	// --- connections / assets / engagements ---
 	PutConnection(ctx context.Context, c platform.Connection) error
 	ListConnections(ctx context.Context, tenantID string) ([]platform.Connection, error)
+	// DeleteConnection removes a tenant's connection by id (no-op if absent). Tenant-scoped:
+	// it only ever touches the given tenant's connections.
+	DeleteConnection(ctx context.Context, tenantID, id string) error
 	PutAsset(ctx context.Context, a platform.Asset) error
 	ListAssets(ctx context.Context, tenantID string) ([]platform.Asset, error)
 	PutEngagement(ctx context.Context, e platform.Engagement) error

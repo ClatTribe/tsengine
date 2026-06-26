@@ -114,6 +114,10 @@ export const api = {
   addAsset: (type: string, target: string, authorized: boolean) =>
     call<Asset>("/v1/assets", { method: "POST", body: JSON.stringify({ type, target, authorized }) }),
 
+  // Disconnect a connection — the founder self-serve fix for a wrong/stale connection. Tenant-scoped,
+  // ledger-signed server-side; stops future scans/actions through it.
+  deleteConnection: (id: string) => call<{ ok: boolean; id: string }>(`/v1/connections/${id}`, { method: "DELETE" }),
+
   // OSINT external-exposure view — the attacker's-eye footprint (breaches, leaks, exposed hosts,
   // typosquats, public exposure, advisories), folded into the same finding graph.
   osint: () =>

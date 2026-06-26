@@ -108,6 +108,38 @@ func TestQuarantineConnection(t *testing.T) {
 	}
 }
 
+// DELETE /v1/connections/{id} disconnects a connection — tenant-scoped, idempotent, never leaks
+// the sealed secret, and a foreign tenant cannot delete another's connection.
+func TestDisconnectConnection(t *testing.T) {
+	h, st := setup(t)
+	ctx := context.Background()
+
+	// A foreign tenant (t2, no connections) cannot delete t1's c1 — it 404s and c1 survives.
+	if rec := do(h, "DELETE", "/v1/connections/c1", "t2", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("ISOLATION: foreign-tenant delete should be 404, got %d", rec.Code)
+	}
+	if cs, _ := st.ListConnections(ctx, "t1"); len(cs) != 1 {
+		t.Fatalf("ISOLATION: c1 must survive a foreign-tenant delete, got %d connections", len(cs))
+	}
+
+	// The owner deletes c1 → 200, no secret leak, and the connection is gone.
+	rec := do(h, "DELETE", "/v1/connections/c1", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("disconnect: want 200, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "vault:") || strings.Contains(rec.Body.String(), "SECRET") {
+		t.Errorf("disconnect response leaked the secret ref: %s", rec.Body.String())
+	}
+	if cs, _ := st.ListConnections(ctx, "t1"); len(cs) != 0 {
+		t.Errorf("connection should be gone, got %d", len(cs))
+	}
+
+	// Deleting an unknown id → 404.
+	if rec := do(h, "DELETE", "/v1/connections/ghost", "t1", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown connection: want 404, got %d", rec.Code)
+	}
+}
+
 // The kill-switch endpoint toggles Tenant.AgentsHalted and the tenant read reflects it.
 func TestKillSwitchToggle(t *testing.T) {
 	h, st := setup(t)

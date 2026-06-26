@@ -162,6 +162,10 @@ func (s *SQLite) PutConnection(ctx context.Context, c platform.Connection) error
 func (s *SQLite) ListConnections(ctx context.Context, tenantID string) ([]platform.Connection, error) {
 	return listJSON[platform.Connection](ctx, s.db, `SELECT data FROM connections WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
+func (s *SQLite) DeleteConnection(ctx context.Context, tenantID, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM connections WHERE tenant_id=? AND id=?`, tenantID, id)
+	return err
+}
 
 func (s *SQLite) PutAsset(ctx context.Context, a platform.Asset) error {
 	return s.upsertTID(ctx, `INSERT INTO assets(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, a.TenantID, a.ID, a)
