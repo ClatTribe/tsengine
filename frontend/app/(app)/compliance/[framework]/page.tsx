@@ -65,19 +65,30 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
           </a>
         </div>
 
-        {/* Progress — only meaningful once at least one control has mapped */}
+        {/* Assessment COVERAGE — how much of the framework automated scanning evaluated (NOT a met/total
+            "score"), so a thin posture never reads as compliant. The bar tracks coverage; gaps shown
+            separately. No green "certified" look — the readiness line + footer keep it honest (#534). */}
         {assessed && (
           <div className="mt-4">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted">
-                {met.length} of {total} controls met
-                {gaps.length > 0 && <span className="text-high"> · {gaps.length} gap{gaps.length > 1 ? "s" : ""}</span>}
-              </span>
-              <span className={`font-semibold ${pct === 100 ? "text-pulse" : "text-ink"}`}>{pct}%</span>
-            </div>
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-3">
-              <div className={`h-full rounded-full ${gaps.length === 0 ? "bg-pulse" : "bg-accent"}`} style={{ width: `${pct}%` }} />
-            </div>
+            {(() => {
+              const cov = rep?.Coverage;
+              const covPct = cov ? Math.round(cov.automated_coverage_pct) : pct;
+              return (
+                <>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted">
+                      {cov ? `${cov.assessed_controls} of ${cov.assessable_controls} technical controls assessed` : `${total} controls tracked`}
+                      {gaps.length > 0 && <span className="text-high"> · {gaps.length} gap{gaps.length > 1 ? "s" : ""}</span>}
+                    </span>
+                    <span className="font-semibold text-ink">{covPct}% assessed</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-3">
+                    <div className={`h-full rounded-full ${gaps.length > 0 ? "bg-accent" : "bg-low"}`} style={{ width: `${covPct}%` }} />
+                  </div>
+                  {cov?.readiness && <p className="mt-1.5 text-[11px] text-faint">{cov.readiness}</p>}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
