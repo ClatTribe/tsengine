@@ -60,6 +60,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/jobs"
+	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/notify"
 	"github.com/ClatTribe/tsengine/internal/obsv"
 	"github.com/ClatTribe/tsengine/internal/operate"
@@ -363,13 +364,19 @@ func main() {
 		agentLLM = llm
 		log.Print("[platform] ModeDeep D-agent wired (LLM spec generator) — open-ended exploitation proposals, deterministically validated")
 	}
+	// The L2 Lead/translator's tool-calling client (POST /v1/l2/translate). Anthropic, OpenAI, or a
+	// local Ollama via l2.ClientFromEnv; nil → the translator endpoint is gated.
+	leadClient := l2.ClientFromEnv()
+	if leadClient != nil {
+		log.Printf("[platform] L2 translator wired (model=%s) — developer-facing consultant deliverable", leadClient.Model())
+	}
 	api := platformapi.NewHandler(platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
 		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
 		Token:          token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
-		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser, AgentLLM: agentLLM,
+		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser, AgentLLM: agentLLM, LeadClient: leadClient,
 	})
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls

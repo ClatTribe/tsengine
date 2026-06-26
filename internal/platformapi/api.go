@@ -19,6 +19,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/jobs"
+	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -68,6 +69,10 @@ type Deps struct {
 	// the deterministic HeuristicSpecGen (today's behaviour). The model widens discovery only; the
 	// deterministic predicate + the RoE Guard still gate every probe, so no LLM false positives.
 	AgentLLM pentest.SpecLLM
+	// LeadClient is the operator-global tool-calling client for the L2 Lead/translator (POST
+	// /v1/l2/translate). Wired from l2.ClientFromEnv (Anthropic, OpenAI, or a local Ollama); a tenant's
+	// own configured model takes precedence. Nil → the translator endpoint is gated (400).
+	LeadClient l2.Client
 }
 
 // NewHandler returns the platform's HTTP handler.
@@ -171,6 +176,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/osint/scan", d.auth(d.handleOSINTScan))                                                           // LIVE keyless OSINT (crt.sh CT) over the tenant's domains
 	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))                                            // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
 	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))                                       // stored cloud-agent attack paths
+	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                                                      // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
 	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                                                                 // OSINT "External exposure" view + summary
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
