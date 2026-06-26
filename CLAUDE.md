@@ -110,7 +110,7 @@ Every scan target maps to exactly one asset type. The asset type determines whic
 | `cloud_account` | AWS / GCP / Azure account | compliance |
 | `mobile_application` | Android (APK / source) or iOS (IPA / source) app bundle | security |
 
-The `cloud_account` asset is what makes tsengine usable for SOC2/PCI compliance teams. Without it, the engine only covers infrastructure surfaces. The `mobile_application` asset (single-stage, like `repository`: the bundle *is* the surface) covers the mobile-app-team audience competitors carve out as a separate offering — anchored on mobsfscan (mobile SAST) + gitleaks (hardcoded secrets) + trivy fs (bundled-dep SCA), all already in the sandbox image, so it adds reach without a new sandbox tool. Count invariant: `pkg/types.AllAssetTypes()` + its test pin the count (now 8).
+The `cloud_account` asset is what makes tsengine usable for SOC2/PCI compliance teams. Without it, the engine only covers infrastructure surfaces. The `mobile_application` asset (single-stage, like `repository`: the bundle *is* the surface) covers the mobile-app-team audience competitors carve out as a separate offering — anchored on mobsfscan (mobile SAST) + gitleaks (hardcoded secrets) + trivy fs (bundled-dep SCA), plus a registry tier of semgrep (mobile packs) + trufflehog + **apkid** (packer/obfuscator/anti-analysis fingerprint — a tampering/repackaging signal mobsfscan's SAST misses; `internal/tool/apkid`). Count invariant: `pkg/types.AllAssetTypes()` + its test pin the count (now 8).
 
 For the per-asset anchor + registry tool lists, filter rules, and bench targets, see [arch.md](arch.md).
 
