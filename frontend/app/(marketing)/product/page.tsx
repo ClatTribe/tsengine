@@ -19,7 +19,7 @@ const LOOP = [
   { name: "triage", t: "Triage & prove", d: "An AI security engineer separates real, exploitable risk from scanner noise — and, where you authorize active testing, proves the exploit with a captured proof-of-concept. A finding is confirmed, not just flagged." },
   { name: "fix", t: "Fix", d: "It prepares the actual remediation — a pull request, a config change, an identity action, or a ticket — ready to ship." },
   { name: "approve", t: "Approve", d: "Low-risk fixes apply automatically; anything consequential waits for one tap of your approval. Autonomy where it's earned." },
-  { name: "prove", t: "Prove", d: "Every finding maps to controls across 14 frameworks and lands in a signed, auditor-ready evidence pack — automatically." },
+  { name: "prove", t: "Prove", d: "Every finding maps to controls across 22 frameworks and lands in a signed, auditor-ready evidence pack — automatically." },
 ];
 
 const PERSONAS = [
