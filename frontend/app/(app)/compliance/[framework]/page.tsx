@@ -93,6 +93,16 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
         )}
       </div>
 
+      {/* Attestation handoff — the coverage layer is explicit that automated scanning is NOT a
+          certification; this is the path to the named human who DOES attest (the §18.4 audit engagement). */}
+      <Link
+        href="/audits"
+        className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
+      >
+        <FileSignature className="h-3.5 w-3.5 shrink-0 text-accent" />
+        <span>We don&apos;t certify you — an independent auditor attests {title}. <span className="font-medium text-accent">Start an audit engagement →</span></span>
+      </Link>
+
       {/* Not-yet-assessed state — a single, honest message (no controls have mapped to a
           finding yet). Replaces the old contradictory "every control met" + "none met". */}
       {!assessed ? (

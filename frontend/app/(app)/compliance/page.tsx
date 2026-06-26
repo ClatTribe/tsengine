@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, FileText, CircleDashed, Plug, CircleCheck, Circle, Layers, Target } from "lucide-react";
+import { ShieldCheck, ArrowRight, FileText, CircleDashed, Plug, CircleCheck, Circle, Layers, Target, FileSignature } from "lucide-react";
 import { api, FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/api";
 import { ASSET_TYPE_LABEL } from "@/lib/connectors";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -55,6 +55,13 @@ export default async function CompliancePage() {
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
             >
               <FileText className="h-3.5 w-3.5" /> Security questionnaire
+            </Link>
+            <Link
+              href="/audits"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
+              title="We don't certify you — an independent auditor attests. Start that engagement here."
+            >
+              <FileSignature className="h-3.5 w-3.5" /> Get attested
             </Link>
           </div>
         }
