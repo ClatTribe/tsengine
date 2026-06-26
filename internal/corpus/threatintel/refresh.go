@@ -10,10 +10,11 @@ import (
 
 // RefreshOptions configures an out-of-band corpus refresh.
 type RefreshOptions struct {
-	OutDir     string       // output dir (default "./corpus")
-	HTTPClient *http.Client // default: 120s timeout
-	KEVURL     string       // override for tests
-	EPSSURL    string       // override for tests
+	OutDir       string       // output dir (default "./corpus")
+	HTTPClient   *http.Client // default: 120s timeout
+	KEVURL       string       // override for tests
+	EPSSURL      string       // override for tests
+	ExploitDBURL string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
 }
 
 func (o RefreshOptions) withDefaults() RefreshOptions {
@@ -28,6 +29,9 @@ func (o RefreshOptions) withDefaults() RefreshOptions {
 	}
 	if o.EPSSURL == "" {
 		o.EPSSURL = EPSSURL
+	}
+	if o.ExploitDBURL == "" {
+		o.ExploitDBURL = ExploitDBURL
 	}
 	return o
 }
@@ -59,7 +63,15 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 		return Manifest{}, "", err
 	}
 
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf)
+	// ExploitDB is best-effort: it's a large optional overlay (public-exploit-exists), so a fetch or
+	// parse failure must NOT block the KEV+EPSS refresh — we just build the corpus without it.
+	var exploits map[string][]string
+	if body, ferr := httpGet(ctx, opts.HTTPClient, opts.ExploitDBURL); ferr == nil {
+		exploits, _ = ParseExploitDB(body)
+		_ = body.Close()
+	}
+
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, exploits)
 	dataPath, err := Write(opts.OutDir, entries, m)
 	if err != nil {
 		return Manifest{}, "", err
