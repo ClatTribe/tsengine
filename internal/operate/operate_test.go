@@ -86,6 +86,16 @@ func TestAssess_VulnerableWorkspaceGrounded(t *testing.T) {
 		}
 	}
 
+	// The identity access/auth findings must map the access-control frameworks that the CWE crosswalk
+	// also assigns to CWE-287/269 (HIPAA, ISO 27001, SOX) — else a healthcare/enterprise/public-company
+	// tenant's identity posture under-reports those frameworks (the non-CWE-path coverage fix).
+	for _, rule := range []string{"operate::admin-without-mfa", "operate::stale-account", "operate::oauth-admin-scope"} {
+		f := rules[rule]
+		if len(f.Compliance.HIPAA) == 0 || len(f.Compliance.ISO27001) == 0 || len(f.Compliance.SOX) == 0 {
+			t.Errorf("%s should map HIPAA+ISO27001+SOX (access-control nexus), got %+v", rule, f.Compliance)
+		}
+	}
+
 	// the suspended admin must NOT produce findings (grounding excludes inactive)
 	for _, f := range fs {
 		if strings.Contains(f.Endpoint, "gone@") {
