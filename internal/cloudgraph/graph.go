@@ -68,6 +68,13 @@ const (
 	EdgeNetworkReach EdgeKind = "network_reach" // src can reach dst over the network
 	EdgeRunsAs       EdgeKind = "runs_as"       // compute runs with this principal (instance profile / exec role)
 	EdgePrivesc      EdgeKind = "privesc"       // a known IAM privesc move (PMapper-style)
+	// EdgeTriggers is a service-coupling: src (an API Gateway, ALB, EventBridge rule, S3 event
+	// source, SNS/SQS, etc.) can INVOKE/trigger dst (a Lambda, ECS task, …). It closes the gap where
+	// the graph modelled the compute's IAM trust (Lambda→role) but not how an attacker reaches the
+	// compute in the first place — so "internet → (reach) public API Gateway → (triggers) Lambda →
+	// (runs_as) role → (has_access) sensitive data" is now a discoverable chain. Config-possible like
+	// every edge: the ingest source emits it only where the integration/event-source is actually wired.
+	EdgeTriggers EdgeKind = "triggers"
 )
 
 // Edge is a directed relationship from→to of a given kind. Condition records a

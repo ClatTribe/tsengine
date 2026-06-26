@@ -242,7 +242,7 @@ func narrate(snap *cloudgraph.Snapshot, p cloudgraph.Path) string {
 	verb := map[cloudgraph.EdgeKind]string{
 		cloudgraph.EdgeNetworkReach: "reaches", cloudgraph.EdgeRunsAs: "runs as",
 		cloudgraph.EdgeAssumeRole: "assumes", cloudgraph.EdgePassRole: "passes",
-		cloudgraph.EdgeHasAccess: "reads", cloudgraph.EdgePrivesc: "escalates to",
+		cloudgraph.EdgeHasAccess: "reads", cloudgraph.EdgePrivesc: "escalates to", cloudgraph.EdgeTriggers: "triggers",
 	}
 	b.WriteString(label(snap, p.Nodes[0]))
 	for i, e := range p.Edges {
