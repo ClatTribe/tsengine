@@ -72,3 +72,40 @@ func TestThreatIntelCorpusInfo_ReflectsManifest(t *testing.T) {
 		t.Errorf("epss as-of = %v, want 2099", epssAsOf)
 	}
 }
+
+// With TSENGINE_KEV_ESCALATE set, a sub-high finding whose CVE is on KEV is bumped to high + logs a promote.
+func TestThreatIntel_KEVEscalateOptIn(t *testing.T) {
+	path := writeOnDiskCorpus(t)
+	t.Setenv(ThreatIntelCorpusEnv, path)
+	t.Setenv(KEVEscalateEnv, "1")
+
+	h := NewThreatIntel()
+	f, audit, _ := h.Apply(types.Finding{ID: "f-1", RuleID: "trivy::CVE-2099-12345", Severity: types.SeverityMedium})
+	if f.Severity != types.SeverityHigh {
+		t.Errorf("a KEV-listed medium finding should escalate to high, got %s", f.Severity)
+	}
+	if len(audit) != 1 || audit[0].Rule != "threat_intel::kev-escalate" || audit[0].Action != "promote" {
+		t.Errorf("escalation should log a kev-escalate promote, got %+v", audit)
+	}
+	// A finding already at/above high is left alone (never downgrade, never redundant-bump).
+	hi, _, _ := h.Apply(types.Finding{ID: "f-2", RuleID: "trivy::CVE-2099-12345", Severity: types.SeverityCritical})
+	if hi.Severity != types.SeverityCritical {
+		t.Errorf("an already-critical finding must not change, got %s", hi.Severity)
+	}
+}
+
+// Default (no env) keeps the annotation-only contract: a KEV-listed medium finding is annotated, NOT bumped.
+func TestThreatIntel_KEVNoEscalateByDefault(t *testing.T) {
+	path := writeOnDiskCorpus(t)
+	t.Setenv(ThreatIntelCorpusEnv, path)
+	// KEVEscalateEnv deliberately unset.
+
+	h := NewThreatIntel()
+	f, audit, _ := h.Apply(types.Finding{ID: "f-1", RuleID: "trivy::CVE-2099-12345", Severity: types.SeverityMedium})
+	if f.Severity != types.SeverityMedium {
+		t.Errorf("default behaviour is annotation-only — severity must stay medium, got %s", f.Severity)
+	}
+	if len(audit) != 1 || audit[0].Rule != "threat_intel::kev-listed" {
+		t.Errorf("default should log the kev-listed annotation, got %+v", audit)
+	}
+}

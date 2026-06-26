@@ -26,9 +26,10 @@ var threatIntelCorpus []byte
 // a Phase-4 static snapshot; Phase 5 wires the cron-refreshed,
 // per-scan-pinned corpus.
 type ThreatIntel struct {
-	corpus   map[string]corpusEntry
-	version  string    // pinned corpus version (embedded const or manifest)
-	snapshot time.Time // as-of of the intel data (embedded snapshot or EPSS as-of)
+	corpus      map[string]corpusEntry
+	version     string    // pinned corpus version (embedded const or manifest)
+	snapshot    time.Time // as-of of the intel data (embedded snapshot or EPSS as-of)
+	escalateKEV bool      // opt-in (TSENGINE_KEV_ESCALATE): bump a sub-high finding to high when its CVE is on CISA KEV
 }
 
 type corpusEntry struct {
@@ -47,6 +48,21 @@ var cvePattern = regexp.MustCompile(`CVE-\d{4}-\d{3,7}`)
 // KEV+EPSS data file written by `tsengine corpus refresh`). When set and
 // loadable it overrides the embedded snapshot.
 const ThreatIntelCorpusEnv = "TSENGINE_THREAT_INTEL_CORPUS"
+
+// KEVEscalateEnv opts IN to KEV-driven severity escalation (the deliberate-future enrichment this hook's
+// Apply documents). When "1"/"true", a finding whose CVE is on the CISA KEV catalog but rated below high is
+// bumped to high — KEV means actively exploited in the wild (the strongest "patch now" signal, and the
+// trigger for CISA BOD 22-01 SLA clocks). Default OFF preserves the annotation-only contract; grounded (§10):
+// it acts ONLY on a real KEV listing in the corpus, and never downgrades.
+const KEVEscalateEnv = "TSENGINE_KEV_ESCALATE"
+
+func kevEscalateEnabled() bool {
+	switch os.Getenv(KEVEscalateEnv) {
+	case "1", "true", "TRUE", "yes":
+		return true
+	}
+	return false
+}
 
 // NewThreatIntel loads the threat-intel corpus: the refreshed on-disk OSINT
 // corpus when TSENGINE_THREAT_INTEL_CORPUS points at one, else the embedded
@@ -72,7 +88,7 @@ func loadThreatIntelEmbedded() *ThreatIntel {
 	if err := json.Unmarshal(threatIntelCorpus, &c); err != nil {
 		panic("hooks: malformed embedded threat_intel corpus: " + err.Error())
 	}
-	return &ThreatIntel{corpus: c, version: ThreatIntelCorpusVersion, snapshot: ThreatIntelSnapshot}
+	return &ThreatIntel{corpus: c, version: ThreatIntelCorpusVersion, snapshot: ThreatIntelSnapshot, escalateKEV: kevEscalateEnabled()}
 }
 
 // loadThreatIntelFile loads a refreshed on-disk OSINT corpus (a bare
@@ -90,7 +106,7 @@ func loadThreatIntelFile(path string) (*ThreatIntel, error) {
 	if len(c) == 0 {
 		return nil, fmt.Errorf("on-disk threat_intel corpus is empty")
 	}
-	h := &ThreatIntel{corpus: c, version: "threat-intel-ondisk"}
+	h := &ThreatIntel{corpus: c, version: "threat-intel-ondisk", escalateKEV: kevEscalateEnabled()}
 	if m, mErr := threatintel.LoadManifest(path); mErr == nil {
 		h.version = m.Version
 		h.snapshot = m.EPSSAsOf
@@ -141,9 +157,9 @@ func (h *ThreatIntel) Lookup(cve string) (*types.ThreatIntel, bool) {
 	}, true
 }
 
-// Apply enriches CVE-bearing findings. Annotation-only — never drops or
-// changes severity (KEV-driven severity escalation is a deliberate
-// future enrichment, gated behind policy).
+// Apply enriches CVE-bearing findings. Annotation-only by default; KEV-driven severity escalation is the
+// deliberate, policy-gated enrichment (TSENGINE_KEV_ESCALATE — KEVEscalateEnv). Grounded (§10): it acts only
+// on a real KEV listing in the pinned corpus, only bumps UP (never downgrades), and logs the promotion.
 func (h *ThreatIntel) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bool) {
 	cve := cvePattern.FindString(f.RuleID)
 	if cve == "" {
@@ -155,9 +171,22 @@ func (h *ThreatIntel) Apply(f types.Finding) (types.Finding, []types.AuditEntry,
 	}
 	f.ThreatIntel = ti
 
-	// A KEV listing is materially important — log it to the audit trail
-	// so the compliance audience sees the SLA-clock trigger explicitly.
 	if ti.KEV != nil && ti.KEV.Listed {
+		// Opt-in escalation: a CVE actively exploited in the wild but rated below high is materially
+		// under-prioritized — bump it to high (CISA BOD 22-01's must-patch bar). Records a `promote`.
+		if h.escalateKEV && f.Severity.Rank() < types.SeverityHigh.Rank() {
+			from := f.Severity
+			f.Severity = types.SeverityHigh
+			return f, []types.AuditEntry{{
+				FindingID:    f.ID,
+				Action:       "promote",
+				FromSeverity: from,
+				ToSeverity:   types.SeverityHigh,
+				Rule:         "threat_intel::kev-escalate",
+				Reason:       cve + " is on the CISA KEV catalog (added " + kevDate(ti.KEV) + ") — actively exploited, bumped to high per BOD 22-01",
+			}}, true
+		}
+		// Default: annotate only — log the KEV listing so the compliance audience sees the SLA-clock trigger.
 		return f, []types.AuditEntry{{
 			FindingID: f.ID,
 			Action:    "annotate",
