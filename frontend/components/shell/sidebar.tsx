@@ -12,6 +12,7 @@ import {
   Boxes,
   ScrollText,
   FileText,
+  Sparkles,
   FileCheck2,
   UserCheck,
   AppWindow,
@@ -46,6 +47,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     items: [
       { href: "/issues", label: "Issues", icon: Layers },
       { href: "/findings", label: "Findings", icon: Bug },
+      { href: "/brief", label: "Plain-English brief", icon: Sparkles },
       { href: "/pentest", label: "Pentest", icon: Crosshair },
       { href: "/cloud-engineer", label: "Cloud engineer", icon: Cloud },
       { href: "/attack-paths", label: "Attack paths", icon: Spline },
