@@ -22,4 +22,8 @@ type Compliance struct {
 	SOX        []string `json:"sox,omitempty"`          // Sarbanes-Oxley IT general controls (ITGC domains)
 	FedRAMP    []string `json:"fedramp,omitempty"`      // FedRAMP Moderate baseline (800-53-derived control IDs)
 	DPDP       []string `json:"dpdp,omitempty"`         // India Digital Personal Data Protection Act 2023 (Section refs)
+	// Competitor-parity additions (Sprinto/Vanta/Drata also support these): US defense + AI governance.
+	CMMC      []string `json:"cmmc,omitempty"`        // CMMC 2.0 Level 2 practice IDs (US DoD; 800-171-derived)
+	ISO42001  []string `json:"iso42001,omitempty"`    // ISO/IEC 42001:2023 AI management system (Annex A)
+	NISTAIRMF []string `json:"nist_ai_rmf,omitempty"` // NIST AI Risk Management Framework 1.0 (functions)
 }

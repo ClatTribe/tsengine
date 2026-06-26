@@ -16,6 +16,9 @@ export const FRAMEWORKS = [
   "sox",
   "fedramp",
   "dpdp",
+  "cmmc",
+  "iso42001",
+  "nist_ai_rmf",
 ] as const;
 
 export const FRAMEWORK_LABEL: Record<string, string> = {
@@ -33,6 +36,9 @@ export const FRAMEWORK_LABEL: Record<string, string> = {
   sox: "SOX",
   fedramp: "FedRAMP",
   dpdp: "DPDP",
+  cmmc: "CMMC 2.0",
+  iso42001: "ISO 42001 (AI)",
+  nist_ai_rmf: "NIST AI RMF",
 };
 
 // FRAMEWORK_DESC — one-line plain-English descriptions, shown on the per-framework drill so
@@ -52,6 +58,9 @@ export const FRAMEWORK_DESC: Record<string, string> = {
   sox: "Sarbanes-Oxley IT general controls over financial-reporting systems.",
   fedramp: "US government cloud authorization baseline (Moderate), built on NIST 800-53.",
   dpdp: "India's Digital Personal Data Protection Act 2023 — safeguards for personal data.",
+  cmmc: "US DoD Cybersecurity Maturity Model Certification 2.0 (Level 2) — defense supply-chain controls.",
+  iso42001: "ISO/IEC 42001:2023 — the AI management-system standard for governing AI risk.",
+  nist_ai_rmf: "NIST AI Risk Management Framework 1.0 — govern, map, measure, and manage AI risk.",
 };
 
 // FRAMEWORK_CATEGORY groups frameworks for the compliance grid's section headers, so a
@@ -68,6 +77,9 @@ export const FRAMEWORK_CATEGORY: Record<string, string> = {
   iso27701: "Privacy",
   ccpa: "Privacy",
   dpdp: "Privacy",
+  cmmc: "Government",
+  iso42001: "AI governance",
+  nist_ai_rmf: "AI governance",
   nist_800_53: "Government",
   nist_800_171: "Government",
   fedramp: "Government",
