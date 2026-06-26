@@ -11,9 +11,12 @@ import { FirstRun } from "@/components/onboarding/first-run";
 
 export const dynamic = "force-dynamic";
 
+// Honest verdicts (no-false-compliant, extended to the risk rating): a clean scan means "nothing flagged",
+// NOT "you're protected" — absence of findings is not a guarantee of security. Only the cautionary verdicts
+// make a strong claim, because there it's warranted.
 const VERDICT: Record<string, string> = {
-  Clear: "You're protected",
-  Low: "You're in good shape",
+  Clear: "Nothing flagged right now",
+  Low: "Low risk — minor items to review",
   Medium: "A few things to review",
   High: "Some issues need your attention",
   Critical: "Action needed now",
