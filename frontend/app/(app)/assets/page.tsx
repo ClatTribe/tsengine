@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Boxes, CircleAlert, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { Boxes, CircleAlert, ArrowUpRight, CheckCircle2, AppWindow, Mail, Globe2 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
 import { api } from "@/lib/api";
 import type { Asset, AssetPosture, AssetSecurity, Connection, Engagement } from "@/lib/types";
@@ -118,6 +118,51 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Complete your coverage — the readiness categories that aren't a one-click OAuth card. /compliance tells
+          the founder they need SaaS / email / web-API coverage; this bridges them to the real path for each
+          (honest §10: SaaS posture is sync/snapshot, not OAuth; email/web are add-a-target). */}
+      <section>
+        <SectionTitle>Complete your coverage</SectionTitle>
+        <p className="mb-3 -mt-1 text-xs text-muted">
+          Your compliance posture needs more than code, cloud, and identity. Here&apos;s how to cover the rest —
+          each maps to controls on your <Link href="/compliance" className="text-accent hover:underline">compliance page</Link>.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Link href="/saas-apps" className="group card flex flex-col gap-2 p-4 transition hover:border-accent/40 hover:bg-surface-2">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-surface-2 text-ink"><AppWindow className="h-4 w-4" /></span>
+              <span className="flex-1 text-sm font-medium">SaaS posture</span>
+              <ArrowUpRight className="h-4 w-4 text-faint transition group-hover:text-accent" />
+            </div>
+            <p className="text-xs leading-relaxed text-muted">Slack, Zoom, Atlassian, Salesforce &amp; GitHub-org config — MFA, OAuth grants, public sharing.</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-faint">Sync your GitHub org in Settings, or post a snapshot. SOC 2 CC9.2 · third-party review.</p>
+            <span className="mt-auto text-[11px] text-accent opacity-0 transition group-hover:opacity-100">Open SaaS posture →</span>
+          </Link>
+          <div className="card flex flex-col gap-2 p-4">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-surface-2 text-ink"><Mail className="h-4 w-4" /></span>
+              <span className="flex-1 text-sm font-medium">Email &amp; domain</span>
+            </div>
+            <p className="text-xs leading-relaxed text-muted">Anti-spoofing on your sending domain — SPF, DKIM, DMARC.</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-faint">Add your domain under <span className="font-medium text-muted">Add a target</span> above. CIS 9.5 · NIST-CSF PR.DS-2.</p>
+          </div>
+          <div className="card flex flex-col gap-2 p-4">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-surface-2 text-ink"><Globe2 className="h-4 w-4" /></span>
+              <span className="flex-1 text-sm font-medium">Web apps &amp; APIs</span>
+            </div>
+            <p className="text-xs leading-relaxed text-muted">DAST on your deployed apps and APIs — injection, auth, exposure.</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-faint">Add each as a target under <span className="font-medium text-muted">Add a target</span> above. SOC 2 CC6.1 · PCI 6.2.4.</p>
+          </div>
+        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-faint">
+          A few controls — endpoint/MDM, centralized logging, backup/DR, and security-awareness training — aren&apos;t
+          automatable. Track those (and document the evidence) on your{" "}
+          <Link href="/compliance" className="text-accent hover:underline">compliance page</Link>; your team, our managed
+          expert, or your MSP signs them off.
+        </p>
       </section>
 
       {/* Connected systems */}
