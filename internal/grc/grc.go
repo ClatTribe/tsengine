@@ -67,6 +67,10 @@ func IsFramework(key string) bool {
 type GRC struct {
 	Store store.Store
 	Now   func() time.Time
+	// ControlUniverse returns the controls our crosswalk CAN assess for a framework (the tooling-
+	// addressable subset). Injected (cmd/platform wires hooks.ControlsFor) so grc stays decoupled +
+	// testable. nil → coverage degrades to "unavailable" rather than over-claiming compliance.
+	ControlUniverse func(framework string) []string
 }
 
 func (g *GRC) now() time.Time {
