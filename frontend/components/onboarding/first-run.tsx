@@ -80,6 +80,7 @@ export function FirstRun() {
                     <ArrowRight className="h-4 w-4 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
                   </div>
                   <p className="text-xs leading-relaxed text-muted">{c.monitors}</p>
+                  <p className="text-[11px] leading-relaxed text-faint">{c.evidence}</p>
                 </a>
               ))}
             </div>
