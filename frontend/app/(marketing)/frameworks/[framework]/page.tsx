@@ -25,6 +25,7 @@ const CATEGORY_ANGLE: Record<string, string> = {
   "Sector & payments": "the sector controls auditors and acquirers hold you to",
   Privacy: "the data-protection obligations regulators and customers expect",
   Government: "the federal-grade controls public-sector and enterprise buyers require",
+  "AI governance": "the AI-risk and model-security controls enterprise buyers and regulators now require",
 };
 
 function info(framework: string) {
