@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 // Maps an OSINT rule to a duotone class icon + a one-line "what it means".
 const CLASS_META: Record<string, { icon: string; about: string }> = {
+  "osint::stealer-log": { icon: "key", about: "Dark web: a corporate credential harvested by infostealer malware from an infected host — rotate it, revoke sessions, re-image the device." },
   "osint::breached-credential": { icon: "key", about: "A team email appears in a known breach — reset + confirm MFA." },
   "osint::leaked-secret": { icon: "lock", about: "A secret leaked in a public repo or paste — rotate immediately." },
   "osint::exposed-host": { icon: "network", about: "Internet-reachable infra that isn't monitored — add it or take it down." },

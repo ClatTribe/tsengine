@@ -32,6 +32,7 @@ type Snapshot struct {
 	Typosquats       []TyposquatDomain  `json:"typosquats"`        // a registered look-alike / phishing domain
 	Exposures        []DataExposure     `json:"exposures"`         // org data found exposed on a public/paste/dark site
 	Advisories       []Advisory         `json:"advisories"`        // a security advisory relevant to the org's stack/sector
+	StealerLogs      []StealerLog       `json:"stealer_logs"`      // dark-web: a corporate credential harvested by infostealer malware
 }
 
 type ExposedHost struct {
@@ -80,6 +81,20 @@ type Advisory struct {
 	Source    string `json:"source"` // taranis-ai / nvd / vendor-advisory
 }
 
+// StealerLog is a dark-web exposure: a corporate credential harvested from an INFECTED employee/contractor
+// machine by infostealer malware (RedLine/Raccoon/Vidar/Lumma) and sold/leaked on dark-web markets, Telegram
+// channels, and stealer-log feeds (HudsonRock/Flare/Intel471/DeHashed). This is materially worse than a
+// breach-DB hit: the credentials (and often live session cookies) are fresh, plaintext, and tied to a host
+// the attacker already controls — a direct account-takeover path. The highest-severity OSINT signal.
+type StealerLog struct {
+	Email    string `json:"email,omitempty"`    // the corporate identity captured
+	Domain   string `json:"domain,omitempty"`   // the app/service the credential unlocks (e.g. okta.acme.com)
+	Malware  string `json:"malware,omitempty"`  // the stealer family (RedLine / Raccoon / Vidar / Lumma / …)
+	Date     string `json:"date,omitempty"`     // when the log was dated / listed
+	Source   string `json:"source"`             // the dark-web feed/market (hudsonrock / flare / intel471 / dehashed / …)
+	Password bool   `json:"password,omitempty"` // a plaintext password was present (proof the credential is compromised)
+}
+
 // Options tunes the assessment; zero value is sensible defaults.
 type Options struct {
 	Now func() time.Time
@@ -105,6 +120,7 @@ func Assess(s Snapshot, opts Options) []types.Finding {
 	}
 
 	var out []types.Finding
+	out = append(out, assessStealerLogs(s, now, id)...)
 	out = append(out, assessBreaches(s, now, id)...)
 	out = append(out, assessLeaks(s, now, id)...)
 	out = append(out, assessExposedHosts(s, now, id)...)
@@ -134,6 +150,38 @@ func assessBreaches(s Snapshot, now time.Time, id func() string) []types.Finding
 		out = append(out, finding(id(), "osint::breached-credential", types.SeverityHigh,
 			fmt.Sprintf("Breached credential for %s", b.Email), b.Email, desc, now,
 			[]string{"CWE-359"}, []string{"T1589"}, src(b.Source),
+			types.Compliance{
+				SOC2: []string{"CC6.1", "CC7.3"}, PCI: []string{"8.3.1"}, HIPAA: []string{"164.308(a)(6)"},
+				GDPR: []string{"Art. 33", "Art. 34"}, CISv8: []string{"5.2", "6.3"}, NISTCSF: []string{"PR.AC-01"},
+			}))
+	}
+	return out
+}
+
+// Stealer-log exposure (dark web) — a corporate credential harvested by infostealer malware (RedLine/Raccoon/
+// Vidar/Lumma) from an infected host and surfaced on a dark-web feed. The single highest-severity OSINT signal:
+// unlike an old breach-DB hash, this credential is fresh + plaintext and the host is attacker-controlled (often
+// with live session cookies), so it's a direct account-takeover path. Critical when a plaintext password is
+// present; high otherwise (the host is still compromised). Verified — the dark-web record IS the proof.
+func assessStealerLogs(s Snapshot, now time.Time, id func() string) []types.Finding {
+	var out []types.Finding
+	for _, l := range s.StealerLogs {
+		who := nz(l.Email, nz(l.Domain, "a corporate identity"))
+		sev := types.SeverityHigh
+		if l.Password {
+			sev = types.SeverityCritical
+		}
+		desc := fmt.Sprintf("%s was captured by infostealer malware", who)
+		if l.Malware != "" {
+			desc += " (" + l.Malware + ")"
+		}
+		if l.Domain != "" && l.Domain != who {
+			desc += " for " + l.Domain
+		}
+		desc += " and surfaced on a dark-web stealer-log feed. The source host is compromised: rotate the credential, revoke active sessions/tokens, and treat the device as infected (re-image)."
+		out = append(out, finding(id(), "osint::stealer-log", sev,
+			fmt.Sprintf("Stealer-log credential exposure: %s", who), nz(l.Email, l.Domain), desc, now,
+			[]string{"CWE-522"}, []string{"T1555"}, src(l.Source),
 			types.Compliance{
 				SOC2: []string{"CC6.1", "CC7.3"}, PCI: []string{"8.3.1"}, HIPAA: []string{"164.308(a)(6)"},
 				GDPR: []string{"Art. 33", "Art. 34"}, CISv8: []string{"5.2", "6.3"}, NISTCSF: []string{"PR.AC-01"},

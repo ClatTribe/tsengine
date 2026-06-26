@@ -211,6 +211,7 @@ func nz(s, dflt string) string {
 
 // osintClassLabel maps an osint:: rule to a human class for the UX summary.
 var osintClassLabel = map[string]string{
+	"osint::stealer-log":         "Stealer-log exposure (dark web)",
 	"osint::breached-credential": "Breached credentials",
 	"osint::leaked-secret":       "Leaked secrets",
 	"osint::exposed-host":        "Exposed hosts",
