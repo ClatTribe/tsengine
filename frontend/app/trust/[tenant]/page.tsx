@@ -104,21 +104,25 @@ export default async function TrustCenter({
           {/* framework coverage */}
           {(data.frameworks ?? []).length > 0 && (
             <div className="mx-auto mt-12 max-w-2xl">
-              <h2 className="mb-4 text-center text-xs font-semibold uppercase tracking-wider text-faint">Framework coverage</h2>
+              <h2 className="mb-1 text-center text-xs font-semibold uppercase tracking-wider text-faint">Automated control coverage</h2>
+              {/* Honest framing for a customer-facing page: this is how much of each framework continuous
+                  scanning has ASSESSED — never presented as "compliant"/"certified". The bar stays accent
+                  (no green "100%"), and a footnote is explicit it isn't a certification. */}
+              <p className="mb-4 text-center text-[11px] text-faint">How much of each framework continuous scanning assesses — not a formal certification.</p>
               <div className="space-y-3">
                 {(data.frameworks ?? []).map((f) => (
                   <div key={f.framework} className="card p-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{FRAMEWORK_LABEL[f.framework] ?? f.framework}</span>
-                      <span className={`text-sm font-semibold ${f.coverage === 100 ? "text-pulse" : "text-ink"}`}>{f.coverage}%</span>
+                      <span className="text-sm font-semibold text-ink">{f.assessable > 0 ? `${f.coverage}% assessed` : `${f.assessed} assessed`}</span>
                     </div>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-3">
-                      <div
-                        className={`h-full rounded-full ${f.coverage === 100 ? "bg-pulse" : "bg-accent"}`}
-                        style={{ width: `${Math.max(4, f.coverage)}%` }}
-                      />
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, f.coverage)}%` }} />
                     </div>
-                    <div className="mt-1.5 text-[11px] text-faint">{f.met} of {f.total} controls met</div>
+                    <div className="mt-1.5 text-[11px] text-faint">
+                      {f.assessable > 0 ? `${f.assessed} of ${f.assessable} technical controls assessed` : `${f.assessed} controls assessed`}
+                      {f.gaps > 0 && <span className="text-high"> · {f.gaps} open gap{f.gaps === 1 ? "" : "s"}</span>}
+                    </div>
                   </div>
                 ))}
               </div>

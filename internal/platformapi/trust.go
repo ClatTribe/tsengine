@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/grc"
-	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 // The public Trust Center (a shareable "we're secure" page, like Vanta/Drata trust pages).
@@ -31,9 +30,13 @@ func (d Deps) trustToken(tenant string) string {
 
 type trustFramework struct {
 	Framework string `json:"framework"`
-	Coverage  int    `json:"coverage"` // % of controls met
-	Met       int    `json:"met"`
-	Total     int    `json:"total"`
+	// Coverage is ASSESSMENT coverage (assessed / assessable %), NOT a met/total "compliance score" — so the
+	// customer-facing Trust Center never reads as a false "100% compliant" (the no-false-compliant rule, the
+	// same honesty layer the in-app /compliance uses). 0 when the assessable universe is unknown.
+	Coverage   int `json:"coverage"`
+	Assessed   int `json:"assessed"`   // controls a finding has actually touched (met + gap)
+	Assessable int `json:"assessable"` // controls the crosswalk CAN evaluate
+	Gaps       int `json:"gaps"`
 }
 
 type trustView struct {
@@ -75,18 +78,16 @@ func (d Deps) handleTrust(w http.ResponseWriter, r *http.Request) {
 	view := trustView{Org: t.Name, Monitored: true, Signed: true, Frameworks: []trustFramework{}, GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
 	if d.GRC != nil {
 		for _, fw := range trustFrameworks {
-			cs, err := d.GRC.Posture(r.Context(), tenant, fw)
-			if err != nil || len(cs) == 0 {
-				continue
-			}
-			met := 0
-			for _, c := range cs {
-				if c.State != platform.ControlGap {
-					met++
-				}
+			// Use the honest assessment-coverage layer (assessed / assessable), NOT met/total — so a thin
+			// posture (a few controls touched, all met) can never render as a green "100% compliant" on a
+			// page the tenant shares with its own customers (the no-false-compliant rule).
+			cov, err := d.GRC.Coverage(r.Context(), tenant, fw)
+			if err != nil || cov.AssessedControls == 0 {
+				continue // no posture for this framework yet → don't list it
 			}
 			view.Frameworks = append(view.Frameworks, trustFramework{
-				Framework: fw, Met: met, Total: len(cs), Coverage: met * 100 / len(cs),
+				Framework: fw, Coverage: int(cov.AutomatedCoveragePct),
+				Assessed: cov.AssessedControls, Assessable: cov.AssessableControls, Gaps: cov.Gaps,
 			})
 		}
 	}
