@@ -6,6 +6,7 @@ import "time"
 // finding carrying a CVE. See CLAUDE.md §7.
 type ThreatIntel struct {
 	CVSS       float64    `json:"cvss,omitempty"`
+	CVSSVector string     `json:"cvss_vector,omitempty"` // CVSS base vector (AV/AC/PR/UI/S/C/I/A) — attack-vector detail beyond the score
 	KEV        *KEVStatus `json:"kev,omitempty"`
 	EPSS       *EPSSScore `json:"epss,omitempty"`
 	Advisories []string   `json:"advisories,omitempty"`

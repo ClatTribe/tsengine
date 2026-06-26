@@ -33,6 +33,7 @@ type ThreatIntel struct {
 
 type corpusEntry struct {
 	CVSS       float64          `json:"cvss"`
+	CVSSVector string           `json:"cvss_vector"`
 	KEV        *types.KEVStatus `json:"kev"`
 	EPSS       *types.EPSSScore `json:"epss"`
 	Advisories []string         `json:"advisories"`
@@ -132,6 +133,7 @@ func (h *ThreatIntel) Lookup(cve string) (*types.ThreatIntel, bool) {
 	}
 	return &types.ThreatIntel{
 		CVSS:       entry.CVSS,
+		CVSSVector: entry.CVSSVector,
 		KEV:        entry.KEV,
 		EPSS:       entry.EPSS,
 		Advisories: entry.Advisories,
