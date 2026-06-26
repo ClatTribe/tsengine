@@ -376,12 +376,15 @@ L2 retains a separate `query_threat_intel` tool for the LLM to look up CVEs that
 
 Every finding emitted at L1 carries a compliance annotation. Mapping is **annotation, not gate** — L1 emits the technical finding regardless of whether it maps to a control; the mapping just records which controls it affects.
 
-Frameworks supported (14 — keys defined once in `grc.Frameworks`, mirrored by `pkg/types.Compliance`, the `compliance.json` crosswalk, and `frontend/lib/frameworks.ts`):
+Frameworks supported (17 — keys defined once in `grc.Frameworks`, mirrored by `pkg/types.Compliance`, the `compliance.json` crosswalk, `internal/tracer/hooks/compliance.go`'s `controlSet`, and `frontend/lib/frameworks.ts`; the `grc.frameworks_e2e_test.go` mirror-consistency + all-frameworks-end-to-end tests gate any drift):
 
 * **Security & trust**: SOC 2 (Trust Services Criteria), CIS Controls v8, NIST CSF 2.0, ISO 27001:2022
 * **Sector & payments**: PCI-DSS v4.0, HIPAA Security Rule, SOX (IT general controls)
 * **Privacy**: EU GDPR, ISO 27701:2019, CCPA/CPRA, India DPDP Act 2023
-* **Government**: NIST SP 800-53 r5, NIST SP 800-171 r2, FedRAMP Moderate
+* **Government**: NIST SP 800-53 r5, NIST SP 800-171 r2, FedRAMP Moderate, CMMC 2.0 (Level 2, 800-171-derived)
+* **AI governance**: ISO 42001:2023, NIST AI RMF 1.0 (mapped only to the security-relevant AI controls — access, data, AI-system lifecycle security; most AI-governance controls are procedural → attestation, surfaced honestly by the coverage layer)
+
+Competitor parity (Sprinto/Vanta/Drata): CMMC + AI governance close the named-framework gap; the next tail is ISO 27018/22301, PIPEDA, GLBA, EU AI Act, CSA STAR, and a custom/"bring-your-own-framework" capability.
 
 A finding maps to a framework **only where the crosswalk has a real control nexus** (grounding §10) — e.g. an injection CWE cites NIST SI-10 and GDPR Art. 32; a data-exposure CWE additionally cites CCPA §1798.150 and SOX access-controls; a memory-safety CWE does not. Adding a framework is one entry in each of the four mirrors above; adding a control mapping is one key in `compliance.json`.
 

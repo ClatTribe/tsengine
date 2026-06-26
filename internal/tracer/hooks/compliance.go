@@ -38,6 +38,9 @@ type controlSet struct {
 	SOX        []string `json:"sox"`
 	FedRAMP    []string `json:"fedramp"`
 	DPDP       []string `json:"dpdp"`
+	CMMC       []string `json:"cmmc"`
+	ISO42001   []string `json:"iso42001"`
+	NISTAIRMF  []string `json:"nist_ai_rmf"`
 }
 
 // NewCompliance loads the embedded corpus. Panics on malformed data.
@@ -105,6 +108,12 @@ func (cs controlSet) forFramework(framework string) []string {
 		return cs.FedRAMP
 	case "dpdp":
 		return cs.DPDP
+	case "cmmc":
+		return cs.CMMC
+	case "iso42001":
+		return cs.ISO42001
+	case "nist_ai_rmf":
+		return cs.NISTAIRMF
 	}
 	return nil
 }
@@ -136,6 +145,9 @@ func (h *Compliance) Lookup(cwes []string) (*types.Compliance, bool) {
 		agg.SOX = mergeUnique(agg.SOX, cs.SOX)
 		agg.FedRAMP = mergeUnique(agg.FedRAMP, cs.FedRAMP)
 		agg.DPDP = mergeUnique(agg.DPDP, cs.DPDP)
+		agg.CMMC = mergeUnique(agg.CMMC, cs.CMMC)
+		agg.ISO42001 = mergeUnique(agg.ISO42001, cs.ISO42001)
+		agg.NISTAIRMF = mergeUnique(agg.NISTAIRMF, cs.NISTAIRMF)
 	}
 	if !matched {
 		return nil, false
@@ -187,6 +199,9 @@ func mergeCompliance(dst, src *types.Compliance) *types.Compliance {
 	dst.SOX = mergeUnique(dst.SOX, src.SOX)
 	dst.FedRAMP = mergeUnique(dst.FedRAMP, src.FedRAMP)
 	dst.DPDP = mergeUnique(dst.DPDP, src.DPDP)
+	dst.CMMC = mergeUnique(dst.CMMC, src.CMMC)
+	dst.ISO42001 = mergeUnique(dst.ISO42001, src.ISO42001)
+	dst.NISTAIRMF = mergeUnique(dst.NISTAIRMF, src.NISTAIRMF)
 	return dst
 }
 

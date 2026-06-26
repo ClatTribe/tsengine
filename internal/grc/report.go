@@ -28,6 +28,9 @@ var frameworkTitle = map[string]string{
 	FrameworkSOX:        "SOX (ITGC)",
 	FrameworkFedRAMP:    "FedRAMP Moderate",
 	FrameworkDPDP:       "India DPDP Act 2023",
+	FrameworkCMMC:       "CMMC 2.0 (Level 2)",
+	FrameworkISO42001:   "ISO 42001:2023 (AI)",
+	FrameworkNISTAIRMF:  "NIST AI RMF 1.0",
 }
 
 // FrameworkTitle returns the display name for a framework key (the key itself if unknown).

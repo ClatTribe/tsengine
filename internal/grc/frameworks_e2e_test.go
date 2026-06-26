@@ -86,6 +86,12 @@ func complianceCiting(framework, ctrl string) *types.Compliance {
 		c.FedRAMP = []string{ctrl}
 	case FrameworkDPDP:
 		c.DPDP = []string{ctrl}
+	case FrameworkCMMC:
+		c.CMMC = []string{ctrl}
+	case FrameworkISO42001:
+		c.ISO42001 = []string{ctrl}
+	case FrameworkNISTAIRMF:
+		c.NISTAIRMF = []string{ctrl}
 	default:
 		return nil // an unhandled framework → the test below sees a nil and fails
 	}
@@ -172,6 +178,7 @@ func TestFrameworkMirrors_Consistent(t *testing.T) {
 		CISv8: []string{"x"}, NISTCSF: []string{"x"}, GDPR: []string{"x"}, ISO27701: []string{"x"},
 		NIST80053: []string{"x"}, NIST800171: []string{"x"}, CCPA: []string{"x"}, SOX: []string{"x"},
 		FedRAMP: []string{"x"}, DPDP: []string{"x"},
+		CMMC: []string{"x"}, ISO42001: []string{"x"}, NISTAIRMF: []string{"x"},
 	}
 	got := frameworkControls(full)
 	if len(got) != len(Frameworks) {
