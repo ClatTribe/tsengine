@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -74,10 +75,16 @@ func (d Deps) handlePutComplianceScope(w http.ResponseWriter, r *http.Request, t
 // tenant's target frameworks, which recommended integrations are connected vs missing — so the customer
 // knows what to wire up BEFORE we (or they) read the posture as compliant.
 func (d Deps) handleComplianceReadiness(w http.ResponseWriter, r *http.Request, tenantID string) {
-	t, _ := d.Store.GetTenant(r.Context(), tenantID)
+	writeJSON(w, http.StatusOK, d.computeReadiness(r.Context(), tenantID))
+}
+
+// computeReadiness derives the connect-this-first checklist from the tenant's connections + assets +
+// declared scope. Shared by the readiness endpoint and the advisor agent.
+func (d Deps) computeReadiness(ctx context.Context, tenantID string) grc.ReadinessReport {
+	t, _ := d.Store.GetTenant(ctx, tenantID)
 	connected := map[string]bool{}
 
-	conns, _ := d.Store.ListConnections(r.Context(), tenantID)
+	conns, _ := d.Store.ListConnections(ctx, tenantID)
 	for _, c := range conns {
 		switch c.Kind {
 		case platform.ConnGWorkspace, platform.ConnM365, platform.ConnOkta:
@@ -94,7 +101,7 @@ func (d Deps) handleComplianceReadiness(w http.ResponseWriter, r *http.Request, 
 			connected["saas"] = true
 		}
 	}
-	assets, _ := d.Store.ListAssets(r.Context(), tenantID)
+	assets, _ := d.Store.ListAssets(ctx, tenantID)
 	for _, a := range assets {
 		switch a.Type {
 		case "repository":
@@ -118,5 +125,5 @@ func (d Deps) handleComplianceReadiness(w http.ResponseWriter, r *http.Request, 
 	if targets == nil {
 		targets = []string{}
 	}
-	writeJSON(w, http.StatusOK, grc.ScopeReadiness(targets, connected))
+	return grc.ScopeReadiness(targets, connected)
 }
