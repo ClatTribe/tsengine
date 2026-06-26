@@ -9,14 +9,14 @@ export const dynamic = "force-dynamic";
 // privacy / government. Anything without an explicit category falls into "Other".
 const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government", "Other"];
 
-type Posture = { total: number; met: number; gap: number } | null;
+type Posture = { total: number; met: number; gap: number; assessable: number; notAssessed: number; coveragePct: number; readiness: string } | null;
 
 export default async function CompliancePage() {
   // One batched call for every framework's posture, then merged against the full FRAMEWORKS list
   // so untracked frameworks still render (as "monitored, no gaps yet") — replaces fanning out 14
   // per-framework requests.
   const summary = await api.postureSummary();
-  const byFramework = new Map(summary.frameworks.map((p) => [p.framework, { total: p.total, met: p.met, gap: p.gap } as Posture]));
+  const byFramework = new Map(summary.frameworks.map((p) => [p.framework, { total: p.total, met: p.met, gap: p.gap, assessable: p.assessable, notAssessed: p.not_assessed, coveragePct: p.coverage_pct, readiness: p.readiness } as Posture]));
   const entries = FRAMEWORKS.map((f) => ({ f, posture: byFramework.get(f) ?? null }));
 
   const withGaps = entries.filter((e) => (e.posture?.gap ?? 0) > 0).length;
@@ -85,24 +85,29 @@ function FrameworkCard({ f, posture }: { f: string; posture: Posture }) {
     );
   }
 
-  const { total, met, gap } = posture;
-  const pct = total > 0 ? Math.round((met / total) * 100) : 0;
+  const { gap, assessable, notAssessed, coveragePct, readiness } = posture;
+  // The bar is ASSESSMENT COVERAGE (how much we've evaluated), NOT a compliance score — so a clean-but-
+  // thin posture never looks "done". gap===0 is shown neutrally (no green "certified" checkmark), because
+  // "no automated gaps" is not "compliant" (the no-false-compliant rule).
+  const pct = Math.round(coveragePct);
   return (
     <Link href={`/compliance/${f}`} className="card group p-5 transition hover:border-border-strong animate-fade-rise">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ShieldCheck className={`h-4 w-4 ${gap === 0 ? "text-pulse" : "text-muted"}`} />
+          <ShieldCheck className={`h-4 w-4 ${gap > 0 ? "text-high" : "text-muted"}`} />
           <span className="text-sm font-medium">{label}</span>
         </div>
         <ArrowRight className="h-4 w-4 text-faint transition group-hover:text-accent" />
       </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3">
-        <div className={`h-full rounded-full ${gap === 0 ? "bg-pulse" : "bg-accent"}`} style={{ width: `${pct}%` }} />
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3" title={`${pct}% of assessable controls assessed`}>
+        <div className={`h-full rounded-full ${gap > 0 ? "bg-accent" : "bg-low"}`} style={{ width: `${pct}%` }} />
       </div>
       <div className="mt-2 flex items-center justify-between text-xs">
-        <span className="text-low">{met} met</span>
-        <span className={gap > 0 ? "text-high" : "text-faint"}>{gap} gap</span>
+        <span className="text-low">{assessable > 0 ? `${pct}% assessed` : "coverage n/a"}</span>
+        <span className={gap > 0 ? "text-high" : "text-faint"}>{gap} gap{gap === 1 ? "" : "s"}</span>
       </div>
+      {notAssessed > 0 && <div className="mt-1 text-[11px] text-faint">{notAssessed} control{notAssessed === 1 ? "" : "s"} not yet assessed · not a certification</div>}
+      <div className="sr-only">{readiness}</div>
     </Link>
   );
 }

@@ -500,9 +500,15 @@ export interface ControlState {
 // the dashboard/compliance/reports pages fetch all frameworks in one call instead of 14.
 export interface FrameworkPosture {
   framework: string;
-  total: number;
+  total: number; // assessed controls (met+gap)
   met: number;
   gap: number;
+  // Coverage honesty — so the UI shows "X of Y assessed" and never reads a clean posture as "compliant".
+  assessable: number; // controls our tooling CAN assess for this framework
+  not_assessed: number;
+  coverage_pct: number; // assessed / assessable, 0..100
+  certifiable: boolean; // ALWAYS false — automated scanning is not a certification
+  readiness: string; // honest status line, never "Compliant"
 }
 export interface PostureSummary {
   frameworks: FrameworkPosture[];
