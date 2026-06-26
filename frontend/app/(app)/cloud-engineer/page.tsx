@@ -3,6 +3,7 @@ import { Cloud, ShieldAlert, Workflow, Plug, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { ConfidencePill } from "@/components/findings/confidence-pill";
 
 export const dynamic = "force-dynamic";
 
@@ -76,9 +77,7 @@ export default async function CloudEngineerPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-ink">{f.title}</span>
                   <SeverityBadge severity={f.severity} />
-                  <span className="rounded-md border border-pulse/40 bg-pulse/10 px-1.5 py-0.5 text-[10px] font-medium text-pulse">
-                    verified
-                  </span>
+                  <ConfidencePill verification={f.verification_status} confidence={f.confidence} />
                 </div>
                 {f.description && <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-muted">{f.description}</p>}
                 {f.endpoint && <div className="mono mt-1 truncate text-[11px] text-faint">{f.endpoint}</div>}

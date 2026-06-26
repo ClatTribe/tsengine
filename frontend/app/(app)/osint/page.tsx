@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { FeatureIcon } from "@/components/brand/feature-icon";
+import { ConfidencePill } from "@/components/findings/confidence-pill";
 import { RunOsintScan } from "@/components/osint/run-scan";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,7 @@ export default async function OSINTPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium text-ink">{f.title}</span>
                       <SeverityBadge severity={f.severity} />
+                      <ConfidencePill verification={f.verification_status} confidence={f.confidence} />
                     </div>
                     {f.description && <p className="mt-1 text-sm leading-relaxed text-muted">{f.description}</p>}
                     {f.endpoint && <div className="mono mt-1 truncate text-[11px] text-faint">{f.endpoint}</div>}
