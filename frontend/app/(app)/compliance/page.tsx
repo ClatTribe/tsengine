@@ -117,6 +117,24 @@ export default async function CompliancePage() {
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-faint">We never mark these met from a scan — so the posture is never a false &ldquo;compliant&rdquo;.</p>
+              {/* Make the manual areas actionable — route the founder (or their HITL expert) to where these
+                  actually get closed, instead of a dead-end list. This is the two-model HITL top layer. */}
+              <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-3">
+                <span className="text-[11px] font-medium text-muted">Close these:</span>
+                <Link href="/program" className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 text-[11px] text-muted transition hover:border-accent/40 hover:text-ink">
+                  <FileText className="h-3 w-3" /> 1. Document a policy
+                </Link>
+                <Link href="/audits" className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 text-[11px] text-muted transition hover:border-accent/40 hover:text-ink">
+                  <FileSignature className="h-3 w-3" /> 2. Get an auditor to attest
+                </Link>
+                <Link href="/risks" className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 text-[11px] text-muted transition hover:border-accent/40 hover:text-ink">
+                  <CircleDashed className="h-3 w-3" /> or accept the risk
+                </Link>
+              </div>
+              <p className="mt-1.5 text-[11px] text-faint">
+                Your team closes these — or, on a managed plan, your MSP&apos;s expert or our hired expert documents
+                the evidence and signs off on your behalf (named, accountable).
+              </p>
             </div>
           )}
         </section>
