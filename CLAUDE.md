@@ -778,6 +778,19 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 > tenant's own key and `platformapi.Deps.resolveAgentLLM` drives the L2 agents with it, falling back to
 > the operator-global model; the §18.5 "bring your own brain".)
 >
+> **Platform live-scanning works (PR #588 — was a silent bug, not an infra gap).** A real end-to-end run
+> through the platform (`POST /v1/assets` a container → `/v1/rescan`) found that platform-driven scanning
+> produced **0 findings for every tech asset since launch** — silently. Cause: a Handler resolves its
+> anchor/recon tools from the **global tool registry**, populated by each wrapper's `init()` **on import**;
+> `cmd/tsengine` blank-imports all 35 wrappers but `cmd/platform` imported **none** → empty registry → every
+> handler planned 0 anchors → 0 dispatches → 0 findings. Fixed by a single registration source —
+> **`internal/toolsbundle`** (blank-imports all wrappers; **every host binary that resolves handlers MUST
+> import it**), imported by `cmd/platform`. Verified live: the platform now scans `alpine:3.18` and lands 27
+> real findings (grype CVEs + dockle + license). Guarded by `cmd/platform`'s
+> `TestPlatformRegistersScanToolsForEveryAsset` (PR #589) + `EngineRunner` per-scan `tools_fired` logging.
+> So "live per-asset recall" below was **this bug**, not a missing target/infra — the engine always worked
+> (the CLI finds 84 CVEs in the same image); only the platform's registry was empty.
+>
 > **Per-asset gate/bucket status** (what runs securely via Docker on one machine, what we fixed
 > vs. what's customer-config vs. operator, and the honest credential-gated boundary):
 > [docs/per-asset-gates.md](docs/per-asset-gates.md). Reproduce the no-creds proofs with
@@ -788,7 +801,7 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 | **0. Foundation** | Repo skeleton, core types (`pkg/types`), `Tool`/`Handler` interfaces, L1 dashboard JSON schema, evidence/attestation grounding (§10), CI (go test + golangci-lint + govulncheck) | ✅ built |
 | **1. Sandbox + E2E** | Docker sandbox image (nuclei baked), `cmd/tool-server` HTTP API, host-side `internal/sandbox` client, run nuclei against one fixture target end-to-end | ✅ built |
 | **2. web_application asset** | Anchor + registry tiers, filter rules, WAVSEP fixture + scorer, tool-replay API | ✅ built (live WAVSEP Youden pending a deployed target) |
-| **3. Other 6 assets** | api, repo, container, ip, domain, cloud_account — anchor + registry tiers, per-asset filter, per-asset normalize | ✅ built (8 assets incl. mobile; live per-asset recall pending targets) |
+| **3. Other 6 assets** | api, repo, container, ip, domain, cloud_account — anchor + registry tiers, per-asset filter, per-asset normalize | ✅ built (8 assets incl. mobile; **platform live scan verified — PR #588** lands 27 real findings on a container; per-asset *recall benchmarks* still pending deployed targets) |
 | **4. L1.5 + dashboard + threat intel + compliance** | Hook chain, vulnerabilities.json renderer, threat_intel.enrich, compliance.map | ✅ built |
 | **5. Template refresh + attestation** | Versioned corpora, pin-per-scan, cron refresh, delta-verify, signed evidence bundle | ✅ built |
 | **6. L2 layer** | LLM Lead agent over ≤12-tool catalog, OODA, bench rigs | ✅ built (incl. ADR-0008 autonomous pentest; live `verified_rate` pending a target + LLM key) |
