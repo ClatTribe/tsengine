@@ -306,6 +306,8 @@ export interface Incident {
   severity: string;
   status: string; // open | resolved
   finding_id: string;
+  verification?: string; // FP-control: verified | corroborated | pattern_match (carried from the finding)
+  confidence?: number; // 0..1 quality scalar — so an unconfirmed alert never looks like a confirmed one
   attacked?: boolean; // escalated because the issue is under attack in production
   opened_at: string;
   resolved_at?: string;

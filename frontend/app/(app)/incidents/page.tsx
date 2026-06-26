@@ -133,6 +133,7 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
               <Flame className="h-2.5 w-2.5" /> under attack
             </span>
           )}
+          <ConfidenceBadge verification={i.verification} confidence={i.confidence} />
           {respondPending && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30">
               <Wrench className="h-2.5 w-2.5" /> fix ready
@@ -170,4 +171,18 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
       {href ? <Link href={href} className="block">{body}</Link> : body}
     </li>
   );
+}
+
+// ConfidenceBadge is the FP-control signal on an alert: a verified/corroborated incident is shown as
+// confirmed, while an unconfirmed pattern_match is flagged "confirm" — so we never present a low-confidence
+// finding as a confident incident ("no high false positive"). No badge when the engine gave no signal.
+function ConfidenceBadge({ verification, confidence }: { verification?: string; confidence?: number }) {
+  if (!verification) return null;
+  const pct = confidence ? ` ${Math.round(confidence * 100)}%` : "";
+  if (verification === "verified")
+    return <span className="inline-flex shrink-0 items-center rounded-full bg-pulse/10 px-2 py-0.5 text-[10px] font-semibold text-pulse" title={`Exploit-verified${pct ? ` · confidence${pct}` : ""}`}>verified{pct}</span>;
+  if (verification === "corroborated")
+    return <span className="inline-flex shrink-0 items-center rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30" title={`Corroborated by ≥2 independent tools${pct ? ` · confidence${pct}` : ""}`}>corroborated{pct}</span>;
+  // pattern_match (or anything unconfirmed) → tell the user it needs confirming, don't dress it as confirmed
+  return <span className="inline-flex shrink-0 items-center rounded-full border border-medium/40 bg-medium/10 px-2 py-0.5 text-[10px] font-medium text-medium" title={`Single-tool pattern match — confirm before acting${pct ? ` · confidence${pct}` : ""}`}>confirm{pct}</span>;
 }

@@ -50,6 +50,28 @@ func TestReconcile_OpensIncidentForNewCritical(t *testing.T) {
 	}
 }
 
+// The incident must carry the opening finding's FP-control signal (verification + confidence) so the alert
+// can show confirmed-vs-unconfirmed and never present a low-confidence finding as a confident incident.
+func TestReconcile_IncidentCarriesFPControlSignal(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := newDetector(st)
+
+	f := crit("nuclei::sqli", "https://app/x?q=")
+	f.VerificationStatus = "corroborated"
+	f.Confidence = 0.82
+	if _, err := d.Reconcile(ctx, "t1", []types.Finding{f}, nil); err != nil {
+		t.Fatal(err)
+	}
+	open := openIncidents(t, st, "t1")
+	if len(open) != 1 {
+		t.Fatalf("want 1 incident, got %d", len(open))
+	}
+	if open[0].Verification != "corroborated" || open[0].Confidence != 0.82 {
+		t.Fatalf("incident must carry the finding's verification+confidence, got verification=%q confidence=%v", open[0].Verification, open[0].Confidence)
+	}
+}
+
 func TestReconcile_Idempotent(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
