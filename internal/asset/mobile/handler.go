@@ -98,4 +98,5 @@ var anchorNames = []string{
 var registryNames = []string{
 	"semgrep",
 	"trufflehog",
+	"apkid", // packer/obfuscator/anti-analysis fingerprint (tampering/repackaging signal)
 }
