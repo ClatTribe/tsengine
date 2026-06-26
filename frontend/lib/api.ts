@@ -136,6 +136,12 @@ export const api = {
       { method: "POST", body: "{}" },
     ),
 
+  // vCISO advisor — a prioritized audit-readiness roadmap over coverage + gaps + readiness (never "compliant").
+  complianceAdvisor: (framework: string) =>
+    call<{ framework: string; title: string; roadmap: string; coverage: { automated_coverage_pct: number; gaps: number; assessable_controls: number }; note: string }>(
+      `/v1/compliance/${framework}/advisor`,
+      { method: "POST", body: "{}" },
+    ),
   // vCISO remediation guidance — concrete, grounded fix steps for a framework's control gaps.
   complianceRemediation: (framework: string) =>
     call<{ framework: string; title: string; gap_count: number; plan: string }>(

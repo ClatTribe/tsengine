@@ -14,3 +14,15 @@ export async function getFixGuidance(framework: string): Promise<FixPlan> {
     return { ok: false, error: e instanceof Error ? e.message : "Could not generate guidance" };
   }
 }
+
+export type Roadmap = { ok: boolean; roadmap?: string; coveragePct?: number; error?: string };
+
+// Runs the vCISO advisor — a prioritized audit-readiness roadmap over coverage + gaps + readiness. Slow.
+export async function getAdvisorRoadmap(framework: string): Promise<Roadmap> {
+  try {
+    const r = await api.complianceAdvisor(framework);
+    return { ok: true, roadmap: r.roadmap, coveragePct: r.coverage?.automated_coverage_pct };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not generate the roadmap" };
+  }
+}
