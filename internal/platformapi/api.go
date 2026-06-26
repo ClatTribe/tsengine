@@ -115,6 +115,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))               // set the escalation tiers (severity → channels)
 	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                             // per-tenant remediation SLA policy (ack/resolve targets)
 	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                             // set the per-severity SLA targets
+	mux.HandleFunc("GET /v1/settings/compliance-scope", d.auth(d.handleGetComplianceScope))            // target frameworks + applicability profile (scope before analysis)
+	mux.HandleFunc("PUT /v1/settings/compliance-scope", d.auth(d.handlePutComplianceScope))            // set target frameworks + profile
+	mux.HandleFunc("GET /v1/compliance/readiness", d.auth(d.handleComplianceReadiness))                // connect-this-first checklist for the target frameworks
 	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))              // planned change-freeze windows (suppress alerting)
 	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))               // schedule a window
 	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow))     // cancel a window

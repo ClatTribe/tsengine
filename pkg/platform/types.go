@@ -68,6 +68,26 @@ type Tenant struct {
 	// attestations, sign-offs, policy publishing) for this tenant. Each carries a Capacity matching
 	// the service model. No bearer secret → stored plain (like Contacts).
 	Practitioners []Practitioner `json:"practitioners,omitempty"`
+	// TargetFrameworks is the compliance scope the customer is actually pursuing (e.g. ["soc2","hipaa"]).
+	// Captured BEFORE analysis so the posture, coverage, and "what to connect" readiness focus on what
+	// the customer needs — not all 14. Empty = no declared scope (the UI shows the full catalog). Keys
+	// match grc.Frameworks. No secret → stored plain.
+	TargetFrameworks []string `json:"target_frameworks,omitempty"`
+	// ComplianceProfile holds the applicability facts that determine which frameworks/controls are in
+	// scope — handles PHI (HIPAA), processes card data (PCI), sells to government (FedRAMP/800-171),
+	// EU/India data subjects (GDPR/DPDP). Drives framework suggestions + scoping. No secret → plain.
+	ComplianceProfile *ComplianceProfile `json:"compliance_profile,omitempty"`
+}
+
+// ComplianceProfile is the set of applicability facts a customer answers ONCE, up front — the scoping
+// questions a consultant asks before any analysis. Each maps to which frameworks actually apply.
+type ComplianceProfile struct {
+	HandlesPHI       bool `json:"handles_phi"`        // → HIPAA in scope
+	ProcessesCards   bool `json:"processes_cards"`    // → PCI-DSS in scope
+	SellsToGov       bool `json:"sells_to_gov"`       // → FedRAMP / NIST 800-171 in scope
+	EUDataSubjects   bool `json:"eu_data_subjects"`   // → GDPR in scope
+	IndiaDataSubject bool `json:"india_data_subject"` // → India DPDP in scope
+	PublicCompany    bool `json:"public_company"`     // → SOX ITGC in scope
 }
 
 // Service models — who employs the human-in-the-loop.
