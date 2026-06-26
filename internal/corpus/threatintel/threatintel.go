@@ -36,6 +36,7 @@ const (
 // map[CVE]Entry) — the hook can load either with the same unmarshal.
 type Entry struct {
 	CVSS       float64          `json:"cvss,omitempty"`
+	CVSSVector string           `json:"cvss_vector,omitempty"`
 	KEV        *types.KEVStatus `json:"kev,omitempty"`
 	EPSS       *types.EPSSScore `json:"epss,omitempty"`
 	Advisories []string         `json:"advisories,omitempty"`
@@ -53,6 +54,7 @@ type Manifest struct {
 	KEVCount     int       `json:"kev_count"`
 	EPSSCount    int       `json:"epss_count"`
 	ExploitCount int       `json:"exploit_count,omitempty"`
+	CVSSCount    int       `json:"cvss_count,omitempty"`
 	BuiltAt      time.Time `json:"built_at"`
 }
 
@@ -62,7 +64,8 @@ type Manifest struct {
 // exists overlay (the patch-priority signal between EPSS probability and KEV exploitation). A nil
 // exploits map is fine — it's a best-effort feed (Refresh keeps going if it can't fetch ExploitDB).
 func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
-	epss map[string]types.EPSSScore, epssAsOf time.Time, exploits map[string][]string) (map[string]Entry, Manifest) {
+	epss map[string]types.EPSSScore, epssAsOf time.Time, exploits map[string][]string,
+	cvss map[string]NVDEntry) (map[string]Entry, Manifest) {
 
 	entries := make(map[string]Entry, len(epss)+len(kev))
 	for cve, e := range epss {
@@ -85,9 +88,29 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 		entries[cve] = ent
 		exploitCVEs++
 	}
+	// NVD CVSS base vectors: enrich coverage with attack-vector detail. A CVE with only CVSS (no KEV/EPSS/
+	// exploit) is still worth pinning — the vector drives surface_priority/exploitability reasoning. We only
+	// overwrite the base score from NVD when the entry had none (KEV/EPSS don't carry one today, so this is
+	// the source that populates CVSS), and always attach the vector.
+	cvssCVEs := 0
+	for cve, n := range cvss {
+		if strings.TrimSpace(n.Vector) == "" {
+			continue
+		}
+		ent := entries[cve]
+		if ent.CVSS == 0 {
+			ent.CVSS = n.BaseScore
+		}
+		ent.CVSSVector = n.Vector
+		entries[cve] = ent
+		cvssCVEs++
+	}
 	sources := []string{KEVURL, EPSSURL}
 	if exploitCVEs > 0 {
 		sources = append(sources, ExploitDBURL)
+	}
+	if cvssCVEs > 0 {
+		sources = append(sources, NVDURL)
 	}
 	m := Manifest{
 		Version:      fmt.Sprintf("kev-%s+epss-%s", sanitize(kevVer), epssAsOf.UTC().Format("2006-01-02")),
@@ -98,6 +121,7 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 		KEVCount:     len(kev),
 		EPSSCount:    len(epss),
 		ExploitCount: exploitCVEs,
+		CVSSCount:    cvssCVEs,
 		BuiltAt:      time.Now().UTC(),
 	}
 	return entries, m

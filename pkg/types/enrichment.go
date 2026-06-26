@@ -26,6 +26,9 @@ func (f Finding) L15Summary() string {
 		if len(ti.Exploits) > 0 {
 			t = append(t, "pub-exploit") // a public exploit/PoC EXISTS (ExploitDB/Metasploit) — patch-priority signal between EPSS and KEV
 		}
+		if strings.Contains(ti.CVSSVector, "AV:N") {
+			t = append(t, "av:network") // NVD CVSS vector says network-attackable (no local access needed) — the strongest reachability signal
+		}
 	}
 	if f.Exploitability != nil {
 		t = append(t, fmt.Sprintf("exploit:%d", f.Exploitability.Score))
