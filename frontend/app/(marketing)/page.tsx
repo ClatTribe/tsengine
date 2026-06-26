@@ -266,7 +266,7 @@ function Compare() {
   const rows: { label: string; cells: (string)[] }[] = [
     { label: "Deep detection — code, cloud, web, identity", cells: ["yes", "part", "part", "yes"] },
     { label: "Ships the actual fix (PR / config change)", cells: ["yes", "no", "no", "yes"] },
-    { label: "Compliance evidence — 14 frameworks, signed", cells: ["yes", "yes", "no", "part"] },
+    { label: "Compliance evidence — 22 frameworks, signed", cells: ["yes", "yes", "no", "part"] },
     { label: "Identity & email-spoofing posture", cells: ["yes", "part", "no", "yes"] },
     { label: "Runs 24/7, autonomous, human-gated", cells: ["yes", "no", "no", "no"] },
     { label: "Cost for an SMB", cells: ["$/mo", "$$/mo", "$/mo", "$$$$/yr"] },
@@ -379,7 +379,7 @@ function StackPipeline() {
   ];
   const outcomes = [
     { icon: Wrench, label: "Fixes shipped", sub: "PRs & configs, gated", strong: true },
-    { icon: FileCheck2, label: "14 frameworks mapped", sub: "SOC 2 · ISO · GDPR · +11" },
+    { icon: FileCheck2, label: "22 frameworks mapped", sub: "SOC 2 · ISO · GDPR · +19" },
     { icon: Lock, label: "Signed evidence pack", sub: "reproducible, not screenshots" },
     { icon: ClipboardCheck, label: "Auditor-ready report", sub: "PDF · Markdown · CSV" },
     { icon: Activity, label: "Live posture dashboard", sub: "continuous, 24/7" },

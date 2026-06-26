@@ -12,7 +12,7 @@ export const metadata = pageMeta({
 
 const POINTS = [
   "A walkthrough on your real stack — code, cloud, and identity.",
-  "How we map findings to 14 compliance frameworks with signed evidence.",
+  "How we map findings to 22 compliance frameworks with signed evidence.",
   "The VAPT / pentest report your enterprise customers ask for.",
   "How human-in-the-loop autonomy keeps you in control of every change.",
 ];

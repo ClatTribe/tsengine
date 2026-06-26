@@ -53,7 +53,7 @@ const TIERS = [
     highlight: true,
     features: [
       "Unlimited systems (code · cloud · identity)",
-      "All 14 frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …",
+      "All 22 frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …",
       "Signed evidence packs + Trust Center",
       "Questionnaire automation",
       "Human-in-the-loop approvals + remediation",

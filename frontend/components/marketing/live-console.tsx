@@ -29,7 +29,7 @@ const SCRIPT: Ev[] = [
   { kind: "scan", tool: "trivy", msg: "dependency + image CVE sweep" },
   { kind: "found", tool: "govulncheck", msg: "reachable RCE in a bundled dependency" },
   { kind: "verify", tool: "agent", msg: "call path traced to the vulnerable sink" },
-  { kind: "sign", tool: "evidence", msg: "ed25519 evidence pack · 14 frameworks mapped" },
+  { kind: "sign", tool: "evidence", msg: "ed25519 evidence pack · 22 frameworks mapped" },
 ];
 
 const META: Record<Kind, { label: string; dot: string; chip: string }> = {
