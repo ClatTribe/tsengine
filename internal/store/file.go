@@ -83,6 +83,13 @@ func (f *File) PutConnection(ctx context.Context, c platform.Connection) error {
 	return f.persist()
 }
 
+func (f *File) DeleteConnection(ctx context.Context, tenantID, id string) error {
+	if err := f.Memory.DeleteConnection(ctx, tenantID, id); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutAsset(ctx context.Context, a platform.Asset) error {
 	if err := f.Memory.PutAsset(ctx, a); err != nil {
 		return err

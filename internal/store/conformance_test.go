@@ -160,6 +160,21 @@ func TestStoreConformance(t *testing.T) {
 			if len(tens) != 2 {
 				t.Errorf("ListTenants: want 2, got %d", len(tens))
 			}
+
+			// DeleteConnection is tenant-scoped: removing t1's connection leaves t2's intact.
+			orFail(t, s.DeleteConnection(ctx, "t1", "t1-c"))
+			c1, err := s.ListConnections(ctx, "t1")
+			orFail(t, err)
+			if len(c1) != 0 {
+				t.Errorf("DeleteConnection: t1 want 0 connections, got %d", len(c1))
+			}
+			c2, err := s.ListConnections(ctx, "t2")
+			orFail(t, err)
+			if len(c2) != 1 || c2[0].ID != "t2-c" {
+				t.Errorf("ISOLATION DeleteConnection: t2's connection affected: %+v", c2)
+			}
+			// Deleting an absent id is a no-op (not an error).
+			orFail(t, s.DeleteConnection(ctx, "t2", "does-not-exist"))
 		})
 	}
 }

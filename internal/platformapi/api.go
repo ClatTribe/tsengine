@@ -105,6 +105,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/assets/{id}/login-flow", d.auth(d.handleSetLoginFlow))    // configure authenticated web scanning (ADR 0010 Phase 3)
 	mux.HandleFunc("POST /v1/assets/{id}/authz-test", d.auth(d.handleSetAuthzTest))    // configure BOLA/BFLA authz test (ADR 0010 Phase 1)
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
+	mux.HandleFunc("DELETE /v1/connections/{id}", d.auth(d.handleDeleteConnection))                    // disconnect a connection (founder self-serve)
 	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))       // per-connection kill-switch (WRD-4)
 	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation)) // per-tenant cloud write role (Bucket B)
 	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                        // the current tenant (org name/plan) for Settings

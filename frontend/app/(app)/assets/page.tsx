@@ -9,6 +9,7 @@ import { AddTarget } from "@/components/assets/add-target";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
 import { DataTierSelect } from "@/components/assets/data-tier-select";
+import { DisconnectButton } from "@/components/assets/disconnect-button";
 import { LoginFlowConfig } from "@/components/assets/login-flow-config";
 import { AuthzTestConfig } from "@/components/assets/authz-test-config";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -240,6 +241,7 @@ function ConnectionRow({ conn }: { conn: Connection }) {
       <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium capitalize", STATUS_CLS[conn.status] ?? "text-muted border-border bg-surface-2")}>
         {conn.status}
       </span>
+      <DisconnectButton id={conn.id} label={kindLabel(conn.kind)} />
     </div>
   );
 }

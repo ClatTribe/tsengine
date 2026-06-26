@@ -34,6 +34,20 @@ export async function addTarget(
   }
 }
 
+// Disconnects a connection (the founder self-serve fix for a wrong/stale GitHub org, GCP project, etc.).
+// Tenant-scoped + ledger-signed server-side; stops future scans/actions through it. On success the row
+// disappears from the connections list. Returns an error string the button can surface.
+export async function disconnectConnection(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await api.deleteConnection(id);
+    revalidatePath("/assets");
+    revalidatePath("/dashboard"); // connected-systems + coverage shift
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not disconnect" };
+  }
+}
+
 // Sets an asset's customer-data-sensitivity tier (1 = customer data, 2 = standard, 3 = low).
 // The tier feeds the platform's risk-adjusted ranking so a finding on a customer-data repo is
 // prioritized over the same finding on a low-sensitivity one (the Synthesia repo-tiering idea).
