@@ -231,6 +231,16 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 			}
 		}
 	}
+	// Compliance reconciliation: grc.Apply (in processFinding) opens control gaps but never closes
+	// one, so a remediated issue's gap would persist forever and the framework would read a stale
+	// "non-compliant". Reconcile flips a gap to Met when its driving finding is gone from this pass's
+	// `current` (mirrors the incident Detector). Guarded by scanned>0 like the detector — an
+	// ingest-only pass must not falsely clear scan-driven gaps.
+	if s.GRC != nil && scanned > 0 {
+		if _, err := s.GRC.Reconcile(ctx, tenantID, current); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
 	return scanned, firstErr
 }
 
