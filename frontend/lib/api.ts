@@ -129,6 +129,17 @@ export const api = {
       { method: "POST", body: "{}" },
     ),
 
+  // L2 translator — run the Lead over the tenant's findings → the plain-English consultant brief.
+  l2Translate: () =>
+    call<{
+      summary: { executive_summary?: string; methodology?: string; recommendations?: string } | null;
+      reports: Finding[];
+      iterations: number;
+      stop_reason: string;
+      cost_usd: number;
+      model: string;
+    }>("/v1/l2/translate", { method: "POST", body: "{}" }),
+
   // AI Cloud Engineer — the cloud-agent's proven attack paths (read-only view) + whether a run is possible.
   cloudInvestigation: () =>
     safe<{ total: number; enabled: boolean; paths: Finding[] }>("/v1/cloud/investigate", { total: 0, enabled: false, paths: [] }),
