@@ -4,12 +4,13 @@ import { api } from "@/lib/api";
 import type { ReviewRequest } from "@/lib/types";
 import { Card, SectionTitle, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { RequestReviewForm } from "@/components/reviews/request-review-form";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReviewsPage() {
-  const all = await api.reviews();
+  const [all, findings] = await Promise.all([api.reviews(), api.findings()]);
   const open = all.filter((r) => r.status !== "resolved").sort(byCreated);
   const resolved = all.filter((r) => r.status === "resolved").sort(byCreated);
 
@@ -25,6 +26,9 @@ export default async function ReviewsPage() {
           ) : undefined
         }
       />
+
+      {/* In-page escalation: open an expert review without first navigating to a finding's detail page. */}
+      <RequestReviewForm findings={findings} />
 
       <div>
         <SectionTitle>Awaiting an expert</SectionTitle>
