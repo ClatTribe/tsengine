@@ -227,7 +227,9 @@ function AssetRow({ asset: a, connections, last, posture, security }: { asset: A
           if (atRisk) return <Link href="/incidents" className="font-medium text-high hover:underline">{security.critical + security.high} confirmed high+</Link>;
           if (security.confirmed > 0) return <span className="text-medium">{security.confirmed} to review</span>;
           if (security.unconfirmed > 0) return <span className="text-faint">{security.unconfirmed} to confirm</span>;
-          if (security.scanned) return <span className="text-low underline decoration-dotted underline-offset-2">clean last scan</span>;
+          // Legible affirmative (the #1 daily-driver question "is this asset secure?") — honest: "no issues
+          // found", never a bare "secure" (the full verdict, incl. "not a guarantee", is the cell tooltip).
+          if (security.scanned) return <span className="inline-flex items-center gap-1 text-pulse"><CheckCircle2 className="h-3.5 w-3.5" /> no issues found</span>;
           return <span className="text-faint">not scanned</span>;
         })()}
       </td>
