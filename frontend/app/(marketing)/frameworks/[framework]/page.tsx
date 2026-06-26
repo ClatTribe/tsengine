@@ -6,6 +6,30 @@ import { ArrowRight, CheckCircle2, ShieldCheck, FileCheck2, Radar, Lock } from "
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
+import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
+
+// Frameworks that culminate in a formal third-party certificate / attestation report (an auditor issues it) —
+// vs. regulations/frameworks that are an ongoing legal obligation, not a one-time certificate. Drives the
+// honest phrasing of the "does TensorShield certify me?" FAQ answer (§10 — never claim to issue an attestation).
+const ATTESTED = new Set(["soc2", "iso27001", "iso27701", "iso42001", "iso27018", "iso22301", "pci", "fedramp", "cmmc"]);
+
+// frameworkFaq builds a unique, framework-specific Q&A set (so each of the 22 pages gets its own FAQ +
+// FAQPage structured data, not thin-duplicate). Templated on the label/desc, branched on whether the framework
+// is auditor-attested, and consistent with our honest line: we make you ready; an independent assessor attests;
+// technical controls automate, policies/attestation need a named human.
+function frameworkFaq(framework: string, label: string, desc: string): [string, string][] {
+  const attested = ATTESTED.has(framework);
+  const certLine = attested
+    ? `No vendor can — and neither can we. A ${label} report is issued by an independent, licensed assessor; that's a legal requirement. What we do is get you audit-ready (automate the technical controls, map every finding to its ${label} control, and produce signed evidence) and quarterback the assessor through the engagement. On a managed plan, our named expert runs that prep for you.`
+    : `${label} isn't a one-time certificate — it's an ongoing obligation. We continuously map your real posture to ${label}, flag gaps the moment they appear, prepare fixes, and keep a signed, current evidence trail — so you can demonstrate compliance whenever a customer, regulator, or auditor asks.`;
+  return [
+    [`What is ${label} and who needs it?`, `${desc} If your customers, buyers, or regulators ask about ${label}, or it's blocking an enterprise deal, it applies to you — and TensorShield gets you ready without a dedicated security hire.`],
+    [`Does TensorShield make my company ${label}-compliant?`, certLine],
+    [`What does TensorShield automate for ${label}, and what still needs a human?`, `The technical controls automate: continuous scanning across your code, cloud, identity, and apps, each finding mapped to the ${label} control it affects, with fixes prepared for one-tap approval. The human-only parts — writing policies, risk decisions, and the independent attestation — are where your team, our managed expert, or your MSP's expert signs off. We're explicit about that line; we never mark a control met from a scan alone.`],
+    [`How long does it take to get ${label}-ready?`, `Most of the delay in a ${label} program is the manual technical work and evidence-gathering — exactly what we automate from day one. You'll see your ${label} posture in minutes and close the automatable gaps fast; the human controls (policies, training${attested ? ", and the assessor's timeline" : ""}) set the remainder of the schedule.`],
+    [`How much does ${label} cost with TensorShield?`, `Far less than a consultant-led ${label} project or a full-time security hire. You can start free and see your ${label} posture before paying anything; the managed "we run it for you" option is priced on your stack and scope — book a call to scope it.`],
+  ];
+}
 
 // Programmatic SEO: one landing page per supported framework, statically generated. The URL
 // (/frameworks/soc2 …) and per-framework <title>/description target the high-intent
@@ -51,6 +75,7 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
   if (!i) notFound();
 
   const others = FRAMEWORKS.filter((f) => f !== framework);
+  const faq = frameworkFaq(framework, i.label, i.desc);
 
   return (
     <>
@@ -110,6 +135,22 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
             How we keep evidence honest <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
+      </section>
+
+      {/* FAQ — framework-specific, with FAQPage structured data for rich results */}
+      <section className="mx-auto max-w-3xl px-5 py-16">
+        <h2 className="mb-8 text-center text-2xl font-semibold tracking-tight">{i.label} FAQ</h2>
+        <div className="space-y-3">
+          {faq.map(([q, a]) => (
+            <div key={q} className="card p-5">
+              <div className="flex items-start gap-2 text-sm font-semibold text-ink">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" /> {q}
+              </div>
+              <p className="mt-2 pl-6 text-sm leading-relaxed text-muted">{a}</p>
+            </div>
+          ))}
+        </div>
+        <FaqJsonLd items={faq} />
       </section>
 
       {/* Internal-linking hub: other frameworks (SEO + discovery) */}
