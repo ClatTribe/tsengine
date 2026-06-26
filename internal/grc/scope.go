@@ -41,20 +41,38 @@ func SuggestedFrameworks(p platform.ComplianceProfile) []string {
 // IntegrationNeed is one recommended system the customer should connect for compliance coverage, and
 // whether they have. The "asset integration to the customer before analysis" ask.
 type IntegrationNeed struct {
-	Category   string `json:"category"`   // identity | cloud | code | saas | email | web_api
+	Category   string `json:"category"`   // identity | cloud | code | saas | email | web_api | endpoint | logging | backup | hr
 	Label      string `json:"label"`      // human label
 	Connectors string `json:"connectors"` // what satisfies it (e.g. "Google Workspace, Microsoft 365, or Okta")
 	Unlocks    string `json:"unlocks"`    // the compliance signal it provides (which controls)
-	Connected  bool   `json:"connected"`  // does the tenant have it
+	Connected  bool   `json:"connected"`  // does the tenant have it (always false for an unsupported area)
 }
 
 // ReadinessReport is the connect-this-first checklist for a tenant's target frameworks.
 type ReadinessReport struct {
 	TargetFrameworks []string          `json:"target_frameworks"`
-	Integrations     []IntegrationNeed `json:"integrations"`
-	Connected        int               `json:"connected"`
-	Recommended      int               `json:"recommended"`
-	Note             string            `json:"note"`
+	Integrations     []IntegrationNeed `json:"integrations"` // SUPPORTED, automatable — counted toward coverage
+	// ManualAreas are control areas that matter for the target frameworks but tsengine does NOT yet
+	// assess automatically (no connector) — endpoint/MDM, centralized logging, backup/DR, HR/training.
+	// Surfaced explicitly so the customer never reads "compliant" without them; they require manual
+	// evidence + auditor attestation (the no-false-compliant rule applied to asset-type COVERAGE).
+	ManualAreas []IntegrationNeed `json:"manual_areas"`
+	Connected   int               `json:"connected"`
+	Recommended int               `json:"recommended"`
+	Note        string            `json:"note"`
+}
+
+// ManualControlAreas are the asset types / control domains that every framework needs but tsengine has no
+// automated connector for yet. Naming them is the honest answer to "any asset type we should be checking
+// and currently are not" — they're out of AUTOMATED scope and require manual attestation (§ no-false-
+// compliant): we will never mark them met from a scan.
+func ManualControlAreas() []IntegrationNeed {
+	return []IntegrationNeed{
+		{Category: "endpoint", Label: "Endpoint / device posture (MDM)", Connectors: "Jamf, Kandji, or Intune — not yet automated", Unlocks: "laptop disk encryption, screen-lock, OS patch level (SOC2 CC6.7, CIS 4, HIPAA 164.310)"},
+		{Category: "logging", Label: "Centralized logging / monitoring", Connectors: "Datadog, Splunk, CloudWatch — not yet automated", Unlocks: "security-event logging + anomaly monitoring (SOC2 CC7.2, NIST-CSF DE.CM)"},
+		{Category: "backup", Label: "Backup & disaster recovery", Connectors: "your backup/DR tooling — not yet automated", Unlocks: "availability + recoverability (SOC2 A1.2, CIS 11)"},
+		{Category: "hr", Label: "HR / security training", Connectors: "your HRIS / LMS — not yet automated", Unlocks: "background checks, security-awareness training (SOC2 CC1.4, CC2.2)"},
+	}
 }
 
 // RecommendedIntegrations is the standard set of systems whose data feeds compliance controls. The set is
@@ -83,12 +101,14 @@ func ScopeReadiness(targets []string, connected map[string]bool) ReadinessReport
 			c++
 		}
 	}
-	note := fmt.Sprintf("%d of %d recommended integrations connected. Until the rest are connected, the assessment can't see those controls — coverage stays partial and the posture is not a certification.", c, len(ints))
+	manual := ManualControlAreas()
+	note := fmt.Sprintf("%d of %d automatable integrations connected. The rest stay unassessed until connected; and %d control areas (endpoint, logging, backup, HR) aren't automated at all — they need manual evidence + auditor attestation. So this is not a certification on its own.", c, len(ints), len(manual))
 	if c == len(ints) {
-		note = "All recommended integrations connected — the automated assessment can see every control class it supports. (Still not a certification; procedural controls need auditor attestation.)"
+		note = fmt.Sprintf("All %d automatable integrations connected — the assessment sees every control class it supports. But %d areas (endpoint, logging, backup, HR) still require manual attestation, so this is not a certification.", len(ints), len(manual))
 	}
 	return ReadinessReport{
-		TargetFrameworks: targets, Integrations: ints, Connected: c, Recommended: len(ints), Note: note,
+		TargetFrameworks: targets, Integrations: ints, ManualAreas: manual,
+		Connected: c, Recommended: len(ints), Note: note,
 	}
 }
 

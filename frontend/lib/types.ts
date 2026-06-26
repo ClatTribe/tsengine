@@ -525,6 +525,7 @@ export interface IntegrationNeed {
 export interface ComplianceReadiness {
   target_frameworks: string[];
   integrations: IntegrationNeed[];
+  manual_areas: IntegrationNeed[]; // important asset/control areas tsengine doesn't automate (attestation)
   connected: number;
   recommended: number;
   note: string;
