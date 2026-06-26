@@ -57,6 +57,13 @@ export function CreateAudit() {
         <input name="auditor_firm" placeholder="Audit firm" className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm" />
         <input name="auditor_email" type="email" placeholder="Auditor email" className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm" />
       </div>
+      <p className="text-[11px] leading-relaxed text-faint">
+        The auditor is an <span className="text-muted">independent licensed firm</span> (a CPA firm for SOC 2)
+        that you engage — that independence is what makes the report credible, so it can&apos;t be us. TensorShield
+        assembles the controls + evidence here so you&apos;re audit-ready and the engagement is faster &amp; cheaper.
+        Don&apos;t have a firm yet? On a managed or MSP plan, your practitioner can help you prepare and recommend
+        audit partners.
+      </p>
       <div className="flex items-center gap-2">
         <Submit />
         <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted transition hover:text-ink">
