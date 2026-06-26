@@ -1,4 +1,5 @@
-import { Cloud, ShieldAlert, Workflow } from "lucide-react";
+import Link from "next/link";
+import { Cloud, ShieldAlert, Workflow, Plug, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -22,27 +23,47 @@ export default async function CloudEngineerPage() {
         description="An autonomous agent investigates a cloud account by querying its graph — resolving effective permissions, tracing reachability, and measuring blast radius — to find the attack paths an external attacker could actually use to reach a crown jewel. It tells real, exploitable paths apart from config-bad-but-inert noise, and every path it records is backed by a tool result with a verified fix. Results flow into your issues, attack paths, and compliance posture."
       />
 
-      {!enabled && (
-        <div className="rounded-xl border border-warn/40 bg-warn/10 px-5 py-4 text-sm text-ink">
-          <div className="flex items-center gap-2 font-medium">
-            <ShieldAlert className="h-4 w-4 text-warn" /> Investigation engine not configured
+      {!enabled ? (
+        <div className="rounded-xl border border-border bg-surface p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <Cloud className="h-4 w-4 text-accent" /> Turn on the AI Cloud Engineer
           </div>
-          <p className="mt-1.5 text-muted">
-            The cloud engineer needs an LLM. Set <code className="mono text-xs">LLM_API_KEY</code> (cloud) or{" "}
-            <code className="mono text-xs">LLM_BASE_URL=http://localhost:11434/v1</code> with{" "}
-            <code className="mono text-xs">LLM_MODEL=qwen2.5</code> for a local Ollama, then restart the platform.
-            Trigger an investigation by posting a cloud inventory to{" "}
-            <code className="mono text-xs">POST /v1/cloud/investigate</code> (or run <code className="mono text-xs">tsengine cloud-investigate</code>).
+          <p className="mt-1.5 max-w-2xl text-sm text-muted">
+            Connect a cloud account and the agent investigates it for you — mapping effective permissions,
+            reachability, and blast radius to surface the attack paths that actually reach a crown jewel.
+          </p>
+          <Link
+            href="/assets"
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover"
+          >
+            <Plug className="h-4 w-4" /> Connect a cloud account <ArrowRight className="h-4 w-4" />
+          </Link>
+          <p className="mt-4 max-w-2xl text-xs leading-relaxed text-faint">
+            For operators: the agent also needs an AI key — set <code className="mono">LLM_API_KEY</code> (cloud)
+            or <code className="mono">LLM_BASE_URL=http://localhost:11434/v1</code> +{" "}
+            <code className="mono">LLM_MODEL=qwen2.5</code> (local Ollama), then restart. Advanced: trigger
+            directly via <code className="mono">POST /v1/cloud/investigate</code> or{" "}
+            <code className="mono">tsengine cloud-investigate</code>.
           </p>
         </div>
-      )}
-
-      {total === 0 ? (
+      ) : total === 0 ? (
         <Empty>
-          No attack paths recorded yet. Run an investigation over a cloud inventory snapshot —{" "}
-          <code className="mono text-xs">POST /v1/cloud/investigate</code> with{" "}
-          <code className="mono text-xs">{"{ inventory, prowler }"}</code> — and the agent&apos;s proven,
-          remediated paths will appear here and flow into your issues + compliance posture.
+          <div className="space-y-4">
+            <p>
+              No attack paths recorded yet. Connect a cloud account and the agent will investigate it — its
+              proven, remediated paths appear here and flow into your issues + compliance posture.
+            </p>
+            <Link
+              href="/assets"
+              className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover"
+            >
+              <Plug className="h-4 w-4" /> Connect a cloud account
+            </Link>
+            <p className="text-xs text-faint">
+              Advanced: <code className="mono text-xs">POST /v1/cloud/investigate</code> with a cloud inventory
+              snapshot, or run <code className="mono text-xs">tsengine cloud-investigate</code>.
+            </p>
+          </div>
         </Empty>
       ) : (
         <section className="card divide-y divide-border">
