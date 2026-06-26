@@ -230,6 +230,17 @@ type SLABreach struct {
 	ResolveBreached bool      `json:"resolve_breached"` // not resolved in time
 }
 
+// BlastRadius is the impact-sizing signal for a finding/incident — does it sit on a cross-surface attack
+// chain that reaches a crown jewel (e.g. cloud root), and how many hops away. Derived from the same
+// correlate chains as /attack-paths (grounded — no new detection); absent when the finding is on no
+// crown-jewel chain (its impact is just its own severity). Defined here so it can ride as a transient
+// read-time annotation on Incident, like SLABreach.
+type BlastRadius struct {
+	ReachesCrownJewel bool   `json:"reaches_crown_jewel"`
+	CrownJewelType    string `json:"crown_jewel_type,omitempty"` // e.g. cloud_account
+	Hops              int    `json:"hops,omitempty"`             // steps from this finding to the crown jewel
+}
+
 // Breached reports whether either clock is breached.
 func (b SLABreach) Breached() bool { return b.AckBreached || b.ResolveBreached }
 
@@ -577,6 +588,10 @@ type Incident struct {
 	// SLABreach is a TRANSIENT, read-time annotation (the incident's state vs. the tenant's SLA
 	// policy) — populated by the API when returning incidents, NEVER persisted. nil = not tracked.
 	SLABreach *SLABreach `json:"sla_breach,omitempty"`
+	// BlastRadius is a TRANSIENT, read-time impact annotation: whether this incident's finding sits on a
+	// cross-surface chain reaching a crown jewel (how big it can get). Computed by the API from the
+	// correlate chains when returning incidents, NEVER persisted. nil = not on a crown-jewel chain.
+	BlastRadius *BlastRadius `json:"blast_radius,omitempty"`
 }
 
 // Acknowledged reports whether a human has taken ownership of the incident.

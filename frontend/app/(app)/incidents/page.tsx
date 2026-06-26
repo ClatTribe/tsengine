@@ -134,6 +134,7 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
             </span>
           )}
           <ConfidenceBadge verification={i.verification} confidence={i.confidence} />
+          <BlastRadiusBadge blast={i.blast_radius} />
           {respondPending && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30">
               <Wrench className="h-2.5 w-2.5" /> fix ready
@@ -185,4 +186,18 @@ function ConfidenceBadge({ verification, confidence }: { verification?: string; 
     return <span className="inline-flex shrink-0 items-center rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30" title={`Corroborated by ≥2 independent tools${pct ? ` · confidence${pct}` : ""}`}>corroborated{pct}</span>;
   // pattern_match (or anything unconfirmed) → tell the user it needs confirming, don't dress it as confirmed
   return <span className="inline-flex shrink-0 items-center rounded-full border border-medium/40 bg-medium/10 px-2 py-0.5 text-[10px] font-medium text-medium" title={`Single-tool pattern match — confirm before acting${pct ? ` · confidence${pct}` : ""}`}>confirm{pct}</span>;
+}
+
+// BlastRadiusBadge sizes the impact: an incident that chains to a crown jewel (e.g. cloud root) is far worse
+// than its own severity implies. Only shown when the engine actually found such a chain (grounded) — so a
+// contained issue never gets an inflated impact tag.
+function BlastRadiusBadge({ blast }: { blast?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number } }) {
+  if (!blast?.reaches_crown_jewel) return null;
+  const jewel = (blast.crown_jewel_type ?? "a crown jewel").replace(/_/g, " ");
+  const reach = blast.hops && blast.hops > 0 ? `${blast.hops}-hop path to ${jewel}` : `on ${jewel}`;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[10px] font-semibold text-critical" title={`Blast radius: this chains to ${jewel} — impact is bigger than its severity (${reach})`}>
+      reaches {jewel}
+    </span>
+  );
 }
