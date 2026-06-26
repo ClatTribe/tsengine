@@ -77,6 +77,30 @@ type Tenant struct {
 	// scope — handles PHI (HIPAA), processes card data (PCI), sells to government (FedRAMP/800-171),
 	// EU/India data subjects (GDPR/DPDP). Drives framework suggestions + scoping. No secret → plain.
 	ComplianceProfile *ComplianceProfile `json:"compliance_profile,omitempty"`
+	// CustomFrameworks are tenant-defined frameworks ("bring your own framework" — Vanta/Sprinto parity
+	// for the long regional/sector tail). Each control maps to our existing findings (by built-in
+	// framework:control, CWE, or rule id), so a custom framework's posture is DERIVED from live findings
+	// — never asserted. No secret → stored plain on the Tenant (like Contacts/Practitioners).
+	CustomFrameworks []CustomFramework `json:"custom_frameworks,omitempty"`
+}
+
+// CustomFramework is a tenant-defined compliance framework. Its controls map to signals tsengine already
+// produces, so it flows through the same grounded posture/coverage machinery as the built-in 22.
+type CustomFramework struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Controls    []CustomControl `json:"controls"`
+}
+
+// CustomControl is one control of a custom framework. MapsTo lists the signals that, if any appears in the
+// tenant's findings, make this control a GAP — each entry is "fw:control" (a built-in framework control,
+// e.g. "soc2:CC6.1"), "cwe:CWE-89", or "rule:<rule-id-substring>". Empty MapsTo → the control can only be
+// satisfied by manual attestation (never auto-met, never auto-gap — honest, no false-compliant).
+type CustomControl struct {
+	ID     string   `json:"id"`
+	Name   string   `json:"name,omitempty"`
+	MapsTo []string `json:"maps_to,omitempty"`
 }
 
 // ComplianceProfile is the set of applicability facts a customer answers ONCE, up front — the scoping

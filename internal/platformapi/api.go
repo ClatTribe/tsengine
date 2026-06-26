@@ -118,6 +118,10 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/settings/compliance-scope", d.auth(d.handleGetComplianceScope))            // target frameworks + applicability profile (scope before analysis)
 	mux.HandleFunc("PUT /v1/settings/compliance-scope", d.auth(d.handlePutComplianceScope))            // set target frameworks + profile
 	mux.HandleFunc("GET /v1/compliance/readiness", d.auth(d.handleComplianceReadiness))                // connect-this-first checklist for the target frameworks
+	mux.HandleFunc("GET /v1/custom-frameworks", d.auth(d.handleListCustomFrameworks))                  // bring-your-own-framework: list
+	mux.HandleFunc("POST /v1/custom-frameworks", d.auth(d.handleAddCustomFramework))                   // define a custom framework (controls map to findings/CWEs/built-in controls)
+	mux.HandleFunc("DELETE /v1/custom-frameworks/{id}", d.auth(d.handleDeleteCustomFramework))         // remove a custom framework
+	mux.HandleFunc("GET /v1/custom-frameworks/{id}/posture", d.auth(d.handleCustomFrameworkPosture))   // derived posture + coverage from live findings
 	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))              // planned change-freeze windows (suppress alerting)
 	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))               // schedule a window
 	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow))     // cancel a window
