@@ -39,6 +39,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -295,6 +296,22 @@ func main() {
 		},
 	}
 
+	// ctFetcher is the bounded HTTP fetcher the continuous-OSINT sync uses for crt.sh (fixed public
+	// host, domain is a query param → no SSRF surface; keyless, no sandbox).
+	ctFetcher := func(ctx context.Context, url string) ([]byte, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "tsengine-osint")
+		resp, err := (&http.Client{Timeout: 12 * time.Second}).Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = resp.Body.Close() }()
+		return io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	}
+
 	svc := &runner.Service{
 		Store: st, Connectors: reg, Tokens: tokens, NewID: newID,
 		GRC: g, Desk: desk,
@@ -315,6 +332,10 @@ func main() {
 		// continuous-monitoring: open/resolve incidents from change between passes,
 		// alerting a human the moment a new at/above-threshold issue appears.
 		Detector: detector,
+		// continuous external-exposure: each pass runs the keyless crt.sh CT collector over the
+		// tenant's domains so a newly-exposed host becomes an incident (the crt.sh host is fixed —
+		// the domain is a query param — so a bounded client is safe; no key, no sandbox).
+		OSINTFetcher: ctFetcher,
 	}
 	// The operate backend serves non-tech "workspace" assets (identity/email posture):
 	// a snapshot file if the asset names one, else a LIVE fetch from the connected
