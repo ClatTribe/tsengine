@@ -113,6 +113,19 @@ export default async function OverviewPage() {
         </div>
       </Card>
 
+      {/* Get ahead — the all-clear state isn't a dead-end: give the founder a proactive next move
+          (the daily-driver thesis is "log in to do your job", not just "log in to be reassured"). */}
+      {protectedNow && approvals.length === 0 && (
+        <section>
+          <SectionTitle>Get ahead</SectionTitle>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <GetAhead href="/assets" icon={ScanLine} title="Run a scan" desc="Add or re-scan an asset to keep coverage fresh." />
+            <GetAhead href="/brief" icon={Layers} title="Board brief" desc="Generate a plain-English security update to share." />
+            <GetAhead href="/reports" icon={Wrench} title="Download a report" desc="Pull a VAPT or compliance evidence pack." />
+          </div>
+        </section>
+      )}
+
       {/* Needs you */}
       {approvals.length > 0 && (
         <Link href="/inbox" className="block">
@@ -308,5 +321,25 @@ function EventIcon({ kind }: { kind: Event["kind"] }) {
     <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${cls}`}>
       <Icon className="h-3.5 w-3.5" />
     </span>
+  );
+}
+
+// GetAhead is a proactive next-step card shown on the all-clear dashboard, so an idle "you're
+// covered" state still offers the founder something useful to do.
+function GetAhead({ href, icon: Icon, title, desc }: { href: string; icon: typeof ScanLine; title: string; desc: string }) {
+  return (
+    <Link href={href} className="block">
+      <Card className="lift flex h-full items-start gap-3 p-4 hover:border-accent/50">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1 text-sm font-semibold text-ink">
+            {title} <ArrowRight className="h-3.5 w-3.5 text-faint" />
+          </div>
+          <div className="mt-0.5 text-xs leading-relaxed text-muted">{desc}</div>
+        </div>
+      </Card>
+    </Link>
   );
 }
