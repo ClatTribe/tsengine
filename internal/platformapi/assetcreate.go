@@ -68,6 +68,13 @@ func (d Deps) handleCreateAsset(w http.ResponseWriter, r *http.Request, tenantID
 			return
 		}
 	}
+	// Plan asset cap (the economic gate, pkg/platform/plan.go): Free is capped small, Growth
+	// expands, Enterprise is unlimited (-1). An over-cap add is refused with 402 so the UI can
+	// prompt an upgrade — not a silent failure.
+	if lim := d.planLimits(r.Context(), tenantID); lim.MaxAssets >= 0 && len(assets) >= lim.MaxAssets {
+		writeJSON(w, http.StatusPaymentRequired, errBody(fmt.Sprintf("the %s plan includes up to %d scan targets — upgrade to add more", lim.Label, lim.MaxAssets)))
+		return
+	}
 	asset := platform.Asset{
 		ID:           d.newID("ast"),
 		TenantID:     tenantID,

@@ -8,6 +8,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudagent"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -48,6 +49,7 @@ func TestCloudInvestigate_GatedWithoutLLM(t *testing.T) {
 
 func TestCloudInvestigate_RunsAndViewReturnsPaths(t *testing.T) {
 	st := store.NewMemory()
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanGrowth}) // AI is a paid feature
 	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", AgentLLM: fakeCloudLLM{}})
 
 	// Run over a minimal inventory — the agent finishes with 0 proven paths (happy path, 200).
@@ -123,9 +125,18 @@ func TestSeedRisks_AgentFindingsProposeVCISORisks(t *testing.T) {
 
 func TestResolveAgentLLM_FallsBackToOperatorGlobal(t *testing.T) {
 	st := store.NewMemory()
-	// No per-tenant LLM configured → resolveAgentLLM returns the operator-global d.AgentLLM.
 	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", AgentLLM: fakeCloudLLM{}}
-	if got := d.resolveAgentLLM(context.Background(), "t1"); got == nil {
-		t.Error("with no tenant LLM, resolveAgentLLM should fall back to the operator-global AgentLLM")
+	// An AI-enabled (paid) tenant with no own key falls back to the operator-global d.AgentLLM.
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "paid", Plan: platform.PlanGrowth})
+	if got := d.resolveAgentLLM(context.Background(), "paid"); got == nil {
+		t.Error("paid tenant with no own LLM should fall back to the operator-global AgentLLM")
+	}
+	// The economic gate: a Free (or unknown) tenant must NOT spend the operator's LLM budget.
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "free", Plan: platform.PlanFree})
+	if got := d.resolveAgentLLM(context.Background(), "free"); got != nil {
+		t.Error("Free tenant must NOT get the operator-global LLM (no operator spend on free)")
+	}
+	if got := d.resolveAgentLLM(context.Background(), "ghost"); got != nil {
+		t.Error("unknown tenant must default to no operator LLM (fail-safe)")
 	}
 }
