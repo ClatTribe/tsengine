@@ -66,6 +66,23 @@ const config: Config = {
           "0%": { transform: "translateY(-100%)" },
           "100%": { transform: "translateY(900%)" },
         },
+        // a highlight dot travelling left→right along a connector track (live data flow)
+        "flow-x": {
+          "0%": { left: "0%", opacity: "0" },
+          "18%": { opacity: "1" },
+          "82%": { opacity: "1" },
+          "100%": { left: "100%", opacity: "0" },
+        },
+        // seamless horizontal scroll for a logo/tool marquee (content duplicated, travel -50%)
+        marquee: {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-50%)" },
+        },
+        // a soft accent ring that breathes around an "alive" element
+        "glow-pulse": {
+          "0%,100%": { boxShadow: "0 0 0 0 rgba(79,70,229,0)" },
+          "50%": { boxShadow: "0 0 0 5px rgba(79,70,229,0.14)" },
+        },
       },
       animation: {
         "fade-rise": "fade-rise 240ms cubic-bezier(0.16,1,0.3,1) both",
@@ -73,6 +90,9 @@ const config: Config = {
         aurora: "aurora 14s ease-in-out infinite",
         "row-in": "row-in 360ms cubic-bezier(0.16,1,0.3,1) both",
         scanline: "scanline 2.6s linear infinite",
+        "flow-x": "flow-x 2.6s ease-in-out infinite",
+        marquee: "marquee 28s linear infinite",
+        "glow-pulse": "glow-pulse 3s ease-in-out infinite",
       },
     },
   },

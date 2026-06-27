@@ -37,13 +37,13 @@ export function UnifiedPlatform() {
     <section className="border-y border-border bg-surface">
       <div className="mx-auto max-w-5xl px-5 py-16">
         <Reveal className="mx-auto mb-10 max-w-2xl text-center">
-          <span className="text-xs font-semibold uppercase tracking-wider text-accent">One platform, one brain</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-accent">One shared brain</span>
           <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
-            Every signal makes the next one smarter.
+            Five surfaces, one brain — every signal makes the next smarter.
           </h2>
           <p className="mt-3 text-base leading-relaxed text-muted">
-            The products aren&apos;t separate tools bolted together. Every scan, pentest, and posture check feeds one
-            finding graph — so they corroborate each other&apos;s detections and roll into a single compliance posture.
+            The surfaces above aren&apos;t separate tools bolted together. Every scan, pentest, and posture check feeds
+            one finding graph — so they corroborate each other&apos;s detections and roll into a single compliance posture.
           </p>
         </Reveal>
 
@@ -61,8 +61,8 @@ export function UnifiedPlatform() {
 
         {/* convergence */}
         <Reveal delay={140} className="mt-6 flex flex-col items-center">
-          <ArrowDown className="h-5 w-5 text-faint" />
-          <div className="mt-2 w-full max-w-xl rounded-2xl border-2 border-accent/40 bg-accent-soft/30 p-5 text-center">
+          <ArrowDown className="h-5 w-5 animate-bounce text-faint" />
+          <div className="mt-2 w-full max-w-xl rounded-2xl border-2 border-accent/40 bg-accent-soft/30 p-5 text-center animate-glow-pulse">
             <div className="text-sm font-semibold text-accent">One finding graph — the shared brain</div>
             <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted">
               Corroborate findings across tools · correlate cross-surface attack paths via a shared entity ·

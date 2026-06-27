@@ -66,7 +66,7 @@ export default function Landing() {
                   See how it works
                 </Link>
               </div>
-              <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +10 more · No credit card to start</p>
+              <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +18 more · No credit card to start</p>
               <Link href="/scan" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
                 Or check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
               </Link>
@@ -125,6 +125,42 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
+            </div>
+          </Reveal>
+
+          {/* From alert to fixed — USP #2 made tangible: the concrete remediation path, animated */}
+          <Reveal delay={150} className="mt-8 rounded-2xl border border-border bg-bg p-4 sm:p-5">
+            <div className="mb-4 text-center text-[11px] font-semibold uppercase tracking-wider text-faint">
+              From alert to fixed — automatically, with you approving what matters
+            </div>
+            <div className="flex min-w-max items-stretch gap-1.5 overflow-x-auto sm:min-w-0 sm:justify-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {[
+                { icon: ScanLine, t: "Detected", d: "ranked, deduped" },
+                { icon: Wrench, t: "Fix prepared", d: "PR · config · runbook" },
+                { icon: CheckCircle2, t: "You approve", d: "1 tap, tier-gated" },
+                { icon: GitBranch, t: "Applied", d: "via your connector" },
+                { icon: ShieldCheck, t: "Re-verified", d: "confirmed gone" },
+              ].map(({ icon: Icon, t, d }, i, arr) => (
+                <div key={t} className="flex items-stretch gap-1.5">
+                  <div className="w-[8.2rem] shrink-0 rounded-xl border border-border bg-surface p-3 text-center shadow-card">
+                    <span className="mx-auto grid h-8 w-8 place-items-center rounded-lg bg-accent-soft text-accent">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="mt-2 text-xs font-semibold text-ink">{t}</div>
+                    <div className="mt-0.5 text-[11px] leading-snug text-muted">{d}</div>
+                  </div>
+                  {i < arr.length - 1 && (
+                    <div className="flex w-6 shrink-0 items-center self-center">
+                      <div className="relative h-px w-full bg-gradient-to-r from-border via-accent/40 to-border">
+                        <span
+                          className="absolute top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_8px_rgba(79,70,229,0.6)] animate-flow-x"
+                          style={{ animationDelay: `${i * 0.45}s` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </Reveal>
         </div>
@@ -356,7 +392,7 @@ function StackPipeline() {
   const stack = [
     { icon: Cloud, label: "Cloud", sub: "AWS · GCP · Azure" },
     { icon: Mail, label: "Workspace", sub: "Google · M365" },
-    { icon: GitBranch, label: "Code", sub: "GitHub · GitLab · Bitbucket · Azure DevOps" },
+    { icon: GitBranch, label: "Code", sub: "GitHub · GitLab" },
     { icon: KeyRound, label: "Identity & MFA", sub: "Okta · SSO" },
   ];
   const outcomes = [
@@ -378,11 +414,12 @@ function StackPipeline() {
 
         <Connector />
 
-        {/* TensorShield */}
+        {/* TensorShield — the live core: a breathing glow + a pulsing ring around the shield */}
         <div className="flex items-center">
-          <div className="w-full rounded-2xl border border-accent/40 bg-accent-soft/40 p-5 text-center">
-            <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-accent text-white shadow-sm">
-              <ShieldCheck className="h-5 w-5" />
+          <div className="w-full rounded-2xl border border-accent/40 bg-accent-soft/40 p-5 text-center animate-glow-pulse">
+            <span className="relative mx-auto grid h-11 w-11 place-items-center rounded-xl bg-accent text-white shadow-sm">
+              <span className="absolute inset-0 rounded-xl bg-accent/40 animate-ping" />
+              <ShieldCheck className="relative h-5 w-5" />
             </span>
             <div className="mt-3 text-base font-semibold">TensorShield</div>
             <div className="mt-1 text-xs font-medium text-accent">Detect · Triage · Fix · Prove</div>
@@ -390,7 +427,7 @@ function StackPipeline() {
           </div>
         </div>
 
-        <Connector />
+        <Connector delay={1.3} />
 
         {/* Outcomes */}
         <Column heading="What you get">
@@ -433,11 +470,18 @@ function Node({ Icon, label, sub, strong }: { Icon: typeof Cloud; label: string;
   );
 }
 
-// Arrow between columns — horizontal on desktop, down-chevron on mobile.
-function Connector() {
+// Live connector between columns — a highlight dot streams left→right along the track on desktop
+// (data flowing into the agent and back out as fixes); a down-chevron on mobile. The `delay`
+// staggers the two connectors so the pulse appears to travel through TensorShield.
+function Connector({ delay = 0 }: { delay?: number }) {
   return (
     <div className="flex items-center justify-center text-faint">
-      <ArrowRight className="hidden h-5 w-5 md:block" />
+      <div className="relative hidden h-px w-10 overflow-visible bg-gradient-to-r from-border via-accent/40 to-border md:block">
+        <span
+          className="absolute top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_8px_rgba(79,70,229,0.7)] animate-flow-x"
+          style={{ animationDelay: `${delay}s` }}
+        />
+      </div>
       <ChevronDown className="h-5 w-5 md:hidden" />
     </div>
   );
