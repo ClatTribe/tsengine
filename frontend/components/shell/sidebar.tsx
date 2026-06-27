@@ -25,6 +25,7 @@ import {
   Radar,
   Building2,
   ScanSearch,
+  Shield,
   ChevronDown,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
@@ -56,6 +57,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
       { href: "/osint", label: "External exposure", icon: Radar },
       { href: "/posture", label: "Asset posture", icon: Building2 },
       { href: "/coverage", label: "Test coverage", icon: ScanSearch },
+      { href: "/runtime", label: "Runtime protection", icon: Shield },
       { href: "/incidents", label: "Incidents", icon: Activity },
     ],
   },
