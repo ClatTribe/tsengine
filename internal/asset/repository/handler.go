@@ -111,5 +111,8 @@ var registryNames = []string{
 	// Escalation-fired when the tree looks like a Go project; reports only
 	// reachable vulnerabilities, corroborating the SCA tools' raw CVE list.
 	"govulncheck",
-	// Phase 3.x: CodeQL, brakeman, gosec, staticcheck, snyk-code, kics, terrascan
+	// gosec — Go-specific security SAST (weak crypto, hardcoded creds, SQL string-building,
+	// unhandled security errors) — complements semgrep's generic packs with Go-idiomatic rules.
+	"gosec",
+	// Phase 3.x: CodeQL, brakeman, staticcheck, snyk-code, kics, terrascan
 }

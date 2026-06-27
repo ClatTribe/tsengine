@@ -172,7 +172,7 @@ NOT escalation — they fan out / anchor every scan.
 | | Secrets | gitleaks, trufflehog |
 | | IaC / Dockerfiles | checkov, hadolint, tfsec |
 | | SBOM | syft |
-| **Registry tier** | (on-demand) | CodeQL (taint-flow SAST — biggest depth gain), brakeman, gosec, staticcheck, snyk-code (free CLI), kics, terrascan |
+| **Registry tier** | (on-demand) | **wrapped:** govulncheck (Go reachability), gosec (`internal/tool/gosec` — Go-specific security SAST: weak crypto, hardcoded creds, SQL string-building, unhandled security errors); **planned:** CodeQL (taint-flow SAST — biggest depth gain), brakeman, staticcheck, snyk-code (free CLI), kics, terrascan |
 | **L1 filtration** | Language detection | semgrep packs chosen per language |
 | | File-tree filter | Skip `node_modules/`, `vendor/`, `.git/`, `__pycache__/`, `dist/`, `build/`, `*.min.js`, binaries > 5MB |
 | **L2 catalog** | Specialists | build_code_map, terminal_execute; rest of catalog same as web |
