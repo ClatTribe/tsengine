@@ -1063,8 +1063,17 @@ owner-issued temp password can't remain the standing credential. Frontend: a top
 `/change-password` route (outside the `(app)` group to avoid a redirect loop) + the `(app)`
 layout redirect on `me.must_change_password`. `cmd/platform` `newID()` is a random hex id
 (a restart-resetting counter previously overwrote tenants). Frontend: `/login`
-(email+password), `/signup`, `/change-password`, Settings â Team. **Still future:** email
-invites / password reset, OAuth-SSO login, and a billing model.
+(email+password), `/signup`, `/change-password`, Settings â Team. **Password reset is now built**:
+`internal/email` (a `Mailer` interface + `SMTP` impl via `net/smtp` STARTTLS + `Noop`, wired from
+`email.FromEnv` over `SMTP_*` env) carries a one-time reset link; `POST /v1/auth/forgot` (public,
+no account enumeration, stores only the SHA-256 of the token + a 1h expiry on the `User`, emails the
+link, logs it when no SMTP is configured) + `POST /v1/auth/reset` (constant-time token check, set new
+password, clear the token + `MustChangePassword`). Frontend: `/forgot-password` + `/reset-password`
++ a "Forgot password?" link on `/login`, proxied via `/api/forgot` + `/api/reset`. The SMTP provider
+is the operator-config gate. **Plan tiers are enforced** (`pkg/platform/plan.go` `Entitlements`): Free
+is asset-capped + AI-off (no operator LLM spend, the economic gate in `resolveAgentLLM`),
+Growth/Enterprise unlock AI; the `/pricing` page (INR, 3 tiers) mirrors it. **Still future:**
+email-based member invites (the reset machinery is reusable), OAuth-SSO login, and a billing model.
 
 **The product stack is containerized** (`docker compose up` / `make up`): `docker/platform/
 Dockerfile` (the `cmd/platform` server, Go, ~108MB) + `frontend/Dockerfile` (Next.js
