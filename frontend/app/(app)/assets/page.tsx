@@ -201,8 +201,8 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         {assets.length === 0 ? (
           <Empty>No assets discovered yet. Connect a system and the agent enumerates what to watch.</Empty>
         ) : (
-          <div className="card p-0">
-            <table className="w-full">
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full min-w-[760px]">
               <thead>
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="py-2.5 pl-5 pr-2 font-medium">Asset</th>

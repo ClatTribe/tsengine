@@ -85,8 +85,8 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
               : "No open issues. As scanners run across your code, cloud, and surfaces, their findings are de-duplicated here into one row per real problem."}
         </Empty>
       ) : (
-        <div className="card p-0">
-          <table className="w-full">
+        <div className="card overflow-x-auto p-0">
+          <table className="w-full min-w-[560px]">
             <thead>
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
                 <th className="py-2.5 pl-5 pr-2 font-medium">Severity</th>
