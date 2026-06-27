@@ -15,24 +15,19 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#6366f1",
+          backgroundColor: "#0b1220",
           borderRadius: "7px",
         }}
       >
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
-          {/* white shield */}
-          <path d="M12 2l8 3v6c0 5-3.4 8.4-8 11-4.6-2.6-8-6-8-11V5l8-3z" fill="#ffffff" />
-          {/* upward tensor node-chevron — matches the brand mark, legible at 16px */}
-          <path
-            d="M8.2 15L12 9l3.8 6"
-            stroke="#6366f1"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <circle cx="8.2" cy="15" r="1.35" fill="#6366f1" />
-          <circle cx="15.8" cy="15" r="1.35" fill="#6366f1" />
-          <circle cx="12" cy="9" r="1.6" fill="#6366f1" />
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          {/* cyan shield — simplified for legibility at favicon size */}
+          <path d="M12 2l8 3v6c0 5-3.4 8.4-8 11-4.6-2.6-8-6-8-11V5l8-3z" fill="#0ea5e9" fillOpacity="0.14" stroke="#38bdf8" strokeWidth="1.6" strokeLinejoin="round" />
+          {/* up-right growth arrow */}
+          <path d="M8.5 15.5L16 8" stroke="#7dd3fc" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12.5 7.5H16.5V11.5" stroke="#7dd3fc" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          {/* warm clasp — the human-accountability point */}
+          <circle cx="11.3" cy="13" r="2.5" fill="#fb923c" />
+          <circle cx="11.3" cy="13" r="0.95" fill="#fff7ed" />
         </svg>
       </div>
     ),
