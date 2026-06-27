@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
   AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen, ShieldCheck,
-  Cloud, KeyRound, UserCheck, ArrowRight,
+  Cloud, KeyRound, UserCheck, ArrowRight, Building2, Users, Mail,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -50,16 +50,26 @@ const TOOLS: Item[] = [
   { href: "/resources", label: "Free resources", desc: "SOC 2 checklist + questionnaire template", icon: BookOpen },
 ];
 
+// Direct top-bar links: the two paths a buyer takes — self-serve (Pricing) and done-for-you
+// (Managed). The "how we deliver to partners" + company pages live under the Company menu below.
 const DIRECT = [
   { href: "/pricing", label: "Pricing" },
   { href: "/managed", label: "Managed" },
-  { href: "/partners", label: "For MSPs" },
-  { href: "/blog", label: "Blog" },
+];
+
+// Company menu — about + ways to reach us + the partner/channel delivery model. These are
+// company/delivery pages, NOT solutions (Solutions = what we provide), so they're grouped here
+// instead of cluttering the top bar.
+const COMPANY: Item[] = [
+  { href: "/about", label: "About", desc: "Who we are and why we built this", icon: Building2 },
+  { href: "/partners", label: "For MSPs & consultancies", desc: "Run TensorShield for your clients", icon: Users },
+  { href: "/blog", label: "Blog", desc: "Notes on security, compliance & AI", icon: BookOpen },
+  { href: "/demo", label: "Contact us", desc: "Book a demo or talk to the team", icon: Mail },
 ];
 
 export function MarketingNav() {
   const [open, setOpen] = useState(false); // mobile sheet
-  const [menu, setMenu] = useState<"solutions" | "frameworks" | "tools" | null>(null); // desktop dropdown
+  const [menu, setMenu] = useState<"solutions" | "frameworks" | "tools" | "company" | null>(null); // desktop dropdown
   const [acc, setAcc] = useState<"security" | "compliance" | "tools" | null>(null); // mobile accordion
   const path = usePathname();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,7 +81,7 @@ export function MarketingNav() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const openMenu = (m: "solutions" | "frameworks" | "tools") => {
+  const openMenu = (m: "solutions" | "frameworks" | "tools" | "company") => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setMenu(m);
   };
@@ -125,6 +135,14 @@ export function MarketingNav() {
               {l.label}
             </Link>
           ))}
+          <Dropdown
+            label="Company"
+            items={COMPANY}
+            isOpen={menu === "company"}
+            onEnter={() => openMenu("company")}
+            onLeave={scheduleClose}
+            path={path}
+          />
         </div>
 
         {/* Desktop CTAs */}
@@ -188,7 +206,7 @@ export function MarketingNav() {
             <Link href="/frameworks" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2.5 text-sm text-muted transition hover:bg-surface-2 hover:text-ink">
               Frameworks ({FRAMEWORKS.length})
             </Link>
-            {DIRECT.map((l) => (
+            {[...DIRECT, ...COMPANY].map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
