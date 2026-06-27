@@ -19,6 +19,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/coverage"
+	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
@@ -79,6 +80,10 @@ type Deps struct {
 	// /v1/l2/translate). Wired from l2.ClientFromEnv (Anthropic, OpenAI, or a local Ollama); a tenant's
 	// own configured model takes precedence. Nil → the translator endpoint is gated (400).
 	LeadClient l2.Client
+	// Mailer sends transactional email (password-reset links, invites). Nil → a no-op (the
+	// platform falls back to the in-UI temp-password flow and logs reset links for the operator).
+	// Wired from email.FromEnv (SMTP_*); the SMTP provider is the credential-gated half.
+	Mailer email.Mailer
 }
 
 // NewHandler returns the platform's HTTP handler.
@@ -96,6 +101,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/auth/team", d.sessionAuth(d.handleTeam))
 	mux.HandleFunc("POST /v1/auth/invite", d.sessionAuth(d.handleInvite))
 	mux.HandleFunc("POST /v1/auth/password", d.sessionAuth(d.handlePassword)) // change pw + clear MustChangePassword
+	mux.HandleFunc("POST /v1/auth/forgot", d.handleForgotPassword)            // start reset (public; emails a one-time link, no enumeration)
+	mux.HandleFunc("POST /v1/auth/reset", d.handleResetPassword)              // complete reset with the token
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))

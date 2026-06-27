@@ -59,6 +59,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/detect"
+	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/jobs"
@@ -73,9 +74,9 @@ import (
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
 	"github.com/ClatTribe/tsengine/internal/scheduler"
-	_ "github.com/ClatTribe/tsengine/internal/toolsbundle" // register OSS tools so host-side PlanAnchors resolves anchors (else 0 findings)
 	"github.com/ClatTribe/tsengine/internal/secret"
 	"github.com/ClatTribe/tsengine/internal/store"
+	_ "github.com/ClatTribe/tsengine/internal/toolsbundle" // register OSS tools so host-side PlanAnchors resolves anchors (else 0 findings)
 	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -413,6 +414,7 @@ func main() {
 		AppURL:             envOr("TSENGINE_APP_URL", os.Getenv("TSENGINE_PLATFORM_PUBLIC")),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
 		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser, AgentLLM: agentLLM, LeadClient: leadClient,
+		Mailer: email.FromEnv(), // transactional email (password reset/invite); no-op until SMTP_* is set
 	})
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls

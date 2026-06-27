@@ -24,6 +24,11 @@ type User struct {
 	// app endpoints are blocked (403 password_change_required) so the temp password — which
 	// the owner who issued it knows — cannot remain the standing credential.
 	MustChangePassword bool `json:"must_change_password,omitempty"`
+	// ResetTokenHash is the SHA-256 (hex) of a one-time password-reset token; the raw token is
+	// emailed to the user and never stored. ResetTokenExpires bounds validity. Both clear on
+	// completion. Never serialized to clients (json:"-").
+	ResetTokenHash    string    `json:"-"`
+	ResetTokenExpires time.Time `json:"-"`
 }
 
 // Session is an authenticated browser session: an opaque random Token that maps to a
