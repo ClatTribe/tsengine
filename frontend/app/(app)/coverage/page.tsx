@@ -2,6 +2,7 @@ import { ScanSearch, CheckCircle2, CircleDashed } from "lucide-react";
 import { api } from "@/lib/api";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ export default async function CoveragePage() {
         title="Test coverage"
         description="Exactly what was tested on each asset — the tools every scan runs, when it last ran, and which of them surfaced something. No black box: a clean tool ran, it just found nothing."
       />
+
+      <PageTabs tabs={[{ href: "/coverage", label: "Test coverage" }, { href: "/posture", label: "Asset posture" }]} />
 
       {cov.total_assets > 0 && (
         <div className="card flex items-center gap-3 px-4 py-3 text-sm">
