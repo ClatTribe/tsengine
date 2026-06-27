@@ -47,8 +47,15 @@ durable + managed (and lets you add more boxes later — the backend is stateles
 
   Do **not** open 8090/3000 — the backend + frontend are reachable only via Caddy on the internal Docker
   network.
-- **DNS:** point an A record (e.g. `app.yourdomain.com`) at the instance's Elastic IP (allocate one so the
-  IP is stable).
+- **DNS / the domain:** `app.yourdomain.com` is a placeholder — `yourdomain.com` is a domain **you own**,
+  and `app` is a subdomain you invent. Allocate an **Elastic IP** first (so the box's IP is stable), then:
+  - **If you own a domain:** in your registrar's DNS panel (Namecheap / GoDaddy / Cloudflare / Route 53),
+    add an **A record** → host `app` (or `api`), value = the Elastic IP. `app.yourdomain.com` now resolves
+    to the box and Caddy auto‑issues a real HTTPS cert.
+  - **If you DON'T own a domain:** use **sslip.io** — no DNS setup at all. Take your Elastic IP, replace the
+    dots with dashes, and append `.sslip.io`: e.g. IP `13.49.22.7` → `13-49-22-7.sslip.io`. sslip.io resolves
+    any `<ip>.sslip.io` to that IP, and Caddy still gets a valid Let's Encrypt cert for it. Use that hostname
+    everywhere below (`TSENGINE_SITE_ADDRESS`, `TSENGINE_PLATFORM_PUBLIC`, and Vercel's `TSENGINE_API_URL`).
 
 ---
 
@@ -150,7 +157,7 @@ Then redeploy on Vercel.
 
 | Symptom | Cause / fix |
 |---|---|
-| "Sign‑in failed" on the live site | `TSENGINE_API_URL` wrong, or the box can't reach Supabase — check the DSN + `sslmode=require`, and `curl https://app.yourdomain.com/healthz`. |
+| **"Sign‑in is temporarily unavailable."** on the live site | The Vercel frontend can't reach the backend. Almost always `TSENGINE_API_URL` is **unset on Vercel** (it then defaults to `http://localhost:8090`, which doesn't exist in Vercel's cloud → 502). Set `TSENGINE_API_URL=https://<your-host>` in Vercel → **Production** env and **redeploy**. If it's set, confirm the box is up (`curl https://<your-host>/healthz`) and the cert is valid (not `tls internal`). |
 | Scans produce 0 findings | sandbox image not built (`make sandbox-image`), or `TSENGINE_PLATFORM_NO_ENGINE` was forced to `1`. Check `docker compose logs platform` for `NO_ENGINE mode`. |
 | Caddy cert errors | DNS A record not pointing at the box yet, port 80 closed (ACME needs it), or `tls internal` still in the Caddyfile. |
 | Postgres connect refused | Supabase requires SSL — keep `?sslmode=require`; for many instances use the Supabase pooler host (port 6543, session mode). |
