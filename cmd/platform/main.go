@@ -103,7 +103,16 @@ func main() {
 	if token == "" {
 		log.Fatal("TSENGINE_PLATFORM_TOKEN is required")
 	}
-	addr := envOr("TSENGINE_PLATFORM_ADDR", ":8090")
+	// Listen address: an explicit TSENGINE_PLATFORM_ADDR wins; else honor the PaaS-injected $PORT
+	// (Render / Railway / Fly / Heroku set it and require the app to bind it); else :8090.
+	addr := os.Getenv("TSENGINE_PLATFORM_ADDR")
+	if addr == "" {
+		if p := os.Getenv("PORT"); p != "" {
+			addr = ":" + p
+		} else {
+			addr = ":8090"
+		}
+	}
 	image := envOr("TSENGINE_SANDBOX_IMAGE", "tsengine/sandbox:latest")
 
 	st := openStore()

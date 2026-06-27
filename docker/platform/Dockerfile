@@ -35,8 +35,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /out/platform /usr/local/bin/platform
 
-ENV TSENGINE_PLATFORM_ADDR=:8090 \
-    TSENGINE_PLATFORM_DB=/data/platform.json
+# No TSENGINE_PLATFORM_ADDR default here: the binary binds $PORT when a PaaS (Render/Railway/Fly)
+# injects it, else :8090 — pinning ADDR would override $PORT and break PaaS port routing.
+ENV TSENGINE_PLATFORM_DB=/data/platform.json
 EXPOSE 8090
 VOLUME ["/data"]
 
