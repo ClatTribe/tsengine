@@ -390,6 +390,8 @@ A finding maps to a framework **only where the crosswalk has a real control nexu
 
 Hook: `compliance.map` fires in the L1.5 hook chain. Sourced from `compliance_corpus/` (versioned YAML), refreshed on cron. Same per-scan pinning as threat intel.
 
+**Provenance of the CWE→control crosswalk (`internal/tracer/hooks/data/compliance.json`, embedded):** unlike the threat-intel corpus (KEV/EPSS/ExploitDB/NVD — OSS feeds, §7), the crosswalk is **in-house hand-curated** reference data, synthesized from the published framework standards. That's architecturally fine — §13's wrap-OSS rule governs *detection*, and this is *annotation* (§8), whose discipline is grounding (§10: maps only where a real control nexus exists), not OSS-wrapping. There is no single authoritative OSS crosswalk for our 22 frameworks (the SaaS leaders keep theirs closed). What we DO have is an **auditable OSS cross-reference**: `internal/corpus/opencre` cross-checks the crosswalk against **OpenCRE** (OWASP's Open Common Requirement Enumeration). OpenCRE maps a CWE → CRE *nodes* (one hop; CRE→framework is separate) and doesn't cover SOC2/HIPAA/GDPR — so it can't *replace* the crosswalk, but it gives each CWE an OSS-traceable provenance signal (recognized + grounds to a CRE requirement). `tsengine corpus compliance-provenance` fetches OpenCRE (out-of-band, keyless, like `corpus refresh`) and reports the OpenCRE-backed vs in-house-only split (in-house-only = OpenCRE has no nexus, honest, not a defect).
+
 Example annotation:
 
 ```json
