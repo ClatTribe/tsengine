@@ -57,6 +57,11 @@ func Assess(snap *cloudgraph.Snapshot, prowler []types.Finding, v Validator, opt
 	// assume-role edge blocked by the target's trust policy), so reachability isn't
 	// over-stated — the held-out FP fix (cloudiam consulted before enumeration, §10).
 	snap.PruneUnauthorized()
+	// 0b. Reachability precision: drop internet→resource network edges the security group
+	// provably blocks (public resource but SG restricted to a corp CIDR / different port), so a
+	// path leads with ACTUALLY-reachable exposure, not theoretical — separating theoretical from
+	// real exposure (the agentic-cloud-security table-stakes signal; grounded, keep-on-absent).
+	snap.PruneUnreachable()
 
 	// 1–2. Orient + hypothesize: from every entry point (internet + public
 	// resources) find paths to a crown jewel (sensitive data OR privileged id).

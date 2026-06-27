@@ -1,6 +1,8 @@
 package cloudgraph
 
 import (
+	"strconv"
+
 	"github.com/ClatTribe/tsengine/internal/azureiam"
 	"github.com/ClatTribe/tsengine/internal/cloudiam"
 	"github.com/ClatTribe/tsengine/internal/gcpiam"
@@ -36,6 +38,62 @@ func (s *Snapshot) PruneUnauthorized() {
 		s.Edges = kept
 		s.out = nil // invalidate the lazily-built adjacency index
 	}
+}
+
+// PruneUnreachable is the network twin of PruneUnauthorized — REACHABILITY PRECISION. The graph
+// over-approximates an internet→resource network_reach edge from "the resource is public"; but a public
+// resource whose security group only permits a corporate CIDR (or a different port) is NOT actually
+// internet-reachable. This drops an internet-sourced network_reach edge when the destination's ingress
+// rules DEFINITIVELY don't permit the open internet to the service port — separating theoretical exposure
+// from real exposure, the category's table-stakes signal.
+//
+// Grounded like PruneUnauthorized: it acts only on a destination node carrying parseable
+// Attrs["sg_ingress"] (a JSON []SGRule) AND a numeric Attrs["service_port"]; an edge with absent/
+// unparseable rule data is KEPT (absent data never prunes a genuinely-reachable path — recall preserved).
+// Optional Attrs["service_proto"] (default "tcp"). Only the internet pseudo-node source is gated; lateral
+// (non-internet) reach edges are untouched here.
+func (s *Snapshot) PruneUnreachable() {
+	if s == nil || len(s.Edges) == 0 {
+		return
+	}
+	kept := make([]Edge, 0, len(s.Edges))
+	for _, e := range s.Edges {
+		if e.Kind == EdgeNetworkReach && e.From == InternetID && s.internetBlocked(e.To) {
+			continue // SG provably blocks the internet to the service port → drop the over-approximation
+		}
+		kept = append(kept, e)
+	}
+	if len(kept) != len(s.Edges) {
+		s.Edges = kept
+		s.out = nil
+	}
+}
+
+// internetBlocked reports whether the destination node carries enough grounded config to PROVE the open
+// internet cannot reach its service port. Returns false (i.e. keep the edge) whenever the data is absent
+// or unparseable — only a definitive "no rule permits 0.0.0.0/0 on the port" prunes.
+func (s *Snapshot) internetBlocked(dst string) bool {
+	n := s.Node(dst)
+	if n == nil || n.Attrs == nil {
+		return false
+	}
+	portStr := n.Attrs["service_port"]
+	if portStr == "" {
+		return false // no known service port → can't disprove reachability → keep
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return false
+	}
+	rules, err := ParseSGRules(n.Attrs["sg_ingress"])
+	if err != nil || len(rules) == 0 {
+		return false // no parseable rules → keep (absent data never prunes)
+	}
+	proto := n.Attrs["service_proto"]
+	if proto == "" {
+		proto = "tcp"
+	}
+	return !InternetReachable(rules, port, proto) // rules exist and DON'T permit the internet → blocked
 }
 
 // assumeAuthorized reports whether the source principal may sts:AssumeRole the target role per
