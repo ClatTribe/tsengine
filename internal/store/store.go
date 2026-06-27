@@ -27,14 +27,18 @@ var ErrNotFound = errors.New("store: not found")
 // Open returns the right Store for a path — the single source of truth for store-path
 // routing, shared by the platform server and dev tooling so they can't drift:
 //
-//	""                      → in-memory (ephemeral)
-//	*.db / *.sqlite[3]      → durable SQLite (the production single-box backend)
-//	any other path (*.json) → the whole-snapshot file store
+//	""                          → in-memory (ephemeral)
+//	postgres:// | postgresql:// → durable Postgres (Supabase / RDS / Neon — multi-node scale-out)
+//	*.db / *.sqlite[3]          → durable SQLite (the production single-box backend)
+//	any other path (*.json)     → the whole-snapshot file store
 //
 // Callers that want startup logging wrap this; the routing itself lives here.
 func Open(path string) (Store, error) {
 	if path == "" {
 		return NewMemory(), nil
+	}
+	if strings.HasPrefix(path, "postgres://") || strings.HasPrefix(path, "postgresql://") {
+		return OpenPostgres(path)
 	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".db", ".sqlite", ".sqlite3":

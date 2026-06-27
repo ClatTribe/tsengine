@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -22,7 +23,7 @@ type storeFactory struct {
 }
 
 func factories() []storeFactory {
-	return []storeFactory{
+	fs := []storeFactory{
 		{"memory", func(*testing.T) Store { return NewMemory() }},
 		{"file", func(t *testing.T) Store {
 			s, err := OpenFile(filepath.Join(t.TempDir(), "store.json"))
@@ -40,6 +41,28 @@ func factories() []storeFactory {
 			return s
 		}},
 	}
+	// Postgres runs through the SAME conformance suite when TEST_POSTGRES_URL points at a throwaway
+	// database (e.g. a Supabase/Neon/local-docker test DB). Skipped otherwise — the impl is a mechanical
+	// port of the SQLite store, so the contract is identical; this proves it against a real Postgres.
+	if dsn := os.Getenv("TEST_POSTGRES_URL"); dsn != "" {
+		fs = append(fs, storeFactory{"postgres", func(t *testing.T) Store {
+			p, err := OpenPostgres(dsn)
+			if err != nil {
+				t.Fatalf("open postgres store: %v", err)
+			}
+			// Clean slate: each conformance run starts empty (Postgres is a shared DB, not a temp dir).
+			for _, tbl := range []string{"tenants", "connections", "assets", "engagements", "findings", "actions",
+				"controls", "incidents", "risks", "audits", "policies", "ignores", "exclusions", "runtimeevts",
+				"pentests", "reviews", "apps", "users", "sessions", "operators", "opsessions"} {
+				if _, err := p.db.ExecContext(context.Background(), "TRUNCATE TABLE "+tbl); err != nil {
+					t.Fatalf("truncate %s: %v", tbl, err)
+				}
+			}
+			t.Cleanup(func() { _ = p.Close() })
+			return p
+		}})
+	}
+	return fs
 }
 
 // seedTenant writes exactly one of every tenant-scoped entity for tid.
