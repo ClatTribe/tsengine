@@ -3,6 +3,7 @@ import { Cloud, ShieldAlert, Workflow, Plug, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
 import { ConfidencePill } from "@/components/findings/confidence-pill";
 import { RunInvestigation } from "@/components/cloud/run-investigation";
 
@@ -24,6 +25,8 @@ export default async function CloudEngineerPage() {
         title="AI Cloud Security Engineer"
         description="An autonomous agent investigates a cloud account by querying its graph — resolving effective permissions, tracing reachability, and measuring blast radius — to find the attack paths an external attacker could actually use to reach a crown jewel. It tells real, exploitable paths apart from config-bad-but-inert noise, and every path it records is backed by a tool result with a verified fix. Results flow into your issues, attack paths, and compliance posture."
       />
+
+      <PageTabs tabs={[{ href: "/attack-paths", label: "Attack paths" }, { href: "/cloud-engineer", label: "Cloud investigation" }]} />
 
       <RunInvestigation />
 

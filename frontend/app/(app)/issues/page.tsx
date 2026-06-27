@@ -7,6 +7,7 @@ import { IssueActions } from "@/components/issues/issue-actions";
 import { ExclusionRules } from "@/components/issues/exclusion-rules";
 import { TriageFunnel } from "@/components/issues/triage-funnel";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,8 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
           </div>
         }
       />
+
+      <PageTabs tabs={[{ href: "/issues", label: "Issues" }, { href: "/findings", label: "All findings (raw)" }]} />
 
       {/* Active / Live-only / Ignored toggle */}
       <div className="flex items-center rounded-lg border border-border bg-surface p-0.5 text-sm w-fit">

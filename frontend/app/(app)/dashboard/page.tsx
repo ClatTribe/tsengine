@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   ArrowRight, ScanLine, ShieldAlert, ShieldCheck, Wrench, Inbox as InboxIcon,
-  Boxes, Radar, Plug, CheckCircle2, Spline, Layers,
+  Boxes, Radar, Plug, CheckCircle2, Spline, Layers, Sparkles,
 } from "lucide-react";
 import { api, FRAMEWORK_LABEL } from "@/lib/api";
 import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
@@ -112,6 +112,18 @@ export default async function OverviewPage() {
           </div>
         </div>
       </Card>
+
+      {/* Plain-English brief — the founder's narrative, surfaced on Overview instead of a separate tab */}
+      <Link href="/brief" className="card lift group flex items-center gap-3 p-4">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+          <Sparkles className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-ink">Plain-English brief</div>
+          <div className="text-xs text-muted">Your whole security posture, explained for a non-engineer — generated on demand.</div>
+        </div>
+        <ArrowRight className="h-4 w-4 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
+      </Link>
 
       {/* Get ahead — the all-clear state isn't a dead-end: give the founder a proactive next move
           (the daily-driver thesis is "log in to do your job", not just "log in to be reassured"). */}

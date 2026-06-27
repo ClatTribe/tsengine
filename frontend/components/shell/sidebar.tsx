@@ -6,24 +6,20 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Inbox,
-  Bug,
   Activity,
   ShieldCheck,
   Boxes,
   ScrollText,
   FileText,
-  Sparkles,
   FileCheck2,
   UserCheck,
   AppWindow,
   Spline,
   Layers,
-  Cloud,
   Crosshair,
   Scale,
   History,
   Radar,
-  Building2,
   ScanSearch,
   ChevronDown,
 } from "lucide-react";
@@ -47,33 +43,38 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   {
     header: "Security",
     items: [
+      // Findings is a raw/grouped tab inside Issues; Cloud engineer a tab inside Attack paths;
+      // Asset posture a tab inside Coverage; the plain-English brief lives on Overview — so each
+      // dataset has ONE nav home, not a redundant peer.
       { href: "/issues", label: "Issues", icon: Layers },
-      { href: "/findings", label: "Findings", icon: Bug },
-      { href: "/brief", label: "Plain-English brief", icon: Sparkles },
-      { href: "/pentest", label: "Pentest", icon: Crosshair },
-      { href: "/cloud-engineer", label: "Cloud engineer", icon: Cloud },
-      { href: "/attack-paths", label: "Attack paths", icon: Spline },
-      { href: "/osint", label: "External exposure", icon: Radar },
-      { href: "/posture", label: "Asset posture", icon: Building2 },
-      { href: "/coverage", label: "Test coverage", icon: ScanSearch },
       { href: "/incidents", label: "Incidents", icon: Activity },
+      { href: "/attack-paths", label: "Attack paths", icon: Spline },
+      { href: "/pentest", label: "Pentest", icon: Crosshair },
+      { href: "/osint", label: "External exposure", icon: Radar },
+      { href: "/coverage", label: "Coverage", icon: ScanSearch },
+      { href: "/saas-apps", label: "SaaS & identity", icon: AppWindow },
     ],
   },
   {
     header: "Compliance",
     items: [
       { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+      { href: "/reports", label: "Reports", icon: FileText },
+    ],
+  },
+  {
+    // The vCISO/GRC-management trio — distinct for an auditor, collapsible so a founder can ignore it.
+    header: "Governance",
+    items: [
       { href: "/risks", label: "Risks", icon: Scale },
       { href: "/audits", label: "Audits", icon: FileCheck2 },
       { href: "/program", label: "Program", icon: ScrollText },
-      { href: "/reports", label: "Reports", icon: FileText },
     ],
   },
   {
     header: "Workspace",
     items: [
       { href: "/assets", label: "Assets", icon: Boxes },
-      { href: "/saas-apps", label: "SaaS apps", icon: AppWindow },
       { href: "/reviews", label: "Reviews", icon: UserCheck },
       { href: "/activity", label: "Activity", icon: History },
     ],

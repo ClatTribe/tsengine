@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import type { AttackPath, AttackStep } from "@/lib/types";
 import { SeverityBadge } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,8 @@ export default async function AttackPathsPage() {
           ) : undefined
         }
       />
+
+      <PageTabs tabs={[{ href: "/attack-paths", label: "Attack paths" }, { href: "/cloud-engineer", label: "Cloud investigation" }]} />
 
       {/* Always-on explainer so the page is self-evident even at zero paths. */}
       <HowItWorks />
