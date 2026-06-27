@@ -22,8 +22,13 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
   const [f, reviews, approvals] = await Promise.all([api.finding(id), api.reviews(), api.approvals()]);
   if (!f) notFound();
 
-  const kev = !!f.threat_intel?.kev;
-  const epss = !!f.threat_intel?.epss;
+  const ti = f.threat_intel;
+  const kev = !!ti?.kev?.listed;
+  const cvss = typeof ti?.cvss === "number" && ti.cvss > 0 ? ti.cvss : null;
+  const cvssVector = ti?.cvss_vector || null;
+  const epssPct = typeof ti?.epss?.score === "number" ? Math.round(ti.epss.score * 100) : null;
+  const publicExploit = Array.isArray(ti?.exploits) && ti.exploits.length > 0;
+  const hasThreatIntel = kev || cvss !== null || epssPct !== null || publicExploit;
   const controls = Object.entries(f.compliance ?? {}).filter(([, v]) => Array.isArray(v) && v.length > 0);
   const hasOpenReview = reviews.some((r) => r.subject_id === id && r.status === "open");
   // The remediation the agent has queued for THIS finding (if any) — the agentic signal.
@@ -51,7 +56,29 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
 
       {kev && (
         <div className="flex items-center gap-2 rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-sm text-critical">
-          <Flame className="h-4 w-4" /> Listed in CISA KEV — actively exploited in the wild.{epss ? " EPSS available." : ""}
+          <Flame className="h-4 w-4" /> Listed in CISA KEV — actively exploited in the wild.{ti?.kev?.date_added ? ` Added ${ti.kev.date_added.slice(0, 10)}.` : ""} Patch now (BOD 22-01).
+        </div>
+      )}
+
+      {hasThreatIntel && (
+        <div className="rounded-lg border border-border bg-surface-2 px-3 py-2.5">
+          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-faint">Threat intelligence</div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
+            {cvss !== null && (
+              <span>
+                <span className="text-faint">CVSS</span> <span className="font-medium text-ink">{cvss.toFixed(1)}</span>
+                {cvssVector && <span className="mono ml-1 text-[11px] text-muted">{cvssVector}</span>}
+              </span>
+            )}
+            {epssPct !== null && (
+              <span title="FIRST.org EPSS — probability of exploitation in the next 30 days">
+                <span className="text-faint">EPSS</span> <span className="font-medium text-ink">{epssPct}%</span>
+              </span>
+            )}
+            {publicExploit && (
+              <span className="font-medium text-high">Public exploit available (PoC published)</span>
+            )}
+          </div>
         </div>
       )}
 

@@ -14,7 +14,14 @@ export interface Finding {
   confidence?: number;
   // blast_radius: read-time impact sizing — does this finding chain to a crown jewel? (mirrors incidents)
   blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
-  threat_intel?: { kev?: unknown; epss?: unknown } | null;
+  threat_intel?: {
+    cvss?: number;
+    cvss_vector?: string; // CVSS base vector (NVD) — attack-vector detail
+    kev?: { listed?: boolean; date_added?: string } | null; // CISA KEV (actively exploited)
+    epss?: { score?: number; percentile?: number } | null; // FIRST.org exploit probability
+    advisories?: string[];
+    exploits?: string[]; // public exploit/PoC refs (ExploitDB/Metasploit)
+  } | null;
   compliance?: Record<string, string[]> | null;
   // Cloud-to-Code: a runtime cloud finding traced back to the IaC resource +
   // file:line that provisioned it. Present only on cloud findings the
