@@ -18,6 +18,7 @@ import (
 	"reflect"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
@@ -145,7 +146,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                      // PUBLIC: book-a-demo / talk-to-sales lead capture
 	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                        // PUBLIC: embeddable SVG grade badge (viral loop)
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
-	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions)) // all remediations + fix-verification status
+	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))   // all remediations + fix-verification status
+	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage)) // per-asset "what was actually tested"
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident))              // human takes ownership → stops timed auto-escalation
 	mux.HandleFunc("GET /v1/risks", d.auth(d.handleListRisks))                              // risk register (vCISO artifact) + board summary
@@ -472,6 +474,29 @@ func (d Deps) handleActions(w http.ResponseWriter, r *http.Request, tenantID str
 		}
 	}
 	respond(w, v, nil)
+}
+
+// handleCoverage returns the per-asset "what was actually tested" view — the declared tools each scan
+// runs, when each asset was last scanned, and which tools surfaced findings (the report's "52% lack
+// visibility into what was tested"). Grounded: never-scanned assets read scanned:false, never "covered".
+func (d Deps) handleCoverage(w http.ResponseWriter, r *http.Request, tenantID string) {
+	ctx := r.Context()
+	assets, err := d.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	engs, err := d.Store.ListEngagements(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	respond(w, coverage.Compute(assets, findings, engs), nil)
 }
 
 // handleApps returns the tenant's third-party OAuth app inventory (the SaaS/app
