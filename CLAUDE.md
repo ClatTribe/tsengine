@@ -595,6 +595,8 @@ In-house code is reserved for orchestration logic only:
 
 **Adding a new in-house `scan_*` detection scanner requires an explicit architectural ADR** explaining why the leading OSS tool doesn't suffice. Default is no.
 
+**Install-time supply-chain gate (`internal/safechain`, Aikido "Safe Chain" parity):** the repository asset DETECTS a malicious dependency once it's in a committed lockfile; `safechain` moves the decision one step earlier — a per-package allow/block verdict the moment someone is about to install it, so a hostile package never runs. `Check(pkg, corpus)` / `CheckAll` reuse `supplychain.Scan` as the oracle (the SAME global malicious-package corpus — detection + gate can't drift). Grounded (§10): block ONLY on a real known-malicious match; an unknown package is ALLOWED (fail-open — a guard never blocks the ecosystem on absence of proof; a typosquat-distance heuristic is the next layer). `POST /v1/safechain/check` is the CI/pre-install gate (tenant-agnostic — the corpus is world-state); the npm/yarn/npx CLI shim that calls it is the gated half. NOT a new in-house detector — it's the existing detection re-pointed at install time.
+
 ### 13.1 SMB per-asset parity packages (ADR 0010)
 
 To be THE SMB product per asset (coverage/depth + FP/FN accuracy vs the SMB category leader),
