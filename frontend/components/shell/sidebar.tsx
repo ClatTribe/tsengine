@@ -15,6 +15,7 @@ import {
   UserCheck,
   AppWindow,
   Spline,
+  Cloud,
   Layers,
   Crosshair,
   Scale,
@@ -43,12 +44,14 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   {
     header: "Security",
     items: [
-      // Findings is a raw/grouped tab inside Issues; Cloud engineer a tab inside Attack paths;
-      // Asset posture a tab inside Coverage; the plain-English brief lives on Overview — so each
-      // dataset has ONE nav home, not a redundant peer.
+      // Findings is a raw/grouped tab inside Issues; Asset posture a tab inside Coverage; the
+      // plain-English brief lives on Overview — so each DATASET has one nav home. Cloud engineer
+      // stays its own item: it's an interactive agent (you run an investigation), not just a view
+      // of attack paths.
       { href: "/issues", label: "Issues", icon: Layers },
       { href: "/incidents", label: "Incidents", icon: Activity },
       { href: "/attack-paths", label: "Attack paths", icon: Spline },
+      { href: "/cloud-engineer", label: "Cloud engineer", icon: Cloud },
       { href: "/pentest", label: "Pentest", icon: Crosshair },
       { href: "/osint", label: "External exposure", icon: Radar },
       { href: "/coverage", label: "Coverage", icon: ScanSearch },
