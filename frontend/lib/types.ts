@@ -74,6 +74,12 @@ export interface Issue {
   live_reason?: string;
   exposed?: boolean;
   in_attack_path?: boolean;
+  // L1.5 threat-intel enrichment (aggregated across the issue's findings): the patch-priority signals.
+  kev?: boolean; // a CVE in the group is on CISA KEV — actively exploited in the wild (patch now)
+  epss?: number; // FIRST.org exploit probability 0..1 (worst across the group)
+  cvss?: number; // worst CVSS base score across the group
+  cvss_vector?: string; // CVSS base vector (NVD) — attack-vector detail
+  public_exploit?: boolean; // a public exploit/PoC exists (ExploitDB/Metasploit)
 }
 
 export interface IssuesResponse {

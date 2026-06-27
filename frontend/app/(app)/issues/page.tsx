@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, Flame, Layers, Zap } from "lucide-react";
+import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -165,6 +165,30 @@ function IssueRow({ issue, ignored }: { issue: Issue; ignored: boolean }) {
               title={issue.live_reason ? `Live: ${issue.live_reason}` : "Live-exploitable"}
             >
               <Zap className="h-3 w-3" /> live
+            </span>
+          )}
+          {issue.kev && !issue.attacked && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full bg-critical/10 px-1.5 py-0.5 text-[10px] font-semibold text-critical"
+              title="A CVE in this issue is on the CISA KEV catalog — actively exploited in the wild. Patch now (BOD 22-01)."
+            >
+              <Crosshair className="h-3 w-3" /> KEV
+            </span>
+          )}
+          {issue.public_exploit && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full bg-high/10 px-1.5 py-0.5 text-[10px] font-medium text-high"
+              title="A public exploit / PoC is published (ExploitDB / Metasploit)."
+            >
+              <Bug className="h-3 w-3" /> public exploit
+            </span>
+          )}
+          {typeof issue.epss === "number" && issue.epss >= 0.5 && (
+            <span
+              className="mono rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted"
+              title="FIRST.org EPSS — probability this vulnerability is exploited in the next 30 days."
+            >
+              EPSS {Math.round(issue.epss * 100)}%
             </span>
           )}
         </div>
