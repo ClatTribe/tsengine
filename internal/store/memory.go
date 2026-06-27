@@ -329,6 +329,16 @@ func (m *Memory) PendingApprovals(_ context.Context, tenantID string) ([]platfor
 	return out, nil
 }
 
+func (m *Memory) ListActions(_ context.Context, tenantID string) ([]platform.Action, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []platform.Action
+	for _, a := range m.actions[tenantID] {
+		out = append(out, a)
+	}
+	return out, nil
+}
+
 func (m *Memory) UpsertControlState(_ context.Context, cs platform.ControlState) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

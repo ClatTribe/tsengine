@@ -82,6 +82,9 @@ type Store interface {
 	PutAction(ctx context.Context, a platform.Action) error
 	GetAction(ctx context.Context, tenantID, id string) (platform.Action, error)
 	PendingApprovals(ctx context.Context, tenantID string) ([]platform.Action, error)
+	// ListActions returns ALL of a tenant's actions (any status) — used by the activity view and
+	// by fix-verification (which re-tests APPLIED actions). Tenant-scoped like every other list.
+	ListActions(ctx context.Context, tenantID string) ([]platform.Action, error)
 
 	// --- GRC system-of-record ---
 	UpsertControlState(ctx context.Context, cs platform.ControlState) error
