@@ -15,7 +15,7 @@ func vulnerableWorkspace() Workspace {
 			{Email: "it@acme.example", Admin: true, MFA: true},         // fine
 			{Email: "sales@acme.example", MFA: false},                  // user w/o MFA → medium
 			{Email: "old@acme.example", MFA: true, LastLoginDays: 200}, // stale → low
-			{Email: "gone@acme.example", Admin: true, Suspended: true}, // suspended → ignored
+			{Email: "gone@acme.example", Admin: true, Suspended: true}, // suspended but retains admin → incomplete-offboarding
 		},
 		Domains: []DomainConfig{
 			{Name: "acme.example", DMARC: "none", SPF: true, DKIM: false}, // DMARC not enforced + DKIM missing
@@ -96,11 +96,21 @@ func TestAssess_VulnerableWorkspaceGrounded(t *testing.T) {
 		}
 	}
 
-	// the suspended admin must NOT produce findings (grounding excludes inactive)
+	// the suspended admin is flagged ONLY by the incomplete-offboarding rule (standing privilege that
+	// survived the disable — re-enable = instant admin) — never by the active-account rules
+	// (admin-without-mfa, stale-account, oauth-*), which still correctly skip suspended accounts.
+	sawOffboarding := false
 	for _, f := range fs {
-		if strings.Contains(f.Endpoint, "gone@") {
-			t.Errorf("suspended account should not be flagged: %+v", f)
+		if !strings.Contains(f.Endpoint, "gone@") {
+			continue
 		}
+		if f.RuleID != "operate::incomplete-offboarding" {
+			t.Errorf("a suspended account must only be flagged by incomplete-offboarding, got %s: %+v", f.RuleID, f)
+		}
+		sawOffboarding = true
+	}
+	if !sawOffboarding {
+		t.Error("a suspended account that retains an admin role must be flagged by operate::incomplete-offboarding")
 	}
 }
 
