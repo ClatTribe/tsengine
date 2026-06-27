@@ -234,7 +234,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/jobs/{id}", d.auth(d.handleJob))
 	mux.HandleFunc("POST /v1/approvals/{id}", d.auth(d.handleApprovalDecide))
 	mux.HandleFunc("GET /v1/connect/{kind}", d.auth(d.handleConnectURL))
-	mux.HandleFunc("GET /v1/connect/{kind}/callback", d.handleConnectCallback) // OAuth redirect; tenant in state
+	mux.HandleFunc("GET /v1/connect/{kind}/callback", d.handleConnectCallback) // OAuth redirect; SIGNED tenant in state (oauthstate.go)
 	mux.HandleFunc("GET /v1/posture", d.auth(d.handlePostureSummary))          // all-framework posture summary in one call (dashboard/compliance/reports)
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
 	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))

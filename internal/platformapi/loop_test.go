@@ -108,9 +108,11 @@ func TestConnectURLCarriesTenantInState(t *testing.T) {
 		AuthorizeURL string `json:"authorize_url"`
 	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	// the OAuth state must carry the tenant so the (unauthenticated) callback can attribute it
-	if !strings.Contains(body.AuthorizeURL, "state=t1") || !strings.Contains(body.AuthorizeURL, "callback") {
-		t.Errorf("authorize url missing tenant state / redirect: %s", body.AuthorizeURL)
+	// the OAuth state must carry the tenant — now as a SIGNED token "t1:<exp>:<hmac>" so the
+	// (unauthenticated) callback can attribute it without trusting a raw, forgeable tenant id
+	// (oauthstate.go). The fakeConn doesn't URL-encode, so the ":" is literal here.
+	if !strings.Contains(body.AuthorizeURL, "state=t1:") || !strings.Contains(body.AuthorizeURL, "callback") {
+		t.Errorf("authorize url missing signed tenant state / redirect: %s", body.AuthorizeURL)
 	}
 }
 
