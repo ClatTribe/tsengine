@@ -87,6 +87,7 @@ func Assess(ws Workspace, opts Options) []types.Finding {
 	f = append(f, checkUserMFA(ws, now, id)...)
 	f = append(f, checkSuperAdmins(ws, opts.MaxSuperAdmins, now, id)...)
 	f = append(f, checkStaleAccounts(ws, opts.StaleLoginDays, now, id)...)
+	f = append(f, checkIncompleteOffboarding(ws, now, id)...)
 	f = append(f, checkEmailAuth(ws, now, id)...)
 	f = append(f, checkOAuthGrants(ws, now, id)...)
 	return f
@@ -168,6 +169,33 @@ func checkStaleAccounts(ws Workspace, staleDays int, now time.Time, id func() st
 				GDPR: []string{"Art. 32"}, NIST80053: []string{"AC-2"}, NIST800171: []string{"3.1.1"},
 				FedRAMP: []string{"AC-2"}, DPDP: []string{"Sec. 8(5)"},
 				HIPAA: []string{"164.312(a)(1)"}, ISO27001: []string{"A.5.16"}, SOX: []string{"ITGC: Access to Programs & Data"}})))
+	}
+	return out
+}
+
+// checkIncompleteOffboarding: a SUSPENDED account that still holds admin/super-admin role bindings — standing
+// privilege that survived the disable. Every other check skips suspended accounts, so this blind spot (an
+// ex-employee whose admin role was never stripped) is otherwise invisible. Re-enabling the account = instant
+// admin, and it signals the offboarding runbook didn't complete. Grounded: cites the suspended-yet-privileged
+// account. The Nudge/Wing/Push "deprovisioning completeness" signal, over the identity data we already hold.
+func checkIncompleteOffboarding(ws Workspace, now time.Time, id func() string) []types.Finding {
+	var out []types.Finding
+	for _, u := range ws.Users {
+		if !u.Suspended || !(u.Admin || u.SuperAdmin) {
+			continue
+		}
+		role := "admin"
+		sev := types.SeverityMedium
+		if u.SuperAdmin {
+			role, sev = "super-admin", types.SeverityHigh // a lingering super-admin binding is worse
+		}
+		out = append(out, finding(id(), "operate::incomplete-offboarding", sev,
+			"Suspended account retains "+role+" role: "+u.Email, u.Email,
+			fmt.Sprintf("%s is suspended but still holds a %s role binding — standing privilege that outlived the account disable. Re-enabling it grants instant %s, and it shows the offboarding runbook didn't strip roles. Remove the role (and revoke its OAuth grants/API tokens) before or with the suspend.", u.Email, role, role),
+			now, comp(types.Compliance{SOC2: []string{"CC6.2", "CC6.3"}, CISv8: []string{"5.3", "6.8"},
+				GDPR: []string{"Art. 32"}, NIST80053: []string{"AC-2", "AC-6"}, NIST800171: []string{"3.1.1", "3.1.5"},
+				FedRAMP: []string{"AC-2", "AC-6"}, DPDP: []string{"Sec. 8(5)"},
+				HIPAA: []string{"164.312(a)(1)"}, ISO27001: []string{"A.5.16", "A.5.18"}, SOX: []string{"ITGC: Access to Programs & Data"}})))
 	}
 	return out
 }
