@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
   AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen, ShieldCheck,
+  Cloud, KeyRound, UserCheck, ArrowRight,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -22,17 +23,23 @@ const FRAMEWORK_GROUPS = FW_CATEGORY_ORDER.map((cat) => ({
   items: FRAMEWORKS.filter((f) => (FRAMEWORK_CATEGORY[f] ?? "Security & trust") === cat),
 })).filter((g) => g.items.length > 0);
 
-// Grouped product menu — the capability pages, behind one trigger so the header stays calm.
-const PRODUCT: Item[] = [
-  { href: "/product", label: "How it works", desc: "Find → fix → prove, with a human where it matters", icon: Layers },
-  { href: "/ai-security-engineer", label: "AI security engineer", desc: "An agent that triages and fixes, not just flags", icon: Bot },
+// The Solutions menu leads with the two OUTCOMES a founder actually buys — Security and Compliance — with
+// the autonomous-team + human-in-the-loop as the cross-cutting spine (the footer). The technical categories
+// are coverage pages filed under the outcome they serve, not co-equal pillars. (Runtime "Protect" is held
+// off until the managed-Zen wrap, so we never advertise a pillar we don't fill.)
+const SECURITY: Item[] = [
+  { href: "/ai-security-engineer", label: "AI security engineer", desc: "Triages, fixes & explains — not just flags", icon: Bot },
   { href: "/ai-pentest", label: "AI pentesting", desc: "Continuous, exploitation-proven testing", icon: Crosshair },
-  { href: "/vapt", label: "VAPT reports", desc: "Always-current, signed evidence", icon: FileCheck2 },
-  { href: "/supply-chain", label: "Supply-chain security", desc: "Deps, SBOM, malware, license risk", icon: Boxes },
-  { href: "/saas-posture", label: "SaaS & identity posture", desc: "MFA, OAuth grants, misconfig", icon: AppWindow },
-  { href: "/ci-cd", label: "CI/CD pipeline", desc: "Catch issues before they ship", icon: GitBranch },
+  { href: "/cloud-security", label: "Cloud security", desc: "CSPM, attack paths & drift across AWS/GCP/Azure", icon: Cloud },
+  { href: "/supply-chain", label: "Code & supply chain", desc: "SAST, deps, SBOM, malware, secrets", icon: Boxes },
+  { href: "/identity", label: "Identity & SaaS posture", desc: "MFA, OAuth grants, stale access, SSPM", icon: KeyRound },
   { href: "/agent-controls", label: "AI agent controls", desc: "Kill-switch, isolation, human gate, signed log", icon: ShieldCheck },
-  { href: "/vs-consulting", label: "vs. a consultant", desc: "The retainer outcome, without the retainer", icon: Scale },
+];
+const COMPLIANCE: Item[] = [
+  { href: "/frameworks", label: "Frameworks", desc: "SOC 2, ISO, HIPAA, PCI + 18 more — auto-mapped", icon: FileCheck2 },
+  { href: "/vapt", label: "VAPT & evidence", desc: "Always-current, signed reports", icon: FileText },
+  { href: "/soc2-readiness", label: "SOC 2 readiness", desc: "Where you'd fail the questionnaire — free", icon: ClipboardCheck },
+  { href: "/vs-consulting", label: "vs. a consultant", desc: "The vCISO outcome, without the retainer", icon: Scale },
 ];
 
 // Free tools — the founder ICP's top-of-funnel hook. Lead with the questionnaire scan.
@@ -52,8 +59,8 @@ const DIRECT = [
 
 export function MarketingNav() {
   const [open, setOpen] = useState(false); // mobile sheet
-  const [menu, setMenu] = useState<"product" | "frameworks" | "tools" | null>(null); // desktop dropdown
-  const [acc, setAcc] = useState<"product" | "frameworks" | "tools" | null>(null); // mobile accordion
+  const [menu, setMenu] = useState<"solutions" | "frameworks" | "tools" | null>(null); // desktop dropdown
+  const [acc, setAcc] = useState<"security" | "compliance" | "tools" | null>(null); // mobile accordion
   const path = usePathname();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -64,7 +71,7 @@ export function MarketingNav() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const openMenu = (m: "product" | "frameworks" | "tools") => {
+  const openMenu = (m: "solutions" | "frameworks" | "tools") => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setMenu(m);
   };
@@ -85,11 +92,9 @@ export function MarketingNav() {
 
         {/* Desktop nav */}
         <div className="hidden items-center gap-0.5 md:flex">
-          <Dropdown
-            label="Product"
-            items={PRODUCT}
-            isOpen={menu === "product"}
-            onEnter={() => openMenu("product")}
+          <SolutionsMenu
+            isOpen={menu === "solutions"}
+            onEnter={() => openMenu("solutions")}
             onLeave={scheduleClose}
             path={path}
           />
@@ -159,10 +164,17 @@ export function MarketingNav() {
       {open && (
         <div className="max-h-[80vh] overflow-y-auto border-t border-border/70 bg-bg px-5 py-3 md:hidden animate-fade-rise">
           <MobileGroup
-            label="Product"
-            items={PRODUCT}
-            open={acc === "product"}
-            onToggle={() => setAcc((a) => (a === "product" ? null : "product"))}
+            label="Security"
+            items={SECURITY}
+            open={acc === "security"}
+            onToggle={() => setAcc((a) => (a === "security" ? null : "security"))}
+            onNavigate={() => setOpen(false)}
+          />
+          <MobileGroup
+            label="Compliance"
+            items={COMPLIANCE}
+            open={acc === "compliance"}
+            onToggle={() => setAcc((a) => (a === "compliance" ? null : "compliance"))}
             onNavigate={() => setOpen(false)}
           />
           <MobileGroup
@@ -245,6 +257,83 @@ function Dropdown({
                 </span>
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// SolutionsMenu — the two-outcome mega-menu. Security + Compliance as co-equal columns (matching the
+// founder's "am I safe? am I audit-ready?" mental model), with the autonomous-team + human-in-the-loop as
+// the cross-cutting spine in the footer — NOT buried in one column. The technical categories are coverage
+// links filed under the outcome they serve, not co-equal pillars.
+function SolutionsMenu({
+  isOpen, onEnter, onLeave, path,
+}: {
+  isOpen: boolean;
+  onEnter: () => void;
+  onLeave: () => void;
+  path: string;
+}) {
+  const active = [...SECURITY, ...COMPLIANCE].some((i) => path === i.href);
+  const col = (heading: string, items: Item[]) => (
+    <div>
+      <div className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-faint">{heading}</div>
+      <div className="flex flex-col gap-0.5">
+        {items.map(({ href, label: l, desc, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className={cn("flex items-start gap-3 rounded-lg px-2.5 py-2 transition hover:bg-surface-2", path === href && "bg-surface-2")}
+          >
+            <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+              <Icon className="h-3.5 w-3.5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-ink">{l}</span>
+              <span className="block text-xs leading-snug text-muted">{desc}</span>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <div className="relative" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <button
+        className={cn(
+          "flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition hover:bg-surface-2 hover:text-ink",
+          isOpen || active ? "text-ink" : "text-muted",
+        )}
+        aria-expanded={isOpen}
+      >
+        Solutions
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
+      </button>
+      {isOpen && (
+        <div className="absolute left-0 top-full pt-2">
+          <div className="w-[42rem] overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-elevated animate-fade-rise">
+            <div className="grid grid-cols-2 gap-x-6">
+              {col("Security", SECURITY)}
+              {col("Compliance", COMPLIANCE)}
+            </div>
+            {/* The spine: one team, a human where it matters — across BOTH outcomes (our AutoFix-slot). */}
+            <Link
+              href="/product"
+              className="mt-3 flex items-center justify-between rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2.5 transition hover:border-border-strong"
+            >
+              <span className="flex items-center gap-2.5">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent text-white">
+                  <UserCheck className="h-3.5 w-3.5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-medium text-ink">One autonomous team — with a human in the loop</span>
+                  <span className="block text-xs text-muted">The agent finds &amp; fixes; a named human makes the calls that matter. Across security and compliance.</span>
+                </span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted" />
+            </Link>
           </div>
         </div>
       )}
