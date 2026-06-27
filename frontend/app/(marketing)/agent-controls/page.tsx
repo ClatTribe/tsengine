@@ -63,8 +63,8 @@ const CONTROLS: {
   },
   {
     icon: Fingerprint, demand: "Proof of asset ownership", pct: "36%",
-    how: "Connected systems prove ownership through their own OAuth consent, and active exploitation requires a recorded, named authorization. An explicit DNS/file ownership challenge for standalone targets is rolling out.",
-    mech: "OAuth consent · recorded authorization", met: false,
+    how: "Connected systems prove ownership through their own OAuth consent. For a standalone target you type, you prove control by publishing a per-asset token via a DNS TXT record or a well-known file — verified against the live target before it's trusted.",
+    mech: "DNS / file challenge · OAuth consent", met: true,
   },
 ];
 
@@ -117,8 +117,9 @@ export default function AgentControls() {
           ))}
         </div>
         <p className="mt-6 text-center text-sm text-muted">
-          <span className="font-semibold text-ink">{met} of {CONTROLS.length}</span> enforced by the architecture today — the
-          last is being strengthened in the open. We&apos;d rather show you the one gap than pretend it isn&apos;t there.
+          <span className="font-semibold text-ink">{met} of {CONTROLS.length}</span> enforced by the architecture today — not a
+          roadmap. These are guardrails the system holds itself to from the first scan, so you can trust the agent before you
+          have to trust the results.
         </p>
       </section>
 

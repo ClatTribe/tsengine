@@ -101,10 +101,12 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
 	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))
-	mux.HandleFunc("POST /v1/assets", d.auth(d.handleCreateAsset))                     // add a standalone scan target (web/api/domain/ip/image)
-	mux.HandleFunc("POST /v1/assets/{id}/data-tier", d.auth(d.handleSetAssetDataTier)) // tier a repo by customer-data exposure
-	mux.HandleFunc("POST /v1/assets/{id}/login-flow", d.auth(d.handleSetLoginFlow))    // configure authenticated web scanning (ADR 0010 Phase 3)
-	mux.HandleFunc("POST /v1/assets/{id}/authz-test", d.auth(d.handleSetAuthzTest))    // configure BOLA/BFLA authz test (ADR 0010 Phase 1)
+	mux.HandleFunc("POST /v1/assets", d.auth(d.handleCreateAsset))                                 // add a standalone scan target (web/api/domain/ip/image)
+	mux.HandleFunc("POST /v1/assets/{id}/data-tier", d.auth(d.handleSetAssetDataTier))             // tier a repo by customer-data exposure
+	mux.HandleFunc("POST /v1/assets/{id}/login-flow", d.auth(d.handleSetLoginFlow))                // configure authenticated web scanning (ADR 0010 Phase 3)
+	mux.HandleFunc("POST /v1/assets/{id}/authz-test", d.auth(d.handleSetAuthzTest))                // configure BOLA/BFLA authz test (ADR 0010 Phase 1)
+	mux.HandleFunc("POST /v1/assets/{id}/ownership/challenge", d.auth(d.handleOwnershipChallenge)) // issue DNS/file ownership token (p35 control)
+	mux.HandleFunc("POST /v1/assets/{id}/ownership/verify", d.auth(d.handleOwnershipVerify))       // verify the token is published (grounded)
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
 	mux.HandleFunc("DELETE /v1/connections/{id}", d.auth(d.handleDeleteConnection))                    // disconnect a connection (founder self-serve)
 	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))       // per-connection kill-switch (WRD-4)
