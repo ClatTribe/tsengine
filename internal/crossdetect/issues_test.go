@@ -99,3 +99,32 @@ func TestUnifiedIssues_CasingVariantToolNotFalselyConfirmed(t *testing.T) {
 		t.Errorf("casing variants of one tool must count as 1 tool, not confirmed; got tools=%v confirmed=%v", issues[0].Tools, issues[0].Confirmed)
 	}
 }
+
+// UnifiedIssues aggregates the L1.5 threat-intel signals across a CVE's findings so the triage view shows
+// the patch-priority data (KEV / EPSS / CVSS+vector / public-exploit) the engine computed.
+func TestUnifiedIssues_AggregatesThreatIntel(t *testing.T) {
+	findings := []types.Finding{
+		{ID: "f1", RuleID: "grype::CVE-2021-44228", Tool: "grype", Severity: types.SeverityCritical,
+			ThreatIntel: &types.ThreatIntel{CVSS: 10.0, CVSSVector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+				EPSS: &types.EPSSScore{Score: 0.80}, KEV: &types.KEVStatus{Listed: true}}},
+		{ID: "f2", RuleID: "trivy::CVE-2021-44228", Tool: "trivy", Severity: types.SeverityCritical,
+			ThreatIntel: &types.ThreatIntel{CVSS: 9.0, EPSS: &types.EPSSScore{Score: 0.97}, Exploits: []string{"exploitdb:EDB-50592"}}},
+	}
+	issues := UnifiedIssues(findings)
+	if len(issues) != 1 {
+		t.Fatalf("the two scanners on CVE-2021-44228 should merge into 1 issue, got %d", len(issues))
+	}
+	i := issues[0]
+	if !i.KEV {
+		t.Error("KEV should aggregate true (f1 is KEV-listed)")
+	}
+	if i.EPSS != 0.97 {
+		t.Errorf("EPSS should be the max across the group (0.97), got %v", i.EPSS)
+	}
+	if i.CVSS != 10.0 || i.CVSSVector == "" {
+		t.Errorf("CVSS should be the max (10.0) carrying its vector, got %v / %q", i.CVSS, i.CVSSVector)
+	}
+	if !i.PublicExploit {
+		t.Error("PublicExploit should aggregate true (f2 has an ExploitDB ref)")
+	}
+}
