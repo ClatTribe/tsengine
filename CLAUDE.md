@@ -859,7 +859,7 @@ are presentation only â the gate, ledger, and engines are unchanged.
 |---|---|
 | `pkg/ledger` | the signed, replayable decision ledger (promoted from `internal/` so the platform imports it) |
 | `pkg/platform` | multi-tenant domain model â Tenant, Connection, Asset, Engagement, Action, ControlState |
-| `internal/store` | the tenant-scoped system-of-record (`Store` interface + Memory / File-snapshot / SQLite impls, table-driven conformance suite); holds the **third-party app inventory** (`ReplaceThirdPartyApps`/`ListThirdPartyApps`, per operate scan) and the **issue-suppression rules** (`Put`/`List`/`DeleteIgnoreRule`, keyed by unified-issue dedup key â the ignore/accept-risk lifecycle) |
+| `internal/store` | the tenant-scoped system-of-record (`Store` interface + Memory / File-snapshot / SQLite / Postgres impls, table-driven conformance suite — postgres:// DSN routes to the Postgres store for multi-node scale, e.g. Supabase/RDS/Neon); holds the **third-party app inventory** (`ReplaceThirdPartyApps`/`ListThirdPartyApps`, per operate scan) and the **issue-suppression rules** (`Put`/`List`/`DeleteIgnoreRule`, keyed by unified-issue dedup key â the ignore/accept-risk lifecycle) |
 | `internal/connector` | external-system integrations (OAuth + Discover + Watch + Apply): GitHub + GitLab (tech SCM), Google Workspace + M365 + Okta (non-tech identity) |
 | `internal/runner` | connectorâengineâstore glue; `ScanRunner` abstracts the engine, `EngineRunner` is the sandbox adapter; runs the full loop |
 | `internal/hitl` | the human desk â the gate between *propose* and *apply* |
