@@ -1,0 +1,38 @@
+# One-click deploy of the tsengine PLATFORM API — the Go backend the Vercel frontend needs.
+#
+# The frontend (frontend/, on Vercel) is only a shell without this backend: login, signup, the free
+# scan, and every post-login data page call it. Deploy this, then set TSENGINE_API_URL on Vercel to
+# this service's URL (see docs/deploy-vercel-backend.md).
+#
+# How: Render dashboard → New → Blueprint → connect this repo → Apply. Render builds
+# docker/platform/Dockerfile and runs it with a 1 GB persistent disk for the database.
+#
+# Mode: NO_ENGINE — the whole product loop works (auth, dashboard, approvals, compliance, posture,
+# vendor/device/OSINT ingest, the HITL desk). LIVE tech-asset SCANNING (nuclei/trivy/etc.) needs the
+# sandbox engine + a Docker host, which Render's managed runtime can't provide — that's the single-box
+# Docker path in docs/production-single-box.md. Everything else is fully functional here.
+services:
+  - type: web
+    name: tsengine-platform
+    runtime: docker
+    dockerfilePath: ./docker/platform/Dockerfile
+    dockerContext: .
+    plan: starter # required for a persistent disk so signups/data survive redeploys (free tier = ephemeral)
+    region: oregon
+    healthCheckPath: /healthz
+    autoDeploy: false
+    disk:
+      name: tsengine-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: TSENGINE_PLATFORM_NO_ENGINE
+        value: "1"
+      - key: TSENGINE_PLATFORM_DB
+        value: /data/platform.db # durable SQLite (WAL) on the persistent disk
+      - key: TSENGINE_PLATFORM_TOKEN
+        generateValue: true # operator/admin bearer token — any random value is fine
+      - key: TSENGINE_SECRET_KEY
+        sync: false # SET MANUALLY in the dashboard: `openssl rand -base64 32` (must decode to 32 bytes; seals OAuth tokens at rest)
+      - key: TSENGINE_APP_URL
+        value: https://tsengine-zeta.vercel.app # where the OAuth callback returns the browser
