@@ -1,4 +1,4 @@
-import { Radio } from "lucide-react";
+import { Radio, CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { ActivityTimeline, type ActivityEvent } from "@/components/activity/activity-timeline";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -19,10 +19,11 @@ function dayLabel(iso: string, now: Date): string {
 }
 
 export default async function ActivityPage() {
-  const [incidents, engagements, approvals] = await Promise.all([
+  const [incidents, engagements, approvals, actions] = await Promise.all([
     api.incidents("all"),
     api.engagements(),
     api.approvals(),
+    api.actions(),
   ]);
 
   const events: ActivityEvent[] = [];
@@ -43,6 +44,17 @@ export default async function ActivityPage() {
   for (const a of approvals) {
     if (a.created_at) events.push({ id: `act-${a.id}`, at: a.created_at, day: "", kind: "queued", title: a.title || "Fix proposed", meta: `${a.kind} · tier ${a.tier}`, href: "/inbox" });
   }
+  // applied fixes that were RE-TESTED → confirmed fixed, or still-present (the fix didn't work). The
+  // KF#4 answer: we don't just propose a fix, we prove it closed the finding (or flag that it didn't).
+  for (const a of actions.actions) {
+    const v = a.verification;
+    if (!v?.verified_at) continue;
+    if (v.status === "fixed") {
+      events.push({ id: `fix-${a.id}`, at: v.verified_at, day: "", kind: "verified", title: `Fix verified — ${a.title || a.kind}`, meta: v.evidence, href: "/inbox" });
+    } else {
+      events.push({ id: `fix-${a.id}`, at: v.verified_at, day: "", kind: "regressed", title: `Fix did not close — ${a.title || a.kind}`, meta: v.evidence, href: "/inbox" });
+    }
+  }
 
   events.sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
   const now = new Date();
@@ -55,6 +67,19 @@ export default async function ActivityPage() {
         title="Activity"
         description="A live, plain-English log of everything the agent has done for you — every weakness it found, every fix it queued, and every scan it ran. Watch it work in real time."
       />
+      {actions.verified > 0 && (
+        <div className="card flex items-center gap-3 px-4 py-3 text-sm">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-pulse" />
+          <span className="text-muted">
+            <span className="font-medium text-ink">{actions.confirmed_fix} of {actions.verified}</span> applied fixes were
+            re-tested and <span className="font-medium text-ink">confirmed closed</span>
+            {actions.still_present > 0 && (
+              <> — <span className="font-medium text-high">{actions.still_present}</span> did not close and stay open</>
+            )}
+            . We don&apos;t just propose fixes, we prove they worked.
+          </span>
+        </div>
+      )}
       <ActivityTimeline events={events} />
     </div>
   );

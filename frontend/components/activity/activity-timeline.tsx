@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ShieldAlert, Wrench, ScanLine, Inbox, Search } from "lucide-react";
+import { ShieldAlert, Wrench, ScanLine, Inbox, Search, CheckCircle2, AlertTriangle } from "lucide-react";
 import { SeverityBadge } from "@/components/ui/primitives";
 import { timeAgo, cn } from "@/lib/utils";
 
-export type ActivityKind = "detected" | "resolved" | "scanned" | "queued";
+export type ActivityKind = "detected" | "resolved" | "scanned" | "queued" | "verified" | "regressed";
 
 export interface ActivityEvent {
   id: string;
@@ -22,6 +22,8 @@ export interface ActivityEvent {
 const KINDS: { key: ActivityKind; label: string }[] = [
   { key: "detected", label: "Detected" },
   { key: "queued", label: "Queued" },
+  { key: "verified", label: "Fix verified" },
+  { key: "regressed", label: "Fix failed" },
   { key: "resolved", label: "Resolved" },
   { key: "scanned", label: "Scanned" },
 ];
@@ -29,6 +31,8 @@ const KINDS: { key: ActivityKind; label: string }[] = [
 const ICON: Record<ActivityKind, { Icon: typeof ShieldAlert; cls: string }> = {
   detected: { Icon: ShieldAlert, cls: "text-high bg-high/10 border-high/30" },
   queued: { Icon: Inbox, cls: "text-accent bg-accent-soft border-accent/30" },
+  verified: { Icon: CheckCircle2, cls: "text-pulse bg-pulse/10 border-pulse/30" },
+  regressed: { Icon: AlertTriangle, cls: "text-high bg-high/10 border-high/30" },
   resolved: { Icon: Wrench, cls: "text-pulse bg-pulse/10 border-pulse/30" },
   scanned: { Icon: ScanLine, cls: "text-muted bg-surface-2 border-border" },
 };
@@ -155,6 +159,8 @@ function Node({ event: e }: { event: ActivityEvent }) {
 const DOT: Record<ActivityKind, string> = {
   detected: "bg-high",
   queued: "bg-accent",
+  verified: "bg-pulse",
+  regressed: "bg-high",
   resolved: "bg-pulse",
   scanned: "bg-muted",
 };
