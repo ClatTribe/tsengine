@@ -68,7 +68,7 @@ const COMPANY: Item[] = [
 export function MarketingNav() {
   const [open, setOpen] = useState(false); // mobile sheet
   const [menu, setMenu] = useState<"solutions" | "frameworks" | "tools" | "company" | null>(null); // desktop dropdown
-  const [acc, setAcc] = useState<"security" | "compliance" | "tools" | null>(null); // mobile accordion
+  const [acc, setAcc] = useState<"security" | "compliance" | "tools" | "company" | null>(null); // mobile accordion
   const path = usePathname();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -200,11 +200,18 @@ export function MarketingNav() {
             onToggle={() => setAcc((a) => (a === "tools" ? null : "tools"))}
             onNavigate={() => setOpen(false)}
           />
+          <MobileGroup
+            label="Company"
+            items={COMPANY}
+            open={acc === "company"}
+            onToggle={() => setAcc((a) => (a === "company" ? null : "company"))}
+            onNavigate={() => setOpen(false)}
+          />
           <div className="mt-1 flex flex-col gap-0.5 border-t border-border/60 pt-2">
             <Link href="/frameworks" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2.5 text-sm text-muted transition hover:bg-surface-2 hover:text-ink">
               Frameworks ({FRAMEWORKS.length})
             </Link>
-            {[...DIRECT, ...COMPANY].map((l) => (
+            {DIRECT.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
