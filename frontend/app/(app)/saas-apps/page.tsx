@@ -49,8 +49,8 @@ export default async function SaaSAppsPage() {
             <Stat icon={KeyRound} label="Write / admin access" value={idSummary.write_or_admin} tone="medium" />
             <Stat icon={ShieldAlert} label="Over-privileged" value={idSummary.risky} tone="critical" />
           </div>
-          <div className="card p-0">
-            <table className="w-full">
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full min-w-[620px]">
               <thead>
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="py-2.5 pl-5 pr-2 font-medium">Identity</th>
@@ -83,8 +83,8 @@ export default async function SaaSAppsPage() {
             </div>
           </Empty>
         ) : (
-          <div className="card p-0">
-            <table className="w-full">
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full min-w-[620px]">
               <thead>
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="py-2.5 pl-5 pr-2 font-medium">App</th>
