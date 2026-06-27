@@ -179,3 +179,31 @@ func TestVAPT_NoPoCWhenNoneCaptured(t *testing.T) {
 		t.Error("a finding with no captured PoC must not be marked exploitation-proven")
 	}
 }
+
+// The VAPT report surfaces the L1.5 threat-intel enrichments — CVSS vector, EPSS probability, and
+// public-exploit availability — not just the bare CVSS score, so the consultant's deliverable shows the
+// full prioritization signal the engine computed.
+func TestVAPTReport_SurfacesThreatIntelEnrichment(t *testing.T) {
+	now := time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC)
+	findings := []types.Finding{{
+		ID: "f-1", RuleID: "grype::CVE-2021-44228", Tool: "grype", Severity: types.SeverityCritical,
+		Title: "Log4Shell", Endpoint: "pkg:maven/log4j", VerificationStatus: "corroborated",
+		ThreatIntel: &types.ThreatIntel{
+			CVSS:       10.0,
+			CVSSVector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+			EPSS:       &types.EPSSScore{Score: 0.97},
+			Exploits:   []string{"exploitdb:EDB-50592"},
+		},
+	}}
+	r := ReportFromFindings(findings, []string{"acme.example"}, "Acme", now, nil)
+	vf := r.Findings[0]
+	if vf.CVSSVector == "" || vf.EPSS != 0.97 || !vf.PublicExploit {
+		t.Fatalf("enrichment not carried onto the VAPT finding: %+v", vf)
+	}
+	md := RenderVAPTMarkdown(r)
+	for _, want := range []string{"AV:N/AC:L", "EPSS:", "97.0% exploit probability", "Public exploit available"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("report markdown missing %q", want)
+		}
+	}
+}

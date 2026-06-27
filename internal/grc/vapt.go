@@ -43,24 +43,27 @@ type VAPTSummary struct {
 
 // VAPTFinding is one assessed vulnerability, grounded in its scanner evidence.
 type VAPTFinding struct {
-	ID           string   `json:"id"`
-	Title        string   `json:"title"`
-	Severity     string   `json:"severity"`
-	CVSS         float64  `json:"cvss,omitempty"`
-	Tool         string   `json:"tool"`    // the scanner that found it (evidence)
-	RuleID       string   `json:"rule_id"` // the specific check
-	Endpoint     string   `json:"endpoint,omitempty"`
-	CWE          []string `json:"cwe,omitempty"`
-	MITRE        []string `json:"mitre,omitempty"`
-	Description  string   `json:"description,omitempty"`
-	PoC          string   `json:"poc,omitempty"`          // captured exploitation proof (active-driver PoC), if any
-	OWASP        []string `json:"owasp,omitempty"`        // OWASP Top 10 (2021) category mapping
-	Remediation  string   `json:"remediation,omitempty"`  // the recommended fix (CWE-class standard)
-	Verification string   `json:"verification,omitempty"` // verified | corroborated | pattern_match
-	Confidence   float64  `json:"confidence,omitempty"`   // 0–1 grounded confidence (per-tool base + corroboration)
-	Unconfirmed  bool     `json:"unconfirmed,omitempty"`  // pattern-match only — a lead to validate, not a confirmed exploit
-	KEV          bool     `json:"kev,omitempty"`          // actively exploited
-	FixReady     bool     `json:"fix_ready,omitempty"`    // a remediation is prepared/queued
+	ID            string   `json:"id"`
+	Title         string   `json:"title"`
+	Severity      string   `json:"severity"`
+	CVSS          float64  `json:"cvss,omitempty"`
+	CVSSVector    string   `json:"cvss_vector,omitempty"`    // CVSS base vector (NVD) — attack-vector detail beyond the score
+	EPSS          float64  `json:"epss,omitempty"`           // FIRST.org exploit-prediction probability (0–1)
+	PublicExploit bool     `json:"public_exploit,omitempty"` // a public exploit/PoC exists (ExploitDB/Metasploit)
+	Tool          string   `json:"tool"`                     // the scanner that found it (evidence)
+	RuleID        string   `json:"rule_id"`                  // the specific check
+	Endpoint      string   `json:"endpoint,omitempty"`
+	CWE           []string `json:"cwe,omitempty"`
+	MITRE         []string `json:"mitre,omitempty"`
+	Description   string   `json:"description,omitempty"`
+	PoC           string   `json:"poc,omitempty"`          // captured exploitation proof (active-driver PoC), if any
+	OWASP         []string `json:"owasp,omitempty"`        // OWASP Top 10 (2021) category mapping
+	Remediation   string   `json:"remediation,omitempty"`  // the recommended fix (CWE-class standard)
+	Verification  string   `json:"verification,omitempty"` // verified | corroborated | pattern_match
+	Confidence    float64  `json:"confidence,omitempty"`   // 0–1 grounded confidence (per-tool base + corroboration)
+	Unconfirmed   bool     `json:"unconfirmed,omitempty"`  // pattern-match only — a lead to validate, not a confirmed exploit
+	KEV           bool     `json:"kev,omitempty"`          // actively exploited
+	FixReady      bool     `json:"fix_ready,omitempty"`    // a remediation is prepared/queued
 }
 
 // VAPTReport assembles the report for a tenant from its current findings + monitored assets.
@@ -139,6 +142,11 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 		}
 		if f.ThreatIntel != nil {
 			vf.CVSS = f.ThreatIntel.CVSS
+			vf.CVSSVector = f.ThreatIntel.CVSSVector
+			if f.ThreatIntel.EPSS != nil {
+				vf.EPSS = f.ThreatIntel.EPSS.Score
+			}
+			vf.PublicExploit = len(f.ThreatIntel.Exploits) > 0
 		}
 		r.Findings = append(r.Findings, vf)
 	}
@@ -252,7 +260,17 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 			fmt.Fprintf(&b, "- **MITRE ATT&CK:** %s\n", strings.Join(f.MITRE, ", "))
 		}
 		if f.CVSS > 0 {
-			fmt.Fprintf(&b, "- **CVSS:** %.1f\n", f.CVSS)
+			if f.CVSSVector != "" {
+				fmt.Fprintf(&b, "- **CVSS:** %.1f (`%s`)\n", f.CVSS, f.CVSSVector)
+			} else {
+				fmt.Fprintf(&b, "- **CVSS:** %.1f\n", f.CVSS)
+			}
+		}
+		if f.EPSS > 0 {
+			fmt.Fprintf(&b, "- **EPSS:** %.1f%% exploit probability (FIRST.org)\n", f.EPSS*100)
+		}
+		if f.PublicExploit {
+			fmt.Fprintf(&b, "- **Public exploit available** (a working PoC is published — ExploitDB/Metasploit)\n")
 		}
 		status := f.Verification
 		if status == "" {
