@@ -37,3 +37,11 @@ attestation-private.bin
 
 # compiled platform binary (built locally; never commit)
 /platform
+
+# Local platform store (SQLite default; never commit a tenant DB)
+platform.db
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
