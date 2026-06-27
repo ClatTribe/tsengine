@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -35,10 +36,12 @@ func TestConnectCallback_SealsTokenBeforePersist(t *testing.T) {
 	reg := connector.NewRegistry(exchConn{})
 	sealer := &recordingSealer{}
 	svc := &runner.Service{Store: st, Connectors: reg, Tokens: fakeTokens{}, Scanner: fakeScanner{}}
-	h := NewHandler(Deps{Store: st, Connectors: reg, Runner: svc, Vault: sealer, Token: "tok", PublicURL: "https://app"})
+	d := Deps{Store: st, Connectors: reg, Runner: svc, Vault: sealer, Token: "tok", PublicURL: "https://app"}
+	h := NewHandler(d)
 
-	// OAuth callback: code + state(tenant). (No bearer auth — it's the OAuth redirect.)
-	req := httptest.NewRequest("GET", "/v1/connect/github/callback?code=abc&state=t1", nil)
+	// OAuth callback: code + a SIGNED state (the unauthenticated callback trusts only a server-minted
+	// state — a raw tenant id would be rejected, see oauthstate.go).
+	req := httptest.NewRequest("GET", "/v1/connect/github/callback?code=abc&state="+url.QueryEscape(d.signOAuthState("t1")), nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -69,9 +72,10 @@ func TestConnectCallback_RedirectsToAppWhenAppURLSet(t *testing.T) {
 	reg := connector.NewRegistry(exchConn{})
 	sealer := &recordingSealer{}
 	svc := &runner.Service{Store: st, Connectors: reg, Tokens: fakeTokens{}, Scanner: fakeScanner{}}
-	h := NewHandler(Deps{Store: st, Connectors: reg, Runner: svc, Vault: sealer, Token: "tok", PublicURL: "https://app", AppURL: "https://app.example/"})
+	d := Deps{Store: st, Connectors: reg, Runner: svc, Vault: sealer, Token: "tok", PublicURL: "https://app", AppURL: "https://app.example/"}
+	h := NewHandler(d)
 
-	req := httptest.NewRequest("GET", "/v1/connect/github/callback?code=abc&state=t1", nil)
+	req := httptest.NewRequest("GET", "/v1/connect/github/callback?code=abc&state="+url.QueryEscape(d.signOAuthState("t1")), nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

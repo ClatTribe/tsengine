@@ -81,8 +81,9 @@ func (d Deps) handleApprovalDecide(w http.ResponseWriter, r *http.Request, tenan
 	writeJSON(w, http.StatusOK, act)
 }
 
-// handleConnectURL returns the provider OAuth consent URL. The CSRF state carries the
-// tenant id so the callback (which has no auth header) can attribute the connection.
+// handleConnectURL returns the provider OAuth consent URL. The state carries a SIGNED, expiring token
+// for this (authenticated) tenant so the callback — which has no auth header — can attribute the
+// connection without trusting an attacker-supplied tenant id (see oauthstate.go).
 func (d Deps) handleConnectURL(w http.ResponseWriter, r *http.Request, tenantID string) {
 	kind := r.PathValue("kind")
 	conn, err := d.Connectors.Get(kind)
@@ -91,16 +92,23 @@ func (d Deps) handleConnectURL(w http.ResponseWriter, r *http.Request, tenantID 
 		return
 	}
 	redirect := d.PublicURL + "/v1/connect/" + kind + "/callback"
-	writeJSON(w, http.StatusOK, map[string]string{"authorize_url": conn.OAuthURL(tenantID, redirect)})
+	writeJSON(w, http.StatusOK, map[string]string{"authorize_url": conn.OAuthURL(d.signOAuthState(tenantID), redirect)})
 }
 
 // handleConnectCallback completes OAuth: exchange the code, store the connection
 // (token vaulted by the connector via SecretRef), then discover + scan the assets.
 func (d Deps) handleConnectCallback(w http.ResponseWriter, r *http.Request) {
 	kind := r.PathValue("kind")
-	code, tenantID := r.URL.Query().Get("code"), r.URL.Query().Get("state")
-	if code == "" || tenantID == "" {
+	code, state := r.URL.Query().Get("code"), r.URL.Query().Get("state")
+	if code == "" || state == "" {
 		writeJSON(w, http.StatusBadRequest, errBody("missing code or state"))
+		return
+	}
+	// Trust the tenant ONLY from a signature this server minted — never the raw query value. A forged or
+	// expired state (cross-tenant connection-injection / OAuth login-CSRF) is rejected here.
+	tenantID, ok := d.verifyOAuthState(state)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid or expired state"))
 		return
 	}
 	conn, err := d.Connectors.Get(kind)
