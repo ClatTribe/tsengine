@@ -24,19 +24,33 @@ import (
 // Snapshot is the normalized OSINT observation an OSINT collector posts for an org. Every slice is the
 // verbatim, source-cited output of an OSINT tool/feed — never a guess.
 type Snapshot struct {
-	Org              string             `json:"org"`
-	Domains          []string           `json:"domains"`
-	ExposedHosts     []ExposedHost      `json:"exposed_hosts"`     // passive recon: an externally-reachable host/service
-	BreachedAccounts []BreachedAccount  `json:"breached_accounts"` // org emails appearing in a known breach
-	LeakedSecrets    []LeakedSecret     `json:"leaked_secrets"`    // a credential/secret leaked in a public repo/paste
-	Typosquats       []TyposquatDomain  `json:"typosquats"`        // a registered look-alike / phishing domain
-	Exposures        []DataExposure     `json:"exposures"`         // org data found exposed on a public/paste/dark site
-	Advisories       []Advisory         `json:"advisories"`        // a security advisory relevant to the org's stack/sector
-	StealerLogs      []StealerLog       `json:"stealer_logs"`      // dark-web: a corporate credential harvested by infostealer malware
+	Org              string            `json:"org"`
+	Domains          []string          `json:"domains"`
+	ExposedHosts     []ExposedHost     `json:"exposed_hosts"`     // passive recon: an externally-reachable host/service
+	BreachedAccounts []BreachedAccount `json:"breached_accounts"` // org emails appearing in a known breach
+	LeakedSecrets    []LeakedSecret    `json:"leaked_secrets"`    // a credential/secret leaked in a public repo/paste
+	Typosquats       []TyposquatDomain `json:"typosquats"`        // a registered look-alike / phishing domain
+	Exposures        []DataExposure    `json:"exposures"`         // org data found exposed on a public/paste/dark site
+	Advisories       []Advisory        `json:"advisories"`        // a security advisory relevant to the org's stack/sector
+	StealerLogs      []StealerLog      `json:"stealer_logs"`      // dark-web: a corporate credential harvested by infostealer malware
+	DanglingRecords  []DanglingDNS     `json:"dangling_records"`  // a dangling DNS record pointing at a deprovisioned service → subdomain-takeover
+}
+
+// DanglingDNS is a subdomain whose DNS record points at a third-party service that is no longer
+// provisioned/claimed — so an attacker can register the target and serve content on the org's own
+// subdomain (subdomain takeover). The canonical EASM finding (subjack / can-i-take-over-xyz / nuclei
+// takeover templates). Grounded: emitted only when the record resolves to a known-takeoverable service
+// fingerprint AND the target is reported unclaimed.
+type DanglingDNS struct {
+	Subdomain string `json:"subdomain"`        // e.g. blog.acme.com
+	Record    string `json:"record"`           // the CNAME/A/ALIAS target, e.g. acme.github.io
+	Service   string `json:"service"`          // the fingerprinted service, e.g. github-pages / s3 / heroku / azure
+	Claimable bool   `json:"claimable"`        // the target is unclaimed/deprovisioned (the takeover-able condition)
+	Source    string `json:"source,omitempty"` // the tool/feed that surfaced it (subjack/nuclei/dnsx/…)
 }
 
 type ExposedHost struct {
-	Host     string   `json:"host"`               // e.g. legacy.acme.com
+	Host     string   `json:"host"` // e.g. legacy.acme.com
 	IP       string   `json:"ip,omitempty"`
 	Ports    []int    `json:"ports,omitempty"`    // open ports observed passively (Shodan/Censys-style)
 	Services []string `json:"services,omitempty"` // e.g. ["http","rdp","mysql"]
@@ -53,10 +67,10 @@ type BreachedAccount struct {
 }
 
 type LeakedSecret struct {
-	Kind     string `json:"kind"`              // e.g. "AWS access key", "private key", "Slack token"
-	Location string `json:"location"`          // the public URL (repo/paste) it was found at
-	Source   string `json:"source"`            // trufflehog / gitleaks / github-search
-	Verified bool   `json:"verified,omitempty"`// did the collector validate the secret is live?
+	Kind     string `json:"kind"`               // e.g. "AWS access key", "private key", "Slack token"
+	Location string `json:"location"`           // the public URL (repo/paste) it was found at
+	Source   string `json:"source"`             // trufflehog / gitleaks / github-search
+	Verified bool   `json:"verified,omitempty"` // did the collector validate the secret is live?
 }
 
 type TyposquatDomain struct {
@@ -124,6 +138,7 @@ func Assess(s Snapshot, opts Options) []types.Finding {
 	out = append(out, assessBreaches(s, now, id)...)
 	out = append(out, assessLeaks(s, now, id)...)
 	out = append(out, assessExposedHosts(s, now, id)...)
+	out = append(out, assessSubdomainTakeovers(s, now, id)...)
 	out = append(out, assessTyposquats(s, now, id)...)
 	out = append(out, assessExposures(s, now, id)...)
 	out = append(out, assessAdvisories(s, now, id)...)
@@ -234,6 +249,32 @@ func assessExposedHosts(s Snapshot, now time.Time, id func() string) []types.Fin
 			fmt.Sprintf("Unmonitored internet-exposed host: %s", h.Host), h.Host, desc, now,
 			nil, []string{"T1590", "T1595"}, src(h.Source),
 			types.Compliance{SOC2: []string{"CC6.6", "CC7.1"}, PCI: []string{"11.2.1"}, CISv8: []string{"1.1", "12.4"}, NISTCSF: []string{"ID.AM-01", "DE.CM-08"}}))
+	}
+	return out
+}
+
+// Subdomain takeover — a dangling DNS record (CNAME/A) pointing at a deprovisioned third-party service
+// whose target is unclaimed, so an attacker can register it and serve content on the org's own
+// subdomain (phishing, cookie theft, OAuth-redirect abuse). The canonical EASM finding. Grounded
+// (§10): emitted ONLY for a record flagged claimable (a resolvable fingerprint + an unclaimed target);
+// a record that still resolves to a live, owned service is not a takeover and is skipped.
+func assessSubdomainTakeovers(s Snapshot, now time.Time, id func() string) []types.Finding {
+	var out []types.Finding
+	for _, d := range s.DanglingRecords {
+		if !d.Claimable || strings.TrimSpace(d.Subdomain) == "" {
+			continue
+		}
+		svc := strings.TrimSpace(d.Service)
+		if svc == "" {
+			svc = "a deprovisioned service"
+		}
+		desc := fmt.Sprintf("%s has a dangling DNS record (%s) pointing at %s, whose target is unclaimed — an attacker can register it and serve content on your subdomain (phishing, session/cookie theft, OAuth-redirect abuse). Remove the DNS record or reclaim the resource.",
+			d.Subdomain, nz(d.Record, "its CNAME target"), svc)
+		out = append(out, finding(id(), "osint::subdomain-takeover", types.SeverityHigh,
+			fmt.Sprintf("Subdomain takeover risk: %s (%s)", d.Subdomain, svc), d.Subdomain, desc, now,
+			[]string{"CWE-350"}, []string{"T1584.001", "T1190"}, src(d.Source),
+			types.Compliance{SOC2: []string{"CC6.1", "CC6.6", "CC7.1"}, PCI: []string{"11.2.1"}, GDPR: []string{"Art. 32"},
+				CISv8: []string{"1.1", "7.1"}, NISTCSF: []string{"ID.AM-01", "PR.DS-2", "DE.CM-08"}, NIST80053: []string{"CM-8", "SC-7"}}))
 	}
 	return out
 }
