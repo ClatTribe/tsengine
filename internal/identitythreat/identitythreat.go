@@ -55,7 +55,9 @@ type Config struct {
 	SprayWindow            time.Duration
 	MFAFatigueThreshold    int // MFA challenges within MFAFatigueWindow that trip a fatigue/bombing alert
 	MFAFatigueWindow       time.Duration
-	DistributedSprayUsers  int // distinct users failing from one IP within SprayWindow → distributed spray
+	DistributedSprayUsers  int           // distinct users failing from one IP within SprayWindow → distributed spray
+	TokenReuseWindow       time.Duration // two successful logins from DIFFERENT IPs within this → session-token reuse
+	MFARemovedAccessWindow time.Duration // MFA removed then a login from a NEW IP within this → account-takeover seq
 }
 
 func (c Config) withDefaults() Config {
@@ -77,6 +79,12 @@ func (c Config) withDefaults() Config {
 	if c.DistributedSprayUsers <= 0 {
 		c.DistributedSprayUsers = 5
 	}
+	if c.TokenReuseWindow <= 0 {
+		c.TokenReuseWindow = 5 * time.Minute
+	}
+	if c.MFARemovedAccessWindow <= 0 {
+		c.MFARemovedAccessWindow = time.Hour
+	}
 	return c
 }
 
@@ -96,6 +104,8 @@ func Detect(events []Event, cfg Config) []Threat {
 		threats = append(threats, passwordSpray(user, evs, cfg)...)
 		threats = append(threats, spraySuccess(user, evs, cfg)...)
 		threats = append(threats, mfaFatigue(user, evs, cfg)...)
+		threats = append(threats, concurrentSession(user, evs, cfg)...)
+		threats = append(threats, mfaRemovedThenAccess(user, evs, cfg)...)
 		for _, e := range evs {
 			if e.Type == EventRoleGrant && e.Admin {
 				threats = append(threats, Threat{
@@ -317,18 +327,70 @@ func nz(s, dflt string) string {
 	return s
 }
 
+// concurrentSession flags two SUCCESSFUL logins from DIFFERENT IPs within TokenReuseWindow — too close for a
+// legitimate re-auth, the signature of a replayed/stolen session token (or shared credentials). Distinct from
+// impossible_travel (geo-velocity across COUNTRIES over a longer window); this is IP-based + a tight window, so
+// it catches same-country token reuse the travel rule misses. One per user; grounded (two real login events).
+func concurrentSession(user string, evs []Event, cfg Config) []Threat {
+	var prev *Event
+	for i := range evs {
+		e := evs[i]
+		if e.Type != EventLogin || e.IP == "" {
+			continue
+		}
+		if prev != nil && prev.IP != e.IP {
+			if d := e.Time.Sub(prev.Time); d >= 0 && d <= cfg.TokenReuseWindow {
+				return []Threat{{Rule: "concurrent_session", User: user, Severity: types.SeverityMedium,
+					Title:    fmt.Sprintf("%s authenticated from two IPs (%s, %s) within %s — possible session-token reuse", user, prev.IP, e.IP, d.Round(time.Second)),
+					Evidence: []string{ev(*prev), ev(e)}}}
+			}
+		}
+		ec := e
+		prev = &ec
+	}
+	return nil
+}
+
+// mfaRemovedThenAccess flags an MFA factor removed followed by a successful login within
+// MFARemovedAccessWindow from an IP NOT previously seen for the user — the classic account-takeover sequence
+// (disable MFA → sign in from the attacker's host). High severity; a compound rule over two ordered real events.
+func mfaRemovedThenAccess(user string, evs []Event, cfg Config) []Threat {
+	for i := range evs {
+		if evs[i].Type != EventMFARemoved {
+			continue
+		}
+		priorIPs := map[string]bool{}
+		for j := 0; j < i; j++ {
+			if evs[j].IP != "" {
+				priorIPs[evs[j].IP] = true
+			}
+		}
+		for j := i + 1; j < len(evs); j++ {
+			n := evs[j]
+			if n.Type == EventLogin && n.IP != "" && !priorIPs[n.IP] && n.Time.Sub(evs[i].Time) <= cfg.MFARemovedAccessWindow {
+				return []Threat{{Rule: "mfa_removed_then_access", User: user, Severity: types.SeverityHigh,
+					Title:    fmt.Sprintf("%s removed MFA then logged in from a new IP (%s) within %s — account-takeover sequence", user, n.IP, n.Time.Sub(evs[i].Time).Round(time.Minute)),
+					Evidence: []string{ev(evs[i]), ev(n)}}}
+			}
+		}
+	}
+	return nil
+}
+
 // ruleMeta maps a threat rule to its CWE + MITRE technique (grounded attribution).
 var ruleMeta = map[string]struct {
 	cwe   string
 	mitre string
 }{
-	"impossible_travel": {"CWE-287", "T1078"},    // valid-account abuse
-	"privileged_grant":  {"CWE-269", "T1098"},     // improper privilege mgmt / account manipulation
-	"mfa_removed":       {"CWE-1390", "T1556"},    // weak auth / modify authentication process
-	"password_spray":    {"CWE-307", "T1110"},     // improper auth-attempt restriction / brute force
-	"spray_success":     {"CWE-307", "T1078"},     // brute force succeeded → valid-account abuse (takeover)
-	"mfa_fatigue":       {"CWE-307", "T1621"},     // multi-factor authentication request generation (MFA bombing)
-	"distributed_spray": {"CWE-307", "T1110.003"}, // password spraying (cross-account, low-and-slow)
+	"impossible_travel":       {"CWE-287", "T1078"},     // valid-account abuse
+	"privileged_grant":        {"CWE-269", "T1098"},     // improper privilege mgmt / account manipulation
+	"mfa_removed":             {"CWE-1390", "T1556"},    // weak auth / modify authentication process
+	"password_spray":          {"CWE-307", "T1110"},     // improper auth-attempt restriction / brute force
+	"spray_success":           {"CWE-307", "T1078"},     // brute force succeeded → valid-account abuse (takeover)
+	"mfa_fatigue":             {"CWE-307", "T1621"},     // multi-factor authentication request generation (MFA bombing)
+	"distributed_spray":       {"CWE-307", "T1110.003"}, // password spraying (cross-account, low-and-slow)
+	"concurrent_session":      {"CWE-287", "T1539"},     // session-token reuse (steal web session cookie)
+	"mfa_removed_then_access": {"CWE-1390", "T1556"},    // disable MFA then valid-account abuse (ATO sequence)
 }
 
 // Findings converts detected threats into platform findings so identity threats flow through the
