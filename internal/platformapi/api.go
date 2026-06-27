@@ -99,6 +99,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))
+	mux.HandleFunc("POST /v1/safechain/check", d.auth(d.handleSafeChain)) // install-time supply-chain gate (Safe Chain parity)
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
 	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))
 	mux.HandleFunc("POST /v1/assets", d.auth(d.handleCreateAsset))                                 // add a standalone scan target (web/api/domain/ip/image)
