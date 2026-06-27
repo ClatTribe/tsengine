@@ -198,6 +198,23 @@ export interface ActionsView {
   still_present: number;
 }
 
+// AssetCoverage — the per-asset "what was actually tested" statement (visibility most teams lack).
+export interface AssetCoverage {
+  asset_id: string;
+  target: string;
+  type: string;
+  scanned: boolean;
+  last_scanned_at?: string;
+  runs_tools: string[]; // the tools every scan of this type runs
+  tools_with_findings: string[]; // which surfaced a finding (the rest ran clean)
+  findings_count: number;
+}
+export interface CoverageSummary {
+  assets: AssetCoverage[];
+  total_assets: number;
+  scanned_assets: number;
+}
+
 // Risk register — the vCISO judgment artifact. The engine proposes candidates (Proposed); a named
 // human decides treatment (accept/mitigate/transfer/avoid), recorded with owner + rationale + ledger.
 export interface Risk {

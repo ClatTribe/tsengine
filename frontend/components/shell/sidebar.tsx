@@ -24,6 +24,7 @@ import {
   History,
   Radar,
   Building2,
+  ScanSearch,
   ChevronDown,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
@@ -54,6 +55,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
       { href: "/attack-paths", label: "Attack paths", icon: Spline },
       { href: "/osint", label: "External exposure", icon: Radar },
       { href: "/posture", label: "Asset posture", icon: Building2 },
+      { href: "/coverage", label: "Test coverage", icon: ScanSearch },
       { href: "/incidents", label: "Incidents", icon: Activity },
     ],
   },
