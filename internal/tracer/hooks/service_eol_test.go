@@ -57,6 +57,11 @@ func TestServiceEOL_ExpandedServices(t *testing.T) {
 		"Elasticsearch": "6.8.0",
 		"Squid":         "5.7",
 		"PHP":           "7.4.3",
+		"Samba":         "4.13.0",
+		"HAProxy":       "2.4.0",
+		"lighttpd":      "1.4.59",
+		"CouchDB":       "3.1.0",
+		"RabbitMQ":      "3.10.0",
 	}
 	for product, ver := range old {
 		out, audit, _ := h.Apply(nmapSvc(product, ver, types.SeverityInfo))
