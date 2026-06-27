@@ -10,6 +10,7 @@ import { LiveConsole } from "@/components/marketing/live-console";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
 import { EngageModels } from "@/components/marketing/engage-models";
+import { Prioritize } from "@/components/marketing/prioritize";
 import { PlatformOverview } from "@/components/marketing/platform-overview";
 import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 
@@ -85,7 +86,10 @@ export default function Landing() {
       {/* Trust signals — who built it, what it runs on, how it's built, who it's for */}
       <TrustBar />
 
-      {/* Differentiator — we fix, not just flag (vs advise-only tools) */}
+      {/* USP #1 — we prioritize the alerts so you don't have to (noise-reduction funnel) */}
+      <Prioritize />
+
+      {/* USP #2 / Differentiator — we go from alert to fix, not just flag (vs advise-only tools) */}
       <section className="border-y border-border bg-surface">
         <div className="mx-auto max-w-5xl px-5 py-16">
           <Reveal className="mx-auto mb-10 max-w-2xl text-center">
@@ -131,7 +135,7 @@ export default function Landing() {
       <section className="border-y border-border bg-surface">
         <Reveal className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-5 py-10 text-center sm:grid-cols-4">
           {[
-            ["14", "compliance frameworks"],
+            ["22", "compliance frameworks"],
             ["30+", "OSS scanners wrapped"],
             ["24/7", "autonomous monitoring"],
             ["1-tap", "approval, fully signed"],
