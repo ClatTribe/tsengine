@@ -5,7 +5,6 @@ import {
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
-import { FeatureIcon } from "@/components/brand/feature-icon";
 import { LiveConsole } from "@/components/marketing/live-console";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
@@ -175,31 +174,6 @@ export default function Landing() {
 
       {/* Platform overview — the whole product in one view: the five surfaces + the HITL spine */}
       <PlatformOverview />
-
-      {/* Features */}
-      <Section eyebrow="One platform" title="Security and compliance, handled." sub="The work a security engineer and a compliance manager would do — automated, on one auditable loop.">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { name: "detection", t: "Best-in-class detection", d: "Wraps the leading OSS scanners across web, APIs, code, containers, cloud & identity — recall on par with standalone tools.", href: "/supply-chain" },
-            { name: "compliance", t: "Compliance on autopilot", d: "Findings map to SOC 2 / ISO / PCI / HIPAA controls automatically, with a signed evidence pack and an auto-answered questionnaire.", href: "/frameworks" },
-            { name: "monitoring", t: "Continuous monitoring", d: "Re-scans on every change and on a schedule — new high-severity issues page on-call, resolved ones close themselves.", href: "/ai-security-engineer" },
-            { name: "hitl", t: "Human in the loop", d: "The agent proposes; you approve. Tier-gated, signed into a tamper-evident ledger — autonomy where it's earned.", href: "/ai-security-engineer" },
-            { name: "identity", t: "Identity posture", d: "MFA gaps, risky OAuth grants, stale accounts, email spoofing (DMARC/SPF/DKIM) — fixed across Google, M365 & Okta.", href: "/saas-posture" },
-            { name: "evidence", t: "Provable evidence", d: "Every claim is backed by a tool and ed25519-signed. Auditors get reproducible proof, not screenshots.", href: "/security" },
-          ].map(({ name, t, d, href }) => (
-            <Link key={t} href={href} className="card group p-5 transition hover:border-accent/40 hover:shadow-card-hover">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent ring-1 ring-accent/10">
-                <FeatureIcon name={name} className="h-[22px] w-[22px]" />
-              </span>
-              <h3 className="mt-3.5 flex items-center gap-1 text-sm font-semibold">
-                {t}
-                <ArrowRight className="h-3.5 w-3.5 -translate-x-1 text-faint opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" />
-              </h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted">{d}</p>
-            </Link>
-          ))}
-        </div>
-      </Section>
 
       {/* Unified platform — every product + asset feeds one finding graph (better detection + compliance) */}
       <UnifiedPlatform />
