@@ -198,6 +198,19 @@ func main() {
 		Endpoint: "https://api.northwind.io/v2/search?q=", Sink: "db.Query", SourceIP: "203.0.113.44",
 		Blocked: true, Source: "zen", OccurredAt: ago(3 * time.Hour),
 	}))
+	// More observations across apps/kinds/modes so the /runtime posture page shows its full shape:
+	// multiple apps reporting, attacks-by-type, most-targeted endpoints, and a monitor-only event
+	// (Blocked:false) that drives the honest "monitoring, not blocking" banner.
+	for _, rt := range []platform.RuntimeEvent{
+		{ID: "rt-2", App: "payments-api", AttackKind: "sql_injection", Endpoint: "https://api.northwind.io/v2/search?q=", Sink: "db.Query", SourceIP: "203.0.113.44", Blocked: true, Source: "zen", OccurredAt: ago(2 * time.Hour)},
+		{ID: "rt-3", App: "payments-api", AttackKind: "ssrf", Endpoint: "https://api.northwind.io/v2/fetch", Sink: "http.Get", SourceIP: "198.51.100.7", Blocked: true, Source: "zen", OccurredAt: ago(90 * time.Minute)},
+		{ID: "rt-4", App: "storefront-web", AttackKind: "path_traversal", Endpoint: "https://shop.northwind.io/download", Sink: "os.Open", SourceIP: "203.0.113.91", Blocked: true, Source: "zen", OccurredAt: ago(70 * time.Minute)},
+		{ID: "rt-5", App: "storefront-web", AttackKind: "xss", Endpoint: "https://shop.northwind.io/profile", Sink: "html.Render", SourceIP: "192.0.2.55", Blocked: false, Source: "zen", OccurredAt: ago(40 * time.Minute)},
+		{ID: "rt-6", App: "payments-api", AttackKind: "command_injection", Endpoint: "https://api.northwind.io/v2/export", Sink: "exec.Command", SourceIP: "198.51.100.7", Blocked: true, Source: "zen", OccurredAt: ago(20 * time.Minute)},
+	} {
+		rt.TenantID = tid
+		must(st.PutRuntimeEvent(ctx, rt))
+	}
 
 	// --- compliance control state ---
 	type cs struct {
