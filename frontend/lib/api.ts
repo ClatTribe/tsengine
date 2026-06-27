@@ -197,6 +197,7 @@ export const api = {
     safe<PentestStats>("/v1/pentest/stats", {
       engagements: 0, active_engagements: 0, completed_runs: 0, total_findings: 0,
       high_plus: 0, exploitation_proven: 0, high_plus_proven: 0, verified_rate: 0, high_plus_found: false,
+      needs_review: 0,
     }),
   approvals: () => safe<Action[]>("/v1/approvals", []),
   connections: () => safe<Connection[]>("/v1/connections", []),
