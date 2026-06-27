@@ -595,6 +595,8 @@ In-house code is reserved for orchestration logic only:
 
 **Adding a new in-house `scan_*` detection scanner requires an explicit architectural ADR** explaining why the leading OSS tool doesn't suffice. Default is no.
 
+**AI-application security** (testing the customer's OWN LLM features — prompt injection, jailbreak, insecure output handling, the OWASP LLM Top 10) is genuine whitespace: tsengine covers AI *governance* (ISO 42001 / NIST AI RMF / EU AI Act, §8) + *inventory* (AI-BOM, WRD-1) today, but not AI-app vuln *detection*. The approach is fixed in [docs/adr/0012-ai-application-security.md](docs/adr/0012-ai-application-security.md) — a wrapped-OSS `ai_application` asset (anchor: **garak**; registry: promptfoo/PyRIT), active-by-nature so gated by the RoE Guard + consent + ownership-verification — NOT an in-house detector. Proposed/backlog; not built.
+
 ### 13.1 SMB per-asset parity packages (ADR 0010)
 
 To be THE SMB product per asset (coverage/depth + FP/FN accuracy vs the SMB category leader),
