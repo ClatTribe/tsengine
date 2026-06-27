@@ -10,6 +10,7 @@ import { LiveConsole } from "@/components/marketing/live-console";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
 import { EngageModels } from "@/components/marketing/engage-models";
+import { PlatformOverview } from "@/components/marketing/platform-overview";
 import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 
 export const metadata = {
@@ -167,6 +168,9 @@ export default function Landing() {
           ))}
         </div>
       </Section>
+
+      {/* Platform overview — the whole product in one view: the five surfaces + the HITL spine */}
+      <PlatformOverview />
 
       {/* Features */}
       <Section eyebrow="One platform" title="Security and compliance, handled." sub="The work a security engineer and a compliance manager would do — automated, on one auditable loop.">
