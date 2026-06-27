@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -20,17 +21,18 @@ import (
 // evaluation, wrapping cloudsplaining/PMapper) is the source's job — this mapper
 // just assembles the graph.
 type Inventory struct {
-	AccountID  string        `json:"account_id"`
-	Provider   string        `json:"provider"`
-	CapturedAt time.Time     `json:"captured_at,omitempty"`
-	Resources  []InvResource `json:"resources,omitempty"`
-	Trusts     []InvTrust    `json:"trusts,omitempty"`  // principal → role it may assume
-	Passes     []InvPass     `json:"passes,omitempty"`  // principal → role it may pass (iam:PassRole)
-	Grants     []InvGrant    `json:"grants,omitempty"`  // principal → resource it may access
-	Reaches    []InvReach    `json:"reaches,omitempty"` // network reachability (incl. internet exposure)
-	RunsAs     []InvRunsAs   `json:"runs_as,omitempty"`
-	Privescs   []InvPrivesc  `json:"privescs,omitempty"` // known IAM privesc edges (PMapper-style)
-	Triggers   []InvTrigger  `json:"triggers,omitempty"` // service-coupling: a service can invoke a compute resource
+	AccountID  string            `json:"account_id"`
+	Provider   string            `json:"provider"`
+	CapturedAt time.Time         `json:"captured_at,omitempty"`
+	Resources  []InvResource     `json:"resources,omitempty"`
+	Trusts     []InvTrust        `json:"trusts,omitempty"`  // principal → role it may assume
+	Passes     []InvPass         `json:"passes,omitempty"`  // principal → role it may pass (iam:PassRole)
+	Grants     []InvGrant        `json:"grants,omitempty"`  // principal → resource it may access
+	Reaches    []InvReach        `json:"reaches,omitempty"` // network reachability (incl. internet exposure)
+	RunsAs     []InvRunsAs       `json:"runs_as,omitempty"`
+	Privescs   []InvPrivesc      `json:"privescs,omitempty"` // known IAM privesc edges (PMapper-style)
+	Triggers   []InvTrigger      `json:"triggers,omitempty"` // service-coupling: a service can invoke a compute resource
+	Secrets    []InvSecretAccess `json:"secrets,omitempty"`  // secret-held-credential reuse (lateral movement)
 }
 
 // InvResource is one resource or identity.
@@ -85,6 +87,19 @@ type InvPrivesc struct {
 type InvTrigger struct {
 	Source    string `json:"source"`  // the invoking service/resource (often public-reachable)
 	Compute   string `json:"compute"` // the compute it invokes
+	Condition string `json:"condition,omitempty"`
+}
+
+// InvSecretAccess is a credential-reuse toxic combination: Principal can READ Secret (a Secrets Manager
+// secret / SSM SecureString / K8s secret / Key Vault secret) whose stored material is a long-lived
+// credential for Yields (a more-privileged principal). Compromising Principal → reading the secret →
+// authenticating as Yields = lateral movement. The ingest source emits one ONLY where it confirmed both
+// that Principal can read the secret AND that the secret holds Yields's credential (grounded, §10 — never
+// inferred from a name). Live detection (reading the secret's stored material / tags) is the gated half.
+type InvSecretAccess struct {
+	Principal string `json:"principal"` // who can read the secret
+	Secret    string `json:"secret"`    // the secret resource id (named in the edge Detail)
+	Yields    string `json:"yields"`    // the principal whose credential the secret holds
 	Condition string `json:"condition,omitempty"`
 }
 
@@ -149,6 +164,8 @@ func (s *Snapshot) ToInventory() Inventory {
 			inv.Privescs = append(inv.Privescs, InvPrivesc{Principal: e.From, Target: e.To, Detail: e.Detail})
 		case EdgeTriggers:
 			inv.Triggers = append(inv.Triggers, InvTrigger{Source: e.From, Compute: e.To, Condition: e.Condition})
+		case EdgeSecretAccess:
+			inv.Secrets = append(inv.Secrets, InvSecretAccess{Principal: e.From, Yields: e.To, Secret: strings.TrimPrefix(e.Detail, "via secret "), Condition: e.Condition})
 		}
 	}
 	return inv
@@ -193,6 +210,11 @@ func Ingest(inv Inventory) *Snapshot {
 	}
 	for _, tr := range inv.Triggers {
 		s.AddEdge(Edge{From: tr.Source, To: tr.Compute, Kind: EdgeTriggers, Condition: tr.Condition})
+	}
+	for _, sa := range inv.Secrets {
+		// the reader can become the principal whose credential the secret holds (lateral movement);
+		// the secret itself is named in Detail for the evidence trail.
+		s.AddEdge(Edge{From: sa.Principal, To: sa.Yields, Kind: EdgeSecretAccess, Detail: "via secret " + sa.Secret, Condition: sa.Condition})
 	}
 	return s
 }
