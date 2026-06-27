@@ -159,6 +159,7 @@ export interface PentestStats {
   high_plus_proven: number;
   verified_rate: number; // 0..1
   high_plus_found: boolean;
+  needs_review: number; // high+ findings actively probed but not auto-proven → manual HITL sign-off
 }
 
 export interface Action {
