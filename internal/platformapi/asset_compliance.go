@@ -7,6 +7,24 @@ import (
 	"github.com/ClatTribe/tsengine/internal/store"
 )
 
+// handleComplianceOSCAL (GET /v1/compliance/oscal) serves the crosswalk's control coverage as a NIST OSCAL
+// component-definition — the GRC-tool-/auditor-ingestible standard format. Tenant-independent (it's the engine's
+// coverage), served as a downloadable JSON attachment.
+func (d Deps) handleComplianceOSCAL(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.GRC == nil {
+		writeJSON(w, http.StatusServiceUnavailable, errBody("compliance posture unavailable"))
+		return
+	}
+	b, err := d.GRC.OSCAL(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="tsengine-compliance-oscal.json"`)
+	_, _ = w.Write(b)
+}
+
 // handleComplianceByAsset returns the per-asset compliance signal — the "is THIS asset compliant?" view
 // (competitor parity: Vanta shows per-resource status). Tenant-scoped (§18.2 inv. 2): reads only this
 // tenant's assets + findings. Grounded (§10): grc.AssetCompliancePosture attributes a finding to an asset

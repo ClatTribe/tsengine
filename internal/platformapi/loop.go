@@ -32,6 +32,8 @@ type Posturer interface {
 	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
 	Questionnaire(ctx context.Context, tenantID string) (*grc.Questionnaire, error)
 	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
+	// OSCAL emits the crosswalk's control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible).
+	OSCAL(ctx context.Context) ([]byte, error)
 	// Apply folds a finding's compliance annotation into the tenant's control-state posture (marks
 	// each cited control a gap). The scan path calls this; the non-scan ingest paths (identity, SaaS,
 	// runtime) must too, or their findings never reach the founder's compliance posture.
