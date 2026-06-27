@@ -92,7 +92,7 @@ export function MarketingNav() {
     <header className="sticky top-0 z-40 border-b border-border/70 bg-bg/80 backdrop-blur-md">
       <nav className="mx-auto flex h-16 max-w-6xl items-center gap-1 px-5">
         <Link href="/" className="mr-2 flex items-center gap-2.5" onClick={() => setOpen(false)}>
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#0b1220] ring-1 ring-white/10 shadow-sm">
             <LogoMark className="h-5 w-5" />
           </span>
           <span className="text-base font-semibold tracking-tight">TensorShield</span>

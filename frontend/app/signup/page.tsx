@@ -40,7 +40,7 @@ export default function SignupPage() {
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm animate-fade-rise">
           <Link href="/" className="mb-10 inline-flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-white shadow-sm">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#0b1220] ring-1 ring-white/10 shadow-sm">
               <LogoMark className="h-6 w-6" />
             </span>
             <span className="text-base font-semibold tracking-tight">TensorShield</span>

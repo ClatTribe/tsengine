@@ -110,7 +110,7 @@ export function Sidebar({ pending }: { pending: number }) {
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-bg/60 px-3 py-4">
       <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
-        <div className="grid h-8 w-8 place-items-center rounded-lg border border-accent/40 bg-accent-soft text-accent">
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0b1220] ring-1 ring-white/10">
           <LogoMark className="h-5 w-5" />
         </div>
         <span className="text-sm font-semibold">TensorShield</span>
