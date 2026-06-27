@@ -117,5 +117,8 @@ var registryNames = []string{
 	// bandit — Python-specific security SAST (shell-injection, unsafe deserialization,
 	// hardcoded passwords, weak crypto) — complements semgrep's generic python packs.
 	"bandit",
-	// Phase 3.x: CodeQL, brakeman, staticcheck, snyk-code, kics, terrascan
+	// kics — deeper IaC SAST (2400+ queries over Terraform/CloudFormation/K8s/Ansible/Helm/
+	// Pulumi) — the on-demand depth pass over checkov's anchor IaC coverage.
+	"kics",
+	// Phase 3.x: CodeQL, brakeman, staticcheck, snyk-code, terrascan
 }
