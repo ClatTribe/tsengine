@@ -111,10 +111,18 @@ func (d Deps) ResolveTenantLLM(ctx context.Context, tenantID string) (provider, 
 // buildable, else the operator-global model (d.AgentLLM, from cloudengine.LLMFromEnv). nil when neither
 // is configured. This is what makes the per-tenant LLM config LIVE instead of dormant.
 func (d Deps) resolveAgentLLM(ctx context.Context, tenantID string) pentest.SpecLLM {
+	// A tenant's OWN key (§18.5 "bring your own brain") costs the operator nothing, so it's
+	// allowed on ANY plan, Free included.
 	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
 		if c, ok := cloudengine.ClientFor(provider, model, key); ok {
 			return c // cloudengine.LLM satisfies pentest.SpecLLM (same Generate method)
 		}
 	}
-	return d.AgentLLM
+	// The operator-global LLM (d.AgentLLM) spends OUR budget — gate it behind an AI-enabled
+	// plan so the Free tier (and any unknown/empty plan) never costs us LLM money. This is the
+	// economic invariant that makes "Free is genuinely free for us" real (pkg/platform/plan.go).
+	if d.planLimits(ctx, tenantID).AIEnabled {
+		return d.AgentLLM
+	}
+	return nil
 }

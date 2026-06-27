@@ -6,6 +6,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 type scriptedDiscoverLLM string
@@ -14,6 +15,7 @@ func (s scriptedDiscoverLLM) Generate(context.Context, string) (string, error) {
 
 func TestAuthzDiscover_GatedAndRuns(t *testing.T) {
 	st := store.NewMemory()
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanGrowth}) // AI is a paid feature
 	// No LLM → 400.
 	d0 := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"}
 	if rec := do(NewHandler(d0), "POST", "/v1/apiauthz/discover", "t1", `{"operations":[]}`); rec.Code != 400 {

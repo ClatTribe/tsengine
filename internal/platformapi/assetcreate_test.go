@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 func TestCreateAsset_AddsStandaloneTarget(t *testing.T) {
@@ -84,5 +85,32 @@ func TestCreateAsset_TenantScoped(t *testing.T) {
 	// t2 must not see t1's asset.
 	if a, _ := st.ListAssets(context.Background(), "t2"); len(a) != 0 {
 		t.Errorf("tenant isolation: t2 must not see t1's asset, got %d", len(a))
+	}
+}
+
+// The plan asset cap (economic gate): Free is capped, Growth expands. Over-cap → 402.
+func TestCreateAsset_PlanAssetCap(t *testing.T) {
+	st := store.NewMemory()
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "free", Plan: platform.PlanFree})
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	add := func(tid, host string) int {
+		return do(h, "POST", "/v1/assets", tid, `{"type":"web_application","target":"`+host+`","authorized":true}`).Code
+	}
+	// Free cap is 2: the first two succeed, the third is refused with 402 (upgrade prompt).
+	if c := add("free", "a.example.com"); c != 201 {
+		t.Fatalf("1st free asset → 201, got %d", c)
+	}
+	if c := add("free", "b.example.com"); c != 201 {
+		t.Fatalf("2nd free asset → 201, got %d", c)
+	}
+	if c := add("free", "c.example.com"); c != 402 {
+		t.Fatalf("3rd free asset must be over-cap → 402, got %d", c)
+	}
+	// A Growth tenant can go past the Free cap.
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "paid", Plan: platform.PlanGrowth})
+	for _, host := range []string{"a.example.com", "b.example.com", "c.example.com"} {
+		if c := add("paid", host); c != 201 {
+			t.Fatalf("growth tenant should add %s → 201, got %d", host, c)
+		}
 	}
 }
