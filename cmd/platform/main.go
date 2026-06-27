@@ -7,16 +7,17 @@
 // connect a system (OAuth) → posture dashboard → approve/reject fixes → compliance
 // report.
 //
-// Durability today: a file-backed store (TSENGINE_PLATFORM_DB; else in-memory) and
-// AES-256-GCM token sealing (TSENGINE_SECRET_KEY). A sqlite/Postgres store + a cloud-KMS
-// vault are the scale-out successors behind the same interfaces. Set
-// TSENGINE_PLATFORM_NO_ENGINE=1 to boot without the sandbox engine (connect / list /
-// webhook-accept / operate-workspace only).
+// Durability: the store is chosen by TSENGINE_PLATFORM_DB (see openStore) — a durable local
+// SQLite file by default, a postgres:// DSN to deploy on managed Postgres. AES-256-GCM token
+// sealing is TSENGINE_SECRET_KEY. A cloud-KMS vault is the scale-out successor behind the same
+// interface. Set TSENGINE_PLATFORM_NO_ENGINE=1 to boot without the sandbox engine (connect /
+// list / webhook-accept / operate-workspace only).
 //
 // Env:
 //
 //	TSENGINE_PLATFORM_TOKEN     static platform bearer token (required)
-//	TSENGINE_PLATFORM_DB        path to a JSON store file (persists across restarts; else in-memory)
+//	TSENGINE_PLATFORM_DB        store selector: unset → SQLite file "platform.db"; a postgres:// DSN
+//	                            → Postgres; a *.db/*.sqlite path → SQLite; *.json → file; "memory" → in-memory
 //	TSENGINE_PLATFORM_ADDR      listen address (default :8090)
 //	TSENGINE_PLATFORM_PUBLIC    public base URL for OAuth redirect_uri
 //	TSENGINE_SANDBOX_IMAGE      sandbox image ref (default tsengine/sandbox:latest)
@@ -580,19 +581,34 @@ func corpusRefreshInterval() time.Duration {
 	return d
 }
 
-// openStore returns the durable store for TSENGINE_PLATFORM_DB (a *.db/*.sqlite path →
-// SQLite, the production single-box backend; a *.json path → the whole-snapshot file
-// store), else an in-memory store. Routing lives in store.Open; this wraps it with
-// startup logging + fatal-on-error.
+// openStore selects the store from TSENGINE_PLATFORM_DB. The default (env unset) is a durable
+// local SQLite file, so "use SQLite now, switch to Postgres for deploy" needs only a one-line
+// env change: set a postgres:// DSN (Supabase/RDS/Neon) at deploy time. Routing itself lives in
+// store.Open; this wraps it with the default, an explicit in-memory opt-out, startup logging
+// (never the Postgres DSN — it holds a password), and fatal-on-error.
+//
+//	(unset)            → SQLite file "platform.db"  (local default; durable across restarts)
+//	postgres://… DSN   → Postgres                   (the deploy target)
+//	*.db / *.sqlite    → SQLite at that path
+//	*.json             → whole-snapshot file store
+//	"memory"/":memory:"→ ephemeral in-memory (tests / throwaway runs)
 func openStore() store.Store {
 	path := os.Getenv("TSENGINE_PLATFORM_DB")
+	switch path {
+	case "":
+		path = "platform.db" // local default: durable SQLite, zero config
+	case "memory", ":memory:":
+		path = "" // explicit opt-in to the ephemeral in-memory store
+	}
 	s, err := store.Open(path)
 	if err != nil {
-		log.Fatalf("[platform] open store %s: %v", path, err)
+		log.Fatalf("[platform] open store: %v", err)
 	}
 	switch {
 	case path == "":
-		log.Print("[platform] in-memory store (set TSENGINE_PLATFORM_DB=/data/platform.db to persist)")
+		log.Print("[platform] in-memory store (ephemeral; unset TSENGINE_PLATFORM_DB or set a path to persist)")
+	case strings.HasPrefix(path, "postgres://") || strings.HasPrefix(path, "postgresql://"):
+		log.Print("[platform] postgres store (deploy backend)")
 	case strings.HasSuffix(strings.ToLower(path), ".json"):
 		log.Printf("[platform] file store at %s", path)
 	default:
