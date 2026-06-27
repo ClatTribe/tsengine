@@ -54,7 +54,7 @@ shape, bench.
 | | Deep exploit | sqlmap, dalfox, nuclei (template corpus), smuggler, ffuf, hydra (default creds) |
 | | DOM-aware | scan_xss, dom_xss_static_probe, scan_cache_deception, scan_websocket_auth, scan_prototype_pollution |
 | | Hygiene | http_security_headers_audit, tls_audit, cors_deep_check, csrf_check, open_redirect_check |
-| **Registry tier** | (on-demand via /replay) | wpscan (WordPress CMS DAST — also escalation-fired), wapiti, nikto, jaeles, arachni, w3af, skipfish, ZAP active, gobuster |
+| **Registry tier** | (on-demand via /replay) | **wrapped:** wpscan (WordPress CMS DAST — also escalation-fired), nikto (`internal/tool/nikto` — legacy/dangerous CGIs, default/backup files, outdated server software, missing headers; distinct corpus from nuclei); **planned:** wapiti, jaeles, arachni, w3af, skipfish, ZAP active, gobuster |
 | **L1 filtration** | Static-asset drop | `.css`, `.png`, `.woff`, bundled JS — extension filter |
 | | Destructive drop | `/admin/delete-*`, `/logout` — destructive-class filter |
 | | Scope | Same host or subdomain only; off-host (twitter, CDN) dropped. `scope.scope_hosts` whitelists extras |
@@ -105,8 +105,8 @@ shape, bench.
 > **Backlog (not built):** SPA/JS-rendered crawl (`webapp_recon_pipeline`),
 > DOM-aware specialists (`scan_xss`, `dom_xss_static_probe`, prototype
 > pollution, cache deception), request-smuggling (`smuggler`), CSRF-token /
-> multi-step / SPA login in `seed_auth`, and the registry-tier tools
-> (wapiti, nikto, ZAP active, …). The L2 catalog rows are Phase 6.
+> multi-step / SPA login in `seed_auth`, and the remaining registry-tier tools
+> (wapiti, ZAP active, … — nikto is now wrapped). The L2 catalog rows are Phase 6.
 
 ---
 
@@ -303,7 +303,7 @@ The mobile-app team's asset. Single-stage like `repository` (the app bundle / so
 | **Anchor tier** | Mobile SAST | mobsfscan — Android/iOS insecure-storage, weak-crypto, exported-component, WebView, deep-link rules |
 | | Secrets | gitleaks — hardcoded API keys / tokens (different engine → corroborates mobsfscan's secret rules); the #1 real-world mobile leak |
 | | SCA | trivy fs — CVEs in bundled dependency manifests (`mode=fs`) |
-| **Registry tier** | (on-demand) | semgrep (Kotlin/Swift/Java mobile packs), trufflehog (deep verified-secret scan); apkid (packer/obfuscator fingerprint) + a full MobSF dynamic pass are the documented next additions |
+| **Registry tier** | (on-demand) | semgrep (Kotlin/Swift/Java mobile packs), trufflehog (deep verified-secret scan), apkid (packer/obfuscator/anti-analysis fingerprint — `internal/tool/apkid`, a tampering/repackaging signal mobsfscan's SAST misses); a full MobSF dynamic pass is the documented next addition |
 | **L1 filtration** | Bundle wholesale | anchors scan the mounted bundle; per-tool exclude wiring lives in the wrappers |
 | **L1.5 enrichment** | Same chain as other assets | mobsfscan findings carry CWEs → `compliance.map` annotates controls like any SAST finding |
 | **Bench** | Headline | `bench/mobile_app` (planted Android/iOS insecure patterns — next addition) |
@@ -316,8 +316,9 @@ The mobile-app team's asset. Single-stage like `repository` (the app bundle / so
 > new sandbox tool. `mobsfscan` already existed as a `repository` escalation
 > (mobile-file finding → mobsfscan); the mobile asset promotes it to an
 > anchor and routes the whole scan around the mobile threat model. Grounded
-> (no in-house detector — §13); the depth tools (apkid, MobSF dynamic) are a
-> documented backlog item, never a silent in-house build.
+> (no in-house detector — §13); apkid (packer/obfuscator/anti-analysis
+> fingerprint) is now wrapped registry-tier; the remaining depth tool (a
+> MobSF dynamic pass) is a documented backlog item, never a silent in-house build.
 
 **Note**: scanning a built binary (APK/IPA) requires decompilation first — today the asset expects an unpacked bundle / source tree at `/workspace`; an automatic `apktool`/`jadx` decompile prepass is the documented next addition.
 
