@@ -195,6 +195,20 @@ RUN CQ_ARCH="$([ "${TARGETARCH}" = "amd64" ] && echo linux64 || echo linux64)" \
     && rm -f /tmp/codeql.tar.gz \
     || echo "codeql fetch failed (non-fatal; codeql escalation will degrade)"
 
+# KICS (deeper IaC SAST, repository registry-tier). Ships per-arch release tarballs that bundle the `kics`
+# binary + its `assets/queries` corpus (a bare `go install` would omit the queries). Non-fatal: a fetch
+# failure degrades the on-demand kics pass, never the build.
+ARG KICS_VERSION=2.1.3
+RUN KX_ARCH="$([ "${TARGETARCH}" = "amd64" ] && echo x64 || echo arm64)" \
+    && mkdir -p /opt/kics \
+    && curl -fL -o /tmp/kics.tar.gz \
+        "https://github.com/Checkmarx/kics/releases/download/v${KICS_VERSION}/kics_${KICS_VERSION}_linux_${KX_ARCH}.tar.gz" \
+    && tar -xzf /tmp/kics.tar.gz -C /opt/kics \
+    && ln -s /opt/kics/kics /usr/local/bin/kics \
+    && rm -f /tmp/kics.tar.gz \
+    || echo "kics fetch failed (non-fatal; kics registry pass will degrade)"
+ENV KICS_QUERIES_PATH=/opt/kics/assets/queries
+
 # syft (SBOM) + hadolint (Dockerfile lint) via release artifacts. syft's
 # install script is anchore's recommended path; hadolint ships per-arch
 # static binaries (Linux-x86_64 / Linux-arm64).
