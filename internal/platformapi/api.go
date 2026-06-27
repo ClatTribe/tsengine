@@ -207,7 +207,6 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
 	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                                                         // continuous config-snapshot drift: prev+cur inventory → change-control findings
 	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                                                       // "search your cloud like a database" — query the inventory + relationships
-	mux.HandleFunc("GET /v1/protect", d.auth(d.handleProtect))                                                                 // runtime-protection posture over ingested RASP/Zen events (/Protect parity)
 	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                                                         // third-party / vendor risk (TPRM) inventory → findings
 	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))                                             // endpoint/device posture (MDM-lite) inventory → findings
 	mux.HandleFunc("GET /v1/posture/sources", d.auth(d.handlePostureView))                                                     // unified vendor/device/cloud-drift posture-source view
