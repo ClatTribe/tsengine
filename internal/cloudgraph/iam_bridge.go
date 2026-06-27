@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/azureiam"
 	"github.com/ClatTribe/tsengine/internal/cloudiam"
 	"github.com/ClatTribe/tsengine/internal/gcpiam"
 )
@@ -74,6 +75,42 @@ func (s *Snapshot) AddGCPPrivescEdges(can map[string]func(permission string) boo
 }
 
 func gcpTechNames(ts []gcpiam.Technique) string {
+	names := make([]string, len(ts))
+	for i, t := range ts {
+		names[i] = t.Name
+	}
+	return strings.Join(names, ",")
+}
+
+// AddAzurePrivescEdges is the Azure twin of AddPrivescEdges / AddGCPPrivescEdges: a per-principal
+// effective-permission predicate (typically wrapping azureiam.Authorize over the principal's
+// hierarchy-inherited role assignments) feeds azureiam.DetectPrivesc, adding a privesc → admin edge for
+// every escalation-capable Azure principal — so privesc chains are discovered symmetrically across
+// AWS+GCP+Azure (§10). The caller (ingest) builds the `can` predicates from the Azure snapshot's RBAC.
+func (s *Snapshot) AddAzurePrivescEdges(can map[string]func(action string) bool) {
+	ids := make([]string, 0, len(can))
+	for id := range can {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var added bool
+	for _, pid := range ids {
+		techs := azureiam.DetectPrivesc(can[pid])
+		if len(techs) == 0 {
+			continue
+		}
+		if !added {
+			if s.Node(AdminID) == nil {
+				s.AddNode(&Node{ID: AdminID, Kind: KindPrincipal, Name: "effective-admin", Privileged: true})
+			}
+			added = true
+		}
+		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: azureTechNames(techs)})
+	}
+}
+
+func azureTechNames(ts []azureiam.Technique) string {
 	names := make([]string, len(ts))
 	for i, t := range ts {
 		names[i] = t.Name
