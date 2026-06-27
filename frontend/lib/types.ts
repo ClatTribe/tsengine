@@ -215,6 +215,30 @@ export interface CoverageSummary {
   scanned_assets: number;
 }
 
+// ProtectStatus — runtime-protection posture over ingested in-app-firewall/RASP (Zen) events.
+export interface ProtectKindCount {
+  kind: string;
+  count: number;
+  blocked: number;
+}
+export interface ProtectEndpointCount {
+  endpoint: string;
+  count: number;
+  blocked: number;
+}
+export interface ProtectStatus {
+  active: boolean;
+  apps: string[];
+  sensors: string[];
+  total_attacks: number;
+  blocked: number;
+  monitor_only: number;
+  block_rate: number;
+  by_attack_kind: ProtectKindCount[] | null;
+  top_endpoints: ProtectEndpointCount[] | null;
+  since?: string;
+}
+
 // Risk register — the vCISO judgment artifact. The engine proposes candidates (Proposed); a named
 // human decides treatment (accept/mitigate/transfer/avoid), recorded with owner + rationale + ledger.
 export interface Risk {
