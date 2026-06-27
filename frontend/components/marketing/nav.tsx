@@ -50,18 +50,16 @@ const TOOLS: Item[] = [
   { href: "/resources", label: "Free resources", desc: "SOC 2 checklist + questionnaire template", icon: BookOpen },
 ];
 
-// Direct top-bar links: the two paths a buyer takes — self-serve (Pricing) and done-for-you
-// (Managed). The "how we deliver to partners" + company pages live under the Company menu below.
-const DIRECT = [
-  { href: "/pricing", label: "Pricing" },
-  { href: "/managed", label: "Managed" },
-];
+// Direct top-bar link: just Pricing. Everything else is either a solution (Solutions menu) or a
+// delivery/company page (Company menu) — the bar stays uncluttered.
+const DIRECT = [{ href: "/pricing", label: "Pricing" }];
 
-// Company menu — about + ways to reach us + the partner/channel delivery model. These are
-// company/delivery pages, NOT solutions (Solutions = what we provide), so they're grouped here
+// Company menu — about + ways to reach us + the two DELIVERY models (managed, MSP channel). These
+// are company/delivery pages, NOT solutions (Solutions = what we provide), so they're grouped here
 // instead of cluttering the top bar.
 const COMPANY: Item[] = [
   { href: "/about", label: "About", desc: "Who we are and why we built this", icon: Building2 },
+  { href: "/managed", label: "Managed service", desc: "We run it for you — done-for-you delivery", icon: UserCheck },
   { href: "/partners", label: "For MSPs & consultancies", desc: "Run TensorShield for your clients", icon: Users },
   { href: "/blog", label: "Blog", desc: "Notes on security, compliance & AI", icon: BookOpen },
   { href: "/demo", label: "Contact us", desc: "Book a demo or talk to the team", icon: Mail },
