@@ -47,6 +47,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudtocode"
+	"github.com/ClatTribe/tsengine/internal/corpus/opencre"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
@@ -323,9 +324,46 @@ func runCorpus(argv []string) error {
 	switch argv[0] {
 	case "refresh":
 		return runCorpusRefresh(argv[1:])
+	case "compliance-provenance":
+		return runComplianceProvenance(argv[1:])
 	default:
-		return fmt.Errorf("unknown corpus subcommand %q (want: refresh)", argv[0])
+		return fmt.Errorf("unknown corpus subcommand %q (want: refresh | compliance-provenance)", argv[0])
 	}
+}
+
+// runComplianceProvenance cross-checks the in-house CWE→control crosswalk against OpenCRE (OWASP's OSS Common
+// Requirement Enumeration) and reports how much of it is OSS-corroborated vs in-house-only — the auditable
+// provenance signal for the compliance audience (§8/§10). Live OpenCRE fetch is out-of-band, like corpus refresh.
+func runComplianceProvenance(argv []string) error {
+	fs := flag.NewFlagSet("corpus compliance-provenance", flag.ContinueOnError)
+	timeout := fs.Duration("timeout", 2*time.Minute, "OpenCRE fetch timeout")
+	asJSON := fs.Bool("json", false, "emit the provenance report as JSON")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+
+	ours := hooks.NewCompliance().MappedCWEs()
+	fmt.Fprintf(os.Stderr, "[corpus] cross-checking %d mapped CWEs against OpenCRE …\n", len(ours))
+	cre, err := opencre.Fetch(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("opencre fetch: %w", err)
+	}
+	rep := opencre.CrossReference(ours, cre)
+	if *asJSON {
+		b, _ := json.MarshalIndent(rep, "", "  ")
+		fmt.Println(string(b))
+		return nil
+	}
+	fmt.Printf("compliance crosswalk provenance (vs OpenCRE):\n")
+	fmt.Printf("  mapped CWEs:      %d\n", rep.TotalMapped)
+	fmt.Printf("  OpenCRE-backed:   %d (%d%%)\n", len(rep.OpenCREBacked), rep.BackedPercent)
+	fmt.Printf("  in-house-only:    %d  (OpenCRE has no CRE nexus for these — honest, not a defect)\n", len(rep.InHouseOnly))
+	if len(rep.InHouseOnly) > 0 {
+		fmt.Printf("  in-house-only set: %s\n", strings.Join(rep.InHouseOnly, " "))
+	}
+	return nil
 }
 
 func runCorpusRefresh(argv []string) error {

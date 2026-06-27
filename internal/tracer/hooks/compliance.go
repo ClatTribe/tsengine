@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -87,6 +88,19 @@ func NewCompliance() *Compliance {
 }
 
 func (*Compliance) Name() string { return "compliance" }
+
+// MappedCWEs returns the sorted set of CWE keys the crosswalk maps (e.g. "CWE-79"). Used by the
+// compliance-provenance auditor to cross-check our in-house crosswalk against an OSS reference (OpenCRE).
+func (h *Compliance) MappedCWEs() []string {
+	out := make([]string, 0, len(h.corpus))
+	for k := range h.corpus {
+		if strings.HasPrefix(k, "CWE-") {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
 
 // ControlsFor returns the distinct, sorted set of controls a framework defines across the whole
 // crosswalk — i.e. the controls this engine can actually assess for that framework (the ones it maps
