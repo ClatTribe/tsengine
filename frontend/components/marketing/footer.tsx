@@ -106,6 +106,18 @@ export function MarketingFooter() {
         </div>
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-faint sm:flex-row">
           <span>© {2026} TensorShield. All rights reserved.</span>
+          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
+            {[
+              { href: "/privacy", label: "Privacy" },
+              { href: "/terms", label: "Terms" },
+              { href: "/dpa", label: "DPA" },
+              { href: "/subprocessors", label: "Subprocessors" },
+            ].map((l) => (
+              <Link key={l.href} href={l.href} className="transition hover:text-ink">
+                {l.label}
+              </Link>
+            ))}
+          </nav>
           <span className="inline-flex items-center gap-1.5">
             <span className="pulse-dot" /> All systems operational
           </span>

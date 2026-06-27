@@ -17,6 +17,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/resources", "/resources/soc2-readiness-checklist", "/resources/security-questionnaire-template",
     // honest competitor-comparison pages
     "/vs-vanta", "/vs-drata", "/vs-sprinto", "/vs-secureframe", "/vs-aikido",
+    // legal
+    "/privacy", "/terms", "/dpa", "/subprocessors",
   ];
   const pages = staticPaths.map((p) => ({
     url: `${SITE_URL}${p}`,
