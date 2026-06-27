@@ -43,6 +43,16 @@ type Issue struct {
 	LiveReason   string `json:"live_reason,omitempty"`
 	Exposed      bool   `json:"exposed,omitempty"`
 	InAttackPath bool   `json:"in_attack_path,omitempty"`
+	// Threat-intel enrichment (the L1.5 threat_intel hook, §7), aggregated across the group's findings so
+	// the triage view shows the patch-priority signals the engine computed: KEV (actively exploited in the
+	// wild — patch now), EPSS (FIRST.org exploit probability 0–1), the worst CVSS base score + its vector
+	// (NVD — attack-vector detail), and whether a public exploit/PoC exists (ExploitDB/Metasploit). All
+	// grounded (§10): set only from a finding's actual ThreatIntel, never asserted. All omitempty.
+	KEV           bool    `json:"kev,omitempty"`
+	EPSS          float64 `json:"epss,omitempty"`
+	CVSS          float64 `json:"cvss,omitempty"`
+	CVSSVector    string  `json:"cvss_vector,omitempty"`
+	PublicExploit bool    `json:"public_exploit,omitempty"`
 }
 
 var cveRe = regexp.MustCompile(`CVE-\d{4}-\d{4,7}`)
@@ -76,6 +86,29 @@ func UnifiedIssues(findings []types.Finding) []Issue {
 			g.Severity = string(f.Severity)
 			if f.Title != "" {
 				g.Title = f.Title
+			}
+		}
+		// Aggregate the L1.5 threat-intel signals across the group (worst-case): KEV/public-exploit if ANY
+		// finding has it; the max EPSS + max CVSS (carrying that finding's vector). Grounded — only from real
+		// ThreatIntel.
+		if ti := f.ThreatIntel; ti != nil {
+			if ti.KEV != nil && ti.KEV.Listed {
+				g.KEV = true
+			}
+			if ti.EPSS != nil && ti.EPSS.Score > g.EPSS {
+				g.EPSS = ti.EPSS.Score
+			}
+			if ti.CVSS > g.CVSS {
+				g.CVSS = ti.CVSS
+				if ti.CVSSVector != "" {
+					g.CVSSVector = ti.CVSSVector
+				}
+			}
+			if g.CVSSVector == "" && ti.CVSSVector != "" {
+				g.CVSSVector = ti.CVSSVector
+			}
+			if len(ti.Exploits) > 0 {
+				g.PublicExploit = true
 			}
 		}
 	}
