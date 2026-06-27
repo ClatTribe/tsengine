@@ -167,12 +167,12 @@ NOT escalation — they fan out / anchor every scan.
 
 | Layer | Element | Detail |
 |---|---|---|
-| **Anchor tier** | SAST (pattern-match) | semgrep (lang-aware packs — `p/java`+`p/findsecbugs`+`p/cwe-top-25` for Java, `p/python` for Python, `p/javascript`+`p/nodejsscan` for JS, etc.), bandit (Python), mobsfscan (Android/iOS) |
+| **Anchor tier** | SAST (pattern-match) | semgrep (lang-aware packs — `p/java`+`p/findsecbugs`+`p/cwe-top-25` for Java, `p/python` for Python, `p/javascript`+`p/nodejsscan` for JS, etc.); mobsfscan (Android/iOS) fires as a mobile-file escalation. Deep per-language SAST (gosec/bandit) is registry-tier (below) |
 | | SCA (lockfiles) | trivy fs, grype, osv-scanner |
 | | Secrets | gitleaks, trufflehog |
 | | IaC / Dockerfiles | checkov, hadolint, tfsec |
 | | SBOM | syft |
-| **Registry tier** | (on-demand) | **wrapped:** govulncheck (Go reachability), gosec (`internal/tool/gosec` — Go-specific security SAST: weak crypto, hardcoded creds, SQL string-building, unhandled security errors); **planned:** CodeQL (taint-flow SAST — biggest depth gain), brakeman, staticcheck, snyk-code (free CLI), kics, terrascan |
+| **Registry tier** | (on-demand) | **wrapped:** govulncheck (Go reachability), gosec (`internal/tool/gosec` — Go security SAST: weak crypto, hardcoded creds, SQL string-building, unhandled security errors), bandit (`internal/tool/bandit` — Python security SAST: shell-injection, unsafe deserialization, hardcoded passwords, weak crypto), codeql, hadolint (Dockerfile lint); **planned:** brakeman, staticcheck, snyk-code (free CLI), kics, terrascan |
 | **L1 filtration** | Language detection | semgrep packs chosen per language |
 | | File-tree filter | Skip `node_modules/`, `vendor/`, `.git/`, `__pycache__/`, `dist/`, `build/`, `*.min.js`, binaries > 5MB |
 | **L2 catalog** | Specialists | build_code_map, terminal_execute; rest of catalog same as web |

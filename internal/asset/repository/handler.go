@@ -114,5 +114,8 @@ var registryNames = []string{
 	// gosec — Go-specific security SAST (weak crypto, hardcoded creds, SQL string-building,
 	// unhandled security errors) — complements semgrep's generic packs with Go-idiomatic rules.
 	"gosec",
+	// bandit — Python-specific security SAST (shell-injection, unsafe deserialization,
+	// hardcoded passwords, weak crypto) — complements semgrep's generic python packs.
+	"bandit",
 	// Phase 3.x: CodeQL, brakeman, staticcheck, snyk-code, kics, terrascan
 }
