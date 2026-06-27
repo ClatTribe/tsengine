@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
   AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen, ShieldCheck,
-  Cloud, KeyRound, UserCheck, ArrowRight, Shield,
+  Cloud, KeyRound, UserCheck, ArrowRight,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -33,7 +33,6 @@ const SECURITY: Item[] = [
   { href: "/cloud-security", label: "Cloud security", desc: "CSPM, attack paths & drift across AWS/GCP/Azure", icon: Cloud },
   { href: "/supply-chain", label: "Code & supply chain", desc: "SAST, deps, SBOM, malware, secrets", icon: Boxes },
   { href: "/identity", label: "Identity & SaaS posture", desc: "MFA, OAuth grants, stale access, SSPM", icon: KeyRound },
-  { href: "/protect", label: "Runtime protection", desc: "Block attacks in production — built on OSS Zen", icon: Shield },
   { href: "/agent-controls", label: "AI agent controls", desc: "Kill-switch, isolation, human gate, signed log", icon: ShieldCheck },
 ];
 const COMPLIANCE: Item[] = [
