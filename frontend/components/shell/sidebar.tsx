@@ -23,6 +23,7 @@ import {
   Scale,
   History,
   Radar,
+  Building2,
   ChevronDown,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
@@ -52,6 +53,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
       { href: "/cloud-engineer", label: "Cloud engineer", icon: Cloud },
       { href: "/attack-paths", label: "Attack paths", icon: Spline },
       { href: "/osint", label: "External exposure", icon: Radar },
+      { href: "/posture", label: "Asset posture", icon: Building2 },
       { href: "/incidents", label: "Incidents", icon: Activity },
     ],
   },

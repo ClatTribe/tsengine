@@ -126,6 +126,13 @@ export const api = {
       { total: 0, summary: [], findings: [] },
     ),
 
+  // Unified vendor/device/cloud-drift posture sources — the asset-class posture findings as first-class groups.
+  postureSources: () =>
+    safe<{
+      total: number;
+      sources: { key: string; label: string; about: string; count: number; severity: Record<string, number>; findings: Finding[] }[];
+    }>("/v1/posture/sources", { total: 0, sources: [] }),
+
   // Run a LIVE keyless OSINT scan (Certificate Transparency / crt.sh) over the tenant's domains.
   osintScan: () =>
     call<{ source: string; domains_scanned: number; hosts_discovered: number; findings_detected: number; assets_pivoted: number }>(
