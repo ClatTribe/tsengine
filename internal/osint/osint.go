@@ -34,6 +34,23 @@ type Snapshot struct {
 	Advisories       []Advisory        `json:"advisories"`        // a security advisory relevant to the org's stack/sector
 	StealerLogs      []StealerLog      `json:"stealer_logs"`      // dark-web: a corporate credential harvested by infostealer malware
 	DanglingRecords  []DanglingDNS     `json:"dangling_records"`  // a dangling DNS record pointing at a deprovisioned service → subdomain-takeover
+	Certificates     []CertObservation `json:"certificates"`      // CT-log certs observed for the org's domains (issuer + expiry monitoring)
+	// ExpectedCertIssuers is the org's known CAs; a CT-log cert from another CA is unexpected (mis-issuance
+	// / phishing prep). Empty → the unexpected-issuer check is skipped (we can't ground "unexpected", §10).
+	ExpectedCertIssuers []string `json:"expected_cert_issuers,omitempty"`
+}
+
+// CertObservation is a TLS certificate seen for the org's domain in Certificate Transparency logs (or by an
+// active probe). Two grounded posture signals ride it: an UNEXPECTED issuer (a cert from a CA the org doesn't
+// use → possible mis-issuance / phishing-prep, the SSLMate-CertSpotter / Facebook-CT-monitor signal) and an
+// EXPIRED/EXPIRING currently-served cert. CT logs include historical certs, so expiry only fires when Served.
+type CertObservation struct {
+	Domain     string `json:"domain"` // the (sub)domain the cert covers
+	CommonName string `json:"common_name,omitempty"`
+	Issuer     string `json:"issuer"`              // the issuing CA (crt.sh issuer_name)
+	NotAfter   string `json:"not_after,omitempty"` // expiry, RFC3339 or "2006-01-02"
+	Served     bool   `json:"served,omitempty"`    // this cert is the one currently served (gates the expiry check vs CT history)
+	Source     string `json:"source,omitempty"`    // crt.sh / certspotter / tls-probe / …
 }
 
 // DanglingDNS is a subdomain whose DNS record points at a third-party service that is no longer
@@ -139,6 +156,7 @@ func Assess(s Snapshot, opts Options) []types.Finding {
 	out = append(out, assessLeaks(s, now, id)...)
 	out = append(out, assessExposedHosts(s, now, id)...)
 	out = append(out, assessSubdomainTakeovers(s, now, id)...)
+	out = append(out, assessCertPosture(s, now, id)...)
 	out = append(out, assessTyposquats(s, now, id)...)
 	out = append(out, assessExposures(s, now, id)...)
 	out = append(out, assessAdvisories(s, now, id)...)
@@ -277,6 +295,78 @@ func assessSubdomainTakeovers(s Snapshot, now time.Time, id func() string) []typ
 				CISv8: []string{"1.1", "7.1"}, NISTCSF: []string{"ID.AM-01", "PR.DS-2", "DE.CM-08"}, NIST80053: []string{"CM-8", "SC-7"}}))
 	}
 	return out
+}
+
+// Certificate posture from CT-log monitoring — the EASM cert-monitoring signal (SSLMate CertSpotter /
+// Facebook CT monitor). Two grounded findings: an UNEXPECTED-issuer cert (a CA the org doesn't use issued a
+// cert for its domain → mis-issuance / phishing prep) and an EXPIRED/EXPIRING currently-served cert.
+func assessCertPosture(s Snapshot, now time.Time, id func() string) []types.Finding {
+	expected := map[string]bool{}
+	for _, ca := range s.ExpectedCertIssuers {
+		if ca = strings.ToLower(strings.TrimSpace(ca)); ca != "" {
+			expected[ca] = true
+		}
+	}
+	var out []types.Finding
+	for _, c := range s.Certificates {
+		dom := strings.TrimSpace(nz(c.Domain, c.CommonName))
+		if dom == "" {
+			continue
+		}
+		comp := types.Compliance{SOC2: []string{"CC6.1", "CC6.7"}, PCI: []string{"4.2.1"}, GDPR: []string{"Art. 32"},
+			CISv8: []string{"3.10"}, NISTCSF: []string{"PR.DS-2"}, NIST80053: []string{"SC-8", "SC-12", "SC-13"}}
+
+		// Unexpected issuer — only groundable when the org supplied its expected CAs (§10).
+		if len(expected) > 0 && strings.TrimSpace(c.Issuer) != "" && !issuerExpected(c.Issuer, expected) {
+			out = append(out, finding(id(), "osint::cert-unexpected-issuer", types.SeverityHigh,
+				fmt.Sprintf("Certificate for %s issued by an unexpected CA (%s)", dom, c.Issuer), dom,
+				fmt.Sprintf("A Certificate Transparency log shows a cert for %s issued by %q, which is not one of your known CAs — a possible mis-issuance or phishing/MITM cert. Verify you requested it; if not, report it to the CA for revocation and review domain control.", dom, c.Issuer),
+				now, []string{"CWE-295"}, []string{"T1588.004", "T1557"}, src(c.Source), comp))
+		}
+
+		// Expiry — only for the currently-served cert (CT logs include historical certs), and only when the
+		// date parses (never guessed).
+		if c.Served && strings.TrimSpace(c.NotAfter) != "" {
+			if exp, ok := parseCertDate(c.NotAfter); ok {
+				switch {
+				case exp.Before(now):
+					out = append(out, finding(id(), "osint::cert-expired", types.SeverityHigh,
+						fmt.Sprintf("Expired TLS certificate served on %s", dom), dom,
+						fmt.Sprintf("The certificate served on %s expired on %s — browsers will hard-fail TLS, and an expired cert can mask interception. Renew immediately.", dom, exp.Format("2006-01-02")),
+						now, []string{"CWE-298", "CWE-324"}, []string{"T1190"}, src(c.Source), comp))
+				case exp.Before(now.AddDate(0, 0, 21)):
+					out = append(out, finding(id(), "osint::cert-expiring", types.SeverityMedium,
+						fmt.Sprintf("TLS certificate expiring soon on %s", dom), dom,
+						fmt.Sprintf("The certificate served on %s expires on %s (within 21 days). Renew/automate renewal to avoid an outage.", dom, exp.Format("2006-01-02")),
+						now, []string{"CWE-298"}, []string{"T1190"}, src(c.Source), comp))
+				}
+			}
+		}
+	}
+	return out
+}
+
+// issuerExpected reports whether a cert's issuer string matches any of the org's expected CAs (substring,
+// case-insensitive — crt.sh issuer strings are verbose DNs, so "Let's Encrypt" matches "C=US, O=Let's Encrypt…").
+func issuerExpected(issuer string, expected map[string]bool) bool {
+	il := strings.ToLower(issuer)
+	for ca := range expected {
+		if strings.Contains(il, ca) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseCertDate accepts the common CT/cert date encodings; returns ok=false if none parse (never guesses).
+func parseCertDate(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), true
+		}
+	}
+	return time.Time{}, false
 }
 
 // Typosquat / phishing domains — registered look-alikes of the org's brand. Mail-capable ones are
