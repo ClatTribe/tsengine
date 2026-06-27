@@ -174,6 +174,17 @@ export default async function CompliancePage() {
           </div>
         </section>
       ))}
+
+      <p className="text-[11px] leading-relaxed text-faint">
+        <span className="font-medium text-muted">How control mappings are derived.</span> Each finding maps to a
+        framework control only where a real control nexus exists (never assumed) — the crosswalk is curated in‑house
+        from the published framework standards (NIST 800‑53, PCI‑DSS, ISO 27001, …), the same way the leading GRC
+        platforms maintain theirs. The mappings are additionally cross‑referenceable against{" "}
+        <span className="font-medium text-muted">OpenCRE</span> (OWASP&apos;s open Common Requirement Enumeration);
+        run <code className="mono rounded bg-surface-2 px-1 py-0.5 text-[10px]">tsengine corpus compliance-provenance</code>{" "}
+        for the OSS‑corroborated vs in‑house‑only split. Threat‑intel feeds (CISA KEV, FIRST.org EPSS, Exploit‑DB) are
+        sourced live from OSS, pinned per scan.
+      </p>
     </div>
   );
 }
