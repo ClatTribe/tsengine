@@ -47,7 +47,9 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudtocode"
+	"github.com/ClatTribe/tsengine/internal/corpus/controlxref"
 	"github.com/ClatTribe/tsengine/internal/corpus/opencre"
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
@@ -338,30 +340,81 @@ func runComplianceProvenance(argv []string) error {
 	fs := flag.NewFlagSet("corpus compliance-provenance", flag.ContinueOnError)
 	timeout := fs.Duration("timeout", 2*time.Minute, "OpenCRE fetch timeout")
 	asJSON := fs.Bool("json", false, "emit the provenance report as JSON")
+	scfFile := fs.String("scf", "", "path to a Secure Controls Framework (SCF) cross-mapping CSV export")
+	ccmFile := fs.String("ccm", "", "path to a CSA Cloud Controls Matrix (CCM) cross-mapping CSV export")
+	noOpenCRE := fs.Bool("no-opencre", false, "skip the live OpenCRE (CWE-level) cross-check")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	ours := hooks.NewCompliance().MappedCWEs()
-	fmt.Fprintf(os.Stderr, "[corpus] cross-checking %d mapped CWEs against OpenCRE …\n", len(ours))
-	cre, err := opencre.Fetch(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("opencre fetch: %w", err)
+	comp := hooks.NewCompliance()
+
+	// --- OpenCRE: CWE-level cross-reference (live OWASP OSS API) ---
+	var creRep *opencre.ProvenanceReport
+	if !*noOpenCRE {
+		cwes := comp.MappedCWEs()
+		fmt.Fprintf(os.Stderr, "[corpus] cross-checking %d mapped CWEs against OpenCRE …\n", len(cwes))
+		if cre, err := opencre.Fetch(ctx, nil); err == nil {
+			r := opencre.CrossReference(cwes, cre)
+			creRep = &r
+		} else {
+			fmt.Fprintf(os.Stderr, "[corpus] OpenCRE fetch failed (%v) — skipping the CWE-level check\n", err)
+		}
 	}
-	rep := opencre.CrossReference(ours, cre)
+
+	// --- SCF / CCM: control↔framework cross-reference (operator-provided CC-licensed exports) ---
+	// Our crosswalk's control IDs per framework — the SCF/CCM check corroborates these (the SOC2/HIPAA/GDPR
+	// coverage OpenCRE lacks).
+	ours := map[string][]string{}
+	for _, fw := range grc.Frameworks {
+		if c := comp.ControlsFor(fw); len(c) > 0 {
+			ours[fw] = c
+		}
+	}
+	var ctrlReps []controlxref.Report
+	for _, src := range []struct {
+		path string
+		cfg  controlxref.Source
+	}{{*scfFile, controlxref.SCF}, {*ccmFile, controlxref.CCM}} {
+		if src.path == "" {
+			continue
+		}
+		f, err := os.Open(src.path) //nolint:gosec // operator-provided path
+		if err != nil {
+			return fmt.Errorf("open %s export: %w", src.cfg.Name, err)
+		}
+		m, perr := controlxref.Parse(f, src.cfg)
+		_ = f.Close()
+		if perr != nil {
+			return fmt.Errorf("parse %s export: %w", src.cfg.Name, perr)
+		}
+		ctrlReps = append(ctrlReps, controlxref.CrossReference(src.cfg.Name, ours, m))
+	}
+
 	if *asJSON {
-		b, _ := json.MarshalIndent(rep, "", "  ")
+		b, _ := json.MarshalIndent(map[string]any{"opencre": creRep, "control_xref": ctrlReps}, "", "  ")
 		fmt.Println(string(b))
 		return nil
 	}
-	fmt.Printf("compliance crosswalk provenance (vs OpenCRE):\n")
-	fmt.Printf("  mapped CWEs:      %d\n", rep.TotalMapped)
-	fmt.Printf("  OpenCRE-backed:   %d (%d%%)\n", len(rep.OpenCREBacked), rep.BackedPercent)
-	fmt.Printf("  in-house-only:    %d  (OpenCRE has no CRE nexus for these — honest, not a defect)\n", len(rep.InHouseOnly))
-	if len(rep.InHouseOnly) > 0 {
-		fmt.Printf("  in-house-only set: %s\n", strings.Join(rep.InHouseOnly, " "))
+
+	fmt.Printf("compliance crosswalk provenance\n")
+	if creRep != nil {
+		fmt.Printf("\nvs OpenCRE (CWE-level, OWASP OSS):\n")
+		fmt.Printf("  mapped CWEs:    %d\n", creRep.TotalMapped)
+		fmt.Printf("  OpenCRE-backed: %d (%d%%)\n", len(creRep.OpenCREBacked), creRep.BackedPercent)
+		fmt.Printf("  in-house-only:  %d  (OpenCRE doesn't cover SOC2/HIPAA/GDPR — see SCF/CCM below)\n", len(creRep.InHouseOnly))
+	}
+	for _, cr := range ctrlReps {
+		fmt.Printf("\nvs %s (control↔framework):\n", cr.Source)
+		fmt.Printf("  mapped controls: %d · corroborated: %d (%d%%)\n", cr.TotalControls, cr.Corroborated, cr.Percent)
+		for _, fc := range cr.Frameworks {
+			fmt.Printf("    %-14s %d/%d corroborated\n", fc.Framework, fc.Corroborated, fc.Mapped)
+		}
+	}
+	if creRep == nil && len(ctrlReps) == 0 {
+		fmt.Printf("  (nothing checked — pass --scf <file> and/or --ccm <file>, or allow the OpenCRE fetch)\n")
 	}
 	return nil
 }
