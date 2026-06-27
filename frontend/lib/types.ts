@@ -173,7 +173,29 @@ export interface Action {
   status: string;
   title?: string;
   payload?: Record<string, unknown>;
+  finding_keys?: string[];
+  verification?: FixVerification; // set once an applied fix is re-tested (KF#4)
   created_at?: string;
+}
+
+// FixVerification — did an applied remediation actually close the finding? "fixed" only when the
+// vuln is provably gone from a fresh scan; "still_present" when the fix didn't work (reopen).
+export interface FixVerification {
+  status: "fixed" | "still_present";
+  method: string;
+  verified_at: string;
+  fixed?: string[];
+  still_present?: string[];
+  evidence?: string;
+}
+
+// ActionsView — the action list + a fix-verification roll-up ("we confirm fixes, not just propose them").
+export interface ActionsView {
+  actions: Action[];
+  applied: number;
+  verified: number;
+  confirmed_fix: number;
+  still_present: number;
 }
 
 // Risk register — the vCISO judgment artifact. The engine proposes candidates (Proposed); a named
