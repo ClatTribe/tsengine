@@ -75,6 +75,14 @@ const (
 	// (runs_as) role → (has_access) sensitive data" is now a discoverable chain. Config-possible like
 	// every edge: the ingest source emits it only where the integration/event-source is actually wired.
 	EdgeTriggers EdgeKind = "triggers"
+	// EdgeSecretAccess is a credential-reuse / lateral-movement toxic combination: src (a principal or a
+	// compute's runs_as principal) can READ a secret whose stored material is a long-lived credential for
+	// dst (a more-privileged principal). So compromising src → reading the secret → authenticating as dst.
+	// It closes the gap where the graph saw "principal can read secret S" (has_access) but not that S
+	// HANDS the reader another identity's keys — the classic Wiz/Orca "secret holds privileged creds"
+	// finding. Grounded like every edge: the ingest emits it ONLY where the secret is both readable by src
+	// AND confirmed to hold dst's credential (never guessed from a name). `Detail` names the secret.
+	EdgeSecretAccess EdgeKind = "secret_access"
 )
 
 // Edge is a directed relationship from→to of a given kind. Condition records a

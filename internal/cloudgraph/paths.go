@@ -107,5 +107,5 @@ func PrivilegedIdentity(n *Node) bool { return n != nil && n.Privileged }
 var AllAttackEdges = map[EdgeKind]bool{
 	EdgeAssumeRole: true, EdgePassRole: true, EdgeHasAccess: true,
 	EdgeNetworkReach: true, EdgeRunsAs: true, EdgePrivesc: true,
-	EdgeTriggers: true,
+	EdgeTriggers: true, EdgeSecretAccess: true,
 }
