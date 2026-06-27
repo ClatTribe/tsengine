@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/cloudiam"
+	"github.com/ClatTribe/tsengine/internal/gcpiam"
 )
 
 // AdminID is the synthetic "effective admin" node. A principal that can run a
@@ -42,6 +43,42 @@ func (s *Snapshot) AddPrivescEdges(policies map[string][]*cloudiam.Document) {
 		}
 		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: techNames(techs)})
 	}
+}
+
+// AddGCPPrivescEdges is the GCP twin of AddPrivescEdges: a per-principal effective-permission predicate
+// (typically wrapping gcpiam.Authorize over the principal's hierarchy-inherited bindings) feeds
+// gcpiam.DetectPrivesc, adding a privesc → admin edge for every escalation-capable GCP principal. So
+// "internet → … → gcp-principal → privesc → admin" chains are discovered symmetrically with AWS (§10).
+// The caller (ingest) builds the `can` predicates from the GCP snapshot's IAM bindings.
+func (s *Snapshot) AddGCPPrivescEdges(can map[string]func(permission string) bool) {
+	ids := make([]string, 0, len(can))
+	for id := range can {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var added bool
+	for _, pid := range ids {
+		techs := gcpiam.DetectPrivesc(can[pid])
+		if len(techs) == 0 {
+			continue
+		}
+		if !added {
+			if s.Node(AdminID) == nil {
+				s.AddNode(&Node{ID: AdminID, Kind: KindPrincipal, Name: "effective-admin", Privileged: true})
+			}
+			added = true
+		}
+		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: gcpTechNames(techs)})
+	}
+}
+
+func gcpTechNames(ts []gcpiam.Technique) string {
+	names := make([]string, len(ts))
+	for i, t := range ts {
+		names[i] = t.Name
+	}
+	return strings.Join(names, ",")
 }
 
 // HasAccess answers resolve_access for an (principal, action, resource): does the
