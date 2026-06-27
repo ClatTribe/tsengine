@@ -62,6 +62,13 @@ var serviceMinSafe = map[string]minSafe{
 	"dovecot":       {"2.3", "Dovecot before 2.3 is past mainstream support and has known IMAP/POP3 CVEs"},
 	"squid":         {"6.0", "Squid before 6.0 (5.x EOL) has many request-smuggling / overflow CVEs"},
 	"php":           {"8.1", "PHP before 8.1 is end-of-life (7.x and 8.0 receive no security fixes)"},
+	// More commonly internet-exposed services that are high-impact when outdated.
+	"samba":    {"4.18", "Samba before 4.18 is past support and carries the SMB RCE/auth-bypass CVE family (e.g. ZeroLogon-adjacent, CVE-2021-44142)"},
+	"smbd":     {"4.18", "Samba (smbd) before 4.18 is past support and carries the SMB RCE/auth-bypass CVE family"},
+	"haproxy":  {"2.6", "HAProxy before 2.6 (an LTS) has known request-smuggling CVEs (e.g. CVE-2023-25725)"},
+	"lighttpd": {"1.4.76", "lighttpd before 1.4.76 has known DoS / info-disclosure CVEs"},
+	"couchdb":  {"3.3", "Apache CouchDB before 3.3 has a remote-code-execution CVE (CVE-2022-24706) and is dangerous when internet-exposed"},
+	"rabbitmq": {"3.12", "RabbitMQ before 3.12 is past support and has known auth/DoS CVEs; an exposed broker is a lateral-movement path"},
 }
 
 // Apply flags + bumps an outdated service. Annotation-only otherwise.
