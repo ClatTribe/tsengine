@@ -6,7 +6,6 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
     title: "Product",
     links: [
       { href: "/product", label: "How it works" },
-      { href: "/vs-consulting", label: "vs. a consultant" },
       { href: "/cross-detection", label: "Unified platform" },
       { href: "/ai-security-engineer", label: "AI security engineer" },
       { href: "/ai-pentest", label: "AI pentesting" },
@@ -51,7 +50,6 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/soc2-readiness", label: "SOC 2 self-assessment" },
       { href: "/resources", label: "Free resources" },
       { href: "/sample-report", label: "Sample report" },
-      { href: "/blog", label: "Blog" },
     ],
   },
   {
@@ -60,15 +58,9 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/about", label: "About" },
       { href: "/managed", label: "Managed service" },
       { href: "/partners", label: "For MSPs & consultancies" },
+      { href: "/blog", label: "Blog" },
       { href: "/demo", label: "Book a demo" },
       { href: "/login", label: "Sign in" },
-    ],
-  },
-  {
-    title: "Trust",
-    links: [
-      { href: "/security", label: "SOC 2 · ISO 27001" },
-      { href: "/security", label: "Signed evidence" },
     ],
   },
 ];
@@ -77,7 +69,7 @@ export function MarketingFooter() {
   return (
     <footer className="border-t border-border bg-surface">
       <div className="mx-auto max-w-6xl px-5 py-14">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-6">
           <div>
             <Link href="/" className="flex items-center gap-2.5">
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
