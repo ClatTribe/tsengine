@@ -145,6 +145,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                      // PUBLIC: book-a-demo / talk-to-sales lead capture
 	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                        // PUBLIC: embeddable SVG grade badge (viral loop)
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
+	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions)) // all remediations + fix-verification status
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident))              // human takes ownership → stops timed auto-escalation
 	mux.HandleFunc("GET /v1/risks", d.auth(d.handleListRisks))                              // risk register (vCISO artifact) + board summary
@@ -200,9 +201,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
 	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                                                         // continuous config-snapshot drift: prev+cur inventory → change-control findings
-	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                                                          // third-party / vendor risk (TPRM) inventory → findings
-	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))                                                 // endpoint/device posture (MDM-lite) inventory → findings
-	mux.HandleFunc("GET /v1/posture/sources", d.auth(d.handlePostureView))                                                        // unified vendor/device/cloud-drift posture-source view
+	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                                                         // third-party / vendor risk (TPRM) inventory → findings
+	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))                                             // endpoint/device posture (MDM-lite) inventory → findings
+	mux.HandleFunc("GET /v1/posture/sources", d.auth(d.handlePostureView))                                                     // unified vendor/device/cloud-drift posture-source view
 	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))                                                // list runtime-protection events
 	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                                                          // create + authorize a pentest engagement
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                                                            // list engagements
@@ -432,6 +433,45 @@ func (d Deps) handleAssets(w http.ResponseWriter, r *http.Request, tenantID stri
 func (d Deps) handleApprovals(w http.ResponseWriter, r *http.Request, tenantID string) {
 	a, err := d.Store.PendingApprovals(r.Context(), tenantID)
 	respond(w, a, err)
+}
+
+// actionsView wraps the action list with a fix-verification roll-up — the KF#4 answer surfaced as a
+// single number ("we don't just fix, we confirm the fix worked"). Grounded: rates are computed only
+// over APPLIED actions that carry finding keys (the verifiable set), never inflated by un-verifiable ones.
+type actionsView struct {
+	Actions      []platform.Action `json:"actions"`
+	Applied      int               `json:"applied"`       // applied actions that are verifiable (carry finding keys)
+	Verified     int               `json:"verified"`      // re-tested at least once
+	ConfirmedFix int               `json:"confirmed_fix"` // re-test proved the fix closed the finding(s)
+	StillPresent int               `json:"still_present"` // re-test showed the fix did NOT close it (reopen)
+}
+
+// handleActions returns ALL the tenant's remediation actions with their fix-verification state —
+// the durable answer to "did the fix actually work?" (KF#4: most teams never retest a fix).
+func (d Deps) handleActions(w http.ResponseWriter, r *http.Request, tenantID string) {
+	acts, err := d.Store.ListActions(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	v := actionsView{Actions: acts}
+	for _, a := range acts {
+		if a.Status != platform.ActApplied || len(a.FindingKeys) == 0 {
+			continue
+		}
+		v.Applied++
+		if a.Verification == nil {
+			continue
+		}
+		v.Verified++
+		switch a.Verification.Status {
+		case "fixed":
+			v.ConfirmedFix++
+		case "still_present":
+			v.StillPresent++
+		}
+	}
+	respond(w, v, nil)
 }
 
 // handleApps returns the tenant's third-party OAuth app inventory (the SaaS/app

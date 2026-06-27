@@ -228,6 +228,10 @@ func (s *SQLite) PendingApprovals(ctx context.Context, tenantID string) ([]platf
 	return out, nil
 }
 
+func (s *SQLite) ListActions(ctx context.Context, tenantID string) ([]platform.Action, error) {
+	return listJSON[platform.Action](ctx, s.db, `SELECT data FROM actions WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
 func (s *SQLite) PutIncident(ctx context.Context, i platform.Incident) error {
 	return s.upsertTID(ctx, `INSERT INTO incidents(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, i.TenantID, i.ID, i)
 }

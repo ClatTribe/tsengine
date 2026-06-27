@@ -132,6 +132,10 @@ func TestStoreConformance(t *testing.T) {
 				orFail(t, err)
 				isolated("approvals", tid, ids(appr, func(a platform.Action) string { return a.ID }))
 
+				allActs, err := s.ListActions(ctx, tid)
+				orFail(t, err)
+				isolated("actions", tid, ids(allActs, func(a platform.Action) string { return a.ID }))
+
 				post, err := s.Posture(ctx, tid, "soc2")
 				orFail(t, err)
 				if len(post) != 1 || post[0].TenantID != tid {

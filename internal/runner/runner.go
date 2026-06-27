@@ -21,6 +21,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/osint"
+	"github.com/ClatTribe/tsengine/internal/retest"
 	"github.com/ClatTribe/tsengine/internal/sspm"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -226,6 +227,17 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
+		// Fix-verification (KF#4 — "60% don't retest after fixes"): re-test every APPLIED
+		// remediation against this pass's authoritative findings. A fix is confirmed "fixed" only
+		// when its finding keys are absent (grounded §10); still-present means the fix didn't close
+		// it. Best-effort — a store error never aborts the pass; the verdict rides on the action.
+		if acts, lerr := s.Store.ListActions(ctx, tenantID); lerr == nil {
+			for _, verified := range retest.Verify(acts, current, s.now()) {
+				if perr := s.Store.PutAction(ctx, verified); perr != nil && firstErr == nil {
+					firstErr = perr
+				}
+			}
+		}
 		// A-RSP "respond" half: for each NEWLY-OPENED incident, the agent prepares a
 		// response. A critical incident yields a T3 breach-disclosure DRAFT that queues for
 		// a human signature (it can never auto-apply). Best-effort + optional — omit the
@@ -424,7 +436,7 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 	// Propose (skipped in processFinding when ProposeBatch is set).
 	if s.ProposeBatch != nil && s.Desk != nil {
 		for _, act := range s.ProposeBatch(findings, a) {
-			if _, err := s.Desk.Submit(ctx, act); err != nil {
+			if _, err := s.Desk.Submit(ctx, stampFindingKeys(act, findings)); err != nil {
 				return nil, nil, fmt.Errorf("runner: desk submit (bulk): %w", err)
 			}
 		}
@@ -450,10 +462,25 @@ func (s *Service) processFinding(ctx context.Context, a platform.Asset, f types.
 	if s.ProposeBatch == nil && s.Propose != nil && s.Desk != nil {
 		act, ok := s.Propose(f, a)
 		if ok {
-			if _, err := s.Desk.Submit(ctx, act); err != nil {
+			if _, err := s.Desk.Submit(ctx, stampFindingKeys(act, []types.Finding{f})); err != nil {
 				return fmt.Errorf("runner: desk submit: %w", err)
 			}
 		}
 	}
 	return nil
+}
+
+// stampFindingKeys captures the STABLE finding keys (rule_id|endpoint) of the findings a proposed
+// action resolves, so the fix can be re-tested after it's applied (retest.Verify). Single-finding
+// actions carry FindingID; bulk actions carry FindingIDs — both are resolved against the findings
+// in hand at propose time. A no-op when none resolve (the action stays un-verifiable, never guessed).
+func stampFindingKeys(act platform.Action, findings []types.Finding) platform.Action {
+	ids := act.FindingIDs
+	if len(ids) == 0 && act.FindingID != "" {
+		ids = []string{act.FindingID}
+	}
+	if keys := retest.KeysForIDs(ids, findings); len(keys) > 0 {
+		act.FindingKeys = keys
+	}
+	return act
 }

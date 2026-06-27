@@ -485,8 +485,28 @@ type Action struct {
 	Payload      map[string]any `json:"payload,omitempty"`
 	Approver     string         `json:"approver,omitempty"`
 	LedgerRef    string         `json:"ledger_ref,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
-	DecidedAt    time.Time      `json:"decided_at,omitempty"`
+	// FindingKeys are the STABLE identities (rule_id|endpoint) of the findings this action
+	// resolves — captured at propose time so the fix can be re-tested after it's applied. Stable
+	// across scans (finding IDs are regenerated per scan; keys are not). Drives FixVerification.
+	FindingKeys  []string         `json:"finding_keys,omitempty"`
+	Verification *FixVerification `json:"verification,omitempty"` // set once the applied fix is re-tested
+	CreatedAt    time.Time        `json:"created_at"`
+	DecidedAt    time.Time        `json:"decided_at,omitempty"`
+}
+
+// FixVerification records whether an APPLIED remediation actually closed the findings it claimed
+// to fix — the answer to KF#4 ("60% don't retest after fixes; a fix that isn't verified is a fix
+// taken on trust"). It is produced by re-testing the action's finding keys against a fresh,
+// authoritative scan. Grounded (§10): a fix is "fixed" ONLY when every key it claimed to resolve
+// is provably absent from the current scan; "still_present" when any remain (the fix didn't work
+// — reopen). Never assumed — an action with no finding keys is simply left un-verified.
+type FixVerification struct {
+	Status       string    `json:"status"` // "fixed" | "still_present"
+	Method       string    `json:"method"` // "rescan" — re-ran detection and compared keys
+	VerifiedAt   time.Time `json:"verified_at"`
+	Fixed        []string  `json:"fixed,omitempty"`         // finding keys confirmed gone from the fresh scan
+	StillPresent []string  `json:"still_present,omitempty"` // finding keys STILL found (the fix did not close them)
+	Evidence     string    `json:"evidence,omitempty"`      // human-readable, e.g. "3 of 3 confirmed fixed in re-scan"
 }
 
 // GateTier is the autonomy tier at/above which an Action must be human-approved

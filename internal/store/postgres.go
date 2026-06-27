@@ -207,6 +207,9 @@ func (p *Postgres) PendingApprovals(ctx context.Context, tenantID string) ([]pla
 	}
 	return out, nil
 }
+func (p *Postgres) ListActions(ctx context.Context, tenantID string) ([]platform.Action, error) {
+	return listJSON[platform.Action](ctx, p.db, pgRebind(`SELECT data FROM actions WHERE tenant_id=? ORDER BY rowid`), tenantID)
+}
 
 func (p *Postgres) PutIncident(ctx context.Context, i platform.Incident) error {
 	return p.upsertTID(ctx, `INSERT INTO incidents(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, i.TenantID, i.ID, i)
