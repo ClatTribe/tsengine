@@ -121,10 +121,50 @@ func (d Deps) handleOSINTScan(w http.ResponseWriter, r *http.Request, tenantID s
 		return io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	}
 	snap := osint.CollectCT(r.Context(), tenantID, domains, known, fetch)
+
+	// Best-effort: if the tenant has a connected GitHub org, ALSO run the code-search leak collector over the
+	// same domains, reusing THAT connection's token (no new credential — the SaaS-posture GitHub sync pattern).
+	// It finds the org's secrets leaked in THIRD-PARTY public repos; the org's OWN repos are excluded (those are
+	// the repository asset's job). Gated: no GitHub connection / no vault / no resolvable token → silently skipped.
+	ghLeaks := 0
+	if d.Vault != nil {
+		conns, _ := d.Store.ListConnections(r.Context(), tenantID)
+		for i := range conns {
+			if conns[i].Kind != platform.ConnGitHub {
+				continue
+			}
+			token, oerr := d.Vault.Open(conns[i].SecretRef)
+			if oerr != nil || token == "" {
+				break
+			}
+			ownOrgs := map[string]bool{strings.ToLower(strings.TrimSpace(conns[i].Account)): true}
+			ghFetch := func(ctx context.Context, u string) ([]byte, error) {
+				client := safeHTTPClient(15 * time.Second)
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set("Authorization", "Bearer "+token)
+				req.Header.Set("Accept", "application/vnd.github+json")
+				req.Header.Set("User-Agent", assessUA)
+				resp, err := client.Do(req)
+				if err != nil {
+					return nil, err
+				}
+				defer resp.Body.Close()
+				return io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+			}
+			gh := osint.CollectGitHubLeaks(r.Context(), tenantID, domains, ownOrgs, ghFetch)
+			snap.LeakedSecrets = append(snap.LeakedSecrets, gh.LeakedSecrets...)
+			ghLeaks = len(gh.LeakedSecrets)
+			break
+		}
+	}
+
 	findings, stored, pivoted := d.ingestOSINTSnapshot(r.Context(), tenantID, snap, "OSINT live CT scan")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"source": "crtsh", "domains_scanned": len(domains), "hosts_discovered": len(snap.ExposedHosts),
-		"findings_detected": stored, "assets_pivoted": pivoted, "findings": findings,
+		"source": "crtsh+github-search", "domains_scanned": len(domains), "hosts_discovered": len(snap.ExposedHosts),
+		"github_leaks": ghLeaks, "findings_detected": stored, "assets_pivoted": pivoted, "findings": findings,
 	})
 }
 
