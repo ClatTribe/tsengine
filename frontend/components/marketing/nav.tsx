@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
-  AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen,
+  AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen, ShieldCheck,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -31,6 +31,7 @@ const PRODUCT: Item[] = [
   { href: "/supply-chain", label: "Supply-chain security", desc: "Deps, SBOM, malware, license risk", icon: Boxes },
   { href: "/saas-posture", label: "SaaS & identity posture", desc: "MFA, OAuth grants, misconfig", icon: AppWindow },
   { href: "/ci-cd", label: "CI/CD pipeline", desc: "Catch issues before they ship", icon: GitBranch },
+  { href: "/agent-controls", label: "AI agent controls", desc: "Kill-switch, isolation, human gate, signed log", icon: ShieldCheck },
   { href: "/vs-consulting", label: "vs. a consultant", desc: "The retainer outcome, without the retainer", icon: Scale },
 ];
 
