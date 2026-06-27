@@ -37,6 +37,13 @@ var Techniques = []Technique{
 	{Name: "PassRoleToCloudFormation", All: [][]string{{"iam:PassRole"}, {"cloudformation:CreateStack"}}},
 	{Name: "UpdateLambdaCode", All: [][]string{{"lambda:UpdateFunctionCode"}}},
 	{Name: "UpdateAssumeRolePolicy", All: [][]string{{"iam:UpdateAssumeRolePolicy", "sts:AssumeRole"}}},
+	// Pass-role-to-new-resource techniques on the lesser-known services PMapper/Rhino cover but the
+	// catalog omitted — depth the IAM attack-path engine needs so a privesc via Glue / Data Pipeline /
+	// SageMaker isn't a blind spot (each is a real, published escalation primitive).
+	{Name: "PassRoleToNewGlueDevEndpoint", All: [][]string{{"iam:PassRole"}, {"glue:CreateDevEndpoint"}, {"glue:GetDevEndpoint"}}},
+	{Name: "UpdateExistingGlueDevEndpoint", All: [][]string{{"glue:UpdateDevEndpoint"}}},
+	{Name: "PassRoleToNewDataPipeline", All: [][]string{{"iam:PassRole"}, {"datapipeline:CreatePipeline"}, {"datapipeline:PutPipelineDefinition"}}},
+	{Name: "PassRoleToNewSageMakerNotebook", All: [][]string{{"iam:PassRole"}, {"sagemaker:CreateNotebookInstance"}, {"sagemaker:CreatePresignedNotebookInstanceUrl"}}},
 }
 
 // CanDo reports whether the principal (its combined policy docs) is permitted an
