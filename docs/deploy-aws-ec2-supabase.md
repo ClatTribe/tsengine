@@ -84,6 +84,12 @@ TSENGINE_PLATFORM_PUBLIC=https://app.yourdomain.com
 Also drop `tls internal` from `docker/caddy/Caddyfile` so Caddy uses public ACME (Let's Encrypt) instead of
 its localhost CA.
 
+> The five vars above are the **minimum**. For a full launch also fill in the grouped sections in
+> `.env.example`: **SMTP_\*** (so password‑reset + invite emails actually send — unset just logs the link),
+> **LLM_\*** (the AI brief + L2 agents — unset turns AI features off), and the **connector OAuth** pairs
+> (GitHub/GitLab/Okta/M365/…) for the systems you want customers to connect. Each is optional and degrades
+> honestly if blank.
+
 > With `TSENGINE_PLATFORM_DB` set to the Supabase DSN, the box no longer needs its data disk — all state is
 > in Supabase. (The compose still mounts a `platform-data` volume; it just goes unused for the DB.)
 
