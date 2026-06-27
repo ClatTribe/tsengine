@@ -18,7 +18,7 @@ import (
 // into the SAME store the rest of the platform reads — so SaaS misconfigs flow through issues /
 // incidents / grc / hitl like any other finding. Mirrors the identity-events ingest.
 //
-// Providers: github_org | slack | zoom | atlassian | salesforce. Tenant-scoped, LLM-free, grounded
+// Providers: github_org | slack | zoom | atlassian | salesforce | m365. Tenant-scoped, LLM-free, grounded
 // (§10) — a hardened app yields zero findings. The live admin-API fetcher (snapshot from the
 // provider's API) is the credential-gated half; this makes the checks usable today with a posted
 // snapshot (no external creds).
@@ -102,7 +102,13 @@ func assessSaaSSnapshot(provider string, raw []byte) ([]types.Finding, error) {
 			return nil, fmt.Errorf("invalid salesforce snapshot: %v", err)
 		}
 		return sspm.AssessSalesforce(s, sspm.Options{}), nil
+	case "m365", "microsoft365":
+		var s sspm.M365Tenant
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return nil, fmt.Errorf("invalid m365 snapshot: %v", err)
+		}
+		return sspm.AssessM365(s, sspm.Options{}), nil
 	default:
-		return nil, fmt.Errorf("unknown SaaS provider %q (want: github_org | slack | zoom | atlassian | salesforce)", provider)
+		return nil, fmt.Errorf("unknown SaaS provider %q (want: github_org | slack | zoom | atlassian | salesforce | m365)", provider)
 	}
 }
