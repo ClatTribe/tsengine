@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { UserCog, Scale, FileCheck2, Crosshair, ScrollText, LogOut } from "lucide-react";
+import { Scale, FileCheck2, Crosshair, ScrollText } from "lucide-react";
 import { getOperatorToken, operatorMe, operatorQueue, type QueueItem } from "@/lib/operator";
-import { operatorLogout } from "./actions";
 import { DecideRiskInline } from "@/components/operator/decide-risk-inline";
 import { PublishPolicyInline } from "@/components/operator/publish-policy-inline";
 import { SignoffPentestInline } from "@/components/operator/signoff-pentest-inline";
@@ -26,26 +25,14 @@ export default async function OperatorConsole() {
   const tenants = [...byTenant.keys()].sort();
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-5 py-10">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-xl border border-accent/40 bg-accent-soft text-accent">
-            <UserCog className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">Practitioner console</h1>
-            <p className="text-xs text-muted">
-              {me.name || me.email}
-              {me.firm ? ` · ${me.firm}` : ""}
-            </p>
-          </div>
-        </div>
-        <form action={operatorLogout}>
-          <button className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition hover:text-ink">
-            <LogOut className="h-3.5 w-3.5" /> Sign out
-          </button>
-        </form>
-      </header>
+    <main className="mx-auto max-w-4xl px-5 py-10">
+      {/* The brand + identity + sign-out live in the operator shell (layout.tsx); this is the page title. */}
+      <div className="mb-6">
+        <h1 className="text-lg font-semibold tracking-tight">Cross-tenant queue</h1>
+        <p className="mt-0.5 text-sm text-muted">
+          Every assigned client&apos;s pending judgment call in one place — scoped to the tenants you serve.
+        </p>
+      </div>
 
       {/* summary */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

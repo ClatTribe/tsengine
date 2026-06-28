@@ -9,7 +9,7 @@ export const metadata = { title: "Practitioner sign in | TensorShield" };
 export default async function OperatorLoginPage() {
   if (await getOperatorToken()) redirect("/operator");
   return (
-    <main className="grid min-h-screen place-items-center bg-bg px-5">
+    <main className="grid min-h-[calc(100vh-3.5rem)] place-items-center px-5">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
           <span className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-xl border border-accent/40 bg-accent-soft text-accent">
