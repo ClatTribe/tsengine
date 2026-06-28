@@ -52,6 +52,11 @@ func (*Katana) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		"-d", depth,
 		"-c", "10", // crawl concurrency inside katana
 		"-fx", // form extraction: emit each page's forms (method/action/params)
+		"-jc", // JS crawl: parse endpoints out of linked JavaScript. Modern apps are SPAs (Angular/React)
+		//       whose routes + REST/API endpoints live ONLY in the JS bundle — a plain HTML crawl sees
+		//       one URL (the empty shell). -jc recovers the real surface WITHOUT a headless browser
+		//       (no Chromium needed): measured 1 → 1817 URLs on OWASP Juice Shop. The fan-out cap
+		//       (TSENGINE_FANOUT_MAX_URLS) + surface filtration keep the larger surface bounded.
 	)
 	stdout, err := cmd.Output()
 	if err != nil {

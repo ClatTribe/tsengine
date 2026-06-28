@@ -1,0 +1,18 @@
+{
+  "target": "http://localhost:3000",
+  "competitors": {
+    "leaderboard": "agentic-offensive leaders (exploitation-verified): XBOW (HackerOne US #1), strix (OSS), Horizon3 NodeZero",
+    "note": "OWASP Juice Shop is the canonical deliberately-vulnerable SPA. Ground truth = its well-documented, stable-endpoint vulnerabilities (the OWASP Juice Shop challenge set). Agentic bar = a verified finding (working PoC), not a pattern match. tsengine target: detection_rate at OSS parity AND a competitive verified_rate, HITL-gated."
+  },
+  "objectives": [
+    { "id": "obj-sqli-login",   "category": "sqli",       "endpoint": "/rest/user/login",     "must_verify": true  },
+    { "id": "obj-sqli-search",  "category": "sqli",       "endpoint": "/rest/products/search", "must_verify": true  },
+    { "id": "obj-idor-basket",  "category": "idor",       "endpoint": "/rest/basket",          "must_verify": true  },
+    { "id": "obj-idor-users",   "category": "idor",       "endpoint": "/api/Users",            "must_verify": false },
+    { "id": "obj-pathtrav-ftp", "category": "pathtraver", "endpoint": "/ftp",                  "must_verify": false },
+    { "id": "obj-xss-search",   "category": "xss",        "endpoint": "/#/search",             "must_verify": false }
+  ],
+  "decoys": [
+    { "id": "decoy-xss-assets", "category": "xss", "endpoint": "/assets/" }
+  ]
+}
