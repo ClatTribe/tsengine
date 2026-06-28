@@ -63,6 +63,40 @@ func TestPasswordReset_FullFlow(t *testing.T) {
 	}
 }
 
+// A password reset must REVOKE every existing session for that user — a stolen token can't outlive the
+// password it was issued under — while leaving other users' sessions untouched.
+func TestPasswordReset_RevokesExistingSessions(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	hash, _ := authn.HashPassword("old-password-123")
+	_ = st.PutUser(ctx, platform.User{ID: "u1", TenantID: "t1", Email: "ada@acme.com", Role: platform.RoleOwner, PasswordHash: hash})
+	_ = st.PutSession(ctx, platform.Session{Token: "victim-live-token", UserID: "u1", TenantID: "t1"})
+	// an unrelated user's session must survive the reset.
+	_ = st.PutUser(ctx, platform.User{ID: "u2", TenantID: "t1", Email: "bob@acme.com", PasswordHash: hash})
+	_ = st.PutSession(ctx, platform.Session{Token: "bystander-token", UserID: "u2", TenantID: "t1"})
+
+	mail := &recMailer{}
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", Mailer: mail, AppURL: "https://app.acme.io"})
+
+	_ = do(h, "POST", "/v1/auth/forgot", "t1", `{"email":"ada@acme.com"}`)
+	m := tokenRE.FindStringSubmatch(mail.body)
+	if m == nil {
+		t.Fatalf("reset email should contain a token; body=%q", mail.body)
+	}
+	token, _ := url.QueryUnescape(m[1])
+	if rec := do(h, "POST", "/v1/auth/reset", "t1", `{"email":"ada@acme.com","token":"`+token+`","new_password":"brand-new-pw-1"}`); rec.Code != 200 {
+		t.Fatalf("valid reset → 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// SECURITY: the pre-reset session must be dead.
+	if _, err := st.GetSession(ctx, "victim-live-token"); err == nil {
+		t.Fatal("SECURITY: the victim's pre-reset session survived the password reset")
+	}
+	// the unrelated user's session is untouched.
+	if _, err := st.GetSession(ctx, "bystander-token"); err != nil {
+		t.Fatalf("an unrelated user's session must survive the reset, got %v", err)
+	}
+}
+
 func TestPasswordReset_ShortPasswordRejected(t *testing.T) {
 	st := store.NewMemory()
 	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})

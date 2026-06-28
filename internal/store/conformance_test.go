@@ -222,3 +222,34 @@ func orFail(t *testing.T, err error) {
 		t.Fatalf("list: %v", err)
 	}
 }
+
+// DeleteSessionsForUser revokes exactly one user's sessions (the credential-change/reset kill step),
+// leaving other users' sessions intact — proven against every Store impl.
+func TestStore_DeleteSessionsForUser(t *testing.T) {
+	for _, f := range factories() {
+		t.Run(f.name, func(t *testing.T) {
+			s := f.open(t)
+			ctx := context.Background()
+			must := func(err error) {
+				t.Helper()
+				if err != nil {
+					t.Fatalf("%s: %v", f.name, err)
+				}
+			}
+			must(s.PutSession(ctx, platform.Session{Token: "a1", UserID: "u1", TenantID: "t1"}))
+			must(s.PutSession(ctx, platform.Session{Token: "a2", UserID: "u1", TenantID: "t1"}))
+			must(s.PutSession(ctx, platform.Session{Token: "b1", UserID: "u2", TenantID: "t1"}))
+
+			must(s.DeleteSessionsForUser(ctx, "u1"))
+
+			for _, tok := range []string{"a1", "a2"} {
+				if _, err := s.GetSession(ctx, tok); err == nil {
+					t.Errorf("%s: u1 session %q should be revoked", f.name, tok)
+				}
+			}
+			if _, err := s.GetSession(ctx, "b1"); err != nil {
+				t.Errorf("%s: u2's session must survive, got %v", f.name, err)
+			}
+		})
+	}
+}

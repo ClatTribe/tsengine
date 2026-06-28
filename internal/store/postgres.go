@@ -369,6 +369,23 @@ func (p *Postgres) DeleteSession(ctx context.Context, token string) error {
 	return p.exec(ctx, `DELETE FROM sessions WHERE token=?`, token)
 }
 
+// DeleteSessionsForUser revokes every session for a user. Sessions are a JSON blob keyed by token (no
+// user_id column), so scan the small sessions set and delete the matches by token.
+func (p *Postgres) DeleteSessionsForUser(ctx context.Context, userID string) error {
+	sessions, err := listJSON[platform.Session](ctx, p.db, pgRebind(`SELECT data FROM sessions`))
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		if sess.UserID == userID {
+			if err := p.exec(ctx, `DELETE FROM sessions WHERE token=?`, sess.Token); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // --- operators & operator sessions ---
 
 func (p *Postgres) PutOperator(ctx context.Context, o platform.Operator) error {

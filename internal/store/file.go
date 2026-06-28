@@ -223,6 +223,13 @@ func (f *File) DeleteSession(ctx context.Context, token string) error {
 	return f.persist()
 }
 
+func (f *File) DeleteSessionsForUser(ctx context.Context, userID string) error {
+	if err := f.Memory.DeleteSessionsForUser(ctx, userID); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutOperator(ctx context.Context, o platform.Operator) error {
 	if err := f.Memory.PutOperator(ctx, o); err != nil {
 		return err

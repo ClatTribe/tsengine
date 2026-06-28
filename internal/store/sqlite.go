@@ -393,6 +393,23 @@ func (s *SQLite) DeleteSession(ctx context.Context, token string) error {
 	return err
 }
 
+// DeleteSessionsForUser revokes every session for a user. Sessions are a JSON blob keyed by token (no
+// user_id column), so scan the small sessions set and delete the matches by token.
+func (s *SQLite) DeleteSessionsForUser(ctx context.Context, userID string) error {
+	sessions, err := listJSON[platform.Session](ctx, s.db, `SELECT data FROM sessions`)
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		if sess.UserID == userID {
+			if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token=?`, sess.Token); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (s *SQLite) PutOperator(ctx context.Context, o platform.Operator) error {
 	d, err := enc(o)
 	if err != nil {

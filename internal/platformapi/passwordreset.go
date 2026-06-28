@@ -116,6 +116,12 @@ func (d Deps) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
+	// Revoke EVERY existing session for this user — a reset is the account-recovery path, so any session
+	// a thief still holds must die with the old password (the user re-authenticates fresh).
+	if err := d.Store.DeleteSessionsForUser(r.Context(), u.ID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "Your password has been reset. You can sign in now."})
 }
 

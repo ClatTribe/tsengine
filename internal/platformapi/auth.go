@@ -208,6 +208,12 @@ func (d Deps) handlePassword(w http.ResponseWriter, r *http.Request, s platform.
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
+	// Revoke the user's OTHER sessions (a credential change should evict any stolen token), but keep the
+	// caller signed in: wipe all, then re-put the current session. Best-effort on the wipe — a failure
+	// here must not block the (already-persisted) password change.
+	if err := d.Store.DeleteSessionsForUser(r.Context(), u.ID); err == nil {
+		_ = d.Store.PutSession(r.Context(), s)
+	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
