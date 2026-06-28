@@ -69,7 +69,7 @@ func TestCreateAsset_RejectsUnauthorizedAndUnsafe(t *testing.T) {
 
 	// A public IP + CIDR + image are accepted.
 	for _, ok := range []string{
-		`{"type":"ip_address","target":"203.0.113.10","authorized":true}`,
+		`{"type":"ip_address","target":"8.8.8.8","authorized":true}`, // a genuinely routable public IP (203.0.113.x is now correctly blocked as TEST-NET)
 		`{"type":"container_image","target":"ghcr.io/acme/api:1.4.2","authorized":true}`,
 	} {
 		if rec := do(h, "POST", "/v1/assets", "t1", ok); rec.Code != 201 {
