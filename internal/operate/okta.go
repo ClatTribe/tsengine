@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/ClatTribe/tsengine/internal/netguard"
 )
 
 // Okta fetches a live identity snapshot from the Okta org's management API and assembles
@@ -28,7 +30,7 @@ type Okta struct {
 
 // NewOkta builds the fetcher for an org base URL.
 func NewOkta(orgURL string) *Okta {
-	return &Okta{OrgURL: strings.TrimRight(orgURL, "/"), HTTP: &http.Client{Timeout: 30 * time.Second}}
+	return &Okta{OrgURL: strings.TrimRight(orgURL, "/"), HTTP: netguard.GuardedClient(30 * time.Second)}
 }
 
 func (o *Okta) client() *http.Client {

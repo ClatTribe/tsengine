@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/netguard"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -33,7 +34,7 @@ type Okta struct {
 func NewOkta(orgURL, clientID, clientSecret string) *Okta {
 	return &Okta{
 		OrgURL: strings.TrimRight(orgURL, "/"), ClientID: clientID, ClientSecret: clientSecret,
-		HTTP: &http.Client{Timeout: 20 * time.Second},
+		HTTP: netguard.GuardedClient(20 * time.Second),
 	}
 }
 

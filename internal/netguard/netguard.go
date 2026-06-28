@@ -9,8 +9,20 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"time"
 )
+
+// GuardedClient returns an http.Client whose transport refuses to connect to any non-public host (the
+// SSRF guard) and is bounded by timeout. Use it for every outbound request to an operator- or
+// tenant-configurable base URL, so a URL pointed at an internal/loopback/metadata address can't be
+// reached server-side. Tests that must hit a loopback httptest server inject their own *http.Client.
+func GuardedClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: &http.Transport{DialContext: GuardedDialContext(timeout), DisableKeepAlives: true},
+	}
+}
 
 // nonPublicCIDRs are special-use / non-routable ranges the stdlib predicates (IsPrivate/IsLoopback/…)
 // do NOT cover but an SSRF guard must still refuse. CGNAT (RFC 6598) is the headline — cloud providers

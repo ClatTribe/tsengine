@@ -24,6 +24,7 @@ func TestGitLab_DiscoverProjectsToAssets(t *testing.T) {
 
 	g := NewGitLab("id", "sec")
 	g.BaseURL = srv.URL
+	g.HTTP = srv.Client() // httptest binds loopback, which NewGitLab's SSRF-guarded default refuses
 	assets, err := g.Discover(context.Background(), platform.Connection{ID: "c1", TenantID: "t1"}, "tok")
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +79,7 @@ func TestGitLab_ApplyOpensMR(t *testing.T) {
 	defer srv.Close()
 	g := NewGitLab("a", "b")
 	g.BaseURL = srv.URL
+	g.HTTP = srv.Client() // httptest binds loopback, which NewGitLab's SSRF-guarded default refuses
 	act := platform.Action{Kind: platform.ActOpenPR, Title: "fix", Payload: map[string]any{"path": "acme/web", "head": "tsengine/fix", "base": "main"}}
 	if err := g.Apply(context.Background(), platform.Connection{}, "tok", act); err != nil {
 		t.Fatal(err)
