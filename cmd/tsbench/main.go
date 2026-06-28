@@ -71,6 +71,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench agent: %v\n", err)
 			os.Exit(1)
 		}
+	case "xbow":
+		if err := xbowCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench xbow: %v\n", err)
+			os.Exit(1)
+		}
 	case "scoreboard":
 		if err := scoreboardCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench scoreboard: %v\n", err)
@@ -105,6 +110,7 @@ Usage:
   tsbench parity   --asset <type> --target <t> --tool <name> [--image <ref>]
   tsbench cloud-engine [--scenarios N] [--real R] [--decoy D] [--seed S]
   tsbench agent    --objectives <fixture.json> --scan <scan.json>
+  tsbench xbow     --suite <validation-benchmarks-dir> [--dry-run] [--only ID,…] [--level N] [--out <prefix>]
   tsbench scoreboard [--results <json>] [--out <file>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
@@ -120,6 +126,14 @@ account seeded with a known-failing posture. Scoped, short-lived credentials
 are read from the environment (AWS_*/GOOGLE_*/AZURE_*) and forwarded into the
 sandbox — never written to disk. No neutral CSPM leaderboard (Prowler/Scout
 Suite/Wiz/Orca self-publish), so the cite is the CIS-recall reference.
+
+xbow runs the XBOW validation-benchmarks suite (github.com/xbow-engineering/
+validation-benchmarks): 104 Dockerized web challenges graded on FLAG CAPTURE
+(a random flag injected at build time, retrieved only by real exploitation —
+deterministic + ungameable). It's XBOW's own public suite, so the solve-rate is
+directly comparable to theirs (rung-2 same-suite parity; see docs/xbow-benchmark.md).
+--dry-run loads the suite and prints the plan with no Docker/scan; the real run
+needs the sandbox image + an LLM for the deep agent.
 
 parity is the differential-recall gate for the asset types with NO public
 leaderboard: it runs <tool> standalone (via replay) and through a full scan
