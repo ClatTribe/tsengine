@@ -49,7 +49,7 @@ func TestCloudInvestigate_GatedWithoutLLM(t *testing.T) {
 
 func TestCloudInvestigate_RunsAndViewReturnsPaths(t *testing.T) {
 	st := store.NewMemory()
-	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanGrowth}) // AI is a paid feature
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanEnterprise}) // AI is a paid feature
 	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", AgentLLM: fakeCloudLLM{}})
 
 	// Run over a minimal inventory — the agent finishes with 0 proven paths (happy path, 200).
@@ -127,7 +127,7 @@ func TestResolveAgentLLM_FallsBackToOperatorGlobal(t *testing.T) {
 	st := store.NewMemory()
 	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", AgentLLM: fakeCloudLLM{}}
 	// An AI-enabled (paid) tenant with no own key falls back to the operator-global d.AgentLLM.
-	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "paid", Plan: platform.PlanGrowth})
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "paid", Plan: platform.PlanEnterprise})
 	if got := d.resolveAgentLLM(context.Background(), "paid"); got == nil {
 		t.Error("paid tenant with no own LLM should fall back to the operator-global AgentLLM")
 	}

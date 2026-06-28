@@ -2,17 +2,21 @@ package platform
 
 import "strings"
 
-// Plan tiers. The product sells three, matching the pricing page:
+// Plan tiers. The product sells three, matching the pricing page's sharp positioning — the
+// deterministic L1.7 substrate is the self-serve product; the two AI teammates are the premium:
 //
-//   - Free       — genuinely free to RUN for us: deterministic OSS scanners only, NO LLM
+//   - Free       — a taste of the deterministic L1.7 substrate: OSS scanners only, NO LLM
 //     spend (the marginal cost), a hard asset cap, core compliance only.
-//   - Growth     — the one paid tier: the AI security+compliance engineer turned on
-//     (L2 agent, AI fixes, continuous monitoring), all frameworks, HITL apply.
-//   - Enterprise — "talk to us": unlimited assets, autonomous pentest, MSP/managed, SSO.
+//   - Substrate  — the FULL deterministic L1.7 substrate (all frameworks, continuous monitoring,
+//     HITL apply) with NO operator-funded AI. The self-serve vs managed SERVICE MODEL differentiates
+//     how it's delivered, not the entitlements. (Plan key stays "growth" — no stored-value migration.)
+//   - Enterprise — "talk to us": the two AI teammates (AI Security Engineer + AI Pentester) on top of
+//     the substrate, plus unlimited assets, MSP/managed, SSO. The ONLY operator-AI-funded tier.
 //
-// The economic invariant: a tenant whose plan is not AI-enabled must never consume the
-// OPERATOR's LLM budget. (A tenant who brings their OWN key — §18.5 — may use AI on any
-// plan, because that cost isn't ours; that exception lives in resolveAgentLLM, not here.)
+// The economic invariant: a tenant whose plan is not AI-enabled must never consume the OPERATOR's LLM
+// budget. With AI now ENTERPRISE-ONLY, both Free AND Substrate are non-AI. (A tenant who brings their
+// OWN key — §18.5 — may use AI on any plan, because that cost isn't ours; that exception lives in
+// resolveAgentLLM, not here.)
 const (
 	PlanFree       = "free"
 	PlanGrowth     = "growth"
@@ -72,9 +76,12 @@ func baseEntitlements(plan string) PlanLimits {
 			ContinuousMonitoring: true, HumanInLoopApply: true,
 		}
 	case PlanGrowth:
+		// The "Substrate" tier: the full deterministic L1.7 substrate, but NO operator-funded AI —
+		// the two AI teammates are Enterprise-only. (Plan key stays "growth"; the label/positioning is
+		// "Substrate". A tenant on this tier can still use AI by bringing its own LLM key — §18.5.)
 		return PlanLimits{
-			Plan: PlanGrowth, Label: "Growth", MaxAssets: 25,
-			AIEnabled: true, AutonomousPentest: false, AllFrameworks: true,
+			Plan: PlanGrowth, Label: "Substrate", MaxAssets: 25,
+			AIEnabled: false, AutonomousPentest: false, AllFrameworks: true,
 			ContinuousMonitoring: true, HumanInLoopApply: true,
 		}
 	default:

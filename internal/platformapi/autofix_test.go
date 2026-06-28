@@ -27,7 +27,7 @@ func TestBuildAutofixPrompt_GroundsInTheFinding(t *testing.T) {
 
 func TestAutofix_GatedAndNotFound(t *testing.T) {
 	st := store.NewMemory()
-	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanGrowth}) // AI is a paid feature
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanEnterprise}) // AI is a paid feature
 	// No LLM → 400.
 	d0 := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"}
 	if rec := do(NewHandler(d0), "POST", "/v1/findings/f-x/autofix", "t1", "{}"); rec.Code != 400 {
