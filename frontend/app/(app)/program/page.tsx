@@ -5,13 +5,17 @@ import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { PublishButton, AckButton } from "@/components/program/policy-actions";
 import { CapacityBadge } from "@/components/ui/capacity-badge";
+import { hitlOwner, capitalize } from "@/lib/service-model";
 import { seedProgram } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProgramPage() {
-  const [{ policies, summary }, me] = await Promise.all([api.program(), api.me()]);
+  const [{ policies, summary }, me, practitioners] = await Promise.all([api.program(), api.me(), api.practitioners()]);
   const myEmail = me?.email ?? "";
+  // Service model: seeding + publishing policies is a vCISO HITL act. self_serve owns it; managed/msp =
+  // the named expert publishes (your team only acknowledges), so the seed CTA + copy defer accordingly.
+  const { selfOwned, actor } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);
 
   // group by category for the register view
   const byCategory = new Map<string, Policy[]>();
@@ -26,7 +30,11 @@ export default async function ProgramPage() {
       <PageIntro
         icon={ScrollText}
         title="Security program"
-        description="The policy set a vCISO maintains. The agent seeds the standard SOC 2 policy set; a named owner publishes each one, and your team acknowledges them — the read-and-accept evidence an auditor asks for. Published policies + acknowledgments are program evidence."
+        description={
+          selfOwned
+            ? "The policy set a vCISO maintains. The agent seeds the standard SOC 2 policy set; a named owner publishes each one, and your team acknowledges them — the read-and-accept evidence an auditor asks for. Published policies + acknowledgments are program evidence."
+            : `The policy set your vCISO maintains. The agent seeds the standard SOC 2 set and ${actor} publishes each one; your team acknowledges them — the read-and-accept evidence an auditor asks for. Published policies + acknowledgments are program evidence.`
+        }
         right={
           <div className="flex items-center gap-4">
             <div className="text-right text-sm">
@@ -43,13 +51,17 @@ export default async function ProgramPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
           <div className="flex items-center gap-2.5 text-sm text-muted">
             <Sparkles className="h-4 w-4 text-accent" />
-            Start with the standard SOC 2 policy set — the agent seeds the drafts; you adopt, edit, and publish each.
+            {selfOwned
+              ? "Start with the standard SOC 2 policy set — the agent seeds the drafts; you adopt, edit, and publish each."
+              : `${capitalize(actor)} maintains your policy set. The standard SOC 2 drafts are seeded and published for you; your team acknowledges them here.`}
           </div>
+          {selfOwned && (
           <form action={seedProgram}>
             <button className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-accent-hover">
               Seed the standard policy set
             </button>
           </form>
+          )}
         </div>
       ) : (
         <>

@@ -5,6 +5,7 @@ import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { DecideRisk } from "@/components/risks/decide-risk";
 import { CapacityBadge } from "@/components/ui/capacity-badge";
+import { hitlOwner, capitalize } from "@/lib/service-model";
 import { seedRisks } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -34,16 +35,23 @@ function score(r: Risk) {
 }
 
 export default async function RisksPage() {
-  const { risks, summary } = await api.risks();
+  const [{ risks, summary }, practitioners] = await Promise.all([api.risks(), api.practitioners()]);
+  const { selfOwned, actor } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);
   const proposed = risks.filter((r) => r.proposed);
   const decided = risks.filter((r) => !r.proposed);
+
+  // Service model: the vCISO judgment (accept/mitigate/transfer/avoid) is a HITL act. self_serve owns it;
+  // managed/msp = the named expert owns it (via /operator), so this page reads informationally for them.
+  const description = selfOwned
+    ? "The judgment layer a vCISO owns. The agent proposes candidate risks from what it found; you — a named person — decide how to treat each one (accept, mitigate, transfer, or avoid). Every decision is signed into a tamper-evident ledger."
+    : `The judgment layer your vCISO owns. The agent proposes candidate risks from what it found; ${actor} — a named person — decides how to treat each one (accept, mitigate, transfer, or avoid). Every decision is signed into a tamper-evident ledger. You can follow the calls here.`;
 
   return (
     <div className="space-y-6">
       <PageIntro
         icon={Scale}
         title="Risk register"
-        description="The judgment layer a vCISO owns. The agent proposes candidate risks from what it found; you — a named person — decide how to treat each one (accept, mitigate, transfer, or avoid). Every decision is signed into a tamper-evident ledger."
+        description={description}
         right={
           <div className="flex gap-4 text-sm">
             <Stat n={summary.accepted} label="accepted" tone="text-pulse" />
@@ -53,18 +61,26 @@ export default async function RisksPage() {
         }
       />
 
-      {/* Propose from findings — the grounded, agent-side half */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
-        <div className="flex items-center gap-2.5 text-sm text-muted">
-          <Sparkles className="h-4 w-4 text-accent" />
-          Let the agent propose candidate risks from your current high-severity findings — grounded in real evidence, never invented.
+      {/* Propose from findings — the grounded, agent-side half. self_serve drives it; for managed/msp the
+          expert seeds + decides via the operator console, so this reads as an informational note instead. */}
+      {selfOwned ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+          <div className="flex items-center gap-2.5 text-sm text-muted">
+            <Sparkles className="h-4 w-4 text-accent" />
+            Let the agent propose candidate risks from your current high-severity findings — grounded in real evidence, never invented.
+          </div>
+          <form action={seedRisks}>
+            <button className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 px-3 py-1.5 text-sm font-medium text-accent transition hover:bg-accent-soft">
+              Propose from findings
+            </button>
+          </form>
         </div>
-        <form action={seedRisks}>
-          <button className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 px-3 py-1.5 text-sm font-medium text-accent transition hover:bg-accent-soft">
-            Propose from findings
-          </button>
-        </form>
-      </div>
+      ) : (
+        <div className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
+          <Sparkles className="h-4 w-4 text-accent" />
+          {capitalize(actor)} proposes and triages these risks for you. You can review every call below.
+        </div>
+      )}
 
       <section>
         <SubHead>Awaiting your decision · {proposed.length}</SubHead>
