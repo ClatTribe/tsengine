@@ -42,11 +42,12 @@ export function TopBar({
         <span className="max-w-[14rem] truncate">{workspace}</span>
       </div>
 
-      {/* Service model — who employs the human-in-the-loop (self-serve / MSP / managed). */}
+      {/* Service model — who employs the human-in-the-loop (self-serve / MSP / managed). Links to the
+          "Your security team" page: who your expert(s) of record are + what they handle. */}
       {svcLabel && (
         <Link
-          href="/settings"
-          title="Who runs your security & compliance — manage in Settings → Service model"
+          href="/security-team"
+          title="Your security team — who runs your security & compliance and what they handle"
           className="hidden items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted transition hover:border-border-strong hover:text-ink md:flex"
         >
           <UserCog className="h-3.5 w-3.5 text-faint" />
