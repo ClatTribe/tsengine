@@ -136,9 +136,19 @@ func (c *Client) Healthz(ctx context.Context) error {
 // untouched: rewriting arbitrary string values could corrupt a payload.
 var loopbackHostArgs = []string{"target", "targets", "login_url", "url", "urls"}
 
-// loopbackHosts are the host tokens that, inside the sandbox, would point
-// at the sandbox itself rather than the host running the target.
-var loopbackHosts = []string{"127.0.0.1", "localhost", "0.0.0.0", "[::1]", "::1"}
+// loopbackHosts are the host tokens that, inside the sandbox, would point at
+// the sandbox itself rather than the host running the target — so they are
+// rewritten to host.docker.internal to reach the host. 0.0.0.0 is deliberately
+// EXCLUDED: it is not a legitimate connect/scan target (use localhost or
+// 127.0.0.1; the platform rejects 0.0.0.0 as a non-public asset anyway) and it
+// is a classic SSRF-filter bypass token — leaving it un-rewritten keeps a
+// 0.0.0.0 arg pointing at the (harmless) sandbox, never the host gateway, so it
+// can't be used to punch through the sandbox's network isolation to a host-local
+// service. (Scoping the whole rewrite to the scan target's host — so a loopback
+// in any arg of a REMOTE-target scan is never host-rewritten — needs the scan
+// target threaded into Execute; that's the documented follow-on, and the L2
+// agent's args are already scope-gated in internal/l2/adapters/prober.go.)
+var loopbackHosts = []string{"127.0.0.1", "localhost", "[::1]", "::1"}
 
 const sandboxHostAlias = "host.docker.internal"
 
