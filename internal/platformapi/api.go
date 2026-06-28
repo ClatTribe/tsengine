@@ -11,6 +11,7 @@ package platformapi
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -249,13 +250,23 @@ func NewHandler(d Deps) http.Handler {
 	return mux
 }
 
+// bearerOK reports whether the request carries the configured platform bearer token, compared in
+// CONSTANT TIME (so a remote timing side-channel can't recover the token byte-by-byte). An empty
+// configured token never matches — a misconfigured deployment can't be bypassed with an empty header.
+func (d Deps) bearerOK(r *http.Request) bool {
+	if d.Token == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+d.Token)) == 1
+}
+
 // auth resolves the request's tenant from either of two credentials and passes it to the
 // handler: (1) the shared platform bearer token + an X-Tenant-ID header (operator / Slack /
 // tests), or (2) a user session token, whose tenant comes from the session itself (the
 // header cannot override it — no cross-tenant escalation).
 func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if d.Token != "" && r.Header.Get("Authorization") == "Bearer "+d.Token {
+		if d.bearerOK(r) {
 			tenantID := r.Header.Get("X-Tenant-ID")
 			if tenantID == "" {
 				writeJSON(w, http.StatusBadRequest, errBody("missing X-Tenant-ID"))
@@ -284,7 +295,7 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 // provisioning endpoints that create/operate across tenants.
 func (d Deps) platformAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if d.Token == "" || r.Header.Get("Authorization") != "Bearer "+d.Token {
+		if !d.bearerOK(r) {
 			writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
 			return
 		}
