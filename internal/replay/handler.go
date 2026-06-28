@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/sandbox"
@@ -161,6 +162,12 @@ func validate(req Request) error {
 	if req.ScanID == "" {
 		return fmt.Errorf("%w: missing scan_id", errBadRequest)
 	}
+	// scan_id is an opaque id (a uuid) used as a SINGLE path element under runsDir. It is request-provided,
+	// so it must never carry a path separator or `..` — otherwise loadScan's filepath.Join would escape
+	// runsDir and read an arbitrary <dir>/vulnerabilities.json (path traversal).
+	if req.ScanID != filepath.Base(req.ScanID) || req.ScanID == "." || req.ScanID == ".." || strings.ContainsAny(req.ScanID, `/\`) {
+		return fmt.Errorf("%w: invalid scan_id", errBadRequest)
+	}
 	if req.Tool == "" {
 		return fmt.Errorf("%w: missing tool", errBadRequest)
 	}
@@ -172,7 +179,7 @@ func validate(req Request) error {
 // reproducibility pin (CLAUDE.md §10).
 func loadScan(runsDir, scanID string) (*types.Scan, error) {
 	p := filepath.Join(runsDir, scanID, "vulnerabilities.json")
-	f, err := os.Open(p) //nolint:gosec // runsDir/scanID are operator-provided paths
+	f, err := os.Open(p) //nolint:gosec // runsDir is operator-provided; scanID is containment-validated in validate() (no separators/traversal)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("%w: %s", errNotFound, scanID)
