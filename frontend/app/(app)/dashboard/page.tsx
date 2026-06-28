@@ -8,6 +8,7 @@ import { riskRating, severityCounts, sevRank, timeAgo } from "@/lib/utils";
 import { categoryBreakdown } from "@/lib/categories";
 import { Card, SectionTitle, SeverityBadge, Empty } from "@/components/ui/primitives";
 import { FirstRun } from "@/components/onboarding/first-run";
+import { hitlOwner, capitalize } from "@/lib/service-model";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function OverviewPage() {
   // One concurrent wave for the whole dashboard. Compliance posture for every framework arrives
   // in a SINGLE batched call (postureSummary) instead of fanning out 14 per-framework requests,
   // and it rides in the same Promise.all as everything else.
-  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, postureResp] = await Promise.all([
+  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, postureResp, practitioners] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
@@ -54,7 +55,11 @@ export default async function OverviewPage() {
     api.attackPaths(),
     api.issues(),
     api.postureSummary(),
+    api.practitioners(),
   ]);
+  // Service model: a managed/MSP customer's expert owns the approvals — the hero shouldn't tell them a fix
+  // is "waiting for YOUR approval" (it's their team's call), so the framing defers to the named expert.
+  const { selfOwned, actor } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);
 
   const counts = severityCounts(findings);
   const byCategory = categoryBreakdown(findings);
@@ -65,10 +70,16 @@ export default async function OverviewPage() {
   const protectedNow = risk === "Clear";
 
   const sub = protectedNow
-    ? "TensorShield is monitoring your systems continuously — nothing needs you right now."
+    ? selfOwned
+      ? "TensorShield is monitoring your systems continuously — nothing needs you right now."
+      : `TensorShield is monitoring your systems continuously and ${actor} has it covered — nothing needs you right now.`
     : approvals.length > 0
-      ? `TensorShield is on it — ${approvals.length} fix${approvals.length === 1 ? "" : "es"} prepared and waiting for your approval.`
-      : "TensorShield is triaging these and will prepare fixes you can approve.";
+      ? selfOwned
+        ? `TensorShield is on it — ${approvals.length} fix${approvals.length === 1 ? "" : "es"} prepared and waiting for your approval.`
+        : `TensorShield prepared ${approvals.length} fix${approvals.length === 1 ? "" : "es"} — ${actor} is reviewing ${approvals.length === 1 ? "it" : "them"} for you.`
+      : selfOwned
+        ? "TensorShield is triaging these and will prepare fixes you can approve."
+        : `TensorShield is triaging these — ${actor} will review and apply the fixes for you.`;
 
   // Synthesize the agent activity feed.
   const events: Event[] = [];
@@ -147,9 +158,13 @@ export default async function OverviewPage() {
             </div>
             <div className="min-w-0">
               <div className="text-sm font-semibold">
-                {approvals.length} fix{approvals.length > 1 ? "es" : ""} ready for your approval
+                {approvals.length} fix{approvals.length > 1 ? "es" : ""} {selfOwned ? "ready for your approval" : `in review by ${actor}`}
               </div>
-              <div className="text-xs text-muted">The agent prepared these and is holding for your decision — review in the Inbox.</div>
+              <div className="text-xs text-muted">
+                {selfOwned
+                  ? "The agent prepared these and is holding for your decision — review in the Inbox."
+                  : "The agent prepared these; your expert is reviewing them. Open the Inbox to follow along or weigh in."}
+              </div>
             </div>
             <ArrowRight className="ml-auto h-5 w-5 shrink-0 text-accent" />
           </Card>

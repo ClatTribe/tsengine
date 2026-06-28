@@ -100,7 +100,10 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
 
 const COLLAPSE_KEY = "ts.nav.collapsed";
 
-export function Sidebar({ pending }: { pending: number }) {
+// selfOwned (service-model): when the logged-in tenant OWNS the HITL acts (self_serve) the pending badge
+// is an accent to-do; for managed/msp the expert owns them, so the badge is informational (muted) — not
+// a nag. Defaults true so nothing changes when the flag isn't passed.
+export function Sidebar({ pending, selfOwned = true }: { pending: number; selfOwned?: boolean }) {
   const path = usePathname();
   // which group headers are collapsed — persisted so a founder's tidied-up nav sticks across sessions.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -168,7 +171,14 @@ export function Sidebar({ pending }: { pending: number }) {
                       <Icon className={cn("h-4 w-4 transition", active ? "text-accent" : "text-faint group-hover:text-muted")} />
                       <span className="flex-1">{label}</span>
                       {badge != null && (
-                        <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-bg">{badge}</span>
+                        <span
+                          className={cn(
+                            "rounded-full px-1.5 py-px text-[10px] font-semibold",
+                            selfOwned ? "bg-accent text-bg" : "bg-surface-2 text-muted",
+                          )}
+                        >
+                          {badge}
+                        </span>
                       )}
                     </Link>
                   );

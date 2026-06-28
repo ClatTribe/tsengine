@@ -5,21 +5,29 @@ import type { ReviewRequest } from "@/lib/types";
 import { Card, SectionTitle, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { RequestReviewForm } from "@/components/reviews/request-review-form";
+import { hitlOwner } from "@/lib/service-model";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReviewsPage() {
-  const [all, findings] = await Promise.all([api.reviews(), api.findings()]);
+  const [all, findings, practitioners] = await Promise.all([api.reviews(), api.findings(), api.practitioners()]);
   const open = all.filter((r) => r.status !== "resolved").sort(byCreated);
   const resolved = all.filter((r) => r.status === "resolved").sort(byCreated);
+
+  // Service model: for managed/msp the human expert IS the named practitioner of record — say so, instead
+  // of a generic "a security expert".
+  const { selfOwned, actor } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);
+  const description = selfOwned
+    ? "Want a second opinion from a human? Escalate any finding or fix here and a security expert weighs in — the AI does the heavy lifting, a person has your back on the calls that matter."
+    : `Escalate any finding or fix here and ${actor} weighs in — the AI does the heavy lifting, your named expert has your back on the calls that matter.`;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageIntro
         icon={UserCheck}
         title="Expert reviews"
-        description="Want a second opinion from a human? Escalate any finding or fix here and a security expert weighs in — the AI does the heavy lifting, a person has your back on the calls that matter."
+        description={description}
         right={
           open.length > 0 ? (
             <span className="rounded-full border border-accent/30 bg-accent-soft px-2.5 py-1 text-xs text-accent">{open.length} open</span>

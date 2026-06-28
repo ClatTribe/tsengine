@@ -7,6 +7,7 @@ import { riskRating, severityCounts } from "@/lib/utils";
 import { Sidebar } from "@/components/shell/sidebar";
 import { TopBar } from "@/components/shell/topbar";
 import { CommandPalette } from "@/components/shell/command-palette";
+import { hitlOwner } from "@/lib/service-model";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -32,10 +33,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     api.practitioners(),
   ]);
   const risk = riskRating(severityCounts(findings));
+  // Service model: a managed/MSP customer's expert owns the HITL acts, so the pending badge is
+  // informational, not the founder's accent to-do.
+  const { selfOwned } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar pending={approvals.length} />
+      <Sidebar pending={approvals.length} selfOwned={selfOwned} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           workspace={tenant?.name || session.tenant}
