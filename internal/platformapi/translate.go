@@ -3,6 +3,7 @@ package platformapi
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -35,29 +36,7 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 		writeJSON(w, http.StatusOK, map[string]any{"summary": "No findings to translate yet — run a scan first.", "reports": []types.Finding{}})
 		return
 	}
-	// Fetch the tenant's assets once — used for the translate target AND the cross-surface correlation.
-	pAssets, _ := d.Store.ListAssets(r.Context(), tenantID)
-	target := types.Asset{Type: types.AssetWebApplication, Target: "tenant:" + tenantID}
-	if len(pAssets) > 0 {
-		target = types.Asset{Type: types.AssetType(pAssets[0].Type), Target: pAssets[0].Target}
-	}
-	// The L1.7 ESTATE VIEW the engineer reasons OVER: deduped/corroborated unified issues + the
-	// cross-surface attack-path chains. The platform computes crossdetect (deterministic); l2 stays
-	// engine-pure. This is what makes the translate a whole-estate engineer, not a flat-finding pass.
-	estate := l2.EstateContext{
-		Issues:      toIssueDigests(crossdetect.UnifiedIssues(findings)),
-		AttackPaths: renderChains(crossdetect.Correlate(pAssets, findings)),
-	}
-	dep := l2.Deps{Target: target, L1Findings: findings}
-	budget := l2.DefaultBudget()
-	budget.MaxIterations = 16 // a bounded translate pass (not a full investigation)
-	agent, aerr := l2.New(client, l2.BuildCatalog(dep), budget)
-	if aerr != nil {
-		respond(w, nil, aerr)
-		return
-	}
-	agent.WithEstate(estate)
-	out, rerr := agent.Run(r.Context(), target, findings)
+	out, rerr := d.runTranslate(r.Context(), tenantID, client, findings)
 	if rerr != nil {
 		respond(w, nil, rerr)
 		return
@@ -89,6 +68,72 @@ func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client 
 		}
 	}
 	return d.LeadClient
+}
+
+// runTranslate is the shared L2 engineer core (used by the on-demand POST /v1/l2/translate AND the
+// post-scan auto-review). It builds the L1.7 estate view (deduped/corroborated unified issues +
+// cross-surface attack paths — the platform computes crossdetect; l2 stays engine-pure) and runs the
+// Lead over it. The caller resolves + validates the client (so the gating policy differs per path).
+func (d Deps) runTranslate(ctx context.Context, tenantID string, client l2.Client, findings []types.Finding) (l2.Outcome, error) {
+	pAssets, _ := d.Store.ListAssets(ctx, tenantID)
+	target := types.Asset{Type: types.AssetWebApplication, Target: "tenant:" + tenantID}
+	if len(pAssets) > 0 {
+		target = types.Asset{Type: types.AssetType(pAssets[0].Type), Target: pAssets[0].Target}
+	}
+	estate := l2.EstateContext{
+		Issues:      toIssueDigests(crossdetect.UnifiedIssues(findings)),
+		AttackPaths: renderChains(crossdetect.Correlate(pAssets, findings)),
+	}
+	dep := l2.Deps{Target: target, L1Findings: findings}
+	budget := l2.DefaultBudget()
+	budget.MaxIterations = 16 // a bounded translate pass (not a full investigation)
+	agent, err := l2.New(client, l2.BuildCatalog(dep), budget)
+	if err != nil {
+		return l2.Outcome{}, err
+	}
+	agent.WithEstate(estate)
+	return agent.Run(ctx, target, findings)
+}
+
+// AutoReviewAfterScan is the runner.Service.AfterScan hook: once a scan pass surfaces something NEW,
+// the AI Security Engineer reviews the estate automatically (instead of waiting for a human to click).
+// Gated so a Free tenant never auto-spends the operator's LLM budget: a tenant's OWN key is allowed on
+// any plan, but the operator-global client only drives auto-review for AI-entitled plans. Best-effort —
+// errors are logged + swallowed, never affecting the scan.
+func (d Deps) AutoReviewAfterScan(ctx context.Context, tenantID string, findings []types.Finding, openedIncidents int) {
+	if len(findings) == 0 {
+		return
+	}
+	client := d.autoReviewClient(ctx, tenantID)
+	if client == nil {
+		return // no own key + not AI-entitled (or no LLM configured at all) → don't spend operator budget
+	}
+	out, err := d.runTranslate(ctx, tenantID, client, findings)
+	if err != nil {
+		slog.Warn("[auto-review] AI engineer review failed", "tenant", tenantID, "err", err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("ai engineer auto-reviewed", "l2-lead",
+			map[string]any{"tenant_id": tenantID, "opened_incidents": openedIncidents, "reports": len(out.Findings), "summary": out.Summary},
+			"AI Security Engineer auto-review after scan change")
+	}
+}
+
+// autoReviewClient resolves the L2 client for the COST-GATED auto-review: the tenant's OWN configured
+// model (their cost — allowed on any plan) else the operator-global client BUT only when the plan is
+// AI-entitled (the economic invariant). nil → skip the auto-review.
+func (d Deps) autoReviewClient(ctx context.Context, tenantID string) l2.Client {
+	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
+		switch strings.ToLower(provider) {
+		case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
+			return l2.NewOpenAICompatClient(model, "", key)
+		}
+	}
+	if d.LeadClient != nil && d.planLimits(ctx, tenantID).AIEnabled {
+		return d.LeadClient
+	}
+	return nil
 }
 
 // toIssueDigests maps crossdetect's unified issues into the engine-pure l2.IssueDigest the Lead prompt
