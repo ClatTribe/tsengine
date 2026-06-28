@@ -43,7 +43,7 @@ func TestOAuthState_Expired(t *testing.T) {
 	d := Deps{Token: "platform-secret"}
 	// hand-mint a state whose exp is in the past, signed correctly.
 	msg := "ten-abc:" + strconv.FormatInt(time.Now().Add(-time.Minute).Unix(), 10)
-	expired := msg + ":" + d.oauthStateMAC(msg)
+	expired := msg + ":" + oauthStateMAC(d.Token, msg)
 	if _, ok := d.verifyOAuthState(expired); ok {
 		t.Fatal("an expired state verified")
 	}

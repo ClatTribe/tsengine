@@ -54,6 +54,8 @@ func deps(t *testing.T, st store.Store) Deps {
 		Connectors: connector.NewRegistry(connector.NewGitHub("client-123", "secret")),
 		PublicURL:  "https://app.example",
 		Rescan:     &fakeRescanner{},
+		// a deterministic stub of platformapi.SignOAuthState (a real signed state is "<tenant>:<exp>:<mac>").
+		StateSigner: func(tenantID string) string { return tenantID + ":1:deadbeef" },
 	}
 }
 
@@ -332,8 +334,10 @@ func TestConnect_RedirectsToProvider(t *testing.T) {
 	if !strings.Contains(loc, "github.com/login/oauth/authorize") {
 		t.Errorf("redirect should target GitHub OAuth, got %q", loc)
 	}
-	if !strings.Contains(loc, "state=t1") {
-		t.Errorf("OAuth state should carry the tenant id, got %q", loc)
+	// the OAuth state is the SIGNED form "<tenant>:<exp>:<mac>" (url-encoded the "t1:" prefix is "t1%3A"),
+	// never a raw tenant id (which the callback rejects).
+	if !strings.Contains(loc, "state=t1%3A") {
+		t.Errorf("OAuth state should be the signed tenant form, got %q", loc)
 	}
 	if !strings.Contains(loc, "redirect_uri=https%3A%2F%2Fapp.example%2Fv1%2Fconnect%2Fgithub%2Fcallback") {
 		t.Errorf("redirect_uri should point at the callback, got %q", loc)

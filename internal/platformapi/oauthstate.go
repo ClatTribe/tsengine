@@ -27,19 +27,24 @@ import (
 
 const oauthStateTTL = 15 * time.Minute
 
-func (d Deps) oauthStateMAC(msg string) string {
-	mac := hmac.New(sha256.New, []byte(d.Token))
+func oauthStateMAC(token, msg string) string {
+	mac := hmac.New(sha256.New, []byte(token))
 	mac.Write([]byte("oauth-state:")) // domain-separation from the Trust Center token (shared key)
 	mac.Write([]byte(msg))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// signOAuthState returns a signed, expiring state token carrying the tenant id. Format:
-// "<tenantID>:<unix-exp>:<hex-hmac>" (tenant ids are `ten-<hex>` — no ':' to collide with).
-func (d Deps) signOAuthState(tenantID string) string {
+// SignOAuthState returns a signed, expiring OAuth `state` carrying the tenant id, keyed by the platform
+// secret. Format "<tenantID>:<unix-exp>:<hex-hmac>" (tenant ids are `ten-<hex>` — no ':' to collide
+// with). Exported so the /ui console mints the SAME state the (signed-only) callback verifies — both
+// connect entry points stay on the one signed-state contract; a raw tenant id would reopen the
+// cross-tenant connection-injection vector this guards.
+func SignOAuthState(token, tenantID string) string {
 	msg := tenantID + ":" + strconv.FormatInt(time.Now().Add(oauthStateTTL).Unix(), 10)
-	return msg + ":" + d.oauthStateMAC(msg)
+	return msg + ":" + oauthStateMAC(token, msg)
 }
+
+func (d Deps) signOAuthState(tenantID string) string { return SignOAuthState(d.Token, tenantID) }
 
 // verifyOAuthState validates a state token and returns the tenant id it was minted for. ok is false
 // for any tampered, malformed, or expired token — the callback trusts the tenant ONLY when the
@@ -50,7 +55,7 @@ func (d Deps) verifyOAuthState(state string) (tenantID string, ok bool) {
 		return "", false
 	}
 	msg, sig := state[:i], state[i+1:]
-	if !hmac.Equal([]byte(sig), []byte(d.oauthStateMAC(msg))) {
+	if !hmac.Equal([]byte(sig), []byte(oauthStateMAC(d.Token, msg))) {
 		return "", false
 	}
 	j := strings.LastIndex(msg, ":")

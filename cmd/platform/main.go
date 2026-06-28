@@ -420,7 +420,10 @@ func main() {
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
 	// through to the API for every non-/ui path.
 	ui := console.Handler(console.Deps{Store: st, Token: token, Desk: desk, Report: g,
-		Connectors: reg, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"), Rescan: svc})
+		Connectors: reg, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"), Rescan: svc,
+		// Mint the SAME signed OAuth state the /v1 callback verifies (keyed by the platform token), so
+		// console onboarding stays on the one signed-state contract instead of a (rejected) raw tenant id.
+		StateSigner: func(tenantID string) string { return platformapi.SignOAuthState(token, tenantID) }})
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", obsv.MetricsHandler()) // Prometheus scrape target (network-restrict in prod)
 	mux.Handle("/ui", ui)

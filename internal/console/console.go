@@ -71,6 +71,10 @@ type Deps struct {
 	Connectors ConnectorSource // onboarding; nil → the connect page/link is hidden
 	PublicURL  string          // base URL for the OAuth redirect_uri (e.g. https://app.example)
 	Rescan     Rescanner       // manual "scan now"; nil → the button is hidden
+	// StateSigner mints the OAuth `state` the (signed-only) callback verifies (platformapi.SignOAuthState).
+	// Required for onboarding — nil disables the console connect flow (a RAW tenant id would be rejected
+	// by the callback and is a cross-tenant-injection footgun, so the console never emits one).
+	StateSigner func(tenantID string) string
 }
 
 // Handler returns the console router: the dashboard, the login form, logout, and the
@@ -153,15 +157,16 @@ func (d Deps) connectPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// connect kicks off the provider OAuth consent: it builds the authorize URL (CSRF state =
-// tenant id, the form the /v1/connect/{kind}/callback handler already expects) and
-// redirects the browser. The callback exchanges the code, seals the token, and scans.
+// connect kicks off the provider OAuth consent: it builds the authorize URL with a SIGNED `state`
+// (the only form the /v1/connect/{kind}/callback handler accepts — a raw tenant id is rejected, and
+// emitting one would be a cross-tenant connection-injection footgun) and redirects the browser. The
+// callback exchanges the code, seals the token, and scans.
 func (d Deps) connect(w http.ResponseWriter, r *http.Request) {
 	if !d.authed(r) {
 		renderLogin(w, http.StatusOK, loginView{Tenant: r.URL.Query().Get("tenant")})
 		return
 	}
-	if d.Connectors == nil {
+	if d.Connectors == nil || d.StateSigner == nil {
 		http.Error(w, "connectors not configured", http.StatusNotImplemented)
 		return
 	}
@@ -176,7 +181,7 @@ func (d Deps) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectURI := d.PublicURL + "/v1/connect/" + c.Kind() + "/callback"
-	http.Redirect(w, r, c.OAuthURL(tenantID, redirectURI), http.StatusSeeOther)
+	http.Redirect(w, r, c.OAuthURL(d.StateSigner(tenantID), redirectURI), http.StatusSeeOther)
 }
 
 // finding renders one finding's full detail — the evidence behind a dashboard row
