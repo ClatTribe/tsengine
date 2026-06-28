@@ -59,14 +59,22 @@ func ParseEPSS(r io.Reader) (map[string]types.EPSSScore, time.Time, error) {
 	return out, asOf, nil
 }
 
-// ParseEPSSGzip decompresses the .csv.gz feed and parses it.
+// maxDecompressedEPSS bounds the GUNZIPPED EPSS stream so a decompression bomb (a tiny .csv.gz that
+// expands to gigabytes) can't OOM the in-process corpus refresher (scheduler.CorpusRefresher runs this
+// on a 24h clock inside the long-lived platform server). The real feed is ~10–15 MiB decompressed
+// (~336k CVEs); 128 MiB is ~8× headroom for growth while capping a bomb at a survivable size. A var so
+// tests can lower it. Over-cap data is truncated (EOF) — legit data is far under the cap, so it's never
+// reached in practice; a bomb just stops at the ceiling instead of OOMing.
+var maxDecompressedEPSS int64 = 128 << 20
+
+// ParseEPSSGzip decompresses the .csv.gz feed and parses it (bounded against a gzip bomb).
 func ParseEPSSGzip(r io.Reader) (map[string]types.EPSSScore, time.Time, error) {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("threatintel: gunzip EPSS: %w", err)
 	}
 	defer func() { _ = gz.Close() }()
-	return ParseEPSS(gz)
+	return ParseEPSS(io.LimitReader(gz, maxDecompressedEPSS))
 }
 
 func parseEPSSRow(line string) (cve string, score, pct float64, ok bool) {

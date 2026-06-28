@@ -92,6 +92,20 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 	return m, dataPath, nil
 }
 
+// maxFeedBody bounds every corpus-feed RESPONSE so a hostile/runaway/MITM'd feed host can't OOM the
+// in-process refresher. The largest real feed (the EPSS .csv.gz) is a few MiB compressed; 64 MiB is
+// ample. (The gunzipped EPSS stream is bounded separately in ParseEPSSGzip — that's the bomb guard.)
+const maxFeedBody = 64 << 20
+
+// limitedReadCloser caps reads at a ceiling while preserving the underlying Close.
+type limitedReadCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (l limitedReadCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
+func (l limitedReadCloser) Close() error               { return l.c.Close() }
+
 func httpGet(ctx context.Context, c *http.Client, url string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -106,5 +120,6 @@ func httpGet(ctx context.Context, c *http.Client, url string) (io.ReadCloser, er
 		_ = resp.Body.Close()
 		return nil, fmt.Errorf("GET %s: HTTP %d", url, resp.StatusCode)
 	}
-	return resp.Body, nil
+	// Bound the (compressed) body for every feed — defense-in-depth against an oversized/runaway response.
+	return limitedReadCloser{r: io.LimitReader(resp.Body, maxFeedBody), c: resp.Body}, nil
 }
