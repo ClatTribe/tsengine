@@ -16,7 +16,7 @@ func TestHTTPDoer_GetReflectsAndRendersStatusHeadersBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := NewHTTPDoer()
+	d := newHTTPDoer(nil) // unguarded: the httptest server binds loopback, which the prod guard refuses
 	out, err := d.Do(context.Background(), "GET", srv.URL+"?q=<script>alert(1)</script>",
 		map[string]string{"X-Probe": "tsengine"}, "")
 	if err != nil {
@@ -39,13 +39,30 @@ func TestHTTPDoer_RejectsNonHTTPScheme(t *testing.T) {
 	}
 }
 
+// The production (SSRF-guarded) doer must refuse internal/metadata targets — the LLM (steerable by a
+// prompt-injected finding) must not be able to make this host-side primitive reach loopback, RFC1918,
+// or the cloud metadata endpoint.
+func TestHTTPDoer_GuardRefusesInternalTargets(t *testing.T) {
+	d := NewHTTPDoer() // the production guarded client
+	for _, u := range []string{
+		"http://127.0.0.1:8090/v1/findings",          // the host platform API
+		"http://169.254.169.254/latest/meta-data/",   // cloud metadata
+		"http://10.0.0.5/internal",                    // RFC1918
+		"http://[::1]:8090/",                          // IPv6 loopback
+	} {
+		if _, err := d.Do(context.Background(), "GET", u, nil, ""); err == nil {
+			t.Errorf("SSRF guard must refuse %s, but the request was allowed", u)
+		}
+	}
+}
+
 func TestHTTPDoer_CapsBodyRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(strings.Repeat("A", 200<<10))) // 200 KiB
 	}))
 	defer srv.Close()
 
-	d := NewHTTPDoer()
+	d := newHTTPDoer(nil) // unguarded: loopback httptest server
 	out, err := d.Do(context.Background(), "GET", srv.URL, nil, "")
 	if err != nil {
 		t.Fatalf("Do: %v", err)
