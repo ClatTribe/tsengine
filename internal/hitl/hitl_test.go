@@ -123,6 +123,38 @@ func TestTier1AutoApplies(t *testing.T) {
 	}
 }
 
+// An approver's Edit may tweak presentational fields but must NOT rewrite the effect-defining keys
+// (target / remediation_type) — otherwise a reviewed bucket-A fix could be retargeted at bucket-B
+// between approval and apply.
+func TestDecide_EditCannotRewriteTargetOrRemediationType(t *testing.T) {
+	app := &recordingApplier{}
+	d, _, _ := newDesk(app)
+	ctx := context.Background()
+	a := platform.Action{
+		ID: "a3", TenantID: "t", Tier: 2, Kind: platform.ActApplyConfig, Status: platform.ActProposed,
+		Payload: map[string]any{"target": "arn:aws:s3:::bucket-A", "remediation_type": "s3_block_public_access"},
+	}
+	if _, err := d.Submit(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	dec, err := d.Decide(ctx, "t", "a3", Verdict{
+		Approver: "analyst-1", Approve: true,
+		Edit: map[string]any{"target": "arn:aws:s3:::bucket-B", "remediation_type": "evil", "summary": "looks fine"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dec.Payload["target"] != "arn:aws:s3:::bucket-A" {
+		t.Errorf("SECURITY: an approver rewrote the action target via Edit: %v", dec.Payload["target"])
+	}
+	if dec.Payload["remediation_type"] != "s3_block_public_access" {
+		t.Errorf("SECURITY: an approver rewrote remediation_type via Edit: %v", dec.Payload["remediation_type"])
+	}
+	if dec.Payload["summary"] != "looks fine" {
+		t.Errorf("a presentational edit should still land, got %v", dec.Payload["summary"])
+	}
+}
+
 func TestTier2GatesThenHumanApproves(t *testing.T) {
 	app := &recordingApplier{}
 	d, rec, st := newDesk(app)

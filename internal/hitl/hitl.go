@@ -119,7 +119,16 @@ func (d *Desk) Decide(ctx context.Context, tenantID, actionID string, v Verdict)
 	}
 	a.Approver = v.Approver
 	a.DecidedAt = d.now()
-	for k, val := range v.Edit { // human edits ride onto the payload before apply
+	// Human edits ride onto the payload before apply — but NEVER the effect-defining keys. An approver
+	// may tweak presentational fields (a PR base/body, a ticket summary), but may not rewrite WHAT a
+	// mutation does: `target` (the resource the connector writes) and `remediation_type` (the class it
+	// routes on) are grounded in the finding at propose time. Without this, an approver could retarget a
+	// reviewed "block public access on bucket-A" at bucket-B after it was queued under the original
+	// description — an approval-integrity gap. New effect-defining keys MUST be added to protectedPayloadKeys.
+	for k, val := range v.Edit {
+		if protectedPayloadKeys[k] {
+			continue
+		}
 		if a.Payload == nil {
 			a.Payload = map[string]any{}
 		}
@@ -141,6 +150,12 @@ func (d *Desk) Decide(ctx context.Context, tenantID, actionID string, v Verdict)
 	}
 	return d.apply(ctx, a, v.Approver)
 }
+
+// protectedPayloadKeys are payload fields that DEFINE what a mutation does — the resource it targets and
+// the remediation class the Deliverer/connector routes on. They are set (grounded in the finding) at
+// propose time and must never be rewritten by an approver's Edit, so a reviewed action can't be silently
+// retargeted between review and apply.
+var protectedPayloadKeys = map[string]bool{"target": true, "remediation_type": true}
 
 // apply executes an approved action and persists the applied state.
 func (d *Desk) apply(ctx context.Context, a platform.Action, approver string) (platform.Action, error) {
@@ -183,13 +198,24 @@ func (d *Desk) apply(ctx context.Context, a platform.Action, approver string) (p
 
 // record writes one decision step into the signed ledger (nil-safe).
 func (d *Desk) record(event string, a platform.Action, approver string) {
+	meta := map[string]any{
+		"action_id": a.ID, "finding_id": a.FindingID, "kind": a.Kind,
+		"tier": a.Tier, "approver": approver,
+	}
+	// Record the effect-defining fields so the signed trail shows WHAT was applied (the resource +
+	// remediation class), not just the action kind — an auditor can see the actual target.
+	if a.Payload != nil {
+		if t, ok := a.Payload["target"]; ok {
+			meta["target"] = t
+		}
+		if rt, ok := a.Payload["remediation_type"]; ok {
+			meta["remediation_type"] = rt
+		}
+	}
 	d.Recorder.Record(
 		"hitl "+event,
 		"hitl_decision",
-		map[string]any{
-			"action_id": a.ID, "finding_id": a.FindingID, "kind": a.Kind,
-			"tier": a.Tier, "approver": approver,
-		},
+		meta,
 		fmt.Sprintf("action %s → %s (tier %d, approver %q)", a.ID, a.Status, a.Tier, approver),
 	)
 }
