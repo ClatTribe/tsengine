@@ -188,6 +188,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
     edges: [
       { t: "Compliance + an auditor flow", d: "Aikido is dev-security-first. We carry that and add 22 frameworks, signed evidence, and an audit/attestation workflow — so the same findings get you SOC 2, not just a clean dev dashboard." },
       PENTEST_EDGE,
+      { t: "A product, or a security team", d: "Aikido is a product a human operates — there's no accountable, signed human-in-the-loop layer, so it can't be delivered as a managed service. Ours can: run it yourself, or have a named expert (ours, or your MSP's) operate it for you and sign off on the calls that matter." },
       TWO_GTM_EDGE,
     ],
     chooseThem: "You're a developer-led team that wants the best dev-security DX and doesn't need compliance, a pentest, or a managed expert from the same vendor.",

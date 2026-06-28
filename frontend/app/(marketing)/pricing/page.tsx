@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
+import { EngageModels } from "@/components/marketing/engage-models";
 import { Reveal } from "@/components/marketing/reveal";
 import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 
@@ -19,7 +20,7 @@ const TIERS = [
     name: "Free",
     price: "₹0",
     cadence: "forever",
-    blurb: "See your real posture across all five categories — deterministic scanners, no AI, no card.",
+    blurb: "Your deterministic security + compliance posture — 30+ scanners, cross-surface correlation, threat-intel. The substrate, free forever (no AI/LLM cost to run). No card.",
     cta: "Start free",
     href: "/signup",
     highlight: false,
@@ -37,7 +38,7 @@ const TIERS = [
     price: "₹7,999",
     cadence: "/ month + GST",
     annual: "or ₹79,990/yr — ~2 months free",
-    blurb: "The full AI security + compliance engineer for a growing company.",
+    blurb: "Everything in Free + your AI Security Engineer — reasons over your whole estate, prioritizes, chains, fixes, and explains in plain English.",
     cta: "Start free",
     href: "/signup",
     highlight: true,
@@ -55,7 +56,7 @@ const TIERS = [
     name: "Enterprise",
     price: "Talk to us",
     cadence: "unlimited",
-    blurb: "Unlimited scale, autonomous pentest, and managed or MSP delivery.",
+    blurb: "Everything in Growth + your AI Pentester (exploitation-proven VAPT) — plus unlimited scale and managed / MSP delivery.",
     cta: "Contact sales",
     href: "/demo",
     highlight: false,
@@ -74,6 +75,7 @@ const TIERS = [
 const FAQ = [
   ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the deterministic open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
   ["What do I get on Growth that Free doesn't have?", "The AI: an agent that prioritizes findings, traces attack chains across code, cloud and identity, writes fixes, and explains everything in plain English — plus continuous monitoring with incidents, all 22 compliance frameworks with signed evidence, and the human-in-the-loop apply loop that actually closes findings. ₹7,999/mo (or ₹79,990/yr), up to 25 targets."],
+  ["Can I use the AI on the Free plan with my own model key?", "Yes — bring your own LLM key. Free doesn't include operator-funded AI (no LLM cost on our side is exactly what keeps it free to run), but connect your own model key in Settings → LLM — any OpenAI-compatible provider, or a local Ollama — and the AI Security Engineer runs on your plan, at your cost. Or upgrade to Growth and we run it for you."],
   ["Why only one paid tier?", "Because most teams don't want to decode a feature matrix. Free to try, Growth for the full product, and Enterprise (talk to us) when you need unlimited targets, autonomous pentest, SSO, or a managed/MSP delivery. Simple."],
   ["Do I need a security engineer to use it?", "No — that's the point. TensorShield does the security engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. Built for a non-technical founder or ops lead."],
   ["What does \"human in the loop\" mean?", "Low-risk fixes apply automatically. Anything consequential (a config change, an identity action) waits for one tap of your approval — and every decision, automated or human, is signed into a tamper-evident ledger."],
@@ -199,6 +201,17 @@ export default function Pricing() {
             Genuinely free to start, one simple paid plan for the full AI security + compliance team, and
             Enterprise when you scale. No per-seat surprises, no security hire — a fraction of a single retainer.
           </p>
+          {/* The architecture as the pricing spine: a free deterministic substrate, two AI teammates you
+              add on top, and a named human accountable for the calls that matter. */}
+          <div className="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs">
+            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Deterministic posture <span className="text-faint">· Free</span></span>
+            <span className="text-faint">+</span>
+            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">AI Security Engineer <span className="text-faint">· Growth</span></span>
+            <span className="text-faint">+</span>
+            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">AI Pentester <span className="text-faint">· Enterprise</span></span>
+            <span className="text-faint">+</span>
+            <span className="rounded-md border border-dashed border-border px-2.5 py-1 font-medium text-muted">a named human (HITL)</span>
+          </div>
         </Reveal>
       </section>
 
@@ -252,29 +265,10 @@ export default function Pricing() {
         </p>
       </section>
 
-      {/* Managed & partner service models — the practitioner layer, surfaced in pricing */}
-      <section className="mx-auto max-w-4xl px-5 pt-6">
-        <Reveal className="rounded-2xl border border-border bg-surface-2/40 p-6 text-center sm:p-8">
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-accent">
-            <Sparkles className="h-3.5 w-3.5" /> Don&apos;t want to run it yourself?
-          </span>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight">Have it fully managed</h2>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-            Prefer not to handle even the approvals? A named security expert — ours, or your own MSP /
-            consultancy partner — runs TensorShield on your behalf: they triage, approve, and sign off,
-            you get the outcome and the accountability. Same engine, same signed evidence — you just
-            don&apos;t lift a finger. Priced per engagement.
-          </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/demo" className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover">
-              Talk to us about Managed <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link href="/partners" className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:border-border-strong">
-              For MSPs &amp; consultancies
-            </Link>
-          </div>
-        </Reveal>
-      </section>
+      {/* The three GTM models as co-equal options (§18.5): self-serve, managed, MSP — the practitioner
+          layer, first-class on the pricing page (was a single managed/MSP band). The only thing that
+          differs is who employs the human-in-the-loop. */}
+      <EngageModels />
 
       {/* Compare plans */}
       <ComparePlans />
