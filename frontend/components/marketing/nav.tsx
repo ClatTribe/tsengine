@@ -31,8 +31,8 @@ const SECURITY: Item[] = [
   { href: "/ai-security-engineer", label: "AI security engineer", desc: "Triages, fixes & explains — not just flags", icon: Bot },
   { href: "/ai-pentest", label: "AI pentesting", desc: "Continuous, exploitation-proven testing", icon: Crosshair },
   { href: "/cloud-security", label: "Cloud security", desc: "CSPM, attack paths & drift across AWS/GCP/Azure", icon: Cloud },
-  { href: "/supply-chain", label: "Code & supply chain", desc: "SAST, deps, SBOM, malware, secrets", icon: Boxes },
-  { href: "/identity", label: "Identity & SaaS posture", desc: "MFA, OAuth grants, stale access, SSPM", icon: KeyRound },
+  { href: "/code-security", label: "Code & supply chain", desc: "SAST, deps, reachability, malware, secrets", icon: Boxes },
+  { href: "/saas-posture", label: "Identity & SaaS posture", desc: "MFA, OAuth grants, stale access, SSPM", icon: KeyRound },
   { href: "/agent-controls", label: "AI agent controls", desc: "Kill-switch, isolation, human gate, signed log", icon: ShieldCheck },
 ];
 const COMPLIANCE: Item[] = [

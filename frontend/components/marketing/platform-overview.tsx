@@ -34,7 +34,7 @@ const SURFACES = [
   {
     name: "Identity",
     outcome: "Security",
-    href: "/identity",
+    href: "/saas-posture",
     icon: KeyRound,
     blurb: "Google · Microsoft 365 · Okta.",
     caps: ["MFA & SSO gaps", "Risky OAuth grants", "Stale / over-privileged", "SaaS posture (SSPM)", "Email auth (DMARC)"],

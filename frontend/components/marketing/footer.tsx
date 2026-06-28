@@ -10,7 +10,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/ai-security-engineer", label: "AI security engineer" },
       { href: "/ai-pentest", label: "AI pentesting" },
       { href: "/vapt", label: "VAPT reports" },
-      { href: "/supply-chain", label: "Supply-chain security" },
+      { href: "/code-security", label: "Code & supply chain" },
       { href: "/saas-posture", label: "SaaS & identity posture" },
       { href: "/ci-cd", label: "CI/CD pipeline" },
       { href: "/integrations", label: "Integrations" },
