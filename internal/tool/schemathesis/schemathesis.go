@@ -10,6 +10,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -29,7 +30,7 @@ func (*Schemathesis) SandboxExecution() bool    { return true }
 func (*Schemathesis) MITRETechniques() []string { return []string{"T1190"} }
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec).
-func (*Schemathesis) KnownArgs() []string { return []string{"spec_url", "max_examples"} }
+func (*Schemathesis) KnownArgs() []string { return []string{"spec_url", "max_examples", "base_url"} }
 
 // Run fuzzes an API from its schema. Recognized args:
 //
@@ -51,7 +52,25 @@ func (*Schemathesis) Run(ctx context.Context, args tool.Args) (tool.Result, erro
 	_ = f.Close()
 	defer os.Remove(junit)
 
-	cli := []string{"run", specURL, "--checks", "all", "--junit-xml", junit}
+	// schemathesis 4.x replaced --junit-xml with --report junit + --report-junit-path.
+	// With the old flag the run errored out ("No such option") and emitted ZERO findings
+	// despite finding real contract violations — the wrapper was silently broken against
+	// the installed v4.x.
+	cli := []string{"run", specURL, "--checks", "all", "--report", "junit", "--report-junit-path", junit}
+	// Force the API base URL (-u). A spec's servers[] is frequently empty or relative
+	// (VAmPI declares servers:[{url:""}]), so without -u schemathesis has no host to
+	// send requests to and reports ZERO findings — the tool silently does nothing.
+	// Prefer an explicit base_url; else derive it from the (already host-resolved)
+	// spec URL — for the common case the schema is served from the API's own origin.
+	base, _ := args["base_url"].(string)
+	if strings.TrimSpace(base) == "" {
+		if u, perr := url.Parse(specURL); perr == nil && u.Host != "" {
+			base = u.Scheme + "://" + u.Host
+		}
+	}
+	if strings.TrimSpace(base) != "" {
+		cli = append(cli, "-u", base)
+	}
 	if n, ok := args["max_examples"].(int); ok && n > 0 {
 		cli = append(cli, fmt.Sprintf("--hypothesis-max-examples=%d", n))
 	}
