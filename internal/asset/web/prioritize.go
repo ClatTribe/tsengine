@@ -21,12 +21,24 @@ import (
 // So the budget holds `max` real, in-scope, DISTINCT, high-value endpoints —
 // not the first `max` raw crawl hits (which are polluted with CSS/JS/nav).
 func (h *Handler) SelectSurface(target types.Asset, raw []string, max int) []string {
-	clean := filterSurface(target, raw)
+	// Preserve API-spec markers: openapi_spec_ingest emits "SPEC <url>" entries, which
+	// are NOT URLs — filterSurface would drop them. PlanFanout routes them to the
+	// spec-driven api fuzzer (schemathesis), so pull them aside, filter/prioritize/cap
+	// the real URLs, then prepend the markers back (they're cheap + must survive the cap).
+	var specMarkers, urls []string
+	for _, e := range raw {
+		if strings.HasPrefix(e, openapiSpecMarker+" ") {
+			specMarkers = append(specMarkers, e)
+		} else {
+			urls = append(urls, e)
+		}
+	}
+	clean := filterSurface(target, urls)
 	prioritizeSurface(clean)
 	if max > 0 && len(clean) > max {
 		clean = clean[:max]
 	}
-	return clean
+	return append(specMarkers, clean...)
 }
 
 var _ asset.SurfaceSelector = (*Handler)(nil)
