@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/netguard"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -30,11 +31,14 @@ type Jira struct {
 	HTTP      *http.Client
 }
 
-// NewJira builds the filer.
+// NewJira builds the filer. BaseURL is tenant-configurable (Tenant.Jira), so the production client uses
+// an SSRF-guarded transport that refuses any non-public host (loopback / RFC1918 / cloud metadata) at
+// dial time — closing the rebind window between when a tenant saves the URL and when a ticket is filed.
 func NewJira(baseURL, email, apiToken, project string) *Jira {
 	return &Jira{
 		BaseURL: strings.TrimRight(baseURL, "/"), Email: email, APIToken: apiToken,
-		Project: project, IssueType: "Task", HTTP: &http.Client{Timeout: 20 * time.Second},
+		Project: project, IssueType: "Task",
+		HTTP: &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{DialContext: netguard.GuardedDialContext(20 * time.Second)}},
 	}
 }
 

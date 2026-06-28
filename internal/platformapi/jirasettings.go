@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -60,6 +61,13 @@ func (d Deps) handlePutJiraSettings(w http.ResponseWriter, r *http.Request, tena
 	}
 	if !strings.HasPrefix(base, "https://") {
 		writeJSON(w, http.StatusBadRequest, errBody("base_url must be an https Jira URL"))
+		return
+	}
+	// The base_url is tenant-controlled and the platform POSTs to it server-side (TenantFiler → connector.Jira),
+	// so screen the host: refuse a private/loopback/reserved address (SSRF guard, mirroring /v1/assess). The
+	// connector's transport re-screens at dial time, catching a hostname that resolves to / rebinds to internal.
+	if u, perr := url.Parse(base); perr != nil || u.Host == "" || screenPublicHost(u.Hostname()) != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("base_url must be a public host (not an internal/loopback/metadata address)"))
 		return
 	}
 	if strings.TrimSpace(body.Email) == "" || strings.TrimSpace(body.Project) == "" {

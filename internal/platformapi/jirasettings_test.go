@@ -66,6 +66,11 @@ func TestJiraSettings_Validation(t *testing.T) {
 		"missing email":      `{"base_url":"https://acme.atlassian.net","project":"SEC","api_token":"t"}`,
 		"missing project":    `{"base_url":"https://acme.atlassian.net","email":"a@b.c","api_token":"t"}`,
 		"no token first time": `{"base_url":"https://acme.atlassian.net","email":"a@b.c","project":"SEC"}`,
+		// SSRF: a tenant must NOT point the server-side Jira filer at an internal/metadata host.
+		"ssrf metadata ip": `{"base_url":"https://169.254.169.254","email":"a@b.c","project":"SEC","api_token":"t"}`,
+		"ssrf localhost":   `{"base_url":"https://localhost:8090","email":"a@b.c","project":"SEC","api_token":"t"}`,
+		"ssrf private ip":  `{"base_url":"https://10.0.0.5","email":"a@b.c","project":"SEC","api_token":"t"}`,
+		"ssrf reserved":    `{"base_url":"https://jira.internal","email":"a@b.c","project":"SEC","api_token":"t"}`,
 	}
 	for name, body := range cases {
 		if rec := putJira(d, body); rec.Code != http.StatusBadRequest {

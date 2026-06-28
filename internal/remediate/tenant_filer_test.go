@@ -37,6 +37,7 @@ func TestTenantFiler_RoutesToPerTenantJira(t *testing.T) {
 			return "", "", "", "", false
 		},
 		Fallback: fallback,
+		HTTP:     srv.Client(), // the httptest server binds loopback, which the production guarded transport refuses
 	}
 	if err := tf.FileTicket(context.Background(), platform.Action{TenantID: "t1", Title: "Fix it"}); err != nil {
 		t.Fatalf("file: %v", err)
