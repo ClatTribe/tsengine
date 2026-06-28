@@ -26,6 +26,7 @@ import {
   Sparkles,
   Bug,
   Gauge,
+  Users,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -93,6 +94,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     header: "Workspace",
     items: [
       { href: "/assets", label: "Assets", icon: Boxes },
+      { href: "/security-team", label: "Your security team", icon: Users },
       { href: "/activity", label: "Activity", icon: History },
     ],
   },
