@@ -28,8 +28,8 @@ func TestL2Translate_GatesAndRuns(t *testing.T) {
 		t.Fatalf("Free tenant must not use the operator LLM → 400, got %d", rec.Code)
 	}
 
-	// Happy path: an AI-entitled (Growth) tenant + a mock tool-calling client + a finding → 200.
-	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanGrowth})
+	// Happy path: an AI-entitled (Enterprise) tenant + a mock tool-calling client + a finding → 200.
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanEnterprise})
 	_ = st.PutFinding(context.Background(), "t1", types.Finding{
 		ID: "f-1", RuleID: "nuclei::sqli", Tool: "nuclei", Severity: types.SeverityHigh,
 		Endpoint: "https://x/s?q=", Title: "SQL injection in q",
@@ -47,7 +47,7 @@ func TestL2Translate_GatesAndRuns(t *testing.T) {
 
 func TestL2Translate_NoFindingsIsOK(t *testing.T) {
 	st := store.NewMemory()
-	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanGrowth}) // AI-entitled
+	_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1", Plan: platform.PlanEnterprise}) // AI-entitled
 	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", LeadClient: &l2.MockClient{}}
 	if rec := do(NewHandler(d), "POST", "/v1/l2/translate", "t1", "{}"); rec.Code != 200 {
 		t.Fatalf("no findings → 200 (nothing to translate), got %d", rec.Code)

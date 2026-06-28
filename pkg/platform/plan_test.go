@@ -34,25 +34,41 @@ func TestEntitlements_FreeIsActuallyFree(t *testing.T) {
 	}
 }
 
-func TestEntitlements_PaidUnlocksAI(t *testing.T) {
-	for _, p := range []string{"growth", "enterprise"} {
-		if !Entitlements(p).AIEnabled {
-			t.Errorf("%s must enable AI", p)
-		}
-		if !Entitlements(p).AllFrameworks {
-			t.Errorf("%s must include all frameworks", p)
-		}
+// Positioning: AI is the PREMIUM. The two AI teammates (operator-funded) live ONLY on Enterprise
+// ("talk to us"); the Substrate tier (plan key "growth") is the full deterministic L1.7 substrate
+// WITHOUT operator AI. Both paid tiers still include all frameworks + continuous monitoring.
+func TestEntitlements_AIIsEnterpriseOnly(t *testing.T) {
+	// Substrate ("growth"): full substrate, NO operator AI.
+	sub := Entitlements("growth")
+	if sub.AIEnabled {
+		t.Error("Substrate (growth) must NOT have operator-funded AI — AI is the Enterprise/talk-to-us premium")
 	}
-	if Entitlements("growth").MaxAssets < 0 {
-		t.Error("Growth is capped, not unlimited")
+	if !sub.AllFrameworks || !sub.ContinuousMonitoring {
+		t.Error("Substrate is the FULL deterministic substrate — all frameworks + continuous monitoring")
 	}
-	if Entitlements("enterprise").MaxAssets != -1 {
+	if sub.MaxAssets < 0 {
+		t.Error("Substrate is asset-capped, not unlimited")
+	}
+	if sub.AutonomousPentest {
+		t.Error("autonomous pentest is Enterprise-only (or an add-on), not base Substrate")
+	}
+	// Enterprise: BOTH AI teammates + unlimited.
+	ent := Entitlements("enterprise")
+	if !ent.AIEnabled {
+		t.Error("Enterprise must enable the AI Security Engineer")
+	}
+	if !ent.AutonomousPentest {
+		t.Error("Enterprise must include the AI Pentester (autonomous pentest)")
+	}
+	if !ent.AllFrameworks {
+		t.Error("Enterprise must include all frameworks")
+	}
+	if ent.MaxAssets != -1 {
 		t.Error("Enterprise is unlimited assets")
 	}
-	if Entitlements("growth").AutonomousPentest {
-		t.Error("autonomous pentest is Enterprise-only (or an add-on), not base Growth")
-	}
-	if !Entitlements("enterprise").AutonomousPentest {
-		t.Error("Enterprise includes autonomous pentest")
+	// The à-la-carte escape hatch: the autonomous-pentest ADD-ON still unlocks AutonomousPentest on
+	// the Substrate base tier without buying Enterprise (no string-match drift — §Entitlements).
+	if !Entitlements("growth+pentest").AutonomousPentest {
+		t.Error("the pentest add-on must unlock AutonomousPentest on the Substrate base tier")
 	}
 }

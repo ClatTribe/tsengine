@@ -24,7 +24,7 @@ func TestResolveLeadClient_EconomicGate(t *testing.T) {
 	st := store.NewMemory()
 	ctx := context.Background()
 	_ = st.PutTenant(ctx, platform.Tenant{ID: "free", Plan: platform.PlanFree})
-	_ = st.PutTenant(ctx, platform.Tenant{ID: "paid", Plan: platform.PlanGrowth})
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "paid", Plan: platform.PlanEnterprise})
 
 	// No operator client configured at all → nil for everyone (nothing to spend).
 	if (Deps{Store: st}).resolveLeadClient(ctx, "paid") != nil {
