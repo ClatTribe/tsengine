@@ -63,6 +63,18 @@ export default async function SettingsPage() {
         </Card>
       </div>
 
+      {/* Service model — who employs the human-in-the-loop (self-serve / MSP / managed). A defining org
+          property (changes who owns approvals across the whole app), so it's its own top-level section,
+          not buried in Notifications. */}
+      <div>
+        <SectionTitle action={<span className="text-[11px] text-faint">changes who owns approvals</span>}>
+          Service model
+        </SectionTitle>
+        <Card className="p-5">
+          <PractitionersControl serviceModel={practitioners.service_model} practitioners={practitioners.practitioners} />
+        </Card>
+      </div>
+
       {/* AI engine — bring-your-own-LLM for the agent + autonomous pentest */}
       <div>
         <SectionTitle>AI engine</SectionTitle>
@@ -165,7 +177,6 @@ export default async function SettingsPage() {
           <JiraControl config={jira} />
           <EscalationControl policy={escalation} />
           <ContactsControl contacts={contacts} />
-          <PractitionersControl serviceModel={practitioners.service_model} practitioners={practitioners.practitioners} />
           <SLAControl policy={sla} />
           <MaintenanceControl windows={maintenance} />
           {[
