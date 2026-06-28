@@ -151,6 +151,22 @@ func TestReplay_RejectsMissingScanID(t *testing.T) {
 	}
 }
 
+// scan_id is a single path element under runsDir — a traversal value must be refused, never joined into
+// a path that escapes runsDir to read an arbitrary file.
+func TestReplay_RejectsTraversalScanID(t *testing.T) {
+	for _, bad := range []string{"../../etc", "..", ".", "a/b", "x/../../y", `a\b`, "foo/vulnerabilities"} {
+		_, err := Replay(context.Background(), Request{ScanID: bad, Tool: "nuclei"}, t.TempDir(), &mockSpawner{})
+		if err == nil || !errors.Is(err, errBadRequest) {
+			t.Errorf("scan_id %q must be rejected as a bad request, got %v", bad, err)
+		}
+	}
+	// a normal uuid-shaped scan_id passes validation (it then fails later as not-found, NOT bad-request).
+	_, err := Replay(context.Background(), Request{ScanID: "rpl-1a2b3c4d", Tool: "nuclei"}, t.TempDir(), &mockSpawner{})
+	if errors.Is(err, errBadRequest) {
+		t.Errorf("a normal scan_id must pass validation, got bad-request: %v", err)
+	}
+}
+
 func TestReplay_RejectsMissingTool(t *testing.T) {
 	_, err := Replay(context.Background(), Request{ScanID: "x"}, t.TempDir(), &mockSpawner{})
 	if err == nil || !errors.Is(err, errBadRequest) {
