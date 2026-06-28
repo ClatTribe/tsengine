@@ -407,6 +407,29 @@ func TestWebhook_VerifiesSignature(t *testing.T) {
 	}
 }
 
+// A connector that CAN verify its signature must FAIL CLOSED when no secret is configured — accepting
+// an unverified provider payload (and triggering a scan) would be the fail-open gap.
+func TestWebhook_FailsClosedWhenVerifiableButNoSecret(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: platform.ConnGitHub, Status: platform.ConnActive, SecretRef: "v:S"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "t1", ConnectionID: "c1", Type: "repository", Target: "https://github.com/acme/web"})
+	reg := connector.NewRegistry(verifyConn{})
+	svc := &runner.Service{Store: st, Connectors: reg, Tokens: fakeTokens{}, Scanner: fakeScanner{}}
+	// NOTE: no WebhookSecret configured.
+	h := NewHandler(Deps{Store: st, Connectors: reg, Runner: svc, Token: "platform-tok"})
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, webhookReq("anything")) // even a "signed" request must be refused — there's no secret to verify against
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a verifiable webhook with no configured secret must fail closed (503), got %d: %s", rec.Code, rec.Body.String())
+	}
+	if fs, _ := st.ListFindings(ctx, "t1", store.FindingFilter{}); len(fs) != 0 {
+		t.Fatal("a refused webhook must NOT trigger a scan")
+	}
+}
+
 func TestRespond_NilSliceSerializesAsEmptyArray(t *testing.T) {
 	// A nil slice must serialize as [] not null — a null crashes a frontend .map/.filter
 	// (the Go nil-slice → JSON-null footgun). Every list endpoint goes through respond().
