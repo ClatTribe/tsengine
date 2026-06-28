@@ -41,7 +41,11 @@ type Event = { at: string; kind: "detected" | "resolved" | "scanned"; title: str
 
 export default async function OverviewPage() {
   const connections = await api.connections();
-  if (connections.length === 0) return <FirstRun />;
+  if (connections.length === 0) {
+    // Cold start: ask the service model here so a managed/MSP tenant isn't silently defaulted to self_serve.
+    const { service_model } = await api.practitioners();
+    return <FirstRun serviceModel={service_model} />;
+  }
 
   // One concurrent wave for the whole dashboard. Compliance posture for every framework arrives
   // in a SINGLE batched call (postureSummary) instead of fanning out 14 per-framework requests,

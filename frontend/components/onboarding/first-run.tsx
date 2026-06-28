@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Target, Plug, ShieldCheck, ArrowRight, FileCheck2 } from "lucide-react";
 import { CONNECTORS, CATEGORY_LABEL, type ConnectorCategory } from "@/lib/connectors";
 import { ProviderIcon } from "@/components/brand/provider-icon";
+import { ServiceModelPicker } from "@/components/onboarding/service-model-picker";
 
 // Compliance-led onboarding (the founder ICP came for SOC 2 / ISO / HIPAA, not a scanner) — so we lead
 // with the goal, like Sprinto/Vanta: 1) tell us your framework, 2) connect your systems, 3) see your
@@ -13,8 +14,9 @@ const STEPS = [
 ];
 
 // The cold-start surface: shown on the Overview when a tenant has no connections yet. A self-serve SMB
-// product lives or dies on this first run — lead the founder straight into their compliance goal.
-export function FirstRun() {
+// product lives or dies on this first run — lead the founder straight into their compliance goal. We also
+// ask the service model here so a managed/MSP tenant isn't silently defaulted to self_serve (B8).
+export function FirstRun({ serviceModel }: { serviceModel?: string }) {
   return (
     <div className="mx-auto max-w-3xl space-y-8 py-6">
       <div className="text-center">
@@ -58,6 +60,10 @@ export function FirstRun() {
           </div>
         ))}
       </div>
+
+      {/* Service model — set who owns the human-in-the-loop up front (default self-serve), so a managed
+          or MSP tenant isn't silently defaulted. */}
+      <ServiceModelPicker current={serviceModel} />
 
       {/* Quick connect — step 2, ready to go the moment they've set a goal. */}
       <div className="space-y-5">
