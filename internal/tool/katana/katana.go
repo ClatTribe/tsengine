@@ -57,6 +57,9 @@ func (*Katana) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		//       one URL (the empty shell). -jc recovers the real surface WITHOUT a headless browser
 		//       (no Chromium needed): measured 1 → 1817 URLs on OWASP Juice Shop. The fan-out cap
 		//       (TSENGINE_FANOUT_MAX_URLS) + surface filtration keep the larger surface bounded.
+		"-jsl", // jsluice: deeper JS endpoint extraction (BishopFox jsluice, bundled in katana). Recovers
+		//        param-bearing API endpoints -jc alone misses (e.g. /redirect?to=, /api/Challenges/?key=
+		//        on Juice Shop: 188 → 204 endpoints) — more injection points for the fan-out's sqlmap/dalfox.
 	)
 	stdout, err := cmd.Output()
 	if err != nil {
