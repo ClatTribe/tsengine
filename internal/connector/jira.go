@@ -37,8 +37,7 @@ type Jira struct {
 func NewJira(baseURL, email, apiToken, project string) *Jira {
 	return &Jira{
 		BaseURL: strings.TrimRight(baseURL, "/"), Email: email, APIToken: apiToken,
-		Project: project, IssueType: "Task",
-		HTTP: &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{DialContext: netguard.GuardedDialContext(20 * time.Second)}},
+		Project: project, IssueType: "Task", HTTP: netguard.GuardedClient(20 * time.Second),
 	}
 }
 

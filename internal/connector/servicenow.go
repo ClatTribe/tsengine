@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/netguard"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -30,7 +31,7 @@ type ServiceNow struct {
 func NewServiceNow(instanceURL, user, password string) *ServiceNow {
 	return &ServiceNow{
 		InstanceURL: strings.TrimRight(instanceURL, "/"), User: user, Password: password,
-		HTTP: &http.Client{Timeout: 20 * time.Second},
+		HTTP: netguard.GuardedClient(20 * time.Second),
 	}
 }
 

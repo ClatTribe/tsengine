@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/netguard"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -26,7 +27,7 @@ type GitLab struct {
 
 // NewGitLab builds the connector for gitlab.com.
 func NewGitLab(clientID, clientSecret string) *GitLab {
-	return &GitLab{ClientID: clientID, ClientSecret: clientSecret, BaseURL: "https://gitlab.com", HTTP: &http.Client{Timeout: 20 * time.Second}}
+	return &GitLab{ClientID: clientID, ClientSecret: clientSecret, BaseURL: "https://gitlab.com", HTTP: netguard.GuardedClient(20 * time.Second)}
 }
 
 func (g *GitLab) Kind() string { return platform.ConnGitLab }
