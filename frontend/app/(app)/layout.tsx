@@ -25,14 +25,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // — send them to the rotation screen, which also lives outside (app) so this check can't loop.
   if (me.must_change_password) redirect("/change-password");
 
-  const [findings, approvals, tenant] = await Promise.all([api.findings(), api.approvals(), api.tenant()]);
+  const [findings, approvals, tenant, practitioners] = await Promise.all([
+    api.findings(),
+    api.approvals(),
+    api.tenant(),
+    api.practitioners(),
+  ]);
   const risk = riskRating(severityCounts(findings));
 
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar pending={approvals.length} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar workspace={tenant?.name || session.tenant} risk={risk} />
+        <TopBar
+          workspace={tenant?.name || session.tenant}
+          risk={risk}
+          serviceModel={practitioners?.service_model}
+          practitioner={practitioners?.practitioners?.[0] ?? null}
+        />
         {tenant?.agents_halted && (
           <Link
             href="/settings"

@@ -23,17 +23,19 @@ import {
   Radar,
   ScanSearch,
   ChevronDown,
+  Sparkles,
+  Bug,
+  Gauge,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badgeKey?: "pending" };
 
-// Grouped IA — a non-security founder (our ICP) drowns in a flat 16-item list. Competitors (Vanta,
-// Aikido, Linear) bucket nav into a few scannable groups. Two pinned items on top (the daily driver),
-// then three labelled groups matching the founder's mental model: Security (am I safe?), Compliance
-// (am I audit-ready?), Workspace (what's connected + what happened). Adding a route → drop it in the
-// right group, don't grow a flat list.
+// Grouped IA — the nav mirrors the product's architecture so a founder reads the thesis from the
+// sidebar: a deterministic POSTURE substrate, two AI teammates that reason over it (a defender and an
+// attacker), Compliance, and the human-judgment (HITL) Governance layer. Two pinned items on top (the
+// daily driver). Adding a route → drop it in the layer it belongs to, don't grow a flat list.
 const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   {
     items: [
@@ -42,21 +44,33 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    header: "Security",
+    // L1.7 — the deterministic security + compliance posture (scans · correlation · threat-intel),
+    // the security-engineer/auditor deliverable that both AI products reason over.
+    header: "Posture",
     items: [
-      // Findings is a raw/grouped tab inside Issues; Asset posture a tab inside Coverage; the
-      // plain-English brief lives on Overview — so each DATASET has one nav home. Cloud engineer
-      // stays its own item: it's an interactive agent (you run an investigation), not just a view
-      // of attack paths.
       { href: "/issues", label: "Issues", icon: Layers },
+      { href: "/findings", label: "Findings", icon: Bug },
       { href: "/incidents", label: "Incidents", icon: Activity },
       { href: "/attack-paths", label: "Attack paths", icon: Spline },
-      { href: "/cloud-engineer", label: "Cloud engineer", icon: Cloud },
-      { href: "/pentest", label: "Pentest", icon: Crosshair },
       { href: "/osint", label: "External exposure", icon: Radar },
       { href: "/coverage", label: "Coverage", icon: ScanSearch },
+      { href: "/posture", label: "Asset posture", icon: Gauge },
       { href: "/saas-apps", label: "SaaS & identity", icon: AppWindow },
     ],
+  },
+  {
+    // L2 defense — reasons OVER the posture: prioritizes, explains, remediates, writes the brief.
+    header: "AI Security Engineer",
+    items: [
+      { href: "/brief", label: "Security brief", icon: Sparkles },
+      { href: "/cloud-engineer", label: "Cloud engineer", icon: Cloud },
+      { href: "/reviews", label: "Expert reviews", icon: UserCheck },
+    ],
+  },
+  {
+    // L2 attack — exploitation-proven VAPT (the other AI teammate).
+    header: "AI Pentester",
+    items: [{ href: "/pentest", label: "Pentest", icon: Crosshair }],
   },
   {
     header: "Compliance",
@@ -66,7 +80,8 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // The vCISO/GRC-management trio — distinct for an auditor, collapsible so a founder can ignore it.
+    // HITL — the human-judgment layer the AI can't own: vCISO risk acceptance, auditor attestation,
+    // policy publication. Distinct for an auditor, collapsible so a founder can ignore it.
     header: "Governance",
     items: [
       { href: "/risks", label: "Risks", icon: Scale },
@@ -78,7 +93,6 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     header: "Workspace",
     items: [
       { href: "/assets", label: "Assets", icon: Boxes },
-      { href: "/reviews", label: "Reviews", icon: UserCheck },
       { href: "/activity", label: "Activity", icon: History },
     ],
   },
