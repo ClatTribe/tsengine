@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FeatureIcon } from "@/components/brand/feature-icon";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
+import { EngageModels } from "@/components/marketing/engage-models";
 import {
   Building2, ArrowRight, TrendingUp, UserCog, Layers, ShieldCheck, Briefcase,
   Clock, BadgeCheck, Wallet, CheckCircle2,
@@ -115,6 +116,20 @@ export default function Partners() {
           ))}
         </ol>
       </section>
+
+      {/* The service-model table, canonical here (§18.5) — the MSP/partner model is one of three ways
+          the SAME engine is delivered. Putting the comparison on this page shows partners exactly where
+          they sit relative to self-serve and our managed service. */}
+      <div className="border-t border-border">
+        <div className="mx-auto max-w-2xl px-5 pt-16 text-center">
+          <span className="text-xs font-semibold uppercase tracking-wider text-accent">Where partners fit</span>
+          <p className="mt-3 text-base leading-relaxed text-muted">
+            One engine, three ways to deliver it. The only thing that changes is who makes the human-in-the-loop
+            calls — your client&apos;s own team, our experts, or <strong className="font-semibold text-ink">yours</strong>.
+          </p>
+        </div>
+        <EngageModels />
+      </div>
 
       {/* Trust strip */}
       <section className="border-y border-border bg-surface">
