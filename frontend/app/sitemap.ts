@@ -6,7 +6,7 @@ import { SITE_URL } from "@/lib/site";
 // Authed app routes (under (app)) are intentionally excluded; they redirect to /login.
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticPaths = [
-    "", "/product", "/cross-detection", "/ai-security-engineer", "/ai-pentest", "/vapt", "/supply-chain",
+    "", "/product", "/cross-detection", "/ai-security-engineer", "/ai-pentest", "/vapt",
     "/saas-posture", "/ci-cd", "/pricing", "/security", "/integrations", "/about", "/frameworks", "/scan", "/demo",
     // GTM pages that were crawlable but missing from the sitemap
     "/vs-consulting", "/partners", "/managed", "/soc2-readiness", "/sample-report", "/blog",
