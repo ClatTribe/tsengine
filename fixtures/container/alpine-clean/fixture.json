@@ -1,13 +1,13 @@
 {
   "name": "container-alpine-clean",
   "asset": "container_image",
-  "target": "alpine:3.18",
-  "description": "Maintained Alpine 3.18 image with no current CVEs. FP-control / specificity check — tsengine must not raise an actionable (high/critical) finding on a clean target.",
+  "target": "alpine:3.21",
+  "description": "Maintained, currently-patched Alpine image with no actionable (high/critical) CVEs. FP-control / specificity check — tsengine must not raise an actionable finding on a clean target. POINT-IN-TIME baseline: a 'clean' image rots as new base-image CVEs are disclosed (e.g. 3.18 accrued musl CVE-2026-40200, an unfixed real CVE — a TRUE positive, not an engine FP), so this target is refreshed to a currently-patched tag rather than pinned forever. Verified clean (0 high+) 2026-06-28.",
   "metric": "fp_rate",
   "max_severity": "high",
   "competitors": {
     "leaderboard": "Trivy / Snyk Container / Anchore — self-published only",
-    "note": "Negative (specificity) test case: a clean image should produce zero high/critical CVE findings (harmless info-level base-image notes are tolerated — the severity-gated FP floor, not a brittle total-count cap). Pairs with container-nginx-vuln (sensitivity) for a recall + FP-rate read on container scanning. FP bar tracks the XBOW 'no false positives' standard."
+    "note": "Negative (specificity) test case: a clean image should produce zero high/critical CVE findings (harmless info-level base-image notes are tolerated — the severity-gated FP floor, not a brittle total-count cap). Pairs with container-nginx-vuln (sensitivity) for a recall + FP-rate read on container scanning. FP bar tracks the XBOW 'no false positives' standard. Refresh the target tag when a new base CVE lands against it (the same world-moves discipline as the threat-intel corpus, CLAUDE.md §7) — do NOT suppress the engine, which is correctly reporting a true positive."
   },
   "runnable": true
 }
