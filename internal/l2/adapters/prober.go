@@ -47,6 +47,12 @@ func NewProber(scanID, runsDir string, spawner replay.Spawner, scope, outOfScope
 // via /replay, and renders the resulting findings into a compact summary the
 // Lead can cite via update_finding(verified_by="dispatch_l2_probe:<tool>").
 func (p *Prober) Probe(ctx context.Context, toolName string, args map[string]any) (string, error) {
+	// Tool gate (default-deny): the LLM may only replay a VERIFICATION-safe tool. dispatch_l2_probe is for
+	// confirming/deepening a finding, not active attack — so credential brute-force (hydra), route/dir
+	// brute (wpscan/kiterunner), and stateful fuzzing (schemathesis) are refused even if the LLM names them.
+	if !verificationSafeTools[toolName] {
+		return "", fmt.Errorf("dispatch_l2_probe refused: %q is not a verification-safe tool (active-attack/brute tools can't be LLM-replayed)", toolName)
+	}
 	req := replay.Request{ScanID: p.ScanID, Tool: toolName, Args: tool.Args{}}
 	for k, v := range args {
 		if k == "target" {
@@ -82,6 +88,22 @@ func (p *Prober) targetAllowed(target string) bool {
 		return false
 	}
 	return matchesScope(target, p.Scope)
+}
+
+// verificationSafeTools is the allowlist of tools dispatch_l2_probe may replay — read-only detection /
+// confirmation tools for live targets plus read-only code/dependency/container/posture analysis. Active
+// credential brute-force (hydra), route/dir brute (wpscan, kiterunner), stateful fuzzing (schemathesis),
+// heavy enum (amass), auth-state seeding (seedauth), and cred-gated cloud tools (prowler/scoutsuite/
+// cloudfox) are deliberately EXCLUDED — the L2 Lead verifies, it does not attack. Per-asset registry-tier
+// scoping is the documented next refinement.
+var verificationSafeTools = map[string]bool{
+	"nuclei": true, "sqlmap": true, "dalfox": true, "httpx": true, "nikto": true,
+	"nmap": true, "naabu": true, "ffuf": true, "inql": true, "katana": true, "openapi": true,
+	"semgrep": true, "codeql": true, "gosec": true, "bandit": true, "gitleaks": true,
+	"trufflehog": true, "trivy": true, "grype": true, "syft": true, "govulncheck": true,
+	"osvscanner": true, "checkov": true, "kics": true, "hadolint": true, "dockle": true,
+	"mobsfscan": true, "apkid": true,
+	"checkdmarc": true, "crtsh": true, "subfinder": true, "dnstwist": true, "cosign": true,
 }
 
 // urlArgKeys are the LLM-arg keys that carry a host/URL (besides "target", handled as req.Target) — the
