@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/l2"
+	"github.com/ClatTribe/tsengine/internal/netguard"
 )
 
 // HTTPDoer is the L2 send_request primitive: a SINGLE, bounded HTTP request to
@@ -32,11 +34,25 @@ const (
 	maxRedirects       = 5
 )
 
-// NewHTTPDoer builds the bounded verification client.
+// NewHTTPDoer builds the bounded, SSRF-guarded verification client. The LLM chooses the URL (and a
+// prompt-injected finding can influence it) and this runs HOST-side, so production refuses any non-public
+// address (loopback, RFC1918, CGNAT, link-local, the cloud metadata endpoint); each redirect hop
+// re-dials through the same guarded transport, so a 30x to an internal host is refused too.
 func NewHTTPDoer() *HTTPDoer {
+	return newHTTPDoer(netguard.GuardedDialContext(defaultHTTPTimeout))
+}
+
+// newHTTPDoer builds the doer with a specific DialContext (the SSRF-guarded one in production). A nil
+// dial uses the transport default — tests inject that to reach a loopback httptest server.
+func newHTTPDoer(dial func(ctx context.Context, network, addr string) (net.Conn, error)) *HTTPDoer {
+	tr := &http.Transport{DisableKeepAlives: true}
+	if dial != nil {
+		tr.DialContext = dial
+	}
 	return &HTTPDoer{
 		client: &http.Client{
-			Timeout: defaultHTTPTimeout,
+			Timeout:   defaultHTTPTimeout,
+			Transport: tr,
 			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
 				if len(via) >= maxRedirects {
 					return fmt.Errorf("stopped after %d redirects", maxRedirects)
