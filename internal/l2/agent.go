@@ -36,9 +36,21 @@ type Agent struct {
 	client  Client
 	catalog Catalog
 	budget  Budget
+	// estate is the deterministic L1.7 correlation (unified issues + cross-surface attack paths) the
+	// Lead reasons OVER. Zero value → the prompt is unchanged (flat-finding behaviour). Set via
+	// WithEstate by the platform, which computes crossdetect (engine-pure l2 never imports it).
+	estate EstateContext
 	// sleep waits d (honoring ctx) between transient-error retries. nil → a real
 	// ctx-aware sleep; tests inject a no-op so the retry path doesn't actually wait.
 	sleep func(ctx context.Context, d time.Duration) error
+}
+
+// WithEstate attaches the L1.7 estate view (unified issues + attack paths) so the Lead triages over
+// the corroborated, cross-surface picture rather than the flat finding list. Returns the agent for
+// chaining. A no-op-equivalent when passed an empty EstateContext.
+func (a *Agent) WithEstate(e EstateContext) *Agent {
+	a.estate = e
+	return a
 }
 
 // New builds an Agent. It enforces the ≤12 cap up front — a catalog that
@@ -58,7 +70,7 @@ func New(client Client, catalog Catalog, budget Budget) (*Agent, error) {
 // Outcome. l1 are the enriched L1 findings (the agent's read-only input);
 // st.Findings are the L2-authored reports it emits.
 func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding) (Outcome, error) {
-	system := BuildSystemPrompt(target, l1)
+	system := BuildSystemPromptWithEstate(target, l1, a.estate)
 	if len(system) < minSystemPromptBytes {
 		// Render guard: never send an empty/tiny prompt (strix's
 		// hallucinate-the-whole-scan bug).

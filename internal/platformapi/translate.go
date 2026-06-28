@@ -2,9 +2,12 @@ package platformapi
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/correlate"
+	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -32,10 +35,18 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 		writeJSON(w, http.StatusOK, map[string]any{"summary": "No findings to translate yet — run a scan first.", "reports": []types.Finding{}})
 		return
 	}
-	// Translate against the tenant's primary asset (best-effort; synthetic if none).
+	// Fetch the tenant's assets once — used for the translate target AND the cross-surface correlation.
+	pAssets, _ := d.Store.ListAssets(r.Context(), tenantID)
 	target := types.Asset{Type: types.AssetWebApplication, Target: "tenant:" + tenantID}
-	if assets, _ := d.Store.ListAssets(r.Context(), tenantID); len(assets) > 0 {
-		target = types.Asset{Type: types.AssetType(assets[0].Type), Target: assets[0].Target}
+	if len(pAssets) > 0 {
+		target = types.Asset{Type: types.AssetType(pAssets[0].Type), Target: pAssets[0].Target}
+	}
+	// The L1.7 ESTATE VIEW the engineer reasons OVER: deduped/corroborated unified issues + the
+	// cross-surface attack-path chains. The platform computes crossdetect (deterministic); l2 stays
+	// engine-pure. This is what makes the translate a whole-estate engineer, not a flat-finding pass.
+	estate := l2.EstateContext{
+		Issues:      toIssueDigests(crossdetect.UnifiedIssues(findings)),
+		AttackPaths: renderChains(crossdetect.Correlate(pAssets, findings)),
 	}
 	dep := l2.Deps{Target: target, L1Findings: findings}
 	budget := l2.DefaultBudget()
@@ -45,6 +56,7 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 		respond(w, nil, aerr)
 		return
 	}
+	agent.WithEstate(estate)
 	out, rerr := agent.Run(r.Context(), target, findings)
 	if rerr != nil {
 		respond(w, nil, rerr)
@@ -77,4 +89,45 @@ func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client 
 		}
 	}
 	return d.LeadClient
+}
+
+// toIssueDigests maps crossdetect's unified issues into the engine-pure l2.IssueDigest the Lead prompt
+// renders — the platform→engine boundary (l2 never imports crossdetect, so the platform does the map).
+func toIssueDigests(issues []crossdetect.Issue) []l2.IssueDigest {
+	out := make([]l2.IssueDigest, 0, len(issues))
+	for _, is := range issues {
+		out = append(out, l2.IssueDigest{
+			Title:     is.Title,
+			Severity:  is.Severity,
+			Sources:   is.Tools,
+			Confirmed: is.Confirmed,
+			Count:     is.Count,
+			Endpoint:  is.Endpoint,
+			CVE:       is.CVE,
+			Attacked:  is.Attacked,
+		})
+	}
+	return out
+}
+
+// renderChains renders each cross-surface attack chain to a one-line "surface → surface → crown"
+// summary for the Lead prompt. Capped so a large estate can't blow the prompt.
+func renderChains(chains []correlate.Chain) []string {
+	const cap = 20
+	out := make([]string, 0, len(chains))
+	for i, ch := range chains {
+		if i >= cap {
+			break
+		}
+		parts := make([]string, 0, len(ch.Steps))
+		for _, s := range ch.Steps {
+			label := s.AssetType + ":" + s.AssetTarget
+			if s.CrownJewel {
+				label += "(crown)"
+			}
+			parts = append(parts, label)
+		}
+		out = append(out, fmt.Sprintf("[%s] %s", ch.Severity, strings.Join(parts, " → ")))
+	}
+	return out
 }
