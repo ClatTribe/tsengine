@@ -38,6 +38,8 @@ func xbowCmd(argv []string) error {
 	targetPort := fs.String("target-port", "", "host port the benchmark publishes (skip docker-compose port autodetect)")
 	out := fs.String("out", "", "write <out>.json (results) + <out>.md (scoreboard); default stdout only")
 	dryRun := fs.Bool("dry-run", false, "load the suite and print the plan WITHOUT Docker/scan (suite-wiring check)")
+	resume := fs.Bool("resume", false, "skip benchmarks already in <out>.json (resume a long/interrupted run)")
+	prune := fs.Bool("prune-images", true, "remove each benchmark's locally-built image after teardown (bounds disk over a full-suite run)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -71,36 +73,70 @@ func xbowCmd(argv []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Resume: carry forward results already checkpointed in <out>.json and skip those benchmarks. A
+	// 104-benchmark run is 12–28h on a laptop, so it MUST survive a crash/throttle/sleep/Ctrl-C.
 	var results []bench.XBOWResult
+	done := map[string]bool{}
+	if *resume && *out != "" {
+		for _, r := range loadXBOWCheckpoint(*out) {
+			results = append(results, r)
+			done[r.ID] = true
+		}
+		if len(done) > 0 {
+			fmt.Fprintf(os.Stderr, "[xbow] resuming: %d benchmarks already done, skipping them\n", len(done))
+		}
+	}
+
 	for i, b := range benches {
+		if done[b.ID] {
+			continue
+		}
 		fmt.Fprintf(os.Stderr, "[xbow %d/%d] %s (level %d) …\n", i+1, len(benches), b.ID, b.Config.Level)
-		r := runOneXBOW(ctx, b, *binary, *timeout, *targetPort)
+		r := runOneXBOW(ctx, b, *binary, *timeout, *targetPort, *prune)
 		status := "MISS"
 		if r.Solved {
 			status = "SOLVED"
 		}
 		fmt.Fprintf(os.Stderr, "  → %s (%.0fs) %s\n", status, r.Duration, r.Note)
 		results = append(results, r)
+		// Checkpoint after EVERY benchmark so an interrupted run loses nothing (and is resumable).
+		if *out != "" {
+			if jerr := writeXBOWResults(*out, results, bench.AggregateXBOW(results)); jerr != nil {
+				fmt.Fprintf(os.Stderr, "[xbow] checkpoint write failed: %v\n", jerr)
+			}
+		}
 	}
 
 	sb := bench.AggregateXBOW(results)
-	report := bench.RenderXBOWScoreboard(sb)
-	fmt.Print(report)
-
+	fmt.Print(bench.RenderXBOWScoreboard(sb))
 	if *out != "" {
-		if jerr := writeXBOWResults(*out, results, sb); jerr != nil {
-			return jerr
-		}
+		_ = writeXBOWResults(*out, results, sb)
 		fmt.Fprintf(os.Stderr, "[xbow] wrote %s.json + %s.md\n", *out, *out)
 	}
 	return nil
+}
+
+// loadXBOWCheckpoint reads the results array from a prior <out>.json (empty on any error — a missing
+// or unreadable checkpoint just means "start fresh").
+func loadXBOWCheckpoint(prefix string) []bench.XBOWResult {
+	data, err := os.ReadFile(prefix + ".json") //nolint:gosec // operator-provided path
+	if err != nil {
+		return nil
+	}
+	var payload struct {
+		Results []bench.XBOWResult `json:"results"`
+	}
+	if json.Unmarshal(data, &payload) != nil {
+		return nil
+	}
+	return payload.Results
 }
 
 // runOneXBOW builds, runs, scans, grades, and tears down a single benchmark. It ALWAYS tears the
 // compose stack down (deferred) so a failed run never leaks containers. A build/up/target/scan
 // failure is recorded as an unsolved result with the error note — the run continues to the next
 // benchmark rather than aborting the whole suite.
-func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, targetPort string) bench.XBOWResult {
+func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, targetPort string, pruneImages bool) bench.XBOWResult {
 	start := time.Now()
 	res := bench.XBOWResult{ID: b.ID, Name: b.Config.Name, Level: b.Config.Level, Tags: b.Config.Tags}
 	finish := func(note string) bench.XBOWResult {
@@ -124,10 +160,12 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, tar
 		return finish("compose build failed: " + tail(out))
 	}
 	if out, uerr := compose_(ctx, compose, "up", "-d", "--wait"); uerr != nil {
-		_, _ = compose_(ctx, compose, "down", "-v")
+		_, _ = composeDown(ctx, compose, pruneImages)
 		return finish("compose up failed: " + tail(out))
 	}
-	defer func() { _, _ = compose_(ctx, compose, "down", "-v") }()
+	// Always tear down. On a full-suite run, --prune-images also removes the locally-built image so 104
+	// builds don't exhaust the disk (the cost: a rebuild if you resume that benchmark).
+	defer func() { _, _ = composeDown(ctx, compose, pruneImages) }()
 
 	target := ""
 	if targetPort != "" {
@@ -151,24 +189,34 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, tar
 	cmd := exec.CommandContext(sctx, binary, "scan", "--asset", "web_application",
 		"--target", target, "--out", tmp, "--timeout", timeout)
 	cmd.Env = os.Environ()
-	if scanOut, serr := cmd.CombinedOutput(); serr != nil {
-		// a non-zero scan exit still may have written a partial report — try to grade it anyway.
-		if scan := loadScanReport(tmp); scan != nil && bench.FlagCapturedInScan(flagStr, scan) {
-			res.Solved = true
-			return finish("flag captured (scan exited " + serr.Error() + ")")
+	scanOut, serr := cmd.CombinedOutput()
+	scan := loadScanReport(tmp) // may exist even on a non-zero exit (partial report)
+	if scan != nil {
+		res.Findings = len(scan.FindingsRaw)
+		if len(scan.FindingsEnriched) > res.Findings {
+			res.Findings = len(scan.FindingsEnriched)
 		}
+		if bench.FlagCapturedInScan(flagStr, scan) {
+			res.Solved = true
+			return finish(fmt.Sprintf("flag captured (%d findings)", res.Findings))
+		}
+	}
+	if serr != nil {
 		return finish("scan failed: " + tail(string(scanOut)))
 	}
-
-	scan := loadScanReport(tmp)
 	if scan == nil {
 		return finish("no vulnerabilities.json produced")
 	}
-	if bench.FlagCapturedInScan(flagStr, scan) {
-		res.Solved = true
-		return finish("flag captured")
+	return finish(fmt.Sprintf("flag not captured (%d findings — reached the app, didn't reach the flag)", res.Findings))
+}
+
+// composeDown tears down the stack; with prune it also removes the locally-built image (so a long
+// full-suite run can't fill the disk). Best-effort — teardown failures never affect the result.
+func composeDown(ctx context.Context, compose string, prune bool) (string, error) {
+	if prune {
+		return compose_(ctx, compose, "down", "-v", "--rmi", "local")
 	}
-	return finish("flag not captured")
+	return compose_(ctx, compose, "down", "-v")
 }
 
 // compose_ runs `docker compose -f <file> <args…>` in the compose file's directory. The path is made
