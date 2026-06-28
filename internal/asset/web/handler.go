@@ -56,8 +56,19 @@ func (h *Handler) PlanAnchors(target types.Asset) []asset.Dispatch {
 // registered/installed, this is empty and the orchestrator falls back to
 // the single-target PlanAnchors path.
 func (h *Handler) Recon() []tool.Tool {
-	return resolveTools([]string{"katana"})
+	// katana crawls the surface; openapi_spec_ingest probes for an OpenAPI/Swagger
+	// spec. Modern web targets are frequently an API/SPA backend — when a spec is
+	// found, PlanFanout routes it to the api asset's spec-driven fuzzer
+	// (schemathesis), so a web scan that lands on an API gets API-aware testing the
+	// crawl/fan-out tools structurally can't (their inputs live in JSON bodies /
+	// dynamic-JS params, not crawlable param URLs). No spec → graceful no-op.
+	return resolveTools([]string{"katana", "openapi_spec_ingest"})
 }
+
+// openapiSpecMarker mirrors internal/asset/api: openapi_spec_ingest emits a
+// "SPEC <url>" surface entry when it resolves a schema. Kept in sync with the api
+// handler's const (same tool, same marker).
+const openapiSpecMarker = "SPEC"
 
 // reconDepth is the crawl depth handed to katana. Depth 2 is too shallow
 // to discover a real app's surface — landing pages, index/menu pages, and
@@ -72,12 +83,13 @@ const reconDepth = 3
 // with only args["target"], inheriting the wrapper's shallow depth-2
 // default. (asset.ReconPlanner)
 func (h *Handler) PlanRecon(target types.Asset) []asset.Dispatch {
-	out := make([]asset.Dispatch, 0, 1)
+	out := make([]asset.Dispatch, 0, 2)
 	for _, t := range h.Recon() {
-		out = append(out, asset.Dispatch{Tool: t, Args: tool.Args{
-			"target": target.Target,
-			"depth":  reconDepth,
-		}})
+		args := tool.Args{"target": target.Target}
+		if t.Name() == "katana" { // only katana takes a crawl depth; openapi_spec_ingest just needs the target
+			args["depth"] = reconDepth
+		}
+		out = append(out, asset.Dispatch{Tool: t, Args: args})
 	}
 	return out
 }
@@ -96,13 +108,31 @@ func (h *Handler) PlanRecon(target types.Asset) []asset.Dispatch {
 // Tools other than the listed ones default to per-URL dispatch; the
 // filter decides which URLs they apply to.
 func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispatch {
+	var out []asset.Dispatch
+
+	// API-aware routing: openapi_spec_ingest emits a "SPEC <url>" surface entry when
+	// it resolves a schema on the target. Route it to the api asset's spec-driven
+	// fuzzer (schemathesis) — this is how a web scan that lands on an API/SPA backend
+	// gets API-aware injection/authz testing the crawl/fan-out tools can't provide.
+	// Extract the markers BEFORE filterSurface (they're not URLs). No spec → no-op.
+	var rest []string
+	for _, e := range surface {
+		if specURL, ok := strings.CutPrefix(e, openapiSpecMarker+" "); ok {
+			if st, ok := tool.Get("schemathesis"); ok {
+				out = append(out, asset.Dispatch{Tool: st, Args: tool.Args{"spec_url": strings.TrimSpace(specURL)}})
+			}
+			continue
+		}
+		rest = append(rest, e)
+	}
+	surface = rest
+
 	// Reduce the surface first: scope, static-asset + destructive-path
 	// drops, then shape-dedup (so /items/1..N collapse to one). Both the
 	// list-mode tools and the per-URL tools fan out over this clean set.
 	surface = filterSurface(target, surface)
 
 	listArg := strings.Join(surface, "\n")
-	var out []asset.Dispatch
 
 	// Authenticated scan: a seed_auth dispatch leads. The W3 wave
 	// classifier puts it in wave 0 (the detectors depend on seed_auth);
