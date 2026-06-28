@@ -118,11 +118,45 @@ func summarize(checks []assessCheck) questionnaireSummary {
 
 // --- the read-only prober (real I/O; the scoring above is pure) ---
 
+// nonPublicCIDRs are special-use / non-routable ranges the stdlib predicates (IsPrivate/IsLoopback/…)
+// do NOT cover but an SSRF guard must still refuse. CGNAT (RFC 6598) is the headline — cloud providers
+// run internal proxies + metadata-adjacent infra there — and the IPv6 NAT64/6to4 ranges embed an IPv4
+// destination, a known guard-bypass to reach an internal host. Public IPv4-mapped IPv6 (::ffff:8.8.8.8)
+// stays allowed: net.IPNet.Contains normalizes a mapped address to v4, so the v4 rows catch a mapped
+// private/CGNAT address while a mapped public one matches nothing here.
+var nonPublicCIDRs = func() []*net.IPNet {
+	out := make([]*net.IPNet, 0, 12)
+	for _, c := range []string{
+		"0.0.0.0/8",       // "this host on this network" (RFC 1122) — IsUnspecified only catches the bare 0.0.0.0
+		"100.64.0.0/10",   // CGNAT / shared address space (RFC 6598)
+		"192.0.0.0/24",    // IETF protocol assignments (RFC 6890)
+		"192.0.2.0/24",    // TEST-NET-1 (RFC 5737)
+		"198.18.0.0/15",   // benchmarking (RFC 2544)
+		"198.51.100.0/24", // TEST-NET-2 (RFC 5737)
+		"203.0.113.0/24",  // TEST-NET-3 (RFC 5737)
+		"240.0.0.0/4",     // reserved / class E (RFC 1112)
+		"64:ff9b::/96",    // NAT64 (RFC 6052) — embeds an IPv4 destination
+		"100::/64",        // discard-only (RFC 6666)
+		"2001:db8::/32",   // documentation (RFC 3849)
+		"2002::/16",       // 6to4 (RFC 3056) — embeds an IPv4 destination
+	} {
+		if _, n, err := net.ParseCIDR(c); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}()
+
 // isPublicIP reports whether an IP is a routable public address (the SSRF guard).
 func isPublicIP(ip net.IP) bool {
 	if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
 		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
 		return false
+	}
+	for _, n := range nonPublicCIDRs {
+		if n.Contains(ip) {
+			return false
+		}
 	}
 	return true
 }
