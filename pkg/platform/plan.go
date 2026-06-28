@@ -49,8 +49,21 @@ func NormalizePlan(plan string) string {
 }
 
 // Entitlements returns the limits for a plan. The pricing page and every server-side gate
-// read from this one function, so the product and the billing story can never drift.
+// read from this one function, so the product and the billing story can never drift. A plan
+// string may carry "+"-joined ADD-ONS on top of its base tier (e.g. "growth+pentest") — today the
+// only add-on is "pentest" (the autonomous-pentest add-on), which unlocks AutonomousPentest on any
+// base tier. This is the ONE source of truth for the autonomous-pentest gate (no string-match drift).
 func Entitlements(plan string) PlanLimits {
+	p := strings.ToLower(strings.TrimSpace(plan))
+	lim := baseEntitlements(strings.SplitN(p, "+", 2)[0]) // base tier = the part before the first add-on
+	if strings.Contains(p, "pentest") {                   // the autonomous-pentest add-on (any plan carrying the token)
+		lim.AutonomousPentest = true
+	}
+	return lim
+}
+
+// baseEntitlements returns the limits for a base tier (no add-ons).
+func baseEntitlements(plan string) PlanLimits {
 	switch NormalizePlan(plan) {
 	case PlanEnterprise:
 		return PlanLimits{

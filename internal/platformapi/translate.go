@@ -64,10 +64,16 @@ func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client 
 	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
 		switch strings.ToLower(provider) {
 		case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
-			return l2.NewOpenAICompatClient(model, "", key)
+			return l2.NewOpenAICompatClient(model, "", key) // tenant's OWN key → allowed on any plan
 		}
 	}
-	return d.LeadClient
+	// Operator-global client → only for AI-entitled plans (the economic invariant: a Free tenant
+	// without its own key must never spend the operator's LLM budget). Previously ungated — a Free
+	// tenant could drive /v1/l2/translate on the operator's dime.
+	if d.LeadClient != nil && d.planLimits(ctx, tenantID).AIEnabled {
+		return d.LeadClient
+	}
+	return nil
 }
 
 // runTranslate is the shared L2 engineer core (used by the on-demand POST /v1/l2/translate AND the
@@ -104,7 +110,7 @@ func (d Deps) AutoReviewAfterScan(ctx context.Context, tenantID string, findings
 	if len(findings) == 0 {
 		return
 	}
-	client := d.autoReviewClient(ctx, tenantID)
+	client := d.resolveLeadClient(ctx, tenantID) // gated: own key (any plan) OR operator LLM (AI-entitled only)
 	if client == nil {
 		return // no own key + not AI-entitled (or no LLM configured at all) → don't spend operator budget
 	}
@@ -118,22 +124,6 @@ func (d Deps) AutoReviewAfterScan(ctx context.Context, tenantID string, findings
 			map[string]any{"tenant_id": tenantID, "opened_incidents": openedIncidents, "reports": len(out.Findings), "summary": out.Summary},
 			"AI Security Engineer auto-review after scan change")
 	}
-}
-
-// autoReviewClient resolves the L2 client for the COST-GATED auto-review: the tenant's OWN configured
-// model (their cost — allowed on any plan) else the operator-global client BUT only when the plan is
-// AI-entitled (the economic invariant). nil → skip the auto-review.
-func (d Deps) autoReviewClient(ctx context.Context, tenantID string) l2.Client {
-	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
-		switch strings.ToLower(provider) {
-		case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
-			return l2.NewOpenAICompatClient(model, "", key)
-		}
-	}
-	if d.LeadClient != nil && d.planLimits(ctx, tenantID).AIEnabled {
-		return d.LeadClient
-	}
-	return nil
 }
 
 // toIssueDigests maps crossdetect's unified issues into the engine-pure l2.IssueDigest the Lead prompt
