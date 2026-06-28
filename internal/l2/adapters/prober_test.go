@@ -119,6 +119,28 @@ func TestProber_RefusesOutOfScopeTarget(t *testing.T) {
 	}
 }
 
+// dispatch_l2_probe is verification-only: the LLM must NOT be able to replay an active-attack tool
+// (credential brute-force, etc.) even within scope.
+func TestProber_RefusesUnsafeTool(t *testing.T) {
+	runs := t.TempDir()
+	writeScan(t, runs, "scan-abc")
+	disp := &mockDispatcher{}
+	p := NewProber("scan-abc", runs, &mockSpawner{disp: disp}, []string{"app.acme.com"}, nil)
+
+	for _, unsafe := range []string{"hydra", "wpscan", "kiterunner", "schemathesis", "rm", "not_a_tool"} {
+		if _, err := p.Probe(context.Background(), unsafe, map[string]any{"target": "https://app.acme.com"}); err == nil {
+			t.Errorf("tool %q is not verification-safe and must be refused", unsafe)
+		}
+	}
+	if disp.gotTool != "" {
+		t.Errorf("a refused (unsafe-tool) probe must NOT dispatch, fired %q", disp.gotTool)
+	}
+	// a verification-safe tool, in scope, proceeds
+	if _, err := p.Probe(context.Background(), "sqlmap", map[string]any{"target": "https://app.acme.com/p?id=1"}); err != nil {
+		t.Errorf("a verification-safe tool must be allowed, got %v", err)
+	}
+}
+
 func TestProber_NoFindings(t *testing.T) {
 	runs := t.TempDir()
 	writeScan(t, runs, "scan-abc")
