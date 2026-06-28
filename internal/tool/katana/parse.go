@@ -1,7 +1,6 @@
 package katana
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"net/url"
@@ -49,10 +48,14 @@ func parse(blob []byte) []string {
 		return nil
 	}
 	seen := map[string]struct{}{}
-	sc := bufio.NewScanner(bytes.NewReader(blob))
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for sc.Scan() {
-		line := bytes.TrimSpace(sc.Bytes())
+	// Split on newlines with NO per-line size cap. katana's -jsonl embeds the full response
+	// BODY in each record, so a single line routinely exceeds 1 MB (real Juice Shop: 3 lines
+	// up to 1.69 MB). A bufio.Scanner capped at 1 MB silently HALTS at the first oversized line
+	// — truncating the discovered surface (it stopped at line 43 of 254, yielding 42 of 188
+	// endpoints, and as little as 1 on a heavy SPA). bytes.Split has no cap; the blob is already
+	// fully in memory, so this neither copies nor bounds line length.
+	for _, raw := range bytes.Split(blob, []byte("\n")) {
+		line := bytes.TrimSpace(raw)
 		if len(line) == 0 || line[0] != '{' {
 			continue
 		}

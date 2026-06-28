@@ -36,6 +36,30 @@ func TestParse_DedupesAndExtracts(t *testing.T) {
 	}
 }
 
+// TestParse_SurvivesOversizedLine guards the recall-capping bug: katana -jsonl embeds the
+// full response body per record, so a single line routinely exceeds 1 MB. The old
+// bufio.Scanner (1 MB cap) silently halted at the first such line, truncating the surface
+// (real Juice Shop: 188 endpoints → 42). A line AFTER a >1 MB line must still be parsed.
+func TestParse_SurvivesOversizedLine(t *testing.T) {
+	big := make([]byte, 2<<20) // 2 MB body — over the old 1 MB scanner cap
+	for i := range big {
+		big[i] = 'x'
+	}
+	blob := []byte(`{"request":{"endpoint":"https://a.test/one"}}` + "\n" +
+		`{"request":{"endpoint":"https://a.test/two"},"response":{"body":"` + string(big) + `"}}` + "\n" +
+		`{"request":{"endpoint":"https://a.test/three"}}` + "\n")
+	urls := parse(blob)
+	got := map[string]bool{}
+	for _, u := range urls {
+		got[u] = true
+	}
+	for _, want := range []string{"https://a.test/one", "https://a.test/two", "https://a.test/three"} {
+		if !got[want] {
+			t.Errorf("missing %q (parse halted on the oversized line?); got %v", want, urls)
+		}
+	}
+}
+
 func TestParse_Empty(t *testing.T) {
 	if parse(nil) != nil {
 		t.Error("nil expected for empty")
