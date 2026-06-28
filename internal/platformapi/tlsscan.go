@@ -50,11 +50,14 @@ func (d Deps) handleTLSScan(w http.ResponseWriter, r *http.Request, tenantID str
 	saved := []types.Finding{}
 	scanned, skipped := 0, []string{}
 	for _, h := range hosts {
-		if !tlsHostAllowed(r.Context(), h) {
+		ip, ok := tlsResolveAllowed(r.Context(), h)
+		if !ok {
 			skipped = append(skipped, h)
 			continue
 		}
-		fs, err := tlsscan.Assess(r.Context(), h)
+		// Pin the handshake to the IP we just screened — a rebinding DNS name can't slip an internal
+		// target in between the check and the dial (DNS-rebinding TOCTOU).
+		fs, err := tlsscan.AssessPinned(r.Context(), h, ip)
 		if err != nil {
 			continue // handshake failed → no finding (we don't guess), not fatal
 		}
@@ -72,25 +75,27 @@ func (d Deps) handleTLSScan(w http.ResponseWriter, r *http.Request, tenantID str
 	writeJSON(w, http.StatusOK, map[string]any{"findings": saved, "scanned": scanned, "skipped": skipped})
 }
 
-// tlsHostAllowed is the SSRF screen: every resolved IP for the host must be public (mirrors osint).
-func tlsHostAllowed(ctx context.Context, host string) bool {
+// tlsResolveAllowed is the SSRF screen: every resolved IP for the host must be public. It returns ONE
+// validated public IP so the caller can dial THAT exact IP (no second resolution) — closing the
+// DNS-rebinding TOCTOU, mirroring assess_web.go's safeHTTPClient.
+func tlsResolveAllowed(ctx context.Context, host string) (net.IP, bool) {
 	h := host
 	if hh, _, err := net.SplitHostPort(host); err == nil {
 		h = hh
 	}
 	if ip := net.ParseIP(h); ip != nil {
-		return isPublicIP(ip)
+		return ip, isPublicIP(ip)
 	}
 	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", h)
 	if err != nil || len(ips) == 0 {
-		return false
+		return nil, false
 	}
 	for _, ip := range ips {
 		if !isPublicIP(ip) {
-			return false
+			return nil, false // any private IP in the set → reject the whole host
 		}
 	}
-	return true
+	return ips[0], true // all public; pin the dial to this validated IP
 }
 
 func hostFromTarget(target string) string {

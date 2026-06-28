@@ -2,6 +2,9 @@ package tlsscan
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,6 +53,25 @@ func TestNormalize(t *testing.T) {
 		if h != want[0] || a != want[1] {
 			t.Errorf("normalize(%q) = (%q,%q), want (%q,%q)", in, h, a, want[0], want[1])
 		}
+	}
+}
+
+// AssessPinned must dial the caller-validated IP (closing the DNS-rebinding TOCTOU) while keeping the
+// hostname as SNI for certificate validation — it must NOT hand the re-resolvable hostname to the dialer.
+func TestAssessPinned_DialsValidatedIPNotHostname(t *testing.T) {
+	orig := dialTLS
+	defer func() { dialTLS = orig }()
+	var gotAddr, gotSNI string
+	dialTLS = func(_ context.Context, addr string, cfg *tls.Config) (*tls.Conn, error) {
+		gotAddr, gotSNI = addr, cfg.ServerName
+		return nil, errors.New("stub: no real handshake") // capture only; abort before any I/O
+	}
+	_, _ = AssessPinned(context.Background(), "evil.example:8443", net.ParseIP("203.0.113.7"))
+	if gotAddr != "203.0.113.7:8443" {
+		t.Errorf("AssessPinned must dial the pinned IP:port, got %q", gotAddr)
+	}
+	if gotSNI != "evil.example" {
+		t.Errorf("SNI/ServerName must remain the hostname for cert validation, got %q", gotSNI)
 	}
 }
 

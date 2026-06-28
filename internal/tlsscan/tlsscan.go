@@ -37,19 +37,42 @@ var dialTLS = func(ctx context.Context, addr string, cfg *tls.Config) (*tls.Conn
 	return c.(*tls.Conn), nil
 }
 
-// Assess performs a TLS handshake against host (host[:port], default :443) and returns grounded
-// posture findings. The caller is responsible for SSRF-screening host before calling (the handler does
-// it, mirroring osint). A dial failure is returned as an error, not a finding (we don't guess).
+// Assess performs a TLS handshake against host (host[:port], default :443), resolving the host by name,
+// and returns grounded posture findings. The caller is responsible for SSRF-screening host first (the
+// handler does). For an SSRF-screened call that must NOT re-resolve (DNS-rebinding safety), use
+// AssessPinned with the already-validated IP. A dial failure is an error, not a finding (we don't guess).
 func Assess(ctx context.Context, host string) ([]types.Finding, error) {
 	hostOnly, addr := normalize(host)
 	if hostOnly == "" {
 		return nil, fmt.Errorf("tlsscan: empty host")
 	}
+	return assess(ctx, hostOnly, addr)
+}
 
-	// Handshake reading the cert even if untrusted, so we can assess an invalid cert rather than abort.
-	conn, err := dialTLS(ctx, addr, &tls.Config{InsecureSkipVerify: true, ServerName: hostOnly}) //nolint:gosec // posture read; validated manually below
+// AssessPinned is the DNS-rebinding-safe entry point: it dials the caller-validated ip — closing the
+// check-then-resolve TOCTOU where a rebinding name passes the SSRF screen then connects to an internal
+// host — while still using the hostname for SNI + certificate validation. The handler uses this after
+// tlsResolveAllowed returns the screened IP, mirroring assess_web.go's safeHTTPClient (resolve, then dial
+// the resolved IP).
+func AssessPinned(ctx context.Context, host string, ip net.IP) ([]types.Finding, error) {
+	hostOnly, addr := normalize(host)
+	if hostOnly == "" {
+		return nil, fmt.Errorf("tlsscan: empty host")
+	}
+	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return nil, fmt.Errorf("tlsscan: handshake with %s failed: %w", addr, err)
+		port = "443"
+	}
+	return assess(ctx, hostOnly, net.JoinHostPort(ip.String(), port))
+}
+
+// assess runs the handshake-based posture checks against dialAddr, using hostOnly for SNI + cert
+// validation. dialAddr is a host:port (Assess) or a pinned ip:port (AssessPinned).
+func assess(ctx context.Context, hostOnly, dialAddr string) ([]types.Finding, error) {
+	// Handshake reading the cert even if untrusted, so we can assess an invalid cert rather than abort.
+	conn, err := dialTLS(ctx, dialAddr, &tls.Config{InsecureSkipVerify: true, ServerName: hostOnly}) //nolint:gosec // posture read; validated manually below
+	if err != nil {
+		return nil, fmt.Errorf("tlsscan: handshake with %s failed: %w", dialAddr, err)
 	}
 	state := conn.ConnectionState()
 	_ = conn.Close()
@@ -101,7 +124,7 @@ func Assess(ctx context.Context, host string) ([]types.Finding, error) {
 
 	// 3. Legacy-protocol SUPPORT probe — even if the default negotiated 1.2+, does the server still
 	//    ACCEPT a 1.0/1.1 client? An attacker can downgrade if it does.
-	if legacy, lerr := dialTLS(ctx, addr, &tls.Config{InsecureSkipVerify: true, ServerName: hostOnly, MinVersion: tls.VersionTLS10, MaxVersion: tls.VersionTLS11}); lerr == nil { //nolint:gosec // intentional downgrade probe
+	if legacy, lerr := dialTLS(ctx, dialAddr, &tls.Config{InsecureSkipVerify: true, ServerName: hostOnly, MinVersion: tls.VersionTLS10, MaxVersion: tls.VersionTLS11}); lerr == nil { //nolint:gosec // intentional downgrade probe
 		v := legacy.ConnectionState().Version
 		_ = legacy.Close()
 		if v <= tls.VersionTLS11 {
