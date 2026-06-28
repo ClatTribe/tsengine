@@ -141,6 +141,9 @@ type Store interface {
 	PutSession(ctx context.Context, s platform.Session) error
 	GetSession(ctx context.Context, token string) (platform.Session, error)
 	DeleteSession(ctx context.Context, token string) error
+	// DeleteSessionsForUser revokes EVERY session belonging to a user — the kill-stolen-tokens step on
+	// a credential change/reset, so a captured session can't outlive the password it was issued under.
+	DeleteSessionsForUser(ctx context.Context, userID string) error
 
 	// --- operators (cross-tenant practitioner identities; a SEPARATE namespace from tenant users) ---
 	PutOperator(ctx context.Context, o platform.Operator) error

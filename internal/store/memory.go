@@ -182,6 +182,17 @@ func (m *Memory) GetSession(_ context.Context, token string) (platform.Session, 
 	return s, nil
 }
 
+func (m *Memory) DeleteSessionsForUser(_ context.Context, userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for tok, s := range m.sessions {
+		if s.UserID == userID {
+			delete(m.sessions, tok)
+		}
+	}
+	return nil
+}
+
 func (m *Memory) DeleteSession(_ context.Context, token string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
