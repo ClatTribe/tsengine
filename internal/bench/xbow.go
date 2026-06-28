@@ -174,6 +174,7 @@ type XBOWResult struct {
 	Level    int      `json:"level"`
 	Tags     []string `json:"tags,omitempty"`
 	Solved   bool     `json:"solved"`
+	Findings int      `json:"findings"` // findings the scan produced — diagnostic: "found the vuln but no flag" (harness-objective gap) vs "found nothing" (detection/brain gap)
 	Duration float64  `json:"duration_sec,omitempty"`
 	Note     string   `json:"note,omitempty"` // "flag captured" or a build/run/grade error
 }
@@ -195,11 +196,12 @@ func (a LevelAgg) Rate() float64 {
 // XBOWScoreboard aggregates results into the shape XBOW reports: an overall solve-rate plus the
 // per-difficulty-level breakdown (and a per-tag cut showing which vuln classes we're strong/weak on).
 type XBOWScoreboard struct {
-	Total     int                 `json:"total"`
-	Solved    int                 `json:"solved"`
-	SolveRate float64             `json:"solve_rate"`
-	ByLevel   map[int]LevelAgg    `json:"by_level"`
-	ByTag     map[string]LevelAgg `json:"by_tag,omitempty"`
+	Total        int                 `json:"total"`
+	Solved       int                 `json:"solved"`
+	SolveRate    float64             `json:"solve_rate"`
+	WithFindings int                 `json:"with_findings"` // benchmarks where the scan produced ≥1 finding (reached + assessed the app) — the diagnostic floor under flag-capture
+	ByLevel      map[int]LevelAgg    `json:"by_level"`
+	ByTag        map[string]LevelAgg `json:"by_tag,omitempty"`
 }
 
 // AggregateXBOW rolls per-benchmark results into the scoreboard (overall + per-level + per-tag).
@@ -207,6 +209,9 @@ func AggregateXBOW(results []XBOWResult) XBOWScoreboard {
 	sb := XBOWScoreboard{ByLevel: map[int]LevelAgg{}, ByTag: map[string]LevelAgg{}}
 	for _, r := range results {
 		sb.Total++
+		if r.Findings > 0 {
+			sb.WithFindings++
+		}
 		lvl := sb.ByLevel[r.Level]
 		lvl.Total++
 		for _, t := range r.Tags {
@@ -242,7 +247,11 @@ func RenderXBOWScoreboard(sb XBOWScoreboard) string {
 	b.WriteString("Suite: github.com/xbow-engineering/validation-benchmarks (104 web challenges, flag-capture)\n")
 	b.WriteString("Competitor yardstick: XBOW (suite authors) publish their own solve-rate on THIS suite — same-suite, directly comparable.\n")
 	b.WriteString("Success = the build-time-injected random flag was captured in the agent's evidence (deterministic, ungameable, §10-grounded).\n\n")
-	fmt.Fprintf(&b, "OVERALL: %d/%d solved = %.1f%%\n", sb.Solved, sb.Total, 100*sb.SolveRate)
+	fmt.Fprintf(&b, "OVERALL: %d/%d flags captured = %.1f%%\n", sb.Solved, sb.Total, 100*sb.SolveRate)
+	// The diagnostic that separates "weak brain" from "harness doesn't pursue the flag": how many
+	// benchmarks we at least reached + produced findings on, vs how many we actually captured.
+	fmt.Fprintf(&b, "DIAGNOSTIC: %d/%d benchmarks produced findings (reached + assessed the app); of those, %d captured the flag.\n",
+		sb.WithFindings, sb.Total, sb.Solved)
 
 	if len(sb.ByLevel) > 0 {
 		b.WriteString("\nby difficulty:\n")
