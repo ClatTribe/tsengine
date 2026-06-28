@@ -38,8 +38,9 @@ func TestRewriteOneLoopback(t *testing.T) {
 	cases := map[string]string{
 		"http://localhost:8098/x": "http://host.docker.internal:8098/x",
 		"https://127.0.0.1/y":     "https://host.docker.internal/y",
-		"http://0.0.0.0:3000":     "http://host.docker.internal:3000",
-		"localhost:8080":          "host.docker.internal:8080",
+		// 0.0.0.0 is NOT rewritten (not a legit target + SSRF-bypass token) — it stays pointing at the sandbox.
+		"http://0.0.0.0:3000": "http://0.0.0.0:3000",
+		"localhost:8080":      "host.docker.internal:8080",
 		"127.0.0.1":               "host.docker.internal",
 		"localhost":               "host.docker.internal",
 		// Must NOT rewrite a non-loopback host that merely contains the token.
