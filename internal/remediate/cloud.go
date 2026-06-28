@@ -6,6 +6,19 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
+// The live cloud-STORAGE remediation_types. Each writes to a single resource (a bucket / storage
+// account) whose name lives in a GLOBAL namespace, so a broadly-scoped write credential could reach a
+// resource outside the tenant — the deliver gate (Deliverer.verifyCloudTargetGrounded) re-binds these
+// to the cited finding's endpoint before the write.
+const (
+	rtypeS3Block    = "s3_block_public_access"
+	rtypeGCSPrevent = "gcs_public_access_prevention"
+	rtypeAzureBlock = "azure_storage_disable_public_access"
+)
+
+// cloudStorageRemediations is the set of those remediation_types (target == the finding's endpoint).
+var cloudStorageRemediations = map[string]bool{rtypeS3Block: true, rtypeGCSPrevent: true, rtypeAzureBlock: true}
+
 // liveCloudMutation returns the live, reversible cloud remediation (remediation_type + the
 // resource-level target) for a finding when a connector write path exists — today only AWS S3
 // public-access block, the fix for a publicly-exposed bucket (DSPM/CSPM). Empty rtype → no live
@@ -20,15 +33,15 @@ func liveCloudMutation(f types.Finding, provider string) (rtype, target string) 
 	// Empty provider is treated as AWS (the original single cloud connector).
 	case provider == "" || strings.EqualFold(provider, "aws"):
 		if isPublicStorageFinding(f) {
-			return "s3_block_public_access", f.Endpoint
+			return rtypeS3Block, f.Endpoint
 		}
 	case strings.EqualFold(provider, "gcp"):
 		if isPublicStorageFinding(f) {
-			return "gcs_public_access_prevention", f.Endpoint
+			return rtypeGCSPrevent, f.Endpoint
 		}
 	case strings.EqualFold(provider, "azure"):
 		if isPublicStorageFinding(f) {
-			return "azure_storage_disable_public_access", f.Endpoint
+			return rtypeAzureBlock, f.Endpoint
 		}
 	}
 	return "", ""

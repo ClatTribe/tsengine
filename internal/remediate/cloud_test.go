@@ -1,11 +1,46 @@
 package remediate
 
 import (
+	"context"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// The deliver gate must re-bind a live cloud-storage mutation to the finding it cites: a target that no
+// longer matches the finding's resource (retargeted/misattributed) is refused, but a matching target —
+// or an aged-out finding — proceeds (no false-refusal of a legit, previously-grounded action).
+func TestVerifyCloudTargetGrounded(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "f1", Endpoint: "arn:aws:s3:::bucket-A"})
+	d := &Deliverer{Store: st}
+
+	cloudAct := func(target, findingID string) platform.Action {
+		return platform.Action{ID: "a1", TenantID: "t1", FindingID: findingID,
+			Payload: map[string]any{"remediation_type": rtypeS3Block, "target": target}}
+	}
+
+	if err := d.verifyCloudTargetGrounded(ctx, cloudAct("arn:aws:s3:::bucket-A", "f1")); err != nil {
+		t.Errorf("a target matching its finding must pass, got %v", err)
+	}
+	if err := d.verifyCloudTargetGrounded(ctx, cloudAct("arn:aws:s3:::bucket-B", "f1")); err == nil {
+		t.Error("SECURITY: a cloud mutation retargeted away from its cited finding must be refused")
+	}
+	if err := d.verifyCloudTargetGrounded(ctx, cloudAct("arn:aws:s3:::bucket-A", "gone")); err != nil {
+		t.Errorf("an aged-out finding must NOT false-refuse, got %v", err)
+	}
+	if err := d.verifyCloudTargetGrounded(ctx, cloudAct("arn:aws:s3:::bucket-A", "")); err == nil {
+		t.Error("a cloud mutation with no finding binding must be refused")
+	}
+	pr := platform.Action{ID: "a2", TenantID: "t1", Payload: map[string]any{"target": "github.com/x/y"}}
+	if err := d.verifyCloudTargetGrounded(ctx, pr); err != nil {
+		t.Errorf("a non-cloud-storage action must be untouched, got %v", err)
+	}
+}
 
 func TestProposeCloud_S3PublicGetsLiveWritePath(t *testing.T) {
 	asset := platform.Asset{
