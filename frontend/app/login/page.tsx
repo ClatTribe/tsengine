@@ -95,6 +95,13 @@ export default function LoginPage() {
             <Link href="/signup" className="font-medium text-accent hover:underline">Create your workspace →</Link>
           </p>
 
+          {/* Discoverability for the SEPARATE operator auth namespace (§18.5): an MSP/managed practitioner
+              works their clients' queue at /operator, not a tenant login. */}
+          <p className="mt-2 text-xs text-faint">
+            Partner or managed practitioner?{" "}
+            <Link href="/operator/login" className="font-medium text-muted hover:text-ink hover:underline">Operator console sign-in →</Link>
+          </p>
+
           <div className="mt-4 flex items-center gap-2 text-[11px] text-faint">
             <Lock className="h-3.5 w-3.5" />
             Your session is held server-side in an httpOnly cookie — never exposed to the browser.

@@ -159,6 +159,12 @@ export default function Partners() {
           <Link href="/demo" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-accent shadow-sm transition hover:bg-white/90">
             Become a partner <ArrowRight className="h-4 w-4" />
           </Link>
+          <p className="mt-4 text-sm text-white/70">
+            Already a partner?{" "}
+            <Link href="/operator/login" className="font-medium text-white underline-offset-2 hover:underline">
+              Sign in to the operator console →
+            </Link>
+          </p>
         </div>
       </section>
     </>
