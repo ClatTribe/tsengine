@@ -2,6 +2,7 @@ package remediate
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -19,14 +20,19 @@ type JiraResolver func(ctx context.Context, tenantID string) (baseURL, email, to
 // Implements remediate.Filer.
 type TenantFiler struct {
 	Resolve  JiraResolver
-	Fallback Filer // operator-global Jira (may be nil → a no-destination ticket is a recorded no-op)
+	Fallback Filer        // operator-global Jira (may be nil → a no-destination ticket is a recorded no-op)
+	HTTP     *http.Client // optional override for the per-tenant Jira client (tests); nil → connector.NewJira's SSRF-guarded default
 }
 
 // FileTicket files into the tenant's own Jira when configured, else the operator fallback.
 func (t TenantFiler) FileTicket(ctx context.Context, a platform.Action) error {
 	if t.Resolve != nil {
 		if base, email, token, project, ok := t.Resolve(ctx, a.TenantID); ok {
-			return connector.NewJira(base, email, token, project).FileTicket(ctx, a)
+			j := connector.NewJira(base, email, token, project)
+			if t.HTTP != nil {
+				j.HTTP = t.HTTP
+			}
+			return j.FileTicket(ctx, a)
 		}
 	}
 	if t.Fallback != nil {
