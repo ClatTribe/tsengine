@@ -90,6 +90,15 @@ type Service struct {
 	// incidents just open + alert.
 	ProposeIncidentResponse func(platform.Incident) ([]platform.Action, bool)
 
+	// AfterScan, when set, auto-invokes the AI Security Engineer (the L2 translate/reasoning pass)
+	// once a scan pass surfaces something NEW — so the engineer reviews the estate automatically
+	// instead of waiting for a human to click. It fires only when scanned>0 AND ≥1 incident opened
+	// this pass (review on CHANGE, not every idle monitor pass — this bounds the LLM cost); the
+	// entitlement (AIEnabled) + LLM-availability gates live INSIDE the injected func (a Free tenant
+	// must never auto-spend the operator's LLM budget). Best-effort, fire-and-forget. nil → no
+	// auto-review (the on-demand POST /v1/l2/translate still works).
+	AfterScan func(ctx context.Context, tenantID string, findings []types.Finding, openedIncidents int)
+
 	// optional webhook auto-registration (event-driven re-scans on connect)
 	WebhookSecret string // shared secret stamped on registered hooks (and verified inbound)
 	PublicURL     string // platform base URL for the webhook callback
@@ -216,6 +225,7 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// would falsely RESOLVE the incidents the ingest path opened via Detector.OpenFor. Those are
 	// event-driven and stay open until a human resolves them. (Mixed scan+ingest tenants still reconcile
 	// over scan output — the ingest-incident-survives-a-scan-pass case is a documented follow-on.)
+	var openedIncidents int
 	if s.Detector != nil && firstErr == nil && scanned > 0 {
 		// Runtime-protection escalation (ADR-0007 Phase 0b): a finding whose endpoint is
 		// being attacked in production opens an incident regardless of severity floor.
@@ -227,6 +237,8 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
+		openedIncidents = len(res.Opened) // the "something changed" signal that triggers the auto-review
+
 		// Fix-verification (KF#4 — "60% don't retest after fixes"): re-test every APPLIED
 		// remediation against this pass's authoritative findings. A fix is confirmed "fixed" only
 		// when its finding keys are absent (grounded §10); still-present means the fix didn't close
@@ -271,6 +283,12 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		if _, err := s.GRC.Reconcile(ctx, tenantID, current); err != nil && firstErr == nil {
 			firstErr = err
 		}
+	}
+	// Auto-review: when this pass surfaced something NEW, the AI Security Engineer reviews the estate
+	// automatically (the entitlement + LLM gates live inside the hook; cost-bounded to CHANGE, not
+	// idle monitor passes). Best-effort — never affects the scan result.
+	if s.AfterScan != nil && scanned > 0 && openedIncidents > 0 {
+		s.AfterScan(ctx, tenantID, current, openedIncidents)
 	}
 	return scanned, firstErr
 }

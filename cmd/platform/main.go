@@ -404,7 +404,7 @@ func main() {
 	if leadClient != nil {
 		log.Printf("[platform] L2 translator wired (model=%s) — developer-facing consultant deliverable", leadClient.Model())
 	}
-	api := platformapi.NewHandler(platformapi.Deps{
+	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
 		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
@@ -415,7 +415,13 @@ func main() {
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
 		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser, AgentLLM: agentLLM, LeadClient: leadClient,
 		Mailer: email.FromEnv(), // transactional email (password reset/invite); no-op until SMTP_* is set
-	})
+	}
+	// Auto-review (framework: auto-invoke the AI Security Engineer after a scan): when a monitoring pass
+	// surfaces something NEW, the engineer reviews the estate automatically instead of waiting for a
+	// human to click /v1/l2/translate. The hook self-gates (AIEnabled + an available LLM), so it's a
+	// no-op when AI isn't entitled/configured — a Free tenant never auto-spends the operator's budget.
+	svc.AfterScan = apiDeps.AutoReviewAfterScan
+	api := platformapi.NewHandler(apiDeps)
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
 	// through to the API for every non-/ui path.
