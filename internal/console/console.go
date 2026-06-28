@@ -17,11 +17,17 @@ package console
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
+	"encoding/hex"
 	"html/template"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +40,7 @@ import (
 )
 
 const (
-	sessionCookie  = "ts_session"  // value = the platform token (httpOnly, SameSite=Strict)
+	sessionCookie  = "ts_session"  // value = a signed, expiring session token (httpOnly, SameSite=Strict) — NOT the raw platform token
 	operatorCookie = "ts_operator" // optional human name, used as the ledger approver
 )
 
@@ -300,8 +306,15 @@ func (d Deps) login(w http.ResponseWriter, r *http.Request) {
 		renderLogin(w, http.StatusUnauthorized, loginView{Error: "Invalid token.", Tenant: r.FormValue("tenant")})
 		return
 	}
+	sess, err := d.mintSession()
+	if err != nil {
+		http.Error(w, "could not start session", http.StatusInternalServerError)
+		return
+	}
 	secure := isHTTPS(r)
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/ui",
+	// The cookie carries a SIGNED, expiring session token — never the raw platform token — so a leaked
+	// cookie is a time-bounded credential, not the master operator secret.
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sess, Path: "/ui",
 		HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: secure})
 	if op := strings.TrimSpace(r.FormValue("operator")); op != "" {
 		http.SetCookie(w, &http.Cookie{Name: operatorCookie, Value: op, Path: "/ui",
@@ -375,11 +388,53 @@ func (d Deps) authed(r *http.Request) bool {
 		subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(h, "Bearer ")), []byte(d.Token)) == 1 {
 		return true
 	}
-	if c, err := r.Cookie(sessionCookie); err == nil &&
-		subtle.ConstantTimeCompare([]byte(c.Value), []byte(d.Token)) == 1 {
+	if c, err := r.Cookie(sessionCookie); err == nil && d.validSession(c.Value) {
 		return true
 	}
 	return false
+}
+
+const consoleSessionTTL = 12 * time.Hour
+
+// mintSession returns a SIGNED, expiring session-cookie value — never the raw platform token, so a
+// leaked cookie is a time-bounded credential rather than the master operator secret. Stateless: an
+// HMAC keyed by the platform token, domain-separated (mirrors the oauth-state / trust-center tokens).
+// Format "<nonce>:<unix-exp>:<hex-hmac>".
+func (d Deps) mintSession() (string, error) {
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	msg := base64.RawURLEncoding.EncodeToString(nonce) + ":" + strconv.FormatInt(time.Now().Add(consoleSessionTTL).Unix(), 10)
+	return msg + ":" + d.sessionMAC(msg), nil
+}
+
+func (d Deps) sessionMAC(msg string) string {
+	mac := hmac.New(sha256.New, []byte(d.Token))
+	mac.Write([]byte("console-session:")) // domain-separation from the other token kinds (shared key)
+	mac.Write([]byte(msg))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// validSession verifies a cookie minted by mintSession: signature (constant-time) + not expired.
+func (d Deps) validSession(cookie string) bool {
+	if d.Token == "" || cookie == "" {
+		return false
+	}
+	i := strings.LastIndex(cookie, ":")
+	if i < 0 {
+		return false
+	}
+	msg, sig := cookie[:i], cookie[i+1:]
+	if !hmac.Equal([]byte(sig), []byte(d.sessionMAC(msg))) {
+		return false
+	}
+	j := strings.LastIndex(msg, ":")
+	if j < 0 {
+		return false
+	}
+	exp, err := strconv.ParseInt(msg[j+1:], 10, 64)
+	return err == nil && time.Now().Unix() <= exp
 }
 
 func (d Deps) renderTenantPicker(w http.ResponseWriter, r *http.Request) {

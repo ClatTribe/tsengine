@@ -143,7 +143,8 @@ func TestDashboard_NoTenantShowsPicker(t *testing.T) {
 
 // Login with the right token sets the session cookie and redirects.
 func TestLogin_SetsCookieAndRedirects(t *testing.T) {
-	h := Handler(deps(t, seed(t)))
+	d := deps(t, seed(t))
+	h := Handler(d)
 	form := url.Values{"token": {tok}, "tenant": {"t1"}, "operator": {"Riya"}}
 	r := httptest.NewRequest(http.MethodPost, "/ui/login", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -154,7 +155,8 @@ func TestLogin_SetsCookieAndRedirects(t *testing.T) {
 	}
 	var session, op bool
 	for _, c := range w.Result().Cookies() {
-		if c.Name == sessionCookie && c.Value == tok && c.HttpOnly {
+		// the cookie must be a signed, valid session token — NOT the raw platform token.
+		if c.Name == sessionCookie && c.Value != "" && c.Value != tok && c.HttpOnly && d.validSession(c.Value) {
 			session = true
 		}
 		if c.Name == operatorCookie && c.Value == "Riya" {
@@ -186,9 +188,11 @@ func TestLogin_WrongTokenRejected(t *testing.T) {
 
 // A cookie session can drive the dashboard (the browser path).
 func TestDashboard_CookieSessionWorks(t *testing.T) {
-	h := Handler(deps(t, seed(t)))
+	d := deps(t, seed(t))
+	h := Handler(d)
+	sess, _ := d.mintSession()
 	r := httptest.NewRequest(http.MethodGet, "/ui?tenant=t1", nil)
-	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: tok})
+	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: sess})
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "SQL injection") {
@@ -196,14 +200,35 @@ func TestDashboard_CookieSessionWorks(t *testing.T) {
 	}
 }
 
+// The session cookie is a SIGNED, expiring token — the raw platform token is NOT accepted as a session
+// (so a leaked cookie isn't the master secret), and a tampered or wrong-key token is rejected.
+func TestSession_RawTokenAndTamperedRejected(t *testing.T) {
+	d := deps(t, seed(t))
+	if d.validSession(tok) {
+		t.Error("SECURITY: the raw platform token must NOT be accepted as a session cookie")
+	}
+	sess, _ := d.mintSession()
+	if !d.validSession(sess) {
+		t.Fatal("a freshly minted session should be valid")
+	}
+	if d.validSession(sess + "x") {
+		t.Error("a tampered session must be rejected")
+	}
+	if other, _ := (Deps{Token: "different-token"}).mintSession(); d.validSession(other) {
+		t.Error("SECURITY: a session signed with another key must not verify")
+	}
+}
+
 // Approving from the console drives the gated desk: the action leaves the pending queue.
 func TestDecide_ApproveThroughDesk(t *testing.T) {
 	st := seed(t)
-	h := Handler(deps(t, st))
+	d := deps(t, st)
+	h := Handler(d)
+	sess, _ := d.mintSession()
 	form := url.Values{"tenant": {"t1"}, "decision": {"approve"}}
 	r := httptest.NewRequest(http.MethodPost, "/ui/approvals/a1", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: tok})
+	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: sess})
 	r.AddCookie(&http.Cookie{Name: operatorCookie, Value: "Riya"})
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
@@ -358,11 +383,13 @@ func TestConnect_RequiresAuth(t *testing.T) {
 // "Scan now" triggers a tenant rescan through the wired Rescanner.
 func TestRescan_TriggersTenantScan(t *testing.T) {
 	rs := &fakeRescanner{}
-	h := Handler(Deps{Store: seed(t), Token: tok, Rescan: rs})
+	d := Deps{Store: seed(t), Token: tok, Rescan: rs}
+	h := Handler(d)
+	sess, _ := d.mintSession()
 	form := url.Values{"tenant": {"t1"}}
 	r := httptest.NewRequest(http.MethodPost, "/ui/rescan", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: tok})
+	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: sess})
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != http.StatusSeeOther {
