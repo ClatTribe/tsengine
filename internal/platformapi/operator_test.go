@@ -26,6 +26,18 @@ func operatorDeps(t *testing.T) Deps {
 	return Deps{Store: st, Token: "op-token", NewID: func() string { n++; return fmt.Sprintf("o%d", n) }}
 }
 
+// Operator login normalizes the email (trim + lowercase) like provisioning + tenant login do, so a
+// case/whitespace variant resolves the same account.
+func TestOperatorLogin_EmailCaseInsensitive(t *testing.T) {
+	d := operatorDeps(t)
+	if r := callRaw(d.handleCreateOperator, http.MethodPost, `{"email":"dana@x.io","password":"sup3rsecret"}`); r.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", r.Code, r.Body.String())
+	}
+	if r := callRaw(d.handleOperatorLogin, http.MethodPost, `{"email":"  Dana@X.IO ","password":"sup3rsecret"}`); r.Code != http.StatusOK {
+		t.Errorf("a mixed-case/padded email should log in (normalized), got %d: %s", r.Code, r.Body.String())
+	}
+}
+
 func TestOperator_ProvisionLoginQueue(t *testing.T) {
 	d := operatorDeps(t)
 

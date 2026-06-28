@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -64,13 +65,20 @@ func (d Deps) handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	link := d.resetLink(em, token)
-	if d.mailer().Configured() {
+	switch {
+	case d.mailer().Configured():
 		if err := d.mailer().Send(r.Context(), em, "Reset your TensorShield password", resetEmailHTML(link)); err != nil {
 			slog.Warn("[auth] reset email failed", "email", em, "err", err)
 		}
-	} else {
-		// Dev / no-SMTP: surface the link to the operator's log, never to the anonymous response.
-		slog.Info("[auth] password reset requested (no mailer configured) — share this link with the user", "email", em, "link", link)
+	case os.Getenv("TSENGINE_DEV_RESET_LINKS") == "1":
+		// EXPLICIT dev opt-in only: the link carries a LIVE reset token, so logging it lets anyone with
+		// log access complete a reset. Never default — a token in logs shipped to a shared aggregator
+		// (Loki/CloudWatch/Datadog) is an account-takeover vector. Production wires SMTP instead.
+		slog.Info("[auth] password reset link (dev mode: TSENGINE_DEV_RESET_LINKS=1)", "email", em, "link", link)
+	default:
+		// No mailer and no dev opt-in: record that a reset was requested WITHOUT the token, and tell the
+		// operator how to deliver it.
+		slog.Warn("[auth] password reset requested but no mailer is configured — set SMTP_* (or TSENGINE_DEV_RESET_LINKS=1 to log the link in dev)", "email", em)
 	}
 	writeJSON(w, http.StatusOK, ok)
 }
