@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
-import { EngageModels } from "@/components/marketing/engage-models";
 import { Reveal } from "@/components/marketing/reveal";
 import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 
@@ -281,10 +280,25 @@ export default function Pricing() {
         </p>
       </section>
 
-      {/* The three GTM models as co-equal options (§18.5): self-serve, managed, MSP — the practitioner
-          layer, first-class on the pricing page (was a single managed/MSP band). The only thing that
-          differs is who employs the human-in-the-loop. */}
-      <EngageModels />
+      {/* The three GTM models (§18.5) live canonically on /partners now. Pricing keeps a compact pointer:
+          every paid tier is delivered self-serve OR managed / via an MSP — only who runs the HITL differs. */}
+      <section className="mx-auto max-w-4xl px-5 pb-2 pt-12">
+        <Reveal className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-surface px-6 py-7 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Pick your service model</h2>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted">
+              Any paid tier runs three ways — you run it, we run it (managed), or your MSP runs it for clients.
+              The product is identical; only who makes the human-in-the-loop calls changes.
+            </p>
+          </div>
+          <Link
+            href="/partners"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-accent/40 hover:text-accent"
+          >
+            Compare service models <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Reveal>
+      </section>
 
       {/* Compare plans */}
       <ComparePlans />

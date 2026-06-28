@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
   AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen, ShieldCheck,
-  Cloud, KeyRound, UserCheck, ArrowRight, Building2, Users, Mail,
+  Cloud, KeyRound, UserCheck, ArrowRight, Building2, Users, Mail, Rocket,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -54,21 +54,27 @@ const TOOLS: Item[] = [
 // delivery/company page (Company menu) — the bar stays uncluttered.
 const DIRECT = [{ href: "/pricing", label: "Pricing" }];
 
-// Company menu — about + ways to reach us + the two DELIVERY models (managed, MSP channel). These
-// are company/delivery pages, NOT solutions (Solutions = what we provide), so they're grouped here
-// instead of cluttering the top bar.
+// Service models (§18.5) — the THREE ways the SAME engine is delivered (self-serve · managed · MSP). The
+// only thing that differs is who employs the human-in-the-loop. First-class in the nav (was buried in
+// Company) because the service model now differentiates the paid tier and is a primary GTM axis. The
+// canonical comparison table lives on /partners.
+const SERVICE_MODELS: Item[] = [
+  { href: "/signup", label: "Self-serve", desc: "Run it yourself — your team makes the calls", icon: Rocket },
+  { href: "/managed", label: "Managed service", desc: "We run it for you — a named expert on your behalf", icon: UserCheck },
+  { href: "/partners", label: "For MSPs & consultancies", desc: "Deliver it to your own clients, your brand", icon: Users },
+];
+
+// Company menu — about + ways to reach us. Delivery/GTM pages moved to the Service models menu above.
 const COMPANY: Item[] = [
   { href: "/about", label: "About", desc: "Who we are and why we built this", icon: Building2 },
-  { href: "/managed", label: "Managed service", desc: "We run it for you — done-for-you delivery", icon: UserCheck },
-  { href: "/partners", label: "For MSPs & consultancies", desc: "Run TensorShield for your clients", icon: Users },
   { href: "/blog", label: "Blog", desc: "Notes on security, compliance & AI", icon: BookOpen },
   { href: "/demo", label: "Contact us", desc: "Book a demo or talk to the team", icon: Mail },
 ];
 
 export function MarketingNav() {
   const [open, setOpen] = useState(false); // mobile sheet
-  const [menu, setMenu] = useState<"solutions" | "frameworks" | "tools" | "company" | null>(null); // desktop dropdown
-  const [acc, setAcc] = useState<"security" | "compliance" | "tools" | "company" | null>(null); // mobile accordion
+  const [menu, setMenu] = useState<"solutions" | "frameworks" | "tools" | "models" | "company" | null>(null); // desktop dropdown
+  const [acc, setAcc] = useState<"security" | "compliance" | "tools" | "models" | "company" | null>(null); // mobile accordion
   const path = usePathname();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -79,7 +85,7 @@ export function MarketingNav() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const openMenu = (m: "solutions" | "frameworks" | "tools" | "company") => {
+  const openMenu = (m: "solutions" | "frameworks" | "tools" | "models" | "company") => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setMenu(m);
   };
@@ -133,6 +139,14 @@ export function MarketingNav() {
               {l.label}
             </Link>
           ))}
+          <Dropdown
+            label="Service models"
+            items={SERVICE_MODELS}
+            isOpen={menu === "models"}
+            onEnter={() => openMenu("models")}
+            onLeave={scheduleClose}
+            path={path}
+          />
           <Dropdown
             label="Company"
             items={COMPANY}
@@ -198,6 +212,13 @@ export function MarketingNav() {
             items={TOOLS}
             open={acc === "tools"}
             onToggle={() => setAcc((a) => (a === "tools" ? null : "tools"))}
+            onNavigate={() => setOpen(false)}
+          />
+          <MobileGroup
+            label="Service models"
+            items={SERVICE_MODELS}
+            open={acc === "models"}
+            onToggle={() => setAcc((a) => (a === "models" ? null : "models"))}
             onNavigate={() => setOpen(false)}
           />
           <MobileGroup
