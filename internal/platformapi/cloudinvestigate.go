@@ -10,6 +10,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudagent"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -49,6 +50,13 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	if ierr != nil {
 		respond(w, nil, ierr)
 		return
+	}
+	// Persist the posted inventory so the AI cloud engineer can later run over STORED cloud state —
+	// the prerequisite for the L2 generalist delegating cloud-depth to cloudagent. Best-effort.
+	if d.CloudSnapshots != nil {
+		_ = d.CloudSnapshots.Put(r.Context(), cloudsnap.Snapshot{
+			TenantID: tenantID, Inventory: body.Inventory, Prowler: body.Prowler, CapturedAt: time.Now().UTC(),
+		})
 	}
 	stored := 0
 	saved := make([]types.Finding, 0, len(rep.Issues))
