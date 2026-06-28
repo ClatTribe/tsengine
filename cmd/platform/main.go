@@ -53,6 +53,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
@@ -404,8 +405,20 @@ func main() {
 	if leadClient != nil {
 		log.Printf("[platform] L2 translator wired (model=%s) — developer-facing consultant deliverable", leadClient.Model())
 	}
+	// Cloud-snapshot store: persists each tenant's last cloud inventory so the AI cloud engineer can
+	// reason over STORED cloud state (the prerequisite for L2→cloudagent delegation). File-backed when
+	// TSENGINE_CLOUDSNAP_DIR is set (durable on a single box), else in-process.
+	var cloudSnaps cloudsnap.Store = cloudsnap.NewMemStore()
+	if dir := os.Getenv("TSENGINE_CLOUDSNAP_DIR"); dir != "" {
+		if fs, ferr := cloudsnap.NewFileStore(dir); ferr != nil {
+			log.Printf("[platform] cloudsnap file store (%s): %v — using in-process", dir, ferr)
+		} else {
+			cloudSnaps = fs
+		}
+	}
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
+		CloudSnapshots: cloudSnaps,
 		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
 		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
 		Token:          token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),

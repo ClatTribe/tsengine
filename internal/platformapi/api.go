@@ -22,6 +22,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/jobs"
+	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/runner"
@@ -81,6 +82,11 @@ type Deps struct {
 	// /v1/l2/translate). Wired from l2.ClientFromEnv (Anthropic, OpenAI, or a local Ollama); a tenant's
 	// own configured model takes precedence. Nil → the translator endpoint is gated (400).
 	LeadClient l2.Client
+	// CloudSnapshots persists a tenant's latest cloud inventory so the AI cloud engineer can run over
+	// STORED cloud state (not only a freshly-posted inventory) — the prerequisite for the L2 generalist
+	// delegating cloud-depth to cloudagent. Nil → no persistence (POST /v1/cloud/investigate still works
+	// over the posted inventory; nothing is stored for later).
+	CloudSnapshots cloudsnap.Store
 	// Mailer sends transactional email (password-reset links, invites). Nil → a no-op (the
 	// platform falls back to the in-UI temp-password flow and logs reset links for the operator).
 	// Wired from email.FromEnv (SMTP_*); the SMTP provider is the credential-gated half.
