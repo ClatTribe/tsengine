@@ -95,7 +95,9 @@ func (d Deps) handleOperatorLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
 		return
 	}
-	op, err := d.Store.GetOperatorByEmail(r.Context(), strings.TrimSpace(body.Email))
+	// Normalize the email exactly like provisioning (handleCreateOperator) and the tenant login do — so a
+	// case variant resolves the same account regardless of whether a Store impl folds case in its lookup.
+	op, err := d.Store.GetOperatorByEmail(r.Context(), strings.ToLower(strings.TrimSpace(body.Email)))
 	if err != nil || !authn.VerifyPassword(body.Password, op.PasswordHash) {
 		writeJSON(w, http.StatusUnauthorized, errBody("invalid email or password"))
 		return
