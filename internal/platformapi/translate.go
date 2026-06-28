@@ -91,6 +91,9 @@ func (d Deps) runTranslate(ctx context.Context, tenantID string, client l2.Clien
 		AttackPaths: renderChains(crossdetect.Correlate(pAssets, findings)),
 	}
 	dep := l2.Deps{Target: target, L1Findings: findings}
+	// Cloud-depth delegation (item 3b): when a stored cloud snapshot exists, the generalist can call
+	// investigate_cloud to run the cloud specialist over it. nil when no snapshot store → tool not exposed.
+	dep.CloudInvestigator = d.cloudInvestigator(tenantID)
 	budget := l2.DefaultBudget()
 	budget.MaxIterations = 16 // a bounded translate pass (not a full investigation)
 	agent, err := l2.New(client, l2.BuildCatalog(dep), budget)

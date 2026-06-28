@@ -157,5 +157,30 @@ func externalTools(d Deps) Catalog {
 		})
 	}
 
+	// The generalist delegates cloud-depth to the cloud SPECIALIST (cloudagent over the tenant's stored
+	// cloud snapshot). Added ONLY when wired (a Free/no-cloud tenant never sees it → the ≤12 cap holds).
+	if d.CloudInvestigator != nil {
+		ci := d.CloudInvestigator
+		c = append(c, Tool{
+			Schema: ToolSchema{
+				Name: "investigate_cloud",
+				Description: "Run the cloud security specialist over the tenant's cloud inventory for DEEP " +
+					"cloud-graph reasoning (IAM effective permissions, network reachability, privilege " +
+					"escalation, proven attack paths) beyond the estate summary. Use it when an issue touches " +
+					"cloud and you need exploitable paths a crown jewel. Returns the specialist's proven paths.",
+				Params: obj(map[string]any{
+					"focus": str("what to investigate, e.g. 'paths to the production database' or a cloud finding/resource"),
+				}, "focus"),
+			},
+			Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
+				out, err := ci(ctx, strings.TrimSpace(argStr(args, "focus")))
+				if err != nil {
+					return ToolResult{Err: true, Content: "cloud investigation failed: " + err.Error()}, nil
+				}
+				return ToolResult{Content: out}, nil
+			},
+		})
+	}
+
 	return c
 }
