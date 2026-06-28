@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -37,6 +38,36 @@ type XBOWConfig struct {
 	Level        int      `json:"level"`         // 1=easy, 2=medium, 3=hard
 	WinCondition string   `json:"win_condition"` // "flag" | "question"
 	Tags         []string `json:"tags"`
+}
+
+// UnmarshalJSON tolerates "level" being either a JSON number (2) OR a quoted string ("2") — the real
+// validation-benchmarks ship it as a string, so a plain `Level int` would fail to parse and silently
+// drop every benchmark. (Running against the real suite is exactly what surfaced this.)
+func (c *XBOWConfig) UnmarshalJSON(data []byte) error {
+	type raw struct {
+		Name         string          `json:"name"`
+		Description  string          `json:"description"`
+		Level        json.RawMessage `json:"level"`
+		WinCondition string          `json:"win_condition"`
+		Tags         []string        `json:"tags"`
+	}
+	var r raw
+	if err := json.Unmarshal(data, &r); err != nil {
+		return err
+	}
+	c.Name, c.Description, c.WinCondition, c.Tags = r.Name, r.Description, r.WinCondition, r.Tags
+	c.Level = flexInt(r.Level)
+	return nil
+}
+
+// flexInt parses an int from a JSON token that may be a number or a quoted string ("" / invalid → 0).
+func flexInt(raw json.RawMessage) int {
+	s := strings.TrimSpace(strings.Trim(string(raw), `"`))
+	if s == "" || s == "null" {
+		return 0
+	}
+	n, _ := strconv.Atoi(s)
+	return n
 }
 
 // XBOWBenchmark is one loaded challenge: its parsed config + the directory holding its
@@ -71,7 +102,9 @@ func LoadXBOWSuite(root string) ([]XBOWBenchmark, error) {
 		if err != nil {
 			return nil // skip unreadable subtrees rather than abort the whole load
 		}
-		if d.IsDir() || d.Name() != "benchmark-config.json" {
+		// The real suite ships <ID>/benchmark.json; older docs describe <ID>/benchmark/benchmark-config.json.
+		// Accept either name.
+		if d.IsDir() || (d.Name() != "benchmark.json" && d.Name() != "benchmark-config.json") {
 			return nil
 		}
 		data, rerr := os.ReadFile(path) //nolint:gosec // operator-provided suite path
@@ -82,8 +115,12 @@ func LoadXBOWSuite(root string) ([]XBOWBenchmark, error) {
 		if jerr := json.Unmarshal(data, &cfg); jerr != nil {
 			return nil // a malformed config is skipped, not fatal — load the rest of the suite
 		}
-		// path = <root>/<ID>/benchmark/benchmark-config.json → benchmark dir = parent-of-parent.
-		benchDir := filepath.Dir(filepath.Dir(path))
+		// The benchmark dir is the one holding docker-compose.yml: the config's own dir, or its parent
+		// if the config sits in a "benchmark/" subdir.
+		benchDir := filepath.Dir(path)
+		if filepath.Base(benchDir) == "benchmark" {
+			benchDir = filepath.Dir(benchDir)
+		}
 		out = append(out, XBOWBenchmark{ID: filepath.Base(benchDir), Dir: benchDir, Config: cfg})
 		return nil
 	})
@@ -105,7 +142,7 @@ func GenerateFlag() (string, error) {
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", fmt.Errorf("xbow: generate flag: %w", err)
 	}
-	return "flag{" + hex.EncodeToString(b[:]) + "}", nil
+	return "FLAG{" + hex.EncodeToString(b[:]) + "}", nil // matches the suite's FLAG{...} convention
 }
 
 // FlagCaptured reports whether the injected flag appears anywhere in the agent's captured evidence —
