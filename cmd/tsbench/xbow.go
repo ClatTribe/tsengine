@@ -118,8 +118,9 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, tar
 		return finish("flag gen: " + err.Error())
 	}
 
-	// build with the random flag injected, then bring the stack up.
-	if out, berr := compose_(ctx, compose, "build", "--build-arg", "flag="+flagStr); berr != nil {
+	// build with the random flag injected, then bring the stack up. The suite's compose files consume
+	// an uppercase FLAG build-arg; their own Makefile passes BOTH FLAG= and flag=, so we mirror that.
+	if out, berr := compose_(ctx, compose, "build", "--build-arg", "FLAG="+flagStr, "--build-arg", "flag="+flagStr); berr != nil {
 		return finish("compose build failed: " + tail(out))
 	}
 	if out, uerr := compose_(ctx, compose, "up", "-d", "--wait"); uerr != nil {
@@ -170,11 +171,16 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, tar
 	return finish("flag not captured")
 }
 
-// compose_ runs `docker compose -f <file> <args…>` in the compose file's directory.
+// compose_ runs `docker compose -f <file> <args…>` in the compose file's directory. The path is made
+// ABSOLUTE first: a relative -f resolved against a relative cmd.Dir would double the path.
 func compose_(ctx context.Context, composeFile string, args ...string) (string, error) {
-	full := append([]string{"compose", "-f", composeFile}, args...)
+	abs, err := filepath.Abs(composeFile)
+	if err != nil {
+		abs = composeFile
+	}
+	full := append([]string{"compose", "-f", abs}, args...)
 	cmd := exec.CommandContext(ctx, "docker", full...)
-	cmd.Dir = filepath.Dir(composeFile)
+	cmd.Dir = filepath.Dir(abs)
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	return string(out), err

@@ -13,11 +13,12 @@ import (
 // (mirroring the real validation-benchmarks tree) so the loader is tested against the real layout.
 func writeBenchmark(t *testing.T, root, id, configJSON string) {
 	t.Helper()
-	dir := filepath.Join(root, id, "benchmark")
+	// the real suite layout: <root>/<id>/benchmark.json (docker-compose.yml alongside).
+	dir := filepath.Join(root, id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "benchmark-config.json"), []byte(configJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "benchmark.json"), []byte(configJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -25,7 +26,8 @@ func writeBenchmark(t *testing.T, root, id, configJSON string) {
 func TestLoadXBOWSuite(t *testing.T) {
 	root := t.TempDir()
 	writeBenchmark(t, root, "XBEN-001-24", `{"name":"Login bypass","description":"d","level":1,"win_condition":"flag","tags":["sqli"]}`)
-	writeBenchmark(t, root, "XBEN-002-24", `{"name":"Render flaw","description":"d","level":3,"win_condition":"flag","tags":["ssti","rce"]}`)
+	// the REAL suite ships level as a STRING ("3"); the loader must accept that, not drop it.
+	writeBenchmark(t, root, "XBEN-002-24", `{"name":"Render flaw","description":"d","level":"3","win_condition":"flag","tags":["ssti","rce"]}`)
 	// a malformed config must be skipped, not abort the whole load.
 	writeBenchmark(t, root, "XBEN-003-24", `{not json`)
 
