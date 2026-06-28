@@ -1,6 +1,10 @@
 package l2
 
-import "github.com/ClatTribe/tsengine/pkg/types"
+import (
+	"context"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
 
 // Deps are the services + inputs the L2 catalog's tool handlers need. It's
 // the seam between the agent (pure loop) and the outside world (L1
@@ -22,6 +26,14 @@ type Deps struct {
 	Compliance  ComplianceLookup
 	Prober      Prober
 	HTTP        HTTPDoer
+
+	// CloudInvestigator, when set, lets the L2 GENERALIST delegate a cloud-depth question to the cloud
+	// SPECIALIST (cloudagent over the tenant's stored cloud snapshot) — the framework's altitude split:
+	// the generalist reasons over the whole estate and dispatches into deep cloud-graph reasoning (IAM,
+	// reachability, privesc, attack paths) on demand. It's a NEUTRAL func so l2 stays engine-pure (never
+	// imports cloudagent/cloudsnap/the platform); the platform injects the closure. nil → the
+	// investigate_cloud tool is not exposed (so the ≤12-tool cap is never spent on a dead tool).
+	CloudInvestigator func(ctx context.Context, focus string) (string, error)
 }
 
 // BuildCatalog assembles the per-asset L2 catalog from Deps. The catalog is

@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -132,5 +133,40 @@ func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
 		ID: id, RuleID: "cloudagent::attack-path", Tool: "cloudagent", Severity: sev,
 		Endpoint: is.Target, Title: title + " — reachable attack path", Description: desc,
 		VerificationStatus: types.VerificationVerified, RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
+	}
+}
+
+// cloudInvestigator returns the L2 generalist's CloudInvestigator (item 3b): it loads the tenant's
+// STORED cloud snapshot (#726) and runs the cloud SPECIALIST (cloudagent) over it — the framework's
+// altitude split, where the whole-estate generalist delegates cloud-depth on demand. Returns nil when
+// no snapshot store is wired, so the investigate_cloud tool isn't exposed (the ≤12-tool cap stays
+// clean). The closure degrades gracefully: a missing snapshot / LLM / parse error returns a plain
+// message, never an error that aborts the L2 loop.
+func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus string) (string, error) {
+	if d.CloudSnapshots == nil {
+		return nil
+	}
+	return func(ctx context.Context, focus string) (string, error) {
+		snap, ok, err := d.CloudSnapshots.Get(ctx, tenantID)
+		if err != nil || !ok {
+			return "No cloud inventory has been ingested for this tenant yet — run a cloud investigation first.", nil
+		}
+		llm := d.resolveAgentLLM(ctx, tenantID)
+		if llm == nil {
+			return "Cloud-depth investigation needs an LLM (not configured for this tenant).", nil
+		}
+		inv, perr := cloudgraph.ParseInventory(snap.Inventory)
+		if perr != nil {
+			return "The stored cloud inventory could not be parsed.", nil
+		}
+		cc := &cloudagent.Context{Snap: cloudgraph.Ingest(inv), Prowler: snap.Prowler}
+		// Bounded specialist run (it's a nested agent — keep it tight). pentest.SpecLLM satisfies
+		// cloudengine.LLM structurally (same Generate), as the on-demand handler above relies on.
+		rep, ierr := cloudagent.Investigate(ctx, llm, cc, cloudagent.Options{MaxIters: 12, MaxHyp: 12})
+		if ierr != nil {
+			return "Cloud investigation error: " + ierr.Error(), nil
+		}
+		_ = focus // the specialist explores the whole graph; focus is the generalist's framing hint
+		return cloudagent.Render(rep), nil
 	}
 }
