@@ -2,6 +2,11 @@ module github.com/ClatTribe/tsengine
 
 go 1.25.8
 
+// Build with >= go1.26.4: it patches two stdlib CVEs our code calls — GO-2026-5037
+// (crypto/x509, via internal/tlsscan cert verification) and the net/textproto advisory
+// (via runner/email). govulncheck flags 1.26.3; this pins the patched toolchain.
+toolchain go1.26.4
+
 require (
 	cloud.google.com/go/storage v1.62.3
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0
