@@ -12,6 +12,7 @@ import { EngageModels } from "@/components/marketing/engage-models";
 import { Prioritize } from "@/components/marketing/prioritize";
 import { PlatformOverview } from "@/components/marketing/platform-overview";
 import { UnifiedPlatform } from "@/components/marketing/unified-platform";
+import { ArchStack } from "@/components/marketing/arch-stack";
 
 export const metadata = {
   title: "TensorShield — pass the security review, close the deal",
@@ -48,8 +49,8 @@ export default function Landing() {
               </h1>
               <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
                 The questionnaire, the SOC 2, the pentest your biggest customer is asking for — TensorShield handles it.
-                It finds, fixes, and proves your security across code, cloud, and identity, and pulls in a named expert
-                where judgment matters. No security hire required.
+                An AI security engineer finds and fixes it, an AI pentester proves it by exploitation, and a named human
+                signs the calls that matter — across code, cloud, and identity. No security hire required.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
@@ -84,6 +85,10 @@ export default function Landing() {
 
       {/* Trust signals — who built it, what it runs on, how it's built, who it's for */}
       <TrustBar />
+
+      {/* The architecture, made legible — a free substrate + the two AI teammates + a human who signs.
+          (Was a black box; the AI Pentester was absent above the fold.) */}
+      <ArchStack />
 
       {/* USP #1 — we prioritize the alerts so you don't have to (noise-reduction funnel) */}
       <Prioritize />
