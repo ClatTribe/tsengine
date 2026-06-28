@@ -321,14 +321,19 @@ func (d Deps) handleWebhook(w http.ResponseWriter, r *http.Request, tenantID str
 	}
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 8<<20))
 
-	// authenticate the webhook before triggering ANY re-scan: a spoofed payload must not
-	// be able to force scans. Verified against the shared secret when one is configured.
-	if d.WebhookSecret != "" {
-		if v, ok := conn.(connector.WebhookVerifier); ok {
-			if err := v.VerifyWebhook(r.Header, body, d.WebhookSecret); err != nil {
-				writeJSON(w, http.StatusUnauthorized, errBody("webhook verification failed"))
-				return
-			}
+	// authenticate the webhook before triggering ANY re-scan: a spoofed payload must not be able to
+	// force scans. If the connector CAN verify its provider signature (GitHub/GitLab HMAC), that check
+	// is MANDATORY — fail closed when the operator hasn't configured the secret, rather than silently
+	// accepting an unverified provider payload (the fail-open gap). Connectors with no signature scheme
+	// fall through to the route's bearer auth (d.auth).
+	if v, ok := conn.(connector.WebhookVerifier); ok {
+		if d.WebhookSecret == "" {
+			writeJSON(w, http.StatusServiceUnavailable, errBody("webhook verification unavailable: set TSENGINE_WEBHOOK_SECRET"))
+			return
+		}
+		if err := v.VerifyWebhook(r.Header, body, d.WebhookSecret); err != nil {
+			writeJSON(w, http.StatusUnauthorized, errBody("webhook verification failed"))
+			return
 		}
 	}
 
