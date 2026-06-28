@@ -142,6 +142,12 @@ func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
 		if gerr != nil {
 			return gerr
 		}
+		// Re-bind a live cloud-STORAGE mutation to the finding it cites, right before the write — a
+		// global-namespace bucket name + a broadly-scoped write credential must not let a tampered/
+		// misattributed action hit a resource outside the tenant's scanned account.
+		if err := d.verifyCloudTargetGrounded(ctx, a); err != nil {
+			return err
+		}
 		tok, terr := d.Tokens.Resolve(ctx, c)
 		if terr != nil {
 			return fmt.Errorf("remediate: resolve token: %w", terr)
@@ -149,6 +155,37 @@ func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
 		return conn.Apply(ctx, c, tok, a)
 	}
 	return fmt.Errorf("remediate: no active connection to deliver action %s", a.ID)
+}
+
+// verifyCloudTargetGrounded re-grounds a live cloud-storage mutation's target to the finding it cites.
+// liveCloudMutation sets target == the finding's endpoint, so for those remediation_types the target
+// MUST still equal the cited finding's endpoint at apply time. A mismatch means the action was
+// retargeted/misattributed after propose (e.g. pointed at a bucket outside the tenant's scanned
+// account) — refuse. Grounded like §10: refuse ONLY on a DEFINITIVE mismatch (the finding is present and
+// its endpoint differs). If the finding has aged out of the store, proceed — don't false-refuse a legit,
+// previously-grounded action that was queued then approved later. Non-cloud-storage actions are untouched.
+func (d *Deliverer) verifyCloudTargetGrounded(ctx context.Context, a platform.Action) error {
+	rtype, _ := a.Payload["remediation_type"].(string)
+	if !cloudStorageRemediations[rtype] {
+		return nil // not a global-namespace cloud-storage mutation — this binding doesn't apply
+	}
+	target, _ := a.Payload["target"].(string)
+	if target == "" || a.FindingID == "" {
+		return fmt.Errorf("remediate: refusing cloud mutation %s — missing target/finding binding", a.ID)
+	}
+	findings, err := d.Store.ListFindings(ctx, a.TenantID, store.FindingFilter{})
+	if err != nil {
+		return err
+	}
+	for _, f := range findings {
+		if f.ID == a.FindingID {
+			if f.Endpoint != target {
+				return fmt.Errorf("remediate: refusing cloud mutation %s — target %q does not match its finding's resource %q (misattributed or tampered)", a.ID, target, f.Endpoint)
+			}
+			return nil // matches the cited finding — grounded, proceed
+		}
+	}
+	return nil // the cited finding aged out of the store — proceed (don't false-refuse a previously-grounded action)
 }
 
 // deliverable reports whether an action kind writes through a connector at all.
