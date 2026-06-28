@@ -60,7 +60,7 @@ func TestProber_RendersFindingsAndRoutesTarget(t *testing.T) {
 		{RuleID: "sqlmap::sqli", Tool: "sqlmap", Severity: types.SeverityCritical,
 			Title: "SQL injection confirmed", Endpoint: "https://x/p?id=1"},
 	}}}
-	p := NewProber("scan-abc", runs, &mockSpawner{disp: disp})
+	p := NewProber("scan-abc", runs, &mockSpawner{disp: disp}, []string{"x"}, nil)
 
 	out, err := p.Probe(context.Background(), "sqlmap", map[string]any{
 		"target": "https://x/p?id=1", "level": "3",
@@ -83,10 +83,46 @@ func TestProber_RendersFindingsAndRoutesTarget(t *testing.T) {
 	}
 }
 
+// The LLM Lead is untrusted (a prompt-injected finding can steer it), so a probe target outside the
+// authorized scan scope — the cloud metadata endpoint, the host platform, an unrelated host — must be
+// refused BEFORE any tool fires.
+func TestProber_RefusesOutOfScopeTarget(t *testing.T) {
+	runs := t.TempDir()
+	writeScan(t, runs, "scan-abc")
+	disp := &mockDispatcher{}
+	p := NewProber("scan-abc", runs, &mockSpawner{disp: disp}, []string{"app.acme.com"}, nil)
+
+	for _, bad := range []string{
+		"http://169.254.169.254/latest/meta-data/", // cloud metadata
+		"http://127.0.0.1:8090/v1/findings",        // the host platform API
+		"https://evil.example/",                    // unrelated host
+	} {
+		if _, err := p.Probe(context.Background(), "nuclei", map[string]any{"target": bad}); err == nil {
+			t.Errorf("an out-of-scope probe target %s must be refused", bad)
+		}
+	}
+	if disp.gotTool != "" {
+		t.Errorf("a refused probe must NOT dispatch a tool, but fired %q", disp.gotTool)
+	}
+
+	// A URL-bearing side arg is screened too (not just "target").
+	if _, err := p.Probe(context.Background(), "nuclei", map[string]any{"url": "http://169.254.169.254/"}); err == nil {
+		t.Error("an out-of-scope url arg must be refused")
+	}
+
+	// An in-scope override (same host, deeper path) proceeds and dispatches.
+	if _, err := p.Probe(context.Background(), "nuclei", map[string]any{"target": "https://app.acme.com/admin?id=1"}); err != nil {
+		t.Errorf("an in-scope target must be allowed, got %v", err)
+	}
+	if disp.gotTool != "nuclei" {
+		t.Errorf("the in-scope probe should have dispatched, fired %q", disp.gotTool)
+	}
+}
+
 func TestProber_NoFindings(t *testing.T) {
 	runs := t.TempDir()
 	writeScan(t, runs, "scan-abc")
-	p := NewProber("scan-abc", runs, &mockSpawner{disp: &mockDispatcher{}})
+	p := NewProber("scan-abc", runs, &mockSpawner{disp: &mockDispatcher{}}, []string{"x"}, nil)
 	out, err := p.Probe(context.Background(), "nuclei", map[string]any{"target": "https://x"})
 	if err != nil {
 		t.Fatalf("probe: %v", err)
@@ -99,7 +135,7 @@ func TestProber_NoFindings(t *testing.T) {
 func TestProber_ReplayError(t *testing.T) {
 	runs := t.TempDir()
 	writeScan(t, runs, "scan-abc")
-	p := NewProber("scan-abc", runs, &mockSpawner{disp: &mockDispatcher{err: errors.New("sandbox boom")}})
+	p := NewProber("scan-abc", runs, &mockSpawner{disp: &mockDispatcher{err: errors.New("sandbox boom")}}, []string{"x"}, nil)
 	if _, err := p.Probe(context.Background(), "sqlmap", map[string]any{"target": "https://x"}); err == nil {
 		t.Error("a replay error should propagate")
 	}
