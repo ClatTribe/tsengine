@@ -1,4 +1,5 @@
-import { FileText } from "lucide-react";
+import Link from "next/link";
+import { FileText, Cloud, ArrowUpRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { PageIntro } from "@/components/ui/page-intro";
 import { GenerateBrief } from "@/components/brief/generate-brief";
@@ -30,6 +31,24 @@ export default async function BriefPage() {
         </p>
       )}
       <GenerateBrief />
+
+      {/* The engineer delegates deep cloud-graph reasoning to the cloud specialist (the investigate_cloud
+          tool, #727) — surfaced here so it reads as a depth lens of THIS engineer, not a separate persona. */}
+      <Link
+        href="/cloud-engineer"
+        className="group flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition hover:border-accent/40"
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+          <Cloud className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-ink">Cloud depth</div>
+          <div className="text-xs text-muted">
+            For IAM effective permissions, reachability, and proven attack paths, the engineer delegates to the cloud specialist.
+          </div>
+        </div>
+        <ArrowUpRight className="h-4 w-4 shrink-0 text-faint transition group-hover:text-accent" />
+      </Link>
     </div>
   );
 }

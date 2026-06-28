@@ -60,12 +60,14 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // L2 defense — reasons OVER the posture: prioritizes, explains, remediates, writes the brief.
+    // L2 defense — ONE persona that reasons OVER the whole estate (prioritizes, explains, remediates,
+    // writes the brief) and DELEGATES cloud-graph depth to the cloud specialist as a tool (#727). The
+    // brief is the deliverable; "Cloud depth" is that subordinate specialist, not a co-equal persona.
+    // (Expert reviews moved to Governance — it's the human-in-the-loop, not the AI engineer.)
     header: "AI Security Engineer",
     items: [
       { href: "/brief", label: "Security brief", icon: Sparkles },
-      { href: "/cloud-engineer", label: "Cloud engineer", icon: Cloud },
-      { href: "/reviews", label: "Expert reviews", icon: UserCheck },
+      { href: "/cloud-engineer", label: "Cloud depth", icon: Cloud },
     ],
   },
   {
@@ -82,12 +84,14 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   },
   {
     // HITL — the human-judgment layer the AI can't own: vCISO risk acceptance, auditor attestation,
-    // policy publication. Distinct for an auditor, collapsible so a founder can ignore it.
+    // policy publication, and expert-review escalations (a human second opinion). Distinct for an
+    // auditor, collapsible so a founder can ignore it.
     header: "Governance",
     items: [
       { href: "/risks", label: "Risks", icon: Scale },
       { href: "/audits", label: "Audits", icon: FileCheck2 },
       { href: "/program", label: "Program", icon: ScrollText },
+      { href: "/reviews", label: "Expert reviews", icon: UserCheck },
     ],
   },
   {

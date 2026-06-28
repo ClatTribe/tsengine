@@ -21,16 +21,19 @@ export default async function CloudEngineerPage() {
     <div className="space-y-8">
       <PageIntro
         icon={Cloud}
-        title="AI Cloud Security Engineer"
-        description="An autonomous agent investigates a cloud account by querying its graph — resolving effective permissions, tracing reachability, and measuring blast radius — to find the attack paths an external attacker could actually use to reach a crown jewel. It tells real, exploitable paths apart from config-bad-but-inert noise, and every path it records is backed by a tool result with a verified fix. Results flow into your issues, attack paths, and compliance posture."
+        title="Cloud depth"
+        description="The cloud-graph specialist your AI Security Engineer delegates to for depth. It investigates a cloud account by querying its graph — resolving effective permissions, tracing reachability, and measuring blast radius — to find the attack paths an external attacker could actually use to reach a crown jewel. It tells real, exploitable paths apart from config-bad-but-inert noise, and every path it records is backed by a tool result with a verified fix. Results flow into your issues, attack paths, and compliance posture."
       />
+      <Link href="/brief" className="-mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
+        <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Back to the AI Security Engineer
+      </Link>
 
       <RunInvestigation />
 
       {!enabled ? (
         <div className="rounded-xl border border-border bg-surface p-6">
           <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <Cloud className="h-4 w-4 text-accent" /> Turn on the AI Cloud Engineer
+            <Cloud className="h-4 w-4 text-accent" /> Turn on cloud depth
           </div>
           <p className="mt-1.5 max-w-2xl text-sm text-muted">
             Connect a cloud account and the agent investigates it for you — mapping effective permissions,
