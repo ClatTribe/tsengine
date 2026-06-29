@@ -134,6 +134,11 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
       {/* Custom exclusion rules (path/package/rule noise filters) */}
       {mainView && <ExclusionRules rules={exclResp.exclusions} excluded={excluded ?? 0} />}
 
+      {/* "Start here" — the AI Security Engineer's outcome #1 (figure out what to work on). The list is
+          already risk-ranked (severity × data-tier × attack-path), so the top row IS the #1 fix; we just
+          make it prominent with its impact reason + the agentic verbs, so a founder isn't parsing a table. */}
+      {mainView && visible.length > 0 && <LeadCard issue={visible[0]} />}
+
       {visible.length === 0 ? (
         <Empty>
           {showingIgnored
@@ -175,6 +180,40 @@ function Tab({ href, active, children }: { href: string; active: boolean; childr
     >
       {children}
     </Link>
+  );
+}
+
+// LeadCard — "Start here": the single highest-priority issue (the list is already risk-ranked), made
+// prominent with its plain-English impact reason + the two agentic verbs (Investigate, AI Fix). This is
+// outcome #1 of the AI Security Engineer — "figure out the issue to work on" — without making a founder
+// parse a table. Deterministic + grounded (the reason comes from real signals on the issue).
+function LeadCard({ issue }: { issue: Issue }) {
+  const reason =
+    issue.live_reason ||
+    (issue.attacked ? "Seen under attack in your live traffic — fix this now." : "") ||
+    (issue.kev ? "On CISA KEV — actively exploited in the wild (BOD 22-01: patch now)." : "") ||
+    (issue.in_attack_path ? "On an attack path to something that matters — that's why it leads." : "") ||
+    (issue.confirmed ? "Confirmed by multiple independent scanners — not a false alarm." : "") ||
+    "Your highest risk-ranked issue across every surface.";
+  return (
+    <div className="rounded-2xl border border-accent/30 bg-accent-soft/20 p-5">
+      <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
+        <Sparkles className="h-3.5 w-3.5" /> Start here — your #1 fix
+      </div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <SeverityBadge severity={issue.severity} />
+            <span className="truncate text-sm font-medium text-ink">{issue.title}</span>
+          </div>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted">{reason}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <IssueInvestigate issueKey={issue.key} title={issue.title} />
+          {issue.finding_ids[0] && <IssueAutofix findingId={issue.finding_ids[0]} title={issue.title} />}
+        </div>
+      </div>
+    </div>
   );
 }
 
