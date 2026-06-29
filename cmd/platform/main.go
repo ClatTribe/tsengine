@@ -20,7 +20,8 @@
 //	                            → Postgres; a *.db/*.sqlite path → SQLite; *.json → file; "memory" → in-memory
 //	TSENGINE_PLATFORM_ADDR      listen address (default :8090)
 //	TSENGINE_PLATFORM_PUBLIC    public base URL for OAuth redirect_uri
-//	TSENGINE_SANDBOX_IMAGE      sandbox image ref (default tsengine/sandbox:latest)
+//	TSENGINE_SANDBOX_IMAGE      scan sandbox image ref (default tsengine/sandbox:latest)
+//	TSENGINE_PENTEST_SANDBOX_IMAGE  pentest (exploitation) sandbox image; unset → falls back to the scan image
 //	TSENGINE_PLATFORM_NO_ENGINE 1 → boot without the sandbox engine
 //	TSENGINE_MONITOR_INTERVAL  continuous re-scan cadence (e.g. 6h; default 12h; 0 disables)
 //	TSENGINE_THREAT_INTEL_CORPUS  path to the GLOBAL KEV/EPSS corpus file (else embedded snapshot)
@@ -117,6 +118,13 @@ func main() {
 		}
 	}
 	image := envOr("TSENGINE_SANDBOX_IMAGE", "tsengine/sandbox:latest")
+	// Two-image split (docs/product-restructure.md P4): the SCAN dispatcher uses the detection image; the
+	// leaner PENTEST image (docker/pentest-sandbox/Dockerfile) carries the exploitation toolset. Pentest
+	// falls back to the scan image when TSENGINE_PENTEST_SANDBOX_IMAGE is unset, so single-image deploys
+	// are unchanged.
+	sandboxImages := sandbox.ResolveImages(image, os.Getenv("TSENGINE_PENTEST_SANDBOX_IMAGE"))
+	log.Printf("[platform] sandbox images — scan=%s pentest=%s (set TSENGINE_PENTEST_SANDBOX_IMAGE to split the exploitation toolset into a leaner image; unset → both use the scan image)",
+		sandboxImages.Scan, sandboxImages.Pentest)
 
 	st := openStore()
 	// AWS: read-only onboarding + the live, reversible remediation write path. The S3 writer is
@@ -363,7 +371,7 @@ func main() {
 	}
 	workspaceRunner := &runner.OperateRunner{Source: workspaceSource, Apps: st}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
-		engine := &runner.EngineRunner{Resolve: assetregistry.HandlerFor, NewDispatcher: sandboxDispatcher(image)}
+		engine := &runner.EngineRunner{Resolve: assetregistry.HandlerFor, NewDispatcher: sandboxDispatcher(sandboxImages.Scan)}
 		svc.Scanner = &runner.MuxRunner{Engine: engine, Workspace: workspaceRunner}
 	} else {
 		log.Print("[platform] NO_ENGINE mode: tech-asset scanning disabled (operate workspace assets still run)")
