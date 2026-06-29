@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FeatureIcon } from "@/components/brand/feature-icon";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
+import { AgenticActions } from "@/components/marketing/agentic-actions";
 import {
   Bot, ArrowRight, ScanLine, Filter, Wrench, FileCheck2, Fingerprint,
   UserCheck, ShieldCheck, GitPullRequest, Power, ScrollText, CheckCircle2, XCircle, Minus,
@@ -148,6 +149,9 @@ export default function AISecurityEngineer() {
           ))}
         </div>
       </section>
+
+      {/* The interaction model — one-click agentic actions, not a chat box (the in-app console). */}
+      <AgenticActions />
 
       {/* Compare */}
       <section className="bg-surface">
