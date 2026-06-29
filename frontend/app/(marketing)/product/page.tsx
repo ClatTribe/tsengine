@@ -88,10 +88,10 @@ export default function Product() {
           </div>
           <div className="card space-y-3 p-6">
             {[
-              ["L1 · Detection", "katana · nuclei · semgrep · trivy · prowler · gitleaks …", "text-ink"],
-              ["L1.5 · Enrichment", "false-positive filter · threat intel (KEV/EPSS) · compliance mapping", "text-muted"],
-              ["L2 · AI engineer", "triage · chain · verify · remediate · explain", "text-accent"],
-              ["HITL · The gate", "you approve · signed ledger", "text-pulse"],
+              ["Deterministic detection", "katana · nuclei · semgrep · trivy · prowler · gitleaks …", "text-ink"],
+              ["ML-based enrichment", "false-positive filter · threat intel (KEV/EPSS) · compliance mapping", "text-muted"],
+              ["AI agents", "triage · chain · verify · remediate · explain", "text-accent"],
+              ["Human in the loop", "you approve · signed ledger", "text-pulse"],
             ].map(([h, d, c]) => (
               <div key={h} className="rounded-xl border border-border bg-bg p-4">
                 <div className={`text-sm font-semibold ${c}`}>{h}</div>

@@ -11,11 +11,11 @@ export function ArchStack() {
   return (
     <section className="mx-auto max-w-5xl px-5 py-20">
       <Reveal className="mx-auto mb-10 max-w-2xl text-center">
-        <span className="text-xs font-semibold uppercase tracking-wider text-accent">The architecture</span>
-        <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">A free substrate. Two AI teammates. A human who signs.</h2>
+        <span className="text-xs font-semibold uppercase tracking-wider text-accent">How it works</span>
+        <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Free scanning. Two AI agents. A human who signs.</h2>
         <p className="mt-3 text-base leading-relaxed text-muted">
-          Not a black box. A deterministic security + compliance substrate you can see — then an AI engineer
-          and an AI pentester that reason over it, with a named human accountable for the calls that matter.
+          Not a black box. A deterministic + ML-based security &amp; compliance scanning engine you can see — then an
+          AI security engineer and an AI pentester that reason over it, with a named human accountable for the calls that matter.
         </p>
       </Reveal>
 
@@ -55,8 +55,8 @@ export function ArchStack() {
           href="/cross-detection"
           icon={Layers}
           tone="substrate"
-          kicker="The deterministic substrate · free"
-          title="L1.7 — 30+ OSS scanners, correlated"
+          kicker="Deterministic + ML scanning · free"
+          title="30+ OSS scanners, correlated"
           desc="Best-in-class open-source detection across code · cloud · attack surface · identity, plus cross-surface correlation, threat-intel (KEV/EPSS), and compliance mapping. The security-engineer + auditor deliverable — free."
         />
       </Reveal>
