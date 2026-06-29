@@ -15,7 +15,6 @@ import {
   Crosshair,
   Scale,
   ChevronDown,
-  Sparkles,
   Gauge,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
@@ -62,14 +61,14 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // The two AI agents that reason OVER the Security/GRC outcomes — each ONE agentic-action console (not
-    // a chat). The AI Security Engineer is NOT fix-only: it investigates deeper (better detection),
-    // prioritizes, AND fixes. Its cloud-graph specialist (/cloud-engineer) is a DELEGATE it calls — an
-    // action card INSIDE the console, not a second nav tab. The AI Pentester proves exploits.
-    header: "AI agents",
+    // The AI Security Engineer is SPRINKLED onto the outcome surfaces — not a dedicated page: its verbs
+    // live where the work is (Investigate / AI Fix / Start-here on Security·Issues; advisor + fix-guidance
+    // on GRC·Compliance), and the whole-estate triage console (/brief) is reached from the Issues AI strip
+    // + the command palette, not a nav row. So the only AI agent that stays a PAGE is the AI Pentester —
+    // a distinct scope→launch→report engagement, not an inline action.
+    header: "AI Pentester",
     items: [
-      { href: "/brief", label: "AI Security Engineer", icon: Sparkles },
-      { href: "/pentest", label: "AI Pentester", icon: Crosshair },
+      { href: "/pentest", label: "Pentest", icon: Crosshair },
     ],
   },
   {
