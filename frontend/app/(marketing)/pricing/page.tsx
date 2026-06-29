@@ -7,20 +7,21 @@ import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 export const metadata = pageMeta({
   title: "Pricing — TensorShield",
   description:
-    "Simple, transparent pricing in ₹ for Indian teams. A free tier for your deterministic posture, a Substrate plan for the full L1.7 security + compliance product (self-serve or managed), and Enterprise for the two AI teammates — AI Security Engineer + AI Pentester.",
+    "Simple, transparent pricing in ₹ for Indian teams. A free tier for your deterministic + ML-based security & compliance posture, a Core plan for the full scanning engine (self-serve or managed), and Enterprise for the two AI agents — AI Security Engineer + AI Pentester.",
   path: "/pricing",
 });
 
-// Three tiers, backed 1:1 by pkg/platform/plan.go Entitlements so the product never drifts from
-// the page. The sharp positioning: the deterministic L1.7 substrate is the self-serve product
-// (Free = a taste, Substrate = the full thing, differentiated only by SERVICE MODEL); the two AI
-// teammates — AI Security Engineer (defense) + AI Pentester (attack) — are the Enterprise premium.
+// Three tiers, backed 1:1 by pkg/platform/plan.go Entitlements so the product never drifts from the page.
+// The sharp positioning, in CUSTOMER terms (no internal layer jargon): the deterministic + ML-based
+// scanning engine is the self-serve product (Free = a taste, Core = the full thing, differentiated only by
+// SERVICE MODEL); the two AI agents — AI Security Engineer (defense) + AI Pentester (attack) — are the
+// Enterprise premium.
 const TIERS = [
   {
     name: "Free",
     price: "₹0",
     cadence: "forever",
-    blurb: "A taste of your deterministic L1.7 substrate — 30+ scanners, cross-surface correlation, threat-intel, SOC 2 readiness. Free forever (no AI/LLM cost to run). No card.",
+    blurb: "A taste of the deterministic + ML-based scanning engine — 30+ scanners, cross-surface correlation, threat-intel, SOC 2 readiness. Free forever (no AI/LLM cost to run). No card.",
     cta: "Start free",
     href: "/signup",
     highlight: false,
@@ -35,18 +36,18 @@ const TIERS = [
     ],
   },
   {
-    name: "Substrate",
+    name: "Core",
     price: "₹7,999",
     cadence: "/ month + GST",
     annual: "or ₹79,990/yr — ~2 months free",
-    blurb: "The full deterministic L1.7 substrate — every scanner, all 22 frameworks, continuous monitoring, signed evidence, the HITL apply loop. Run it yourself, or have us / your MSP run it — the service model is yours to pick.",
+    blurb: "The full deterministic + ML-based scanning engine — every scanner, all 22 frameworks, continuous monitoring, signed evidence, the human-in-the-loop apply loop. Run it yourself, or have us / your MSP run it — the service model is yours to pick.",
     cta: "Start free",
     href: "/signup",
     highlight: true,
     persona: false,
     features: [
       "Up to 25 scan targets",
-      "Full L1.7 substrate — detection + correlation + threat-intel + attack paths",
+      "Full deterministic + ML detection — correlation, threat-intel, attack paths",
       "Continuous monitoring + incidents",
       "All 22 frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …",
       "Signed evidence packs + Trust Center",
@@ -58,8 +59,8 @@ const TIERS = [
   {
     name: "Enterprise",
     price: "Talk to us",
-    cadence: "+ the AI teammates",
-    blurb: "Everything in Substrate, plus the two AI teammates over your whole estate — your AI Security Engineer (defense) and AI Pentester (attack), with a named human accountable for the calls that matter. Unlimited scale, managed / MSP delivery, SSO.",
+    cadence: "+ the AI agents",
+    blurb: "Everything in Core, plus the two AI agents over your whole estate — your AI Security Engineer (defense) and AI Pentester (attack), with a named human accountable for the calls that matter. Unlimited scale, managed / MSP delivery, SSO.",
     cta: "Contact sales",
     href: "/demo",
     highlight: false,
@@ -78,9 +79,9 @@ const TIERS = [
 
 const FAQ = [
   ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the deterministic open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
-  ["What do I get on Substrate that Free doesn't have?", "The full deterministic L1.7 substrate: every scanner with cross-surface correlation across all five categories, continuous monitoring with incidents, all 22 compliance frameworks with signed evidence packs, the questionnaire automation, and the human-in-the-loop apply loop that actually closes findings — self-serve or fully managed. ₹7,999/mo (or ₹79,990/yr), up to 25 targets. The two AI teammates are the Enterprise tier."],
-  ["How are the tiers structured?", "Free to try the substrate, Substrate for the full deterministic security + compliance product (self-serve or managed), and Enterprise (talk to us) which adds the two AI teammates — your AI Security Engineer (defense) and AI Pentester (attack) — over your whole estate, plus unlimited targets, SSO, and a managed/MSP partner desk. The service model — you run it, we run it, or your MSP does — is yours to pick on the paid tiers."],
-  ["Can I use the AI without Enterprise (bring my own key)?", "Yes. The AI Security Engineer + AI Pentester are the Enterprise tier when WE fund the model. But on any plan you can connect your OWN LLM key in Settings → LLM — any OpenAI-compatible provider, or a local Ollama — and run the AI at your cost. Free stays free to run for us; you only pay your model bill. Or talk to us for Enterprise and we run it for you."],
+  ["What do I get on Core that Free doesn't have?", "The full deterministic + ML-based scanning engine: every scanner with cross-surface correlation across all five categories, continuous monitoring with incidents, all 22 compliance frameworks with signed evidence packs, the questionnaire automation, and the human-in-the-loop apply loop that actually closes findings — self-serve or fully managed. ₹7,999/mo (or ₹79,990/yr), up to 25 targets. The two AI agents are the Enterprise tier."],
+  ["How are the tiers structured?", "Free to try the scanning engine, Core for the full deterministic + ML-based security + compliance product (self-serve or managed), and Enterprise (talk to us) which adds the two AI agents — your AI Security Engineer (defense) and AI Pentester (attack) — over your whole estate, plus unlimited targets, SSO, and a managed/MSP partner desk. The service model — you run it, we run it, or your MSP does — is yours to pick on the paid tiers."],
+  ["Can I use the AI without Enterprise (bring my own key)?", "Yes. The AI Security Engineer + AI Pentester are the Enterprise tier when WE fund the model. But on any plan you can connect your OWN LLM key in Settings → LLM — any OpenAI-compatible provider, or a local Ollama — and run the AI agents at your cost. Free stays free to run for us; you only pay your model bill. Or talk to us for Enterprise and we run it for you."],
   ["Do I need a security engineer to use it?", "No — that's the point. TensorShield does the security engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. Built for a non-technical founder or ops lead."],
   ["What does \"human in the loop\" mean?", "Low-risk fixes apply automatically. Anything consequential (a config change, an identity action) waits for one tap of your approval — and every decision, automated or human, is signed into a tamper-evident ledger."],
   ["What if I'd rather not run it at all?", "Have it fully managed. Our security expert — or your MSP / consultancy partner — operates TensorShield for you: they triage, approve, and sign off, and you get the outcome plus named accountability. Same engine and signed evidence, priced per engagement."],
@@ -88,12 +89,12 @@ const FAQ = [
 ];
 
 // ComparePlans — the at-a-glance matrix. Cell value: "yes" | "no" | a literal string. Mirrors
-// the TIERS lists + the backend Entitlements, no new claims. Order: Free · Substrate · Enterprise.
-// The load-bearing line: the AI teammates are ENTERPRISE-ONLY (plan.go: AIEnabled/AutonomousPentest
-// are Enterprise) — Substrate is the FULL deterministic substrate, differentiated by service model.
+// the TIERS lists + the backend Entitlements, no new claims. Order: Free · Core · Enterprise.
+// The load-bearing line: the AI agents are ENTERPRISE-ONLY (plan.go: AIEnabled/AutonomousPentest
+// are Enterprise) — Core is the FULL deterministic + ML-based scanning engine, differentiated by service model.
 const COMPARE: { section: string; rows: { label: string; cells: [string, string, string] }[] }[] = [
   {
-    section: "Deterministic substrate (L1.7)",
+    section: "Deterministic + ML-based scanning",
     rows: [
       { label: "Scan targets", cells: ["2", "Up to 25", "Unlimited"] },
       { label: "Categories — code · cloud · attack · identity · compliance", cells: ["All 5", "All 5", "All 5"] },
@@ -113,7 +114,7 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
     ],
   },
   {
-    section: "AI teammates — talk to us",
+    section: "AI agents — talk to us",
     rows: [
       { label: "AI Security Engineer — prioritize · chain · fix · explain", cells: ["no", "no", "yes"] },
       { label: "AI Pentester — exploitation-proven VAPT (XBOW-class)", cells: ["no", "no", "yes"] },
@@ -133,7 +134,7 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
 ];
 
 function ComparePlans() {
-  const tiers = ["Free", "Substrate", "Enterprise"];
+  const tiers = ["Free", "Core", "Enterprise"];
   return (
     <section className="mx-auto max-w-4xl px-5 pb-4 pt-14">
       <h2 className="text-center text-2xl font-semibold tracking-tight">Compare plans</h2>
@@ -204,16 +205,16 @@ export default function Pricing() {
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-accent" /> Built for Indian teams · priced in ₹
           </span>
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">The substrate is the product. The AI is the premium.</h1>
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">The scanning is the product. The AI agents are the premium.</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            Free to see your posture, a <strong className="font-semibold text-ink">Substrate</strong> plan for the full
-            deterministic security + compliance product, and Enterprise (talk to us) for the two AI teammates. The
+            Free to see your posture, a <strong className="font-semibold text-ink">Core</strong> plan for the full
+            deterministic + ML-based security + compliance product, and Enterprise (talk to us) for the two AI agents. The
             service model — you run it, we run it, or your MSP does — is yours to pick.
           </p>
-          {/* The architecture as the pricing spine: a deterministic L1.7 substrate (Free + Substrate), the
-              two AI teammates on the talk-to-us tier, and a named human accountable. Personas cross-link out. */}
+          {/* The pricing spine in customer terms: deterministic + ML-based scanning (Free + Core), the two AI
+              agents on the talk-to-us tier, and a named human accountable. Personas cross-link out. */}
           <div className="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs">
-            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">L1.7 substrate <span className="text-faint">· Free + Substrate</span></span>
+            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Deterministic + ML scanning <span className="text-faint">· Free + Core</span></span>
             <span className="text-faint">+</span>
             <Link href="/ai-security-engineer" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Security Engineer <span className="text-faint">· Talk to us</span></Link>
             <span className="text-faint">+</span>
@@ -276,7 +277,7 @@ export default function Pricing() {
         <p className="mt-6 text-center text-xs text-faint">
           Prices in INR, exclusive of 18% GST. <span className="text-muted">Free is genuinely free — it runs only the
           deterministic OSS scanners (no AI/LLM cost on our side), so we never have to take it away.</span> Annual billing
-          on Substrate saves ~2 months. The signed decision ledger is on every plan.
+          on Core saves ~2 months. The signed decision ledger is on every plan.
         </p>
       </section>
 
