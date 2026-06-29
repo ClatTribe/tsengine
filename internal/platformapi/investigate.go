@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/ClatTribe/tsengine/internal/correlate"
@@ -23,7 +24,13 @@ import (
 // the deterministic half + a "turn on the AI engineer" note (200, never a fabricated narrative). The
 // LLM is gated exactly like /v1/l2/translate (own key any plan, operator LLM for AI-entitled plans).
 func (d Deps) handleIssueInvestigate(w http.ResponseWriter, r *http.Request, tenantID string) {
-	key := r.PathValue("key")
+	// The issue key is rule_id|endpoint (or a CVE) — it contains '/' and ':' (endpoint URLs, ARNs), so it
+	// can't ride in a {key} path segment (%2F breaks Go ServeMux matching → 404). It goes in the body.
+	var body struct {
+		Key string `json:"key"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	key := body.Key
 	if key == "" {
 		writeJSON(w, http.StatusBadRequest, errBody("missing issue key"))
 		return

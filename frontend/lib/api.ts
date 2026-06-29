@@ -159,7 +159,7 @@ export const api = {
       summary?: { executive_summary?: string; methodology?: string; recommendations?: string } | null;
       reports?: Finding[];
       model?: string;
-    }>(`/v1/issues/${encodeURIComponent(key)}/investigate`, { method: "POST", body: "{}" }),
+    }>(`/v1/issues/investigate`, { method: "POST", body: JSON.stringify({ key }) }),
 
   // vCISO advisor — a prioritized audit-readiness roadmap over coverage + gaps + readiness (never "compliant").
   complianceAdvisor: (framework: string) =>
