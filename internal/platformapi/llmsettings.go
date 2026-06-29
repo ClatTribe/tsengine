@@ -26,11 +26,19 @@ func (d Deps) handleGetLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 		writeJSON(w, http.StatusNotFound, errBody("tenant not found"))
 		return
 	}
-	resp := map[string]any{"provider": "", "model": "", "has_key": false}
+	hasKey := t.LLM != nil && t.LLM.HasKey()
+	// ai_enabled is the single source of truth for "can this tenant run the AI agents": operator-funded
+	// (the plan's entitlement) OR the tenant brought its own LLM key (§18.5). The UI reads this to show
+	// whether the AI Security Engineer is on, instead of re-deriving plan rules client-side.
+	resp := map[string]any{
+		"provider":   "",
+		"model":      "",
+		"has_key":    hasKey,
+		"ai_enabled": platform.Entitlements(t.Plan).AIEnabled || hasKey,
+	}
 	if t.LLM != nil {
 		resp["provider"] = t.LLM.Provider
 		resp["model"] = t.LLM.Model
-		resp["has_key"] = t.LLM.HasKey()
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug, Globe, Spline } from "lucide-react";
+import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug, Globe, Spline, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -18,11 +18,13 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const showingIgnored = show === "ignored";
   const showingLive = show === "live";
   const showingExternal = show === "external";
-  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live }, exclResp, funnel] = await Promise.all([
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live }, exclResp, funnel, llm] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
     api.triageFunnel(),
+    api.llmSettings(),
   ]);
+  const aiEnabled = llm.ai_enabled;
   // View filters over the SAME unified list (no separate pages): "Live" = the genuinely-live subset,
   // "External" = internet/attacker-eye exposure (the old OSINT page — those findings carry tool "osint"
   // and already flow into Issues, so here they're just a source filter, not a destination).
@@ -50,6 +52,38 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
       />
 
       <PageTabs tabs={[{ href: "/issues", label: "Issues" }, { href: "/findings", label: "All findings" }]} />
+
+      {/* AI Security Engineer state — honest: this list is deterministically ranked (severity × data-tier ×
+          attack-path). The AI doesn't silently re-rank it; it's an ACTION you run. So we show whether it's
+          ON and point to the console, or prompt to turn it on — never claim "AI ranked this". */}
+      {mainView && (
+        <Link
+          href="/brief"
+          className={`group flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm transition ${
+            aiEnabled
+              ? "border-accent/30 bg-accent-soft/30 hover:border-accent/60"
+              : "border-border bg-surface hover:border-accent/40"
+          }`}
+        >
+          <Sparkles className={`h-4 w-4 shrink-0 ${aiEnabled ? "text-accent" : "text-muted"}`} />
+          <span className="min-w-0 flex-1 text-muted">
+            {aiEnabled ? (
+              <>
+                <span className="font-medium text-ink">Your AI Security Engineer is on.</span> Have it dig deeper,
+                re-rank by real impact, and explain each issue in plain English.
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-ink">Turn on your AI Security Engineer</span> to triage this list,
+                rank by real impact, and explain every issue — beyond the deterministic scan.
+              </>
+            )}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-accent">
+            {aiEnabled ? "Triage & prioritize" : "Enable"} <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+          </span>
+        </Link>
+      )}
 
       {/* View filters over the one list — no separate pages. Live = exploitable subset; External = the
           internet/attacker-eye (old OSINT) slice; raw per-tool detail is the "All findings" tab above. */}
