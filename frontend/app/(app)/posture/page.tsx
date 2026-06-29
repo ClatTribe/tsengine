@@ -21,7 +21,7 @@ export default async function PosturePage() {
     <div className="space-y-8">
       <PageIntro
         icon={ShieldCheck}
-        title="Asset posture"
+        title="Vendors & devices"
         description="Risk across the asset classes a pure scanner misses — your vendors, your employee devices, and changes to your cloud since the last baseline. Each is assessed against SOC 2 / CIS / NIST / GDPR controls and flows into the same issues and compliance posture as every other finding."
       />
 

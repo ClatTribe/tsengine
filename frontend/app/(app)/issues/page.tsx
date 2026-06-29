@@ -32,7 +32,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
       <PageIntro
         icon={Layers}
         title="Issues"
-        description="One issue, many signals. The same weakness flagged by several scanners across your code, cloud, and apps is merged into a single row — so you fix real problems instead of wading through duplicate alerts."
+        description="Everything that needs fixing, in one list. We pull together every weakness across your code, cloud, apps, identity, and what's exposed on the internet — merge the duplicates, rank by real risk, and flag what's new or under active attack — so you work one prioritized list instead of juggling separate reports. The raw per-tool detail is one tab away."
         right={
           <div className="flex gap-4 text-sm">
             <Stat n={showingLive ? visible.length : count} label={showingIgnored ? "ignored" : showingLive ? "live" : "issues"} tone="text-ink" />
@@ -44,7 +44,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
         }
       />
 
-      <PageTabs tabs={[{ href: "/issues", label: "Issues" }, { href: "/findings", label: "All findings (raw)" }]} />
+      <PageTabs tabs={[{ href: "/issues", label: "Issues" }, { href: "/findings", label: "All findings" }]} />
 
       {/* Active / Live-only / Ignored toggle */}
       <div className="flex items-center rounded-lg border border-border bg-surface p-0.5 text-sm w-fit">
