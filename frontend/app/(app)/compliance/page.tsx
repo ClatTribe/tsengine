@@ -57,6 +57,13 @@ export default async function CompliancePage() {
               <FileText className="h-3.5 w-3.5" /> Security questionnaire
             </Link>
             <Link
+              href="/reports"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
+              title="Download the signed evidence packs, SARIF/CSV exports, and the VAPT report — generated from this posture."
+            >
+              <FileSignature className="h-3.5 w-3.5" /> Evidence &amp; exports
+            </Link>
+            <Link
               href="/audits"
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
               title="We don't certify you — an independent auditor attests. Start that engagement here."

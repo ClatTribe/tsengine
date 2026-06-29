@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   Boxes,
   ScrollText,
-  FileText,
   FileCheck2,
   AppWindow,
   Spline,
@@ -54,34 +53,28 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // COMPLIANCE outcome — the same substrate's control mapping + reachability + evidence. "Am I
-    // audit-ready?" Adjacent to Security: the two outcomes are the spine; the AI consoles operate on them.
-    header: "Compliance",
+    // GRC outcome — "am I audit-ready + governed?". ONE menu (was two: Compliance + GRC — clubbed per the
+    // user). Four DISTINCT artifacts (each carries info the others don't): Compliance = the live control
+    // posture (findings→controls); Risks = the risk register (accept/mitigate decisions); Audits = the
+    // external-auditor attestation engagement; Program = the policy set. Reports is DERIVATIVE (the SAME
+    // posture call rendered as downloadable evidence) → reachable from Compliance + the palette, not a row.
+    header: "GRC",
     items: [
       { href: "/compliance", label: "Compliance", icon: ShieldCheck },
-      { href: "/reports", label: "Reports", icon: FileText },
+      { href: "/risks", label: "Risks", icon: Scale },
+      { href: "/audits", label: "Audits", icon: FileCheck2 },
+      { href: "/program", label: "Program", icon: ScrollText },
     ],
   },
   {
-    // The two AI agents that reason OVER the Security/Compliance outcomes — each ONE agentic-action
-    // console (not a chat). The AI Security Engineer is NOT fix-only: it investigates deeper (better
-    // detection), prioritizes, AND fixes. Its cloud-graph specialist (/cloud-engineer) is a DELEGATE it
-    // calls — an action card INSIDE the console, not a second nav tab. The AI Pentester proves exploits.
+    // The two AI agents that reason OVER the Security/GRC outcomes — each ONE agentic-action console (not
+    // a chat). The AI Security Engineer is NOT fix-only: it investigates deeper (better detection),
+    // prioritizes, AND fixes. Its cloud-graph specialist (/cloud-engineer) is a DELEGATE it calls — an
+    // action card INSIDE the console, not a second nav tab. The AI Pentester proves exploits.
     header: "AI agents",
     items: [
       { href: "/brief", label: "AI Security Engineer", icon: Sparkles },
       { href: "/pentest", label: "AI Pentester", icon: Crosshair },
-    ],
-  },
-  {
-    // GRC outcome — the human-judgment layer the AI can't own: vCISO risk acceptance, auditor
-    // attestation, policy publication. (Expert reviews — "get a human second opinion" — lives on the
-    // "Your security team" hub, NOT here.) Renamed "Governance" → "GRC" (the customer's word).
-    header: "GRC",
-    items: [
-      { href: "/risks", label: "Risks", icon: Scale },
-      { href: "/audits", label: "Audits", icon: FileCheck2 },
-      { href: "/program", label: "Program", icon: ScrollText },
     ],
   },
   {
