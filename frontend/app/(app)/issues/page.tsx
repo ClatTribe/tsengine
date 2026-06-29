@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug } from "lucide-react";
+import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug, Globe } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -17,14 +17,19 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const show = (await searchParams).show;
   const showingIgnored = show === "ignored";
   const showingLive = show === "live";
+  const showingExternal = show === "external";
   const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live }, exclResp, funnel] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
     api.triageFunnel(),
   ]);
-  // The "Live only" view filters the active list to the genuinely-live issues (the ACSP "the few
-  // that matter" lens). The backend already ranks them first; this hides the rest.
-  const visible = showingLive ? issues.filter((i) => i.live) : issues;
+  // View filters over the SAME unified list (no separate pages): "Live" = the genuinely-live subset,
+  // "External" = internet/attacker-eye exposure (the old OSINT page — those findings carry tool "osint"
+  // and already flow into Issues, so here they're just a source filter, not a destination).
+  const isExternal = (i: (typeof issues)[number]) => i.tools?.includes("osint");
+  const externalCount = issues.filter(isExternal).length;
+  const visible = showingExternal ? issues.filter(isExternal) : showingLive ? issues.filter((i) => i.live) : issues;
+  const mainView = !showingIgnored && !showingLive && !showingExternal;
   const collapsed = Math.max(0, raw_findings - count);
 
   return (
@@ -35,23 +40,29 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
         description="Everything that needs fixing, in one list. We pull together every weakness across your code, cloud, apps, identity, and what's exposed on the internet — merge the duplicates, rank by real risk, and flag what's new or under active attack — so you work one prioritized list instead of juggling separate reports. The raw per-tool detail is one tab away."
         right={
           <div className="flex gap-4 text-sm">
-            <Stat n={showingLive ? visible.length : count} label={showingIgnored ? "ignored" : showingLive ? "live" : "issues"} tone="text-ink" />
-            {!showingIgnored && !showingLive && (live ?? 0) > 0 && <Stat n={live ?? 0} label="live · exploitable" tone="text-critical" />}
-            {!showingIgnored && (attacked ?? 0) > 0 && <Stat n={attacked ?? 0} label="under attack" tone="text-critical" />}
-            {!showingIgnored && <Stat n={confirmed} label="multi-tool confirmed" tone="text-pulse" />}
-            {!showingIgnored && collapsed > 0 && <Stat n={collapsed} label="duplicates merged" tone="text-faint" />}
+            <Stat n={showingLive || showingExternal ? visible.length : count} label={showingIgnored ? "ignored" : showingLive ? "live" : showingExternal ? "external" : "issues"} tone="text-ink" />
+            {mainView && (live ?? 0) > 0 && <Stat n={live ?? 0} label="live · exploitable" tone="text-critical" />}
+            {mainView && (attacked ?? 0) > 0 && <Stat n={attacked ?? 0} label="under attack" tone="text-critical" />}
+            {mainView && <Stat n={confirmed} label="multi-tool confirmed" tone="text-pulse" />}
+            {mainView && collapsed > 0 && <Stat n={collapsed} label="duplicates merged" tone="text-faint" />}
           </div>
         }
       />
 
       <PageTabs tabs={[{ href: "/issues", label: "Issues" }, { href: "/findings", label: "All findings" }]} />
 
-      {/* Active / Live-only / Ignored toggle */}
+      {/* View filters over the one list — no separate pages. Live = exploitable subset; External = the
+          internet/attacker-eye (old OSINT) slice; raw per-tool detail is the "All findings" tab above. */}
       <div className="flex items-center rounded-lg border border-border bg-surface p-0.5 text-sm w-fit">
-        <Tab href="/issues" active={!showingIgnored && !showingLive}>Active</Tab>
+        <Tab href="/issues" active={mainView}>Active</Tab>
         <Tab href="/issues?show=live" active={showingLive}>
           <span className="inline-flex items-center gap-1"><Zap className="h-3 w-3" /> Live{(live ?? 0) > 0 ? ` (${live})` : ""}</span>
         </Tab>
+        {externalCount > 0 && (
+          <Tab href="/issues?show=external" active={showingExternal}>
+            <span className="inline-flex items-center gap-1"><Globe className="h-3 w-3" /> External ({externalCount})</span>
+          </Tab>
+        )}
         <Tab href="/issues?show=ignored" active={showingIgnored}>
           Ignored{typeof ignored === "number" && ignored > 0 ? ` (${ignored})` : ""}
         </Tab>
@@ -64,9 +75,17 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
         </p>
       )}
 
+      {showingExternal && (
+        <p className="text-sm text-muted">
+          Your <span className="font-medium text-ink">internet / attacker-eye exposure</span> — leaked credentials, exposed
+          hosts, typosquats, certificate issues — discovered from open sources. These already sit in your main list; this is
+          just that slice.
+        </p>
+      )}
+
       {/* Plain-English legend for the header stats — the ICP is a non-security founder, so the
           trust signals in the stat row shouldn't be jargon. */}
-      {!showingIgnored && !showingLive && (
+      {mainView && (
         <p className="text-xs leading-relaxed text-muted">
           <span className="font-medium text-pulse">Multi-tool confirmed</span> = at least two independent scanners
           flagged it (the strongest signal it&apos;s real, not a false alarm). <span className="font-medium text-critical">Live · exploitable</span> = we have
@@ -75,10 +94,10 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
       )}
 
       {/* Auto-triage funnel — the quantified noise reduction (% the engine handled for you) */}
-      {!showingIgnored && !showingLive && <TriageFunnel f={funnel} />}
+      {mainView && <TriageFunnel f={funnel} />}
 
       {/* Custom exclusion rules (path/package/rule noise filters) */}
-      {!showingIgnored && !showingLive && <ExclusionRules rules={exclResp.exclusions} excluded={excluded ?? 0} />}
+      {mainView && <ExclusionRules rules={exclResp.exclusions} excluded={excluded ?? 0} />}
 
       {visible.length === 0 ? (
         <Empty>
@@ -86,7 +105,9 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
             ? "No ignored issues. Suppressed issues (false-positive / accepted-risk) appear here and can be restored."
             : showingLive
               ? "Nothing live right now — no issue is under active attack or internet-exposed on an attack path. The full list is under Active."
-              : "No open issues. As scanners run across your code, cloud, and surfaces, their findings are de-duplicated here into one row per real problem."}
+              : showingExternal
+                ? "No internet-facing exposure found — no leaked credentials, exposed hosts, or look-alike domains. The full list is under Active."
+                : "No open issues. As scanners run across your code, cloud, and surfaces, their findings are de-duplicated here into one row per real problem."}
         </Empty>
       ) : (
         <div className="card overflow-x-auto p-0">
