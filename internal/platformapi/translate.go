@@ -86,22 +86,33 @@ func (d Deps) runTranslate(ctx context.Context, tenantID string, client l2.Clien
 	if len(pAssets) > 0 {
 		target = types.Asset{Type: types.AssetType(pAssets[0].Type), Target: pAssets[0].Target}
 	}
+	// Whole-estate pass: the deliverable scopes to all findings, 16-iter cap.
+	return d.runEstateAgent(ctx, tenantID, client, target, findings, findings, 16)
+}
+
+// runEstateAgent is the shared L2-Lead core for BOTH the whole-estate translate (l1Findings == allFindings)
+// and the per-issue investigate (l1Findings == the issue's findings). It builds the cross-surface estate
+// context (deduped unified issues + attack chains over allFindings — the "three scanners → one engineer"
+// reasoning) once, scopes the deliverable to l1Findings, wires cloud-depth delegation, and runs the
+// bounded agent. One place — was duplicated across runTranslate + runInvestigate.
+func (d Deps) runEstateAgent(ctx context.Context, tenantID string, client l2.Client, target types.Asset, l1Findings, allFindings []types.Finding, maxIter int) (l2.Outcome, error) {
+	pAssets, _ := d.Store.ListAssets(ctx, tenantID)
 	estate := l2.EstateContext{
-		Issues:      toIssueDigests(crossdetect.UnifiedIssues(findings)),
-		AttackPaths: renderChains(crossdetect.Correlate(pAssets, findings)),
+		Issues:      toIssueDigests(crossdetect.UnifiedIssues(allFindings)),
+		AttackPaths: renderChains(crossdetect.Correlate(pAssets, allFindings)),
 	}
-	dep := l2.Deps{Target: target, L1Findings: findings}
-	// Cloud-depth delegation (item 3b): when a stored cloud snapshot exists, the generalist can call
-	// investigate_cloud to run the cloud specialist over it. nil when no snapshot store → tool not exposed.
+	dep := l2.Deps{Target: target, L1Findings: l1Findings}
+	// Cloud-depth delegation: when a stored cloud snapshot exists, the generalist can call investigate_cloud
+	// to run the cloud specialist over it. nil when no snapshot store → tool not exposed.
 	dep.CloudInvestigator = d.cloudInvestigator(tenantID)
 	budget := l2.DefaultBudget()
-	budget.MaxIterations = 16 // a bounded translate pass (not a full investigation)
+	budget.MaxIterations = maxIter
 	agent, err := l2.New(client, l2.BuildCatalog(dep), budget)
 	if err != nil {
 		return l2.Outcome{}, err
 	}
 	agent.WithEstate(estate)
-	return agent.Run(ctx, target, findings)
+	return agent.Run(ctx, target, l1Findings)
 }
 
 // AutoReviewAfterScan is the runner.Service.AfterScan hook: once a scan pass surfaces something NEW,

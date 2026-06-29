@@ -1,6 +1,7 @@
 package crossdetect
 
 import (
+	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -14,8 +15,16 @@ import (
 // (impact = its own severity, never inflated). When a finding is on multiple crown-jewel chains, the CLOSEST
 // (fewest hops) wins — the worst case.
 func BlastRadiusByFinding(assets []platform.Asset, findings []types.Finding) map[string]platform.BlastRadius {
+	return BlastRadiusFromChains(Correlate(assets, findings))
+}
+
+// BlastRadiusFromChains sizes blast radius from ALREADY-computed cross-surface chains, so a caller that
+// already holds the chains (e.g. the per-issue investigate path) doesn't recompute the correlation graph
+// (Correlate is the per-request hot path). BlastRadiusByFinding is the convenience wrapper that correlates
+// first. Same grounding: only a finding on a crown-jewel chain gets a radius.
+func BlastRadiusFromChains(chains []correlate.Chain) map[string]platform.BlastRadius {
 	out := map[string]platform.BlastRadius{}
-	for _, ch := range Correlate(assets, findings) {
+	for _, ch := range chains {
 		if len(ch.Steps) == 0 {
 			continue
 		}
