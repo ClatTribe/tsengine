@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Menu, X, ChevronDown, Bot, Crosshair, FileCheck2, Boxes,
-  AppWindow, GitBranch, Scale, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen, ShieldCheck,
+  AppWindow, GitBranch, Layers, Radar, ClipboardCheck, FileText, Sparkles, BookOpen, ShieldCheck,
   Cloud, KeyRound, UserCheck, ArrowRight, Building2, Users, Mail, Rocket,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
@@ -23,24 +23,29 @@ const FRAMEWORK_GROUPS = FW_CATEGORY_ORDER.map((cat) => ({
   items: FRAMEWORKS.filter((f) => (FRAMEWORK_CATEGORY[f] ?? "Security & trust") === cat),
 })).filter((g) => g.items.length > 0);
 
-// The Solutions menu leads with the two OUTCOMES a founder actually buys — Security and Compliance — with
-// the autonomous-team + human-in-the-loop as the cross-cutting spine (the footer). The technical categories
-// are coverage pages filed under the outcome they serve, not co-equal pillars. (Runtime "Protect" is held
-// off until the managed-Zen wrap, so we never advertise a pillar we don't fill.)
-const SECURITY: Item[] = [
-  { href: "/ai-security-engineer", label: "AI security engineer", desc: "Triages, fixes & explains — not just flags", icon: Bot },
-  { href: "/ai-pentest", label: "AI pentesting", desc: "Continuous, exploitation-proven testing", icon: Crosshair },
+// The Solutions mega-menu, structured to the positioning so it doesn't read as a flat pile of links: the
+// two AI personas are the HEADLINE (the premium), then the deterministic-substrate COVERAGE + the
+// COMPLIANCE outcome as two tight columns, with the human-in-the-loop + agent controls as the cross-cutting
+// spine in the footer. Coverage pages are filed under the outcome they serve, not co-equal pillars.
+// (vs-consulting lives in the footer Compare column; runtime "Protect" is held off until the managed-Zen
+// wrap, so we never advertise a pillar we don't fill.)
+const PERSONAS: Item[] = [
+  { href: "/ai-security-engineer", label: "AI Security Engineer", desc: "Defense — triage, fix & explain, one click at a time", icon: Bot },
+  { href: "/ai-pentest", label: "AI Pentester", desc: "Attack — continuous, exploitation-proven testing", icon: Crosshair },
+];
+const COVERAGE: Item[] = [
   { href: "/cloud-security", label: "Cloud security", desc: "CSPM, attack paths & drift across AWS/GCP/Azure", icon: Cloud },
   { href: "/code-security", label: "Code & supply chain", desc: "SAST, deps, reachability, malware, secrets", icon: Boxes },
   { href: "/saas-posture", label: "Identity & SaaS posture", desc: "MFA, OAuth grants, stale access, SSPM", icon: KeyRound },
-  { href: "/agent-controls", label: "AI agent controls", desc: "Kill-switch, isolation, human gate, signed log", icon: ShieldCheck },
 ];
 const COMPLIANCE: Item[] = [
   { href: "/frameworks", label: "Frameworks", desc: "SOC 2, ISO, HIPAA, PCI + 18 more — auto-mapped", icon: FileCheck2 },
   { href: "/vapt", label: "VAPT & evidence", desc: "Always-current, signed reports", icon: FileText },
   { href: "/soc2-readiness", label: "SOC 2 readiness", desc: "Where you'd fail the questionnaire — free", icon: ClipboardCheck },
-  { href: "/vs-consulting", label: "vs. a consultant", desc: "The vCISO outcome, without the retainer", icon: Scale },
 ];
+const AGENT_CONTROLS: Item = { href: "/agent-controls", label: "AI agent controls", desc: "Kill-switch, isolation, human gate, signed log", icon: ShieldCheck };
+// The combined "Security" set for the mobile accordion (personas + coverage + controls under one heading).
+const SECURITY_MOBILE: Item[] = [...PERSONAS, ...COVERAGE, AGENT_CONTROLS];
 
 // Free tools — the founder ICP's top-of-funnel hook. Lead with the questionnaire scan.
 const TOOLS: Item[] = [
@@ -195,7 +200,7 @@ export function MarketingNav() {
         <div className="max-h-[80vh] overflow-y-auto border-t border-border/70 bg-bg px-5 py-3 md:hidden animate-fade-rise">
           <MobileGroup
             label="Security"
-            items={SECURITY}
+            items={SECURITY_MOBILE}
             open={acc === "security"}
             onToggle={() => setAcc((a) => (a === "security" ? null : "security"))}
             onNavigate={() => setOpen(false)}
@@ -320,7 +325,8 @@ function SolutionsMenu({
   onLeave: () => void;
   path: string;
 }) {
-  const active = [...SECURITY, ...COMPLIANCE].some((i) => path === i.href);
+  const active = [...PERSONAS, ...COVERAGE, ...COMPLIANCE, AGENT_CONTROLS].some((i) => path === i.href);
+  const ControlsIcon = AGENT_CONTROLS.icon;
   const col = (heading: string, items: Item[]) => (
     <div>
       <div className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-faint">{heading}</div>
@@ -358,26 +364,65 @@ function SolutionsMenu({
       {isOpen && (
         <div className="absolute left-0 top-full pt-2">
           <div className="w-[42rem] overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-elevated animate-fade-rise">
-            <div className="grid grid-cols-2 gap-x-6">
-              {col("Security", SECURITY)}
+            {/* Headline: the two AI personas (the premium) — accent-bordered so they lead, not blend in. */}
+            <div className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-accent">AI security team</div>
+            <div className="grid grid-cols-2 gap-2">
+              {PERSONAS.map(({ href, label: l, desc, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-start gap-3 rounded-lg border px-2.5 py-2.5 transition hover:border-accent/60",
+                    path === href ? "border-accent bg-accent-soft/40" : "border-accent/30 bg-accent-soft/20",
+                  )}
+                >
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent text-white">
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-ink">{l}</span>
+                    <span className="block text-xs leading-snug text-muted">{desc}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+
+            {/* The two substrate outcomes — coverage (what it scans) + compliance — as tight columns. */}
+            <div className="mt-3 grid grid-cols-2 gap-x-6">
+              {col("Security coverage", COVERAGE)}
               {col("Compliance", COMPLIANCE)}
             </div>
-            {/* The spine: one team, a human where it matters — across BOTH outcomes (our AutoFix-slot). */}
-            <Link
-              href="/product"
-              className="mt-3 flex items-center justify-between rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2.5 transition hover:border-border-strong"
-            >
-              <span className="flex items-center gap-2.5">
+
+            {/* The spine: a human in the loop + the agent controls that make the autonomy trustworthy. */}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Link
+                href="/product"
+                className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2.5 transition hover:border-border-strong"
+              >
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent text-white">
                   <UserCheck className="h-3.5 w-3.5" />
                 </span>
-                <span>
-                  <span className="block text-sm font-medium text-ink">One autonomous team — with a human in the loop</span>
-                  <span className="block text-xs text-muted">The agent finds &amp; fixes; a named human makes the calls that matter. Across security and compliance.</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-ink">Human in the loop</span>
+                  <span className="block text-xs leading-snug text-muted">A named person signs the calls that matter — across both outcomes.</span>
                 </span>
-              </span>
-              <ArrowRight className="h-4 w-4 shrink-0 text-muted" />
-            </Link>
+              </Link>
+              <Link
+                href={AGENT_CONTROLS.href}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2.5 transition hover:border-border-strong",
+                  path === AGENT_CONTROLS.href && "border-border-strong",
+                )}
+              >
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <ControlsIcon className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-ink">{AGENT_CONTROLS.label}</span>
+                  <span className="block text-xs leading-snug text-muted">{AGENT_CONTROLS.desc}</span>
+                </span>
+              </Link>
+            </div>
           </div>
         </div>
       )}
