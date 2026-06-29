@@ -11,7 +11,6 @@ import {
   ScrollText,
   FileText,
   FileCheck2,
-  UserCheck,
   AppWindow,
   Spline,
   Cloud,
@@ -68,7 +67,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   {
     // L2 defense console — ONE persona reasoning OVER both outcomes (prioritize · explain · remediate ·
     // auto-fix), delegating cloud-graph depth to the cloud specialist as a tool (#727). Agentic ACTIONS,
-    // not a chat (docs/product-restructure.md). (Expert reviews → Governance: it's the HITL, not the AI.)
+    // not a chat (docs/product-restructure.md). (Expert reviews → "Your security team" hub: it's the HITL, not the AI.)
     header: "AI Security Engineer",
     items: [
       { href: "/brief", label: "Console", icon: Sparkles },
@@ -82,14 +81,14 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   },
   {
     // HITL — the human-judgment layer the AI can't own: vCISO risk acceptance, auditor attestation,
-    // policy publication, and expert-review escalations (a human second opinion). Distinct for an
-    // auditor, collapsible so a founder can ignore it.
+    // policy publication. Distinct for an auditor, collapsible so a founder can ignore it. (Expert
+    // reviews — "get a human second opinion" — lives on the "Your security team" hub now, NOT here:
+    // it's the same human expert, so we don't show two expert pages in two sections.)
     header: "Governance",
     items: [
       { href: "/risks", label: "Risks", icon: Scale },
       { href: "/audits", label: "Audits", icon: FileCheck2 },
       { href: "/program", label: "Program", icon: ScrollText },
-      { href: "/reviews", label: "Expert reviews", icon: UserCheck },
     ],
   },
   {

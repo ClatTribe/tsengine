@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Scale, FileCheck2, ScrollText, Crosshair, Inbox, ArrowRight, Mail, BadgeCheck } from "lucide-react";
+import { Users, Scale, FileCheck2, ScrollText, Crosshair, Inbox, ArrowRight, Mail, BadgeCheck, UserCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { Card, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 // NOT a fabricated activity feed (we don't invent acts the ledger doesn't hold).
 const HANDLES = [
   { href: "/inbox", icon: Inbox, label: "Fix approvals", desc: "Reviews + approves each remediation before it applies" },
+  { href: "/reviews", icon: UserCheck, label: "Expert reviews", desc: "Get a human second opinion on any finding or fix" },
   { href: "/risks", icon: Scale, label: "Risk decisions", desc: "Accepts, mitigates, transfers, or avoids each risk" },
   { href: "/program", icon: ScrollText, label: "Policies", desc: "Publishes the policy set; your team acknowledges" },
   { href: "/audits", icon: FileCheck2, label: "Audit attestations", desc: "Renders each control verdict for the auditor" },
