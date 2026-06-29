@@ -2,7 +2,6 @@ import { ShieldCheck, Building2, Laptop, CloudCog } from "lucide-react";
 import { api } from "@/lib/api";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
-import { PageTabs } from "@/components/ui/page-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +24,6 @@ export default async function PosturePage() {
         description="Risk across the asset classes a pure scanner misses — your vendors, your employee devices, and changes to your cloud since the last baseline. Each is assessed against SOC 2 / CIS / NIST / GDPR controls and flows into the same issues and compliance posture as every other finding."
       />
 
-      <PageTabs tabs={[{ href: "/coverage", label: "Test coverage" }, { href: "/posture", label: "Asset posture" }]} />
 
       {total === 0 ? (
         <Empty>
