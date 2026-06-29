@@ -75,7 +75,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     // not a chat (docs/product-restructure.md). (Expert reviews → Governance: it's the HITL, not the AI.)
     header: "AI Security Engineer",
     items: [
-      { href: "/brief", label: "Security brief", icon: Sparkles },
+      { href: "/brief", label: "Console", icon: Sparkles },
       { href: "/cloud-engineer", label: "Cloud depth", icon: Cloud },
     ],
   },
