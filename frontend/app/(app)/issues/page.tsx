@@ -5,6 +5,7 @@ import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { IssueActions } from "@/components/issues/issue-actions";
 import { IssueAutofix } from "@/components/issues/issue-autofix";
+import { IssueInvestigate } from "@/components/issues/issue-investigate";
 import { ExclusionRules } from "@/components/issues/exclusion-rules";
 import { TriageFunnel } from "@/components/issues/triage-funnel";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -263,6 +264,7 @@ function IssueRow({ issue, ignored }: { issue: Issue; ignored: boolean }) {
       </td>
       <td className="py-3 pr-5 align-top text-right">
         <div className="flex items-center justify-end gap-2">
+          {!ignored && <IssueInvestigate issueKey={issue.key} title={issue.title} />}
           {!ignored && issue.finding_ids[0] && <IssueAutofix findingId={issue.finding_ids[0]} title={issue.title} />}
           <IssueActions issueKey={issue.key} ignored={ignored} />
           {href && (

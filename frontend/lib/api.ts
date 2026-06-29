@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, ActionsView, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIBom, Action, ActionsView, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -146,6 +146,20 @@ export const api = {
       `/v1/findings/${id}/autofix`,
       { method: "POST", body: "{}" },
     ),
+
+  // AI per-issue Investigate — the agentic verb on the Issues surface. Always returns the deterministic
+  // cross-surface chain + blast radius; when AI is enabled, adds the root-cause/fix narrative.
+  investigateIssue: (key: string) =>
+    call<{
+      issue: Issue;
+      chains: string[];
+      blast_radius: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
+      ai_enabled: boolean;
+      note?: string;
+      summary?: { executive_summary?: string; methodology?: string; recommendations?: string } | null;
+      reports?: Finding[];
+      model?: string;
+    }>(`/v1/issues/${encodeURIComponent(key)}/investigate`, { method: "POST", body: "{}" }),
 
   // vCISO advisor — a prioritized audit-readiness roadmap over coverage + gaps + readiness (never "compliant").
   complianceAdvisor: (framework: string) =>
