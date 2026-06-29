@@ -56,6 +56,45 @@ func TestChain_WebLeakToCloudAdmin(t *testing.T) {
 	t.Log("\n" + Render(chains))
 }
 
+// The IDENTITY bridge: a no-MFA admin in the workspace (operate) is the SAME person who holds cloud
+// admin — joined by the shared email. The canonical compromised-developer chain that was invisible
+// before identity findings could correlate.
+func TestChain_IdentityToCloudAdmin(t *testing.T) {
+	ws := Asset{
+		ID: "s-ws", Type: "workspace", Target: "okta:corp",
+		Findings: []Finding{{
+			ID: "op-001", Title: "Admin without MFA", Severity: "high", Tool: "operate",
+			Endpoint: "alice@corp.com", Description: "Okta admin alice@corp.com has no MFA enrolled",
+		}},
+	}
+	cloud := Asset{
+		ID: "s-cloud", Type: "cloud_account", Target: "aws-acct-1",
+		Findings: []Finding{{
+			ID: "cl-009", Title: "IAM user can escalate to Administrator", Severity: "critical",
+			Description: "principal alice@corp.com has iam:PutUserPolicy → privilege escalation",
+		}},
+	}
+	chains := Correlate([]Asset{ws, cloud})
+	if len(chains) != 1 {
+		t.Fatalf("want 1 identity→cloud chain via the shared email, got %d: %+v", len(chains), chains)
+	}
+	if !strings.Contains(chains[0].Steps[0].ViaEntity, "alice@corp.com") {
+		t.Errorf("bridge should cite the shared email: %q", chains[0].Steps[0].ViaEntity)
+	}
+}
+
+// A generic mailbox/vendor address (security@…) shared by two unrelated findings must NOT invent a
+// chain — the email bridge is for a real principal, not a support inbox (§10 grounding).
+func TestNoChain_GenericEmailNotBridged(t *testing.T) {
+	a := Asset{ID: "s-a", Type: "workspace", Target: "okta:corp",
+		Findings: []Finding{{ID: "a1", Title: "Weak password policy", Severity: "high", Endpoint: "security@corp.com", Description: "reported to security@corp.com"}}}
+	b := Asset{ID: "s-b", Type: "cloud_account", Target: "aws-acct-1",
+		Findings: []Finding{{ID: "b1", Title: "IAM user can escalate to Administrator", Severity: "critical", Description: "privilege escalation; notify security@corp.com"}}}
+	if chains := Correlate([]Asset{a, b}); len(chains) != 0 {
+		t.Fatalf("a generic mailbox email must not bridge; got %d chains", len(chains))
+	}
+}
+
 // No shared identifier → no chain. The web finding and cloud crown jewel are real
 // but UNRELATED (different keys); correlation must not invent a link.
 func TestNoChain_WhenNoSharedIdentifier(t *testing.T) {
