@@ -13,7 +13,6 @@ import {
   FileCheck2,
   AppWindow,
   Spline,
-  Cloud,
   Layers,
   Crosshair,
   Scale,
@@ -64,19 +63,15 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // L2 defense console — ONE persona reasoning OVER both outcomes (prioritize · explain · remediate ·
-    // auto-fix), delegating cloud-graph depth to the cloud specialist as a tool (#727). Agentic ACTIONS,
-    // not a chat (docs/product-restructure.md). (Expert reviews → "Your security team" hub: it's the HITL, not the AI.)
-    header: "AI Security Engineer",
+    // The two AI agents that reason OVER the Security/Compliance outcomes — each ONE agentic-action
+    // console (not a chat). The AI Security Engineer is NOT fix-only: it investigates deeper (better
+    // detection), prioritizes, AND fixes. Its cloud-graph specialist (/cloud-engineer) is a DELEGATE it
+    // calls — an action card INSIDE the console, not a second nav tab. The AI Pentester proves exploits.
+    header: "AI agents",
     items: [
-      { href: "/brief", label: "Console", icon: Sparkles },
-      { href: "/cloud-engineer", label: "Cloud depth", icon: Cloud },
+      { href: "/brief", label: "AI Security Engineer", icon: Sparkles },
+      { href: "/pentest", label: "AI Pentester", icon: Crosshair },
     ],
-  },
-  {
-    // L2 attack console — exploitation-proven VAPT (scope → launch → report).
-    header: "AI Pentester",
-    items: [{ href: "/pentest", label: "Pentest", icon: Crosshair }],
   },
   {
     // GRC outcome — the human-judgment layer the AI can't own: vCISO risk acceptance, auditor
