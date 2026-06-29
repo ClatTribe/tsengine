@@ -11,11 +11,9 @@ import {
   ScrollText,
   FileCheck2,
   AppWindow,
-  Spline,
   Layers,
   Crosshair,
   Scale,
-  ScanSearch,
   ChevronDown,
   Sparkles,
   Gauge,
@@ -39,17 +37,14 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   {
     // SECURITY outcome — "Am I secure?". ONE problems list (Issues) the founder/dev acts on. We do NOT
     // make them learn issue vs finding vs incident: the raw per-tool detail is a tab INSIDE Issues,
-    // "what's new / urgent" rides as badges on Issues + the Overview, and internet/external exposure (the
-    // old "OSINT" page) already flows INTO Issues as a detection source — not a separate destination.
-    // Only TWO surfaces hold information NOT already in Issues, so only they earn a slot beside it:
-    // Attack paths (the graph/EDGES — Issues is just nodes) and What we test (the NEGATIVE space — tools
-    // that ran clean). Raw findings / incidents / OSINT are the SAME findings re-sliced → filters on
-    // Issues, not pages. Vendors & devices + Connected apps are INVENTORIES → moved to Connections.
+    // SECURITY outcome — "Am I secure?" = ONE list, Issues. Everything else is context ON an issue, not a
+    // separate destination: raw findings / incidents / OSINT are the same findings re-sliced (filters on
+    // Issues); ATTACK PATHS already drive an issue's priority (live/in_attack_path) and show as an
+    // "on attack path" badge on the row → /attack-paths; WHAT WE TEST is per-asset assurance context
+    // (Overview strip + palette). Vendors & devices + Connected apps are inventories → Connections.
     header: "Security",
     items: [
       { href: "/issues", label: "Issues", icon: Layers },
-      { href: "/attack-paths", label: "Attack paths", icon: Spline },
-      { href: "/coverage", label: "What we test", icon: ScanSearch },
     ],
   },
   {

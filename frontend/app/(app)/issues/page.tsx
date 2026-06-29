@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug, Globe } from "lucide-react";
+import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug, Globe, Spline } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Issue } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -191,6 +191,15 @@ function IssueRow({ issue, ignored }: { issue: Issue; ignored: boolean }) {
             >
               <Zap className="h-3 w-3" /> live
             </span>
+          )}
+          {issue.in_attack_path && (
+            <Link
+              href="/attack-paths"
+              className="inline-flex items-center gap-0.5 rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent transition hover:bg-accent/20"
+              title="This issue is a link in a cross-surface attack chain — that's why it ranks higher. See how it chains to a crown jewel."
+            >
+              <Spline className="h-3 w-3" /> on attack path
+            </Link>
           )}
           {issue.kev && !issue.attacked && (
             <span

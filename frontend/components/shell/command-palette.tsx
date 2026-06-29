@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Bug, Activity, ShieldCheck, Boxes, ScrollText,
   RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings, FileText, UserCheck,
-  Layers, Crosshair, Spline, AppWindow, Scale, Radar, Cloud, Sparkles,
+  Layers, Crosshair, Spline, AppWindow, Scale, Radar, Cloud, Sparkles, ScanSearch,
 } from "lucide-react";
 import { rescanAll } from "@/app/(app)/assets/actions";
 import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
@@ -67,7 +67,8 @@ export function CommandPalette() {
       { id: "pentest", label: "Pentest", group: "Go to", icon: Crosshair, keywords: "vapt exploit proven engagement penetration", run: go("/pentest") },
       { id: "brief", label: "AI Security Engineer", group: "Go to", icon: Sparkles, keywords: "ai security engineer console triage brief auto-fix translate plain english remediation l2 agent actions", run: go("/brief") },
       { id: "cloud-engineer", label: "Cloud engineer", group: "Go to", icon: Cloud, keywords: "cloud agent attack path investigate aws gcp azure iam blast radius vulnagent crown jewel", run: go("/cloud-engineer") },
-      { id: "attack-paths", label: "Attack paths", group: "Go to", icon: Spline, keywords: "chain correlation crown jewel lateral", run: go("/attack-paths") },
+      { id: "attack-paths", label: "Attack paths", group: "Go to", icon: Spline, keywords: "chain correlation crown jewel lateral priority", run: go("/attack-paths") },
+      { id: "coverage", label: "What we test", group: "Go to", icon: ScanSearch, keywords: "coverage scanned tools clean tested assurance no black box", run: go("/coverage") },
       { id: "osint", label: "External exposure", group: "Go to", icon: Radar, keywords: "osint breach leaked secret exposed host typosquat dark web shodan recon footprint", run: go("/osint") },
       { id: "incidents", label: "Incidents", group: "Go to", icon: Activity, keywords: "monitoring new resolved attack", run: go("/incidents") },
       { id: "compliance", label: "Compliance", group: "Go to", icon: ShieldCheck, keywords: "soc2 controls audit posture", run: go("/compliance") },
