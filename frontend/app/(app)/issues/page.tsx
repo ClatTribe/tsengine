@@ -6,6 +6,7 @@ import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { IssueActions } from "@/components/issues/issue-actions";
 import { IssueAutofix } from "@/components/issues/issue-autofix";
 import { IssueInvestigate } from "@/components/issues/issue-investigate";
+import { EngineerStrip } from "@/components/issues/engineer-strip";
 import { ExclusionRules } from "@/components/issues/exclusion-rules";
 import { TriageFunnel } from "@/components/issues/triage-funnel";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -54,37 +55,10 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
 
       <PageTabs tabs={[{ href: "/issues", label: "Issues" }, { href: "/findings", label: "All findings" }]} />
 
-      {/* AI Security Engineer state — honest: this list is deterministically ranked (severity × data-tier ×
-          attack-path). The AI doesn't silently re-rank it; it's an ACTION you run. So we show whether it's
-          ON and point to the console, or prompt to turn it on — never claim "AI ranked this". */}
-      {mainView && (
-        <Link
-          href="/brief"
-          className={`group flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm transition ${
-            aiEnabled
-              ? "border-accent/30 bg-accent-soft/30 hover:border-accent/60"
-              : "border-border bg-surface hover:border-accent/40"
-          }`}
-        >
-          <Sparkles className={`h-4 w-4 shrink-0 ${aiEnabled ? "text-accent" : "text-muted"}`} />
-          <span className="min-w-0 flex-1 text-muted">
-            {aiEnabled ? (
-              <>
-                <span className="font-medium text-ink">Your AI Security Engineer is on.</span> Have it dig deeper,
-                re-rank by real impact, and explain each issue in plain English.
-              </>
-            ) : (
-              <>
-                <span className="font-medium text-ink">Turn on your AI Security Engineer</span> to triage this list,
-                rank by real impact, and explain every issue — beyond the deterministic scan.
-              </>
-            )}
-          </span>
-          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-accent">
-            {aiEnabled ? "Triage & prioritize" : "Enable"} <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
-          </span>
-        </Link>
-      )}
+      {/* AI Security Engineer presence — SPRINKLED, not a page. The list is deterministically ranked; the
+          AI is an ACTION you run. When on, "Triage everything" runs the whole-estate triage INLINE (a
+          modal, right here) — not a hop to a console; when off, it points to Settings to enable it. */}
+      {mainView && <EngineerStrip aiEnabled={aiEnabled} />}
 
       {/* View filters over the one list — no separate pages. Live = exploitable subset; External = the
           internet/attacker-eye (old OSINT) slice; raw per-tool detail is the "All findings" tab above. */}
