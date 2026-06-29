@@ -85,6 +85,28 @@ func TestProposeCloud_NonS3StaysAccountRunbook(t *testing.T) {
 	}
 }
 
+func TestProposeCloud_IAMPrivescGetsLayerCorrectType(t *testing.T) {
+	asset := platform.Asset{ID: "a", TenantID: "t1", Type: "cloud_account", Target: "aws:111122223333", Meta: map[string]string{"provider": "aws"}}
+	// An IAM over-privilege / privesc finding — the right-layer fix is tighten the principal's policy,
+	// not a storage toggle. No live write yet, so it's labeled iam_restrict + the principal as target.
+	f := types.Finding{
+		ID: "f3", Severity: types.SeverityHigh, Tool: "cloudengine",
+		Title:    "IAM role allows privilege escalation to AdministratorAccess",
+		RuleID:   "cloudengine::iam-privesc",
+		Endpoint: "arn:aws:iam::111122223333:role/deploy",
+	}
+	act, ok := Propose(f, asset, nil)
+	if !ok {
+		t.Fatal("an IAM finding should produce an action")
+	}
+	if act.Payload["remediation_type"] != "iam_restrict" {
+		t.Errorf("an IAM-privesc finding should carry the layer-correct iam_restrict type, got %v", act.Payload["remediation_type"])
+	}
+	if act.Payload["target"] != "arn:aws:iam::111122223333:role/deploy" {
+		t.Errorf("target should be the offending principal, got %v", act.Payload["target"])
+	}
+}
+
 func TestLiveCloudMutation_ProviderGating(t *testing.T) {
 	f := types.Finding{Title: "public storage bucket exposed", Endpoint: "arn:aws:s3:::b"}
 	if rt, _ := liveCloudMutation(f, "aws"); rt != "s3_block_public_access" {

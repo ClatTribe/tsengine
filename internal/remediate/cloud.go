@@ -19,6 +19,27 @@ const (
 // cloudStorageRemediations is the set of those remediation_types (target == the finding's endpoint).
 var cloudStorageRemediations = map[string]bool{rtypeS3Block: true, rtypeGCSPrevent: true, rtypeAzureBlock: true}
 
+// rtypeIAMRestrict labels a cloud IAM over-privilege / privesc finding with its RIGHT-LAYER fix —
+// tighten the offending principal's policy — so the action names the correct cut instead of a generic
+// "remediate the account". Deliberately NOT in cloudStorageRemediations: there's no live connector
+// write for IAM yet, so it stays a documented (HITL-gated) action until an IAM-write path lands, exactly
+// like identity's oauth_revoke. Grounded: the target is the finding's own principal/policy.
+const rtypeIAMRestrict = "iam_restrict"
+
+// isIAMPrivescFinding reports whether a cloud finding is an IAM over-privilege / privilege-escalation
+// issue — the class whose right-layer fix is tightening a principal's policy, not a storage toggle.
+func isIAMPrivescFinding(f types.Finding) bool {
+	hay := strings.ToLower(f.RuleID + " " + f.Title + " " + f.Description)
+	if !strings.Contains(hay, "iam") && !strings.Contains(hay, "role") && !strings.Contains(hay, "policy") &&
+		!strings.Contains(hay, "principal") && !strings.Contains(hay, "permission") {
+		return false
+	}
+	return strings.Contains(hay, "privesc") || strings.Contains(hay, "privilege escalation") ||
+		strings.Contains(hay, "over-privileg") || strings.Contains(hay, "overprivileg") ||
+		strings.Contains(hay, "escalat") || strings.Contains(hay, "administratoraccess") ||
+		strings.Contains(hay, "*:*") || strings.Contains(hay, "wildcard")
+}
+
 // liveCloudMutation returns the live, reversible cloud remediation (remediation_type + the
 // resource-level target) for a finding when a connector write path exists — today only AWS S3
 // public-access block, the fix for a publicly-exposed bucket (DSPM/CSPM). Empty rtype → no live
