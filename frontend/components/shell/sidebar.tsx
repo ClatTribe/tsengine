@@ -17,12 +17,10 @@ import {
   Layers,
   Crosshair,
   Scale,
-  History,
   ScanSearch,
   ChevronDown,
   Sparkles,
   Gauge,
-  Users,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -102,15 +100,9 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
       { href: "/saas-apps", label: "Connected apps", icon: AppWindow },
     ],
   },
-  {
-    // Account context — who's accountable for the human calls + the audit log. Not an outcome; a founder
-    // rarely needs it, so it sits last.
-    header: "Account",
-    items: [
-      { href: "/security-team", label: "Your security team", icon: Users },
-      { href: "/activity", label: "Activity", icon: History },
-    ],
-  },
+  // "Your security team" (who's accountable) + "Activity" (audit log) are ACCOUNT CONTEXT, not daily
+  // destinations — they live under Settings now, reachable from there + the command palette, off the
+  // daily sidebar.
 ];
 
 const COLLAPSE_KEY = "ts.nav.collapsed";

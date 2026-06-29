@@ -75,6 +75,20 @@ export default async function SettingsPage() {
         </Card>
       </div>
 
+      {/* Your security team — the accountability hub (who owns the human calls + escalate for a second
+          opinion). Account context, so it lives here, not on the daily sidebar. */}
+      <div>
+        <SectionTitle action={<Link href="/security-team" className="text-[11px] font-medium text-accent hover:underline">view →</Link>}>
+          Your security team
+        </SectionTitle>
+        <Card className="p-5">
+          <p className="text-sm text-muted">
+            Who&apos;s accountable for the human-in-the-loop decisions — fix approvals, risk calls, policy
+            publication, audit attestations, pentest sign-off — and where to escalate any finding for a second opinion.
+          </p>
+        </Card>
+      </div>
+
       {/* AI engine — bring-your-own-LLM for the agent + autonomous pentest */}
       <div>
         <SectionTitle>AI engine</SectionTitle>
@@ -194,6 +208,18 @@ export default async function SettingsPage() {
               <span className="text-[11px] text-faint">admin-managed</span>
             </div>
           ))}
+        </Card>
+      </div>
+
+      {/* Activity log — the tamper-evident audit trail. Account context, moved off the daily sidebar. */}
+      <div>
+        <SectionTitle action={<Link href="/activity" className="text-[11px] font-medium text-accent hover:underline">view →</Link>}>
+          Activity log
+        </SectionTitle>
+        <Card className="p-5">
+          <p className="text-sm text-muted">
+            Every scan, fix, and signed decision, in order — the tamper-evident audit trail for you and your auditor.
+          </p>
         </Card>
       </div>
 

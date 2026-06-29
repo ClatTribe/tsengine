@@ -79,8 +79,9 @@ export function CommandPalette() {
       { id: "assets", label: "Assets & connections", group: "Go to", icon: Boxes, keywords: "connect systems monitored", run: go("/assets") },
       { id: "saas-apps", label: "SaaS apps", group: "Go to", icon: AppWindow, keywords: "shadow it oauth grants saas inventory discovery", run: go("/saas-apps") },
       { id: "reviews", label: "Expert reviews", group: "Go to", icon: UserCheck, keywords: "human expert escalation second opinion vciso", run: go("/reviews") },
-      { id: "activity", label: "Activity", group: "Go to", icon: ScrollText, keywords: "feed log agent", run: go("/activity") },
-      { id: "settings", label: "Settings", group: "Go to", icon: Settings, keywords: "account organization notifications profile", run: go("/settings") },
+      { id: "security-team", label: "Your security team", group: "Go to", icon: UserCheck, keywords: "accountable practitioner hitl owner service model who signs expert", run: go("/security-team") },
+      { id: "activity", label: "Activity", group: "Go to", icon: ScrollText, keywords: "feed log agent audit trail history", run: go("/activity") },
+      { id: "settings", label: "Settings", group: "Go to", icon: Settings, keywords: "account organization notifications profile team audit", run: go("/settings") },
     ];
     const actions: Cmd[] = [
       {
