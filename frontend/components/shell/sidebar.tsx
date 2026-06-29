@@ -45,9 +45,10 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // L1.7 — the deterministic security + compliance posture (scans · correlation · threat-intel),
-    // the security-engineer/auditor deliverable that both AI products reason over.
-    header: "Posture",
+    // SECURITY outcome — the L1.7 deterministic substrate's security output (scans · correlation ·
+    // threat-intel · attack paths). "Am I secure?" — what the scanning engine produces, on every plan.
+    // (Renamed from "Posture": the nav spine is now the two OUTCOMES a founder buys, not our layers.)
+    header: "Security",
     items: [
       { href: "/issues", label: "Issues", icon: Layers },
       { href: "/findings", label: "Findings", icon: Bug },
@@ -60,10 +61,18 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // L2 defense — ONE persona that reasons OVER the whole estate (prioritizes, explains, remediates,
-    // writes the brief) and DELEGATES cloud-graph depth to the cloud specialist as a tool (#727). The
-    // brief is the deliverable; "Cloud depth" is that subordinate specialist, not a co-equal persona.
-    // (Expert reviews moved to Governance — it's the human-in-the-loop, not the AI engineer.)
+    // COMPLIANCE outcome — the same substrate's control mapping + reachability + evidence. "Am I
+    // audit-ready?" Adjacent to Security: the two outcomes are the spine; the AI consoles operate on them.
+    header: "Compliance",
+    items: [
+      { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+      { href: "/reports", label: "Reports", icon: FileText },
+    ],
+  },
+  {
+    // L2 defense console — ONE persona reasoning OVER both outcomes (prioritize · explain · remediate ·
+    // auto-fix), delegating cloud-graph depth to the cloud specialist as a tool (#727). Agentic ACTIONS,
+    // not a chat (docs/product-restructure.md). (Expert reviews → Governance: it's the HITL, not the AI.)
     header: "AI Security Engineer",
     items: [
       { href: "/brief", label: "Security brief", icon: Sparkles },
@@ -71,16 +80,9 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // L2 attack — exploitation-proven VAPT (the other AI teammate).
+    // L2 attack console — exploitation-proven VAPT (scope → launch → report).
     header: "AI Pentester",
     items: [{ href: "/pentest", label: "Pentest", icon: Crosshair }],
-  },
-  {
-    header: "Compliance",
-    items: [
-      { href: "/compliance", label: "Compliance", icon: ShieldCheck },
-      { href: "/reports", label: "Reports", icon: FileText },
-    ],
   },
   {
     // HITL — the human-judgment layer the AI can't own: vCISO risk acceptance, auditor attestation,
