@@ -44,15 +44,16 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     // SECURITY outcome — "Am I secure?". ONE problems list (Issues) the founder/dev acts on. We do NOT
     // make them learn issue vs finding vs incident: the raw per-tool detail is a tab INSIDE Issues,
     // "what's new / urgent" rides as badges on Issues + the Overview, and internet/external exposure (the
-    // old "OSINT" page) already flows INTO Issues as a detection source — not a separate destination. The
-    // remaining items are genuinely-different VIEWS of the same findings (how they chain, what was tested).
+    // old "OSINT" page) already flows INTO Issues as a detection source — not a separate destination.
+    // Only TWO surfaces hold information NOT already in Issues, so only they earn a slot beside it:
+    // Attack paths (the graph/EDGES — Issues is just nodes) and What we test (the NEGATIVE space — tools
+    // that ran clean). Raw findings / incidents / OSINT are the SAME findings re-sliced → filters on
+    // Issues, not pages. Vendors & devices + Connected apps are INVENTORIES → moved to Connections.
     header: "Security",
     items: [
       { href: "/issues", label: "Issues", icon: Layers },
       { href: "/attack-paths", label: "Attack paths", icon: Spline },
       { href: "/coverage", label: "What we test", icon: ScanSearch },
-      { href: "/posture", label: "Vendors & devices", icon: Gauge },
-      { href: "/saas-apps", label: "Connected apps", icon: AppWindow },
     ],
   },
   {
@@ -80,11 +81,10 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     items: [{ href: "/pentest", label: "Pentest", icon: Crosshair }],
   },
   {
-    // HITL — the human-judgment layer the AI can't own: vCISO risk acceptance, auditor attestation,
-    // policy publication. Distinct for an auditor, collapsible so a founder can ignore it. (Expert
-    // reviews — "get a human second opinion" — lives on the "Your security team" hub now, NOT here:
-    // it's the same human expert, so we don't show two expert pages in two sections.)
-    header: "Governance",
+    // GRC outcome — the human-judgment layer the AI can't own: vCISO risk acceptance, auditor
+    // attestation, policy publication. (Expert reviews — "get a human second opinion" — lives on the
+    // "Your security team" hub, NOT here.) Renamed "Governance" → "GRC" (the customer's word).
+    header: "GRC",
     items: [
       { href: "/risks", label: "Risks", icon: Scale },
       { href: "/audits", label: "Audits", icon: FileCheck2 },
@@ -92,9 +92,21 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    header: "Workspace",
+    // INTEGRATION outcome — "what I've connected." The inventory: targets/repos/cloud (Assets) plus the
+    // two surfaces that are INVENTORIES, not finding-views — Vendors & devices and Connected apps (their
+    // risk findings already appear in Security via Issues; here you see WHAT you have, not what's wrong).
+    header: "Connections",
     items: [
       { href: "/assets", label: "Assets", icon: Boxes },
+      { href: "/posture", label: "Vendors & devices", icon: Gauge },
+      { href: "/saas-apps", label: "Connected apps", icon: AppWindow },
+    ],
+  },
+  {
+    // Account context — who's accountable for the human calls + the audit log. Not an outcome; a founder
+    // rarely needs it, so it sits last.
+    header: "Account",
+    items: [
       { href: "/security-team", label: "Your security team", icon: Users },
       { href: "/activity", label: "Activity", icon: History },
     ],
