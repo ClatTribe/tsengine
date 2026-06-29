@@ -13,6 +13,7 @@ import { Prioritize } from "@/components/marketing/prioritize";
 import { PlatformOverview } from "@/components/marketing/platform-overview";
 import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 import { ArchStack } from "@/components/marketing/arch-stack";
+import { AgenticActions } from "@/components/marketing/agentic-actions";
 
 export const metadata = {
   title: "TensorShield — pass the security review, close the deal",
@@ -89,6 +90,9 @@ export default function Landing() {
       {/* The architecture, made legible — a free substrate + the two AI teammates + a human who signs.
           (Was a black box; the AI Pentester was absent above the fold.) */}
       <ArchStack />
+
+      {/* The interaction model — one-click agentic actions (auto-fix, launch a pentest…), not a chat box. */}
+      <AgenticActions />
 
       {/* USP #1 — we prioritize the alerts so you don't have to (noise-reduction funnel) */}
       <Prioritize />
