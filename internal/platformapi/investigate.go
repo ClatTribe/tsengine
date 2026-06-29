@@ -68,9 +68,11 @@ func (d Deps) handleIssueInvestigate(w http.ResponseWriter, r *http.Request, ten
 	pAssets, _ := d.Store.ListAssets(r.Context(), tenantID)
 
 	// Deterministic, GROUNDED context (always — no LLM): the cross-surface chains this issue sits on +
-	// the worst (closest-to-crown-jewel) blast radius across its findings.
-	issueChains := chainsForFindings(crossdetect.Correlate(pAssets, findings), idset)
-	blast := worstBlast(crossdetect.BlastRadiusByFinding(pAssets, findings), issue.FindingIDs)
+	// the worst (closest-to-crown-jewel) blast radius across its findings. Correlate is the hot path, so
+	// compute it ONCE and reuse for both the chain filter and the blast radius (BlastRadiusFromChains).
+	chains := crossdetect.Correlate(pAssets, findings)
+	issueChains := chainsForFindings(chains, idset)
+	blast := worstBlast(crossdetect.BlastRadiusFromChains(chains), issue.FindingIDs)
 
 	resp := map[string]any{
 		"issue":        issue,
@@ -108,8 +110,8 @@ func (d Deps) handleIssueInvestigate(w http.ResponseWriter, r *http.Request, ten
 }
 
 // runInvestigate runs the L2 Lead SCOPED to one issue (its findings) but with the WHOLE-estate
-// cross-surface chains in context, so the dig is focused yet graph-aware. A small budget — a per-issue
-// dive, not a full estate translate. Mirrors runTranslate; differs only in the scoped finding set + cap.
+// cross-surface chains in context, so the dig is focused yet graph-aware (an 8-iter per-issue dive). The
+// estate-build + agent-run is the shared runEstateAgent (was duplicated with runTranslate).
 func (d Deps) runInvestigate(ctx context.Context, tenantID string, client l2.Client, issue *crossdetect.Issue, issueFindings, allFindings []types.Finding) (l2.Outcome, error) {
 	pAssets, _ := d.Store.ListAssets(ctx, tenantID)
 	target := types.Asset{Type: types.AssetWebApplication, Target: "tenant:" + tenantID}
@@ -118,23 +120,7 @@ func (d Deps) runInvestigate(ctx context.Context, tenantID string, client l2.Cli
 	} else if len(pAssets) > 0 {
 		target = types.Asset{Type: types.AssetType(pAssets[0].Type), Target: pAssets[0].Target}
 	}
-	// The Lead sees the WHOLE estate's unified issues + cross-surface chains, so it can explain how THIS
-	// issue (the scoped L1Findings) bridges to anything that matters — the "three scanners → one
-	// engineer" reasoning. L1Findings is scoped to the issue, so the deliverable focuses on it.
-	estate := l2.EstateContext{
-		Issues:      toIssueDigests(crossdetect.UnifiedIssues(allFindings)),
-		AttackPaths: renderChains(crossdetect.Correlate(pAssets, allFindings)),
-	}
-	dep := l2.Deps{Target: target, L1Findings: issueFindings}
-	dep.CloudInvestigator = d.cloudInvestigator(tenantID)
-	budget := l2.DefaultBudget()
-	budget.MaxIterations = 8 // a per-issue dive, tighter than the 16-iter whole-estate translate
-	agent, err := l2.New(client, l2.BuildCatalog(dep), budget)
-	if err != nil {
-		return l2.Outcome{}, err
-	}
-	agent.WithEstate(estate)
-	return agent.Run(ctx, target, issueFindings)
+	return d.runEstateAgent(ctx, tenantID, client, target, issueFindings, allFindings, 8)
 }
 
 // chainsForFindings filters the cross-surface chains to those whose steps include one of the issue's
