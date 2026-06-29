@@ -59,6 +59,12 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		if rt, tgt := liveCloudMutation(f, asset.Meta["provider"]); rt != "" {
 			payload["remediation_type"] = rt
 			payload["target"] = tgt // the specific bucket, not the whole account
+		} else if isIAMPrivescFinding(f) {
+			// Layer-correct but not yet live-writable: name the IAM-tighten fix + the principal, so the
+			// action is the RIGHT cut (not a generic account runbook). Promotes to a live mutation the
+			// moment an IAM-write connector path lands — same pattern as identity's oauth_revoke.
+			payload["remediation_type"] = rtypeIAMRestrict
+			payload["target"] = nz(f.Endpoint, asset.Target)
 		}
 		return platform.Action{
 			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
