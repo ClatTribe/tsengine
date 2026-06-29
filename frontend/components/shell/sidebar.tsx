@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Inbox,
-  Activity,
   ShieldCheck,
   Boxes,
   ScrollText,
@@ -20,11 +19,9 @@ import {
   Crosshair,
   Scale,
   History,
-  Radar,
   ScanSearch,
   ChevronDown,
   Sparkles,
-  Bug,
   Gauge,
   Users,
 } from "lucide-react";
@@ -45,19 +42,18 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // SECURITY outcome — the L1.7 deterministic substrate's security output (scans · correlation ·
-    // threat-intel · attack paths). "Am I secure?" — what the scanning engine produces, on every plan.
-    // (Renamed from "Posture": the nav spine is now the two OUTCOMES a founder buys, not our layers.)
+    // SECURITY outcome — "Am I secure?". ONE problems list (Issues) the founder/dev acts on. We do NOT
+    // make them learn issue vs finding vs incident: the raw per-tool detail is a tab INSIDE Issues,
+    // "what's new / urgent" rides as badges on Issues + the Overview, and internet/external exposure (the
+    // old "OSINT" page) already flows INTO Issues as a detection source — not a separate destination. The
+    // remaining items are genuinely-different VIEWS of the same findings (how they chain, what was tested).
     header: "Security",
     items: [
       { href: "/issues", label: "Issues", icon: Layers },
-      { href: "/findings", label: "Findings", icon: Bug },
-      { href: "/incidents", label: "Incidents", icon: Activity },
       { href: "/attack-paths", label: "Attack paths", icon: Spline },
-      { href: "/osint", label: "External exposure", icon: Radar },
-      { href: "/coverage", label: "Coverage", icon: ScanSearch },
-      { href: "/posture", label: "Asset posture", icon: Gauge },
-      { href: "/saas-apps", label: "SaaS & identity", icon: AppWindow },
+      { href: "/coverage", label: "What we test", icon: ScanSearch },
+      { href: "/posture", label: "Vendors & devices", icon: Gauge },
+      { href: "/saas-apps", label: "Connected apps", icon: AppWindow },
     ],
   },
   {

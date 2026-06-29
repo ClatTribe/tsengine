@@ -21,7 +21,7 @@ export default async function SaaSAppsPage() {
     <div className="space-y-8">
       <PageIntro
         icon={AppWindow}
-        title="SaaS apps"
+        title="Connected apps"
         description="Every third-party app your team connected to its identity providers (Google Workspace, Microsoft 365, Okta) — discovered automatically from OAuth grants. Find the unsanctioned, over-permissioned, and unverified apps before they become an incident."
       />
 

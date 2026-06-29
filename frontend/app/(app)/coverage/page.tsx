@@ -26,7 +26,7 @@ export default async function CoveragePage() {
     <div className="space-y-5">
       <PageIntro
         icon={ScanSearch}
-        title="Test coverage"
+        title="What we test"
         description="Exactly what was tested on each asset — the tools every scan runs, when it last ran, and which of them surfaced something. No black box: a clean tool ran, it just found nothing."
       />
 
