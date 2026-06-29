@@ -24,6 +24,11 @@ const (
 	EntHost   EntityKind = "host"
 	EntIP     EntityKind = "ip"
 	EntBucket EntityKind = "s3_bucket"
+	// EntEmail bridges the IDENTITY surface (operate: Okta/GW/M365 — endpoint is the user's email) to
+	// code/cloud findings that name the same human/principal. The canonical breach path: a no-MFA admin
+	// (identity) who also has cloud admin (cloud) and prod repo push (code) is ONE blast radius, not three
+	// shrugs. Grounded: a real shared email; generic mailbox/vendor local-parts are excluded (genericEmailLocal).
+	EntEmail EntityKind = "email"
 )
 
 // Entity is a shared identifier that can bridge two assets.
@@ -208,7 +213,18 @@ var (
 	arnRe    = regexp.MustCompile(`arn:aws:[a-z0-9-]*:[a-z0-9-]*:\d{12}:[\w./:*-]+`)
 	bucketRe = regexp.MustCompile(`(?:s3://|arn:aws:s3:::)([a-z0-9.-]{3,63})`)
 	ipRe     = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
+	emailRe  = regexp.MustCompile(`[\w.+-]+@[\w-]+\.[\w.-]+`)
 )
+
+// genericEmailLocal: local-parts that are almost never the SUBJECT of a finding (mailboxes, reporters,
+// vendor/role addresses). Extracting them as identity entities would bridge two unrelated findings that
+// merely cite the same support inbox — so we exclude them. The email bridge is for a real human/principal.
+var genericEmailLocal = map[string]bool{
+	"noreply": true, "no-reply": true, "donotreply": true, "do-not-reply": true, "notifications": true,
+	"security": true, "abuse": true, "admin": true, "administrator": true, "support": true, "help": true,
+	"info": true, "hello": true, "contact": true, "sales": true, "team": true, "billing": true,
+	"root": true, "postmaster": true, "mailer-daemon": true, "example": true, "test": true,
+}
 
 func extractEntities(f Finding) []Entity {
 	blob := f.Title + " " + f.Description + " " + f.Endpoint
@@ -228,6 +244,15 @@ func extractEntities(f Finding) []Entity {
 	}
 	for _, ip := range ipRe.FindAllString(f.Endpoint, -1) {
 		out = append(out, Entity{EntIP, ip})
+	}
+	// Identity bridge: a real human/principal email shared across surfaces (operate→cloud→code). Skip
+	// generic mailbox/vendor local-parts so a shared support address never invents a chain (§10).
+	for _, m := range emailRe.FindAllString(blob, -1) {
+		local := strings.ToLower(m)
+		if i := strings.IndexByte(local, '@'); i > 0 && genericEmailLocal[local[:i]] {
+			continue
+		}
+		out = append(out, Entity{EntEmail, m})
 	}
 	return out
 }
@@ -265,6 +290,11 @@ func dedupeEntities(in []Entity) []Entity {
 func isEntry(a *Asset, f Finding) bool {
 	switch a.Type {
 	case "web_application", "api", "ip_address", "domain":
+		return f.Verified || sevRank(f.Severity) <= sevRank("high")
+	case "workspace", "saas":
+		// A compromised IDENTITY is a real entry point: a no-MFA admin, a leaked credential, or an
+		// over-privileged OAuth app is how an attacker gets IN (phish / credential theft / app compromise),
+		// then pivots via the shared principal (email/app) to cloud or code. High+ only, same bar as the rest.
 		return f.Verified || sevRank(f.Severity) <= sevRank("high")
 	}
 	return false
