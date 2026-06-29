@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Cloud, ArrowUpRight } from "lucide-react";
+import { Sparkles, Cloud, ShieldCheck, Wrench, ArrowUpRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { PageIntro } from "@/components/ui/page-intro";
 import { GenerateBrief } from "@/components/brief/generate-brief";
@@ -7,48 +7,80 @@ import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-// The plain-English security brief — the L2 Lead/translator turns the raw findings into the deliverable
-// a founder / non-security team can actually act on (exec summary, what to do next, prioritized issues).
-export default async function BriefPage() {
-  // Fetch the scope so the founder sees WHAT the brief covers + how fresh the data is BEFORE generating —
-  // a brief built on a stale or empty scan should say so (coverage honesty), not look authoritative by default.
+// The AI Security Engineer console — agentic ACTION cards (NOT a chat box; docs/product-restructure.md).
+// Each action runs a bounded agent over the tenant's REAL findings: triage/brief (l2 translate), cloud
+// deep-dive (cloudagent), compliance fixes (vCISO remediation), auto-fix (per-finding patch). Grounded
+// (§10 — never fabricates); anything it would change routes through the HITL gate.
+const ACTIONS = [
+  {
+    href: "/cloud-engineer",
+    icon: Cloud,
+    title: "Cloud deep-dive",
+    desc: "Run the cloud specialist over your cloud graph — IAM effective permissions, reachability, and the attack paths that actually reach a crown jewel.",
+  },
+  {
+    href: "/compliance",
+    icon: ShieldCheck,
+    title: "Compliance fixes & evidence",
+    desc: "Turn each control gap into concrete, grounded remediation steps and signed, auditor-ready evidence.",
+  },
+  {
+    href: "/issues",
+    icon: Wrench,
+    title: "Auto-fix a finding",
+    desc: "Open an issue and hit Fix — the engineer generates the patch (PR / config) and routes it to you for approval.",
+  },
+];
+
+export default async function EngineerConsolePage() {
+  // Scope so the founder sees WHAT the engineer reasons over (coverage honesty) before triggering an action.
   const [findings, assets, engagements] = await Promise.all([api.findings(), api.assets(), api.engagements()]);
   const freshest = engagements.map((e) => e.completed_at).filter(Boolean).sort().pop();
 
   return (
     <div className="space-y-8">
       <PageIntro
-        icon={FileText}
-        title="Plain-English brief"
-        description="Your findings, translated by the AI security engineer into a report a non-security team can act on — an executive summary, the prioritized issues that actually matter, and what to do next. The same grounded findings, explained in plain English. Whoever owns the judgment (your team, your MSP's expert, or our hired expert) reviews it and signs off."
+        icon={Sparkles}
+        title="AI Security Engineer"
+        description="Pick an action — your AI security engineer reads your real findings, digs deeper, and proposes what to fix. Grounded in evidence, nothing invented; anything it changes is routed to you (or your expert) for approval."
       />
       {findings.length > 0 && (
         <p className="text-xs leading-relaxed text-muted">
-          This brief will cover{" "}
+          Reasoning over{" "}
           <span className="font-medium text-ink">{findings.length} finding{findings.length === 1 ? "" : "s"}</span> across{" "}
-          <span className="font-medium text-ink">{assets.length} monitored asset{assets.length === 1 ? "" : "s"}</span>
+          <span className="font-medium text-ink">{assets.length} asset{assets.length === 1 ? "" : "s"}</span>
           {freshest ? <> · freshest scan {timeAgo(freshest)}</> : null}.
         </p>
       )}
-      <GenerateBrief />
 
-      {/* The engineer delegates deep cloud-graph reasoning to the cloud specialist (the investigate_cloud
-          tool, #727) — surfaced here so it reads as a depth lens of THIS engineer, not a separate persona. */}
-      <Link
-        href="/cloud-engineer"
-        className="group flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition hover:border-accent/40"
-      >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
-          <Cloud className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-ink">Cloud depth</div>
-          <div className="text-xs text-muted">
-            For IAM effective permissions, reachability, and proven attack paths, the engineer delegates to the cloud specialist.
-          </div>
+      {/* Primary agentic action — Triage & brief (the l2 translate agent over the whole estate). */}
+      <section className="rounded-2xl border border-accent/30 bg-accent-soft/20 p-5">
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent">Triage &amp; prioritize</div>
+        <p className="mb-4 text-sm leading-relaxed text-muted">
+          One click: the engineer prioritizes everything that matters, chains it across surfaces, and writes a
+          plain-English brief you can forward to a board, an investor, or a customer.
+        </p>
+        <GenerateBrief />
+      </section>
+
+      {/* More agentic actions — each triggers a real agent over your findings (not a chat). */}
+      <section>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-faint">More actions</div>
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          {ACTIONS.map(({ href, icon: Icon, title, desc }) => (
+            <Link key={href} href={href} className="card group flex items-start gap-3 p-4 transition hover:border-accent/40">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+                <Icon className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ink">{title}</div>
+                <div className="text-xs leading-relaxed text-muted">{desc}</div>
+              </div>
+              <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-faint transition group-hover:text-accent" />
+            </Link>
+          ))}
         </div>
-        <ArrowUpRight className="h-4 w-4 shrink-0 text-faint transition group-hover:text-accent" />
-      </Link>
+      </section>
     </div>
   );
 }
