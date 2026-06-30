@@ -135,3 +135,50 @@
     animation: shimmer 1.4s infinite;
   }
 }
+
+/* AttackPathHero — the cross-surface chain draws itself in. The global prefers-reduced-motion guard
+   (above) collapses these durations to ~0, and animation-fill-mode:forwards holds the END state, so
+   reduced-motion users see the fully-drawn graph (offset 0 / opacity 1), just without the motion. */
+@keyframes aph-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes aph-pop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.draw-path {
+  stroke-dasharray: var(--len, 240);
+  stroke-dashoffset: var(--len, 240);
+  animation: aph-draw 0.9s ease-out 0.15s forwards;
+}
+.draw-path-2 {
+  animation-delay: 0.55s;
+}
+.draw-path-3 {
+  animation-delay: 0.95s;
+}
+.node-pop {
+  opacity: 0;
+  animation: aph-pop 0.5s ease-out forwards;
+}
+.node-pop-2 {
+  animation-delay: 0.12s;
+}
+.node-pop-3 {
+  animation-delay: 0.4s;
+}
+.node-pop-4 {
+  animation-delay: 0.85s;
+}
+/* keep node labels legible when the graph scales down on a phone: drop the edge annotations */
+@media (max-width: 420px) {
+  .ap-edge-label {
+    display: none;
+  }
+}

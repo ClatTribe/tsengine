@@ -5,7 +5,7 @@ import {
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
-import { LiveConsole } from "@/components/marketing/live-console";
+import { AttackPathHero } from "@/components/marketing/attack-path-hero";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
 import { EngageModels } from "@/components/marketing/engage-models";
@@ -16,9 +16,9 @@ import { ArchStack } from "@/components/marketing/arch-stack";
 import { AgenticActions } from "@/components/marketing/agentic-actions";
 
 export const metadata = {
-  title: "TensorShield — pass the security review, close the deal",
+  title: "TensorShield — one AI engineer that finds the attack path across code, cloud, and SaaS",
   description:
-    "Enterprise deals stall on security questionnaires, SOC 2, and pentests. TensorShield handles all of it — finds, fixes, and proves your security, with a named expert in the loop where judgment matters. No security hire required.",
+    "Connect your code, cloud, and SaaS. One AI engineer finds the attack path across all three — from a leaked key to your cloud root — and fixes it, with a named human signing the risky calls. SOC 2 and compliance built in.",
   alternates: { canonical: "/" },
 };
 
@@ -45,13 +45,12 @@ export default function Landing() {
               </Link>
 
               <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
-                Enterprise deals stall on security.{" "}
-                <span className="text-accent">Stop losing them.</span>
+                One leaked secret is all it takes to reach{" "}
+                <span className="text-accent">your cloud root.</span>
               </h1>
               <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-                The questionnaire, the SOC 2, the pentest your biggest customer is asking for — TensorShield handles it.
-                An AI security engineer finds and fixes it, an AI pentester proves it by exploitation, and a named human
-                signs the calls that matter — across code, cloud, and identity. No security hire required.
+                TensorShield connects your code, cloud, and SaaS, walks every attack path an attacker could, and shuts
+                it. One AI engineer finds the chain across all three and fixes it — a named human signs the risky calls.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
@@ -65,18 +64,18 @@ export default function Landing() {
                   href="/product"
                   className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-border-strong"
                 >
-                  See how it works
+                  See how the attack path works
                 </Link>
               </div>
-              <p className="mt-4 text-xs text-faint">SOC 2 · ISO 27001 · GDPR · HIPAA · +18 more · No credit card to start</p>
+              <p className="mt-4 text-xs text-faint">Connect code, cloud, and SaaS · SOC 2 · ISO 27001 · +20 more · No credit card to start</p>
               <Link href="/scan" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
-                Or check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
+                Founder, not security? Check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
 
-            {/* live product preview */}
-            <div className="animate-fade-rise">
-              <LiveConsole />
+            {/* the cross-surface attack path — code + SaaS bridge to cloud root (the wedge, visualized) */}
+            <div>
+              <AttackPathHero />
             </div>
           </div>
 
