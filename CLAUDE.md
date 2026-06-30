@@ -611,7 +611,7 @@ honest credential/sandbox gate for live execution (full design + per-asset plan:
 | Package | Asset Â· gap (vs leader) | What it is |
 |---|---|---|
 | `internal/apiauthz` | **api** Â· BOLA/BFLA authz (vs Akto) | The Â§13 **no-OSS exception** (authz is business logic): a differential test â replay the victim's request as the attacker; `Evaluate` flags a bypass only on a proven 2xx-with-victim-data (BOLA) / undenied privileged call (BFLA), so a hit is `verification: verified`. Live prober gated (active + consent). |
-| `internal/prbot` | **repository** Â· PR-inline review bot (vs Aikido/Snyk) | `Build(findings, changedFiles, blockAt)` â inline comments **only on PR-changed lines** + a check-run `success/neutral/failure`. Live GitHub post gated on the App PR scope. |
+| `internal/prbot` | **repository** Â· PR-inline review bot (vs Aikido/Snyk) | `Build(findings, changedFiles, blockAt)` â inline comments **only on PR-changed lines** + a check-run `success/neutral/failure`. CI entry point `POST /v1/ci/pr-check` (+ `docs/ci/github-action.yml`) runs the merge-gate from any CI via the check's exit code; live GitHub inline-post gated on the App PR scope. |
 | `internal/webauth` | **web** Â· authenticated-scan reliability (vs Probely/Detectify) | `LoginFlow{form/token/recorded}` + `ValidateSession` ("am I authed?") + `IsLoginWall` ("session expired â re-auth") â the FN guard against silently scanning logged-out. Live replay gated (sandbox seed_auth). |
 | `internal/registrywatch` | **container** Â· scan-on-push (vs Aikido/Snyk) | `Reconcile(current, seen)` digest-diff â scan only new/re-pushed images. Live registry listing gated (connector). |
 | `internal/identitythreat` | **identity** Â· real-time ITDR (vs Nudge/Push) | `Detect(events)` rules: impossible_travel, privileged_grant, mfa_removed, password_spray, distributed_spray, mfa_fatigue, concurrent_session (two logins from different IPs within a tight window → session-token reuse, distinct from travel which needs different countries), mfa_removed_then_access (MFA disabled then a login from a new IP → the account-takeover sequence) â LLM-free, grounded. Live IdP-audit ingestion gated. |
@@ -648,6 +648,22 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
   So all three clouds now have a live, HITL-gated, SDK-backed public-storage remediation; each SDK is isolated
   in its own `*remediate` package so the core `connector` stays SDK-free. **api/web** â apiauthz/webauth live
   execution is active testing â behind the explicit-consent + sandbox gate.
+- **THE CROSS-SURFACE WEDGE** ("connect code, cloud, SaaS -> one AI engineer finds the attack path across all
+  three and fixes it") -- the homepage leads with it (`AttackPathHero`: a code-leaked-key + breached-SaaS-login
+  graph bridging through cloud IAM to a `cloud root` crown; H1 "One leaked secret is all it takes to reach your
+  cloud root"; two front doors kept -- `/scan` for founders, the attack path for security buyers). Its three
+  integration halves: (1) **cloud fuel** -- `internal/connector/awsinventory.Build(RawAWS) -> cloudgraph.Inventory`
+  (grounded mapper: trust edges only from real assume-role policies, internet-reach only when a SG actually opens
+  the port via `cloudgraph.InternetReachable`, admin -> Privileged, sensitive bucket -> KindData; SDK isolated,
+  live `describe-*` = gated half) feeds `POST /v1/cloud/inventory` (posted raw AWS state -> stored cloudsnap -> the
+  AI cloud engineer/drift/search reason over the REAL account, mirroring `/v1/osint/ingest`). (2) **cloud "fixes
+  it"** -- a leaked AWS key (the code->cloud entry point) gets `remediate`'s `aws_key_revoke` directive (revoke in
+  cloud, then scrub code; key id via AKIA regex, grounded), gated like `iam_restrict` until a live IAM-write
+  connector lands. (3) **the check in the PR** -- `POST /v1/ci/pr-check` + `docs/ci/github-action.yml` run
+  `prbot.Build`'s merge-gate in CI (high+ finding on a changed line -> non-zero exit blocks the merge; disabled
+  policy -> neutral), surfaced as a copy-paste snippet in the PR-bot settings panel; the live GitHub inline-post
+  is the gated half. All three offline-tested cores ship; live AWS SDK fetch + live IAM/key write + live GitHub
+  post are the honest credential/scope-gated halves.
 
 **Config surfaces (the per-asset setup half, end-to-end UX + API)** â each stores its config + drives the
 core; the live *execution* stays each core's gated half:
