@@ -129,6 +129,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                        // the current tenant (org name/plan) for Settings
 	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                             // per-tenant LLM config (provider/model + has_key)
 	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                             // set provider/model + seal the API key
+	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                  // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
 	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                        // repository PR-review-bot policy (ADR 0010)
 	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                        // set enable + merge-gating block severity
 	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                // per-tenant Slack incident webhook (has_slack_webhook)

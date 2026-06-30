@@ -1,0 +1,64 @@
+# TensorShield — PR security gate (composite GitHub Action template)
+#
+# Drop this into your repo (e.g. .github/actions/tsengine-pr-check/action.yml) and reference it from a
+# pull_request workflow, OR copy the `run:` step into an existing job. It posts the PR's changed lines +
+# the findings from a prior `tsengine scan` step to the platform and FAILS the check when a high+ finding
+# lands on a changed line — the cross-surface attack-path gate where the developer lives, in the PR.
+#
+# Secrets the workflow needs:
+#   TENSORSHIELD_URL    your platform base URL (e.g. https://app.tensorshield.example)
+#   TENSORSHIELD_TOKEN  a tenant API token (X-Tenant-ID is carried by the session token)
+#
+# The live inline-comment post to GitHub is the gated half (the GitHub App PR-write scope); this gate
+# works today from the check's exit code alone.
+
+name: "TensorShield PR security gate"
+description: "Fail the PR when a high+ security finding lands on a changed line (cross-surface attack-path aware)."
+runs:
+  using: "composite"
+  steps:
+    - name: TensorShield PR check
+      shell: bash
+      env:
+        TENSORSHIELD_URL: ${{ env.TENSORSHIELD_URL }}
+        TENSORSHIELD_TOKEN: ${{ env.TENSORSHIELD_TOKEN }}
+      run: |
+        set -euo pipefail
+        BASE="${GITHUB_BASE_REF:-main}"
+        git fetch --no-tags --depth=1 origin "$BASE" || true
+
+        # 1. changed_files: each changed file + the new-side line numbers it added/modified.
+        python3 - "$BASE" > /tmp/changed.json <<'PY'
+        import json, subprocess, sys, re
+        base = sys.argv[1]
+        diff = subprocess.run(["git","diff","--unified=0",f"origin/{base}...HEAD"],
+                              capture_output=True, text=True).stdout
+        files, cur = {}, None
+        for ln in diff.splitlines():
+            if ln.startswith("+++ b/"):
+                cur = ln[6:]; files.setdefault(cur, set())
+            elif ln.startswith("@@") and cur is not None:
+                m = re.search(r"\+(\d+)(?:,(\d+))?", ln)
+                if m:
+                    s = int(m.group(1)); n = int(m.group(2) or 1)
+                    for i in range(s, s+n): files[cur].add(i)
+        print(json.dumps([{"path": p, "lines": sorted(v)} for p, v in files.items()]))
+        PY
+
+        # 2. findings: from a prior `tsengine scan ... --json findings.json` step (vulnerabilities.json
+        #    findings_raw). Empty array if you have no scan step yet — the gate then just no-ops green.
+        FINDINGS="${TSENGINE_FINDINGS_JSON:-[]}"
+        [ -f findings.json ] && FINDINGS="$(cat findings.json)"
+
+        jq -n --argjson cf "$(cat /tmp/changed.json)" --argjson f "$FINDINGS" \
+          '{changed_files:$cf, findings:$f}' > /tmp/body.json
+
+        # 3. ask the gate; fail the build when blocked.
+        RESP="$(curl -sS -X POST "$TENSORSHIELD_URL/v1/ci/pr-check" \
+          -H "Authorization: Bearer $TENSORSHIELD_TOKEN" \
+          -H "Content-Type: application/json" --data @/tmp/body.json)"
+        echo "$RESP" | jq .
+        if [ "$(echo "$RESP" | jq -r '.blocked')" = "true" ]; then
+          echo "::error::TensorShield blocked this PR — a high+ security finding was introduced on a changed line."
+          exit 1
+        fi
