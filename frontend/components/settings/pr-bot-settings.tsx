@@ -1,9 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { GitPullRequest, Loader2, Check } from "lucide-react";
+import { GitPullRequest, Loader2, Check, Terminal, Copy } from "lucide-react";
 import { setPRBotPolicy } from "@/app/(app)/settings/actions";
 import type { PRBotSettings } from "@/lib/types";
+
+// The copy-paste CI gate: post the PR's changed lines + the scan findings to /v1/ci/pr-check; the call
+// exits non-zero (fails the build) when a high+ finding lands on a changed line. Works in any CI today —
+// the GitHub-App inline-comment post is the only gated half. Full GitHub Action: docs/ci/github-action.yml.
+const CI_SNIPPET = `# Fail the PR when a high+ finding lands on a changed line (any CI).
+curl -sS -X POST "$TENSORSHIELD_URL/v1/ci/pr-check" \\
+  -H "Authorization: Bearer $TENSORSHIELD_TOKEN" \\
+  -d "$(jq -n --argjson cf "$CHANGED_FILES" --argjson f "$FINDINGS" \\
+        '{changed_files:$cf, findings:$f}')" \\
+  | jq -e '.blocked == false'   # non-zero exit blocks the merge`;
 
 // PRBotSettingsPanel configures the repository PR-review bot: post inline review comments on
 // PR-changed lines + a merge-gating check-run that fails at/above a severity floor. The live
@@ -21,7 +31,15 @@ export function PRBotSettingsPanel({ initial }: { initial: PRBotSettings }) {
   const [blockSeverity, setBlockSeverity] = useState(initial.block_severity || "off");
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState("");
+  const [copied, setCopied] = useState(false);
   const [pending, start] = useTransition();
+
+  function copySnippet() {
+    navigator.clipboard?.writeText(CI_SNIPPET).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
 
   function save() {
     setErr("");
@@ -84,6 +102,29 @@ export function PRBotSettingsPanel({ initial }: { initial: PRBotSettings }) {
         </div>
       )}
       {err && <div className="rounded-lg bg-critical/10 px-3 py-2 text-xs text-critical">{err}</div>}
+
+      <details className="rounded-lg border border-border bg-surface-2/40 px-3 py-2 text-xs">
+        <summary className="flex cursor-pointer items-center gap-2 font-medium text-ink">
+          <Terminal className="h-3.5 w-3.5 text-accent" /> Run the gate in CI (GitHub, GitLab, any)
+        </summary>
+        <p className="mt-2 text-muted">
+          Don&apos;t want to wait for the GitHub App? Fail the build directly from CI — POST the PR&apos;s
+          changed lines + your scan findings and the call exits non-zero when a high+ finding lands on a
+          changed line. Full GitHub Action:{" "}
+          <code className="mono text-accent">docs/ci/github-action.yml</code>.
+        </p>
+        <div className="relative mt-2">
+          <pre className="overflow-x-auto rounded-lg bg-ink/90 p-3 text-[11px] leading-relaxed text-surface">
+            {CI_SNIPPET}
+          </pre>
+          <button
+            onClick={copySnippet}
+            className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-surface/15 px-2 py-1 text-[11px] font-medium text-surface transition hover:bg-surface/25"
+          >
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />} {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </details>
     </div>
   );
 }
