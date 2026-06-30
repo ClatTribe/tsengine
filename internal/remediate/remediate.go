@@ -37,18 +37,30 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		if full == "" {
 			full = asset.Target
 		}
+		payload := map[string]any{
+			// both SCM shapes; each connector reads what it needs (github: full_name; gitlab: path)
+			"full_name": full,
+			"path":      nz(asset.Meta["path"], full),
+			"base":      "main",
+			"head":      "tsengine/fix-" + f.ID,
+			"body":      fixBody(f),
+		}
+		// Cross-surface fix: a leaked CLOUD access key found IN CODE is already compromised — scrubbing the
+		// repo is not enough, it must be REVOKED in the cloud. Carry the revoke as a machine-readable
+		// directive + the key id (grounded) so a future cloud-containment connector promotes it to a live
+		// IAM mutation; the PR body leads with the revoke. This is the wedge's code→cloud "fixes it".
+		if isLeakedAWSKeyFinding(f) {
+			payload["remediation_type"] = rtypeKeyRevoke
+			if kid := awsKeyID(f); kid != "" {
+				payload["key_id"] = kid
+			}
+			payload["body"] = keyRevokeBody(f) + "\n\n" + fixBody(f)
+		}
 		return platform.Action{
 			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 			Kind: platform.ActOpenPR, Tier: tierOpenPR, Status: platform.ActProposed,
-			Title: "tsengine: fix " + f.Title,
-			Payload: map[string]any{
-				// both SCM shapes; each connector reads what it needs (github: full_name; gitlab: path)
-				"full_name": full,
-				"path":      nz(asset.Meta["path"], full),
-				"base":      "main",
-				"head":      "tsengine/fix-" + f.ID,
-				"body":      fixBody(f),
-			},
+			Title:   "tsengine: fix " + f.Title,
+			Payload: payload,
 		}, true
 	case "cloud_account":
 		// Account-scoped runbook by default; when the finding has a live, reversible
