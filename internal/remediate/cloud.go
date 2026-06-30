@@ -1,6 +1,8 @@
 package remediate
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -75,4 +77,54 @@ func isPublicStorageFinding(f types.Finding) bool {
 	hay := strings.ToLower(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
 	return strings.Contains(hay, "public") &&
 		(strings.Contains(hay, "s3") || strings.Contains(hay, "bucket") || strings.Contains(hay, "gcs") || strings.Contains(hay, "storage"))
+}
+
+// rtypeKeyRevoke labels the CROSS-SURFACE fix for a leaked cloud access key — the wedge's classic entry
+// point: a key committed to a repo. Removing it from code is NOT sufficient (the key is compromised the
+// moment it lands in git); the right fix is REVOKING it in the cloud. The repo PR scrubs the code; this
+// remediation_type + the key id name the revoke so a future cloud-containment connector can promote it to
+// a live IAM mutation (today gated, like rtypeIAMRestrict). This is "fixes it across all three" for the
+// finding that bridges code → cloud root.
+const rtypeKeyRevoke = "aws_key_revoke"
+
+// akiaRe matches an AWS access key id (AKIA/ASIA + 16 base32 chars) — the grounded extractor.
+var akiaRe = regexp.MustCompile(`(?:AKIA|ASIA)[A-Z0-9]{16}`)
+
+// isLeakedAWSKeyFinding reports whether a finding is a leaked AWS access key (a secret scanner's AWS-key
+// rule, or any finding whose evidence carries an AKIA/ASIA key id). Grounded: matches the finding's own
+// text, never a guess.
+func isLeakedAWSKeyFinding(f types.Finding) bool {
+	hay := f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint
+	if akiaRe.MatchString(hay) {
+		return true
+	}
+	low := strings.ToLower(hay)
+	return strings.Contains(low, "aws") &&
+		(strings.Contains(low, "access key") || strings.Contains(low, "access-key") ||
+			strings.Contains(low, "access-token") || strings.Contains(low, "access token") ||
+			strings.Contains(low, "secret key") || strings.Contains(low, "secret access"))
+}
+
+// awsKeyID extracts the leaked access key id (AKIA/ASIA…) from the finding, or "" if none is present
+// (secret scanners often redact the value — then the revoke names the key generically, never invented).
+func awsKeyID(f types.Finding) string {
+	return akiaRe.FindString(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
+}
+
+// keyRevokeBody is the PR/runbook body for a leaked key: lead with the revoke (the code scrub is secondary).
+func keyRevokeBody(f types.Finding) string {
+	kid := awsKeyID(f)
+	named := kid
+	if named == "" {
+		named = "the leaked key"
+	}
+	placeholder := kid
+	if placeholder == "" {
+		placeholder = "<ACCESS_KEY_ID>"
+	}
+	return fmt.Sprintf(`CRITICAL — leaked AWS access key (%s). This key is compromised the moment it hit the repo; removing it from code is NOT enough. Revoke it in the cloud first:
+  1. aws iam update-access-key --access-key-id %s --status Inactive
+  2. confirm nothing breaks, then: aws iam delete-access-key --access-key-id %s
+  3. rotate any credential that depended on it
+Then this PR scrubs the secret from the codebase.`, named, placeholder, placeholder)
 }
