@@ -26,52 +26,55 @@ import (
 
 // RawAWS mirrors the SUBSET of AWS list-/describe- output the mapper reads. Pure data (no SDK types) so
 // Build is unit-testable with fixtures and the SDK stays behind Fetcher.
+// JSON tags make RawAWS a wire format too: an external collector with AWS creds (a CI job, the customer's
+// own script) can POST this raw shape to /v1/cloud/inventory and the platform maps + stores it — the same
+// posted-snapshot pattern as /v1/osint/ingest, with the live SDK fetch as the gated alternative.
 type RawAWS struct {
-	AccountID string
-	Users     []RawIAMUser
-	Roles     []RawIAMRole
-	SGs       []RawSecurityGroup
-	Instances []RawInstance
-	Buckets   []RawBucket
+	AccountID string             `json:"account_id"`
+	Users     []RawIAMUser       `json:"users,omitempty"`
+	Roles     []RawIAMRole       `json:"roles,omitempty"`
+	SGs       []RawSecurityGroup `json:"security_groups,omitempty"`
+	Instances []RawInstance      `json:"instances,omitempty"`
+	Buckets   []RawBucket        `json:"buckets,omitempty"`
 }
 
 // RawIAMUser / RawIAMRole carry the identity + a fetcher-resolved Admin flag (an attached/inline policy
 // grants admin-equivalent — AdministratorAccess or *:*). The role also carries its verbatim trust policy.
 type RawIAMUser struct {
-	ARN   string
-	Name  string
-	Admin bool
+	ARN   string `json:"arn"`
+	Name  string `json:"name,omitempty"`
+	Admin bool   `json:"admin,omitempty"`
 }
 type RawIAMRole struct {
-	ARN             string
-	Name            string
-	Admin           bool
-	TrustPolicyJSON string
+	ARN             string `json:"arn"`
+	Name            string `json:"name,omitempty"`
+	Admin           bool   `json:"admin,omitempty"`
+	TrustPolicyJSON string `json:"trust_policy,omitempty"`
 }
 
 // RawSecurityGroup carries the normalized ingress rules (a JSON array of cloudgraph.SGRule) for one SG.
 type RawSecurityGroup struct {
-	ID          string
-	IngressJSON string
+	ID          string `json:"id"`
+	IngressJSON string `json:"ingress,omitempty"`
 }
 
 // RawInstance is a compute resource; PublicIP + SGIDs + ServicePort drive the grounded reachability eval.
 type RawInstance struct {
-	ID           string
-	Region       string
-	PublicIP     bool
-	SGIDs        []string
-	ServicePort  int    // primary listening port; 0 = unknown → never asserts an internet edge
-	ServiceProto string // "tcp" (default) | "udp"
+	ID           string   `json:"id"`
+	Region       string   `json:"region,omitempty"`
+	PublicIP     bool     `json:"public_ip,omitempty"`
+	SGIDs        []string `json:"security_group_ids,omitempty"`
+	ServicePort  int      `json:"service_port,omitempty"`  // primary listening port; 0 = unknown → no internet edge
+	ServiceProto string   `json:"service_proto,omitempty"` // "tcp" (default) | "udp"
 }
 
 // RawBucket is an object store; Public + Sensitive are fetcher-resolved (public-access-block / tags).
 type RawBucket struct {
-	ARN       string
-	Name      string
-	Region    string
-	Public    bool
-	Sensitive bool
+	ARN       string `json:"arn,omitempty"`
+	Name      string `json:"name"`
+	Region    string `json:"region,omitempty"`
+	Public    bool   `json:"public,omitempty"`
+	Sensitive bool   `json:"sensitive,omitempty"`
 }
 
 // Build maps the raw AWS subset into a cloudgraph.Inventory. Pure + grounded (§10).
