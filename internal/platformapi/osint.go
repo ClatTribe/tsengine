@@ -43,6 +43,7 @@ func (d Deps) handleIngestOSINT(w http.ResponseWriter, r *http.Request, tenantID
 // the live keyless scan. Returns the findings (never nil) + counts.
 func (d Deps) ingestOSINTSnapshot(ctx context.Context, tenantID string, snap osint.Snapshot, recLabel string) ([]types.Finding, int, int) {
 	findings := osint.Assess(snap, osint.Options{})
+	findings = enrichFindings(findings) // L1.5 parity: enrich platform-native findings like engine-scanned ones (§11)
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {

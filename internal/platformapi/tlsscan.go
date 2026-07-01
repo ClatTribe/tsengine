@@ -62,6 +62,7 @@ func (d Deps) handleTLSScan(w http.ResponseWriter, r *http.Request, tenantID str
 			continue // handshake failed → no finding (we don't guess), not fatal
 		}
 		scanned++
+		fs = enrichFindings(fs) // L1.5 parity (§11)
 		for _, f := range fs {
 			if err := d.Store.PutFinding(r.Context(), tenantID, f); err == nil {
 				saved = append(saved, f)

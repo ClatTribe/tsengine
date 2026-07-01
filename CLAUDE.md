@@ -498,6 +498,20 @@ When the host tracer's `Add(finding)` is called, hooks fire in this order. Each 
 
 `findings_raw` is captured **before** hook 1 â that's what the security engineer reads. `findings_enriched` is the post-hook view. Both ship.
 
+**The chain runs on BOTH doors, not just the engine.** Engine-scanned findings (repo/container/web/
+cloud/etc.) reach the host tracer via the sandbox sidecar (Sec 12.4), so the hooks fire on them by
+construction. Findings that enter through the platform's OWN ingest paths -- identity events, OSINT
+snapshots, SaaS posture, TPRM, device posture, cloud drift (config + CDR), TLS scan -- used to call
+`Store.PutFinding` directly and land UN-enriched (no threat-intel, no exploitability, no confidence;
+any CVE they carried never got KEV/EPSS). `platformapi.enrichFindings` (`internal/platformapi/enrich.go`)
+closes that asymmetry: each ingest handler runs the batch through a host-side `tracer.New(DefaultPerFinding,
+DefaultFinalize)` before storing, so a finding is enriched the same way no matter which door it came in.
+Safe for posture/config classes: the `compliance.map` hook MERGES (never clobbers) the inline mapping
+each detector already set, and threat_intel/service_eol/exploitability no-op without a CVE/product/
+critical-CWE -- so a config finding keeps its inline compliance and gains corroboration+confidence, while
+a CVE-bearing one also gains KEV/EPSS. Honors `TSENGINE_L15_DISABLED`. (Not yet wired: `cloudinvestigate.go`,
+which builds a finding per L2 Issue inline -- the documented follow-on.)
+
 If you add a new hook, **append it to this list in CLAUDE.md** so the order stays documented.
 
 ---

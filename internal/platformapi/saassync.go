@@ -52,6 +52,7 @@ func (d Deps) handleSyncSaaSGitHub(w http.ResponseWriter, r *http.Request, tenan
 		return
 	}
 	findings := sspm.AssessGitHubOrg(snap, sspm.Options{})
+	findings = enrichFindings(findings) // L1.5 parity (§11)
 
 	stored := 0
 	for _, f := range findings {

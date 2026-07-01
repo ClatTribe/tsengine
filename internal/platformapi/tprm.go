@@ -38,6 +38,7 @@ func (d Deps) handleTPRMIngest(w http.ResponseWriter, r *http.Request, tenantID 
 	}
 
 	findings := tprm.Assess(req.Vendors, tprm.Options{})
+	findings = enrichFindings(findings) // L1.5 parity (§11)
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {

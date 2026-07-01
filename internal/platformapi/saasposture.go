@@ -36,6 +36,7 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 
+	findings = enrichFindings(findings) // L1.5 parity (§11)
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for _, f := range findings {
