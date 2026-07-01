@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Spline, Crown, ArrowRight, Globe, Cloud, GitBranch, Server, Network, Smartphone, KeyRound, ShieldCheck, ShieldAlert, Bug } from "lucide-react";
 import { api } from "@/lib/api";
 import type { AttackPath, AttackStep } from "@/lib/types";
@@ -7,8 +8,12 @@ import { PageIntro } from "@/components/ui/page-intro";
 export const dynamic = "force-dynamic";
 
 export default async function AttackPathsPage() {
-  const { attack_paths: paths } = await api.attackPaths();
+  const [{ attack_paths: paths }, conns] = await Promise.all([api.attackPaths(), api.connections()]);
   const sorted = [...paths].sort((a, b) => sevRank(a.severity) - sevRank(b.severity));
+  // Grounded: every attack path terminates at a cloud crown jewel (cloud_account is the only crown in the
+  // correlation graph). So with NO cloud connected, there can be no paths at all — nudge connecting one
+  // rather than implying a clean posture.
+  const hasCloud = conns.some((c) => c.kind === "aws" || c.kind === "gcp" || c.kind === "azure");
 
   return (
     <div className="space-y-6">
@@ -29,12 +34,33 @@ export default async function AttackPathsPage() {
       {/* Always-on explainer so the page is self-evident even at zero paths. */}
       <HowItWorks />
 
-      {sorted.length === 0 ? (
+      {sorted.length === 0 && !hasCloud ? (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-accent/30 bg-accent-soft/30 px-5 py-4 text-sm">
+            <div className="flex items-center gap-2 font-medium text-ink">
+              <Cloud className="h-4 w-4 text-accent" /> Connect your cloud to see the full attack path
+            </div>
+            <p className="mt-1.5 text-muted">
+              Every attack path ends at your cloud root — a leaked key in code or a breached SaaS login only
+              becomes a <span className="font-medium text-ink">breach</span> once it reaches your cloud. Without a
+              cloud connected we can map the on‑ramps (code, SaaS) but not where they lead. Connect AWS, GCP, or
+              Azure and the chains appear.
+            </p>
+            <Link
+              href="/assets"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-accent-hover"
+            >
+              Connect a cloud <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <PathCard path={EXAMPLE_PATH} example />
+        </div>
+      ) : sorted.length === 0 ? (
         <div className="space-y-3">
           <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-muted">
             <span className="font-medium text-ink">No attack paths right now — that&apos;s good.</span> It means no
-            single weakness currently chains all the way to something valuable. Connect more of your stack (code,
-            cloud, web, apps) so we can spot chains the moment one appears. Here&apos;s what one looks like:
+            single weakness currently chains all the way to your cloud root. We&apos;ll spot a chain the moment one
+            appears. Here&apos;s what one looks like:
           </div>
           <PathCard path={EXAMPLE_PATH} example />
         </div>
