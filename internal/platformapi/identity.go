@@ -36,6 +36,7 @@ func (d Deps) handleIngestIdentityEvents(w http.ResponseWriter, r *http.Request,
 
 	threats := identitythreat.Detect(events, identitythreat.Config{})
 	findings := identitythreat.Findings(threats)
+	findings = enrichFindings(findings) // L1.5 parity (§11) — threat-intel/exploitability/confidence + the CWE→control map below stays as the L15-disabled fallback
 	// Map each identity threat to the compliance controls it affects (§8) — these are access-control /
 	// authentication issues, so an MFA-removed or privileged-grant IS a SOC 2 CC6.x / NIST IA-2 gap.
 	// Without this they'd carry no control mapping and never surface in the founder's compliance posture.

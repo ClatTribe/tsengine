@@ -42,6 +42,7 @@ func (d Deps) handleCloudDrift(w http.ResponseWriter, r *http.Request, tenantID 
 	prev := cloudgraph.Ingest(req.Prev)
 	cur := cloudgraph.Ingest(req.Cur)
 	findings := clouddrift.Diff(prev, cur, clouddrift.Options{})
+	findings = enrichFindings(findings) // L1.5 parity (§11)
 
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))

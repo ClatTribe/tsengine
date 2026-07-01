@@ -32,6 +32,7 @@ func (d Deps) handleDevicePostureIngest(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	findings := deviceposture.Assess(req.Devices, deviceposture.Options{})
+	findings = enrichFindings(findings) // L1.5 parity (§11)
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {

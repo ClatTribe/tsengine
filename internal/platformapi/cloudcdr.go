@@ -36,6 +36,7 @@ func (d Deps) handleIngestCloudEvents(w http.ResponseWriter, r *http.Request, te
 
 	threats := cloudcdr.Detect(events)
 	findings := cloudcdr.Findings(threats)
+	findings = enrichFindings(findings) // L1.5 parity (§11)
 	stored := 0
 	for _, f := range findings {
 		f.ID = d.newID("cdr")
