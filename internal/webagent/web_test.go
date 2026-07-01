@@ -82,6 +82,66 @@ func TestInvestigate_FindsAndVerifiesSQLi(t *testing.T) {
 	}
 }
 
+// TestEvidenceCapture_HoldsDeepFlag locks in the fix that makes XBOW-style flag capture possible:
+// the evidence RECORDED on a Turn must be large enough to contain an exploited artifact (a captured
+// flag / secret) that sits PAST the 240-byte LLM-facing snippet. With the old 240B cap the flag was
+// truncated away, so a genuinely-exploited app graded as "no capture" — a harness blind spot, not a
+// model failure. The LLM still only sees the tight 240B snippet (token budget + prompt-injection
+// surface); this asserts the recorded evidence sees enough to prove the capture.
+func TestEvidenceCapture_HoldsDeepFlag(t *testing.T) {
+	const flag = "FLAG{deep_secret_past_byte_240_aabbccddeeff0011}"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, strings.Repeat("x", 1000)+flag) // 1000B of filler, THEN the flag — well past 240B
+	}))
+	defer srv.Close()
+
+	steps := []string{
+		fmt.Sprintf(`{"thought":"exfil","tool":"send_request","args":{"method":"GET","url":%q}}`, srv.URL+"/loot"),
+		`{"thought":"done","tool":"finish","args":{"summary":"fetched the loot"}}`,
+	}
+	cc := &Context{Target: srv.URL}
+	if _, err := Investigate(context.Background(), &scriptLLM{steps: steps}, cc, Options{MaxRequests: 5}); err != nil {
+		t.Fatalf("Investigate: %v", err)
+	}
+	if len(cc.History) == 0 {
+		t.Fatal("no turns recorded")
+	}
+	if !strings.Contains(cc.History[0].RespSnippet, flag) {
+		t.Errorf("evidence capture truncated the flag: RespSnippet len=%d must contain a flag sitting past byte 240 (the fix that unblocks flag-capture grading)", len(cc.History[0].RespSnippet))
+	}
+}
+
+// TestProgress_FlushesEachTurn locks in the partial-progress hook: Options.Progress must fire after
+// every completed tool turn, with the live Context reflecting that turn. This is what lets a caller
+// flush the transcript incrementally so a hard timeout / SIGKILL can't erase a captured flag — the
+// robustness fix behind honest flag-capture grading on a slow model.
+func TestProgress_FlushesEachTurn(t *testing.T) {
+	srv := mockTarget()
+	defer srv.Close()
+
+	steps := []string{
+		fmt.Sprintf(`{"thought":"a","tool":"send_request","args":{"method":"GET","url":%q}}`, srv.URL+"/search?q=1"),
+		fmt.Sprintf(`{"thought":"b","tool":"send_request","args":{"method":"GET","url":%q}}`, srv.URL+"/echo?name=x"),
+		`{"thought":"done","tool":"finish","args":{"summary":"ok"}}`,
+	}
+	var flushes, lastSeenTurns int
+	cc := &Context{Target: srv.URL}
+	_, err := Investigate(context.Background(), &scriptLLM{steps: steps}, cc, Options{
+		MaxRequests: 10,
+		Progress:    func(c *Context) { flushes++; lastSeenTurns = len(c.History) },
+	})
+	if err != nil {
+		t.Fatalf("Investigate: %v", err)
+	}
+	// 3 tool turns (2 requests + finish) → Progress fires 3 times; the last flush sees both requests.
+	if flushes != 3 {
+		t.Errorf("Progress fired %d times, want 3 (one per tool turn)", flushes)
+	}
+	if lastSeenTurns != 2 {
+		t.Errorf("last flush saw %d request turns, want 2 — Progress must see live in-loop state", lastSeenTurns)
+	}
+}
+
 // The core anti-hallucination + injection guarantee: a finding whose cited turn
 // carries NO indicator is rejected, even though the LLM "claims" it.
 func TestRecordFinding_RejectsUngrounded(t *testing.T) {

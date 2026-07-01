@@ -948,6 +948,7 @@ func runWebInvestigate(argv []string) error {
 	maxIters := fs.Int("max-iters", 30, "max tool-call turns before the loop is force-closed")
 	minInterval := fs.Duration("min-interval", 0, "throttle between requests (e.g. 200ms)")
 	exportEvidence := fs.String("export-evidence", "", "write a signed, tamper-evident evidence bundle (the VAPT PoC deliverable) to this JSON file")
+	transcriptOut := fs.String("transcript", "", "write the FULL engagement transcript (every request/response turn, not just proving turns) to this JSON file")
 	ledgerOut := fs.String("ledger", "", "write a signed, replayable agent decision ledger (every thought/tool/observation step) to this JSON file")
 	signKey := fs.String("sign-key", attest.DefaultKeyPath(), "ed25519 key to sign the evidence bundle / ledger")
 	signer := fs.String("signer", "", "human-readable signer id recorded in the bundle (default: derived from key)")
@@ -975,13 +976,47 @@ func runWebInvestigate(argv []string) error {
 	}
 	startedAt := time.Now().UTC()
 	cc := &webagent.Context{Target: *target}
-	rep, err := webagent.Investigate(context.Background(), llm, cc, webagent.Options{
+
+	// The full transcript is every request/response turn the agent made (cc is populated in place
+	// by Investigate) — the complete engagement record, distinct from the evidence bundle's
+	// proving-turns-only view. It's what a harness / auditor greps to see everything the agent
+	// observed (e.g. a captured flag in a turn the agent didn't formally record a finding against).
+	// Flushed from the LIVE cc so it works both mid-loop (via Options.Progress) and at the end.
+	writeTranscript := func() {
+		if *transcriptOut == "" {
+			return
+		}
+		tj, terr := json.MarshalIndent(struct {
+			Target   string             `json:"target"`
+			Summary  string             `json:"summary"`
+			Findings []webagent.Finding `json:"findings"`
+			History  []webagent.Turn    `json:"history"`
+		}{cc.Target, cc.Summary, cc.Findings, cc.History}, "", "  ")
+		if terr != nil {
+			return
+		}
+		_ = os.WriteFile(*transcriptOut, tj, 0o644) //nolint:gosec // operator-provided path
+	}
+
+	opts := webagent.Options{
 		MaxIters: *maxIters, MaxRequests: *maxReq, MinInterval: *minInterval, Seed: seed, Ledger: rec,
-	})
+	}
+	if *transcriptOut != "" {
+		// Flush after every turn so a hard timeout / SIGKILL (e.g. a bench per-target deadline)
+		// can't erase a flag the agent already captured. Cheap: a few turns, small file.
+		opts.Progress = func(*webagent.Context) { writeTranscript() }
+	}
+
+	rep, err := webagent.Investigate(context.Background(), llm, cc, opts)
 	if err != nil {
 		return err
 	}
 	fmt.Print(webagent.Render(rep))
+
+	if *transcriptOut != "" {
+		writeTranscript() // final flush (summary + findings now finalized)
+		fmt.Fprintf(os.Stderr, "[web-investigate] transcript (%d turns) → %s\n", len(cc.History), *transcriptOut)
+	}
 
 	if *ledgerOut != "" {
 		decisions := make([]ledger.Decision, 0, len(rep.Findings))

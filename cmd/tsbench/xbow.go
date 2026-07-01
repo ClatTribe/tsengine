@@ -32,6 +32,7 @@ func xbowCmd(argv []string) error {
 	fs := flag.NewFlagSet("xbow", flag.ContinueOnError)
 	suite := fs.String("suite", "", "path to a cloned github.com/xbow-engineering/validation-benchmarks tree")
 	binary := fs.String("binary", "./bin/tsengine", "tsengine binary path (runs the deep agent)")
+	mode := fs.String("mode", "investigate", "investigate = the offensive LLM agent that PURSUES the flag (web-investigate); scan = deterministic L1 detection only (finds vulns, cannot capture a flag by design)")
 	timeout := fs.String("timeout", "12m", "per-benchmark scan timeout")
 	only := fs.String("only", "", "comma-separated benchmark IDs to run (default: all)")
 	level := fs.Int("level", 0, "only run benchmarks of this difficulty level (1/2/3; 0 = all)")
@@ -56,8 +57,14 @@ func xbowCmd(argv []string) error {
 		return fmt.Errorf("no benchmarks matched --only/--level")
 	}
 
+	switch *mode {
+	case "investigate", "scan":
+	default:
+		return fmt.Errorf("--mode must be investigate or scan, got %q", *mode)
+	}
+
 	if *dryRun {
-		fmt.Printf("=== XBOW suite plan (%d benchmarks) ===\n", len(benches))
+		fmt.Printf("=== XBOW suite plan (%d benchmarks, mode=%s) ===\n", len(benches), *mode)
 		for _, b := range benches {
 			compose := b.ComposeFile()
 			if compose == "" {
@@ -92,7 +99,7 @@ func xbowCmd(argv []string) error {
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "[xbow %d/%d] %s (level %d) …\n", i+1, len(benches), b.ID, b.Config.Level)
-		r := runOneXBOW(ctx, b, *binary, *timeout, *targetPort, *prune)
+		r := runOneXBOW(ctx, b, *binary, *mode, *timeout, *targetPort, *prune)
 		status := "MISS"
 		if r.Solved {
 			status = "SOLVED"
@@ -136,7 +143,7 @@ func loadXBOWCheckpoint(prefix string) []bench.XBOWResult {
 // compose stack down (deferred) so a failed run never leaks containers. A build/up/target/scan
 // failure is recorded as an unsolved result with the error note — the run continues to the next
 // benchmark rather than aborting the whole suite.
-func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, targetPort string, pruneImages bool) bench.XBOWResult {
+func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, mode, timeout, targetPort string, pruneImages bool) bench.XBOWResult {
 	start := time.Now()
 	res := bench.XBOWResult{ID: b.ID, Name: b.Config.Name, Level: b.Config.Level, Tags: b.Config.Tags}
 	finish := func(note string) bench.XBOWResult {
@@ -177,37 +184,118 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, tar
 		return finish("could not determine target URL (set --target-port)")
 	}
 
-	// scan the target with the deep agent. Env (LLM_*, TSENGINE_ACTIVE_EXPLOIT, sandbox image) is
-	// inherited from this process, so the operator controls the agent's brain + exploitation gate.
-	tmp, err := os.MkdirTemp("", "xbow-scan-")
+	// Env (LLM_*, TSENGINE_ACTIVE_EXPLOIT, sandbox image) is inherited from this process, so the
+	// operator controls the agent's brain + exploitation gate.
+	tmp, err := os.MkdirTemp("", "xbow-run-")
 	if err != nil {
 		return finish("mktemp: " + err.Error())
 	}
 	defer os.RemoveAll(tmp)
 	sctx, scancel := context.WithTimeout(ctx, parseDur(timeout))
 	defer scancel()
-	cmd := exec.CommandContext(sctx, binary, "scan", "--asset", "web_application",
+
+	var solved bool
+	var findings int
+	var note string
+	if mode == "scan" {
+		// Deterministic L1 detection: finds + classifies vulns. It CANNOT capture a flag by
+		// design (no goal-directed exfil loop) — kept for the findings-count diagnostic + A/B.
+		solved, findings, note = gradeScanMode(sctx, binary, timeout, target, tmp, flagStr)
+	} else {
+		// The OFFENSIVE agent that PURSUES the flag (web-investigate): LLM brain drives crafted
+		// requests, reads responses, records grounded findings. This is the flag-capture path.
+		solved, findings, note = gradeInvestigateMode(sctx, binary, timeout, target, tmp, flagStr)
+	}
+	res.Solved, res.Findings = solved, findings
+	return finish(note)
+}
+
+// gradeScanMode runs the deterministic detector (`tsengine scan`) and grades flag capture over the
+// produced vulnerabilities.json. Detection can't pursue a flag, so this is the diagnostic/A-B arm.
+func gradeScanMode(ctx context.Context, binary, timeout, target, tmp, flagStr string) (bool, int, string) {
+	cmd := exec.CommandContext(ctx, binary, "scan", "--asset", "web_application",
 		"--target", target, "--out", tmp, "--timeout", timeout)
 	cmd.Env = os.Environ()
-	scanOut, serr := cmd.CombinedOutput()
+	out, serr := cmd.CombinedOutput()
 	scan := loadScanReport(tmp) // may exist even on a non-zero exit (partial report)
+	findings := 0
 	if scan != nil {
-		res.Findings = len(scan.FindingsRaw)
-		if len(scan.FindingsEnriched) > res.Findings {
-			res.Findings = len(scan.FindingsEnriched)
+		findings = len(scan.FindingsRaw)
+		if len(scan.FindingsEnriched) > findings {
+			findings = len(scan.FindingsEnriched)
 		}
 		if bench.FlagCapturedInScan(flagStr, scan) {
-			res.Solved = true
-			return finish(fmt.Sprintf("flag captured (%d findings)", res.Findings))
+			return true, findings, fmt.Sprintf("flag captured (%d findings)", findings)
 		}
 	}
 	if serr != nil {
-		return finish("scan failed: " + tail(string(scanOut)))
+		return false, findings, "scan failed: " + tail(string(out))
 	}
 	if scan == nil {
-		return finish("no vulnerabilities.json produced")
+		return false, findings, "no vulnerabilities.json produced"
 	}
-	return finish(fmt.Sprintf("flag not captured (%d findings — reached the app, didn't reach the flag)", res.Findings))
+	return false, findings, fmt.Sprintf("flag not captured (%d findings — reached the app, didn't reach the flag)", findings)
+}
+
+// gradeInvestigateMode runs the offensive LLM agent (`tsengine web-investigate`) that PURSUES the
+// flag, and grades capture over the UNION of everything it produced: stdout render + the full
+// transcript (every turn's response body) + the signed evidence bundle. If the injected random flag
+// appears anywhere the agent observed it, that is a real, ungameable capture (§10).
+func gradeInvestigateMode(ctx context.Context, binary, timeout, target, tmp, flagStr string) (bool, int, string) {
+	transcript := filepath.Join(tmp, "transcript.json")
+	evidence := filepath.Join(tmp, "evidence.json")
+	cmd := exec.CommandContext(ctx, binary, "web-investigate",
+		"--target", target,
+		"--transcript", transcript,
+		"--export-evidence", evidence,
+		"--max-requests", "150",
+		"--max-iters", "40")
+	cmd.Env = os.Environ()
+	out, ierr := cmd.CombinedOutput()
+
+	blob := string(out)
+	tData, _ := os.ReadFile(transcript) //nolint:gosec // our own temp dir
+	blob += "\n" + string(tData)
+	eData, _ := os.ReadFile(evidence) //nolint:gosec // our own temp dir
+	blob += "\n" + string(eData)
+
+	findings, turns := investigateCounts(tData)
+	if bench.FlagCaptured(flagStr, blob) {
+		return true, findings, fmt.Sprintf("flag captured (%d finding(s), %d turn(s), offensive agent)", findings, turns)
+	}
+	if ierr != nil {
+		note := tail(string(out))
+		if strings.Contains(note, "needs an LLM") {
+			return false, findings, "web-investigate needs an LLM (set LLM_* / LLM_API_KEY) — the flag-pursuit brain"
+		}
+		if turns > 0 {
+			// Killed mid-engagement (usually the per-benchmark timeout on a slow model). The partial
+			// transcript WAS flushed + graded above (Options.Progress) — the flag just wasn't in it yet.
+			return false, findings, fmt.Sprintf("agent engaged %d turn(s) then stopped (timeout?) — no flag in partial transcript", turns)
+		}
+		if note == "" {
+			note = "killed before any turn completed (timeout before the model's first reply?)"
+		}
+		return false, findings, "web-investigate failed: " + note
+	}
+	return false, findings, fmt.Sprintf("flag not captured (%d finding(s), %d turn(s) — agent engaged, didn't reach the flag)", findings, turns)
+}
+
+// investigateCounts pulls the recorded-finding count + the turn (request) count from the agent
+// transcript (0,0 on any parse error — a missing count is diagnostic, never fatal). Turns > 0 on a
+// failed run means the agent DID engage the target before it was stopped (vs. never starting).
+func investigateCounts(transcript []byte) (findings, turns int) {
+	if len(transcript) == 0 {
+		return 0, 0
+	}
+	var t struct {
+		Findings []json.RawMessage `json:"findings"`
+		History  []json.RawMessage `json:"history"`
+	}
+	if json.Unmarshal(transcript, &t) != nil {
+		return 0, 0
+	}
+	return len(t.Findings), len(t.History)
 }
 
 // composeDown tears down the stack; with prune it also removes the locally-built image (so a long
