@@ -98,6 +98,11 @@ type Options struct {
 	// observation) into the replayable agent decision ledger. Nil-safe: a nil
 	// recorder is a no-op, so the loop calls it unconditionally.
 	Ledger *ledger.Recorder
+	// Progress, when set, is called after every tool turn with the live Context so the caller
+	// can flush partial state (e.g. the transcript) to disk mid-engagement. This makes a long
+	// run robust to a hard timeout / SIGKILL: whatever the agent has already observed — including
+	// a captured flag — survives even if the loop never reaches a clean finish. Nil-safe.
+	Progress func(*Context)
 }
 
 // Investigate runs the LLM-as-brain loop against a live target (the cloudagent
@@ -166,6 +171,9 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		obs := t.handler(cc, act.Args)
 		opts.Ledger.Record(act.Thought, act.Tool, act.Args, obs)
 		transcript = appendCapped(transcript, fmt.Sprintf("ACTION %s(%s)\nOBSERVATION: %s", act.Tool, compactArgs(act.Args), obs))
+		if opts.Progress != nil {
+			opts.Progress(cc) // flush partial state so a timeout/SIGKILL can't erase a captured flag
+		}
 	}
 	return &Report{
 		Target: cc.Target, Summary: cc.Summary, Findings: cc.Findings,

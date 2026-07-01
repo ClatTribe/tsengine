@@ -5,6 +5,13 @@ import (
 	"strings"
 )
 
+// evidenceBodyCap bounds the response body captured on a Turn for the signed evidence
+// bundle / transcript. Larger than the 240B LLM-facing snippet (which stays tight for the
+// token budget + prompt-injection surface) so the PROOF is complete enough to contain the
+// exploited artifact — a captured secret / flag / leaked file. Bounded so a large page
+// can't bloat the artifact. Not sent to the model.
+const evidenceBodyCap = 16384
+
 // Turn is one request/response in the engagement history (the evidence substrate).
 type Turn struct {
 	ID          string   `json:"id"`
@@ -79,19 +86,29 @@ func tSend(cc *Context, args map[string]any) string {
 	ind := indicators(payload, resp)
 	cc.turnN++
 
-	// A SHORT, clearly-delimited UNTRUSTED snippet — also captured on the turn as
-	// the proving response for the signed evidence bundle. Findings ride on the
-	// indicators, never on the body's contents.
+	// Two DISTINCT captures of the response, decoupled on purpose:
+	//   1. `snippet` (240B) is what the LLM sees — a SHORT, clearly-delimited UNTRUSTED
+	//      slice, tight for the token budget AND to minimize the indirect-prompt-injection
+	//      surface (findings ride on the deterministic indicators, never the body's text).
+	//   2. `evidence` (up to evidenceBodyCap) is what the turn RECORDS for the signed
+	//      evidence bundle / transcript. The proof must be complete enough to contain the
+	//      exploited artifact — a captured secret / flag / leaked file — which the tight
+	//      LLM snippet would truncate away. It is NEVER sent to the model.
 	snippet := resp.Body
 	if len(snippet) > 240 {
 		snippet = snippet[:240] + "…"
 	}
 	snippet = strings.ReplaceAll(snippet, "\n", " ")
 
+	evidence := resp.Body
+	if len(evidence) > evidenceBodyCap {
+		evidence = evidence[:evidenceBodyCap] + "…"
+	}
+
 	t := Turn{
 		ID: fmt.Sprintf("t-%03d", cc.turnN), Method: strings.ToUpper(method), URL: rawURL,
 		Payload: payload, Status: resp.Status, Indicators: ind, Elapsed: resp.Elapsed.String(),
-		RespSnippet: snippet,
+		RespSnippet: evidence,
 	}
 	cc.History = append(cc.History, t)
 	indStr := "none"
