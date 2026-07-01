@@ -63,6 +63,45 @@ func TestIngestAWSInventory_MapsAndStores(t *testing.T) {
 	}
 }
 
+// ?provider=gcp routes the body through the GCP collector (impersonation → trust edge) and stores it.
+func TestIngestInventory_GCPProvider(t *testing.T) {
+	store := cloudsnap.NewMemStore()
+	d := Deps{CloudSnapshots: store}
+	body := `{"project_id":"proj-1","service_accounts":[{"email":"deploy@proj-1.iam.gserviceaccount.com","admin":true,"impersonators":["user:dev@acme.com"]}],"buckets":[{"name":"pub","public":true}]}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/cloud/inventory?provider=gcp", strings.NewReader(body))
+	d.handleIngestAWSInventory(rec, req, "ten-1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["trust_edges"] != float64(1) {
+		t.Errorf("GCP impersonation should yield 1 trust edge, got %v", resp["trust_edges"])
+	}
+	if resp["internet_edges"] != float64(1) {
+		t.Errorf("public bucket should yield 1 internet edge, got %v", resp["internet_edges"])
+	}
+	snap, ok, _ := store.Get(context.Background(), "ten-1")
+	if !ok {
+		t.Fatal("GCP inventory not stored")
+	}
+	if inv, _ := cloudgraph.ParseInventory(snap.Inventory); inv.Provider != "gcp" {
+		t.Errorf("stored inventory provider should be gcp, got %q", inv.Provider)
+	}
+}
+
+// An unknown provider is a 400, never a panic.
+func TestIngestInventory_UnknownProvider400(t *testing.T) {
+	d := Deps{CloudSnapshots: cloudsnap.NewMemStore()}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/cloud/inventory?provider=oracle", strings.NewReader(`{}`))
+	d.handleIngestAWSInventory(rec, req, "ten-1")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown provider should be 400, got %d", rec.Code)
+	}
+}
+
 // No snapshot store wired → 503, never a panic.
 func TestIngestAWSInventory_NoStore503(t *testing.T) {
 	d := Deps{}

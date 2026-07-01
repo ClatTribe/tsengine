@@ -2,13 +2,17 @@ package platformapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
+	"github.com/ClatTribe/tsengine/internal/connector/azinventory"
+	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
 )
 
 // handleIngestAWSInventory (POST /v1/cloud/inventory) is the live-collector ingest for the wedge's CLOUD
@@ -18,7 +22,36 @@ import (
 // actually opens the port) into the attack-path Inventory and STORES it as the tenant's cloud snapshot. So
 // the AI Cloud Engineer (/v1/cloud/investigate), drift, and search reason over the REAL account state, not
 // a hand-posted file — turning "find the attack path across all three" into a connected-account reality.
-// Mirrors /v1/osint/ingest: the posted-snapshot path works today with no tsengine-side creds.
+// Mirrors /v1/osint/ingest: the posted-snapshot path works today with no tsengine-side creds. The
+// `?provider=` query selects the cloud (aws default | gcp | azure) — each maps its own raw shape through the
+// matching grounded collector into the same cloudgraph.Inventory the engine reasons over.
+//
+// buildCloudInventory dispatches the posted raw cloud state to the right grounded collector by provider.
+func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, error) {
+	switch provider {
+	case "", "aws":
+		var raw awsinventory.RawAWS
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return cloudgraph.Inventory{}, fmt.Errorf("invalid AWS inventory body")
+		}
+		return awsinventory.Build(raw), nil
+	case "gcp":
+		var raw gcpinventory.RawGCP
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return cloudgraph.Inventory{}, fmt.Errorf("invalid GCP inventory body")
+		}
+		return gcpinventory.Build(raw), nil
+	case "azure":
+		var raw azinventory.RawAzure
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return cloudgraph.Inventory{}, fmt.Errorf("invalid Azure inventory body")
+		}
+		return azinventory.Build(raw), nil
+	default:
+		return cloudgraph.Inventory{}, fmt.Errorf("unknown provider %q (expected aws|gcp|azure)", provider)
+	}
+}
+
 func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, tenantID string) {
 	if d.CloudSnapshots == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errBody("cloud snapshot store not configured"))
@@ -29,12 +62,11 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
-	var raw awsinventory.RawAWS
-	if err := json.Unmarshal(body, &raw); err != nil {
-		writeJSON(w, http.StatusBadRequest, errBody("invalid AWS inventory body"))
+	inv, perr := buildCloudInventory(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body)
+	if perr != nil {
+		writeJSON(w, http.StatusBadRequest, errBody(perr.Error()))
 		return
 	}
-	inv := awsinventory.Build(raw)
 	invJSON, err := json.Marshal(inv)
 	if err != nil {
 		respond(w, nil, err)
