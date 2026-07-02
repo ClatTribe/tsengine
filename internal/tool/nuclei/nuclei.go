@@ -63,27 +63,7 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		}
 		cliArgs = []string{"-u", target, "-jsonl", "-silent", "-disable-update-check"}
 	}
-	if t, ok := args["templates"].(string); ok && t != "" {
-		cliArgs = append(cliArgs, "-t", t)
-	}
-	if tags, ok := args["tags"].(string); ok && tags != "" {
-		cliArgs = append(cliArgs, "-tags", tags)
-	}
-	if c, ok := args["cookie"].(string); ok && c != "" {
-		cliArgs = append(cliArgs, "-H", "Cookie: "+c)
-	}
-	// DAST/OAST mode: enable nuclei's fuzzing templates, which use the
-	// built-in interactsh client for OUT-OF-BAND (blind) detection —
-	// SSRF/XXE/RCE/blind-SQLi that produce no in-band response. This is
-	// the OSS OAST path; the escalation engine turns it on for
-	// param-bearing URLs (CLAUDE.md §5.3). It's expensive, so it's never
-	// the default.
-	if d, ok := args["dast"].(bool); ok && d {
-		cliArgs = append(cliArgs, "-dast")
-	}
-	if rl, ok := args["rate_limit"].(int); ok && rl > 0 {
-		cliArgs = append(cliArgs, "-rl", fmt.Sprintf("%d", rl))
-	}
+	cliArgs = appendOptArgs(cliArgs, args)
 
 	cmd := exec.CommandContext(ctx, "nuclei", cliArgs...)
 	stdout, err := cmd.Output()
@@ -108,7 +88,38 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 // KnownArgs declares the recognized arg keys (tool.ArgSpec). nuclei reads
 // "targets" via tool.TargetList in addition to a single "target".
 func (*Nuclei) KnownArgs() []string {
-	return []string{"target", "targets", "templates", "tags", "cookie", "rate_limit", "dast"}
+	return []string{"target", "targets", "templates", "tags", "id", "cookie", "rate_limit", "dast"}
+}
+
+// appendOptArgs appends the optional nuclei flags from args to the base cliArgs (pure — no exec, so
+// it's unit-tested). Every branch is opt-in; an empty args map leaves cliArgs untouched.
+func appendOptArgs(cliArgs []string, args tool.Args) []string {
+	if t, ok := args["templates"].(string); ok && t != "" {
+		cliArgs = append(cliArgs, "-t", t)
+	}
+	if tags, ok := args["tags"].(string); ok && tags != "" {
+		cliArgs = append(cliArgs, "-tags", tags)
+	}
+	// "id" runs ONE named template (e.g. -id CVE-2021-41773). The dispatch_oss / tool-replay caller
+	// uses it for a targeted known-CVE check when it has already fingerprinted the software version —
+	// far cheaper than -tags cve (the whole CVE corpus). Comma-separated ids are passed through.
+	if id, ok := args["id"].(string); ok && strings.TrimSpace(id) != "" {
+		cliArgs = append(cliArgs, "-id", id)
+	}
+	if c, ok := args["cookie"].(string); ok && c != "" {
+		cliArgs = append(cliArgs, "-H", "Cookie: "+c)
+	}
+	// DAST/OAST mode: enable nuclei's fuzzing templates, which use the built-in interactsh client for
+	// OUT-OF-BAND (blind) detection — SSRF/XXE/RCE/blind-SQLi that produce no in-band response. The
+	// OSS OAST path; the escalation engine turns it on for param-bearing URLs (§5.3). Expensive, so
+	// never the default.
+	if d, ok := args["dast"].(bool); ok && d {
+		cliArgs = append(cliArgs, "-dast")
+	}
+	if rl, ok := args["rate_limit"].(int); ok && rl > 0 {
+		cliArgs = append(cliArgs, "-rl", fmt.Sprintf("%d", rl))
+	}
+	return cliArgs
 }
 
 func init() {
