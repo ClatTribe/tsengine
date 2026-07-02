@@ -27,12 +27,13 @@ type Context struct {
 	Summary  string
 	Done     bool
 
-	ctx   context.Context
-	req   *Requester
-	oob   *Collector // lazily started out-of-band interaction collector (blind-vuln proof + exfil)
-	turnN int
-	findN int
-	calls int
+	ctx        context.Context
+	req        *Requester
+	oob        *Collector // lazily started out-of-band interaction collector (blind-vuln proof + exfil)
+	dispatcher Dispatcher // optional OSS-specialist dispatch (sqlmap/wpscan/…); nil when not wired
+	turnN      int
+	findN      int
+	calls      int
 }
 
 // turn looks up a request/response by its turn ID (for grounding checks).
@@ -104,6 +105,11 @@ type Options struct {
 	// run robust to a hard timeout / SIGKILL: whatever the agent has already observed — including
 	// a captured flag — survives even if the loop never reaches a clean finish. Nil-safe.
 	Progress func(*Context)
+	// Dispatcher, when set, lets the agent hand a specialized job to an OSS tool in the sandbox
+	// (sqlmap/wpscan/nuclei/…) via dispatch_oss — the §13 "wrap OSS, don't rebuild" path for
+	// blind-SQLi extraction, WordPress CVEs, etc. Nil (standalone host-side runs) → the tool degrades
+	// gracefully and says so.
+	Dispatcher Dispatcher
 }
 
 // Investigate runs the LLM-as-brain loop against a live target (the cloudagent
@@ -129,6 +135,7 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		cc.req = NewRequester(allowHostsFor(cc.Target, allowSeeds), opts.MaxRequests, opts.MinInterval)
 	}
 	cc.ctx = ctx
+	cc.dispatcher = opts.Dispatcher
 	defer func() {
 		if cc.oob != nil {
 			cc.oob.Stop() // shut the OOB listener at engagement end (best-effort)
