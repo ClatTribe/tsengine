@@ -258,6 +258,14 @@ func gradeInvestigateMode(ctx context.Context, binary, timeout, target, tmp, fla
 	if scanReport != "" {
 		args = append(args, "--scan", scanReport) // seed from the recon surface
 	}
+	if img := os.Getenv("TSENGINE_SANDBOX_IMAGE"); strings.TrimSpace(img) != "" {
+		// Give the agent the §13 OSS specialists (sqlmap blind-SQLi EXTRACTION, wpscan/nuclei CVEs,
+		// hydra, ffuf) via dispatch_oss — reusing the SAME sandbox image the L1 recon scan uses.
+		// Without this the agent is HTTP-only: it can DETECT a blind-SQLi but can't do the char-by-char
+		// extraction, so classes like blind_sqli/cve are unreachable regardless of the model. No image
+		// set → dispatch_oss stays unavailable and the agent falls back to its in-process tools.
+		args = append(args, "--oss-sandbox", img)
+	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Env = os.Environ()
 	out, ierr := cmd.CombinedOutput()
