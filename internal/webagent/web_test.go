@@ -176,6 +176,56 @@ func TestSend_AutoJSONContentType(t *testing.T) {
 	}
 }
 
+// TestSend_PersistsSessionCookie locks in the auth-chain fix: a cookie jar now persists Set-Cookie
+// across requests, so once the agent logs in it STAYS authenticated. Without it every post-login
+// request went out session-less and silently hit the logged-out view (the dead end that made every
+// authenticated surface unreachable). The login response's Set-Cookie is also recorded on the Turn +
+// surfaced as a cookie_set:<name> indicator so the agent can reason about — and forge — the token.
+func TestSend_PersistsSessionCookie(t *testing.T) {
+	const secret = "FLAG{authed_only_area}"
+	mux := http.NewServeMux()
+	mux.HandleFunc("/login", func(w http.ResponseWriter, _ *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "session", Value: "s3cr3t-token", Path: "/"})
+		fmt.Fprint(w, "logged in")
+	})
+	mux.HandleFunc("/account", func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie("session")
+		if err != nil || c.Value != "s3cr3t-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, "please log in")
+			return
+		}
+		fmt.Fprint(w, secret) // only visible WITH the persisted session cookie
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	steps := []string{
+		fmt.Sprintf(`{"thought":"login","tool":"send_request","args":{"method":"POST","url":%q}}`, srv.URL+"/login"),
+		fmt.Sprintf(`{"thought":"authed area","tool":"send_request","args":{"method":"GET","url":%q}}`, srv.URL+"/account"),
+		`{"tool":"finish","args":{"summary":"reached the authed area"}}`,
+	}
+	cc := &Context{Target: srv.URL}
+	if _, err := Investigate(context.Background(), &scriptLLM{steps: steps}, cc, Options{MaxRequests: 10}); err != nil {
+		t.Fatalf("Investigate: %v", err)
+	}
+	if len(cc.History) < 2 {
+		t.Fatalf("want 2 turns, got %d", len(cc.History))
+	}
+	login, account := cc.History[0], cc.History[1]
+	// the login response's Set-Cookie is recorded on the Turn + raised as an indicator
+	if len(login.SetCookies) == 0 || !strings.Contains(login.SetCookies[0], "session=s3cr3t-token") {
+		t.Errorf("login Turn did not record Set-Cookie: %+v", login.SetCookies)
+	}
+	if !hasIndicator(login, "cookie_set:session") {
+		t.Errorf("login turn missing cookie_set:session indicator: %v", login.Indicators)
+	}
+	// the crux: the /account request carried the persisted session and saw the authed-only secret
+	if account.Status != http.StatusOK || !strings.Contains(account.RespSnippet, secret) {
+		t.Errorf("session not persisted — /account returned status=%d without the authed content; the jar failed to re-send the login cookie", account.Status)
+	}
+}
+
 // The core anti-hallucination + injection guarantee: a finding whose cited turn
 // carries NO indicator is rejected, even though the LLM "claims" it.
 func TestRecordFinding_RejectsUngrounded(t *testing.T) {
