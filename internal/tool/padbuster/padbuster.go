@@ -47,6 +47,10 @@ func (*Padbuster) Run(ctx context.Context, args tool.Args) (tool.Result, error) 
 		return tool.Result{}, err
 	}
 	cmd := exec.CommandContext(ctx, "padbuster", cli...)
+	// padbuster prompts "Do you want to use this value (Yes/No/All)?" per recovered byte; the sandbox
+	// tool-server has no TTY. Feed "A" (All) — padbuster then auto-accepts every value without asking,
+	// so the whole decrypt runs unattended. Bounded stream (EOFs, never hangs).
+	cmd.Stdin = strings.NewReader(strings.Repeat("a\n", 64))
 	stdout, err := cmd.Output()
 	if err != nil {
 		var ee *exec.ExitError
@@ -86,10 +90,16 @@ func buildCLI(args tool.Args) ([]string, error) {
 	if b, ok := args["no_iv"].(bool); ok && b {
 		cli = append(cli, "-noiv")
 	}
+	// -noencode: do NOT URL-encode the manipulated ciphertext. REQUIRED for a base64-cookie oracle —
+	// without it padbuster percent-encodes the base64 (=,/,+) so the server's b64decode always fails
+	// and EVERY response looks like invalid padding ("No matching response on Byte N"). Proven live on
+	// XBEN-101: the decrypt only progresses with -noencode.
+	if b, ok := args["no_encode"].(bool); ok && b {
+		cli = append(cli, "-noencode")
+	}
 	// NOTE: padbuster has no -noninteractive flag; it runs unattended when "-error <sig>" pins the
-	// oracle (else it prompts to identify the padding-error response — the caller should pass `error`
-	// for a clean automated run). The sandbox gives the child an empty stdin (EOF), so a missing
-	// oracle degrades to an error, never a hang.
+	// oracle (else it prompts to identify the padding-error response — pass `error` for a clean run).
+	// Run() also feeds an auto-answer stdin so any residual prompt can't hang the tool-server (no TTY).
 	return cli, nil
 }
 
@@ -100,7 +110,7 @@ func str(args tool.Args, k string) string {
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec).
 func (*Padbuster) KnownArgs() []string {
-	return []string{"target", "sample", "block_size", "error", "encoding", "cookies", "plaintext", "post", "headers", "no_iv"}
+	return []string{"target", "sample", "block_size", "error", "encoding", "cookies", "plaintext", "post", "headers", "no_iv", "no_encode"}
 }
 
 func init() { tool.Register(New()) }

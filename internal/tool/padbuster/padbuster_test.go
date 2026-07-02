@@ -68,6 +68,23 @@ func TestBuildCLI_ForgeAndOracle(t *testing.T) {
 	}
 }
 
+// TestBuildCLI_NoEncode: -noencode is REQUIRED for a base64-cookie oracle (proven live on XBEN-101 —
+// without it padbuster percent-encodes the base64 and every response looks like invalid padding).
+func TestBuildCLI_NoEncode(t *testing.T) {
+	cli, err := buildCLI(tool.Args{"target": "http://t/", "sample": "Zm9v", "no_encode": true})
+	if err != nil {
+		t.Fatalf("buildCLI: %v", err)
+	}
+	if !has(cli, "-noencode") {
+		t.Errorf("no_encode:true should add -noencode: %v", cli)
+	}
+	// default (absent) must NOT add it — a hex/URL-param oracle wants padbuster's default encoding.
+	cli2, _ := buildCLI(tool.Args{"target": "http://t/", "sample": "Zm9v"})
+	if has(cli2, "-noencode") {
+		t.Errorf("no_encode absent must not add -noencode: %v", cli2)
+	}
+}
+
 func TestBuildCLI_Required(t *testing.T) {
 	if _, err := buildCLI(tool.Args{"target": "http://t/"}); err == nil {
 		t.Error("missing sample should error")
