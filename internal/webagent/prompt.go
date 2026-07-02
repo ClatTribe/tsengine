@@ -35,6 +35,9 @@ RULES
   automatically, so your session is re-sent on every later request. A cookie_set:<name> indicator
   confirms you got a session; inspect the surfaced token if a forgery / IDOR / privilege-escalation
   chain needs it.
+- URL-encode query-string values you send: the URL goes out VERBATIM, so a raw space (or other
+  whitespace) is rejected before it even leaves — use %20 for a space, %25 for a literal %. Encode only
+  for the wire; keep deliberate payload characters (../, {%..%}) exactly as the exploit needs them.
 - You have a hard request budget; spend it on promising parameters, not blind fuzzing.
 - When done, call finish(summary) with a short executive summary of what you proved.
 
