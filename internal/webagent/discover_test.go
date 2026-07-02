@@ -27,7 +27,7 @@ func TestDiscoverSurface_FindsBuriedEndpoint(t *testing.T) {
 		<link href="/style.css" rel="stylesheet"><script src="/app.js"></script>
 		</body></html>`
 
-	got := discoverSurface(body)
+	got := discoverSurface(body, "http://t/")
 	if got == "" {
 		t.Fatal("discoverSurface returned nothing — the agent gets no lead")
 	}
@@ -71,7 +71,7 @@ func TestDiscoverSurface_SurfacesIDORTemplates(t *testing.T) {
 		`<a href="/account/2024/report">yearly</a>` + // 2024 is a leading id-shaped seg but NOT after a resource → no template for it
 		`<a href="/about">about</a>` // no id → no template
 
-	got := discoverSurface(body)
+	got := discoverSurface(body, "http://t/")
 	idx := strings.Index(got, "IDOR/BOLA candidates")
 	if idx < 0 {
 		t.Fatalf("no IDOR/BOLA candidates surfaced\n  got: %s", got)
@@ -114,13 +114,29 @@ func TestIdorTemplate_Grounded(t *testing.T) {
 	}
 }
 
+// TestDiscoverSurface_ResolvesRelativeLinks locks in the recon fix: RELATIVE links (post.php?id=x,
+// posts/upload.php) are resolved against the page URL, not silently dropped. Absolute paths stay as-is.
+func TestDiscoverSurface_ResolvesRelativeLinks(t *testing.T) {
+	body := `<a href="post.php?id=EternalBlue">p</a> <a href="posts/upload-article.php">up</a> <a href="/about.php">a</a>`
+	got := discoverSurface(body, "http://site.test/")
+	for _, want := range []string{
+		"http://site.test/post.php?id=EternalBlue",
+		"http://site.test/posts/upload-article.php",
+		"/about.php",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("relative link not resolved/surfaced: want %q in\n  %s", want, got)
+		}
+	}
+}
+
 // TestDiscoverSurface_QuietOnNothing keeps it grounded: a body with no request surface yields no
 // hint (never invents endpoints — §10).
 func TestDiscoverSurface_QuietOnNothing(t *testing.T) {
-	if got := discoverSurface("<html><body><p>hello world</p></body></html>"); got != "" {
+	if got := discoverSurface("<html><body><p>hello world</p></body></html>", "http://t/"); got != "" {
 		t.Errorf("discoverSurface invented a lead from a plain page: %q", got)
 	}
-	if got := discoverSurface(""); got != "" {
+	if got := discoverSurface("", "http://t/"); got != "" {
 		t.Errorf("discoverSurface(empty) = %q, want empty", got)
 	}
 }
