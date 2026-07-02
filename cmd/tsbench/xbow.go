@@ -242,14 +242,23 @@ func gradeScanMode(ctx context.Context, binary, timeout, target, tmp, flagStr st
 // transcript (every turn's response body) + the signed evidence bundle. If the injected random flag
 // appears anywhere the agent observed it, that is a real, ungameable capture (§10).
 func gradeInvestigateMode(ctx context.Context, binary, timeout, target, tmp, flagStr string) (bool, int, string) {
+	// RECON HANDOFF: run a bounded L1 scan first so the agent starts SEEDED with the discovered
+	// surface (katana crawl / spec ingest / found endpoints) instead of blind. Best-effort — on any
+	// failure the agent still runs, falling back to its own in-response surface extraction.
+	scanReport := runReconScan(ctx, binary, target, filepath.Join(tmp, "scan"))
+
 	transcript := filepath.Join(tmp, "transcript.json")
 	evidence := filepath.Join(tmp, "evidence.json")
-	cmd := exec.CommandContext(ctx, binary, "web-investigate",
+	args := []string{"web-investigate",
 		"--target", target,
 		"--transcript", transcript,
 		"--export-evidence", evidence,
 		"--max-requests", "150",
-		"--max-iters", "40")
+		"--max-iters", "40"}
+	if scanReport != "" {
+		args = append(args, "--scan", scanReport) // seed from the recon surface
+	}
+	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Env = os.Environ()
 	out, ierr := cmd.CombinedOutput()
 
@@ -279,6 +288,27 @@ func gradeInvestigateMode(ctx context.Context, binary, timeout, target, tmp, fla
 		return false, findings, "web-investigate failed: " + note
 	}
 	return false, findings, fmt.Sprintf("flag not captured (%d finding(s), %d turn(s) — agent engaged, didn't reach the flag)", findings, turns)
+}
+
+// runReconScan runs a bounded L1 scan to discover the target's request surface and returns the path
+// to the vulnerabilities.json it produced (or "" on any failure — seeding is best-effort, never
+// fatal). Bounded to a slice of the per-benchmark budget so recon can't starve the agent; a partial
+// report still carries discovered_surface. This is the recon→offensive-agent handoff.
+func runReconScan(ctx context.Context, binary, target, outDir string) string {
+	sub, cancel := context.WithTimeout(ctx, 4*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(sub, binary, "scan", "--asset", "web_application",
+		"--target", target, "--out", outDir, "--timeout", "4m")
+	cmd.Env = os.Environ()
+	_ = cmd.Run() // best-effort — even a timed-out scan persists the surface it discovered
+	var found string
+	_ = filepath.WalkDir(outDir, func(path string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && d.Name() == "vulnerabilities.json" {
+			found = path
+		}
+		return nil
+	})
+	return found
 }
 
 // investigateCounts pulls the recorded-finding count + the turn (request) count from the agent

@@ -47,12 +47,24 @@ type Dispatcher interface {
 //
 // Returns the normalized findings + the list of anchor tool names that
 // actually executed (anchors_fired in vulnerabilities.json).
+// Run is the back-compatible entry point (findings + tools-fired). It wraps RunWithSurface and drops
+// the discovered surface, so existing callers are untouched. A caller that wants to SEED the L2
+// offensive agent from L1 recon uses RunWithSurface instead.
 func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher) ([]types.Finding, []string, error) {
+	findings, fired, _, err := RunWithSurface(ctx, target, handler, dispatcher)
+	return findings, fired, err
+}
+
+// RunWithSurface is Run plus the deduped/filtered request surface the recon stage discovered — the
+// endpoints detection fanned out over (katana crawl, spec ingest). Single-stage assets (repo /
+// container) return [target] as the surface. This surface was previously computed and thrown away;
+// exposing it lets a caller seed web-investigate so the agent doesn't start blind.
+func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher) ([]types.Finding, []string, []string, error) {
 	if handler == nil {
-		return nil, nil, errors.New("orchestrator: nil handler")
+		return nil, nil, nil, errors.New("orchestrator: nil handler")
 	}
 	if dispatcher == nil {
-		return nil, nil, errors.New("orchestrator: nil dispatcher")
+		return nil, nil, nil, errors.New("orchestrator: nil dispatcher")
 	}
 
 	// Recon-capable assets (web crawl, api spec ingest) run a two-stage
@@ -72,8 +84,9 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 	// Even on a deadline error we normalize + return the partial results so
 	// the CLI can persist them (err signals "partial", findings are kept).
 	// Single-stage assets have no recon surface; the target itself is it.
-	findings, allFired := finalizeWithEscalation(ctx, target, handler, dispatcher, results, fired, []string{target.Target})
-	return findings, allFired, err
+	single := []string{target.Target}
+	findings, allFired := finalizeWithEscalation(ctx, target, handler, dispatcher, results, fired, single)
+	return findings, allFired, single, err
 }
 
 // runWithRecon implements the two-stage recon → fan-out flow:
@@ -87,7 +100,7 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 //
 // Recon findings (if any) + fan-out findings are both normalized, so a
 // recon tool that also emits a finding never loses it.
-func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler, rh asset.ReconHandler, dispatcher Dispatcher) ([]types.Finding, []string, error) {
+func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler, rh asset.ReconHandler, dispatcher Dispatcher) ([]types.Finding, []string, []string, error) {
 	// A ReconPlanner shapes its own recon dispatches (crawl depth, seeds);
 	// otherwise fall back to the generic single-arg target mapping.
 	var reconDispatches []asset.Dispatch
@@ -101,7 +114,7 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 		// Recon itself was cut short — normalize + return whatever it
 		// produced (usually empty) so the caller persists it.
 		findings, f := finalizeWithEscalation(ctx, target, handler, dispatcher, reconResults, reconFired, []string{target.Target})
-		return findings, f, err
+		return findings, f, []string{target.Target}, err // recon cut short — surface is just the target
 	}
 
 	// ResolveSurface filters + prioritizes BEFORE capping (web), so the cap
@@ -122,7 +135,7 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 	allResults := append(reconResults, fanoutResults...)
 	allFired := append(reconFired, fanoutFired...)
 	findings, fnFired := finalizeWithEscalation(ctx, target, handler, dispatcher, allResults, allFired, surface)
-	return findings, fnFired, fanoutErr
+	return findings, fnFired, surface, fanoutErr
 }
 
 // finalizeWithEscalation is the shared tail of both the single-stage and
