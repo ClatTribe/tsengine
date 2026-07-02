@@ -85,6 +85,29 @@ func TestTGraphQL_LiveIntrospection(t *testing.T) {
 	}
 }
 
+// TestTGraphQL_FollowsTrailingSlashRedirect: the tool follows the 307 /graphql -> /graphql/ redirect
+// (standard Starlette/FastAPI/Django behavior) so introspection isn't silently lost on the common setup.
+func TestTGraphQL_FollowsTrailingSlashRedirect(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/graphql/", http.StatusTemporaryRedirect)
+	})
+	mux.HandleFunc("/graphql/", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"data":{"__schema":{"queryType":{"name":"Query"},"types":[`+
+			`{"name":"Query","kind":"OBJECT","fields":[{"name":"jobs","args":[{"name":"jobType"}]}]}]}}}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cc := &Context{Target: srv.URL}
+	cc.req = NewRequester([]string{hostOf(srv.URL)}, 5, 0)
+	cc.ctx = context.Background()
+	out := tGraphQL(cc, map[string]any{}) // defaults to <target>/graphql (no slash → 307)
+	if !strings.Contains(out, "jobs") {
+		t.Fatalf("did not follow the trailing-slash redirect to introspect:\n%s", out)
+	}
+}
+
 // sanity: the introspection query we ship is valid JSON-embeddable (marshals without error into a body).
 func TestGraphQLIntrospectionQuery_Embeds(t *testing.T) {
 	b, err := json.Marshal(map[string]string{"query": gqlIntrospectionQuery})
