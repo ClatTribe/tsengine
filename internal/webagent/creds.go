@@ -25,6 +25,7 @@ var defaultCreds = []credPair{
 	{"admin", "pass"}, {"admin", "12345"}, {"administrator", "administrator"},
 	{"administrator", "password"}, {"root", "root"}, {"root", "toor"}, {"root", "password"},
 	{"test", "test"}, {"guest", "guest"}, {"user", "user"}, {"tomcat", "tomcat"}, {"sa", ""},
+	{"demo", "demo"}, {"demo", "password"}, {"admin", "admin@123"}, {"admin", "Password1"},
 }
 
 func orDefault(s, def string) string {
