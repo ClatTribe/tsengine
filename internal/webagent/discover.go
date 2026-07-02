@@ -33,6 +33,59 @@ var (
 // signal-dense (the agent doesn't need /style.css to find the SQLi).
 var staticAssetRe = regexp.MustCompile(`(?i)\.(css|js|png|jpe?g|gif|svg|ico|woff2?|ttf|eot|map)(\?|$)`)
 
+// numIDRe / uuidRe match a path segment that addresses a resource by an OBJECT ID — a pure integer or
+// a UUID. Such a segment in a URL is the classic IDOR/BOLA tell: the resource is enumerable, so the
+// agent should try OTHER ids to reach another user's object.
+var (
+	numIDRe = regexp.MustCompile(`^\d+$`)
+	uuidRe  = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+)
+
+// idorTemplate turns an endpoint that addresses a resource by an object id into a parameterized
+// template (/company/1042 → /company/{id}), an IDOR/BOLA enumeration lead for the agent. Returns
+// (template, true) only when a qualifying id segment sits AFTER a resource-name segment — so a bare
+// /123 or a leading year like /2024/report is NOT mistaken for an object-id endpoint. Scheme+host and
+// query are dropped. Grounded (§10): the endpoint is a real substring of the body; the agent verifies,
+// and a finding still requires the class's indicator.
+func idorTemplate(endpoint string) (string, bool) {
+	p := endpoint
+	if i := strings.Index(p, "://"); i >= 0 { // strip scheme://host → path
+		if slash := strings.IndexByte(p[i+3:], '/'); slash >= 0 {
+			p = p[i+3+slash:]
+		} else {
+			return "", false
+		}
+	}
+	if q := strings.IndexAny(p, "?#"); q >= 0 {
+		p = p[:q]
+	}
+	if !strings.HasPrefix(p, "/") {
+		return "", false
+	}
+	segs := strings.Split(p, "/") // segs[0] == "" (leading slash)
+	out := make([]string, len(segs))
+	copy(out, segs)
+	found := false
+	for i, s := range segs {
+		if s == "" || i == 0 {
+			continue
+		}
+		if !numIDRe.MatchString(s) && !uuidRe.MatchString(s) {
+			continue
+		}
+		prev := segs[i-1] // ORIGINAL preceding segment (never a mutated {id})
+		if prev == "" || numIDRe.MatchString(prev) || uuidRe.MatchString(prev) {
+			continue // require a real resource name before the id (resource/{id} shape)
+		}
+		out[i] = "{id}"
+		found = true
+	}
+	if !found {
+		return "", false
+	}
+	return strings.Join(out, "/"), true
+}
+
 // nonParamKey filters JS/JSON object keys that are language furniture (fetch options, etc.), not
 // request parameters — keeps the params list to plausible inputs like job_type / username.
 var nonParamKey = map[string]bool{
@@ -102,9 +155,22 @@ func discoverSurface(body string) string {
 		}
 	}
 
+	// IDOR/BOLA leads: an endpoint that carries an object id in its path (/invoice/1042) means the
+	// resource is enumerable — surface a /invoice/{id} template so the agent tries OTHER ids. Derived
+	// from the real endpoints above (grounded), the concrete instance still stays in the endpoints list.
+	idorTemplates := map[string]bool{}
+	for u := range endpoints {
+		if tmpl, ok := idorTemplate(u); ok {
+			idorTemplates[tmpl] = true
+		}
+	}
+
 	parts := []string{}
 	if s := joinSet(endpoints, 15); s != "" {
 		parts = append(parts, "endpoints: "+s)
+	}
+	if s := joinSet(idorTemplates, 10); s != "" {
+		parts = append(parts, "IDOR/BOLA candidates (object id in path — try other ids for another user's object): "+s)
 	}
 	if s := joinSet(jsonParams, 15); s != "" {
 		// The explicit "send as application/json" is the fix for the opaque-500 dead end: the agent must

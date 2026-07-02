@@ -61,6 +61,59 @@ func TestDiscoverSurface_FindsBuriedEndpoint(t *testing.T) {
 	}
 }
 
+// TestDiscoverSurface_SurfacesIDORTemplates locks in the IDOR/BOLA lead: an endpoint that addresses a
+// resource by an object id (/invoice/1042, /api/users/7/orders) is surfaced as a /invoice/{id}
+// template so the agent enumerates OTHER ids — the classic access-control test it otherwise skips. A
+// bare id, a leading year, and an id-less path must NOT produce a template (noise control + §10).
+func TestDiscoverSurface_SurfacesIDORTemplates(t *testing.T) {
+	body := `<a href="/invoice/1042">inv</a>` +
+		`<script>fetch('/api/users/7/orders')</script>` +
+		`<a href="/account/2024/report">yearly</a>` + // 2024 is a leading id-shaped seg but NOT after a resource → no template for it
+		`<a href="/about">about</a>` // no id → no template
+
+	got := discoverSurface(body)
+	idx := strings.Index(got, "IDOR/BOLA candidates")
+	if idx < 0 {
+		t.Fatalf("no IDOR/BOLA candidates surfaced\n  got: %s", got)
+	}
+	seg := got[idx:]
+	for _, want := range []string{"/invoice/{id}", "/api/users/{id}/orders"} {
+		if !strings.Contains(seg, want) {
+			t.Errorf("IDOR templates missing %q\n  got: %s", want, seg)
+		}
+	}
+	// /account/2024/report: 2024 sits directly after "account" so it IS a resource/{id} shape and is a
+	// legitimate lead; what must NOT happen is templating a leading/bare numeric with no resource before
+	// it. Assert the genuinely id-less /about produced nothing spurious.
+	if strings.Contains(seg, "/about/{id}") {
+		t.Errorf("templated an id-less path\n  got: %s", seg)
+	}
+}
+
+// TestIdorTemplate_Grounded unit-tests the segment rules directly: an id after a resource name → a
+// template; a bare/leading id, an id-less path, or a non-path → no template.
+func TestIdorTemplate_Grounded(t *testing.T) {
+	cases := []struct {
+		in       string
+		want     string
+		template bool
+	}{
+		{"/invoice/1042", "/invoice/{id}", true},
+		{"https://app.test/company/55/edit", "/company/{id}/edit", true},
+		{"/orders/3fa85f64-5717-4562-b3fc-2c963f66afa6", "/orders/{id}", true},
+		{"/123", "", false},         // bare id, no resource
+		{"/about", "", false},       // no id segment
+		{"/rest/products", "", false}, // words only
+		{"relative/7", "", false},   // not a path
+	}
+	for _, c := range cases {
+		got, ok := idorTemplate(c.in)
+		if ok != c.template || (ok && got != c.want) {
+			t.Errorf("idorTemplate(%q) = (%q,%v), want (%q,%v)", c.in, got, ok, c.want, c.template)
+		}
+	}
+}
+
 // TestDiscoverSurface_QuietOnNothing keeps it grounded: a body with no request surface yields no
 // hint (never invents endpoints — §10).
 func TestDiscoverSurface_QuietOnNothing(t *testing.T) {
