@@ -75,18 +75,22 @@ func discoverSurface(body string) string {
 		}
 	}
 
-	params := map[string]bool{}
+	// Two param classes, kept DISTINCT because the encoding differs and the agent needs to know
+	// which: form fields go in a urlencoded body, but JSON.stringify keys go in an application/json
+	// body. Conflating them is exactly why the XBEN-006 agent POSTed job_type as a form field and got
+	// an opaque 500 (the app does request.json()) — it had no signal the body must be JSON.
+	formParams := map[string]bool{}
 	for _, m := range reFormName.FindAllStringSubmatch(body, -1) {
 		if k := strings.TrimSpace(m[1]); k != "" && len(k) <= 40 {
-			params[k] = true
+			formParams[k] = true
 		}
 	}
-	// request-body keys — the JSON payload a fetch/XHR posts (where job_type lives)
+	jsonParams := map[string]bool{}
 	for _, sm := range reStringify.FindAllStringSubmatch(body, -1) {
 		for _, km := range reObjKey.FindAllStringSubmatch(sm[1], -1) {
 			k := strings.ToLower(strings.TrimSpace(km[1]))
 			if !nonParamKey[k] {
-				params[km[1]] = true
+				jsonParams[km[1]] = true
 			}
 		}
 	}
@@ -102,8 +106,13 @@ func discoverSurface(body string) string {
 	if s := joinSet(endpoints, 15); s != "" {
 		parts = append(parts, "endpoints: "+s)
 	}
-	if s := joinSet(params, 15); s != "" {
-		parts = append(parts, "request params: "+s)
+	if s := joinSet(jsonParams, 15); s != "" {
+		// The explicit "send as application/json" is the fix for the opaque-500 dead end: the agent must
+		// POST a JSON body ({"field": "..."}) with Content-Type: application/json, not a form field.
+		parts = append(parts, "JSON body fields (send as application/json): "+s)
+	}
+	if s := joinSet(formParams, 15); s != "" {
+		parts = append(parts, "form params: "+s)
 	}
 	if s := joinSet(methods, 6); s != "" {
 		parts = append(parts, "methods seen: "+s)

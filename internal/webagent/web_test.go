@@ -3,6 +3,7 @@ package webagent
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -139,6 +140,34 @@ func TestProgress_FlushesEachTurn(t *testing.T) {
 	}
 	if lastSeenTurns != 2 {
 		t.Errorf("last flush saw %d request turns, want 2 — Progress must see live in-loop state", lastSeenTurns)
+	}
+}
+
+// TestSend_AutoJSONContentType locks in the fix for the XBEN-006 dead end: the agent POSTed a
+// JSON-looking body with no Content-Type, the app did request.json(), and it got an opaque 500. A
+// JSON body ({…}/[…]) now auto-gets Content-Type: application/json so it actually reaches the handler.
+func TestSend_AutoJSONContentType(t *testing.T) {
+	var gotCT, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCT = r.Header.Get("Content-Type")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		fmt.Fprint(w, "ok")
+	}))
+	defer srv.Close()
+
+	post := fmt.Sprintf(`{"thought":"exploit","tool":"send_request","args":{"method":"POST","url":%q,"body":%q}}`,
+		srv.URL+"/jobs", `{"job_type":"x' Or type='private"}`)
+	cc := &Context{Target: srv.URL}
+	if _, err := Investigate(context.Background(), &scriptLLM{steps: []string{post, `{"tool":"finish","args":{"summary":"ok"}}`}},
+		cc, Options{MaxRequests: 5}); err != nil {
+		t.Fatalf("Investigate: %v", err)
+	}
+	if gotCT != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json (auto-set for a JSON body)", gotCT)
+	}
+	if !strings.Contains(gotBody, "job_type") {
+		t.Errorf("body not delivered intact: %q", gotBody)
 	}
 }
 
