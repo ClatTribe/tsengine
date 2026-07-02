@@ -1,6 +1,7 @@
 package webagent
 
 import (
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -99,20 +100,30 @@ var nonParamKey = map[string]bool{
 // discoverSurface returns a one-line "DISCOVERED …" summary of the endpoints / request params /
 // non-GET methods the body reveals, or "" when it reveals nothing useful. Output is deduped, sorted
 // (stable), and length-bounded so it can't bloat the prompt.
-func discoverSurface(body string) string {
+func discoverSurface(body, base string) string {
 	if body == "" {
 		return ""
 	}
 	endpoints := map[string]bool{}
 	addURL := func(u string) {
 		u = strings.TrimSpace(u)
-		// keep only same-app request paths / absolute URLs; skip anchors, data:, mailto:, static assets
+		// skip anchors, data:, mailto:, tel:, javascript:
 		if u == "" || strings.HasPrefix(u, "#") || strings.HasPrefix(u, "data:") ||
-			strings.HasPrefix(u, "mailto:") || strings.HasPrefix(u, "javascript:") {
+			strings.HasPrefix(u, "mailto:") || strings.HasPrefix(u, "tel:") || strings.HasPrefix(u, "javascript:") {
 			return
 		}
 		if !strings.HasPrefix(u, "/") && !strings.HasPrefix(u, "http") {
-			return
+			// RELATIVE link (post.php?id=x, posts/upload.php) — resolve it against the page's OWN URL.
+			// Dropping these silently lost the surface on every app that uses relative links.
+			if b, err := url.Parse(base); err == nil && b.Host != "" {
+				if r, err := url.Parse(u); err == nil {
+					u = b.ResolveReference(r).String()
+				} else {
+					return
+				}
+			} else {
+				return
+			}
 		}
 		if staticAssetRe.MatchString(u) {
 			return
