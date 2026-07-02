@@ -1026,6 +1026,7 @@ func runWebInvestigate(argv []string) error {
 	ledgerOut := fs.String("ledger", "", "write a signed, replayable agent decision ledger (every thought/tool/observation step) to this JSON file")
 	signKey := fs.String("sign-key", attest.DefaultKeyPath(), "ed25519 key to sign the evidence bundle / ledger")
 	signer := fs.String("signer", "", "human-readable signer id recorded in the bundle (default: derived from key)")
+	ossSandbox := fs.String("oss-sandbox", "", "spawn this sandbox image so the agent can dispatch OSS specialists (sqlmap/wpscan/nuclei/…) via dispatch_oss (§13). Omit → dispatch_oss reports the tools unavailable and the agent uses its in-process tools only")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -1093,7 +1094,25 @@ func runWebInvestigate(argv []string) error {
 		opts.Progress = func(*webagent.Context) { writeTranscript() }
 	}
 
-	rep, err := webagent.Investigate(context.Background(), llm, cc, opts)
+	agentCtx := context.Background()
+	// --oss-sandbox wires the §13 OSS-dispatch path: spawn the sandbox tool-server and hand its
+	// client to the agent's Dispatcher, so dispatch_oss(sqlmap/wpscan/nuclei/…) reaches the real
+	// tools. Omitted → opts.Dispatcher stays nil and dispatch_oss degrades gracefully (never
+	// pretends). The sandbox is torn down at engagement end.
+	if *ossSandbox != "" {
+		fmt.Fprintf(os.Stderr, "[web-investigate] spawning OSS sandbox %s for dispatch_oss\n", *ossSandbox)
+		info, serr := sandbox.Spawn(agentCtx, sandbox.SpawnOptions{Image: *ossSandbox})
+		if serr != nil {
+			return fmt.Errorf("--oss-sandbox: spawn %s: %w", *ossSandbox, serr)
+		}
+		defer func() {
+			fmt.Fprintf(os.Stderr, "[web-investigate] tearing down OSS sandbox %s\n", shortID(info.ContainerID))
+			_ = sandbox.Destroy(context.Background(), info)
+		}()
+		opts.Dispatcher = webagent.SandboxDispatcher(sandbox.NewClient(info))
+	}
+
+	rep, err := webagent.Investigate(agentCtx, llm, cc, opts)
 	if err != nil {
 		return err
 	}
