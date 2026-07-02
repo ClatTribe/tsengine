@@ -280,6 +280,27 @@ func TestRequester_BlocksOffScope(t *testing.T) {
 	}
 }
 
+// TestRequester_RejectsRawWhitespaceURL locks in the XBEN-009 papercut fix: a raw space in the URL
+// (e.g. an unencoded SSTI payload `{% debug %}`) splits the HTTP request line → an opaque 400 with no
+// signal. The tool now rejects it early with an ACTIONABLE "percent-encode" hint and does NOT burn a
+// request — rather than silently re-encoding, which would clobber deliberate encoding tricks.
+func TestRequester_RejectsRawWhitespaceURL(t *testing.T) {
+	r := NewRequester([]string{"good.example"}, 10, 0)
+	_, err := r.Send(context.Background(), "GET", "http://good.example/x?tmpl={% debug %}", "", nil)
+	if err == nil || !strings.Contains(err.Error(), "percent-encode") {
+		t.Fatalf("raw-whitespace URL not rejected with an encoding hint: err=%v", err)
+	}
+	if r.Sent() != 0 {
+		t.Errorf("a fixable encoding typo cost a request: sent=%d", r.Sent())
+	}
+	// the encoded form is accepted (host allowlisted; no server needed — parse/allowlist pass, then it
+	// fails at Do with a connection error, which is FINE: it got past the whitespace guard).
+	_, err = r.Send(context.Background(), "GET", "http://good.example/x?tmpl=%7B%25%20debug%20%25%7D", "", nil)
+	if err != nil && strings.Contains(err.Error(), "percent-encode") {
+		t.Errorf("properly-encoded URL wrongly rejected by the whitespace guard: %v", err)
+	}
+}
+
 func TestRequester_EnforcesCap(t *testing.T) {
 	srv := mockTarget()
 	defer srv.Close()

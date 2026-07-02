@@ -68,6 +68,15 @@ func (r *Requester) Sent() int { return r.sent }
 
 // Send fires one request, enforcing the allowlist + cap + throttle.
 func (r *Requester) Send(ctx context.Context, method, rawURL, body string, headers map[string]string) (*Resp, error) {
+	// A raw space (or other request-line-breaking whitespace) in the URL can't be sent — it splits the
+	// HTTP request line and the server 400s with no useful signal (the XBEN-009 `{% debug %}` dead end).
+	// Reject it with an ACTIONABLE hint to percent-encode, rather than silently re-encoding the URL —
+	// silent encoding would clobber the deliberate encoding tricks the agent needs (SSTI `{% %}`,
+	// double-encoded traversal, …). Only mechanical whitespace is caught; every payload char is left
+	// untouched. Returns before the budget counter, so a fixable typo never costs a request.
+	if strings.ContainsAny(rawURL, " \t\r\n") {
+		return nil, fmt.Errorf("URL contains raw whitespace — percent-encode query values before sending (space→%%20, and a literal %% →%%25); the HTTP request line cannot carry a raw space. Leave deliberate payload characters (../, {%%..%%}) as-is; encode only what the wire needs")
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("bad url: %w", err)
