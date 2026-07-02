@@ -142,6 +142,17 @@ RUN apt-get update \
     && (gem install wpscan --no-document || echo "WARN: gem install wpscan failed (tool will be unavailable)") \
     && rm -rf /var/lib/apt/lists/*
 
+# padbuster (CRYPTO specialist — AES-CBC/block-cipher padding-oracle decrypt+forge; the dispatch_oss
+# crypto answer). A single Perl script (GDSSecurity original), needs perl + libwww-perl (LWP). Not in
+# apt. Best-effort so a fetch failure degrades to "unavailable" at runtime rather than failing the image.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends perl libwww-perl libcrypt-ssleay-perl \
+    && (curl -fL -o /usr/local/bin/padbuster \
+          https://raw.githubusercontent.com/GDSSecurity/PadBuster/master/padBuster.pl \
+        && chmod +x /usr/local/bin/padbuster \
+        || echo "WARN: padbuster install failed (tool will be unavailable)") \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install nuclei. Use the linux/<arch> release matching the host arch.
 RUN curl -fL -o /tmp/nuclei.zip \
         "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH}.zip" \

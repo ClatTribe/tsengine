@@ -28,11 +28,12 @@ type Dispatcher interface {
 // ossSpecialists is the curated registry the agent may dispatch to, each with WHEN to reach for it. These
 // are OSS specialists the L1 pipeline already wraps — the webagent just gains on-demand access to them.
 var ossSpecialists = map[string]string{
-	"sqlmap": "automated SQL-injection EXTRACTION — boolean/time-based BLIND, error-based, UNION; dump tables/columns when manual extraction is infeasible (the blind-SQLi answer)",
-	"wpscan": "WordPress core/plugin/theme CVE detection + user enumeration (the WordPress-CVE answer)",
-	"nuclei": "known-CVE / misconfiguration template scan against a URL",
-	"ffuf":   "content / parameter / vhost fuzzing at scale (bigger than discover_content's small wordlist)",
-	"hydra":  "credential brute-force against a discovered login (bigger than try_default_creds' short list)",
+	"sqlmap":    "automated SQL-injection EXTRACTION — boolean/time-based BLIND, error-based, UNION; dump tables/columns when manual extraction is infeasible (the blind-SQLi answer)",
+	"wpscan":    "WordPress core/plugin/theme CVE detection + user enumeration (the WordPress-CVE answer)",
+	"nuclei":    "known-CVE / misconfiguration template scan against a URL",
+	"ffuf":      "content / parameter / vhost fuzzing at scale (bigger than discover_content's small wordlist)",
+	"hydra":     "credential brute-force against a discovered login (bigger than try_default_creds' short list)",
+	"padbuster": "AES-CBC / block-cipher PADDING-ORACLE attack — decrypt a ciphertext byte-by-byte, or FORGE (encrypt) an arbitrary plaintext into a valid cookie/token (the crypto answer; char-by-char work the request budget can't do)",
 }
 
 func ossToolList() string {
