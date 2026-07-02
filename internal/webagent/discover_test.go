@@ -11,7 +11,8 @@ import (
 // agent fetched `/`, saw only boilerplate, and probed params that don't exist. discoverSurface pulls
 // the endpoint + param + method out of the FULL body so the agent gets the lead regardless of offset.
 func TestDiscoverSurface_FindsBuriedEndpoint(t *testing.T) {
-	body := "<!doctype html><html><head><title>Jobs</title>" +
+	body := `<!doctype html><html><head><title>Jobs</title>` +
+		`<meta name="viewport" content="width=device-width, initial-scale=1.0">` + // must NOT become a "param"
 		strings.Repeat("<!-- filler filler filler -->", 80) + // push the JS well past any snippet cap
 		`<script>
 		async function load() {
@@ -46,6 +47,11 @@ func TestDiscoverSurface_FindsBuriedEndpoint(t *testing.T) {
 		if strings.Contains(got, noise) {
 			t.Errorf("discoverSurface leaked JS language key %q as a param (should be filtered)\n  got: %s", noise, got)
 		}
+	}
+	// The XBEN-006 replay caught this: <meta name="viewport"> must NOT be surfaced as a request param
+	// (the agent chased a fictional ?viewport= param). Only FORM-FIELD name= counts.
+	if strings.Contains(got, "viewport") {
+		t.Errorf("discoverSurface surfaced <meta name=viewport> as a request param (noise)\n  got: %s", got)
 	}
 }
 

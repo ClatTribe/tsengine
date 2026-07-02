@@ -20,8 +20,11 @@ var (
 	reAxiosURL = regexp.MustCompile("(?i)axios(?:\\.\\w+)?\\(\\s*[\"'`]([^\"'`]+)")
 	reXHROpen  = regexp.MustCompile("(?i)\\.open\\(\\s*[\"'][A-Za-z]+[\"']\\s*,\\s*[\"'`]([^\"'`]+)")
 	reAttrURL  = regexp.MustCompile("(?i)\\b(?:href|src|action|url)\\s*[:=]\\s*[\"'`]([^\"'`#][^\"'`]*)")
-	reMethod   = regexp.MustCompile("(?i)\\bmethod\\s*:\\s*[\"']([A-Za-z]+)[\"']")
-	reFormName = regexp.MustCompile("(?i)\\bname\\s*=\\s*[\"']([^\"']+)[\"']")
+	reMethod = regexp.MustCompile("(?i)\\bmethod\\s*:\\s*[\"']([A-Za-z]+)[\"']")
+	// Only FORM-FIELD name= (input/textarea/select/button) is a request param — NOT <meta name="viewport">
+	// or <link name=…>, which are page metadata. Scoping to the field tag kills that noise class (the
+	// XBEN-006 replay showed the agent chase a `?viewport=` param lifted from the viewport meta tag).
+	reFormName = regexp.MustCompile("(?is)<(?:input|textarea|select|button)\\b[^>]*?\\bname\\s*=\\s*[\"']([^\"']+)")
 	reStringify = regexp.MustCompile("(?is)JSON\\.stringify\\(\\s*\\{([^}]{0,400})\\}")
 	reObjKey   = regexp.MustCompile("[\"']?([a-zA-Z_][a-zA-Z0-9_]{1,40})[\"']?\\s*:")
 )
