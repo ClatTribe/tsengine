@@ -37,6 +37,12 @@ func TestDiscoverSurface_FindsBuriedEndpoint(t *testing.T) {
 			t.Errorf("discoverSurface missing %q\n  got: %s", want, got)
 		}
 	}
+	// job_type came from JSON.stringify → it MUST be flagged as a JSON body field (send as
+	// application/json), the signal whose absence sent the agent down the form-encoded 500 dead end.
+	jsonIdx := strings.Index(got, "JSON body fields")
+	if jsonIdx < 0 || !strings.Contains(got[jsonIdx:], "job_type") {
+		t.Errorf("job_type not flagged as a JSON body field (agent would form-encode it → opaque 500)\n  got: %s", got)
+	}
 	// Must NOT surface page furniture (static assets) or JS language keys as params (noise control).
 	for _, noise := range []string{"/style.css", "/app.js"} {
 		if strings.Contains(got, noise) {
