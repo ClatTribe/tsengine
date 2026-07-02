@@ -29,6 +29,7 @@ type Context struct {
 
 	ctx   context.Context
 	req   *Requester
+	oob   *Collector // lazily started out-of-band interaction collector (blind-vuln proof + exfil)
 	turnN int
 	findN int
 	calls int
@@ -128,6 +129,11 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		cc.req = NewRequester(allowHostsFor(cc.Target, allowSeeds), opts.MaxRequests, opts.MinInterval)
 	}
 	cc.ctx = ctx
+	defer func() {
+		if cc.oob != nil {
+			cc.oob.Stop() // shut the OOB listener at engagement end (best-effort)
+		}
+	}()
 	if cc.Target != "" {
 		cc.Routes = appendUniq(cc.Routes, cc.Target)
 	}

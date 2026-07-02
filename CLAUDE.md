@@ -588,6 +588,23 @@ The propagation is best-effort â any failure during re-emission is logged +
 | Findings store (host_tracer) | â (with hooks) | â (hookless; sidecar-shipped to host) |
 | Workflow state singleton | â | (separate sandbox-side; not propagated) |
 
+### 12.6 L2 offensive agents execute host-side (NOT via the sandbox)
+
+The host/sandbox split above governs **L1 tool dispatch** -- the `Tool` interface,
+`SandboxExecution()`, and the tool-server. The **L2 offensive agents run on the HOST and own
+their own network I/O**, a separate execution model:
+
+* `internal/webagent` (the `web-investigate` CLI -- the flag-pursuing web/API pentester, the XBOW
+  driver) makes live HTTP straight from the host via its own `Requester` (`http.Client`); it does
+  NOT go through `internal/sandbox` or the tool-server.
+* `internal/cloudengine`'s cloud agent is the same shape.
+
+Consequence for adding agent capabilities: an L2 agent TOOL (e.g. a headless browser via chromedp,
+an OOB/interaction collector) is **host-side Go with a host-side dependency -- it needs NO sandbox
+image rebuild** (that slow step is only for the sandboxed L1 OSS tools). The agent is
+host-allowlist-scoped for safety (its `Requester`), not sandbox-isolated. Do not assume "new agent
+capability => sandbox rebuild" -- check which layer owns the execution first.
+
 ---
 
 ## 13. No new in-house detection engines
