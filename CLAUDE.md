@@ -605,6 +605,34 @@ image rebuild** (that slow step is only for the sandboxed L1 OSS tools). The age
 host-allowlist-scoped for safety (its `Requester`), not sandbox-isolated. Do not assume "new agent
 capability => sandbox rebuild" -- check which layer owns the execution first.
 
+### 12.7 The ONE exception: `dispatch_oss` bridges the host-side agent to the sandbox OSS tools
+
+Some vuln classes are a specialized OSS tool's job, NOT the agent's in-process HTTP + the in-scope
+request budget: automated blind-SQLi EXTRACTION (sqlmap), WordPress/CVE (wpscan/nuclei), padding-oracle
+decrypt+forge (padbuster), credential brute-force (hydra), content fuzzing at scale (ffuf). Rebuilding
+those in the agent would violate Sec 13 and blow the budget. So the host-side `internal/webagent` gets
+ONE gateway back into the sandbox:
+
+* **`dispatch_oss(tool, args)`** (`internal/webagent/dispatch.go`) is the agent's single catalog slot
+  that reaches the whole OSS registry -- mirroring the L2 Lead's `dispatch_l2_probe` (Sec 2.6 / Sec 9:
+  one slot, many tools, so the LLM's tool list stays small). The curated registry today is 6 tools:
+  **sqlmap, wpscan, nuclei, ffuf, hydra, padbuster**. This is the 14th webagent tool but it is the
+  GATEWAY, not N per-tool slots -- it does NOT break the <=12-tool spirit (Sec 2.6).
+* **`webagent.SandboxDispatcher`** (`internal/webagent/sandbox_dispatch.go`) adapts the SAME sandbox
+  executor the L1 orchestrator uses (`Execute(ctx, tool, tool.Args) (tool.Result, error)`, satisfied by
+  `*sandbox.Client`) to the agent's string `Dispatcher`. So it is ONE dispatch path (Sec 9) -- the
+  offensive agent gets no second, divergent way to run OSS tools.
+* **Honest gate (Sec 10):** the host-side agent has no sandbox of its own, so a run WIRES the Dispatcher
+  (`web-investigate --oss-sandbox <image>`; `tsbench xbow --mode investigate` passes it through). When it
+  is nil (standalone `web-investigate --target`), `dispatch_oss` degrades gracefully and SAYS the tools
+  are unavailable -- it never pretends a tool ran.
+
+**WIRING RULE for a new sandbox OSS tool** (learned the hard way): register it in **BOTH**
+`internal/toolsbundle` (the host dispatch view -- so `cmd/tsengine`/`cmd/platform` resolve it) **AND**
+`cmd/tool-server/imports.go` (the sandbox execution view -- so the tool-server can actually run it).
+Miss the second and the tool-server 404s "unknown tool". Then add the binary to `docker/sandbox/Dockerfile`
+and (if it should be agent-reachable) to the `dispatch_oss` `ossSpecialists` registry.
+
 ---
 
 ## 13. No new in-house detection engines
