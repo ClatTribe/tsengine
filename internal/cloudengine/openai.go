@@ -92,6 +92,12 @@ func ClientFor(provider, model, apiKey string) (LLM, bool) {
 // (LLM_BASE_URL/LLM_PROVIDER — including a LOCAL Ollama) takes precedence, else Gemini (LLM_API_KEY).
 // Returns (nil, false) when neither is configured, so callers degrade to deterministic output.
 func LLMFromEnv() (LLM, bool) {
+	// Native Claude first (most specific env — ANTHROPIC_API_KEY), then an OpenAI-compat backend
+	// (LLM_BASE_URL, incl. a local Ollama), then Gemini (LLM_API_KEY). So setting ANTHROPIC_API_KEY
+	// drives the L2 agents on a frontier brain.
+	if a, ok := AnthropicFromEnv(); ok {
+		return a, true
+	}
 	if c, ok := OpenAICompatFromEnv(); ok {
 		return c, true
 	}
