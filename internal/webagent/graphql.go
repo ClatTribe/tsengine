@@ -3,6 +3,7 @@ package webagent
 import (
 	"encoding/json"
 	"fmt"
+	neturl "net/url"
 	"sort"
 	"strings"
 )
@@ -56,9 +57,30 @@ func tGraphQL(cc *Context, args map[string]any) string {
 	}
 	bodyBytes, _ := json.Marshal(map[string]string{"query": gqlIntrospectionQuery})
 	body := string(bodyBytes)
-	resp, err := cc.req.Send(cc.ctx, "POST", url, body, map[string]string{"Content-Type": "application/json"})
+	hdr := map[string]string{"Content-Type": "application/json"}
+	resp, err := cc.req.Send(cc.ctx, "POST", url, body, hdr)
 	if err != nil {
 		return "REQUEST FAILED: " + err.Error()
+	}
+	// GraphQL mounts on Starlette / FastAPI / Django commonly 307/308-redirect a missing trailing slash
+	// (/graphql -> /graphql/) — a method+body-preserving redirect. The Requester doesn't auto-follow
+	// (that's for open-redirect detection on 301/302), so follow ONE such redirect here, else the most
+	// common GraphQL setup silently returns no schema.
+	for hops := 0; hops < 2 && resp.Status >= 300 && resp.Status < 400 && resp.Location != ""; hops++ {
+		loc := resp.Location
+		if b, e := neturl.Parse(url); e == nil {
+			if r, e2 := neturl.Parse(loc); e2 == nil {
+				loc = b.ResolveReference(r).String()
+			}
+		}
+		if loc == url {
+			break
+		}
+		r2, e := cc.req.Send(cc.ctx, "POST", loc, body, hdr)
+		if e != nil {
+			break
+		}
+		resp, url = r2, loc
 	}
 	cc.turnN++
 	ev := resp.Body
