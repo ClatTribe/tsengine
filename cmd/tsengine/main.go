@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -560,7 +561,7 @@ func runScan(argv []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "[%s] orchestrator running anchors against %s\n", scanID, *target)
-	findings, fired, err := orchestrator.Run(ctx, assetTarget, handler, client)
+	findings, fired, surface, err := orchestrator.RunWithSurface(ctx, assetTarget, handler, client)
 	// A deadline (scan --timeout) is NOT fatal: the orchestrator returns the
 	// findings that completed before the cutoff. Persist them, flagged
 	// partial — a 0-finding timeout must be distinguishable from a clean
@@ -607,6 +608,7 @@ func runScan(argv []string) error {
 		Engine:           types.Engine{Version: Version, SandboxImageDigest: info.ImageDigest},
 		Corpus:           corpus,
 		AnchorsFired:     fired,
+		DiscoveredSurface: surface,
 		FindingsRaw:      tr.Raw(),
 		FindingsEnriched: tr.Enriched(),
 		L15AuditLog:      tr.AuditLog(),
@@ -935,6 +937,77 @@ func runCloudInvestigate(argv []string) error {
 	return nil
 }
 
+// seedRoutesFromScan reads a prior L1 scan's vulnerabilities.json and returns the routes to seed the
+// offensive agent with: the recon-discovered surface (katana crawl / spec ingest) PLUS every endpoint
+// L1 already flagged a finding on. Deduped and NORMALIZED onto targetBase's host — the scan runs in
+// the sandbox (surface hosts are the sandbox-rewritten host.docker.internal / a mix of "SPEC <url>",
+// "POST /path", full URLs), but the host-side agent's allowlist is targetBase, so a raw seed would be
+// blocked out-of-scope. This is the recon→agent handoff — the agent starts from the real surface.
+func seedRoutesFromScan(path, targetBase string) ([]string, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // operator-provided path
+	if err != nil {
+		return nil, err
+	}
+	var scan types.Scan
+	if err := json.Unmarshal(data, &scan); err != nil {
+		return nil, fmt.Errorf("parse scan report: %w", err)
+	}
+	raw := append([]string{}, scan.DiscoveredSurface...)
+	for _, f := range scan.FindingsRaw {
+		raw = append(raw, f.Endpoint)
+	}
+	for _, f := range scan.FindingsEnriched {
+		raw = append(raw, f.Endpoint)
+	}
+	routes := make([]string, 0, len(raw))
+	for _, r := range raw {
+		if n := normalizeSeedRoute(r, targetBase); n != "" {
+			routes = append(routes, n)
+		}
+	}
+	return dedupeStrings(routes), nil
+}
+
+// normalizeSeedRoute maps one scan-report surface/endpoint entry to a concrete URL on targetBase's
+// host — the only host the host-side agent is allowed to reach. Strips a leading method / "SPEC "
+// marker, takes the path+query of a full URL (re-hosting off the sandbox's host.docker.internal),
+// and prepends targetBase to a bare path. Returns "" for anything it can't turn into a same-host URL.
+func normalizeSeedRoute(rawRoute, targetBase string) string {
+	s := strings.TrimSpace(rawRoute)
+	for _, p := range []string{"SPEC ", "GET ", "POST ", "PUT ", "DELETE ", "PATCH ", "HEAD ", "OPTIONS "} {
+		if strings.HasPrefix(s, p) {
+			s = strings.TrimSpace(strings.TrimPrefix(s, p))
+			break
+		}
+	}
+	base := strings.TrimRight(strings.TrimSpace(targetBase), "/")
+	if s == "" {
+		return ""
+	}
+	if u, err := url.Parse(s); err == nil && u.Host != "" {
+		return base + u.RequestURI() // re-host the path+query onto the target
+	}
+	if strings.HasPrefix(s, "/") {
+		return base + s
+	}
+	return ""
+}
+
+// dedupeStrings returns the input with blanks + duplicates removed, first-seen order preserved.
+func dedupeStrings(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
+}
+
 // runWebInvestigate points the LLM-as-brain offensive agent at one authorized
 // live web/API target. The agent sends crafted requests, reads the engine's
 // DETERMINISTIC indicators, and records only structurally-grounded findings
@@ -944,6 +1017,7 @@ func runWebInvestigate(argv []string) error {
 	fs := flag.NewFlagSet("web-investigate", flag.ContinueOnError)
 	target := fs.String("target", "", "authorized target base URL (REQUIRED — you must own/have permission to test it)")
 	seedCSV := fs.String("seed", "", "optional comma-separated seed routes from a prior scan (same host(s) as --target)")
+	scanReport := fs.String("scan", "", "seed the agent from a prior L1 scan's vulnerabilities.json (its discovered_surface + finding endpoints) so it doesn't start blind — the recon→agent handoff")
 	maxReq := fs.Int("max-requests", 120, "hard request budget (the runaway / do-no-harm guard)")
 	maxIters := fs.Int("max-iters", 30, "max tool-call turns before the loop is force-closed")
 	minInterval := fs.Duration("min-interval", 0, "throttle between requests (e.g. 200ms)")
@@ -965,6 +1039,18 @@ func runWebInvestigate(argv []string) error {
 			seed = append(seed, s)
 		}
 	}
+	// Seed from a prior L1 scan (the recon→agent handoff): the discovered surface (katana crawl /
+	// spec ingest) + the endpoints L1 already found something on. This is what keeps the agent from
+	// starting blind — it begins with the real request surface instead of guessing routes.
+	if *scanReport != "" {
+		routes, serr := seedRoutesFromScan(*scanReport, *target)
+		if serr != nil {
+			return fmt.Errorf("--scan: %w", serr)
+		}
+		seed = append(seed, routes...)
+		fmt.Fprintf(os.Stderr, "[web-investigate] seeded %d route(s) from %s\n", len(routes), *scanReport)
+	}
+	seed = dedupeStrings(seed)
 
 	llm, ok := cloudengine.LLMFromEnv()
 	if !ok {

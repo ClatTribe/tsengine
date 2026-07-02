@@ -25,6 +25,12 @@ type Scan struct {
 	Corpus           Corpus       `json:"corpus"`
 	AnchorsFired     []string     `json:"anchors_fired"`
 	RegistryFired    []string     `json:"registry_fired,omitempty"`
+	// DiscoveredSurface is the deduped, filtered request surface the L1 recon stage found (katana
+	// crawl, spec ingest, etc.) — the endpoints the detection tools fanned out over. Persisted so a
+	// consumer can SEED the L2 offensive agent from it (web-investigate --scan) instead of running the
+	// agent blind. Recon output that was previously computed and thrown away. Empty for single-stage
+	// assets (repo/container) that have no crawl surface.
+	DiscoveredSurface []string     `json:"discovered_surface,omitempty"`
 	FindingsRaw      []Finding    `json:"findings_raw"`
 	FindingsEnriched []Finding    `json:"findings_enriched"`
 	L15AuditLog      []AuditEntry `json:"l15_audit_log,omitempty"`
