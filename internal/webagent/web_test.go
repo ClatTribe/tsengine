@@ -169,6 +169,11 @@ func TestSend_AutoJSONContentType(t *testing.T) {
 	if !strings.Contains(gotBody, "job_type") {
 		t.Errorf("body not delivered intact: %q", gotBody)
 	}
+	// The turn must RECORD the body actually sent — the gemma comparison was blind to the empty-body
+	// 500s precisely because only `payload` (not the sent body) was in the transcript.
+	if len(cc.History) == 0 || !strings.Contains(cc.History[0].Body, "job_type") {
+		t.Errorf("Turn.Body not recorded — a transcript can't show what body was actually sent")
+	}
 }
 
 // The core anti-hallucination + injection guarantee: a finding whose cited turn
