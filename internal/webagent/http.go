@@ -66,6 +66,16 @@ type Resp struct {
 // Sent reports how many requests have been made (for budget display).
 func (r *Requester) Sent() int { return r.sent }
 
+// AllowedURL reports whether rawURL's host is in the scope allowlist — the SAME guard Send enforces,
+// exposed so other host-side tools (e.g. the headless browser) apply identical scope before acting.
+func (r *Requester) AllowedURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return r.allow[strings.ToLower(u.Host)]
+}
+
 // Send fires one request, enforcing the allowlist + cap + throttle.
 func (r *Requester) Send(ctx context.Context, method, rawURL, body string, headers map[string]string) (*Resp, error) {
 	// A raw space (or other request-line-breaking whitespace) in the URL can't be sent — it splits the
