@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -938,9 +939,11 @@ func runCloudInvestigate(argv []string) error {
 
 // seedRoutesFromScan reads a prior L1 scan's vulnerabilities.json and returns the routes to seed the
 // offensive agent with: the recon-discovered surface (katana crawl / spec ingest) PLUS every endpoint
-// L1 already flagged a finding on. Deduped. This is the recon→agent handoff — the agent starts from
-// the real request surface instead of guessing routes blind.
-func seedRoutesFromScan(path string) ([]string, error) {
+// L1 already flagged a finding on. Deduped and NORMALIZED onto targetBase's host — the scan runs in
+// the sandbox (surface hosts are the sandbox-rewritten host.docker.internal / a mix of "SPEC <url>",
+// "POST /path", full URLs), but the host-side agent's allowlist is targetBase, so a raw seed would be
+// blocked out-of-scope. This is the recon→agent handoff — the agent starts from the real surface.
+func seedRoutesFromScan(path, targetBase string) ([]string, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // operator-provided path
 	if err != nil {
 		return nil, err
@@ -949,18 +952,45 @@ func seedRoutesFromScan(path string) ([]string, error) {
 	if err := json.Unmarshal(data, &scan); err != nil {
 		return nil, fmt.Errorf("parse scan report: %w", err)
 	}
-	routes := append([]string{}, scan.DiscoveredSurface...)
+	raw := append([]string{}, scan.DiscoveredSurface...)
 	for _, f := range scan.FindingsRaw {
-		if f.Endpoint != "" {
-			routes = append(routes, f.Endpoint)
-		}
+		raw = append(raw, f.Endpoint)
 	}
 	for _, f := range scan.FindingsEnriched {
-		if f.Endpoint != "" {
-			routes = append(routes, f.Endpoint)
+		raw = append(raw, f.Endpoint)
+	}
+	routes := make([]string, 0, len(raw))
+	for _, r := range raw {
+		if n := normalizeSeedRoute(r, targetBase); n != "" {
+			routes = append(routes, n)
 		}
 	}
 	return dedupeStrings(routes), nil
+}
+
+// normalizeSeedRoute maps one scan-report surface/endpoint entry to a concrete URL on targetBase's
+// host — the only host the host-side agent is allowed to reach. Strips a leading method / "SPEC "
+// marker, takes the path+query of a full URL (re-hosting off the sandbox's host.docker.internal),
+// and prepends targetBase to a bare path. Returns "" for anything it can't turn into a same-host URL.
+func normalizeSeedRoute(rawRoute, targetBase string) string {
+	s := strings.TrimSpace(rawRoute)
+	for _, p := range []string{"SPEC ", "GET ", "POST ", "PUT ", "DELETE ", "PATCH ", "HEAD ", "OPTIONS "} {
+		if strings.HasPrefix(s, p) {
+			s = strings.TrimSpace(strings.TrimPrefix(s, p))
+			break
+		}
+	}
+	base := strings.TrimRight(strings.TrimSpace(targetBase), "/")
+	if s == "" {
+		return ""
+	}
+	if u, err := url.Parse(s); err == nil && u.Host != "" {
+		return base + u.RequestURI() // re-host the path+query onto the target
+	}
+	if strings.HasPrefix(s, "/") {
+		return base + s
+	}
+	return ""
 }
 
 // dedupeStrings returns the input with blanks + duplicates removed, first-seen order preserved.
@@ -1013,7 +1043,7 @@ func runWebInvestigate(argv []string) error {
 	// spec ingest) + the endpoints L1 already found something on. This is what keeps the agent from
 	// starting blind — it begins with the real request surface instead of guessing routes.
 	if *scanReport != "" {
-		routes, serr := seedRoutesFromScan(*scanReport)
+		routes, serr := seedRoutesFromScan(*scanReport, *target)
 		if serr != nil {
 			return fmt.Errorf("--scan: %w", serr)
 		}
