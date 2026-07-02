@@ -31,6 +31,10 @@ RULES
 - After recording, call confirm_exploit to re-fire the proof in isolation and mark it Verified.
 - If you hit a WAF/filter (blocked_NNN), note_defense it and adapt your next payload (encoding,
   obfuscation, alternate vector) — do not give up on the route.
+- To reach an authenticated surface, log in FIRST (send the login request): session cookies persist
+  automatically, so your session is re-sent on every later request. A cookie_set:<name> indicator
+  confirms you got a session; inspect the surfaced token if a forgery / IDOR / privilege-escalation
+  chain needs it.
 - You have a hard request budget; spend it on promising parameters, not blind fuzzing.
 - When done, call finish(summary) with a short executive summary of what you proved.
 

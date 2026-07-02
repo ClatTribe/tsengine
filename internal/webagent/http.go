@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strings"
@@ -39,8 +40,14 @@ func NewRequester(allowHosts []string, maxRequests int, minInterval time.Duratio
 	for _, h := range allowHosts {
 		allow[strings.ToLower(h)] = true
 	}
+	// A cookie jar persists Set-Cookie across requests, so once the agent logs in it STAYS
+	// authenticated on every later request. Without it each post-login request went out with no
+	// session and silently hit the logged-out view — the auth-chain dead end that made every
+	// authenticated surface unreachable. The jar is per-Requester (fresh per engagement, no
+	// cross-target leakage) and the agent is host-allowlisted anyway. cookiejar.New(nil) never errors.
+	jar, _ := cookiejar.New(nil)
 	return &Requester{
-		client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: noFollow},
+		client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: noFollow, Jar: jar},
 		allow:  allow, max: maxRequests, minInterval: minInterval,
 	}
 }
@@ -49,10 +56,11 @@ func noFollow(_ *http.Request, _ []*http.Request) error { return http.ErrUseLast
 
 // Resp is the part of a response the agent reasons over.
 type Resp struct {
-	Status   int
-	Body     string
-	Location string
-	Elapsed  time.Duration
+	Status    int
+	Body      string
+	Location  string
+	SetCookie []string // raw Set-Cookie header values from THIS response — the session token(s) the agent may need to inspect/forge (server-set metadata, capped)
+	Elapsed   time.Duration
 }
 
 // Sent reports how many requests have been made (for budget display).
@@ -102,8 +110,40 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 	b, _ := io.ReadAll(io.LimitReader(httpResp.Body, 64*1024))
 	return &Resp{
 		Status: httpResp.StatusCode, Body: string(b),
-		Location: httpResp.Header.Get("Location"), Elapsed: time.Since(start),
+		Location:  httpResp.Header.Get("Location"),
+		SetCookie: capCookies(httpResp.Header["Set-Cookie"]),
+		Elapsed:   time.Since(start),
 	}, nil
+}
+
+// cookieMaxLen bounds a single Set-Cookie value recorded/surfaced — generous enough to hold a full
+// session JWT (which the agent may need to inspect for a token-forgery / IDOR chain) yet bounded so a
+// pathological cookie can't bloat the transcript / evidence.
+const cookieMaxLen = 4096
+
+// capCookies caps each raw Set-Cookie value (nil in → nil out, so a cookieless response records nothing).
+func capCookies(raw []string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, c := range raw {
+		if len(c) > cookieMaxLen {
+			c = c[:cookieMaxLen] + "…"
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// cookieName extracts the NAME of a Set-Cookie header value (the part before '='), for a stable
+// deterministic indicator. "session=eyJ…; Path=/" → "session". Names are case-sensitive per RFC 6265,
+// so it is preserved as-is.
+func cookieName(raw string) string {
+	if i := strings.IndexByte(raw, '='); i > 0 {
+		return strings.TrimSpace(raw[:i])
+	}
+	return strings.TrimSpace(raw)
 }
 
 // --- deterministic indicators (the grounding substrate) ---
@@ -152,6 +192,9 @@ func indicators(payload string, resp *Resp) []string {
 	}
 	if resp.Status == 403 || resp.Status == 406 || resp.Status == 429 {
 		ind = append(ind, fmt.Sprintf("blocked_%d", resp.Status)) // WAF/filter signal
+	}
+	for _, c := range resp.SetCookie {
+		ind = append(ind, "cookie_set:"+cookieName(c)) // session established/rotated — informational, like redirect:
 	}
 	return ind
 }
