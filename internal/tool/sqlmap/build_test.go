@@ -119,3 +119,20 @@ func TestKnownArgs_CoversExtraction(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildCLI_URLAlias: dispatch_oss's docs say sqlmap {"url":...}; the wrapper must accept url as
+// an alias for target (else every dispatch_oss(sqlmap) call fails "missing required arg target").
+func TestBuildCLI_URLAlias(t *testing.T) {
+	cli, target, err := buildCLI(tool.Args{"url": "http://t/x?id=1"})
+	if err != nil {
+		t.Fatalf("url alias should be accepted: %v", err)
+	}
+	if target != "http://t/x?id=1" || !hasFlagVal(cli, "-u", "http://t/x?id=1") {
+		t.Errorf("url not used as target: %v", cli)
+	}
+	// explicit target still wins over url
+	c2, tg2, _ := buildCLI(tool.Args{"target": "http://a/", "url": "http://b/"})
+	if tg2 != "http://a/" || !hasFlagVal(c2, "-u", "http://a/") {
+		t.Errorf("target should win over url: %v", c2)
+	}
+}
