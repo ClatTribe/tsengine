@@ -76,9 +76,15 @@ func (*Sqlmap) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 // buildCLI assembles the sqlmap argv from the tool args (pure — no exec, so it's unit-tested). It
 // returns the argv and the resolved target (for the finding-parse call).
 func buildCLI(args tool.Args) ([]string, string, error) {
+	// Accept "url" as an alias for "target": the dispatch_oss tool description tells the agent to
+	// pass sqlmap {"url":"..."}, and an LLM naturally uses "url" for an HTTP endpoint — without the
+	// alias every dispatch_oss(sqlmap) call died with "missing required arg 'target'".
 	target, _ := args["target"].(string)
 	if strings.TrimSpace(target) == "" {
-		return nil, "", errors.New("sqlmap: missing required arg 'target'")
+		target, _ = args["url"].(string)
+	}
+	if strings.TrimSpace(target) == "" {
+		return nil, "", errors.New("sqlmap: missing required arg 'target' (or 'url')")
 	}
 	technique := defaultTechnique
 	if t, ok := args["technique"].(string); ok && strings.TrimSpace(t) != "" {
@@ -151,7 +157,7 @@ func buildCLI(args tool.Args) ([]string, string, error) {
 // rest are the opt-in extraction args (dispatch_oss / tool-replay dig-deeper).
 func (*Sqlmap) KnownArgs() []string {
 	return []string{
-		"target", "data", "method", "cookie", "technique", "level", "risk",
+		"target", "url", "data", "method", "cookie", "technique", "level", "risk",
 		"param", "prefix", "suffix", "string", "dbms", "db", "table", "column", "file_read", "dump",
 	}
 }
