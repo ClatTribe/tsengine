@@ -14,12 +14,23 @@ import (
 // params) — so it never invents surface (§10). Wordlists are GENERIC pentest defaults (admin.php,
 // file, page, id…), not tied to any target.
 
-// commonPaths — the highest-signal unlinked endpoints/files across web apps. Kept short to respect the
-// request budget; ordered by likelihood. GENERIC (no target-specific names — §14.2).
+// commonPaths — the highest-signal unlinked endpoints/files across web apps. GENERIC pentest defaults
+// (no target-specific names — §14.2); ordered by likelihood. Includes the dynamic AUTH + CRUD/query
+// handlers where SQLi/IDOR actually live (login.php, search.php, product.php, …) — a static site's
+// forms often point at a placeholder action while the real injectable endpoint is unlinked, so name
+// discovery is the only way to reach it. Bounded (~40) to respect the request budget.
 var commonPaths = []string{
+	// exposure / config / meta
 	"admin.php", "admin", "private.php", "private", "config.php", ".env", ".git/HEAD",
 	"robots.txt", "backup.zip", "backup.sql", "phpinfo.php", "info.php", "test.php",
 	"upload.php", "api.php", "dashboard.php", "panel.php", "server-status",
+	// auth handlers (the login/register SQLi + auth-bypass sinks)
+	"login.php", "login", "signin.php", "signin", "signup.php", "register.php", "auth.php",
+	"authenticate.php", "checklogin.php", "logout.php",
+	// CRUD / query handlers (SQLi/IDOR sinks behind a listing or detail view)
+	"search.php", "product.php", "products.php", "item.php", "view.php", "details.php",
+	"user.php", "users.php", "profile.php", "account.php", "news.php", "article.php",
+	"category.php", "list.php", "index.php", "home.php", "api/login",
 }
 
 // commonParams — the standard server-side query-param names (LFI/IDOR/injection/debug). GENERIC.

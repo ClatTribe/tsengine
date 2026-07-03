@@ -26,6 +26,8 @@ var (
 	// or <link name=…>, which are page metadata. Scoping to the field tag kills that noise class (the
 	// XBEN-006 replay showed the agent chase a `?viewport=` param lifted from the viewport meta tag).
 	reFormName = regexp.MustCompile("(?is)<(?:input|textarea|select|button)\\b[^>]*?\\bname\\s*=\\s*[\"']([^\"']+)")
+	// the <form action="..."> POST target -- the injection SINK the agent must submit to.
+	reFormAction = regexp.MustCompile("(?is)<form\\b[^>]*?\\baction\\s*=\\s*[\"']([^\"'#][^\"']*)")
 	reStringify = regexp.MustCompile("(?is)JSON\\.stringify\\(\\s*\\{([^}]{0,400})\\}")
 	reObjKey   = regexp.MustCompile("[\"']?([a-zA-Z_][a-zA-Z0-9_]{1,40})[\"']?\\s*:")
 )
@@ -105,37 +107,59 @@ func discoverSurface(body, base string) string {
 		return ""
 	}
 	endpoints := map[string]bool{}
-	addURL := func(u string) {
+	// norm resolves a raw link to an absolute in-scope URL, dropping anchors/schemes/static assets.
+	// Strips a #fragment (index.html#features and index.html#support are the SAME endpoint -- keeping
+	// both floods the capped list with same-page nav anchors and crowds out real handlers).
+	norm := func(u string) (string, bool) {
 		u = strings.TrimSpace(u)
-		// skip anchors, data:, mailto:, tel:, javascript:
 		if u == "" || strings.HasPrefix(u, "#") || strings.HasPrefix(u, "data:") ||
 			strings.HasPrefix(u, "mailto:") || strings.HasPrefix(u, "tel:") || strings.HasPrefix(u, "javascript:") {
-			return
+			return "", false
+		}
+		if i := strings.IndexByte(u, '#'); i >= 0 { // drop same-page fragment
+			u = u[:i]
+		}
+		if u == "" {
+			return "", false
 		}
 		if !strings.HasPrefix(u, "/") && !strings.HasPrefix(u, "http") {
-			// RELATIVE link (post.php?id=x, posts/upload.php) — resolve it against the page's OWN URL.
-			// Dropping these silently lost the surface on every app that uses relative links.
+			// RELATIVE link (post.php?id=x, send.php) — resolve against the page's OWN URL.
 			if b, err := url.Parse(base); err == nil && b.Host != "" {
 				if r, err := url.Parse(u); err == nil {
 					u = b.ResolveReference(r).String()
 				} else {
-					return
+					return "", false
 				}
 			} else {
-				return
+				return "", false
 			}
 		}
 		if staticAssetRe.MatchString(u) {
-			return
+			return "", false
 		}
 		if len(u) > 120 {
 			u = u[:120]
 		}
-		endpoints[u] = true
+		return u, true
+	}
+	addURL := func(u string) {
+		if n, ok := norm(u); ok {
+			endpoints[n] = true
+		}
 	}
 	for _, re := range []*regexp.Regexp{reFetchURL, reAxiosURL, reXHROpen, reAttrURL} {
 		for _, m := range re.FindAllStringSubmatch(body, -1) {
 			addURL(m[1])
+		}
+	}
+	// Form <action> targets are the highest-signal endpoints -- they're the POST SINK the agent must
+	// submit the injection to (SQLi/auth-bypass/etc.). Surface them in a DEDICATED line so a page full
+	// of nav links can't crowd the real handler out of the capped endpoints list. (reAttrURL already
+	// adds them to `endpoints` too; this just guarantees they're always shown + labelled.)
+	formActions := map[string]bool{}
+	for _, m := range reFormAction.FindAllStringSubmatch(body, -1) {
+		if n, ok := norm(m[1]); ok {
+			formActions[n] = true
 		}
 	}
 
@@ -177,6 +201,9 @@ func discoverSurface(body, base string) string {
 	}
 
 	parts := []string{}
+	if s := joinSet(formActions, 8); s != "" {
+		parts = append(parts, "form action (POST submit target — the injection sink): "+s)
+	}
 	if s := joinSet(endpoints, 15); s != "" {
 		parts = append(parts, "endpoints: "+s)
 	}
