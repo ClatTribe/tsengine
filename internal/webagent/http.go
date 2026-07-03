@@ -26,6 +26,7 @@ import (
 // none LLM-trusted (the cloudsafety principle).
 type Requester struct {
 	client      *http.Client
+	jar         http.CookieJar // persistence store; NOT attached to client.Jar so an explicit Cookie header can override it (token forgery)
 	allow       map[string]bool
 	max         int
 	minInterval time.Duration
@@ -46,8 +47,15 @@ func NewRequester(allowHosts []string, maxRequests int, minInterval time.Duratio
 	// authenticated surface unreachable. The jar is per-Requester (fresh per engagement, no
 	// cross-target leakage) and the agent is host-allowlisted anyway. cookiejar.New(nil) never errors.
 	jar, _ := cookiejar.New(nil)
+	// The jar is held on the Requester, NOT on client.Jar: Go's client auto-APPENDS jar cookies after
+	// any explicit Cookie header, and a duplicate cookie name means the server keeps one (usually the
+	// jar's original) -- so an explicit forged/overridden token (Bearer <other-id>, a re-signed JWT)
+	// was silently clobbered by the login cookie, dead-ending EVERY token-forgery IDOR/privesc chain.
+	// Sending cookies manually (mergeCookieHeader) lets an explicit Cookie header override the jar
+	// per-name while still persisting the login cookie for normal authed requests.
 	return &Requester{
-		client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: noFollow, Jar: jar},
+		client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: noFollow},
+		jar:    jar,
 		allow:  allow, max: maxRequests, minInterval: minInterval,
 	}
 }
@@ -115,8 +123,19 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 	if err != nil {
 		return nil, err
 	}
+	var explicitCookie string
 	for k, v := range headers {
+		if strings.EqualFold(k, "Cookie") {
+			explicitCookie = v // handled below (merge with jar, explicit wins per-name); don't set here
+			continue
+		}
 		req.Header.Set(k, v)
+	}
+	// Send cookies manually: jar (persisted login) merged with any explicit Cookie header, where the
+	// explicit value WINS per name -- so the agent can forge/override a session token for an IDOR/
+	// privesc chain. Empty result => no Cookie header (unauthenticated), matching a fresh client.
+	if merged := mergeCookieHeader(r.jar.Cookies(u), explicitCookie); merged != "" {
+		req.Header.Set("Cookie", merged)
 	}
 	r.sent++
 	r.last = time.Now()
@@ -126,6 +145,10 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 		return nil, err
 	}
 	defer httpResp.Body.Close()
+	// Persist this response's Set-Cookie into the jar (the client has no Jar of its own now).
+	if rc := httpResp.Cookies(); len(rc) > 0 {
+		r.jar.SetCookies(u, rc)
+	}
 	b, _ := io.ReadAll(io.LimitReader(httpResp.Body, 64*1024))
 	return &Resp{
 		Status: httpResp.StatusCode, Body: string(b),
@@ -133,6 +156,41 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 		SetCookie: capCookies(httpResp.Header["Set-Cookie"]),
 		Elapsed:   time.Since(start),
 	}, nil
+}
+
+// mergeCookieHeader builds the outgoing Cookie header from the jar's persisted cookies plus an
+// explicit Cookie header, where the EXPLICIT value overrides the jar for any shared name. This is
+// what lets the agent forge/override a session token (Bearer <other-id>, a re-signed JWT) for an
+// IDOR/privesc chain while still keeping the login cookie for names it did not override. Order:
+// explicit names first (as given), then the jar names it did not replace.
+func mergeCookieHeader(jarCookies []*http.Cookie, explicit string) string {
+	var parts []string
+	seen := map[string]bool{}
+	// explicit "name=value; name2=value2" -- keep values VERBATIM (a forged token may contain '=' or a
+	// space, e.g. "Bearer Mg=="), splitting only on the first '=' of each ';'-separated pair.
+	if strings.TrimSpace(explicit) != "" {
+		for _, pair := range strings.Split(explicit, ";") {
+			pair = strings.TrimSpace(pair)
+			if pair == "" {
+				continue
+			}
+			name := pair
+			if i := strings.IndexByte(pair, '='); i >= 0 {
+				name = strings.TrimSpace(pair[:i])
+			}
+			if name != "" && !seen[name] {
+				seen[name] = true
+				parts = append(parts, pair)
+			}
+		}
+	}
+	for _, c := range jarCookies {
+		if !seen[c.Name] {
+			seen[c.Name] = true
+			parts = append(parts, c.Name+"="+c.Value)
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 // cookieMaxLen bounds a single Set-Cookie value recorded/surfaced — generous enough to hold a full
