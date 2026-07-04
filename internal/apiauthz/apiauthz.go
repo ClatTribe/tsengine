@@ -17,6 +17,7 @@ package apiauthz
 
 import (
 	"context"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -156,13 +157,29 @@ func Evaluate(t AuthzTest, baseline, attacker Response) Verdict {
 				"attacker identity read the victim's object: HTTP " + strconv.Itoa(attacker.Status) + " with the victim's data returned"}
 		}
 	case ClassBFLA:
-		// A low-privilege caller invoked a privileged function and was NOT denied.
-		if attacker.Status/100 == 2 {
+		// A low-privilege caller invoked a privileged function and was NOT denied. The status alone is
+		// insufficient: many APIs (GraphQL always; REST APIs that put errors in the body) return HTTP 200
+		// for an authorization DENIAL — a "soft denial" like 200 {"error":"forbidden"}. Counting that 2xx
+		// as a bypass is a false positive, so a 2xx whose body carries a denial signal is NOT a finding
+		// (§10 — a finding needs a proven bypass, and a body-level denial IS a denial).
+		if attacker.Status/100 == 2 && !deniedInBody(attacker.Body) {
 			return Verdict{true, ClassBFLA,
 				"low-privilege identity invoked a privileged function without authorization: HTTP " + strconv.Itoa(attacker.Status)}
 		}
 	}
 	return Verdict{}
+}
+
+// authzDenialRe recognizes an authorization-DENIAL signal inside a body — used to reject a "soft
+// denial" (a 2xx that actually denies access, common in GraphQL and body-error REST APIs) from being
+// counted as a BFLA bypass. Deliberately CONSERVATIVE (unambiguous denial phrases that don't appear in
+// a real privileged-success payload): it only ever removes a clear soft-denial, never suppresses a
+// genuine bypass (whose 2xx carries the privileged result, not denial language).
+var authzDenialRe = regexp.MustCompile(`(?i)(forbidden|unauthorized|not authorized|access denied|permission denied|insufficient (?:scope|privilege|privileges|permission|permissions|role|rights)|requires admin|admin (?:role )?required|not allowed|you (?:do not|don't) have (?:permission|access|the))`)
+
+// deniedInBody reports whether a response body signals an authorization denial (a soft denial).
+func deniedInBody(body string) bool {
+	return authzDenialRe.MatchString(body)
 }
 
 // victimDataLeaked reports whether the attacker's response carries the victim's data.
