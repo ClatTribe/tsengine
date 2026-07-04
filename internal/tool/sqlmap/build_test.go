@@ -76,6 +76,47 @@ func TestBuildCLI_ExtractionArgs(t *testing.T) {
 	}
 }
 
+// TestBuildCLI_TamperEvasion: when a SQLi sits behind a WAF / keyword-strip filter, sqlmap's own
+// error output tells you to use --tamper (and --random-agent). The wrapper must expose both so
+// dispatch_oss(sqlmap) can bypass the protection mechanism — without them every filtered/WAF-protected
+// SQLi dead-ends "does not seem to be injectable" (grounded: live XBEN-006 keyword-allowlist filter,
+// where the default BEU payloads were all stripped → 500). tamper is a deliberate-bypass signal, so it
+// must also drop --smart (like the other extraction args).
+func TestBuildCLI_TamperEvasion(t *testing.T) {
+	cli, _, err := buildCLI(tool.Args{
+		"url":          "http://t/jobs",
+		"data":         `{"job_type":"back-end"}`,
+		"param":        "job_type",
+		"tamper":       "between,randomcase,space2comment",
+		"random_agent": true,
+		"dump":         true,
+	})
+	if err != nil {
+		t.Fatalf("buildCLI: %v", err)
+	}
+	if !hasFlagVal(cli, "--tamper", "between,randomcase,space2comment") {
+		t.Errorf("tamper not wired to --tamper: %v", cli)
+	}
+	if !hasFlag(cli, "--random-agent") {
+		t.Errorf("random_agent:true should add --random-agent: %v", cli)
+	}
+	if hasFlag(cli, "--smart") {
+		t.Errorf("a tamper (deliberate bypass) must drop --smart: %v", cli)
+	}
+	// random_agent accepts the JSON-string "true" too (dispatch args can arrive as strings).
+	c2, _, _ := buildCLI(tool.Args{"url": "http://t/", "random_agent": "true"})
+	if !hasFlag(c2, "--random-agent") {
+		t.Errorf(`random_agent:"true" (string) should add --random-agent: %v`, c2)
+	}
+	// tamper is in the arg contract (§5.2 C4) so a dispatcher passing it isn't a build failure.
+	known := strings.Join(New().KnownArgs(), ",")
+	for _, k := range []string{"tamper", "random_agent"} {
+		if !strings.Contains(known, k) {
+			t.Errorf("KnownArgs missing evasion key %q", k)
+		}
+	}
+}
+
 // TestBuildCLI_FileRead + dump accepts the JSON-string "true" (dispatch args arrive as strings).
 func TestBuildCLI_FileReadAndStringBool(t *testing.T) {
 	cli, _, err := buildCLI(tool.Args{"target": "http://t/", "file_read": "/FLAG.txt", "dump": "true"})

@@ -28,7 +28,7 @@ type Dispatcher interface {
 // ossSpecialists is the curated registry the agent may dispatch to, each with WHEN to reach for it. These
 // are OSS specialists the L1 pipeline already wraps — the webagent just gains on-demand access to them.
 var ossSpecialists = map[string]string{
-	"sqlmap":    "automated SQL-injection EXTRACTION — boolean/time-based BLIND, error-based, UNION; dump tables/columns when manual extraction is infeasible (the blind-SQLi answer)",
+	"sqlmap":    "automated SQL-injection EXTRACTION — boolean/time-based BLIND, error-based, UNION; dump tables/columns when manual extraction is infeasible (the blind-SQLi answer). If the injection sits behind a WAF or a keyword/word filter (payloads get stripped → sqlmap reports 'not injectable' / repeated 500s), retry with tamper=\"between,randomcase,space2comment\" (+ random_agent:true) to rewrite payloads past the filter",
 	"wpscan":    "WordPress core/plugin/theme CVE detection + user enumeration (the WordPress-CVE answer)",
 	"nuclei":    "known-CVE / misconfiguration template scan against a URL",
 	"ffuf":      "fuzzing at scale. Put the FUZZ keyword ANYWHERE in url (e.g. url=\"http://t/order/FUZZ/receipt\") for path-segment/IDOR fuzzing; for an OBJECT-ID sweep add range=\"lo-hi\" with match=\"<regex>\" ({\"url\":\"http://t/order/FUZZ/receipt\",\"range\":\"300000-300999\",\"match\":\"flag\"}) — match keeps ONLY responses whose body matches (the flag), the filter you want. Your login session is auto-sent, so authed IDOR works. calibrate:true adds ffuf -ac (filters a uniform not-found) but it can over-filter — prefer match. No FUZZ + no range = dir-brute the seclists wordlist under url",
