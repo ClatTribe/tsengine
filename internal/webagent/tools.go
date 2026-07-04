@@ -10,12 +10,38 @@ import (
 // carries the endpoint/param leads the raw head would otherwise truncate away.
 const llmSnippetCap = 2048
 
+// llmSnippetTail is how much of the LLM snippet's budget is reserved for the TAIL of the body (the
+// rest is the head). A result that renders at the bottom of the page (a success flash, a
+// "here is the flag: …" line, an exfil after a big inline <style>) must stay visible.
+const llmSnippetTail = 768
+
 // evidenceBodyCap bounds the response body captured on a Turn for the signed evidence
 // bundle / transcript. Larger than the 240B LLM-facing snippet (which stays tight for the
 // token budget + prompt-injection surface) so the PROOF is complete enough to contain the
 // exploited artifact — a captured secret / flag / leaked file. Bounded so a large page
 // can't bloat the artifact. Not sent to the model.
 const evidenceBodyCap = 16384
+
+// evidenceBodyTail reserves part of the evidence cap for the body's TAIL, so a flag/exfil that lands
+// past evidenceBodyCap bytes (e.g. at the end of a long dispatch_oss dump) is still recorded.
+const evidenceBodyTail = 2048
+
+// headTail keeps the first head bytes AND the last tail bytes of s when it exceeds head+tail,
+// eliding the middle with a byte-count marker. It replaces pure head-truncation, which hid results
+// that render at the BOTTOM of a response. Byte-sliced (like the prior cap) — a split mid-rune is
+// tolerated the same way it was before.
+func headTail(s string, head, tail int) string {
+	if head < 0 {
+		head = 0
+	}
+	if tail < 0 {
+		tail = 0
+	}
+	if len(s) <= head+tail {
+		return s
+	}
+	return s[:head] + fmt.Sprintf(" …[%d bytes elided]… ", len(s)-head-tail) + s[len(s)-tail:]
+}
 
 // Turn is one request/response in the engagement history (the evidence substrate).
 type Turn struct {
@@ -140,16 +166,16 @@ func tSend(cc *Context, args map[string]any) string {
 	//      evidence bundle / transcript. The proof must be complete enough to contain the
 	//      exploited artifact — a captured secret / flag / leaked file — which the tight
 	//      LLM snippet would truncate away. It is NEVER sent to the model.
-	snippet := resp.Body
-	if len(snippet) > llmSnippetCap {
-		snippet = snippet[:llmSnippetCap] + "…"
-	}
+	// HEAD+TAIL, not head-only: the winning artifact often renders at the BOTTOM of the page — a
+	// success flash, a "Congratulations, here is the flag: …" line, an exfil appended after a large
+	// inline <style>/<script>. Pure head truncation made the agent EXECUTE the winning request yet
+	// never SEE the win (confirmed on a client-side-auth-bypass bench: the flag sat past a ~2KB
+	// Simpsons CSS block, so the head-capped snippet showed only the login form). Keeping both ends
+	// makes a bottom-of-page result visible without growing the token budget.
+	snippet := headTail(resp.Body, llmSnippetCap-llmSnippetTail, llmSnippetTail)
 	snippet = strings.ReplaceAll(snippet, "\n", " ")
 
-	evidence := resp.Body
-	if len(evidence) > evidenceBodyCap {
-		evidence = evidence[:evidenceBodyCap] + "…"
-	}
+	evidence := headTail(resp.Body, evidenceBodyCap-evidenceBodyTail, evidenceBodyTail)
 
 	// Deterministic surface extraction from the FULL body: the endpoints/params/methods a page reveals
 	// (e.g. a fetch('/jobs', {method:'POST', body:{job_type}}) buried past the snippet cap). This is the
