@@ -21,6 +21,7 @@ require (
 	github.com/chromedp/chromedp v0.15.1
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/prometheus/client_golang v1.23.2
+	golang.org/x/crypto v0.53.0
 	golang.org/x/sync v0.21.0
 	google.golang.org/api v0.286.0
 	modernc.org/sqlite v1.52.0
@@ -96,7 +97,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect

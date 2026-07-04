@@ -74,6 +74,28 @@ type Resp struct {
 // Sent reports how many requests have been made (for budget display).
 func (r *Requester) Sent() int { return r.sent }
 
+// HostInScope reports whether bareHost matches the HOSTNAME of any authorized entry (any port). SSH
+// lateral movement (ssh_exec) reaches the target box on a service port (22) distinct from the web
+// port, so scope is enforced at host granularity — the agent is authorized against the box, not one
+// port. A bare host with no authorized surface is refused, so ssh_exec can never touch a host the
+// LLM invents.
+func (r *Requester) HostInScope(bareHost string) bool {
+	bareHost = strings.ToLower(strings.TrimSpace(bareHost))
+	if bareHost == "" {
+		return false
+	}
+	for h := range r.allow {
+		hn := h
+		if i := strings.LastIndex(hn, ":"); i >= 0 {
+			hn = hn[:i]
+		}
+		if hn == bareHost {
+			return true
+		}
+	}
+	return false
+}
+
 // AllowedURL reports whether rawURL's host is in the scope allowlist — the SAME guard Send enforces,
 // exposed so other host-side tools (e.g. the headless browser) apply identical scope before acting.
 func (r *Requester) AllowedURL(rawURL string) bool {

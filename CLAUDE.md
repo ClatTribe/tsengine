@@ -600,10 +600,19 @@ their own network I/O**, a separate execution model:
 * `internal/cloudengine`'s cloud agent is the same shape.
 
 Consequence for adding agent capabilities: an L2 agent TOOL (e.g. a headless browser via chromedp,
-an OOB/interaction collector) is **host-side Go with a host-side dependency -- it needs NO sandbox
-image rebuild** (that slow step is only for the sandboxed L1 OSS tools). The agent is
-host-allowlist-scoped for safety (its `Requester`), not sandbox-isolated. Do not assume "new agent
-capability => sandbox rebuild" -- check which layer owns the execution first.
+an OOB/interaction collector, **`ssh_exec` -- credential-based SSH lateral movement via
+`golang.org/x/crypto/ssh`, `internal/webagent/ssh.go`**) is **host-side Go with a host-side dependency
+-- it needs NO sandbox image rebuild** (that slow step is only for the sandboxed L1 OSS tools). The
+agent is host-allowlist-scoped for safety (its `Requester`), not sandbox-isolated. Do not assume "new
+agent capability => sandbox rebuild" -- check which layer owns the execution first.
+
+`ssh_exec` is the EXPLOIT step for a leaked-credential finding: the agent discovers SSH creds over
+HTTP (a source disclosure / config dump), but the flag/next hop lives behind SSH not HTTP -- so
+`ssh_exec(user, password?|private_key?, command, host?, port?)` connects with the discovered creds
+and runs ONE command, returning its real output (grounded, §10). Scope-guarded at HOST granularity
+(`Requester.HostInScope` -- SSH:22 is a different port from the web app but the same authorized box)
+so it can never touch a host the LLM invents; bounded (dial+handshake timeout, 12KB output cap). This
+is the class-level fix that turns "I found creds" into a proven lateral-movement capture (XBEN-042).
 
 ### 12.7 The ONE exception: `dispatch_oss` bridges the host-side agent to the sandbox OSS tools
 
