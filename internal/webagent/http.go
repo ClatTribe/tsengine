@@ -16,6 +16,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -289,6 +290,9 @@ func indicators(payload string, resp *Resp) []string {
 	if resp.Elapsed > 4*time.Second {
 		ind = append(ind, "slow_response") // time-based blind signal
 	}
+	if payload != "" && sstiEvaluated(payload, resp.Body) {
+		ind = append(ind, "ssti_eval") // server-side template injection: the engine COMPUTED the arithmetic probe
+	}
 	if resp.Status == 403 || resp.Status == 406 || resp.Status == 429 {
 		ind = append(ind, fmt.Sprintf("blocked_%d", resp.Status)) // WAF/filter signal
 	}
@@ -300,6 +304,33 @@ func indicators(payload string, resp *Resp) []string {
 
 func looksInjectable(payload string) bool {
 	return strings.ContainsAny(payload, "<>\"'") || strings.Contains(payload, "script")
+}
+
+// sstiExprRe matches a template-injection ARITHMETIC probe in the payload — {{A*B}}, ${A*B},
+// <%= A*B %>, #{A*B} — the canonical SSTI confirmation across Jinja/Twig/ERB/Freemarker/Ruby.
+var sstiExprRe = regexp.MustCompile(`(?:\{\{|\$\{|<%=|#\{)\s*(\d{2,7})\s*\*\s*(\d{2,7})\s*(?:\}\}|\}|%>)`)
+
+// sstiEvaluated reports a deterministic server-side-template-injection signal: the payload carried a
+// template arithmetic expression whose PRODUCT appears in the response while the raw expression does
+// NOT — i.e. the engine computed it (a mere reflection echoes the literal unchanged, which is XSS not
+// SSTI). Requires a ≥4-digit product so a common small number can't collide, keeping ssti_eval
+// false-positive-free (the record_finding gate requires it, and confirm_exploit re-verifies). Grounded
+// (§10): a real request/response substring, never the model's reading.
+func sstiEvaluated(payload, body string) bool {
+	m := sstiExprRe.FindStringSubmatch(payload)
+	if m == nil {
+		return false
+	}
+	a, _ := strconv.Atoi(m[1])
+	b, _ := strconv.Atoi(m[2])
+	if a == 0 || b == 0 {
+		return false
+	}
+	product := strconv.Itoa(a * b)
+	if len(product) < 4 {
+		return false // too collision-prone to ground a finding
+	}
+	return strings.Contains(body, product) && !strings.Contains(body, m[0])
 }
 
 func hasIndicator(turn Turn, want string) bool {
