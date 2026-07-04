@@ -63,19 +63,30 @@ func discoverPaths(cc *Context, base string) string {
 	if err != nil {
 		return "REQUEST FAILED (baseline): " + err.Error()
 	}
+	// Baseline auto-calibration (ffuf/arjun): a SECOND bogus path. If two nonexistent paths already
+	// differ in size beyond the threshold, the 404/catch-all body is non-deterministic (rotating
+	// banner, path-derived "did you mean", variable-length nonce) — the size-diff signal would then fire
+	// for EVERY probed path (a false-positive flood violating the "no invented surface" promise, §10).
+	// When unstable, fall back to STATUS-ONLY matching, which stays grounded.
+	base2, err2 := cc.req.Send(cc.ctx, "GET", base+"/zz"+randHex(6), "", nil)
+	sizeReliable := err2 == nil && base2.Status == baseResp.Status && !sizeDiffers(baseResp.Body, base2.Body)
 	var found []string
 	for _, p := range commonPaths {
 		resp, err := cc.req.Send(cc.ctx, "GET", base+"/"+p, "", nil)
 		if err != nil { // budget exhausted / network — stop with what we have
 			break
 		}
-		if pathDiffers(baseResp, resp) {
+		if pathDiffers(baseResp, resp, sizeReliable) {
 			found = append(found, fmt.Sprintf("/%s (%d)", p, resp.Status))
 			cc.Routes = appendUniq(cc.Routes, base+"/"+p)
 		}
 	}
 	if len(found) == 0 {
-		return fmt.Sprintf("no common hidden paths found (probed %d) — the surface may be fully linked, or uses non-standard names.", len(commonPaths))
+		note := ""
+		if !sizeReliable {
+			note = " (the 404 page is dynamic — matched on status only, so size-only hidden pages may be missed; probe likely names manually)"
+		}
+		return fmt.Sprintf("no common hidden paths found (probed %d)%s — the surface may be fully linked, or uses non-standard names.", len(commonPaths), note)
 	}
 	return "DISCOVERED hidden paths (not linked — probe them): " + strings.Join(found, ", ")
 }
@@ -97,6 +108,12 @@ func discoverParams(cc *Context, page string) string {
 	if err != nil {
 		return "REQUEST FAILED (baseline): " + err.Error()
 	}
+	// Same auto-calibration as discoverPaths: a SECOND bogus-param request. If the page body already
+	// varies beyond the fine threshold between two identical-semantics requests, it's dynamic (nonce,
+	// rotating content) — the size-diff signal would then flag EVERY inert param, so we suppress it and
+	// keep only the grounded reflected-canary + status signals.
+	base2, err2 := cc.req.Send(cc.ctx, "GET", page+sep+"zz"+randHex(6)+"="+canary, "", nil)
+	sizeReliable := err2 == nil && base2.Status == base.Status && !paramSizeDiffers(base.Body, base2.Body)
 	var found []string
 	for _, name := range commonParams {
 		resp, err := cc.req.Send(cc.ctx, "GET", page+sep+name+"="+canary, "", nil)
@@ -109,7 +126,7 @@ func discoverParams(cc *Context, page string) string {
 			why = "reflected" // echoes this param's value specifically (not the bogus one)
 		case resp.Status != base.Status:
 			why = fmt.Sprintf("status %d→%d", base.Status, resp.Status)
-		case paramSizeDiffers(base.Body, resp.Body):
+		case sizeReliable && paramSizeDiffers(base.Body, resp.Body):
 			why = "response changed"
 		}
 		if why != "" {
@@ -122,12 +139,14 @@ func discoverParams(cc *Context, page string) string {
 	return "PARAMS that change " + page + " (leads — try payloads on them): " + strings.Join(found, ", ")
 }
 
-// pathDiffers reports whether resp looks like a real page vs the 404 baseline.
-func pathDiffers(base, resp *Resp) bool {
+// pathDiffers reports whether resp looks like a real page vs the 404 baseline. sizeReliable is false
+// when the baseline is non-deterministic (calibration failed) — then only a status change counts, so a
+// dynamic 404 can't manufacture a hit for every probe.
+func pathDiffers(base, resp *Resp, sizeReliable bool) bool {
 	if resp.Status != base.Status {
 		return true
 	}
-	return resp.Status < 400 && sizeDiffers(base.Body, resp.Body)
+	return sizeReliable && resp.Status < 400 && sizeDiffers(base.Body, resp.Body)
 }
 
 // sizeDiffers reports a meaningful body-length change for PATH discovery (coarser — a real page vs a
