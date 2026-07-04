@@ -91,6 +91,16 @@ func Eval(action, resource string, docs ...*Document) (Decision, bool) {
 				continue
 			}
 			if strings.EqualFold(st.Effect, "Deny") {
+				// A CONDITIONED deny only applies when its condition holds — which we don't evaluate. So
+				// it is NOT a definitive deny: treating it as one over-denies and drops a possibly-reachable
+				// edge/privesc path (§10 — keep on uncertain, drop only on a DEFINITIVE deny; matches the
+				// sibling authorize.go's "indeterminate deny condition is not-denying"). The grant becomes
+				// conditional (allowed unless the deny fires) rather than denied. An UNCONDITIONAL deny
+				// still wins outright.
+				if len(st.Condition) > 0 {
+					conditional = true
+					continue
+				}
 				return ExplicitDeny, false
 			}
 			if strings.EqualFold(st.Effect, "Allow") {
