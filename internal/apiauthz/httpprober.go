@@ -70,6 +70,14 @@ func (h *HTTPProber) do1(ctx context.Context, r Request) (Response, error) {
 	for k, v := range r.Headers {
 		req.Header.Set(k, v)
 	}
+	// Default the Content-Type from the body shape when a body is present and the identity headers
+	// didn't set one. A mass_assignment write is a JSON body carrying only auth headers; without a
+	// parseable Content-Type a request.json()/body-parser API silently ignores it, so the privileged
+	// field never persists and a real bug is MISSED (a false negative) — the same XBEN-006 dead end the
+	// webagent already defends against. Go's client sets no Content-Type of its own.
+	if r.Body != "" && req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", bodyContentType(r.Body))
+	}
 	req.Header.Set("User-Agent", "tsengine-apiauthz/1.0 (authorized authz test)")
 	res, err := h.Client.Do(req)
 	if err != nil {
@@ -82,6 +90,16 @@ func (h *HTTPProber) do1(ctx context.Context, r Request) (Response, error) {
 	}
 	b, _ := io.ReadAll(io.LimitReader(res.Body, cap))
 	return Response{Status: res.StatusCode, Body: string(b)}, nil
+}
+
+// bodyContentType picks a default Content-Type from a request body's shape: a JSON object/array →
+// application/json (the mass_assignment write and most modern API writes), else form-urlencoded.
+func bodyContentType(body string) string {
+	b := strings.TrimSpace(body)
+	if strings.HasPrefix(b, "{") || strings.HasPrefix(b, "[") {
+		return "application/json"
+	}
+	return "application/x-www-form-urlencoded"
 }
 
 // LiveProber returns a live HTTPProber ONLY when the operator has explicitly enabled active
