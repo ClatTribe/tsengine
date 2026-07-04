@@ -32,7 +32,7 @@ func (*FFUF) MITRETechniques() []string { return []string{"T1083", "T1595.003"} 
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec).
 func (*FFUF) KnownArgs() []string {
-	return []string{"target", "url", "wordlist", "range", "match"}
+	return []string{"target", "url", "wordlist", "range", "match", "cookie"}
 }
 
 // defaultWordlist is a small, ubiquitous list present in the sandbox image
@@ -104,7 +104,11 @@ func parseRange(spec string) (lo, hi int, err error) {
 //	"wordlist"     string — optional path (default seclists common.txt).
 //	"range"        string — optional "lo-hi"; generates a NUMERIC wordlist (IDOR/id enumeration) +
 //	                        auto-calibration so the uniform not-found response is filtered out.
-//	"match"        string — optional regex; only responses whose body matches are reported (ffuf -mr).
+//	"match"        string — optional regex; ONLY responses whose body matches are reported (ffuf
+//	                        -mr, required via -mmode and, not OR'd against the status matcher).
+//	"cookie"       string — optional "name=v; name2=v2"; sent as a Cookie header so an AUTHENTICATED
+//	                        surface (IDOR/SQLi behind login) is reachable. Injected by dispatch_oss from
+//	                        the agent's session; redacted from the returned output.
 func (*FFUF) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	target := tool.URLTarget(args) // accepts "url" as an alias for "target" (dispatch_oss agents pass url=)
 	if strings.TrimSpace(target) == "" {
@@ -132,27 +136,54 @@ func (*FFUF) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	_ = f.Close()
 	defer os.Remove(out)
 
+	matchRe := ""
+	if m, ok := args["match"].(string); ok {
+		matchRe = strings.TrimSpace(m)
+	}
+	// When matching on body content, -mr must be the DECIDING matcher: set -mc all + -mmode and so a hit
+	// requires the regex (else ffuf ORs -mr with the default status matcher and every 2xx/3xx shows,
+	// defeating the match). Without a match, keep the status-code matcher.
+	mc := "200,204,301,302,307,401,403,405"
+	if matchRe != "" {
+		mc = "all"
+	}
 	// gosec G204: binary is literal "ffuf"; u/wl are validated tool.Args (asset target / a path).
 	cmdArgs := []string{
 		"-u", u, "-w", wl,
-		"-mc", "200,204,301,302,307,401,403,405",
+		"-mc", mc,
 		"-of", "json", "-o", out, "-s",
+	}
+	cookie := ""
+	if c, ok := args["cookie"].(string); ok {
+		cookie = strings.TrimSpace(c)
+	}
+	if cookie != "" {
+		cmdArgs = append(cmdArgs, "-H", "Cookie: "+cookie)
 	}
 	if autocalib {
 		cmdArgs = append(cmdArgs, "-ac")
 	}
-	if m, ok := args["match"].(string); ok && strings.TrimSpace(m) != "" {
-		cmdArgs = append(cmdArgs, "-mr", m)
+	if matchRe != "" {
+		cmdArgs = append(cmdArgs, "-mr", matchRe, "-mmode", "and")
 	}
 	cmd := exec.CommandContext(ctx, "ffuf", cmdArgs...) //nolint:gosec
 	combined, runErr := cmd.CombinedOutput()
 	blob, rerr := os.ReadFile(out) //nolint:gosec // temp file we created
 	if rerr != nil || len(blob) == 0 {
-		return tool.Result{Output: string(combined)}, nil
+		return tool.Result{Output: redactCookie(string(combined), cookie)}, nil
 	}
 	_ = runErr
 	findings, surface := parse(blob)
-	return tool.Result{Output: string(blob), Findings: findings, DiscoveredURLs: surface}, nil
+	return tool.Result{Output: redactCookie(string(blob), cookie), Findings: findings, DiscoveredURLs: surface}, nil
+}
+
+// redactCookie strips the injected session cookie value from ffuf's output (it echoes the -H Cookie
+// header in its config), so the agent's session never lands in the transcript / signed evidence.
+func redactCookie(out, cookie string) string {
+	if cookie == "" {
+		return out
+	}
+	return strings.ReplaceAll(out, cookie, "<redacted-session>")
 }
 
 type report struct {
