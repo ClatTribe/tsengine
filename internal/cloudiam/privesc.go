@@ -27,16 +27,16 @@ var Techniques = []Technique{
 	{Name: "UpdateLoginProfile", All: [][]string{{"iam:UpdateLoginProfile"}}},
 	{Name: "AttachUserPolicy", All: [][]string{{"iam:AttachUserPolicy"}}},
 	{Name: "AttachGroupPolicy", All: [][]string{{"iam:AttachGroupPolicy"}}},
-	{Name: "AttachRolePolicy", All: [][]string{{"iam:AttachRolePolicy", "sts:AssumeRole"}}},
+	{Name: "AttachRolePolicy", All: [][]string{{"iam:AttachRolePolicy"}, {"sts:AssumeRole"}}},
 	{Name: "PutUserPolicy", All: [][]string{{"iam:PutUserPolicy"}}},
 	{Name: "PutGroupPolicy", All: [][]string{{"iam:PutGroupPolicy"}}},
-	{Name: "PutRolePolicy", All: [][]string{{"iam:PutRolePolicy", "sts:AssumeRole"}}},
+	{Name: "PutRolePolicy", All: [][]string{{"iam:PutRolePolicy"}, {"sts:AssumeRole"}}},
 	{Name: "AddUserToGroup", All: [][]string{{"iam:AddUserToGroup"}}},
 	{Name: "PassRoleToNewLambda", All: [][]string{{"iam:PassRole"}, {"lambda:CreateFunction"}, {"lambda:InvokeFunction"}}},
 	{Name: "PassRoleToNewEC2", All: [][]string{{"iam:PassRole"}, {"ec2:RunInstances"}}},
 	{Name: "PassRoleToCloudFormation", All: [][]string{{"iam:PassRole"}, {"cloudformation:CreateStack"}}},
 	{Name: "UpdateLambdaCode", All: [][]string{{"lambda:UpdateFunctionCode"}}},
-	{Name: "UpdateAssumeRolePolicy", All: [][]string{{"iam:UpdateAssumeRolePolicy", "sts:AssumeRole"}}},
+	{Name: "UpdateAssumeRolePolicy", All: [][]string{{"iam:UpdateAssumeRolePolicy"}, {"sts:AssumeRole"}}},
 	// Pass-role-to-new-resource techniques on the lesser-known services PMapper/Rhino cover but the
 	// catalog omitted — depth the IAM attack-path engine needs so a privesc via Glue / Data Pipeline /
 	// SageMaker isn't a blind spot (each is a real, published escalation primitive).
