@@ -15,6 +15,11 @@
 #                      is invalid for `expose:` — it takes a bare port). Old Compose tolerated it;
 #                      Compose v2/v29 rejects it with `invalid start port`. `expose` only documents a
 #                      port (never publishes), so dropping the host half is behaviour-preserving.
+#   4. FIXED HOSTPORT — ~15 compose files publish to a FIXED host port (`ports: - "5000:5000"`) that
+#                      is often already bound on a dev host (macOS AirPlay Receiver owns :5000), so
+#                      `up` dies with `address already in use`. Dropping the host half → Docker
+#                      auto-assigns an ephemeral host port (the harness reads it via `docker inspect`,
+#                      like every already-working benchmark), so it's behaviour-preserving.
 #
 # Idempotent + safe to re-run. Prints a summary. Does NOT run any benchmark — that's `tsbench xbow`.
 #
@@ -85,6 +90,38 @@ while IFS= read -r cf; do
   fi
 done < <(grep -rlE 'expose:' "$SUITE/benchmarks" --include='docker-compose*.y*ml' 2>/dev/null)
 echo "xbow-prep: scanned $fixed compose file(s) with an expose: block; malformed remaining = $remaining"
+
+# --- bucket 4: normalize FIXED host ports `ports: - "N:N"` -> `ports: - "N"` -------------------
+# ~15 compose files publish to a FIXED host port (e.g. `- "5000:5000"`). On a dev host that fixed
+# port is often already taken — macOS Control Center / AirPlay Receiver listens on :5000, so every
+# Flask-on-5000 benchmark dies at `up` with `bind: address already in use` (grounded: XBEN-096).
+# Dropping the host half lets Docker publish the container port to an EPHEMERAL host port, exactly
+# like the benchmarks that already work; the harness discovers the published port via `docker
+# inspect` either way, so this is behaviour-preserving. Only rewrites a list item that is a bare
+# host:container number pair inside a `ports:` block (a host-IP form like "127.0.0.1:5000:5000" or a
+# range/protocol is left untouched — it won't collide the same way). Idempotent: `- "5000"` is a
+# no-op on re-run.
+echo "xbow-prep: normalizing fixed host ports (ports: N:N -> N, so Docker auto-assigns)…"
+ports_fixed=0
+while IFS= read -r cf; do
+  perl -0777 -i -pe '
+    s{(^[ \t]*ports:[ \t]*\n)((?:[ \t]*-[ \t]*[^\n]*\n)+)}{
+      my ($h,$body)=($1,$2);
+      # "N:N" or N:N (bare host:container, no host-IP, no extra colon) -> just the container port
+      $body =~ s/^([ \t]*-[ \t]*)"?(\d+):(\d+)"?([ \t]*)$/$1"$3"$4/mg;
+      $h.$body;
+    }gme;
+  ' "$cf" 2>/dev/null || true
+  ports_fixed=$((ports_fixed+1))
+done < <(grep -rlE '^[[:space:]]*ports:' "$SUITE/benchmarks" --include='docker-compose*.y*ml' 2>/dev/null)
+# Re-scan for any remaining bare N:N host map inside a ports: block.
+ports_remaining=0
+while IFS= read -r cf; do
+  if awk '/^[[:space:]]*ports:/{p=1;next} p&&/^[[:space:]]*-[[:space:]]*"?[0-9]+:[0-9]+"?[[:space:]]*$/{f=1;exit} p&&/^[[:space:]]*[a-z_]+:/{p=0} END{exit !f}' "$cf"; then
+    ports_remaining=$((ports_remaining+1))
+  fi
+done < <(grep -rlE '^[[:space:]]*ports:' "$SUITE/benchmarks" --include='docker-compose*.y*ml' 2>/dev/null)
+echo "xbow-prep: scanned $ports_fixed compose file(s) with a ports: block; fixed-host-port remaining = $ports_remaining"
 
 echo "xbow-prep: DONE. Now run the suite with amd64 emulation, e.g.:"
 echo "    DOCKER_DEFAULT_PLATFORM=linux/amd64 \\"
