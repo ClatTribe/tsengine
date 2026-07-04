@@ -56,6 +56,66 @@ func TestChain_WebLeakToCloudAdmin(t *testing.T) {
 	t.Log("\n" + Render(chains))
 }
 
+// The CODE→CLOUD attack path — the product's flagship wedge ("one leaked secret in code reaches your
+// cloud root": the homepage AttackPathHero). A repository finding (gitleaks-style committed AWS key)
+// shares that key with a cloud crown-jewel finding. The repo IS the entry vector — an attacker who reads
+// the repo / its git history obtains the key — so the chain MUST emit. isEntry omitted `repository` (and
+// `container_image`), so the repo node was never a BFS start and this canonical chain was silently
+// dropped, even though FromScan extracts the key from repo raw output (TestFromScan). Grounded: the
+// bridge still requires a REAL shared secret (§10) — a repo/container endpoint yields no host/IP entity,
+// so there is no coincidental-host risk from admitting these as entries.
+func TestChain_CodeLeakToCloudAdmin(t *testing.T) {
+	repo := Asset{
+		ID: "s-repo", Type: "repository", Target: "github.com/acme/app",
+		Findings: []Finding{{
+			ID: "gl-001", Title: "AWS key committed", Severity: "high", Tool: "gitleaks",
+			Endpoint: "config/secrets.yml:12", Description: "hardcoded access key " + keyEx,
+		}},
+	}
+	cloud := Asset{
+		ID: "s-cloud", Type: "cloud_account", Target: "aws-acct-1",
+		Findings: []Finding{{
+			ID: "cl-009", Title: "IAM user can escalate to Administrator", Severity: "critical",
+			Description: "principal for access key " + keyEx + " has iam:PutUserPolicy → privilege escalation",
+		}},
+	}
+	chains := Correlate([]Asset{repo, cloud})
+	if len(chains) != 1 {
+		t.Fatalf("want 1 code→cloud chain via the shared AWS key, got %d: %+v", len(chains), chains)
+	}
+	if chains[0].Steps[0].AssetType != "repository" {
+		t.Errorf("step 1 should be the repository entry: %+v", chains[0].Steps[0])
+	}
+	if !strings.Contains(chains[0].Steps[0].ViaEntity, keyEx) {
+		t.Errorf("bridge should cite the leaked AWS key: %q", chains[0].Steps[0].ViaEntity)
+	}
+	if !chains[0].Steps[len(chains[0].Steps)-1].CrownJewel {
+		t.Errorf("last step should be the cloud crown jewel: %+v", chains[0].Steps)
+	}
+}
+
+// The sibling: a container_image with a baked-in credential (a leaked key in an image layer) reaching the
+// same cloud crown jewel. Same class as the repo case — an artifact carrying a real secret is an entry.
+func TestChain_ContainerLeakToCloudAdmin(t *testing.T) {
+	img := Asset{
+		ID: "s-img", Type: "container_image", Target: "acme/app:1.4",
+		Findings: []Finding{{
+			ID: "im-001", Title: "Hardcoded AWS credential in image layer", Severity: "high", Tool: "trivy",
+			Description: "layer bakes in access key " + keyP,
+		}},
+	}
+	cloud := Asset{
+		ID: "s-cloud", Type: "cloud_account", Target: "aws-acct-1",
+		Findings: []Finding{{
+			ID: "cl-010", Title: "role grants administrator access", Severity: "critical",
+			Description: "access key " + keyP + " maps to a principal that can assume admin",
+		}},
+	}
+	if chains := Correlate([]Asset{img, cloud}); len(chains) != 1 {
+		t.Fatalf("want 1 container→cloud chain via the shared AWS key, got %d: %+v", len(chains), chains)
+	}
+}
+
 // The IDENTITY bridge: a no-MFA admin in the workspace (operate) is the SAME person who holds cloud
 // admin — joined by the shared email. The canonical compromised-developer chain that was invisible
 // before identity findings could correlate.

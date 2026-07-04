@@ -296,6 +296,15 @@ func isEntry(a *Asset, f Finding) bool {
 		// over-privileged OAuth app is how an attacker gets IN (phish / credential theft / app compromise),
 		// then pivots via the shared principal (email/app) to cloud or code. High+ only, same bar as the rest.
 		return f.Verified || sevRank(f.Severity) <= sevRank("high")
+	case "repository", "container_image":
+		// The CODE→CLOUD wedge (the homepage AttackPathHero): a secret leaked in source / baked into an
+		// image layer is a real initial-access vector — an attacker who reads the repo, its git history, or
+		// a published image obtains the credential, then pivots via the shared key/ARN/bucket to the cloud
+		// crown jewel. FromScan already extracts those secrets from repo/container findings (TestFromScan),
+		// but without an entry role the repo node was never a BFS start, so the flagship chain was dropped.
+		// Grounded (§10): a repo/container endpoint yields no host/IP entity, so the bridge is secret-only —
+		// admitting these as entries adds no coincidental-host risk; a chain still needs a REAL shared secret.
+		return f.Verified || sevRank(f.Severity) <= sevRank("high")
 	}
 	return false
 }
