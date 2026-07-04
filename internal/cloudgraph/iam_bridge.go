@@ -42,7 +42,19 @@ func (s *Snapshot) AddPrivescEdges(policies map[string][]*cloudiam.Document) {
 			}
 			added = true
 		}
-		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: techNames(techs)})
+		// If EVERY detected escalation depends on a condition-gated permission (no technique is reachable
+		// UNCONDITIONALLY), the privesc is config-possible only, not definite: mark the edge conditional so
+		// Path.Conditional() flags a path through it for live validation (ADR-0002 / §10), rather than
+		// over-claiming a definite escalation. canFirm keeps only unconditional grants (Allows cond=false).
+		canFirm := func(a string) bool {
+			ok, cond := cloudiam.Allows(a, "*", docs...)
+			return ok && !cond
+		}
+		condition := ""
+		if len(cloudiam.DetectPrivesc(canFirm)) == 0 {
+			condition = "iam-condition-gated escalation (config-possible; validate live)"
+		}
+		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: techNames(techs), Condition: condition})
 	}
 }
 
