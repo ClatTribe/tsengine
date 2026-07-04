@@ -147,7 +147,14 @@ func scanCeiling(req Request, docs []*Document) scan {
 				continue
 			}
 			if strings.EqualFold(st.Effect, "Deny") {
-				r.deny = true
+				// Ceilings evaluate no condition context — so a CONDITIONED ceiling deny is INDETERMINATE,
+				// not definitive. Treating it as an unconditional deny over-prunes a genuinely-reachable
+				// edge (§10: drop only on a DEFINITIVE deny; keep on uncertain — the same rule the
+				// identity/resource path already applies). Only an UNCONDITIONAL ceiling deny definitively
+				// denies; a conditioned one is left as a possible deny that doesn't prune.
+				if len(st.Condition) == 0 {
+					r.deny = true
+				}
 			} else if strings.EqualFold(st.Effect, "Allow") {
 				r.allow = true
 			}
