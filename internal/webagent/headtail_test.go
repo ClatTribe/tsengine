@@ -10,7 +10,7 @@ import (
 // ~2KB inline <style> block, and pure head-truncation showed only the login form, so the agent
 // executed the winning POST but never saw the flag.
 func TestHeadTail_KeepsBottomOfPage(t *testing.T) {
-	big := strings.Repeat("<style>.x{color:red}</style>", 200) // ~5.6KB of head noise
+	big := strings.Repeat("<style>.x{color:red}</style>", 400) // ~11KB of head noise — exceeds llmSnippetCap so elision still triggers
 	body := "<title>Login</title>" + big + "Congratulations, here is the flag: flag{bottom-of-page}</body>"
 
 	out := headTail(body, llmSnippetCap-llmSnippetTail, llmSnippetTail)
