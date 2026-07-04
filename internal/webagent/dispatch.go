@@ -83,17 +83,15 @@ func tDispatchOSS(cc *Context, args map[string]any) string {
 		return "OSS dispatch (" + tool + ") failed: " + err.Error()
 	}
 	cc.turnN++
-	ev := out
-	if len(ev) > evidenceBodyCap {
-		ev = ev[:evidenceBodyCap] + "…"
-	}
+	// head+tail, not head-only: an OSS dump (sqlmap tables, hydra creds, ffuf hits) puts the EXTRACTED
+	// artifact near the END, so pure head-truncation dropped the very data the agent dispatched for and
+	// left the signed evidence bundle without the proof (the #807 fix, previously applied to
+	// send_request but not here).
+	ev := headTail(out, evidenceBodyCap-evidenceBodyTail, evidenceBodyTail)
 	cc.History = append(cc.History, Turn{
 		ID: fmt.Sprintf("t-%03d", cc.turnN), Method: "dispatch:" + tool,
 		URL: strOr(targs["url"], strOr(targs["target"], "")), Status: 200, Elapsed: "0s", RespSnippet: ev,
 	})
-	snip := out
-	if len(snip) > llmSnippetCap {
-		snip = snip[:llmSnippetCap] + "…"
-	}
+	snip := headTail(out, llmSnippetCap-llmSnippetTail, llmSnippetTail)
 	return fmt.Sprintf("t-%03d  %s result:\n%s", cc.turnN, tool, snip)
 }
