@@ -32,8 +32,28 @@ var ossSpecialists = map[string]string{
 	"wpscan":    "WordPress core/plugin/theme CVE detection + user enumeration (the WordPress-CVE answer)",
 	"nuclei":    "known-CVE / misconfiguration template scan against a URL",
 	"ffuf":      "content / parameter / vhost fuzzing at scale (bigger than discover_content's small wordlist)",
-	"hydra":     "credential brute-force against a discovered login (bigger than try_default_creds' short list)",
+	"hydra":     "credential brute-force against a discovered NETWORK login (bigger than try_default_creds' short list). REQUIRES args {\"target\":\"<host>\",\"service\":\"<ssh|ftp|mysql|postgres|redis|smb|rdp|telnet|vnc>\"} (+ optional {\"port\":<n>}); it errors without `service` — hydra can't guess which protocol to brute",
 	"padbuster": "AES-CBC / block-cipher PADDING-ORACLE attack — decrypt a ciphertext byte-by-byte, or FORGE (encrypt) an arbitrary plaintext into a valid cookie/token (the crypto answer; char-by-char work the request budget can't do)",
+}
+
+// dispatchOSSHelp builds the dispatch_oss tool help from ossSpecialists — the single source of truth —
+// so EVERY specialist (and its arg requirements) reaches the LLM. The help used to be a hand-maintained
+// summary that drifted from the registry: it omitted padbuster entirely (so the crypto specialist was
+// invisible) and never told the agent hydra REQUIRES a `service` arg (so dispatch_oss(hydra,{target})
+// silently dead-ended — the #809 missing-required-arg-guidance class). Generating it here keeps the two
+// in lockstep.
+func dispatchOSSHelp() string {
+	names := make([]string, 0, len(ossSpecialists))
+	for n := range ossSpecialists {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	b.WriteString("dispatch_oss(tool, args) — hand a SPECIALIZED job to an OSS specialist instead of doing it by hand. `args` is that tool's own argument object (most take {\"url\":\"...\"} or {\"target\":\"...\"}, e.g. sqlmap: {\"url\":\"...\",\"data\":\"...\"}). Use this — don't reimplement char-by-char blind extraction or a CVE exploit yourself. Specialists:")
+	for _, n := range names {
+		b.WriteString("\n  • " + n + " — " + ossSpecialists[n])
+	}
+	return b.String()
 }
 
 func ossToolList() string {
