@@ -1,9 +1,11 @@
 package webagent
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/pem"
 	"net"
 	"strconv"
 	"strings"
@@ -176,5 +178,79 @@ func TestSSHExec_BadAuthFails(t *testing.T) {
 	}
 	if strings.Contains(out, "flag{") {
 		t.Fatalf("bad auth must not leak output: %s", out)
+	}
+}
+
+// startTestSSHServerPubkey spins an in-process SSH server that accepts ONE authorized public key
+// (any user), and answers exec with wantOut. Proves ssh_exec's private-key auth path end to end.
+func startTestSSHServerPubkey(t *testing.T, authorized ssh.PublicKey, wantOut string) (string, int) {
+	t.Helper()
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("gen host key: %v", err)
+	}
+	signer, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		t.Fatalf("signer: %v", err)
+	}
+	cfg := &ssh.ServerConfig{
+		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			if bytes.Equal(key.Marshal(), authorized.Marshal()) {
+				return &ssh.Permissions{}, nil
+			}
+			return nil, errBadAuth
+		},
+	}
+	cfg.AddHostKey(signer)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			nConn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go serveOneSSH(nConn, cfg, wantOut)
+		}
+	}()
+	_, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	port, _ := strconv.Atoi(portStr)
+	return "127.0.0.1", port
+}
+
+// TestSSHExec_EncryptedPrivateKeyWithPassphrase: a leaked id_rsa is often passphrase-protected;
+// ssh_exec must decrypt it with a supplied passphrase and authenticate. Regression for the gap where
+// only unencrypted keys and passwords worked.
+func TestSSHExec_EncryptedPrivateKeyWithPassphrase(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	sshPub, _ := ssh.NewPublicKey(pub)
+	block, err := ssh.MarshalPrivateKeyWithPassphrase(priv, "leaked", []byte("s3cr3t-pass"))
+	if err != nil {
+		t.Fatalf("marshal encrypted key: %v", err)
+	}
+	pemKey := string(pem.EncodeToMemory(block))
+
+	host, port := startTestSSHServerPubkey(t, sshPub, "flag{ssh-encrypted-key}\n")
+	cc := testCtx(t, []string{host + ":" + strconv.Itoa(port)})
+
+	// correct passphrase → authenticates → reads the flag
+	out := tSSHExec(cc, map[string]any{
+		"host": host, "port": strconv.Itoa(port), "user": "pedro",
+		"private_key": pemKey, "passphrase": "s3cr3t-pass", "command": "cat /flag",
+	})
+	if !strings.Contains(out, "flag{ssh-encrypted-key}") {
+		t.Fatalf("encrypted-key auth failed: %s", out)
+	}
+
+	// encrypted key WITHOUT a passphrase → actionable hint, no silent failure
+	out = tSSHExec(cc, map[string]any{
+		"host": host, "port": strconv.Itoa(port), "user": "pedro",
+		"private_key": pemKey, "command": "cat /flag",
+	})
+	if !strings.Contains(out, "passphrase-protected") {
+		t.Fatalf("expected a passphrase-protected hint, got: %s", out)
 	}
 }
