@@ -127,10 +127,9 @@ func tBrowserRender(cc *Context, args map[string]any) string {
 	if res.DialogFired {
 		ind = append(ind, "js_executed") // a JS dialog opened → the script EXECUTED in a real DOM
 	}
-	dom := res.DOM
-	if len(dom) > evidenceBodyCap {
-		dom = dom[:evidenceBodyCap] + "…"
-	}
+	// head+tail, not head-only: a stored-XSS/exfil artifact (a leaked cookie, a flag written into the
+	// page) can render at the BOTTOM of the DOM, so keep the tail (the #807 fix, applied here too).
+	dom := headTail(res.DOM, evidenceBodyCap-evidenceBodyTail, evidenceBodyTail)
 	cc.History = append(cc.History, Turn{
 		ID: fmt.Sprintf("t-%03d", cc.turnN), Method: "GET(browser)", URL: rawURL,
 		Status: 200, Indicators: ind, Elapsed: res.Elapsed.String(), RespSnippet: dom,
@@ -157,9 +156,7 @@ func tBrowserRender(cc *Context, args map[string]any) string {
 		}
 	}
 	if snip := strings.TrimSpace(res.DOM); snip != "" {
-		if len(snip) > llmSnippetCap {
-			snip = snip[:llmSnippetCap] + "…"
-		}
+		snip = headTail(snip, llmSnippetCap-llmSnippetTail, llmSnippetTail) // keep the tail: the XSS/exfil proof can render at the bottom of the DOM
 		fmt.Fprintf(&b, "<<RENDERED DOM (untrusted)>> %s <<END>>", strings.ReplaceAll(snip, "\n", " "))
 	}
 	return b.String()

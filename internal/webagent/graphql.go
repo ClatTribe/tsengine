@@ -83,10 +83,9 @@ func tGraphQL(cc *Context, args map[string]any) string {
 		resp, url = r2, loc
 	}
 	cc.turnN++
-	ev := resp.Body
-	if len(ev) > evidenceBodyCap {
-		ev = ev[:evidenceBodyCap] + "…"
-	}
+	// head+tail, not head-only: a large introspection/query response can carry the proving data
+	// (a leaked field value) near the end, so keep the tail (the #807 fix, applied here too).
+	ev := headTail(resp.Body, evidenceBodyCap-evidenceBodyTail, evidenceBodyTail)
 	cc.History = append(cc.History, Turn{
 		ID: fmt.Sprintf("t-%03d", cc.turnN), Method: "POST", URL: url,
 		Body: body, Status: resp.Status, Elapsed: resp.Elapsed.String(), RespSnippet: ev,
