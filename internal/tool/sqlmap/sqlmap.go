@@ -142,6 +142,7 @@ func buildCLI(args tool.Args) ([]string, string, error) {
 		{"table", "-T"},              // target table
 		{"column", "-C"},             // target column(s)
 		{"file_read", "--file-read"}, // read a server file via LOAD_FILE (FILE priv)
+		{"tamper", "--tamper"},       // payload-rewrite scripts to bypass a WAF / keyword-strip filter
 	} {
 		if v, ok := args[m.key].(string); ok && strings.TrimSpace(v) != "" {
 			cli = append(cli, m.flag, v)
@@ -149,6 +150,9 @@ func buildCLI(args tool.Args) ([]string, string, error) {
 	}
 	if truthy(args["dump"]) {
 		cli = append(cli, "--dump") // dump the selected db/table/column
+	}
+	if truthy(args["random_agent"]) {
+		cli = append(cli, "--random-agent") // rotate User-Agent — the other UA-fingerprinting-WAF evasion
 	}
 	return cli, target, nil
 }
@@ -159,13 +163,14 @@ func (*Sqlmap) KnownArgs() []string {
 	return []string{
 		"target", "url", "data", "method", "cookie", "technique", "level", "risk",
 		"param", "prefix", "suffix", "string", "dbms", "db", "table", "column", "file_read", "dump",
+		"tamper", "random_agent",
 	}
 }
 
 // extractionMode reports whether the caller supplied any deliberate-extraction arg — the signal
 // that this is a dispatch_oss / replay "extract, don't just detect" call (not an anchor fan-out).
 func extractionMode(args tool.Args) bool {
-	for _, k := range []string{"param", "prefix", "suffix", "string", "db", "table", "column", "file_read"} {
+	for _, k := range []string{"param", "prefix", "suffix", "string", "db", "table", "column", "file_read", "tamper"} {
 		if v, ok := args[k].(string); ok && strings.TrimSpace(v) != "" {
 			return true
 		}
