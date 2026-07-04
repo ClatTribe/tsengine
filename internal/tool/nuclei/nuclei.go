@@ -57,9 +57,9 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	if isList {
 		cliArgs = []string{"-list", listFile, "-jsonl", "-silent", "-disable-update-check"}
 	} else {
-		target, _ := args["target"].(string)
+		target := tool.URLTarget(args) // accepts "url" as an alias for "target" (dispatch_oss agents pass url=)
 		if strings.TrimSpace(target) == "" {
-			return tool.Result{}, errors.New("nuclei: missing required arg 'target' or 'targets'")
+			return tool.Result{}, errors.New("nuclei: missing required arg 'target' (or 'url') or 'targets'")
 		}
 		cliArgs = []string{"-u", target, "-jsonl", "-silent", "-disable-update-check"}
 	}
@@ -88,7 +88,7 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 // KnownArgs declares the recognized arg keys (tool.ArgSpec). nuclei reads
 // "targets" via tool.TargetList in addition to a single "target".
 func (*Nuclei) KnownArgs() []string {
-	return []string{"target", "targets", "templates", "tags", "id", "cookie", "rate_limit", "dast"}
+	return []string{"target", "url", "targets", "templates", "tags", "id", "cookie", "rate_limit", "dast"}
 }
 
 // appendOptArgs appends the optional nuclei flags from args to the base cliArgs (pure — no exec, so

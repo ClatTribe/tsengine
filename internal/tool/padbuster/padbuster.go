@@ -65,10 +65,10 @@ func (*Padbuster) Run(ctx context.Context, args tool.Args) (tool.Result, error) 
 // buildCLI assembles the padbuster argv (pure — no exec, so it's unit-tested). padbuster takes three
 // POSITIONAL args (URL, sample, blocksize) then dash-options.
 func buildCLI(args tool.Args) ([]string, error) {
-	target := strings.TrimSpace(str(args, "target"))
+	target := strings.TrimSpace(tool.URLTarget(args)) // accepts "url" as an alias for "target" (dispatch_oss agents pass url=)
 	sample := strings.TrimSpace(str(args, "sample"))
 	if target == "" || sample == "" {
-		return nil, errors.New("padbuster: 'target' and 'sample' are required")
+		return nil, errors.New("padbuster: 'target' (or 'url') and 'sample' are required")
 	}
 	block := strings.TrimSpace(str(args, "block_size"))
 	if block == "" {

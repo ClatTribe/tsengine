@@ -41,7 +41,7 @@ func (*WPScan) MITRETechniques() []string { return []string{"T1190", "T1592"} }
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec). "target" is
 // the WordPress site URL (loopback-rewritten at the sandbox boundary).
-func (*WPScan) KnownArgs() []string { return []string{"target"} }
+func (*WPScan) KnownArgs() []string { return []string{"target", "url"} }
 
 // Run scans a WordPress site. Recognized args:
 //
@@ -52,9 +52,9 @@ func (*WPScan) KnownArgs() []string { return []string{"target"} }
 // unlocks the vulnerability database for CVE-level detail — optional; without
 // it WPScan still enumerates versions, interesting findings, and users.
 func (*WPScan) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
-	target, _ := args["target"].(string)
+	target := tool.URLTarget(args) // accepts "url" as an alias for "target" (dispatch_oss agents pass url=)
 	if strings.TrimSpace(target) == "" {
-		return tool.Result{}, errors.New("wpscan: missing required arg 'target'")
+		return tool.Result{}, errors.New("wpscan: missing required arg 'target' (or 'url')")
 	}
 	argv := []string{
 		"--url", target,
