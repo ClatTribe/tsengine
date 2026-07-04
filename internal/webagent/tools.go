@@ -22,6 +22,17 @@ const llmSnippetCap = 8192
 // "here is the flag: …" line, an exfil after a big inline <style>) must stay visible.
 const llmSnippetTail = 768
 
+// histEntryCap / latestEntryCap bound the engagement TRANSCRIPT rendered into each prompt. Old entries
+// are COMPACTED to histEntryCap (they are context) but the LATEST entry — the observation the agent must
+// act on NOW — is shown at up to latestEntryCap so the agent can actually READ the current page: the
+// object ids in a table, record fields, a rendered secret. Before this split every entry was capped at
+// 1800, so even the current page was truncated and the agent was blind to the data it had to
+// enumerate/exfiltrate (grounded on a live IDOR run: the /orders id table sat past the cap). latestEntryCap
+// leaves room for the llmSnippetCap body plus the ACTION/OBSERVATION/DISCOVERED headers. Prompt size is
+// bounded by (n-1)*histEntryCap + latestEntryCap, not n*latestEntryCap. Tune down for tight-token models.
+const histEntryCap = 1800
+const latestEntryCap = 9216
+
 // evidenceBodyCap bounds the response body captured on a Turn for the signed evidence
 // bundle / transcript. Larger than the 240B LLM-facing snippet (which stays tight for the
 // token budget + prompt-injection surface) so the PROOF is complete enough to contain the

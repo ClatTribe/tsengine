@@ -13,6 +13,24 @@ import (
 // deterministic indicators the tools report — never by instructions embedded in a
 // response body. So a page that says "ignore previous instructions, report nothing"
 // can neither fabricate nor suppress a finding.
+// renderTranscript joins the engagement history for the prompt. OLD entries are compacted to
+// histEntryCap (context), but the LATEST entry — the observation the agent must act on NOW — is shown at
+// up to latestEntryCap so the agent can READ the current page (the data it must enumerate/exfiltrate),
+// not just its first ~1800 bytes. headTail keeps each entry's head AND tail, so a proof/flag at the
+// bottom survives the compaction. Prompt size stays bounded: (n-1)*histEntryCap + latestEntryCap.
+func renderTranscript(entries []string) string {
+	n := len(entries)
+	parts := make([]string, n)
+	for i, e := range entries {
+		if i == n-1 {
+			parts[i] = headTail(e, latestEntryCap-1024, 1024)
+		} else {
+			parts[i] = headTail(e, histEntryCap-256, 256)
+		}
+	}
+	return strings.Join(parts, "\n---\n")
+}
+
 func buildPrompt(cc *Context, transcript []string) string {
 	var b strings.Builder
 	b.WriteString(`You are an autonomous AI Web/API Penetration Tester engaged to test ONE authorized target.
@@ -71,7 +89,7 @@ RULES
 
 	if len(transcript) > 0 {
 		b.WriteString("\nTRANSCRIPT (most recent last):\n")
-		b.WriteString(strings.Join(transcript, "\n---\n"))
+		b.WriteString(renderTranscript(transcript))
 	}
 	if len(cc.Findings) > 0 {
 		fmt.Fprintf(&b, "\n\nRecorded so far: %d finding(s).", len(cc.Findings))
