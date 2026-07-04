@@ -291,8 +291,10 @@ func compactArgs(args map[string]any) string {
 }
 
 func appendCapped(t []string, entry string) []string {
-	if len(entry) > 1800 {
-		entry = entry[:1800] + " …(truncated)"
+	// Store generously (keep head+tail so a proof at the BOTTOM of a long dump survives); the
+	// render step (renderTranscript) compacts OLD entries and shows the LATEST in full.
+	if len(entry) > latestEntryCap {
+		entry = headTail(entry, latestEntryCap-1024, 1024)
 	}
 	t = append(t, entry)
 	const keep = 24
