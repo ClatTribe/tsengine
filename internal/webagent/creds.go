@@ -47,6 +47,23 @@ func argBool(args map[string]any, k string) bool {
 
 func isRedirect(status int) bool { return status >= 300 && status < 400 }
 
+// redirectPath returns a redirect Location reduced to scheme+host+path — the QUERY and fragment
+// dropped. A failed-login redirect commonly carries a per-request token in the query
+// (?error=1&csrf=<nonce>, ?msg=<flash-id>), which would otherwise make every attempt's Location look
+// "different" from the baseline and read as a success. Comparing paths keeps the differential grounded:
+// a real success redirects to a DIFFERENT path (/dashboard), not the same login page with a fresh token.
+func redirectPath(loc string) string {
+	if strings.TrimSpace(loc) == "" {
+		return ""
+	}
+	u, err := url.Parse(loc)
+	if err != nil {
+		return loc
+	}
+	u.RawQuery, u.Fragment = "", ""
+	return u.String()
+}
+
 // sessionishCookieNames returns the Set-Cookie names that look like an auth/session cookie — the ones
 // whose PRESENCE (when a failed login lacked them) is a real login-success signal.
 func sessionishCookieNames(raw []string) []string {
@@ -99,12 +116,26 @@ func tDefaultCreds(cc *Context, args map[string]any) string {
 	passField := orDefault(argStr(args, "pass_field"), "password")
 	asJSON := argBool(args, "json")
 
-	// Baseline: a random-junk credential — what a FAILED login looks like on this endpoint.
+	// Baseline: a random-junk credential — what a FAILED login looks like on this endpoint. TWO junk
+	// baselines, not one: a login endpoint often varies its FAILURE response per request (a fresh CSRF
+	// token / flash-message id in the redirect Location, a rotating error nonce), and one sample can't
+	// tell "this pair succeeded" from "the app echoes a new token every time". Calibrating with a second
+	// junk login detects that non-determinism so the differential stays grounded (the #813 baseline
+	// class, applied to the login differential).
 	base, err := cc.credPost(loginURL, userField, passField, "zzq"+randHex(4), "wrong"+randHex(3), asJSON)
 	if err != nil {
 		return "REQUEST FAILED (baseline): " + err.Error()
 	}
+	base2, err2 := cc.credPost(loginURL, userField, passField, "zzq"+randHex(4), "wrong"+randHex(3), asJSON)
+	// A session cookie the app sets on EITHER failed login is not "new" (union the two samples).
 	baseSess := sessionishCookieNames(base.SetCookie)
+	if err2 == nil {
+		baseSess = append(baseSess, sessionishCookieNames(base2.SetCookie)...)
+	}
+	// Is the failed-login redirect deterministic across the two junk baselines? (compare PATHS — a
+	// per-request query token is not a real difference.) If not, don't trust the redirect signal.
+	redirectStable := err2 == nil && isRedirect(base.Status) == isRedirect(base2.Status) &&
+		redirectPath(base.Location) == redirectPath(base2.Location)
 
 	tried := 0
 	for _, c := range defaultCreds {
@@ -115,9 +146,11 @@ func tDefaultCreds(cc *Context, args map[string]any) string {
 		tried++
 
 		// Grounded success = a DIFFERENTIAL win vs the failed baseline:
-		//   (a) a redirect the baseline didn't get (or to a different place), or
+		//   (a) a redirect the baseline didn't get, or one to a different PATH (query token ignored) —
+		//       and only when the failure redirect is deterministic across the two baselines, or
 		//   (b) an auth/session cookie the baseline didn't set.
-		redirectWin := isRedirect(resp.Status) && (!isRedirect(base.Status) || resp.Location != base.Location)
+		redirectWin := isRedirect(resp.Status) &&
+			(!isRedirect(base.Status) || (redirectStable && redirectPath(resp.Location) != redirectPath(base.Location)))
 		newCookie := ""
 		for _, n := range sessionishCookieNames(resp.SetCookie) {
 			if !containsStr(baseSess, n) {
