@@ -181,6 +181,19 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 	}, nil
 }
 
+// CookieHeader returns the agent's persisted session cookies for rawURL as a "name=v; name2=v2" string
+// (empty if none / bad URL). It's how the authenticated session the agent established via send_request
+// gets threaded into a dispatched OSS tool (ffuf/sqlmap): an authed IDOR/SQLi sweep MUST carry the login,
+// else the tool hits the login wall and finds nothing (grounded on a live IDOR run — ffuf unauthenticated
+// got a 302→/login for every id). Never persisted to vulnerabilities.json (the CapturedSession rule).
+func (r *Requester) CookieHeader(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return mergeCookieHeader(r.jar.Cookies(u), "")
+}
+
 // mergeCookieHeader builds the outgoing Cookie header from the jar's persisted cookies plus an
 // explicit Cookie header, where the EXPLICIT value overrides the jar for any shared name. This is
 // what lets the agent forge/override a session token (Bearer <other-id>, a re-signed JWT) for an

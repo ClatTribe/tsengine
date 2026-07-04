@@ -78,6 +78,21 @@ func tDispatchOSS(cc *Context, args map[string]any) string {
 		return fmt.Sprintf("OSS-tool dispatch unavailable in this run — %s runs in the sandbox tool-server, which this host-side session isn't wired to. (The platform/tsbench path provides it.) Continue with the in-agent tools, or hand this class to the L1 scan.", tool)
 	}
 	targs, _ := args["args"].(map[string]any) // tool-specific args (e.g. sqlmap: {url, data, technique})
+	if targs == nil {
+		targs = map[string]any{}
+	}
+	// Thread the agent's AUTHENTICATED session into the dispatched tool. An authed IDOR/SQLi sweep must
+	// carry the login the agent already established via send_request; without it the tool hits the login
+	// wall and finds nothing (grounded: ffuf unauthenticated got a 302→/login for every id). Injected as
+	// a "cookie" arg only when the agent didn't set one explicitly and the target is in scope; the wrapper
+	// (ffuf today) sends it + redacts it from its output so the session never lands in the evidence.
+	if _, has := targs["cookie"]; !has {
+		if u := strOr(targs["url"], strOr(targs["target"], "")); u != "" && cc.req != nil {
+			if ch := cc.req.CookieHeader(u); ch != "" {
+				targs["cookie"] = ch
+			}
+		}
+	}
 	out, err := cc.dispatcher.RunTool(cc.ctx, tool, targs)
 	if err != nil {
 		return "OSS dispatch (" + tool + ") failed: " + err.Error()

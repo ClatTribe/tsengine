@@ -20,6 +20,22 @@ func TestFuzzURL_KeywordAnywhere(t *testing.T) {
 	}
 }
 
+// TestRedactCookie: the injected session cookie must never survive into ffuf's returned output (it
+// echoes the -H Cookie header in its config), so the agent's session can't leak into the evidence.
+func TestRedactCookie(t *testing.T) {
+	out := `{"config":{"headers":{"Cookie":"session=eyJ1c2VyX2lkIjoxMDAzMn0.abc"}}}`
+	got := redactCookie(out, "session=eyJ1c2VyX2lkIjoxMDAzMn0.abc")
+	if strings.Contains(got, "eyJ1c2VyX2lkIjoxMDAzMn0") {
+		t.Errorf("session cookie leaked into output: %s", got)
+	}
+	if !strings.Contains(got, "<redacted-session>") {
+		t.Errorf("expected a redaction marker: %s", got)
+	}
+	if redactCookie("no cookie here", "") != "no cookie here" {
+		t.Error("empty cookie must not alter output")
+	}
+}
+
 // TestNumericWordlist_RangeSweep: a numeric range generates a wordlist of every id in [lo,hi] — the
 // object-id sweep a word wordlist can't do. Bounded by maxRange so a typo can't make it unbounded.
 func TestNumericWordlist_RangeSweep(t *testing.T) {
