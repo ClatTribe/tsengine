@@ -78,7 +78,12 @@ type Request struct {
 
 // Authorize returns the decision and whether the deciding allow is condition-gated (uncertain).
 func Authorize(req Request, ps PolicySet) (Decision, bool) {
-	// 1. Deny assignments win when they definitively apply.
+	// 1. Deny assignments win — but ONLY when they definitively apply. A deny whose principal match is
+	//    uncertain (a group whose membership we can't resolve) is a POSSIBLE deny, not a definitive one:
+	//    treating it as ExplicitDeny would over-prune a possibly-reachable edge (§10 — drop only on a
+	//    DEFINITIVE deny; the allow side is already symmetric via `sure`). A possible deny instead makes
+	//    any subsequent allow conditional (allowed unless the deny turns out to apply).
+	denyPossible := false
 	for _, d := range ps.Denies {
 		if d.Condition != "" {
 			continue // unresolved condition → not denying (conservative)
@@ -89,8 +94,11 @@ func Authorize(req Request, ps PolicySet) (Decision, bool) {
 		if principalInExact(d.ExcludePrincipals, req.Principal) {
 			continue
 		}
-		if hit, _ := principalMatch(d.Principals, req.Principal); hit {
-			return ExplicitDeny, false
+		if hit, certain := principalMatch(d.Principals, req.Principal); hit {
+			if certain {
+				return ExplicitDeny, false
+			}
+			denyPossible = true // uncertain group deny — not definitive; downgrade any allow to conditional
 		}
 	}
 
@@ -115,7 +123,7 @@ func Authorize(req Request, ps PolicySet) (Decision, bool) {
 	}
 	switch {
 	case allow:
-		return Allow, false
+		return Allow, cond || denyPossible // a firm allow shadowed by a possible deny is conditional
 	case cond:
 		return Allow, true
 	default:
