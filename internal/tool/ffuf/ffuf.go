@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/tool"
@@ -30,24 +31,97 @@ func (*FFUF) SandboxExecution() bool    { return true }
 func (*FFUF) MITRETechniques() []string { return []string{"T1083", "T1595.003"} }
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec).
-func (*FFUF) KnownArgs() []string { return []string{"target", "url", "wordlist"} }
+func (*FFUF) KnownArgs() []string {
+	return []string{"target", "url", "wordlist", "range", "match"}
+}
 
 // defaultWordlist is a small, ubiquitous list present in the sandbox image
 // (seclists common.txt). Overridable via args["wordlist"].
 const defaultWordlist = "/usr/share/seclists/Discovery/Web-Content/common.txt"
 
-// Run brute-forces paths under the target. Recognized args:
+// maxRange caps a generated numeric wordlist so a huge/typo'd range can't turn one dispatch into an
+// unbounded scan (the cost twin of the fan-out cap).
+const maxRange = 100000
+
+// fuzzURL places the FUZZ keyword. Faithful to real ffuf: if the caller already put FUZZ IN the url
+// (e.g. .../order/FUZZ/receipt — the IDOR/enumeration case), use it verbatim; otherwise append /FUZZ
+// (the dir-brute default). The old wrapper always appended /FUZZ, so FUZZ-in-the-middle was impossible.
+func fuzzURL(target string) string {
+	if strings.Contains(target, "FUZZ") {
+		return target
+	}
+	return strings.TrimRight(strings.TrimSpace(target), "/") + "/FUZZ"
+}
+
+// numericWordlist writes a temp wordlist of the integers in spec ("lo-hi", e.g. "300000-300999") — the
+// IDOR object-id sweep that a word wordlist can't do. Bounded by maxRange. Returns the file path + a
+// cleanup func. This is what lets ffuf enumerate /order/FUZZ/receipt over an id range.
+func numericWordlist(spec string) (string, func(), error) {
+	lo, hi, err := parseRange(spec)
+	if err != nil {
+		return "", func() {}, err
+	}
+	f, err := os.CreateTemp("", "ffuf-nums-*.txt")
+	if err != nil {
+		return "", func() {}, err
+	}
+	var sb strings.Builder
+	for i := lo; i <= hi; i++ {
+		fmt.Fprintf(&sb, "%d\n", i)
+	}
+	if _, err := f.WriteString(sb.String()); err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return "", func() {}, err
+	}
+	_ = f.Close()
+	return f.Name(), func() { _ = os.Remove(f.Name()) }, nil
+}
+
+func parseRange(spec string) (lo, hi int, err error) {
+	parts := strings.SplitN(strings.TrimSpace(spec), "-", 2)
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("ffuf: range %q must be lo-hi (e.g. 300000-300999)", spec)
+	}
+	if lo, err = strconv.Atoi(strings.TrimSpace(parts[0])); err != nil {
+		return 0, 0, fmt.Errorf("ffuf: bad range low: %w", err)
+	}
+	if hi, err = strconv.Atoi(strings.TrimSpace(parts[1])); err != nil {
+		return 0, 0, fmt.Errorf("ffuf: bad range high: %w", err)
+	}
+	if hi < lo {
+		return 0, 0, fmt.Errorf("ffuf: range hi<lo (%d<%d)", hi, lo)
+	}
+	if hi-lo+1 > maxRange {
+		hi = lo + maxRange - 1 // bound the sweep
+	}
+	return lo, hi, nil
+}
+
+// Run fuzzes the target. Recognized args:
 //
-//	"target"   string — required, the base URL (FUZZ is appended).
-//	"wordlist" string — optional path (default seclists common.txt).
+//	"target"/"url" string — required. If it contains FUZZ, used verbatim; else /FUZZ is appended.
+//	"wordlist"     string — optional path (default seclists common.txt).
+//	"range"        string — optional "lo-hi"; generates a NUMERIC wordlist (IDOR/id enumeration) +
+//	                        auto-calibration so the uniform not-found response is filtered out.
+//	"match"        string — optional regex; only responses whose body matches are reported (ffuf -mr).
 func (*FFUF) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	target := tool.URLTarget(args) // accepts "url" as an alias for "target" (dispatch_oss agents pass url=)
-	target = strings.TrimRight(strings.TrimSpace(target), "/")
-	if target == "" {
+	if strings.TrimSpace(target) == "" {
 		return tool.Result{}, errors.New("ffuf: missing required arg 'target' (or 'url')")
 	}
+	u := fuzzURL(target)
 	wl := defaultWordlist
-	if w, ok := args["wordlist"].(string); ok && strings.TrimSpace(w) != "" {
+	autocalib := false
+	if rng, ok := args["range"].(string); ok && strings.TrimSpace(rng) != "" {
+		wf, cleanup, err := numericWordlist(rng)
+		if err != nil {
+			return tool.Result{}, err
+		}
+		defer cleanup()
+		wl = wf
+		autocalib = true // a numeric sweep returns a uniform not-found; -ac filters it so real hits stand out
+	} else if w, ok := args["wordlist"].(string); ok && strings.TrimSpace(w) != "" {
 		wl = w
 	}
 	f, err := os.CreateTemp("", "ffuf-*.json")
@@ -58,12 +132,19 @@ func (*FFUF) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	_ = f.Close()
 	defer os.Remove(out)
 
-	// gosec G204: binary is literal "ffuf"; target is a validated tool.Args
-	// asset target, wl is a path baked into the sandbox image.
-	cmd := exec.CommandContext(ctx, "ffuf", //nolint:gosec
-		"-u", target+"/FUZZ", "-w", wl,
+	// gosec G204: binary is literal "ffuf"; u/wl are validated tool.Args (asset target / a path).
+	cmdArgs := []string{
+		"-u", u, "-w", wl,
 		"-mc", "200,204,301,302,307,401,403,405",
-		"-of", "json", "-o", out, "-s")
+		"-of", "json", "-o", out, "-s",
+	}
+	if autocalib {
+		cmdArgs = append(cmdArgs, "-ac")
+	}
+	if m, ok := args["match"].(string); ok && strings.TrimSpace(m) != "" {
+		cmdArgs = append(cmdArgs, "-mr", m)
+	}
+	cmd := exec.CommandContext(ctx, "ffuf", cmdArgs...) //nolint:gosec
 	combined, runErr := cmd.CombinedOutput()
 	blob, rerr := os.ReadFile(out) //nolint:gosec // temp file we created
 	if rerr != nil || len(blob) == 0 {
