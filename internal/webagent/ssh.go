@@ -3,6 +3,7 @@ package webagent
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -70,11 +71,26 @@ func tSSHExec(cc *Context, args map[string]any) string {
 		auth = append(auth, ssh.Password(pw))
 	}
 	if key := strings.TrimSpace(argStr(args, "private_key")); key != "" {
-		if signer, err := ssh.ParsePrivateKey([]byte(key)); err == nil {
-			auth = append(auth, ssh.PublicKeys(signer))
+		// A leaked id_rsa is frequently passphrase-protected; when a passphrase is supplied use the
+		// decrypting parser, else the plain one. If the key is encrypted and NO passphrase was given,
+		// ssh returns a *PassphraseMissingError — surface an actionable hint so the agent knows to
+		// pass passphrase=<pp> (which it may have leaked alongside the key) rather than giving up.
+		var signer ssh.Signer
+		var err error
+		if pp := argStr(args, "passphrase"); pp != "" {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase([]byte(key), []byte(pp))
 		} else {
-			return "ERROR: private_key did not parse as a PEM private key: " + err.Error()
+			signer, err = ssh.ParsePrivateKey([]byte(key))
 		}
+		if err != nil {
+			hint := ""
+			var pm *ssh.PassphraseMissingError
+			if errors.As(err, &pm) {
+				hint = " — the key is passphrase-protected; pass passphrase=<pp>"
+			}
+			return "ERROR: private_key did not parse as a PEM private key: " + err.Error() + hint
+		}
+		auth = append(auth, ssh.PublicKeys(signer))
 	}
 	if len(auth) == 0 {
 		return "ERROR: no credentials — pass password=<pw> or private_key=<pem>"
