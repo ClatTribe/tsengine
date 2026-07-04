@@ -288,6 +288,21 @@ func tRecord(cc *Context, args map[string]any) string {
 	return fmt.Sprintf("recorded %s (%s) — grounded by the %q indicator. Run confirm_exploit(%s) to verify it reproduces.", f.ID, class, want, f.ID)
 }
 
+// confirmHeaders reconstructs the minimal Content-Type for a re-fired proving request from its body
+// shape. The Turn doesn't store the original request headers, but the payload for a POST-body injection
+// lives in the body, so it must be sent with a Content-Type the server will parse (JSON vs form) — else
+// the body is ignored and the indicator wrongly fails to reproduce. Empty body → no headers (GET/query
+// finding). Mirrors tSend's JSON auto-detection.
+func confirmHeaders(body string) map[string]string {
+	if strings.TrimSpace(body) == "" {
+		return nil
+	}
+	if looksJSONBody(body) {
+		return map[string]string{"Content-Type": "application/json"}
+	}
+	return map[string]string{"Content-Type": "application/x-www-form-urlencoded"}
+}
+
 func tConfirm(cc *Context, args map[string]any) string {
 	id := argStr(args, "finding_id")
 	idx := -1
@@ -307,7 +322,12 @@ func tConfirm(cc *Context, args map[string]any) string {
 		if !ok || !hasIndicator(turn, want) {
 			continue
 		}
-		resp, err := cc.req.Send(cc.ctx, turn.Method, turn.URL, "", nil)
+		// Re-fire WITH the proving request's body — a POST-body injection (SSTI/SQLi/cmdi in the body,
+		// not the URL) can't reproduce without it, and a body-less re-fire would falsely report the real
+		// finding as "not reproduced" and tell the agent to drop it. The Turn doesn't store the original
+		// headers, so reconstruct the minimal Content-Type from the body shape (JSON vs form) — many
+		// servers (Go's ParseForm included) ignore a body entirely without a parseable Content-Type.
+		resp, err := cc.req.Send(cc.ctx, turn.Method, turn.URL, turn.Body, confirmHeaders(turn.Body))
 		if err != nil {
 			return "confirm failed (request error): " + err.Error()
 		}
