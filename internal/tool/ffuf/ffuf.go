@@ -30,7 +30,7 @@ func (*FFUF) SandboxExecution() bool    { return true }
 func (*FFUF) MITRETechniques() []string { return []string{"T1083", "T1595.003"} }
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec).
-func (*FFUF) KnownArgs() []string { return []string{"target", "wordlist"} }
+func (*FFUF) KnownArgs() []string { return []string{"target", "url", "wordlist"} }
 
 // defaultWordlist is a small, ubiquitous list present in the sandbox image
 // (seclists common.txt). Overridable via args["wordlist"].
@@ -41,10 +41,10 @@ const defaultWordlist = "/usr/share/seclists/Discovery/Web-Content/common.txt"
 //	"target"   string — required, the base URL (FUZZ is appended).
 //	"wordlist" string — optional path (default seclists common.txt).
 func (*FFUF) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
-	target, _ := args["target"].(string)
+	target := tool.URLTarget(args) // accepts "url" as an alias for "target" (dispatch_oss agents pass url=)
 	target = strings.TrimRight(strings.TrimSpace(target), "/")
 	if target == "" {
-		return tool.Result{}, errors.New("ffuf: missing required arg 'target'")
+		return tool.Result{}, errors.New("ffuf: missing required arg 'target' (or 'url')")
 	}
 	wl := defaultWordlist
 	if w, ok := args["wordlist"].(string); ok && strings.TrimSpace(w) != "" {

@@ -14,8 +14,8 @@ func TestRegistered(t *testing.T) {
 }
 
 func TestKnownArgs(t *testing.T) {
-	if got := New().KnownArgs(); len(got) != 1 || got[0] != "target" {
-		t.Errorf("KnownArgs = %v, want [target]", got)
+	if got := New().KnownArgs(); len(got) != 2 || got[0] != "target" || got[1] != "url" {
+		t.Errorf("KnownArgs = %v, want [target url]", got)
 	}
 }
 
