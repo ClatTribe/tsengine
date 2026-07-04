@@ -25,6 +25,23 @@ type proposedOp struct {
 	URL    string `json:"url"`
 	Class  string `json:"class"`
 	Marker string `json:"marker,omitempty"`
+	Body   string `json:"body,omitempty"` // the write payload for a mass_assignment proposal (required for that class)
+}
+
+// normalizeProposedClass maps the model's short class vocabulary (the words proposePrompt asks for) to
+// the Class constants. The prompt says "mass", but ClassMass is "mass_assignment" — so without this
+// mapping EVERY proposed mass-assignment op was silently dropped by the class filter (the whole class
+// was un-proposable). Returns "" for an unrecognized class.
+func normalizeProposedClass(s string) Class {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "bola":
+		return ClassBOLA
+	case "bfla":
+		return ClassBFLA
+	case "mass", "mass_assignment":
+		return ClassMass
+	}
+	return ""
 }
 
 // ProposeOperations asks the model for up to maxN additional candidate BOLA/BFLA/mass operations given
@@ -57,19 +74,26 @@ func ProposeOperations(ctx context.Context, llm LLM, known []Operation, maxN int
 	for _, p := range props {
 		m := strings.ToUpper(strings.TrimSpace(p.Method))
 		u := strings.TrimSpace(p.URL)
-		cl := Class(strings.ToLower(strings.TrimSpace(p.Class)))
-		if m == "" || u == "" || (cl != ClassBOLA && cl != ClassBFLA && cl != ClassMass) {
+		cl := normalizeProposedClass(p.Class)
+		if m == "" || u == "" || cl == "" {
 			continue
 		}
 		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 			continue // must be a concrete URL, not a path fragment
+		}
+		// A mass_assignment test needs a write body + a privileged-value marker (mirrors
+		// TestConfig.Valid): Run writes op.Body and evaluateMassAssignment checks op.Marker persisted.
+		// A mass proposal missing either can never fire (a guaranteed no-op that also wastes a live
+		// write), so drop it rather than emit a dead test.
+		if cl == ClassMass && (strings.TrimSpace(p.Body) == "" || strings.TrimSpace(p.Marker) == "") {
+			continue
 		}
 		k := opKey(m, u)
 		if seen[k] {
 			continue
 		}
 		seen[k] = true
-		ops = append(ops, Operation{Method: m, URL: u, Class: cl, Marker: strings.TrimSpace(p.Marker)})
+		ops = append(ops, Operation{Method: m, URL: u, Class: cl, Marker: strings.TrimSpace(p.Marker), Body: strings.TrimSpace(p.Body)})
 		if len(ops) >= maxN {
 			break
 		}
@@ -89,7 +113,8 @@ an API, propose up to %d ADDITIONAL candidate operations likely to carry a broke
 
 Ground proposals in the known operations' host + path patterns — same host, plausible sibling routes.
 Do NOT invent unrelated hosts. Output ONLY a JSON array, each item:
-{"method":"GET","url":"<full url, same host>","class":"bola|bfla|mass","marker":"<a string proving leakage if it appears>"}
+{"method":"GET","url":"<full url, same host>","class":"bola|bfla|mass","marker":"<a string proving leakage if it appears>","body":"<mass ONLY: the JSON write payload incl the privileged field, e.g. {\"role\":\"admin\"}>"}
+For class "mass" you MUST include both a "body" (the write payload) and a "marker" (the privileged value that proves the field persisted); a mass item without both is discarded.
 
 KNOWN OPERATIONS:
 `, maxN)
