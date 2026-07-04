@@ -6,10 +6,16 @@ import (
 	"strings"
 )
 
-// llmSnippetCap bounds the raw response body shown to the LLM per turn — kept small (token budget +
-// the indirect-prompt-injection surface), since the deterministic DISCOVERED line (discoverSurface)
-// carries the endpoint/param leads the raw head would otherwise truncate away.
-const llmSnippetCap = 2048
+// llmSnippetCap bounds the raw response body shown to the LLM per turn. It must be large enough to
+// contain the DATA REGION of a normal-sized page, not just the surface: the deterministic DISCOVERED
+// line (discoverSurface) extracts endpoints/params, but NOT data VALUES — the object ids in a table,
+// record fields, a secret/flag rendered in the page. The whole "read the data to exploit it" class
+// (IDOR, enumeration, info-disclosure, LFI file reads, SSTI output) needs those values visible to pick
+// the next action; at 2048 a ~6KB page's middle (where the table lived) was elided and the agent was
+// blind to the ids it had to enumerate (grounded on a live IDOR run). 8KB shows a typical vuln-app page
+// in full while still bounding a huge dump; headTail returns the whole body unchanged when it fits, so
+// small responses pay nothing. Tune this one constant down for cheap-model / tight-token deployments.
+const llmSnippetCap = 8192
 
 // llmSnippetTail is how much of the LLM snippet's budget is reserved for the TAIL of the body (the
 // rest is the head). A result that renders at the bottom of the page (a success flash, a
