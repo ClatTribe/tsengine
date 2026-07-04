@@ -82,10 +82,13 @@ func Reachable(rules []SGRule, srcCIDR string, port int, proto string) bool {
 	return false
 }
 
-// InternetReachable reports whether the open internet (0.0.0.0/0) can reach (port, proto) — i.e. the
-// resource is ACTUALLY internet-exposed on that service port, not merely "has a public IP".
+// InternetReachable reports whether the open internet can reach (port, proto) — i.e. the resource is
+// ACTUALLY internet-exposed on that service port, not merely "has a public IP". Checks BOTH the IPv4
+// (0.0.0.0/0) and IPv6 (::/0) "anywhere" sources: an SG rule opening the port to ::/0 is a real internet
+// exposure on a dual-stack / IPv6 deployment, so ignoring it would let PruneUnreachable drop a genuinely
+// reachable edge (a §10 recall violation — a ::/0 rule is not a definitive deny of internet reach).
 func InternetReachable(rules []SGRule, port int, proto string) bool {
-	return Reachable(rules, "0.0.0.0/0", port, proto)
+	return Reachable(rules, "0.0.0.0/0", port, proto) || Reachable(rules, "::/0", port, proto)
 }
 
 // cidrCovers reports whether the allowed range `rule` is a SUPERSET of (covers every address in) `src`.
