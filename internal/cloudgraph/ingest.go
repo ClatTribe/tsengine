@@ -79,6 +79,11 @@ type InvPrivesc struct {
 	Principal string `json:"principal"`
 	Target    string `json:"target"`
 	Detail    string `json:"detail,omitempty"`
+	// Condition gates the escalation at runtime (e.g. iam:CreateAccessKey requires MFA) — the #827
+	// config-possible-only flag. Like InvTrust/InvGrant/InvReach/InvTrigger/InvSecretAccess it must
+	// round-trip, else ToInventory drops it and a re-ingested path over-claims a conditional escalation
+	// as DEFINITE (§10: a config-possible escalation is never reported as confirmed).
+	Condition string `json:"condition,omitempty"`
 }
 
 // InvTrigger is a service-coupling: Source (an API Gateway, ALB, EventBridge rule, S3 event source,
@@ -161,7 +166,7 @@ func (s *Snapshot) ToInventory() Inventory {
 		case EdgeRunsAs:
 			inv.RunsAs = append(inv.RunsAs, InvRunsAs{Compute: e.From, Principal: e.To})
 		case EdgePrivesc:
-			inv.Privescs = append(inv.Privescs, InvPrivesc{Principal: e.From, Target: e.To, Detail: e.Detail})
+			inv.Privescs = append(inv.Privescs, InvPrivesc{Principal: e.From, Target: e.To, Detail: e.Detail, Condition: e.Condition})
 		case EdgeTriggers:
 			inv.Triggers = append(inv.Triggers, InvTrigger{Source: e.From, Compute: e.To, Condition: e.Condition})
 		case EdgeSecretAccess:
@@ -206,7 +211,7 @@ func Ingest(inv Inventory) *Snapshot {
 		s.AddEdge(Edge{From: ra.Compute, To: ra.Principal, Kind: EdgeRunsAs})
 	}
 	for _, pe := range inv.Privescs {
-		s.AddEdge(Edge{From: pe.Principal, To: pe.Target, Kind: EdgePrivesc, Detail: pe.Detail})
+		s.AddEdge(Edge{From: pe.Principal, To: pe.Target, Kind: EdgePrivesc, Detail: pe.Detail, Condition: pe.Condition})
 	}
 	for _, tr := range inv.Triggers {
 		s.AddEdge(Edge{From: tr.Source, To: tr.Compute, Kind: EdgeTriggers, Condition: tr.Condition})

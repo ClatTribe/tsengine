@@ -26,6 +26,40 @@ func TestLoadSnapshot_SampleInventory(t *testing.T) {
 	}
 }
 
+// TestToInventory_PrivescConditionSurvivesRoundTrip: a CONDITION-GATED privesc edge (the #827 flag — a
+// config-possible-only escalation, e.g. iam:CreateAccessKey requires MFA) must survive ToInventory→Ingest.
+// InvPrivesc lacked a Condition field (unlike InvTrust/InvGrant/InvReach/InvTrigger/InvSecretAccess), so
+// ToInventory silently DROPPED it: the round-tripped edge came back unconditional → Path.Conditional()
+// read a path through it as DEFINITE, re-introducing exactly the over-certainty #827 fixed — at the
+// serialization boundary (EmitScenario → scan --snapshot re-ingest). §10: a conditional escalation must
+// never be reported as definite.
+func TestToInventory_PrivescConditionSurvivesRoundTrip(t *testing.T) {
+	const cond = "iam-condition-gated escalation (config-possible; validate live)"
+	s1 := New("acct", "aws")
+	s1.AddNode(&Node{ID: InternetID, Kind: KindNetwork, Name: "internet"}) // Ingest always injects this; add it so the Hash round-trip is symmetric
+	s1.AddNode(&Node{ID: "role", Kind: KindPrincipal, Name: "role"})
+	s1.AddNode(&Node{ID: AdminID, Kind: KindPrincipal, Name: "effective-admin", Privileged: true})
+	s1.AddEdge(Edge{From: "role", To: AdminID, Kind: EdgePrivesc, Detail: "CreateAccessKey", Condition: cond})
+
+	s2 := Ingest(s1.ToInventory())
+
+	var found bool
+	for _, e := range s2.Edges {
+		if e.Kind == EdgePrivesc && e.From == "role" && e.To == AdminID {
+			found = true
+			if e.Condition != cond {
+				t.Errorf("privesc condition lost in round-trip: want %q, got %q", cond, e.Condition)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("privesc edge missing after round-trip")
+	}
+	if s1.Hash() != s2.Hash() {
+		t.Errorf("round-trip changed the graph (condition dropped):\n %s\n %s", s1.Hash(), s2.Hash())
+	}
+}
+
 func TestParseInventory_RoundTrip(t *testing.T) {
 	in := `{"account_id":"a","provider":"aws","resources":[{"id":"r1","kind":"resource"}],
 	  "trusts":[{"principal":"p","role":"q","condition":"mfa"}]}`
