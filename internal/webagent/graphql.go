@@ -18,7 +18,11 @@ import (
 
 // gqlIntrospectionQuery asks for just enough to enumerate the surface: query/mutation root names, and
 // each type's fields + arg names. Kept minimal (no nested type refs) so the response stays parseable.
-const gqlIntrospectionQuery = `{__schema{queryType{name} mutationType{name} types{name kind fields{name args{name}}}}}`
+// fields(includeDeprecated:true) is REQUIRED: the spec default is `includeDeprecated: false`, so a
+// compliant server otherwise OMITS deprecated operations — and a deprecated-but-still-wired mutation
+// (a legacy endpoint kept for backwards-compat) is frequently the LEAST-protected authz/IDOR target.
+// This matches the standard GraphiQL/Apollo introspection query.
+const gqlIntrospectionQuery = `{__schema{queryType{name} mutationType{name} types{name kind fields(includeDeprecated:true){name args{name}}}}}`
 
 type gqlTypeRef struct {
 	Name string `json:"name"`
