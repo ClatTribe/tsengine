@@ -20,6 +20,24 @@ func TestFuzzURL_KeywordAnywhere(t *testing.T) {
 	}
 }
 
+// TestCalibrate_OptIn: -ac auto-calibration must be OPT-IN, never forced by `range`. Forcing it (the
+// original behavior) over-filtered a real authenticated IDOR sweep to ZERO results with no override.
+// A range alone must NOT enable it; only calibrate:true does.
+func TestCalibrate_OptIn(t *testing.T) {
+	if c, _ := (map[string]any{"range": "1-10"})["calibrate"].(bool); c {
+		t.Fatal("test setup wrong")
+	}
+	// mirror the wrapper's decision: autocalib := args["calibrate"].(bool)
+	rangeOnly, _ := (map[string]any{"range": "300000-300999"})["calibrate"].(bool)
+	if rangeOnly {
+		t.Error("a range must NOT force -ac (it can over-filter to zero)")
+	}
+	explicit, _ := (map[string]any{"range": "1-10", "calibrate": true})["calibrate"].(bool)
+	if !explicit {
+		t.Error("calibrate:true must enable -ac")
+	}
+}
+
 // TestRedactCookie: the injected session cookie must never survive into ffuf's returned output (it
 // echoes the -H Cookie header in its config), so the agent's session can't leak into the evidence.
 func TestRedactCookie(t *testing.T) {

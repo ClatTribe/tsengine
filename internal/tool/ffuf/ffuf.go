@@ -32,7 +32,7 @@ func (*FFUF) MITRETechniques() []string { return []string{"T1083", "T1595.003"} 
 
 // KnownArgs declares the recognized arg keys (tool.ArgSpec).
 func (*FFUF) KnownArgs() []string {
-	return []string{"target", "url", "wordlist", "range", "match", "cookie"}
+	return []string{"target", "url", "wordlist", "range", "match", "cookie", "calibrate"}
 }
 
 // defaultWordlist is a small, ubiquitous list present in the sandbox image
@@ -116,7 +116,10 @@ func (*FFUF) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	}
 	u := fuzzURL(target)
 	wl := defaultWordlist
-	autocalib := false
+	// -ac (auto-calibration) is OPT-IN, never forced. It can over-filter to ZERO results — and when a
+	// `match` regex is set the regex IS the filter, so -ac is redundant. Forcing it on every range (the
+	// original #833 behavior) zeroed a real authenticated IDOR sweep with no override (grounded live).
+	autocalib, _ := args["calibrate"].(bool)
 	if rng, ok := args["range"].(string); ok && strings.TrimSpace(rng) != "" {
 		wf, cleanup, err := numericWordlist(rng)
 		if err != nil {
@@ -124,7 +127,6 @@ func (*FFUF) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		}
 		defer cleanup()
 		wl = wf
-		autocalib = true // a numeric sweep returns a uniform not-found; -ac filters it so real hits stand out
 	} else if w, ok := args["wordlist"].(string); ok && strings.TrimSpace(w) != "" {
 		wl = w
 	}
