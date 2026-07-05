@@ -61,8 +61,13 @@ func tSSHExec(cc *Context, args map[string]any) string {
 		return "ERROR: no command — pass command=<shell command>, e.g. command=\"cat /home/<user>/FLAG.txt\""
 	}
 	port := 22
-	if p := strings.TrimSpace(argStr(args, "port")); p != "" {
-		if n, err := strconv.Atoi(p); err == nil && n > 0 && n < 65536 {
+	switch p := args["port"].(type) {
+	case string:
+		if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil && n > 0 && n < 65536 {
+			port = n
+		}
+	case float64: // JSON numbers decode as float64 — an LLM naturally sends port as a NUMBER, not a string
+		if n := int(p); n > 0 && n < 65536 {
 			port = n
 		}
 	}
@@ -103,11 +108,22 @@ func tSSHExec(cc *Context, args map[string]any) string {
 	if len(out) > sshMaxOutput {
 		out = out[:sshMaxOutput] + "\n…(truncated)"
 	}
+	// Record the SSH result as a citable evidence turn — like dispatch_oss/send_request. Without this the
+	// output (a captured flag, extracted data) never reaches the transcript + signed evidence bundle: the
+	// whole lateral-movement capture would be invisible to grading AND to the evidence pack (§10).
+	// Observed live on XBEN-042: ssh_exec read /home/pedro/FLAG.txt but the run graded unsolved because
+	// the SSH output was not in the evidence.
+	cc.turnN++
+	tid := fmt.Sprintf("t-%03d", cc.turnN)
+	cc.History = append(cc.History, Turn{
+		ID: tid, Method: "ssh_exec", URL: fmt.Sprintf("%s@%s:%d", user, host, port),
+		Status: 200, Elapsed: "0s", RespSnippet: headTail(out, evidenceBodyCap-evidenceBodyTail, evidenceBodyTail),
+	})
 	note := ""
-	if strings.Contains(out, "flag{") {
-		note = " — output contains a flag{…}; record the lateral-movement finding citing this turn"
+	if strings.Contains(strings.ToLower(out), "flag{") { // case-insensitive — FLAG{…} is as common as flag{…}
+		note = " — output contains a flag{…}; the lateral-movement capture is recorded in this turn's evidence"
 	}
-	return fmt.Sprintf("SSH %s@%s:%d ran %q%s\n%s", user, host, port, command, note, out)
+	return fmt.Sprintf("%s  SSH %s@%s:%d ran %q%s\n%s", tid, user, host, port, command, note, out)
 }
 
 // sshExec is the pure connect→run→return core (unit-tested against an in-process SSH server). A
