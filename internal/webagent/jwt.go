@@ -112,19 +112,49 @@ func crackJWT(token string, forgeClaims map[string]any) jwtResult {
 		return res
 	}
 	signingInput := parts[0] + "." + parts[1]
-	for _, s := range jwtWeakSecrets {
+	tryHMAC := func(s string) bool { // ACTUAL verification — no false positive (§10)
 		mac := hmac.New(hfn, []byte(s))
 		mac.Write([]byte(signingInput))
-		if hmac.Equal(mac.Sum(nil), sigBytes) { // ACTUAL verification — no false positive (§10)
-			res.Cracked = true
-			res.Secret = s
-			if forgeClaims != nil {
-				res.Forged = forgeJWT(payB, forgeClaims, hdr.Alg, s)
-			}
-			return res
+		return hmac.Equal(mac.Sum(nil), sigBytes)
+	}
+	// Candidate secrets: the high-signal JWT-specific list FIRST, then crack_hash's broader
+	// common-password wordlist + the same case/suffix mangling. A JWT HMAC secret is frequently just a
+	// common word/password, and jwt_crack previously tried only its own 35-entry list — narrower than the
+	// crack_hash corpus (grounded: a live XBEN-005 JWT went uncracked). Sharing one curated wordlist means
+	// both crackers get the same coverage. Bounded by maxCandidates so the crack stays sub-second.
+	found := ""
+	for _, s := range jwtWeakSecrets {
+		if tryHMAC(s) {
+			found = s
+			break
 		}
 	}
-	res.Note = "not cracked with the built-in weak-secret list — the secret is strong (or non-HMAC); an OSS cracker (hashcat -m 16500) with a full wordlist is the next step"
+	if found == "" {
+		tried := 0
+	scan:
+		for _, base := range commonPasswords {
+			for _, v := range caseVariants(base) {
+				for _, suf := range mangleSuffixes {
+					if tried++; tried > maxCandidates {
+						break scan
+					}
+					if cand := v + suf; tryHMAC(cand) {
+						found = cand
+						break scan
+					}
+				}
+			}
+		}
+	}
+	if found != "" {
+		res.Cracked = true
+		res.Secret = found
+		if forgeClaims != nil {
+			res.Forged = forgeJWT(payB, forgeClaims, hdr.Alg, found)
+		}
+		return res
+	}
+	res.Note = "not cracked with the built-in weak-secret + common-password wordlist — the secret is strong (or non-HMAC); an OSS cracker (hashcat -m 16500) with a full wordlist is the next step"
 	return res
 }
 
