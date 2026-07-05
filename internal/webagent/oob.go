@@ -198,5 +198,20 @@ func tOOBCheck(cc *Context, args map[string]any) string {
 			b.WriteString("      body: " + bd + "\n")
 		}
 	}
+	// A confirmed callback is grounded, citable evidence: emit a Turn carrying the oob_interaction
+	// indicator so record_finding(class="ssrf", evidence=[this turn]) passes the grounding gate. Only a
+	// REAL recorded hit reaches here, so the indicator is false-positive-free by construction (§10). The
+	// hit's token is stored on the Turn.Payload so confirm_exploit can re-verify the durable callback.
+	tok := token
+	if tok == "" {
+		tok = hits[0].Token
+	}
+	cc.turnN++
+	tid := fmt.Sprintf("t-%03d", cc.turnN)
+	cc.History = append(cc.History, Turn{
+		ID: tid, Method: "oob_check", Payload: tok, Status: 200,
+		Indicators: []string{"oob_interaction"}, Elapsed: "0s", RespSnippet: b.String(),
+	})
+	fmt.Fprintf(&b, "\n[%s] oob_interaction — cite this turn to record_finding(class=\"ssrf\", evidence=[\"%s\"]).", tid, tid)
 	return b.String()
 }
