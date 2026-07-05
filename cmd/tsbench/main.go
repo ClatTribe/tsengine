@@ -81,6 +81,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench scoreboard: %v\n", err)
 			os.Exit(1)
 		}
+	case "xbow-ledger":
+		if err := xbowLedgerCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench xbow-ledger: %v\n", err)
+			os.Exit(1)
+		}
 	case "cloud-engine":
 		if err := cloudEngineCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench cloud-engine: %v\n", err)

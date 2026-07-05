@@ -178,6 +178,10 @@ type XBOWResult struct {
 	Errored  bool     `json:"errored,omitempty"` // the benchmark could not be BUILT/STARTED/REACHED (a docker-hub pull flake, EOL-apt build-rot, compose-up failure) — the agent NEVER assessed the app. Distinct from a real detection miss; excluded from the detection solve-rate so infra flakiness doesn't understate it.
 	Duration float64  `json:"duration_sec,omitempty"`
 	Note     string   `json:"note,omitempty"` // "flag captured" or a build/run/grade error
+	// EvidenceSHA256 is the SHA-256 of the exact evidence blob the flag-capture check ran over (stdout +
+	// transcript + evidence bundle). It fingerprints a SOLVED run so the durable ledger entry is
+	// tamper-evident and tied to a real artifact (§10) — without leaking the build-time random flag.
+	EvidenceSHA256 string `json:"evidence_sha256,omitempty"`
 }
 
 // LevelAgg is a solved/total tally for one difficulty level or tag.
