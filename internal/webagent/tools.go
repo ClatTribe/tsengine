@@ -246,6 +246,13 @@ func tSend(cc *Context, args map[string]any) string {
 		SetCookies: resp.SetCookie, RespSnippet: evidence,
 	}
 	cc.History = append(cc.History, t)
+	// Remember the EXACT request (full body + the Content-Type actually sent) so confirm_exploit can
+	// re-fire this proof byte-for-byte — the recorded Turn.Body above is display-truncated (512B) and
+	// carries no Content-Type, which cannot reconstruct a multipart upload (boundary lost).
+	if cc.sentReqs == nil {
+		cc.sentReqs = map[string]sentReq{}
+	}
+	cc.sentReqs[t.ID] = sentReq{body: body, contentType: headerFold(headers, "content-type")}
 	indStr := "none"
 	if len(ind) > 0 {
 		indStr = strings.Join(ind, ", ")
@@ -344,6 +351,16 @@ func hasHeaderFold(h map[string]string, name string) bool {
 	return false
 }
 
+// headerFold returns the value of a header by case-insensitive name ("" if absent).
+func headerFold(h map[string]string, name string) string {
+	for k, v := range h {
+		if strings.EqualFold(k, name) {
+			return v
+		}
+	}
+	return ""
+}
+
 func tRecord(cc *Context, args map[string]any) string {
 	class := strings.ToLower(argStr(args, "class"))
 	evid := argStrList(args, "evidence")
@@ -418,10 +435,21 @@ func tConfirm(cc *Context, args map[string]any) string {
 		}
 		// Re-fire WITH the proving request's body — a POST-body injection (SSTI/SQLi/cmdi in the body,
 		// not the URL) can't reproduce without it, and a body-less re-fire would falsely report the real
-		// finding as "not reproduced" and tell the agent to drop it. The Turn doesn't store the original
-		// headers, so reconstruct the minimal Content-Type from the body shape (JSON vs form) — many
-		// servers (Go's ParseForm included) ignore a body entirely without a parseable Content-Type.
-		resp, err := cc.req.Send(cc.ctx, turn.Method, turn.URL, turn.Body, confirmHeaders(turn.Body))
+		// finding as "not reproduced" and tell the agent to drop it. Prefer the EXACT remembered request
+		// (full body + the Content-Type actually sent) so a MULTIPART UPLOAD proof re-fires byte-for-byte
+		// (boundary preserved) — an XXE-via-SVG-upload / file-upload-RCE finding was un-verifiable before
+		// because the display-truncated Turn.Body + a guessed form Content-Type made the server 422.
+		// Fall back to the truncated Turn.Body + a shape-guessed Content-Type when no snapshot exists.
+		body, hdrs := turn.Body, confirmHeaders(turn.Body)
+		if snap, ok := cc.sentReqs[turn.ID]; ok {
+			body = snap.body
+			if snap.contentType != "" {
+				hdrs = map[string]string{"Content-Type": snap.contentType}
+			} else {
+				hdrs = confirmHeaders(body)
+			}
+		}
+		resp, err := cc.req.Send(cc.ctx, turn.Method, turn.URL, body, hdrs)
 		if err != nil {
 			return "confirm failed (request error): " + err.Error()
 		}
