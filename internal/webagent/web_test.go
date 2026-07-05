@@ -332,14 +332,14 @@ func TestIndicators_Deterministic(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := indicators(c.payload, c.resp)
+			got := indicators(c.payload, "", c.resp)
 			if !hasIndicator(Turn{Indicators: got}, c.want) {
 				t.Errorf("indicators(%q) = %v, want one matching %q", c.payload, got, c.want)
 			}
 		})
 	}
 	// a benign 200 with no reflection / error yields no indicators
-	if got := indicators("hello", &Resp{Status: 200, Body: "results for hello"}); len(got) != 0 {
+	if got := indicators("hello", "", &Resp{Status: 200, Body: "results for hello"}); len(got) != 0 {
 		t.Errorf("benign response produced indicators: %v", got)
 	}
 }

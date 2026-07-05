@@ -209,7 +209,7 @@ func tSend(cc *Context, args map[string]any) string {
 	if err != nil {
 		return "REQUEST FAILED: " + err.Error()
 	}
-	ind := indicators(payload, resp)
+	ind := indicators(payload, body, resp)
 	cc.turnN++
 
 	// Two DISTINCT captures of the response, decoupled on purpose:
@@ -453,7 +453,7 @@ func tConfirm(cc *Context, args map[string]any) string {
 		if err != nil {
 			return "confirm failed (request error): " + err.Error()
 		}
-		if hasIndicator(Turn{Indicators: indicators(turn.Payload, resp)}, want) {
+		if hasIndicator(Turn{Indicators: indicators(turn.Payload, body, resp)}, want) {
 			cc.Findings[idx].Verified = true
 			return fmt.Sprintf("VERIFIED %s — re-firing the proving request reproduced the %q indicator (status=%d).", id, want, resp.Status)
 		}
