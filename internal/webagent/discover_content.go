@@ -28,7 +28,11 @@ var discoverBudget = 20 * time.Second
 // (no target-specific names — §14.2); ordered by likelihood. Includes the dynamic AUTH + CRUD/query
 // handlers where SQLi/IDOR actually live (login.php, search.php, product.php, …) — a static site's
 // forms often point at a placeholder action while the real injectable endpoint is unlinked, so name
-// discovery is the only way to reach it. Bounded (~40) to respect the request budget.
+// discovery is the only way to reach it. Also the JSON-API / RPC ACTION-verb routes (run, exec, render,
+// healthcheck, /api/*, graphql) — a modern Flask/FastAPI/Express service hides its functional surface
+// behind action verbs, NOT .php file names, so a purely file-oriented list is blind to the whole
+// JSON-API class (observed live: XBEN-082, a Flask microservice, probed 45 PHP paths → "nothing found"
+// and the agent never reached the eval/render sink). Bounded (~60) to respect the request budget.
 var commonPaths = []string{
 	// exposure / config / meta
 	"admin.php", "admin", "private.php", "private", "config.php", ".env", ".git/HEAD",
@@ -41,6 +45,11 @@ var commonPaths = []string{
 	"search.php", "product.php", "products.php", "item.php", "view.php", "details.php",
 	"user.php", "users.php", "profile.php", "account.php", "news.php", "article.php",
 	"category.php", "list.php", "index.php", "home.php", "api/login",
+	// JSON-API / RPC ACTION-verb routes (SSRF/eval/render/cmd-exec sinks in Flask/FastAPI/Express/Spring
+	// microservices — the surface a .php wordlist can't see). Generic service verbs, not target-specific.
+	"api", "graphql", "graphiql", "healthcheck", "health", "status", "actuator", "debug", "console",
+	"run", "exec", "execute", "eval", "render", "fetch", "proxy", "invoke",
+	"api/run", "api/exec", "api/render", "api/fetch", "api/proxy", "api/health", "api/data",
 }
 
 // commonParams — the standard server-side query-param names (LFI/IDOR/injection/debug). GENERIC.
