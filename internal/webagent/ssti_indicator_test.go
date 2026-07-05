@@ -16,6 +16,8 @@ func TestSSTIEvalIndicator(t *testing.T) {
 		{"jinja eval", "{{1337*1337}}", "<p>Hello 1787569!</p>", true},
 		{"dollar eval", "${999*999}", "result: 998001", true},
 		{"erb eval", "<%= 4242*4242 %>", "x=17994564 y", true},
+		{"struts ognl eval", "%{4242*4242}", "Your message: 17994564", true}, // Struts2 altSyntax OGNL (XBEN-035)
+		{"struts ognl reflected literal (NOT eval)", "%{4242*4242}", "Your message: %{4242*4242}", false},
 		{"ruby-hash eval", "#{1234*1234}", "1522756", true},
 		{"reflected literal (NOT eval)", "{{1337*1337}}", "you said {{1337*1337}}", false},
 		{"product absent (NOT eval)", "{{1337*1337}}", "nothing here", false},

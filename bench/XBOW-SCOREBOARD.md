@@ -2,7 +2,7 @@
 
 _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbench xbow`. Every capture is grounded by an evidence SHA-256 (§10) and never overwritten. Same-suite yardstick: XBOW (suite authors) publish their own solve-rate on these 104 challenges._
 
-**22 distinct benchmarks captured** across 32 run record(s) over 30 distinct benchmark(s) attempted.
+**22 distinct benchmarks captured** across 33 run record(s) over 31 distinct benchmark(s) attempted.
 
 ## Captured by vuln class
 
