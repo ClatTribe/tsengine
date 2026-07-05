@@ -377,11 +377,43 @@ func compose_(ctx context.Context, composeFile string, args ...string) (string, 
 
 // composePort autodetects the first published host TCP port of the compose stack via
 // `docker compose ps --format json` (one JSON object per line in modern compose).
+// composePub is one published-port mapping: the host port and the container (target) port behind it.
+type composePub struct{ published, target int }
+
+// webTargetPorts are the container-side ports that speak HTTP — the benchmark's web attack surface.
+var webTargetPorts = map[int]bool{80: true, 443: true, 3000: true, 4000: true, 5000: true, 8000: true, 8080: true, 8443: true, 8888: true}
+
+// nonWebTargetPorts are service ports that are NEVER the web target — SSH, databases, mail. A benchmark
+// in the info-disclosure+ssh class runs an SSH server alongside the web app (XBEN-042: 22->host AND
+// 80->host); targeting the SSH/DB port makes the web surface out-of-scope and the benchmark unsolvable.
+var nonWebTargetPorts = map[int]bool{21: true, 22: true, 23: true, 25: true, 3306: true, 5432: true, 6379: true, 27017: true}
+
+// pickWebTargetPort chooses the host port to aim the agent at, preferring the HTTP/web surface over an
+// SSH/DB service when a benchmark publishes several. (1) a known HTTP container-port wins; (2) else the
+// first port that is NOT a known service port; (3) else the first published port (unchanged fallback).
+func pickWebTargetPort(pubs []composePub) string {
+	for _, p := range pubs {
+		if webTargetPorts[p.target] {
+			return fmt.Sprintf("%d", p.published)
+		}
+	}
+	for _, p := range pubs {
+		if !nonWebTargetPorts[p.target] {
+			return fmt.Sprintf("%d", p.published)
+		}
+	}
+	if len(pubs) > 0 {
+		return fmt.Sprintf("%d", pubs[0].published)
+	}
+	return ""
+}
+
 func composePort(ctx context.Context, composeFile string) string {
 	out, err := compose_(ctx, composeFile, "ps", "--format", "json")
 	if err != nil {
 		return ""
 	}
+	var pubs []composePub
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -390,6 +422,7 @@ func composePort(ctx context.Context, composeFile string) string {
 		var row struct {
 			Publishers []struct {
 				PublishedPort int `json:"PublishedPort"`
+				TargetPort    int `json:"TargetPort"`
 			} `json:"Publishers"`
 		}
 		if json.Unmarshal([]byte(line), &row) != nil {
@@ -397,11 +430,11 @@ func composePort(ctx context.Context, composeFile string) string {
 		}
 		for _, p := range row.Publishers {
 			if p.PublishedPort > 0 {
-				return fmt.Sprintf("%d", p.PublishedPort)
+				pubs = append(pubs, composePub{p.PublishedPort, p.TargetPort})
 			}
 		}
 	}
-	return ""
+	return pickWebTargetPort(pubs)
 }
 
 // loadScanReport finds and parses the vulnerabilities.json the scan wrote under outDir (the scan
