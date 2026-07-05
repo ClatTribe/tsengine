@@ -333,8 +333,9 @@ func looksInjectable(payload string) bool {
 }
 
 // sstiExprRe matches a template-injection ARITHMETIC probe in the payload — {{A*B}}, ${A*B},
-// <%= A*B %>, #{A*B} — the canonical SSTI confirmation across Jinja/Twig/ERB/Freemarker/Ruby.
-var sstiExprRe = regexp.MustCompile(`(?:\{\{|\$\{|<%=|#\{)\s*(\d{2,7})\s*\*\s*(\d{2,7})\s*(?:\}\}|\}|%>)`)
+// %{A*B}, <%= A*B %>, #{A*B} — the canonical SSTI/OGNL confirmation across Jinja/Twig/ERB/Freemarker/
+// Ruby and Struts2 OGNL altSyntax (%{...}, grounded live on XBEN-035 where %{1234*1234} evaluated).
+var sstiExprRe = regexp.MustCompile(`(?:\{\{|\$\{|%\{|<%=|#\{)\s*(\d{2,7})\s*\*\s*(\d{2,7})\s*(?:\}\}|\}|%>)`)
 
 // sstiEvaluated reports a deterministic server-side-template-injection signal: the payload carried a
 // template arithmetic expression whose PRODUCT appears in the response while the raw expression does
