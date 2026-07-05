@@ -97,6 +97,27 @@ func tDispatchOSS(cc *Context, args map[string]any) string {
 	if err != nil {
 		return "OSS dispatch (" + tool + ") failed: " + err.Error()
 	}
+	// Honesty (§10): a tool that ran cleanly but produced NO output is ambiguous — the agent can't tell
+	// "target is clean" from "the tool did nothing / was misconfigured", and a bare empty "result:" reads
+	// as the former. Say it plainly so the agent doesn't wrongly conclude the target is safe (grounded: a
+	// live nuclei dispatch returned empty because the target's vuln was a CUSTOM app flaw with no public
+	// template — NOT because the app was clean). What "no output" means is tool-specific, so name it.
+	if strings.TrimSpace(out) == "" {
+		var why string
+		switch tool {
+		case "nuclei":
+			why = "no template matched — the target has no KNOWN-CVE/misconfiguration exposure nuclei ships a signature for. This does NOT mean it's secure: a CUSTOM/business-logic/0-day vuln needs manual analysis (read the source, endpoints, params)."
+		case "sqlmap":
+			why = "sqlmap found no injection with these args — try a higher --level/--risk, a different param, --tamper for a filter/WAF, or the injection may be a different class."
+		case "wpscan":
+			why = "wpscan surfaced nothing (no API token → no vuln data, or no vulnerable plugin/theme detected). Enumerate/analyze the theme+plugins manually."
+		case "ffuf":
+			why = "no paths matched — the wordlist/match filter found nothing; adjust match/range or try another wordlist."
+		default:
+			why = "the tool ran but returned no output — it found nothing with these args, or needs different ones. This is NOT proof the target is clean."
+		}
+		out = fmt.Sprintf("(%s: %s)", tool, why)
+	}
 	cc.turnN++
 	// head+tail, not head-only: an OSS dump (sqlmap tables, hydra creds, ffuf hits) puts the EXTRACTED
 	// artifact near the END, so pure head-truncation dropped the very data the agent dispatched for and
