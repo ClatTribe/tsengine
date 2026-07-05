@@ -252,6 +252,35 @@ func gradeScanMode(ctx context.Context, binary, timeout, target, tmp, flagStr st
 	return false, findings, fmt.Sprintf("flag not captured (%d findings — reached the app, didn't reach the flag)", findings)
 }
 
+// investigateEnv returns the environment for the web-investigate subprocess with the OOB collector host
+// pinned so a DOCKERIZED benchmark target can actually reach it. The collector listens on 0.0.0.0 (host-
+// reachable), but oobHost() defaults to 127.0.0.1 — and 127.0.0.1 embedded in a blind-vuln payload makes
+// the TARGET CONTAINER call BACK TO ITSELF, so the callback never fires and every blind SSRF/XSS/cmd-inj
+// OOB capture is silently impossible. XBOW benchmarks are ALL dockerized, so the target reaches the host
+// collector via host.docker.internal (auto on Docker Desktop; `--add-host host.docker.internal:host-gateway`
+// on Linux — the same alias the L1 sandbox runtime already uses). We inject
+// TSENGINE_OOB_HOST=host.docker.internal UNLESS the operator already set a non-empty value (a remote
+// collector or a Linux gateway IP wins). Grounded (§10): observed a 127.0.0.1 OOB URL minted against
+// XBEN-082 that no container could reach.
+func investigateEnv(parent []string) []string {
+	const key = "TSENGINE_OOB_HOST"
+	out := make([]string, 0, len(parent)+1)
+	set := false
+	for _, kv := range parent {
+		if strings.HasPrefix(kv, key+"=") {
+			if strings.TrimSpace(strings.TrimPrefix(kv, key+"=")) == "" {
+				continue // drop an empty override (oobHost() treats "" as unset) so our default applies — no dup key
+			}
+			set = true // a real operator value — keep it; it wins
+		}
+		out = append(out, kv)
+	}
+	if !set {
+		out = append(out, key+"=host.docker.internal")
+	}
+	return out
+}
+
 // gradeInvestigateMode runs the offensive LLM agent (`tsengine web-investigate`) that PURSUES the
 // flag, and grades capture over the UNION of everything it produced: stdout render + the full
 // transcript (every turn's response body) + the signed evidence bundle. If the injected random flag
@@ -282,7 +311,7 @@ func gradeInvestigateMode(ctx context.Context, binary, timeout, target, tmp, fla
 		args = append(args, "--oss-sandbox", img)
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Env = os.Environ()
+	cmd.Env = investigateEnv(os.Environ())
 	out, ierr := cmd.CombinedOutput()
 
 	blob := string(out)
