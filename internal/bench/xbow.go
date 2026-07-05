@@ -175,6 +175,7 @@ type XBOWResult struct {
 	Tags     []string `json:"tags,omitempty"`
 	Solved   bool     `json:"solved"`
 	Findings int      `json:"findings"` // findings the scan produced — diagnostic: "found the vuln but no flag" (harness-objective gap) vs "found nothing" (detection/brain gap)
+	Errored  bool     `json:"errored,omitempty"` // the benchmark could not be BUILT/STARTED/REACHED (a docker-hub pull flake, EOL-apt build-rot, compose-up failure) — the agent NEVER assessed the app. Distinct from a real detection miss; excluded from the detection solve-rate so infra flakiness doesn't understate it.
 	Duration float64  `json:"duration_sec,omitempty"`
 	Note     string   `json:"note,omitempty"` // "flag captured" or a build/run/grade error
 }
@@ -196,10 +197,11 @@ func (a LevelAgg) Rate() float64 {
 // XBOWScoreboard aggregates results into the shape XBOW reports: an overall solve-rate plus the
 // per-difficulty-level breakdown (and a per-tag cut showing which vuln classes we're strong/weak on).
 type XBOWScoreboard struct {
-	Total        int                 `json:"total"`
+	Total        int                 `json:"total"` // benchmarks that actually RAN (built + started + agent assessed) — the detection denominator
 	Solved       int                 `json:"solved"`
 	SolveRate    float64             `json:"solve_rate"`
 	WithFindings int                 `json:"with_findings"` // benchmarks where the scan produced ≥1 finding (reached + assessed the app) — the diagnostic floor under flag-capture
+	Errored      int                 `json:"errored,omitempty"` // benchmarks EXCLUDED from the detection denominator: build/start/reach failure (infra, not detection). Reported separately so a docker-hub flake never masquerades as a detection miss.
 	ByLevel      map[int]LevelAgg    `json:"by_level"`
 	ByTag        map[string]LevelAgg `json:"by_tag,omitempty"`
 }
@@ -208,6 +210,13 @@ type XBOWScoreboard struct {
 func AggregateXBOW(results []XBOWResult) XBOWScoreboard {
 	sb := XBOWScoreboard{ByLevel: map[int]LevelAgg{}, ByTag: map[string]LevelAgg{}}
 	for _, r := range results {
+		// An infra/build failure means the agent never assessed the app. Count it separately and exclude
+		// it from every detection denominator (overall, by-level, by-tag) — else a docker-hub pull flake or
+		// EOL-apt build-rot reads as "failed to detect the vuln" and understates the real solve-rate (§14).
+		if r.Errored {
+			sb.Errored++
+			continue
+		}
 		sb.Total++
 		if r.Findings > 0 {
 			sb.WithFindings++
@@ -252,6 +261,12 @@ func RenderXBOWScoreboard(sb XBOWScoreboard) string {
 	// benchmarks we at least reached + produced findings on, vs how many we actually captured.
 	fmt.Fprintf(&b, "DIAGNOSTIC: %d/%d benchmarks produced findings (reached + assessed the app); of those, %d captured the flag.\n",
 		sb.WithFindings, sb.Total, sb.Solved)
+	// Infra/build failures are NOT detection misses — report them separately so the solve-rate above stays
+	// honest (a docker-hub pull flake or EOL-apt build-rot never masquerades as "the agent failed to find
+	// the vuln"). §14 bench honesty.
+	if sb.Errored > 0 {
+		fmt.Fprintf(&b, "EXCLUDED: %d benchmark(s) errored (could not be built/started/reached — infra/build failure, the agent never ran) — NOT counted in the solve-rate above.\n", sb.Errored)
+	}
 
 	if len(sb.ByLevel) > 0 {
 		b.WriteString("\nby difficulty:\n")

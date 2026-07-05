@@ -85,12 +85,20 @@ func xbowCmd(argv []string) error {
 	var results []bench.XBOWResult
 	done := map[string]bool{}
 	if *resume && *out != "" {
+		retried := 0
 		for _, r := range loadXBOWCheckpoint(*out) {
+			// An errored benchmark (build/start/reach failure) is a TRANSIENT infra miss — a docker-hub
+			// pull flake, a slow build that timed out. Don't carry it forward + skip it; let resume RE-RUN
+			// it so a network blip on the first pass doesn't permanently drop a benchmark.
+			if r.Errored {
+				retried++
+				continue
+			}
 			results = append(results, r)
 			done[r.ID] = true
 		}
-		if len(done) > 0 {
-			fmt.Fprintf(os.Stderr, "[xbow] resuming: %d benchmarks already done, skipping them\n", len(done))
+		if len(done) > 0 || retried > 0 {
+			fmt.Fprintf(os.Stderr, "[xbow] resuming: %d benchmarks already done (skipping); %d errored will be retried\n", len(done), retried)
 		}
 	}
 
@@ -151,24 +159,31 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, mode, timeou
 		res.Note = note
 		return res
 	}
+	// errFinish marks an INFRA/build failure: the stack could not be built/started/reached, so the agent
+	// never assessed the app. AggregateXBOW excludes these from the detection solve-rate (a docker-hub
+	// pull flake or EOL-apt build-rot is not a detection miss — §14 bench honesty).
+	errFinish := func(note string) bench.XBOWResult {
+		res.Errored = true
+		return finish(note)
+	}
 
 	compose := b.ComposeFile()
 	if compose == "" {
-		return finish("no docker-compose file in benchmark dir")
+		return errFinish("no docker-compose file in benchmark dir")
 	}
 	flagStr, err := bench.GenerateFlag()
 	if err != nil {
-		return finish("flag gen: " + err.Error())
+		return errFinish("flag gen: " + err.Error())
 	}
 
 	// build with the random flag injected, then bring the stack up. The suite's compose files consume
 	// an uppercase FLAG build-arg; their own Makefile passes BOTH FLAG= and flag=, so we mirror that.
 	if out, berr := compose_(ctx, compose, "build", "--build-arg", "FLAG="+flagStr, "--build-arg", "flag="+flagStr); berr != nil {
-		return finish("compose build failed: " + tail(out))
+		return errFinish("compose build failed: " + tail(out))
 	}
 	if out, uerr := compose_(ctx, compose, "up", "-d", "--wait"); uerr != nil {
 		_, _ = composeDown(ctx, compose, pruneImages)
-		return finish("compose up failed: " + tail(out))
+		return errFinish("compose up failed: " + tail(out))
 	}
 	// Always tear down. On a full-suite run, --prune-images also removes the locally-built image so 104
 	// builds don't exhaust the disk (the cost: a rebuild if you resume that benchmark).
@@ -181,7 +196,7 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, mode, timeou
 		target = "http://localhost:" + p
 	}
 	if target == "" {
-		return finish("could not determine target URL (set --target-port)")
+		return errFinish("could not determine target URL (set --target-port)")
 	}
 
 	// Env (LLM_*, TSENGINE_ACTIVE_EXPLOIT, sandbox image) is inherited from this process, so the
