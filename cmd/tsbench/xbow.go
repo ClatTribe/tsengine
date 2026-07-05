@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,6 +16,14 @@ import (
 	"github.com/ClatTribe/tsengine/internal/bench"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// sha256Hex fingerprints the evidence blob a run was graded over — the tamper-evident anchor for a durable
+// ledger entry (§10). One-way, so it records that an artifact of this exact content existed without
+// leaking the build-time random flag inside it.
+func sha256Hex(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
+}
 
 // xbowCmd runs the XBOW validation-benchmarks suite (rung-2 same-suite comparison): for each
 // benchmark it injects a random flag at build time, spins up the vulnerable app, runs the tsengine
@@ -38,6 +48,7 @@ func xbowCmd(argv []string) error {
 	level := fs.Int("level", 0, "only run benchmarks of this difficulty level (1/2/3; 0 = all)")
 	targetPort := fs.String("target-port", "", "host port the benchmark publishes (skip docker-compose port autodetect)")
 	out := fs.String("out", "", "write <out>.json (results) + <out>.md (scoreboard); default stdout only")
+	ledger := fs.String("ledger", "bench/xbow-ledger.jsonl", "durable, append-only capture ledger — one JSON line per run, git-committed, NEVER overwritten (the audit trail --out's ephemeral snapshot lacked). A sibling XBOW-SCOREBOARD.md is regenerated from it. Empty disables.")
 	dryRun := fs.Bool("dry-run", false, "load the suite and print the plan WITHOUT Docker/scan (suite-wiring check)")
 	resume := fs.Bool("resume", false, "skip benchmarks already in <out>.json (resume a long/interrupted run)")
 	prune := fs.Bool("prune-images", true, "remove each benchmark's locally-built image after teardown (bounds disk over a full-suite run)")
@@ -114,6 +125,19 @@ func xbowCmd(argv []string) error {
 		}
 		fmt.Fprintf(os.Stderr, "  → %s (%.0fs) %s\n", status, r.Duration, r.Note)
 		results = append(results, r)
+		// DURABLE record: append one line to the committed, append-only ledger BEFORE the ephemeral
+		// --out checkpoint. A run is never silently lost again — solved, missed, or errored, it leaves a
+		// permanent, diffable, evidence-fingerprinted trail (§10).
+		if *ledger != "" {
+			entry := bench.XBOWLedgerEntry{
+				TS: time.Now().UTC().Format(time.RFC3339), ID: r.ID, Name: r.Name, Level: r.Level,
+				Tags: r.Tags, Mode: *mode, Solved: r.Solved, Findings: r.Findings, Errored: r.Errored,
+				EvidenceSHA256: r.EvidenceSHA256, Note: r.Note,
+			}
+			if aerr := bench.AppendXBOWLedger(*ledger, entry); aerr != nil {
+				fmt.Fprintf(os.Stderr, "[xbow] ledger append failed: %v\n", aerr)
+			}
+		}
 		// Checkpoint after EVERY benchmark so an interrupted run loses nothing (and is resumable).
 		if *out != "" {
 			if jerr := writeXBOWResults(*out, results, bench.AggregateXBOW(results)); jerr != nil {
@@ -127,6 +151,16 @@ func xbowCmd(argv []string) error {
 	if *out != "" {
 		_ = writeXBOWResults(*out, results, sb)
 		fmt.Fprintf(os.Stderr, "[xbow] wrote %s.json + %s.md\n", *out, *out)
+	}
+	// Regenerate the durable, human-readable scoreboard from the FULL ledger history (all runs ever,
+	// across every invocation) — the committed "written number".
+	if *ledger != "" {
+		if entries, lerr := bench.LoadXBOWLedger(*ledger); lerr == nil && len(entries) > 0 {
+			sbPath := filepath.Join(filepath.Dir(*ledger), "XBOW-SCOREBOARD.md")
+			if werr := os.WriteFile(sbPath, []byte(bench.RenderXBOWLedgerMarkdown(entries)), 0o644); werr == nil { //nolint:gosec // bench artifact
+				fmt.Fprintf(os.Stderr, "[xbow] updated durable ledger %s (+ %s)\n", *ledger, sbPath)
+			}
+		}
 	}
 	return nil
 }
@@ -211,28 +245,35 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, mode, timeou
 
 	var solved bool
 	var findings int
-	var note string
+	var note, evidenceSHA string
 	if mode == "scan" {
 		// Deterministic L1 detection: finds + classifies vulns. It CANNOT capture a flag by
 		// design (no goal-directed exfil loop) — kept for the findings-count diagnostic + A/B.
-		solved, findings, note = gradeScanMode(sctx, binary, timeout, target, tmp, flagStr)
+		solved, findings, note, evidenceSHA = gradeScanMode(sctx, binary, timeout, target, tmp, flagStr)
 	} else {
 		// The OFFENSIVE agent that PURSUES the flag (web-investigate): LLM brain drives crafted
 		// requests, reads responses, records grounded findings. This is the flag-capture path.
-		solved, findings, note = gradeInvestigateMode(sctx, binary, timeout, target, tmp, flagStr)
+		solved, findings, note, evidenceSHA = gradeInvestigateMode(sctx, binary, timeout, target, tmp, flagStr)
 	}
-	res.Solved, res.Findings = solved, findings
+	res.Solved, res.Findings, res.EvidenceSHA256 = solved, findings, evidenceSHA
 	return finish(note)
 }
 
 // gradeScanMode runs the deterministic detector (`tsengine scan`) and grades flag capture over the
 // produced vulnerabilities.json. Detection can't pursue a flag, so this is the diagnostic/A-B arm.
-func gradeScanMode(ctx context.Context, binary, timeout, target, tmp, flagStr string) (bool, int, string) {
+func gradeScanMode(ctx context.Context, binary, timeout, target, tmp, flagStr string) (bool, int, string, string) {
 	cmd := exec.CommandContext(ctx, binary, "scan", "--asset", "web_application",
 		"--target", target, "--out", tmp, "--timeout", timeout)
 	cmd.Env = os.Environ()
 	out, serr := cmd.CombinedOutput()
 	scan := loadScanReport(tmp) // may exist even on a non-zero exit (partial report)
+	blob := string(out)
+	if scan != nil {
+		if raw, merr := json.Marshal(scan); merr == nil {
+			blob += "\n" + string(raw) // grade runs over the parsed scan — fingerprint its canonical bytes
+		}
+	}
+	sha := sha256Hex(blob)
 	findings := 0
 	if scan != nil {
 		findings = len(scan.FindingsRaw)
@@ -240,16 +281,16 @@ func gradeScanMode(ctx context.Context, binary, timeout, target, tmp, flagStr st
 			findings = len(scan.FindingsEnriched)
 		}
 		if bench.FlagCapturedInScan(flagStr, scan) {
-			return true, findings, fmt.Sprintf("flag captured (%d findings)", findings)
+			return true, findings, fmt.Sprintf("flag captured (%d findings)", findings), sha
 		}
 	}
 	if serr != nil {
-		return false, findings, "scan failed: " + tail(string(out))
+		return false, findings, "scan failed: " + tail(string(out)), sha
 	}
 	if scan == nil {
-		return false, findings, "no vulnerabilities.json produced"
+		return false, findings, "no vulnerabilities.json produced", sha
 	}
-	return false, findings, fmt.Sprintf("flag not captured (%d findings — reached the app, didn't reach the flag)", findings)
+	return false, findings, fmt.Sprintf("flag not captured (%d findings — reached the app, didn't reach the flag)", findings), sha
 }
 
 // investigateEnv returns the environment for the web-investigate subprocess with the OOB collector host
@@ -285,7 +326,7 @@ func investigateEnv(parent []string) []string {
 // flag, and grades capture over the UNION of everything it produced: stdout render + the full
 // transcript (every turn's response body) + the signed evidence bundle. If the injected random flag
 // appears anywhere the agent observed it, that is a real, ungameable capture (§10).
-func gradeInvestigateMode(ctx context.Context, binary, timeout, target, tmp, flagStr string) (bool, int, string) {
+func gradeInvestigateMode(ctx context.Context, binary, timeout, target, tmp, flagStr string) (bool, int, string, string) {
 	// RECON HANDOFF: run a bounded L1 scan first so the agent starts SEEDED with the discovered
 	// surface (katana crawl / spec ingest / found endpoints) instead of blind. Best-effort — on any
 	// failure the agent still runs, falling back to its own in-response surface extraction.
@@ -320,26 +361,27 @@ func gradeInvestigateMode(ctx context.Context, binary, timeout, target, tmp, fla
 	eData, _ := os.ReadFile(evidence) //nolint:gosec // our own temp dir
 	blob += "\n" + string(eData)
 
+	sha := sha256Hex(blob) // fingerprint the exact blob the capture check runs over
 	findings, turns := investigateCounts(tData)
 	if bench.FlagCaptured(flagStr, blob) {
-		return true, findings, fmt.Sprintf("flag captured (%d finding(s), %d turn(s), offensive agent)", findings, turns)
+		return true, findings, fmt.Sprintf("flag captured (%d finding(s), %d turn(s), offensive agent)", findings, turns), sha
 	}
 	if ierr != nil {
 		note := tail(string(out))
 		if strings.Contains(note, "needs an LLM") {
-			return false, findings, "web-investigate needs an LLM (set LLM_* / LLM_API_KEY) — the flag-pursuit brain"
+			return false, findings, "web-investigate needs an LLM (set LLM_* / LLM_API_KEY) — the flag-pursuit brain", sha
 		}
 		if turns > 0 {
 			// Killed mid-engagement (usually the per-benchmark timeout on a slow model). The partial
 			// transcript WAS flushed + graded above (Options.Progress) — the flag just wasn't in it yet.
-			return false, findings, fmt.Sprintf("agent engaged %d turn(s) then stopped (timeout?) — no flag in partial transcript", turns)
+			return false, findings, fmt.Sprintf("agent engaged %d turn(s) then stopped (timeout?) — no flag in partial transcript", turns), sha
 		}
 		if note == "" {
 			note = "killed before any turn completed (timeout before the model's first reply?)"
 		}
-		return false, findings, "web-investigate failed: " + note
+		return false, findings, "web-investigate failed: " + note, sha
 	}
-	return false, findings, fmt.Sprintf("flag not captured (%d finding(s), %d turn(s) — agent engaged, didn't reach the flag)", findings, turns)
+	return false, findings, fmt.Sprintf("flag not captured (%d finding(s), %d turn(s) — agent engaged, didn't reach the flag)", findings, turns), sha
 }
 
 // runReconScan runs a bounded L1 scan to discover the target's request surface and returns the path
@@ -541,4 +583,29 @@ func parseDur(s string) time.Duration {
 		return d
 	}
 	return 12 * time.Minute
+}
+
+// xbowLedgerCmd renders the durable, append-only capture ledger (bench/xbow-ledger.jsonl) into the
+// human-readable capture scoreboard — regenerate the "written number" anytime, no suite run needed.
+// Read-only: it never mutates the ledger, only summarizes it.
+func xbowLedgerCmd(argv []string) error {
+	fs := flag.NewFlagSet("xbow-ledger", flag.ContinueOnError)
+	ledger := fs.String("ledger", "bench/xbow-ledger.jsonl", "path to the append-only capture ledger (.jsonl)")
+	out := fs.String("out", "", "also write the rendered scoreboard markdown to this path (default stdout only)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	entries, err := bench.LoadXBOWLedger(*ledger)
+	if err != nil {
+		return fmt.Errorf("load ledger %s: %w", *ledger, err)
+	}
+	md := bench.RenderXBOWLedgerMarkdown(entries)
+	fmt.Print(md)
+	if *out != "" {
+		if werr := os.WriteFile(*out, []byte(md), 0o644); werr != nil { //nolint:gosec // bench artifact
+			return werr
+		}
+		fmt.Fprintf(os.Stderr, "[xbow-ledger] wrote %s (%d run records)\n", *out, len(entries))
+	}
+	return nil
 }
