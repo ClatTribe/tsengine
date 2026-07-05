@@ -126,6 +126,33 @@ func TestSSHExec_ReadsFlag(t *testing.T) {
 	if !strings.Contains(out, "contains a flag") {
 		t.Errorf("ssh_exec did not flag the flag-bearing output to the agent: %s", out)
 	}
+	// The output must be RECORDED as a citable evidence turn — else the flag never reaches the
+	// transcript / signed evidence bundle the grader (and a real customer) reads, so the lateral-movement
+	// capture is invisible. Observed live on XBEN-042: ssh_exec read the flag but the run graded unsolved
+	// because the SSH output was not in the evidence.
+	if len(cc.History) == 0 {
+		t.Fatal("ssh_exec recorded NO evidence turn — the SSH output (with the flag) is invisible to the transcript/evidence")
+	}
+	last := cc.History[len(cc.History)-1]
+	if last.Method != "ssh_exec" || !strings.Contains(last.RespSnippet, "flag{ssh-lateral-movement}") {
+		t.Errorf("ssh_exec evidence turn missing the flag output: %+v", last)
+	}
+}
+
+// TestSSHExec_NumericPort: an LLM naturally passes port as a NUMBER (JSON float64), not a string. The
+// arg parser must accept it — else the numeric port is dropped, ssh_exec defaults to 22, and it can't
+// reach a non-standard published SSH port. Observed live on XBEN-042: the container's SSH is published
+// on a high host port; a numeric port silently fell back to 22 → "connection refused".
+func TestSSHExec_NumericPort(t *testing.T) {
+	host, port := startTestSSHServer(t, "pedro", "pw", "flag{numeric-port}\n")
+	cc := testCtx(t, []string{host + ":" + strconv.Itoa(port)})
+	out := tSSHExec(cc, map[string]any{
+		"host": host, "port": float64(port), // JSON numbers decode as float64 — as an LLM sends them
+		"user": "pedro", "password": "pw", "command": "cat /flag",
+	})
+	if !strings.Contains(out, "flag{numeric-port}") {
+		t.Fatalf("ssh_exec with a NUMERIC port did not connect/return the flag (port likely dropped to 22): %s", out)
+	}
 }
 
 // TestSSHExec_OutOfScopeRefused: a host outside the authorized surface is refused before any dial —
