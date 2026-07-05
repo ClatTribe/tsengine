@@ -69,3 +69,64 @@ func TestOOBCheck_NoCollector(t *testing.T) {
 		t.Errorf("expected a start-it-first hint: %s", got)
 	}
 }
+
+// TestOOBCheck_RendersControlByteExfil: a blind-cmdi/SSRF exfil frequently ships /proc/self/environ
+// (or a binary blob) through the callback BODY -- NUL-separated. Rendered raw, the first NUL truncates
+// the terminal/transcript display so exfiltrated data past it (the flag env var) is invisible to the
+// operator AND to the driving LLM, which then thinks the exfil failed and burns turns re-trying.
+// oob_check must sanitize control bytes so the FULL exfil is readable, while keeping the literal flag
+// substring intact for the grader (§10).
+func TestOOBCheck_RendersControlByteExfil(t *testing.T) {
+	cc := &Context{}
+	tOOBURL(cc, nil)
+	defer cc.oob.Stop()
+	url, token := cc.oob.Mint()
+	// env-style exfil: KEY=val NUL KEY=val NUL FLAG sitting past the first NUL (the XBEN-045 shape).
+	body := "HOSTNAME=box\x00PATH=/usr/bin\x00FLAG{oob_env_exfil}\x00"
+	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
+	if resp, err := http.DefaultClient.Do(req); err == nil {
+		resp.Body.Close()
+	}
+	got := tOOBCheck(cc, map[string]any{"token": token})
+	if strings.ContainsRune(got, '\x00') {
+		t.Errorf("oob_check output still carries a raw NUL -- the exfil display will truncate at it: %q", got)
+	}
+	if !strings.Contains(got, "FLAG{oob_env_exfil}") {
+		t.Errorf("exfiltrated flag past the first NUL was not rendered: %s", got)
+	}
+}
+
+// TestOOBCheck_ExfilBodyNotOverCapped: an OOB exfil body IS the payload (that's the whole point of the
+// channel), so the body display must not be capped so tight that a flag lands past it. The old ~300B
+// cap hid deeper exfil.
+func TestOOBCheck_ExfilBodyNotOverCapped(t *testing.T) {
+	cc := &Context{}
+	tOOBURL(cc, nil)
+	defer cc.oob.Stop()
+	url, token := cc.oob.Mint()
+	body := strings.Repeat("A", 350) + "FLAG{deep_exfil}"
+	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
+	if resp, err := http.DefaultClient.Do(req); err == nil {
+		resp.Body.Close()
+	}
+	got := tOOBCheck(cc, map[string]any{"token": token})
+	if !strings.Contains(got, "FLAG{deep_exfil}") {
+		t.Errorf("exfil past 300 bytes was truncated out of oob_check: %s", got)
+	}
+}
+
+// TestPrintableOOB_KeepsFlagStripsNUL is a direct unit check of the sanitizer: NUL becomes a newline
+// (env dumps read as KEY=val lines), other control bytes become '.', and printable ASCII (the flag) is
+// untouched so the grader still matches it.
+func TestPrintableOOB_KeepsFlagStripsNUL(t *testing.T) {
+	got := printableOOB("A=1\x00B=2\x07FLAG{x}\x00")
+	if strings.ContainsRune(got, '\x00') || strings.ContainsRune(got, '\x07') {
+		t.Errorf("control bytes survived sanitization: %q", got)
+	}
+	if !strings.Contains(got, "FLAG{x}") {
+		t.Errorf("flag substring was corrupted: %q", got)
+	}
+	if !strings.Contains(got, "A=1\nB=2") {
+		t.Errorf("NUL should render as a newline separator: %q", got)
+	}
+}
