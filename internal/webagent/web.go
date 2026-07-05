@@ -34,6 +34,20 @@ type Context struct {
 	turnN      int
 	findN      int
 	calls      int
+
+	// sentReqs remembers the EXACT request (full body + Content-Type) sent for each turn ID, so
+	// confirm_exploit can re-fire an upload / large-body proof byte-for-byte. The Turn.Body is
+	// display-truncated (512B) and carries no Content-Type, which broke re-firing multipart uploads
+	// (XXE-via-SVG-upload, file-upload RCE) — a guessed CT made the server 422 and a real finding got
+	// reported "not reproduced". Not serialized (kept out of the transcript/evidence).
+	sentReqs map[string]sentReq
+}
+
+// sentReq is the exact wire request for a turn, kept in memory for confirm_exploit's byte-for-byte
+// re-fire (the recorded Turn.Body is display-truncated and lacks the Content-Type/boundary).
+type sentReq struct {
+	body        string
+	contentType string
 }
 
 // turn looks up a request/response by its turn ID (for grounding checks).
