@@ -274,7 +274,7 @@ var cmdOutRe = regexp.MustCompile(`(uid=\d+\([^)]*\)\s+gid=\d+\(|Linux [\w.-]+ \
 
 // indicators are deterministic, evidence-grade signals extracted from a response.
 // A finding may ONLY be recorded against a turn that carries the matching indicator.
-func indicators(payload string, resp *Resp) []string {
+func indicators(payload, reqBody string, resp *Resp) []string {
 	var ind []string
 	if sqlErrRe.MatchString(resp.Body) {
 		ind = append(ind, "sql_error")
@@ -303,7 +303,20 @@ func indicators(payload string, resp *Resp) []string {
 	if resp.Elapsed > 4*time.Second {
 		ind = append(ind, "slow_response") // time-based blind signal
 	}
-	if payload != "" && sstiEvaluated(payload, resp.Body) {
+	// SSTI: the arithmetic probe may live in the explicit `payload` (URL-param sinks) OR in the request
+	// BODY (a POST form field / JSON param — Ruby ERB `<%= A*B %>`, a template sink behind a form). Check
+	// both so a body-sink SSTI grounds without the agent having to duplicate the probe into `payload`.
+	// A form body is URL-encoded (`<%=` → `%3C%25%3D`), so also scan a decoded copy. Still FP-free:
+	// sstiEvaluated requires the >=4-digit product in the response and the raw expr absent.
+	sstiHit := payload != "" && sstiEvaluated(payload, resp.Body)
+	if !sstiHit && reqBody != "" {
+		if sstiEvaluated(reqBody, resp.Body) {
+			sstiHit = true
+		} else if dec, err := url.QueryUnescape(reqBody); err == nil && sstiEvaluated(dec, resp.Body) {
+			sstiHit = true
+		}
+	}
+	if sstiHit {
 		ind = append(ind, "ssti_eval") // server-side template injection: the engine COMPUTED the arithmetic probe
 	}
 	if resp.Status == 403 || resp.Status == 406 || resp.Status == 429 {
