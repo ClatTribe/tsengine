@@ -1,9 +1,19 @@
 package webagent
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 )
+
+// discoverBudget caps the TOTAL wall-clock of one discover_content call. The probes run serially (the
+// Requester isn't goroutine-safe — it has a request budget + rate limiter), each up to the Requester's
+// 15s per-request timeout, so 45 paths could otherwise block the ReAct agent for ~11 minutes if the
+// target holds connections or is slow (grounded: a live XBEN-103 run hung the whole agent for 7+ min
+// here). A bounded context makes the WHOLE sweep return within ~budget with whatever it found so far —
+// content discovery is best-effort, not exhaustive. A var so tests can shrink it.
+var discoverBudget = 20 * time.Second
 
 // discover_content.go closes a general recon gap: discoverSurface only sees LINKED pages and VISIBLE
 // form params. Real targets hide the interesting surface — an unlinked admin/private page, a
@@ -58,8 +68,10 @@ func tDiscoverContent(cc *Context, args map[string]any) string {
 // discoverPaths probes commonPaths under base, reporting those whose response differs from a random-path
 // 404 baseline (a real page: 200/301/302/401/403/dir-listing). Found paths are added to cc.Routes.
 func discoverPaths(cc *Context, base string) string {
+	ctx, cancel := context.WithTimeout(cc.ctx, discoverBudget)
+	defer cancel()
 	base = strings.TrimRight(base, "/")
-	baseResp, err := cc.req.Send(cc.ctx, "GET", base+"/zz"+randHex(6), "", nil)
+	baseResp, err := cc.req.Send(ctx, "GET", base+"/zz"+randHex(6), "", nil)
 	if err != nil {
 		return "REQUEST FAILED (baseline): " + err.Error()
 	}
@@ -68,11 +80,11 @@ func discoverPaths(cc *Context, base string) string {
 	// banner, path-derived "did you mean", variable-length nonce) — the size-diff signal would then fire
 	// for EVERY probed path (a false-positive flood violating the "no invented surface" promise, §10).
 	// When unstable, fall back to STATUS-ONLY matching, which stays grounded.
-	base2, err2 := cc.req.Send(cc.ctx, "GET", base+"/zz"+randHex(6), "", nil)
+	base2, err2 := cc.req.Send(ctx, "GET", base+"/zz"+randHex(6), "", nil)
 	sizeReliable := err2 == nil && base2.Status == baseResp.Status && !sizeDiffers(baseResp.Body, base2.Body)
 	var found []string
 	for _, p := range commonPaths {
-		resp, err := cc.req.Send(cc.ctx, "GET", base+"/"+p, "", nil)
+		resp, err := cc.req.Send(ctx, "GET", base+"/"+p, "", nil)
 		if err != nil { // budget exhausted / network — stop with what we have
 			break
 		}
@@ -95,6 +107,8 @@ func discoverPaths(cc *Context, base string) string {
 // baseline (a reflected canary, a status change, or a meaningful size change) — the sign of a real
 // server-side parameter. Reported as LEADS (the agent verifies).
 func discoverParams(cc *Context, page string) string {
+	ctx, cancel := context.WithTimeout(cc.ctx, discoverBudget)
+	defer cancel()
 	sep := "?"
 	if strings.Contains(page, "?") {
 		sep = "&"
@@ -104,7 +118,7 @@ func discoverParams(cc *Context, page string) string {
 	// trick: it distinguishes "the app reacts to THIS param" from "the app reacts/reflects for ANY
 	// param", which kills the false positives a bare-page baseline produces — and lets us use a small
 	// size threshold to catch params whose only effect is a short message (e.g. "File not found").
-	base, err := cc.req.Send(cc.ctx, "GET", page+sep+"zz"+randHex(6)+"="+canary, "", nil)
+	base, err := cc.req.Send(ctx, "GET", page+sep+"zz"+randHex(6)+"="+canary, "", nil)
 	if err != nil {
 		return "REQUEST FAILED (baseline): " + err.Error()
 	}
@@ -112,11 +126,11 @@ func discoverParams(cc *Context, page string) string {
 	// varies beyond the fine threshold between two identical-semantics requests, it's dynamic (nonce,
 	// rotating content) — the size-diff signal would then flag EVERY inert param, so we suppress it and
 	// keep only the grounded reflected-canary + status signals.
-	base2, err2 := cc.req.Send(cc.ctx, "GET", page+sep+"zz"+randHex(6)+"="+canary, "", nil)
+	base2, err2 := cc.req.Send(ctx, "GET", page+sep+"zz"+randHex(6)+"="+canary, "", nil)
 	sizeReliable := err2 == nil && base2.Status == base.Status && !paramSizeDiffers(base.Body, base2.Body)
 	var found []string
 	for _, name := range commonParams {
-		resp, err := cc.req.Send(cc.ctx, "GET", page+sep+name+"="+canary, "", nil)
+		resp, err := cc.req.Send(ctx, "GET", page+sep+name+"="+canary, "", nil)
 		if err != nil {
 			break
 		}
