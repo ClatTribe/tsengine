@@ -75,6 +75,17 @@ type Resp struct {
 // Sent reports how many requests have been made (for budget display).
 func (r *Requester) Sent() int { return r.sent }
 
+// AllowHosts returns the scope host allowlist (lowercased host[:port]) as a slice, so a caller can
+// build a FRESH, isolated Requester with the SAME scope — needed by the BOLA differential, which runs
+// three sessions (victim / attacker / unauthenticated) whose cookie jars must not cross-contaminate.
+func (r *Requester) AllowHosts() []string {
+	hs := make([]string, 0, len(r.allow))
+	for h := range r.allow {
+		hs = append(hs, h)
+	}
+	return hs
+}
+
 // HostInScope reports whether bareHost matches the HOSTNAME of any authorized entry (any port). SSH
 // lateral movement (ssh_exec) reaches the target box on a service port (22) distinct from the web
 // port, so scope is enforced at host granularity — the agent is authorized against the box, not one
