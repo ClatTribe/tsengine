@@ -15,7 +15,6 @@ func (f *fakeLLM) Generate(_ context.Context, prompt string) (string, error) {
 	f.seen = prompt
 	return f.reply, nil
 }
-func (f *fakeLLM) Model() string { return "fake-model" }
 
 // TestProposePatch_ProducesAppliedFiles: the engineer returns whole-file replacements, restricted to the
 // files actually supplied (it can't invent new files or escape the build context), with provenance.
@@ -31,8 +30,8 @@ func TestProposePatch_ProducesAppliedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("propose: %v", err)
 	}
-	if p.Model != "fake-model" || p.Raw == "" {
-		t.Errorf("provenance missing: %+v", p)
+	if p.Raw == "" {
+		t.Errorf("raw model output (provenance) missing: %+v", p)
 	}
 	if len(p.Files) != 1 || p.Files[0].Path != "app/login.php" {
 		t.Fatalf("only the supplied file should be kept, got %+v", p.Files)

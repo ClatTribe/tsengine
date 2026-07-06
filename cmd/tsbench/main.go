@@ -96,6 +96,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench cloud-baseline: %v\n", err)
 			os.Exit(1)
 		}
+	case "defense-xbow":
+		if err := defenseXbowCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench defense-xbow: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()

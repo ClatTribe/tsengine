@@ -14,12 +14,11 @@ import (
 	"strings"
 )
 
-// LLM is the minimal model seam — the same shape as the offensive agent's and cloudengine's (a single
-// Generate). In production this is the customer's key; in dev it's the local proxy. Kept tiny so codeagent
-// stays testable with a scripted fake.
+// LLM is the minimal model seam — EXACTLY cloudengine.LLM's shape (a single Generate), so an
+// OpenAI-compat client (the local proxy) or the customer's key satisfies it directly with no adapter.
+// Kept tiny so codeagent stays testable with a scripted fake.
 type LLM interface {
 	Generate(ctx context.Context, prompt string) (string, error)
-	Model() string
 }
 
 // Finding is the proven vulnerability the engineer must fix (class + where + why).
@@ -45,7 +44,6 @@ type PatchedFile struct {
 // Patch is the engineer's proposed fix + provenance.
 type Patch struct {
 	Files []PatchedFile
-	Model string
 	Raw   string // the raw model output (for the evidence trail)
 }
 
@@ -66,7 +64,7 @@ func ProposePatch(ctx context.Context, llm LLM, f Finding, sources []SourceFile)
 	}
 	files, perr := ParsePatch(out)
 	if perr != nil {
-		return Patch{Model: llm.Model(), Raw: out}, perr
+		return Patch{Raw: out}, perr
 	}
 	// Only allow rewrites of files we actually supplied — a fix must edit the app, not invent new files or
 	// escape the build context (defence-in-depth on top of the traversal check).
@@ -80,7 +78,7 @@ func ProposePatch(ctx context.Context, llm LLM, f Finding, sources []SourceFile)
 			kept = append(kept, pf)
 		}
 	}
-	return Patch{Files: kept, Model: llm.Model(), Raw: out}, nil
+	return Patch{Files: kept, Raw: out}, nil
 }
 
 // buildPatchPrompt renders the instruction. It is deliberately GENERIC — no per-challenge hints, no payload
