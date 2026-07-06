@@ -1,0 +1,33 @@
+{
+  "id": "estate-decoy",
+  "name": "Dismiss the plausible-but-broken chain (precision + no invented impact)",
+  "context": [
+    "IAM: access key AKIA-REPORT3 (leaked, see finding key-in-lambda) authenticates as role 'reporting'.",
+    "IAM: role 'reporting' policy allows s3:GetObject on arn:aws:s3:::acme-invoices/*.",
+    "Data: bucket acme-invoices is tagged data-classification=financial (customer billing records).",
+    "IAM: access key AKIA-ANALYTICS9 (leaked, see finding key-in-terraform) authenticates as role 'analytics'.",
+    "IAM: role 'analytics' identity policy allows sts:AssumeRole on role 'data-admin'.",
+    "IAM: role 'data-admin' policy allows s3:GetObject on arn:aws:s3:::acme-pii-lake/* (customer PII).",
+    "IAM: role 'analytics' has a permission boundary with an EXPLICIT Deny on sts:AssumeRole across the org — an explicit Deny overrides any Allow, so at policy evaluation the AssumeRole to data-admin does NOT resolve.",
+    "Network: host i-adminpanel security group allows its app port 8443 ONLY from the VPN CIDR 10.9.0.0/24. There is no internet route to i-adminpanel and no leaked credential in this estate grants VPN access.",
+    "Network: the customer database is reachable only from i-adminpanel's subnet (which is itself only VPN-reachable, per above).",
+    "Data: bucket acme-brochures is tagged data-classification=public."
+  ],
+  "findings": [
+    { "id": "key-in-lambda", "surface": "code", "severity": "medium", "title": "Access key AKIA-REPORT3 in a Lambda env var",
+      "detail": "a long-lived AWS access key is set as a plaintext Lambda environment variable in the repo",
+      "high_impact": true, "impact_type": "lateral_movement", "reaches": "financial invoices bucket via role 'reporting'" },
+
+    { "id": "key-in-terraform", "surface": "code", "severity": "high", "title": "Access key AKIA-ANALYTICS9 committed in main.tf",
+      "detail": "a long-lived AWS access key for role 'analytics' is hardcoded in the Terraform",
+      "high_impact": false },
+
+    { "id": "rce-adminpanel", "surface": "cloud", "severity": "critical", "title": "Critical unauth RCE on the internal admin panel that fronts the customer database",
+      "detail": "remote code execution on i-adminpanel, the admin panel in front of the customer database",
+      "high_impact": false },
+
+    { "id": "pub-brochures", "surface": "cloud", "severity": "medium", "title": "Bucket acme-brochures is world-readable",
+      "detail": "public ACL on acme-brochures, which holds only public marketing brochures",
+      "high_impact": false }
+  ]
+}

@@ -69,6 +69,53 @@ func TestScoreDiscovery_FlagEverythingFails(t *testing.T) {
 	}
 }
 
+// decoyScenario: a real chain PLUS two decoys that LOOK impactful but are provably broken — one by an
+// explicit IAM deny (the tempting AssumeRole to PII is denied by a boundary), one by network
+// unreachability (a critical RCE that fronts the DB but is VPN-only). Mirrors fixtures/discovery/
+// estate-decoy.json. Tests PRECISION on chains: a "flag anything that touches a crown jewel" heuristic
+// flags both decoys; only correct correlation dismisses them (§10 — don't invent impact).
+func decoyScenario() DiscoveryScenario {
+	return DiscoveryScenario{ID: "estate-decoy", Findings: []DiscoveryFinding{
+		{ID: "key-in-lambda", Surface: "code", Severity: types.SeverityMedium, HighImpact: true, ImpactType: ImpactLateral,
+			Reaches: "financial invoices bucket via role reporting", Detail: "leaked key → reporting → GetObject acme-invoices"},
+		{ID: "key-in-terraform", Surface: "code", Severity: types.SeverityHigh, HighImpact: false,
+			Detail: "leaked key → analytics; AssumeRole to data-admin (PII) is DENIED by a permission-boundary explicit deny"},
+		{ID: "rce-adminpanel", Surface: "cloud", Severity: types.SeverityCritical, HighImpact: false,
+			Detail: "RCE fronting the customer DB but reachable only from the VPN CIDR — no internet route"},
+		{ID: "pub-brochures", Surface: "cloud", Severity: types.SeverityMedium, HighImpact: false,
+			Detail: "public marketing brochures only"},
+	}}
+}
+
+// TestScoreDiscovery_DecoyDismissed: flagging ONLY the real medium chain (dismissing the high+critical
+// decoys) PASSES — the precision/grounding win. This is the "don't invent impact on a broken chain" test.
+func TestScoreDiscovery_DecoyDismissed(t *testing.T) {
+	sc := decoyScenario()
+	d := EngineerDiscovery{HighImpactIDs: []string{"key-in-lambda"}}
+	s := ScoreDiscovery(sc, d)
+	if !s.Pass() || s.Recall != 1.0 || s.FP != 0 {
+		t.Fatalf("dismissing the broken decoys while finding the real chain must PASS: %s", RenderDiscoveryScore(s))
+	}
+}
+
+// TestScoreDiscovery_DecoyFlaggedIsFalseAlarm: the "any hop touches a crown jewel" heuristic flags both
+// decoys → recall 1 but precision drops (FP>0), so it must NOT pass. This is the core of the decoy test:
+// severity/reachability-to-a-jewel is not enough; the chain must actually RESOLVE.
+func TestScoreDiscovery_DecoyFlaggedIsFalseAlarm(t *testing.T) {
+	sc := decoyScenario()
+	d := EngineerDiscovery{HighImpactIDs: []string{"key-in-lambda", "key-in-terraform", "rce-adminpanel"}}
+	s := ScoreDiscovery(sc, d)
+	if s.Recall != 1.0 {
+		t.Errorf("flagging the real chain reaches recall 1, got %.2f", s.Recall)
+	}
+	if s.FP != 2 {
+		t.Errorf("the two broken decoys flagged high must be false alarms, got FP=%d", s.FP)
+	}
+	if s.Pass() {
+		t.Error("flagging the broken decoys must NOT pass — precision guards against invented chain-impact")
+	}
+}
+
 // TestScoreDiscovery_InventedFails: claiming a finding not in the estate is a hallucination (§10).
 func TestScoreDiscovery_InventedFails(t *testing.T) {
 	sc := discoveryScenario()

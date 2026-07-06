@@ -39,6 +39,26 @@ reaches customer PII, while dismissing a *critical* isolated RCE and a *high* SS
 Severity-first is *exactly inverted* from the truth — the strongest evidence that finding real impact is
 correlation/judgment, not a severity lookup.
 
+**Decoy-chain test** (`estate-decoy`): the precision/grounding counterpart — a chain can *look* like it
+reaches a crown jewel but be **broken**, and a good engineer must **dismiss** it (§10 — don't invent
+impact). One real *medium* chain (leaked key → role → financial invoices) sits beside two decoys that a
+naive "any hop touches a jewel" heuristic flags: a *high* leaked key whose `AssumeRole` to the PII lake is
+killed by a **permission-boundary explicit Deny** (mirrors `cloudiam.Authorize`'s definitive-deny prune),
+and a *critical* RCE that "fronts the customer DB" but is **VPN-only, no internet route** (mirrors
+`cloudgraph.PruneUnreachable`). The break lives ONLY in the Context facts — the finding states just the
+temptation — so dismissing a decoy requires real correlation, not reading a hint.
+
+| Ranker | Recall | Precision |
+|---|---|---|
+| AI engineer (traces the deny + reachability) | **100%** | **100%** → PASS |
+| Severity-first (flags critical RCE + high key) | **0%** (missed the real medium chain) | **0%** |
+| "Any hop touches a crown jewel" heuristic | 100% | **33%** (flagged both broken decoys) → fails |
+
+The heuristic's 33% precision is the point: reaching-a-jewel is *necessary but not sufficient* — the chain
+must actually **resolve** (no explicit deny, network-reachable). That resolution is exactly the deterministic
+substrate's job (`cloudiam`/`cloudgraph`), and the engineer's job is to *reason over its verdicts* — not to
+re-flag a jewel the facts prove is unreachable.
+
 ## The two halves of the job → three measured axes
 
 | Axis | Question | How it's scored | CLI |
