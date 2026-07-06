@@ -53,10 +53,14 @@ func tTamperProbe(cc *Context, args map[string]any) string {
 	tamperBody := argStr(args, "tamper_body")
 	baseCookie := argStr(args, "base_cookie")
 	tamperCookie := argStr(args, "tamper_cookie")
+	// arbitrary tampered headers (X-Forwarded-For, X-Real-IP, X-Original-URL, a custom auth header) — the
+	// header sibling of a tampered cookie/body field, a very common trusted-input access-control bypass.
+	baseHeaders := argStrMap(args, "base_headers")
+	tamperHeaders := argStrMap(args, "tamper_headers")
 	if !cc.req.AllowedURL(baseURL) || !cc.req.AllowedURL(tamperURL) {
 		return "ERROR: a probe URL is out of scope."
 	}
-	hdr := func(cookie string) map[string]string {
+	hdr := func(cookie string, extra map[string]string) map[string]string {
 		h := map[string]string{}
 		if method != "GET" {
 			h["Content-Type"] = "application/x-www-form-urlencoded"
@@ -64,19 +68,28 @@ func tTamperProbe(cc *Context, args map[string]any) string {
 		if cookie != "" {
 			h["Cookie"] = cookie
 		}
+		for k, v := range extra {
+			h[k] = v
+		}
 		if len(h) == 0 {
 			return nil
 		}
 		return h
 	}
-	base, e1 := cc.req.Send(cc.ctx, method, baseURL, baseBody, hdr(baseCookie))
-	tamper, e2 := cc.req.Send(cc.ctx, method, tamperURL, tamperBody, hdr(tamperCookie))
+	base, e1 := cc.req.Send(cc.ctx, method, baseURL, baseBody, hdr(baseCookie, baseHeaders))
+	tamper, e2 := cc.req.Send(cc.ctx, method, tamperURL, tamperBody, hdr(tamperCookie, tamperHeaders))
 	if e1 != nil || e2 != nil {
 		return fmt.Sprintf("REQUEST FAILED (base=%v tamper=%v)", e1, e2)
 	}
 
-	// everything the attacker SENT, for the echo guard
-	sent := strings.Join([]string{baseURL, tamperURL, baseBody, tamperBody, baseCookie, tamperCookie}, " ")
+	// everything the attacker SENT, for the echo guard (incl. tampered header values)
+	sentParts := []string{baseURL, tamperURL, baseBody, tamperBody, baseCookie, tamperCookie}
+	for _, m := range []map[string]string{baseHeaders, tamperHeaders} {
+		for k, v := range m {
+			sentParts = append(sentParts, k, v)
+		}
+	}
+	sent := strings.Join(sentParts, " ")
 	confirmed := tamperConfirmed(base, tamper, marker, sent)
 
 	cc.turnN++
