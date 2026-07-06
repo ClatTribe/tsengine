@@ -45,3 +45,30 @@ func TestConfirmExploit_RefiresPostBody(t *testing.T) {
 		t.Errorf("finding was not marked Verified after a reproducing re-fire")
 	}
 }
+
+// TestConfirmExploit_BrowserFinding: a dom_xss finding grounded by js_executed comes from a
+// browser_render turn whose Method is "GET(browser)" (a real headless browser fired a JS dialog, NOT an
+// HTTP request). confirm_exploit must NOT try to re-fire it as HTTP — that passes "GET(browser)" as the
+// method and errors ("net/http: invalid method"), failing to verify a real finding. js_executed is
+// deterministic DOM-execution proof, so the render turn is verification-grade.
+func TestConfirmExploit_BrowserFinding(t *testing.T) {
+	cc := &Context{Target: "http://x", ctx: context.Background()}
+	// no Requester Send should be reached; a nil-ish requester would panic if the buggy HTTP path ran.
+	cc.req = NewRequester([]string{"x"}, 40, 0)
+	cc.History = []Turn{{
+		ID: "t-001", Method: "GET(browser)", URL: "http://x/page?name=%3Cimg%20onerror%3Dprompt(1)%3E",
+		Status: 200, Indicators: []string{"js_executed"},
+	}}
+	cc.Findings = []Finding{{ID: "f-001", Class: "dom_xss", Evidence: []string{"t-001"}}}
+
+	out := tConfirm(cc, map[string]any{"finding_id": "f-001"})
+	if strings.Contains(out, "invalid method") {
+		t.Fatalf("confirm_exploit tried an HTTP re-fire of a browser finding: %s", out)
+	}
+	if !strings.Contains(out, "VERIFIED") {
+		t.Fatalf("browser (js_executed) finding did not verify:\n%s", out)
+	}
+	if !cc.Findings[0].Verified {
+		t.Errorf("browser finding was not marked Verified")
+	}
+}
