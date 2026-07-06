@@ -239,6 +239,12 @@ LLM_BASE_URL=… tsbench discover --from-scan fixtures/discovery-scans/scan-acme
 - **Impact ground truth for mis-tagged findings is authored** (it must be — measuring judgment needs a
   ground-truth judgment), but every override is justified by the finding *detail* shown to the engineer, so
   it's a fair test, and the scoring code stays SUT-agnostic.
+- **The end-to-end `--from-scan` findings are realistic scanner-output shapes, not live scan output.** The
+  ground truth *is* engine-derived (`crossdetect.Correlate` decides what chains), which is the load-bearing
+  honesty claim — but the input findings are crafted to mirror native gitleaks/prowler/trivy/nuclei output.
+  Running the pipeline on findings emitted by an *actual* sandbox scan of a live target is the final,
+  infra-gated step (it needs the scanners + a target, the same gate as the live per-asset recall numbers);
+  the bridge itself is proven and would consume that output unchanged.
 
 Design: [`docs/adr/0014-xbow-defense-benchmark.md`](../docs/adr/0014-xbow-defense-benchmark.md),
 [`docs/adr/0013-code-depth-specialist.md`](../docs/adr/0013-code-depth-specialist.md),
