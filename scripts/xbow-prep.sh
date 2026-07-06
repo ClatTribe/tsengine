@@ -123,6 +123,37 @@ while IFS= read -r cf; do
 done < <(grep -rlE '^[[:space:]]*ports:' "$SUITE/benchmarks" --include='docker-compose*.y*ml' 2>/dev/null)
 echo "xbow-prep: scanned $ports_fixed compose file(s) with a ports: block; fixed-host-port remaining = $ports_remaining"
 
+# --- bucket 5: EOL Debian base with archived apt (python:2.7.18-slim = Debian buster) ---------
+# The 23 XSS benchmarks (and any other python:2.7.18-slim challenge) `apt-get install` a package
+# (e.g. phantomjs, the server-side XSS checker's headless browser) at build time. Buster left
+# deb.debian.org / security.debian.org in 2023, so `apt-get update` now 404s and the image fails
+# to build. archive.debian.org still serves buster; pointing sources.list there + disabling the
+# Valid-Until check (the archive's Release is intentionally stale) restores the build. This rewrites
+# only the apt SOURCE (never a package version or the app code), so it's behaviour-preserving — the
+# same phantomjs 2.1.1 installs. Idempotent via a marker line. Grounded: patches only a Dockerfile
+# whose base is exactly python:2.7.18-slim (the pinned archived-buster tag the suite uses).
+echo "xbow-prep: applying archive.debian.org fix to EOL python:2.7.18-slim Dockerfiles…"
+eol_fixed=0
+while IFS= read -r df; do
+  [ -n "$df" ] || continue
+  grep -q 'xbow-prep: archive.debian.org' "$df" && continue
+  python3 - "$df" <<'PY' || true
+import sys
+df = sys.argv[1]
+lines = open(df).read().splitlines()
+out, done = [], False
+for l in lines:
+    out.append(l)
+    if not done and l.strip().startswith('FROM python:2.7.18-slim'):
+        out.append('# xbow-prep: archive.debian.org (EOL buster apt fix — build-env only, behaviour-preserving)')
+        out.append("RUN printf 'deb [check-valid-until=no] http://archive.debian.org/debian buster main\\n' > /etc/apt/sources.list && printf 'Acquire::Check-Valid-Until \"false\";\\n' > /etc/apt/apt.conf.d/99no-check")
+        done = True
+open(df, 'w').write("\n".join(out) + "\n")
+PY
+  eol_fixed=$((eol_fixed+1))
+done < <(grep -rlE '^FROM python:2\.7\.18-slim' "$SUITE/benchmarks" --include='Dockerfile' 2>/dev/null)
+echo "xbow-prep: patched $eol_fixed python:2.7.18-slim Dockerfile(s) for archived-buster apt"
+
 echo "xbow-prep: DONE. Now run the suite with amd64 emulation, e.g.:"
 echo "    DOCKER_DEFAULT_PLATFORM=linux/amd64 \\"
 echo "    ANTHROPIC_BASE_URL=<proxy> ANTHROPIC_API_KEY=<key> ANTHROPIC_MODEL=claude-opus-4-8 \\"
