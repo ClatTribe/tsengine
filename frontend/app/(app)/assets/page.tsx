@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Boxes, CircleAlert, ArrowUpRight, CheckCircle2, AppWindow, Mail, Globe2 } from "lucide-react";
+import { Boxes, CircleAlert, ArrowUpRight, CheckCircle2, AppWindow, Mail, Globe2, Crosshair } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
 import { api } from "@/lib/api";
 import type { Asset, AssetPosture, AssetSecurity, Connection, Engagement } from "@/lib/types";
@@ -246,6 +246,11 @@ function ConnectionRow({ conn }: { conn: Connection }) {
   );
 }
 
+// PENTESTABLE are the live-network asset types the AI pentester can actually probe (HTTP / host
+// surfaces). Container/repo/cloud assets aren't live targets for the web/host agent, so they don't
+// get the "Pentest" affordance.
+const PENTESTABLE = new Set(["web_application", "api", "domain", "ip_address"]);
+
 function AssetRow({ asset: a, connections, last, posture, security }: { asset: Asset; connections: Connection[]; last?: string; posture?: AssetPosture; security?: AssetSecurity }) {
   const via = connections.find((c) => c.id === a.connection_id);
   return (
@@ -263,6 +268,15 @@ function AssetRow({ asset: a, connections, last, posture, security }: { asset: A
             <span className="shrink-0">
               <AuthzTestConfig assetId={a.id} configured={!!a.meta?.authz_test} />
             </span>
+          )}
+          {PENTESTABLE.has(a.type) && (
+            <Link
+              href={`/pentest?target=${encodeURIComponent(a.target)}&asset=${a.id}`}
+              title="Run an AI pentest against this asset (scope pre-filled)"
+              className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted transition hover:border-accent/50 hover:text-accent"
+            >
+              <Crosshair className="h-3 w-3" /> Pentest
+            </Link>
           )}
         </div>
       </td>
