@@ -20,6 +20,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/coverage"
+	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
@@ -98,6 +99,12 @@ type Deps struct {
 	// configured model simply skips discovery and runs the verify drivers (honest, never a crash).
 	// Injectable for tests (drive discovery deterministically without a live LLM loop).
 	WebDiscoverer WebDiscoverer
+	// Detector, when set, reconciles a pentest run's findings into incidents IMMEDIATELY (the
+	// detect-&-respond "respond" half) — so a pentest that PROVES a high+/critical exploit opens
+	// an incident right away instead of waiting for the next scheduled monitoring pass. The same
+	// detector the runner uses; Reconcile dedups against open incidents, so bringing it forward is
+	// safe. Nil → escalation happens on the next monitoring pass (today's behaviour).
+	Detector *detect.Detector
 }
 
 // NewHandler returns the platform's HTTP handler.
