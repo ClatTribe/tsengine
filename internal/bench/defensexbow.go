@@ -28,6 +28,14 @@ type WinningExploit struct {
 	Class       string        `json:"class,omitempty"` // vuln class (the benchmark's first tag)
 	Steps       []ExploitStep `json:"steps"`
 	RecordedAt  string        `json:"recorded_at,omitempty"`
+
+	// Functional (optional) is a LEGITIMATE request that must still succeed after the fix — its response
+	// must contain FunctionalMarker. It hardens the regression guard for access-control classes
+	// (IDOR/authz), where a fix could "close" the exploit by breaking ALL access (block everything): this
+	// proves the fix preserved legitimate function, not just killed the endpoint. Absent → only the
+	// homepage regression applies (injection classes don't touch legitimate paths).
+	Functional       []ExploitStep `json:"functional,omitempty"`
+	FunctionalMarker string        `json:"functional_marker,omitempty"`
 }
 
 // ExploitStep is one HTTP request in the recorded exploit. Path is target-relative (e.g. "/login?u=x").

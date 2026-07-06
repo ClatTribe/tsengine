@@ -142,6 +142,46 @@ func AppFunctional(ctx context.Context, client *http.Client, baseURL string) boo
 	return resp.StatusCode < 500
 }
 
+// FunctionalPreserved checks the exploit's optional LEGITIMATE-request probe still works after the fix: the
+// probe's response must contain FunctionalMarker. This is what stops an access-control "fix" from scoring
+// remediated by blocking ALL access (the exploit dies, but so does legitimate use). No probe declared →
+// true (nothing extra to check; the homepage regression still applies). A transport error → false.
+func FunctionalPreserved(ctx context.Context, client *http.Client, baseURL string, e WinningExploit) bool {
+	if len(e.Functional) == 0 || strings.TrimSpace(e.FunctionalMarker) == "" {
+		return true // no functional contract declared
+	}
+	base := strings.TrimRight(baseURL, "/")
+	for _, s := range e.Functional {
+		req, err := http.NewRequestWithContext(ctx, methodOr(s.Method), base+ensureLeadingSlash(s.Path), bodyReader(s.Body))
+		if err != nil {
+			return false
+		}
+		for k, v := range s.Headers {
+			req.Header.Set(k, v)
+		}
+		if s.Body != "" && req.Header.Get("Content-Type") == "" {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		resp, derr := client.Do(req)
+		if derr != nil {
+			return false
+		}
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if resp.StatusCode >= 500 || !strings.Contains(string(data), e.FunctionalMarker) {
+			return false // legitimate request broke or lost its expected content
+		}
+	}
+	return true
+}
+
+func bodyReader(b string) io.Reader {
+	if b == "" {
+		return nil
+	}
+	return strings.NewReader(b)
+}
+
 func ensureLeadingSlash(p string) string {
 	if p == "" {
 		return "/"

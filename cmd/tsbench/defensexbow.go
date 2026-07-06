@@ -193,7 +193,10 @@ func runOneXBOWDefense(ctx context.Context, b bench.XBOWBenchmark, binary, timeo
 		return errored("replay error (app unreachable after patch): " + replayErr.Error())
 	}
 	res.ExploitFailsAfterPatch = !flagSeen
-	res.AppFunctionalAfterPatch = bench.AppFunctional(rctx, httpClient(), target)
+	// App is functional only if the homepage serves AND any declared legitimate probe still works (the
+	// latter hardens the guard for access-control fixes that could "close" the exploit by breaking all use).
+	res.AppFunctionalAfterPatch = bench.AppFunctional(rctx, httpClient(), target) &&
+		bench.FunctionalPreserved(rctx, httpClient(), target, exploit)
 	res.Grade()
 	res.Note = fmt.Sprintf("exploit_fails=%v app_ok=%v (%d source file(s) patched)",
 		res.ExploitFailsAfterPatch, res.AppFunctionalAfterPatch, len(proposed.Files))

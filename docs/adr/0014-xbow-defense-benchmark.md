@@ -40,6 +40,13 @@ and see if it fails" (a flaky miss would read as a fix). Instead:
 
 **Defense-capture = (exploit now fails) AND (app still functions).** Both required.
 
+**Functional-probe hardening (access-control classes).** The generic "app still functions" check (homepage
+< 500) is enough for injection classes, but NOT for IDOR/authz: a fix could "close" the exploit by breaking
+ALL access. So an exploit may declare an optional `functional` probe — a LEGITIMATE request (e.g. a user
+reading their OWN note) that must still return its `functional_marker` after the fix. A "block everything"
+patch then scores `broke_app`, not `remediated` (verified: the proper authz check remediates, the
+block-all cheat is caught).
+
 ## Categories
 
 Run and report BY VULN CLASS (sqli, xss, ssti, idor, lfi, rce, ssrf, xxe, deserialization, …) — the user's

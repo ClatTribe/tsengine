@@ -88,3 +88,36 @@ func TestAppFunctional_RegressionGuard(t *testing.T) {
 }
 
 // (patch parsing moved to internal/codeagent — the engineer owns its output format.)
+
+// TestFunctionalPreserved_CatchesBlockEverything: the access-control regression guard. A fix that keeps
+// legitimate access working preserves function; a "block everything" fix (kills the exploit by killing the
+// feature) does NOT — so it can't score remediated. No probe declared → true (injection classes).
+func TestFunctionalPreserved_CatchesBlockEverything(t *testing.T) {
+	e := WinningExploit{
+		BenchmarkID:      "idor",
+		Functional:       []ExploitStep{{Method: "GET", Path: "/note?id=1", Headers: map[string]string{"Cookie": "user=alice"}}},
+		FunctionalMarker: "alice's shopping list",
+	}
+	// A properly-fixed app: the owner's own note still serves.
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("alice's shopping list"))
+	}))
+	defer ok.Close()
+	// A "block everything" fix: 403 on the endpoint.
+	blocked := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+		w.Write([]byte("forbidden"))
+	}))
+	defer blocked.Close()
+	ctx := context.Background()
+	if !FunctionalPreserved(ctx, http.DefaultClient, ok.URL, e) {
+		t.Error("a fix that keeps the owner's own access working must preserve function")
+	}
+	if FunctionalPreserved(ctx, http.DefaultClient, blocked.URL, e) {
+		t.Error("a block-everything fix must NOT count as functional (it broke legitimate access)")
+	}
+	// No functional contract declared -> nothing extra to check.
+	if !FunctionalPreserved(ctx, http.DefaultClient, blocked.URL, WinningExploit{BenchmarkID: "x"}) {
+		t.Error("no functional probe declared -> preserved is vacuously true")
+	}
+}
