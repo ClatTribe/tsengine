@@ -101,6 +101,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench defense-xbow: %v\n", err)
 			os.Exit(1)
 		}
+	case "impact":
+		if err := impactCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench impact: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()

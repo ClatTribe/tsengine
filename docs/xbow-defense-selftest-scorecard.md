@@ -44,3 +44,35 @@ every challenge). That is the honest gate — the number over the real suite is 
 
 The benchmark's *correctness* (that a wrong or app-breaking patch scores `ineffective`/`broke_app`, not a
 false pass) is proven separately by the calibration self-test (ADR 0014, `TestDefenseXBOWSelftest_Calibration`).
+
+## The other half of the job: impact accuracy
+
+Remediation is only half of a security engineer's job. The other half — the differentiated AI value — is
+figuring out **what a finding means for the organisation**: what it reaches, what data it exposes, how to
+prioritise. Detection is deterministic; *impact-to-this-org* is judgment. `tsbench impact`
+(`internal/bench/impact.go`) measures it: the engineer is given the estate + the substrate's grounded facts
+(severity, data-tier, crown-jewel reach) and must **prioritise by real impact, not raw severity**, identify
+crown-jewel reach, and invent nothing (§10).
+
+**Live run (2026-07-06, `model=claude-proxy`)** on a mixed estate:
+
+| Finding | Severity | Tier | Reaches crown | |
+|---|---|---|---|---|
+| leaked AWS key → PII bucket | medium | 1 | ✅ | ← the engineer ranked this **#1** |
+| stored XSS in admin panel | high | 2 | ✗ | |
+| RCE on a throwaway CI box | critical | 3 | ✗ | scarier severity, contained blast radius |
+| SQLi on marketing microsite | high | 3 | ✗ | |
+
+Result: `crown 1/1 correct · priority 1/1 lead (100%) [PASS]` — the engineer led with the *medium* that
+reaches customer data over the *critical* on a throwaway box. **Discrimination proven**: a severity-first
+answer (`--answer-file`) scores `priority 0/1 lead (0%)` — no pass. So the benchmark rewards real-impact
+reasoning and penalises the "AI = re-rank by CVSS" failure.
+
+**Two axes, both live-proven** — mirroring the two halves of the engineer's job:
+- **remediation-capture** (`defense-xbow`): did the estate get verifiably safer? (execution-verified)
+- **impact-accuracy** (`impact`): did the engineer correctly tell the org what matters + why? (grounded rubric)
+
+Honest next step (documented, not built): the impact dimension currently scores *consistency with the
+tagged facts*. The deeper AI value-add — catching impact the tags **mis-classify** (a "tier-3 internal"
+repo that actually holds prod admin keys) — needs scenarios whose correct impact *overrides* the naive
+substrate ranking; that is the follow-on dimension.

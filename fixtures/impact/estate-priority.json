@@ -1,0 +1,10 @@
+{
+  "id": "estate-priority",
+  "name": "Prioritise by real org impact, not raw severity",
+  "issues": [
+    { "id": "crit-devbox",   "title": "Critical RCE on a throwaway CI dev box",              "severity": "critical", "data_tier": 3, "reaches_crown": false },
+    { "id": "sqli-marketing","title": "High SQLi on the public marketing microsite",          "severity": "high",     "data_tier": 3, "reaches_crown": false },
+    { "id": "xss-admin",     "title": "High stored XSS in the internal admin panel",          "severity": "high",     "data_tier": 2, "reaches_crown": false },
+    { "id": "secret-in-repo","title": "Medium: leaked AWS key in a repo -> reaches PII bucket","severity": "medium",   "data_tier": 1, "reaches_crown": true }
+  ]
+}
