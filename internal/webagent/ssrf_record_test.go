@@ -13,8 +13,8 @@ import (
 // construction: the `oob_interaction` indicator is set ONLY when the collector recorded a real inbound
 // callback (the target literally reached the attacker's URL — §10), and only tOOBCheck can set it.
 func TestRecordFinding_SSRF_OOBGrounded(t *testing.T) {
-	if requiredIndicator["ssrf"] != "oob_interaction" {
-		t.Fatalf("ssrf must be grounded by the oob_interaction indicator, got %q", requiredIndicator["ssrf"])
+	if !contains(requiredIndicator["ssrf"], "oob_interaction") {
+		t.Fatalf("ssrf must be grounded by the oob_interaction indicator, got %v", requiredIndicator["ssrf"])
 	}
 
 	// A collector that already recorded a callback for token z1abcd (as if the target fetched our URL).

