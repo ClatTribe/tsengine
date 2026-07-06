@@ -90,6 +90,28 @@ func (s DiscoveryScore) Pass() bool {
 	return s.Recall >= 1.0 && s.FP == 0 && len(s.Invented) == 0
 }
 
+// OracleDiscovery is the perfect answer for a scenario: exactly the high-impact ids. Scoring it must PASS —
+// used by the suite runner to self-validate that every fixture is well-formed (a perfect engineer passes).
+func OracleDiscovery(sc DiscoveryScenario) EngineerDiscovery {
+	var d EngineerDiscovery
+	for _, f := range sc.Findings {
+		if f.HighImpact {
+			d.HighImpactIDs = append(d.HighImpactIDs, f.ID)
+		}
+	}
+	return d
+}
+
+// FlagAllDiscovery flags every finding — the "cry wolf on everything" baseline. Scoring it must have FP>0
+// on any scenario that contains noise, proving the scenario actually tests precision (not just recall).
+func FlagAllDiscovery(sc DiscoveryScenario) EngineerDiscovery {
+	var d EngineerDiscovery
+	for _, f := range sc.Findings {
+		d.HighImpactIDs = append(d.HighImpactIDs, f.ID)
+	}
+	return d
+}
+
 // ScoreDiscovery grades an engineer's discovery. Pure + deterministic — the ground truth is the scenario's
 // authored HighImpact facts (justified by each finding's Detail, so it's a fair judgment test, §10).
 func ScoreDiscovery(sc DiscoveryScenario, d EngineerDiscovery) DiscoveryScore {

@@ -10,6 +10,28 @@ fix it and explain what it means (`defense-xbow` + `impact`).
 
 ## Impact discovery — FINDING the vuln that creates real impact (the primary axis)
 
+**Suite scorecard** (7 scenarios, every one live-proven via the proxy at recall 100% / precision 100%, and
+deterministically self-validated by `tsbench discover-suite` — the oracle answer PASSES and flag-everything
+raises false alarms, so each genuinely tests precision, not just recall):
+
+| Scenario | Dimension tested | Findings | Real impacts | AI engineer | Best severity/keyword baseline |
+|---|---|---|---|---|---|
+| `estate-crosssurface` | recall across 4 categories | 7 | 4 | **100% / 100%** | 50% / 50% |
+| `estate-correlate` | un-spoon-fed chaining | 4 | 1 | **100% / 100%** | 0% / 0% |
+| `estate-decoy` | precision — dismiss broken chains | 4 | 1 | **100% / 100%** | 0% / 0% |
+| `estate-privesc` | privilege-escalation correlation | 4 | 1 | **100% / 100%** | 0% / 0% |
+| `estate-external` | external-exposure correlation | 4 | 1 | **100% / 100%** | 0% / 0% |
+| `estate-backlog` | volume / anti-overfit (scary noise) | 16 | 4 | **100% / 100%** | 25% / 25% |
+| `estate-combo` | cross-surface composition (the wedge) | 6 | 2 | **100% / 100%** | n/a (all low-severity) |
+
+The single takeaway: in every scenario the real impact is a *below-the-scary-severity* item and the noise is
+*high/critical-tagged*, so a severity-or-keyword ranker scores 0–50% where reasoning over the grounded facts
+scores 100%. That gap — consistent across the whole impact taxonomy, at volume, and on emergent cross-surface
+impact no single finding contains — is the AI Security Engineer's value made testable. Run the integrity
+check: `tsbench discover-suite --dir fixtures/discovery --strict`.
+
+## Impact discovery — the scenarios in detail
+
 The AI Security Engineer's highest-value job is not fixing — it's **finding the vuln that creates real
 organisational impact**: the one that reaches a crown jewel (customer/regulated data, admin/root, a
 financial system), often via a **cross-surface chain** no single scanner sees, buried in a backlog of
@@ -164,6 +186,11 @@ tsbench defense-xbow --only <id> --patch-file <fix>
 # Impact:
 LLM_BASE_URL=… tsbench impact --scenario fixtures/impact/estate-mistagged.json
 tsbench impact --scenario … --naive-baseline    # the substrate-only number to beat
+
+# Impact DISCOVERY (find the vuln that creates real impact):
+LLM_BASE_URL=… tsbench discover --scenario fixtures/discovery/estate-combo.json   # live, one scenario
+tsbench discover --scenario … --answer-file <picks>          # no-LLM CI/demo mode
+tsbench discover-suite --dir fixtures/discovery --strict      # deterministic suite integrity scorecard
 ```
 
 ## Honest gates (not fabricated)
