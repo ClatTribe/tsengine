@@ -45,7 +45,7 @@ func TestDefaultCreds_FindsWorkingPair(t *testing.T) {
 	if !hasIndicator(last, "default_creds") {
 		t.Errorf("winning turn missing the default_creds indicator: %+v", last.Indicators)
 	}
-	if requiredIndicator["default_credentials"] != "default_creds" {
+	if !contains(requiredIndicator["default_credentials"], "default_creds") {
 		t.Errorf("default_credentials class not grounded by default_creds")
 	}
 }

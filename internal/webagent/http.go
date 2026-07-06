@@ -330,6 +330,20 @@ func indicators(payload, reqBody string, resp *Resp) []string {
 	if sstiHit {
 		ind = append(ind, "ssti_eval") // server-side template injection: the engine COMPUTED the arithmetic probe
 	}
+	// UNION-based SQLi: an arithmetic sentinel (A*B) placed in a UNION SELECT column whose PRODUCT
+	// appears in the response while the literal expression does not — the DB evaluated it (FP-free,
+	// mirroring ssti_eval). Checks payload + body (a POST-form UNION); a decoded copy handles form-encoding.
+	unionHit := payload != "" && sqlUnionEvaluated(payload, resp.Body)
+	if !unionHit && reqBody != "" {
+		if sqlUnionEvaluated(reqBody, resp.Body) {
+			unionHit = true
+		} else if dec, err := url.QueryUnescape(reqBody); err == nil && sqlUnionEvaluated(dec, resp.Body) {
+			unionHit = true
+		}
+	}
+	if unionHit {
+		ind = append(ind, "sql_union") // UNION-based SQL injection: the DB computed the injected sentinel
+	}
 	if resp.Status == 403 || resp.Status == 406 || resp.Status == 429 {
 		ind = append(ind, fmt.Sprintf("blocked_%d", resp.Status)) // WAF/filter signal
 	}

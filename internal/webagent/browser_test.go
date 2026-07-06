@@ -57,7 +57,7 @@ func TestBrowserRender_DetectsDOMXSS(t *testing.T) {
 		t.Errorf("browser Turn missing the js_executed indicator: %+v", last.Indicators)
 	}
 	// grounding wiring: js_executed must satisfy a dom_xss finding
-	if requiredIndicator["dom_xss"] != "js_executed" {
+	if !contains(requiredIndicator["dom_xss"], "js_executed") {
 		t.Errorf("dom_xss is not grounded by js_executed")
 	}
 }
