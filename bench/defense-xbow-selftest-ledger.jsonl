@@ -1,0 +1,4 @@
+{"ts":"2026-07-06T17:37:57Z","benchmark_id":"selftest-lfi","class":"lfi","level":1,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}
+{"ts":"2026-07-06T17:46:24Z","benchmark_id":"selftest-sqli","class":"sqli","level":1,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}
+{"ts":"2026-07-06T17:51:29Z","benchmark_id":"selftest-cmdi","class":"cmdi","level":1,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}
+{"ts":"2026-07-06T17:53:52Z","benchmark_id":"selftest-ssti","class":"ssti","level":2,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}

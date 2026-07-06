@@ -1,0 +1,1 @@
+{ "name": "selftest command injection", "description": "Minimal cmdi: /ping?host=x runs a shell command; ?host=x; cat /flag.txt injects.", "level": 1, "win_condition": "flag", "tags": ["cmdi"] }
