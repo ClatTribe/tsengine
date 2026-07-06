@@ -162,6 +162,49 @@ export interface PentestStats {
   needs_review: number; // high+ findings actively probed but not auto-proven → manual HITL sign-off
 }
 
+// Pre-flight readiness for an engagement (GET /v1/pentest/{id}/readiness) — surfaces, before a
+// run, what still blocks an active/deep exploitation: per-target ownership, recorded consent, and
+// whether an LLM is configured to actually discover vulns.
+export interface TargetReadiness {
+  target: string;
+  owned: boolean;
+  method?: string; // dns_txt | well_known | connection | verified
+  asset_id?: string;
+  needs_challenge: boolean;
+  note?: string;
+}
+export interface AIReadiness {
+  configured: boolean;
+  source: string; // tenant_key | operator | none
+  discovery_will_run: boolean;
+  note: string;
+}
+export interface PentestReadiness {
+  engagement_id: string;
+  mode: string;
+  ready: boolean;
+  requires_consent: boolean;
+  consent_present: boolean;
+  ai: AIReadiness;
+  scope: TargetReadiness[];
+  blockers: string[];
+}
+
+// Ownership challenge (POST /v1/assets/{id}/ownership/challenge) — the token + publishing
+// instructions the customer follows to PROVE they control a standalone target.
+export interface OwnershipChallenge {
+  token: string;
+  host: string;
+  dns_name: string;
+  dns_value: string;
+  file_url: string;
+  file_content: string;
+}
+export interface OwnershipResult {
+  verified: boolean;
+  method?: string; // dns | file | ""
+}
+
 export interface Action {
   id: string;
   tenant_id: string;
