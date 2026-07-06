@@ -25,6 +25,7 @@ func impactCmd(argv []string) error {
 	scenario := fs.String("scenario", "", "path to an impact scenario JSON")
 	ledger := fs.String("ledger", "", "optional append-only ledger (.jsonl)")
 	answerFile := fs.String("answer-file", "", "DEV/CI: supply the engineer's assessment from a file (RANKING:/CROWN: lines) instead of the LLM")
+	naiveBaseline := fs.Bool("naive-baseline", false, "score the SUBSTRATE-ONLY baseline (rank by the tags, no LLM) — the number the AI engineer must beat")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -41,6 +42,13 @@ func impactCmd(argv []string) error {
 	}
 	if sc.ID == "" || len(sc.Issues) == 0 {
 		return fmt.Errorf("scenario needs an id + issues")
+	}
+
+	// Substrate-only baseline: rank by the tags, no LLM — the number the AI engineer must beat.
+	if *naiveBaseline {
+		score := bench.ScoreImpact(sc, bench.NaiveBaseline(sc))
+		fmt.Println("substrate-only " + bench.RenderImpactScore(score))
+		return nil
 	}
 
 	// Get the engineer's assessment: a fixed answer file (deterministic demo), else the LLM.
@@ -91,12 +99,16 @@ func buildImpactPrompt(sc bench.ImpactScenario) string {
 	b.WriteString("the asset it sits on (1=customer/regulated data, 2=standard, 3=low/throwaway), and whether an\n")
 	b.WriteString("attack path from it REACHES A CROWN JEWEL (sensitive data or admin).\n\n")
 	b.WriteString("Your job: prioritise these by REAL organisational impact — NOT by raw severity. A medium that\n")
-	b.WriteString("reaches customer data matters more than a critical on a throwaway dev box. Do not invent impact\n")
-	b.WriteString("the facts don't support.\n\n")
+	b.WriteString("reaches customer data matters more than a critical on a throwaway dev box. IMPORTANT: the tags can\n")
+	b.WriteString("be WRONG — READ each finding's detail; a low-tagged asset whose detail reveals prod admin\n")
+	b.WriteString("credentials (or the reverse) must be re-judged on the detail. Do not invent impact the facts don't support.\n\n")
 	b.WriteString("FINDINGS:\n")
 	for _, is := range sc.Issues {
 		fmt.Fprintf(&b, "- id=%s | severity=%s | data_tier=%d | reaches_crown_jewel=%v | %s\n",
 			is.ID, is.Severity, is.DataTier, is.ReachesCrown, is.Title)
+		if strings.TrimSpace(is.Detail) != "" {
+			fmt.Fprintf(&b, "    detail: %s\n", is.Detail)
+		}
 	}
 	b.WriteString("\nRespond with EXACTLY two lines:\n")
 	b.WriteString("RANKING: <issue ids, comma-separated, MOST impactful first>\n")

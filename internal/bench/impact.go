@@ -30,17 +30,51 @@ type ImpactIssue struct {
 	Severity     types.Severity `json:"severity"`
 	DataTier     int            `json:"data_tier"`     // 1=customer-data … 3=low (platform.DataTier)
 	ReachesCrown bool           `json:"reaches_crown"` // ground truth: reaches a crown jewel (crossdetect path)
+
+	// Detail is the finding's evidence/description — the CONTEXT a security engineer reads to judge true
+	// impact (e.g. "the leaked key has AdministratorAccess"). It is what lets the engineer OVERRIDE a
+	// misleading tag. Surfaced to the engineer in the prompt.
+	Detail string `json:"detail,omitempty"`
+	// TrueImpact, when >0, is the AUTHORED ground-truth impact for a MIS-TAGGED finding — where the real
+	// impact (justified by Detail) differs from what the naive tag/RiskWeight computes. This is the ONLY
+	// place the benchmark isn't purely computed, and it is what measures the AI's value-ADD over the
+	// deterministic substrate: a substrate-only ranking uses the naive score and gets these wrong; only an
+	// engineer that READS Detail ranks them right. Must be justified by Detail (a fair judgment test, §10).
+	TrueImpact int `json:"true_impact,omitempty"`
 }
 
-// groundScore is the deterministic ground-truth impact: the substrate's data-tier-adjusted RiskWeight,
-// boosted when the finding actually reaches a crown jewel (a reachable path to sensitive data / admin is
-// what makes a finding matter beyond its raw severity). This is the answer key — computed, not authored.
-func groundScore(i ImpactIssue) int {
+// naiveScore is what the DETERMINISTIC substrate alone computes from the tags: the data-tier-adjusted
+// RiskWeight, crown-boosted. This is the baseline the AI must BEAT on mis-tagged findings.
+func naiveScore(i ImpactIssue) int {
 	w := crossdetect.RiskWeight(i.Severity, i.DataTier)
 	if i.ReachesCrown {
 		w *= 2 // reaching a crown jewel doubles the real impact
 	}
 	return w
+}
+
+// groundScore is the answer-key impact: the authored TrueImpact when set (mis-tagged findings that require
+// judgment), else the computed naiveScore. So a scenario with no overrides scores exactly as before.
+func groundScore(i ImpactIssue) int {
+	if i.TrueImpact > 0 {
+		return i.TrueImpact
+	}
+	return naiveScore(i)
+}
+
+// NaiveBaseline is the assessment a SUBSTRATE-ONLY approach (no LLM reading Detail) would produce: rank by
+// naiveScore, and claim crown reach exactly per the tags. Scoring THIS against a mis-tagged scenario shows
+// the deterministic layer fails there — the gap ScoreImpact(engineer) - ScoreImpact(NaiveBaseline) is the
+// AI engineer's measured value-add.
+func NaiveBaseline(sc ImpactScenario) EngineerAssessment {
+	ranked := append([]ImpactIssue(nil), sc.Issues...)
+	sort.SliceStable(ranked, func(i, j int) bool { return naiveScore(ranked[i]) > naiveScore(ranked[j]) })
+	a := EngineerAssessment{CrownJewelClaims: map[string]bool{}}
+	for _, is := range ranked {
+		a.RankedIssueIDs = append(a.RankedIssueIDs, is.ID)
+		a.CrownJewelClaims[is.ID] = is.ReachesCrown
+	}
+	return a
 }
 
 // ImpactScenario is a seeded estate with ground-truth impact per issue.
@@ -110,14 +144,17 @@ func ScoreImpact(sc ImpactScenario, a EngineerAssessment) ImpactScore {
 	// them — this rewards prioritising by REAL impact, not raw severity.
 	ranked := append([]ImpactIssue(nil), sc.Issues...)
 	sort.SliceStable(ranked, func(i, j int) bool { return groundScore(ranked[i]) > groundScore(ranked[j]) })
+	// The "must-lead" set: issues that genuinely matter most — those reaching a crown jewel OR whose Detail
+	// makes them high-impact despite a low tag (TrueImpact override). Including the override issues is what
+	// makes the test require the engineer to READ the detail, not just trust the tags.
 	crownSet := map[string]bool{}
 	for _, is := range sc.Issues {
-		if is.ReachesCrown {
+		if is.ReachesCrown || is.TrueImpact > 0 {
 			crownSet[is.ID] = true
 		}
 	}
 	k := len(crownSet)
-	if k == 0 { // no crown reaches → the top third by ground score are "what matters"
+	if k == 0 { // nothing specially flagged → the top third by ground score are "what matters"
 		k = (len(ranked) + 2) / 3
 		crownSet = map[string]bool{}
 		for i := 0; i < k && i < len(ranked); i++ {

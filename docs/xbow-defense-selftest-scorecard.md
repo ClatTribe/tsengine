@@ -72,7 +72,23 @@ reasoning and penalises the "AI = re-rank by CVSS" failure.
 - **remediation-capture** (`defense-xbow`): did the estate get verifiably safer? (execution-verified)
 - **impact-accuracy** (`impact`): did the engineer correctly tell the org what matters + why? (grounded rubric)
 
-Honest next step (documented, not built): the impact dimension currently scores *consistency with the
-tagged facts*. The deeper AI value-add — catching impact the tags **mis-classify** (a "tier-3 internal"
-repo that actually holds prod admin keys) — needs scenarios whose correct impact *overrides* the naive
-substrate ranking; that is the follow-on dimension.
+### The AI value-add, measured: mis-tagged impact
+
+The deeper test — where the AI genuinely **beats a deterministic RiskWeight**. `estate-mistagged.json`
+seeds a finding tagged *medium / tier-3* ("secret in an internal-tools repo") whose **detail** reveals it's
+an *AWS AdministratorAccess key* (full account takeover), plus a *critical* RCE whose detail says it's an
+isolated, credential-less, nightly-torn-down dev box. The tags mis-classify both; only reading the detail
+re-judges them.
+
+The benchmark scores the two side by side (`--naive-baseline` runs the substrate-only ranking, no LLM):
+
+| Ranker | Prioritisation | |
+|---|---|---|
+| **Substrate-only** (ranks by the tags) | `0/1 lead (0%)` | buried the admin key — the tag said tier-3/medium |
+| **AI engineer** (reads the detail, `model=claude-proxy`) | `1/1 lead (100%) [PASS]` | caught the AdministratorAccess key → led with it |
+
+**The gap 0% → 100% is the AI Security Engineer's measured value-add** — catching impact the deterministic
+substrate mis-classifies, which is precisely the judgment a lookup cannot do. Note the engineer did NOT
+claim a crown-jewel path the correlation graph hadn't proven (no invented impact, §10) — it expressed the
+criticality through prioritisation, staying grounded. `TestScoreImpact_MisTagged_AIValueAdd` locks this in
+CI (the naive baseline must fail; a detail-reading assessment must pass).

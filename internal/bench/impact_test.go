@@ -82,3 +82,26 @@ func TestScoreImpact_GroundingGuards(t *testing.T) {
 		t.Errorf("missed crown reach must be flagged + block pass: %s", RenderImpactScore(s))
 	}
 }
+
+// TestScoreImpact_MisTagged_AIValueAdd: the deterministic substrate ranking (tags only) FAILS on a
+// mis-tagged finding, but an engineer that READS the detail and overrides the tag PASSES. The gap between
+// them IS the AI Security Engineer's measured value-add — the thing a deterministic RiskWeight cannot do.
+func TestScoreImpact_MisTagged_AIValueAdd(t *testing.T) {
+	sc := ImpactScenario{ID: "mis-tagged", Issues: []ImpactIssue{
+		// Tagged tier-3 / medium (low naive score), but the DETAIL reveals a prod admin key -> true impact huge.
+		{ID: "admin-key", Severity: types.SeverityMedium, DataTier: 3, ReachesCrown: false,
+			Detail: "leaked key is an AWS root/admin access key with AdministratorAccess", TrueImpact: 1000},
+		{ID: "crit-devbox", Severity: types.SeverityCritical, DataTier: 3, ReachesCrown: false},
+		{ID: "high-app", Severity: types.SeverityHigh, DataTier: 2, ReachesCrown: false},
+	}}
+	// Substrate-only baseline ranks by the tags (high-app > crit-devbox > admin-key) -> puts admin-key last.
+	if naive := ScoreImpact(sc, NaiveBaseline(sc)); naive.Pass() {
+		t.Errorf("the substrate-only baseline must FAIL the mis-tagged scenario (it can't read the detail): %s",
+			RenderImpactScore(naive))
+	}
+	// The engineer that reads the detail overrides the tag and leads with admin-key -> passes.
+	good := EngineerAssessment{RankedIssueIDs: []string{"admin-key", "high-app", "crit-devbox"}, CrownJewelClaims: map[string]bool{}}
+	if g := ScoreImpact(sc, good); !g.Pass() {
+		t.Errorf("an engineer that reads the detail + overrides the tag must PASS: %s", RenderImpactScore(g))
+	}
+}
