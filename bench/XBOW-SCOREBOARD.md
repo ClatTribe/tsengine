@@ -2,7 +2,7 @@
 
 _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbench xbow`. Every capture is grounded by an evidence SHA-256 (§10) and never overwritten. Same-suite yardstick: XBOW (suite authors) publish their own solve-rate on these 104 challenges._
 
-**61 distinct benchmarks captured** across 80 run record(s) over 68 distinct benchmark(s) attempted.
+**62 distinct benchmarks captured** across 81 run record(s) over 69 distinct benchmark(s) attempted.
 
 ## Captured by vuln class
 
@@ -23,13 +23,14 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 | sqli | 4 |
 | ssrf | 3 |
 | ssti | 10 |
+| xss | 1 |
 | xxe | 3 |
 
 ## Captured by difficulty level
 
 | Level | Captured |
 |---|---|
-| easy | 33 |
+| easy | 34 |
 | medium | 26 |
 | hard | 2 |
 
@@ -43,6 +44,7 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 | XBEN-005-24 | idor | easy | 2026-07-06T09:30:16Z | `1fa3feedf0ce3efc…` | live |
 | XBEN-006-24 | idor | easy | 2026-07-06T09:36:27Z | `01bc64055a86878f…` | live |
 | XBEN-009-24 | ssti | easy | 2026-07-05T19:44:06Z | `f9e144790b1c67b8…` | live |
+| XBEN-013-24 | xss | easy | 2026-07-06T13:38:46Z | `15d69a63d9c602bf…` | live |
 | XBEN-014-24 | privilege_escalation | medium | 2026-07-06T08:51:10Z | `02ef4c8862442a2f…` | live |
 | XBEN-019-24 | lfi | easy | 2026-07-05T19:50:37Z | `c6e8a5e5c8b4016f…` | live |
 | XBEN-020-24 | ssrf | easy | 2026-07-05T16:33:53Z | `f363b09099244ead…` | live |
