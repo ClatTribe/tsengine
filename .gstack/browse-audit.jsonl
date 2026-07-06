@@ -1,0 +1,72 @@
+{"ts":"2026-06-29T16:51:39.729Z","cmd":"goto","args":"http://localhost:3000","origin":"http://localhost:3000/","durationMs":298,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:51:39.782Z","cmd":"url","args":"","origin":"http://localhost:3000/","durationMs":2,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:51:39.831Z","cmd":"js","args":"document.title","origin":"http://localhost:3000/","durationMs":3,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:51:40.126Z","cmd":"text","args":"","origin":"http://localhost:3000/","durationMs":13,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:51:40.172Z","cmd":"console","args":"--errors","origin":"http://localhost:3000/","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:51:40.589Z","cmd":"screenshot","args":"/tmp/gs-home.png","origin":"http://localhost:3000/","durationMs":379,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:52:42.728Z","cmd":"goto","args":"http://localhost:3000/login","origin":"http://localhost:3000/login","durationMs":3587,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:52:42.839Z","cmd":"snapshot","args":"-i","origin":"http://localhost:3000/login","durationMs":25,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:52:54.882Z","cmd":"fill","args":"@e2 founder@northwind.io","origin":"http://localhost:3000/login","durationMs":1,"status":"error","hasCookies":false,"mode":"launched","error":"Ref @e2 not found. Run 'snapshot' to get fresh refs."}
+{"ts":"2026-06-29T16:52:54.919Z","cmd":"fill","args":"@e4 sentinel123","origin":"http://localhost:3000/login","durationMs":0,"status":"error","hasCookies":false,"mode":"launched","error":"Ref @e4 not found. Run 'snapshot' to get fresh refs."}
+{"ts":"2026-06-29T16:52:54.962Z","cmd":"click","args":"@e5","origin":"http://localhost:3000/login","durationMs":1,"status":"error","hasCookies":false,"mode":"launched","error":"Ref @e5 not found. Run 'snapshot' to get fresh refs."}
+{"ts":"2026-06-29T16:52:54.997Z","cmd":"wait","args":"--networkidle","origin":"http://localhost:3000/login","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:52:55.032Z","cmd":"url","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:52:55.071Z","cmd":"snapshot","args":"-i -s aside","origin":"http://localhost:3000/login","durationMs":2,"status":"error","hasCookies":false,"mode":"launched","error":"Selector not found: aside"}
+{"ts":"2026-06-29T16:53:07.135Z","cmd":"url","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:07.182Z","cmd":"text","args":"","origin":"http://localhost:3000/login","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:07.222Z","cmd":"console","args":"--errors","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:07.257Z","cmd":"network","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:27.385Z","cmd":"goto","args":"http://localhost:3000/login","origin":"http://localhost:3000/login","durationMs":92,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:28.025Z","cmd":"fill","args":"input[type=email] founder@northwind.io","origin":"http://localhost:3000/login","durationMs":578,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:28.093Z","cmd":"fill","args":"input[type=password] sentinel123","origin":"http://localhost:3000/login","durationMs":11,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:28.129Z","cmd":"js","args":"document.querySelector('input[type=email]').value","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:28.165Z","cmd":"js","args":"document.querySelector('input[type=password]').value.length","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:28.210Z","cmd":"press","args":"Enter","origin":"http://localhost:3000/login","durationMs":10,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:28.255Z","cmd":"wait","args":"--networkidle","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:29.343Z","cmd":"url","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:29.400Z","cmd":"network","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:47.825Z","cmd":"goto","args":"http://localhost:3000/login","origin":"http://localhost:3000/login","durationMs":160,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:47.902Z","cmd":"snapshot","args":"-i","origin":"http://localhost:3000/login","durationMs":10,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:48.465Z","cmd":"fill","args":"@e2 founder@northwind.io","origin":"http://localhost:3000/login","durationMs":520,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:48.531Z","cmd":"fill","args":"@e4 sentinel123","origin":"http://localhost:3000/login","durationMs":0,"status":"error","hasCookies":false,"mode":"launched","error":"Ref @e4 not found. Run 'snapshot' to get fresh refs."}
+{"ts":"2026-06-29T16:53:48.569Z","cmd":"js","args":"document.querySelectorAll('input')[0].value","origin":"http://localhost:3000/login","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:48.602Z","cmd":"js","args":"Array.from(document.querySelectorAll('input')).map(i=>i.type).join(',')","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:53:48.636Z","cmd":"click","args":"@e5","origin":"http://localhost:3000/login","durationMs":0,"status":"error","hasCookies":false,"mode":"launched","error":"Ref @e5 not found. Run 'snapshot' to get fresh refs."}
+{"ts":"2026-06-29T16:53:50.702Z","cmd":"url","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:07.248Z","cmd":"snapshot","args":"-s form","origin":"http://localhost:3000/login","durationMs":3,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:07.288Z","cmd":"text","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:28.609Z","cmd":"goto","args":"http://localhost:3000/login","origin":"http://localhost:3000/login","durationMs":91,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:28.661Z","cmd":"network","args":"--clear","origin":"http://localhost:3000/login","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:28.711Z","cmd":"snapshot","args":"-i","origin":"http://localhost:3000/login","durationMs":9,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:29.235Z","cmd":"fill","args":"@e2 founder@northwind.io","origin":"http://localhost:3000/login","durationMs":265,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:29.305Z","cmd":"fill","args":"@e4 sentinel123","origin":"http://localhost:3000/login","durationMs":0,"status":"error","hasCookies":false,"mode":"launched","error":"Ref @e4 not found. Run 'snapshot' to get fresh refs."}
+{"ts":"2026-06-29T16:54:29.343Z","cmd":"click","args":"@e5","origin":"http://localhost:3000/login","durationMs":0,"status":"error","hasCookies":false,"mode":"launched","error":"Ref @e5 not found. Run 'snapshot' to get fresh refs."}
+{"ts":"2026-06-29T16:54:32.424Z","cmd":"network","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:32.464Z","cmd":"console","args":"--errors","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:54:32.502Z","cmd":"url","args":"","origin":"http://localhost:3000/login","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:55:20.699Z","cmd":"js","args":"fetch('/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'founder@northwind.io',password:'sentinel123'})}).then(r=>r.status)","origin":"http://localhost:3000/login","durationMs":120,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:55:20.961Z","cmd":"goto","args":"http://localhost:3000/dashboard","origin":"http://localhost:3000/dashboard","durationMs":198,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:55:36.012Z","cmd":"wait","args":"--networkidle","origin":"http://localhost:3000/dashboard","durationMs":15003,"status":"error","hasCookies":false,"mode":"launched","error":"forLoadState: Timeout 15000ms exceeded.\n=========================== logs ===========================\n  \"load\" event fired\n============================================================"}
+{"ts":"2026-06-29T16:55:36.074Z","cmd":"url","args":"","origin":"http://localhost:3000/dashboard","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:55:36.129Z","cmd":"snapshot","args":"-i -s aside","origin":"http://localhost:3000/dashboard","durationMs":19,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:55:54.460Z","cmd":"screenshot","args":"/tmp/gs-dashboard.png","origin":"http://localhost:3000/dashboard","durationMs":25,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:55:54.507Z","cmd":"console","args":"--errors","origin":"http://localhost:3000/dashboard","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:55:54.868Z","cmd":"goto","args":"http://localhost:3000/issues","origin":"http://localhost:3000/issues","durationMs":324,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:56:09.916Z","cmd":"wait","args":"--networkidle","origin":"http://localhost:3000/issues","durationMs":15002,"status":"error","hasCookies":false,"mode":"launched","error":"forLoadState: Timeout 15000ms exceeded.\n=========================== logs ===========================\n  \"load\" event fired\n============================================================"}
+{"ts":"2026-06-29T16:56:09.974Z","cmd":"text","args":"","origin":"http://localhost:3000/issues","durationMs":2,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:56:10.031Z","cmd":"snapshot","args":"-i","origin":"http://localhost:3000/issues","durationMs":22,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:56:10.109Z","cmd":"screenshot","args":"/tmp/gs-issues.png","origin":"http://localhost:3000/issues","durationMs":44,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:56:52.713Z","cmd":"goto","args":"http://localhost:3000/issues","origin":"http://localhost:3000/issues","durationMs":209,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:57:07.765Z","cmd":"wait","args":"--networkidle","origin":"http://localhost:3000/issues","durationMs":15002,"status":"error","hasCookies":false,"mode":"launched","error":"forLoadState: Timeout 15000ms exceeded.\n=========================== logs ===========================\n  \"load\" event fired\n============================================================"}
+{"ts":"2026-06-29T16:57:07.855Z","cmd":"snapshot","args":"-i","origin":"http://localhost:3000/issues","durationMs":22,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:57:09.938Z","cmd":"click","args":"@e30","origin":"http://localhost:3000/issues","durationMs":2048,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:57:13.007Z","cmd":"text","args":"","origin":"http://localhost:3000/issues","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:57:13.092Z","cmd":"screenshot","args":"/tmp/gs-investigate.png","origin":"http://localhost:3000/issues","durationMs":48,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T16:57:13.126Z","cmd":"console","args":"--errors","origin":"http://localhost:3000/issues","durationMs":0,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T17:04:34.155Z","cmd":"js","args":"fetch('/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'founder@northwind.io',password:'sentinel123'})}).then(r=>r.status)","origin":"http://localhost:3000/issues","durationMs":1353,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T17:04:34.458Z","cmd":"goto","args":"http://localhost:3000/issues","origin":"http://localhost:3000/issues","durationMs":260,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T17:04:49.509Z","cmd":"wait","args":"--networkidle","origin":"http://localhost:3000/issues","durationMs":15002,"status":"error","hasCookies":false,"mode":"launched","error":"forLoadState: Timeout 15000ms exceeded.\n=========================== logs ===========================\n  \"load\" event fired\n============================================================"}
+{"ts":"2026-06-29T17:04:49.604Z","cmd":"snapshot","args":"-i","origin":"http://localhost:3000/issues","durationMs":24,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T17:04:51.677Z","cmd":"click","args":"@e30","origin":"http://localhost:3000/issues","durationMs":2037,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T17:04:54.745Z","cmd":"text","args":"","origin":"http://localhost:3000/issues","durationMs":1,"status":"ok","hasCookies":false,"mode":"launched"}
+{"ts":"2026-06-29T17:04:54.838Z","cmd":"screenshot","args":"/tmp/gs-investigate-fixed.png","origin":"http://localhost:3000/issues","durationMs":56,"status":"ok","hasCookies":false,"mode":"launched"}

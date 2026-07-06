@@ -59,10 +59,18 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 			TenantID: tenantID, Inventory: body.Inventory, Prowler: body.Prowler, CapturedAt: time.Now().UTC(),
 		})
 	}
-	stored := 0
-	saved := make([]types.Finding, 0, len(rep.Issues))
+	// Build the agent's proven paths into findings, then run them through the SAME L1.5 host-side
+	// enrichment chain every other finding gets (§11, enrichFindings) — so the AI Cloud Engineer's OWN
+	// findings are first-class (exploitability/confidence + KEV/EPSS on any CVE + MERGED compliance),
+	// not the second-class inline-built findings they used to be (the documented §11 follow-on:
+	// "Not yet wired: cloudinvestigate.go"). Honors TSENGINE_L15_DISABLED (the ablation).
+	built := make([]types.Finding, 0, len(rep.Issues))
 	for i, is := range rep.Issues {
-		f := cloudIssueToFinding(d.newID("cloudagent")+"-"+strconv.Itoa(i), is)
+		built = append(built, cloudIssueToFinding(d.newID("cloudagent")+"-"+strconv.Itoa(i), is))
+	}
+	stored := 0
+	saved := make([]types.Finding, 0, len(built))
+	for _, f := range enrichFindings(built) {
 		if err := d.Store.PutFinding(r.Context(), tenantID, f); err != nil {
 			continue
 		}
