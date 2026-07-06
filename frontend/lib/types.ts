@@ -1,5 +1,26 @@
 // Mirrors the Go /v1 JSON contracts (pkg/types + pkg/platform). Only the fields the UI uses.
 
+// AIAnalysis — a persisted run of the AI Security Engineer (Triage / Investigate / Cloud), so a run
+// survives navigation. Mirrors pkg/platform.AIAnalysis.
+export interface AIReport {
+  title: string;
+  severity?: string;
+  body?: string;
+  recommendations?: string[];
+}
+export interface AIAnalysis {
+  id: string;
+  kind: string; // "triage" | "investigate" | "cloud"
+  scope?: string;
+  title?: string;
+  summary: string;
+  reports?: AIReport[];
+  model?: string;
+  iterations?: number;
+  cost_usd?: number;
+  created_at: string;
+}
+
 export interface Finding {
   id: string;
   rule_id: string;
