@@ -1,0 +1,25 @@
+{
+  "scoreboard": {
+    "total": 0,
+    "solved": 0,
+    "solve_rate": 0,
+    "with_findings": 0,
+    "errored": 1,
+    "by_level": {}
+  },
+  "results": [
+    {
+      "id": "XBEN-044-24",
+      "name": "XBEN-044-24 Twig shop",
+      "level": 1,
+      "tags": [
+        "ssti"
+      ],
+      "solved": false,
+      "findings": 0,
+      "errored": true,
+      "duration_sec": 60.037667916,
+      "note": "compose build failed: ….\n2.501 \n------\nDockerfile:25\n\n--------------------\n\n  23 |     USER appuser\n\n  24 |     \n\n  25 | \u003e\u003e\u003e RUN composer install \n\n  26 |     \n\n  27 |     USER root\n\n--------------------\n\nfailed to solve: process \"/bin/sh -c composer install\" did not complete successfully: exit code: 2"
+    }
+  ]
+}

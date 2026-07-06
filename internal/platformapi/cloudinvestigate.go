@@ -45,7 +45,13 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 		writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
 		return
 	}
-	cc := &cloudagent.Context{Snap: cloudgraph.Ingest(inv), Prowler: body.Prowler}
+	cc := &cloudagent.Context{
+		Snap:    cloudgraph.Ingest(inv),
+		Prowler: body.Prowler,
+		// G2: feed the cross-surface footholds (a leaked key in code, an exposed host) that correlate
+		// INTO this account, so the depth agent verifies paths FROM them first — the code→cloud wedge.
+		Bridges: d.tenantCloudBridges(r.Context(), tenantID),
+	}
 	// llm (pentest.SpecLLM) satisfies cloudengine.LLM structurally — same Generate method.
 	rep, ierr := cloudagent.Investigate(r.Context(), llm, cc, cloudagent.Options{MaxIters: 24, MaxHyp: 20})
 	if ierr != nil {
@@ -59,10 +65,18 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 			TenantID: tenantID, Inventory: body.Inventory, Prowler: body.Prowler, CapturedAt: time.Now().UTC(),
 		})
 	}
-	stored := 0
-	saved := make([]types.Finding, 0, len(rep.Issues))
+	// Build the agent's proven paths into findings, then run them through the SAME L1.5 host-side
+	// enrichment chain every other finding gets (§11, enrichFindings) — so the AI Cloud Engineer's OWN
+	// findings are first-class (exploitability/confidence + KEV/EPSS on any CVE + MERGED compliance),
+	// not the second-class inline-built findings they used to be (the documented §11 follow-on:
+	// "Not yet wired: cloudinvestigate.go"). Honors TSENGINE_L15_DISABLED (the ablation).
+	built := make([]types.Finding, 0, len(rep.Issues))
 	for i, is := range rep.Issues {
-		f := cloudIssueToFinding(d.newID("cloudagent")+"-"+strconv.Itoa(i), is)
+		built = append(built, cloudIssueToFinding(d.newID("cloudagent")+"-"+strconv.Itoa(i), is))
+	}
+	stored := 0
+	saved := make([]types.Finding, 0, len(built))
+	for _, f := range enrichFindings(built) {
 		if err := d.Store.PutFinding(r.Context(), tenantID, f); err != nil {
 			continue
 		}
@@ -159,7 +173,10 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 		if perr != nil {
 			return "The stored cloud inventory could not be parsed.", nil
 		}
-		cc := &cloudagent.Context{Snap: cloudgraph.Ingest(inv), Prowler: snap.Prowler}
+		cc := &cloudagent.Context{
+			Snap: cloudgraph.Ingest(inv), Prowler: snap.Prowler,
+			Bridges: d.tenantCloudBridges(ctx, tenantID), // G2: cross-surface footholds (code→cloud wedge)
+		}
 		// Bounded specialist run (it's a nested agent — keep it tight). pentest.SpecLLM satisfies
 		// cloudengine.LLM structurally (same Generate), as the on-demand handler above relies on.
 		rep, ierr := cloudagent.Investigate(ctx, llm, cc, cloudagent.Options{MaxIters: 12, MaxHyp: 12})

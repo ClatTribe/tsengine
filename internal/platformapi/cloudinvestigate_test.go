@@ -123,6 +123,31 @@ func TestSeedRisks_AgentFindingsProposeVCISORisks(t *testing.T) {
 	}
 }
 
+// TestCloudAgentFindingsGetEnriched proves G3: the AI Cloud Engineer's OWN findings now run through
+// the SAME L1.5 enrichment chain (enrichFindings) every other platform ingest path uses, instead of the
+// old inline PutFinding that landed them un-enriched. A raw cloudIssueToFinding carries no confidence
+// scalar; after enrichment the confidence Finalize hook sets one — so the engineer's findings are
+// first-class (the documented §11 follow-on, now wired).
+func TestCloudAgentFindingsGetEnriched(t *testing.T) {
+	t.Setenv("TSENGINE_L15_DISABLED", "") // ensure the chain runs even if the ambient env disabled it
+	raw := cloudIssueToFinding("ca-raw", cloudagentIssueFixture())
+	if raw.Confidence != 0 {
+		t.Fatalf("precondition: a raw agent finding should have no confidence scalar, got %v", raw.Confidence)
+	}
+	enriched := enrichFindings([]types.Finding{raw})
+	if len(enriched) != 1 {
+		t.Fatalf("enrichment should keep the single verified attack-path finding, got %d", len(enriched))
+	}
+	if enriched[0].Confidence <= 0 {
+		t.Errorf("enriched agent finding must gain a confidence scalar from the L1.5 chain, got %v", enriched[0].Confidence)
+	}
+	// The ablation flag must make enrichment a no-op (recall/parity guard, §14.1).
+	t.Setenv("TSENGINE_L15_DISABLED", "1")
+	if got := enrichFindings([]types.Finding{raw}); got[0].Confidence != 0 {
+		t.Errorf("with TSENGINE_L15_DISABLED=1 enrichment must be a no-op, got confidence %v", got[0].Confidence)
+	}
+}
+
 func TestResolveAgentLLM_FallsBackToOperatorGlobal(t *testing.T) {
 	st := store.NewMemory()
 	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", AgentLLM: fakeCloudLLM{}}

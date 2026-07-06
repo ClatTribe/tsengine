@@ -34,6 +34,18 @@ RULES
 		cc.Snap.AccountID, cc.Snap.Provider, len(cc.Snap.Nodes), len(cc.Prowler))
 	fmt.Fprintf(&b, "Crown jewels (sensitive data / privileged identities): %s\n\n", crownJewels(cc.Snap))
 
+	// Cross-surface entry points (G2): footholds correlation already proved on OTHER surfaces (a code
+	// repo, a web app) that bridge INTO this account. An attacker who owns that foothold starts INSIDE —
+	// so verify paths FROM the named principal/resource first. Grounded by a real chain; still confirm
+	// every issue in the graph (a bridge widens where you look, it does not authorise an ungrounded issue).
+	if len(cc.Bridges) > 0 {
+		b.WriteString("CROSS-SURFACE ENTRY POINTS (from code/other surfaces — grounded by correlation). An external\nattacker already holds these footholds; treat the cloud principal/resource each names as attacker-\ncontrolled and verify paths FROM it to a crown jewel FIRST:\n")
+		for _, br := range cc.Bridges {
+			b.WriteString("- " + br + "\n")
+		}
+		b.WriteByte('\n')
+	}
+
 	// Surface the prowler findings WITH their L1.5 enrichment so the agent triages from the
 	// engine's signals (KEV/EPSS/exploitability + compliance), not a bare count. It still must
 	// VERIFY each via the graph tools (config-bad ≠ exploitable), but now it knows where to look first.
