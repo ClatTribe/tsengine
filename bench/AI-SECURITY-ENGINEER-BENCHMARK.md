@@ -26,6 +26,19 @@ one that matters), **precision** (don't cry wolf), and **grounding** (§10), BY 
 
 The gap is the AI value-add: it finds the impact severity-based tools miss and ignores the noise they raise.
 
+**Un-spoon-fed correlation test** (`estate-correlate`): the harder, honest version — the impact is NOT
+stated in any finding. The estate gives RAW facts (IAM key→role, role→assumeRole, role→`GetObject` on a
+bucket, bucket→`customer-pii` tag) and the engineer must CHAIN them to discover that a *medium* leaked key
+reaches customer PII, while dismissing a *critical* isolated RCE and a *high* SSH that's corp-CIDR-only.
+
+| Ranker | Recall | Precision |
+|---|---|---|
+| AI engineer (correlates the facts) | **100%** | **100%** → PASS |
+| Severity-first | **0%** (missed the chain) | **0%** (flagged the critical RCE + high SSH noise) |
+
+Severity-first is *exactly inverted* from the truth — the strongest evidence that finding real impact is
+correlation/judgment, not a severity lookup.
+
 ## The two halves of the job → three measured axes
 
 | Axis | Question | How it's scored | CLI |

@@ -91,6 +91,13 @@ func buildDiscoveryPrompt(sc bench.DiscoveryScenario) string {
 	b.WriteString("unlocks a cloud data store). Do NOT flag scary-but-contained findings (a critical RCE on an\n")
 	b.WriteString("isolated throwaway box, a high CVE that isn't reachable) — read each finding's detail and judge\n")
 	b.WriteString("REAL impact, not raw severity. Do not claim impact the facts don't support.\n\n")
+	if len(sc.Context) > 0 {
+		b.WriteString("ESTATE CONTEXT (raw facts — CORRELATE these with the findings to trace what actually\nreaches a crown jewel; the impact is NOT stated in any single finding):\n")
+		for _, c := range sc.Context {
+			b.WriteString("- " + c + "\n")
+		}
+		b.WriteByte('\n')
+	}
 	b.WriteString("FINDINGS:\n")
 	for _, f := range sc.Findings {
 		fmt.Fprintf(&b, "- id=%s | surface=%s | severity=%s | %s\n", f.ID, f.Surface, f.Severity, f.Title)

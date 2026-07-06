@@ -1,0 +1,27 @@
+{
+  "id": "estate-correlate",
+  "name": "Correlate raw facts to DISCOVER the chain (impact not spoon-fed)",
+  "context": [
+    "IAM: access key AKIA-DEPLOY7 authenticates as role 'ci-deployer'.",
+    "IAM: role 'ci-deployer' policy allows sts:AssumeRole on role 'prod-backup'.",
+    "IAM: role 'prod-backup' policy allows s3:GetObject on arn:aws:s3:::acme-cust-exports/*.",
+    "Data: bucket acme-cust-exports is tagged data-classification=customer-pii.",
+    "IAM: role 'ci-deployer' has NO other sensitive permissions.",
+    "Network: host i-web01 security group allows 22/tcp only from the corporate CIDR 10.8.0.0/16.",
+    "Data: bucket acme-public-assets is tagged data-classification=public."
+  ],
+  "findings": [
+    { "id": "key-in-ci",   "surface": "code",  "severity": "medium", "title": "Access key AKIA-DEPLOY7 committed in ci/deploy.sh",
+      "detail": "a long-lived AWS access key is hardcoded in the CI deploy script",
+      "high_impact": true, "impact_type": "lateral_movement", "reaches": "customer-pii bucket via ci-deployer->prod-backup" },
+    { "id": "pub-assets",  "surface": "cloud", "severity": "medium", "title": "Bucket acme-public-assets is world-readable",
+      "detail": "public ACL on acme-public-assets",
+      "high_impact": false },
+    { "id": "ssh-web01",   "surface": "cloud", "severity": "high", "title": "Port 22 open on i-web01",
+      "detail": "SSH reachable on i-web01",
+      "high_impact": false },
+    { "id": "rce-sandbox", "surface": "cloud", "severity": "critical", "title": "Critical RCE on the sandbox runner",
+      "detail": "ephemeral throwaway sandbox, no credentials, no prod network, recycled per job",
+      "high_impact": false }
+  ]
+}

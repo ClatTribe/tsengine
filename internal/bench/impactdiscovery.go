@@ -50,6 +50,11 @@ type DiscoveryScenario struct {
 	ID       string             `json:"id"`
 	Name     string             `json:"name,omitempty"`
 	Findings []DiscoveryFinding `json:"findings"`
+	// Context are RAW estate facts (IAM role→policy, bucket→sensitivity, network reachability) that are NOT
+	// impact statements — the engineer must CORRELATE them with the findings to DISCOVER a chain (e.g. this
+	// leaked key → this role → this PII bucket). This is the honest, un-spoon-fed test: the impact is not
+	// pre-written in any single finding's detail; it must be derived. Optional (absent → detail-level test).
+	Context []string `json:"context,omitempty"`
 }
 
 // EngineerDiscovery is what the AI produced: the finding ids it judges create real organisational impact.
