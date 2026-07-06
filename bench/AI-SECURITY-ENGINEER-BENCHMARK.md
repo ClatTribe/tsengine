@@ -38,6 +38,16 @@ scores 100%. That gap — consistent across the whole impact taxonomy, at volume
 impact no single finding contains — is the AI Security Engineer's value made testable. Run the integrity
 check: `tsbench discover-suite --dir fixtures/discovery --strict`.
 
+**Grounded in the real engine, not hypothetical facts.** A fair objection: `tsbench discover` feeds a
+hand-authored estate to an LLM — does it measure the *product* or just Claude reasoning over invented facts?
+The answer: the cross-surface chains the scenarios ask the engineer to discover are *exactly* what the
+deterministic substrate surfaces. `internal/bench/discoverysubstrate_test.go` feeds realistic repo + cloud
+findings (a `gitleaks` AWS-key leak + a `prowler` admin-role finding sharing that key) to the **real**
+`crossdetect.Correlate` and asserts it produces the repo→cloud crown-jewel chain — and that with *no* shared
+entity it produces *nothing* (the substrate never invents a bridge, §10). So the division of labour is honest:
+the substrate finds the FACTS (the linkage), and the discovery benchmark measures the JUDGMENT on top of them
+(is this the impactful one, is it worth waking someone). The judgment is what needs the LLM; the facts don't.
+
 ## Impact discovery — the scenarios in detail
 
 The AI Security Engineer's highest-value job is not fixing — it's **finding the vuln that creates real
