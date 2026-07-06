@@ -215,6 +215,29 @@ func TestScoreDiscovery_CrossSurfaceCombination(t *testing.T) {
 	}
 }
 
+// TestScoreDiscovery_CleanEstateFloor: a hardened all-noise estate — the correct answer is FLAG NOTHING.
+// Flagging nothing PASSES (the precision floor); crying wolf on the scary critical/high (grounded as
+// contained) is a false alarm and must NOT pass. This is the §10 "don't manufacture impact" test at the
+// estate level — the complement every recall test misses (an always-flag-nothing engineer passes here but
+// fails every other scenario; an over-flagger fails here). Mirrors fixtures/discovery/estate-clean.json.
+func TestScoreDiscovery_CleanEstateFloor(t *testing.T) {
+	sc := DiscoveryScenario{ID: "clean", Findings: []DiscoveryFinding{
+		{ID: "critical-airgapped", Severity: types.SeverityCritical, HighImpact: false, Detail: "CVE on an air-gapped box, no network"},
+		{ID: "admin-sso-mfa", Severity: types.SeverityHigh, HighImpact: false, Detail: "internet admin panel but SSO+MFA, IP-allowlisted"},
+		{ID: "headers", Severity: types.SeverityLow, HighImpact: false, Detail: "missing security headers"},
+	}}
+	// flag nothing → the correct answer → PASS (recall vacuously 1, no false alarms).
+	clean := ScoreDiscovery(sc, EngineerDiscovery{})
+	if !clean.Pass() || clean.FP != 0 {
+		t.Fatalf("flagging nothing on a clean estate must PASS: %s", RenderDiscoveryScore(clean))
+	}
+	// crying wolf on the scary-but-contained critical/high → false alarms → must NOT pass.
+	wolf := ScoreDiscovery(sc, EngineerDiscovery{HighImpactIDs: []string{"critical-airgapped", "admin-sso-mfa"}})
+	if wolf.FP != 2 || wolf.Pass() {
+		t.Errorf("crying wolf on contained findings must be false alarms + not pass: %s", RenderDiscoveryScore(wolf))
+	}
+}
+
 // TestScoreDiscovery_InventedFails: claiming a finding not in the estate is a hallucination (§10).
 func TestScoreDiscovery_InventedFails(t *testing.T) {
 	sc := discoveryScenario()

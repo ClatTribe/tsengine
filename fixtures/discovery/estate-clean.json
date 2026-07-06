@@ -1,0 +1,35 @@
+{
+  "id": "estate-clean",
+  "name": "Zero-impact precision floor — a hardened estate where the correct answer is FLAG NOTHING",
+  "context": [
+    "Host: the box in finding critical-cve-airgapped has no network interface attached (air-gapped lab bench) and holds no data.",
+    "Deps: the CVE in finding vulndep-buildonly is in a dependency used only by a local build script, never imported at runtime and never shipped.",
+    "Data: bucket acme-public-docs (finding public-docs-bucket) holds only the published API reference, already public by design (data-classification=public).",
+    "Network: host devbox allows 22/tcp only from the corporate VPN CIDR 10.30.0.0/16; it has no standing access to any production system or data.",
+    "App: the reflected value in finding self-xss is only reachable by a user submitting a payload to their OWN session; there is no cross-user delivery path.",
+    "Auth: the admin panel in finding admin-panel-exposed requires SSO and enforces MFA; no bypass is present, and it is additionally IP-allowlisted to the office range."
+  ],
+  "findings": [
+    { "id": "critical-cve-airgapped", "surface": "cloud", "severity": "critical", "title": "Critical kernel CVE on an air-gapped lab host",
+      "detail": "a high-CVSS local-privilege-escalation CVE is unpatched on a lab bench host",
+      "high_impact": false },
+    { "id": "vulndep-buildonly", "surface": "code", "severity": "high", "title": "Known CVE in a build-time dependency",
+      "detail": "a dependency with a published CVE appears in the lockfile",
+      "high_impact": false },
+    { "id": "public-docs-bucket", "surface": "cloud", "severity": "medium", "title": "Bucket acme-public-docs is world-readable",
+      "detail": "public read on the API-docs bucket",
+      "high_impact": false },
+    { "id": "devbox-ssh", "surface": "cloud", "severity": "medium", "title": "SSH exposed on devbox",
+      "detail": "port 22 open on the developer box",
+      "high_impact": false },
+    { "id": "self-xss", "surface": "web", "severity": "low", "title": "Reflected value in a user-only form",
+      "detail": "a form field reflects unsanitised input back to the same user",
+      "high_impact": false },
+    { "id": "admin-panel-exposed", "surface": "web", "severity": "high", "title": "Admin panel is internet-reachable",
+      "detail": "the /admin panel responds on the public internet",
+      "high_impact": false },
+    { "id": "missing-security-headers", "surface": "web", "severity": "low", "title": "Security headers not set",
+      "detail": "CSP and X-Content-Type-Options are absent",
+      "high_impact": false }
+  ]
+}

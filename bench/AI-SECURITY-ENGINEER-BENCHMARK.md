@@ -10,7 +10,7 @@ fix it and explain what it means (`defense-xbow` + `impact`).
 
 ## Impact discovery — FINDING the vuln that creates real impact (the primary axis)
 
-**Suite scorecard** (7 scenarios, every one live-proven via the proxy at recall 100% / precision 100%, and
+**Suite scorecard** (8 scenarios, every one live-proven via the proxy at recall 100% / precision 100%, and
 deterministically self-validated by `tsbench discover-suite` — the oracle answer PASSES and flag-everything
 raises false alarms, so each genuinely tests precision, not just recall):
 
@@ -23,6 +23,14 @@ raises false alarms, so each genuinely tests precision, not just recall):
 | `estate-external` | external-exposure correlation | 4 | 1 | **100% / 100%** | 0% / 0% |
 | `estate-backlog` | volume / anti-overfit (scary noise) | 16 | 4 | **100% / 100%** | 25% / 25% |
 | `estate-combo` | cross-surface composition (the wedge) | 6 | 2 | **100% / 100%** | n/a (all low-severity) |
+| `estate-clean` | zero-impact floor — flag NOTHING | 7 | 0 | **100% / 100%** | 0% precision (cries wolf) |
+
+`estate-clean` is the precision floor: a hardened all-noise estate (a *critical* CVE on an air-gapped box, a
+*high* internet-facing admin panel that enforces SSO+MFA and is IP-allowlisted) where the correct answer is to
+flag **nothing**. It's the §10 "don't manufacture impact" test at the estate level — the complement every
+recall test misses: an always-flag-nothing engineer passes here but fails all seven others, and an over-flagger
+fails here. Live via the proxy the AI engineer flagged nothing (recall vacuously 100%, precision 100%); a
+severity ranker that grabs the scary critical + high scores precision 0%.
 
 The single takeaway: in every scenario the real impact is a *below-the-scary-severity* item and the noise is
 *high/critical-tagged*, so a severity-or-keyword ranker scores 0–50% where reasoning over the grounded facts

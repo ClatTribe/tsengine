@@ -111,13 +111,30 @@ func buildDiscoveryPrompt(sc bench.DiscoveryScenario) string {
 }
 
 // parseDiscovery extracts the HIGH_IMPACT ids. Unknown ids are kept (ScoreDiscovery flags them as invented).
+// Sentinel "empty" tokens (none / n/a / - / nothing) are dropped: the correct answer to a clean estate is
+// "flag nothing", and a model naturally writes "HIGH_IMPACT: none" — which must parse to zero picks, not an
+// invented id. Without this the zero-impact precision-floor test would falsely fail a correct engineer.
 func parseDiscovery(reply string) bench.EngineerDiscovery {
 	var d bench.EngineerDiscovery
 	for _, ln := range strings.Split(reply, "\n") {
 		ln = strings.TrimSpace(ln)
 		if strings.HasPrefix(strings.ToUpper(ln), "HIGH_IMPACT:") {
-			d.HighImpactIDs = append(d.HighImpactIDs, splitIDs(ln[len("HIGH_IMPACT:"):])...)
+			for _, id := range splitIDs(ln[len("HIGH_IMPACT:"):]) {
+				if isEmptySentinel(id) {
+					continue
+				}
+				d.HighImpactIDs = append(d.HighImpactIDs, id)
+			}
 		}
 	}
 	return d
+}
+
+// isEmptySentinel reports whether a token is a "no picks" marker rather than a finding id.
+func isEmptySentinel(id string) bool {
+	switch strings.ToLower(strings.Trim(id, "()[].")) {
+	case "none", "n/a", "na", "nothing", "empty", "-":
+		return true
+	}
+	return false
 }
