@@ -45,7 +45,13 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 		writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
 		return
 	}
-	cc := &cloudagent.Context{Snap: cloudgraph.Ingest(inv), Prowler: body.Prowler}
+	cc := &cloudagent.Context{
+		Snap:    cloudgraph.Ingest(inv),
+		Prowler: body.Prowler,
+		// G2: feed the cross-surface footholds (a leaked key in code, an exposed host) that correlate
+		// INTO this account, so the depth agent verifies paths FROM them first — the code→cloud wedge.
+		Bridges: d.tenantCloudBridges(r.Context(), tenantID),
+	}
 	// llm (pentest.SpecLLM) satisfies cloudengine.LLM structurally — same Generate method.
 	rep, ierr := cloudagent.Investigate(r.Context(), llm, cc, cloudagent.Options{MaxIters: 24, MaxHyp: 20})
 	if ierr != nil {
@@ -167,7 +173,10 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 		if perr != nil {
 			return "The stored cloud inventory could not be parsed.", nil
 		}
-		cc := &cloudagent.Context{Snap: cloudgraph.Ingest(inv), Prowler: snap.Prowler}
+		cc := &cloudagent.Context{
+			Snap: cloudgraph.Ingest(inv), Prowler: snap.Prowler,
+			Bridges: d.tenantCloudBridges(ctx, tenantID), // G2: cross-surface footholds (code→cloud wedge)
+		}
 		// Bounded specialist run (it's a nested agent — keep it tight). pentest.SpecLLM satisfies
 		// cloudengine.LLM structurally (same Generate), as the on-demand handler above relies on.
 		rep, ierr := cloudagent.Investigate(ctx, llm, cc, cloudagent.Options{MaxIters: 12, MaxHyp: 12})

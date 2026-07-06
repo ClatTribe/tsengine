@@ -77,6 +77,25 @@ func TestAgent_InvestigatesAndGroundsAFinding(t *testing.T) {
 	}
 }
 
+// TestBuildPrompt_RendersCrossSurfaceBridges is the G2 guard: when the cloud specialist is given
+// cross-surface footholds (a leaked key in code correlating into this account), the prompt must surface
+// them as external entry points so the agent verifies paths FROM them first — the code→cloud wedge. With
+// no bridges the section is absent (a purely-cloud investigation is unchanged).
+func TestBuildPrompt_RendersCrossSurfaceBridges(t *testing.T) {
+	cc := fixture(t)
+	if strings.Contains(buildPrompt(cc, nil), "CROSS-SURFACE ENTRY POINTS") {
+		t.Fatal("with no bridges the cross-surface section must be absent")
+	}
+	cc.Bridges = []string{`shared aws_key AKIA… bridges repository foothold "leaked AWS key in config.py" → cloud target "admin role"`}
+	p := buildPrompt(cc, nil)
+	if !strings.Contains(p, "CROSS-SURFACE ENTRY POINTS") {
+		t.Error("the cross-surface entry-point section must render when bridges are present")
+	}
+	if !strings.Contains(p, "leaked AWS key in config.py") {
+		t.Error("the bridge hint text must appear so the agent knows the code→cloud foothold")
+	}
+}
+
 // TestAgent_RejectsUngroundedFinding is the anti-hallucination guard: a path that
 // does not exist in the graph must be REJECTED, so the LLM cannot invent findings.
 func TestAgent_RejectsUngroundedFinding(t *testing.T) {

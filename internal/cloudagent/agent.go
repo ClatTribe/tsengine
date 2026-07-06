@@ -20,6 +20,14 @@ type Context struct {
 	Prowler []types.Finding
 	MaxHyp  int
 
+	// Bridges are grounded CROSS-SURFACE entry-point hints (G2): footholds discovered on OTHER
+	// surfaces (e.g. a leaked AWS key in a code repo) that correlate into THIS cloud account. They
+	// tell the cloud specialist where an external attacker already has a foothold so it prioritizes
+	// verifying paths FROM that principal/resource — the code→cloud wedge. Each is derived from a real
+	// correlation chain (§10); the agent still must confirm every recorded issue in the graph, so a
+	// bridge only widens where it LOOKS, it can never fabricate a path.
+	Bridges []string
+
 	Issues  []Issue
 	Summary string
 	Done    bool
