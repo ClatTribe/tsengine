@@ -429,6 +429,7 @@ func main() {
 		CloudSnapshots: cloudSnaps,
 		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
 		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
+		Detector:       detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)
 		Token:          token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// AppURL lands the user back in the app after OAuth (else they'd see a raw JSON blob).
 		// Defaults to the public base (same-origin behind the TLS edge), override with TSENGINE_APP_URL.
