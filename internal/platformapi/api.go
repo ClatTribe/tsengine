@@ -246,6 +246,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                                                            // list engagements
 	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))                                                      // portfolio scorecard (verified_rate, SLA)
 	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))                                                         // one engagement + findings
+	mux.HandleFunc("GET /v1/pentest/{id}/readiness", d.auth(d.handlePentestReadiness))                                         // pre-flight: per-target ownership + consent + LLM-key status
 	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                                                    // run/retest the engagement (passive, RoE-gated)
 	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))                                               // the engagement's VAPT report (md/json)
 	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))                                            // HITL: named human signs the report → signed ledger
