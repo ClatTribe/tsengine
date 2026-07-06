@@ -627,9 +627,21 @@ the deterministic predicate DISPOSES, so the model can never upgrade a finding i
 positives, §10). Wired `requiredIndicator[idor|bola|broken_object_level_authorization]=bola_confirmed`
 so `record_finding` grounds it like any class. This is why a one-session "a different id returned
 different data" heuristic was deliberately NOT shipped (FP-prone on public per-object endpoints + the
-attacker's own object). BFLA (function-level authz) is deliberately NOT a webagent tool: "this function
-is privileged" is a policy fact unprovable from responses alone, so it stays `apiauthz`'s job (the
-`api` asset, operator-declared `TestConfig`) rather than an FP-prone webagent probe.
+attacker's own object).
+
+`privesc_probe` (`internal/webagent/privesc.go`) is the sibling for the FP-free SUBSET of BFLA:
+self-privilege-escalation / mass-assignment (OWASP API #3 + #6, the IDOR/privesc-takeover shape).
+`privesc_probe(session_cookie, verify_url, role_after, escalate{method,url,body})` runs a
+before→escalate→after sequence on ONE session and sets `privesc_confirmed` ONLY when a high-privilege
+marker was ABSENT in the session's own baseline read and PRESENT after the call that granted it -- an
+OBSERVED transition of the session's OWN privilege (the before/after diff on the same page auto-excludes
+a static marker), so it needs NO policy declaration. Wired
+`requiredIndicator[mass_assignment|privilege_escalation|privesc]=privesc_confirmed`. The honest
+boundary: GENERAL BFLA (a low-priv user calls an admin-only function affecting OTHERS) is NOT a webagent
+tool -- "this function is privileged" is a policy fact unprovable from responses alone, so it stays
+`apiauthz`'s job (the `api` asset, operator-declared `TestConfig`). A user promoting THEMSELVES is
+unambiguously a vuln regardless of policy, which is exactly why the self-privesc slice CAN be grounded
+FP-free while general BFLA cannot.
 
 ### 12.7 The ONE exception: `dispatch_oss` bridges the host-side agent to the sandbox OSS tools
 
