@@ -76,6 +76,16 @@ only appears after correlating the facts, and each category's decoy is a *high/c
 keyword heuristic wrongly promotes. That inversion — real impact low-tagged, noise high-tagged — is the
 measured AI value-add, held consistent across the whole impact taxonomy.
 
+**Volume / anti-overfit** (`estate-backlog`): the discrimination above could be an artifact of tiny
+4-finding estates. This is a realistic **16-finding backlog** — 4 real impacts (across data-exposure,
+privesc, lateral) buried in 12 varied, plausible noise items, three of them deliberately *scarier* than the
+real ones (a **critical** Log4Shell that's only in a test fixture, a **high** OpenSSL CVE on a nightly-recycled
+devbox, **high** default-creds on VPN-only staging with empty data). Live via the proxy: the AI engineer
+scored **recall 100% / precision 100%** — found all four buried impacts and dismissed every scary-but-contained
+noise item; a severity-first top-4 scored **recall 25% / precision 25%** (it grabs the critical fixture-log4j
+and the high devbox CVE and misses three of the four real impacts). Holding 100/100 at volume, against noise
+that outranks the real findings on severity, is the honest evidence the signal is judgment — not estate size.
+
 ## The two halves of the job → three measured axes
 
 | Axis | Question | How it's scored | CLI |

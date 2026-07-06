@@ -161,6 +161,31 @@ func TestScoreDiscovery_PerCategoryCorrelation(t *testing.T) {
 	}
 }
 
+// TestScoreDiscovery_VolumePrecision: at realistic backlog volume the scary-but-contained noise (a
+// critical Log4Shell in a test fixture, a high devbox CVE) is the precision trap. Flagging the real
+// buried impacts PASSES; a severity-first top-N that grabs the scary noise fails on both recall and
+// precision. Guards against a "tiny 4-finding estate" overfit. Mirrors fixtures/discovery/estate-backlog.
+func TestScoreDiscovery_VolumePrecision(t *testing.T) {
+	// a compact stand-in: 3 real buried impacts + 3 scary-but-contained noise (higher-severity than the real).
+	sc := DiscoveryScenario{ID: "backlog", Findings: []DiscoveryFinding{
+		{ID: "leaked-db", Severity: types.SeverityMedium, HighImpact: true, ImpactType: ImpactDataExposure, Detail: "creds → prod PII DB"},
+		{ID: "key-privesc", Severity: types.SeverityMedium, HighImpact: true, ImpactType: ImpactPrivEsc, Detail: "key → CreateAccessKey * → admin"},
+		{ID: "ssrf-pii", Severity: types.SeverityMedium, HighImpact: true, ImpactType: ImpactLateral, Detail: "SSRF → IMDSv1 → PII bucket"},
+		{ID: "log4j-testfixture", Severity: types.SeverityCritical, HighImpact: false, Detail: "log4j in test fixtures, not shipped"},
+		{ID: "openssl-devbox", Severity: types.SeverityHigh, HighImpact: false, Detail: "CVE on a recycled devbox, no prod route"},
+		{ID: "default-creds-staging", Severity: types.SeverityHigh, HighImpact: false, Detail: "admin/admin on VPN-only staging, empty data"},
+	}}
+	good := ScoreDiscovery(sc, EngineerDiscovery{HighImpactIDs: []string{"leaked-db", "key-privesc", "ssrf-pii"}})
+	if !good.Pass() || good.Recall != 1.0 || good.FP != 0 {
+		t.Fatalf("finding the 3 buried real impacts must PASS: %s", RenderDiscoveryScore(good))
+	}
+	// severity-first grabs the 3 scary noise items → misses every real one, all false alarms.
+	sev := ScoreDiscovery(sc, EngineerDiscovery{HighImpactIDs: []string{"log4j-testfixture", "openssl-devbox", "default-creds-staging"}})
+	if sev.Recall != 0 || sev.FP != 3 || sev.Pass() {
+		t.Errorf("severity-first must miss all real + flag 3 noise: %s", RenderDiscoveryScore(sev))
+	}
+}
+
 // TestScoreDiscovery_InventedFails: claiming a finding not in the estate is a hallucination (§10).
 func TestScoreDiscovery_InventedFails(t *testing.T) {
 	sc := discoveryScenario()
