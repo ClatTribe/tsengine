@@ -1,0 +1,116 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
+)
+
+// discover.go is `tsbench discover` — the IMPACT-DISCOVERY runner. It presents the AI Security Engineer a
+// noisy code+cloud estate (findings + facts + detail) and asks it to identify which findings create REAL
+// organisational impact (reach a crown jewel — customer data / admin / financial, often via a cross-surface
+// chain). bench.ScoreDiscovery grades recall (never miss the impactful one), precision (don't cry wolf),
+// and grounding (§10). The engineer's brain is cloudengine.LLMFromEnv (the proxy in dev, the customer key
+// in prod); --answer-file supplies the picks with no model (CI/demo).
+
+func discoverCmd(argv []string) error {
+	fs := flag.NewFlagSet("discover", flag.ContinueOnError)
+	scenario := fs.String("scenario", "", "path to a discovery scenario JSON (a noisy estate)")
+	ledger := fs.String("ledger", "", "optional append-only ledger (.jsonl)")
+	answerFile := fs.String("answer-file", "", "DEV/CI: supply the engineer's picks from a file (HIGH_IMPACT: line) instead of the LLM")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *scenario == "" {
+		return fmt.Errorf("--scenario is required")
+	}
+	raw, err := os.ReadFile(*scenario) //nolint:gosec // operator-supplied bench fixture
+	if err != nil {
+		return err
+	}
+	var sc bench.DiscoveryScenario
+	if err := json.Unmarshal(raw, &sc); err != nil {
+		return fmt.Errorf("parse scenario: %w", err)
+	}
+	if sc.ID == "" || len(sc.Findings) == 0 {
+		return fmt.Errorf("scenario needs an id + findings")
+	}
+
+	var reply, model string
+	if *answerFile != "" {
+		b, rerr := os.ReadFile(*answerFile) //nolint:gosec // dev/CI answer
+		if rerr != nil {
+			return rerr
+		}
+		reply, model = string(b), "answer-file"
+	} else {
+		llm, ok := cloudengine.LLMFromEnv()
+		if !ok {
+			return fmt.Errorf("discover needs an LLM (the engineer's brain): set LLM_BASE_URL/LLM_MODEL/LLM_API_KEY (the proxy) or ANTHROPIC_API_KEY — or pass --answer-file")
+		}
+		out, gerr := llm.Generate(context.Background(), buildDiscoveryPrompt(sc))
+		if gerr != nil {
+			return fmt.Errorf("engineer LLM: %w", gerr)
+		}
+		reply, model = out, firstNonEmptyEnv("LLM_MODEL", "ANTHROPIC_MODEL")
+	}
+
+	d := parseDiscovery(reply)
+	score := bench.ScoreDiscovery(sc, d)
+	fmt.Println(bench.RenderDiscoveryScore(score))
+	if *ledger != "" {
+		line, _ := json.Marshal(map[string]any{
+			"scenario_id": score.ScenarioID, "model": model, "pass": score.Pass(),
+			"recall": score.Recall, "precision": score.Precision, "missed": len(score.Missed),
+			"false_alarms": score.FP, "invented": len(score.Invented),
+		})
+		f, oerr := os.OpenFile(*ledger, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // bench path
+		if oerr == nil {
+			_, _ = f.Write(append(line, '\n'))
+			_ = f.Close()
+		}
+	}
+	return nil
+}
+
+// buildDiscoveryPrompt presents the noisy estate and asks the engineer to surface only the findings that
+// create REAL organisational impact. The facts + detail come from the substrate; the engineer reasons over
+// them — the impactful ones often require reading the detail (a chain, a mis-tag), not trusting severity.
+func buildDiscoveryPrompt(sc bench.DiscoveryScenario) string {
+	var b strings.Builder
+	b.WriteString("You are the AI Security Engineer. Below is the organisation's open finding backlog across\n")
+	b.WriteString("code and cloud. Most of it is noise. Your job: identify ONLY the findings that create REAL\n")
+	b.WriteString("organisational impact — those that reach a CROWN JEWEL (customer/regulated data, admin/root, or\n")
+	b.WriteString("a financial system), INCLUDING via a cross-surface chain (e.g. a leaked key in code that\n")
+	b.WriteString("unlocks a cloud data store). Do NOT flag scary-but-contained findings (a critical RCE on an\n")
+	b.WriteString("isolated throwaway box, a high CVE that isn't reachable) — read each finding's detail and judge\n")
+	b.WriteString("REAL impact, not raw severity. Do not claim impact the facts don't support.\n\n")
+	b.WriteString("FINDINGS:\n")
+	for _, f := range sc.Findings {
+		fmt.Fprintf(&b, "- id=%s | surface=%s | severity=%s | %s\n", f.ID, f.Surface, f.Severity, f.Title)
+		if strings.TrimSpace(f.Detail) != "" {
+			fmt.Fprintf(&b, "    detail: %s\n", f.Detail)
+		}
+	}
+	b.WriteString("\nRespond with EXACTLY one line:\n")
+	b.WriteString("HIGH_IMPACT: <comma-separated ids of the findings that create real organisational impact>\n")
+	return b.String()
+}
+
+// parseDiscovery extracts the HIGH_IMPACT ids. Unknown ids are kept (ScoreDiscovery flags them as invented).
+func parseDiscovery(reply string) bench.EngineerDiscovery {
+	var d bench.EngineerDiscovery
+	for _, ln := range strings.Split(reply, "\n") {
+		ln = strings.TrimSpace(ln)
+		if strings.HasPrefix(strings.ToUpper(ln), "HIGH_IMPACT:") {
+			d.HighImpactIDs = append(d.HighImpactIDs, splitIDs(ln[len("HIGH_IMPACT:"):])...)
+		}
+	}
+	return d
+}

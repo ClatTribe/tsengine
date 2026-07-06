@@ -8,6 +8,24 @@ It is the defensive twin of `tsbench xbow` (the offensive flag-capture suite), a
 **same XBOW challenge corpus** so the two are directly comparable: exploit it (`xbow`), then prove you can
 fix it and explain what it means (`defense-xbow` + `impact`).
 
+## Impact discovery — FINDING the vuln that creates real impact (the primary axis)
+
+The AI Security Engineer's highest-value job is not fixing — it's **finding the vuln that creates real
+organisational impact**: the one that reaches a crown jewel (customer/regulated data, admin/root, a
+financial system), often via a **cross-surface chain** no single scanner sees, buried in a backlog of
+scary-but-contained noise. `tsbench discover` (`internal/bench/impactdiscovery.go`) measures it: given a
+noisy code+cloud estate, the engineer surfaces the impactful findings, scored by **recall** (never miss the
+one that matters), **precision** (don't cry wolf), and **grounding** (§10), BY IMPACT CATEGORY.
+
+**Live (model=claude-proxy)** on a 7-finding estate (4 real across 4 categories + 3 noise):
+
+| Ranker | Recall | Precision | Notes |
+|---|---|---|---|
+| AI engineer (reads detail) | **100%** | **100%** | found the code→cloud chain, the public-PII bucket, the mis-tagged admin key, the internet-exposed billing DB; dismissed the isolated critical RCE, the unreachable CVE, the static-blog XSS → **PASS** |
+| Severity-first | 50% (missed 2) | 50% (2 false alarms) | missed exactly `lateral_movement 0/1` + `privilege_escalation 0/1` (the judgment-requiring ones) and cried wolf on the critical-on-a-devbox |
+
+The gap is the AI value-add: it finds the impact severity-based tools miss and ignores the noise they raise.
+
 ## The two halves of the job → three measured axes
 
 | Axis | Question | How it's scored | CLI |
