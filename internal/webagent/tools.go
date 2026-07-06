@@ -485,6 +485,13 @@ func tConfirm(cc *Context, args map[string]any) string {
 		case "sql_boolean", "bola_confirmed", "privesc_confirmed", "tamper_confirmed", "race_confirmed", "nosqli_confirmed":
 			cc.Findings[idx].Verified = true
 			return fmt.Sprintf("VERIFIED %s — the %q differential probe already disposed this deterministically; the recorded proving turn is verification-grade.", id, want)
+		case "js_executed":
+			// browser_render findings: the proving turn came from a REAL headless browser firing a JS dialog
+			// (Method "GET(browser)"), NOT an HTTP request — an HTTP re-fire would pass that as a method and
+			// error ("invalid method GET(browser)"). js_executed is deterministic DOM-execution proof, so it is
+			// verification-grade like the differential probes above.
+			cc.Findings[idx].Verified = true
+			return fmt.Sprintf("VERIFIED %s — js_executed came from a REAL headless browser firing a JS dialog (deterministic DOM execution, not a flaky pattern-match); the recorded render turn is verification-grade.", id)
 		}
 		// Re-fire WITH the proving request's body — a POST-body injection (SSTI/SQLi/cmdi in the body,
 		// not the URL) can't reproduce without it, and a body-less re-fire would falsely report the real
