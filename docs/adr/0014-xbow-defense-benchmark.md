@@ -89,6 +89,15 @@ compose/image/port (collision-safe, CI-able via a seeded exploit + `--patch-file
 own regression test: it proves the number means real remediation and can't be gamed by the two cheats that
 matter, *before* trusting any live per-category run.
 
+**Live engineer run — demonstrated (2026-07-06).** The full loop was also run with a real LLM engineer
+(Claude, via the file-relay proxy — the no-key dev workaround): `defense-xbow --only selftest-lfi` with NO
+`--patch-file`, so `codeagent.ProposePatch` asked the model to fix the LFI. The model proposed a root-cause
+patch (confine reads to a public dir, reject absolute/traversal paths); the harness applied it, rebuilt,
+re-fired the recorded exploit (gone) + regression (app alive), and scored `remediated` — ledger
+`{"class":"lfi","verdict":"remediated","model":"claude-proxy"}`. So the engineer-scoring path is proven
+end-to-end with a live model; the full 71-category XBOW sweep is the same command over the real suite,
+gated only on an autonomous LLM key (or seeded exploits + a driven proxy).
+
 ## Consequence
 
 Two symmetric, ungameable, climbing scoreboards on the same suite: **attack** = flags captured
