@@ -82,6 +82,15 @@ bench: cli tsbench sandbox-image ## run the runnable L1 benchmarks
 bench-ablation: cli tsbench sandbox-image ## run the L1.5 ablation on the container fixture
 	./bin/tsbench ablation --fixture fixtures/container/nginx-vuln
 
+.PHONY: bench-engineer
+bench-engineer: cli tsbench ## AI Security Engineer benchmark — deterministic checks (unit + calibration + impact discrimination). Live per-category scoring needs an LLM key (see bench/AI-SECURITY-ENGINEER-BENCHMARK.md)
+	@echo "→ unit: verdict/impact/patch scorers + anti-overfit guard"
+	go test ./internal/bench/ ./internal/codeagent/ ./cmd/tsbench/
+	@echo "→ calibration on a real container (needs Docker): correct→remediated, no-op→ineffective, breaking→broke_app"
+	go test -tags=integration -run DefenseXBOWSelftest ./cmd/tsbench/
+	@echo "→ impact discrimination: the substrate-only baseline must NOT pass the mis-tagged estate"
+	./bin/tsbench impact --scenario fixtures/impact/estate-mistagged.json --naive-baseline
+
 .PHONY: up
 up: ## bring up the full product stack (platform API + frontend) via docker compose
 	docker compose up --build -d

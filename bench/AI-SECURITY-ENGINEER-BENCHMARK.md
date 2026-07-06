@@ -64,6 +64,9 @@ A grader is only trustworthy if it correctly *fails* bad inputs. Proven in CI:
 ## How to run
 
 ```sh
+# The deterministic gate (unit scorers + calibration on a real container + impact discrimination):
+make bench-engineer
+
 # Remediation, per category (real XBOW suite; needs a live LLM for the attack + patch steps):
 LLM_BASE_URL=… LLM_MODEL=… LLM_API_KEY=… tsbench defense-xbow --category sqli
 # Deterministic pipeline validation (no LLM):
