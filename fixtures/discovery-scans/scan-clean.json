@@ -1,0 +1,31 @@
+{
+  "assets": [
+    { "id": "a-repo", "type": "repository", "target": "github.com/acme/webapp" },
+    { "id": "a-cloud", "type": "cloud_account", "target": "aws:123456789012" },
+    { "id": "a-web", "type": "web_application", "target": "https://shop.acme.com" }
+  ],
+  "findings": [
+    { "id": "gl-slack", "rule_id": "gitleaks::slack-webhook", "tool": "gitleaks", "severity": "low",
+      "title": "Slack webhook URL in README",
+      "description": "A Slack incoming-webhook URL is present in the README; it posts to a public #announcements channel" },
+
+    { "id": "pw-docspublic", "rule_id": "prowler::s3_bucket_public", "tool": "prowler", "severity": "medium",
+      "title": "S3 bucket acme-docs is public",
+      "endpoint": "AwsS3Bucket acme-docs @us-east-1",
+      "description": "Bucket acme-docs is world-readable; it holds only the published API reference documentation" },
+
+    { "id": "tv-devdep", "rule_id": "trivy::CVE-2023-0002", "tool": "trivy", "severity": "medium",
+      "title": "CVE in a dev dependency",
+      "description": "a linter used only in CI has CVE-2023-0002; not present in any shipped artifact" },
+
+    { "id": "nu-hsts", "rule_id": "nuclei::missing-hsts", "tool": "nuclei", "severity": "low",
+      "title": "HSTS header missing",
+      "endpoint": "https://shop.acme.com/",
+      "description": "Strict-Transport-Security is not set" },
+
+    { "id": "nu-verinfo", "rule_id": "nuclei::version-disclosure", "tool": "nuclei", "severity": "info",
+      "title": "Framework version disclosed",
+      "endpoint": "https://shop.acme.com/",
+      "description": "the X-Powered-By header discloses the framework version" }
+  ]
+}

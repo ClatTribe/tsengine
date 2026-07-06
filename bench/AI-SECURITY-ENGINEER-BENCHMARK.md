@@ -59,7 +59,10 @@ backups) among 7 findings; live via the proxy the engineer independently re-deri
 raw findings — spotting the shared `AKIA…` key across two different scanners — and dismissed the 5 noise
 findings (a build-only CVE, a public-CDN bucket, a Slack webhook, missing headers, version disclosure):
 **recall 100% / precision 100%**. This is the strongest honesty claim in the suite: the estate isn't authored,
-it's what the engine emits, and the engineer's judgment is scored against what the engine proved.
+it's what the engine emits, and the engineer's judgment is scored against what the engine proved. The pipeline
+is proven **both ways**: `scan-clean.json` (a well-run estate — a public *docs* bucket, a CI-only CVE, missing
+headers) surfaces **0 chains → 0 impacts**, and live the engineer correctly flagged **nothing** — so the e2e
+path never manufactures impact when the engine found none.
 
 ## Impact discovery — the scenarios in detail
 
