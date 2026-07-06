@@ -90,6 +90,10 @@ bench-engineer: cli tsbench ## AI Security Engineer benchmark — deterministic 
 	go test -tags=integration -run DefenseXBOWSelftest ./cmd/tsbench/
 	@echo "→ impact discrimination: the substrate-only baseline must NOT pass the mis-tagged estate"
 	./bin/tsbench impact --scenario fixtures/impact/estate-mistagged.json --naive-baseline
+	@echo "→ discovery suite integrity: every scenario well-formed + discriminating"
+	./bin/tsbench discover-suite --dir fixtures/discovery --strict
+	@echo "→ end-to-end: real scan → crossdetect → engine-derived estate (oracle must pass)"
+	echo "HIGH_IMPACT: gl-awskey, pw-adminrole" | ./bin/tsbench discover --from-scan fixtures/discovery-scans/scan-acme.json --answer-file /dev/stdin
 
 .PHONY: up
 up: ## bring up the full product stack (platform API + frontend) via docker compose
