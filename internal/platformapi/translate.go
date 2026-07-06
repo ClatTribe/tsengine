@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
@@ -49,8 +50,10 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 	if reports == nil {
 		reports = []types.Finding{}
 	}
+	// Persist as the tenant's latest whole-estate triage so it survives navigation (best-effort).
+	saved := d.persistAIAnalysis(r.Context(), tenantID, "triage", "", "Whole-estate triage", out, time.Now())
 	writeJSON(w, http.StatusOK, map[string]any{
-		"summary": out.Summary, "reports": reports,
+		"summary": out.Summary, "reports": reports, "analysis_id": saved.ID, "saved_at": saved.CreatedAt,
 		"iterations": out.Iterations, "stop_reason": out.StopReason, "cost_usd": out.CostUSD, "model": out.Model,
 	})
 }

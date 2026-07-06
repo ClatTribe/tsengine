@@ -25,6 +25,7 @@ type Memory struct {
 	controls    map[string]map[string]platform.ControlState    // tenantID → "framework/control" → state
 	incidents   map[string]map[string]platform.Incident        // tenantID → incidentID → incident
 	risks       map[string]map[string]platform.Risk            // tenantID → riskID → risk
+	aiAnalyses  map[string]map[string]platform.AIAnalysis      // tenantID → analysisID → AI analysis
 	audits      map[string]map[string]platform.AuditEngagement // tenantID → engagementID → audit
 	policies    map[string]map[string]platform.Policy          // tenantID → policyID → policy
 
@@ -52,6 +53,7 @@ func NewMemory() *Memory {
 		controls:    map[string]map[string]platform.ControlState{},
 		incidents:   map[string]map[string]platform.Incident{},
 		risks:       map[string]map[string]platform.Risk{},
+		aiAnalyses:  map[string]map[string]platform.AIAnalysis{},
 		audits:      map[string]map[string]platform.AuditEngagement{},
 		policies:    map[string]map[string]platform.Policy{},
 		ignores:     map[string]map[string]platform.IgnoreRule{},
@@ -412,6 +414,26 @@ func (m *Memory) ListRisks(_ context.Context, tenantID string) ([]platform.Risk,
 	return out, nil
 }
 
+func (m *Memory) PutAIAnalysis(_ context.Context, a platform.AIAnalysis) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.aiAnalyses[a.TenantID] == nil {
+		m.aiAnalyses[a.TenantID] = map[string]platform.AIAnalysis{}
+	}
+	m.aiAnalyses[a.TenantID][a.ID] = a
+	return nil
+}
+
+func (m *Memory) ListAIAnalyses(_ context.Context, tenantID string) ([]platform.AIAnalysis, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.AIAnalysis, 0, len(m.aiAnalyses[tenantID]))
+	for _, a := range m.aiAnalyses[tenantID] {
+		out = append(out, a)
+	}
+	return out, nil
+}
+
 func (m *Memory) PutAuditEngagement(_ context.Context, e platform.AuditEngagement) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -602,6 +624,7 @@ type Snapshot struct {
 	Controls    map[string]map[string]platform.ControlState    `json:"controls"`
 	Incidents   map[string]map[string]platform.Incident        `json:"incidents"`
 	Risks       map[string]map[string]platform.Risk            `json:"risks,omitempty"`
+	AIAnalyses  map[string]map[string]platform.AIAnalysis      `json:"ai_analyses,omitempty"`
 	Audits      map[string]map[string]platform.AuditEngagement `json:"audits,omitempty"`
 	Policies    map[string]map[string]platform.Policy          `json:"policies,omitempty"`
 	Ignores     map[string]map[string]platform.IgnoreRule      `json:"ignores,omitempty"`
@@ -631,6 +654,7 @@ func (m *Memory) Export() Snapshot {
 		Controls:    m.controls,
 		Incidents:   m.incidents,
 		Risks:       m.risks,
+		AIAnalyses:  m.aiAnalyses,
 		Audits:      m.audits,
 		Policies:    m.policies,
 		Ignores:     m.ignores,
@@ -659,6 +683,7 @@ func (m *Memory) load(s Snapshot) {
 	m.controls = orEmptyControls(s.Controls)
 	m.incidents = orEmptyIncidents(s.Incidents)
 	m.risks = orEmptyRisks(s.Risks)
+	m.aiAnalyses = orEmptyAIAnalyses(s.AIAnalyses)
 	m.audits = orEmptyAudits(s.Audits)
 	m.policies = orEmptyPolicies(s.Policies)
 	m.ignores = orEmptyIgnores(s.Ignores)
@@ -730,6 +755,12 @@ func orEmptyIgnores(m map[string]map[string]platform.IgnoreRule) map[string]map[
 func orEmptyRisks(m map[string]map[string]platform.Risk) map[string]map[string]platform.Risk {
 	if m == nil {
 		return map[string]map[string]platform.Risk{}
+	}
+	return m
+}
+func orEmptyAIAnalyses(m map[string]map[string]platform.AIAnalysis) map[string]map[string]platform.AIAnalysis {
+	if m == nil {
+		return map[string]map[string]platform.AIAnalysis{}
 	}
 	return m
 }
