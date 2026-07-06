@@ -3,7 +3,6 @@ package bench
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -158,69 +157,4 @@ func methodOr(m string) string {
 		return http.MethodGet
 	}
 	return strings.ToUpper(m)
-}
-
-// --- patch parsing (the engineer's LLM output → applied file replacements) ---
-
-// PatchedFile is one file the engineer rewrote to fix the vuln.
-type PatchedFile struct {
-	Path    string
-	Content string
-}
-
-// patchFileMarker delimits a rewritten file in the engineer's output. We instruct the LLM to emit each
-// fixed file whole (not a diff) between these markers — robust to whitespace/line-ending drift that breaks
-// unified-diff application, and trivial to parse deterministically.
-const (
-	patchBegin = "=== FILE:"
-	patchEnd   = "=== END FILE ==="
-)
-
-// ParsePatch extracts the file replacements from the engineer's response. Format:
-//
-//	=== FILE: relative/path.php ===
-//	<full new file content>
-//	=== END FILE ===
-//
-// Returns an error only on a malformed block (a BEGIN with no END) — no blocks at all is (nil, nil): the
-// engineer legitimately produced no patch (→ the run scores no_patch, never a fabricated fix). Paths are
-// sanitised: a traversal (`..`) or absolute path is rejected so a patch can only touch the build context.
-func ParsePatch(out string) ([]PatchedFile, error) {
-	var files []PatchedFile
-	rest := out
-	for {
-		bi := strings.Index(rest, patchBegin)
-		if bi < 0 {
-			break
-		}
-		afterMarker := rest[bi+len(patchBegin):]
-		nl := strings.IndexByte(afterMarker, '\n')
-		if nl < 0 {
-			return nil, fmt.Errorf("patch: FILE marker with no newline")
-		}
-		header := afterMarker[:nl]
-		path := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(header), "==="))
-		bodyStart := afterMarker[nl+1:]
-		ei := strings.Index(bodyStart, patchEnd)
-		if ei < 0 {
-			return nil, fmt.Errorf("patch: FILE %q has no END marker", path)
-		}
-		content := strings.TrimRight(bodyStart[:ei], "\n")
-		if !safeRelPath(path) {
-			return nil, fmt.Errorf("patch: unsafe path %q (traversal/absolute rejected)", path)
-		}
-		files = append(files, PatchedFile{Path: path, Content: content})
-		rest = bodyStart[ei+len(patchEnd):]
-	}
-	return files, nil
-}
-
-// safeRelPath rejects absolute paths and `..` traversal so an applied patch can only write inside the build
-// context (a patch must not escape to touch the host).
-func safeRelPath(p string) bool {
-	p = strings.TrimSpace(p)
-	if p == "" || strings.HasPrefix(p, "/") || strings.Contains(p, "..") {
-		return false
-	}
-	return true
 }
