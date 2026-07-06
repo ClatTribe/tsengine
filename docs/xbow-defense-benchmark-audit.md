@@ -51,6 +51,17 @@ finding (score 200) is outscored by a **critical** non-crown one (score 400): th
    independent-party measurement. The hardened real-XBOW number (independent challenges) is the honest next
    step.
 
+## Fixture bug found + FIXED (surfaced while hardening #1)
+
+Building the variant-replay revealed a concrete instance of limitation #1: the **SQLi self-test fixture put
+the flag in a user row (`id=99`), directly readable via `?id=99` with NO injection**. The parameterised
+fix blocked the recorded `OR 1=1` exploit, so it scored `remediated` — but the flag was still trivially
+reachable. Corrected: the flag now lives in a separate `secrets` table reachable **only via UNION
+injection**, the exploit carries a **variant** step (casing/comment — defeats a naive UNION-SELECT filter),
+and a **functional probe** (a legit `?name=al` search must still return `alice`). The corrected fixture
+builds and the UNION exploit re-confirms; the `sqli` remediation entry should be re-verified live against it
+(the mechanism is proven; the earlier `remediated` was on the flawed fixture).
+
 ## Verdict
 
 The scoring logic is correct after the one fix; the calibration + discrimination controls hold; the
