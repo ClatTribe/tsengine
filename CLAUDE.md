@@ -614,6 +614,23 @@ and runs ONE command, returning its real output (grounded, §10). Scope-guarded 
 so it can never touch a host the LLM invents; bounded (dial+handshake timeout, 12KB output cap). This
 is the class-level fix that turns "I found creds" into a proven lateral-movement capture (XBEN-042).
 
+`bola_probe` (`internal/webagent/bola.go`) is the same host-side shape for the ONE web-vuln class no
+OSS scanner grounds -- broken object-level authorization (IDOR/BOLA), which is business logic. It is
+the `apiauthz.Evaluate` model as an agent tool: `bola_probe(url, attacker_cookie, victim_cookie,
+marker)` runs the victim's object through THREE isolated `Requester`s (a new `Requester.AllowHosts()`
+keeps them same-scope with no cookie-jar cross-contamination) and sets the `bola_confirmed` indicator
+ONLY on a three-leg differential -- (1) OWNERSHIP: the victim's own session reads it 2xx + the private
+marker present; (2) VIOLATION: a DISTINCT attacker session reads that same victim-private marker 2xx;
+(3) CONTROL: an unauthenticated request does NOT reveal the marker (proves access-controlled not
+public; a nil control or <4-char marker refuses to ground). The LLM PROPOSES the two cookies + marker;
+the deterministic predicate DISPOSES, so the model can never upgrade a finding itself (no LLM false
+positives, §10). Wired `requiredIndicator[idor|bola|broken_object_level_authorization]=bola_confirmed`
+so `record_finding` grounds it like any class. This is why a one-session "a different id returned
+different data" heuristic was deliberately NOT shipped (FP-prone on public per-object endpoints + the
+attacker's own object). BFLA (function-level authz) is deliberately NOT a webagent tool: "this function
+is privileged" is a policy fact unprovable from responses alone, so it stays `apiauthz`'s job (the
+`api` asset, operator-declared `TestConfig`) rather than an FP-prone webagent probe.
+
 ### 12.7 The ONE exception: `dispatch_oss` bridges the host-side agent to the sandbox OSS tools
 
 Some vuln classes are a specialized OSS tool's job, NOT the agent's in-process HTTP + the in-scope
