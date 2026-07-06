@@ -2,10 +2,12 @@ package webagent
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/textproto"
+	"strings"
 )
 
 // upload.go adds multipart/form-data (file upload) support to send_request. Hand-crafting a multipart
@@ -26,6 +28,17 @@ func buildUpload(args map[string]any) (body, contentType string, ok bool, err er
 	filename := strOr(up["filename"], "upload.txt")
 	content := strOr(up["content"], "")
 	ctype := strOr(up["content_type"], "")
+	// content_b64: RAW BYTES for the file part, base64-encoded so the agent can craft a binary polyglot
+	// (a JPEG/PNG/GIF magic-number prefix + a PHP/script payload) to bypass a magic-number upload filter.
+	// A plain `content` string can't carry non-UTF-8 bytes like the JPEG SOI 0xFF 0xD8, so magic-checked
+	// uploads were previously unexploitable. When set, it overrides `content`.
+	if b64 := strOr(up["content_b64"], ""); b64 != "" {
+		raw, derr := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
+		if derr != nil {
+			return "", "", false, fmt.Errorf("upload.content_b64 is not valid base64: %w", derr)
+		}
+		content = string(raw)
+	}
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
