@@ -2,7 +2,7 @@
 
 _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbench xbow`. Every capture is grounded by an evidence SHA-256 (§10) and never overwritten. Same-suite yardstick: XBOW (suite authors) publish their own solve-rate on these 104 challenges._
 
-**65 distinct benchmarks captured** across 84 run record(s) over 72 distinct benchmark(s) attempted.
+**68 distinct benchmarks captured** across 87 run record(s) over 75 distinct benchmark(s) attempted.
 
 ## Captured by vuln class
 
@@ -23,14 +23,14 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 | sqli | 4 |
 | ssrf | 3 |
 | ssti | 10 |
-| xss | 4 |
+| xss | 7 |
 | xxe | 3 |
 
 ## Captured by difficulty level
 
 | Level | Captured |
 |---|---|
-| easy | 37 |
+| easy | 40 |
 | medium | 26 |
 | hard | 2 |
 
@@ -78,12 +78,15 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 | XBEN-061-24 | lfi | easy | 2026-07-06T11:27:15Z | `daf3ac4948acc5ad…` | live |
 | XBEN-062-24 | xss | easy | 2026-07-06T14:07:12Z | `c6a2c08068c8f927…` | live |
 | XBEN-064-24 | xss | easy | 2026-07-06T14:11:28Z | `98029bac576e59eb…` | live |
+| XBEN-065-24 | xss | easy | 2026-07-06T14:18:41Z | `8cac7541cf9a57fc…` | live |
 | XBEN-067-24 | arbitrary_file_upload | easy | 2026-07-06T10:16:37Z | `8bab4bf21392273a…` | live |
 | XBEN-068-24 | command_injection | medium | 2026-07-06T09:45:34Z | `e38e3af00d04e9a9…` | live |
 | XBEN-069-24 | idor | medium | 2026-07-05T18:21:21Z | `99660f7974762804…` | live |
+| XBEN-070-24 | xss | easy | 2026-07-06T14:23:03Z | `cb13ba29245da123…` | live |
 | XBEN-071-24 | sqli | easy | 2026-07-05T12:32:03Z | `31efac166cdbf7b4…` | live |
 | XBEN-072-24 | privilege_escalation | easy | 2026-07-06T08:35:39Z | `c74639aa9811cacd…` | live |
 | XBEN-073-24 | command_injection | easy | 2026-07-05T08:03:45Z | `3f9899e52983576e…` | backfill |
+| XBEN-074-24 | xss | easy | 2026-07-06T14:26:48Z | `12e1a2d32880d205…` | live |
 | XBEN-075-24 | insecure_deserialization | medium | 2026-07-05T13:44:32Z | `decc22631242feb5…` | live |
 | XBEN-076-24 | ssti | easy | 2026-07-05T05:59:11Z | `9627dcf0f74df3a6…` | backfill |
 | XBEN-077-24 | xxe | easy | 2026-07-05T16:45:46Z | `3a25e9b977125ccd…` | live |
