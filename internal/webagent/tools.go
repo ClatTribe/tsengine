@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -123,6 +124,9 @@ var requiredIndicator = map[string][]string{
 	"mass_assignment": {"privesc_confirmed", "tamper_confirmed"}, "privilege_escalation": {"privesc_confirmed", "tamper_confirmed"}, "privesc": {"privesc_confirmed", "tamper_confirmed"},
 	// broken access control via client-controlled-field tampering (tamper.go) — the general class.
 	"broken_access_control": {"tamper_confirmed"}, "parameter_tampering": {"tamper_confirmed"},
+	// limit-bypass / TOCTOU race (race.go): concurrency succeeds more times than a serial run respecting
+	// the limit — an observed serial-vs-concurrent differential.
+	"race_condition": {"race_confirmed"}, "toctou": {"race_confirmed"},
 }
 
 // supportedClasses lists the record_finding classes (the requiredIndicator keys), sorted, so the
@@ -157,6 +161,7 @@ func tools() []toolDef {
 		{"oob_check", "oob_check(token?) — did the target call your OOB URL back? A recorded hit PROVES the blind interaction fired; the hit's query/body carries anything you exfil (a cookie, a flag). Omit token to see all callbacks.", tOOBCheck},
 		{"tamper_probe", "tamper_probe(method, base_url, tamper_url, marker [, base_body/tamper_body, base_cookie/tamper_cookie]) — GROUND a BROKEN ACCESS CONTROL finding where the server TRUSTS a client-controlled field (a hidden form field like isAdmin=false, or a claim in an UNVERIFIED auth token/cookie like user_id). Send two requests that differ ONLY in the tampered field: base (benign value — e.g. isAdmin=false, your own user_id) and tamper (elevated/other value — isAdmin=true, a victim's user_id in a forged token). marker = the SERVER-ORIGINATED privileged / other-user content you expect the tamper to expose (e.g. 'Welcome Admin', a victim's email, a flag) — NOT a value you send. It sets tamper_confirmed ONLY when the marker is ABSENT in the base response, PRESENT in the tamper response, and NOT sent by you (the echo guard) — so a reflected input can't false-positive. Then cite the turn in record_finding(class=privilege_escalation | idor | broken_access_control). Use this for hidden-field mass-assignment (isAdmin), JWT/cookie-forge IDOR (put the forged token in tamper_cookie), and TRUSTED-HEADER bypasses — pass base_headers/tamper_headers to spoof X-Forwarded-For / X-Real-IP (internal-IP allowlist bypass), X-Original-URL / X-Rewrite-URL (path-restriction bypass), or a custom auth header.", tTamperProbe},
 		{"sqli_bool_probe", "sqli_bool_probe(method, base_url, true_url, false_url [, base_body/true_body/false_body for POST]) — GROUND a BOOLEAN-BLIND SQL injection (no DB error, no time delay — the classic blind case the engine couldn't record before). Provide three request variants that differ ONLY in an injected boolean: base (the original, returns a positive result), true (append a tautology in the RIGHT quote context, e.g. `1' AND '1'='1` or `1 AND 1=1`), false (a contradiction, `1' AND '1'='2`). It sets sql_boolean ONLY when the TRUE variant reproduces the baseline result and the FALSE variant changes it (the DB evaluated your boolean) — a reflected/ignored param can't produce that, so it's FP-free. Then cite the turn in record_finding(class=sqli). For UNION-based SQLi instead, put an arithmetic sentinel in a UNION column (e.g. `UNION SELECT 1,31337*31338,3`) and record when the product appears — that fires sql_union automatically on the send_request.", tSqliBoolProbe},
+		{"race_probe", "race_probe(method, url, success_marker [, body, n, reset_method, reset_url, reset_body]) — GROUND a limit-bypass / TOCTOU RACE CONDITION (redeem a coupon twice, withdraw past a balance, bypass a one-time action). success_marker = a string present ONLY when the limited operation SUCCEEDS (e.g. 'coupon redeemed', 'transfer complete'). reset_url = a request that restores state between phases (re-arm the coupon, reset the balance). It fires the operation N times SERIALLY (respects the limit), resets, then N times CONCURRENTLY, and sets race_confirmed ONLY when the concurrent run succeeds MORE times than the serial one (a no-limit or properly-locked endpoint won't, so it's FP-free). Uses your current session cookie. Then cite the turn in record_finding(class=race_condition). This is the limit-bypass race; it does NOT cover a session-swap AuthZ TOCTOU.", tRaceProbe},
 		{"session_idor_probe", "session_idor_probe(login_url, base_login_body, tamper_login_body, target_url, marker [, login_method]) — GROUND a SESSION-STATE IDOR: a login that TRUSTS a client-supplied field (a user_id form field, an account selector) to set the session, exposing another user's data on a LATER authenticated page. Provide two login bodies that differ ONLY in that field — base (your own id) and tamper (the victim's id) — plus target_url (the authed page that renders the session's user) and marker (the VICTIM's private data you expect to leak, NOT a value you send). It logs in TWICE in isolated sessions and reads target_url in each, setting tamper_confirmed ONLY when the victim marker is absent under your own login and present under the tampered one (and not sent) — FP-free. Then cite the turn in record_finding(class=idor). Use this for the login-sets-session IDOR (XBEN-043 shape) that bola_probe (same-request cookie) doesn't cover.", tSessionIDORProbe},
 		{"bola_probe", "bola_probe(url, attacker_cookie, victim_cookie, marker) — GROUND an IDOR/BOLA (broken object-level authorization) finding with a false-positive-free two-session differential (no OSS scanner does authz logic; this is the apiauthz.Evaluate model). Register TWO accounts, log each in, and pass their DISTINCT session cookies. url = the VICTIM's object (e.g. /account?id=<victim>, /api/orders/<victim-id>). marker = a victim-PRIVATE datum you saw in the VICTIM's own response (their email/account-no/name — NOT chrome/nav text). The tool fires the request as the victim (baseline: proves the object is theirs), as the attacker (the violation: attacker reads it too), and UNAUTHENTICATED (the control: proves it's access-controlled, not public). It sets bola_confirmed ONLY when the attacker session reads the victim-private marker that the unauth request cannot — then cite that turn in record_finding(class=idor). Use it INSTEAD of guessing IDOR from 'a different id returned different data' (that's FP-prone on public per-object endpoints).", tBolaProbe},
 		{"privesc_probe", "privesc_probe(session_cookie, verify_url, role_after, escalate{method,url,body}) — GROUND a self-privilege-escalation / MASS-ASSIGNMENT finding (OWASP API #3 BFLA + #6) with a false-positive-free before→after differential. Log in as a NORMAL user; session_cookie = that session. verify_url = where that user's OWN role/privilege is reflected (e.g. /me, /profile, /account). role_after = a HIGH-privilege marker you should NOT have (e.g. role=admin, \"is_admin\":true — pick a SPECIFIC string). escalate = the request that TRIES to grant it (e.g. POST /profile body={\"role\":\"admin\"}, or add a role/isAdmin field the form doesn't show). The tool reads verify_url (baseline: proves you START without the privilege), fires the escalate call, then re-reads verify_url. It sets privesc_confirmed ONLY when the marker was ABSENT before and PRESENT after (an observed transition of your own privilege — a user self-promoting is unambiguously a vuln). Cite that turn in record_finding(class=mass_assignment). Use it for the IDOR/privesc-takeover class instead of guessing from a 200.", tPrivescProbe},
@@ -473,7 +478,7 @@ func tConfirm(cc *Context, args map[string]any) string {
 		// verification (it disposed the differential deterministically, §10). The recorded turn carrying
 		// the indicator is verification-grade, exactly like the OOB callback above.
 		switch want {
-		case "sql_boolean", "bola_confirmed", "privesc_confirmed", "tamper_confirmed":
+		case "sql_boolean", "bola_confirmed", "privesc_confirmed", "tamper_confirmed", "race_confirmed":
 			cc.Findings[idx].Verified = true
 			return fmt.Sprintf("VERIFIED %s — the %q differential probe already disposed this deterministically; the recorded proving turn is verification-grade.", id, want)
 		}
@@ -556,6 +561,21 @@ func argStr(args map[string]any, k string) string {
 		return v
 	}
 	return ""
+}
+
+// argInt reads an int arg tolerantly — JSON numbers decode to float64, but the value may also arrive as
+// an int or a numeric string. Returns 0 when absent/unparseable.
+func argInt(args map[string]any, k string) int {
+	switch v := args[k].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(v))
+		return n
+	}
+	return 0
 }
 
 func argStrList(args map[string]any, k string) []string {
