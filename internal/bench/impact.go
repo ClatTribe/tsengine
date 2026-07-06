@@ -144,22 +144,25 @@ func ScoreImpact(sc ImpactScenario, a EngineerAssessment) ImpactScore {
 	// them — this rewards prioritising by REAL impact, not raw severity.
 	ranked := append([]ImpactIssue(nil), sc.Issues...)
 	sort.SliceStable(ranked, func(i, j int) bool { return groundScore(ranked[i]) > groundScore(ranked[j]) })
-	// The "must-lead" set: issues that genuinely matter most — those reaching a crown jewel OR whose Detail
-	// makes them high-impact despite a low tag (TrueImpact override). Including the override issues is what
-	// makes the test require the engineer to READ the detail, not just trust the tags.
-	crownSet := map[string]bool{}
+	// K = how many issues "clearly matter" — those reaching a crown jewel OR whose Detail makes them
+	// high-impact despite a low tag (TrueImpact override). Including overrides is what makes the test
+	// require the engineer to READ the detail, not just trust the tags. If nothing is specially flagged,
+	// K is the top third.
+	k := 0
 	for _, is := range sc.Issues {
 		if is.ReachesCrown || is.TrueImpact > 0 {
-			crownSet[is.ID] = true
+			k++
 		}
 	}
-	k := len(crownSet)
-	if k == 0 { // nothing specially flagged → the top third by ground score are "what matters"
+	if k == 0 {
 		k = (len(ranked) + 2) / 3
-		crownSet = map[string]bool{}
-		for i := 0; i < k && i < len(ranked); i++ {
-			crownSet[ranked[i].ID] = true
-		}
+	}
+	// The must-lead set is ALWAYS the top-K by ground-truth impact (groundScore) — so it can never diverge
+	// from the answer-key ranking (a crown-reaching LOW finding outscored by a CRITICAL non-crown must not
+	// be "required to lead" over the higher-impact issue; consistency bug guard).
+	crownSet := map[string]bool{}
+	for i := 0; i < k && i < len(ranked); i++ {
+		crownSet[ranked[i].ID] = true
 	}
 	s.K = k
 	engTopK := map[string]bool{}

@@ -105,3 +105,26 @@ func TestScoreImpact_MisTagged_AIValueAdd(t *testing.T) {
 		t.Errorf("an engineer that reads the detail + overrides the tag must PASS: %s", RenderImpactScore(g))
 	}
 }
+
+// TestScoreImpact_MustLeadConsistentWithScore is the regression for the consistency bug: a crown-reaching
+// LOW finding (score 200) must NOT be "required to lead" over a CRITICAL non-crown (score 400). The
+// must-lead set is the top-K by groundScore, so an engineer that ranks by real impact (critical first)
+// PASSES — it would have wrongly FAILED when the must-lead set was the crown flags directly.
+func TestScoreImpact_MustLeadConsistentWithScore(t *testing.T) {
+	sc := ImpactScenario{ID: "consistency", Issues: []ImpactIssue{
+		{ID: "low-crown", Severity: types.SeverityLow, DataTier: 2, ReachesCrown: true},           // groundScore 200
+		{ID: "crit-noncrown", Severity: types.SeverityCritical, DataTier: 2, ReachesCrown: false}, // groundScore 400
+	}}
+	// A correct engineer leads with the critical (higher real impact by the answer key) and flags the crown.
+	good := EngineerAssessment{
+		RankedIssueIDs:   []string{"crit-noncrown", "low-crown"},
+		CrownJewelClaims: map[string]bool{"low-crown": true},
+	}
+	s := ScoreImpact(sc, good)
+	if s.RankQuality != 1.0 {
+		t.Errorf("the critical (higher groundScore) must be the must-lead; a correct engineer must PASS: %s", RenderImpactScore(s))
+	}
+	if !s.Pass() {
+		t.Errorf("consistency: an answer-key-consistent ranking must pass, got %s", RenderImpactScore(s))
+	}
+}
