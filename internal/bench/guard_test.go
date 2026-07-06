@@ -19,7 +19,7 @@ import (
 func TestScorer_NoSUTIdentifiers(t *testing.T) {
 	scoringFiles := []string{"score.go", "report.go", "multitrial.go", "agent.go",
 		// the defense benchmark scorers (synthetic + XBOW-derived) — same SUT-agnostic bar
-		"defense.go", "defensexbow.go", "defensexbow_replay.go"}
+		"defense.go", "defensexbow.go", "defensexbow_replay.go", "impact.go"}
 
 	forbidden := []string{
 		// vulnerable-app SUTs
