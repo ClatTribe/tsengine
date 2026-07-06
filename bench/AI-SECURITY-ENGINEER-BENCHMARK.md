@@ -38,6 +38,8 @@ substrate computes the facts; the AI engineer is scored on judgment over them, a
 | sqli | parameterise the query | ✅ remediated |
 | cmdi | drop the shell, argument vector | ✅ remediated |
 | ssti | never eval user input as a template | ✅ remediated |
+| idor | enforce object-level authorization | ✅ remediated |
+| xxe | disable external entities + DTD | ✅ remediated |
 
 **Impact** — the engineer led with a *medium* leaked key that reaches customer PII over a *critical* on a
 throwaway box: `priority 1/1 lead, PASS`. A severity-first answer scores `0/1 lead` (fails).

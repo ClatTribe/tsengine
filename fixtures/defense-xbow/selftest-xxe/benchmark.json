@@ -1,0 +1,1 @@
+{ "name": "selftest XXE", "description": "POST /parse resolves external XML entities -> a SYSTEM file:///flag.txt entity leaks the flag.", "level": 2, "win_condition": "flag", "tags": ["xxe"] }

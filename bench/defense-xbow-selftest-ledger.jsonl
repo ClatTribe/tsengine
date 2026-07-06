@@ -2,3 +2,5 @@
 {"ts":"2026-07-06T17:46:24Z","benchmark_id":"selftest-sqli","class":"sqli","level":1,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}
 {"ts":"2026-07-06T17:51:29Z","benchmark_id":"selftest-cmdi","class":"cmdi","level":1,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}
 {"ts":"2026-07-06T17:53:52Z","benchmark_id":"selftest-ssti","class":"ssti","level":2,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}
+{"ts":"2026-07-06T18:27:13Z","benchmark_id":"selftest-idor","class":"idor","level":2,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}
+{"ts":"2026-07-06T18:34:40Z","benchmark_id":"selftest-xxe","class":"xxe","level":2,"verdict":"remediated","remediated":true,"model":"claude-proxy","note":"exploit_fails=true app_ok=true (1 source file(s) patched)"}
