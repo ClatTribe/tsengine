@@ -91,6 +91,13 @@ type Deps struct {
 	// platform falls back to the in-UI temp-password flow and logs reset links for the operator).
 	// Wired from email.FromEnv (SMTP_*); the SMTP provider is the credential-gated half.
 	Mailer email.Mailer
+	// WebDiscoverer runs the host-side XBOW discovery agent (internal/webagent) as the FIRST
+	// stage of an ACTIVE/DEEP pentest run — so the engagement DISCOVERS new grounded vulns (not
+	// only verifies existing scanner findings). Nil → defaultWebDiscoverer (webagent.Investigate).
+	// The whole stage is gated on an available LLM + the ownership gate, so a run without a
+	// configured model simply skips discovery and runs the verify drivers (honest, never a crash).
+	// Injectable for tests (drive discovery deterministically without a live LLM loop).
+	WebDiscoverer WebDiscoverer
 }
 
 // NewHandler returns the platform's HTTP handler.
