@@ -186,6 +186,35 @@ func TestScoreDiscovery_VolumePrecision(t *testing.T) {
 	}
 }
 
+// TestScoreDiscovery_CrossSurfaceCombination: two individually-low findings that only reach a crown jewel
+// TOGETHER (a push-only registry token + a prod cluster that auto-deploys :latest → prod-secrets RCE). Both
+// must be flagged (each is half the impact). A structurally-identical but non-joining pair (a read-only
+// token + a staging deploy) must be dismissed. Every finding is low-severity, so this is pure composition
+// reasoning — severity/keyword ranking cannot separate them. Mirrors fixtures/discovery/estate-combo.json.
+func TestScoreDiscovery_CrossSurfaceCombination(t *testing.T) {
+	sc := DiscoveryScenario{ID: "combo", Findings: []DiscoveryFinding{
+		{ID: "push-token", Severity: types.SeverityLow, HighImpact: true, ImpactType: ImpactLateral, Detail: "ecr:PutImage on acme/web"},
+		{ID: "prod-deploy", Severity: types.SeverityLow, HighImpact: true, ImpactType: ImpactLateral, Detail: "prod auto-deploys acme/web:latest, node role has prod secrets"},
+		{ID: "ro-token", Severity: types.SeverityLow, HighImpact: false, Detail: "read-only metrics token, joins nothing"},
+		{ID: "staging-deploy", Severity: types.SeverityLow, HighImpact: false, Detail: "staging auto-deploy, no secrets, no prod route"},
+	}}
+	// composing the two halves PASSES.
+	good := ScoreDiscovery(sc, EngineerDiscovery{HighImpactIDs: []string{"push-token", "prod-deploy"}})
+	if !good.Pass() || good.ByType[ImpactLateral].Found != 2 {
+		t.Fatalf("composing the two halves must PASS with both surfaced: %s", RenderDiscoveryScore(good))
+	}
+	// flagging only one half misses the composition (recall < 1).
+	half := ScoreDiscovery(sc, EngineerDiscovery{HighImpactIDs: []string{"push-token"}})
+	if half.Recall >= 1.0 || half.Pass() {
+		t.Errorf("flagging one half must miss the composition: %s", RenderDiscoveryScore(half))
+	}
+	// flagging the structurally-identical non-joining pair too is a false alarm (precision < 1).
+	over := ScoreDiscovery(sc, EngineerDiscovery{HighImpactIDs: []string{"push-token", "prod-deploy", "ro-token", "staging-deploy"}})
+	if over.FP != 2 || over.Pass() {
+		t.Errorf("flagging the non-joining decoys must be false alarms: %s", RenderDiscoveryScore(over))
+	}
+}
+
 // TestScoreDiscovery_InventedFails: claiming a finding not in the estate is a hallucination (§10).
 func TestScoreDiscovery_InventedFails(t *testing.T) {
 	sc := discoveryScenario()

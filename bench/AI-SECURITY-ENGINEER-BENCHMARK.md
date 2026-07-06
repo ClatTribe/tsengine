@@ -86,6 +86,18 @@ noise item; a severity-first top-4 scored **recall 25% / precision 25%** (it gra
 and the high devbox CVE and misses three of the four real impacts). Holding 100/100 at volume, against noise
 that outranks the real findings on severity, is the honest evidence the signal is judgment — not estate size.
 
+**Cross-surface composition** (`estate-combo`) — the product's actual wedge (*code + cloud → one attack
+path*): two findings that are each individually **low** and benign — a push-only ECR token, and a prod
+cluster that auto-deploys a mutable `:latest` tag — but **together** are a prod-secrets RCE (push a malicious
+image → the cluster runs it under a node role holding `secretsmanager` on `prod/*`). The impact *emerges only
+from the pair*; neither alone reaches a crown jewel. And a structurally-identical pair (a read-only token + a
+staging deploy) is present as a decoy that does NOT join. **Every finding is low-severity**, so severity and
+keyword ranking are useless by construction — only composition reasoning separates them. Live via the proxy:
+the AI engineer flagged exactly the two halves → **recall 100% / precision 100%**, while "flag every low
+token+deploy" scores precision 50% (the non-joining decoys) and "flag one half" scores recall 50% (misses the
+composition). This is the one dimension a per-finding scanner *cannot* reach: the impact isn't in any finding,
+it's in the join.
+
 ## The two halves of the job → three measured axes
 
 | Axis | Question | How it's scored | CLI |
