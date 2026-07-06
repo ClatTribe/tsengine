@@ -56,13 +56,18 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 }
 
 // resolveLeadClient returns the tool-calling l2.Client for the tenant: its own configured model (the
-// OpenAI-compatible family — the per-tenant key opened from the vault) else the operator-global client
-// (d.LeadClient, from l2.ClientFromEnv — Anthropic, OpenAI, or a local Ollama). nil when neither is set.
-// Anthropic/Gemini per-tenant for the tool-calling seam fall back to the operator-global client (their
-// keyed constructors read env), a documented follow-on.
+// per-tenant key opened from the vault — Anthropic/Claude, the OpenAI-compatible family, or Gemini via
+// its OpenAI-compatible endpoint) else the operator-global client (d.LeadClient, from l2.ClientFromEnv —
+// Anthropic, OpenAI, or a local Ollama). nil when neither is set. A tenant's OWN key is honoured on ANY
+// plan (they pay for it); the operator-global client is gated to AI-entitled plans.
 func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client {
 	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
 		switch strings.ToLower(provider) {
+		case "anthropic", "claude":
+			return l2.NewAnthropicClientWithKey(model, key) // customer's own Claude key → drives Triage/Investigate
+		case "gemini", "google", "googleai":
+			// Gemini exposes an OpenAI-compatible surface; route the tenant key there so tool-calling works.
+			return l2.NewOpenAICompatClient(model, "https://generativelanguage.googleapis.com/v1beta/openai", key)
 		case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
 			return l2.NewOpenAICompatClient(model, "", key) // tenant's OWN key → allowed on any plan
 		}

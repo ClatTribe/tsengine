@@ -25,11 +25,22 @@ type AnthropicClient struct {
 // NewAnthropicClient constructs the client. model defaults to a current
 // Claude model; the key is read from ANTHROPIC_API_KEY if not supplied.
 func NewAnthropicClient(model string) *AnthropicClient {
+	return NewAnthropicClientWithKey(model, os.Getenv("ANTHROPIC_API_KEY"))
+}
+
+// NewAnthropicClientWithKey constructs the client with an EXPLICIT key — the
+// per-tenant path: a customer who configures their own Claude key drives the
+// L2 Lead (Triage / Investigate) on their OWN budget, not the operator's. An
+// empty key falls back to ANTHROPIC_API_KEY so the dev/operator path is intact.
+func NewAnthropicClientWithKey(model, key string) *AnthropicClient {
 	if model == "" {
 		model = "claude-sonnet-4-5"
 	}
+	if key == "" {
+		key = os.Getenv("ANTHROPIC_API_KEY")
+	}
 	return &AnthropicClient{
-		apiKey:    os.Getenv("ANTHROPIC_API_KEY"),
+		apiKey:    key,
 		model:     model,
 		maxTokens: 4096,
 		http:      &http.Client{Timeout: 120 * time.Second},
