@@ -10,7 +10,19 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/bench"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/correlate"
 )
+
+// countImpacts is the number of ground-truth high-impact findings in a scenario (for the e2e run summary).
+func countImpacts(sc bench.DiscoveryScenario) int {
+	n := 0
+	for _, f := range sc.Findings {
+		if f.HighImpact {
+			n++
+		}
+	}
+	return n
+}
 
 // discover.go is `tsbench discover` — the IMPACT-DISCOVERY runner. It presents the AI Security Engineer a
 // noisy code+cloud estate (findings + facts + detail) and asks it to identify which findings create REAL
@@ -22,21 +34,38 @@ import (
 func discoverCmd(argv []string) error {
 	fs := flag.NewFlagSet("discover", flag.ContinueOnError)
 	scenario := fs.String("scenario", "", "path to a discovery scenario JSON (a noisy estate)")
+	fromScan := fs.String("from-scan", "", "END-TO-END: derive the estate from a real scan (assets+findings) via crossdetect, ground truth = the engine's chains")
 	ledger := fs.String("ledger", "", "optional append-only ledger (.jsonl)")
 	answerFile := fs.String("answer-file", "", "DEV/CI: supply the engineer's picks from a file (HIGH_IMPACT: line) instead of the LLM")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
-	if *scenario == "" {
-		return fmt.Errorf("--scenario is required")
+	if *scenario == "" && *fromScan == "" {
+		return fmt.Errorf("one of --scenario or --from-scan is required")
 	}
-	raw, err := os.ReadFile(*scenario) //nolint:gosec // operator-supplied bench fixture
-	if err != nil {
-		return err
-	}
+
 	var sc bench.DiscoveryScenario
-	if err := json.Unmarshal(raw, &sc); err != nil {
-		return fmt.Errorf("parse scenario: %w", err)
+	if *fromScan != "" {
+		raw, rerr := os.ReadFile(*fromScan) //nolint:gosec // operator-supplied bench fixture
+		if rerr != nil {
+			return rerr
+		}
+		var in bench.ScanInput
+		if jerr := json.Unmarshal(raw, &in); jerr != nil {
+			return fmt.Errorf("parse scan: %w", jerr)
+		}
+		var chains []correlate.Chain
+		sc, chains = bench.EstateFromFindings("scan-e2e", in)
+		fmt.Printf("substrate surfaced %d cross-surface chain(s) from %d findings; %d ground-truth impacts\n",
+			len(chains), len(in.Findings), countImpacts(sc))
+	} else {
+		raw, rerr := os.ReadFile(*scenario) //nolint:gosec // operator-supplied bench fixture
+		if rerr != nil {
+			return rerr
+		}
+		if jerr := json.Unmarshal(raw, &sc); jerr != nil {
+			return fmt.Errorf("parse scenario: %w", jerr)
+		}
 	}
 	if sc.ID == "" || len(sc.Findings) == 0 {
 		return fmt.Errorf("scenario needs an id + findings")

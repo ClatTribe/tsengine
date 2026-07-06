@@ -48,6 +48,19 @@ entity it produces *nothing* (the substrate never invents a bridge, §10). So th
 the substrate finds the FACTS (the linkage), and the discovery benchmark measures the JUDGMENT on top of them
 (is this the impactful one, is it worth waking someone). The judgment is what needs the LLM; the facts don't.
 
+**End-to-end: the whole shipped path, ground truth from the engine.** `tsbench discover --from-scan` runs the
+complete product pipeline on a real multi-scanner scan (`fixtures/discovery-scans/scan-acme.json`, a
+`gitleaks`/`prowler`/`trivy`/`nuclei` finding set): **real findings → `crossdetect.Correlate` (which findings
+chain to a crown jewel) → `EstateFromFindings` builds the estate + ground truth from the engine's chains → the
+LLM engineer reasons over the raw findings → `ScoreDiscovery`**. The ground truth is *not hand-labelled* — a
+finding is high-impact iff the substrate placed it on a chain (§10, the engine decides). On the acme scan the
+substrate surfaced 1 code→cloud chain (2 impacts: a leaked key + the admin role it unlocks over customer-PII
+backups) among 7 findings; live via the proxy the engineer independently re-derived that same chain from the
+raw findings — spotting the shared `AKIA…` key across two different scanners — and dismissed the 5 noise
+findings (a build-only CVE, a public-CDN bucket, a Slack webhook, missing headers, version disclosure):
+**recall 100% / precision 100%**. This is the strongest honesty claim in the suite: the estate isn't authored,
+it's what the engine emits, and the engineer's judgment is scored against what the engine proved.
+
 ## Impact discovery — the scenarios in detail
 
 The AI Security Engineer's highest-value job is not fixing — it's **finding the vuln that creates real
@@ -209,6 +222,8 @@ tsbench impact --scenario … --naive-baseline    # the substrate-only number to
 LLM_BASE_URL=… tsbench discover --scenario fixtures/discovery/estate-combo.json   # live, one scenario
 tsbench discover --scenario … --answer-file <picks>          # no-LLM CI/demo mode
 tsbench discover-suite --dir fixtures/discovery --strict      # deterministic suite integrity scorecard
+# END-TO-END: real scan → crossdetect → estate → LLM → score (ground truth from the engine):
+LLM_BASE_URL=… tsbench discover --from-scan fixtures/discovery-scans/scan-acme.json
 ```
 
 ## Honest gates (not fabricated)
