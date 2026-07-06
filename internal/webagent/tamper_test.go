@@ -115,3 +115,32 @@ func TestTamperProbe_EndToEnd_CookieForge(t *testing.T) {
 		t.Fatalf("idor rejected despite tamper_confirmed: %s", rec)
 	}
 }
+
+// TestTamperProbe_EndToEnd_HeaderSpoof: a trusted-header access-control bypass (the server grants
+// admin when X-Forwarded-For is an internal-allowlist IP) fires tamper_confirmed via base_headers/
+// tamper_headers — the header sibling of the field/cookie tamper (XBEN-085).
+func TestTamperProbe_EndToEnd_HeaderSpoof(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Forwarded-For") == "127.0.0.1" {
+			fmt.Fprint(w, "Welcome Admin — flag{INTERNAL}")
+			return
+		}
+		fmt.Fprint(w, "Access Restricted to Internal Employees only")
+	}))
+	defer srv.Close()
+	cc := &Context{Target: srv.URL, ctx: context.Background()}
+	cc.req = NewRequester([]string{hostOf(srv.URL)}, 40, 0)
+	tTamperProbe(cc, map[string]any{
+		"method": "POST", "base_url": srv.URL + "/", "tamper_url": srv.URL + "/",
+		"base_body": "username=x&password=x", "tamper_body": "username=x&password=x",
+		"tamper_headers": map[string]any{"X-Forwarded-For": "127.0.0.1"},
+		"marker":         "Welcome Admin",
+	})
+	if !hasIndicator(cc.History[len(cc.History)-1], "tamper_confirmed") {
+		t.Fatalf("XFF trusted-header bypass did not fire tamper_confirmed: %+v", cc.History)
+	}
+	tid := cc.History[len(cc.History)-1].ID
+	if rec := tRecord(cc, map[string]any{"route": "/", "class": "broken_access_control", "evidence": []any{tid}}); strings.Contains(rec, "REJECTED") {
+		t.Fatalf("broken_access_control rejected despite tamper_confirmed: %s", rec)
+	}
+}
