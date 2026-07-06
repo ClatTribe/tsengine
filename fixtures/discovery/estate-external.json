@@ -1,0 +1,29 @@
+{
+  "id": "estate-external",
+  "name": "Correlate network + data facts to discover an internet-exposed sensitive surface",
+  "context": [
+    "Network: RDS instance prod-orders-db security group allows 5432/tcp ingress from 0.0.0.0/0 (the entire internet).",
+    "Data: prod-orders-db holds customer orders and stored payment tokens (data-classification=financial).",
+    "Network: RDS instance internal-metrics-db security group allows 5432/tcp only from 10.0.0.0/8 (private VPC range).",
+    "Data: internal-metrics-db holds only aggregate service metrics (data-classification=low).",
+    "Network: host bastion allows 22/tcp from 0.0.0.0/0, but SSH requires a key pair not present anywhere in this estate, and the bastion has no standing access to any data store.",
+    "Network: bucket cdn-assets is public (world-readable) and holds only static CSS/JS/image assets (data-classification=public)."
+  ],
+  "findings": [
+    { "id": "open-orders-db", "surface": "cloud", "severity": "high", "title": "prod-orders-db is a managed PostgreSQL instance",
+      "detail": "the production orders database, a managed RDS PostgreSQL instance",
+      "high_impact": true, "impact_type": "external_exposure", "reaches": "customer orders + payment tokens over the public internet" },
+
+    { "id": "open-bastion", "surface": "cloud", "severity": "high", "title": "Bastion host exposes SSH to the internet",
+      "detail": "the bastion host listens for SSH from anywhere",
+      "high_impact": false },
+
+    { "id": "metrics-db", "surface": "cloud", "severity": "medium", "title": "internal-metrics-db PostgreSQL instance",
+      "detail": "a PostgreSQL instance used for internal service metrics",
+      "high_impact": false },
+
+    { "id": "pub-cdn", "surface": "cloud", "severity": "medium", "title": "Bucket cdn-assets is world-readable",
+      "detail": "public ACL on the CDN asset bucket",
+      "high_impact": false }
+  ]
+}

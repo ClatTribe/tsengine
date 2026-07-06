@@ -116,6 +116,51 @@ func TestScoreDiscovery_DecoyFlaggedIsFalseAlarm(t *testing.T) {
 	}
 }
 
+// TestScoreDiscovery_PerCategoryCorrelation: the privesc + external-exposure correlation scenarios. Each
+// has one real chain (only derivable from the raw facts) + a decoy that a naive severity/keyword read
+// flags. Finding exactly the real one PASSES with the right category; flagging the decoy is a false alarm.
+// Mirrors fixtures/discovery/estate-privesc.json + estate-external.json.
+func TestScoreDiscovery_PerCategoryCorrelation(t *testing.T) {
+	cases := []struct {
+		name     string
+		sc       DiscoveryScenario
+		real     string
+		realType ImpactType
+		decoy    string // a plausible-but-wrong finding a naive ranker flags
+	}{
+		{
+			name:     "privilege_escalation",
+			real:     "key-in-jenkins", realType: ImpactPrivEsc, decoy: "key-in-notebook",
+			sc: DiscoveryScenario{ID: "privesc", Findings: []DiscoveryFinding{
+				{ID: "key-in-jenkins", Severity: types.SeverityMedium, HighImpact: true, ImpactType: ImpactPrivEsc,
+					Detail: "leaked key → ci-build → PassRole+Lambda → account admin"},
+				{ID: "key-in-notebook", Severity: types.SeverityMedium, HighImpact: false, Detail: "leaked key → analyst → public bucket only"},
+			}},
+		},
+		{
+			name:     "external_exposure",
+			real:     "open-orders-db", realType: ImpactExternal, decoy: "open-bastion",
+			sc: DiscoveryScenario{ID: "external", Findings: []DiscoveryFinding{
+				{ID: "open-orders-db", Severity: types.SeverityHigh, HighImpact: true, ImpactType: ImpactExternal,
+					Detail: "SG 0.0.0.0/0 on 5432 → financial DB"},
+				{ID: "open-bastion", Severity: types.SeverityHigh, HighImpact: false, Detail: "internet SSH but no key + fronts nothing"},
+			}},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			good := ScoreDiscovery(c.sc, EngineerDiscovery{HighImpactIDs: []string{c.real}})
+			if !good.Pass() || good.ByType[c.realType].Found != 1 {
+				t.Fatalf("finding the real %s chain must PASS in-category: %s", c.name, RenderDiscoveryScore(good))
+			}
+			bad := ScoreDiscovery(c.sc, EngineerDiscovery{HighImpactIDs: []string{c.decoy}})
+			if bad.FP != 1 || bad.Pass() {
+				t.Errorf("flagging the decoy %q must be a false alarm + not pass: %s", c.decoy, RenderDiscoveryScore(bad))
+			}
+		})
+	}
+}
+
 // TestScoreDiscovery_InventedFails: claiming a finding not in the estate is a hallucination (§10).
 func TestScoreDiscovery_InventedFails(t *testing.T) {
 	sc := discoveryScenario()

@@ -59,6 +59,23 @@ must actually **resolve** (no explicit deny, network-reachable). That resolution
 substrate's job (`cloudiam`/`cloudgraph`), and the engineer's job is to *reason over its verdicts* — not to
 re-flag a jewel the facts prove is unreachable.
 
+**Correlation across all four impact categories** (each an un-spoon-fed scenario — the finding states only
+the neutral surface, the impact is derived from the Context facts; each carries a decoy a naive ranker
+flags). All PASS live via the proxy (recall 100% / precision 100%):
+
+| Category | Scenario | Real chain to discover | Decoy to dismiss |
+|---|---|---|---|
+| `lateral_movement` | `estate-correlate` | medium leaked key → role → assumeRole → customer-PII bucket | critical isolated RCE, corp-CIDR-only SSH |
+| `lateral_movement` (precision) | `estate-decoy` | medium leaked key → financial invoices | high key (AssumeRole DENIED), critical RCE (VPN-only) |
+| `privilege_escalation` | `estate-privesc` | medium leaked key → `PassRole`+Lambda → account admin | medium key reaching only a public bucket |
+| `external_exposure` | `estate-external` | high DB with `0.0.0.0/0` ingress → customer orders + payment tokens | high internet-SSH bastion with no key + no data behind it |
+| `data_exposure` | `estate-crosssurface` | public S3 bucket of customer records | — (covered in the mixed estate) |
+
+The through-line: in every category the impactful finding is a *below-the-scary-severity* item whose impact
+only appears after correlating the facts, and each category's decoy is a *high/critical* item a severity or
+keyword heuristic wrongly promotes. That inversion — real impact low-tagged, noise high-tagged — is the
+measured AI value-add, held consistent across the whole impact taxonomy.
+
 ## The two halves of the job → three measured axes
 
 | Axis | Question | How it's scored | CLI |

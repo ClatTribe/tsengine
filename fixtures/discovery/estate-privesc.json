@@ -1,0 +1,30 @@
+{
+  "id": "estate-privesc",
+  "name": "Correlate IAM facts to discover a privilege-escalation path to account admin",
+  "context": [
+    "IAM: access key AKIA-BUILD2 (leaked, finding key-in-jenkins) authenticates as role 'ci-build'.",
+    "IAM: role 'ci-build' policy allows iam:PassRole on role 'deploy-admin', plus lambda:CreateFunction and lambda:InvokeFunction.",
+    "IAM: role 'deploy-admin' has AdministratorAccess (Action '*' on Resource '*').",
+    "IAM technique: a principal holding iam:PassRole + lambda:CreateFunction + lambda:InvokeFunction can create a function that runs AS the passed role and invoke it; passing an admin role yields code execution with full account-admin privileges (a known AWS privesc method).",
+    "IAM: access key AKIA-READONLY5 (leaked, finding key-in-notebook) authenticates as role 'analyst', whose only permission is s3:GetObject on arn:aws:s3:::acme-press-kit/*.",
+    "Data: bucket acme-press-kit is tagged data-classification=public.",
+    "IAM: role 'ci-build' has no other permissions beyond those listed."
+  ],
+  "findings": [
+    { "id": "key-in-jenkins", "surface": "code", "severity": "medium", "title": "Access key AKIA-BUILD2 committed in Jenkinsfile",
+      "detail": "a long-lived AWS access key for role 'ci-build' is hardcoded in the CI Jenkinsfile",
+      "high_impact": true, "impact_type": "privilege_escalation", "reaches": "full account admin via PassRole + Lambda privesc" },
+
+    { "id": "key-in-notebook", "surface": "code", "severity": "medium", "title": "Access key AKIA-READONLY5 committed in a Jupyter notebook",
+      "detail": "a long-lived AWS access key for role 'analyst' is hardcoded in an analytics notebook",
+      "high_impact": false },
+
+    { "id": "verbose-errors", "surface": "web", "severity": "low", "title": "Stack traces leaked on HTTP 500",
+      "detail": "unhandled exceptions render a full stack trace to the user on the internal dashboard",
+      "high_impact": false },
+
+    { "id": "outdated-jquery", "surface": "web", "severity": "medium", "title": "Outdated jQuery 1.12 on the marketing site",
+      "detail": "the public marketing site loads an old jQuery with known low-impact issues; no sensitive data",
+      "high_impact": false }
+  ]
+}
