@@ -139,4 +139,25 @@ func TestCodeInvestigate_RunsAndGroundsAssessment(t *testing.T) {
 	if codeF != 1 {
 		t.Errorf("want 1 stored codeagent finding, got %d", codeF)
 	}
+
+	// The GET view surfaces the stored assessment (survives navigation) + reports enabled, tenant-scoped.
+	v := do(h, "GET", "/v1/code/investigate", "t1", "")
+	var view struct {
+		Total     int             `json:"total"`
+		Enabled   bool            `json:"enabled"`
+		Confirmed []types.Finding `json:"confirmed"`
+	}
+	_ = json.Unmarshal(v.Body.Bytes(), &view)
+	if view.Total != 1 || !view.Enabled || len(view.Confirmed) != 1 || view.Confirmed[0].Tool != "codeagent" {
+		t.Errorf("GET view should show the 1 stored codeagent assessment + enabled, got %s", v.Body.String())
+	}
+	// tenant isolation: t2 sees none of t1's assessments.
+	v2 := do(h, "GET", "/v1/code/investigate", "t2", "")
+	var view2 struct {
+		Total int `json:"total"`
+	}
+	_ = json.Unmarshal(v2.Body.Bytes(), &view2)
+	if view2.Total != 0 {
+		t.Errorf("tenant isolation breached: t2 sees %d of t1's assessments", view2.Total)
+	}
 }

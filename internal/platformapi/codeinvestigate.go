@@ -43,7 +43,11 @@ func (d Deps) codeInvestigator(tenantID string) func(ctx context.Context, focus 
 		}
 	}
 	// Need an owner (the connection Account) + a specific repo (Config["repo"]) to build a live source.
-	// Multi-repo attribution is the documented follow-on; a tenant with one configured repo works today.
+	// Multi-repo is blocked on a data-model change, not a quick follow-on: types.Finding carries no repo
+	// attribution (a repo finding's endpoint is a relative file:line), so there's no grounded way to route a
+	// finding to its own repo's source. This single-repo gate degrades SAFELY — a wrong-repo path 404s and
+	// grounding refuses it (§10, never a false finding). The clean fix is per-finding repo attribution on the
+	// engine's repository-asset scan, then a MultiRepoSource; until then a tenant with one configured repo works.
 	if gh == nil || gh.Account == "" || gh.Config["repo"] == "" {
 		return nil
 	}
@@ -167,6 +171,29 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 	writeJSON(w, http.StatusOK, map[string]any{
 		"summary": rep.Summary, "issues": rep.Issues, "tool_calls": rep.Calls,
 		"findings_assessed": len(body.Findings), "confirmed_exploitable": stored,
+	})
+}
+
+// handleCodeInvestigationView (GET /v1/code/investigate) returns the tenant's stored, confirmed-exploitable
+// code assessments (tool=codeagent) — so the /code-engineer page shows past runs (the analysis survives
+// navigation) instead of only the inline result, mirroring the cloud view. `enabled` reports whether a run
+// is possible (an LLM is resolvable).
+func (d Deps) handleCodeInvestigationView(w http.ResponseWriter, r *http.Request, tenantID string) {
+	all, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	assessed := make([]types.Finding, 0)
+	for _, f := range all {
+		if f.Tool == "codeagent" || strings.HasPrefix(f.RuleID, "codeagent::") {
+			assessed = append(assessed, f)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":     len(assessed),
+		"confirmed": assessed,
+		"enabled":   d.resolveAgentLLM(r.Context(), tenantID) != nil,
 	})
 }
 

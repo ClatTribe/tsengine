@@ -211,6 +211,10 @@ export const api = {
       confirmed_exploitable: number;
     }>("/v1/code/investigate", { method: "POST", body: JSON.stringify({ repo, findings, source }) }),
 
+  // AI Code Engineer — the stored, confirmed-exploitable source assessments (read-only view) + runnable flag.
+  codeInvestigation: () =>
+    safe<{ total: number; enabled: boolean; confirmed: Finding[] }>("/v1/code/investigate", { total: 0, enabled: false, confirmed: [] }),
+
   // AI Cloud Engineer — the cloud-agent's proven attack paths (read-only view) + whether a run is possible.
   cloudInvestigation: () =>
     safe<{ total: number; enabled: boolean; paths: Finding[] }>("/v1/cloud/investigate", { total: 0, enabled: false, paths: [] }),
