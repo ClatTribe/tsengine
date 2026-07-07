@@ -20,13 +20,19 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const showingIgnored = show === "ignored";
   const showingLive = show === "live";
   const showingExternal = show === "external";
-  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live }, exclResp, funnel, llm] = await Promise.all([
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live }, exclResp, funnel, llm, priorInv] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
     api.triageFunnel(),
     api.llmSettings(),
+    api.aiAnalyses("investigate"),
   ]);
   const aiEnabled = llm.ai_enabled;
+  // Persisted per-issue investigations keyed by issue key (scope) — so reopening Investigate shows the saved
+  // narrative instantly instead of re-spending the LLM (survives navigation, like the triage brief).
+  const priorByIssue = new Map(
+    (priorInv.analyses ?? []).map((a) => [a.scope ?? "", { summary: a.summary, reports: a.reports, model: a.model, created_at: a.created_at }]),
+  );
   // View filters over the SAME unified list (no separate pages): "Live" = the genuinely-live subset,
   // "External" = internet/attacker-eye exposure (the old OSINT page — those findings carry tool "osint"
   // and already flow into Issues, so here they're just a source filter, not a destination).
@@ -111,7 +117,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
       {/* "Start here" — the AI Security Engineer's outcome #1 (figure out what to work on). The list is
           already risk-ranked (severity × data-tier × attack-path), so the top row IS the #1 fix; we just
           make it prominent with its impact reason + the agentic verbs, so a founder isn't parsing a table. */}
-      {mainView && visible.length > 0 && <LeadCard issue={visible[0]} />}
+      {mainView && visible.length > 0 && <LeadCard issue={visible[0]} prior={priorByIssue.get(visible[0].key)} />}
 
       {visible.length === 0 ? (
         <Empty>
@@ -136,7 +142,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
             </thead>
             <tbody>
               {visible.map((it) => (
-                <IssueRow key={it.key} issue={it} ignored={showingIgnored} />
+                <IssueRow key={it.key} issue={it} ignored={showingIgnored} prior={priorByIssue.get(it.key)} />
               ))}
             </tbody>
           </table>
@@ -161,7 +167,10 @@ function Tab({ href, active, children }: { href: string; active: boolean; childr
 // prominent with its plain-English impact reason + the two agentic verbs (Investigate, AI Fix). This is
 // outcome #1 of the AI Security Engineer — "figure out the issue to work on" — without making a founder
 // parse a table. Deterministic + grounded (the reason comes from real signals on the issue).
-function LeadCard({ issue }: { issue: Issue }) {
+// PriorInv is the persisted per-issue investigation threaded to the Investigate button (survives navigation).
+type PriorInv = { summary?: string; reports?: { title: string; severity?: string; body?: string }[]; model?: string; created_at?: string } | undefined;
+
+function LeadCard({ issue, prior }: { issue: Issue; prior?: PriorInv }) {
   const reason =
     issue.live_reason ||
     (issue.attacked ? "Seen under attack in your live traffic — fix this now." : "") ||
@@ -183,7 +192,7 @@ function LeadCard({ issue }: { issue: Issue }) {
           <p className="mt-1.5 text-sm leading-relaxed text-muted">{reason}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <IssueInvestigate issueKey={issue.key} title={issue.title} />
+          <IssueInvestigate issueKey={issue.key} title={issue.title} prior={prior} />
           {issue.finding_ids[0] && <IssueAutofix findingId={issue.finding_ids[0]} title={issue.title} />}
         </div>
       </div>
@@ -191,7 +200,7 @@ function LeadCard({ issue }: { issue: Issue }) {
   );
 }
 
-function IssueRow({ issue, ignored }: { issue: Issue; ignored: boolean }) {
+function IssueRow({ issue, ignored, prior }: { issue: Issue; ignored: boolean; prior?: PriorInv }) {
   // The issue links to one of its underlying findings (the evidence).
   const href = issue.finding_ids[0] ? `/findings/${issue.finding_ids[0]}` : undefined;
   const title = <span className="truncate text-sm">{issue.title}</span>;
@@ -277,7 +286,7 @@ function IssueRow({ issue, ignored }: { issue: Issue; ignored: boolean }) {
       </td>
       <td className="py-3 pr-5 align-top text-right">
         <div className="flex items-center justify-end gap-2">
-          {!ignored && <IssueInvestigate issueKey={issue.key} title={issue.title} />}
+          {!ignored && <IssueInvestigate issueKey={issue.key} title={issue.title} prior={prior} />}
           {!ignored && issue.finding_ids[0] && <IssueAutofix findingId={issue.finding_ids[0]} title={issue.title} />}
           <IssueActions issueKey={issue.key} ignored={ignored} />
           {href && (
