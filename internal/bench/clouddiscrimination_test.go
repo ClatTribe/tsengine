@@ -44,3 +44,33 @@ func TestCloudDiscrimination_Headroom(t *testing.T) {
 		}
 	}
 }
+
+// TestDiscriminationSweep aggregates per-scenario reports into the tuning-corpus summary: how many
+// discriminate + the headroom distribution.
+func TestDiscriminationSweep(t *testing.T) {
+	reports := []CloudDiscriminationReport{
+		ComputeCloudDiscrimination("s0", 2, 20, 5, 2, 2),    // headroom 0 — non-discriminating
+		ComputeCloudDiscrimination("s1", 8, 150, 5, 8, 5),   // headroom 3
+		ComputeCloudDiscrimination("s2", 10, 150, 5, 10, 4), // headroom 6
+	}
+	sw := AggregateDiscrimination(reports)
+	if sw.Total != 3 || sw.Discriminating != 2 {
+		t.Errorf("want 3 total, 2 discriminating, got %d/%d", sw.Discriminating, sw.Total)
+	}
+	if sw.MinHeadroom != 0 || sw.MedianHeadroom != 3 || sw.MaxHeadroom != 6 {
+		t.Errorf("headroom stats wrong: min %d median %d max %d", sw.MinHeadroom, sw.MedianHeadroom, sw.MaxHeadroom)
+	}
+	if sw.DiscriminatingFraction() < 0.66 || sw.DiscriminatingFraction() > 0.67 {
+		t.Errorf("discriminating fraction should be ~0.667, got %v", sw.DiscriminatingFraction())
+	}
+	out := RenderDiscriminationSweep(sw)
+	if !strings.Contains(out, "2/3") || !strings.Contains(out, "run the agent") {
+		t.Errorf("render should summarize the corpus + next step, got:\n%s", out)
+	}
+
+	// an all-non-discriminating sweep must say so (don't spend LLM budget).
+	flat := AggregateDiscrimination([]CloudDiscriminationReport{ComputeCloudDiscrimination("a", 2, 20, 5, 2, 2)})
+	if strings.Contains(RenderDiscriminationSweep(flat), "run the agent") {
+		t.Error("a sweep with no discriminating scenario must NOT recommend an agent run")
+	}
+}
