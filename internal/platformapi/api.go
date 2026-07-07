@@ -40,6 +40,7 @@ type Deps struct {
 	Runner         *runner.Service
 	Jobs           *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
 	Desk           Decider          // optional: the HITL desk (approvals decide)
+	Submitter      Submitter        // optional: queue a proposed remediation Action at the desk (self-remediating loop)
 	GRC            Posturer         // optional: the compliance system-of-record (posture)
 	IncidentOpener IncidentOpener   // optional: opens incidents for event-driven ingest (identity/SaaS)
 	Vault          Sealer           // optional: seals OAuth tokens before persistence
