@@ -1,0 +1,52 @@
+{
+  "id": "leaked-key-to-cloud",
+  "name": "Leaked AWS key in code reaches cloud admin (the code→cloud wedge)",
+  "assets": [
+    { "id": "repo-1", "type": "repository", "target": "acme/api", "meta": { "full_name": "acme/api" } },
+    { "id": "cloud-1", "type": "cloud_account", "target": "123456789012", "meta": { "provider": "aws" } }
+  ],
+  "before": [
+    {
+      "id": "f-secret",
+      "rule_id": "gitleaks::aws-access-key",
+      "tool": "gitleaks",
+      "severity": "high",
+      "endpoint": "acme/api/config.py:12",
+      "title": "Hardcoded AWS access key AKIAIOSFODNN7EXAMPLE in config.py",
+      "description": "A long-lived AWS access key AKIAIOSFODNN7EXAMPLE is committed in config.py. Anyone who can read the repo (or its git history) obtains it."
+    },
+    {
+      "id": "f-admin-role",
+      "rule_id": "prowler::iam-privesc",
+      "tool": "prowler",
+      "severity": "high",
+      "endpoint": "arn:aws:iam::123456789012:role/deploy",
+      "title": "IAM role allows privilege escalation to administrator",
+      "description": "The deploy role is assumable with the leaked key AKIAIOSFODNN7EXAMPLE and its policy grants *:* (full admin access) — a path to administrator."
+    },
+    {
+      "id": "f-decoy",
+      "rule_id": "semgrep::missing-frame-options",
+      "tool": "semgrep",
+      "severity": "low",
+      "endpoint": "acme/api/app.py:3",
+      "title": "Missing X-Frame-Options header",
+      "description": "A defensive-depth header is not set. Benign on this internal service — noise a good engineer leaves alone."
+    }
+  ],
+  "after": [
+    {
+      "id": "f-decoy",
+      "rule_id": "semgrep::missing-frame-options",
+      "tool": "semgrep",
+      "severity": "low",
+      "endpoint": "acme/api/app.py:3",
+      "title": "Missing X-Frame-Options header",
+      "description": "Still present post-fix — the correct remediation closed the two real vulns and left the low-severity noise."
+    }
+  ],
+  "decoys": ["semgrep::missing-frame-options|acme/api/app.py:3"],
+  "attack_paths": [
+    { "entry_surface": "repository", "cloud_target": "administrator", "via_entity": "aws_key" }
+  ]
+}

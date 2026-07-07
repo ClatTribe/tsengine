@@ -553,6 +553,13 @@ CLAUDE.md §14. Per-asset bench targets:
 | domain | `bench/recon_breadth` | subfinder/amass published |
 | cloud_account | `bench/cloud_baseline` | None public; CIS recall |
 
+**L2 (agent) benches — the two AI personas:**
+
+| Persona | Bench | Hero metric | External comparison |
+|---|---|---|---|
+| AI Pentester (attack) | `bench/agent` + `tsbench xbow` | verified_rate / flag-capture | XBOW (same 104-suite) |
+| AI Security Engineer (defense) | `tsbench defense` (`internal/bench/defense.go`, `fixtures/defense/`) | **remediation-capture** (vulns verifiably closed on re-scan via `retest.Verify`) + path-recall + triage-precision + grounding; substrate-vs-agent ablation = the LLM lift | Internal (no neutral AI-SOC leaderboard) |
+
 ---
 
 ## L2 design (Phase 6) — the AI security engineer
