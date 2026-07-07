@@ -468,6 +468,10 @@ export const api = {
   pentestFromAsset: (assetId: string, body: { name?: string; mode: string; max_requests?: number; out_of_scope?: string[]; allow_active?: boolean; authorized_by?: string; consent?: string }) =>
     call<PentestEngagement>(`/v1/assets/${assetId}/pentest`, { method: "POST", body: JSON.stringify(body) }),
   runPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/run`, { method: "POST" }),
+  // Set a recurring re-test cadence (off|daily|weekly|monthly). Scheduled runs are always a safe
+  // passive re-verify — never auto active exploitation.
+  setPentestSchedule: (id: string, cadence: string) =>
+    call<PentestEngagement>(`/v1/pentest/${id}/schedule`, { method: "POST", body: JSON.stringify({ cadence }) }),
   // Named human sign-off on the VAPT report (the HITL accountability layer).
   signoffPentest: (id: string, body: { signer: string; role?: string; statement?: string }) =>
     call<PentestEngagement>(`/v1/pentest/${id}/signoff`, { method: "POST", body: JSON.stringify(body) }),

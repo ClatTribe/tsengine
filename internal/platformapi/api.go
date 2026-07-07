@@ -40,6 +40,7 @@ type Deps struct {
 	Runner         *runner.Service
 	Jobs           *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
 	Desk           Decider          // optional: the HITL desk (approvals decide)
+	Submitter      Submitter        // optional: queue a proposed remediation Action at the desk (self-remediating loop)
 	GRC            Posturer         // optional: the compliance system-of-record (posture)
 	IncidentOpener IncidentOpener   // optional: opens incidents for event-driven ingest (identity/SaaS)
 	Vault          Sealer           // optional: seals OAuth tokens before persistence
@@ -255,6 +256,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                                                    // run/retest the engagement (passive, RoE-gated)
 	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))                                               // the engagement's VAPT report (md/json)
 	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))                                            // HITL: named human signs the report → signed ledger
+	mux.HandleFunc("POST /v1/pentest/{id}/schedule", d.auth(d.handleSetPentestSchedule))                                       // set a recurring re-test cadence (safe passive re-verify)
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                                                                   // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)

@@ -99,6 +99,12 @@ type Service struct {
 	// auto-review (the on-demand POST /v1/l2/translate still works).
 	AfterScan func(ctx context.Context, tenantID string, findings []types.Finding, openedIncidents int)
 
+	// AfterPass, when set, fires on EVERY monitoring pass (unconditionally, unlike AfterScan) — the
+	// hook for time-driven, change-independent work like running due SCHEDULED pentests. Any gating
+	// (is anything due? is the tenant halted?) lives inside the injected func. Best-effort,
+	// fire-and-forget. nil → nothing extra runs.
+	AfterPass func(ctx context.Context, tenantID string)
+
 	// optional webhook auto-registration (event-driven re-scans on connect)
 	WebhookSecret string // shared secret stamped on registered hooks (and verified inbound)
 	PublicURL     string // platform base URL for the webhook callback
@@ -291,6 +297,10 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// incident, while a static estate doesn't re-spend the LLM every monitor pass. Best-effort.
 	if s.AfterScan != nil && scanned > 0 {
 		s.AfterScan(ctx, tenantID, current, openedIncidents)
+	}
+	// Time-driven per-pass work (due scheduled pentests) — unconditional; the hook self-gates.
+	if s.AfterPass != nil {
+		s.AfterPass(ctx, tenantID)
 	}
 	return scanned, firstErr
 }

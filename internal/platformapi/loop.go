@@ -22,6 +22,13 @@ type Decider interface {
 	Decide(ctx context.Context, tenantID, actionID string, v hitl.Verdict) (platform.Action, error)
 }
 
+// Submitter queues a proposed remediation Action at the HITL desk — tier-gated, so nothing risky
+// auto-applies. Satisfied by *hitl.Desk. Separate from Decider (a new method on that interface would
+// break its test fakes); optional on Deps.
+type Submitter interface {
+	Submit(ctx context.Context, a platform.Action) (platform.Action, error)
+}
+
 // Posturer is the GRC surface the API needs (satisfied by *grc.GRC): the raw control
 // state plus the auditor-facing compliance report.
 type Posturer interface {
