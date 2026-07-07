@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -42,31 +43,37 @@ func (d Deps) handleCloudDrift(w http.ResponseWriter, r *http.Request, tenantID 
 	prev := cloudgraph.Ingest(req.Prev)
 	cur := cloudgraph.Ingest(req.Cur)
 	findings := clouddrift.Diff(prev, cur, clouddrift.Options{})
-	findings = enrichFindings(findings) // L1.5 parity (§11)
+	saved, stored := d.persistDriftFindings(r.Context(), tenantID, findings)
+	if saved == nil {
+		saved = []types.Finding{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"drift_detected": stored, "findings": saved})
+}
 
-	stored := 0
+// persistDriftFindings enriches (L1.5 parity §11), stores, folds into the GRC posture, and — for a
+// high-severity drift (became-public / new-privileged / new-internet-exposure) — opens an incident, for a
+// batch of cloud-drift findings. Shared by the explicit /v1/cloud/drift ingest AND the automatic
+// diff-on-ingest path (cloudinventory.go) so the two never diverge. Returns the stored findings (with
+// assigned ids) + the count. Grounded + LLM-free: an unchanged account produces an empty batch → no-op.
+func (d Deps) persistDriftFindings(ctx context.Context, tenantID string, findings []types.Finding) ([]types.Finding, int) {
+	findings = enrichFindings(findings) // L1.5 parity (§11)
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {
 		f.ID = d.newID("drift") + "-" + strconv.Itoa(i)
-		if err := d.Store.PutFinding(r.Context(), tenantID, f); err != nil {
+		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
 			continue
 		}
 		if d.GRC != nil {
-			_ = d.GRC.Apply(r.Context(), tenantID, f) // fold the change-control finding into the posture
+			_ = d.GRC.Apply(ctx, tenantID, f) // fold the change-control finding into the posture
 		}
 		saved = append(saved, f)
-		stored++
 	}
-	// a high-severity drift (became-public, new-privileged, new-internet-exposure) is incident-worthy now.
-	if d.IncidentOpener != nil && stored > 0 {
-		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
+	if d.IncidentOpener != nil && len(saved) > 0 {
+		_, _ = d.IncidentOpener.OpenFor(ctx, tenantID, saved, nil)
 	}
-	if d.Recorder != nil && stored > 0 {
+	if d.Recorder != nil && len(saved) > 0 {
 		d.Recorder.Record("cloud drift detected", "cloud_drift",
-			map[string]any{"tenant_id": tenantID, "drift_findings": stored}, "config-snapshot drift")
+			map[string]any{"tenant_id": tenantID, "drift_findings": len(saved)}, "config-snapshot drift")
 	}
-	if findings == nil {
-		findings = []types.Finding{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"drift_detected": stored, "findings": findings})
+	return saved, len(saved)
 }

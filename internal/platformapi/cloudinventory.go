@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/clouddrift"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
@@ -72,6 +73,20 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
+	// Diff-on-ingest (continuous Detect): if a prior snapshot exists, diff it against this fresh one BEFORE
+	// overwriting → automatic cloud config-drift findings (a resource became public, a new privileged
+	// principal, a new internet/privesc/lateral path). This makes cloud change-control CONTINUOUS on every
+	// re-ingest — the "connect once, detect change" promise — with no separate /v1/cloud/drift call and no
+	// live fetcher. Grounded + LLM-free (§10): an unchanged account yields zero findings; the first ingest
+	// (no baseline) yields zero. Best-effort — a drift-diff failure never blocks storing the new snapshot.
+	driftStored := 0
+	if prevSnap, ok, gerr := d.CloudSnapshots.Get(r.Context(), tenantID); d.Store != nil && gerr == nil && ok && len(prevSnap.Inventory) > 0 {
+		var prevInv cloudgraph.Inventory
+		if json.Unmarshal(prevSnap.Inventory, &prevInv) == nil {
+			findings := clouddrift.Diff(cloudgraph.Ingest(prevInv), cloudgraph.Ingest(inv), clouddrift.Options{})
+			_, driftStored = d.persistDriftFindings(r.Context(), tenantID, findings)
+		}
+	}
 	if err := d.CloudSnapshots.Put(r.Context(), cloudsnap.Snapshot{
 		TenantID: tenantID, Inventory: invJSON, CapturedAt: time.Now().UTC(),
 	}); err != nil {
@@ -94,6 +109,7 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		"resources":      len(inv.Resources),
 		"trust_edges":    len(inv.Trusts),
 		"internet_edges": internetEdges,
+		"drift_detected": driftStored, // config changes vs the prior snapshot (0 on first ingest / no change)
 		"stored":         true,
 	})
 }
