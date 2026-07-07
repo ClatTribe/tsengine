@@ -28,6 +28,12 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
+// evidenceHeartbeat is the max gap between continuous-compliance evidence snapshots for an UNCHANGED
+// framework — a daily "the control still holds" heartbeat. A real posture change captures immediately
+// regardless (see grc.CaptureEvidenceSnapshot); this only bounds the no-change cadence so the timeline
+// stays a meaningful audit record without growing every monitoring pass.
+const evidenceHeartbeat = 24 * time.Hour
+
 // ScanRunner runs the engine over one asset and returns its grounded findings. The
 // real implementation drives internal/orchestrator in a sandbox; tests use a fake.
 type ScanRunner interface {
@@ -287,6 +293,14 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// ingest-only pass must not falsely clear scan-driven gaps.
 	if s.GRC != nil && scanned > 0 {
 		if _, err := s.GRC.Reconcile(ctx, tenantID, current); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		// Continuous compliance evidence: capture a timestamped posture snapshot per assessed framework
+		// onto the append-only timeline — the SOC 2 Type II "it held across the window" proof the
+		// point-in-time EvidencePack can't give. Bounded by CaptureEvidenceSnapshot's change+heartbeat gate
+		// (only a real posture change or a full day elapsed captures a new point), so a static estate adds
+		// nothing per pass. Best-effort — a capture error never fails the monitoring pass.
+		if _, err := s.GRC.CaptureAllEvidence(ctx, tenantID, evidenceHeartbeat); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}

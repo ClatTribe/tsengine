@@ -271,6 +271,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
 	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))
 	mux.HandleFunc("GET /v1/compliance/{framework}/fixes", d.auth(d.handleComplianceFixes))              // compliance→remediation bridge: which gaps are fixable now (findings + queued actions)
+	mux.HandleFunc("GET /v1/compliance/{framework}/evidence-history", d.auth(d.handleEvidenceHistory))   // continuous-evidence timeline: posture snapshots over the audit window (SOC 2 Type II proof)
+	mux.HandleFunc("POST /v1/compliance/{framework}/evidence/capture", d.auth(d.handleEvidenceCapture))  // on-demand: snapshot this framework's posture onto the timeline now
 	mux.HandleFunc("POST /v1/compliance/{framework}/remediation", d.auth(d.handleComplianceRemediation)) // vCISO "how do I close this gap?" — LLM remediation guidance (gated)
 	mux.HandleFunc("POST /v1/compliance/{framework}/advisor", d.auth(d.handleComplianceAdvisor))         // vCISO advisor — prioritized audit-readiness roadmap over coverage+gaps+readiness (gated)
 	mux.HandleFunc("GET /v1/questionnaire", d.auth(d.handleQuestionnaire))

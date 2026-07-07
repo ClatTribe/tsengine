@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS controls    (tenant_id TEXT, framework TEXT, control_
 CREATE TABLE IF NOT EXISTS incidents   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS risks       (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ai_analyses (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS compliance_snaps (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
@@ -247,6 +248,12 @@ func (s *SQLite) ListRisks(ctx context.Context, tenantID string) ([]platform.Ris
 }
 func (s *SQLite) PutAIAnalysis(ctx context.Context, a platform.AIAnalysis) error {
 	return s.upsertTID(ctx, `INSERT INTO ai_analyses(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, a.TenantID, a.ID, a)
+}
+func (s *SQLite) PutComplianceSnapshot(ctx context.Context, snap platform.ComplianceSnapshot) error {
+	return s.upsertTID(ctx, `INSERT INTO compliance_snaps(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, snap.TenantID, snap.ID, snap)
+}
+func (s *SQLite) ListComplianceSnapshots(ctx context.Context, tenantID string) ([]platform.ComplianceSnapshot, error) {
+	return listJSON[platform.ComplianceSnapshot](ctx, s.db, `SELECT data FROM compliance_snaps WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 func (s *SQLite) ListAIAnalyses(ctx context.Context, tenantID string) ([]platform.AIAnalysis, error) {
 	return listJSON[platform.AIAnalysis](ctx, s.db, `SELECT data FROM ai_analyses WHERE tenant_id=? ORDER BY rowid`, tenantID)
