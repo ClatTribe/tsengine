@@ -141,6 +141,23 @@ func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
 		}
 		return d.Ticket.FileTicket(ctx, a)
 	}
+	// A cloud remediation whose class has no live connector write yet (the cloudCatalog runbook classes:
+	// open SG, unencrypted-at-rest, public snapshot/DB, missing MFA, disabled logging, root key, weak
+	// password policy, IAM privesc) is a RUNBOOK — the payload carries the exact steps. File it as an
+	// actionable ticket for the human's team to execute, rather than calling connector.Apply which would
+	// error "no live write path yet" (turning an approved fix into a spurious failure). The human already
+	// approved it at the desk; delivery hands them the runbook. A live-writable class (cloud storage
+	// public-access block) is NOT in this set and falls through to the real connector write below. Precise
+	// by construction: the set is only cloudCatalog types, so identity (account_suspend) and live storage
+	// actions are never mis-routed here.
+	if a.Kind == platform.ActApplyConfig {
+		if rt, _ := a.Payload["remediation_type"].(string); cloudRunbookRemediations[rt] {
+			if d.Ticket == nil {
+				return nil // no tracker → recorded no-op (graceful); never a false "applied"
+			}
+			return d.Ticket.FileTicket(ctx, a)
+		}
+	}
 	if !deliverable(a.Kind) {
 		return nil // anything else without a write path: recorded, no external write
 	}

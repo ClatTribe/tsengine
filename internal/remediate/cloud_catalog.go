@@ -184,6 +184,22 @@ func isIAMPrivescHay(hay string) bool {
 		"administratoraccess", "*:*", "wildcard")
 }
 
+// cloudRunbookRemediations is the set of cloud remediation_types that have NO live connector write path
+// yet — every class in cloudCatalog (they name the exact fix but can't self-apply). A cloud ActApplyConfig
+// carrying one of these is a RUNBOOK: the Deliverer files it as an actionable ticket (the payload holds
+// the steps) instead of calling connector.Apply, which would error "no live write path". Derived from
+// cloudCatalog so a newly-added class is runbook-routed automatically; when a class gains a live write,
+// move it out (add its connector.Apply case + a live remediation_type entry). Distinct from
+// cloudStorageRemediations (those DO write live) and from identity types (account_suspend etc., a
+// different surface) — so this never mis-catches a live or non-cloud action.
+var cloudRunbookRemediations = func() map[string]bool {
+	m := make(map[string]bool, len(cloudCatalog))
+	for _, c := range cloudCatalog {
+		m[c.rtype] = true
+	}
+	return m
+}()
+
 // cloudFixCatalog returns the class-correct remediation_type + a specific runbook for a cloud finding
 // that has no live storage-write path. ok=false → no class matched → keep the generic account runbook.
 // Grounded: matches the finding's own text only.
