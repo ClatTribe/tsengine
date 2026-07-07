@@ -130,6 +130,38 @@ func azureTechNames(ts []azureiam.Technique) string {
 	return strings.Join(names, ",")
 }
 
+// AddAzureEntraPrivescEdges is the ENTRA (Azure AD) graph-plane twin of AddAzurePrivescEdges: a
+// per-principal predicate over the principal's effective Microsoft Graph permissions / directory roles
+// feeds azureiam.DetectEntraPrivesc, adding a privesc → admin edge for every principal that can escalate
+// on the IDENTITY plane (add a credential to a privileged app, self-assign a directory role, …). This is a
+// DISTINCT authorization plane from ARM (§10 — the two are not conflated): an attacker can own the tenant
+// via Entra without ever touching an ARM role assignment, so without this the attack path is invisible.
+// The caller (ingest) builds the `can` predicates from the Entra snapshot's app-role assignments +
+// directory-role memberships (the honest gate — same as the ARM side). Edge Detail is prefixed so an Entra
+// escalation is distinguishable from an ARM one in the graph.
+func (s *Snapshot) AddAzureEntraPrivescEdges(can map[string]func(perm string) bool) {
+	ids := make([]string, 0, len(can))
+	for id := range can {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var added bool
+	for _, pid := range ids {
+		techs := azureiam.DetectEntraPrivesc(can[pid])
+		if len(techs) == 0 {
+			continue
+		}
+		if !added {
+			if s.Node(AdminID) == nil {
+				s.AddNode(&Node{ID: AdminID, Kind: KindPrincipal, Name: "effective-admin", Privileged: true})
+			}
+			added = true
+		}
+		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: azureTechNames(techs)})
+	}
+}
+
 // HasAccess answers resolve_access for an (principal, action, resource): does the
 // principal's combined policy permit it (and is it conditional)? The ingest uses
 // this to build has_access edges.
