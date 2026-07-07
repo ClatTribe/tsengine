@@ -21,6 +21,25 @@ export interface AIAnalysis {
   created_at: string;
 }
 
+// ComplianceFixes — the compliance→remediation bridge: which control gaps are fixable now (findings that
+// already have a queued remediation action). Mirrors platformapi.ComplianceFixes.
+export interface ControlFix {
+  control_id: string;
+  finding_count: number;
+  fixable_count: number;
+  pending_count: number;
+  applied_count: number;
+  action_ids?: string[];
+  pending_action?: string;
+}
+export interface ComplianceFixes {
+  framework: string;
+  gap_controls: number;
+  fixable_gaps: number;
+  pending_fixes: number;
+  controls?: ControlFix[];
+}
+
 export interface Finding {
   id: string;
   rule_id: string;

@@ -263,6 +263,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture", d.auth(d.handlePostureSummary))          // all-framework posture summary in one call (dashboard/compliance/reports)
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
 	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))
+	mux.HandleFunc("GET /v1/compliance/{framework}/fixes", d.auth(d.handleComplianceFixes)) // compliance→remediation bridge: which gaps are fixable now (findings + queued actions)
 	mux.HandleFunc("POST /v1/compliance/{framework}/remediation", d.auth(d.handleComplianceRemediation)) // vCISO "how do I close this gap?" — LLM remediation guidance (gated)
 	mux.HandleFunc("POST /v1/compliance/{framework}/advisor", d.auth(d.handleComplianceAdvisor))         // vCISO advisor — prioritized audit-readiness roadmap over coverage+gaps+readiness (gated)
 	mux.HandleFunc("GET /v1/questionnaire", d.auth(d.handleQuestionnaire))
