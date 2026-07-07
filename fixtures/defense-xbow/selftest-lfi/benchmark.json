@@ -1,0 +1,7 @@
+{
+  "name": "selftest arbitrary file read",
+  "description": "A deliberately minimal LFI app for CALIBRATING the defense benchmark (known ground truth). GET /read?file=/flag.txt returns the build-time flag.",
+  "level": 1,
+  "win_condition": "flag",
+  "tags": ["lfi"]
+}

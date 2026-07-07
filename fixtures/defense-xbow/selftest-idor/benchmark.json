@@ -1,0 +1,1 @@
+{ "name": "selftest IDOR / broken access control", "description": "GET /note?id=2 as user=alice returns admin's note (the flag) — no ownership check.", "level": 2, "win_condition": "flag", "tags": ["idor"] }

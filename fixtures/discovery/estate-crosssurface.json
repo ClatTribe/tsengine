@@ -1,0 +1,27 @@
+{
+  "id": "estate-crosssurface",
+  "name": "Find the vulns that reach a crown jewel across a noisy code+cloud estate",
+  "findings": [
+    { "id": "leaked-key",   "surface": "code",  "severity": "medium", "title": "AWS key committed in a repo",
+      "detail": "the key assumes a deploy role that can read the customer-PII S3 bucket — a code→cloud chain to customer data",
+      "high_impact": true, "impact_type": "lateral_movement", "reaches": "customer PII" },
+    { "id": "public-bucket","surface": "cloud", "severity": "high", "title": "S3 bucket publicly readable",
+      "detail": "the bucket holds exported customer records; public ACL = anyone on the internet can read it",
+      "high_impact": true, "impact_type": "data_exposure", "reaches": "customer PII" },
+    { "id": "admin-token",  "surface": "code",  "severity": "low", "title": "Token in an 'internal-tools' repo",
+      "detail": "the token is a cloud AdministratorAccess credential — full production takeover despite the low tag",
+      "high_impact": true, "impact_type": "privilege_escalation", "reaches": "cloud admin" },
+    { "id": "open-rdp",     "surface": "cloud", "severity": "high", "title": "RDP open to 0.0.0.0/0 on a prod host",
+      "detail": "the host runs the billing database; internet-exposed admin port to a financial system",
+      "high_impact": true, "impact_type": "external_exposure", "reaches": "billing DB" },
+    { "id": "rce-devbox",   "surface": "cloud", "severity": "critical", "title": "Critical RCE on a CI dev box",
+      "detail": "isolated ephemeral build agent, no credentials, no network to prod, torn down nightly",
+      "high_impact": false },
+    { "id": "old-cve",      "surface": "code",  "severity": "high", "title": "High CVE in a bundled library",
+      "detail": "the vulnerable function is never called (not reachable); dependency present but unused",
+      "high_impact": false },
+    { "id": "xss-blog",     "surface": "web",   "severity": "medium", "title": "Reflected XSS on the public blog",
+      "detail": "static marketing blog, no sessions, no data, no auth",
+      "high_impact": false }
+  ]
+}

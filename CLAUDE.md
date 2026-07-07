@@ -852,6 +852,7 @@ Per-asset recall vs. neutral competitor leaderboards where possible:
 | cloud_account (offline) | `tsbench cloud-baseline` (`internal/cloudbench`) | CIS-control recall over a fixture account, prowler-only vs. tsengine (engine+DSPM/CWPP lift) â laptop/CI, no sandbox | Prowler/Scout (no neutral baseline exists) |
 | L1.5 ablation | (any L1 bench) + `TSENGINE_L15_DISABLED=1` | Î-metric = L1.5 lift | Internal |
 | L2 agent | `bench/agent` (scorer + `tsbench agent`); live targets `bench/webgoat_dual` + `bench/juiceshop_full` | detection_rate, **verified_rate** (PoC/evidence-grounded â the XBOW no-FP bar), completion_rate, FP-control | vs XBOW / strix / NodeZero (exploitation-verified) |
+| L2 agent (defense) — **AI Security Engineer**, XBOW-derived | `tsbench defense-xbow` (`internal/bench/defensexbow*.go` + `internal/codeagent`; ADR 0014) over the same XBOW suite | **remediation-capture**: patch the real vuln → the RECORDED winning exploit no longer captures the flag AND the app still functions (the anti-sabotage regression guard) — execution-verified, by vuln CLASS; `--patch-file`/substrate vs LLM ablation | vs XBOW (offense-only — a lane it doesn't have: exploit it, then prove you can fix it) |
 | Multi-trial | `bench/multi_trial` wrapper | median + p10/p90 over N=5 | â |
 
 ### 14.1 Ablation flags

@@ -1,0 +1,1 @@
+{ "name": "selftest server-side template injection", "description": "Naive template engine evaluates {{ expr }} on user input -> {{open('/flag.txt').read()}}.", "level": 2, "win_condition": "flag", "tags": ["ssti"] }
