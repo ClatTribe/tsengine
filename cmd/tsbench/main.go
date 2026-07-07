@@ -96,6 +96,26 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench cloud-baseline: %v\n", err)
 			os.Exit(1)
 		}
+	case "defense-xbow":
+		if err := defenseXbowCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench defense-xbow: %v\n", err)
+			os.Exit(1)
+		}
+	case "impact":
+		if err := impactCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench impact: %v\n", err)
+			os.Exit(1)
+		}
+	case "discover":
+		if err := discoverCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench discover: %v\n", err)
+			os.Exit(1)
+		}
+	case "discover-suite":
+		if err := discoverSuiteCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench discover-suite: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()

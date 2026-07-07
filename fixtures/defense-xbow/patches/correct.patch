@@ -1,0 +1,30 @@
+=== FILE: app/server.py ===
+import http.server, urllib.parse, os
+
+BASE = "/srv/public"
+
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        u = urllib.parse.urlparse(self.path)
+        if u.path == "/":
+            self.send_response(200); self.end_headers()
+            self.wfile.write(b"selftest app: try /read?file=<path>")
+            return
+        if u.path == "/read":
+            f = urllib.parse.parse_qs(u.query).get("file", [""])[0]
+            # FIXED: confine reads to BASE; reject absolute paths and traversal
+            full = os.path.normpath(os.path.join(BASE, f.lstrip("/")))
+            if full != BASE and not full.startswith(BASE + os.sep):
+                self.send_response(403); self.end_headers(); self.wfile.write(b"forbidden"); return
+            try:
+                with open(full, "rb") as fh:
+                    data = fh.read()
+                self.send_response(200); self.end_headers(); self.wfile.write(data)
+            except Exception as e:
+                self.send_response(404); self.end_headers(); self.wfile.write(str(e).encode())
+            return
+        self.send_response(404); self.end_headers()
+
+http.server.HTTPServer(("0.0.0.0", 8000), H).serve_forever()
+=== END FILE ===

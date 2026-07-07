@@ -1,0 +1,1 @@
+{ "name": "selftest sql injection", "description": "Minimal SQLi calibration app: GET /user?id=1 OR 1=1 dumps every row incl. the flag row.", "level": 1, "win_condition": "flag", "tags": ["sqli"] }

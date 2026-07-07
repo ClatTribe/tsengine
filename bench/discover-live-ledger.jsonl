@@ -1,0 +1,2 @@
+{"false_alarms":0,"invented":0,"missed":0,"model":"claude-proxy","pass":true,"precision":1,"recall":1,"scenario_id":"estate-crosssurface"}
+{"false_alarms":0,"invented":0,"missed":0,"model":"claude-proxy","pass":true,"precision":1,"recall":1,"scenario_id":"estate-correlate"}

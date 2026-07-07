@@ -1,0 +1,8 @@
+services:
+  web:
+    build:
+      context: ./app
+      args:
+        flag: ${flag:-FLAG{selftest-default}}
+    ports:
+      - "8000"

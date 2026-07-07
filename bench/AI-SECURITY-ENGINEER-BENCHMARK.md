@@ -1,0 +1,251 @@
+# The AI Security Engineer benchmark — better than XBOW by measuring the whole job
+
+XBOW proves a vuln is **exploitable**. A scanner proves it **exists**. Neither tells the organisation what
+it **means for them**, nor proves it can be **fixed**. This benchmark measures the two things a real
+security engineer does that neither does — and it is the "better than XBOW" claim, made testable.
+
+It is the defensive twin of `tsbench xbow` (the offensive flag-capture suite), and it is derived from the
+**same XBOW challenge corpus** so the two are directly comparable: exploit it (`xbow`), then prove you can
+fix it and explain what it means (`defense-xbow` + `impact`).
+
+## Impact discovery — FINDING the vuln that creates real impact (the primary axis)
+
+**Suite scorecard** (8 scenarios, every one live-proven via the proxy at recall 100% / precision 100%, and
+deterministically self-validated by `tsbench discover-suite` — the oracle answer PASSES and flag-everything
+raises false alarms, so each genuinely tests precision, not just recall):
+
+| Scenario | Dimension tested | Findings | Real impacts | AI engineer | Best severity/keyword baseline |
+|---|---|---|---|---|---|
+| `estate-crosssurface` | recall across 4 categories | 7 | 4 | **100% / 100%** | 50% / 50% |
+| `estate-correlate` | un-spoon-fed chaining | 4 | 1 | **100% / 100%** | 0% / 0% |
+| `estate-decoy` | precision — dismiss broken chains | 4 | 1 | **100% / 100%** | 0% / 0% |
+| `estate-privesc` | privilege-escalation correlation | 4 | 1 | **100% / 100%** | 0% / 0% |
+| `estate-external` | external-exposure correlation | 4 | 1 | **100% / 100%** | 0% / 0% |
+| `estate-backlog` | volume / anti-overfit (scary noise) | 16 | 4 | **100% / 100%** | 25% / 25% |
+| `estate-combo` | cross-surface composition (the wedge) | 6 | 2 | **100% / 100%** | n/a (all low-severity) |
+| `estate-clean` | zero-impact floor — flag NOTHING | 7 | 0 | **100% / 100%** | 0% precision (cries wolf) |
+
+`estate-clean` is the precision floor: a hardened all-noise estate (a *critical* CVE on an air-gapped box, a
+*high* internet-facing admin panel that enforces SSO+MFA and is IP-allowlisted) where the correct answer is to
+flag **nothing**. It's the §10 "don't manufacture impact" test at the estate level — the complement every
+recall test misses: an always-flag-nothing engineer passes here but fails all seven others, and an over-flagger
+fails here. Live via the proxy the AI engineer flagged nothing (recall vacuously 100%, precision 100%); a
+severity ranker that grabs the scary critical + high scores precision 0%.
+
+The single takeaway: in every scenario the real impact is a *below-the-scary-severity* item and the noise is
+*high/critical-tagged*, so a severity-or-keyword ranker scores 0–50% where reasoning over the grounded facts
+scores 100%. That gap — consistent across the whole impact taxonomy, at volume, and on emergent cross-surface
+impact no single finding contains — is the AI Security Engineer's value made testable. Run the integrity
+check: `tsbench discover-suite --dir fixtures/discovery --strict`.
+
+**Grounded in the real engine, not hypothetical facts.** A fair objection: `tsbench discover` feeds a
+hand-authored estate to an LLM — does it measure the *product* or just Claude reasoning over invented facts?
+The answer: the cross-surface chains the scenarios ask the engineer to discover are *exactly* what the
+deterministic substrate surfaces. `internal/bench/discoverysubstrate_test.go` feeds realistic repo + cloud
+findings (a `gitleaks` AWS-key leak + a `prowler` admin-role finding sharing that key) to the **real**
+`crossdetect.Correlate` and asserts it produces the repo→cloud crown-jewel chain — and that with *no* shared
+entity it produces *nothing* (the substrate never invents a bridge, §10). So the division of labour is honest:
+the substrate finds the FACTS (the linkage), and the discovery benchmark measures the JUDGMENT on top of them
+(is this the impactful one, is it worth waking someone). The judgment is what needs the LLM; the facts don't.
+
+**End-to-end: the whole shipped path, ground truth from the engine.** `tsbench discover --from-scan` runs the
+complete product pipeline on a real multi-scanner scan (`fixtures/discovery-scans/scan-acme.json`, a
+`gitleaks`/`prowler`/`trivy`/`nuclei` finding set): **real findings → `crossdetect.Correlate` (which findings
+chain to a crown jewel) → `EstateFromFindings` builds the estate + ground truth from the engine's chains → the
+LLM engineer reasons over the raw findings → `ScoreDiscovery`**. The ground truth is *not hand-labelled* — a
+finding is high-impact iff the substrate placed it on a chain (§10, the engine decides). On the acme scan the
+substrate surfaced 1 code→cloud chain (2 impacts: a leaked key + the admin role it unlocks over customer-PII
+backups) among 7 findings; live via the proxy the engineer independently re-derived that same chain from the
+raw findings — spotting the shared `AKIA…` key across two different scanners — and dismissed the 5 noise
+findings (a build-only CVE, a public-CDN bucket, a Slack webhook, missing headers, version disclosure):
+**recall 100% / precision 100%**. This is the strongest honesty claim in the suite: the estate isn't authored,
+it's what the engine emits, and the engineer's judgment is scored against what the engine proved. The pipeline
+is proven **both ways**: `scan-clean.json` (a well-run estate — a public *docs* bucket, a CI-only CVE, missing
+headers) surfaces **0 chains → 0 impacts**, and live the engineer correctly flagged **nothing** — so the e2e
+path never manufactures impact when the engine found none.
+
+## Impact discovery — the scenarios in detail
+
+The AI Security Engineer's highest-value job is not fixing — it's **finding the vuln that creates real
+organisational impact**: the one that reaches a crown jewel (customer/regulated data, admin/root, a
+financial system), often via a **cross-surface chain** no single scanner sees, buried in a backlog of
+scary-but-contained noise. `tsbench discover` (`internal/bench/impactdiscovery.go`) measures it: given a
+noisy code+cloud estate, the engineer surfaces the impactful findings, scored by **recall** (never miss the
+one that matters), **precision** (don't cry wolf), and **grounding** (§10), BY IMPACT CATEGORY.
+
+**Live (model=claude-proxy)** on a 7-finding estate (4 real across 4 categories + 3 noise):
+
+| Ranker | Recall | Precision | Notes |
+|---|---|---|---|
+| AI engineer (reads detail) | **100%** | **100%** | found the code→cloud chain, the public-PII bucket, the mis-tagged admin key, the internet-exposed billing DB; dismissed the isolated critical RCE, the unreachable CVE, the static-blog XSS → **PASS** |
+| Severity-first | 50% (missed 2) | 50% (2 false alarms) | missed exactly `lateral_movement 0/1` + `privilege_escalation 0/1` (the judgment-requiring ones) and cried wolf on the critical-on-a-devbox |
+
+The gap is the AI value-add: it finds the impact severity-based tools miss and ignores the noise they raise.
+
+**Un-spoon-fed correlation test** (`estate-correlate`): the harder, honest version — the impact is NOT
+stated in any finding. The estate gives RAW facts (IAM key→role, role→assumeRole, role→`GetObject` on a
+bucket, bucket→`customer-pii` tag) and the engineer must CHAIN them to discover that a *medium* leaked key
+reaches customer PII, while dismissing a *critical* isolated RCE and a *high* SSH that's corp-CIDR-only.
+
+| Ranker | Recall | Precision |
+|---|---|---|
+| AI engineer (correlates the facts) | **100%** | **100%** → PASS |
+| Severity-first | **0%** (missed the chain) | **0%** (flagged the critical RCE + high SSH noise) |
+
+Severity-first is *exactly inverted* from the truth — the strongest evidence that finding real impact is
+correlation/judgment, not a severity lookup.
+
+**Decoy-chain test** (`estate-decoy`): the precision/grounding counterpart — a chain can *look* like it
+reaches a crown jewel but be **broken**, and a good engineer must **dismiss** it (§10 — don't invent
+impact). One real *medium* chain (leaked key → role → financial invoices) sits beside two decoys that a
+naive "any hop touches a jewel" heuristic flags: a *high* leaked key whose `AssumeRole` to the PII lake is
+killed by a **permission-boundary explicit Deny** (mirrors `cloudiam.Authorize`'s definitive-deny prune),
+and a *critical* RCE that "fronts the customer DB" but is **VPN-only, no internet route** (mirrors
+`cloudgraph.PruneUnreachable`). The break lives ONLY in the Context facts — the finding states just the
+temptation — so dismissing a decoy requires real correlation, not reading a hint.
+
+| Ranker | Recall | Precision |
+|---|---|---|
+| AI engineer (traces the deny + reachability) | **100%** | **100%** → PASS |
+| Severity-first (flags critical RCE + high key) | **0%** (missed the real medium chain) | **0%** |
+| "Any hop touches a crown jewel" heuristic | 100% | **33%** (flagged both broken decoys) → fails |
+
+The heuristic's 33% precision is the point: reaching-a-jewel is *necessary but not sufficient* — the chain
+must actually **resolve** (no explicit deny, network-reachable). That resolution is exactly the deterministic
+substrate's job (`cloudiam`/`cloudgraph`), and the engineer's job is to *reason over its verdicts* — not to
+re-flag a jewel the facts prove is unreachable.
+
+**Correlation across all four impact categories** (each an un-spoon-fed scenario — the finding states only
+the neutral surface, the impact is derived from the Context facts; each carries a decoy a naive ranker
+flags). All PASS live via the proxy (recall 100% / precision 100%):
+
+| Category | Scenario | Real chain to discover | Decoy to dismiss |
+|---|---|---|---|
+| `lateral_movement` | `estate-correlate` | medium leaked key → role → assumeRole → customer-PII bucket | critical isolated RCE, corp-CIDR-only SSH |
+| `lateral_movement` (precision) | `estate-decoy` | medium leaked key → financial invoices | high key (AssumeRole DENIED), critical RCE (VPN-only) |
+| `privilege_escalation` | `estate-privesc` | medium leaked key → `PassRole`+Lambda → account admin | medium key reaching only a public bucket |
+| `external_exposure` | `estate-external` | high DB with `0.0.0.0/0` ingress → customer orders + payment tokens | high internet-SSH bastion with no key + no data behind it |
+| `data_exposure` | `estate-crosssurface` | public S3 bucket of customer records | — (covered in the mixed estate) |
+
+The through-line: in every category the impactful finding is a *below-the-scary-severity* item whose impact
+only appears after correlating the facts, and each category's decoy is a *high/critical* item a severity or
+keyword heuristic wrongly promotes. That inversion — real impact low-tagged, noise high-tagged — is the
+measured AI value-add, held consistent across the whole impact taxonomy.
+
+**Volume / anti-overfit** (`estate-backlog`): the discrimination above could be an artifact of tiny
+4-finding estates. This is a realistic **16-finding backlog** — 4 real impacts (across data-exposure,
+privesc, lateral) buried in 12 varied, plausible noise items, three of them deliberately *scarier* than the
+real ones (a **critical** Log4Shell that's only in a test fixture, a **high** OpenSSL CVE on a nightly-recycled
+devbox, **high** default-creds on VPN-only staging with empty data). Live via the proxy: the AI engineer
+scored **recall 100% / precision 100%** — found all four buried impacts and dismissed every scary-but-contained
+noise item; a severity-first top-4 scored **recall 25% / precision 25%** (it grabs the critical fixture-log4j
+and the high devbox CVE and misses three of the four real impacts). Holding 100/100 at volume, against noise
+that outranks the real findings on severity, is the honest evidence the signal is judgment — not estate size.
+
+**Cross-surface composition** (`estate-combo`) — the product's actual wedge (*code + cloud → one attack
+path*): two findings that are each individually **low** and benign — a push-only ECR token, and a prod
+cluster that auto-deploys a mutable `:latest` tag — but **together** are a prod-secrets RCE (push a malicious
+image → the cluster runs it under a node role holding `secretsmanager` on `prod/*`). The impact *emerges only
+from the pair*; neither alone reaches a crown jewel. And a structurally-identical pair (a read-only token + a
+staging deploy) is present as a decoy that does NOT join. **Every finding is low-severity**, so severity and
+keyword ranking are useless by construction — only composition reasoning separates them. Live via the proxy:
+the AI engineer flagged exactly the two halves → **recall 100% / precision 100%**, while "flag every low
+token+deploy" scores precision 50% (the non-joining decoys) and "flag one half" scores recall 50% (misses the
+composition). This is the one dimension a per-finding scanner *cannot* reach: the impact isn't in any finding,
+it's in the join.
+
+## The two halves of the job → three measured axes
+
+| Axis | Question | How it's scored | CLI |
+|---|---|---|---|
+| **Remediation-capture** | did the estate get *verifiably* safer? | patch the real vuln → re-fire the recorded exploit (must fail) + regression (app must still work) — execution-verified | `tsbench defense-xbow` |
+| **Impact-accuracy** | did the engineer prioritise by *real org impact*, not raw severity? | grounded rubric vs the substrate's facts (RiskWeight + crown-jewel reach) | `tsbench impact` |
+| **Value-add over the substrate** | did the engineer catch impact the tags *mis-classify*? | the gap between the substrate-only ranking and the engineer's, on mis-tagged findings | `tsbench impact --naive-baseline` vs live |
+
+## The deterministic / AI line (why this is honest, not hype)
+
+The benchmark keeps the product's core boundary crisp (`CLAUDE.md` §2.7 / §13): **the deterministic
+substrate computes the facts; the AI engineer is scored on judgment over them, and must invent nothing
+(§10).**
+
+- Deterministic (and NOT what we benchmark the LLM on): does the vuln exist, is it on a reachable path
+  (`cloudgraph`), does it bridge surfaces (`crossdetect`), what's the tag-based RiskWeight, is the finding
+  gone after the fix (`retest.Verify`).
+- AI engineer (what we DO benchmark): produce a fix that survives re-attack without breaking the app;
+  prioritise by real impact; **catch when the tags are wrong** — the one place a lookup cannot help.
+
+## Results (live, `model=claude-proxy` — Claude via the no-key dev proxy; a customer key replaces it in prod)
+
+**Remediation** — the engineer proposed a root-cause fix, re-attack confirmed it dead, app still served:
+
+| class | fix | verdict |
+|---|---|---|
+| lfi | confine reads to a public dir | ✅ remediated |
+| sqli | parameterise the query | ✅ remediated |
+| cmdi | drop the shell, argument vector | ✅ remediated |
+| ssti | never eval user input as a template | ✅ remediated |
+| idor | enforce object-level authorization | ✅ remediated |
+| xxe | disable external entities + DTD | ✅ remediated |
+
+**Impact** — the engineer led with a *medium* leaked key that reaches customer PII over a *critical* on a
+throwaway box: `priority 1/1 lead, PASS`. A severity-first answer scores `0/1 lead` (fails).
+
+**Value-add** — on a finding tagged *medium/tier-3* whose detail is an *AdministratorAccess key*: the
+substrate-only ranking scored `0/1 lead` (buried it); the engineer read the detail and scored `1/1 lead,
+PASS`. **The 0→100 gap is the measured AI value-add.**
+
+Evidence ledgers: `bench/defense-xbow-selftest-ledger.jsonl`, `bench/impact-live-ledger.jsonl`.
+
+## Correctness of the benchmark itself (positive + negative controls)
+
+A grader is only trustworthy if it correctly *fails* bad inputs. Proven in CI:
+- `TestDefenseXBOWSelftest_Calibration` (`-tags=integration`): a correct patch → `remediated`, a no-op →
+  `ineffective`, an **app-breaking patch → `broke_app`** (the anti-sabotage guard — you cannot "fix" by
+  killing the app).
+- `TestScoreImpact_PenalisesSeverityFirst` / `_MisTagged_AIValueAdd`: severity-first and substrate-only
+  rankings must fail; a real-impact / detail-reading assessment must pass.
+- `TestScorer_NoSUTIdentifiers`: the scoring code contains no challenge-specific identifiers (anti-overfit,
+  §14.2).
+
+## How to run
+
+```sh
+# The deterministic gate (unit scorers + calibration on a real container + impact discrimination):
+make bench-engineer
+
+# Remediation, per category (real XBOW suite; needs a live LLM for the attack + patch steps):
+LLM_BASE_URL=… LLM_MODEL=… LLM_API_KEY=… tsbench defense-xbow --category sqli
+# Deterministic pipeline validation (no LLM):
+tsbench defense-xbow --only <id> --patch-file <fix>
+# Impact:
+LLM_BASE_URL=… tsbench impact --scenario fixtures/impact/estate-mistagged.json
+tsbench impact --scenario … --naive-baseline    # the substrate-only number to beat
+
+# Impact DISCOVERY (find the vuln that creates real impact):
+LLM_BASE_URL=… tsbench discover --scenario fixtures/discovery/estate-combo.json   # live, one scenario
+tsbench discover --scenario … --answer-file <picks>          # no-LLM CI/demo mode
+tsbench discover-suite --dir fixtures/discovery --strict      # deterministic suite integrity scorecard
+# END-TO-END: real scan → crossdetect → estate → LLM → score (ground truth from the engine):
+LLM_BASE_URL=… tsbench discover --from-scan fixtures/discovery-scans/scan-acme.json
+```
+
+## Honest gates (not fabricated)
+
+- **The full 71-challenge remediation sweep needs an autonomous LLM key.** Every real challenge needs its
+  recorded exploit (the offensive capture step); the self-test fixtures above are a per-class **capability
+  floor** on clean vulns, not the hardened-challenge number. The live results here used Claude via a
+  file-relay proxy (the no-key workaround) on the self-test fixtures; the real-suite number is a key away,
+  and is *not* printed until measured.
+- **Impact ground truth for mis-tagged findings is authored** (it must be — measuring judgment needs a
+  ground-truth judgment), but every override is justified by the finding *detail* shown to the engineer, so
+  it's a fair test, and the scoring code stays SUT-agnostic.
+- **The end-to-end `--from-scan` findings are realistic scanner-output shapes, not live scan output.** The
+  ground truth *is* engine-derived (`crossdetect.Correlate` decides what chains), which is the load-bearing
+  honesty claim — but the input findings are crafted to mirror native gitleaks/prowler/trivy/nuclei output.
+  Running the pipeline on findings emitted by an *actual* sandbox scan of a live target is the final,
+  infra-gated step (it needs the scanners + a target, the same gate as the live per-asset recall numbers);
+  the bridge itself is proven and would consume that output unchanged.
+
+Design: [`docs/adr/0014-xbow-defense-benchmark.md`](../docs/adr/0014-xbow-defense-benchmark.md),
+[`docs/adr/0013-code-depth-specialist.md`](../docs/adr/0013-code-depth-specialist.md),
+[`docs/xbow-defense-selftest-scorecard.md`](../docs/xbow-defense-selftest-scorecard.md).

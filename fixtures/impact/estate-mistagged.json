@@ -1,0 +1,12 @@
+{
+  "id": "estate-mistagged",
+  "name": "Read the detail — the tags mis-classify impact",
+  "issues": [
+    { "id": "key-internal", "title": "Secret in an 'internal-tools' repo", "severity": "medium", "data_tier": 3, "reaches_crown": false,
+      "detail": "the leaked credential is an AWS access key attached to the AdministratorAccess policy — full production account takeover", "true_impact": 1000 },
+    { "id": "crit-devbox", "title": "Critical RCE on a throwaway CI dev box", "severity": "critical", "data_tier": 3, "reaches_crown": false,
+      "detail": "isolated ephemeral build agent, no credentials, torn down nightly" },
+    { "id": "high-portal", "title": "High stored XSS in the internal portal", "severity": "high", "data_tier": 2, "reaches_crown": false,
+      "detail": "reflected in an admin-only page behind SSO" }
+  ]
+}

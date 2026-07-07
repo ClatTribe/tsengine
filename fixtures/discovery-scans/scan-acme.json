@@ -1,0 +1,40 @@
+{
+  "assets": [
+    { "id": "a-repo", "type": "repository", "target": "github.com/acme/deploy" },
+    { "id": "a-cloud", "type": "cloud_account", "target": "aws:123456789012" },
+    { "id": "a-web", "type": "web_application", "target": "https://app.acme.com" }
+  ],
+  "findings": [
+    { "id": "gl-awskey", "rule_id": "gitleaks::aws-access-key", "tool": "gitleaks", "severity": "high",
+      "title": "AWS access key committed in deploy/config.yaml",
+      "description": "Hardcoded long-lived AWS key AKIAIOSFODNN7EXAMPLE found in deploy/config.yaml on the main branch" },
+
+    { "id": "pw-adminrole", "rule_id": "prowler::iam_role_administratoraccess", "tool": "prowler", "severity": "high",
+      "title": "IAM role reachable by a leaked key has AdministratorAccess over customer-PII backups",
+      "endpoint": "AwsIamRole ci-deployer @global",
+      "description": "The role assumed via access key AKIAIOSFODNN7EXAMPLE holds AdministratorAccess, including s3:GetObject on the customer-pii backup bucket" },
+
+    { "id": "tv-libcve", "rule_id": "trivy::CVE-2023-0001", "tool": "trivy", "severity": "medium",
+      "title": "CVE in a build-time dependency",
+      "description": "libbuildtool 1.2 has CVE-2023-0001; used only by a local codegen script, not shipped at runtime" },
+
+    { "id": "nu-headers", "rule_id": "nuclei::missing-security-headers", "tool": "nuclei", "severity": "low",
+      "title": "Missing security headers",
+      "endpoint": "https://app.acme.com/",
+      "description": "CSP and X-Content-Type-Options are not set on the app root" },
+
+    { "id": "pw-cdnpublic", "rule_id": "prowler::s3_bucket_public", "tool": "prowler", "severity": "medium",
+      "title": "S3 bucket acme-cdn is public",
+      "endpoint": "AwsS3Bucket acme-cdn @us-east-1",
+      "description": "Bucket acme-cdn is world-readable; it holds only public static web assets (css/js/images)" },
+
+    { "id": "gl-slackhook", "rule_id": "gitleaks::slack-webhook", "tool": "gitleaks", "severity": "low",
+      "title": "Slack webhook URL in README",
+      "description": "A Slack incoming-webhook URL is present in the README; it posts to a public #announcements channel" },
+
+    { "id": "nu-version", "rule_id": "nuclei::version-disclosure", "tool": "nuclei", "severity": "info",
+      "title": "Server version disclosed",
+      "endpoint": "https://app.acme.com/",
+      "description": "The Server response header discloses the reverse-proxy version" }
+  ]
+}
