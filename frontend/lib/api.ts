@@ -197,6 +197,24 @@ export const api = {
       model: string;
     }>("/v1/l2/translate", { method: "POST", body: "{}" }),
 
+  // AI Code Engineer — run the code-depth specialist over posted code findings + source; returns its
+  // grounded, source-read assessment (exploitable vs contained, blast radius, right-layer fix).
+  runCodeInvestigation: (repo: string, findings: unknown[], source: Record<string, string>) =>
+    call<{
+      summary: string;
+      issues: {
+        id: string; finding_id: string; title: string; severity?: string; exploitable: boolean;
+        rationale?: string; evidence?: string[]; blast_radius?: string; fix_location?: string; fix?: string;
+      }[];
+      tool_calls: number;
+      findings_assessed: number;
+      confirmed_exploitable: number;
+    }>("/v1/code/investigate", { method: "POST", body: JSON.stringify({ repo, findings, source }) }),
+
+  // AI Code Engineer — the stored, confirmed-exploitable source assessments (read-only view) + runnable flag.
+  codeInvestigation: () =>
+    safe<{ total: number; enabled: boolean; confirmed: Finding[] }>("/v1/code/investigate", { total: 0, enabled: false, confirmed: [] }),
+
   // AI Cloud Engineer — the cloud-agent's proven attack paths (read-only view) + whether a run is possible.
   cloudInvestigation: () =>
     safe<{ total: number; enabled: boolean; paths: Finding[] }>("/v1/cloud/investigate", { total: 0, enabled: false, paths: [] }),

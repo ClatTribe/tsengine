@@ -90,13 +90,13 @@ type Service struct {
 	// incidents just open + alert.
 	ProposeIncidentResponse func(platform.Incident) ([]platform.Action, bool)
 
-	// AfterScan, when set, auto-invokes the AI Security Engineer (the L2 translate/reasoning pass)
-	// once a scan pass surfaces something NEW — so the engineer reviews the estate automatically
-	// instead of waiting for a human to click. It fires only when scanned>0 AND ≥1 incident opened
-	// this pass (review on CHANGE, not every idle monitor pass — this bounds the LLM cost); the
-	// entitlement (AIEnabled) + LLM-availability gates live INSIDE the injected func (a Free tenant
-	// must never auto-spend the operator's LLM budget). Best-effort, fire-and-forget. nil → no
-	// auto-review (the on-demand POST /v1/l2/translate still works).
+	// AfterScan, when set, auto-invokes the AI Security Engineer (the L2 translate/reasoning pass) so
+	// the engineer reviews the estate automatically instead of waiting for a human to click. It fires
+	// on any pass with scanned>0; the COST bound + entitlement (AIEnabled) + LLM-availability gates all
+	// live INSIDE the injected func (where the store is): it reviews on a NEW incident OR the tenant's
+	// FIRST review ever (a newly-connected tenant gets an initial analysis), and SKIPS a static estate
+	// re-scanned every pass — so the engine runs continuously without re-spending the LLM idly, and a
+	// Free tenant never auto-spends the operator's budget. Best-effort. nil → no auto-review.
 	AfterScan func(ctx context.Context, tenantID string, findings []types.Finding, openedIncidents int)
 
 	// AfterPass, when set, fires on EVERY monitoring pass (unconditionally, unlike AfterScan) — the
@@ -290,10 +290,12 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 			firstErr = err
 		}
 	}
-	// Auto-review: when this pass surfaced something NEW, the AI Security Engineer reviews the estate
-	// automatically (the entitlement + LLM gates live inside the hook; cost-bounded to CHANGE, not
-	// idle monitor passes). Best-effort — never affects the scan result.
-	if s.AfterScan != nil && scanned > 0 && openedIncidents > 0 {
+	// Auto-review: after any pass that scanned assets, give the AI Security Engineer a chance to review
+	// the estate automatically. The COST bound (fire only on CHANGE or a tenant's FIRST review, never on
+	// idle re-scans of a static estate) + the entitlement/LLM gates all live inside the hook, where the
+	// store is available — so a newly-connected tenant gets an initial analysis even without a brand-new
+	// incident, while a static estate doesn't re-spend the LLM every monitor pass. Best-effort.
+	if s.AfterScan != nil && scanned > 0 {
 		s.AfterScan(ctx, tenantID, current, openedIncidents)
 	}
 	// Time-driven per-pass work (due scheduled pentests) — unconditional; the hook self-gates.

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Sparkles, Cloud, ShieldCheck, Wrench, ArrowUpRight, Search, ListFilter } from "lucide-react";
+import { Sparkles, Cloud, Code2, ShieldCheck, Wrench, ArrowUpRight, Search, ListFilter } from "lucide-react";
 import { api } from "@/lib/api";
 import { PageIntro } from "@/components/ui/page-intro";
 import { GenerateBrief } from "@/components/brief/generate-brief";
@@ -15,6 +15,12 @@ export const dynamic = "force-dynamic";
 // autofix + compliance remediation). Each action runs a bounded agent over the tenant's REAL findings;
 // grounded (§10 — never fabricates), and anything it would change routes through the HITL gate.
 const ACTIONS = [
+  {
+    href: "/code-engineer",
+    icon: Code2,
+    title: "Code deep-dive",
+    desc: "Run the code specialist over your source — is a finding actually exploitable, a leaked secret's blast radius, and the right-layer fix a scanner can't give.",
+  },
   {
     href: "/cloud-engineer",
     icon: Cloud,
