@@ -464,6 +464,7 @@ func cloudEngineCmd(argv []string) error {
 	cqSize := fs.Int("size", 300, "with --cloudquery-large: approximate account size (number of benign principals; other counts scale from it)")
 	cqEmitInv := fs.String("cloudquery-emit-inventory", "", "write the RESOLVED inventory + prowler findings (the `tsengine cloud-assess` input) to <prefix>.json / <prefix>.prowler.json and exit")
 	cqAgent := fs.Bool("agent", false, "also run the LLM agent (cloudagent) over the same account and score it head-to-head vs the deterministic engine (needs LLM_API_KEY)")
+	cqDiscrim := fs.Bool("discrimination", false, "report the AGENT's measurable headroom on this account (substrate @ production budget vs @ a realistic-scale budget) — does the scenario actually separate a good agent from the substrate? LLM-free")
 	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -480,9 +481,9 @@ func cloudEngineCmd(argv []string) error {
 	// CloudQuery config; cloudiam (trust policies + permission boundaries) defines
 	// exploitability truth; the engineer ingests CloudQuery (resolving effective
 	// perms) and is scored against that independent key.
-	if *cqRun || *cqEmit != "" || *cqEmitInv != "" {
+	if *cqRun || *cqEmit != "" || *cqEmitInv != "" || *cqLarge || *cqDiscrim {
 		return runCloudQuery(cqOpts{loadDir: *cqDir, emitDir: *cqEmit, emitInv: *cqEmitInv, maxHyp: *maxHyp,
-			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed, agent: *cqAgent})
+			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed, agent: *cqAgent, discrimination: *cqDiscrim})
 	}
 
 	// Independent-generator check: an external model authors the account AND its
@@ -571,6 +572,7 @@ type cqOpts struct {
 	loadDir, emitDir, emitInv string
 	maxHyp, size              int
 	advanced, large, agent    bool
+	discrimination            bool
 	seed                      int64
 }
 
@@ -635,6 +637,24 @@ func runCloudQuery(o cqOpts) error {
 	findings := cloudquery.EvalProwler(ds.Tables) // prowler "tools say"
 	inv := cloudquery.ToInventory(ds.Tables)      // effective-perms resolution (the eyes)
 	snap := cloudgraph.Ingest(inv)                // the engineer's pinned graph
+
+	// --discrimination: does this scenario actually SEPARATE a good agent from the substrate? Run the engine
+	// at a generous PRODUCTION budget (the reachable ceiling) and a bounded realistic-SCALE budget, and
+	// report the headroom (real, recoverable paths the bounded substrate misses = the agent's opportunity).
+	// LLM-free — establishes the benchmark's discriminating power before any LLM budget is spent.
+	if o.discrimination {
+		prodBudget := max(150, len(ds.AnswerKey.RealTargets)*8)
+		scaleBudget := o.maxHyp
+		if scaleBudget <= 0 || scaleBudget >= prodBudget {
+			scaleBudget = 5 // a tight worklist modeling "can't exhaustively enumerate every path at scale"
+		}
+		sProd := cloudquery.ScoreAssessment(ds, cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: prodBudget}))
+		sScale := cloudquery.ScoreAssessment(ds, cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: scaleBudget}))
+		rep := bench.ComputeCloudDiscrimination("cloudquery-emulated", sProd.RealTotal, prodBudget, scaleBudget, sProd.RealFound, sScale.RealFound)
+		fmt.Print(bench.RenderCloudDiscrimination(rep))
+		return nil
+	}
+
 	a := cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: maxHyp})
 	s := cloudquery.ScoreAssessment(ds, a)
 
