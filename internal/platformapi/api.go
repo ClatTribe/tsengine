@@ -138,46 +138,47 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/challenge", d.auth(d.handleOwnershipChallenge)) // issue DNS/file ownership token (p35 control)
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/verify", d.auth(d.handleOwnershipVerify))       // verify the token is published (grounded)
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
-	mux.HandleFunc("DELETE /v1/connections/{id}", d.auth(d.handleDeleteConnection))                    // disconnect a connection (founder self-serve)
-	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))       // per-connection kill-switch (WRD-4)
-	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation)) // per-tenant cloud write role (Bucket B)
-	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                        // the current tenant (org name/plan) for Settings
-	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                             // per-tenant LLM config (provider/model + has_key)
-	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                             // set provider/model + seal the API key
-	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                  // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
-	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                        // repository PR-review-bot policy (ADR 0010)
-	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                        // set enable + merge-gating block severity
-	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                // per-tenant Slack incident webhook (has_slack_webhook)
-	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                // set + seal the tenant's Slack incident webhook (Bucket B)
-	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                           // per-tenant Jira ticketing destination (base/email/project + has_token)
-	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                           // set + seal the tenant's Jira API token (Bucket B)
-	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))               // per-tenant incident escalation matrix (MDR/SOC)
-	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))               // set the escalation tiers (severity → channels)
-	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                             // per-tenant remediation SLA policy (ack/resolve targets)
-	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                             // set the per-severity SLA targets
-	mux.HandleFunc("GET /v1/settings/compliance-scope", d.auth(d.handleGetComplianceScope))            // target frameworks + applicability profile (scope before analysis)
-	mux.HandleFunc("PUT /v1/settings/compliance-scope", d.auth(d.handlePutComplianceScope))            // set target frameworks + profile
-	mux.HandleFunc("GET /v1/compliance/readiness", d.auth(d.handleComplianceReadiness))                // connect-this-first checklist for the target frameworks
-	mux.HandleFunc("GET /v1/compliance/by-asset", d.auth(d.handleComplianceByAsset))                   // per-asset compliance signal ("is this asset compliant?") — grounded, never false-compliant
-	mux.HandleFunc("GET /v1/compliance/oscal", d.auth(d.handleComplianceOSCAL))                        // control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible)
-	mux.HandleFunc("GET /v1/security/by-asset", d.auth(d.handleSecurityByAsset))                       // per-asset security posture ("is this asset secure?") — FP-aware, never a false "all clear"
-	mux.HandleFunc("GET /v1/custom-frameworks", d.auth(d.handleListCustomFrameworks))                  // bring-your-own-framework: list
-	mux.HandleFunc("POST /v1/custom-frameworks", d.auth(d.handleAddCustomFramework))                   // define a custom framework (controls map to findings/CWEs/built-in controls)
-	mux.HandleFunc("DELETE /v1/custom-frameworks/{id}", d.auth(d.handleDeleteCustomFramework))         // remove a custom framework
-	mux.HandleFunc("GET /v1/custom-frameworks/{id}/posture", d.auth(d.handleCustomFrameworkPosture))   // derived posture + coverage from live findings
-	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))              // planned change-freeze windows (suppress alerting)
-	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))               // schedule a window
-	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow))     // cancel a window
-	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                                   // on-call escalation roster (names + numbers)
-	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                                    // add a contact
-	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                          // remove a contact
-	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                  // global kill-switch: halt/resume all agent action
-	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                            // agent capability manifest (WRD-1): what the automation can touch
-	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                                    // owner's shareable Trust Center token
-	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                            // PUBLIC, HMAC-token-gated; safe aggregates only
-	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                             // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
-	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                      // PUBLIC: book-a-demo / talk-to-sales lead capture
-	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                        // PUBLIC: embeddable SVG grade badge (viral loop)
+	mux.HandleFunc("DELETE /v1/connections/{id}", d.auth(d.handleDeleteConnection))                       // disconnect a connection (founder self-serve)
+	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))          // per-connection kill-switch (WRD-4)
+	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation))    // per-tenant cloud write role (Bucket B)
+	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                           // the current tenant (org name/plan) for Settings
+	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                                // per-tenant LLM config (provider/model + has_key)
+	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                                // set provider/model + seal the API key
+	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                     // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
+	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                           // repository PR-review-bot policy (ADR 0010)
+	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                           // set enable + merge-gating block severity
+	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // per-tenant Slack incident webhook (has_slack_webhook)
+	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's Slack incident webhook (Bucket B)
+	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                              // per-tenant Jira ticketing destination (base/email/project + has_token)
+	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                              // set + seal the tenant's Jira API token (Bucket B)
+	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))                  // per-tenant incident escalation matrix (MDR/SOC)
+	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))                  // set the escalation tiers (severity → channels)
+	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                                // per-tenant remediation SLA policy (ack/resolve targets)
+	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                                // set the per-severity SLA targets
+	mux.HandleFunc("GET /v1/settings/compliance-scope", d.auth(d.handleGetComplianceScope))               // target frameworks + applicability profile (scope before analysis)
+	mux.HandleFunc("PUT /v1/settings/compliance-scope", d.auth(d.handlePutComplianceScope))               // set target frameworks + profile
+	mux.HandleFunc("GET /v1/compliance/readiness", d.auth(d.handleComplianceReadiness))                   // connect-this-first checklist for the target frameworks
+	mux.HandleFunc("GET /v1/compliance/by-asset", d.auth(d.handleComplianceByAsset))                      // per-asset compliance signal ("is this asset compliant?") — grounded, never false-compliant
+	mux.HandleFunc("GET /v1/compliance/oscal", d.auth(d.handleComplianceOSCAL))                           // control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible)
+	mux.HandleFunc("GET /v1/compliance/oscal/assessment-results", d.auth(d.handleComplianceOSCALResults)) // per-tenant findings-as-evidence OSCAL assessment-results (auditor-ingestible)
+	mux.HandleFunc("GET /v1/security/by-asset", d.auth(d.handleSecurityByAsset))                          // per-asset security posture ("is this asset secure?") — FP-aware, never a false "all clear"
+	mux.HandleFunc("GET /v1/custom-frameworks", d.auth(d.handleListCustomFrameworks))                     // bring-your-own-framework: list
+	mux.HandleFunc("POST /v1/custom-frameworks", d.auth(d.handleAddCustomFramework))                      // define a custom framework (controls map to findings/CWEs/built-in controls)
+	mux.HandleFunc("DELETE /v1/custom-frameworks/{id}", d.auth(d.handleDeleteCustomFramework))            // remove a custom framework
+	mux.HandleFunc("GET /v1/custom-frameworks/{id}/posture", d.auth(d.handleCustomFrameworkPosture))      // derived posture + coverage from live findings
+	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))                 // planned change-freeze windows (suppress alerting)
+	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))                  // schedule a window
+	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow))        // cancel a window
+	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                                      // on-call escalation roster (names + numbers)
+	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                                       // add a contact
+	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                             // remove a contact
+	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                     // global kill-switch: halt/resume all agent action
+	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                               // agent capability manifest (WRD-1): what the automation can touch
+	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                                       // owner's shareable Trust Center token
+	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                               // PUBLIC, HMAC-token-gated; safe aggregates only
+	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                                // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
+	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                         // PUBLIC: book-a-demo / talk-to-sales lead capture
+	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                           // PUBLIC: embeddable SVG grade badge (viral loop)
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))   // all remediations + fix-verification status
 	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage)) // per-asset "what was actually tested"
