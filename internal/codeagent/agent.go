@@ -14,13 +14,11 @@ package codeagent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
+	"github.com/ClatTribe/tsengine/internal/agentloop"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
-	"github.com/ClatTribe/tsengine/internal/llmretry"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -103,117 +101,31 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 
 	var transcript []string
 	for i := 0; i < opts.MaxIters && !cc.Done; i++ {
-		out, err := generateWithRetry(ctx, llm, buildPrompt(cc, transcript), 3)
+		out, err := agentloop.GenerateWithRetry(ctx, llm, buildPrompt(cc, transcript), 3)
 		if err != nil {
 			if cc.Summary == "" {
 				cc.Summary = fmt.Sprintf("code investigation stopped early after a model failure (%v); %d issue(s) grounded so far", err, len(cc.Issues))
 			}
 			break
 		}
-		act, perr := parseAction(out)
+		act, perr := agentloop.ParseAction(out)
 		if perr != nil {
 			opts.Ledger.Note("reply was not a valid JSON action: " + perr.Error())
-			transcript = appendCapped(transcript, "OBSERVATION: your reply was not a valid JSON action ("+perr.Error()+"). Reply with exactly one JSON action.")
+			transcript = agentloop.AppendCapped(transcript, "OBSERVATION: your reply was not a valid JSON action ("+perr.Error()+"). Reply with exactly one JSON action.")
 			continue
 		}
 		t, ok := reg[act.Tool]
 		if !ok {
 			opts.Ledger.Note(fmt.Sprintf("unknown tool %q", act.Tool))
-			transcript = appendCapped(transcript, fmt.Sprintf("OBSERVATION: unknown tool %q. Available: %s", act.Tool, toolNames()))
+			transcript = agentloop.AppendCapped(transcript, fmt.Sprintf("OBSERVATION: unknown tool %q. Available: %s", act.Tool, toolNames()))
 			continue
 		}
 		cc.calls++
 		obs := t.handler(cc, act.Args)
 		opts.Ledger.Record(act.Thought, act.Tool, act.Args, obs)
-		transcript = appendCapped(transcript, fmt.Sprintf("ACTION %s(%s)\nOBSERVATION: %s", act.Tool, compactArgs(act.Args), obs))
+		transcript = agentloop.AppendCapped(transcript, fmt.Sprintf("ACTION %s(%s)\nOBSERVATION: %s", act.Tool, agentloop.CompactArgs(act.Args), obs))
 	}
 	return &Report{Summary: cc.Summary, Issues: cc.Issues, Calls: cc.calls}, nil
-}
-
-// generateWithRetry calls the model, retrying transient failures; a permanent fault fails fast.
-func generateWithRetry(ctx context.Context, llm cloudengine.LLM, prompt string, attempts int) (string, error) {
-	var err error
-	for a := 0; a < attempts; a++ {
-		if a > 0 {
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(time.Duration(a) * 2 * time.Second):
-			}
-		}
-		var out string
-		if out, err = llm.Generate(ctx, prompt); err == nil {
-			return out, nil
-		}
-		if !llmretry.IsTransient(err) {
-			return "", err
-		}
-	}
-	return "", err
-}
-
-type action struct {
-	Thought string         `json:"thought"`
-	Tool    string         `json:"tool"`
-	Args    map[string]any `json:"args"`
-}
-
-func parseAction(s string) (action, error) {
-	s = stripFences(s)
-	if i := strings.IndexByte(s, '{'); i > 0 {
-		s = s[i:]
-	}
-	if j := strings.LastIndexByte(s, '}'); j >= 0 {
-		s = s[:j+1]
-	}
-	var a action
-	if err := json.Unmarshal([]byte(s), &a); err != nil {
-		return a, fmt.Errorf("parse: %v", err)
-	}
-	if a.Tool == "" {
-		var wrap struct {
-			Thought string `json:"thought"`
-			Action  action `json:"action"`
-		}
-		if err := json.Unmarshal([]byte(s), &wrap); err == nil && wrap.Action.Tool != "" {
-			wrap.Action.Thought = wrap.Thought
-			return wrap.Action, nil
-		}
-		return a, fmt.Errorf("no tool named")
-	}
-	return a, nil
-}
-
-func stripFences(s string) string {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```") {
-		if i := strings.IndexByte(s, '\n'); i >= 0 {
-			s = s[i+1:]
-		}
-		s = strings.TrimSuffix(strings.TrimSpace(s), "```")
-	}
-	return strings.TrimSpace(s)
-}
-
-func compactArgs(args map[string]any) string {
-	b, _ := json.Marshal(args)
-	if len(b) > 200 {
-		b = append(b[:197], "..."...)
-	}
-	return string(b)
-}
-
-// appendCapped keeps the transcript bounded so the prompt can't grow unbounded.
-func appendCapped(t []string, entry string) []string {
-	if len(entry) > 1800 {
-		entry = entry[:1800] + " …(truncated)"
-	}
-	t = append(t, entry)
-	const keep = 24
-	if len(t) > keep {
-		t = t[len(t)-keep:]
-	}
-	return t
 }
 
 func toolNames() string {
