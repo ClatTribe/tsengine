@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 
@@ -16,18 +17,19 @@ import (
 type Memory struct {
 	mu sync.RWMutex
 
-	tenants     map[string]platform.Tenant
-	connections map[string][]platform.Connection               // tenantID → connections
-	assets      map[string][]platform.Asset                    // tenantID → assets
-	engagements map[string][]platform.Engagement               // tenantID → engagements
-	findings    map[string][]types.Finding                     // tenantID → findings
-	actions     map[string]map[string]platform.Action          // tenantID → actionID → action
-	controls    map[string]map[string]platform.ControlState    // tenantID → "framework/control" → state
-	incidents   map[string]map[string]platform.Incident        // tenantID → incidentID → incident
-	risks       map[string]map[string]platform.Risk            // tenantID → riskID → risk
-	aiAnalyses  map[string]map[string]platform.AIAnalysis      // tenantID → analysisID → AI analysis
-	audits      map[string]map[string]platform.AuditEngagement // tenantID → engagementID → audit
-	policies    map[string]map[string]platform.Policy          // tenantID → policyID → policy
+	tenants         map[string]platform.Tenant
+	connections     map[string][]platform.Connection                  // tenantID → connections
+	assets          map[string][]platform.Asset                       // tenantID → assets
+	engagements     map[string][]platform.Engagement                  // tenantID → engagements
+	findings        map[string][]types.Finding                        // tenantID → findings
+	actions         map[string]map[string]platform.Action             // tenantID → actionID → action
+	controls        map[string]map[string]platform.ControlState       // tenantID → "framework/control" → state
+	incidents       map[string]map[string]platform.Incident           // tenantID → incidentID → incident
+	risks           map[string]map[string]platform.Risk               // tenantID → riskID → risk
+	aiAnalyses      map[string]map[string]platform.AIAnalysis         // tenantID → analysisID → AI analysis
+	complianceSnaps map[string]map[string]platform.ComplianceSnapshot // tenantID → snapshotID → evidence snapshot
+	audits          map[string]map[string]platform.AuditEngagement    // tenantID → engagementID → audit
+	policies        map[string]map[string]platform.Policy             // tenantID → policyID → policy
 
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
 	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
@@ -44,28 +46,29 @@ type Memory struct {
 // NewMemory returns an empty in-memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		tenants:     map[string]platform.Tenant{},
-		connections: map[string][]platform.Connection{},
-		assets:      map[string][]platform.Asset{},
-		engagements: map[string][]platform.Engagement{},
-		findings:    map[string][]types.Finding{},
-		actions:     map[string]map[string]platform.Action{},
-		controls:    map[string]map[string]platform.ControlState{},
-		incidents:   map[string]map[string]platform.Incident{},
-		risks:       map[string]map[string]platform.Risk{},
-		aiAnalyses:  map[string]map[string]platform.AIAnalysis{},
-		audits:      map[string]map[string]platform.AuditEngagement{},
-		policies:    map[string]map[string]platform.Policy{},
-		ignores:     map[string]map[string]platform.IgnoreRule{},
-		exclusions:  map[string]map[string]platform.ExclusionRule{},
-		runtimeEvts: map[string][]platform.RuntimeEvent{},
-		pentests:    map[string]map[string]pentest.Engagement{},
-		reviews:     map[string]map[string]platform.ReviewRequest{},
-		apps:        map[string][]platform.ThirdPartyApp{},
-		users:       map[string]platform.User{},
-		sessions:    map[string]platform.Session{},
-		operators:   map[string]platform.Operator{},
-		opSessions:  map[string]platform.OperatorSession{},
+		tenants:         map[string]platform.Tenant{},
+		connections:     map[string][]platform.Connection{},
+		assets:          map[string][]platform.Asset{},
+		engagements:     map[string][]platform.Engagement{},
+		findings:        map[string][]types.Finding{},
+		actions:         map[string]map[string]platform.Action{},
+		controls:        map[string]map[string]platform.ControlState{},
+		incidents:       map[string]map[string]platform.Incident{},
+		risks:           map[string]map[string]platform.Risk{},
+		aiAnalyses:      map[string]map[string]platform.AIAnalysis{},
+		complianceSnaps: map[string]map[string]platform.ComplianceSnapshot{},
+		audits:          map[string]map[string]platform.AuditEngagement{},
+		policies:        map[string]map[string]platform.Policy{},
+		ignores:         map[string]map[string]platform.IgnoreRule{},
+		exclusions:      map[string]map[string]platform.ExclusionRule{},
+		runtimeEvts:     map[string][]platform.RuntimeEvent{},
+		pentests:        map[string]map[string]pentest.Engagement{},
+		reviews:         map[string]map[string]platform.ReviewRequest{},
+		apps:            map[string][]platform.ThirdPartyApp{},
+		users:           map[string]platform.User{},
+		sessions:        map[string]platform.Session{},
+		operators:       map[string]platform.Operator{},
+		opSessions:      map[string]platform.OperatorSession{},
 	}
 }
 
@@ -434,6 +437,33 @@ func (m *Memory) ListAIAnalyses(_ context.Context, tenantID string) ([]platform.
 	return out, nil
 }
 
+func (m *Memory) PutComplianceSnapshot(_ context.Context, s platform.ComplianceSnapshot) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.complianceSnaps[s.TenantID] == nil {
+		m.complianceSnaps[s.TenantID] = map[string]platform.ComplianceSnapshot{}
+	}
+	m.complianceSnaps[s.TenantID][s.ID] = s
+	return nil
+}
+
+func (m *Memory) ListComplianceSnapshots(_ context.Context, tenantID string) ([]platform.ComplianceSnapshot, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.ComplianceSnapshot, 0, len(m.complianceSnaps[tenantID]))
+	for _, s := range m.complianceSnaps[tenantID] {
+		out = append(out, s)
+	}
+	// oldest-first — the timeline order an auditor reads (map iteration is random).
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CapturedAt.Equal(out[j].CapturedAt) {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].CapturedAt.Before(out[j].CapturedAt)
+	})
+	return out, nil
+}
+
 func (m *Memory) PutAuditEngagement(_ context.Context, e platform.AuditEngagement) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -615,28 +645,29 @@ func (m *Memory) ListThirdPartyApps(_ context.Context, tenantID string) ([]platf
 // Snapshot is the serializable form of a Memory store — what the file-backed store
 // persists. Fields are exported so encoding/json can round-trip them.
 type Snapshot struct {
-	Tenants     map[string]platform.Tenant                     `json:"tenants"`
-	Connections map[string][]platform.Connection               `json:"connections"`
-	Assets      map[string][]platform.Asset                    `json:"assets"`
-	Engagements map[string][]platform.Engagement               `json:"engagements"`
-	Findings    map[string][]types.Finding                     `json:"findings"`
-	Actions     map[string]map[string]platform.Action          `json:"actions"`
-	Controls    map[string]map[string]platform.ControlState    `json:"controls"`
-	Incidents   map[string]map[string]platform.Incident        `json:"incidents"`
-	Risks       map[string]map[string]platform.Risk            `json:"risks,omitempty"`
-	AIAnalyses  map[string]map[string]platform.AIAnalysis      `json:"ai_analyses,omitempty"`
-	Audits      map[string]map[string]platform.AuditEngagement `json:"audits,omitempty"`
-	Policies    map[string]map[string]platform.Policy          `json:"policies,omitempty"`
-	Ignores     map[string]map[string]platform.IgnoreRule      `json:"ignores,omitempty"`
-	Exclusions  map[string]map[string]platform.ExclusionRule   `json:"exclusions,omitempty"`
-	RuntimeEvts map[string][]platform.RuntimeEvent             `json:"runtime_events,omitempty"`
-	Pentests    map[string]map[string]pentest.Engagement       `json:"pentests,omitempty"`
-	Reviews     map[string]map[string]platform.ReviewRequest   `json:"reviews"`
-	Apps        map[string][]platform.ThirdPartyApp            `json:"apps"`
-	Users       map[string]platform.User                       `json:"users"`
-	Sessions    map[string]platform.Session                    `json:"sessions"`
-	Operators   map[string]platform.Operator                   `json:"operators,omitempty"`
-	OpSessions  map[string]platform.OperatorSession            `json:"op_sessions,omitempty"`
+	Tenants         map[string]platform.Tenant                        `json:"tenants"`
+	Connections     map[string][]platform.Connection                  `json:"connections"`
+	Assets          map[string][]platform.Asset                       `json:"assets"`
+	Engagements     map[string][]platform.Engagement                  `json:"engagements"`
+	Findings        map[string][]types.Finding                        `json:"findings"`
+	Actions         map[string]map[string]platform.Action             `json:"actions"`
+	Controls        map[string]map[string]platform.ControlState       `json:"controls"`
+	Incidents       map[string]map[string]platform.Incident           `json:"incidents"`
+	Risks           map[string]map[string]platform.Risk               `json:"risks,omitempty"`
+	AIAnalyses      map[string]map[string]platform.AIAnalysis         `json:"ai_analyses,omitempty"`
+	ComplianceSnaps map[string]map[string]platform.ComplianceSnapshot `json:"compliance_snaps,omitempty"`
+	Audits          map[string]map[string]platform.AuditEngagement    `json:"audits,omitempty"`
+	Policies        map[string]map[string]platform.Policy             `json:"policies,omitempty"`
+	Ignores         map[string]map[string]platform.IgnoreRule         `json:"ignores,omitempty"`
+	Exclusions      map[string]map[string]platform.ExclusionRule      `json:"exclusions,omitempty"`
+	RuntimeEvts     map[string][]platform.RuntimeEvent                `json:"runtime_events,omitempty"`
+	Pentests        map[string]map[string]pentest.Engagement          `json:"pentests,omitempty"`
+	Reviews         map[string]map[string]platform.ReviewRequest      `json:"reviews"`
+	Apps            map[string][]platform.ThirdPartyApp               `json:"apps"`
+	Users           map[string]platform.User                          `json:"users"`
+	Sessions        map[string]platform.Session                       `json:"sessions"`
+	Operators       map[string]platform.Operator                      `json:"operators,omitempty"`
+	OpSessions      map[string]platform.OperatorSession               `json:"op_sessions,omitempty"`
 }
 
 // Export returns a deep-enough copy of the store's data for persistence (taken under
@@ -645,28 +676,29 @@ func (m *Memory) Export() Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return Snapshot{
-		Tenants:     m.tenants,
-		Connections: m.connections,
-		Assets:      m.assets,
-		Engagements: m.engagements,
-		Findings:    m.findings,
-		Actions:     m.actions,
-		Controls:    m.controls,
-		Incidents:   m.incidents,
-		Risks:       m.risks,
-		AIAnalyses:  m.aiAnalyses,
-		Audits:      m.audits,
-		Policies:    m.policies,
-		Ignores:     m.ignores,
-		Exclusions:  m.exclusions,
-		RuntimeEvts: m.runtimeEvts,
-		Pentests:    m.pentests,
-		Reviews:     m.reviews,
-		Apps:        m.apps,
-		Users:       m.users,
-		Sessions:    m.sessions,
-		Operators:   m.operators,
-		OpSessions:  m.opSessions,
+		Tenants:         m.tenants,
+		Connections:     m.connections,
+		Assets:          m.assets,
+		Engagements:     m.engagements,
+		Findings:        m.findings,
+		Actions:         m.actions,
+		Controls:        m.controls,
+		Incidents:       m.incidents,
+		Risks:           m.risks,
+		AIAnalyses:      m.aiAnalyses,
+		ComplianceSnaps: m.complianceSnaps,
+		Audits:          m.audits,
+		Policies:        m.policies,
+		Ignores:         m.ignores,
+		Exclusions:      m.exclusions,
+		RuntimeEvts:     m.runtimeEvts,
+		Pentests:        m.pentests,
+		Reviews:         m.reviews,
+		Apps:            m.apps,
+		Users:           m.users,
+		Sessions:        m.sessions,
+		Operators:       m.operators,
+		OpSessions:      m.opSessions,
 	}
 }
 
@@ -684,6 +716,7 @@ func (m *Memory) load(s Snapshot) {
 	m.incidents = orEmptyIncidents(s.Incidents)
 	m.risks = orEmptyRisks(s.Risks)
 	m.aiAnalyses = orEmptyAIAnalyses(s.AIAnalyses)
+	m.complianceSnaps = orEmptyComplianceSnaps(s.ComplianceSnaps)
 	m.audits = orEmptyAudits(s.Audits)
 	m.policies = orEmptyPolicies(s.Policies)
 	m.ignores = orEmptyIgnores(s.Ignores)
@@ -761,6 +794,12 @@ func orEmptyRisks(m map[string]map[string]platform.Risk) map[string]map[string]p
 func orEmptyAIAnalyses(m map[string]map[string]platform.AIAnalysis) map[string]map[string]platform.AIAnalysis {
 	if m == nil {
 		return map[string]map[string]platform.AIAnalysis{}
+	}
+	return m
+}
+func orEmptyComplianceSnaps(m map[string]map[string]platform.ComplianceSnapshot) map[string]map[string]platform.ComplianceSnapshot {
+	if m == nil {
+		return map[string]map[string]platform.ComplianceSnapshot{}
 	}
 	return m
 }

@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS controls    (seq BIGSERIAL, tenant_id TEXT, framework
 CREATE TABLE IF NOT EXISTS incidents   (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS risks       (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ai_analyses (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS compliance_snaps (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (seq BIGSERIAL, tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
@@ -230,6 +231,12 @@ func (p *Postgres) PutAIAnalysis(ctx context.Context, a platform.AIAnalysis) err
 }
 func (p *Postgres) ListAIAnalyses(ctx context.Context, tenantID string) ([]platform.AIAnalysis, error) {
 	return listJSON[platform.AIAnalysis](ctx, p.db, pgRebind(`SELECT data FROM ai_analyses WHERE tenant_id=? ORDER BY rowid`), tenantID)
+}
+func (p *Postgres) PutComplianceSnapshot(ctx context.Context, s platform.ComplianceSnapshot) error {
+	return p.upsertTID(ctx, `INSERT INTO compliance_snaps(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, s.TenantID, s.ID, s)
+}
+func (p *Postgres) ListComplianceSnapshots(ctx context.Context, tenantID string) ([]platform.ComplianceSnapshot, error) {
+	return listJSON[platform.ComplianceSnapshot](ctx, p.db, pgRebind(`SELECT data FROM compliance_snaps WHERE tenant_id=? ORDER BY rowid`), tenantID)
 }
 
 func (p *Postgres) PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error {

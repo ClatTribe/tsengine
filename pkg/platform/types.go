@@ -729,6 +729,24 @@ type AIReport struct {
 // AIAnalysisID builds the deterministic id for a (kind, scope) so re-runs overwrite the prior analysis.
 func AIAnalysisID(kind, scope string) string { return kind + ":" + scope }
 
+// ComplianceSnapshot is one timestamped point on a framework's CONTINUOUS-EVIDENCE timeline — the
+// answer to "was this control Met across the whole audit window?", which the point-in-time EvidencePack
+// (grc.go) can't show. Unlike AIAnalysis it is APPEND-ONLY (a unique id per capture), so the store keeps
+// the history an auditor reads as continuity proof. StateHash captures the per-control states so a
+// capture is skipped when nothing changed (see grc.CaptureEvidenceSnapshot) — the history stays
+// meaningful without per-monitoring-pass bloat. Grounded (§10): the counts come from real ControlState.
+type ComplianceSnapshot struct {
+	ID            string    `json:"id"` // append-only: Framework ":" RFC3339Nano capture time
+	TenantID      string    `json:"tenant_id"`
+	Framework     string    `json:"framework"`
+	CapturedAt    time.Time `json:"captured_at"`
+	TotalControls int       `json:"total_controls"`
+	MetControls   int       `json:"met_controls"`
+	GapControls   int       `json:"gap_controls"`
+	StateHash     string    `json:"state_hash"` // sha256 of the sorted per-control states — change detection
+	FullyMet      bool      `json:"fully_met"`  // no gaps at capture time — the "audit-ready" bit for this instant
+}
+
 func clamp15(n int) int {
 	if n < 1 {
 		return 1

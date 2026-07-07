@@ -84,6 +84,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.PutIncident(ctx, platform.Incident{ID: tid + "-i", TenantID: tid, Status: platform.IncidentOpen}))
 	must(s.PutRisk(ctx, platform.Risk{ID: tid + "-rk", TenantID: tid, Title: "r", Status: platform.RiskOpen}))
 	must(s.PutAIAnalysis(ctx, platform.AIAnalysis{ID: tid + "-ai", TenantID: tid, Kind: "triage", Summary: "s"}))
+	must(s.PutComplianceSnapshot(ctx, platform.ComplianceSnapshot{ID: tid + "-cs", TenantID: tid, Framework: "soc2", TotalControls: 3, MetControls: 3, FullyMet: true}))
 	must(s.PutAuditEngagement(ctx, platform.AuditEngagement{ID: tid + "-au", TenantID: tid, Framework: "soc2", Status: platform.AuditPlanning}))
 	must(s.PutPolicy(ctx, platform.Policy{ID: tid + "-pol", TenantID: tid, Name: "p", Status: platform.PolicyDraft}))
 	must(s.PutReviewRequest(ctx, platform.ReviewRequest{ID: tid + "-r", TenantID: tid, Status: platform.ReviewOpen}))
@@ -154,6 +155,10 @@ func TestStoreConformance(t *testing.T) {
 				ais, err := s.ListAIAnalyses(ctx, tid)
 				orFail(t, err)
 				isolated("ai_analyses", tid, ids(ais, func(a platform.AIAnalysis) string { return a.ID }))
+
+				css, err := s.ListComplianceSnapshots(ctx, tid)
+				orFail(t, err)
+				isolated("compliance_snaps", tid, ids(css, func(c platform.ComplianceSnapshot) string { return c.ID }))
 
 				aus, err := s.ListAuditEngagements(ctx, tid)
 				orFail(t, err)
