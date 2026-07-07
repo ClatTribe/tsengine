@@ -704,6 +704,18 @@ func runCloudQuery(o cqOpts) error {
 		// flag — did this run actually evaluate the agent, or did the substrate already cover everything
 		// (a silently-uninformative score)? This is the "evaluate L2 on accuracy + completeness" answer.
 		fmt.Print(bench.RenderL2Scorecard(bench.ComputeL2Scorecard(s.RealTotal, s.RealFound, as.RealFound, as.FalseIssues)))
+		// Remediation quality: the L2 agent's job doesn't end at detection — did it propose a fix for each
+		// confirmed path, and did the evaluator VERIFY the fix cuts it (the defensive verified_rate, §10)?
+		proposed, verified := 0, 0
+		for _, is := range rep.Issues {
+			if is.Remediation != "" {
+				proposed++
+			}
+			if is.FixVerified {
+				verified++
+			}
+		}
+		fmt.Print(bench.RenderRemediationScore(bench.ComputeRemediationScore(len(rep.Issues), proposed, verified)))
 		fmt.Print(cloudagent.Render(rep))
 		if !as.Pass {
 			os.Exit(3)
