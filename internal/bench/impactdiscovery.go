@@ -75,6 +75,11 @@ type DiscoveryScore struct {
 
 	// per impact category — which kinds of impact the engineer surfaces well.
 	ByType map[ImpactType]*TypeRecall `json:"by_type,omitempty"`
+
+	// Ranking grades the ORDER of the engineer's prioritized list (its triage), not just the set: did it
+	// rank the truly-impactful findings ABOVE its false flags? A human works the list top-down, so burying
+	// real items under noise is a triage failure even at full recall — set-metrics (TP/FP/recall) miss it.
+	Ranking RankingScore `json:"ranking"`
 }
 
 // TypeRecall is the found/total for one impact category.
@@ -164,6 +169,20 @@ func ScoreDiscovery(sc DiscoveryScenario, d EngineerDiscovery) DiscoveryScore {
 	} else {
 		s.Precision = 1.0 // flagged nothing (vacuous) — recall carries the verdict
 	}
+	// Ranking / triage: grade the ORDER of the engineer's prioritized list. Each flagged id is relevant iff
+	// it is TRULY high-impact (a low-impact flag or an invented id is a false flag); good triage ranks the
+	// real ones above the false ones. Position-aware where TP/FP/precision are set-only.
+	seen := map[string]bool{}
+	ranked := make([]RankedItem, 0, len(d.HighImpactIDs))
+	for _, id := range d.HighImpactIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		f, ok := truth[id]
+		ranked = append(ranked, RankedItem{ID: id, HighImpact: ok && f.HighImpact})
+	}
+	s.Ranking = ComputeRankingScore(ranked)
 	return s
 }
 
@@ -183,6 +202,7 @@ func RenderDiscoveryScore(s DiscoveryScore) string {
 		tr := s.ByType[ImpactType(t)]
 		parts = append(parts, fmt.Sprintf("%s %d/%d", t, tr.Found, tr.Total))
 	}
-	return fmt.Sprintf("%s: recall %.0f%% (missed %d) · precision %.0f%% (%d false alarms) · invented %d · [%s]%s",
-		s.ScenarioID, s.Recall*100, s.FN, s.Precision*100, s.FP, len(s.Invented), strings.Join(parts, " "), pass)
+	return fmt.Sprintf("%s: recall %.0f%% (missed %d) · precision %.0f%% (%d false alarms) · invented %d · triage P@%d %.0f%%/NDCG %.2f · [%s]%s",
+		s.ScenarioID, s.Recall*100, s.FN, s.Precision*100, s.FP, len(s.Invented),
+		s.Ranking.Relevant, s.Ranking.PrecisionAtK*100, s.Ranking.NDCG, strings.Join(parts, " "), pass)
 }
