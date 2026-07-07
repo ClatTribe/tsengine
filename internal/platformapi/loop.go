@@ -41,6 +41,9 @@ type Posturer interface {
 	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
 	// OSCAL emits the crosswalk's control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible).
 	OSCAL(ctx context.Context) ([]byte, error)
+	// OSCALAssessmentResults emits the PER-TENANT findings-as-evidence OSCAL assessment-results (each control
+	// satisfied/not-satisfied, gaps citing the finding that proved them) — the auditor-ingestible evidence doc.
+	OSCALAssessmentResults(ctx context.Context, tenantID string) ([]byte, error)
 	// Continuous compliance evidence: capture a timestamped posture snapshot onto the append-only timeline
 	// (change+heartbeat-gated) and read the timeline back with a continuity summary — the SOC 2 Type II
 	// "held across the window" artifact the point-in-time Report/EvidencePack can't give.

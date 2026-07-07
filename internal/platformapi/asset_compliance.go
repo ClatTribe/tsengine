@@ -25,6 +25,26 @@ func (d Deps) handleComplianceOSCAL(w http.ResponseWriter, r *http.Request, tena
 	_, _ = w.Write(b)
 }
 
+// handleComplianceOSCALResults (GET /v1/compliance/oscal/assessment-results) serves the PER-TENANT
+// findings-as-evidence OSCAL assessment-results — each assessed control satisfied/not-satisfied, every gap
+// citing the observation (finding) that proved it. The auditor-/GRC-tool-ingestible evidence doc that
+// complements the tenant-independent component-definition. Tenant-scoped (§18.2 inv. 2); grounded (§10 — a
+// gap's observations come only from real findings).
+func (d Deps) handleComplianceOSCALResults(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if d.GRC == nil {
+		writeJSON(w, http.StatusServiceUnavailable, errBody("compliance posture unavailable"))
+		return
+	}
+	b, err := d.GRC.OSCALAssessmentResults(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="tsengine-assessment-results-oscal.json"`)
+	_, _ = w.Write(b)
+}
+
 // handleComplianceByAsset returns the per-asset compliance signal — the "is THIS asset compliant?" view
 // (competitor parity: Vanta shows per-resource status). Tenant-scoped (§18.2 inv. 2): reads only this
 // tenant's assets + findings. Grounded (§10): grc.AssetCompliancePosture attributes a finding to an asset
