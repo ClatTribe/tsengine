@@ -71,7 +71,7 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		if rt, tgt := liveCloudMutation(f, asset.Meta["provider"]); rt != "" {
 			payload["remediation_type"] = rt
 			payload["target"] = tgt // the specific bucket, not the whole account
-		} else if rt, runbook, ok := cloudFixCatalog(f); ok {
+		} else if rt, runbook, ok := cloudFixCatalog(f, asset.Meta["provider"]); ok {
 			// Respond breadth: a class-correct fix for the common non-storage cloud-misconfig classes
 			// (IAM privesc, open SG, unencrypted-at-rest, public snapshot/DB, missing MFA, disabled
 			// logging, root key, weak password policy). Named + grounded + promotable — the moment a live
