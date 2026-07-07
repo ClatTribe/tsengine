@@ -113,6 +113,9 @@ func (d Deps) runEstateAgent(ctx context.Context, tenantID string, client l2.Cli
 	// Cloud-depth delegation: when a stored cloud snapshot exists, the generalist can call investigate_cloud
 	// to run the cloud specialist over it. nil when no snapshot store → tool not exposed.
 	dep.CloudInvestigator = d.cloudInvestigator(tenantID)
+	// Code-depth delegation: when a GitHub repo is connected, the generalist can call investigate_code to
+	// run the code specialist over its live source. nil when no connected repo → tool not exposed (cap-safe).
+	dep.CodeInvestigator = d.codeInvestigator(tenantID)
 	budget := l2.DefaultBudget()
 	budget.MaxIterations = maxIter
 	agent, err := l2.New(client, l2.BuildCatalog(dep), budget)
