@@ -108,6 +108,36 @@ triangulation, not a fabricated head-to-head.
 
 ---
 
+## The DEFENSE benchmark (the AI Security Engineer — a lane nobody benchmarks)
+
+XBOW is the yardstick for the *attacker*. There is **no neutral benchmark for the defensive AI
+Security Engineer** — Aikido, Dropzone, Prophet, and every AI-SOC vendor publish MTTR anecdotes and
+internal accuracy, not a leaderboard, because triage/prioritization is subjective. So we *define*
+one, anchored on the single part of the defense job that is execution-verifiable: **did the fix
+actually close the vuln.**
+
+`tsbench defense` (`internal/bench/defense.go`, scenarios under `fixtures/defense/`) grades a seeded
+code+cloud estate against a known answer key. The hero metric is **remediation-capture** — the
+fraction of seeded vulns the engineer's proposed fix *provably closes on re-scan*, computed by reusing
+the SAME `retest.Verify` the product runs (so bench and product can never drift on "what is fixed").
+Its respected external analog is **SWE-bench Verified** ("does the patch make the test pass") — same
+execution-verified spirit. Around it: attack-path recall (the cross-surface chain), triage precision
+(decoys left alone), and grounding (FP=0, the §10 bar).
+
+The load-bearing design choice is the **substrate-vs-agent ablation** (`--mode`): the same scenario
+runs deterministic-remediation-only *and* engineer-driven, and the delta is the LLM engineer's
+**measured lift**. Nobody else ablates their AI against their own substrate — so this is a defensible
+number Aikido's "95% noise" slogan cannot answer. The committed baseline
+(`bench/defense-ledger.jsonl`) shows the deterministic substrate remediates + finds the code→cloud
+chain but *fails triage on the decoy* — exactly where the engineer's lift lands.
+
+Two symmetric, ungameable, climbing scoreboards result: **attack** = XBOW flags captured, **defense**
+= vulns verifiably remediated + agent-lift. The defense one is something no AI-SOC competitor
+publishes. (Honest caveat: triage-precision at scale needs a labeled decoy corpus — the one defensive
+dimension that can't be grounded without curation; remediation-capture and path-recall ground cheaply.)
+
+---
+
 ## The noise / false-positive axis (Aikido's headline metric)
 
 Aikido leads with "**reduce noise by 95 %**" (no published method). This is the same axis our

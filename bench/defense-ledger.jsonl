@@ -1,0 +1,1 @@
+{"ts":"2026-07-06T16:05:50Z","scenario_id":"leaked-key-to-cloud","name":"Leaked AWS key in code reaches cloud admin (the code→cloud wedge)","mode":"substrate","closeable":2,"captured":2,"remediation_rate":1,"expected_paths":1,"found_paths":1,"decoy_actions":1,"invented":0,"pass":false,"evidence_sha256":"b96ce2daedc312d27c039599caec8b83ecb1178e7630a84cc3920ab7f050a0a3"}

@@ -509,8 +509,11 @@ DefaultFinalize)` before storing, so a finding is enriched the same way no matte
 Safe for posture/config classes: the `compliance.map` hook MERGES (never clobbers) the inline mapping
 each detector already set, and threat_intel/service_eol/exploitability no-op without a CVE/product/
 critical-CWE -- so a config finding keeps its inline compliance and gains corroboration+confidence, while
-a CVE-bearing one also gains KEV/EPSS. Honors `TSENGINE_L15_DISABLED`. (Not yet wired: `cloudinvestigate.go`,
-which builds a finding per L2 Issue inline -- the documented follow-on.)
+a CVE-bearing one also gains KEV/EPSS. Honors `TSENGINE_L15_DISABLED`. **`cloudinvestigate.go` (the AI
+Cloud Engineer's own attack-path findings) is now wired too** -- it builds a finding per L2 Issue then runs
+the batch through `enrichFindings` before storing, so the agent's findings are first-class (exploitability/
+confidence + KEV/EPSS on any CVE + merged compliance), not the second-class inline-built findings they used
+to be. The `cloudinvestigate.go`-not-wired caveat is closed.
 
 If you add a new hook, **append it to this list in CLAUDE.md** so the order stays documented.
 
@@ -761,6 +764,14 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
   policy -> neutral), surfaced as a copy-paste snippet in the PR-bot settings panel; the live GitHub inline-post
   is the gated half. All three offline-tested cores ship; live AWS SDK fetch + live IAM/key write + live GitHub
   post are the honest credential/scope-gated halves.
+  **Cross-surface footholds reach the cloud DEPTH agent (G2):** the cloud specialist (`internal/cloudagent`)
+  reasons over the cloud graph in isolation and had no crossdetect awareness, so it could not know a leaked
+  key in code IS a foothold in the account. `platformapi.cloudBridges`/`bridgeHint` now extract the
+  code→cloud (or web/host→cloud) chains from `crossdetect.Correlate` and feed them as grounded
+  `cloudagent.Context.Bridges` ("CROSS-SURFACE ENTRY POINTS" in the agent prompt) at both the on-demand
+  handler and the L2-delegated `cloudInvestigator`. Grounded (§10): a hint only tells the agent WHERE to
+  look; it still confirms every recorded issue in the graph, so a bridge never authorises an ungrounded
+  finding — the wedge's fuel delivered to the one agent that can deeply reason about IAM reachability.
 
 **Config surfaces (the per-asset setup half, end-to-end UX + API)** â each stores its config + drives the
 core; the live *execution* stays each core's gated half:
@@ -852,6 +863,8 @@ Per-asset recall vs. neutral competitor leaderboards where possible:
 | cloud_account (offline) | `tsbench cloud-baseline` (`internal/cloudbench`) | CIS-control recall over a fixture account, prowler-only vs. tsengine (engine+DSPM/CWPP lift) â laptop/CI, no sandbox | Prowler/Scout (no neutral baseline exists) |
 | L1.5 ablation | (any L1 bench) + `TSENGINE_L15_DISABLED=1` | Î-metric = L1.5 lift | Internal |
 | L2 agent | `bench/agent` (scorer + `tsbench agent`); live targets `bench/webgoat_dual` + `bench/juiceshop_full` | detection_rate, **verified_rate** (PoC/evidence-grounded â the XBOW no-FP bar), completion_rate, FP-control | vs XBOW / strix / NodeZero (exploitation-verified) |
+| L2 agent (defense) — **AI Security Engineer** | `tsbench defense` (`internal/bench/defense.go` + `defense_ledger.go`); seeded code+cloud estate scenarios under `fixtures/defense/` | **remediation-capture** (seeded vulns verifiably closed on re-scan, via the SAME `retest.Verify` the product uses — the defensive XBOW-clean hero metric) + attack-path recall + triage precision (decoys) + grounding (FP=0); **substrate-vs-agent ablation** = the LLM engineer's measured lift | Internal (no neutral AI-SOC leaderboard exists — the honest gap) |
+| L2 agent (defense) — **AI Security Engineer**, XBOW-derived | `tsbench defense-xbow` (`internal/bench/defensexbow*.go` + `internal/codeagent`; ADR 0014) over the same XBOW suite | **remediation-capture**: patch the real vuln → the RECORDED winning exploit no longer captures the flag AND the app still functions (the anti-sabotage regression guard) — execution-verified, by vuln CLASS; `--patch-file`/substrate vs LLM ablation | vs XBOW (offense-only — a lane it doesn't have: exploit it, then prove you can fix it) |
 | Multi-trial | `bench/multi_trial` wrapper | median + p10/p90 over N=5 | â |
 
 ### 14.1 Ablation flags
@@ -1252,7 +1265,7 @@ can't be automated. Four capabilities, all ledger-signed, all behind the same st
 
 | Capability | Package(s) | What the engine does (grounded) | Where the human is in the loop (HITL) |
 |---|---|---|---|
-| **Risk register** (vCISO judgment) | `pkg/platform.Risk`, `internal/grc/risk.go`, `internal/platformapi/risks.go`, `/risks` | `CandidateRisks` clusters high+ findings by coarse category (CWEâcat, else tool), cites finding ids, sets a *starting* likelihood/impact. Seeded on-demand (`POST /v1/risks/seed`) AND **automatically after an L2-agent investigation** (cloud-investigate calls `Deps.seedRisks`) â so the agent's proven attack paths land candidate risks on the vCISO desk (agent proposes â named human disposes) | `POST /v1/risks/{id}/decision` â a named owner accepts/mitigates/transfers/avoids residual risk with a rationale; the agent never accepts risk |
+| **Risk register** (vCISO judgment) | `pkg/platform.Risk`, `internal/grc/risk.go`, `internal/platformapi/risks.go`, `/risks` | `CandidateRisks` clusters high+ findings by coarse category (CWEâcat, else tool), cites finding ids, sets a *starting* likelihood/impact. Seeded on-demand (`POST /v1/risks/seed`) AND **automatically after an L2-agent investigation** (cloud-investigate calls `Deps.seedRisks`, AND the post-scan `AutoReviewAfterScan` calls `seedRisks` too — so a routine scan's high+ findings reach the vCISO desk, not only the on-demand cloud path) â so the agent's proven attack paths land candidate risks on the vCISO desk (agent proposes â named human disposes) | `POST /v1/risks/{id}/decision` â a named owner accepts/mitigates/transfers/avoids residual risk with a rationale; the agent never accepts risk |
 | **Audit engagement** (legal attestation) | `pkg/platform.AuditEngagement`/`ControlAttestation`, `internal/grc/audit.go`, `internal/platformapi/audits.go`, `/audits` | seeds the controls-to-attest from the tenant's real posture for the framework | `POST /v1/audits/{id}/attest` â a named **external** auditor renders each control verdict; issue gated on all-attested + named auditor. "Audit-ready, not the audit" |
 | **Pentest sign-off** (named accountability) | `internal/pentest.Signoff`, `internal/platformapi/pentest.go`, `/pentest/{id}` | produces the exploitation-proven VAPT report | `POST /v1/pentest/{id}/signoff` â a named human signs; the rendered report carries the signer line |
 | **vCISO program** (policies) | `pkg/platform.Policy`/`PolicyAck`, `internal/grc/program.go`, `internal/platformapi/program.go`, `/program` | `StarterPolicies` seeds the standard SOC 2 policy set as drafts (idempotent) | `POST /v1/program/{id}/publish` â a named owner publishes; `â¦/ack` â each member acknowledges |

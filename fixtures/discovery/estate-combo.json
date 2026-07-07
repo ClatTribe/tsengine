@@ -1,0 +1,37 @@
+{
+  "id": "estate-combo",
+  "name": "Compose two individually-low findings into one cross-surface impact (the wedge)",
+  "context": [
+    "IAM: token in finding ci-registry-token authenticates as user 'ci-push', whose ONLY permission is ecr:PutImage on ECR repo 'acme/web'.",
+    "Deploy: the PRODUCTION EKS cluster redeploys acme/web:latest (a MUTABLE tag) on every image push; its node role 'eks-node' holds secretsmanager:GetSecretValue on arn:aws:secretsmanager:*:*:secret:prod/*.",
+    "Data: secretsmanager holds prod/stripe-live-key and prod/db-master-password under the prod/ prefix.",
+    "Join: a holder of the ci-push token can push a malicious acme/web:latest; the prod cluster then pulls and runs it, giving code execution under 'eks-node' → all prod secrets. NEITHER finding alone reaches a crown jewel (the token is push-only to one repo; auto-deploy of latest is normal ops) — the IMPACT emerges only from the two together.",
+    "IAM: token in finding metrics-token authenticates as user 'metrics-ro', whose only permission is cloudwatch:GetMetricData (read-only metrics; it can push no image and reach no secret).",
+    "Deploy: the STAGING EKS cluster also redeploys acme/web-staging:latest on push, but node role 'eks-node-staging' has NO secretsmanager access and no route to any prod resource; staging holds only seed data."
+  ],
+  "findings": [
+    { "id": "ci-registry-token", "surface": "code", "severity": "low", "title": "ECR push token committed in a GitHub Actions workflow",
+      "detail": "a long-lived token for user 'ci-push' (ecr:PutImage on acme/web) is hardcoded in .github/workflows/deploy.yml",
+      "high_impact": true, "impact_type": "lateral_movement", "reaches": "all prod secrets — via pushing a malicious image the prod cluster auto-deploys" },
+
+    { "id": "prod-mutable-deploy", "surface": "cloud", "severity": "low", "title": "Production EKS auto-deploys a mutable :latest image tag",
+      "detail": "the prod cluster redeploys acme/web:latest on every push to the registry",
+      "high_impact": true, "impact_type": "lateral_movement", "reaches": "prod-secrets RCE — when combined with a registry push capability" },
+
+    { "id": "metrics-token", "surface": "code", "severity": "low", "title": "CloudWatch read token committed in a script",
+      "detail": "a long-lived token for user 'metrics-ro' (cloudwatch:GetMetricData) is hardcoded in a reporting script",
+      "high_impact": false },
+
+    { "id": "staging-mutable-deploy", "surface": "cloud", "severity": "low", "title": "Staging EKS auto-deploys a mutable :latest tag",
+      "detail": "the staging cluster redeploys acme/web-staging:latest on every push",
+      "high_impact": false },
+
+    { "id": "debug-endpoint", "surface": "web", "severity": "low", "title": "Debug endpoint /__debug reachable in prod",
+      "detail": "a /__debug route echoes request headers; no secrets, no auth bypass",
+      "high_impact": false },
+
+    { "id": "verbose-logging", "surface": "web", "severity": "low", "title": "Request bodies logged at INFO",
+      "detail": "the app logs full request bodies to stdout; logs are access-controlled",
+      "high_impact": false }
+  ]
+}

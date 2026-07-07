@@ -96,6 +96,26 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench cloud-baseline: %v\n", err)
 			os.Exit(1)
 		}
+	case "defense-xbow":
+		if err := defenseXbowCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench defense-xbow: %v\n", err)
+			os.Exit(1)
+		}
+	case "impact":
+		if err := impactCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench impact: %v\n", err)
+			os.Exit(1)
+		}
+	case "discover":
+		if err := discoverCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench discover: %v\n", err)
+			os.Exit(1)
+		}
+	case "discover-suite":
+		if err := discoverSuiteCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench discover-suite: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -116,6 +136,8 @@ Usage:
   tsbench cloud-engine [--scenarios N] [--real R] [--decoy D] [--seed S]
   tsbench agent    --objectives <fixture.json> --scan <scan.json>
   tsbench xbow     --suite <validation-benchmarks-dir> [--dry-run] [--only ID,…] [--level N] [--out <prefix>]
+  tsbench defense  [--scenarios <dir>] [--only <id>] [--mode substrate] [--out <scoreboard.md>]
+  tsbench defense-ledger [--ledger <path>] [--out <file>]
   tsbench scoreboard [--results <json>] [--out <file>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
@@ -139,6 +161,17 @@ deterministic + ungameable). It's XBOW's own public suite, so the solve-rate is
 directly comparable to theirs (rung-2 same-suite parity; see docs/xbow-benchmark.md).
 --dry-run loads the suite and prints the plan with no Docker/scan; the real run
 needs the sandbox image + an LLM for the deep agent.
+
+defense is the DEFENSIVE benchmark — the AI Security Engineer's twin of xbow.
+It loads seeded code+cloud estate scenarios (fixtures/defense/<name>/scenario.json),
+runs a system-under-test to REMEDIATE the estate, and scores it against a
+post-fix oracle. The hero metric is remediation-capture (seeded vulns verifiably
+closed on re-scan, via the same retest.Verify the product uses), plus
+attack-path recall, triage precision (decoys left alone), and grounding (nothing
+invented). --mode substrate runs the deterministic proposer (the CI baseline);
+agent mode (the LLM engineer's lift) is the documented follow-on. Runs append a
+durable, diffable ledger (bench/defense-ledger.jsonl); defense-ledger renders the
+scoreboard from it.
 
 parity is the differential-recall gate for the asset types with NO public
 leaderboard: it runs <tool> standalone (via replay) and through a full scan

@@ -165,12 +165,24 @@ func (d Deps) AutoReviewAfterScan(ctx context.Context, tenantID string, findings
 		slog.Warn("[auto-review] AI engineer review failed", "tenant", tenantID, "err", err)
 		return
 	}
+	// Agent proposes → named vCISO disposes (§18.4): the whole-estate review clusters the tenant's high+
+	// findings into candidate risks on the vCISO desk — the SAME agent-proposes-risk step the on-demand
+	// cloud investigation does (cloudinvestigate.go), which the routine scan→auto-review path was missing.
+	// Without this, a normal scan's high+ findings never reached the vCISO desk unless a human manually
+	// POSTed /v1/risks/seed. Grounded + idempotent (CandidateRisks is deterministic; seedRisks never
+	// overwrites a human's decision). Best-effort — a seeding error never affects the scan.
+	risksProposed := 0
+	if seeded, serr := d.seedRisks(ctx, tenantID); serr == nil {
+		risksProposed = len(seeded)
+	} else {
+		slog.Warn("[auto-review] risk seeding failed", "tenant", tenantID, "err", serr)
+	}
 	// Persist the auto-review as the tenant's latest triage (like the on-demand path) so it survives to the
 	// /brief console — the continuous engine's work is visible without the user re-running it.
 	d.persistAIAnalysis(ctx, tenantID, "triage", "", "Auto-review after scan", out, time.Now())
 	if d.Recorder != nil {
 		d.Recorder.Record("ai engineer auto-reviewed", "l2-lead",
-			map[string]any{"tenant_id": tenantID, "opened_incidents": openedIncidents, "reports": len(out.Findings), "summary": out.Summary},
+			map[string]any{"tenant_id": tenantID, "opened_incidents": openedIncidents, "reports": len(out.Findings), "risks_proposed": risksProposed, "summary": out.Summary},
 			"AI Security Engineer auto-review after scan change")
 	}
 }
