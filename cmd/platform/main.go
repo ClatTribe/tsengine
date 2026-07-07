@@ -443,6 +443,9 @@ func main() {
 	// human to click /v1/l2/translate. The hook self-gates (AIEnabled + an available LLM), so it's a
 	// no-op when AI isn't entitled/configured — a Free tenant never auto-spends the operator's budget.
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
+	// Continuous pentesting: each monitoring pass runs any engagement whose recurring schedule is due
+	// (a safe PASSIVE re-verify — never auto active exploitation). Self-gating (no-op when nothing is due).
+	svc.AfterPass = func(ctx context.Context, tenantID string) { apiDeps.RunDuePentests(ctx, tenantID) }
 	api := platformapi.NewHandler(apiDeps)
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls
