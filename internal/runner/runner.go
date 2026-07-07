@@ -90,13 +90,13 @@ type Service struct {
 	// incidents just open + alert.
 	ProposeIncidentResponse func(platform.Incident) ([]platform.Action, bool)
 
-	// AfterScan, when set, auto-invokes the AI Security Engineer (the L2 translate/reasoning pass)
-	// once a scan pass surfaces something NEW — so the engineer reviews the estate automatically
-	// instead of waiting for a human to click. It fires only when scanned>0 AND ≥1 incident opened
-	// this pass (review on CHANGE, not every idle monitor pass — this bounds the LLM cost); the
-	// entitlement (AIEnabled) + LLM-availability gates live INSIDE the injected func (a Free tenant
-	// must never auto-spend the operator's LLM budget). Best-effort, fire-and-forget. nil → no
-	// auto-review (the on-demand POST /v1/l2/translate still works).
+	// AfterScan, when set, auto-invokes the AI Security Engineer (the L2 translate/reasoning pass) so
+	// the engineer reviews the estate automatically instead of waiting for a human to click. It fires
+	// on any pass with scanned>0; the COST bound + entitlement (AIEnabled) + LLM-availability gates all
+	// live INSIDE the injected func (where the store is): it reviews on a NEW incident OR the tenant's
+	// FIRST review ever (a newly-connected tenant gets an initial analysis), and SKIPS a static estate
+	// re-scanned every pass — so the engine runs continuously without re-spending the LLM idly, and a
+	// Free tenant never auto-spends the operator's budget. Best-effort. nil → no auto-review.
 	AfterScan func(ctx context.Context, tenantID string, findings []types.Finding, openedIncidents int)
 
 	// AfterPass, when set, fires on EVERY monitoring pass (unconditionally, unlike AfterScan) — the
