@@ -94,6 +94,43 @@ func TestChain_CodeLeakToCloudAdmin(t *testing.T) {
 	}
 }
 
+// A leaked GitHub token in code bridges to the SaaS surface where the SAME token grants access — the
+// code→SaaS foothold that only AWS keys used to make. Grounded on the exact shared token value.
+func TestChain_GitHubTokenLeakBridgesCodeToSaaS(t *testing.T) {
+	const pat = "ghp_1234567890abcdefABCDEF1234567890abcd" // ghp_ + 36 chars = a well-formed GitHub PAT
+	repo := Asset{
+		ID: "s-repo", Type: "repository", Target: "github.com/acme/app",
+		Findings: []Finding{{
+			ID: "gl-010", Title: "GitHub token committed", Severity: "high", Tool: "gitleaks",
+			Endpoint: "ci/deploy.sh:4", Description: "hardcoded personal access token " + pat,
+		}},
+	}
+	saas := Asset{
+		ID: "s-saas", Type: "cloud_account", Target: "github-org-acme",
+		Findings: []Finding{{
+			ID: "sspm-3", Title: "Org-admin automation uses a static token", Severity: "critical",
+			Description: "the token " + pat + " has admin:org scope — full access to administer the org (privilege escalation across all repos)",
+		}},
+	}
+	chains := Correlate([]Asset{repo, saas})
+	if len(chains) != 1 {
+		t.Fatalf("want 1 code→SaaS chain via the shared GitHub token, got %d: %+v", len(chains), chains)
+	}
+	if !strings.Contains(chains[0].Steps[0].ViaEntity, pat) {
+		t.Errorf("bridge should cite the leaked GitHub token, got %q", chains[0].Steps[0].ViaEntity)
+	}
+}
+
+// A common word shared across two findings must NOT bridge — only a well-formed provider token does, so a
+// generic string can never invent a cross-surface chain (§10).
+func TestNoChain_GenericStringNotASecretBridge(t *testing.T) {
+	a := Asset{ID: "a", Type: "repository", Target: "r", Findings: []Finding{{ID: "1", Title: "uses token deploy_helper", Severity: "high"}}}
+	b := Asset{ID: "b", Type: "cloud_account", Target: "c", Findings: []Finding{{ID: "2", Title: "role deploy_helper is admin", Severity: "critical", Description: "privilege escalation"}}}
+	if chains := Correlate([]Asset{a, b}); len(chains) != 0 {
+		t.Errorf("a shared generic word must NOT bridge as a secret, got %d chains: %+v", len(chains), chains)
+	}
+}
+
 // The sibling: a container_image with a baked-in credential (a leaked key in an image layer) reaching the
 // same cloud crown jewel. Same class as the repo case — an artifact carrying a real secret is an entry.
 func TestChain_ContainerLeakToCloudAdmin(t *testing.T) {
