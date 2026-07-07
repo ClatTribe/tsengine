@@ -2,6 +2,7 @@ package remediate
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -69,19 +70,95 @@ func TestProposeCloud_S3PublicGetsLiveWritePath(t *testing.T) {
 	}
 }
 
-func TestProposeCloud_NonS3StaysAccountRunbook(t *testing.T) {
+func TestProposeCloud_UnclassifiableStaysAccountRunbook(t *testing.T) {
 	asset := platform.Asset{ID: "a", TenantID: "t1", Type: "cloud_account", Target: "aws:111122223333", Meta: map[string]string{"provider": "aws"}}
-	// A non-S3-public cloud finding (e.g. root MFA) → no live write path yet.
-	f := types.Finding{ID: "f2", Severity: types.SeverityHigh, Title: "Root account MFA not enabled", RuleID: "prowler::iam_root_mfa"}
+	// A cloud finding that matches NO remediation class (not storage, not IAM, not SG/encryption/MFA/…)
+	// → falls back to the generic account-scoped runbook with no remediation_type.
+	f := types.Finding{ID: "f2", Severity: types.SeverityMedium, Title: "Tag policy is not applied to the account", RuleID: "prowler::org_tag_policy"}
 	act, ok := Propose(f, asset, nil)
 	if !ok {
 		t.Fatal("should still produce an action")
 	}
 	if _, has := act.Payload["remediation_type"]; has {
-		t.Error("a finding with no live write path must NOT carry a remediation_type (stays an account-scoped runbook)")
+		t.Errorf("an unclassifiable finding must NOT carry a remediation_type (stays an account-scoped runbook), got %v", act.Payload["remediation_type"])
 	}
 	if act.Payload["target"] != "aws:111122223333" {
 		t.Errorf("the account runbook target should be the account, got %v", act.Payload["target"])
+	}
+}
+
+// TestProposeCloud_BreadthCatalog: the Respond breadth catalog gives the common non-storage cloud-
+// misconfig classes a class-correct remediation_type + a SPECIFIC runbook (grounded on the finding's own
+// resource), instead of the old generic "review this" ticket. Each is named + promotable to a live write.
+func TestProposeCloud_BreadthCatalog(t *testing.T) {
+	asset := platform.Asset{ID: "a", TenantID: "t1", Type: "cloud_account", Target: "aws:111122223333", Meta: map[string]string{"provider": "aws"}}
+	cases := []struct {
+		name      string
+		f         types.Finding
+		wantType  string
+		wantInRun string // a substring the specific runbook must contain (proves it's class-correct, not generic)
+	}{
+		{
+			name:      "open security group",
+			f:         types.Finding{ID: "sg", Title: "Security group allows 0.0.0.0/0 ingress on port 22", RuleID: "prowler::ec2_sg_open_ssh", Endpoint: "sg-0abc123"},
+			wantType:  "sg_restrict_ingress",
+			wantInRun: "revoke-security-group-ingress",
+		},
+		{
+			name:      "unencrypted volume",
+			f:         types.Finding{ID: "ebs", Title: "EBS volume is unencrypted at rest", RuleID: "prowler::ec2_ebs_encryption", Endpoint: "vol-0abc"},
+			wantType:  "enable_encryption",
+			wantInRun: "encryption at rest",
+		},
+		{
+			name:      "public RDS",
+			f:         types.Finding{ID: "rds", Title: "RDS database instance is publicly accessible", RuleID: "prowler::rds_public", Endpoint: "db-prod-1"},
+			wantType:  "disable_public_access",
+			wantInRun: "PubliclyAccessible=false",
+		},
+		{
+			name:      "root MFA",
+			f:         types.Finding{ID: "mfa", Title: "Root account MFA not enabled", RuleID: "prowler::iam_root_mfa", Endpoint: "root"},
+			wantType:  "enforce_mfa",
+			wantInRun: "MFA",
+		},
+		{
+			name:      "cloudtrail disabled",
+			f:         types.Finding{ID: "ct", Title: "CloudTrail logging is disabled in region", RuleID: "prowler::cloudtrail_disabled", Endpoint: "us-east-1"},
+			wantType:  "enable_logging",
+			wantInRun: "CloudTrail",
+		},
+		{
+			name:      "root access key",
+			f:         types.Finding{ID: "rk", Title: "Root account has an active access key", RuleID: "prowler::iam_root_key", Endpoint: "root"},
+			wantType:  "remove_root_access_key",
+			wantInRun: "root-account access key",
+		},
+		{
+			name:      "weak password policy",
+			f:         types.Finding{ID: "pp", Title: "Account password policy minimum length is too short", RuleID: "prowler::iam_password_policy", Endpoint: "aws:111122223333"},
+			wantType:  "strengthen_password_policy",
+			wantInRun: "update-account-password-policy",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			act, ok := Propose(c.f, asset, nil)
+			if !ok {
+				t.Fatal("should produce an action")
+			}
+			if act.Payload["remediation_type"] != c.wantType {
+				t.Errorf("want remediation_type %q, got %v", c.wantType, act.Payload["remediation_type"])
+			}
+			// target must be the finding's own resource (grounded), not the account.
+			if c.f.Endpoint != "" && act.Payload["target"] != c.f.Endpoint {
+				t.Errorf("target should be the finding's resource %q, got %v", c.f.Endpoint, act.Payload["target"])
+			}
+			run, _ := act.Payload["remediation"].(string)
+			if !strings.Contains(run, c.wantInRun) {
+				t.Errorf("runbook should be class-correct (contain %q), got:\n%s", c.wantInRun, run)
+			}
+		})
 	}
 }
 
