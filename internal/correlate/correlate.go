@@ -29,6 +29,13 @@ const (
 	// (identity) who also has cloud admin (cloud) and prod repo push (code) is ONE blast radius, not three
 	// shrugs. Grounded: a real shared email; generic mailbox/vendor local-parts are excluded (genericEmailLocal).
 	EntEmail EntityKind = "email"
+	// EntSecret bridges a leaked NON-AWS credential across surfaces. AWS keys already bridge (EntAWSKey);
+	// but gitleaks/trufflehog/OSINT also find GitHub PATs, Slack tokens, Google API keys, and Stripe keys —
+	// and a GitHub token leaked in code (repository) that ALSO appears in a SaaS-posture / OSINT finding is
+	// the same code→SaaS foothold, not two unrelated leaks. The bridge value is the token itself, so a match
+	// is an EXACT shared secret (grounded §10) — only well-formed provider tokens match (specific prefixes +
+	// length), never a generic substring, so a shared common word can't invent a chain.
+	EntSecret EntityKind = "secret"
 )
 
 // Entity is a shared identifier that can bridge two assets.
@@ -214,6 +221,16 @@ var (
 	bucketRe = regexp.MustCompile(`(?:s3://|arn:aws:s3:::)([a-z0-9.-]{3,63})`)
 	ipRe     = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	emailRe  = regexp.MustCompile(`[\w.+-]+@[\w-]+\.[\w.-]+`)
+	// Well-formed NON-AWS provider secrets — specific prefixes + length, so only a real token matches (an
+	// EXACT shared value bridges, never a generic substring). Mirrors the secret classes gitleaks/
+	// trufflehog/OSINT surface (GitHub, Slack, Google, Stripe).
+	secretRes = []*regexp.Regexp{
+		regexp.MustCompile(`gh[posru]_[A-Za-z0-9]{36}`),      // GitHub PAT / OAuth / app / user / refresh token
+		regexp.MustCompile(`github_pat_[A-Za-z0-9_]{60,}`),   // GitHub fine-grained PAT
+		regexp.MustCompile(`xox[baprs]-[A-Za-z0-9-]{10,48}`), // Slack bot/user/app/refresh token
+		regexp.MustCompile(`AIza[0-9A-Za-z_-]{35}`),          // Google API key
+		regexp.MustCompile(`[sr]k_live_[0-9A-Za-z]{24,}`),    // Stripe live secret/restricted key
+	}
 )
 
 // genericEmailLocal: local-parts that are almost never the SUBJECT of a finding (mailboxes, reporters,
@@ -232,6 +249,13 @@ func extractEntities(f Finding) []Entity {
 	out = append(out, f.Entities...)
 	for _, k := range awsKeyRe.FindAllString(blob, -1) {
 		out = append(out, Entity{EntAWSKey, k})
+	}
+	// Leaked non-AWS provider secrets (GitHub/Slack/Google/Stripe) — an exact shared token bridges the
+	// surface it leaked on (code) to any surface it's reused on (SaaS/OSINT/another repo).
+	for _, re := range secretRes {
+		for _, s := range re.FindAllString(blob, -1) {
+			out = append(out, Entity{EntSecret, s})
+		}
 	}
 	for _, a := range arnRe.FindAllString(blob, -1) {
 		out = append(out, Entity{EntARN, a})
