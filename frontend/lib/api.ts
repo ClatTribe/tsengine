@@ -431,11 +431,11 @@ export const api = {
   createPentest: (body: {
     name: string;
     mode: string;
-    rules_of_engagement: { authorized_targets: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string; consent?: string };
+    rules_of_engagement: { authorized_targets: string[]; out_of_scope?: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string; consent?: string };
   }) => call<PentestEngagement>("/v1/pentest", { method: "POST", body: JSON.stringify(body) }),
   // Create a pentest PRE-SCOPED to an asset ("pentest this asset"). Scope is the asset's own target
   // (server-side), so the SMB user doesn't re-type it; the same active-consent gate applies.
-  pentestFromAsset: (assetId: string, body: { name?: string; mode: string; max_requests?: number; allow_active?: boolean; authorized_by?: string; consent?: string }) =>
+  pentestFromAsset: (assetId: string, body: { name?: string; mode: string; max_requests?: number; out_of_scope?: string[]; allow_active?: boolean; authorized_by?: string; consent?: string }) =>
     call<PentestEngagement>(`/v1/assets/${assetId}/pentest`, { method: "POST", body: JSON.stringify(body) }),
   runPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/run`, { method: "POST" }),
   // Named human sign-off on the VAPT report (the HITL accountability layer).
