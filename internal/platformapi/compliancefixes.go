@@ -18,10 +18,10 @@ import (
 // ControlFix is the fixability of one gap control.
 type ControlFix struct {
 	ControlID     string   `json:"control_id"`
-	FindingCount  int      `json:"finding_count"`  // findings citing this control (from the report)
-	FixableCount  int      `json:"fixable_count"`  // of those, how many have a remediation Action (any status)
-	PendingCount  int      `json:"pending_count"`  // fixes awaiting the owner's approval (the actionable subset)
-	AppliedCount  int      `json:"applied_count"`  // fixes already applied (progress)
+	FindingCount  int      `json:"finding_count"`            // findings citing this control (from the report)
+	FixableCount  int      `json:"fixable_count"`            // of those, how many have a remediation Action (any status)
+	PendingCount  int      `json:"pending_count"`            // fixes awaiting the owner's approval (the actionable subset)
+	AppliedCount  int      `json:"applied_count"`            // fixes already applied (progress)
 	ActionIDs     []string `json:"action_ids,omitempty"`     // the actions that touch this control's findings
 	PendingAction string   `json:"pending_action,omitempty"` // a representative pending action id (deep-link to inbox)
 }
