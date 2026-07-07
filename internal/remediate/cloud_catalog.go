@@ -39,11 +39,12 @@ const (
 )
 
 // cloudMatcher is one class in the catalog: a grounded predicate over the finding's own text plus the
-// class's remediation_type and a runbook builder that names the exact fix for that resource.
+// class's remediation_type and a runbook builder that names the exact fix for that resource on the
+// finding's OWN cloud (aws | gcp | azure).
 type cloudMatcher struct {
 	rtype   string
 	match   func(hay string) bool
-	runbook func(f types.Finding) string
+	runbook func(f types.Finding, provider string) string
 }
 
 // contains-any helper: true if hay contains any of the needles.
@@ -64,6 +65,21 @@ func resourceOf(f types.Finding) string {
 	return "the affected resource"
 }
 
+// pp picks the provider-specific runbook step so a GCP or Azure finding never gets AWS CLI guidance.
+// Empty provider is treated as AWS (the original single-cloud default, matching liveCloudMutation); an
+// unrecognized provider also falls back to the AWS phrasing (the most common), which is honest — the
+// descriptive "what to do" half of every runbook is provider-agnostic, only this CLI line differs.
+func pp(provider, aws, gcp, azure string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "gcp", "google", "gcloud":
+		return gcp
+	case "azure", "az":
+		return azure
+	default:
+		return aws
+	}
+}
+
 // cloudCatalog is ordered MOST-SPECIFIC first — the first matching class wins, so e.g. IAM-privesc is
 // tested before the broad MFA/logging classes. Storage-public and leaked-key are handled on their own
 // live paths (liveCloudMutation / the repo key-revoke) and are deliberately NOT in this catalog.
@@ -71,11 +87,13 @@ var cloudCatalog = []cloudMatcher{
 	{
 		rtype: rtypeIAMRestrict,
 		match: func(hay string) bool { return isIAMPrivescHay(hay) },
-		runbook: func(f types.Finding) string {
+		runbook: func(f types.Finding, provider string) string {
 			return "Tighten the offending principal's policy (" + resourceOf(f) + "): remove the wildcard/" +
-				"privilege-escalation permission (e.g. iam:PassRole + a compute create, or a \"*\":\"*\" action) and " +
-				"replace it with a least-privilege policy scoped to the resources it actually uses.\n" +
-				"  aws iam list-attached-role-policies / put-role-policy with the scoped document, then re-run the scan to confirm the privesc edge is gone."
+				"privilege-escalation permission and replace it with a least-privilege policy scoped to the resources it actually uses, then re-run the scan to confirm the privesc edge is gone.\n" +
+				pp(provider,
+					"  aws iam list-attached-role-policies / put-role-policy with the scoped document; strip iam:PassRole + compute-create or a \"*\":\"*\" action.",
+					"  gcloud projects remove-iam-policy-binding <proj> --member=<principal> --role=<broad-role>, then add a least-privilege custom role; watch for actAs / setIamPolicy.",
+					"  az role assignment delete --assignee <principal> --role <broad-role>, then assign a least-privilege built-in/custom role; watch for roleAssignments/write + elevateAccess.")
 		},
 	},
 	{
@@ -84,11 +102,13 @@ var cloudCatalog = []cloudMatcher{
 			return anyOf(hay, "security group", "security-group", "sg-", "firewall", "ingress", "inbound", "nsg", "network security group") &&
 				anyOf(hay, "0.0.0.0/0", "::/0", "open to", "internet", "any source", "world", "public", "unrestricted", "wide open")
 		},
-		runbook: func(f types.Finding) string {
+		runbook: func(f types.Finding, provider string) string {
 			return "Restrict the wide-open ingress rule on " + resourceOf(f) + ": remove the 0.0.0.0/0 (or ::/0) " +
-				"source and scope it to the specific CIDR / prefix-list / peered SG that needs it.\n" +
-				"  aws ec2 revoke-security-group-ingress --group-id <sg> --protocol tcp --port <port> --cidr 0.0.0.0/0\n" +
-				"  then re-add a narrowed rule for the real client range."
+				"source and scope it to the specific CIDR / prefix-list / peered network that needs it, then re-add a narrowed rule for the real client range.\n" +
+				pp(provider,
+					"  aws ec2 revoke-security-group-ingress --group-id <sg> --protocol tcp --port <port> --cidr 0.0.0.0/0",
+					"  gcloud compute firewall-rules update <rule> --source-ranges=<narrow-cidr>  (or delete the rule allowing 0.0.0.0/0)",
+					"  az network nsg rule update -g <rg> --nsg-name <nsg> -n <rule> --source-address-prefixes <narrow-cidr>")
 		},
 	},
 	{
@@ -97,10 +117,12 @@ var cloudCatalog = []cloudMatcher{
 			return anyOf(hay, "unencrypted", "not encrypted", "no encryption", "encryption disabled", "encryption is not", "without encryption", "encryption at rest") &&
 				anyOf(hay, "volume", "ebs", "disk", "rds", "database", "bucket", "snapshot", "s3", "storage", "efs", "sqs", "sns", "dynamodb", "kms")
 		},
-		runbook: func(f types.Finding) string {
-			return "Enable encryption at rest on " + resourceOf(f) + " using a CMK.\n" +
-				"  EBS/RDS: create an encrypted snapshot/copy with --kms-key-id and replace the resource; new resources: enable default encryption.\n" +
-				"  S3: aws s3api put-bucket-encryption with aws:kms. Verify the resource reports SSE/CMK enabled."
+		runbook: func(f types.Finding, provider string) string {
+			return "Enable encryption at rest on " + resourceOf(f) + " using a customer-managed key (CMK), then verify the resource reports it.\n" +
+				pp(provider,
+					"  EBS/RDS: create an encrypted snapshot/copy with --kms-key-id and replace the resource; S3: aws s3api put-bucket-encryption with aws:kms; enable account default encryption.",
+					"  Disks/Cloud SQL: recreate with a CMEK (Cloud KMS) key; buckets: gcloud storage buckets update gs://<b> --default-encryption-key=<kms-key>.",
+					"  Managed disks / storage: set customer-managed keys (az disk-encryption-set / az storage account update --encryption-key-source Microsoft.Keyvault) and enable infrastructure encryption.")
 		},
 	},
 	{
@@ -109,10 +131,12 @@ var cloudCatalog = []cloudMatcher{
 			return anyOf(hay, "public", "publicly", "internet-exposed", "internet exposed", "exposed to the internet") &&
 				anyOf(hay, "snapshot", "ami", "image", "rds", "database", "db instance", "redshift", "elasticsearch", "opensearch", "instance is public", "publicly accessible")
 		},
-		runbook: func(f types.Finding) string {
-			return "Make " + resourceOf(f) + " private: remove the public attribute / grant.\n" +
-				"  Snapshot/AMI: aws ec2 modify-snapshot-attribute (or modify-image-attribute) --operation-type remove --group-names all\n" +
-				"  RDS/Redshift: modify the instance to PubliclyAccessible=false and place it in a private subnet."
+		runbook: func(f types.Finding, provider string) string {
+			return "Make " + resourceOf(f) + " private: remove the public attribute / grant and place it in a private network.\n" +
+				pp(provider,
+					"  Snapshot/AMI: aws ec2 modify-snapshot-attribute (or modify-image-attribute) --operation-type remove --group-names all; RDS/Redshift: modify to PubliclyAccessible=false in a private subnet.",
+					"  Remove allUsers/allAuthenticatedUsers bindings (images/snapshots); Cloud SQL: remove authorized public networks / disable the public IP and use Private Service Connect.",
+					"  Disable public network access (az sql server update --enable-public-network false / the resource's publicNetworkAccess=Disabled) and use a private endpoint.")
 		},
 	},
 	{
@@ -120,9 +144,12 @@ var cloudCatalog = []cloudMatcher{
 		match: func(hay string) bool {
 			return anyOf(hay, "root") && anyOf(hay, "access key", "access-key", "api key") && !anyOf(hay, "mfa")
 		},
-		runbook: func(f types.Finding) string {
-			return "Delete the root-account access key (" + resourceOf(f) + "). The root user must never have a standing programmatic key.\n" +
-				"  Sign in as root → Security credentials → delete the access key. Use scoped IAM roles/users for automation instead."
+		runbook: func(f types.Finding, provider string) string {
+			return "Remove the standing programmatic credential on the most-privileged account (" + resourceOf(f) + "). A break-glass/root-equivalent identity must never hold a long-lived key.\n" +
+				pp(provider,
+					"  Sign in as root → Security credentials → delete the access key. Use scoped IAM roles/users for automation instead.",
+					"  GCP has no root user; the analog is an Owner service account with a long-lived key: gcloud iam service-accounts keys delete <key> --iam-account=<sa>, then use workload identity / short-lived tokens.",
+					"  Azure has no root user; the analog is a Global Admin or an over-privileged service principal with a standing secret: remove the app credential (az ad app credential delete) and use managed identities / short-lived tokens.")
 		},
 	},
 	{
@@ -131,10 +158,12 @@ var cloudCatalog = []cloudMatcher{
 			return anyOf(hay, "mfa", "multi-factor", "multifactor", "two-factor", "2fa") &&
 				anyOf(hay, "not enabled", "disabled", "missing", "without", "no mfa", "lacks", "not configured", "not registered", "not set")
 		},
-		runbook: func(f types.Finding) string {
-			return "Enforce MFA on " + resourceOf(f) + ".\n" +
-				"  Root: enable a virtual/hardware MFA device on the root user.\n" +
-				"  IAM users: attach an IAM policy that denies actions unless aws:MultiFactorAuthPresent is true, and register a device."
+		runbook: func(f types.Finding, provider string) string {
+			return "Enforce multi-factor authentication on " + resourceOf(f) + ".\n" +
+				pp(provider,
+					"  Root: enable a virtual/hardware MFA device on the root user. IAM users: attach a policy that denies actions unless aws:MultiFactorAuthPresent is true, and register a device.",
+					"  Enforce 2-Step Verification in the Google Admin console for the org unit, and require it via a Cloud Identity policy; enroll the affected accounts.",
+					"  Require MFA via an Entra ID Conditional Access policy (or enable security defaults) and register the affected users' methods.")
 		},
 	},
 	{
@@ -143,10 +172,12 @@ var cloudCatalog = []cloudMatcher{
 			return anyOf(hay, "cloudtrail", "audit log", "logging", "flow log", "flow-log", "access log", "trail") &&
 				anyOf(hay, "disabled", "not enabled", "no logging", "not configured", "missing", "off", "not logging")
 		},
-		runbook: func(f types.Finding) string {
-			return "Enable audit logging for " + resourceOf(f) + ".\n" +
-				"  CloudTrail: create a multi-region trail delivering to a locked S3 bucket + CloudWatch Logs.\n" +
-				"  VPC flow logs / S3 access logs / RDS logs: enable and route to your log sink. Confirm events are landing."
+		runbook: func(f types.Finding, provider string) string {
+			return "Enable audit logging for " + resourceOf(f) + " and confirm events are landing in your log sink.\n" +
+				pp(provider,
+					"  CloudTrail: create a multi-region trail delivering to a locked S3 bucket + CloudWatch Logs; enable VPC flow logs / S3 access logs / RDS logs.",
+					"  Cloud Audit Logs: enable Data Access logs (Admin Activity is always on) via the IAM audit config; enable VPC Flow Logs on the subnets.",
+					"  Enable a diagnostic setting to export the Activity Log + resource logs to a Log Analytics workspace / storage; turn on NSG flow logs.")
 		},
 	},
 	{
@@ -155,10 +186,12 @@ var cloudCatalog = []cloudMatcher{
 			return anyOf(hay, "password policy", "password requirement", "password complexity", "password length", "password reuse", "password expir") &&
 				anyOf(hay, "weak", "does not", "not meet", "insufficient", "missing", "no minimum", "too short", "not enforced")
 		},
-		runbook: func(f types.Finding) string {
-			return "Strengthen the account password policy (" + resourceOf(f) + ").\n" +
-				"  aws iam update-account-password-policy --minimum-password-length 14 --require-symbols --require-numbers " +
-				"--require-uppercase-characters --require-lowercase-characters --max-password-age 90 --password-reuse-prevention 24"
+		runbook: func(f types.Finding, provider string) string {
+			return "Strengthen the account password policy (" + resourceOf(f) + "): ≥14 chars, complexity, rotation, and reuse-prevention.\n" +
+				pp(provider,
+					"  aws iam update-account-password-policy --minimum-password-length 14 --require-symbols --require-numbers --require-uppercase-characters --require-lowercase-characters --max-password-age 90 --password-reuse-prevention 24",
+					"  Set the password policy in the Google Admin console (Security → Password management): min length, strength enforcement, and reuse limits for the org unit.",
+					"  Enable Entra password protection (banned-password list + lockout) and require strong passwords via policy; for hybrid, deploy the on-prem agent.")
 		},
 	},
 	{
@@ -167,9 +200,13 @@ var cloudCatalog = []cloudMatcher{
 			return anyOf(hay, "public ip", "public-ip", "publicly reachable", "directly exposed", "reachable from the internet", "internet reachable", "internet-reachable") &&
 				!anyOf(hay, "bucket", "s3", "snapshot", "ami", "rds", "database") // those have their own, more specific classes
 		},
-		runbook: func(f types.Finding) string {
+		runbook: func(f types.Finding, provider string) string {
 			return "Remove the direct public exposure of " + resourceOf(f) + ": move it behind a load balancer / bastion / private subnet, " +
-				"or restrict its security group to known sources. Public IPs should front only intentionally-public endpoints."
+				"or restrict its firewall to known sources. Public IPs should front only intentionally-public endpoints.\n" +
+				pp(provider,
+					"  Detach the public IP / put the instance in a private subnet behind an ALB or SSM Session Manager (no bastion needed).",
+					"  Remove the external IP (gcloud compute instances delete-access-config) and reach it via IAP TCP forwarding or a load balancer.",
+					"  Remove the public IP association / set the NIC to private and reach it via Azure Bastion or a load balancer.")
 		},
 	},
 }
@@ -200,14 +237,15 @@ var cloudRunbookRemediations = func() map[string]bool {
 	return m
 }()
 
-// cloudFixCatalog returns the class-correct remediation_type + a specific runbook for a cloud finding
-// that has no live storage-write path. ok=false → no class matched → keep the generic account runbook.
-// Grounded: matches the finding's own text only.
-func cloudFixCatalog(f types.Finding) (rtype, runbook string, ok bool) {
+// cloudFixCatalog returns the class-correct remediation_type + a specific, PROVIDER-AWARE runbook for a
+// cloud finding that has no live storage-write path. ok=false → no class matched → keep the generic
+// account runbook. provider (aws|gcp|azure, from the asset) selects the right CLI so a GCP/Azure finding
+// never gets AWS guidance. Grounded: matches the finding's own text only.
+func cloudFixCatalog(f types.Finding, provider string) (rtype, runbook string, ok bool) {
 	hay := strings.ToLower(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
 	for _, m := range cloudCatalog {
 		if m.match(hay) {
-			return m.rtype, m.runbook(f), true
+			return m.rtype, m.runbook(f, provider), true
 		}
 	}
 	return "", "", false

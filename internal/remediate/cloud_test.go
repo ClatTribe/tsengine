@@ -132,7 +132,7 @@ func TestProposeCloud_BreadthCatalog(t *testing.T) {
 			name:      "root access key",
 			f:         types.Finding{ID: "rk", Title: "Root account has an active access key", RuleID: "prowler::iam_root_key", Endpoint: "root"},
 			wantType:  "remove_root_access_key",
-			wantInRun: "root-account access key",
+			wantInRun: "delete the access key", // AWS variant (the test asset's provider is aws)
 		},
 		{
 			name:      "weak password policy",
@@ -203,5 +203,45 @@ func TestLiveCloudMutation_ProviderGating(t *testing.T) {
 	// an unsupported provider still has none.
 	if rt, _ := liveCloudMutation(f, "oracle"); rt != "" {
 		t.Errorf("an unsupported provider must have no live write path, got %q", rt)
+	}
+}
+
+// TestProposeCloud_ProviderAwareRunbooks: a cloud runbook must speak the finding's OWN cloud — a GCP
+// finding gets gcloud steps, an Azure finding gets az steps, an AWS finding gets aws steps. Before this,
+// every class emitted AWS CLI regardless of provider (wrong guidance for GCP/Azure tenants).
+func TestProposeCloud_ProviderAwareRunbooks(t *testing.T) {
+	// an open-security-group / firewall finding across the three clouds.
+	sg := types.Finding{ID: "sg", Title: "Firewall allows 0.0.0.0/0 ingress on port 22", RuleID: "sg_open", Endpoint: "net-1"}
+	cases := []struct {
+		provider string
+		wantCLI  string // a provider-specific token the runbook must contain
+		banned   string // a token from ANOTHER cloud that must NOT appear
+	}{
+		{"aws", "revoke-security-group-ingress", "gcloud compute firewall-rules"},
+		{"gcp", "gcloud compute firewall-rules", "revoke-security-group-ingress"},
+		{"azure", "az network nsg rule", "revoke-security-group-ingress"},
+	}
+	for _, c := range cases {
+		t.Run(c.provider, func(t *testing.T) {
+			asset := platform.Asset{ID: "a", TenantID: "t1", Type: "cloud_account", Target: "acct", Meta: map[string]string{"provider": c.provider}}
+			act, ok := Propose(sg, asset, nil)
+			if !ok {
+				t.Fatal("should produce an action")
+			}
+			run, _ := act.Payload["remediation"].(string)
+			if !strings.Contains(run, c.wantCLI) {
+				t.Errorf("%s runbook must contain %q, got:\n%s", c.provider, c.wantCLI, run)
+			}
+			if strings.Contains(run, c.banned) {
+				t.Errorf("%s runbook must NOT contain another cloud's CLI %q, got:\n%s", c.provider, c.banned, run)
+			}
+		})
+	}
+
+	// empty provider falls back to AWS (the original single-cloud default), never a crash.
+	asset := platform.Asset{ID: "a", TenantID: "t1", Type: "cloud_account", Target: "acct", Meta: map[string]string{}}
+	act, _ := Propose(sg, asset, nil)
+	if run, _ := act.Payload["remediation"].(string); !strings.Contains(run, "revoke-security-group-ingress") {
+		t.Errorf("empty provider should default to AWS guidance, got:\n%s", run)
 	}
 }
