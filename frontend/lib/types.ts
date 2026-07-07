@@ -777,6 +777,32 @@ export interface ComplianceReport {
   SHA256?: string;
 }
 
+// ComplianceSnapshot — one point on a framework's continuous-evidence timeline (mirrors
+// platform.ComplianceSnapshot). Append-only: an auditor reads these as continuity proof.
+export interface ComplianceSnapshot {
+  id: string;
+  tenant_id: string;
+  framework: string;
+  captured_at: string;
+  total_controls: number;
+  met_controls: number;
+  gap_controls: number;
+  state_hash: string;
+  fully_met: boolean;
+}
+
+// EvidenceTimeline — the continuous-evidence view for a framework (mirrors grc.EvidenceTimeline):
+// the ordered snapshots + a continuity summary (fully-met ratio, the captured window).
+export interface EvidenceTimeline {
+  framework: string;
+  snapshots: ComplianceSnapshot[] | null; // Go marshals an empty slice as null — guard it
+  count: number;
+  first_captured_at?: string;
+  last_captured_at?: string;
+  fully_met_ratio: number;
+  continuous: boolean;
+}
+
 export interface SaaSApp {
   name: string;
   count: number;
