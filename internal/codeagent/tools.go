@@ -1,12 +1,22 @@
 package codeagent
 
 import (
+	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// sourceCtx returns the investigation context (nil-safe — a zero Context / direct tool call uses Background).
+func (cc *Context) sourceCtx() context.Context {
+	if cc.ctx != nil {
+		return cc.ctx
+	}
+	return context.Background()
+}
 
 // toolDef is one hand: the name + one-line help the brain sees, and the handler.
 type toolDef struct {
@@ -63,7 +73,7 @@ func tReadSource(cc *Context, args map[string]any) string {
 	} else {
 		start, end = 1, 2*window // file head
 	}
-	src, err := cc.Source.ReadFile(path, start, end)
+	src, err := cc.Source.ReadFile(cc.sourceCtx(), path, start, end)
 	if err != nil {
 		return fmt.Sprintf("ERROR: cannot read %s: %v (check the path with grep_code / list_findings — do not cite source you can't read)", path, err)
 	}
@@ -85,7 +95,7 @@ func tGrep(cc *Context, args map[string]any) string {
 	if max <= 0 || max > 40 {
 		max = 20
 	}
-	hits, err := cc.Source.Grep(pat, max)
+	hits, err := cc.Source.Grep(cc.sourceCtx(), pat, max)
 	if err != nil {
 		return "ERROR: grep failed: " + err.Error()
 	}
@@ -154,8 +164,10 @@ func (cc *Context) hasFinding(id string) bool {
 	return false
 }
 
-// evidenceGrounded requires at least one evidence entry ("path" or "path:line") whose path the SourceProvider
-// can actually read. This is what stops the agent citing code it never saw.
+// evidenceGrounded requires at least one evidence entry ("path" or "path:line") that resolves to source the
+// SourceProvider actually produces. Crucially it verifies the cited LINE exists, not merely the file: a
+// citation like "handler.go:9999" on a 5-line file returns empty content (no line) and is REJECTED — so the
+// §10 anti-hallucination guard can't be satisfied by pointing at a real file at a line the agent never read.
 func (cc *Context) evidenceGrounded(evidence []string) (bool, string) {
 	if len(evidence) == 0 {
 		return false, "evidence[] is empty"
@@ -168,26 +180,29 @@ func (cc *Context) evidenceGrounded(evidence []string) (bool, string) {
 		if path == "" {
 			continue
 		}
-		if _, err := cc.Source.ReadFile(path, maxInt(1, line-1), line+1); err == nil {
+		// line>0 → read EXACTLY that line (it must exist); line==0 (bare path) → the file must have content.
+		start, end := line, line
+		if line <= 0 {
+			start, end = 1, 1
+		}
+		if src, err := cc.Source.ReadFile(cc.sourceCtx(), path, start, end); err == nil && strings.TrimSpace(src) != "" {
 			return true, ""
 		}
 	}
-	return false, "none of the cited locations point at readable source"
+	return false, "none of the cited locations point at real, readable source (the file:line must exist)"
 }
 
-// splitPathLine parses "path:line" (line optional) into its parts.
+// splitPathLine parses "path:line" (line optional) into its parts. A non-numeric or out-of-range suffix
+// (including overflow) yields line 0 (treated as a bare path) rather than a corrupted value.
 func splitPathLine(s string) (string, int) {
 	s = strings.TrimSpace(s)
 	i := strings.LastIndexByte(s, ':')
-	if i <= 0 {
+	if i <= 0 || i == len(s)-1 {
 		return s, 0
 	}
-	n := 0
-	for _, r := range s[i+1:] {
-		if r < '0' || r > '9' {
-			return s, 0 // the part after ':' isn't a line number → whole thing is a path
-		}
-		n = n*10 + int(r-'0')
+	n, err := strconv.Atoi(s[i+1:])
+	if err != nil || n < 0 {
+		return s, 0 // the part after ':' isn't a valid line number → whole thing is a path
 	}
 	return s[:i], n
 }
@@ -251,13 +266,6 @@ func firstNonEmpty(xs ...string) string {
 	return ""
 }
 
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // MapSource is an in-memory SourceProvider (path → file content). It backs tests today and any host-side
 // caller that has already materialized the relevant files; the live connector-backed provider (GitHub
 // file-contents / a stored scan checkout) implements the same interface. Deterministic + dependency-free.
@@ -268,7 +276,7 @@ type MapSource struct {
 // NewMapSource builds a MapSource from a path→content map.
 func NewMapSource(files map[string]string) *MapSource { return &MapSource{files: files} }
 
-func (m *MapSource) ReadFile(path string, startLine, endLine int) (string, error) {
+func (m *MapSource) ReadFile(_ context.Context, path string, startLine, endLine int) (string, error) {
 	content, ok := m.files[path]
 	if !ok {
 		return "", fmt.Errorf("no such file")
@@ -290,7 +298,7 @@ func (m *MapSource) ReadFile(path string, startLine, endLine int) (string, error
 	return strings.TrimRight(b.String(), "\n"), nil
 }
 
-func (m *MapSource) Grep(pattern string, maxHits int) ([]GrepHit, error) {
+func (m *MapSource) Grep(_ context.Context, pattern string, maxHits int) ([]GrepHit, error) {
 	var hits []GrepHit
 	paths := make([]string, 0, len(m.files))
 	for p := range m.files {

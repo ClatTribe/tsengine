@@ -33,13 +33,14 @@ type GrepHit struct {
 }
 
 // SourceProvider is the agent's read-only access to the repository under investigation — its "hands" over
-// the code. All methods are deterministic; a real (non-empty) return is what grounds a recorded issue.
+// the code. All methods are deterministic; a real (non-empty) return is what grounds a recorded issue. The
+// context is honored (§15/§5.2-C3): a cancelled scan cancels in-flight live fetches.
 type SourceProvider interface {
 	// ReadFile returns the lines [startLine,endLine] (1-indexed, inclusive) of path, or the whole file when
 	// endLine<=0. An unknown path returns an error (so the agent cannot cite source that doesn't exist).
-	ReadFile(path string, startLine, endLine int) (string, error)
+	ReadFile(ctx context.Context, path string, startLine, endLine int) (string, error)
 	// Grep returns up to maxHits matches of a plain substring (case-sensitive) across the tree.
-	Grep(pattern string, maxHits int) ([]GrepHit, error)
+	Grep(ctx context.Context, pattern string, maxHits int) ([]GrepHit, error)
 	// Files lists the known source paths (for orientation).
 	Files() []string
 }
@@ -54,6 +55,7 @@ type Context struct {
 	Summary string
 	Done    bool
 
+	ctx    context.Context // the investigation context — threaded to Source so live fetches are cancellable
 	issueN int
 	calls  int
 }
@@ -93,6 +95,7 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 	if opts.MaxIters <= 0 {
 		opts.MaxIters = 24
 	}
+	cc.ctx = ctx // threaded to the SourceProvider so live fetches honor the scan deadline/cancel
 	reg := map[string]toolDef{}
 	for _, t := range tools() {
 		reg[t.name] = t

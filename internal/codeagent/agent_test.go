@@ -69,6 +69,28 @@ func TestCodeAgent_GroundedExploitableAssessment(t *testing.T) {
 	}
 }
 
+// TestCodeAgent_GroundingRequiresRealLine: citing a REAL file at a NONEXISTENT line is refused — the §10
+// guard verifies the cited line exists, not merely the file (the review found the file-only hole).
+func TestCodeAgent_GroundingRequiresRealLine(t *testing.T) {
+	cc := &Context{Source: sqliRepo(), Findings: []types.Finding{{ID: "f1"}}}
+	// sqliRepo's file has ~6 lines; line 4 exists, line 9999 does not.
+	if ok, _ := cc.evidenceGrounded([]string{"api/handler.go:4"}); !ok {
+		t.Error("a real file:line must ground")
+	}
+	if ok, _ := cc.evidenceGrounded([]string{"api/handler.go:9999"}); ok {
+		t.Error("a real file at a NONEXISTENT line must NOT ground (file-only is not enough)")
+	}
+	// a malformed/overflow line suffix is a bad citation → not grounded, and crucially NEVER crashes or
+	// produces a negative line (the reason for the safe strconv parse).
+	if ok, _ := cc.evidenceGrounded([]string{"api/handler.go:99999999999999999999"}); ok {
+		t.Error("an overflow/malformed line suffix must not ground")
+	}
+	// a bare path (no line) still grounds on a real file with content.
+	if ok, _ := cc.evidenceGrounded([]string{"api/handler.go"}); !ok {
+		t.Error("a bare path to a real non-empty file must ground")
+	}
+}
+
 // TestCodeAgent_RefusesUngroundedRecord: record_issue WITHOUT readable evidence is rejected — the agent
 // cannot assert exploitability from the finding text alone (§10 anti-hallucination). A later grounded record
 // succeeds, proving the guard blocks only the ungrounded attempt.

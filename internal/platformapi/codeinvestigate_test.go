@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/codeagent"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/secret"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -56,6 +57,26 @@ func TestCodeInvestigator_GatedOffWithoutConnectedRepo(t *testing.T) {
 		t.Error("no vault → codeInvestigator must be nil")
 	}
 }
+
+// TestCodeIssueToFinding_DistinctRuleIDsAndSeverity: two confirmed issues at the SAME endpoint must map to
+// DISTINCT findings (RuleID carries the assessed finding id) so detect.Key can't collapse/mask one; and an
+// un-graded confirmation defaults to medium, never a silent High escalation.
+func TestCodeIssueToFinding_DistinctRuleIDsAndSeverity(t *testing.T) {
+	a := codeIssueToFinding("id-a", "acme/api", codeagent.CodeIssue{FindingID: "f1", FixLocation: "db.go:40", Severity: ""})
+	b := codeIssueToFinding("id-b", "acme/api", codeagent.CodeIssue{FindingID: "f2", FixLocation: "db.go:40", Severity: ""})
+	if a.RuleID == b.RuleID {
+		t.Errorf("two confirmations must have distinct RuleIDs (else detect.Key collides): %q", a.RuleID)
+	}
+	if detectKeyOf(a) == detectKeyOf(b) {
+		t.Errorf("distinct confirmations must not share a detect key: %q", detectKeyOf(a))
+	}
+	if a.Severity != types.SeverityMedium {
+		t.Errorf("un-graded confirmation must default to medium, not High; got %s", a.Severity)
+	}
+}
+
+// detectKeyOf mirrors detect.Key (rule_id|endpoint) for the collision assertion above.
+func detectKeyOf(f types.Finding) string { return f.RuleID + "|" + f.Endpoint }
 
 func TestCodeInvestigate_GatedWithoutLLM(t *testing.T) {
 	st := store.NewMemory()

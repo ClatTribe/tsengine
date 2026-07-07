@@ -137,6 +137,11 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 		if !is.Exploitable {
 			continue
 		}
+		// Don't silently escalate an un-graded confirmation to High: fall back to the ASSESSED finding's
+		// own severity, so the agent's verdict carries the scanner's severity unless it explicitly re-rated.
+		if strings.TrimSpace(is.Severity) == "" {
+			is.Severity = string(severityOfFinding(body.Findings, is.FindingID))
+		}
 		built = append(built, codeIssueToFinding(d.newID("codeagent")+"-"+strconv.Itoa(i), body.Repo, is))
 	}
 	stored := 0
@@ -165,13 +170,24 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 	})
 }
 
+// severityOfFinding returns the assessed L1 finding's own severity (the fallback when the agent didn't
+// re-rate), else medium — so a confirmed issue carries the scanner's severity, not a blanket High.
+func severityOfFinding(fs []types.Finding, id string) types.Severity {
+	for _, f := range fs {
+		if f.ID == id && f.Severity != "" {
+			return f.Severity
+		}
+	}
+	return types.SeverityMedium
+}
+
 // codeIssueToFinding maps a grounded, EXPLOITABLE code assessment into a first-class verified finding — the
 // AI Code Engineer's own output, distinct from the raw scanner hit it assessed (it carries the confirmed
 // blast radius + the right-layer fix location the scanner couldn't give).
 func codeIssueToFinding(id, repo string, is codeagent.CodeIssue) types.Finding {
 	sev := types.Severity(strings.ToLower(strings.TrimSpace(is.Severity)))
 	if sev == "" {
-		sev = types.SeverityHigh
+		sev = types.SeverityMedium // neutral default — never silently escalate an un-graded confirmation to High
 	}
 	desc := is.Rationale
 	if is.BlastRadius != "" {
@@ -192,8 +208,15 @@ func codeIssueToFinding(id, repo string, is codeagent.CodeIssue) types.Finding {
 	if title == "" {
 		title = "Confirmed exploitable"
 	}
+	// RuleID incorporates the ASSESSED finding id so two confirmations at the same fix location stay
+	// DISTINCT under detect.Key (RuleID|Endpoint) — otherwise the second would mask the first in
+	// incidents / unified issues, silently dropping a confirmed-exploitable vuln.
+	rule := "codeagent::confirmed-exploitable"
+	if is.FindingID != "" {
+		rule += "::" + is.FindingID
+	}
 	return types.Finding{
-		ID: id, RuleID: "codeagent::confirmed-exploitable", Tool: "codeagent", Severity: sev,
+		ID: id, RuleID: rule, Tool: "codeagent", Severity: sev,
 		Endpoint: endpoint, Title: title + " — confirmed at source", Description: desc,
 		VerificationStatus: types.VerificationVerified, RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
 	}

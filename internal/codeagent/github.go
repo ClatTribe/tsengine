@@ -50,7 +50,7 @@ func (g *GitHubSource) base() string {
 }
 
 // fetch returns the full file content (cached), via the Contents API.
-func (g *GitHubSource) fetch(path string) (string, error) {
+func (g *GitHubSource) fetch(ctx context.Context, path string) (string, error) {
 	if g.cache == nil {
 		g.cache = map[string]string{}
 	}
@@ -61,7 +61,7 @@ func (g *GitHubSource) fetch(path string) (string, error) {
 	if g.Ref != "" {
 		u += "?ref=" + url.QueryEscape(g.Ref)
 	}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", err
 	}
@@ -96,8 +96,8 @@ func (g *GitHubSource) fetch(path string) (string, error) {
 	return content, nil
 }
 
-func (g *GitHubSource) ReadFile(path string, startLine, endLine int) (string, error) {
-	content, err := g.fetch(path)
+func (g *GitHubSource) ReadFile(ctx context.Context, path string, startLine, endLine int) (string, error) {
+	content, err := g.fetch(ctx, path)
 	if err != nil {
 		return "", err
 	}
@@ -121,7 +121,7 @@ func (g *GitHubSource) ReadFile(path string, startLine, endLine int) (string, er
 // Grep first scans already-fetched files (line-accurate, free), then falls back to the GitHub code-search
 // API for files not yet read (file-level → line 0). A search failure (missing scope / rate limit) is not
 // fatal — the cached-file matches still return.
-func (g *GitHubSource) Grep(pattern string, maxHits int) ([]GrepHit, error) {
+func (g *GitHubSource) Grep(ctx context.Context, pattern string, maxHits int) ([]GrepHit, error) {
 	var hits []GrepHit
 	// 1) cached files — line-accurate.
 	paths := make([]string, 0, len(g.cache))
@@ -144,7 +144,7 @@ func (g *GitHubSource) Grep(pattern string, maxHits int) ([]GrepHit, error) {
 		seen[h.Path] = true
 	}
 	// 2) code search for files we haven't read (file-level; line 0). Best-effort.
-	found, _ := g.searchFiles(pattern, maxHits)
+	found, _ := g.searchFiles(ctx, pattern, maxHits)
 	for _, p := range found {
 		if seen[p] {
 			continue
@@ -157,10 +157,10 @@ func (g *GitHubSource) Grep(pattern string, maxHits int) ([]GrepHit, error) {
 	return hits, nil
 }
 
-func (g *GitHubSource) searchFiles(pattern string, maxHits int) ([]string, error) {
+func (g *GitHubSource) searchFiles(ctx context.Context, pattern string, maxHits int) ([]string, error) {
 	q := fmt.Sprintf("%s repo:%s/%s", pattern, g.Owner, g.Repo)
 	u := fmt.Sprintf("%s/search/code?q=%s&per_page=%d", g.base(), url.QueryEscape(q), maxHits)
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}

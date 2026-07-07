@@ -1,6 +1,7 @@
 package codeagent
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -35,7 +36,7 @@ func TestGitHubSource_ReadAndGrep(t *testing.T) {
 	gs.Base = srv.URL
 
 	// ReadFile: line-accurate window.
-	got, err := gs.ReadFile("api/handler.go", 3, 4)
+	got, err := gs.ReadFile(context.Background(), "api/handler.go", 3, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,13 +45,13 @@ func TestGitHubSource_ReadAndGrep(t *testing.T) {
 	}
 
 	// A second read of the same file is served from cache (no extra Contents call).
-	_, _ = gs.ReadFile("api/handler.go", 1, 1)
+	_, _ = gs.ReadFile(context.Background(), "api/handler.go", 1, 1)
 	if contentsCalls != 1 {
 		t.Errorf("second read should hit the cache, contents calls=%d", contentsCalls)
 	}
 
 	// Grep over the cached file is line-accurate.
-	hits, _ := gs.Grep("Query().Get", 10)
+	hits, _ := gs.Grep(context.Background(), "Query().Get", 10)
 	if len(hits) == 0 || hits[0].Path != "api/handler.go" || hits[0].Line != 3 {
 		t.Errorf("grep should find the cached line 3, got %+v", hits)
 	}

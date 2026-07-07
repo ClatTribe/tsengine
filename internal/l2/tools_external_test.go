@@ -80,6 +80,25 @@ func TestExternalTools_PresentAndUnderCapWhenWired(t *testing.T) {
 	}
 }
 
+// TestCatalog_WorstCaseWithBothInvestigatorsUnderCap is the true ≤12 boundary (CLAUDE.md §2.6): every
+// external service wired PLUS both delegation tools (investigate_cloud + investigate_code). This is the
+// densest catalog the L2 Lead can present; it must still satisfy the cap, and both delegation tools must
+// appear. Without this, adding another external tool would silently push the catalog past 12 with green CI.
+func TestCatalog_WorstCaseWithBothInvestigatorsUnderCap(t *testing.T) {
+	d := wiredDeps()
+	d.CloudInvestigator = func(context.Context, string) (string, error) { return "", nil }
+	d.CodeInvestigator = func(context.Context, string) (string, error) { return "", nil }
+	c := BuildCatalog(d)
+	if err := c.Validate(); err != nil {
+		t.Fatalf("worst-case catalog (all externals + both investigators) must satisfy the ≤%d cap: %v", MaxCatalog, err)
+	}
+	for _, name := range []string{"investigate_cloud", "investigate_code"} {
+		if _, ok := c.find(name); !ok {
+			t.Errorf("%q must be present when its investigator is wired", name)
+		}
+	}
+}
+
 func TestQueryThreatIntel(t *testing.T) {
 	c := BuildCatalog(wiredDeps())
 	tool, _ := c.find("query_threat_intel")
