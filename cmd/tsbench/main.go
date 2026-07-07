@@ -687,6 +687,12 @@ func runCloudQuery(o cqOpts) error {
 		fmt.Printf("deterministic engine: recall %.2f%% (%d/%d), FP-reduction %.2f%%, false paths %d\n",
 			s.PathRecall*100, s.RealFound, s.RealTotal, s.FPReduction*100, len(s.Extra))
 		fmt.Printf("LLM agent           : %s", cloudagent.RenderScore(as))
+		// The measured AGENT LIFT — the point of the head-to-head. On a bounded-budget (discriminating)
+		// scenario the substrate under-covers by design; the agent's value is the grounded headroom it
+		// recovers. Front-and-center so a bounded engine's honest "under budget" self-verdict above isn't
+		// mistaken for an overall failure. A higher recall bought with invented paths is NOT a lift (§10).
+		lift := bench.ComputeAgentLift(s.RealTotal, s.RealFound, as.RealFound, as.FalseIssues)
+		fmt.Print(bench.RenderAgentLift(lift))
 		fmt.Print(cloudagent.Render(rep))
 		if !as.Pass {
 			os.Exit(3)
