@@ -10,6 +10,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
+	"github.com/ClatTribe/tsengine/internal/store"
 )
 
 // Posting raw AWS state maps it (grounded) into the attack-path Inventory and stores it as the tenant's
@@ -88,6 +89,62 @@ func TestIngestInventory_GCPProvider(t *testing.T) {
 	}
 	if inv, _ := cloudgraph.ParseInventory(snap.Inventory); inv.Provider != "gcp" {
 		t.Errorf("stored inventory provider should be gcp, got %q", inv.Provider)
+	}
+}
+
+// TestIngestInventory_DiffOnIngest: re-ingesting a changed account automatically detects config DRIFT
+// vs the stored baseline — no separate /v1/cloud/drift call. First ingest establishes the baseline (0
+// drift); the second, with a bucket flipped public, surfaces a grounded resource-became-public finding
+// into the same store (→ issues/incidents/grc). This is the continuous-Detect "connect once, detect
+// change" promise. Grounded (§10): the first ingest and an unchanged re-ingest both yield 0 drift.
+func TestIngestInventory_DiffOnIngest(t *testing.T) {
+	st := store.NewMemory()
+	snaps := cloudsnap.NewMemStore()
+	d := Deps{Store: st, CloudSnapshots: snaps}
+
+	post := func(body string) map[string]any {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/cloud/inventory", strings.NewReader(body))
+		d.handleIngestAWSInventory(rec, req, "ten-1")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		return resp
+	}
+
+	// 1) baseline: the bucket is private → no baseline to diff against yet → 0 drift.
+	base := post(`{"account_id":"111122223333","buckets":[{"name":"cust-data","public":false}]}`)
+	if base["drift_detected"] != float64(0) {
+		t.Fatalf("the first ingest has no baseline → 0 drift, got %v", base["drift_detected"])
+	}
+
+	// 2) re-ingest, unchanged → still 0 drift (grounded: no change, no finding).
+	same := post(`{"account_id":"111122223333","buckets":[{"name":"cust-data","public":false}]}`)
+	if same["drift_detected"] != float64(0) {
+		t.Fatalf("an unchanged re-ingest must yield 0 drift, got %v", same["drift_detected"])
+	}
+
+	// 3) re-ingest with the bucket now PUBLIC → automatic resource-became-public drift.
+	changed := post(`{"account_id":"111122223333","buckets":[{"name":"cust-data","public":true}]}`)
+	if changed["drift_detected"] == float64(0) {
+		t.Fatalf("flipping a bucket public must be detected as drift on re-ingest, got %v", changed["drift_detected"])
+	}
+
+	// the drift finding landed in the SAME store the rest of the platform reads.
+	fs, err := st.ListFindings(context.Background(), "ten-1", store.FindingFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawBecamePublic bool
+	for _, f := range fs {
+		if strings.Contains(f.RuleID, "clouddrift::") {
+			sawBecamePublic = true
+		}
+	}
+	if !sawBecamePublic {
+		t.Errorf("expected a clouddrift:: change-control finding in the store, got %d findings", len(fs))
 	}
 }
 
