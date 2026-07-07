@@ -188,6 +188,7 @@ export interface PentestEngagement {
   started_at?: string;
   completed_at?: string;
   signoff?: Signoff | null; // named human sign-off on the report (the HITL accountability)
+  schedule?: { cadence: string; next_run_at?: string } | null; // recurring re-test cadence (safe passive re-verify)
 }
 
 export interface PentestStats {
