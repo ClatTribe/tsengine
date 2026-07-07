@@ -71,12 +71,16 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		if rt, tgt := liveCloudMutation(f, asset.Meta["provider"]); rt != "" {
 			payload["remediation_type"] = rt
 			payload["target"] = tgt // the specific bucket, not the whole account
-		} else if isIAMPrivescFinding(f) {
-			// Layer-correct but not yet live-writable: name the IAM-tighten fix + the principal, so the
-			// action is the RIGHT cut (not a generic account runbook). Promotes to a live mutation the
-			// moment an IAM-write connector path lands — same pattern as identity's oauth_revoke.
-			payload["remediation_type"] = rtypeIAMRestrict
+		} else if rt, runbook, ok := cloudFixCatalog(f); ok {
+			// Respond breadth: a class-correct fix for the common non-storage cloud-misconfig classes
+			// (IAM privesc, open SG, unencrypted-at-rest, public snapshot/DB, missing MFA, disabled
+			// logging, root key, weak password policy). Named + grounded + promotable — the moment a live
+			// connector write for that class lands, it upgrades to a real HITL-gated mutation (like S3
+			// block-public-access) with one catalog entry. Until then the human gets the exact steps, not
+			// a vague "review this". Target is the finding's own resource (grounded).
+			payload["remediation_type"] = rt
 			payload["target"] = nz(f.Endpoint, asset.Target)
+			payload["remediation"] = runbook + "\n\n" + fixBody(f)
 		}
 		return platform.Action{
 			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,

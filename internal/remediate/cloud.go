@@ -30,16 +30,10 @@ const rtypeIAMRestrict = "iam_restrict"
 
 // isIAMPrivescFinding reports whether a cloud finding is an IAM over-privilege / privilege-escalation
 // issue — the class whose right-layer fix is tightening a principal's policy, not a storage toggle.
+// Shares its text core (isIAMPrivescHay, cloud_catalog.go) with the Respond breadth catalog so the two
+// never drift.
 func isIAMPrivescFinding(f types.Finding) bool {
-	hay := strings.ToLower(f.RuleID + " " + f.Title + " " + f.Description)
-	if !strings.Contains(hay, "iam") && !strings.Contains(hay, "role") && !strings.Contains(hay, "policy") &&
-		!strings.Contains(hay, "principal") && !strings.Contains(hay, "permission") {
-		return false
-	}
-	return strings.Contains(hay, "privesc") || strings.Contains(hay, "privilege escalation") ||
-		strings.Contains(hay, "over-privileg") || strings.Contains(hay, "overprivileg") ||
-		strings.Contains(hay, "escalat") || strings.Contains(hay, "administratoraccess") ||
-		strings.Contains(hay, "*:*") || strings.Contains(hay, "wildcard")
+	return isIAMPrivescHay(strings.ToLower(f.RuleID + " " + f.Title + " " + f.Description))
 }
 
 // liveCloudMutation returns the live, reversible cloud remediation (remediation_type + the
