@@ -22,3 +22,25 @@ func TestRemediationForDiscoveryClasses(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderVAPTExecMarkdown_ConciseTrustSummary(t *testing.T) {
+	rep := &VAPTReport{
+		TenantName: "Acme", Engine: "tsengine", Scope: []string{"app.acme.com"},
+		Summary: VAPTSummary{Total: 2, BySeverity: map[string]int{"high": 1, "medium": 1}, ExploitProven: 1, RiskRating: "High"},
+		Findings: []VAPTFinding{
+			{Title: "SQL injection", Severity: "high", PoC: "[Exploitation PoC · sqli] GET /x → HTTP 500"},
+			{Title: "Reflected XSS", Severity: "medium", Unconfirmed: true},
+		},
+		Signer: "Alice, Lead Pentester",
+	}
+	md := RenderVAPTExecMarkdown(rep)
+	for _, want := range []string{"Executive Summary", "Overall risk rating: High", "app.acme.com", "Alice, Lead Pentester", "SQL injection", "exploitation-proven", "1 exploitation-proven"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("exec summary missing %q", want)
+		}
+	}
+	// The exec summary must NOT leak per-finding technical detail (the PoC/payload block).
+	if strings.Contains(md, "GET /x → HTTP 500") {
+		t.Error("exec summary should not include the raw PoC/technical detail")
+	}
+}
