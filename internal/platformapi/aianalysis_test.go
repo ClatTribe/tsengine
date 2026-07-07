@@ -23,9 +23,9 @@ func TestAIAnalysis_PersistOverwriteList(t *testing.T) {
 	d := Deps{Store: st}
 
 	out1 := l2.Outcome{
-		Summary:    &l2.FinalReport{ExecutiveSummary: "first pass"},
-		Findings:   []types.Finding{{Title: "SQLi in login", Severity: types.SeverityHigh, Description: "reaches user DB"}},
-		Model:      "claude-opus-4-8", Iterations: 5, CostUSD: 0.12,
+		Summary:  &l2.FinalReport{ExecutiveSummary: "first pass"},
+		Findings: []types.Finding{{Title: "SQLi in login", Severity: types.SeverityHigh, Description: "reaches user DB"}},
+		Model:    "claude-opus-4-8", Iterations: 5, CostUSD: 0.12,
 	}
 	a1 := d.persistAIAnalysis(ctx, "ten", "triage", "", "Whole-estate triage", out1, time.Unix(1000, 0))
 	if a1.ID != "triage:" {

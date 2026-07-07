@@ -18,12 +18,12 @@ import (
 	"net/http"
 	"reflect"
 
+	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/jobs"
-	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/runner"
@@ -230,8 +230,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))                                        // stored cloud-agent attack paths
 	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                                                       // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
 	mux.HandleFunc("POST /v1/findings/{id}/autofix", d.auth(d.handleAutofix))                                                  // AI autofix — LLM-generated code patch for a finding (LLM-gated)
-	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))                                           // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
-	mux.HandleFunc("GET /v1/ai-analyses", d.auth(d.handleListAIAnalyses))                                                     // persisted AI Security Engineer analyses (Triage/Investigate) — a run survives navigation; ?kind= filter
+	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))                                            // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
+	mux.HandleFunc("GET /v1/ai-analyses", d.auth(d.handleListAIAnalyses))                                                      // persisted AI Security Engineer analyses (Triage/Investigate) — a run survives navigation; ?kind= filter
 	mux.HandleFunc("POST /v1/apiauthz/discover", d.auth(d.handleAuthzDiscover))                                                // API BOLA/BFLA discovery — LLM proposes candidate authz tests (LLM-gated)
 	mux.HandleFunc("POST /v1/tls/scan", d.auth(d.handleTLSScan))                                                               // TLS/SSL posture — host-side handshake assessment (no sandbox, SSRF-screened)
 	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                                                                 // OSINT "External exposure" view + summary
@@ -265,7 +265,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture", d.auth(d.handlePostureSummary))          // all-framework posture summary in one call (dashboard/compliance/reports)
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
 	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))
-	mux.HandleFunc("GET /v1/compliance/{framework}/fixes", d.auth(d.handleComplianceFixes)) // compliance→remediation bridge: which gaps are fixable now (findings + queued actions)
+	mux.HandleFunc("GET /v1/compliance/{framework}/fixes", d.auth(d.handleComplianceFixes))              // compliance→remediation bridge: which gaps are fixable now (findings + queued actions)
 	mux.HandleFunc("POST /v1/compliance/{framework}/remediation", d.auth(d.handleComplianceRemediation)) // vCISO "how do I close this gap?" — LLM remediation guidance (gated)
 	mux.HandleFunc("POST /v1/compliance/{framework}/advisor", d.auth(d.handleComplianceAdvisor))         // vCISO advisor — prioritized audit-readiness roadmap over coverage+gaps+readiness (gated)
 	mux.HandleFunc("GET /v1/questionnaire", d.auth(d.handleQuestionnaire))
