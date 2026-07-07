@@ -15,6 +15,17 @@ export async function getFixGuidance(framework: string): Promise<FixPlan> {
   }
 }
 
+// Captures the framework's current posture onto the continuous-evidence timeline (an on-demand
+// snapshot; the monitoring loop also captures automatically). Returns whether a point was recorded.
+export async function captureEvidence(framework: string): Promise<{ ok: boolean; captured?: boolean; error?: string }> {
+  try {
+    const r = await api.captureEvidence(framework);
+    return { ok: true, captured: r.captured };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not capture evidence" };
+  }
+}
+
 export type Roadmap = { ok: boolean; roadmap?: string; coveragePct?: number; error?: string };
 
 // Runs the vCISO advisor — a prioritized audit-readiness roadmap over coverage + gaps + readiness. Slow.

@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -170,6 +170,14 @@ export const api = {
   // Compliance → remediation bridge — which control gaps are fixable NOW (findings with a queued action).
   complianceFixes: (framework: string) =>
     safe<ComplianceFixes>(`/v1/compliance/${framework}/fixes`, { framework, gap_controls: 0, fixable_gaps: 0, pending_fixes: 0, controls: [] }),
+
+  // Continuous-evidence timeline — the SOC 2 Type II "it held across the window" history (posture
+  // snapshots over time + a continuity summary). Empty timeline for an un-monitored framework (honest).
+  evidenceHistory: (framework: string) =>
+    safe<EvidenceTimeline>(`/v1/compliance/${framework}/evidence-history`, { framework, snapshots: [], count: 0, fully_met_ratio: 0, continuous: false }),
+  // On-demand: capture this framework's posture onto the timeline right now.
+  captureEvidence: (framework: string) =>
+    call<{ captured: boolean; snapshot: ComplianceSnapshot }>(`/v1/compliance/${framework}/evidence/capture`, { method: "POST" }),
 
   // vCISO remediation guidance — concrete, grounded fix steps for a framework's control gaps.
   complianceRemediation: (framework: string) =>

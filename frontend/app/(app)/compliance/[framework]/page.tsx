@@ -6,6 +6,7 @@ import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from 
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { FixGuidance } from "@/components/compliance/fix-guidance";
 import { AdvisorRoadmap } from "@/components/compliance/advisor-roadmap";
+import { EvidenceTimelineView } from "@/components/compliance/evidence-timeline";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
   // render the page; it shows the "not yet assessed" state and a refresh (force-dynamic) picks
   // up the data once the API is back.
   if (!(FRAMEWORKS as readonly string[]).includes(framework)) notFound();
-  const [rep, fixes] = await Promise.all([api.report(framework), api.complianceFixes(framework)]);
+  const [rep, fixes, evidence] = await Promise.all([api.report(framework), api.complianceFixes(framework), api.evidenceHistory(framework)]);
   // control_id → its remediation bridge status (which gaps are fixable now).
   const fixByControl = new Map((fixes.controls ?? []).map((c) => [c.control_id, c]));
 
@@ -126,6 +127,15 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
           <section>
             <div className="mb-2 text-xs uppercase tracking-wider text-muted">AI vCISO advisor</div>
             <AdvisorRoadmap framework={framework} />
+          </section>
+          <section>
+            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wider text-muted">
+              Continuous evidence
+              <span className="rounded-full border border-border bg-surface-2 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-faint">Type II</span>
+            </div>
+            <div className="card p-4">
+              <EvidenceTimelineView framework={framework} timeline={evidence} />
+            </div>
           </section>
           <section>
             <div className="mb-2 text-xs uppercase tracking-wider text-muted">Gaps ({gaps.length})</div>
