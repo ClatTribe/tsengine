@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -226,6 +226,18 @@ export const api = {
   // getOr404 → null only when the engagement genuinely doesn't exist (page notFound()); a
   // transient/5xx error throws to the recoverable error boundary instead of a false 404.
   pentest: (id: string) => getOr404<PentestEngagement>(`/v1/pentest/${id}`),
+  // Pre-flight readiness: per-target ownership + consent + LLM-key status before a run.
+  pentestReadiness: (id: string) =>
+    safe<PentestReadiness>(`/v1/pentest/${id}/readiness`, {
+      engagement_id: id, mode: "", ready: false, requires_consent: false, consent_present: false,
+      ai: { configured: false, source: "none", discovery_will_run: false, note: "" }, scope: [], blockers: [],
+    }),
+  // Ownership proof for a standalone target: issue a challenge (token + DNS/well-known instructions),
+  // then verify it against the live target once the customer publishes it.
+  ownershipChallenge: (assetId: string) =>
+    call<OwnershipChallenge>(`/v1/assets/${assetId}/ownership/challenge`, { method: "POST" }),
+  ownershipVerify: (assetId: string) =>
+    call<OwnershipResult>(`/v1/assets/${assetId}/ownership/verify`, { method: "POST" }),
   pentestStats: () =>
     safe<PentestStats>("/v1/pentest/stats", {
       engagements: 0, active_engagements: 0, completed_runs: 0, total_findings: 0,
@@ -431,8 +443,12 @@ export const api = {
   createPentest: (body: {
     name: string;
     mode: string;
-    rules_of_engagement: { authorized_targets: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string; consent?: string };
+    rules_of_engagement: { authorized_targets: string[]; out_of_scope?: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string; consent?: string };
   }) => call<PentestEngagement>("/v1/pentest", { method: "POST", body: JSON.stringify(body) }),
+  // Create a pentest PRE-SCOPED to an asset ("pentest this asset"). Scope is the asset's own target
+  // (server-side), so the SMB user doesn't re-type it; the same active-consent gate applies.
+  pentestFromAsset: (assetId: string, body: { name?: string; mode: string; max_requests?: number; out_of_scope?: string[]; allow_active?: boolean; authorized_by?: string; consent?: string }) =>
+    call<PentestEngagement>(`/v1/assets/${assetId}/pentest`, { method: "POST", body: JSON.stringify(body) }),
   runPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/run`, { method: "POST" }),
   // Named human sign-off on the VAPT report (the HITL accountability layer).
   signoffPentest: (id: string, body: { signer: string; role?: string; statement?: string }) =>

@@ -244,9 +244,11 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture/sources", d.auth(d.handlePostureView))                                                     // unified vendor/device/cloud-drift posture-source view
 	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))                                                // list runtime-protection events
 	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                                                          // create + authorize a pentest engagement
+	mux.HandleFunc("POST /v1/assets/{id}/pentest", d.auth(d.handleCreatePentestFromAsset))                                     // create a pentest pre-scoped to an asset ("pentest this asset")
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                                                            // list engagements
 	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))                                                      // portfolio scorecard (verified_rate, SLA)
 	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))                                                         // one engagement + findings
+	mux.HandleFunc("GET /v1/pentest/{id}/readiness", d.auth(d.handlePentestReadiness))                                         // pre-flight: per-target ownership + consent + LLM-key status
 	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                                                    // run/retest the engagement (passive, RoE-gated)
 	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))                                               // the engagement's VAPT report (md/json)
 	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))                                            // HITL: named human signs the report → signed ledger

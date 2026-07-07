@@ -90,7 +90,7 @@ export default async function SettingsPage() {
       </div>
 
       {/* AI engine — bring-your-own-LLM for the agent + autonomous pentest */}
-      <div>
+      <div id="ai-engine" className="scroll-mt-20">
         <SectionTitle>AI engine</SectionTitle>
         <Card className="p-5">
           <LLMSettings initial={llm} />

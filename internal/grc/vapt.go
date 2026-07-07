@@ -307,3 +307,55 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	}
 	return b.String()
 }
+
+// RenderVAPTExecMarkdown renders the concise EXECUTIVE / trust summary of the same report — the
+// shareable one-pager for a customer, auditor, or exec who asks "did you get pentested, and what's
+// the posture?" It carries the risk rating, exploitation-proven counts, severity breakdown, the
+// top findings by title/severity only (NO per-finding technical detail / PoC / payloads), and the
+// named sign-off. The full technical VAPT (RenderVAPTMarkdown) stays the developer/remediation
+// deliverable. Same grounded data — a different altitude, not different claims.
+func RenderVAPTExecMarkdown(r *VAPTReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Penetration Test — Executive Summary — %s\n\n", r.TenantName)
+	fmt.Fprintf(&b, "- **Generated:** %s\n", r.GeneratedAt.UTC().Format(time.RFC3339))
+	fmt.Fprintf(&b, "- **Assessed by:** %s\n", r.Engine)
+	if len(r.Scope) > 0 {
+		fmt.Fprintf(&b, "- **Scope:** %s\n", strings.Join(r.Scope, ", "))
+	}
+	if r.Signer != "" {
+		fmt.Fprintf(&b, "- **Signed off by:** %s\n", r.Signer)
+	}
+	s := r.Summary
+	fmt.Fprintf(&b, "\n## Overall risk rating: %s\n\n", s.RiskRating)
+	fmt.Fprintf(&b, "- **%d findings** — Critical %d · High %d · Medium %d · Low %d · Info %d\n",
+		s.Total, s.BySeverity["critical"], s.BySeverity["high"], s.BySeverity["medium"], s.BySeverity["low"], s.BySeverity["info"])
+	fmt.Fprintf(&b, "- **%d exploitation-proven** (a benign proof-of-concept was captured) · **%d actively exploited in the wild** (CISA KEV) · **%d with a fix already prepared**\n",
+		s.ExploitProven, s.KEV, s.FixesReady)
+	b.WriteString("\n" + narrativeSummary(r) + "\n")
+
+	// Top findings — title + severity + confidence tier only (the "what", not the "how"). Cap at 10
+	// so the exec page stays a page; the full technical report carries the rest.
+	if len(r.Findings) > 0 {
+		b.WriteString("\n## Most significant findings\n\n")
+		n := len(r.Findings)
+		if n > 10 {
+			n = 10
+		}
+		for _, f := range r.Findings[:n] {
+			tier := "confirmed"
+			if f.Unconfirmed {
+				tier = "unconfirmed lead"
+			} else if f.PoC != "" {
+				tier = "exploitation-proven"
+			}
+			fmt.Fprintf(&b, "- **[%s]** %s — _%s_\n", strings.ToUpper(f.Severity), f.Title, tier)
+		}
+		if len(r.Findings) > n {
+			fmt.Fprintf(&b, "\n_+ %d more — see the full technical report for every finding, evidence, and remediation._\n", len(r.Findings)-n)
+		}
+	} else {
+		b.WriteString("\nNo findings were identified in scope for this assessment.\n")
+	}
+	b.WriteString("\n---\n_This is the executive summary. The full technical report includes every finding with its evidence, request/response proof, CWE/OWASP mapping, and developer-ready remediation._\n")
+	return b.String()
+}
