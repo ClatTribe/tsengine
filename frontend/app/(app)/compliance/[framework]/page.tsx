@@ -17,7 +17,9 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
   // render the page; it shows the "not yet assessed" state and a refresh (force-dynamic) picks
   // up the data once the API is back.
   if (!(FRAMEWORKS as readonly string[]).includes(framework)) notFound();
-  const rep = await api.report(framework);
+  const [rep, fixes] = await Promise.all([api.report(framework), api.complianceFixes(framework)]);
+  // control_id → its remediation bridge status (which gaps are fixable now).
+  const fixByControl = new Map((fixes.controls ?? []).map((c) => [c.control_id, c]));
 
   // Go marshals an empty slice as JSON `null`, so Rows is null for a not-yet-mapped framework —
   // guard it (a raw .filter would crash the page). rep itself may be null on a transient fetch
@@ -131,12 +133,41 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
               <Empty>No open gaps — every control that mapped to a finding is met.</Empty>
             ) : (
               <div className="space-y-3">
+                {/* Compliance → remediation bridge: turn "you have gaps" into "here's what's fixable now". */}
+                {(fixes.fixable_gaps > 0 || fixes.pending_fixes > 0) && (
+                  <Link
+                    href="/inbox"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent-soft/30 px-4 py-3 text-sm transition hover:border-accent"
+                  >
+                    <span className="text-ink">
+                      <span className="font-semibold">{fixes.fixable_gaps}</span> of {fixes.gap_controls} gap
+                      {fixes.gap_controls === 1 ? "" : "s"} already have a fix your engineer proposed
+                      {fixes.pending_fixes > 0 && (
+                        <> — <span className="font-semibold text-accent">{fixes.pending_fixes}</span> waiting for your approval</>
+                      )}
+                      .
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-accent">Review in inbox →</span>
+                  </Link>
+                )}
                 <FixGuidance framework={framework} />
-                {gaps.map((r) => (
+                {gaps.map((r) => {
+                  const fx = fixByControl.get(r.ControlID);
+                  return (
                   <div key={r.ControlID} className="card p-4 animate-fade-rise">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="mono text-sm font-medium">{r.ControlID}</span>
                       <span className="rounded border border-high/30 bg-high/10 px-1.5 py-px text-[10px] font-medium text-high">GAP</span>
+                      {fx && fx.pending_count > 0 && (
+                        <Link href="/inbox" className="rounded border border-accent/40 bg-accent-soft px-1.5 py-px text-[10px] font-medium text-accent transition hover:border-accent">
+                          {fx.pending_count} fix{fx.pending_count === 1 ? "" : "es"} to approve →
+                        </Link>
+                      )}
+                      {fx && fx.applied_count > 0 && (
+                        <span className="rounded border border-low/40 bg-low/10 px-1.5 py-px text-[10px] font-medium text-low">
+                          {fx.applied_count} fix{fx.applied_count === 1 ? "" : "es"} applied
+                        </span>
+                      )}
                     </div>
                     {r.Evidence && r.Evidence.length > 0 ? (
                       <ul className="mt-2 space-y-1.5">
@@ -153,7 +184,8 @@ export default async function FrameworkPage({ params }: { params: Promise<{ fram
                       <div className="mt-1.5 text-xs text-faint">No evidence finding on record.</div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>

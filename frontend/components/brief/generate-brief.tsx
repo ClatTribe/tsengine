@@ -1,19 +1,26 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Sparkles, Loader2, CircleAlert } from "lucide-react";
+import { Sparkles, Loader2, CircleAlert, RefreshCw } from "lucide-react";
 import { generateBrief, type Brief } from "@/app/(app)/brief/actions";
 import { SeverityBadge } from "@/components/ui/primitives";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 
 // "Generate plain-English brief" — runs the L2 Lead/translator over the tenant's findings and renders
 // the consultant deliverable (exec summary + recommendations + the prioritized issues, in plain English).
-export function GenerateBrief() {
+// `initial` is the LAST PERSISTED triage (from the store) so the analysis SURVIVES navigation — the console
+// shows it on load, with a "Re-run" button, instead of forcing a re-spend of the LLM just to see it again.
+export function GenerateBrief({ initial }: { initial?: (Brief & { created_at?: string }) | null }) {
   const [pending, start] = useTransition();
-  const [brief, setBrief] = useState<Brief | null>(null);
+  const [brief, setBrief] = useState<Brief | null>(initial ?? null);
+  // The "last run" stamp belongs only to the persisted brief; a fresh re-run clears it so we never claim a
+  // new run happened at the old time.
+  const [savedAt, setSavedAt] = useState<string | undefined>(initial?.created_at);
+  const hasResult = brief?.ok === true;
 
   function run() {
     setBrief(null);
+    setSavedAt(undefined);
     start(async () => setBrief(await generateBrief()));
   }
 
@@ -25,9 +32,12 @@ export function GenerateBrief() {
           disabled={pending}
           className="inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3.5 py-2 text-sm font-medium text-accent transition hover:border-accent disabled:opacity-50"
         >
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {pending ? "Writing your brief…" : "Generate plain-English brief"}
+          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : hasResult ? <RefreshCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+          {pending ? "Writing your brief…" : hasResult ? "Re-run triage" : "Generate plain-English brief"}
         </button>
+        {savedAt && !pending && (
+          <p className="mt-2 text-xs text-faint">Showing your last triage from {timeAgo(savedAt)} — re-run to refresh it.</p>
+        )}
         {pending && (
           <p className="mt-2 text-xs text-faint">
             The AI security engineer is reading your findings and writing the brief — this can take a minute.

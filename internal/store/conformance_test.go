@@ -83,6 +83,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.UpsertControlState(ctx, platform.ControlState{TenantID: tid, Framework: "soc2", ControlID: "CC6.1", State: platform.ControlGap}))
 	must(s.PutIncident(ctx, platform.Incident{ID: tid + "-i", TenantID: tid, Status: platform.IncidentOpen}))
 	must(s.PutRisk(ctx, platform.Risk{ID: tid + "-rk", TenantID: tid, Title: "r", Status: platform.RiskOpen}))
+	must(s.PutAIAnalysis(ctx, platform.AIAnalysis{ID: tid + "-ai", TenantID: tid, Kind: "triage", Summary: "s"}))
 	must(s.PutAuditEngagement(ctx, platform.AuditEngagement{ID: tid + "-au", TenantID: tid, Framework: "soc2", Status: platform.AuditPlanning}))
 	must(s.PutPolicy(ctx, platform.Policy{ID: tid + "-pol", TenantID: tid, Name: "p", Status: platform.PolicyDraft}))
 	must(s.PutReviewRequest(ctx, platform.ReviewRequest{ID: tid + "-r", TenantID: tid, Status: platform.ReviewOpen}))
@@ -149,6 +150,10 @@ func TestStoreConformance(t *testing.T) {
 				rks, err := s.ListRisks(ctx, tid)
 				orFail(t, err)
 				isolated("risks", tid, ids(rks, func(r platform.Risk) string { return r.ID }))
+
+				ais, err := s.ListAIAnalyses(ctx, tid)
+				orFail(t, err)
+				isolated("ai_analyses", tid, ids(ais, func(a platform.AIAnalysis) string { return a.ID }))
 
 				aus, err := s.ListAuditEngagements(ctx, tid)
 				orFail(t, err)

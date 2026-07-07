@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, ActionsView, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -167,11 +167,23 @@ export const api = {
       `/v1/compliance/${framework}/advisor`,
       { method: "POST", body: "{}" },
     ),
+  // Compliance → remediation bridge — which control gaps are fixable NOW (findings with a queued action).
+  complianceFixes: (framework: string) =>
+    safe<ComplianceFixes>(`/v1/compliance/${framework}/fixes`, { framework, gap_controls: 0, fixable_gaps: 0, pending_fixes: 0, controls: [] }),
+
   // vCISO remediation guidance — concrete, grounded fix steps for a framework's control gaps.
   complianceRemediation: (framework: string) =>
     call<{ framework: string; title: string; gap_count: number; plan: string }>(
       `/v1/compliance/${framework}/remediation`,
       { method: "POST", body: "{}" },
+    ),
+
+  // Persisted AI Security Engineer analyses (Triage / Investigate) — so a run SURVIVES navigation.
+  // safe() → an empty list when the endpoint/store is unavailable, so the page still renders.
+  aiAnalyses: (kind?: string) =>
+    safe<{ analyses: AIAnalysis[] }>(
+      `/v1/ai-analyses${kind ? `?kind=${encodeURIComponent(kind)}` : ""}`,
+      { analyses: [] },
     ),
 
   // L2 translator — run the Lead over the tenant's findings → the plain-English consultant brief.

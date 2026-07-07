@@ -3,6 +3,7 @@ import { Sparkles, Cloud, ShieldCheck, Wrench, ArrowUpRight, Search, ListFilter 
 import { api } from "@/lib/api";
 import { PageIntro } from "@/components/ui/page-intro";
 import { GenerateBrief } from "@/components/brief/generate-brief";
+import { lastTriage } from "./actions";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,9 @@ const ACTIONS = [
 
 export default async function EngineerConsolePage() {
   // Scope so the founder sees WHAT the engineer reasons over (coverage honesty) before triggering an action.
-  const [findings, assets, engagements] = await Promise.all([api.findings(), api.assets(), api.engagements()]);
+  const [findings, assets, engagements, priorBrief] = await Promise.all([
+    api.findings(), api.assets(), api.engagements(), lastTriage(),
+  ]);
   const freshest = engagements.map((e) => e.completed_at).filter(Boolean).sort().pop();
 
   return (
@@ -76,7 +79,7 @@ export default async function EngineerConsolePage() {
           One click: the engineer prioritizes everything that matters, chains it across surfaces, and writes a
           plain-English brief you can forward to a board, an investor, or a customer.
         </p>
-        <GenerateBrief />
+        <GenerateBrief initial={priorBrief} />
       </section>
 
       {/* More agentic actions — each triggers a real agent over your findings (not a chat). */}

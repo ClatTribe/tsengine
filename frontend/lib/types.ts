@@ -1,5 +1,46 @@
 // Mirrors the Go /v1 JSON contracts (pkg/types + pkg/platform). Only the fields the UI uses.
 
+// AIAnalysis — a persisted run of the AI Security Engineer (Triage / Investigate / Cloud), so a run
+// survives navigation. Mirrors pkg/platform.AIAnalysis.
+export interface AIReport {
+  title: string;
+  severity?: string;
+  body?: string;
+}
+export interface AIAnalysis {
+  id: string;
+  kind: string; // "triage" | "investigate" | "cloud"
+  scope?: string;
+  title?: string;
+  summary: string;
+  recommends?: string; // "what to do next" — the fix narrative
+  methodology?: string;
+  reports?: AIReport[];
+  model?: string;
+  iterations?: number;
+  cost_usd?: number;
+  created_at: string;
+}
+
+// ComplianceFixes — the compliance→remediation bridge: which control gaps are fixable now (findings that
+// already have a queued remediation action). Mirrors platformapi.ComplianceFixes.
+export interface ControlFix {
+  control_id: string;
+  finding_count: number;
+  fixable_count: number;
+  pending_count: number;
+  applied_count: number;
+  action_ids?: string[];
+  pending_action?: string;
+}
+export interface ComplianceFixes {
+  framework: string;
+  gap_controls: number;
+  fixable_gaps: number;
+  pending_fixes: number;
+  controls?: ControlFix[];
+}
+
 export interface Finding {
   id: string;
   rule_id: string;
