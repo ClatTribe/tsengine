@@ -700,6 +700,10 @@ func runCloudQuery(o cqOpts) error {
 		// mistaken for an overall failure. A higher recall bought with invented paths is NOT a lift (§10).
 		lift := bench.ComputeAgentLift(s.RealTotal, s.RealFound, as.RealFound, as.FalseIssues)
 		fmt.Print(bench.RenderAgentLift(lift))
+		// The unified L2 scorecard: one graded accuracy number (recall × grounding) PLUS the completeness
+		// flag — did this run actually evaluate the agent, or did the substrate already cover everything
+		// (a silently-uninformative score)? This is the "evaluate L2 on accuracy + completeness" answer.
+		fmt.Print(bench.RenderL2Scorecard(bench.ComputeL2Scorecard(s.RealTotal, s.RealFound, as.RealFound, as.FalseIssues)))
 		fmt.Print(cloudagent.Render(rep))
 		if !as.Pass {
 			os.Exit(3)
