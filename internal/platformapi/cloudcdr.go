@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/ClatTribe/tsengine/internal/cloudcdr"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // handleIngestCloudEvents is the cloud detection-and-response (CDR) ingest — the ACSP "observe live
@@ -37,14 +38,25 @@ func (d Deps) handleIngestCloudEvents(w http.ResponseWriter, r *http.Request, te
 	threats := cloudcdr.Detect(events)
 	findings := cloudcdr.Findings(threats)
 	findings = enrichFindings(findings) // L1.5 parity (§11)
-	stored := 0
+	saved := make([]types.Finding, 0, len(findings))
 	for _, f := range findings {
 		f.ID = d.newID("cdr")
 		if perr := d.Store.PutFinding(r.Context(), tenantID, f); perr != nil {
 			respond(w, nil, perr)
 			return
 		}
-		stored++
+		saved = append(saved, f)
+	}
+	stored := len(saved)
+	// Open incidents IMMEDIATELY for the live control-plane threats — that's the whole point of CDR
+	// (detection-and-response in SECONDS, not the hours a periodic scan takes). Without this, a
+	// root-console-login / SG-opened-to-the-world / IAM-privesc finding just sat in the store until the
+	// next monitoring pass's Reconcile escalated it — defeating the real-time promise. Mirrors the drift,
+	// identity-events, and OSINT ingest, which all open incidents on ingest via the same opener. High-sev
+	// CDR threats cross the opener's floor; medium (new-credentials) opens per the floor. Grounded — the
+	// finding IS the observed control-plane event.
+	if d.IncidentOpener != nil && stored > 0 {
+		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
 	if d.Recorder != nil && stored > 0 {
 		d.Recorder.Record("cloud control-plane threats detected", "cloud_cdr",
