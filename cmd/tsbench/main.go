@@ -649,9 +649,13 @@ func runCloudQuery(o cqOpts) error {
 	// --agent: run the LLM agent over the SAME account and score it head-to-head
 	// against the deterministic engine, both vs the independent answer key.
 	if o.agent {
-		llm, ok := cloudengine.GeminiFromEnv()
+		// Use the standard LLM selector (Anthropic → OpenAI-compat incl. a local proxy/Ollama → Gemini),
+		// so the head-to-head agent can be driven by ANY configured brain — a frontier key, a dev file-relay
+		// proxy (LLM_BASE_URL), or a local model — not only Gemini. This is what makes the agent benchmark
+		// runnable without a specific cloud key (the whole point of tuning via the proxy).
+		llm, ok := cloudengine.LLMFromEnv()
 		if !ok {
-			return fmt.Errorf("--agent needs LLM_API_KEY (the agent's brain)")
+			return fmt.Errorf("--agent needs an LLM: set ANTHROPIC_API_KEY, or LLM_BASE_URL+LLM_MODEL (OpenAI-compat/proxy/Ollama), or LLM_API_KEY (Gemini)")
 		}
 		cc := &cloudagent.Context{Snap: snap, Prowler: findings}
 		rep, aerr := cloudagent.Investigate(context.Background(), llm, cc, cloudagent.Options{MaxIters: 4*len(ds.AnswerKey.RealTargets) + 12, MaxHyp: maxHyp})
