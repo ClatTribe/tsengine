@@ -425,10 +425,11 @@ func main() {
 		}
 	}
 	apiDeps := platformapi.Deps{
-		Store: st, Connectors: reg, Runner: svc, Desk: desk, GRC: g, Vault: vault, Jobs: scanJobs,
+		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		CloudSnapshots: cloudSnaps,
 		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
 		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
+		Detector:       detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)
 		Token:          token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// AppURL lands the user back in the app after OAuth (else they'd see a raw JSON blob).
 		// Defaults to the public base (same-origin behind the TLS edge), override with TSENGINE_APP_URL.
@@ -442,6 +443,9 @@ func main() {
 	// human to click /v1/l2/translate. The hook self-gates (AIEnabled + an available LLM), so it's a
 	// no-op when AI isn't entitled/configured — a Free tenant never auto-spends the operator's budget.
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
+	// Continuous pentesting: each monitoring pass runs any engagement whose recurring schedule is due
+	// (a safe PASSIVE re-verify — never auto active exploitation). Self-gating (no-op when nothing is due).
+	svc.AfterPass = func(ctx context.Context, tenantID string) { apiDeps.RunDuePentests(ctx, tenantID) }
 	api := platformapi.NewHandler(apiDeps)
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls

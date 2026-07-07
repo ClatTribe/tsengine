@@ -71,12 +71,16 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		if rt, tgt := liveCloudMutation(f, asset.Meta["provider"]); rt != "" {
 			payload["remediation_type"] = rt
 			payload["target"] = tgt // the specific bucket, not the whole account
-		} else if isIAMPrivescFinding(f) {
-			// Layer-correct but not yet live-writable: name the IAM-tighten fix + the principal, so the
-			// action is the RIGHT cut (not a generic account runbook). Promotes to a live mutation the
-			// moment an IAM-write connector path lands — same pattern as identity's oauth_revoke.
-			payload["remediation_type"] = rtypeIAMRestrict
+		} else if rt, runbook, ok := cloudFixCatalog(f); ok {
+			// Respond breadth: a class-correct fix for the common non-storage cloud-misconfig classes
+			// (IAM privesc, open SG, unencrypted-at-rest, public snapshot/DB, missing MFA, disabled
+			// logging, root key, weak password policy). Named + grounded + promotable — the moment a live
+			// connector write for that class lands, it upgrades to a real HITL-gated mutation (like S3
+			// block-public-access) with one catalog entry. Until then the human gets the exact steps, not
+			// a vague "review this". Target is the finding's own resource (grounded).
+			payload["remediation_type"] = rt
 			payload["target"] = nz(f.Endpoint, asset.Target)
+			payload["remediation"] = runbook + "\n\n" + fixBody(f)
 		}
 		return platform.Action{
 			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
@@ -136,6 +140,23 @@ func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
 			return nil // no issue tracker configured → recorded no-op (graceful)
 		}
 		return d.Ticket.FileTicket(ctx, a)
+	}
+	// A cloud remediation whose class has no live connector write yet (the cloudCatalog runbook classes:
+	// open SG, unencrypted-at-rest, public snapshot/DB, missing MFA, disabled logging, root key, weak
+	// password policy, IAM privesc) is a RUNBOOK — the payload carries the exact steps. File it as an
+	// actionable ticket for the human's team to execute, rather than calling connector.Apply which would
+	// error "no live write path yet" (turning an approved fix into a spurious failure). The human already
+	// approved it at the desk; delivery hands them the runbook. A live-writable class (cloud storage
+	// public-access block) is NOT in this set and falls through to the real connector write below. Precise
+	// by construction: the set is only cloudCatalog types, so identity (account_suspend) and live storage
+	// actions are never mis-routed here.
+	if a.Kind == platform.ActApplyConfig {
+		if rt, _ := a.Payload["remediation_type"].(string); cloudRunbookRemediations[rt] {
+			if d.Ticket == nil {
+				return nil // no tracker → recorded no-op (graceful); never a false "applied"
+			}
+			return d.Ticket.FileTicket(ctx, a)
+		}
 	}
 	if !deliverable(a.Kind) {
 		return nil // anything else without a write path: recorded, no external write

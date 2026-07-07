@@ -1,5 +1,46 @@
 // Mirrors the Go /v1 JSON contracts (pkg/types + pkg/platform). Only the fields the UI uses.
 
+// AIAnalysis — a persisted run of the AI Security Engineer (Triage / Investigate / Cloud), so a run
+// survives navigation. Mirrors pkg/platform.AIAnalysis.
+export interface AIReport {
+  title: string;
+  severity?: string;
+  body?: string;
+}
+export interface AIAnalysis {
+  id: string;
+  kind: string; // "triage" | "investigate" | "cloud"
+  scope?: string;
+  title?: string;
+  summary: string;
+  recommends?: string; // "what to do next" — the fix narrative
+  methodology?: string;
+  reports?: AIReport[];
+  model?: string;
+  iterations?: number;
+  cost_usd?: number;
+  created_at: string;
+}
+
+// ComplianceFixes — the compliance→remediation bridge: which control gaps are fixable now (findings that
+// already have a queued remediation action). Mirrors platformapi.ComplianceFixes.
+export interface ControlFix {
+  control_id: string;
+  finding_count: number;
+  fixable_count: number;
+  pending_count: number;
+  applied_count: number;
+  action_ids?: string[];
+  pending_action?: string;
+}
+export interface ComplianceFixes {
+  framework: string;
+  gap_controls: number;
+  fixable_gaps: number;
+  pending_fixes: number;
+  controls?: ControlFix[];
+}
+
 export interface Finding {
   id: string;
   rule_id: string;
@@ -147,6 +188,7 @@ export interface PentestEngagement {
   started_at?: string;
   completed_at?: string;
   signoff?: Signoff | null; // named human sign-off on the report (the HITL accountability)
+  schedule?: { cadence: string; next_run_at?: string } | null; // recurring re-test cadence (safe passive re-verify)
 }
 
 export interface PentestStats {
@@ -160,6 +202,49 @@ export interface PentestStats {
   verified_rate: number; // 0..1
   high_plus_found: boolean;
   needs_review: number; // high+ findings actively probed but not auto-proven → manual HITL sign-off
+}
+
+// Pre-flight readiness for an engagement (GET /v1/pentest/{id}/readiness) — surfaces, before a
+// run, what still blocks an active/deep exploitation: per-target ownership, recorded consent, and
+// whether an LLM is configured to actually discover vulns.
+export interface TargetReadiness {
+  target: string;
+  owned: boolean;
+  method?: string; // dns_txt | well_known | connection | verified
+  asset_id?: string;
+  needs_challenge: boolean;
+  note?: string;
+}
+export interface AIReadiness {
+  configured: boolean;
+  source: string; // tenant_key | operator | none
+  discovery_will_run: boolean;
+  note: string;
+}
+export interface PentestReadiness {
+  engagement_id: string;
+  mode: string;
+  ready: boolean;
+  requires_consent: boolean;
+  consent_present: boolean;
+  ai: AIReadiness;
+  scope: TargetReadiness[];
+  blockers: string[];
+}
+
+// Ownership challenge (POST /v1/assets/{id}/ownership/challenge) — the token + publishing
+// instructions the customer follows to PROVE they control a standalone target.
+export interface OwnershipChallenge {
+  token: string;
+  host: string;
+  dns_name: string;
+  dns_value: string;
+  file_url: string;
+  file_content: string;
+}
+export interface OwnershipResult {
+  verified: boolean;
+  method?: string; // dns | file | ""
 }
 
 export interface Action {
@@ -690,6 +775,32 @@ export interface ComplianceReport {
   };
   Signer?: string;
   SHA256?: string;
+}
+
+// ComplianceSnapshot — one point on a framework's continuous-evidence timeline (mirrors
+// platform.ComplianceSnapshot). Append-only: an auditor reads these as continuity proof.
+export interface ComplianceSnapshot {
+  id: string;
+  tenant_id: string;
+  framework: string;
+  captured_at: string;
+  total_controls: number;
+  met_controls: number;
+  gap_controls: number;
+  state_hash: string;
+  fully_met: boolean;
+}
+
+// EvidenceTimeline — the continuous-evidence view for a framework (mirrors grc.EvidenceTimeline):
+// the ordered snapshots + a continuity summary (fully-met ratio, the captured window).
+export interface EvidenceTimeline {
+  framework: string;
+  snapshots: ComplianceSnapshot[] | null; // Go marshals an empty slice as null — guard it
+  count: number;
+  first_captured_at?: string;
+  last_captured_at?: string;
+  fully_met_ratio: number;
+  continuous: boolean;
 }
 
 export interface SaaSApp {

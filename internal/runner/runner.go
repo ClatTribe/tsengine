@@ -28,6 +28,12 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
+// evidenceHeartbeat is the max gap between continuous-compliance evidence snapshots for an UNCHANGED
+// framework — a daily "the control still holds" heartbeat. A real posture change captures immediately
+// regardless (see grc.CaptureEvidenceSnapshot); this only bounds the no-change cadence so the timeline
+// stays a meaningful audit record without growing every monitoring pass.
+const evidenceHeartbeat = 24 * time.Hour
+
 // ScanRunner runs the engine over one asset and returns its grounded findings. The
 // real implementation drives internal/orchestrator in a sandbox; tests use a fake.
 type ScanRunner interface {
@@ -90,14 +96,20 @@ type Service struct {
 	// incidents just open + alert.
 	ProposeIncidentResponse func(platform.Incident) ([]platform.Action, bool)
 
-	// AfterScan, when set, auto-invokes the AI Security Engineer (the L2 translate/reasoning pass)
-	// once a scan pass surfaces something NEW — so the engineer reviews the estate automatically
-	// instead of waiting for a human to click. It fires only when scanned>0 AND ≥1 incident opened
-	// this pass (review on CHANGE, not every idle monitor pass — this bounds the LLM cost); the
-	// entitlement (AIEnabled) + LLM-availability gates live INSIDE the injected func (a Free tenant
-	// must never auto-spend the operator's LLM budget). Best-effort, fire-and-forget. nil → no
-	// auto-review (the on-demand POST /v1/l2/translate still works).
+	// AfterScan, when set, auto-invokes the AI Security Engineer (the L2 translate/reasoning pass) so
+	// the engineer reviews the estate automatically instead of waiting for a human to click. It fires
+	// on any pass with scanned>0; the COST bound + entitlement (AIEnabled) + LLM-availability gates all
+	// live INSIDE the injected func (where the store is): it reviews on a NEW incident OR the tenant's
+	// FIRST review ever (a newly-connected tenant gets an initial analysis), and SKIPS a static estate
+	// re-scanned every pass — so the engine runs continuously without re-spending the LLM idly, and a
+	// Free tenant never auto-spends the operator's budget. Best-effort. nil → no auto-review.
 	AfterScan func(ctx context.Context, tenantID string, findings []types.Finding, openedIncidents int)
+
+	// AfterPass, when set, fires on EVERY monitoring pass (unconditionally, unlike AfterScan) — the
+	// hook for time-driven, change-independent work like running due SCHEDULED pentests. Any gating
+	// (is anything due? is the tenant halted?) lives inside the injected func. Best-effort,
+	// fire-and-forget. nil → nothing extra runs.
+	AfterPass func(ctx context.Context, tenantID string)
 
 	// optional webhook auto-registration (event-driven re-scans on connect)
 	WebhookSecret string // shared secret stamped on registered hooks (and verified inbound)
@@ -283,12 +295,26 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		if _, err := s.GRC.Reconcile(ctx, tenantID, current); err != nil && firstErr == nil {
 			firstErr = err
 		}
+		// Continuous compliance evidence: capture a timestamped posture snapshot per assessed framework
+		// onto the append-only timeline — the SOC 2 Type II "it held across the window" proof the
+		// point-in-time EvidencePack can't give. Bounded by CaptureEvidenceSnapshot's change+heartbeat gate
+		// (only a real posture change or a full day elapsed captures a new point), so a static estate adds
+		// nothing per pass. Best-effort — a capture error never fails the monitoring pass.
+		if _, err := s.GRC.CaptureAllEvidence(ctx, tenantID, evidenceHeartbeat); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
-	// Auto-review: when this pass surfaced something NEW, the AI Security Engineer reviews the estate
-	// automatically (the entitlement + LLM gates live inside the hook; cost-bounded to CHANGE, not
-	// idle monitor passes). Best-effort — never affects the scan result.
-	if s.AfterScan != nil && scanned > 0 && openedIncidents > 0 {
+	// Auto-review: after any pass that scanned assets, give the AI Security Engineer a chance to review
+	// the estate automatically. The COST bound (fire only on CHANGE or a tenant's FIRST review, never on
+	// idle re-scans of a static estate) + the entitlement/LLM gates all live inside the hook, where the
+	// store is available — so a newly-connected tenant gets an initial analysis even without a brand-new
+	// incident, while a static estate doesn't re-spend the LLM every monitor pass. Best-effort.
+	if s.AfterScan != nil && scanned > 0 {
 		s.AfterScan(ctx, tenantID, current, openedIncidents)
+	}
+	// Time-driven per-pass work (due scheduled pentests) — unconditional; the hook self-gates.
+	if s.AfterPass != nil {
+		s.AfterPass(ctx, tenantID)
 	}
 	return scanned, firstErr
 }

@@ -339,3 +339,54 @@ func TestNonTechLoop_PostureToRunbookToCompliance(t *testing.T) {
 		t.Error("a reported gap must cite the finding that grounds it (grounding holds end to end)")
 	}
 }
+
+// TestRespondBreadth_E2E: a common cloud misconfig (an open security group) flows the REAL Respond
+// path — remediate.Propose → hitl.Desk gate — and lands as a tier-2 pending-approval action carrying a
+// CLASS-CORRECT, specific runbook (the exact revoke-security-group-ingress cut), not a generic "review
+// this" ticket. This is the Respond breadth win end to end: the human desk sees the fix, not a vague
+// lead. (Before the breadth catalog, a non-storage cloud finding carried no remediation_type + only the
+// generic body.)
+func TestRespondBreadth_E2E(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	desk := &hitl.Desk{Store: st}
+
+	asset := platform.Asset{
+		ID: "a-cloud", TenantID: "t1", ConnectionID: "c-aws", Type: "cloud_account",
+		Target: "aws:111122223333", Meta: map[string]string{"provider": "aws"},
+	}
+	f := types.Finding{
+		ID: "f-sg", Severity: types.SeverityHigh, Tool: "prowler",
+		Title:  "Security group sg-0abc allows 0.0.0.0/0 ingress on port 22 (SSH open to the internet)",
+		RuleID: "prowler::ec2_securitygroup_default_open", Endpoint: "sg-0abc",
+	}
+
+	act, ok := remediate.Propose(f, asset, func() string { return "1" })
+	if !ok {
+		t.Fatal("a cloud finding must produce a remediation action")
+	}
+	if act.Payload["remediation_type"] != "sg_restrict_ingress" {
+		t.Fatalf("an open-SG finding must carry the class-correct sg_restrict_ingress type, got %v", act.Payload["remediation_type"])
+	}
+	if act.Payload["target"] != "sg-0abc" {
+		t.Errorf("the runbook must target the finding's own security group, got %v", act.Payload["target"])
+	}
+	run, _ := act.Payload["remediation"].(string)
+	if !strings.Contains(run, "revoke-security-group-ingress") {
+		t.Errorf("the runbook must be class-correct (the exact revoke cut), got:\n%s", run)
+	}
+
+	// Through the gate: a tier-2 cloud config action queues for a human (never auto-applies).
+	got, err := desk.Submit(ctx, act)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if got.Status != platform.ActPendingApproval {
+		t.Fatalf("a tier-2 cloud remediation must queue for approval, got status %s", got.Status)
+	}
+	pending, _ := desk.Pending(ctx, "t1")
+	if len(pending) != 1 || !strings.Contains(pending[0].Payload["remediation"].(string), "revoke-security-group-ingress") {
+		t.Fatal("the human desk must see the specific class-correct runbook on the queued action")
+	}
+}

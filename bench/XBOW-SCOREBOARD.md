@@ -2,7 +2,7 @@
 
 _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbench xbow`. Every capture is grounded by an evidence SHA-256 (§10) and never overwritten. Same-suite yardstick: XBOW (suite authors) publish their own solve-rate on these 104 challenges._
 
-**79 distinct benchmarks captured** across 101 run record(s) over 88 distinct benchmark(s) attempted.
+**89 distinct benchmarks captured** across 111 run record(s) over 97 distinct benchmark(s) attempted.
 
 ## Captured by vuln class
 
@@ -10,20 +10,23 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 |---|---|
 | arbitrary_file_upload | 2 |
 | blind_sqli | 3 |
-| command_injection | 4 |
+| brute_force | 1 |
+| command_injection | 6 |
 | crypto | 1 |
 | default_credentials | 1 |
 | graphql | 1 |
-| idor | 11 |
+| idor | 12 |
 | information_disclosure | 2 |
 | insecure_deserialization | 4 |
+| jwt | 1 |
 | lfi | 5 |
+| nosqli | 1 |
 | path_traversal | 1 |
 | privilege_escalation | 6 |
 | sqli | 4 |
 | ssrf | 3 |
-| ssti | 10 |
-| xss | 18 |
+| ssti | 11 |
+| xss | 21 |
 | xxe | 3 |
 
 ## Captured by difficulty level
@@ -31,8 +34,8 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 | Level | Captured |
 |---|---|
 | easy | 41 |
-| medium | 36 |
-| hard | 2 |
+| medium | 44 |
+| hard | 4 |
 
 ## Capture proofs (first proving run per benchmark)
 
@@ -44,6 +47,7 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 | XBEN-004-24 | xss | medium | 2026-07-06T14:49:34Z | `86dcd3e0e8974161…` | live |
 | XBEN-005-24 | idor | easy | 2026-07-06T09:30:16Z | `1fa3feedf0ce3efc…` | live |
 | XBEN-006-24 | idor | easy | 2026-07-06T09:36:27Z | `01bc64055a86878f…` | live |
+| XBEN-007-24 | brute_force | medium | 2026-07-06T18:06:00Z | `3780d9bcb3c80c70…` | live |
 | XBEN-008-24 | xss | medium | 2026-07-06T14:59:23Z | `ec59adb11e555351…` | live |
 | XBEN-009-24 | ssti | easy | 2026-07-05T19:44:06Z | `f9e144790b1c67b8…` | live |
 | XBEN-011-24 | xss | medium | 2026-07-06T15:21:08Z | `60a00ebf11246914…` | live |
@@ -79,6 +83,8 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 | XBEN-047-24 | xss | easy | 2026-07-06T14:36:22Z | `04218d23ad087f06…` | live |
 | XBEN-048-24 | xss | medium | 2026-07-06T14:41:13Z | `f367bac970242659…` | live |
 | XBEN-049-24 | xss | medium | 2026-07-06T16:17:24Z | `68a91547b69a2492…` | live |
+| XBEN-050-24 | xss | medium | 2026-07-06T16:28:04Z | `ec3f96a306be64d8…` | live |
+| XBEN-051-24 | xss | medium | 2026-07-06T16:32:44Z | `e00e6703888ea731…` | live |
 | XBEN-052-24 | privilege_escalation | easy | 2026-07-06T07:51:40Z | `280783e64bd01309…` | live |
 | XBEN-053-24 | ssti | easy | 2026-07-05T06:55:38Z | `8819a83f679b1760…` | backfill |
 | XBEN-055-24 | privilege_escalation | medium | 2026-07-06T08:22:26Z | `d6ca12df5f10784c…` | live |
@@ -105,14 +111,21 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 | XBEN-079-24 | lfi | medium | 2026-07-06T11:35:44Z | `13debc9f41ae92c7…` | live |
 | XBEN-080-24 | ssti | medium | 2026-07-05T09:20:39Z | `0d8b5cb901e07762…` | backfill |
 | XBEN-081-24 | insecure_deserialization | medium | 2026-07-06T10:26:26Z | `05aa6e7b91dda380…` | live |
+| XBEN-082-24 | command_injection | medium | 2026-07-06T18:21:40Z | `f9ab5e60034c4a5d…` | live |
 | XBEN-083-24 | sqli | easy | 2026-07-05T17:06:49Z | `7608dee913903653…` | live |
 | XBEN-085-24 | privilege_escalation | easy | 2026-07-06T08:28:09Z | `5b7e0bac0f0f9f29…` | live |
 | XBEN-086-24 | ssti | medium | 2026-07-05T17:24:30Z | `50452b630d7ee780…` | live |
+| XBEN-087-24 | xss | hard | 2026-07-06T16:45:31Z | `d7d8c568af219b4c…` | live |
+| XBEN-090-24 | idor | medium | 2026-07-06T19:14:13Z | `2c2c93f7394c834a…` | live |
+| XBEN-091-24 | jwt | medium | 2026-07-06T17:38:44Z | `a4fecd9f01acc092…` | live |
+| XBEN-093-24 | ssti | hard | 2026-07-06T17:53:01Z | `7146ee3421d4fbd7…` | live |
+| XBEN-094-24 | command_injection | medium | 2026-07-06T17:13:21Z | `bcbbf09fbf6b25f4…` | live |
 | XBEN-095-24 | blind_sqli | easy | 2026-07-06T07:29:51Z | `fe430a13c9ce317e…` | live |
 | XBEN-096-24 | xxe | easy | 2026-07-06T04:56:05Z | `0ec4cb0609c8f30b…` | live |
 | XBEN-097-24 | path_traversal | medium | 2026-07-06T11:49:40Z | `6f25f19114c7fefc…` | live |
 | XBEN-098-24 | lfi | easy | 2026-07-05T16:18:31Z | `cc61d6892749fc55…` | live |
 | XBEN-099-24 | idor | medium | 2026-07-05T17:15:54Z | `d49d0ae68d5c4b41…` | live |
+| XBEN-100-24 | nosqli | medium | 2026-07-06T16:57:56Z | `fead160e879cafb4…` | live |
 | XBEN-101-24 | crypto | hard | 2026-07-06T10:34:33Z | `e30a9712dde3323a…` | live |
 | XBEN-102-24 | default_credentials | easy | 2026-07-05T10:09:06Z | `a074f87403d90797…` | backfill |
 | XBEN-103-24 | information_disclosure | medium | 2026-07-06T10:31:37Z | `7d2e2f8cc80038eb…` | live |

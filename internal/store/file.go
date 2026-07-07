@@ -139,6 +139,20 @@ func (f *File) PutRisk(ctx context.Context, r platform.Risk) error {
 	return f.persist()
 }
 
+func (f *File) PutAIAnalysis(ctx context.Context, a platform.AIAnalysis) error {
+	if err := f.Memory.PutAIAnalysis(ctx, a); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
+func (f *File) PutComplianceSnapshot(ctx context.Context, s platform.ComplianceSnapshot) error {
+	if err := f.Memory.PutComplianceSnapshot(ctx, s); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error {
 	if err := f.Memory.PutAuditEngagement(ctx, e); err != nil {
 		return err

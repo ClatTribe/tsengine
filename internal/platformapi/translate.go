@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
@@ -49,20 +51,27 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 	if reports == nil {
 		reports = []types.Finding{}
 	}
+	// Persist as the tenant's latest whole-estate triage so it survives navigation (best-effort).
+	saved := d.persistAIAnalysis(r.Context(), tenantID, "triage", "", "Whole-estate triage", out, time.Now())
 	writeJSON(w, http.StatusOK, map[string]any{
-		"summary": out.Summary, "reports": reports,
+		"summary": out.Summary, "reports": reports, "analysis_id": saved.ID, "saved_at": saved.CreatedAt,
 		"iterations": out.Iterations, "stop_reason": out.StopReason, "cost_usd": out.CostUSD, "model": out.Model,
 	})
 }
 
 // resolveLeadClient returns the tool-calling l2.Client for the tenant: its own configured model (the
-// OpenAI-compatible family — the per-tenant key opened from the vault) else the operator-global client
-// (d.LeadClient, from l2.ClientFromEnv — Anthropic, OpenAI, or a local Ollama). nil when neither is set.
-// Anthropic/Gemini per-tenant for the tool-calling seam fall back to the operator-global client (their
-// keyed constructors read env), a documented follow-on.
+// per-tenant key opened from the vault — Anthropic/Claude, the OpenAI-compatible family, or Gemini via
+// its OpenAI-compatible endpoint) else the operator-global client (d.LeadClient, from l2.ClientFromEnv —
+// Anthropic, OpenAI, or a local Ollama). nil when neither is set. A tenant's OWN key is honoured on ANY
+// plan (they pay for it); the operator-global client is gated to AI-entitled plans.
 func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client {
 	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
 		switch strings.ToLower(provider) {
+		case "anthropic", "claude":
+			return l2.NewAnthropicClientWithKey(model, key) // customer's own Claude key → drives Triage/Investigate
+		case "gemini", "google", "googleai":
+			// Gemini exposes an OpenAI-compatible surface; route the tenant key there so tool-calling works.
+			return l2.NewOpenAICompatClient(model, "https://generativelanguage.googleapis.com/v1beta/openai", key)
 		case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
 			return l2.NewOpenAICompatClient(model, "", key) // tenant's OWN key → allowed on any plan
 		}
@@ -70,10 +79,22 @@ func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client 
 	// Operator-global client → only for AI-entitled plans (the economic invariant: a Free tenant
 	// without its own key must never spend the operator's LLM budget). Previously ungated — a Free
 	// tenant could drive /v1/l2/translate on the operator's dime.
-	if d.LeadClient != nil && d.planLimits(ctx, tenantID).AIEnabled {
+	if d.LeadClient != nil && d.operatorLLMAllowed(ctx, tenantID) {
 		return d.LeadClient
 	}
 	return nil
+}
+
+// operatorLLMAllowed reports whether a tenant may drive the OPERATOR-GLOBAL LLM (d.LeadClient / d.AgentLLM).
+// Normally this is the economic gate — AI-entitled plans only, so a Free tenant never spends operator budget.
+// TSENGINE_DEV_LLM_ALL_PLANS=1 is a DEV-ONLY override (off by default → the production invariant is intact):
+// it lets `make dev` + the file-relay proxy power the AI engine for any test tenant without a paid plan or a
+// customer key. NEVER set it in production — it would let Free tenants spend the operator's LLM budget.
+func (d Deps) operatorLLMAllowed(ctx context.Context, tenantID string) bool {
+	if os.Getenv("TSENGINE_DEV_LLM_ALL_PLANS") == "1" {
+		return true
+	}
+	return d.planLimits(ctx, tenantID).AIEnabled
 }
 
 // runTranslate is the shared L2 engineer core (used by the on-demand POST /v1/l2/translate AND the
@@ -105,6 +126,9 @@ func (d Deps) runEstateAgent(ctx context.Context, tenantID string, client l2.Cli
 	// Cloud-depth delegation: when a stored cloud snapshot exists, the generalist can call investigate_cloud
 	// to run the cloud specialist over it. nil when no snapshot store → tool not exposed.
 	dep.CloudInvestigator = d.cloudInvestigator(tenantID)
+	// Code-depth delegation: when a GitHub repo is connected, the generalist can call investigate_code to
+	// run the code specialist over its live source. nil when no connected repo → tool not exposed (cap-safe).
+	dep.CodeInvestigator = d.codeInvestigator(tenantID)
 	budget := l2.DefaultBudget()
 	budget.MaxIterations = maxIter
 	agent, err := l2.New(client, l2.BuildCatalog(dep), budget)
@@ -128,6 +152,14 @@ func (d Deps) AutoReviewAfterScan(ctx context.Context, tenantID string, findings
 	if client == nil {
 		return // no own key + not AI-entitled (or no LLM configured at all) → don't spend operator budget
 	}
+	// COST bound for continuous operation: run the LLM when something CHANGED (a new incident opened) OR
+	// this tenant has never had an analysis yet (the first-connect "aha" — a newly-connected SMB shouldn't
+	// need to click Triage to get an initial review). Otherwise skip: a static estate re-scanned every
+	// monitor pass must NOT re-spend the LLM. The persisted-analysis store is the "have we reviewed before"
+	// signal, so this is bounded to change + first-run, not per-pass.
+	if openedIncidents == 0 && d.hasPriorTriage(ctx, tenantID) {
+		return
+	}
 	out, err := d.runTranslate(ctx, tenantID, client, findings)
 	if err != nil {
 		slog.Warn("[auto-review] AI engineer review failed", "tenant", tenantID, "err", err)
@@ -145,11 +177,29 @@ func (d Deps) AutoReviewAfterScan(ctx context.Context, tenantID string, findings
 	} else {
 		slog.Warn("[auto-review] risk seeding failed", "tenant", tenantID, "err", serr)
 	}
+	// Persist the auto-review as the tenant's latest triage (like the on-demand path) so it survives to the
+	// /brief console — the continuous engine's work is visible without the user re-running it.
+	d.persistAIAnalysis(ctx, tenantID, "triage", "", "Auto-review after scan", out, time.Now())
 	if d.Recorder != nil {
 		d.Recorder.Record("ai engineer auto-reviewed", "l2-lead",
 			map[string]any{"tenant_id": tenantID, "opened_incidents": openedIncidents, "reports": len(out.Findings), "risks_proposed": risksProposed, "summary": out.Summary},
 			"AI Security Engineer auto-review after scan change")
 	}
+}
+
+// hasPriorTriage reports whether the tenant already has a persisted whole-estate triage analysis (the
+// "have we reviewed before" signal that bounds the continuous auto-review to change + first-run).
+func (d Deps) hasPriorTriage(ctx context.Context, tenantID string) bool {
+	all, err := d.Store.ListAIAnalyses(ctx, tenantID)
+	if err != nil {
+		return true // on a read error, be conservative: assume reviewed → don't spend the LLM
+	}
+	for _, a := range all {
+		if a.Kind == "triage" {
+			return true
+		}
+	}
+	return false
 }
 
 // toIssueDigests maps crossdetect's unified issues into the engine-pure l2.IssueDigest the Lead prompt

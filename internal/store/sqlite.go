@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS actions     (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS controls    (tenant_id TEXT, framework TEXT, control_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,framework,control_id));
 CREATE TABLE IF NOT EXISTS incidents   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS risks       (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS ai_analyses (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS compliance_snaps (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
@@ -243,6 +245,18 @@ func (s *SQLite) PutRisk(ctx context.Context, r platform.Risk) error {
 }
 func (s *SQLite) ListRisks(ctx context.Context, tenantID string) ([]platform.Risk, error) {
 	return listJSON[platform.Risk](ctx, s.db, `SELECT data FROM risks WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) PutAIAnalysis(ctx context.Context, a platform.AIAnalysis) error {
+	return s.upsertTID(ctx, `INSERT INTO ai_analyses(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, a.TenantID, a.ID, a)
+}
+func (s *SQLite) PutComplianceSnapshot(ctx context.Context, snap platform.ComplianceSnapshot) error {
+	return s.upsertTID(ctx, `INSERT INTO compliance_snaps(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, snap.TenantID, snap.ID, snap)
+}
+func (s *SQLite) ListComplianceSnapshots(ctx context.Context, tenantID string) ([]platform.ComplianceSnapshot, error) {
+	return listJSON[platform.ComplianceSnapshot](ctx, s.db, `SELECT data FROM compliance_snaps WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) ListAIAnalyses(ctx context.Context, tenantID string) ([]platform.AIAnalysis, error) {
+	return listJSON[platform.AIAnalysis](ctx, s.db, `SELECT data FROM ai_analyses WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 func (s *SQLite) PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error {
 	return s.upsertTID(ctx, `INSERT INTO audits(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, e.TenantID, e.ID, e)

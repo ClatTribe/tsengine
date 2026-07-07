@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Sparkles } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { riskRating, severityCounts } from "@/lib/utils";
@@ -26,11 +26,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // — send them to the rotation screen, which also lives outside (app) so this check can't loop.
   if (me.must_change_password) redirect("/change-password");
 
-  const [findings, approvals, tenant, practitioners] = await Promise.all([
+  const [findings, approvals, tenant, practitioners, llm] = await Promise.all([
     api.findings(),
     api.approvals(),
     api.tenant(),
     api.practitioners(),
+    api.llmSettings(),
   ]);
   const risk = riskRating(severityCounts(findings));
   // Service model: a managed/MSP customer's expert owns the HITL acts, so the pending badge is
@@ -54,6 +55,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           >
             <ShieldAlert className="h-3.5 w-3.5" />
             Automation is halted — no scans or fixes are running. Resume in Settings.
+          </Link>
+        )}
+        {/* AI Security Engineer OFF — the product's core is the AI engineer, but it can't run without an LLM
+            key. This global nudge (only when not halted) makes "add your key" prominent instead of buried in
+            Settings, so a new SMB isn't left with a silent, do-nothing engineer. Disappears once a key is set. */}
+        {!tenant?.agents_halted && !llm.ai_enabled && (
+          <Link
+            href="/settings"
+            className="flex items-center justify-center gap-2 border-b border-accent/30 bg-accent-soft/40 px-6 py-2 text-xs font-medium text-accent transition hover:bg-accent-soft"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Your AI Security Engineer is off — add your LLM key in Settings to turn on triage, investigation, and fixes.
           </Link>
         )}
         <main className="flex-1 overflow-y-auto px-6 py-6">

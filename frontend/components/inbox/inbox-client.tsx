@@ -32,6 +32,31 @@ function needsSignature(a: Action): boolean {
   return a.tier >= 3;
 }
 
+// tierMeaning translates the gate tier into plain English for a non-security SMB owner — what the action
+// is, whether it can be undone, and WHY it's in their queue instead of auto-handled. This is the "SMB
+// context" the raw "tier N" jargon didn't give. Mirrors platform.GateTier(2)/TierIrreversible(3).
+function tierMeaning(tier: number): { label: string; reversible: boolean; why: string } {
+  if (tier >= 3) {
+    return {
+      label: "Irreversible or legal",
+      reversible: false,
+      why: "It can't be undone (or it's a legal/customer communication), so it can never happen without a person signing off.",
+    };
+  }
+  if (tier === 2) {
+    return {
+      label: "Reversible change",
+      reversible: true,
+      why: "It changes a real configuration. You can roll it back, but it's consequential enough that we hold it for your approval first.",
+    };
+  }
+  return {
+    label: "Low-risk & reversible",
+    reversible: true,
+    why: "Low-risk and easily undone — here for your awareness. Actions like this normally apply automatically within the agent's safe limits.",
+  };
+}
+
 export function InboxClient({ actions, findings }: { actions: Action[]; findings: Record<string, Finding> }) {
   const [items, removeOptimistic] = useOptimistic(actions, (state, id: string) => state.filter((a) => a.id !== id));
   const [sel, setSel] = useState(0);
@@ -113,7 +138,9 @@ export function InboxClient({ actions, findings }: { actions: Action[]; findings
                   </div>
                   <div className="mt-1 flex items-center gap-2">
                     {f && <SeverityBadge severity={f.severity} className="scale-90" />}
-                    <span className="mono text-[11px] text-faint">tier {a.tier}</span>
+                    <span className={cn("text-[11px]", a.tier >= 3 ? "text-critical" : "text-faint")}>
+                      {a.tier >= 3 ? "needs signature" : a.tier === 2 ? "reversible" : "low-risk"}
+                    </span>
                     {a.finding_ids && a.finding_ids.length > 1 && (
                       <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">
                         bulk · fixes {a.finding_ids.length}
@@ -177,6 +204,18 @@ function DetailPane({
           then sign to file it; reject to discard. Nothing is sent until a person signs.
         </div>
       )}
+
+      {/* Plain-English "what this means for you" — so a non-security owner understands WHY it's in their
+          queue and whether it can be undone, instead of decoding "tier N". Tier-3 has its own banner above. */}
+      {!sign && (() => {
+        const m = tierMeaning(action.tier);
+        return (
+          <div className="border-b border-border bg-surface-2/50 px-5 py-2.5 text-xs">
+            <span className={cn("font-medium", m.reversible ? "text-ink" : "text-critical")}>{m.label}.</span>{" "}
+            <span className="text-muted">{m.why}</span>
+          </div>
+        );
+      })()}
 
       <div className="flex-1 space-y-5 overflow-y-auto p-5">
         {/* Why — the citing finding */}

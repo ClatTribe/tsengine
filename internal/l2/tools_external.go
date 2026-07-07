@@ -182,5 +182,31 @@ func externalTools(d Deps) Catalog {
 		})
 	}
 
+	// The generalist delegates code-depth to the code SPECIALIST (codeagent over the connected repo's
+	// source). Added ONLY when wired (a tenant with no connected code source never sees it → the cap holds).
+	if d.CodeInvestigator != nil {
+		ki := d.CodeInvestigator
+		c = append(c, Tool{
+			Schema: ToolSchema{
+				Name: "investigate_code",
+				Description: "Run the code security specialist over the repository SOURCE for DEEP code " +
+					"reasoning beyond the finding text: is this finding actually exploitable (trace the tainted " +
+					"value to its sink), what is a leaked secret's blast radius, and where does the fix really " +
+					"belong. Use it when an issue touches code and you need source-grounded truth. Returns the " +
+					"specialist's grounded assessment.",
+				Params: obj(map[string]any{
+					"focus": str("what to investigate, e.g. a code finding id, a file, or 'the SQLi in the search handler'"),
+				}, "focus"),
+			},
+			Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
+				out, err := ki(ctx, strings.TrimSpace(argStr(args, "focus")))
+				if err != nil {
+					return ToolResult{Err: true, Content: "code investigation failed: " + err.Error()}, nil
+				}
+				return ToolResult{Content: out}, nil
+			},
+		})
+	}
+
 	return c
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIBom, Action, ActionsView, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestStats, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -167,11 +167,31 @@ export const api = {
       `/v1/compliance/${framework}/advisor`,
       { method: "POST", body: "{}" },
     ),
+  // Compliance → remediation bridge — which control gaps are fixable NOW (findings with a queued action).
+  complianceFixes: (framework: string) =>
+    safe<ComplianceFixes>(`/v1/compliance/${framework}/fixes`, { framework, gap_controls: 0, fixable_gaps: 0, pending_fixes: 0, controls: [] }),
+
+  // Continuous-evidence timeline — the SOC 2 Type II "it held across the window" history (posture
+  // snapshots over time + a continuity summary). Empty timeline for an un-monitored framework (honest).
+  evidenceHistory: (framework: string) =>
+    safe<EvidenceTimeline>(`/v1/compliance/${framework}/evidence-history`, { framework, snapshots: [], count: 0, fully_met_ratio: 0, continuous: false }),
+  // On-demand: capture this framework's posture onto the timeline right now.
+  captureEvidence: (framework: string) =>
+    call<{ captured: boolean; snapshot: ComplianceSnapshot }>(`/v1/compliance/${framework}/evidence/capture`, { method: "POST" }),
+
   // vCISO remediation guidance — concrete, grounded fix steps for a framework's control gaps.
   complianceRemediation: (framework: string) =>
     call<{ framework: string; title: string; gap_count: number; plan: string }>(
       `/v1/compliance/${framework}/remediation`,
       { method: "POST", body: "{}" },
+    ),
+
+  // Persisted AI Security Engineer analyses (Triage / Investigate) — so a run SURVIVES navigation.
+  // safe() → an empty list when the endpoint/store is unavailable, so the page still renders.
+  aiAnalyses: (kind?: string) =>
+    safe<{ analyses: AIAnalysis[] }>(
+      `/v1/ai-analyses${kind ? `?kind=${encodeURIComponent(kind)}` : ""}`,
+      { analyses: [] },
     ),
 
   // L2 translator — run the Lead over the tenant's findings → the plain-English consultant brief.
@@ -184,6 +204,24 @@ export const api = {
       cost_usd: number;
       model: string;
     }>("/v1/l2/translate", { method: "POST", body: "{}" }),
+
+  // AI Code Engineer — run the code-depth specialist over posted code findings + source; returns its
+  // grounded, source-read assessment (exploitable vs contained, blast radius, right-layer fix).
+  runCodeInvestigation: (repo: string, findings: unknown[], source: Record<string, string>) =>
+    call<{
+      summary: string;
+      issues: {
+        id: string; finding_id: string; title: string; severity?: string; exploitable: boolean;
+        rationale?: string; evidence?: string[]; blast_radius?: string; fix_location?: string; fix?: string;
+      }[];
+      tool_calls: number;
+      findings_assessed: number;
+      confirmed_exploitable: number;
+    }>("/v1/code/investigate", { method: "POST", body: JSON.stringify({ repo, findings, source }) }),
+
+  // AI Code Engineer — the stored, confirmed-exploitable source assessments (read-only view) + runnable flag.
+  codeInvestigation: () =>
+    safe<{ total: number; enabled: boolean; confirmed: Finding[] }>("/v1/code/investigate", { total: 0, enabled: false, confirmed: [] }),
 
   // AI Cloud Engineer — the cloud-agent's proven attack paths (read-only view) + whether a run is possible.
   cloudInvestigation: () =>
@@ -214,6 +252,18 @@ export const api = {
   // getOr404 → null only when the engagement genuinely doesn't exist (page notFound()); a
   // transient/5xx error throws to the recoverable error boundary instead of a false 404.
   pentest: (id: string) => getOr404<PentestEngagement>(`/v1/pentest/${id}`),
+  // Pre-flight readiness: per-target ownership + consent + LLM-key status before a run.
+  pentestReadiness: (id: string) =>
+    safe<PentestReadiness>(`/v1/pentest/${id}/readiness`, {
+      engagement_id: id, mode: "", ready: false, requires_consent: false, consent_present: false,
+      ai: { configured: false, source: "none", discovery_will_run: false, note: "" }, scope: [], blockers: [],
+    }),
+  // Ownership proof for a standalone target: issue a challenge (token + DNS/well-known instructions),
+  // then verify it against the live target once the customer publishes it.
+  ownershipChallenge: (assetId: string) =>
+    call<OwnershipChallenge>(`/v1/assets/${assetId}/ownership/challenge`, { method: "POST" }),
+  ownershipVerify: (assetId: string) =>
+    call<OwnershipResult>(`/v1/assets/${assetId}/ownership/verify`, { method: "POST" }),
   pentestStats: () =>
     safe<PentestStats>("/v1/pentest/stats", {
       engagements: 0, active_engagements: 0, completed_runs: 0, total_findings: 0,
@@ -419,9 +469,17 @@ export const api = {
   createPentest: (body: {
     name: string;
     mode: string;
-    rules_of_engagement: { authorized_targets: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string; consent?: string };
+    rules_of_engagement: { authorized_targets: string[]; out_of_scope?: string[]; max_requests: number; allow_active?: boolean; authorized_by?: string; consent?: string };
   }) => call<PentestEngagement>("/v1/pentest", { method: "POST", body: JSON.stringify(body) }),
+  // Create a pentest PRE-SCOPED to an asset ("pentest this asset"). Scope is the asset's own target
+  // (server-side), so the SMB user doesn't re-type it; the same active-consent gate applies.
+  pentestFromAsset: (assetId: string, body: { name?: string; mode: string; max_requests?: number; out_of_scope?: string[]; allow_active?: boolean; authorized_by?: string; consent?: string }) =>
+    call<PentestEngagement>(`/v1/assets/${assetId}/pentest`, { method: "POST", body: JSON.stringify(body) }),
   runPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/run`, { method: "POST" }),
+  // Set a recurring re-test cadence (off|daily|weekly|monthly). Scheduled runs are always a safe
+  // passive re-verify — never auto active exploitation.
+  setPentestSchedule: (id: string, cadence: string) =>
+    call<PentestEngagement>(`/v1/pentest/${id}/schedule`, { method: "POST", body: JSON.stringify({ cadence }) }),
   // Named human sign-off on the VAPT report (the HITL accountability layer).
   signoffPentest: (id: string, body: { signer: string; role?: string; statement?: string }) =>
     call<PentestEngagement>(`/v1/pentest/${id}/signoff`, { method: "POST", body: JSON.stringify(body) }),

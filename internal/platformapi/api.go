@@ -18,11 +18,12 @@ import (
 	"net/http"
 	"reflect"
 
+	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/coverage"
+	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/jobs"
-	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/runner"
@@ -39,6 +40,7 @@ type Deps struct {
 	Runner         *runner.Service
 	Jobs           *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
 	Desk           Decider          // optional: the HITL desk (approvals decide)
+	Submitter      Submitter        // optional: queue a proposed remediation Action at the desk (self-remediating loop)
 	GRC            Posturer         // optional: the compliance system-of-record (posture)
 	IncidentOpener IncidentOpener   // optional: opens incidents for event-driven ingest (identity/SaaS)
 	Vault          Sealer           // optional: seals OAuth tokens before persistence
@@ -91,6 +93,19 @@ type Deps struct {
 	// platform falls back to the in-UI temp-password flow and logs reset links for the operator).
 	// Wired from email.FromEnv (SMTP_*); the SMTP provider is the credential-gated half.
 	Mailer email.Mailer
+	// WebDiscoverer runs the host-side XBOW discovery agent (internal/webagent) as the FIRST
+	// stage of an ACTIVE/DEEP pentest run — so the engagement DISCOVERS new grounded vulns (not
+	// only verifies existing scanner findings). Nil → defaultWebDiscoverer (webagent.Investigate).
+	// The whole stage is gated on an available LLM + the ownership gate, so a run without a
+	// configured model simply skips discovery and runs the verify drivers (honest, never a crash).
+	// Injectable for tests (drive discovery deterministically without a live LLM loop).
+	WebDiscoverer WebDiscoverer
+	// Detector, when set, reconciles a pentest run's findings into incidents IMMEDIATELY (the
+	// detect-&-respond "respond" half) — so a pentest that PROVES a high+/critical exploit opens
+	// an incident right away instead of waiting for the next scheduled monitoring pass. The same
+	// detector the runner uses; Reconcile dedups against open incidents, so bringing it forward is
+	// safe. Nil → escalation happens on the next monitoring pass (today's behaviour).
+	Detector *detect.Detector
 }
 
 // NewHandler returns the platform's HTTP handler.
@@ -123,46 +138,47 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/challenge", d.auth(d.handleOwnershipChallenge)) // issue DNS/file ownership token (p35 control)
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/verify", d.auth(d.handleOwnershipVerify))       // verify the token is published (grounded)
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
-	mux.HandleFunc("DELETE /v1/connections/{id}", d.auth(d.handleDeleteConnection))                    // disconnect a connection (founder self-serve)
-	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))       // per-connection kill-switch (WRD-4)
-	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation)) // per-tenant cloud write role (Bucket B)
-	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                        // the current tenant (org name/plan) for Settings
-	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                             // per-tenant LLM config (provider/model + has_key)
-	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                             // set provider/model + seal the API key
-	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                  // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
-	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                        // repository PR-review-bot policy (ADR 0010)
-	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                        // set enable + merge-gating block severity
-	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                // per-tenant Slack incident webhook (has_slack_webhook)
-	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                // set + seal the tenant's Slack incident webhook (Bucket B)
-	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                           // per-tenant Jira ticketing destination (base/email/project + has_token)
-	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                           // set + seal the tenant's Jira API token (Bucket B)
-	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))               // per-tenant incident escalation matrix (MDR/SOC)
-	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))               // set the escalation tiers (severity → channels)
-	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                             // per-tenant remediation SLA policy (ack/resolve targets)
-	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                             // set the per-severity SLA targets
-	mux.HandleFunc("GET /v1/settings/compliance-scope", d.auth(d.handleGetComplianceScope))            // target frameworks + applicability profile (scope before analysis)
-	mux.HandleFunc("PUT /v1/settings/compliance-scope", d.auth(d.handlePutComplianceScope))            // set target frameworks + profile
-	mux.HandleFunc("GET /v1/compliance/readiness", d.auth(d.handleComplianceReadiness))                // connect-this-first checklist for the target frameworks
-	mux.HandleFunc("GET /v1/compliance/by-asset", d.auth(d.handleComplianceByAsset))                   // per-asset compliance signal ("is this asset compliant?") — grounded, never false-compliant
-	mux.HandleFunc("GET /v1/compliance/oscal", d.auth(d.handleComplianceOSCAL))                        // control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible)
-	mux.HandleFunc("GET /v1/security/by-asset", d.auth(d.handleSecurityByAsset))                       // per-asset security posture ("is this asset secure?") — FP-aware, never a false "all clear"
-	mux.HandleFunc("GET /v1/custom-frameworks", d.auth(d.handleListCustomFrameworks))                  // bring-your-own-framework: list
-	mux.HandleFunc("POST /v1/custom-frameworks", d.auth(d.handleAddCustomFramework))                   // define a custom framework (controls map to findings/CWEs/built-in controls)
-	mux.HandleFunc("DELETE /v1/custom-frameworks/{id}", d.auth(d.handleDeleteCustomFramework))         // remove a custom framework
-	mux.HandleFunc("GET /v1/custom-frameworks/{id}/posture", d.auth(d.handleCustomFrameworkPosture))   // derived posture + coverage from live findings
-	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))              // planned change-freeze windows (suppress alerting)
-	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))               // schedule a window
-	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow))     // cancel a window
-	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                                   // on-call escalation roster (names + numbers)
-	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                                    // add a contact
-	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                          // remove a contact
-	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                  // global kill-switch: halt/resume all agent action
-	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                            // agent capability manifest (WRD-1): what the automation can touch
-	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                                    // owner's shareable Trust Center token
-	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                            // PUBLIC, HMAC-token-gated; safe aggregates only
-	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                             // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
-	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                      // PUBLIC: book-a-demo / talk-to-sales lead capture
-	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                        // PUBLIC: embeddable SVG grade badge (viral loop)
+	mux.HandleFunc("DELETE /v1/connections/{id}", d.auth(d.handleDeleteConnection))                       // disconnect a connection (founder self-serve)
+	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))          // per-connection kill-switch (WRD-4)
+	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation))    // per-tenant cloud write role (Bucket B)
+	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                           // the current tenant (org name/plan) for Settings
+	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                                // per-tenant LLM config (provider/model + has_key)
+	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                                // set provider/model + seal the API key
+	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                     // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
+	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                           // repository PR-review-bot policy (ADR 0010)
+	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                           // set enable + merge-gating block severity
+	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // per-tenant Slack incident webhook (has_slack_webhook)
+	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's Slack incident webhook (Bucket B)
+	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                              // per-tenant Jira ticketing destination (base/email/project + has_token)
+	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                              // set + seal the tenant's Jira API token (Bucket B)
+	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))                  // per-tenant incident escalation matrix (MDR/SOC)
+	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))                  // set the escalation tiers (severity → channels)
+	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                                // per-tenant remediation SLA policy (ack/resolve targets)
+	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                                // set the per-severity SLA targets
+	mux.HandleFunc("GET /v1/settings/compliance-scope", d.auth(d.handleGetComplianceScope))               // target frameworks + applicability profile (scope before analysis)
+	mux.HandleFunc("PUT /v1/settings/compliance-scope", d.auth(d.handlePutComplianceScope))               // set target frameworks + profile
+	mux.HandleFunc("GET /v1/compliance/readiness", d.auth(d.handleComplianceReadiness))                   // connect-this-first checklist for the target frameworks
+	mux.HandleFunc("GET /v1/compliance/by-asset", d.auth(d.handleComplianceByAsset))                      // per-asset compliance signal ("is this asset compliant?") — grounded, never false-compliant
+	mux.HandleFunc("GET /v1/compliance/oscal", d.auth(d.handleComplianceOSCAL))                           // control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible)
+	mux.HandleFunc("GET /v1/compliance/oscal/assessment-results", d.auth(d.handleComplianceOSCALResults)) // per-tenant findings-as-evidence OSCAL assessment-results (auditor-ingestible)
+	mux.HandleFunc("GET /v1/security/by-asset", d.auth(d.handleSecurityByAsset))                          // per-asset security posture ("is this asset secure?") — FP-aware, never a false "all clear"
+	mux.HandleFunc("GET /v1/custom-frameworks", d.auth(d.handleListCustomFrameworks))                     // bring-your-own-framework: list
+	mux.HandleFunc("POST /v1/custom-frameworks", d.auth(d.handleAddCustomFramework))                      // define a custom framework (controls map to findings/CWEs/built-in controls)
+	mux.HandleFunc("DELETE /v1/custom-frameworks/{id}", d.auth(d.handleDeleteCustomFramework))            // remove a custom framework
+	mux.HandleFunc("GET /v1/custom-frameworks/{id}/posture", d.auth(d.handleCustomFrameworkPosture))      // derived posture + coverage from live findings
+	mux.HandleFunc("GET /v1/maintenance-windows", d.auth(d.handleListMaintenanceWindows))                 // planned change-freeze windows (suppress alerting)
+	mux.HandleFunc("POST /v1/maintenance-windows", d.auth(d.handleAddMaintenanceWindow))                  // schedule a window
+	mux.HandleFunc("DELETE /v1/maintenance-windows/{id}", d.auth(d.handleDeleteMaintenanceWindow))        // cancel a window
+	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                                      // on-call escalation roster (names + numbers)
+	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                                       // add a contact
+	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                             // remove a contact
+	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                     // global kill-switch: halt/resume all agent action
+	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                               // agent capability manifest (WRD-1): what the automation can touch
+	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                                       // owner's shareable Trust Center token
+	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                               // PUBLIC, HMAC-token-gated; safe aggregates only
+	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                                // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
+	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                         // PUBLIC: book-a-demo / talk-to-sales lead capture
+	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                           // PUBLIC: embeddable SVG grade badge (viral loop)
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))   // all remediations + fix-verification status
 	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage)) // per-asset "what was actually tested"
@@ -213,10 +229,13 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/osint/scan", d.auth(d.handleOSINTScan))                                                           // LIVE keyless OSINT (crt.sh CT) over the tenant's domains
 	mux.HandleFunc("POST /v1/cloud/inventory", d.auth(d.handleIngestAWSInventory))                                             // live collector: posted raw AWS state → attack-path Inventory → stored (wedge gap #1)
 	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))                                             // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
+	mux.HandleFunc("POST /v1/code/investigate", d.auth(d.handleCodeInvestigate))                                               // AI Code Engineer (codeagent) — depth over code findings + source (LLM-gated)
+	mux.HandleFunc("GET /v1/code/investigate", d.auth(d.handleCodeInvestigationView))                                          // stored code-agent confirmed-exploitable assessments
 	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))                                        // stored cloud-agent attack paths
 	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                                                       // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
 	mux.HandleFunc("POST /v1/findings/{id}/autofix", d.auth(d.handleAutofix))                                                  // AI autofix — LLM-generated code patch for a finding (LLM-gated)
-	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))                                           // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
+	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))                                            // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
+	mux.HandleFunc("GET /v1/ai-analyses", d.auth(d.handleListAIAnalyses))                                                      // persisted AI Security Engineer analyses (Triage/Investigate) — a run survives navigation; ?kind= filter
 	mux.HandleFunc("POST /v1/apiauthz/discover", d.auth(d.handleAuthzDiscover))                                                // API BOLA/BFLA discovery — LLM proposes candidate authz tests (LLM-gated)
 	mux.HandleFunc("POST /v1/tls/scan", d.auth(d.handleTLSScan))                                                               // TLS/SSL posture — host-side handshake assessment (no sandbox, SSRF-screened)
 	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                                                                 // OSINT "External exposure" view + summary
@@ -229,12 +248,16 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture/sources", d.auth(d.handlePostureView))                                                     // unified vendor/device/cloud-drift posture-source view
 	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))                                                // list runtime-protection events
 	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                                                          // create + authorize a pentest engagement
+	mux.HandleFunc("POST /v1/assets/{id}/pentest", d.auth(d.handleCreatePentestFromAsset))                                     // create a pentest pre-scoped to an asset ("pentest this asset")
 	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                                                            // list engagements
 	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))                                                      // portfolio scorecard (verified_rate, SLA)
 	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))                                                         // one engagement + findings
+	mux.HandleFunc("GET /v1/pentest/{id}/readiness", d.auth(d.handlePentestReadiness))                                         // pre-flight: per-target ownership + consent + LLM-key status
+	mux.HandleFunc("GET /v1/pentest/{id}/progress", d.auth(d.handlePentestProgress))                                           // live run progress (requests sent / findings so far) for the watch-it-work view
 	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                                                    // run/retest the engagement (passive, RoE-gated)
 	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))                                               // the engagement's VAPT report (md/json)
 	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))                                            // HITL: named human signs the report → signed ledger
+	mux.HandleFunc("POST /v1/pentest/{id}/schedule", d.auth(d.handleSetPentestSchedule))                                       // set a recurring re-test cadence (safe passive re-verify)
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                                                                   // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
@@ -248,6 +271,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture", d.auth(d.handlePostureSummary))          // all-framework posture summary in one call (dashboard/compliance/reports)
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
 	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))
+	mux.HandleFunc("GET /v1/compliance/{framework}/fixes", d.auth(d.handleComplianceFixes))              // compliance→remediation bridge: which gaps are fixable now (findings + queued actions)
+	mux.HandleFunc("GET /v1/compliance/{framework}/evidence-history", d.auth(d.handleEvidenceHistory))   // continuous-evidence timeline: posture snapshots over the audit window (SOC 2 Type II proof)
+	mux.HandleFunc("POST /v1/compliance/{framework}/evidence/capture", d.auth(d.handleEvidenceCapture))  // on-demand: snapshot this framework's posture onto the timeline now
 	mux.HandleFunc("POST /v1/compliance/{framework}/remediation", d.auth(d.handleComplianceRemediation)) // vCISO "how do I close this gap?" — LLM remediation guidance (gated)
 	mux.HandleFunc("POST /v1/compliance/{framework}/advisor", d.auth(d.handleComplianceAdvisor))         // vCISO advisor — prioritized audit-readiness roadmap over coverage+gaps+readiness (gated)
 	mux.HandleFunc("GET /v1/questionnaire", d.auth(d.handleQuestionnaire))

@@ -34,6 +34,13 @@ type Deps struct {
 	// imports cloudagent/cloudsnap/the platform); the platform injects the closure. nil → the
 	// investigate_cloud tool is not exposed (so the ≤12-tool cap is never spent on a dead tool).
 	CloudInvestigator func(ctx context.Context, focus string) (string, error)
+
+	// CodeInvestigator is the CODE twin of CloudInvestigator: it lets the generalist delegate a code
+	// finding to the code-depth SPECIALIST (codeagent — opens the source, traces taint to a sink,
+	// computes a secret's blast radius, finds the right-layer fix). Same neutral-func discipline (l2 never
+	// imports codeagent); the platform injects the closure and only when source is reachable (a connected
+	// repo), so nil → the investigate_code tool is not exposed and the ≤12-tool cap is never spent on it.
+	CodeInvestigator func(ctx context.Context, focus string) (string, error)
 }
 
 // BuildCatalog assembles the per-asset L2 catalog from Deps. The catalog is

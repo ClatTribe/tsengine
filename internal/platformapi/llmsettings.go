@@ -126,10 +126,10 @@ func (d Deps) resolveAgentLLM(ctx context.Context, tenantID string) pentest.Spec
 			return c // cloudengine.LLM satisfies pentest.SpecLLM (same Generate method)
 		}
 	}
-	// The operator-global LLM (d.AgentLLM) spends OUR budget — gate it behind an AI-enabled
-	// plan so the Free tier (and any unknown/empty plan) never costs us LLM money. This is the
-	// economic invariant that makes "Free is genuinely free for us" real (pkg/platform/plan.go).
-	if d.planLimits(ctx, tenantID).AIEnabled {
+	// The operator-global LLM (d.AgentLLM) spends OUR budget — gate it behind an AI-enabled plan so the
+	// Free tier never costs us LLM money (the economic invariant). The DEV-only TSENGINE_DEV_LLM_ALL_PLANS
+	// override (operatorLLMAllowed) lets `make dev` + the file-relay proxy power any test tenant.
+	if d.operatorLLMAllowed(ctx, tenantID) {
 		return d.AgentLLM
 	}
 	return nil

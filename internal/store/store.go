@@ -98,6 +98,17 @@ type Store interface {
 	PutRisk(ctx context.Context, r platform.Risk) error
 	ListRisks(ctx context.Context, tenantID string) ([]platform.Risk, error)
 
+	// --- persisted AI Security Engineer analyses (Triage / Investigate / Cloud) — so a run survives
+	// navigation; the deterministic id overwrites the prior analysis for the same scope (latest wins) ---
+	PutAIAnalysis(ctx context.Context, a platform.AIAnalysis) error
+	ListAIAnalyses(ctx context.Context, tenantID string) ([]platform.AIAnalysis, error)
+
+	// --- continuous-compliance evidence timeline (APPEND-ONLY per-framework posture snapshots, so an
+	// auditor sees a control held across the audit window, not just now). List returns all of a tenant's
+	// snapshots (any framework) oldest-first; callers filter by framework. ---
+	PutComplianceSnapshot(ctx context.Context, s platform.ComplianceSnapshot) error
+	ListComplianceSnapshots(ctx context.Context, tenantID string) ([]platform.ComplianceSnapshot, error)
+
 	// --- audit engagements (external-auditor attestation; the legal layer) ---
 	PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error
 	ListAuditEngagements(ctx context.Context, tenantID string) ([]platform.AuditEngagement, error)

@@ -22,6 +22,13 @@ type Decider interface {
 	Decide(ctx context.Context, tenantID, actionID string, v hitl.Verdict) (platform.Action, error)
 }
 
+// Submitter queues a proposed remediation Action at the HITL desk — tier-gated, so nothing risky
+// auto-applies. Satisfied by *hitl.Desk. Separate from Decider (a new method on that interface would
+// break its test fakes); optional on Deps.
+type Submitter interface {
+	Submit(ctx context.Context, a platform.Action) (platform.Action, error)
+}
+
 // Posturer is the GRC surface the API needs (satisfied by *grc.GRC): the raw control
 // state plus the auditor-facing compliance report.
 type Posturer interface {
@@ -34,6 +41,14 @@ type Posturer interface {
 	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
 	// OSCAL emits the crosswalk's control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible).
 	OSCAL(ctx context.Context) ([]byte, error)
+	// OSCALAssessmentResults emits the PER-TENANT findings-as-evidence OSCAL assessment-results (each control
+	// satisfied/not-satisfied, gaps citing the finding that proved them) — the auditor-ingestible evidence doc.
+	OSCALAssessmentResults(ctx context.Context, tenantID string) ([]byte, error)
+	// Continuous compliance evidence: capture a timestamped posture snapshot onto the append-only timeline
+	// (change+heartbeat-gated) and read the timeline back with a continuity summary — the SOC 2 Type II
+	// "held across the window" artifact the point-in-time Report/EvidencePack can't give.
+	CaptureEvidenceSnapshot(ctx context.Context, tenantID, framework string, minInterval time.Duration) (platform.ComplianceSnapshot, bool, error)
+	EvidenceTimeline(ctx context.Context, tenantID, framework string) (grc.EvidenceTimeline, error)
 	// Apply folds a finding's compliance annotation into the tenant's control-state posture (marks
 	// each cited control a gap). The scan path calls this; the non-scan ingest paths (identity, SaaS,
 	// runtime) must too, or their findings never reach the founder's compliance posture.

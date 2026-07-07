@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Sparkles, Cloud, ShieldCheck, Wrench, ArrowUpRight, Search, ListFilter } from "lucide-react";
+import { Sparkles, Cloud, Code2, ShieldCheck, Wrench, ArrowUpRight, Search, ListFilter } from "lucide-react";
 import { api } from "@/lib/api";
 import { PageIntro } from "@/components/ui/page-intro";
 import { GenerateBrief } from "@/components/brief/generate-brief";
+import { lastTriage } from "./actions";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,12 @@ export const dynamic = "force-dynamic";
 // autofix + compliance remediation). Each action runs a bounded agent over the tenant's REAL findings;
 // grounded (§10 — never fabricates), and anything it would change routes through the HITL gate.
 const ACTIONS = [
+  {
+    href: "/code-engineer",
+    icon: Code2,
+    title: "Code deep-dive",
+    desc: "Run the code specialist over your source — is a finding actually exploitable, a leaked secret's blast radius, and the right-layer fix a scanner can't give.",
+  },
   {
     href: "/cloud-engineer",
     icon: Cloud,
@@ -36,7 +43,9 @@ const ACTIONS = [
 
 export default async function EngineerConsolePage() {
   // Scope so the founder sees WHAT the engineer reasons over (coverage honesty) before triggering an action.
-  const [findings, assets, engagements] = await Promise.all([api.findings(), api.assets(), api.engagements()]);
+  const [findings, assets, engagements, priorBrief] = await Promise.all([
+    api.findings(), api.assets(), api.engagements(), lastTriage(),
+  ]);
   const freshest = engagements.map((e) => e.completed_at).filter(Boolean).sort().pop();
 
   return (
@@ -76,7 +85,7 @@ export default async function EngineerConsolePage() {
           One click: the engineer prioritizes everything that matters, chains it across surfaces, and writes a
           plain-English brief you can forward to a board, an investor, or a customer.
         </p>
-        <GenerateBrief />
+        <GenerateBrief initial={priorBrief} />
       </section>
 
       {/* More agentic actions — each triggers a real agent over your findings (not a chat). */}

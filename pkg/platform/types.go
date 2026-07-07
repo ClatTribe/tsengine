@@ -697,6 +697,56 @@ func (r Risk) Level() string {
 	}
 }
 
+// AIAnalysis is a PERSISTED run of the AI Security Engineer over a tenant's estate — the deliverable the L2
+// Lead produced (whole-estate "Triage", a per-issue "Investigate", or a cloud attack-path investigation).
+// It is stored so the SMB user's analysis SURVIVES navigation: run it once, read it later, without re-spending
+// the LLM. Grounded (§10): it records only what the agent actually produced (summary + reports + model +
+// cost); it asserts nothing the run didn't. The ID is deterministic (Kind + ":" + Scope) so a fresh run
+// OVERWRITES the prior one for that scope — the store holds the LATEST analysis per scope, bounded by design.
+type AIAnalysis struct {
+	ID          string     `json:"id"` // deterministic: Kind ":" Scope (so a re-run overwrites)
+	TenantID    string     `json:"tenant_id"`
+	Kind        string     `json:"kind"`                  // "triage" (whole estate) | "investigate" (one issue) | "cloud"
+	Scope       string     `json:"scope,omitempty"`       // investigate: the issue key; cloud: the target; triage: ""
+	Title       string     `json:"title,omitempty"`       // a short human label for the scope
+	Summary     string     `json:"summary"`               // the agent's executive summary
+	Recommends  string     `json:"recommends,omitempty"`  // "what to do next" — the FIX narrative (must persist too)
+	Methodology string     `json:"methodology,omitempty"` // "how we looked" — the agent's approach
+	Reports     []AIReport `json:"reports,omitempty"`     // the prioritized per-issue reports
+	Model       string     `json:"model,omitempty"`       // which model produced it (honest provenance)
+	Iterations  int        `json:"iterations,omitempty"`
+	CostUSD     float64    `json:"cost_usd,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// AIReport is one prioritized item within an AIAnalysis (a per-issue narrative).
+type AIReport struct {
+	Title    string `json:"title"`
+	Severity string `json:"severity,omitempty"`
+	Body     string `json:"body,omitempty"`
+}
+
+// AIAnalysisID builds the deterministic id for a (kind, scope) so re-runs overwrite the prior analysis.
+func AIAnalysisID(kind, scope string) string { return kind + ":" + scope }
+
+// ComplianceSnapshot is one timestamped point on a framework's CONTINUOUS-EVIDENCE timeline — the
+// answer to "was this control Met across the whole audit window?", which the point-in-time EvidencePack
+// (grc.go) can't show. Unlike AIAnalysis it is APPEND-ONLY (a unique id per capture), so the store keeps
+// the history an auditor reads as continuity proof. StateHash captures the per-control states so a
+// capture is skipped when nothing changed (see grc.CaptureEvidenceSnapshot) — the history stays
+// meaningful without per-monitoring-pass bloat. Grounded (§10): the counts come from real ControlState.
+type ComplianceSnapshot struct {
+	ID            string    `json:"id"` // append-only: Framework ":" RFC3339Nano capture time
+	TenantID      string    `json:"tenant_id"`
+	Framework     string    `json:"framework"`
+	CapturedAt    time.Time `json:"captured_at"`
+	TotalControls int       `json:"total_controls"`
+	MetControls   int       `json:"met_controls"`
+	GapControls   int       `json:"gap_controls"`
+	StateHash     string    `json:"state_hash"` // sha256 of the sorted per-control states — change detection
+	FullyMet      bool      `json:"fully_met"`  // no gaps at capture time — the "audit-ready" bit for this instant
+}
+
 func clamp15(n int) int {
 	if n < 1 {
 		return 1

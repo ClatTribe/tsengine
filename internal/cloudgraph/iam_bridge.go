@@ -130,6 +130,85 @@ func azureTechNames(ts []azureiam.Technique) string {
 	return strings.Join(names, ",")
 }
 
+// AddAzureEntraPrivescEdges is the ENTRA (Azure AD) graph-plane twin of AddAzurePrivescEdges: a
+// per-principal predicate over the principal's effective Microsoft Graph permissions / directory roles
+// feeds azureiam.DetectEntraPrivesc, adding a privesc → admin edge for every principal that can escalate
+// on the IDENTITY plane (add a credential to a privileged app, self-assign a directory role, …). This is a
+// DISTINCT authorization plane from ARM (§10 — the two are not conflated): an attacker can own the tenant
+// via Entra without ever touching an ARM role assignment, so without this the attack path is invisible.
+// The caller (ingest) builds the `can` predicates from the Entra snapshot's app-role assignments +
+// directory-role memberships (the honest gate — same as the ARM side). Edge Detail is prefixed so an Entra
+// escalation is distinguishable from an ARM one in the graph.
+func (s *Snapshot) AddAzureEntraPrivescEdges(can map[string]func(perm string) bool) {
+	ids := make([]string, 0, len(can))
+	for id := range can {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var added bool
+	for _, pid := range ids {
+		techs := azureiam.DetectEntraPrivesc(can[pid])
+		if len(techs) == 0 {
+			continue
+		}
+		if !added {
+			if s.Node(AdminID) == nil {
+				s.AddNode(&Node{ID: AdminID, Kind: KindPrincipal, Name: "effective-admin", Privileged: true})
+			}
+			added = true
+		}
+		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: azureTechNames(techs)})
+	}
+}
+
+// AddEntraOwnershipEdges is the RELATIONSHIP half of Entra graph-plane privesc (the permission half is
+// AddAzureEntraPrivescEdges) — the documented next slice from #988. In Entra, OWNING an app registration
+// or service principal lets you add a credential to it and authenticate AS it, inheriting its privilege.
+// So an owner of a PRIVILEGED service principal (or one that can itself escalate to admin) is effectively
+// admin — the canonical BloodHound "Owns → AZServicePrincipal" attack edge, invisible to a permission-only
+// view. ownerships maps an owner principal id → the node ids it owns; the ingest builds it from the Entra
+// snapshot's app/SP `owners` (the honest gate — same as the permission side).
+//
+// Grounded (§10): an owner→admin edge is added ONLY when the OWNED node is really privileged — either its
+// Node.Privileged flag is set OR it already has a privesc→admin edge (so run this AFTER
+// AddAzureEntraPrivescEdges to pick up permission-escalating SPs too). Owning a NON-privileged SP adds
+// nothing. Self-ownership and unknown owned nodes are skipped.
+func (s *Snapshot) AddEntraOwnershipEdges(ownerships map[string][]string) {
+	// nodes that can reach admin via their own privesc edge (so owning them = inheriting that escalation).
+	escalates := map[string]bool{}
+	for _, e := range s.Edges {
+		if e.Kind == EdgePrivesc && e.To == AdminID {
+			escalates[e.From] = true
+		}
+	}
+
+	owners := make([]string, 0, len(ownerships))
+	for o := range ownerships {
+		owners = append(owners, o)
+	}
+	sort.Strings(owners)
+
+	for _, owner := range owners {
+		owned := append([]string(nil), ownerships[owner]...)
+		sort.Strings(owned)
+		for _, sp := range owned {
+			if sp == owner {
+				continue // self-ownership escalates nothing
+			}
+			n := s.Node(sp)
+			privileged := (n != nil && n.Privileged) || escalates[sp]
+			if !privileged {
+				continue // owning a non-privileged SP is not an escalation (grounded)
+			}
+			if s.Node(AdminID) == nil {
+				s.AddNode(&Node{ID: AdminID, Kind: KindPrincipal, Name: "effective-admin", Privileged: true})
+			}
+			s.AddEdge(Edge{From: owner, To: AdminID, Kind: EdgePrivesc, Detail: "Entra:OwnerOfPrivilegedSP(" + sp + ")"})
+		}
+	}
+}
+
 // HasAccess answers resolve_access for an (principal, action, resource): does the
 // principal's combined policy permit it (and is it conditional)? The ingest uses
 // this to build has_access edges.

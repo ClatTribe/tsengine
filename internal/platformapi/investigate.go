@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
@@ -106,7 +107,19 @@ func (d Deps) handleIssueInvestigate(w http.ResponseWriter, r *http.Request, ten
 			map[string]any{"tenant_id": tenantID, "issue": key, "reports": len(reports)},
 			"AI Security Engineer per-issue investigation")
 	}
+	// Persist as the tenant's latest investigation for THIS issue so it survives navigation (best-effort).
+	saved := d.persistAIAnalysis(r.Context(), tenantID, "investigate", key, issueTitle(issue, key), out, time.Now())
+	resp["analysis_id"] = saved.ID
+	resp["saved_at"] = saved.CreatedAt
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// issueTitle is a display label for a persisted per-issue investigation.
+func issueTitle(issue *crossdetect.Issue, key string) string {
+	if issue != nil && issue.Title != "" {
+		return issue.Title
+	}
+	return key
 }
 
 // runInvestigate runs the L2 Lead SCOPED to one issue (its findings) but with the WHOLE-estate
