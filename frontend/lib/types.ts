@@ -6,7 +6,6 @@ export interface AIReport {
   title: string;
   severity?: string;
   body?: string;
-  recommendations?: string[];
 }
 export interface AIAnalysis {
   id: string;
@@ -14,6 +13,8 @@ export interface AIAnalysis {
   scope?: string;
   title?: string;
   summary: string;
+  recommends?: string; // "what to do next" — the fix narrative
+  methodology?: string;
   reports?: AIReport[];
   model?: string;
   iterations?: number;

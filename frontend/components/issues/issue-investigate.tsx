@@ -8,7 +8,7 @@ import { timeAgo } from "@/lib/utils";
 
 // A prior PERSISTED investigation for this issue (the AI narrative from the last run) — so reopening shows
 // it instantly instead of re-spending the LLM (the same "survives navigation" guarantee as the triage brief).
-type PriorInvestigation = { summary?: string; reports?: { title: string; severity?: string; body?: string }[]; model?: string; created_at?: string };
+type PriorInvestigation = { summary?: string; recommends?: string; reports?: { title: string; severity?: string; body?: string }[]; model?: string; created_at?: string };
 
 // Per-issue "Investigate" — the agentic verb of the AI Security Engineer, sprinkled onto the Issues row
 // (not a separate console). One click pulls the GROUNDED cross-surface picture for this one issue: the
@@ -80,6 +80,7 @@ export function IssueInvestigate({ issueKey, title, prior }: { issueKey: string;
                   </button>
                 </div>
                 {prior!.summary && <Block icon label="Root cause &amp; impact" body={prior!.summary} />}
+                {prior!.recommends && <Block label="The fix (right layer)" body={prior!.recommends} />}
                 {(prior!.reports?.length ?? 0) > 0 && (
                   <div className="space-y-2">
                     {prior!.reports!.map((r, i) => (

@@ -38,9 +38,13 @@ type ComplianceFixes struct {
 // complianceFixStatus joins a compliance report's gap controls to the tenant's remediation actions. Pure +
 // deterministic — the caller supplies both, so it never touches the store and is trivially testable.
 func complianceFixStatus(framework string, rep grc.Report, actions []platform.Action) ComplianceFixes {
-	// findingID → the actions that resolve it (a bulk action resolves many).
+	// findingID → the actions that resolve it (a bulk action resolves many). A REJECTED action is skipped:
+	// a fix the owner declined is not a fix, so it must not make a gap read as "already has a fix".
 	byFinding := map[string][]platform.Action{}
 	for _, a := range actions {
+		if a.Status == platform.ActRejected {
+			continue
+		}
 		ids := a.FindingIDs
 		if len(ids) == 0 && a.FindingID != "" {
 			ids = []string{a.FindingID}

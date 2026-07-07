@@ -24,16 +24,19 @@ func TestComplianceFixStatus_BridgesGapsToActions(t *testing.T) {
 			{ControlID: "CC8.1", Gap: false, Evidence: []grc.ReportEvidence{{FindingID: "f4"}}},
 			// CC9.9: a gap with a finding that has NO action → not fixable.
 			{ControlID: "CC9.9", Gap: true, Evidence: []grc.ReportEvidence{{FindingID: "f5"}}},
+			// CC1.1: a gap whose only fix was REJECTED → must NOT read as fixable (a declined fix is not a fix).
+			{ControlID: "CC1.1", Gap: true, Evidence: []grc.ReportEvidence{{FindingID: "f6"}}},
 		},
 	}
 	actions := []platform.Action{
 		{ID: "act-pending", Status: platform.ActPendingApproval, FindingID: "f1"},
 		{ID: "act-applied", Status: platform.ActApplied, FindingIDs: []string{"f3"}}, // bulk action citing f3
+		{ID: "act-rejected", Status: platform.ActRejected, FindingID: "f6"},          // declined — must not count
 	}
 
 	got := complianceFixStatus("soc2", rep, actions)
-	if got.GapControls != 3 {
-		t.Errorf("gap controls = %d, want 3 (met CC8.1 excluded)", got.GapControls)
+	if got.GapControls != 4 {
+		t.Errorf("gap controls = %d, want 4 (met CC8.1 excluded)", got.GapControls)
 	}
 	if got.FixableGaps != 2 {
 		t.Errorf("fixable gaps = %d, want 2 (CC6.1 + CC7.2)", got.FixableGaps)
@@ -53,6 +56,9 @@ func TestComplianceFixStatus_BridgesGapsToActions(t *testing.T) {
 	}
 	if c := byID["CC9.9"]; c.FixableCount != 0 || len(c.ActionIDs) != 0 {
 		t.Errorf("CC9.9 must be not-fixable (no action), got %+v", c)
+	}
+	if c := byID["CC1.1"]; c.FixableCount != 0 || len(c.ActionIDs) != 0 {
+		t.Errorf("CC1.1 must be not-fixable (its only fix was REJECTED), got %+v", c)
 	}
 	if _, ok := byID["CC8.1"]; ok {
 		t.Error("a MET control must not appear in the gap bridge")

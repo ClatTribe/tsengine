@@ -67,6 +67,30 @@ func TestAIAnalysis_PersistOverwriteList(t *testing.T) {
 	}
 }
 
+// TestAIAnalysis_RecommendationsPersist_DegenerateSkipped: the "fix" half (Recommendations) must survive to
+// the store (else reload shows root-cause without the fix), and a DEGENERATE run (empty summary + no reports)
+// must NOT overwrite a prior good analysis (deterministic id → latest-wins would otherwise destroy it).
+func TestAIAnalysis_RecommendationsPersist_DegenerateSkipped(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := Deps{Store: st}
+
+	good := l2.Outcome{Summary: &l2.FinalReport{ExecutiveSummary: "root cause", Recommendations: "apply the patch at the auth layer"}}
+	d.persistAIAnalysis(ctx, "ten", "triage", "", "Triage", good, time.Unix(1, 0))
+
+	all, _ := st.ListAIAnalyses(ctx, "ten")
+	if len(all) != 1 || all[0].Recommends != "apply the patch at the auth layer" {
+		t.Fatalf("recommendations (the fix half) must persist: %+v", all)
+	}
+
+	// A degenerate re-run (no summary, no reports, no recommends) must NOT overwrite the good analysis.
+	d.persistAIAnalysis(ctx, "ten", "triage", "", "Triage", l2.Outcome{}, time.Unix(2, 0))
+	all, _ = st.ListAIAnalyses(ctx, "ten")
+	if len(all) != 1 || all[0].Recommends != "apply the patch at the auth layer" {
+		t.Errorf("a degenerate empty run must NOT destroy the prior good analysis: %+v", all)
+	}
+}
+
 // TestAIAnalysis_PersistBestEffort: a nil/failing store must never panic the run path (best-effort persist).
 func TestAIAnalysis_PersistBestEffort(t *testing.T) {
 	d := Deps{Store: store.NewMemory()}

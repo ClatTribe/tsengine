@@ -33,6 +33,14 @@ func (d Deps) persistAIAnalysis(ctx context.Context, tenantID, kind, scope, titl
 	}
 	if out.Summary != nil {
 		a.Summary = out.Summary.ExecutiveSummary
+		a.Recommends = out.Summary.Recommendations // the "fix" half — must persist so reload isn't degraded
+		a.Methodology = out.Summary.Methodology
+	}
+	// Don't OVERWRITE a prior good analysis with a degenerate empty one: because the id is deterministic
+	// (latest-wins), a hiccup run (LLM returned no summary + no reports — e.g. budget exhausted) would
+	// otherwise destroy the tenant's last useful brief. A run with no content is not worth persisting.
+	if a.Summary == "" && a.Recommends == "" && len(a.Reports) == 0 {
+		return a
 	}
 	if err := d.Store.PutAIAnalysis(ctx, a); err != nil && d.Recorder != nil {
 		d.Recorder.Record("ai analysis persist failed", "platform",

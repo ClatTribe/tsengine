@@ -31,7 +31,7 @@ export async function lastTriage(): Promise<(Brief & { created_at: string }) | n
     ok: true,
     created_at: a.created_at,
     model: a.model,
-    summary: { executive_summary: a.summary },
+    summary: { executive_summary: a.summary, recommendations: a.recommends, methodology: a.methodology },
     reports: (a.reports ?? []).map((r, i) => ({
       id: `${a.id}-${i}`,
       title: r.title,

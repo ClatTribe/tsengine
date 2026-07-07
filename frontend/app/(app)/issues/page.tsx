@@ -31,7 +31,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   // Persisted per-issue investigations keyed by issue key (scope) — so reopening Investigate shows the saved
   // narrative instantly instead of re-spending the LLM (survives navigation, like the triage brief).
   const priorByIssue = new Map(
-    (priorInv.analyses ?? []).map((a) => [a.scope ?? "", { summary: a.summary, reports: a.reports, model: a.model, created_at: a.created_at }]),
+    (priorInv.analyses ?? []).map((a) => [a.scope ?? "", { summary: a.summary, recommends: a.recommends, reports: a.reports, model: a.model, created_at: a.created_at }]),
   );
   // View filters over the SAME unified list (no separate pages): "Live" = the genuinely-live subset,
   // "External" = internet/attacker-eye exposure (the old OSINT page — those findings carry tool "osint"
@@ -168,7 +168,7 @@ function Tab({ href, active, children }: { href: string; active: boolean; childr
 // outcome #1 of the AI Security Engineer — "figure out the issue to work on" — without making a founder
 // parse a table. Deterministic + grounded (the reason comes from real signals on the issue).
 // PriorInv is the persisted per-issue investigation threaded to the Investigate button (survives navigation).
-type PriorInv = { summary?: string; reports?: { title: string; severity?: string; body?: string }[]; model?: string; created_at?: string } | undefined;
+type PriorInv = { summary?: string; recommends?: string; reports?: { title: string; severity?: string; body?: string }[]; model?: string; created_at?: string } | undefined;
 
 function LeadCard({ issue, prior }: { issue: Issue; prior?: PriorInv }) {
   const reason =

@@ -704,25 +704,26 @@ func (r Risk) Level() string {
 // cost); it asserts nothing the run didn't. The ID is deterministic (Kind + ":" + Scope) so a fresh run
 // OVERWRITES the prior one for that scope — the store holds the LATEST analysis per scope, bounded by design.
 type AIAnalysis struct {
-	ID         string     `json:"id"` // deterministic: Kind ":" Scope (so a re-run overwrites)
-	TenantID   string     `json:"tenant_id"`
-	Kind       string     `json:"kind"`              // "triage" (whole estate) | "investigate" (one issue) | "cloud"
-	Scope      string     `json:"scope,omitempty"`   // investigate: the issue key; cloud: the target; triage: ""
-	Title      string     `json:"title,omitempty"`   // a short human label for the scope
-	Summary    string     `json:"summary"`           // the executive summary the agent wrote
-	Reports    []AIReport `json:"reports,omitempty"` // the prioritized per-issue reports/recommendations
-	Model      string     `json:"model,omitempty"`   // which model produced it (honest provenance)
-	Iterations int        `json:"iterations,omitempty"`
-	CostUSD    float64    `json:"cost_usd,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID          string     `json:"id"` // deterministic: Kind ":" Scope (so a re-run overwrites)
+	TenantID    string     `json:"tenant_id"`
+	Kind        string     `json:"kind"`                  // "triage" (whole estate) | "investigate" (one issue) | "cloud"
+	Scope       string     `json:"scope,omitempty"`       // investigate: the issue key; cloud: the target; triage: ""
+	Title       string     `json:"title,omitempty"`       // a short human label for the scope
+	Summary     string     `json:"summary"`               // the agent's executive summary
+	Recommends  string     `json:"recommends,omitempty"`  // "what to do next" — the FIX narrative (must persist too)
+	Methodology string     `json:"methodology,omitempty"` // "how we looked" — the agent's approach
+	Reports     []AIReport `json:"reports,omitempty"`     // the prioritized per-issue reports
+	Model       string     `json:"model,omitempty"`       // which model produced it (honest provenance)
+	Iterations  int        `json:"iterations,omitempty"`
+	CostUSD     float64    `json:"cost_usd,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
-// AIReport is one prioritized item within an AIAnalysis (a per-issue narrative + recommendation).
+// AIReport is one prioritized item within an AIAnalysis (a per-issue narrative).
 type AIReport struct {
-	Title           string   `json:"title"`
-	Severity        string   `json:"severity,omitempty"`
-	Body            string   `json:"body,omitempty"`
-	Recommendations []string `json:"recommendations,omitempty"`
+	Title    string `json:"title"`
+	Severity string `json:"severity,omitempty"`
+	Body     string `json:"body,omitempty"`
 }
 
 // AIAnalysisID builds the deterministic id for a (kind, scope) so re-runs overwrite the prior analysis.

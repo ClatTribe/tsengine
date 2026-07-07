@@ -30,14 +30,14 @@ func NewAnthropicClient(model string) *AnthropicClient {
 
 // NewAnthropicClientWithKey constructs the client with an EXPLICIT key — the
 // per-tenant path: a customer who configures their own Claude key drives the
-// L2 Lead (Triage / Investigate) on their OWN budget, not the operator's. An
-// empty key falls back to ANTHROPIC_API_KEY so the dev/operator path is intact.
+// L2 Lead (Triage / Investigate) on their OWN budget, not the operator's. The
+// key is used EXACTLY as given: an empty key does NOT fall back to
+// ANTHROPIC_API_KEY, so a tenant flagged "anthropic" with a missing key fails
+// CLOSED (Generate errors) rather than silently billing the operator — the
+// economic invariant. The operator/dev path reads the env in NewAnthropicClient.
 func NewAnthropicClientWithKey(model, key string) *AnthropicClient {
 	if model == "" {
 		model = "claude-sonnet-4-5"
-	}
-	if key == "" {
-		key = os.Getenv("ANTHROPIC_API_KEY")
 	}
 	return &AnthropicClient{
 		apiKey:    key,
