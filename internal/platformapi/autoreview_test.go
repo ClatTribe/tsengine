@@ -7,6 +7,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 type fakeLeadClient struct{}
@@ -16,6 +17,66 @@ func (fakeLeadClient) Generate(context.Context, string, []l2.Message, []l2.ToolS
 }
 func (fakeLeadClient) Model() string      { return "fake" }
 func (fakeLeadClient) ContextWindow() int { return 8000 }
+
+// recordingLeadClient flags whether the L2 loop was driven (so a test can assert the auto-review DID or
+// did NOT spend the model). Returns a finishing response so the agent loop terminates immediately.
+type recordingLeadClient struct{ called *bool }
+
+func (c recordingLeadClient) Generate(context.Context, string, []l2.Message, []l2.ToolSchema) (l2.Response, error) {
+	*c.called = true
+	return l2.Response{}, nil
+}
+func (recordingLeadClient) Model() string      { return "rec" }
+func (recordingLeadClient) ContextWindow() int { return 8000 }
+
+// TestAutoReview_ContinuousBounded: the continuous auto-review fires on a tenant's FIRST review (no prior
+// analysis) even with no new incident — so a newly-connected SMB gets an initial analysis automatically —
+// and SKIPS a static re-scan (prior analysis + no new incident) so it doesn't re-spend the LLM every pass.
+func TestAutoReview_ContinuousBounded(t *testing.T) {
+	ctx := context.Background()
+	findings := []types.Finding{{ID: "f1", Severity: types.SeverityHigh, Title: "SQLi"}}
+
+	fire := func(seedPrior bool, opened int) bool {
+		st := store.NewMemory()
+		_ = st.PutTenant(ctx, platform.Tenant{ID: "t", Plan: platform.PlanEnterprise})
+		if seedPrior {
+			_ = st.PutAIAnalysis(ctx, platform.AIAnalysis{ID: "triage:", TenantID: "t", Kind: "triage", Summary: "prior"})
+		}
+		called := false
+		d := Deps{Store: st, LeadClient: recordingLeadClient{called: &called}}
+		d.AutoReviewAfterScan(ctx, "t", findings, opened)
+		return called
+	}
+
+	if !fire(false, 0) {
+		t.Error("first review (no prior analysis) must fire even with 0 new incidents")
+	}
+	if fire(true, 0) {
+		t.Error("a static estate (prior review + 0 new incidents) must NOT re-spend the LLM")
+	}
+	if !fire(true, 1) {
+		t.Error("a new incident must trigger a re-review even when a prior analysis exists")
+	}
+}
+
+// TestDevLLMAllPlans_Override: the DEV-only flag lets a Free tenant use the operator LLM (so `make dev` +
+// the proxy powers any test tenant), while OFF (the default) the economic gate still blocks Free.
+func TestDevLLMAllPlans_Override(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "free", Plan: platform.PlanFree})
+	d := Deps{Store: st, LeadClient: fakeLeadClient{}}
+
+	// default (flag unset): Free tenant is gated off the operator LLM.
+	if d.resolveLeadClient(ctx, "free") != nil {
+		t.Error("without the dev flag, a Free tenant must NOT use the operator LLM")
+	}
+	// dev flag on: Free tenant may use the operator LLM (dev/proxy convenience).
+	t.Setenv("TSENGINE_DEV_LLM_ALL_PLANS", "1")
+	if d.resolveLeadClient(ctx, "free") == nil {
+		t.Error("with TSENGINE_DEV_LLM_ALL_PLANS=1, a Free tenant should use the operator LLM (dev proxy)")
+	}
+}
 
 // TestResolveLeadClient_EconomicGate locks the invariant that the post-scan AI auto-review never spends
 // the OPERATOR's LLM budget for a non-AI-entitled tenant — only an AI-entitled plan (or a tenant's own

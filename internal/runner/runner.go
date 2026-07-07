@@ -284,10 +284,12 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 			firstErr = err
 		}
 	}
-	// Auto-review: when this pass surfaced something NEW, the AI Security Engineer reviews the estate
-	// automatically (the entitlement + LLM gates live inside the hook; cost-bounded to CHANGE, not
-	// idle monitor passes). Best-effort — never affects the scan result.
-	if s.AfterScan != nil && scanned > 0 && openedIncidents > 0 {
+	// Auto-review: after any pass that scanned assets, give the AI Security Engineer a chance to review
+	// the estate automatically. The COST bound (fire only on CHANGE or a tenant's FIRST review, never on
+	// idle re-scans of a static estate) + the entitlement/LLM gates all live inside the hook, where the
+	// store is available — so a newly-connected tenant gets an initial analysis even without a brand-new
+	// incident, while a static estate doesn't re-spend the LLM every monitor pass. Best-effort.
+	if s.AfterScan != nil && scanned > 0 {
 		s.AfterScan(ctx, tenantID, current, openedIncidents)
 	}
 	return scanned, firstErr

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -78,10 +79,22 @@ func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client 
 	// Operator-global client → only for AI-entitled plans (the economic invariant: a Free tenant
 	// without its own key must never spend the operator's LLM budget). Previously ungated — a Free
 	// tenant could drive /v1/l2/translate on the operator's dime.
-	if d.LeadClient != nil && d.planLimits(ctx, tenantID).AIEnabled {
+	if d.LeadClient != nil && d.operatorLLMAllowed(ctx, tenantID) {
 		return d.LeadClient
 	}
 	return nil
+}
+
+// operatorLLMAllowed reports whether a tenant may drive the OPERATOR-GLOBAL LLM (d.LeadClient / d.AgentLLM).
+// Normally this is the economic gate — AI-entitled plans only, so a Free tenant never spends operator budget.
+// TSENGINE_DEV_LLM_ALL_PLANS=1 is a DEV-ONLY override (off by default → the production invariant is intact):
+// it lets `make dev` + the file-relay proxy power the AI engine for any test tenant without a paid plan or a
+// customer key. NEVER set it in production — it would let Free tenants spend the operator's LLM budget.
+func (d Deps) operatorLLMAllowed(ctx context.Context, tenantID string) bool {
+	if os.Getenv("TSENGINE_DEV_LLM_ALL_PLANS") == "1" {
+		return true
+	}
+	return d.planLimits(ctx, tenantID).AIEnabled
 }
 
 // runTranslate is the shared L2 engineer core (used by the on-demand POST /v1/l2/translate AND the
@@ -139,16 +152,42 @@ func (d Deps) AutoReviewAfterScan(ctx context.Context, tenantID string, findings
 	if client == nil {
 		return // no own key + not AI-entitled (or no LLM configured at all) → don't spend operator budget
 	}
+	// COST bound for continuous operation: run the LLM when something CHANGED (a new incident opened) OR
+	// this tenant has never had an analysis yet (the first-connect "aha" — a newly-connected SMB shouldn't
+	// need to click Triage to get an initial review). Otherwise skip: a static estate re-scanned every
+	// monitor pass must NOT re-spend the LLM. The persisted-analysis store is the "have we reviewed before"
+	// signal, so this is bounded to change + first-run, not per-pass.
+	if openedIncidents == 0 && d.hasPriorTriage(ctx, tenantID) {
+		return
+	}
 	out, err := d.runTranslate(ctx, tenantID, client, findings)
 	if err != nil {
 		slog.Warn("[auto-review] AI engineer review failed", "tenant", tenantID, "err", err)
 		return
 	}
+	// Persist the auto-review as the tenant's latest triage (like the on-demand path) so it survives to the
+	// /brief console — the continuous engine's work is visible without the user re-running it.
+	d.persistAIAnalysis(ctx, tenantID, "triage", "", "Auto-review after scan", out, time.Now())
 	if d.Recorder != nil {
 		d.Recorder.Record("ai engineer auto-reviewed", "l2-lead",
 			map[string]any{"tenant_id": tenantID, "opened_incidents": openedIncidents, "reports": len(out.Findings), "summary": out.Summary},
 			"AI Security Engineer auto-review after scan change")
 	}
+}
+
+// hasPriorTriage reports whether the tenant already has a persisted whole-estate triage analysis (the
+// "have we reviewed before" signal that bounds the continuous auto-review to change + first-run).
+func (d Deps) hasPriorTriage(ctx context.Context, tenantID string) bool {
+	all, err := d.Store.ListAIAnalyses(ctx, tenantID)
+	if err != nil {
+		return true // on a read error, be conservative: assume reviewed → don't spend the LLM
+	}
+	for _, a := range all {
+		if a.Kind == "triage" {
+			return true
+		}
+	}
+	return false
 }
 
 // toIssueDigests maps crossdetect's unified issues into the engine-pure l2.IssueDigest the Lead prompt
