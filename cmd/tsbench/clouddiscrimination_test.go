@@ -46,3 +46,31 @@ func TestCloudDiscrimination_LargeAccountHasHeadroom(t *testing.T) {
 	t.Logf("discrimination OK: ceiling %d/%d, bounded %d/%d, agent headroom %d (%.0f%%)",
 		sProd.RealFound, sProd.RealTotal, sScale.RealFound, sScale.RealTotal, rep.Headroom, rep.HeadroomPct*100)
 }
+
+// TestDiscriminationSweep_AcrossSeeds guards the sweep end to end: over several seeded accounts, the
+// bounded substrate leaves headroom (so the corpus contains scenarios worth an agent run). A regression
+// that made every seeded account fully-covered at any budget would empty the tuning corpus — this catches it.
+func TestDiscriminationSweep_AcrossSeeds(t *testing.T) {
+	const scaleBudget = 5
+	var reports []bench.CloudDiscriminationReport
+	for i := 0; i < 3; i++ {
+		ds, err := cloudquery.GenerateLarge(cloudquery.SizedLargeOpts(int64(1+i), 200))
+		if err != nil {
+			t.Fatalf("seed %d: %v", 1+i, err)
+		}
+		findings := cloudquery.EvalProwler(ds.Tables)
+		snap := cloudgraph.Ingest(cloudquery.ToInventory(ds.Tables))
+		prodBudget := 8 * len(ds.AnswerKey.RealTargets)
+		if prodBudget < 150 {
+			prodBudget = 150
+		}
+		sProd := cloudquery.ScoreAssessment(ds, cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: prodBudget}))
+		sScale := cloudquery.ScoreAssessment(ds, cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: scaleBudget}))
+		reports = append(reports, bench.ComputeCloudDiscrimination("s", sProd.RealTotal, prodBudget, scaleBudget, sProd.RealFound, sScale.RealFound))
+	}
+	sw := bench.AggregateDiscrimination(reports)
+	if sw.Discriminating == 0 {
+		t.Fatalf("the sweep must find discriminating scenarios (headroom for the agent) across seeds; got 0/%d — the tuning corpus would be empty", sw.Total)
+	}
+	t.Logf("sweep: %d/%d discriminate, headroom min/median/max %d/%d/%d", sw.Discriminating, sw.Total, sw.MinHeadroom, sw.MedianHeadroom, sw.MaxHeadroom)
+}

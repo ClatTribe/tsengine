@@ -465,9 +465,16 @@ func cloudEngineCmd(argv []string) error {
 	cqEmitInv := fs.String("cloudquery-emit-inventory", "", "write the RESOLVED inventory + prowler findings (the `tsengine cloud-assess` input) to <prefix>.json / <prefix>.prowler.json and exit")
 	cqAgent := fs.Bool("agent", false, "also run the LLM agent (cloudagent) over the same account and score it head-to-head vs the deterministic engine (needs LLM_API_KEY)")
 	cqDiscrim := fs.Bool("discrimination", false, "report the AGENT's measurable headroom on this account (substrate @ production budget vs @ a realistic-scale budget) — does the scenario actually separate a good agent from the substrate? LLM-free")
+	cqSweep := fs.Int("discrimination-sweep", 0, "sweep the discrimination metric over N seeded accounts (seed..seed+N-1) and report which give the agent measurable headroom — the curated tuning corpus. LLM-free")
 	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
+	}
+
+	// Discrimination sweep: over N seeded accounts, which ones give the agent measurable headroom?
+	// The curated tuning corpus — LLM-free, so a campaign can select scenarios worth an agent run first.
+	if *cqSweep > 0 {
+		return runDiscriminationSweep(*cqSweep, *seed, *cqSize, *maxHyp)
 	}
 
 	// Tier-1 fidelity calibration vs CloudGoat (Rhino Security Labs): the ground
@@ -703,6 +710,33 @@ func runCloudQuery(o cqOpts) error {
 	if !s.Pass {
 		os.Exit(3)
 	}
+	return nil
+}
+
+// runDiscriminationSweep computes the discrimination metric over N seeded accounts and reports how many
+// give the agent measurable headroom — the curated tuning corpus. Deterministic + LLM-free: it runs the
+// substrate at a generous production budget (the reachable ceiling) and a bounded scale budget, per seed,
+// so a tuning campaign can pick the discriminating scenarios BEFORE spending any LLM budget on an agent run.
+func runDiscriminationSweep(n int, seedBase int64, size, scaleBudget int) error {
+	reports := make([]bench.CloudDiscriminationReport, 0, n)
+	for i := 0; i < n; i++ {
+		seed := seedBase + int64(i)
+		ds, err := cloudquery.GenerateLarge(cloudquery.SizedLargeOpts(seed, size))
+		if err != nil {
+			return fmt.Errorf("discrimination-sweep seed %d: %w", seed, err)
+		}
+		findings := cloudquery.EvalProwler(ds.Tables)
+		snap := cloudgraph.Ingest(cloudquery.ToInventory(ds.Tables))
+		prodBudget := max(150, len(ds.AnswerKey.RealTargets)*8)
+		sb := scaleBudget
+		if sb <= 0 || sb >= prodBudget {
+			sb = 5 // a tight worklist modeling "can't exhaustively enumerate every path at scale"
+		}
+		sProd := cloudquery.ScoreAssessment(ds, cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: prodBudget}))
+		sScale := cloudquery.ScoreAssessment(ds, cloudengine.Assess(snap, findings, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: sb}))
+		reports = append(reports, bench.ComputeCloudDiscrimination(fmt.Sprintf("seed-%d", seed), sProd.RealTotal, prodBudget, sb, sProd.RealFound, sScale.RealFound))
+	}
+	fmt.Print(bench.RenderDiscriminationSweep(bench.AggregateDiscrimination(reports)))
 	return nil
 }
 

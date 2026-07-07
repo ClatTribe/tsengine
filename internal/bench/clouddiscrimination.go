@@ -2,6 +2,7 @@ package bench
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -79,6 +80,65 @@ func RenderCloudDiscrimination(r CloudDiscriminationReport) string {
 		fmt.Fprintf(&b, "verdict: DISCRIMINATES — an agent run on this scenario measures real quality (capture of the headroom).\n")
 	} else {
 		fmt.Fprintf(&b, "verdict: does NOT discriminate — the substrate covers everything; an agent run here teaches nothing (don't spend LLM budget).\n")
+	}
+	return b.String()
+}
+
+// DiscriminationSweep aggregates the discrimination report across many seeded scenarios — the curated
+// tuning corpus. It answers "which scenarios give the agent MEASURABLE headroom", so a tuning campaign
+// spends (expensive) LLM budget only where the run can teach something: a scenario the substrate fully
+// covers is worthless for tuning (the agent can't out-do a substrate that already found everything).
+type DiscriminationSweep struct {
+	Total          int                         `json:"total"`
+	Discriminating int                         `json:"discriminating"` // scenarios with headroom > 0
+	TotalHeadroom  int                         `json:"total_headroom"`
+	MinHeadroom    int                         `json:"min_headroom"`
+	MedianHeadroom int                         `json:"median_headroom"`
+	MaxHeadroom    int                         `json:"max_headroom"`
+	Reports        []CloudDiscriminationReport `json:"reports,omitempty"`
+}
+
+// DiscriminatingFraction is the share of swept scenarios that measure agent quality.
+func (s DiscriminationSweep) DiscriminatingFraction() float64 {
+	if s.Total == 0 {
+		return 0
+	}
+	return float64(s.Discriminating) / float64(s.Total)
+}
+
+// AggregateDiscrimination rolls a set of per-scenario reports into the sweep summary.
+func AggregateDiscrimination(reports []CloudDiscriminationReport) DiscriminationSweep {
+	sw := DiscriminationSweep{Total: len(reports), Reports: reports}
+	heads := make([]int, 0, len(reports))
+	for _, r := range reports {
+		if r.Discriminates() {
+			sw.Discriminating++
+		}
+		sw.TotalHeadroom += r.Headroom
+		heads = append(heads, r.Headroom)
+	}
+	if len(heads) > 0 {
+		sort.Ints(heads)
+		sw.MinHeadroom = heads[0]
+		sw.MaxHeadroom = heads[len(heads)-1]
+		sw.MedianHeadroom = heads[len(heads)/2]
+	}
+	return sw
+}
+
+// RenderDiscriminationSweep is the operator-facing corpus summary — how many scenarios are worth an agent
+// run, and the headroom distribution across them.
+func RenderDiscriminationSweep(s DiscriminationSweep) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "=== Discrimination sweep — the tuning corpus (%d scenarios) ===\n", s.Total)
+	fmt.Fprintf(&b, "discriminating: %d/%d (%.0f%%) — scenarios where an agent run measures real quality\n",
+		s.Discriminating, s.Total, s.DiscriminatingFraction()*100)
+	fmt.Fprintf(&b, "headroom (real, recoverable paths the bounded substrate misses): min %d, median %d, max %d\n",
+		s.MinHeadroom, s.MedianHeadroom, s.MaxHeadroom)
+	if s.Discriminating == 0 {
+		fmt.Fprintf(&b, "verdict: NO scenario discriminates at this budget — tighten --max-hypotheses or grow the accounts before spending LLM budget.\n")
+	} else {
+		fmt.Fprintf(&b, "verdict: run the agent head-to-head on the %d discriminating scenario(s) to measure its lift.\n", s.Discriminating)
 	}
 	return b.String()
 }
