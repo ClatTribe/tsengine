@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/codeagent"
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/secret"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -159,5 +160,63 @@ func TestCodeInvestigate_RunsAndGroundsAssessment(t *testing.T) {
 	_ = json.Unmarshal(v2.Body.Bytes(), &view2)
 	if view2.Total != 0 {
 		t.Errorf("tenant isolation breached: t2 sees %d of t1's assessments", view2.Total)
+	}
+}
+
+// TestCodeInvestigate_FoldsIntoComplianceAndSeedsRisk proves the code path reaches the SAME downstream
+// surfaces as the cloud path: a confirmed-exploitable code finding that carries a CWE folds into the
+// compliance posture (compliance.map on the forwarded CWE → a SOC2 control gap), AND seeds a candidate
+// risk on the vCISO (HITL) desk — the two wirings the code path used to skip (findings landed
+// compliance-less and never reached the risk register). The posted scanner finding carries CWE-89 (SQLi),
+// which the CWE→control crosswalk maps to SOC2 SI-10-class controls.
+func TestCodeInvestigate_FoldsIntoComplianceAndSeedsRisk(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Plan: platform.PlanEnterprise})
+	llm := &scriptedCodeLLM{replies: []string{
+		`{"tool":"read_source","args":{"path":"api/handler.go","line":3}}`,
+		`{"tool":"record_issue","args":{"finding_id":"f1","exploitable":true,"severity":"high","rationale":"tainted q reaches the query","evidence":["api/handler.go:3"],"fix_location":"api/handler.go:3","fix":"parameterize"}}`,
+		`{"tool":"finish","args":{"summary":"1 exploitable SQLi confirmed"}}`,
+	}}
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", AgentLLM: llm, GRC: &grc.GRC{Store: st}})
+
+	// the posted scanner finding carries CWE-89 → the confirmation must forward it so compliance.map fires.
+	body := `{"repo":"acme/api","findings":[{"id":"f1","tool":"semgrep","severity":"high","cwe":["CWE-89"],"endpoint":"api/handler.go:3","title":"SQLi"}],` +
+		`"source":{"api/handler.go":"package api\nfunc Search(r *http.Request){\n q := r.URL.Query().Get(\"q\"); db.Query(\"...\"+q)\n}"}}`
+	rec := do(h, "POST", "/v1/code/investigate", "t1", body)
+	if rec.Code != 200 {
+		t.Fatalf("run should be 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		ConfirmedExploitable int `json:"confirmed_exploitable"`
+		RisksProposed        int `json:"risks_proposed"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if out.ConfirmedExploitable != 1 {
+		t.Fatalf("want 1 confirmed-exploitable, got %s", rec.Body.String())
+	}
+	// 1) the confirmed finding folded into the SOC2 posture as a control gap (CWE-89 → controls).
+	cs, _ := (&grc.GRC{Store: st}).Posture(ctx, "t1", grc.FrameworkSOC2)
+	gaps := 0
+	for _, c := range cs {
+		if c.State == platform.ControlGap {
+			gaps++
+		}
+	}
+	if gaps == 0 {
+		t.Error("a confirmed CWE-89 code finding must fold into the SOC2 compliance posture as a control gap")
+	}
+	// 2) it seeded a candidate risk on the vCISO (HITL) desk — proposed, awaiting a human decision.
+	if out.RisksProposed < 1 {
+		t.Errorf("the confirmed finding must seed a candidate risk on the vCISO desk, got risks_proposed=%d", out.RisksProposed)
+	}
+	risks, _ := st.ListRisks(ctx, "t1")
+	if len(risks) == 0 {
+		t.Fatal("a candidate risk must be persisted for the vCISO to decide")
+	}
+	for _, rk := range risks {
+		if !rk.Proposed || rk.DecidedBy != "" {
+			t.Errorf("a seeded risk must be a PROPOSAL awaiting a human (HITL), got %+v", rk)
+		}
 	}
 }

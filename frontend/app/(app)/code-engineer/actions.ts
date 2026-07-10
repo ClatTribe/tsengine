@@ -23,6 +23,7 @@ export type CodeInvestigationResult = {
   issues?: CodeIssue[];
   assessed?: number;
   confirmed?: number;
+  risksProposed?: number;
 };
 
 // Runs the AI Code Engineer over posted code findings + repo source. The agent opens the source, traces the
@@ -61,7 +62,7 @@ export async function runCodeInvestigation(
     const res = await api.runCodeInvestigation(repo.trim(), findings, source);
     revalidatePath("/code-engineer");
     revalidatePath("/issues");
-    return { ok: true, summary: res.summary, issues: res.issues, assessed: res.findings_assessed, confirmed: res.confirmed_exploitable };
+    return { ok: true, summary: res.summary, issues: res.issues, assessed: res.findings_assessed, confirmed: res.confirmed_exploitable, risksProposed: res.risks_proposed };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "The code investigation failed." };
   }

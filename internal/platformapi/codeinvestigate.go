@@ -146,7 +146,12 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 		if strings.TrimSpace(is.Severity) == "" {
 			is.Severity = string(severityOfFinding(body.Findings, is.FindingID))
 		}
-		built = append(built, codeIssueToFinding(d.newID("codeagent")+"-"+strconv.Itoa(i), body.Repo, is))
+		// Carry the ASSESSED scanner finding's CWE forward — it's the same vuln, now confirmed at source —
+		// so compliance.map (CWE-keyed, §11) annotates the confirmation and it folds into the compliance
+		// posture. Grounded (§10): the CWE comes from the real scanner finding, not invented.
+		f := codeIssueToFinding(d.newID("codeagent")+"-"+strconv.Itoa(i), body.Repo, is)
+		f.CWE = cweOfFinding(body.Findings, is.FindingID)
+		built = append(built, f)
 	}
 	stored := 0
 	saved := make([]types.Finding, 0, len(built))
@@ -163,14 +168,24 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
+	// Agent proposes → named vCISO disposes (§18.4): the confirmed-exploitable code findings cluster into
+	// candidate risks on the vCISO desk automatically, so a human judges the agent's confirmations — the
+	// same HITL surface the AI Cloud Engineer already feeds. (The code path used to skip this, so its
+	// discoveries never reached the risk register.)
+	risksProposed := 0
+	if stored > 0 {
+		if seeded, serr := d.seedRisks(r.Context(), tenantID); serr == nil {
+			risksProposed = len(seeded)
+		}
+	}
 	if d.Recorder != nil {
 		d.Recorder.Record("ai code engineer investigated", "code-agent",
-			map[string]any{"tenant_id": tenantID, "repo": body.Repo, "findings": len(body.Findings), "issues": len(rep.Issues), "confirmed": stored, "calls": rep.Calls},
+			map[string]any{"tenant_id": tenantID, "repo": body.Repo, "findings": len(body.Findings), "issues": len(rep.Issues), "confirmed": stored, "calls": rep.Calls, "risks_proposed": risksProposed},
 			"AI Code Security Engineer depth investigation")
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"summary": rep.Summary, "issues": rep.Issues, "tool_calls": rep.Calls,
-		"findings_assessed": len(body.Findings), "confirmed_exploitable": stored,
+		"findings_assessed": len(body.Findings), "confirmed_exploitable": stored, "risks_proposed": risksProposed,
 	})
 }
 
@@ -206,6 +221,18 @@ func severityOfFinding(fs []types.Finding, id string) types.Severity {
 		}
 	}
 	return types.SeverityMedium
+}
+
+// cweOfFinding returns the assessed L1 finding's CWE(s) so the confirmed-at-source finding carries them
+// forward — the input to compliance.map (§11). Nil when the assessed finding is unknown or CWE-less (a
+// secret/config finding legitimately has none); §10 — never invents a CWE.
+func cweOfFinding(fs []types.Finding, id string) []string {
+	for _, f := range fs {
+		if f.ID == id {
+			return f.CWE
+		}
+	}
+	return nil
 }
 
 // codeIssueToFinding maps a grounded, EXPLOITABLE code assessment into a first-class verified finding — the
