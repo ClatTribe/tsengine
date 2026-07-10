@@ -121,9 +121,19 @@ func benchCodeAgent(ctx context.Context, llm cloudengine.LLM) AgentResult {
 
 // RunAgentCoverage runs the cloud + code AI engineers against their planted estates.
 func RunAgentCoverage(ctx context.Context, llm cloudengine.LLM) []AgentResult {
-	return []AgentResult{
-		benchCloudAgent(ctx, llm),
-		benchCodeAgent(ctx, llm),
+	return RunAgentCoverageOnly(ctx, llm, "")
+}
+
+// RunAgentCoverageOnly runs a subset: "cloud", "code", or "" for both. Useful for a
+// tractable single-agent run against the manual dev proxy.
+func RunAgentCoverageOnly(ctx context.Context, llm cloudengine.LLM, only string) []AgentResult {
+	switch only {
+	case "cloud":
+		return []AgentResult{benchCloudAgent(ctx, llm)}
+	case "code":
+		return []AgentResult{benchCodeAgent(ctx, llm)}
+	default:
+		return []AgentResult{benchCloudAgent(ctx, llm), benchCodeAgent(ctx, llm)}
 	}
 }
 

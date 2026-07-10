@@ -22,6 +22,7 @@ func integrationCmd(argv []string) error {
 	out := fs.String("out", "", "write the Markdown scoreboard to this file (default: stdout)")
 	jsonOut := fs.Bool("json", false, "emit the per-integration results as JSON instead of Markdown")
 	agent := fs.Bool("agent", false, "ALSO run the LLM agent layer (cloud+code investigate) — needs a model via LLMFromEnv (the dev proxy or a local Ollama)")
+	agentOnly := fs.String("agent-only", "", "restrict the agent layer to \"cloud\" or \"code\" (default: both) — for a tractable single-agent proxy run")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -35,7 +36,7 @@ func integrationCmd(argv []string) error {
 	agentRan := false
 	if *agent {
 		if llm, ok := cloudengine.LLMFromEnv(); ok {
-			agentResults = bench.RunAgentCoverage(context.Background(), llm)
+			agentResults = bench.RunAgentCoverageOnly(context.Background(), llm, *agentOnly)
 			agentRan = true
 		}
 	}
