@@ -15,6 +15,8 @@ type Verdict struct {
 	EntryReached  []string `json:"entry_reached,omitempty"`
 	DirectHitters []string `json:"direct_hitters,omitempty"` // funcs that call the vuln symbol
 	Path          []string `json:"path,omitempty"`           // entrypoint → … → vuln symbol (the evidence)
+	Lang          string   `json:"lang,omitempty"`           // extractor provenance
+	Fidelity      Fidelity `json:"fidelity,omitempty"`       // how precise this verdict is (a coarse-tier negative is soft, §10)
 }
 
 // Analyze decides whether an application entrypoint (package-main `main`, or any
@@ -29,7 +31,7 @@ func Analyze(g *Graph, vulnPkg string, symbols []string) Verdict {
 	match := func(e ExtRef) bool {
 		return pkgMatch(e.ImportPath, vulnPkg) && (len(symSet) == 0 || symSet[e.Symbol])
 	}
-	v := Verdict{Package: vulnPkg, Symbols: symbols}
+	v := Verdict{Package: vulnPkg, Symbols: symbols, Lang: g.Lang, Fidelity: g.Fidelity}
 
 	// direct hitters: functions whose body calls a matching external symbol.
 	hitters := map[FuncID]bool{}
@@ -163,11 +165,12 @@ func pkgMatch(importPath, vulnPkg string) bool {
 
 // SCAFinding is one dependency vulnerability to triage (from trivy/grype/osv).
 type SCAFinding struct {
-	ID       string   `json:"id"`
-	CVE      string   `json:"cve,omitempty"`
-	Package  string   `json:"package"`           // the vulnerable import/module path
-	Symbols  []string `json:"symbols,omitempty"` // vulnerable functions; empty ⇒ any
-	Severity string   `json:"severity,omitempty"`
+	ID        string   `json:"id"`
+	CVE       string   `json:"cve,omitempty"`
+	Package   string   `json:"package"`           // the vulnerable import/module path
+	Symbols   []string `json:"symbols,omitempty"` // vulnerable functions; empty ⇒ any
+	Severity  string   `json:"severity,omitempty"`
+	Ecosystem string   `json:"ecosystem,omitempty"` // npm | pip | go | … — routes to the language graph (TriageMulti)
 }
 
 // TriageResult pairs a finding with its reachability verdict + a priority call.
@@ -183,17 +186,23 @@ type TriageResult struct {
 func TriageSCA(g *Graph, findings []SCAFinding) []TriageResult {
 	out := make([]TriageResult, 0, len(findings))
 	for _, f := range findings {
-		v := Analyze(g, f.Package, f.Symbols)
-		pr := "deprioritized"
-		switch {
-		case v.Reachable:
-			pr = "reachable"
-		case !v.Imported:
-			pr = "unused" // dependency present but the vulnerable symbol is never called
-		}
-		out = append(out, TriageResult{Finding: f, Verdict: v, Priority: pr})
+		out = append(out, triageOne(g, f))
 	}
 	return out
+}
+
+// triageOne is the per-finding reachability → priority decision shared by TriageSCA
+// (single graph) and TriageMulti (per-ecosystem graph).
+func triageOne(g *Graph, f SCAFinding) TriageResult {
+	v := Analyze(g, f.Package, f.Symbols)
+	pr := "deprioritized"
+	switch {
+	case v.Reachable:
+		pr = "reachable"
+	case !v.Imported:
+		pr = "unused" // dependency present but the vulnerable symbol is never called
+	}
+	return TriageResult{Finding: f, Verdict: v, Priority: pr}
 }
 
 // Render formats a triage report.

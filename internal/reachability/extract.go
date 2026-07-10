@@ -48,9 +48,11 @@ type Func struct {
 
 // Graph is the extracted call graph.
 type Graph struct {
-	Module string              `json:"module"`
-	Funcs  map[FuncID]*Func    `json:"funcs"`
-	index  map[string][]FuncID // (pkgdir \x00 name) -> free funcs, for local-call resolution
+	Module   string              `json:"module"`
+	Lang     string              `json:"lang,omitempty"`     // "go" | "javascript" | "python" — the extractor that built it
+	Fidelity Fidelity            `json:"fidelity,omitempty"` // how precise this graph's evidence is (§10 honesty)
+	Funcs    map[FuncID]*Func    `json:"funcs"`
+	index    map[string][]FuncID // (pkgdir \x00 name) -> free funcs, for local-call resolution
 }
 
 type importTarget struct {
@@ -64,11 +66,18 @@ type localRef struct {
 	dir, name string
 }
 
-// Extract builds the call graph rooted at dir. Skips vendor/, testdata/, .git/,
-// and _test.go files (production reachability).
+// Extract builds the Go call graph rooted at dir — the package-level entry point kept
+// for back-compat (callers: cmd/tsengine, gate). It is GoExtractor's implementation;
+// for polyglot repos use BuildGraphs / the Extractor registry.
 func Extract(root string) (*Graph, error) {
+	return extractGo(root)
+}
+
+// extractGo builds the call graph rooted at dir. Skips vendor/, testdata/, .git/,
+// and _test.go files (production reachability).
+func extractGo(root string) (*Graph, error) {
 	module := readModulePath(root)
-	g := &Graph{Module: module, Funcs: map[FuncID]*Func{}, index: map[string][]FuncID{}}
+	g := &Graph{Module: module, Lang: "go", Fidelity: FidelityCallGraph, Funcs: map[FuncID]*Func{}, index: map[string][]FuncID{}}
 	fset := token.NewFileSet()
 	pending := map[FuncID][]localRef{}
 
