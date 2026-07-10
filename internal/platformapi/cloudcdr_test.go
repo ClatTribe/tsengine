@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/detect"
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -65,5 +66,39 @@ func TestCDR_NoOpenerStillStores(t *testing.T) {
 	}
 	if fs, _ := st.ListFindings(ctx, "t1", store.FindingFilter{}); len(fs) == 0 {
 		t.Error("the threat must still be stored without an opener wired")
+	}
+}
+
+// TestCDR_FoldsIntoCompliancePosture: a live control-plane threat that carries a compliance nexus (a
+// public-resource-exposure = CWE-284 → SOC2 CC6.1/CC6.3) must mark those controls a gap in the compliance
+// posture — like every other ingest path. Before, CDR was the only ingest that skipped grc.Apply, so a
+// live exposure showed in issues but never in GET /v1/compliance.
+func TestCDR_FoldsIntoCompliancePosture(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	g := &grc.GRC{Store: st}
+	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", GRC: g}
+
+	// a bucket just made public — CWE-284, maps to SOC2 access-control controls.
+	body := `{"provider":"aws","event_name":"PutBucketAcl","resource":"arn:aws:s3:::acme-data","detail":"granted AllUsers READ"}`
+	rec := do(NewHandler(d), "POST", "/v1/cloud/events", "t1", body)
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// the SOC2 posture must now show a gap driven by this live threat.
+	cs, err := g.Posture(ctx, "t1", grc.FrameworkSOC2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gaps := 0
+	for _, c := range cs {
+		if c.State == platform.ControlGap {
+			gaps++
+		}
+	}
+	if gaps == 0 {
+		t.Fatal("a live public-exposure CDR threat (CWE-284) must fold into the SOC2 posture as a control gap")
 	}
 }

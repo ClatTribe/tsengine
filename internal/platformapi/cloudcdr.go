@@ -45,6 +45,14 @@ func (d Deps) handleIngestCloudEvents(w http.ResponseWriter, r *http.Request, te
 			respond(w, nil, perr)
 			return
 		}
+		// Fold the control-plane threat into the compliance posture (mark its cited controls a gap), like
+		// every other ingest path (drift/identity/OSINT/tprm/device/SaaS) does. CDR findings carry a CWE
+		// (e.g. CWE-284 for public-exposure / SG-opened → access-control controls; audit-logging-disabled →
+		// logging controls), so a live threat should show up in GET /v1/compliance — not only in issues.
+		// Grounded (§10): grc.Apply marks a control a gap ONLY where the finding has a real compliance nexus.
+		if d.GRC != nil {
+			_ = d.GRC.Apply(r.Context(), tenantID, f)
+		}
 		saved = append(saved, f)
 	}
 	stored := len(saved)
