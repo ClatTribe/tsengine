@@ -230,15 +230,48 @@ func renderChains(chains []correlate.Chain) []string {
 		if i >= cap {
 			break
 		}
-		parts := make([]string, 0, len(ch.Steps))
-		for _, s := range ch.Steps {
-			label := s.AssetType + ":" + s.AssetTarget
-			if s.CrownJewel {
-				label += "(crown)"
-			}
-			parts = append(parts, label)
-		}
-		out = append(out, fmt.Sprintf("[%s] %s", ch.Severity, strings.Join(parts, " → ")))
+		out = append(out, renderChain(ch))
 	}
 	return out
+}
+
+// renderChain renders one chain so the L2 Lead can reason about it WITHOUT drilling in: each
+// hop names its actual finding (not just the bucketed asset target, which collapses distinct
+// crowns), and the shared identifier that BRIDGES to the next hop is shown inline — so the
+// Lead sees WHY the surfaces connect (the leaked key / email / ARN), the reasoning it otherwise
+// couldn't explain. (Prior render dropped ViaEntity and used AssetTarget, making three chains
+// to three different crowns look identical.)
+func renderChain(ch correlate.Chain) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "[%s] ", ch.Severity)
+	for i, s := range ch.Steps {
+		if i > 0 {
+			if bridge := ch.Steps[i-1].ViaEntity; bridge != "" {
+				fmt.Fprintf(&b, " —[%s]→ ", bridge)
+			} else {
+				b.WriteString(" → ")
+			}
+		}
+		label := s.AssetType
+		if t := chainStepLabel(s); t != "" {
+			label += " " + t
+		}
+		if s.CrownJewel {
+			label += " (CROWN)"
+		}
+		b.WriteString(label)
+	}
+	return b.String()
+}
+
+// chainStepLabel is the step's own finding identity (title, else its target) — precise per
+// step, so distinct crowns don't collapse to the asset's display target.
+func chainStepLabel(s correlate.Step) string {
+	if t := strings.TrimSpace(s.Title); t != "" {
+		if len(t) > 70 {
+			t = t[:70] + "…"
+		}
+		return "“" + t + "”"
+	}
+	return s.AssetTarget
 }
