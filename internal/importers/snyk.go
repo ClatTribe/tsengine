@@ -16,6 +16,7 @@ type snykDoc struct {
 	Vulnerabilities []snykVuln `json:"vulnerabilities"`
 	ProjectName     string     `json:"projectName"`
 	TargetFile      string     `json:"displayTargetFile"`
+	PackageManager  string     `json:"packageManager"` // npm|pip|gomodules|maven|… — the doc-wide ecosystem
 }
 
 type snykVuln struct {
@@ -77,6 +78,7 @@ func SnykToSCA(data []byte) ([]reachability.SCAFinding, error) {
 		}
 		out = append(out, reachability.SCAFinding{
 			ID: v.ID, CVE: cve, Package: v.PackageName, Severity: strings.ToLower(v.Severity),
+			Ecosystem: doc.PackageManager, // doc-wide package manager → routes reachability
 		})
 	}
 	return out, nil

@@ -146,10 +146,11 @@ func DependabotToSCA(data []byte) ([]reachability.SCAFinding, error) {
 			continue
 		}
 		out = append(out, reachability.SCAFinding{
-			ID:       firstNonEmpty(a.SecurityAdvisory.CVEID, fmt.Sprintf("ghsa-%d", a.Number)),
-			CVE:      a.SecurityAdvisory.CVEID,
-			Package:  a.SecurityVulnerability.Package.Name,
-			Severity: strings.ToLower(a.SecurityAdvisory.Severity),
+			ID:        firstNonEmpty(a.SecurityAdvisory.CVEID, fmt.Sprintf("ghsa-%d", a.Number)),
+			CVE:       a.SecurityAdvisory.CVEID,
+			Package:   a.SecurityVulnerability.Package.Name,
+			Severity:  strings.ToLower(a.SecurityAdvisory.Severity),
+			Ecosystem: a.SecurityVulnerability.Package.Ecosystem, // GHAS: npm|pip|go|maven|… → routes reachability
 		})
 	}
 	return out, nil
