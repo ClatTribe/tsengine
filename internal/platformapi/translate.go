@@ -65,15 +65,19 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 // Anthropic, OpenAI, or a local Ollama). nil when neither is set. A tenant's OWN key is honoured on ANY
 // plan (they pay for it); the operator-global client is gated to AI-entitled plans.
 func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client {
-	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
-		switch strings.ToLower(provider) {
+	if cfg, key, ok := d.resolveTenantLLMConfig(ctx, tenantID); ok {
+		switch strings.ToLower(cfg.Provider) {
 		case "anthropic", "claude":
-			return l2.NewAnthropicClientWithKey(model, key) // customer's own Claude key → drives Triage/Investigate
+			return l2.NewAnthropicClientWithKey(cfg.Model, key) // customer's own Claude key → drives Triage/Investigate
 		case "gemini", "google", "googleai":
 			// Gemini exposes an OpenAI-compatible surface; route the tenant key there so tool-calling works.
-			return l2.NewOpenAICompatClient(model, "https://generativelanguage.googleapis.com/v1beta/openai", key)
+			return l2.NewOpenAICompatClient(cfg.Model, "https://generativelanguage.googleapis.com/v1beta/openai", key)
 		case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
-			return l2.NewOpenAICompatClient(model, "", key) // tenant's OWN key → allowed on any plan
+			// Thread the tenant's BaseURL so a self-hosted endpoint OR the dev file-relay proxy actually
+			// drives the L2 Lead (Triage/Investigate/narrative) — the same base-URL wiring resolveAgentLLM
+			// already has via ClientForURL. Without it the Lead ignored the endpoint, so a proxy-configured
+			// tenant (dev) or a self-hosted-model tenant (prod) couldn't run the code/cloud engineer's narrative.
+			return l2.NewOpenAICompatClient(cfg.Model, cfg.BaseURL, key)
 		}
 	}
 	// Operator-global client → only for AI-entitled plans (the economic invariant: a Free tenant
