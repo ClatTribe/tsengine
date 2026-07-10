@@ -466,6 +466,7 @@ func cloudEngineCmd(argv []string) error {
 	cqAgent := fs.Bool("agent", false, "also run the LLM agent (cloudagent) over the same account and score it head-to-head vs the deterministic engine (needs LLM_API_KEY)")
 	cqDiscrim := fs.Bool("discrimination", false, "report the AGENT's measurable headroom on this account (substrate @ production budget vs @ a realistic-scale budget) — does the scenario actually separate a good agent from the substrate? LLM-free")
 	cqSweep := fs.Int("discrimination-sweep", 0, "sweep the discrimination metric over N seeded accounts (seed..seed+N-1) and report which give the agent measurable headroom — the curated tuning corpus. LLM-free")
+	cqLedger := fs.String("ledger", "", "with --agent: append the head-to-head's L2 score (accuracy/lift/remediation) to this durable JSONL ledger — the tuning-progress record")
 	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -490,7 +491,7 @@ func cloudEngineCmd(argv []string) error {
 	// perms) and is scored against that independent key.
 	if *cqRun || *cqEmit != "" || *cqEmitInv != "" || *cqLarge || *cqDiscrim {
 		return runCloudQuery(cqOpts{loadDir: *cqDir, emitDir: *cqEmit, emitInv: *cqEmitInv, maxHyp: *maxHyp,
-			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed, agent: *cqAgent, discrimination: *cqDiscrim})
+			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed, agent: *cqAgent, discrimination: *cqDiscrim, ledger: *cqLedger})
 	}
 
 	// Independent-generator check: an external model authors the account AND its
@@ -581,6 +582,7 @@ type cqOpts struct {
 	advanced, large, agent    bool
 	discrimination            bool
 	seed                      int64
+	ledger                    string // append each --agent head-to-head's L2 score to this durable JSONL
 }
 
 func runCloudQuery(o cqOpts) error {
@@ -716,6 +718,23 @@ func runCloudQuery(o cqOpts) error {
 			}
 		}
 		fmt.Print(bench.RenderRemediationScore(bench.ComputeRemediationScore(len(rep.Issues), proposed, verified)))
+		// Durable tuning record: append this head-to-head's L2 score to the ledger, so a tuning campaign can
+		// see whether the agent is getting BETTER across runs (the trend, not just today's number). Best-effort.
+		if o.ledger != "" {
+			scaleBudget := maxHyp
+			if scaleBudget <= 0 {
+				scaleBudget = max(150, len(ds.AnswerKey.RealTargets)*8)
+			}
+			sc := bench.ComputeL2Scorecard(s.RealTotal, s.RealFound, as.RealFound, as.FalseIssues)
+			rem := bench.ComputeRemediationScore(len(rep.Issues), proposed, verified)
+			entry := bench.CloudEngineEntry(o.seed, scaleBudget, os.Getenv("LLM_MODEL"), sc, rem)
+			entry.TS = time.Now().UTC().Format(time.RFC3339)
+			if lerr := bench.AppendCloudEngineLedger(o.ledger, entry); lerr != nil {
+				fmt.Fprintf(os.Stderr, "[cloud-engine] ledger append failed: %v\n", lerr)
+			} else {
+				fmt.Printf("ledger: appended run (seed %d) → %s\n", o.seed, o.ledger)
+			}
+		}
 		fmt.Print(cloudagent.Render(rep))
 		if !as.Pass {
 			os.Exit(3)
