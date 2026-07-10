@@ -146,6 +146,10 @@ demo-secure: ## run the demo with the ENGINE ON + hardened Docker sandboxes (one
 demo-scan-asset: ## prove the secure-Docker scan path per asset type (container + repo, no creds)
 	./scripts/demo-scan-asset.sh
 
+.PHONY: pentest-e2e
+pentest-e2e: ## live recall + FP-control of the AI pentester vs Juice Shop / VAmPI / a clean target (needs an LLM env — see docs/pentest-e2e-validation.md)
+	./scripts/pentest-agent-e2e.sh all
+
 .PHONY: dev-down
 dev-down: ## stop the local dev stack (frees :3000 and :8090)
 	@pkill -f 'next dev' 2>/dev/null || true; pkill -f 'next-server' 2>/dev/null || true
