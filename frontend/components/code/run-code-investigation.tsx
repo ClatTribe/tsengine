@@ -86,6 +86,9 @@ export function RunCodeInvestigation() {
             Assessed <span className="font-semibold">{res.assessed ?? 0}</span> finding
             {(res.assessed ?? 0) === 1 ? "" : "s"} at source — <span className="font-semibold">{res.confirmed ?? 0}</span> confirmed
             exploitable{(res.confirmed ?? 0) > 0 ? " (now tracked as verified findings)" : ""}.
+            {(res.risksProposed ?? 0) > 0
+              ? ` ${res.risksProposed} candidate risk${res.risksProposed === 1 ? "" : "s"} on the vCISO desk for review.`
+              : ""}
             {res.summary ? <span className="mt-1 block text-muted">{res.summary}</span> : null}
           </div>
           {(res.issues ?? []).map((is) => (

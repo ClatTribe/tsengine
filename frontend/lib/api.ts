@@ -217,6 +217,7 @@ export const api = {
       tool_calls: number;
       findings_assessed: number;
       confirmed_exploitable: number;
+      risks_proposed: number;
     }>("/v1/code/investigate", { method: "POST", body: JSON.stringify({ repo, findings, source }) }),
 
   // AI Code Engineer — the stored, confirmed-exploitable source assessments (read-only view) + runnable flag.
