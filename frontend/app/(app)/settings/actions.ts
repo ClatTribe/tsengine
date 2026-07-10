@@ -104,8 +104,9 @@ export async function setLLMConfig(
   provider: string,
   model: string,
   apiKey: string,
-): Promise<{ provider: string; model: string; has_key: boolean }> {
-  const r = await api.setLLMConfig(provider, model, apiKey);
+  baseURL?: string,
+): Promise<{ provider: string; model: string; has_key: boolean; base_url?: string }> {
+  const r = await api.setLLMConfig(provider, model, apiKey, baseURL);
   revalidatePath("/settings");
   return r;
 }

@@ -62,7 +62,17 @@ func TestClientFor_PerTenantProviders(t *testing.T) {
 	} else if _, isO := c.(*OpenAICompat); !isO {
 		t.Errorf("openai → *OpenAICompat, got %T", c)
 	}
-	if _, ok := ClientFor("anthropic", "claude", "k"); ok {
-		t.Error("anthropic is not a text-seam provider here → should be unsupported (caller falls back)")
+	// anthropic is now supported in the text seam (was the documented follow-on) — a tenant's Claude
+	// key (the UI default provider) must actually build a client, not silently fall back.
+	if c, ok := ClientFor("anthropic", "claude-opus-4-8", "k"); !ok {
+		t.Error("anthropic should be supported")
+	} else if _, isA := c.(*Anthropic); !isA {
+		t.Errorf("anthropic → *Anthropic, got %T", c)
+	}
+	// A self-hosted Ollama needs its base URL threaded through — ClientForURL is how it's reached.
+	if c, ok := ClientForURL("ollama", "llama3.1", "", "http://localhost:11434/v1"); !ok {
+		t.Error("ollama should be supported")
+	} else if oc, isO := c.(*OpenAICompat); !isO || oc.baseURL != "http://localhost:11434/v1" {
+		t.Errorf("ollama → *OpenAICompat @ the given base URL, got %T", c)
 	}
 }

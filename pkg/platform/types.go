@@ -342,10 +342,18 @@ type PRBotPolicy struct {
 // pentest, the live bench). Provider/Model are plain; KeyRef is the secret.Vault-sealed ref
 // for the API key (never plaintext at rest, never returned to the client — §18.2 inv. 6).
 type LLMConfig struct {
-	Provider string `json:"provider"` // anthropic | openai | gemini
-	Model    string `json:"model"`    // e.g. claude-opus-4-8, gpt-4o, gemini-2.0-flash
-	KeyRef   string `json:"key_ref,omitempty"`
+	Provider string `json:"provider"` // anthropic | openai | gemini | ollama | openai-compat
+	Model    string `json:"model"`    // e.g. claude-opus-4-8, gpt-4o, gemini-2.0-flash, llama3.1
+	// BaseURL is the endpoint for a SELF-HOSTED OpenAI-compatible model (Ollama / vLLM / LM Studio),
+	// e.g. http://localhost:11434/v1. Not a secret (an endpoint, like Jira.BaseURL) → stored plain.
+	// Empty for cloud providers (they use their vendor default).
+	BaseURL string `json:"base_url,omitempty"`
+	KeyRef  string `json:"key_ref,omitempty"`
 }
+
+// SelfHosted reports whether this config points at a self-hosted OpenAI-compatible endpoint (which
+// may legitimately have NO API key — Ollama doesn't require one).
+func (c *LLMConfig) SelfHosted() bool { return c != nil && strings.TrimSpace(c.BaseURL) != "" }
 
 // HasKey reports whether an API key is configured (without exposing it).
 func (c *LLMConfig) HasKey() bool { return c != nil && c.KeyRef != "" }
