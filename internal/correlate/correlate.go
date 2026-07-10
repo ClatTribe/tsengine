@@ -258,7 +258,12 @@ func extractEntities(f Finding) []Entity {
 		}
 	}
 	for _, a := range arnRe.FindAllString(blob, -1) {
-		out = append(out, Entity{EntARN, a})
+		// The ARN char class includes '.', so an ARN at a sentence end greedily captures the
+		// trailing punctuation ("…role/web-instance-role.") — which then never matches the clean
+		// ARN on another surface, silently dropping the bridge. Trim trailing sentence
+		// punctuation so an ARN mentioned in prose still correlates (an ARN never validly ends
+		// in .,;:)]}"' — those are always punctuation, never resource-name characters).
+		out = append(out, Entity{EntARN, strings.TrimRight(a, ".,;:)]}\"'")})
 	}
 	for _, m := range bucketRe.FindAllStringSubmatch(blob, -1) {
 		out = append(out, Entity{EntBucket, m[1]})
