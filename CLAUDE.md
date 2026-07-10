@@ -276,6 +276,25 @@ Invariants:
    Breadth tools that are unconditional (dnstwist, cosign) are NOT
    escalation â they're fan-out/anchor.
 
+### 5.4 SCA reachability triage is multi-language (Go + JS/TS + Python)
+
+`internal/reachability` turns dependency-scanner noise into a finding: *"a
+scanner says this dep has a vulnerable function — does THIS code actually call
+it, from an entrypoint?"* The **solver + graph model are language-agnostic;
+only extraction is per-language** — so it's an `Extractor` interface
+(`Lang`/`Detect`/`Extract` → the shared `Graph`), `GoExtractor` wrapping the
+stdlib `go/parser` path unchanged, plus pure-Go host-side `JSExtractor` +
+`PythonExtractor`. Two **fidelity tiers stamped on every verdict** (§10
+honesty): `call_graph` (resolved intra-repo calls — Go) vs `import_use`
+(import + call-site, no cross-file dynamic dispatch — JS/Python), so a
+coarse-tier "not reachable" is a SOFT negative, never a precise one.
+`BuildGraphs` + `TriageMulti` route each SCA finding to its ecosystem's graph
+(npm/pip/go); an unroutable ecosystem is `unknown_ecosystem`, never silently
+safe. Importers carry the ecosystem (Dependabot `package.ecosystem`, Snyk
+`packageManager`); `tsengine reachability`/`gate --sca` drive it. The
+`call_graph`-tier upgrade per non-Go language (wrap Jelly/PyCG/WALA as sandbox
+tools) is the documented follow-on. See [ADR 0015](docs/adr/0015-multi-language-reachability.md).
+
 ---
 
 ## 6. The L1 dashboard contract â `vulnerabilities.json`
