@@ -78,11 +78,23 @@ func NewOpenAICompat(apiKey, model, baseURL string) *OpenAICompat {
 // family (openai/ollama/vllm/openrouter); returns (nil,false) for an unsupported provider so the caller
 // falls back to the operator-global LLM. Anthropic in the text seam is the documented follow-on.
 func ClientFor(provider, model, apiKey string) (LLM, bool) {
+	return ClientForURL(provider, model, apiKey, "")
+}
+
+// ClientForURL is ClientFor with an explicit base URL — REQUIRED to reach a SELF-HOSTED
+// OpenAI-compatible backend (Ollama / vLLM / LM Studio); without it the openai-compat family defaults
+// to https://api.openai.com/v1 and can never reach a local model. For a fixed-endpoint cloud provider
+// (Gemini) baseURL is ignored. It ALSO handles "anthropic" (via NewAnthropic) — ClientFor previously
+// returned (nil,false) for it, so a tenant's Anthropic key (the UI's DEFAULT provider) was silently
+// dropped and never drove the agents.
+func ClientForURL(provider, model, apiKey, baseURL string) (LLM, bool) {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "anthropic", "claude":
+		return NewAnthropic(apiKey, model, baseURL), true
 	case "gemini", "google":
 		return NewGemini(apiKey, model), true
 	case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
-		return NewOpenAICompat(apiKey, model, ""), true
+		return NewOpenAICompat(apiKey, model, baseURL), true
 	default:
 		return nil, false
 	}

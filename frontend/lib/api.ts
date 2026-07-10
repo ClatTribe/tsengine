@@ -387,11 +387,11 @@ export const api = {
     ),
 
   llmSettings: () =>
-    safe<{ provider: string; model: string; has_key: boolean; ai_enabled: boolean }>("/v1/settings/llm", { provider: "", model: "", has_key: false, ai_enabled: false }),
-  setLLMConfig: (provider: string, model: string, apiKey: string) =>
-    call<{ provider: string; model: string; has_key: boolean }>("/v1/settings/llm", {
+    safe<{ provider: string; model: string; has_key: boolean; ai_enabled: boolean; base_url?: string }>("/v1/settings/llm", { provider: "", model: "", has_key: false, ai_enabled: false }),
+  setLLMConfig: (provider: string, model: string, apiKey: string, baseURL?: string) =>
+    call<{ provider: string; model: string; has_key: boolean; base_url?: string }>("/v1/settings/llm", {
       method: "PUT",
-      body: JSON.stringify({ provider, model, api_key: apiKey }),
+      body: JSON.stringify({ provider, model, api_key: apiKey, base_url: baseURL ?? "" }),
     }),
 
   // Repository PR-review-bot policy: enable inline review + a merge-gating check-run, and the

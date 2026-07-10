@@ -16,7 +16,11 @@ import (
 // the secret Vault before it touches the store and is NEVER returned to the client (§18.2
 // inv. 6); GET reports only provider/model + whether a key is set.
 
-var llmProviders = map[string]bool{"anthropic": true, "openai": true, "gemini": true}
+var llmProviders = map[string]bool{"anthropic": true, "openai": true, "gemini": true, "ollama": true, "openai-compat": true}
+
+// selfHostedProvider reports whether a provider points at a customer-run OpenAI-compatible endpoint
+// (needs a base URL, may have no key) rather than a cloud vendor.
+func selfHostedProvider(p string) bool { return p == "ollama" || p == "openai-compat" }
 
 // handleGetLLMSettings returns the tenant's LLM provider/model and whether a key is set —
 // never the key itself.
@@ -39,6 +43,7 @@ func (d Deps) handleGetLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 	if t.LLM != nil {
 		resp["provider"] = t.LLM.Provider
 		resp["model"] = t.LLM.Model
+		resp["base_url"] = t.LLM.BaseURL // a self-hosted endpoint is not a secret — safe to echo
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -51,6 +56,7 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 		Provider string `json:"provider"`
 		Model    string `json:"model"`
 		APIKey   string `json:"api_key"`
+		BaseURL  string `json:"base_url"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
@@ -58,19 +64,29 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 	}
 	body.Provider = strings.ToLower(strings.TrimSpace(body.Provider))
 	if !llmProviders[body.Provider] {
-		writeJSON(w, http.StatusBadRequest, errBody("provider must be one of: anthropic, openai, gemini"))
+		writeJSON(w, http.StatusBadRequest, errBody("provider must be one of: anthropic, openai, gemini, ollama, openai-compat"))
 		return
 	}
 	if strings.TrimSpace(body.Model) == "" {
 		writeJSON(w, http.StatusBadRequest, errBody("a model is required"))
 		return
 	}
+	// A self-hosted model (Ollama / vLLM / LM Studio) needs a base URL to reach it (a cloud provider
+	// uses its vendor default). The endpoint is the customer's own — stored plain, like Jira.BaseURL.
+	baseURL := strings.TrimSpace(body.BaseURL)
+	if selfHostedProvider(body.Provider) && baseURL == "" {
+		writeJSON(w, http.StatusBadRequest, errBody("a base_url is required for a self-hosted model (e.g. http://localhost:11434/v1)"))
+		return
+	}
+	if !selfHostedProvider(body.Provider) {
+		baseURL = "" // cloud providers use their fixed endpoint
+	}
 	t, err := d.Store.GetTenant(r.Context(), tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, errBody("tenant not found"))
 		return
 	}
-	cfg := &platform.LLMConfig{Provider: body.Provider, Model: strings.TrimSpace(body.Model)}
+	cfg := &platform.LLMConfig{Provider: body.Provider, Model: strings.TrimSpace(body.Model), BaseURL: baseURL}
 	if t.LLM != nil {
 		cfg.KeyRef = t.LLM.KeyRef // preserve the existing key by default
 	}
@@ -96,33 +112,54 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 			map[string]any{"tenant_id": tenantID, "provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey()},
 			"tenant LLM configured")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey()})
+	writeJSON(w, http.StatusOK, map[string]any{"provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey(), "base_url": cfg.BaseURL})
 }
 
-// ResolveTenantLLM returns the tenant's configured (provider, model, apiKey) for engine agent
-// work, opening the sealed key via the Vault. ok=false when no usable config exists, so the
-// caller falls back to the LLM_API_KEY / STRIX_LLM env default. The key is never logged.
-func (d Deps) ResolveTenantLLM(ctx context.Context, tenantID string) (provider, model, apiKey string, ok bool) {
+// resolveTenantLLMConfig returns the tenant's FULL LLM config (incl. BaseURL for a self-hosted model)
+// + the opened key. Usable (ok=true) when it carries a key (cloud) OR a self-hosted endpoint (Ollama
+// et al. may legitimately have no key). The key is never logged.
+func (d Deps) resolveTenantLLMConfig(ctx context.Context, tenantID string) (platform.LLMConfig, string, bool) {
 	t, err := d.Store.GetTenant(ctx, tenantID)
-	if err != nil || t.LLM == nil || !t.LLM.HasKey() || d.Vault == nil {
-		return "", "", "", false
+	if err != nil || t.LLM == nil {
+		return platform.LLMConfig{}, "", false
 	}
-	key, oerr := d.Vault.Open(t.LLM.KeyRef)
-	if oerr != nil || key == "" {
-		return "", "", "", false
+	key := ""
+	if t.LLM.HasKey() {
+		if d.Vault == nil {
+			return platform.LLMConfig{}, "", false
+		}
+		k, oerr := d.Vault.Open(t.LLM.KeyRef)
+		if oerr != nil || k == "" {
+			return platform.LLMConfig{}, "", false
+		}
+		key = k
 	}
-	return t.LLM.Provider, t.LLM.Model, key, true
+	// A config with neither a key nor a self-hosted endpoint can't drive anything.
+	if key == "" && !t.LLM.SelfHosted() {
+		return platform.LLMConfig{}, "", false
+	}
+	return *t.LLM, key, true
+}
+
+// ResolveTenantLLM returns the tenant's configured (provider, model, apiKey) for engine agent work.
+// ok=false when no usable config exists, so the caller falls back to the env default. The key is
+// never logged. A thin wrapper over resolveTenantLLMConfig, kept for its existing callers.
+func (d Deps) ResolveTenantLLM(ctx context.Context, tenantID string) (provider, model, apiKey string, ok bool) {
+	if cfg, key, o := d.resolveTenantLLMConfig(ctx, tenantID); o {
+		return cfg.Provider, cfg.Model, key, true
+	}
+	return "", "", "", false
 }
 
 // resolveAgentLLM returns the LLM that drives an L2 agent for this tenant: the tenant's OWN configured
-// model (the §18.5 "bring your own brain" — an MSP/customer key opened from the vault) when set +
-// buildable, else the operator-global model (d.AgentLLM, from cloudengine.LLMFromEnv). nil when neither
-// is configured. This is what makes the per-tenant LLM config LIVE instead of dormant.
+// model (the §18.5 "bring your own brain" — a cloud key or a SELF-HOSTED Ollama/vLLM endpoint) when
+// set + buildable, else the operator-global model (d.AgentLLM). nil when neither is configured.
 func (d Deps) resolveAgentLLM(ctx context.Context, tenantID string) pentest.SpecLLM {
-	// A tenant's OWN key (§18.5 "bring your own brain") costs the operator nothing, so it's
-	// allowed on ANY plan, Free included.
-	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
-		if c, ok := cloudengine.ClientFor(provider, model, key); ok {
+	// A tenant's OWN model (§18.5 "bring your own brain") costs the operator nothing, so it's
+	// allowed on ANY plan, Free included. ClientForURL threads the base URL so a self-hosted endpoint
+	// is actually reached (and handles anthropic — the UI default — which ClientFor used to drop).
+	if cfg, key, ok := d.resolveTenantLLMConfig(ctx, tenantID); ok {
+		if c, ok := cloudengine.ClientForURL(cfg.Provider, cfg.Model, key, cfg.BaseURL); ok {
 			return c // cloudengine.LLM satisfies pentest.SpecLLM (same Generate method)
 		}
 	}
