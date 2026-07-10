@@ -71,6 +71,40 @@ func TestPathCompliance_NilWhenNoCharacteristic(t *testing.T) {
 	}
 }
 
+// TestIssueCompliance_ReconstructsFromSnapshot proves the AI Cloud Engineer's own findings (an ARN node
+// list, not a rich cloudgraph.Path) fold into compliance by reconstructing the path's REAL edges from the
+// snapshot — the §8 emission-path-3 wiring the agent's findings used to bypass. Grounded (§10): the
+// controls come from real snapshot edges (internet reach, assume-role) + the real target node (PII →
+// sensitive), so a fabricated node list maps nothing.
+func TestIssueCompliance_ReconstructsFromSnapshot(t *testing.T) {
+	snap := handBuilt() // internet → alb → ec2 → web → data → pii (SensHigh)
+	c := IssueCompliance(snap, []string{cloudgraph.InternetID, "alb", "ec2", "web", "data", "pii"}, "pii")
+	if c == nil {
+		t.Fatal("a reconstructed internet→sensitive-data path must carry compliance")
+	}
+	// internet reach (CC6.6) + sensitive data (CC6.1) + assume-role hop (CC6.1) — the real edges.
+	if !containsAll(c.SOC2, []string{"CC6.6", "CC6.1"}) {
+		t.Errorf("SOC2 = %v, want CC6.6 (boundary) + CC6.1 (data), reconstructed from snapshot edges", c.SOC2)
+	}
+	if !containsAll(c.GDPR, []string{"Art. 32"}) {
+		t.Errorf("GDPR = %v, want Art. 32", c.GDPR)
+	}
+}
+
+func TestIssueCompliance_GroundingGuards(t *testing.T) {
+	snap := handBuilt()
+	if IssueCompliance(nil, []string{"a", "b"}, "b") != nil {
+		t.Error("a nil snapshot must map nothing (no snapshot to ground against)")
+	}
+	if IssueCompliance(snap, nil, "pii") != nil {
+		t.Error("an empty path must map nothing")
+	}
+	// nodes that don't exist as edges in the snapshot, target not sensitive → nothing to ground.
+	if IssueCompliance(snap, []string{"ghost-a", "ghost-b"}, "ghost-b") != nil {
+		t.Error("a node list with no real edges + a non-sensitive target must map nothing (§10 — no fabrication)")
+	}
+}
+
 func containsAll(have, want []string) bool {
 	set := map[string]bool{}
 	for _, h := range have {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudagent"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -72,7 +73,7 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	// "Not yet wired: cloudinvestigate.go"). Honors TSENGINE_L15_DISABLED (the ablation).
 	built := make([]types.Finding, 0, len(rep.Issues))
 	for i, is := range rep.Issues {
-		built = append(built, cloudIssueToFinding(d.newID("cloudagent")+"-"+strconv.Itoa(i), is))
+		built = append(built, cloudIssueToFinding(d.newID("cloudagent")+"-"+strconv.Itoa(i), is, cc.Snap))
 	}
 	stored := 0
 	saved := make([]types.Finding, 0, len(built))
@@ -126,8 +127,12 @@ func (d Deps) handleCloudInvestigationView(w http.ResponseWriter, r *http.Reques
 }
 
 // cloudIssueToFinding maps an agent-proven attack path to a stored finding (verified — the agent only
-// records paths it confirmed via the graph tools, §10).
-func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
+// records paths it confirmed via the graph tools, §10). It annotates the finding with the compliance
+// controls the path violates, reconstructed from the snapshot's REAL edges (cloudengine.IssueCompliance,
+// §8 emission-path 3) — so the AI Cloud Engineer's own findings fold into the compliance posture like
+// every engine-discovered path, instead of landing compliance-less. compliance.map later MERGES any CWE
+// mapping on top (§11), so this never clobbers.
+func cloudIssueToFinding(id string, is cloudagent.Issue, snap *cloudgraph.Snapshot) types.Finding {
 	sev := types.Severity(strings.ToLower(strings.TrimSpace(is.Severity)))
 	if sev == "" {
 		sev = types.SeverityHigh
@@ -147,6 +152,7 @@ func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
 		ID: id, RuleID: "cloudagent::attack-path", Tool: "cloudagent", Severity: sev,
 		Endpoint: is.Target, Title: title + " — reachable attack path", Description: desc,
 		VerificationStatus: types.VerificationVerified, RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
+		Compliance: cloudengine.IssueCompliance(snap, is.Path, is.Target),
 	}
 }
 

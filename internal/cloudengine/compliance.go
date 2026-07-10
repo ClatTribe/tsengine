@@ -1,9 +1,37 @@
 package cloudengine
 
 import (
+	"strings"
+
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// IssueCompliance maps an agent-recorded attack path (its ARN node list + target) to the compliance
+// controls it violates, by reconstructing the path's REAL edges from the snapshot and reusing
+// pathCompliance (§8 emission-path 3). This closes the gap where the AI Cloud Engineer's OWN findings
+// (cloudagent.Issue, which carry only a []string node list) bypassed the deterministic attack-path
+// compliance mapping every engine-discovered path already gets. Grounded (§10): only edges that
+// actually exist in the snapshot contribute, and the target's sensitivity/privilege come from the real
+// node — returns nil when the path is empty or no characteristic maps, never an over-claim.
+func IssueCompliance(snap *cloudgraph.Snapshot, nodes []string, target string) *types.Compliance {
+	if snap == nil || len(nodes) == 0 {
+		return nil
+	}
+	var edges []cloudgraph.Edge
+	for i := 0; i+1 < len(nodes); i++ {
+		for _, e := range snap.Edges {
+			if e.From == nodes[i] && e.To == nodes[i+1] {
+				edges = append(edges, e)
+			}
+		}
+	}
+	var tn *cloudgraph.Node
+	if strings.TrimSpace(target) != "" {
+		tn = snap.Node(target)
+	}
+	return pathCompliance(cloudgraph.Path{Nodes: nodes, Edges: edges}, tn)
+}
 
 // pathCompliance maps an attack path to the compliance controls it violates —
 // the compliance-auditor lens of the dual-view (CLAUDE.md §8). Honest-mapping
