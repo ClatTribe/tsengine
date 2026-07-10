@@ -64,6 +64,7 @@ func TestSARIF(t *testing.T) {
 const snykFixture = `{
   "projectName": "myapp",
   "displayTargetFile": "package.json",
+  "packageManager": "npm",
   "vulnerabilities": [
     {"id": "SNYK-JS-LODASH-567746", "title": "Prototype Pollution", "severity": "high",
      "packageName": "lodash", "version": "4.17.11",

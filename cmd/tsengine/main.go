@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -50,19 +51,19 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudtocode"
 	"github.com/ClatTribe/tsengine/internal/corpus/controlxref"
 	"github.com/ClatTribe/tsengine/internal/corpus/opencre"
-	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/exporter"
 	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/gate"
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/importers"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
 	"github.com/ClatTribe/tsengine/internal/operate"
-	"github.com/ClatTribe/tsengine/internal/osint"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
+	"github.com/ClatTribe/tsengine/internal/osint"
 	"github.com/ClatTribe/tsengine/internal/reachability"
 	"github.com/ClatTribe/tsengine/internal/replay"
 	"github.com/ClatTribe/tsengine/internal/report"
@@ -601,20 +602,20 @@ func runScan(argv []string) error {
 	}
 
 	scan := types.Scan{
-		ScanID:           scanID,
-		Asset:            assetTarget,
-		StartedAt:        started,
-		CompletedAt:      time.Now().UTC(),
-		Engine:           types.Engine{Version: Version, SandboxImageDigest: info.ImageDigest},
-		Corpus:           corpus,
-		AnchorsFired:     fired,
+		ScanID:            scanID,
+		Asset:             assetTarget,
+		StartedAt:         started,
+		CompletedAt:       time.Now().UTC(),
+		Engine:            types.Engine{Version: Version, SandboxImageDigest: info.ImageDigest},
+		Corpus:            corpus,
+		AnchorsFired:      fired,
 		DiscoveredSurface: surface,
-		FindingsRaw:      tr.Raw(),
-		FindingsEnriched: tr.Enriched(),
-		L15AuditLog:      tr.AuditLog(),
-		ChildAssets:      childAssets,
-		Partial:          partial,
-		StopReason:       stopReason,
+		FindingsRaw:       tr.Raw(),
+		FindingsEnriched:  tr.Enriched(),
+		L15AuditLog:       tr.AuditLog(),
+		ChildAssets:       childAssets,
+		Partial:           partial,
+		StopReason:        stopReason,
 	}
 
 	// Dual-view: for a cloud_account scan with an inventory snapshot, attach the
@@ -1589,7 +1590,8 @@ func runReachability(argv []string) error {
 	fs := flag.NewFlagSet("reachability", flag.ContinueOnError)
 	repo := fs.String("repo", ".", "path to the source repository to analyze")
 	pkg := fs.String("package", "", "vulnerable dependency import/module path (single-query mode)")
-	sca := fs.String("sca", "", "JSON file of SCA findings to triage (batch mode): [{id,cve,package,symbols,severity}]")
+	lang := fs.String("lang", "", "single-query language: go|javascript|python (default: auto when the repo is single-language)")
+	sca := fs.String("sca", "", "JSON file of SCA findings to triage (batch mode): [{id,cve,package,symbols,severity,ecosystem}]")
 	var symbols multiFlag
 	fs.Var(&symbols, "symbol", "vulnerable symbol (repeatable; empty = any symbol from the package)")
 	jsonOut := fs.Bool("json", false, "emit JSON")
@@ -1600,10 +1602,9 @@ func runReachability(argv []string) error {
 		return fmt.Errorf("provide --package <path> (single query) or --sca <findings.json> (batch)")
 	}
 
-	g, err := reachability.Extract(*repo)
-	if err != nil {
-		return fmt.Errorf("extract call graph: %w", err)
-	}
+	// Build one call graph per language present in the repo (Go / JS / Python); each SCA
+	// finding routes to the graph for its ecosystem (batch), or --lang selects it (single).
+	graphs := reachability.BuildGraphsOrGo(*repo)
 
 	if *sca != "" {
 		data, rerr := os.ReadFile(*sca) //nolint:gosec // operator-provided path
@@ -1614,7 +1615,7 @@ func runReachability(argv []string) error {
 		if jerr := json.Unmarshal(data, &findings); jerr != nil {
 			return fmt.Errorf("parse sca findings: %w", jerr)
 		}
-		results := reachability.TriageSCA(g, findings)
+		results := reachability.TriageMulti(graphs, findings)
 		if *jsonOut {
 			b, _ := json.MarshalIndent(results, "", "  ")
 			fmt.Println(string(b))
@@ -1630,6 +1631,10 @@ func runReachability(argv []string) error {
 		return nil
 	}
 
+	g, gerr := pickGraph(graphs, *lang)
+	if gerr != nil {
+		return gerr
+	}
 	v := reachability.Analyze(g, *pkg, symbols)
 	if *jsonOut {
 		b, _ := json.MarshalIndent(v, "", "  ")
@@ -1647,6 +1652,32 @@ func runReachability(argv []string) error {
 		fmt.Printf("NOT REACHABLE: %s is called only from non-entrypoint (dead) code: %s\n", *pkg, strings.Join(v.DirectHitters, ", "))
 	}
 	return nil
+}
+
+// pickGraph selects the call graph for single-query mode: the explicit --lang, else the
+// sole graph when the repo is single-language, else an error naming the choices.
+func pickGraph(graphs map[string]*reachability.Graph, lang string) (*reachability.Graph, error) {
+	if lang != "" {
+		if g := graphs[lang]; g != nil {
+			return g, nil
+		}
+		return nil, fmt.Errorf("no %s source detected in the repo (built: %s)", lang, strings.Join(graphLangs(graphs), ", "))
+	}
+	if len(graphs) == 1 {
+		for _, g := range graphs {
+			return g, nil
+		}
+	}
+	return nil, fmt.Errorf("repo has multiple languages (%s) — pass --lang to pick one for a single-package query", strings.Join(graphLangs(graphs), ", "))
+}
+
+func graphLangs(graphs map[string]*reachability.Graph) []string {
+	var out []string
+	for k := range graphs {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // multiFlag collects a repeatable string flag.
@@ -1697,10 +1728,7 @@ func runGate(argv []string) error {
 		findings = append(findings, gate.FromReport(rep)...)
 	}
 	if *scaPath != "" {
-		g, gerr := reachability.Extract(*repo)
-		if gerr != nil {
-			return fmt.Errorf("reachability extract: %w", gerr)
-		}
+		graphs := reachability.BuildGraphsOrGo(*repo)
 		data, rerr := os.ReadFile(*scaPath) //nolint:gosec // operator-provided path
 		if rerr != nil {
 			return fmt.Errorf("read --sca: %w", rerr)
@@ -1709,7 +1737,7 @@ func runGate(argv []string) error {
 		if jerr := json.Unmarshal(data, &sca); jerr != nil {
 			return fmt.Errorf("parse --sca: %w", jerr)
 		}
-		findings = append(findings, gate.FromReachability(reachability.TriageSCA(g, sca))...)
+		findings = append(findings, gate.FromReachability(reachability.TriageMulti(graphs, sca))...)
 	}
 
 	// policy: start from the JSON file (or defaults), then let explicitly-set flags win.

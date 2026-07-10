@@ -9,9 +9,9 @@ import "strings"
 // ecosystemToLang maps an SCA finding's ecosystem (as trivy/grype/osv emit it) to the
 // extractor Lang that owns it.
 var ecosystemToLang = map[string]string{
-	"go": "go", "gomod": "go", "golang": "go",
-	"npm": "javascript", "yarn": "javascript", "pnpm": "javascript", "node": "javascript", "javascript": "javascript",
-	"pip": "python", "pypi": "python", "poetry": "python", "python": "python",
+	"go": "go", "gomod": "go", "gomodules": "go", "golang": "go", "golangdep": "go",
+	"npm": "javascript", "yarn": "javascript", "pnpm": "javascript", "node": "javascript", "javascript": "javascript", "typescript": "javascript",
+	"pip": "python", "pypi": "python", "poetry": "python", "pipenv": "python", "python": "python",
 }
 
 // LangForEcosystem returns the extractor Lang for an SCA ecosystem string (case-insensitive),
@@ -39,6 +39,19 @@ func BuildGraphs(root string) map[string]*Graph {
 	return out
 }
 
+// BuildGraphsOrGo is the CLI/triage helper: BuildGraphs, but if no extractor detected a
+// manifest (e.g. a Go source dir with no go.mod), it falls back to a forced Go extraction
+// so a single-language Go triage still works — preserving the pre-multi-language behavior.
+func BuildGraphsOrGo(root string) map[string]*Graph {
+	graphs := BuildGraphs(root)
+	if len(graphs) == 0 {
+		if g, err := extractGo(root); err == nil && g != nil {
+			graphs["go"] = g
+		}
+	}
+	return graphs
+}
+
 // TriageMulti triages SCA findings across a polyglot repo. Each finding is analyzed against
 // the graph for its own ecosystem; a finding whose ecosystem has no built graph (unknown
 // language, or that manifest absent) is returned with an empty verdict + priority
@@ -46,13 +59,28 @@ func BuildGraphs(root string) map[string]*Graph {
 func TriageMulti(graphs map[string]*Graph, findings []SCAFinding) []TriageResult {
 	out := make([]TriageResult, 0, len(findings))
 	for _, f := range findings {
-		lang := LangForEcosystem(f.Ecosystem)
-		g := graphs[lang]
-		if lang == "" || g == nil {
+		g := graphForFinding(graphs, f)
+		if g == nil {
 			out = append(out, TriageResult{Finding: f, Priority: "unknown_ecosystem"})
 			continue
 		}
 		out = append(out, triageOne(g, f))
 	}
 	return out
+}
+
+// graphForFinding picks the graph a finding triages against: by its ecosystem when set;
+// else, when the finding carries no ecosystem AND the repo is single-language, the sole
+// graph (unambiguous — preserves back-compat for ecosystem-less SCA inputs). Multi-language
+// repo + no ecosystem is genuinely ambiguous → nil (reported unknown_ecosystem, §10).
+func graphForFinding(graphs map[string]*Graph, f SCAFinding) *Graph {
+	if lang := LangForEcosystem(f.Ecosystem); lang != "" {
+		return graphs[lang]
+	}
+	if f.Ecosystem == "" && len(graphs) == 1 {
+		for _, only := range graphs {
+			return only
+		}
+	}
+	return nil
 }
