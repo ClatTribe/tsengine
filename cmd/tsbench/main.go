@@ -116,6 +116,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench discover-suite: %v\n", err)
 			os.Exit(1)
 		}
+	case "integration":
+		if err := integrationCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench integration: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -138,6 +143,7 @@ Usage:
   tsbench xbow     --suite <validation-benchmarks-dir> [--dry-run] [--only ID,…] [--level N] [--out <prefix>]
   tsbench defense  [--scenarios <dir>] [--only <id>] [--mode substrate] [--out <scoreboard.md>]
   tsbench defense-ledger [--ledger <path>] [--out <file>]
+  tsbench integration [--out <scoreboard.md>] [--json]
   tsbench scoreboard [--results <json>] [--out <file>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
