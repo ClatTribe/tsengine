@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 
 	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
 )
 
 // integrationCmd runs the credential-free INTEGRATION-COVERAGE benchmark: every
@@ -19,6 +21,7 @@ func integrationCmd(argv []string) error {
 	fs := flag.NewFlagSet("integration", flag.ContinueOnError)
 	out := fs.String("out", "", "write the Markdown scoreboard to this file (default: stdout)")
 	jsonOut := fs.Bool("json", false, "emit the per-integration results as JSON instead of Markdown")
+	agent := fs.Bool("agent", false, "ALSO run the LLM agent layer (cloud+code investigate) — needs a model via LLMFromEnv (the dev proxy or a local Ollama)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -26,11 +29,31 @@ func integrationCmd(argv []string) error {
 	results := bench.RunIntegrationCoverage()
 	summary := bench.SummarizeIntegrationCoverage(results)
 
+	// The LLM agent layer is opt-in (it needs a brain). LLMFromEnv resolves the dev proxy
+	// (frontier Claude) or a local Ollama — credential-free either way. Absent → honest skip.
+	var agentResults []bench.AgentResult
+	agentRan := false
+	if *agent {
+		if llm, ok := cloudengine.LLMFromEnv(); ok {
+			agentResults = bench.RunAgentCoverage(context.Background(), llm)
+			agentRan = true
+		}
+	}
+
 	if *jsonOut {
-		b, _ := json.MarshalIndent(map[string]any{"summary": summary, "integrations": results}, "", "  ")
+		payload := map[string]any{"summary": summary, "integrations": results}
+		if agentRan {
+			payload["agents"] = agentResults
+		}
+		b, _ := json.MarshalIndent(payload, "", "  ")
 		fmt.Println(string(b))
 	} else {
 		md := bench.RenderIntegrationCoverageMarkdown(results)
+		if agentRan {
+			md += bench.RenderAgentCoverageMarkdown(agentResults)
+		} else if *agent {
+			md += "\n## AI agent layer\n\n_SKIPPED — no LLM configured. Set `LLM_BASE_URL` to the dev proxy (frontier Claude) or a local Ollama (`http://localhost:11434/v1`), plus `LLM_MODEL` + `LLM_API_KEY`, then re-run with `--agent`._\n"
+		}
 		if *out != "" {
 			if err := os.WriteFile(*out, []byte(md), 0o644); err != nil { //nolint:gosec // operator-controlled path
 				return fmt.Errorf("write scoreboard: %w", err)
