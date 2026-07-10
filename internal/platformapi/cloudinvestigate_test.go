@@ -59,7 +59,7 @@ func TestCloudInvestigate_RunsAndViewReturnsPaths(t *testing.T) {
 	}
 
 	// Seed a stored cloud-agent attack-path finding (as a real investigation would) and confirm the view surfaces it.
-	_ = st.PutFinding(context.Background(), "t1", cloudIssueToFinding("ca-1", cloudagentIssueFixture()))
+	_ = st.PutFinding(context.Background(), "t1", cloudIssueToFinding("ca-1", cloudagentIssueFixture(), nil))
 	v := do(h, "GET", "/v1/cloud/investigate", "t1", "")
 	var view struct {
 		Total   int             `json:"total"`
@@ -86,7 +86,7 @@ func TestCloudInvestigate_RunsAndViewReturnsPaths(t *testing.T) {
 }
 
 func TestCloudIssueToFinding_Maps(t *testing.T) {
-	f := cloudIssueToFinding("ca-9", cloudagentIssueFixture())
+	f := cloudIssueToFinding("ca-9", cloudagentIssueFixture(), nil)
 	if f.RuleID != "cloudagent::attack-path" || f.Tool != "cloudagent" || f.Endpoint != "arn:aws:s3:::secrets" {
 		t.Errorf("mapping wrong: %+v", f)
 	}
@@ -105,8 +105,8 @@ func TestSeedRisks_AgentFindingsProposeVCISORisks(t *testing.T) {
 	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"}
 
 	// Two proven cloud-agent attack paths (high+) land as findings...
-	_ = st.PutFinding(context.Background(), "t1", cloudIssueToFinding("ca-1", cloudagentIssueFixture()))
-	_ = st.PutFinding(context.Background(), "t1", cloudIssueToFinding("ca-2", cloudagentIssueFixture()))
+	_ = st.PutFinding(context.Background(), "t1", cloudIssueToFinding("ca-1", cloudagentIssueFixture(), nil))
+	_ = st.PutFinding(context.Background(), "t1", cloudIssueToFinding("ca-2", cloudagentIssueFixture(), nil))
 
 	// ...seedRisks clusters them into a candidate Risk for the named vCISO to judge.
 	seeded, err := d.seedRisks(context.Background(), "t1")
@@ -130,7 +130,7 @@ func TestSeedRisks_AgentFindingsProposeVCISORisks(t *testing.T) {
 // first-class (the documented §11 follow-on, now wired).
 func TestCloudAgentFindingsGetEnriched(t *testing.T) {
 	t.Setenv("TSENGINE_L15_DISABLED", "") // ensure the chain runs even if the ambient env disabled it
-	raw := cloudIssueToFinding("ca-raw", cloudagentIssueFixture())
+	raw := cloudIssueToFinding("ca-raw", cloudagentIssueFixture(), nil)
 	if raw.Confidence != 0 {
 		t.Fatalf("precondition: a raw agent finding should have no confidence scalar, got %v", raw.Confidence)
 	}
