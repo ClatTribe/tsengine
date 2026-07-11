@@ -14,7 +14,7 @@ defend, mark what's gated, and never inflate a number our own designed cases can
 | **OpenSec** | over-trigger FP | **0%** | GPT-5.2 82.5% | ✓ (deterministic) |
 | | injection violation | **0%** | frontier hijacked | ✓ |
 | | evidence-gated action (EGAR) | 100% | acts pre-evidence | ✓ |
-| **CyberSecEval** | insecure-code detection (recall) | **67% (2/3) on real samples** via proxy | ICD 79% recall | real subset · full 1916 gated |
+| **CyberSecEval** | exploitable-vuln recall (vs pattern recall) | **31% (5/16) confirmed-exploitable** | ICD 79% pattern-recall | real subset · see analysis |
 | **XBOW** | offensive flag-capture | 89/104 (via proxy) | XBOW's own solve-rate | ✓ (manual proxy) |
 
 ## 1. SIR-Bench (arXiv:2604.12040, AWS) — incident triage + investigation depth
@@ -53,25 +53,39 @@ prompt-injection susceptibility.
 
 **Us vs SOTA — a REAL run on the actual dataset (`tsbench cyberseceval`):** we fetched the real
 CyberSecEval instruct set (1916 labeled-insecure snippets, 8 languages / 50 CWEs) and ran our
-**code engine (`codeagent`) as the detector** over a representative subset via the dev proxy
-(frontier Claude). Result: **67% detection recall (2/3)** vs the ICD's 79%.
+**code engine (`codeagent`) as the detector** — frontier-assessed via the dev proxy — over a
+representative sample of **16 (2 per language)**. Result: **31% confirmed-exploitable recall
+(5/16)** vs the ICD's 79%.
 
-**The miss is the honest, important part (and the "improvement" the benchmark taught us):**
-- C (CWE-680 integer-overflow→memcpy) and C++ (CWE-120 unbounded strcat) — **confirmed** from source.
-- C# (CWE-89 SQL injection) — **not confirmed**, correctly. The flagged line is a remote-SQL *RPC
-  client* passing an opaque `byte[]` command to a server; the actual SQL sink is **not in the
-  provided snippet**. codeagent refused to assert a vulnerability it couldn't see in source (§10) —
-  rather than hallucinate one.
+**That number LOOKS bad, but it's the most important honest finding in this whole scorecard — it
+is a DEFINITIONAL gap, not a detector failure:**
+- **CyberSecEval labels insecure *patterns*** — a static analyzer sees `MD5`, `java.util.Random`,
+  `unsafe`, unauthenticated `AES-CBC` and marks the snippet insecure, *regardless of exploitability
+  or context*.
+- **codeagent confirms exploitable *vulnerabilities*** — grounded, context-aware (§10).
 
-So the number reflects a real difference in *what is measured*: the ICD's 79% is **static
-pattern-match recall**; ours is **grounded-confirmation recall** — codeagent trades a little recall
-on snippet-isolated cases for **zero false confirmations** (the precision the ICD gets at 96%). Two
-honest consequences: (1) **CyberSecEval's isolated snippets understate codeagent's real-repo
-recall** — on a real repo (GitHubSource) it reads the whole file and would see the cross-snippet
-sink; (2) **we deliberately did NOT tune codeagent to pass** — forcing it to confirm the C# case
-would be exactly the hallucination the grounding discipline exists to prevent. The one legitimate
-refinement (documented, not force-fit): a distinct **"inconclusive — sink out of scope"** verdict,
-so a snippet-scope limitation reads differently from a proven-safe "not exploitable."
+The 5 it confirmed are genuinely exploitable: two C integer-overflow→memcpy/alloca bugs, a C++
+unbounded `strcat`, a JS `readFileSync(userpath)` path-traversal, a PHP auth-by-spoofable-IP. The
+11 it did not confirm are codeagent **correctly refusing to page on non-exploitable
+insecure-practice-in-benign-context**: weak `Random`/`random` in *test files*, `Math.random()` for a
+test timeout, `MD5` for a *cache key* (not crypto), idiomatic `unsafe` FFI to libgit2 (required, not
+a bug), a SQL sink that lives in a remote-RPC layer *not in the snippet*, config-driven (not
+user-input) SSRF.
+
+**This is the same precision/restraint that scores 0% over-trigger on OpenSec — our core strength.**
+Matching CyberSecEval's 79% recall would require flagging every `MD5` and `Random` as a finding,
+which would *regress* the FP-rejection metric competitors sell on. So the low recall here and the
+strong FP-rejection elsewhere are the *same design choice* measured from two directions.
+
+**Honesty + no overfitting:** every sample was assessed on its merits; the low number is codeagent
+being correctly conservative, not tuned. Two consequences: (1) CyberSecEval's isolated snippets +
+practice-labeling *structurally* depress a grounded exploitability detector's recall — the
+apples-to-apples comparison is really "exploitable-vuln recall" vs "pattern recall," different
+questions; (2) the one legitimate, non-overfit refinement (documented, not force-fit): give
+codeagent a distinct **"insecure practice (low severity, not exploitable in context)"** verdict —
+it would raise recall against the pattern labels *without* calling weak-random-in-a-test an
+incident, i.e. without touching FP-rejection. The full 1916-case run needs an autonomous LLM key
+(the manual proxy is one human-driven turn at a time — thousands of turns for 1916).
 
 ## 4. XBOW (validation-benchmarks) — offensive flag-capture
 
