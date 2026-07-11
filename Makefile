@@ -146,6 +146,10 @@ demo-secure: ## run the demo with the ENGINE ON + hardened Docker sandboxes (one
 demo-scan-asset: ## prove the secure-Docker scan path per asset type (container + repo, no creds)
 	./scripts/demo-scan-asset.sh
 
+.PHONY: xbow-regression
+xbow-regression: ## fast deterministic guard for the XBOW offensive benchmark (unit tests + ledger baseline; --live for full flag-capture)
+	./scripts/xbow-regression.sh
+
 .PHONY: pentest-e2e
 pentest-e2e: ## live recall + FP-control of the AI pentester vs Juice Shop / VAmPI / a clean target (needs an LLM env — see docs/pentest-e2e-validation.md)
 	./scripts/pentest-agent-e2e.sh all
