@@ -116,6 +116,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench discover-suite: %v\n", err)
 			os.Exit(1)
 		}
+	case "triage":
+		if err := triageCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench triage: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
