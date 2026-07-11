@@ -116,6 +116,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench discover-suite: %v\n", err)
 			os.Exit(1)
 		}
+	case "sirbench":
+		if err := sirbenchCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench sirbench: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
