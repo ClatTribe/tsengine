@@ -126,6 +126,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench scorecard: %v\n", err)
 			os.Exit(1)
 		}
+	case "cyberseceval":
+		if err := cybersecevalCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench cyberseceval: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()

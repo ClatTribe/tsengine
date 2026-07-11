@@ -14,7 +14,7 @@ defend, mark what's gated, and never inflate a number our own designed cases can
 | **OpenSec** | over-trigger FP | **0%** | GPT-5.2 82.5% | ✓ (deterministic) |
 | | injection violation | **0%** | frontier hijacked | ✓ |
 | | evidence-gated action (EGAR) | 100% | acts pre-evidence | ✓ |
-| **CyberSecEval** | insecure-code detection | 100% on the demo pair (frontier via proxy) | ICD 96% prec / 79% rec | representative · full run gated |
+| **CyberSecEval** | insecure-code detection (recall) | **67% (2/3) on real samples** via proxy | ICD 79% recall | real subset · full 1916 gated |
 | **XBOW** | offensive flag-capture | 89/104 (via proxy) | XBOW's own solve-rate | ✓ (manual proxy) |
 
 ## 1. SIR-Bench (arXiv:2604.12040, AWS) — incident triage + investigation depth
@@ -51,14 +51,27 @@ is the gated headline — but the architecture guarantees the restraint the metr
 time across models), and an Insecure-Code Detector (**96% precision / 79% recall**). Also
 prompt-injection susceptibility.
 
-**Us vs SOTA:** we're not a code-*generation* model, so the relevant comparison is *detection* —
-our **code engine (`codeagent`) as the detector**. In the proxy-driven run it confirmed the real
-string-concat SQLi and **refused** the parameterized-query decoy (precision 100% / recall 100% on
-that demonstration pair, 0 invented). To produce the comparable headline (precision/recall vs the
-ICD's 96/79), run `codeagent` over CyberSecEval's public insecure-code samples with a real LLM key
-— **gated on the dataset + key**, but the grounding discipline (a deterministic predicate
-disposes) is the same property that gives the ICD its 96% precision. On the injection axis, our
-0% injection-violation (row 2) is the direct answer.
+**Us vs SOTA — a REAL run on the actual dataset (`tsbench cyberseceval`):** we fetched the real
+CyberSecEval instruct set (1916 labeled-insecure snippets, 8 languages / 50 CWEs) and ran our
+**code engine (`codeagent`) as the detector** over a representative subset via the dev proxy
+(frontier Claude). Result: **67% detection recall (2/3)** vs the ICD's 79%.
+
+**The miss is the honest, important part (and the "improvement" the benchmark taught us):**
+- C (CWE-680 integer-overflow→memcpy) and C++ (CWE-120 unbounded strcat) — **confirmed** from source.
+- C# (CWE-89 SQL injection) — **not confirmed**, correctly. The flagged line is a remote-SQL *RPC
+  client* passing an opaque `byte[]` command to a server; the actual SQL sink is **not in the
+  provided snippet**. codeagent refused to assert a vulnerability it couldn't see in source (§10) —
+  rather than hallucinate one.
+
+So the number reflects a real difference in *what is measured*: the ICD's 79% is **static
+pattern-match recall**; ours is **grounded-confirmation recall** — codeagent trades a little recall
+on snippet-isolated cases for **zero false confirmations** (the precision the ICD gets at 96%). Two
+honest consequences: (1) **CyberSecEval's isolated snippets understate codeagent's real-repo
+recall** — on a real repo (GitHubSource) it reads the whole file and would see the cross-snippet
+sink; (2) **we deliberately did NOT tune codeagent to pass** — forcing it to confirm the C# case
+would be exactly the hallucination the grounding discipline exists to prevent. The one legitimate
+refinement (documented, not force-fit): a distinct **"inconclusive — sink out of scope"** verdict,
+so a snippet-scope limitation reads differently from a proven-safe "not exploitable."
 
 ## 4. XBOW (validation-benchmarks) — offensive flag-capture
 

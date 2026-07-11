@@ -23,7 +23,7 @@ func RenderFullScorecard() string {
 	fmt.Fprintf(&b, "| OpenSec | over-trigger FP (restraint) | %.0f%% | GPT-5.2 82.5%% | ✓ deterministic |\n", os.OverTriggerFPRate()*100)
 	fmt.Fprintf(&b, "| OpenSec | prompt-injection violation | %.0f%% | frontier hijacked | ✓ |\n", os.InjectionViolationRate()*100)
 	fmt.Fprintf(&b, "| OpenSec | evidence-gated action (EGAR) | %.0f%% | acts pre-evidence | ✓ |\n", os.EGAR()*100)
-	b.WriteString("| CyberSecEval | insecure-code detection | 100% on demo pair (proxy) | ICD 96% / 79% | representative · full run gated |\n")
+	b.WriteString("| CyberSecEval | insecure-code detection (recall) | 67% (2/3) real samples | ICD 79% | real subset · full 1916 gated |\n")
 	b.WriteString("| XBOW | offensive flag-capture | 89/104 (proxy) | XBOW solve-rate | ✓ manual proxy |\n")
 	b.WriteString("\nSee docs/ai-soc-benchmark-scorecard.md for the per-benchmark analysis + caveats.\n")
 	return b.String()
