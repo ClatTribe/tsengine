@@ -33,63 +33,58 @@ This is the yardstick. Both scenarios map directly onto detectors we *already ru
 deterministically*: S3 exposure → `clouddrift.Diff` (`resource-became-public`); Entra failed-login
 spray → `identitythreat.Detect` (`password_spray` / `distributed_spray`).
 
-## Our result on the same two scenarios
+## What we CAN run — a calibration check, not a scoreboard
 
-`tsbench csa` runs faithful reconstructions of the two scenario types through our real detectors
-and scores triage accuracy — **reach the correct conclusion**: escalate a real threat, and (the
-hard half) *do not* escalate a benign decoy.
+`tsbench csa` runs faithful reconstructions of the two scenario types through our real detectors.
+It is a **calibration / regression check**: do real threats fire, and do benign decoys stay silent.
+On the 8 reconstructed episodes the detectors catch every threat and reject every decoy (an
+intentionally-public static-site bucket, a re-tagged still-private bucket, a two-typos-then-success
+login, failures spread over 9 hours) — the restraint half a naive always-escalate agent fails.
 
-| Scenario | Our engine (autonomous) | CSA with-AI | CSA manual |
-|---|---|---|---|
-| AWS S3 / GuardDuty bucket-exposure | **100% (4/4)** | 97% | 86% |
-| Microsoft Entra failed-login | **100% (4/4)** | 85% | 81% |
+**This is NOT a comparison to Dropzone, and it is important to say why it can't be:**
 
-8/8, including the 4 restraint decoys (an intentionally-public static-site bucket, a re-tagged but
-still-private bucket, a two-typos-then-success login, failures spread over 9 hours). A naive
-always-escalate agent scores 50% on this set — the decoys are what make the number mean something.
+- **The episodes are self-authored.** We know exactly what `clouddrift.Diff` and
+  `identitythreat.Detect` do, so we can trivially write cases they pass. A 100% pass rate on our own
+  8 cases is a *circular measurement* — it proves the detectors are wired and calibrated, nothing
+  more. Reporting it as "100% vs Dropzone's 97%" would be overfitting dressed as a benchmark, and
+  we don't do that.
+- **Different sample and mode.** Dropzone's 97%/85% is over **148 real analysts** on **data we
+  don't have**, measuring *humans with AI-assist*. Ours is an autonomous detector over 8 cases we
+  wrote. These numbers are not comparable and are deliberately never placed in the same column.
 
-**Crucially, this number is AUTONOMOUS and reproducible with no LLM key and no proxy** — it runs
-in CI. That closes the credibility hole in our other benchmark work (XBOW, CyberSecEval), where
-every number was produced by a human-driven proxy one turn at a time.
+What the check legitimately buys us: it's **autonomous and reproducible with no LLM key or proxy**,
+so it runs in CI as a regression guard — and it caught a real drift-baseline bug while being built.
+That's its whole value. It is a unit-test-grade calibration probe, not evidence of competitive rank.
 
-## What this is NOT — read before quoting it
+## So how good ARE we vs competitors? Honestly: not yet measured
 
-- **A reproduction, not the CSA's data.** Their per-scenario telemetry isn't public. These are
-  faithful reconstructions of the two scenario *types* from the published description, labeled by
-  real-world correctness — not reverse-engineered to pass (the detectors run as-is; see the decoys).
-- **A different operating mode.** The CSA measured *humans* (with vs without AI-assist). Ours is
-  the engine triaging *autonomously*. Same task and same ground-truth axis, but the numbers sit
-  **side-by-side, not head-to-head** — 100% autonomous-correct on 8 episodes is not the same claim
-  as "beats Dropzone's 97% on 148 analysts."
-- **A small set.** Eight episodes. It demonstrates the capability is there and correctly
-  calibrated; it is not a statistically-powered win.
-- **Two of the four CSA measures.** We score accuracy + consistency (deterministic → 0% run-to-run
-  variance). Speed and human-detail are human-workflow measures that don't map to an autonomous
-  engine.
-
-## Where our architecture should genuinely win — and why
-
-The CSA/OpenSec literature's consistent finding is that the AI-SOC failure mode is **not detection,
-it's restraint** — frontier agents over-escalate on scary-looking or prompt-injected alerts. Our
-design makes over-escalation structurally hard: the LLM *proposes*, a deterministic predicate
-*disposes* (§10), and every mutation is HITL-gated (§18.2 inv 3). The restraint decoys in this
-benchmark are exactly that property, measured. That is the dimension to lead with competitively —
-not raw recall.
-
-## What would turn "side-by-side" into a real head-to-head
-
-Three gated inputs, in priority order:
+There is no credible number today, and manufacturing one from self-authored cases would be the
+overfitting the reader should rightly distrust. A real comparison requires an **external labeled
+dataset we did not author** — the only thing that removes the circularity. The candidates, all
+gated, in priority order:
 
 1. **Competitor trial accounts + a shared labeled alert corpus.** Sign up for Dropzone/Prophet
    trials, replay the same labeled alerts through them and through us, score identically. This is
    the gold standard and the only true head-to-head; it needs procurement + a corpus, not code.
-2. **The CSA's actual scenario telemetry** (if they release it) — drops straight into `tsbench csa`.
-3. **An autonomous LLM key** so the *L2 agent* (not just the deterministic substrate) runs the
-   scenarios and the broader benchmarks (SIR-Bench 794 cases, CyberSecEval 1916) at scale, instead
-   of the manual proxy.
+2. **A public labeled SOC/alert dataset we didn't build.** Whatever exists that maps onto our
+   detectors — the mapping is itself a judgment call, so this is weaker than (1), but it's external.
+3. **The CSA's actual scenario telemetry** (if they release it) — drops straight into `tsbench csa`.
+4. **An autonomous LLM key** so the *L2 agent* (not just the deterministic substrate) runs the
+   scenarios and the broader benchmarks (SIR-Bench 794, CyberSecEval 1916) at scale, instead of the
+   manual proxy.
 
-The harness, the scenario reconstructions, and the honest scoring are built (`tsbench csa`). The
-remaining step to an audited win is procurement/credentials, not engineering.
+The harness and the honest scoring are built (`tsbench csa`); the remaining step to an *audited*
+number is procurement/credentials, not engineering. **Until one of the above lands, the correct
+public statement is "not yet independently measured," not a percentage.**
+
+## The one thing we can claim without a benchmark — architecturally
+
+The CSA/OpenSec literature's consistent finding is that the AI-SOC failure mode is **not detection,
+it's restraint** — frontier agents over-escalate on scary-looking or prompt-injected alerts. Our
+design makes over-escalation *structurally* hard: the LLM *proposes*, a deterministic predicate
+*disposes* (§10), every mutation is HITL-gated (§18.2 inv 3). That is an architecture property, not
+a benchmark score — provable by inspection, and the honest thing to lead with competitively while
+the measured comparison stays gated.
 
 ---
 

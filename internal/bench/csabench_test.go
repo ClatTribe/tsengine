@@ -28,7 +28,8 @@ func TestCSABench_RunsBothScenarios(t *testing.T) {
 		if threats == 0 {
 			t.Errorf("%s: no real threats — recall untested", r.Key)
 		}
-		t.Logf("%s: %.0f%% (%d/%d) — CSA with-AI %d%%, manual %d%%", r.Key, r.Accuracy(), r.Correct, r.Total, r.AIBench, r.Manual)
+		// calibration only — NOT compared to the CSA number (self-authored → circular).
+		t.Logf("%s calibration: %d/%d episodes correctly classified (%d threats, %d decoys)", r.Key, r.Correct, r.Total, threats, decoys)
 	}
 }
 

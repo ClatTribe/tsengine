@@ -40,8 +40,12 @@ import (
 //     (d) NO OVERFIT. Detectors run AS-IS; the set includes restraint decoys that a naive
 //     always-escalate agent would get WRONG, so accuracy is not gameable by crying wolf.
 //
-// This is the honest ceiling of a no-gated-input comparison: our autonomous number on the same
-// task shape, ranked next to the published competitor numbers, every caveat on the label.
+// IMPORTANT — this is a CALIBRATION check, NOT a competitor scoreboard. The episodes are
+// self-authored, so a 100% pass here is circular (we know what the detectors do). It proves the
+// detectors are wired + correctly reject decoys; it proves NOTHING about out-performing Dropzone
+// et al. A real comparison needs an EXTERNAL labeled dataset / the CSA telemetry / competitor
+// trials — none of which we have. The render says this loudly and does NOT put our rate in the
+// same column as the competitor number.
 
 // CSAScenario is one of the two CSA scenarios, as a set of labeled triage episodes.
 type CSAScenario struct {
@@ -228,26 +232,47 @@ func RunCSABench() []CSAResult {
 	return out
 }
 
-// RenderCSAMarkdown renders our autonomous triage accuracy vs the CSA published numbers.
+// RenderCSAMarkdown renders the CSA-scenario CALIBRATION check. It deliberately does NOT report an
+// accuracy percentage ranked against the competitor number — 8 self-authored episodes at 100% is a
+// circular measurement (we know what the detectors do, so we can trivially write cases they pass).
+// It reports detector calibration (threats caught / decoys rejected) and states the competitor
+// number as NON-COMPARABLE context, not a scoreboard.
 func RenderCSAMarkdown(results []CSAResult) string {
 	var b strings.Builder
-	b.WriteString("\n## CSA \"Beyond the Hype\" — autonomous triage accuracy vs the published competitor numbers\n\n")
-	b.WriteString("_The only independent, public AI-SOC benchmark with named competitor numbers (Cloud Security ")
-	b.WriteString("Alliance, Oct 2025; 148 CSA-run analysts). We run the SAME two scenario TYPES through our engine's ")
-	b.WriteString("DETERMINISTIC detectors — so the number is autonomous + reproducible + needs NO LLM key/proxy._\n\n")
-	b.WriteString("| Scenario | Our engine (autonomous) | CSA with-AI (Dropzone) | CSA manual |\n|---|---|---|---|\n")
+	b.WriteString("\n## CSA \"Beyond the Hype\" scenarios — detector calibration check (NOT a competitor scoreboard)\n\n")
+	b.WriteString("_The two scenario TYPES from the CSA AI-SOC study, run through our deterministic detectors as a ")
+	b.WriteString("reproducible CALIBRATION smoke test: do real threats fire and benign decoys stay silent. This is ")
+	b.WriteString("NOT an accuracy benchmark — the episodes are self-authored, so a passing rate here proves the ")
+	b.WriteString("detectors are wired + calibrated, NOT that we out-perform anyone._\n\n")
+	b.WriteString("⚠️ **We cannot claim to beat the competitors from this.** The CSA study reports Dropzone-with-AI at ")
+	b.WriteString("97%/85% on **148 real analysts** over data we don't have; this harness is **8 episodes we wrote ")
+	b.WriteString("ourselves**. Different sample, different mode (human+AI vs autonomous), and self-authored — so the ")
+	b.WriteString("numbers are NOT comparable and are not placed in the same table on purpose.\n\n")
+	b.WriteString("| Scenario | Threats caught | Decoys rejected | (CSA context, not comparable) |\n|---|---|---|---|\n")
 	for _, r := range results {
-		fmt.Fprintf(&b, "| %s | **%.0f%%** (%d/%d) | %d%% | %d%% |\n", r.Name, r.Accuracy(), r.Correct, r.Total, r.AIBench, r.Manual)
+		var tW, tG, dW, dG int
+		for _, d := range r.Detail {
+			if d.Want {
+				tW++
+				if d.Got {
+					tG++
+				}
+			} else {
+				dW++
+				if !d.Got {
+					dG++
+				}
+			}
+		}
+		fmt.Fprintf(&b, "| %s | %d/%d | %d/%d | Dropzone+human %d%% · manual %d%% |\n", r.Name, tG, tW, dG, dW, r.AIBench, r.Manual)
 	}
-	b.WriteString("\n**Honest reading (do not over-quote):**\n")
-	b.WriteString("- REPRODUCTION, not the CSA's data (their per-scenario telemetry isn't public) — faithful ")
-	b.WriteString("reconstructions of the two scenario TYPES, labeled by real-world correctness.\n")
-	b.WriteString("- DIFFERENT MODE: CSA measured HUMANS (with vs without AI-assist); ours is the engine triaging ")
-	b.WriteString("AUTONOMOUSLY. Same task + ground-truth axis, different measurement — the numbers sit side-by-side, not head-to-head.\n")
-	b.WriteString("- NO OVERFIT: detectors run AS-IS; each scenario includes restraint DECOYS (an intentionally-public ")
-	b.WriteString("bucket, sub-threshold failures) that a naive always-escalate agent gets WRONG — accuracy is not gameable by crying wolf.\n")
-	b.WriteString("- This is a SMALL set: the real head-to-head needs the CSA telemetry (gated) or competitor trial ")
-	b.WriteString("accounts + a labeled corpus. This is the honest ceiling of a no-gated-input comparison.\n\n")
+	b.WriteString("\n**What this does and does not establish:**\n")
+	b.WriteString("- ✅ ESTABLISHES: the S3-exposure + identity-spray detectors fire on real threats and correctly ")
+	b.WriteString("REJECT benign decoys (an intentionally-public bucket, sub-threshold failures) — the restraint half ")
+	b.WriteString("a naive always-escalate agent fails. Autonomous, no LLM/proxy, so it runs in CI as a regression guard.\n")
+	b.WriteString("- ❌ DOES NOT ESTABLISH: any comparison to Dropzone/Prophet/etc. That needs an EXTERNAL labeled ")
+	b.WriteString("dataset we didn't author, the CSA's actual telemetry (gated), or competitor trial accounts + a shared ")
+	b.WriteString("corpus. Until then the honest answer to \"how good vs competitors\" is: not measured.\n\n")
 	for _, r := range results {
 		fmt.Fprintf(&b, "### %s — %d/%d correct\n\n", r.Name, r.Correct, r.Total)
 		sort.SliceStable(r.Detail, func(i, j int) bool { return r.Detail[i].ID < r.Detail[j].ID })
