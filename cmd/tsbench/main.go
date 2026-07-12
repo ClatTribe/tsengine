@@ -116,6 +116,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench discover-suite: %v\n", err)
 			os.Exit(1)
 		}
+	case "csa":
+		if err := csaCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench csa: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -139,6 +144,7 @@ Usage:
   tsbench defense  [--scenarios <dir>] [--only <id>] [--mode substrate] [--out <scoreboard.md>]
   tsbench defense-ledger [--ledger <path>] [--out <file>]
   tsbench scoreboard [--results <json>] [--out <file>]
+  tsbench csa      [--json] [--out <file>]   # CSA "Beyond the Hype" AI-SOC triage accuracy vs Dropzone/manual
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
