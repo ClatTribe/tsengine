@@ -35,15 +35,16 @@ import (
 
 // CVEPatchInstance is one real app-sec CVE the engineer must fix.
 type CVEPatchInstance struct {
-	ID        string   `json:"id"`         // e.g. "flask-CVE-2019-1010083"
-	CVE       string   `json:"cve"`        // the real CVE id (external provenance)
-	FixCommit string   `json:"fix_commit"` // URL/sha of the real fixing commit (external provenance)
-	Lang      string   `json:"lang"`       // js|ts|python|go|java|php|ruby …
-	Class     string   `json:"class"`      // sqli|xss|idor|ssti|lfi|rce|… (codeagent.Finding.Class)
-	Endpoint  string   `json:"endpoint"`   // the vulnerable route/location
-	Detail    string   `json:"detail"`     // the confirmed-vuln rationale (grounds the fix; from the advisory)
-	VulnFiles []VFile  `json:"vuln_files"` // the offending file(s) at the pre-fix commit (the build context)
-	GoldFiles []string `json:"gold_files"` // the file paths the REAL fixing commit modified (localization oracle)
+	ID        string      `json:"id"`               // e.g. "flask-CVE-2019-1010083"
+	CVE       string      `json:"cve"`              // the real CVE id (external provenance)
+	FixCommit string      `json:"fix_commit"`       // URL/sha of the real fixing commit (external provenance)
+	Lang      string      `json:"lang"`             // js|ts|python|go|java|php|ruby …
+	Class     string      `json:"class"`            // sqli|xss|idor|ssti|lfi|rce|… (codeagent.Finding.Class)
+	Endpoint  string      `json:"endpoint"`         // the vulnerable route/location
+	Detail    string      `json:"detail"`           // the confirmed-vuln rationale (grounds the fix; from the advisory)
+	VulnFiles []VFile     `json:"vuln_files"`       // the offending file(s) at the pre-fix commit (the build context)
+	GoldFiles []string    `json:"gold_files"`       // the file paths the REAL fixing commit modified (localization oracle)
+	Verify    *VerifySpec `json:"verify,omitempty"` // optional execution oracle (real PoC + regression) → auto-scores `fixed`
 }
 
 // VFile is one source file the engineer may rewrite (pre-fix content).
@@ -122,6 +123,11 @@ func RunCVEPatchBench(ctx context.Context, instances []CVEPatchInstance, llm cod
 			if gold[pf.Path] {
 				r.Localized = true
 			}
+		}
+		// EXECUTION ORACLE disposes the fix verdict (never the model's own claim, §10). No spec/runtime
+		// → stays JudgeUnknown (honest: no oracle, no verdict).
+		if in.Verify != nil {
+			r.Fixed = VerifyPatch(ctx, p, in.Verify)
 		}
 		out = append(out, r)
 	}
