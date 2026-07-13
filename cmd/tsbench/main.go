@@ -116,6 +116,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench discover-suite: %v\n", err)
 			os.Exit(1)
 		}
+	case "cvepatch":
+		if err := cvepatchCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench cvepatch: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
