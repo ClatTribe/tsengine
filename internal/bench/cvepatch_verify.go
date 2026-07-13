@@ -83,6 +83,8 @@ func VerifyPatch(ctx context.Context, patch codeagent.Patch, spec *VerifySpec) J
 	if err := write(driver, spec.Driver); err != nil {
 		return JudgeUnknown
 	}
+	//nolint:gosec // by design: the benchmark runs the operator-provided runtime (node/python3) on the
+	// instance's PoC driver — that IS the execution oracle. Runtime is gated to a PATH-resolved binary.
 	cmd := exec.CommandContext(ctx, spec.Runtime, filepath.Join(dir, driver))
 	cmd.Dir = dir
 	out, _ := cmd.CombinedOutput() // a non-zero exit is a NOT_FIXED signal, not a harness error
