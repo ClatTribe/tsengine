@@ -55,6 +55,30 @@ running the actual exploit:
 - **Selection is ours** (2 external CVEs we chose); the vuln + gold fix are external/real, but a larger,
   third-party-curated instance set is the next step to remove selection bias.
 
+## The improvement: propose→verify→REFINE (measured, non-overfit)
+
+Running the benchmark exposed a real engine limitation: `ProposePatch` was **single-shot** — one
+attempt, no recovery when the first fix is *incomplete*. The classic case: a prototype-pollution fix
+that guards `__proto__` but not `constructor`/`prototype`, which a `--constructor.prototype.x` payload
+still bypasses (the exact minimist CVE-2020-7598 → CVE-2021-44906 progression).
+
+`codeagent.ProposePatchIterative` adds the loop the product already uses on offense (the XBOW iterative
+driver) and for fix-verification (`retest.Verify`): propose → let the **deterministic execution oracle
+dispose** the attempt → on failure, thread the verifier's *real output* back into a refined attempt.
+Bounded by `--refine N`. Grounded (§10): the model widens the search across attempts, but the oracle —
+never the model — decides "fixed", so refinement can't manufacture a false success. Overfit-free
+(§14.2): the refine prompt carries only the verifier's real failure output, never an instance hint.
+
+**Measured on the real bypass case** (`--constructor.prototype.polluted` PoC):
+
+| Mode | Result |
+|---|---|
+| single-shot (`--refine 1`) | `not_fixed` — the `__proto__`-only fix leaves the constructor bypass open |
+| refine loop (`--refine 3`) | **`fixed` at attempt 2** — the failure fed back → complete guard → oracle confirms |
+
+So the engine now recovers a fix the single-shot path reported broken — the improvement that raises the
+`fixed` rate is a real long-horizon capability, not tuning to the instances.
+
 ## What it takes to scale to a real number
 
 1. **A capable autonomous model** (API key) — run `ProposePatch` over N instances unattended.

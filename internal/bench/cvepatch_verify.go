@@ -41,15 +41,22 @@ func runtimeAvailable(rt string) bool {
 // returns FIXED only if it prints "FIXED". Any failure (build/run error, "NOT_FIXED", missing runtime)
 // → NotFixed/Unknown, never a false positive. The patched files come from the engineer's own rewrite.
 func VerifyPatch(ctx context.Context, patch codeagent.Patch, spec *VerifySpec) Judged {
+	j, _ := verifyPatch(ctx, patch, spec)
+	return j
+}
+
+// verifyPatch is the shared implementation; it also returns the driver's raw output so the iterative
+// refine loop can thread WHY a patch failed back into the next attempt.
+func verifyPatch(ctx context.Context, patch codeagent.Patch, spec *VerifySpec) (Judged, string) {
 	if spec == nil || !runtimeAvailable(spec.Runtime) {
-		return JudgeUnknown
+		return JudgeUnknown, ""
 	}
 	if patch.Empty() {
-		return JudgeNotFixed // no patch can't have fixed anything
+		return JudgeNotFixed, "the engineer produced no patch" // no patch can't have fixed anything
 	}
 	dir, err := os.MkdirTemp("", "cvepatch-verify-*")
 	if err != nil {
-		return JudgeUnknown
+		return JudgeUnknown, ""
 	}
 	defer os.RemoveAll(dir)
 
@@ -66,13 +73,13 @@ func VerifyPatch(ctx context.Context, patch codeagent.Patch, spec *VerifySpec) J
 	// the engineer's patched file(s) — the thing under test
 	for _, f := range patch.Files {
 		if err := write(f.Path, f.Content); err != nil {
-			return JudgeUnknown
+			return JudgeUnknown, ""
 		}
 	}
 	// aux files the driver needs (dep stubs, fixtures — external instance data)
 	for rel, content := range spec.AuxFiles {
 		if err := write(rel, content); err != nil {
-			return JudgeUnknown
+			return JudgeUnknown, ""
 		}
 	}
 	ext := spec.Ext
@@ -81,7 +88,7 @@ func VerifyPatch(ctx context.Context, patch codeagent.Patch, spec *VerifySpec) J
 	}
 	driver := "__verify_driver." + ext
 	if err := write(driver, spec.Driver); err != nil {
-		return JudgeUnknown
+		return JudgeUnknown, ""
 	}
 	//nolint:gosec // by design: the benchmark runs the operator-provided runtime (node/python3) on the
 	// instance's PoC driver — that IS the execution oracle. Runtime is gated to a PATH-resolved binary.
@@ -89,7 +96,16 @@ func VerifyPatch(ctx context.Context, patch codeagent.Patch, spec *VerifySpec) J
 	cmd.Dir = dir
 	out, _ := cmd.CombinedOutput() // a non-zero exit is a NOT_FIXED signal, not a harness error
 	if strings.Contains(string(out), "FIXED") && !strings.Contains(string(out), "NOT_FIXED") {
-		return JudgeFixed
+		return JudgeFixed, ""
 	}
-	return JudgeNotFixed
+	return JudgeNotFixed, strings.TrimSpace(string(out))
+}
+
+// Verifier adapts the execution oracle to codeagent's Verifier callback, so ProposePatchIterative can
+// dispose each attempt and thread the driver's real output back on failure.
+func (spec *VerifySpec) Verifier() codeagent.Verifier {
+	return func(ctx context.Context, p codeagent.Patch) codeagent.VerifyOutcome {
+		j, feedback := verifyPatch(ctx, p, spec)
+		return codeagent.VerifyOutcome{Fixed: j == JudgeFixed, Feedback: feedback}
+	}
 }

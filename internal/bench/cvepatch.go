@@ -75,6 +75,7 @@ type CVEPatchResult struct {
 	Produced  bool            `json:"produced"`  // engineer returned an applicable rewrite
 	Localized bool            `json:"localized"` // rewrite touches a gold-patched file
 	Fixed     Judged          `json:"fixed"`     // JUDGED: does it close the vuln equivalently to gold
+	Attempts  int             `json:"attempts"`  // propose→verify→refine attempts the engineer used (1 = single-shot)
 	OurFiles  []string        `json:"our_files"` // files the engineer rewrote (for the judge/evidence)
 	Err       string          `json:"err,omitempty"`
 	patch     codeagent.Patch // retained in-process for the judge; not serialized
@@ -94,19 +95,47 @@ const (
 // assess equivalence to gold. Kept off the JSON so the raw model output isn't dumped by default.
 func (r CVEPatchResult) Patch() codeagent.Patch { return r.patch }
 
-// RunCVEPatchBench runs the engineer's ProposePatch over each instance and scores the two AUTOMATIC
-// signals (produced, localized). `fixed` stays JudgeUnknown until an external oracle/judge sets it —
-// the harness never marks the engineer's own fix "working".
+// RunCVEPatchBench runs the engineer single-shot (one ProposePatch per instance) — the baseline.
 func RunCVEPatchBench(ctx context.Context, instances []CVEPatchInstance, llm codeagent.LLM) []CVEPatchResult {
+	return RunCVEPatchBenchN(ctx, instances, llm, 1)
+}
+
+// RunCVEPatchBenchN runs up to maxAttempts of propose→verify→refine per instance (1 = single-shot
+// baseline). The refine loop engages only when the instance ships an execution oracle AND its runtime
+// is present (else there is nothing to dispose an attempt, so it stays single-shot + JudgeUnknown —
+// the honest gate). `fixed` is always the oracle's verdict, never the model's claim (§10).
+func RunCVEPatchBenchN(ctx context.Context, instances []CVEPatchInstance, llm codeagent.LLM, maxAttempts int) []CVEPatchResult {
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
 	out := make([]CVEPatchResult, 0, len(instances))
 	for _, in := range instances {
-		r := CVEPatchResult{ID: in.ID, CVE: in.CVE, Class: in.Class, Fixed: JudgeUnknown}
+		r := CVEPatchResult{ID: in.ID, CVE: in.CVE, Class: in.Class, Fixed: JudgeUnknown, Attempts: 1}
 		sources := make([]codeagent.SourceFile, 0, len(in.VulnFiles))
 		for _, vf := range in.VulnFiles {
 			sources = append(sources, codeagent.SourceFile{Path: vf.Path, Content: vf.Content})
 		}
-		p, err := codeagent.ProposePatch(ctx, llm,
-			codeagent.Finding{Class: in.Class, Endpoint: in.Endpoint, Detail: in.Detail}, sources)
+		finding := codeagent.Finding{Class: in.Class, Endpoint: in.Endpoint, Detail: in.Detail}
+
+		var p codeagent.Patch
+		var err error
+		canRefine := maxAttempts > 1 && in.Verify != nil && runtimeAvailable(in.Verify.Runtime)
+		if canRefine {
+			var confirmed bool
+			p, r.Attempts, confirmed, err = codeagent.ProposePatchIterative(ctx, llm, finding, sources, in.Verify.Verifier(), maxAttempts)
+			if err == nil {
+				if confirmed {
+					r.Fixed = JudgeFixed
+				} else if !p.Empty() {
+					r.Fixed = JudgeNotFixed
+				}
+			}
+		} else {
+			p, err = codeagent.ProposePatch(ctx, llm, finding, sources)
+			if err == nil && in.Verify != nil {
+				r.Fixed = VerifyPatch(ctx, p, in.Verify) // single-shot: oracle disposes once (or JudgeUnknown)
+			}
+		}
 		if err != nil {
 			r.Err = err.Error()
 			out = append(out, r)
@@ -123,11 +152,6 @@ func RunCVEPatchBench(ctx context.Context, instances []CVEPatchInstance, llm cod
 			if gold[pf.Path] {
 				r.Localized = true
 			}
-		}
-		// EXECUTION ORACLE disposes the fix verdict (never the model's own claim, §10). No spec/runtime
-		// → stays JudgeUnknown (honest: no oracle, no verdict).
-		if in.Verify != nil {
-			r.Fixed = VerifyPatch(ctx, p, in.Verify)
 		}
 		out = append(out, r)
 	}

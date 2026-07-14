@@ -7,27 +7,49 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/bench"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 )
 
-// replayLLM returns pre-generated model outputs in call order (RunCVEPatchBench calls Generate once
-// per instance, sequentially). It lets ANY external agent — including the manual frontier proxy —
-// generate the fixes offline, then run them through the REAL ProposePatch parse + scoring. This is
-// how "a capable model via proxy" plugs in without a fragile concurrent HTTP relay.
+// replayLLM replays pre-generated fixes so any external agent (incl. the manual frontier proxy) can
+// generate offline, then run through the REAL ProposePatch(Iterative) parse + scoring — no fragile
+// concurrent HTTP relay. It tracks instance + attempt so the propose→verify→REFINE loop works: a
+// NON-refine prompt marks a new instance (the loop always starts an instance with buildPatchPrompt);
+// a refine prompt bumps the attempt. Response files: <id>.txt (attempt 1) then <id>.<n>.txt (refines).
 type replayLLM struct {
-	responses []string
-	n         int
+	ids     []string // instance IDs in processing order
+	dir     string
+	instIdx int
+	attempt int
 }
 
-func (r *replayLLM) Generate(_ context.Context, _ string) (string, error) {
-	if r.n >= len(r.responses) {
-		return "", fmt.Errorf("replay: no response for call %d", r.n)
+func newReplayLLM(dir string, ids []string) *replayLLM {
+	return &replayLLM{ids: ids, dir: dir, instIdx: -1}
+}
+
+func (r *replayLLM) Generate(_ context.Context, prompt string) (string, error) {
+	if strings.Contains(prompt, "VERIFIER OUTPUT (why your last patch failed)") {
+		r.attempt++
+	} else {
+		r.instIdx++
+		r.attempt = 1
 	}
-	out := r.responses[r.n]
-	r.n++
-	return out, nil
+	if r.instIdx < 0 || r.instIdx >= len(r.ids) {
+		return "", fmt.Errorf("replay: instance index %d out of range", r.instIdx)
+	}
+	id := r.ids[r.instIdx]
+	cands := []string{fmt.Sprintf("%s.%d.txt", id, r.attempt)}
+	if r.attempt == 1 {
+		cands = append(cands, id+".txt")
+	}
+	for _, c := range cands {
+		if b, err := os.ReadFile(filepath.Join(r.dir, filepath.Clean(c))); err == nil { //nolint:gosec // operator dir
+			return string(b), nil
+		}
+	}
+	return "", fmt.Errorf("replay: no response file for %s attempt %d", id, r.attempt)
 }
 
 // cvepatchCmd runs the AI Security Engineer's code-fix (codeagent.ProposePatch) over real app-sec CVE
@@ -38,7 +60,8 @@ func cvepatchCmd(argv []string) error {
 	fs := flag.NewFlagSet("cvepatch", flag.ContinueOnError)
 	dataset := fs.String("dataset", "", "path to the real-CVE instance set (JSON array; operator-provided, not committed)")
 	asJSON := fs.Bool("json", false, "emit per-instance results (incl. proposed patches) as JSON for a judge")
-	responses := fs.String("responses", "", "dir of pre-generated fixes (<instance-id>.txt) — replay a proxy/offline run through the real scoring")
+	responses := fs.String("responses", "", "dir of pre-generated fixes (<id>.txt, <id>.<n>.txt for refines) — replay a proxy/offline run through the real scoring")
+	refine := fs.Int("refine", 1, "max propose→verify→refine attempts per instance (1 = single-shot baseline; needs an execution oracle to refine)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -53,15 +76,11 @@ func cvepatchCmd(argv []string) error {
 		Generate(context.Context, string) (string, error)
 	}
 	if *responses != "" {
-		rl := &replayLLM{}
-		for _, in := range instances {
-			b, err := os.ReadFile(filepath.Join(*responses, in.ID+".txt")) //nolint:gosec // operator dir
-			if err != nil {
-				return fmt.Errorf("replay: %w", err)
-			}
-			rl.responses = append(rl.responses, string(b))
+		ids := make([]string, len(instances))
+		for i, in := range instances {
+			ids[i] = in.ID
 		}
-		llm = rl
+		llm = newReplayLLM(*responses, ids)
 	} else {
 		live, ok := cloudengine.LLMFromEnv()
 		if !ok {
@@ -69,7 +88,7 @@ func cvepatchCmd(argv []string) error {
 		}
 		llm = live
 	}
-	results := bench.RunCVEPatchBench(context.Background(), instances, llm)
+	results := bench.RunCVEPatchBenchN(context.Background(), instances, llm, *refine)
 	if *asJSON {
 		// include the proposed patches so an out-of-band judge (proxy/oracle) can set `fixed`.
 		type out struct {

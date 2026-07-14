@@ -68,17 +68,7 @@ func ProposePatch(ctx context.Context, llm LLM, f Finding, sources []SourceFile)
 	}
 	// Only allow rewrites of files we actually supplied — a fix must edit the app, not invent new files or
 	// escape the build context (defence-in-depth on top of the traversal check).
-	supplied := map[string]bool{}
-	for _, s := range sources {
-		supplied[s.Path] = true
-	}
-	kept := files[:0]
-	for _, pf := range files {
-		if supplied[pf.Path] {
-			kept = append(kept, pf)
-		}
-	}
-	return Patch{Files: kept, Raw: out}, nil
+	return Patch{Files: keepSupplied(files, sources), Raw: out}, nil
 }
 
 // buildPatchPrompt renders the instruction. It is deliberately GENERIC — no per-challenge hints, no payload
