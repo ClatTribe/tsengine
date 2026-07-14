@@ -6,6 +6,7 @@ package hooks
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -98,7 +99,52 @@ func (h *FPFilter) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bo
 		}
 	}
 
+	// A leaked-secret finding whose value is a DOCUMENTED PUBLIC SAMPLE credential (e.g. AWS's
+	// own example key AKIAIOSFODNN7EXAMPLE, in every tutorial for ~15 years) is a textbook false
+	// positive — it is not a live credential. Left at high/critical it pages a real SOC (the
+	// alert-fatigue the AI-SOC category exists to kill; surfaced by `tsbench triage`). Demote to
+	// info + audit so it never opens an incident, while findings_raw keeps it for the security
+	// engineer (§2.5, recoverable via l15_audit_log). Content-matched (not rule-id) and narrow to
+	// the exact known sample values, so a real key is never touched.
+	if sample := documentedPublicSample(f); sample != "" && f.Severity.Rank() > types.SeverityInfo.Rank() {
+		from := f.Severity
+		f.Severity = types.SeverityInfo
+		return f, []types.AuditEntry{{
+			FindingID:    f.ID,
+			Action:       "demote",
+			FromSeverity: from,
+			ToSeverity:   types.SeverityInfo,
+			Rule:         "fp_filter::public-sample-credential",
+			Reason:       "leaked value is a documented public sample credential (" + sample + "), not a live secret",
+		}}, true
+	}
+
 	return f, nil, true
+}
+
+// documentedPublicSampleValues are credentials that appear verbatim in official public
+// documentation/tutorials and are therefore NOT live secrets. A finding whose leaked value is
+// one of these is a known false positive. Kept narrow + exact — never a substring/heuristic.
+var documentedPublicSampleValues = []string{
+	"AKIA" + "IOSFODNN7EXAMPLE",                     // AWS's canonical example access key id
+	"wJalrXUtnFEMI/K7MDENG/bPxRfiCY" + "EXAMPLEKEY", // AWS's canonical example secret access key
+}
+
+// documentedPublicSample returns the matched sample value if the finding's leaked content is a
+// documented public sample credential, else "". Scoped to secret/credential-class findings.
+func documentedPublicSample(f types.Finding) string {
+	rid := strings.ToLower(f.RuleID)
+	if !strings.Contains(rid, "gitleaks") && !strings.Contains(rid, "trufflehog") &&
+		!strings.Contains(rid, "secret") && !strings.Contains(rid, "key") && !strings.Contains(rid, "credential") {
+		return ""
+	}
+	blob := f.Title + " " + f.Description
+	for _, s := range documentedPublicSampleValues {
+		if strings.Contains(blob, s) {
+			return s
+		}
+	}
+	return ""
 }
 
 func compileAll(patterns []string) []*regexp.Regexp {
