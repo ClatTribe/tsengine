@@ -97,6 +97,18 @@ func (d Deps) operatorLLMAllowed(ctx context.Context, tenantID string) bool {
 	return d.planLimits(ctx, tenantID).AIEnabled
 }
 
+// agentsAllowed reports whether this tenant may run the AI agents AT ALL — on any model, including a
+// key it brought itself. This is the PRODUCT gate (the pricing page: the agents are what you buy, and
+// "Free — No AI agents, scanning only"); operatorLLMAllowed above is the separate ECONOMIC gate for
+// whose budget pays. Free is refused even with its own key, or the premium would be free to anyone
+// who pastes an API key. The dev override drives test tenants on any plan.
+func (d Deps) agentsAllowed(ctx context.Context, tenantID string) bool {
+	if os.Getenv("TSENGINE_DEV_LLM_ALL_PLANS") == "1" {
+		return true
+	}
+	return d.planLimits(ctx, tenantID).AIAgents
+}
+
 // runTranslate is the shared L2 engineer core (used by the on-demand POST /v1/l2/translate AND the
 // post-scan auto-review). It builds the L1.7 estate view (deduped/corroborated unified issues +
 // cross-surface attack paths — the platform computes crossdetect; l2 stays engine-pure) and runs the

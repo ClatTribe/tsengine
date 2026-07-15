@@ -28,14 +28,21 @@ const (
 // unlimited. AIEnabled is the load-bearing one: it gates the operator-funded L2/LLM work
 // (cloud investigation, AI remediation, ModeDeep) so the Free tier costs us ~nothing.
 type PlanLimits struct {
-	Plan                 string `json:"plan"`
-	Label                string `json:"label"`
-	MaxAssets            int    `json:"max_assets"`            // -1 = unlimited
-	AIEnabled            bool   `json:"ai_enabled"`            // operator-funded L2 agent / AI fixes / LLM
-	AutonomousPentest    bool   `json:"autonomous_pentest"`    // ModeDeep / XBOW-class open-ended exploitation
-	AllFrameworks        bool   `json:"all_frameworks"`        // all 22 vs core (SOC 2 + 1)
-	ContinuousMonitoring bool   `json:"continuous_monitoring"` // scheduled re-scan + incidents, vs on-demand
-	HumanInLoopApply     bool   `json:"human_in_loop_apply"`   // gated remediation apply loop
+	Plan      string `json:"plan"`
+	Label     string `json:"label"`
+	MaxAssets int    `json:"max_assets"` // -1 = unlimited
+	// AIAgents — may this tenant run the AI Security Engineer / AI Pentester AT ALL, on ANY model
+	// (including its own key)? This is the PRODUCT gate and it mirrors the pricing page: the agents are
+	// what you buy, so Free ("No AI agents — scanning only") is false and every paid plan is true.
+	// Distinct from AIEnabled, which is only about WHOSE MODEL BUDGET pays.
+	AIAgents bool `json:"ai_agents"`
+	// AIEnabled — do WE fund the model? The economic gate: only Enterprise spends the operator's LLM
+	// budget. Core is true for AIAgents but false here — it runs the agents on the tenant's own key.
+	AIEnabled            bool `json:"ai_enabled"`
+	AutonomousPentest    bool `json:"autonomous_pentest"`    // ModeDeep / XBOW-class open-ended exploitation
+	AllFrameworks        bool `json:"all_frameworks"`        // all 22 vs core (SOC 2 + 1)
+	ContinuousMonitoring bool `json:"continuous_monitoring"` // scheduled re-scan + incidents, vs on-demand
+	HumanInLoopApply     bool `json:"human_in_loop_apply"`   // gated remediation apply loop
 }
 
 // NormalizePlan maps a raw plan string (case/space-insensitive, with legacy aliases) to a
@@ -73,22 +80,26 @@ func baseEntitlements(plan string) PlanLimits {
 	case PlanEnterprise:
 		return PlanLimits{
 			Plan: PlanEnterprise, Label: "Enterprise", MaxAssets: -1,
-			AIEnabled: true, AutonomousPentest: true, AllFrameworks: true,
+			AIAgents: true, AIEnabled: true, AutonomousPentest: true, AllFrameworks: true,
 			ContinuousMonitoring: true, HumanInLoopApply: true,
 		}
 	case PlanGrowth:
-		// The "Core" tier: the full deterministic + ML-based scanning engine, but NO operator-funded AI —
-		// the two AI agents are Enterprise-only. (Plan key stays "growth"; the customer-facing label is
-		// "Core" — no internal layer jargon. A tenant here can still use AI by bringing its own LLM key — §18.5.)
+		// The "Core" tier — what the pricing page sells: BOTH AI agents (AIAgents), run on the TENANT'S
+		// OWN model key, plus every scanner, all frameworks, monitoring and the approval loop. AIEnabled
+		// stays FALSE on purpose: that gates the OPERATOR's model budget, which is the Enterprise tier.
+		// (Plan key stays "growth"; the customer-facing label is "Core".)
 		return PlanLimits{
 			Plan: PlanGrowth, Label: "Core", MaxAssets: 25,
-			AIEnabled: false, AutonomousPentest: false, AllFrameworks: true,
+			AIAgents: true, AIEnabled: false, AutonomousPentest: false, AllFrameworks: true,
 			ContinuousMonitoring: true, HumanInLoopApply: true,
 		}
 	default:
+		// Free is scanning only — exactly what the pricing page promises ("No AI agents"). AIAgents is
+		// false, so the agents are refused even if the tenant configures its own key: the agents are the
+		// product, and giving them away free would leave nothing to sell.
 		return PlanLimits{
 			Plan: PlanFree, Label: "Free", MaxAssets: 2,
-			AIEnabled: false, AutonomousPentest: false, AllFrameworks: false,
+			AIAgents: false, AIEnabled: false, AutonomousPentest: false, AllFrameworks: false,
 			ContinuousMonitoring: false, HumanInLoopApply: false,
 		}
 	}
