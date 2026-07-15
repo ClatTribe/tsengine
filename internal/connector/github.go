@@ -175,10 +175,23 @@ func (g *GitHub) Apply(ctx context.Context, c platform.Connection, token string,
 	if full == "" {
 		return fmt.Errorf("github: action missing full_name")
 	}
+	head := strFrom(a.Payload, "head")
+	base := nz(strFrom(a.Payload, "base"), "main")
+	title := nz(a.Title, "tsengine: verified security fix")
+	// When the action carries the ACTUAL fix (path→new content), commit it to a new branch first so the
+	// PR carries a real diff instead of prose. No files → today's behaviour (PR from an existing head).
+	if files := filesFrom(a.Payload); len(files) > 0 {
+		if head == "" {
+			head = "tsengine/fix-" + safeBranchSuffix(a.ID)
+		}
+		if err := g.CommitFiles(ctx, token, full, base, head, title, files); err != nil {
+			return err
+		}
+	}
 	body := pullRequestReq{
-		Title: nz(a.Title, "tsengine: verified security fix"),
-		Head:  strFrom(a.Payload, "head"),
-		Base:  nz(strFrom(a.Payload, "base"), "main"),
+		Title: title,
+		Head:  head,
+		Base:  base,
 		Body:  strFrom(a.Payload, "body"),
 	}
 	b, _ := json.Marshal(body)

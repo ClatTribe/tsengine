@@ -14,3 +14,24 @@ export async function getAutofix(id: string): Promise<AutofixResult> {
     return { ok: false, error: e instanceof Error ? e.message : "Could not generate a fix" };
   }
 }
+
+export type FixPRResult = {
+  ok: boolean;
+  patched?: boolean;
+  reason?: string;
+  filesChanged?: string[];
+  repo?: string;
+  error?: string;
+};
+
+// Opens a real fix PR for one finding: the engineer reads the ACTUAL source, patches it, and the patch
+// is queued as a gated action — approving it is what pushes the commit and opens the PR. Slow (an LLM
+// call over real source), so the caller shows a loading state.
+export async function openFixPR(id: string): Promise<FixPRResult> {
+  try {
+    const r = await api.fixPR(id);
+    return { ok: true, patched: r.patched, reason: r.reason, filesChanged: r.files_changed, repo: r.repo };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not open a fix PR" };
+  }
+}

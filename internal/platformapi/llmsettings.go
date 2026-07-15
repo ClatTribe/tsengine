@@ -35,10 +35,13 @@ func (d Deps) handleGetLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 	// (the plan's entitlement) OR the tenant brought its own LLM key (§18.5). The UI reads this to show
 	// whether the AI Security Engineer is on, instead of re-deriving plan rules client-side.
 	resp := map[string]any{
-		"provider":   "",
-		"model":      "",
-		"has_key":    hasKey,
-		"ai_enabled": platform.Entitlements(t.Plan).AIEnabled || hasKey,
+		"provider": "",
+		"model":    "",
+		"has_key":  hasKey,
+		// Mirrors resolveAgentLLM exactly, so Settings never claims AI the agents would refuse: the plan
+		// must include the agents at all (AIAgents), AND a model must exist — either the tenant's own key
+		// or, on Enterprise, ours.
+		"ai_enabled": platform.Entitlements(t.Plan).AIAgents && (platform.Entitlements(t.Plan).AIEnabled || hasKey),
 	}
 	if t.LLM != nil {
 		resp["provider"] = t.LLM.Provider
@@ -155,9 +158,16 @@ func (d Deps) ResolveTenantLLM(ctx context.Context, tenantID string) (provider, 
 // model (the §18.5 "bring your own brain" — a cloud key or a SELF-HOSTED Ollama/vLLM endpoint) when
 // set + buildable, else the operator-global model (d.AgentLLM). nil when neither is configured.
 func (d Deps) resolveAgentLLM(ctx context.Context, tenantID string) pentest.SpecLLM {
-	// A tenant's OWN model (§18.5 "bring your own brain") costs the operator nothing, so it's
-	// allowed on ANY plan, Free included. ClientForURL threads the base URL so a self-hosted endpoint
-	// is actually reached (and handles anthropic — the UI default — which ClientFor used to drop).
+	// PRODUCT gate first: the AI agents are what a customer buys ("Free — No AI agents, scanning only").
+	// A Free tenant is refused even with its own key — otherwise the whole premium is free for anyone
+	// who pastes an API key, and the pricing page would be a lie. Paid plans pass. (Dev override still
+	// applies so `make dev` + the file-relay proxy can drive any test tenant.)
+	if !d.agentsAllowed(ctx, tenantID) {
+		return nil
+	}
+	// The tenant's OWN model (§18.5 "bring your own brain") costs the operator nothing, so on a PAID
+	// plan it needs no further gate. ClientForURL threads the base URL so a self-hosted endpoint is
+	// actually reached (and handles anthropic — the UI default — which ClientFor used to drop).
 	if cfg, key, ok := d.resolveTenantLLMConfig(ctx, tenantID); ok {
 		if c, ok := cloudengine.ClientForURL(cfg.Provider, cfg.Model, key, cfg.BaseURL); ok {
 			return c // cloudengine.LLM satisfies pentest.SpecLLM (same Generate method)

@@ -7,21 +7,22 @@ import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 export const metadata = pageMeta({
   title: "Pricing — TensorShield",
   description:
-    "Simple, transparent pricing in ₹ for Indian teams. A free tier for your deterministic + ML-based security & compliance posture, a Core plan for the full scanning engine (self-serve or managed), and Enterprise for the two AI agents — AI Security Engineer + AI Pentester.",
+    "Priced in ₹ for Indian teams, built for companies with no security hire. Free to see your real posture. ₹7,999/mo for your AI Security Engineer and AI Pentester across code, cloud and SaaS — a fraction of one pentest.",
   path: "/pricing",
 });
 
-// Three tiers, backed 1:1 by pkg/platform/plan.go Entitlements so the product never drifts from the page.
-// The sharp positioning, in CUSTOMER terms (no internal layer jargon): the deterministic + ML-based
-// scanning engine is the self-serve product (Free = a taste, Core = the full thing, differentiated only by
-// SERVICE MODEL); the two AI agents — AI Security Engineer (defense) + AI Pentester (attack) — are the
-// Enterprise premium.
+// Three tiers for an SMB buyer, priced in ₹. The positioning, in CUSTOMER terms (never internal layer
+// jargon): the TWO AI AGENTS ARE THE PRODUCT, and they start at Core — not Enterprise. Free is scanning
+// only (it costs us no model spend, which is why it can stay free forever). Core runs both agents on the
+// TENANT'S OWN key (resolveAgentLLM allows a tenant's own model on any plan — it costs the operator
+// nothing), so the ₹ price stays flat and predictable and we never mark up a model bill. Enterprise is
+// the same agents with the model run BY US (the only operator-funded tier, per plan.go AIEnabled).
 const TIERS = [
   {
     name: "Free",
     price: "₹0",
     cadence: "forever",
-    blurb: "A taste of the deterministic + ML-based scanning engine — 30+ scanners, cross-surface correlation, threat-intel, SOC 2 readiness. Free forever (no AI/LLM cost to run). No card.",
+    blurb: "See your real posture. 30+ scanners across code, cloud, attack surface and identity, with cross-surface correlation and a SOC 2 readiness view — on 2 targets. Scanning only: the AI agents start at Core. No card, free forever.",
     cta: "Start free",
     href: "/signup",
     highlight: false,
@@ -29,10 +30,11 @@ const TIERS = [
     features: [
       "2 scan targets",
       "All 5 categories — code · cloud · attack surface · identity · compliance",
-      "30+ OSS scanners (deterministic, on-demand)",
+      "30+ scanners with cross-surface correlation + threat-intel",
       "Findings dashboard + SOC 2 readiness view",
       "Signed decision ledger",
       "Community support",
+      "No AI agents — scanning only",
     ],
   },
   {
@@ -40,18 +42,21 @@ const TIERS = [
     price: "₹7,999",
     cadence: "/ month + GST",
     annual: "or ₹79,990/yr — ~2 months free",
-    blurb: "The full deterministic + ML-based scanning engine — every scanner, all 22 frameworks, continuous monitoring, signed evidence, the human-in-the-loop apply loop. Run it yourself, or have us / your MSP run it — the service model is yours to pick.",
+    blurb: "Your AI Security Engineer and AI Pentester, working your whole estate — plus every scanner, all 22 frameworks, continuous monitoring and signed evidence. Connect your own LLM key and the agents turn on: you pay your model bill, we don't mark it up.",
     cta: "Start free",
     href: "/signup",
     highlight: true,
     persona: false,
     features: [
+      "★ AI Security Engineer — triages the noise, proves what's real, writes the fix",
+      "★ AI Pentester — actually exploits it to prove it, then reports it",
+      "Bring your own LLM key — Anthropic, OpenAI-compatible, or a local model",
       "Up to 25 scan targets",
-      "Full deterministic + ML detection — correlation, threat-intel, attack paths",
+      "Every scanner + cross-surface correlation, threat-intel, attack paths",
       "Continuous monitoring + incidents",
       "All 22 frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …",
       "Signed evidence packs + Trust Center",
-      "Human-in-the-loop approvals + remediation",
+      "You approve anything consequential — nothing ships without a human",
       "Self-serve, managed, or MSP delivery — your service model",
       "Slack · Jira · email alerts",
     ],
@@ -59,15 +64,15 @@ const TIERS = [
   {
     name: "Enterprise",
     price: "Talk to us",
-    cadence: "+ the AI agents",
-    blurb: "Everything in Core, plus the two AI agents over your whole estate — your AI Security Engineer (defense) and AI Pentester (attack), with a named human accountable for the calls that matter. Unlimited scale, managed / MSP delivery, SSO.",
+    cadence: "AI included — no key to manage",
+    blurb: "Everything in Core, but we run the model for you — no LLM key, no model bill, no capacity planning. Unlimited scale, a named human accountable for the calls that matter, managed / MSP delivery and SSO.",
     cta: "Contact sales",
     href: "/demo",
     highlight: false,
     persona: true,
     features: [
-      "★ AI Security Engineer — prioritizes, chains, fixes, explains in plain English",
-      "★ AI Pentester — exploitation-proven VAPT (XBOW-class)",
+      "★ Both AI agents — included, running on our models (no key to configure)",
+      "A named security expert accountable for every consequential call",
       "Unlimited scan targets",
       "Managed service + MSP / partner desk",
       "SSO / SAML + role-based access",
@@ -78,10 +83,11 @@ const TIERS = [
 ];
 
 const FAQ = [
-  ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the deterministic open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
-  ["What do I get on Core that Free doesn't have?", "The full deterministic + ML-based scanning engine: every scanner with cross-surface correlation across all five categories, continuous monitoring with incidents, all 22 compliance frameworks with signed evidence packs, the questionnaire automation, and the human-in-the-loop apply loop that actually closes findings — self-serve or fully managed. ₹7,999/mo (or ₹79,990/yr), up to 25 targets. The two AI agents are the Enterprise tier."],
-  ["How are the tiers structured?", "Free to try the scanning engine, Core for the full deterministic + ML-based security + compliance product (self-serve or managed), and Enterprise (talk to us) which adds the two AI agents — your AI Security Engineer (defense) and AI Pentester (attack) — over your whole estate, plus unlimited targets, SSO, and a managed/MSP partner desk. The service model — you run it, we run it, or your MSP does — is yours to pick on the paid tiers."],
-  ["Can I use the AI without Enterprise (bring my own key)?", "Yes. The AI Security Engineer + AI Pentester are the Enterprise tier when WE fund the model. But on any plan you can connect your OWN LLM key in Settings → LLM — any OpenAI-compatible provider, or a local Ollama — and run the AI agents at your cost. Free stays free to run for us; you only pay your model bill. Or talk to us for Enterprise and we run it for you."],
+  ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the open-source scanners across all five categories, so there is no AI cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
+  ["What do I get on Core that Free doesn't have?", "The two AI agents — your AI Security Engineer and AI Pentester — plus every scanner with cross-surface correlation, continuous monitoring with incidents, all 22 compliance frameworks with signed evidence packs, questionnaire automation, and the approval loop that actually closes findings. ₹7,999/mo (or ₹79,990/yr), up to 25 targets. You connect your own LLM key and the agents turn on."],
+  ["How are the tiers structured?", "Free to see your real posture with the scanners. Core is the whole product — both AI agents running on your own LLM key, all 22 frameworks, continuous monitoring, signed evidence — self-serve, managed, or via your MSP. Enterprise (talk to us) is the same agents but we run the model for you, with unlimited targets, SSO, a named accountable expert, and a managed/MSP partner desk."],
+  ["Why do I bring my own LLM key on Core?", "Because it's cheaper and more honest. You pay your model provider directly — Anthropic, any OpenAI-compatible provider, or a local model — at cost, with no markup from us, and you keep control of where your data goes. It takes a minute in Settings. If you'd rather not think about models at all, Enterprise includes them and we handle it."],
+  ["Which models can I connect?", "Anthropic, any OpenAI-compatible provider, or a self-hosted model (Ollama / vLLM) if you want everything to stay on your own infrastructure. You pick the model; the agents use it for triage, proving exploitability, and writing fixes."],
   ["Do I need a security engineer to use it?", "No — that's the point. TensorShield does the security engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. Built for a non-technical founder or ops lead."],
   ["What does \"human in the loop\" mean?", "Low-risk fixes apply automatically. Anything consequential (a config change, an identity action) waits for one tap of your approval — and every decision, automated or human, is signed into a tamper-evident ledger."],
   ["What if I'd rather not run it at all?", "Have it fully managed. Our security expert — or your MSP / consultancy partner — operates TensorShield for you: they triage, approve, and sign off, and you get the outcome plus named accountability. Same engine and signed evidence, priced per engagement."],
@@ -89,12 +95,13 @@ const FAQ = [
 ];
 
 // ComparePlans — the at-a-glance matrix. Cell value: "yes" | "no" | a literal string. Mirrors
-// the TIERS lists + the backend Entitlements, no new claims. Order: Free · Core · Enterprise.
-// The load-bearing line: the AI agents are ENTERPRISE-ONLY (plan.go: AIEnabled/AutonomousPentest
-// are Enterprise) — Core is the FULL deterministic + ML-based scanning engine, differentiated by service model.
+// the TIERS lists, no new claims. Order: Free · Core · Enterprise.
+// The load-bearing line: the AI agents start at CORE, on the tenant's OWN model key ("your key"), and
+// Enterprise is the same agents with the model funded by us ("included") — plan.go's AIEnabled gates
+// only the OPERATOR-funded model, never a tenant's own.
 const COMPARE: { section: string; rows: { label: string; cells: [string, string, string] }[] }[] = [
   {
-    section: "Deterministic + ML-based scanning",
+    section: "What we scan",
     rows: [
       { label: "Scan targets", cells: ["2", "Up to 25", "Unlimited"] },
       { label: "Categories — code · cloud · attack · identity · compliance", cells: ["All 5", "All 5", "All 5"] },
@@ -114,12 +121,13 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
     ],
   },
   {
-    section: "AI agents — talk to us",
+    section: "The AI agents",
     rows: [
-      { label: "AI Security Engineer — prioritize · chain · fix · explain", cells: ["no", "no", "yes"] },
-      { label: "AI Pentester — exploitation-proven VAPT (XBOW-class)", cells: ["no", "no", "yes"] },
-      { label: "Plain-English narrative & remediation", cells: ["no", "no", "yes"] },
-      { label: "Or: bring your own LLM key — AI on any plan, at your cost", cells: ["yes", "yes", "yes"] },
+      { label: "AI Security Engineer — triage · prove · fix · explain", cells: ["no", "your key", "included"] },
+      { label: "AI Pentester — proves it by exploiting it, then reports", cells: ["no", "your key", "included"] },
+      { label: "Plain-English narrative & remediation", cells: ["no", "your key", "included"] },
+      { label: "Who pays for the model", cells: ["—", "You (no markup)", "We do"] },
+      { label: "Connect any model — Anthropic · OpenAI-compatible · local", cells: ["no", "yes", "managed for you"] },
     ],
   },
   {
@@ -205,16 +213,17 @@ export default function Pricing() {
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-accent" /> Built for Indian teams · priced in ₹
           </span>
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">The scanning is the product. The AI agents are the premium.</h1>
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">A security team for less than one pentest.</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            Free to see your posture, a <strong className="font-semibold text-ink">Core</strong> plan for the full
-            deterministic + ML-based security + compliance product, and Enterprise (talk to us) for the two AI agents. The
-            service model — you run it, we run it, or your MSP does — is yours to pick.
+            Priced in ₹, built for teams with no security hire. Start free to see your real posture. On{" "}
+            <strong className="font-semibold text-ink">Core</strong>, your AI Security Engineer and AI Pentester work
+            your code, cloud and SaaS every day — for less per year than a single pentest costs once. You run it, we run
+            it, or your MSP does.
           </p>
-          {/* The pricing spine in customer terms: deterministic + ML-based scanning (Free + Core), the two AI
-              agents on the talk-to-us tier, and a named human accountable. Personas cross-link out. */}
+          {/* The pricing spine in customer terms: scanning on every plan, the two AI
+              agents from Core, and a named human accountable. Personas cross-link out. */}
           <div className="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs">
-            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Deterministic + ML scanning <span className="text-faint">· Free + Core</span></span>
+            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Scanning <span className="text-faint">· every plan</span></span>
             <span className="text-faint">+</span>
             <Link href="/ai-security-engineer" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Security Engineer <span className="text-faint">· Talk to us</span></Link>
             <span className="text-faint">+</span>
@@ -276,7 +285,7 @@ export default function Pricing() {
         </Reveal>
         <p className="mt-6 text-center text-xs text-faint">
           Prices in INR, exclusive of 18% GST. <span className="text-muted">Free is genuinely free — it runs only the
-          deterministic OSS scanners (no AI/LLM cost on our side), so we never have to take it away.</span> Annual billing
+          open-source scanners (no AI cost on our side), so we never have to take it away.</span> Annual billing
           on Core saves ~2 months. The signed decision ledger is on every plan.
         </p>
       </section>

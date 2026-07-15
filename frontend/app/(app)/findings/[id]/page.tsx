@@ -4,6 +4,7 @@ import { ArrowLeft, ShieldAlert, Flame, Wrench, GitPullRequest, Settings2, Ticke
 import { api } from "@/lib/api";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import { AutofixButton } from "@/components/findings/autofix-button";
+import { FixPRButton } from "@/components/findings/fix-pr-button";
 import { SeverityBadge, Tag } from "@/components/ui/primitives";
 import { RequestReview } from "@/components/reviews/request-review";
 import type { Action } from "@/lib/types";
@@ -103,14 +104,23 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
         </section>
       )}
 
+      {/* The real fix leads; the advice view is the fallback for anything not patchable from a repo
+          (a cloud/web finding, or a codebase we can't read). */}
       <section>
         <div className="mb-2 text-xs uppercase tracking-wider text-muted">AI fix</div>
         <div className="card p-5">
           <p className="mb-3 text-sm text-muted">
-            Generate a concrete code patch for this finding, grounded in the evidence above. A named owner reviews
-            and merges it.
+            Your AI Security Engineer reads the actual file in your repository, writes the patch, and puts a pull
+            request in front of you. Nothing reaches your default branch without your approval.
           </p>
-          <AutofixButton id={id} />
+          <FixPRButton id={id} />
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="mb-3 text-xs text-muted">
+              Not a code finding, or want the reasoning instead of a patch? Get the fix explained, grounded in the
+              evidence above.
+            </p>
+            <AutofixButton id={id} />
+          </div>
         </div>
       </section>
 

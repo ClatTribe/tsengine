@@ -13,7 +13,9 @@ import (
 func TestLLMSettings_SelfHostedOllama(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	// A PAID tenant: the AI agents are the product, so a plan that includes them is a precondition for
+	// resolving one at all (a Free tenant is refused even with its own model — see TestAgentsAreAPaidFeature).
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Plan: platform.PlanGrowth})
 	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"}
 	h := NewHandler(d)
 
