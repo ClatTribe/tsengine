@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"reflect"
 
+	"github.com/ClatTribe/tsengine/internal/billing"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/coverage"
@@ -38,15 +39,16 @@ type Deps struct {
 	Store          store.Store
 	Connectors     *connector.Registry
 	Runner         *runner.Service
-	Jobs           *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
-	Desk           Decider          // optional: the HITL desk (approvals decide)
-	Submitter      Submitter        // optional: queue a proposed remediation Action at the desk (self-remediating loop)
-	GRC            Posturer         // optional: the compliance system-of-record (posture)
-	IncidentOpener IncidentOpener   // optional: opens incidents for event-driven ingest (identity/SaaS)
-	Vault          Sealer           // optional: seals OAuth tokens before persistence
-	Recorder       *ledger.Recorder // optional: signs review request/resolve into the ledger
-	Token          string           // static platform bearer token (required)
-	PublicURL      string           // base URL for OAuth redirect_uri (e.g. https://app.example)
+	Jobs           *jobs.Pool        // optional: runs rescans off the request path (nil → synchronous)
+	Desk           Decider           // optional: the HITL desk (approvals decide)
+	Submitter      Submitter         // optional: queue a proposed remediation Action at the desk (self-remediating loop)
+	GRC            Posturer          // optional: the compliance system-of-record (posture)
+	IncidentOpener IncidentOpener    // optional: opens incidents for event-driven ingest (identity/SaaS)
+	Vault          Sealer            // optional: seals OAuth tokens before persistence
+	Recorder       *ledger.Recorder  // optional: signs review request/resolve into the ledger
+	Razorpay       *billing.Razorpay // optional: self-serve purchase (nil/unconfigured → checkout says so honestly)
+	Token          string            // static platform bearer token (required)
+	PublicURL      string            // base URL for OAuth redirect_uri (e.g. https://app.example)
 	// AppURL is the browser-facing app base the OAuth callback lands the user back on after a
 	// successful connect. When set, the callback 303-redirects to AppURL/assets?connected=<kind>
 	// instead of writing a raw JSON blob into the browser (the post-connect "aha" moment). Empty
@@ -282,7 +284,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/reviews", d.auth(d.handleCreateReview))
 	mux.HandleFunc("GET /v1/reviews", d.auth(d.handleListReviews))
 	mux.HandleFunc("POST /v1/reviews/{id}/resolve", d.auth(d.handleResolveReview))
-	mux.HandleFunc("POST /v1/slack/interactive", d.handleSlackInteractive) // Slack-signed, not bearer-auth'd
+	mux.HandleFunc("POST /v1/slack/interactive", d.handleSlackInteractive)       // Slack-signed, not bearer-auth'd
+	mux.HandleFunc("POST /v1/billing/checkout", d.auth(d.handleBillingCheckout)) // self-serve purchase — creates a Razorpay order for the calling tenant
+	mux.HandleFunc("POST /v1/billing/webhook", d.handleBillingWebhook)           // Razorpay-signed, not bearer-auth'd — the only thing that flips Tenant.Plan
 	return mux
 }
 
