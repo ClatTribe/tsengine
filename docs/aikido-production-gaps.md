@@ -62,6 +62,19 @@ Two seams shaped the design, and both are handled honestly rather than guessed a
 - **Token resolution lives on `runner`, not `platformapi.Deps`** — but `Deps.Runner.Tokens` already
   reaches it, so no new dependency was needed.
 
+## Production readiness — the state after this campaign
+
+| Gap | State |
+|---|---|
+| **Billing — the product could not take money** | ✅ **Built.** `Tenant.Plan` was set at creation and never changed again: no provider, no checkout, no upgrade path. Now `internal/billing` (catalog to the paise, 18% GST, ₹-native) + `POST /v1/billing/checkout` + a signature-verified `POST /v1/billing/webhook` that is the only thing which flips a plan. Fails closed everywhere; only captured money grants a plan. |
+| **Checkout UI** | ✅ **Built.** Settings → "Plan & billing". The browser never flips the plan — Razorpay's signed webhook does, server-side. |
+| **Free + own-key leak** | ✅ **Closed.** The agents are the product, so `PlanLimits.AIAgents` (may you run them at all — Free=false) is now distinct from `AIEnabled` (do *we* fund the model — Enterprise only). Free is refused even with its own key. |
+| **"Fix it" button** | ✅ **Built.** The finding page leads with the real fix PR; the advice view is the fallback. |
+| Razorpay account + GST registration | ⏳ **Yours** — the live half is credential-gated (`RAZORPAY_*`). |
+| GitHub App `contents: write` | ⏳ **Yours** — without it the commit 403s (surfaced honestly). |
+| Pre-PR verification | ⏳ Needs CI/sandbox to run a customer's tests — see below. |
+| Detection quality at scale | ⏳ Needs deployed targets / an autonomous key. The real risk under every claim. |
+
 ## What still separates us from "high-confidence fix PRs"
 
 1. **The production patch is UNVERIFIED.** `ProposePatch` runs single-shot here. The
