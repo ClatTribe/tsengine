@@ -43,27 +43,34 @@ to the customer's repo. Four links; the third is now built:
 Everything stays HITL-gated (§18.2 inv. 3): a fix PR is a proposal a human reviews and merges, never a
 direct write to the default branch.
 
-## The one remaining link — and the design decision it needs
+## The chain — now complete (`POST /v1/findings/{id}/fix-pr`)
 
-Built and tested: **FetchFile** (read real source) → **codeagent.ProposePatch** (already on main) →
-**remediate.ProposeWithPatch** (carry the patch) → **CommitFiles + Apply** (commit + PR). What's left
-is wiring them together, and that is a design decision rather than glue, because of two seams:
+finding → **FetchFile** (real source) → **codeagent.ProposePatch** → **remediate.ProposeWithPatch**
+(carries the files) → **Submitter** (the HITL desk) → on approval **CommitFiles + Apply** (commit +
+PR with a diff). `/autofix` remains the cheap advice view.
 
-- **A `types.Finding` carries no `AssetID`.** Findings aren't linked to their asset in the data model;
-  everywhere else (per-asset compliance, data-tier) attributes a finding to an asset *heuristically*
-  (longest literal target match on the endpoint). A fix PR needs to know the repo — so it needs either
-  that same heuristic or a real finding→asset link.
-- **Token resolution lives on `runner`, not `platformapi.Deps`.** A handler (`POST /v1/findings/{id}/
-  autofix`) has the per-tenant LLM but no `Tokens`; the runner has `Tokens` + the asset + connection
-  but no LLM seam. Its `ProposeBatch` injection point (`cmd/platform/main.go`) has the signature
-  `func([]types.Finding, platform.Asset) []platform.Action` — no `ctx`, no model.
+**User-triggered by design** (the product call): a fix spends the customer's OWN model budget
+(§18.5 BYO-key), so it runs when they click Fix — never silently on a scan. The automatic
+"AutoFixes/mo" shape stays available by widening the runner's `ProposeBatch` seam (it currently has
+no ctx/LLM) later.
 
-So the choice is: (a) give `platformapi.Deps` a `Tokens` resolver and generate the patch in the
-autofix handler (the fix becomes on-demand, per finding, user-triggered), or (b) widen the
-`ProposeBatch` seam with a ctx + LLM and generate patches during the scan→propose pass (fixes arrive
-automatically, matching Aikido's "AutoFixes/mo" model). (b) is closer to the competitor's product
-shape; (a) is the smaller change and keeps LLM spend user-initiated. **Not chosen unilaterally** —
-it changes when we spend a customer's model budget.
+Two seams shaped the design, and both are handled honestly rather than guessed around:
+- **A `types.Finding` carries no `AssetID`**, and a code finding's endpoint is a `file:line` that does
+  NOT name the repo — so the usual longest-target attribution cannot identify the codebase. Rather
+  than guess which repo to open a PR against: explicit `asset_id` wins → a single connected repo is
+  unambiguous → otherwise refuse and ask.
+- **Token resolution lives on `runner`, not `platformapi.Deps`** — but `Deps.Runner.Tokens` already
+  reaches it, so no new dependency was needed.
+
+## What still separates us from "high-confidence fix PRs"
+
+1. **The production patch is UNVERIFIED.** `ProposePatch` runs single-shot here. The
+   propose→verify→**refine** loop and the execution oracle exist (`ProposePatchIterative`, benchmarked
+   on real CVEs) but on the benchmark branch — wiring them for a *customer* repo means running their
+   tests / re-scanning the patched tree, which needs CI or a sandbox. Until then the PR is a
+   well-grounded proposal a human must review, not a verified fix.
+2. **No UI yet** — the endpoint exists; a "Fix it" button on a finding does not.
+3. **`contents: write`** on the GitHub App is required for the commit; a 403 surfaces honestly.
 
 ## Known product limitation
 
