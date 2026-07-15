@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -135,6 +136,43 @@ func TestApply_NoFilesKeepsLegacyBehaviour(t *testing.T) {
 	}
 	if strings.Join(f.calls, ",") != "open-pr" {
 		t.Errorf("no files → PR only, got %v", f.calls)
+	}
+}
+
+// TestFetchFile reads real source (the input an honest fix needs) and refuses anything it can't
+// actually read — never a silently-empty "source" the model would hallucinate against.
+func TestFetchFile(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/acme/app/contents/app/login.php", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("ref") != "main" {
+			t.Errorf("ref not threaded: %q", r.URL.Query().Get("ref"))
+		}
+		// GitHub wraps base64 at 60 cols
+		enc := base64.StdEncoding.EncodeToString([]byte("<?php $q=\"SELECT $u\";"))
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": "file", "encoding": "base64", "content": enc[:4] + "\n" + enc[4:]})
+	})
+	mux.HandleFunc("/repos/acme/app/contents/app", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": "dir"})
+	})
+	mux.HandleFunc("/repos/acme/app/contents/huge.bin", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": "file", "encoding": "none", "size": 9000000})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	g := &GitHub{APIBase: srv.URL, HTTP: srv.Client()}
+
+	got, err := g.FetchFile(context.Background(), "tok", "acme/app", "main", "app/login.php")
+	if err != nil {
+		t.Fatalf("FetchFile: %v", err)
+	}
+	if got != "<?php $q=\"SELECT $u\";" {
+		t.Errorf("decoded content wrong: %q", got)
+	}
+	if _, err := g.FetchFile(context.Background(), "tok", "acme/app", "", "app"); err == nil {
+		t.Error("a directory must be an error, not empty source")
+	}
+	if _, err := g.FetchFile(context.Background(), "tok", "acme/app", "", "huge.bin"); err == nil {
+		t.Error("a too-large/no-inline-content file must be an error, not empty source")
 	}
 }
 

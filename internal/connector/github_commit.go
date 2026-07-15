@@ -3,6 +3,7 @@ package connector
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -157,6 +158,39 @@ func (g *GitHub) ghJSON(ctx context.Context, token, method, path string, body an
 		return nil
 	}
 	return json.Unmarshal(raw, out)
+}
+
+// FetchFile reads ONE file's content at `ref` (a branch/sha; empty = the repo default). This is the
+// other half of an honest AI fix: the engineer must reason over the REAL source, not a finding's
+// metadata. Returns the decoded text. A directory, a binary blob, or a too-large file is an error —
+// never a silently-empty "source" the model would then hallucinate a patch against.
+func (g *GitHub) FetchFile(ctx context.Context, token, full, ref, path string) (string, error) {
+	var out struct {
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+		Type     string `json:"type"`
+		Size     int    `json:"size"`
+	}
+	url := "/repos/" + full + "/contents/" + path
+	if ref != "" {
+		url += "?ref=" + ref
+	}
+	if err := g.ghJSON(ctx, token, http.MethodGet, url, nil, &out); err != nil {
+		return "", err
+	}
+	if out.Type != "" && out.Type != "file" {
+		return "", fmt.Errorf("github: %s is a %s, not a file", path, out.Type)
+	}
+	if out.Encoding != "base64" {
+		// GitHub omits content for very large files and asks you to use the blob API.
+		return "", fmt.Errorf("github: %s has no inline content (encoding %q, size %d) — too large to patch inline", path, out.Encoding, out.Size)
+	}
+	// the API wraps base64 at 60 cols
+	dec, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(out.Content, "\n", ""))
+	if err != nil {
+		return "", fmt.Errorf("github: decode %s: %w", path, err)
+	}
+	return string(dec), nil
 }
 
 // filesFrom extracts the fix payload (path→new file content) from an Action. Survives the JSON
