@@ -140,12 +140,26 @@ export const api = {
       { method: "POST", body: "{}" },
     ),
 
-  // AI autofix — an LLM-generated code patch for one finding (competitor parity: Snyk/Aikido/Copilot).
+  // AI autofix — fix GUIDANCE for one finding (reasoned from the finding itself, no repo access).
   autofix: (id: string) =>
     call<{ finding_id: string; title: string; rule_id: string; fix: string }>(
       `/v1/findings/${id}/autofix`,
       { method: "POST", body: "{}" },
     ),
+
+  // AI fix PR — the real thing: reads the actual source, patches it, and queues a gated pull request
+  // carrying the diff. patched:false is an honest outcome (the engineer declined), not an error.
+  // assetId names the repo when more than one is connected (a code finding's file:line doesn't say).
+  fixPR: (id: string, assetId?: string) =>
+    call<{
+      finding_id: string;
+      patched: boolean;
+      reason?: string;
+      action_id?: string;
+      status?: string;
+      files_changed?: string[];
+      repo?: string;
+    }>(`/v1/findings/${id}/fix-pr`, { method: "POST", body: JSON.stringify({ asset_id: assetId ?? "" }) }),
 
   // AI per-issue Investigate — the agentic verb on the Issues surface. Always returns the deterministic
   // cross-surface chain + blast radius; when AI is enabled, adds the root-cause/fix narrative.
