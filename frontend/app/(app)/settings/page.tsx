@@ -11,6 +11,7 @@ import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
+import { BillingControl } from "@/components/settings/billing-control";
 import { CloudRemediationControl } from "@/components/settings/cloud-remediation-control";
 import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
 import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
@@ -41,6 +42,8 @@ export default async function SettingsPage() {
   const [sla, maintenance, contacts, practitioners] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
+  // Customer-facing label — the store key for Core is "growth" (legacy); never show that to a user.
+  const planLabel = plan === "growth" ? "Core" : plan === "enterprise" ? "Enterprise" : "Free";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -55,12 +58,20 @@ export default async function SettingsPage() {
         <SectionTitle>Organization</SectionTitle>
         <Card className="space-y-3 p-5">
           <Row icon={Building2} label="Name" value={orgName} />
-          <Row icon={ShieldCheck} label="Plan" value={<span className="inline-flex items-center rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium capitalize text-accent">{plan}</span>} />
+          <Row icon={ShieldCheck} label="Plan" value={<span className="inline-flex items-center rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">{planLabel}</span>} />
           <Row icon={Lock} label="Tenant ID" value={<span className="mono text-xs text-muted">{session?.tenant ?? "—"}</span>} />
           {tenant?.created_at && (
             <Row icon={CheckCircle2} label="Member since" value={<span className="text-sm text-muted">{new Date(tenant.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>} />
           )}
         </Card>
+      </div>
+
+      {/* Billing — the self-serve purchase path. On Free this is the upgrade to the two AI agents; on a
+          paid plan it just confirms what's active. The plan itself only ever changes via Razorpay's
+          signed webhook, server-side. */}
+      <div>
+        <SectionTitle>Plan &amp; billing</SectionTitle>
+        <BillingControl plan={plan} planLabel={planLabel} />
       </div>
 
       {/* Service model — who employs the human-in-the-loop (self-serve / MSP / managed). A defining org
