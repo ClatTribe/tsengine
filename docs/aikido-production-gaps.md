@@ -43,6 +43,28 @@ to the customer's repo. Four links; the third is now built:
 Everything stays HITL-gated (§18.2 inv. 3): a fix PR is a proposal a human reviews and merges, never a
 direct write to the default branch.
 
+## The one remaining link — and the design decision it needs
+
+Built and tested: **FetchFile** (read real source) → **codeagent.ProposePatch** (already on main) →
+**remediate.ProposeWithPatch** (carry the patch) → **CommitFiles + Apply** (commit + PR). What's left
+is wiring them together, and that is a design decision rather than glue, because of two seams:
+
+- **A `types.Finding` carries no `AssetID`.** Findings aren't linked to their asset in the data model;
+  everywhere else (per-asset compliance, data-tier) attributes a finding to an asset *heuristically*
+  (longest literal target match on the endpoint). A fix PR needs to know the repo — so it needs either
+  that same heuristic or a real finding→asset link.
+- **Token resolution lives on `runner`, not `platformapi.Deps`.** A handler (`POST /v1/findings/{id}/
+  autofix`) has the per-tenant LLM but no `Tokens`; the runner has `Tokens` + the asset + connection
+  but no LLM seam. Its `ProposeBatch` injection point (`cmd/platform/main.go`) has the signature
+  `func([]types.Finding, platform.Asset) []platform.Action` — no `ctx`, no model.
+
+So the choice is: (a) give `platformapi.Deps` a `Tokens` resolver and generate the patch in the
+autofix handler (the fix becomes on-demand, per finding, user-triggered), or (b) widen the
+`ProposeBatch` seam with a ctx + LLM and generate patches during the scan→propose pass (fixes arrive
+automatically, matching Aikido's "AutoFixes/mo" model). (b) is closer to the competitor's product
+shape; (a) is the smaller change and keeps LLM spend user-initiated. **Not chosen unilaterally** —
+it changes when we spend a customer's model budget.
+
 ## Known product limitation
 
 `ProposePatch` returns **whole-file** contents. Fine for a small module; it breaks down on large files
