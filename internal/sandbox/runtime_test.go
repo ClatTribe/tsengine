@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/ClatTribe/tsengine/internal/execpolicy"
 )
 
 func argsString(a []string) string { return strings.Join(a, " ") }
@@ -162,5 +164,24 @@ func clearSandboxEnv(t *testing.T) {
 			t.Cleanup(func() { _ = os.Unsetenv(k) })
 		}
 		_ = os.Unsetenv(k)
+	}
+}
+
+// TestBuildRunArgs_InjectsPolicy: a spawn-time capability envelope is baked into the container as
+// TSENGINE_EXEC_POLICY, so the tool-server enforces scope even if the caller is later compromised.
+func TestBuildRunArgs_InjectsPolicy(t *testing.T) {
+	p := &execpolicy.Policy{Tools: []string{"nuclei"}, Hosts: []string{"app.acme.com"}, MaxRequests: 50}
+	args := buildRunArgs(SpawnOptions{Image: "img:1", Policy: p}, 12345, "tok")
+	got := argsString(args)
+	if !strings.Contains(got, "TSENGINE_EXEC_POLICY=") {
+		t.Fatalf("policy must be injected as an env var, got: %s", got)
+	}
+	// and the encoded policy must carry the real scope (so it's not an empty envelope)
+	if !strings.Contains(got, "nuclei") || !strings.Contains(got, "app.acme.com") {
+		t.Errorf("injected policy must carry the tools/hosts, got: %s", got)
+	}
+	// no policy → no env var (back-compat)
+	if strings.Contains(argsString(buildRunArgs(SpawnOptions{Image: "img:1"}, 1, "t")), "TSENGINE_EXEC_POLICY") {
+		t.Error("nil policy must not inject the env var")
 	}
 }

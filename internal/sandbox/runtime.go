@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/ClatTribe/tsengine/internal/execpolicy"
 )
 
 // SpawnOptions configures a sandbox container.
@@ -38,6 +40,13 @@ type SpawnOptions struct {
 	// credentials. Values live only for the container's lifetime
 	// (--rm) and are never written to disk inside the sandbox.
 	Env []string
+
+	// Policy is the per-dispatch capability envelope the tool-server enforces
+	// on every /execute (permitted tools/targets, run budget, expiry). Baked
+	// in at spawn as TSENGINE_EXEC_POLICY, so the sandbox refuses out-of-scope
+	// work even if the caller is later compromised or miswired. nil → the
+	// tool-server runs permissive (dev/back-compat, with a loud warning).
+	Policy *execpolicy.Policy
 
 	// Hardening is the per-sandbox security + resource confinement
 	// (docs/production-single-box.md, threat model T1/T2/T4/T5). When left
@@ -306,6 +315,14 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	}
 	for _, e := range opts.Env {
 		args = append(args, "-e", e)
+	}
+	// The capability envelope — baked in at container creation so it can't be widened by any later
+	// request. Best-effort: an encode failure (shouldn't happen for a plain struct) leaves the
+	// tool-server permissive, which it logs; the platform should surface it, but a scan must not crash.
+	if opts.Policy != nil {
+		if enc, err := opts.Policy.Encode(); err == nil {
+			args = append(args, "-e", "TSENGINE_EXEC_POLICY="+enc)
+		}
 	}
 	return append(args, opts.Image)
 }
