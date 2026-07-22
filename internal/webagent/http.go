@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/breaker"
 	"github.com/ClatTribe/tsengine/internal/netguard"
 )
 
@@ -35,9 +36,10 @@ type Requester struct {
 	max         int
 	minInterval time.Duration
 
-	sent   int
-	last   time.Time
-	denied int // egress-guard rejections (a host rebound to metadata/loopback) — the circuit-breaker signal
+	sent    int
+	last    time.Time
+	denied  int              // egress-guard rejections (a host rebound to metadata/loopback)
+	breaker *breaker.Breaker // auto-halt: repeated egress blocks trip it, and Send refuses once tripped
 }
 
 // NewRequester builds a Requester scoped to allowHosts (lowercased host[:port]).
@@ -59,6 +61,11 @@ func NewRequester(allowHosts []string, maxRequests int, minInterval time.Duratio
 	// Sending cookies manually (mergeCookieHeader) lets an explicit Cookie header override the jar
 	// per-name while still persisting the login cookie for normal authed requests.
 	r := &Requester{jar: jar, allow: allow, max: maxRequests, minInterval: minInterval}
+	// Auto-halt: 3 blocked-egress attempts within a minute means the agent is being steered (or has
+	// been steered) toward the SSRF-escalation surface — halt in-flight rather than block each one
+	// forever. Latches until a human resumes (Breaker().Reset()). This is the "nothing tripped while
+	// the model went hyperfocused" gap from the incident, closed on the host-side agent.
+	r.breaker = breaker.New(map[breaker.Kind]int{breaker.EgressBlocked: 3}, time.Minute)
 	// EGRESS GUARD (defense-in-depth on top of the host allowlist): dial through netguard so an
 	// in-scope hostname that resolves — or DNS-rebinds — to cloud metadata / loopback is refused at
 	// connect time. This is the Hugging Face-incident escalation path (SSRF → 169.254.169.254 →
@@ -70,7 +77,7 @@ func NewRequester(allowHosts []string, maxRequests int, minInterval time.Duratio
 		Timeout:       15 * time.Second,
 		CheckRedirect: noFollow,
 		Transport: &http.Transport{
-			DialContext:       netguard.ForbiddenDialContext(15*time.Second, true, func(_ string, _ net.IP) { r.denied++ }),
+			DialContext:       netguard.ForbiddenDialContext(15*time.Second, true, func(_ string, _ net.IP) { r.denied++; r.breaker.Record(breaker.EgressBlocked) }),
 			DisableKeepAlives: true,
 		},
 	}
@@ -80,6 +87,10 @@ func NewRequester(allowHosts []string, maxRequests int, minInterval time.Duratio
 // Denied reports how many outbound requests the egress guard refused (a scoped host that resolved to a
 // forbidden metadata/loopback address). Non-zero is a containment signal — an SSRF/rebind attempt.
 func (r *Requester) Denied() int { return r.denied }
+
+// Breaker is the auto-halt circuit-breaker (exposed so the engagement can surface its state + a human
+// can Reset it after reviewing). Nil-safe for a zero-value Requester.
+func (r *Requester) Breaker() *breaker.Breaker { return r.breaker }
 
 func noFollow(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 
@@ -148,6 +159,14 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 	// untouched. Returns before the budget counter, so a fixable typo never costs a request.
 	if strings.ContainsAny(rawURL, " \t\r\n") {
 		return nil, fmt.Errorf("URL contains raw whitespace — percent-encode query values before sending (space→%%20, and a literal %% →%%25); the HTTP request line cannot carry a raw space. Leave deliberate payload characters (../, {%%..%%}) as-is; encode only what the wire needs")
+	}
+	// AUTO-HALT: once the circuit-breaker has tripped (repeated egress-block attempts), refuse every
+	// further request until a human resumes. The agent doesn't get to keep probing after it's been
+	// caught steering toward the SSRF-escalation surface.
+	if r.breaker != nil {
+		if tripped, reason := r.breaker.Tripped(); tripped {
+			return nil, fmt.Errorf("AGENT AUTO-HALTED: %s — a human must review and resume before this agent can send again", reason)
+		}
 	}
 	u, err := url.Parse(rawURL)
 	if err != nil {

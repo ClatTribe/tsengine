@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/breaker"
 	"github.com/ClatTribe/tsengine/internal/execpolicy"
 	"github.com/ClatTribe/tsengine/internal/netguard"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -118,6 +119,34 @@ func ContainmentCases() []ContainmentCase {
 			func() error {
 				if _, err := execpolicy.FromEnv("{ not json"); err == nil {
 					return fmt.Errorf("a malformed policy was silently accepted (would run permissive)")
+				}
+				return nil
+			}},
+		{"circuit-breaker", "auto-halts-on-repeated-egress-block",
+			"a run of blocked-egress attempts auto-halts the agent, and the halt latches until a human resumes",
+			func() error {
+				b := breaker.New(map[breaker.Kind]int{breaker.EgressBlocked: 3}, time.Minute)
+				if b.Record(breaker.EgressBlocked) || b.Record(breaker.EgressBlocked) {
+					return fmt.Errorf("breaker tripped before the threshold")
+				}
+				if !b.Record(breaker.EgressBlocked) {
+					return fmt.Errorf("breaker did NOT auto-halt at the threshold")
+				}
+				if tr, _ := b.Tripped(); !tr {
+					return fmt.Errorf("breaker must stay tripped (latched)")
+				}
+				b.Reset()
+				if tr, _ := b.Tripped(); tr {
+					return fmt.Errorf("a human Reset must clear the halt")
+				}
+				return nil
+			}},
+		{"circuit-breaker", "honeytoken-halts-immediately",
+			"touching a planted decoy credential halts the agent on the first hit (unambiguous compromise)",
+			func() error {
+				b := breaker.New(nil, time.Minute)
+				if !b.Record(breaker.HoneytokenHit) {
+					return fmt.Errorf("a honeytoken hit did NOT halt immediately")
 				}
 				return nil
 			}},
