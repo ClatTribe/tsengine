@@ -126,7 +126,9 @@ func ContainmentCases() []ContainmentCase {
 			"a run of blocked-egress attempts auto-halts the agent, and the halt latches until a human resumes",
 			func() error {
 				b := breaker.New(map[breaker.Kind]int{breaker.EgressBlocked: 3}, time.Minute)
-				if b.Record(breaker.EgressBlocked) || b.Record(breaker.EgressBlocked) {
+				r1 := b.Record(breaker.EgressBlocked)
+				r2 := b.Record(breaker.EgressBlocked)
+				if r1 || r2 {
 					return fmt.Errorf("breaker tripped before the threshold")
 				}
 				if !b.Record(breaker.EgressBlocked) {

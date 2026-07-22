@@ -11,7 +11,9 @@ func clockAt(t *time.Time) func() time.Time { return func() time.Time { return *
 func TestBreaker_TripsAtThreshold(t *testing.T) {
 	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
 	b := New(map[Kind]int{EgressBlocked: 3}, time.Minute).WithClock(clockAt(&now))
-	if b.Record(EgressBlocked) || b.Record(EgressBlocked) {
+	first := b.Record(EgressBlocked)
+	second := b.Record(EgressBlocked)
+	if first || second {
 		t.Fatal("must not trip below the threshold")
 	}
 	if !b.Record(EgressBlocked) {
