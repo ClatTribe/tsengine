@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -19,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ClatTribe/tsengine/internal/netguard"
 )
 
 // Requester is the safety layer between the agent and the network. It enforces a
@@ -32,8 +35,9 @@ type Requester struct {
 	max         int
 	minInterval time.Duration
 
-	sent int
-	last time.Time
+	sent   int
+	last   time.Time
+	denied int // egress-guard rejections (a host rebound to metadata/loopback) — the circuit-breaker signal
 }
 
 // NewRequester builds a Requester scoped to allowHosts (lowercased host[:port]).
@@ -54,12 +58,28 @@ func NewRequester(allowHosts []string, maxRequests int, minInterval time.Duratio
 	// was silently clobbered by the login cookie, dead-ending EVERY token-forgery IDOR/privesc chain.
 	// Sending cookies manually (mergeCookieHeader) lets an explicit Cookie header override the jar
 	// per-name while still persisting the login cookie for normal authed requests.
-	return &Requester{
-		client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: noFollow},
-		jar:    jar,
-		allow:  allow, max: maxRequests, minInterval: minInterval,
+	r := &Requester{jar: jar, allow: allow, max: maxRequests, minInterval: minInterval}
+	// EGRESS GUARD (defense-in-depth on top of the host allowlist): dial through netguard so an
+	// in-scope hostname that resolves — or DNS-rebinds — to cloud metadata / loopback is refused at
+	// connect time. This is the Hugging Face-incident escalation path (SSRF → 169.254.169.254 →
+	// instance-role creds) closed for our most powerful offensive component. Private/RFC1918 is still
+	// permitted (an authorized internal target); the scope allowlist gates which hosts at all. A
+	// rejection bumps `denied` — the counter a circuit-breaker later trips on. Requesters are used
+	// serially per engagement (like sent/last), so a plain counter matches the existing model.
+	r.client = &http.Client{
+		Timeout:       15 * time.Second,
+		CheckRedirect: noFollow,
+		Transport: &http.Transport{
+			DialContext:       netguard.ForbiddenDialContext(15*time.Second, true, func(_ string, _ net.IP) { r.denied++ }),
+			DisableKeepAlives: true,
+		},
 	}
+	return r
 }
+
+// Denied reports how many outbound requests the egress guard refused (a scoped host that resolved to a
+// forbidden metadata/loopback address). Non-zero is a containment signal — an SSRF/rebind attempt.
+func (r *Requester) Denied() int { return r.denied }
 
 func noFollow(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 
