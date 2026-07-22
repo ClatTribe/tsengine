@@ -91,6 +91,10 @@ services:
       # gets a read-only rootfs. Resource/PID/file limits apply by default.
       TSENGINE_SANDBOX_NETWORK: tsengine-sandbox
       TSENGINE_SANDBOX_READONLY: "1"
+      # Fail-closed: run every sandbox as a non-root user (belt-and-suspenders over the
+      # image's own non-root USER) so a compromised tool never has uid 0. cap-drop=ALL +
+      # no-new-privileges are always-on in the spawn path (sandbox.ConfinementFlags).
+      TSENGINE_SANDBOX_USER: "65534:65534"
       TSENGINE_MONITOR_INTERVAL: ${TSENGINE_MONITOR_INTERVAL:-12h}
       TSENGINE_WEBHOOK_SECRET: ${TSENGINE_WEBHOOK_SECRET:-}
       # Public base URL is the TLS edge (OAuth redirect_uri, webhook callbacks).

@@ -11,6 +11,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/breaker"
 	"github.com/ClatTribe/tsengine/internal/execpolicy"
 	"github.com/ClatTribe/tsengine/internal/netguard"
+	"github.com/ClatTribe/tsengine/internal/sandbox"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -149,6 +150,37 @@ func ContainmentCases() []ContainmentCase {
 				b := breaker.New(nil, time.Minute)
 				if !b.Record(breaker.HoneytokenHit) {
 					return fmt.Errorf("a honeytoken hit did NOT halt immediately")
+				}
+				return nil
+			}},
+		{"sandbox", "confinement-flags-fail-closed",
+			"every sandbox spawns with ALL caps dropped + no-new-privileges, and never disables seccomp/apparmor or runs privileged",
+			func() error {
+				flags := strings.Join(sandbox.ConfinementFlags(), " ")
+				for _, want := range []string{"--cap-drop=ALL", "no-new-privileges"} {
+					if !strings.Contains(flags, want) {
+						return fmt.Errorf("the always-on confinement set is missing %q", want)
+					}
+				}
+				for _, bad := range []string{"--privileged", "seccomp=unconfined", "apparmor=unconfined", "--cap-add"} {
+					if strings.Contains(flags, bad) {
+						return fmt.Errorf("the confinement set contains an escape-weakening flag %q", bad)
+					}
+				}
+				return nil
+			}},
+		{"sandbox", "strict-profile-isolated",
+			"the production hardening profile is read-only rootfs + a non-root user + an isolated network",
+			func() error {
+				h := sandbox.StrictHardening("tsengine-sandbox")
+				if !h.ReadOnly {
+					return fmt.Errorf("strict profile does not force a read-only rootfs")
+				}
+				if h.User == "" || h.User == "0" || h.User == "root" || strings.HasPrefix(h.User, "0:") {
+					return fmt.Errorf("strict profile runs as root (user=%q)", h.User)
+				}
+				if h.Network == "" {
+					return fmt.Errorf("strict profile does not isolate the network")
 				}
 				return nil
 			}},

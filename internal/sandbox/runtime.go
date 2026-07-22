@@ -90,6 +90,36 @@ func DefaultHardening() Hardening {
 	return Hardening{Memory: "4g", CPUs: "2", PidsLimit: "1024", NoFile: "4096", TmpfsTmp: "512m"}
 }
 
+// StrictHardening is the fail-closed production profile: the DefaultHardening
+// resource caps PLUS a read-only root filesystem, a non-root user, and an
+// isolated network. This is what docker-compose.prod wires via the
+// TSENGINE_SANDBOX_* env — a tool that is compromised inside the sandbox gets
+// no writable rootfs, no root, and no route off its own dedicated network. The
+// network name is deployment-specific (the dedicated docker network the
+// platform joins), so it is a parameter; an empty name yields the prod caps
+// minus network isolation. Named + exported so the containment gate can assert
+// the production profile stays fail-closed.
+func StrictHardening(network string) Hardening {
+	h := DefaultHardening()
+	h.ReadOnly = true
+	h.User = "65534:65534" // nobody:nogroup — never uid 0
+	h.Network = network
+	return h
+}
+
+// ConfinementFlags are the always-on Docker security flags EVERY sandbox spawns
+// with, independent of the opt-in Hardening profile: drop ALL Linux
+// capabilities and forbid privilege escalation (a setuid/setgid binary inside
+// the sandbox can never gain new privileges). Docker's default seccomp +
+// AppArmor profiles also apply because buildRunArgs NEVER emits
+// seccomp=unconfined / apparmor=unconfined / --privileged. This is the single
+// source of truth for the escape boundary — buildRunArgs uses it, and the
+// containment release gate asserts over it so a future change cannot silently
+// weaken confinement.
+func ConfinementFlags() []string {
+	return []string{"--cap-drop=ALL", "--security-opt", "no-new-privileges"}
+}
+
 // HardeningFromEnv overlays TSENGINE_SANDBOX_* env vars on DefaultHardening.
 // A value of "off"/"none"/"0"/"unlimited" for a limit disables it (sets it "").
 func HardeningFromEnv() Hardening {
@@ -253,8 +283,11 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	args := []string{
 		"run", "-d", "--rm",
 		"-e", "TSENGINE_AUTH_TOKEN=" + token,
-		"--cap-drop=ALL",
-		"--security-opt", "no-new-privileges",
+	}
+	// Always-on escape boundary (single source of truth — ConfinementFlags):
+	// cap-drop=ALL + no-new-privileges, and never seccomp/apparmor unconfined.
+	args = append(args, ConfinementFlags()...)
+	args = append(args,
 		// Make host.docker.internal resolve to the host gateway from
 		// inside the sandbox. Docker Desktop (macOS/Windows) injects this
 		// automatically, but Linux does not — without it, a target the
@@ -263,7 +296,7 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 		// fail. strix lost a full ip_address benchmark to exactly this
 		// (recall 1.0→0.0). The alias is harmless where it already exists.
 		"--add-host", "host.docker.internal:host-gateway",
-	}
+	)
 
 	// Per-sandbox hardening (docs/production-single-box.md §5 P1). Limits + a
 	// writable /tmp tmpfs apply by default; read-only rootfs / non-root user /
