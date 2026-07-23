@@ -123,6 +123,12 @@ func (d Deps) handleOSINTScan(w http.ResponseWriter, r *http.Request, tenantID s
 	}
 	snap := osint.CollectCT(r.Context(), tenantID, domains, known, fetch)
 
+	// Dark-web / infostealer: the KEYLESS HudsonRock Cavalier collector over the same domains, reusing the
+	// same SSRF-screened fetch (a public HTTPS JSON API like crt.sh). A corporate credential harvested by
+	// infostealer malware is the highest-severity OSINT class (SpyCloud/Flare parity). Best-effort.
+	stealer := osint.CollectStealerLogs(r.Context(), tenantID, domains, fetch)
+	snap.StealerLogs = append(snap.StealerLogs, stealer.StealerLogs...)
+
 	// Best-effort: if the tenant has a connected GitHub org, ALSO run the code-search leak collector over the
 	// same domains, reusing THAT connection's token (no new credential — the SaaS-posture GitHub sync pattern).
 	// It finds the org's secrets leaked in THIRD-PARTY public repos; the org's OWN repos are excluded (those are
@@ -164,8 +170,8 @@ func (d Deps) handleOSINTScan(w http.ResponseWriter, r *http.Request, tenantID s
 
 	findings, stored, pivoted := d.ingestOSINTSnapshot(r.Context(), tenantID, snap, "OSINT live CT scan")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"source": "crtsh+github-search", "domains_scanned": len(domains), "hosts_discovered": len(snap.ExposedHosts),
-		"github_leaks": ghLeaks, "findings_detected": stored, "assets_pivoted": pivoted, "findings": findings,
+		"source": "crtsh+hudsonrock+github-search", "domains_scanned": len(domains), "hosts_discovered": len(snap.ExposedHosts),
+		"stealer_logs": len(snap.StealerLogs), "github_leaks": ghLeaks, "findings_detected": stored, "assets_pivoted": pivoted, "findings": findings,
 	})
 }
 

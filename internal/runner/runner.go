@@ -389,6 +389,11 @@ func (s *Service) syncOSINT(ctx context.Context, tenantID string) []types.Findin
 		return nil // nothing to monitor externally (no domain assets) — never a false finding
 	}
 	snap := osint.CollectCT(ctx, tenantID, domains, known, s.OSINTFetcher)
+	// Dark-web / infostealer monitoring is CONTINUOUS too (not just the manual scan): the keyless
+	// HudsonRock collector over the same domains + fetcher, so a newly-listed corporate credential
+	// compromise becomes a finding the Detector turns into an incident — the "new exposure → alert" loop.
+	stealer := osint.CollectStealerLogs(ctx, tenantID, domains, s.OSINTFetcher)
+	snap.StealerLogs = append(snap.StealerLogs, stealer.StealerLogs...)
 	findings := osint.Assess(snap, osint.Options{NewID: s.NewID})
 	for i := range findings {
 		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
