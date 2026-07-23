@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -50,6 +51,20 @@ type InvResource struct {
 	// Set on ECS/EKS/Lambda-image/etc. resources; drives the agentless workload scan
 	// (ADR 0009 Phase 2 — cloudengine.WorkloadScanPlan). Carried into Node.Attrs["image"].
 	Image string `json:"image,omitempty"`
+	// Entitlement carries the CIEM rightsizing inputs for a PRINCIPAL — optional; when present it is
+	// carried into the principal Node's Attrs so cloudengine.RightsizePrincipals can flag over-privilege.
+	Entitlement *Entitlement `json:"entitlement,omitempty"`
+}
+
+// Entitlement is a principal's granted action set plus the actions it actually USED in an observation
+// window (the CIEM inputs). The granted side can come from policy ingest; the usage side is the gated
+// live half (CloudTrail / IAM last-accessed / Access Analyzer). Observed is the honest gate (§10): true
+// only when real usage data is available — absence of usage is never treated as "unused".
+type Entitlement struct {
+	GrantedActions []string `json:"granted_actions,omitempty"`
+	UsedActions    []string `json:"used_actions,omitempty"`
+	WindowDays     int      `json:"window_days,omitempty"`
+	Observed       bool     `json:"observed,omitempty"`
 }
 
 type InvTrust struct {
@@ -187,6 +202,23 @@ func Ingest(inv Inventory) *Snapshot {
 		}
 		if r.Image != "" { // the container image a workload runs (agentless scan, Phase 2)
 			n.Attrs = map[string]string{"image": r.Image}
+		}
+		if e := r.Entitlement; e != nil { // CIEM rightsizing inputs → Node.Attrs (read by RightsizePrincipals)
+			if n.Attrs == nil {
+				n.Attrs = map[string]string{}
+			}
+			if len(e.GrantedActions) > 0 {
+				n.Attrs["granted_actions"] = strings.Join(e.GrantedActions, " ")
+			}
+			if len(e.UsedActions) > 0 {
+				n.Attrs["used_actions"] = strings.Join(e.UsedActions, " ")
+			}
+			if e.WindowDays > 0 {
+				n.Attrs["usage_window_days"] = strconv.Itoa(e.WindowDays)
+			}
+			if e.Observed {
+				n.Attrs["usage_observed"] = "true"
+			}
 		}
 		s.AddNode(n)
 	}

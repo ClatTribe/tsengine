@@ -44,12 +44,16 @@ type RawIAMUser struct {
 	ARN   string `json:"arn"`
 	Name  string `json:"name,omitempty"`
 	Admin bool   `json:"admin,omitempty"`
+	// Entitlement is OPTIONAL CIEM data (granted + used actions). When the collector includes IAM
+	// last-accessed / CloudTrail usage, it flows into over-privilege findings; absent → no CIEM claim.
+	Entitlement *cloudgraph.Entitlement `json:"entitlement,omitempty"`
 }
 type RawIAMRole struct {
-	ARN             string `json:"arn"`
-	Name            string `json:"name,omitempty"`
-	Admin           bool   `json:"admin,omitempty"`
-	TrustPolicyJSON string `json:"trust_policy,omitempty"`
+	ARN             string                  `json:"arn"`
+	Name            string                  `json:"name,omitempty"`
+	Admin           bool                    `json:"admin,omitempty"`
+	TrustPolicyJSON string                  `json:"trust_policy,omitempty"`
+	Entitlement     *cloudgraph.Entitlement `json:"entitlement,omitempty"` // optional CIEM data (see RawIAMUser)
 }
 
 // RawSecurityGroup carries the normalized ingress rules (a JSON array of cloudgraph.SGRule) for one SG.
@@ -84,11 +88,13 @@ func Build(raw RawAWS) cloudgraph.Inventory {
 	for _, u := range raw.Users {
 		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
 			ID: u.ARN, Kind: cloudgraph.KindPrincipal, Type: "iam_user", Name: u.Name, Privileged: u.Admin,
+			Entitlement: u.Entitlement,
 		})
 	}
 	for _, r := range raw.Roles {
 		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
 			ID: r.ARN, Kind: cloudgraph.KindPrincipal, Type: "iam_role", Name: r.Name, Privileged: r.Admin,
+			Entitlement: r.Entitlement,
 		})
 		for _, p := range trustPrincipals(r.TrustPolicyJSON) {
 			inv.Trusts = append(inv.Trusts, cloudgraph.InvTrust{Principal: p, Role: r.ARN})
