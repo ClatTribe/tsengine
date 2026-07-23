@@ -61,7 +61,13 @@ RULES
 
 `)
 	fmt.Fprintf(&b, "TARGET: %s\n", cc.Target)
-	if len(cc.Routes) > 0 {
+	// Always-on structured memory (ADR 0016): inject the world-model digest every turn so the agent reasons
+	// over its accumulated structured state (endpoints + untested params + tested/blocked classes + sessions
+	// held + hosts + pivots) — the long-horizon coherence XBOW gets from a durable model, not a scrolling
+	// transcript. Derived purely from evidence (§10). Falls back to the flat route list before any probe.
+	if digest := BuildWorldModel(cc.History, cc.Findings).Digest(); digest != "" {
+		fmt.Fprintf(&b, "TARGET MODEL (your structured memory — reason over THIS, not the raw transcript):\n%s\n", digest)
+	} else if len(cc.Routes) > 0 {
 		fmt.Fprintf(&b, "KNOWN ROUTES: %s\n", strings.Join(cc.Routes, ", "))
 	}
 	if len(cc.Seeds) > 0 {
