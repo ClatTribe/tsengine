@@ -1,19 +1,23 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/clouddrift"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/azinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // handleIngestAWSInventory (POST /v1/cloud/inventory) is the live-collector ingest for the wedge's CLOUD
@@ -93,6 +97,10 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
+	// CIEM: if the posted inventory's principals carry observed usage data, rightsize them into
+	// over-privilege findings that flow through the same store/GRC/issues path. Inert (0 findings) when
+	// no principal carries usage attrs — the honest gate (§10). Best-effort — never blocks the ingest.
+	ciemStored := d.persistCIEMFindings(r.Context(), tenantID, cloudengine.RightsizePrincipals(cloudgraph.Ingest(inv)))
 	internetEdges := 0
 	for _, e := range inv.Reaches {
 		if e.From == cloudgraph.InternetID {
@@ -110,6 +118,32 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		"trust_edges":    len(inv.Trusts),
 		"internet_edges": internetEdges,
 		"drift_detected": driftStored, // config changes vs the prior snapshot (0 on first ingest / no change)
+		"ciem_findings":  ciemStored,  // over-privileged principals (0 unless the inventory carries usage data)
 		"stored":         true,
 	})
+}
+
+// persistCIEMFindings stores the CIEM over-privilege findings through the same L1.5-enrich → store → GRC
+// path as drift findings (mirrors persistDriftFindings, with CIEM provenance). Best-effort.
+func (d Deps) persistCIEMFindings(ctx context.Context, tenantID string, findings []types.Finding) int {
+	if d.Store == nil || len(findings) == 0 {
+		return 0
+	}
+	findings = enrichFindings(findings) // L1.5 parity (§11)
+	saved := 0
+	for i, f := range findings {
+		f.ID = d.newID("ciem") + "-" + strconv.Itoa(i)
+		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
+			continue
+		}
+		if d.GRC != nil {
+			_ = d.GRC.Apply(ctx, tenantID, f) // fold the least-privilege gap into the posture
+		}
+		saved++
+	}
+	if d.Recorder != nil && saved > 0 {
+		d.Recorder.Record("ciem over-privilege detected", "ciem",
+			map[string]any{"tenant_id": tenantID, "ciem_findings": saved}, "unused-permission rightsizing")
+	}
+	return saved
 }
