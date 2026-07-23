@@ -27,7 +27,9 @@ type WorldModel struct {
 	Endpoints  map[string]*WMEndpoint `json:"endpoints"`
 	Identities []*WMIdentity          `json:"identities,omitempty"`
 	Attempts   []*WMAttempt           `json:"attempts,omitempty"`
-	Edges      []*WMPivotEdge         `json:"edges,omitempty"` // host→host pivots (populated in P3)
+	Edges      []*WMPivotEdge         `json:"edges,omitempty"` // host→host pivots (P3)
+
+	firstWebHost string // the engagement's initial web host (the pivot source) — evidence-order, deterministic
 }
 
 // WMHost is one reachable host:port in the target's footprint (the cross-host graph's node).
@@ -106,6 +108,24 @@ func BuildWorldModel(turns []Turn, findings []Finding) *WorldModel {
 // ingest folds one Turn into the model: its host, its endpoint (+ params + auth-requirement), any session
 // identity it established, and a blocked-attempt if the server refused it (403).
 func (w *WorldModel) ingest(t Turn) {
+	// Cross-host chaining (P3): an ssh_exec turn (Method "ssh_exec", URL "user@host:port") is a lateral
+	// hop — the creds were discovered over HTTP, so it's a PIVOT from the web host to a new SSH host
+	// (the XBEN-042 "leaked cred → lateral movement → new surface" capability, made durable).
+	if strings.EqualFold(strings.TrimSpace(t.Method), "ssh_exec") {
+		if sshHost := sshHostPort(t.URL); sshHost != "" {
+			h := w.Hosts[sshHost]
+			if h == nil {
+				h = &WMHost{ID: sshHost, Reachable: t.Status > 0, FromTurn: t.ID}
+				w.Hosts[sshHost] = h
+			}
+			h.Services = addUnique(h.Services, "ssh")
+			if from := w.firstWebHost; from != "" && from != sshHost {
+				w.addEdge(&WMPivotEdge{FromHost: from, ToHost: sshHost, Via: "leaked-cred", Evidence: t.ID})
+			}
+		}
+		return // an SSH hop is not an HTTP endpoint
+	}
+
 	host := hostPortOf(t.URL)
 	if host != "" {
 		h := w.Hosts[host]
@@ -116,7 +136,12 @@ func (w *WorldModel) ingest(t Turn) {
 		if t.Status > 0 {
 			h.Reachable = true
 		}
-		h.Services = addUnique(h.Services, schemeOf(t.URL))
+		if s := schemeOf(t.URL); s == "http" || s == "https" {
+			h.Services = addUnique(h.Services, s)
+			if w.firstWebHost == "" {
+				w.firstWebHost = host
+			}
+		}
 	}
 
 	shape := urlShape(t.URL)
@@ -264,6 +289,25 @@ func endpointKeyForRoute(route string) string {
 		return ""
 	}
 	return "GET " + shape
+}
+
+// sshHostPort parses an ssh_exec turn URL ("user@host:port") into the "host:port" host id.
+func sshHostPort(raw string) string {
+	s := strings.TrimSpace(raw)
+	if i := strings.LastIndexByte(s, '@'); i >= 0 {
+		s = s[i+1:]
+	}
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
+// addEdge appends a pivot edge, deduped by (from,to,via).
+func (w *WorldModel) addEdge(e *WMPivotEdge) {
+	for _, x := range w.Edges {
+		if x.FromHost == e.FromHost && x.ToHost == e.ToHost && x.Via == e.Via {
+			return
+		}
+	}
+	w.Edges = append(w.Edges, e)
 }
 
 func hostPortOf(raw string) string {
