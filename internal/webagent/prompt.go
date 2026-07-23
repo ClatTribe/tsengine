@@ -82,8 +82,12 @@ RULES
 	}
 	fmt.Fprintf(&b, "REQUESTS USED: %d\n\n", cc.req.Sent())
 
-	b.WriteString("TOOLS:\n")
-	for _, t := range tools() {
+	// Progressive tool disclosure (toolselect.go): show only the tools relevant to the current engagement
+	// state, not the whole catalog — keeps the LLM's active tool set minimal for accuracy. More tools
+	// unlock as the engagement progresses (surface discovered → probes; creds seen → crack/lateral; a
+	// finding recorded → confirm).
+	b.WriteString("TOOLS (more unlock as you discover surface / creds / findings):\n")
+	for _, t := range selectTools(cc) {
 		fmt.Fprintf(&b, "- %s\n", t.help)
 	}
 
