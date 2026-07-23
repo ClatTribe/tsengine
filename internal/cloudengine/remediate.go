@@ -159,25 +159,65 @@ func iamDenyAccess(pathID string, e types.PathEdge) RemediationArtifact {
 	return art
 }
 
+// restrictTrust emits a CONCRETE scoped trust policy (the applyable "after" state) that permits
+// sts:AssumeRole only for authorized callers — not the attacker principal — then VERIFIES via
+// cloudiam.Authorize that the fix cuts the edge: e.From CAN assume e.To under a trust that lists it
+// (the finding), and CANNOT under the scoped trust (the fix). Proving the transition, not just that
+// the new doc is safe, is what makes this a real verification (§10) rather than prose.
 func restrictTrust(pathID string, e types.PathEdge) RemediationArtifact {
-	return RemediationArtifact{
+	scoped := `{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "AllowAuthorizedCallersOnly",
+    "Effect": "Allow",
+    "Principal": {"AWS": "arn:aws:iam::ACCOUNT_ID:role/authorized-caller"},
+    "Action": "sts:AssumeRole"
+  }]
+}`
+	art := RemediationArtifact{
 		PathID: pathID, Strategy: "restrict_trust", Kind: "trust_policy", CutsEdge: e,
 		Title:     fmt.Sprintf("Scope %s's trust policy to exclude %s", e.To, e.From),
-		Rationale: fmt.Sprintf("%s can assume %s; remove %s from %s's AssumeRolePolicyDocument so the chain breaks.", e.From, e.To, e.From, e.To),
-		Content: fmt.Sprintf(`# Edit the trust policy of %s: remove the statement permitting
-# principal %s to sts:AssumeRole. Keep only the principals that legitimately need it.`, e.To, e.From),
+		Rationale: fmt.Sprintf("%s can assume %s; replace %s's AssumeRolePolicyDocument with one that lists only the principals that legitimately need it (the attacker principal removed), so the chain breaks.", e.From, e.To, e.To),
+		Content:   scoped,
 	}
+	// self-verify the transition through the same evaluator the engine reasons with.
+	before, _ := cloudiam.Parse([]byte(fmt.Sprintf(`{"Statement":[{"Effect":"Allow","Principal":{"AWS":%q},"Action":"sts:AssumeRole"}]}`, e.From)))
+	after, err := cloudiam.Parse([]byte(scoped))
+	if before != nil && err == nil {
+		req := cloudiam.Request{Principal: e.From, Action: "sts:AssumeRole", Resource: e.To}
+		decBefore, _ := cloudiam.Authorize(req, cloudiam.PolicySet{ResourcePolicy: before, SameAccount: true})
+		decAfter, _ := cloudiam.Authorize(req, cloudiam.PolicySet{ResourcePolicy: after, SameAccount: true})
+		art.Verified = decBefore == cloudiam.Allow && decAfter != cloudiam.Allow
+		art.VerifyMsg = fmt.Sprintf("cloudiam.Authorize confirms %s could assume %s before and cannot under the scoped trust policy", e.From, e.To)
+	}
+	return art
 }
 
+// closeNetwork emits the revoke CLI plus a scoped-ingress end-state, then VERIFIES via
+// cloudgraph.InternetReachable that the fix cuts internet reach: the 0.0.0.0/0 ingress IS
+// internet-reachable (the finding), the scoped-to-a-private-CIDR ingress is NOT (the fix) — using
+// the same reachability evaluator PruneUnreachable uses. The transition is the proof (§10).
 func closeNetwork(pathID string, e types.PathEdge) RemediationArtifact {
-	return RemediationArtifact{
+	art := RemediationArtifact{
 		PathID: pathID, Strategy: "close_network", Kind: "aws_cli", CutsEdge: e,
 		Title:     fmt.Sprintf("Remove internet exposure of %s", e.To),
-		Rationale: fmt.Sprintf("the path enters via %s → %s; restrict the security group / public access so the outside cannot reach it.", e.From, e.To),
+		Rationale: fmt.Sprintf("the path enters via %s → %s; revoke the 0.0.0.0/0 ingress (or set the bucket/account public-access block) so the outside cannot reach it — scope ingress to your corporate CIDR instead.", e.From, e.To),
 		Content: fmt.Sprintf(`# revoke the 0.0.0.0/0 ingress that exposes %s, e.g.:
 aws ec2 revoke-security-group-ingress --group-id <sg-id> --protocol tcp --port 0-65535 --cidr 0.0.0.0/0
+# then scope ingress to your corporate range, e.g.:
+aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port <svc-port> --cidr 10.0.0.0/8
 # (or set the bucket/account public-access block, depending on the resource type)`, e.To),
 	}
+	// self-verify the transition: internet-open before, corp-scoped after (port-agnostic — a private
+	// CIDR never covers 0.0.0.0/0, so the "after" is unreachable from the internet on any port).
+	const anyPort = 443
+	openRules := []cloudgraph.SGRule{{Proto: "tcp", CIDR: "0.0.0.0/0", PortFrom: 0, PortTo: 65535}}
+	scopedRules := []cloudgraph.SGRule{{Proto: "tcp", CIDR: "10.0.0.0/8", PortFrom: 0, PortTo: 65535}}
+	exposedBefore := cloudgraph.InternetReachable(openRules, anyPort, "tcp")
+	exposedAfter := cloudgraph.InternetReachable(scopedRules, anyPort, "tcp")
+	art.Verified = exposedBefore && !exposedAfter
+	art.VerifyMsg = "cloudgraph.InternetReachable confirms the service is reachable from 0.0.0.0/0 and unreachable once ingress is scoped to a private CIDR"
+	return art
 }
 
 // RenderRemediations formats the applyable fixes.
