@@ -58,8 +58,11 @@ RULES
 		b.WriteByte('\n')
 	}
 
+	// Minimal tool list (toolselect.go): show only the tools usable now — propose_fix appears once an
+	// issue is recorded, rightsize_principal only when the snapshot carries usage data. The dispatch
+	// registry keeps every tool, so this narrows what the LLM sees for accuracy, not what it can call.
 	b.WriteString("TOOLS:\n")
-	for _, t := range tools() {
+	for _, t := range selectTools(cc) {
 		fmt.Fprintf(&b, "- %s\n", t.help)
 	}
 
