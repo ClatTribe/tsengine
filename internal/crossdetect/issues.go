@@ -53,9 +53,23 @@ type Issue struct {
 	CVSS          float64 `json:"cvss,omitempty"`
 	CVSSVector    string  `json:"cvss_vector,omitempty"`
 	PublicExploit bool    `json:"public_exploit,omitempty"`
+	// SSVC is the worst CISA SSVC decision across the group's findings (act > attend > track) — the
+	// actionable "what do I DO" prioritization from the threat_intel hook (§7). Drives a within-severity
+	// prioritization boost so an "act" issue leads. Grounded: only from a finding's real ThreatIntel.SSVC.
+	SSVC string `json:"ssvc,omitempty"`
 }
 
 var cveRe = regexp.MustCompile(`CVE-\d{4}-\d{4,7}`)
+
+// worstSSVC returns the more-urgent of two SSVC decisions (act > attend > track). Empty inputs are
+// ignored, so aggregating across a group keeps the most-urgent decision any finding carried.
+func worstSSVC(a, b string) string {
+	rank := map[string]int{"act": 3, "attend": 2, "track": 1}
+	if rank[b] > rank[a] {
+		return b
+	}
+	return a
+}
 
 // UnifiedIssues collapses a tenant's flat finding list into de-duplicated issues.
 // Findings sharing a CVE (across any scanner / surface) merge into one issue;
@@ -109,6 +123,9 @@ func UnifiedIssues(findings []types.Finding) []Issue {
 			}
 			if len(ti.Exploits) > 0 {
 				g.PublicExploit = true
+			}
+			if ti.SSVC != nil {
+				g.SSVC = worstSSVC(g.SSVC, ti.SSVC.Decision)
 			}
 		}
 	}

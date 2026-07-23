@@ -63,7 +63,7 @@ func PrioritizeByDataTier(issues []Issue, assets []platform.Asset) []Issue {
 	for i := range issues {
 		tier := tierForEndpoint(issues[i].Endpoint, assets)
 		issues[i].DataTier = tier
-		issues[i].RiskRank = RiskWeight(types.Severity(issues[i].Severity), tier) + exploitabilityBoost(issues[i])
+		issues[i].RiskRank = RiskWeight(types.Severity(issues[i].Severity), tier) + exploitabilityBoost(issues[i]) + ssvcBoost(issues[i])
 	}
 	sort.SliceStable(issues, func(a, b int) bool { return issues[a].RiskRank > issues[b].RiskRank })
 	return issues
@@ -83,6 +83,20 @@ func exploitabilityBoost(i Issue) int {
 		return 60
 	case i.Confirmed:
 		return 20
+	}
+	return 0
+}
+
+// ssvcBoost is the threat-intel-urgency term (a DIFFERENT axis from exploitabilityBoost's proof-of-exploit):
+// a CISA SSVC "act" decision (actively exploited + high impact — patch now) leads, "attend" (out-of-cycle)
+// next. Small + additive, and capped so exploitabilityBoost(≤80) + ssvcBoost(≤15) stays under the 100-point
+// severity gap — it re-orders WITHIN a severity band, never lifts a lesser issue past a worse one.
+func ssvcBoost(i Issue) int {
+	switch i.SSVC {
+	case "act":
+		return 15
+	case "attend":
+		return 8
 	}
 	return 0
 }
