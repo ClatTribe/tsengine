@@ -100,6 +100,8 @@ type Resp struct {
 	Body      string
 	Location  string
 	SetCookie []string // raw Set-Cookie header values from THIS response — the session token(s) the agent may need to inspect/forge (server-set metadata, capped)
+	ACAO      string   // Access-Control-Allow-Origin response header (CORS proof — see cors.go)
+	ACAC      bool     // Access-Control-Allow-Credentials == true (CORS-with-credentials)
 	Elapsed   time.Duration
 }
 
@@ -227,6 +229,8 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 		Status: httpResp.StatusCode, Body: string(b),
 		Location:  httpResp.Header.Get("Location"),
 		SetCookie: capCookies(httpResp.Header["Set-Cookie"]),
+		ACAO:      httpResp.Header.Get("Access-Control-Allow-Origin"),
+		ACAC:      strings.EqualFold(strings.TrimSpace(httpResp.Header.Get("Access-Control-Allow-Credentials")), "true"),
 		Elapsed:   time.Since(start),
 	}, nil
 }
