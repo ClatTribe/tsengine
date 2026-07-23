@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/ClatTribe/tsengine/internal/execpolicy"
 )
 
 func argsString(a []string) string { return strings.Join(a, " ") }
@@ -116,6 +118,99 @@ func TestBuildRunArgs_ReadOnlyWithoutTmpfsStillReadOnly(t *testing.T) {
 	}
 }
 
+// --- Escape-boundary regression tests (containment campaign item #6) ---
+//
+// These lock the sandbox's fail-closed confinement in place so a future change
+// to buildRunArgs / ConfinementFlags cannot silently weaken it (the class of
+// mistake the OpenAI×HuggingFace incident turned on — a compromised tool that
+// could break out of its box). They assert the boundary holds regardless of the
+// opt-in Hardening profile, and that no spawn path ever disables it.
+
+// TestConfinementFlags_AlwaysOn: the always-on flags are present for EVERY
+// hardening profile — zero, default, and strict — never conditional on env.
+func TestBuildRunArgs_ConfinementFlagsAlwaysPresent(t *testing.T) {
+	profiles := map[string]Hardening{
+		"zero":    {},
+		"default": DefaultHardening(),
+		"strict":  StrictHardening("tsengine-sandbox"),
+	}
+	for name, h := range profiles {
+		s := argsString(buildRunArgs(SpawnOptions{Image: "img:1", Hardening: h}, 1, "t"))
+		if !strings.Contains(s, "--cap-drop=ALL") {
+			t.Errorf("%s profile: must always drop ALL caps: %s", name, s)
+		}
+		if !strings.Contains(s, "--security-opt no-new-privileges") {
+			t.Errorf("%s profile: must always forbid privilege escalation: %s", name, s)
+		}
+	}
+}
+
+// TestBuildRunArgs_NeverWeakensConfinement: the spawn argv must NEVER contain a
+// flag that would disable the escape boundary — no --privileged, and no
+// seccomp/apparmor unconfined (which would strip Docker's default syscall +
+// MAC profiles). Probe across every knob a caller controls, incl. attacker-
+// influenced env/mounts, so a value can't smuggle one of these in.
+func TestBuildRunArgs_NeverWeakensConfinement(t *testing.T) {
+	forbidden := []string{"--privileged", "seccomp=unconfined", "apparmor=unconfined", "--cap-add"}
+	cases := []SpawnOptions{
+		{Image: "img:1"},
+		{Image: "img:1", Hardening: StrictHardening("iso")},
+		{Image: "img:1", Hardening: DefaultHardening()},
+		// hostile-looking env/mount values must not change the security flags.
+		{Image: "img:1", Env: []string{"X=--privileged", "Y=seccomp=unconfined"}},
+		{Image: "img:1", Mounts: []Mount{{HostPath: "/etc", ContainerPath: "/x --privileged"}}},
+	}
+	for i, opts := range cases {
+		s := argsString(buildRunArgs(opts, 1, "t"))
+		for _, bad := range forbidden {
+			// --privileged / unconfined must never appear as an actual docker flag.
+			// (Env/mount VALUES that merely contain the substring are fine — they're
+			// after -e/-v, not standalone flags — so assert on flag position.)
+			if hasStandaloneFlag(s, bad) {
+				t.Errorf("case %d: confinement-weakening flag %q present: %s", i, bad, s)
+			}
+		}
+	}
+}
+
+// hasStandaloneFlag reports whether `flag` appears as its own argv token (a real
+// docker flag), not merely as a substring inside an -e/-v value.
+func hasStandaloneFlag(argv, flag string) bool {
+	for _, tok := range strings.Fields(argv) {
+		if tok == flag {
+			return true
+		}
+	}
+	return false
+}
+
+// TestStrictHardening_FailClosed: the production preset is read-only rootfs +
+// a NON-root user + an isolated network + the resource caps.
+func TestStrictHardening_FailClosed(t *testing.T) {
+	h := StrictHardening("tsengine-sandbox")
+	if !h.ReadOnly {
+		t.Error("strict must force a read-only rootfs")
+	}
+	if h.User == "" || strings.HasPrefix(h.User, "0:") || h.User == "0" || h.User == "root" {
+		t.Errorf("strict must run as a non-root user, got %q", h.User)
+	}
+	if h.Network == "" {
+		t.Error("strict must join an isolated network")
+	}
+	for _, cap := range []string{h.Memory, h.CPUs, h.PidsLimit, h.NoFile} {
+		if cap == "" {
+			t.Errorf("strict must keep the resource caps, got %+v", h)
+		}
+	}
+	// And it must actually render those flags in the spawn argv.
+	s := argsString(buildRunArgs(SpawnOptions{Image: "img:1", Hardening: h}, 1, "t"))
+	for _, want := range []string{"--read-only", "--user 65534:65534", "--network tsengine-sandbox"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("strict spawn argv missing %q: %s", want, s)
+		}
+	}
+}
+
 func TestHardeningFromEnv(t *testing.T) {
 	// Defaults when nothing is set. Truly UNSET the keys (LookupEnv distinguishes
 	// set-but-empty from unset), restoring on cleanup.
@@ -162,5 +257,24 @@ func clearSandboxEnv(t *testing.T) {
 			t.Cleanup(func() { _ = os.Unsetenv(k) })
 		}
 		_ = os.Unsetenv(k)
+	}
+}
+
+// TestBuildRunArgs_InjectsPolicy: a spawn-time capability envelope is baked into the container as
+// TSENGINE_EXEC_POLICY, so the tool-server enforces scope even if the caller is later compromised.
+func TestBuildRunArgs_InjectsPolicy(t *testing.T) {
+	p := &execpolicy.Policy{Tools: []string{"nuclei"}, Hosts: []string{"app.acme.com"}, MaxRequests: 50}
+	args := buildRunArgs(SpawnOptions{Image: "img:1", Policy: p}, 12345, "tok")
+	got := argsString(args)
+	if !strings.Contains(got, "TSENGINE_EXEC_POLICY=") {
+		t.Fatalf("policy must be injected as an env var, got: %s", got)
+	}
+	// and the encoded policy must carry the real scope (so it's not an empty envelope)
+	if !strings.Contains(got, "nuclei") || !strings.Contains(got, "app.acme.com") {
+		t.Errorf("injected policy must carry the tools/hosts, got: %s", got)
+	}
+	// no policy → no env var (back-compat)
+	if strings.Contains(argsString(buildRunArgs(SpawnOptions{Image: "img:1"}, 1, "t")), "TSENGINE_EXEC_POLICY") {
+		t.Error("nil policy must not inject the env var")
 	}
 }

@@ -36,6 +36,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/kics"
 	_ "github.com/ClatTribe/tsengine/internal/tool/kiterunner"
 	_ "github.com/ClatTribe/tsengine/internal/tool/mobsfscan"
+	_ "github.com/ClatTribe/tsengine/internal/tool/modelscan"
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nikto"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"

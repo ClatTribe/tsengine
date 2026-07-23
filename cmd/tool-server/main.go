@@ -22,9 +22,11 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/execpolicy"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
 	"github.com/ClatTribe/tsengine/internal/tool"
 )
@@ -42,10 +44,23 @@ func main() {
 		os.Exit(2)
 	}
 
+	// The per-dispatch capability envelope, baked in at spawn (TSENGINE_EXEC_POLICY). Enforced on every
+	// /execute so the sandbox refuses out-of-scope tools/targets/volume even if the orchestrator that
+	// calls it is compromised or miswired. A malformed policy is fatal (never silently permissive); an
+	// ABSENT policy runs permissive with a loud warning (dev / back-compat).
+	policy, perr := execpolicy.FromEnv(os.Getenv("TSENGINE_EXEC_POLICY"))
+	if perr != nil {
+		fmt.Fprintln(os.Stderr, "tool-server:", perr)
+		os.Exit(2)
+	}
+	if policy == nil {
+		fmt.Fprintln(os.Stderr, "tool-server: WARNING — no TSENGINE_EXEC_POLICY set; running WITHOUT per-dispatch scope enforcement (dev only)")
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handleHealthz)
 	mux.HandleFunc("/corpus", requireBearer(token, handleCorpus))
-	mux.HandleFunc("/execute", requireBearer(token, handleExecute))
+	mux.HandleFunc("/execute", requireBearer(token, execHandler(policy)))
 
 	srv := &http.Server{
 		Addr:              *addr,
@@ -81,33 +96,47 @@ func handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func handleExecute(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+// execHandler dispatches a tool, but only after the request passes the spawn-time capability envelope.
+// The policy check runs BEFORE tool.Get, so an out-of-scope tool is a 403 (refused), not a 404: the
+// sandbox never reveals whether an unauthorized tool exists, and never runs it. count bounds the run
+// budget across the container's lifetime.
+func execHandler(policy *execpolicy.Policy) http.HandlerFunc {
+	var count int64
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req sandbox.ExecuteRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "decode request: "+err.Error())
+			return
+		}
+		if req.Tool == "" {
+			writeErr(w, http.StatusBadRequest, "missing tool name")
+			return
+		}
+		// Enforce the capability BEFORE resolving/running the tool. A leaked/misused caller cannot run
+		// a tool or hit a target the scan was not authorized for.
+		if err := policy.Allow(req.Tool, req.Args, int(atomic.LoadInt64(&count)), time.Now()); err != nil {
+			writeErr(w, http.StatusForbidden, err.Error())
+			return
+		}
+		t, ok := tool.Get(req.Tool)
+		if !ok {
+			writeErr(w, http.StatusNotFound, fmt.Sprintf("unknown tool %q", req.Tool))
+			return
+		}
+		atomic.AddInt64(&count, 1) // an authorized dispatch — counts against the budget
+		result, err := t.Run(r.Context(), req.Args)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "tool run: "+err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(result)
 	}
-	var req sandbox.ExecuteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "decode request: "+err.Error())
-		return
-	}
-	if req.Tool == "" {
-		writeErr(w, http.StatusBadRequest, "missing tool name")
-		return
-	}
-	t, ok := tool.Get(req.Tool)
-	if !ok {
-		writeErr(w, http.StatusNotFound, fmt.Sprintf("unknown tool %q", req.Tool))
-		return
-	}
-	result, err := t.Run(r.Context(), req.Args)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "tool run: "+err.Error())
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(result)
 }
 
 // requireBearer enforces the Authorization: Bearer <token> header via a

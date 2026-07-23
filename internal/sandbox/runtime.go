@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/ClatTribe/tsengine/internal/execpolicy"
 )
 
 // SpawnOptions configures a sandbox container.
@@ -38,6 +40,13 @@ type SpawnOptions struct {
 	// credentials. Values live only for the container's lifetime
 	// (--rm) and are never written to disk inside the sandbox.
 	Env []string
+
+	// Policy is the per-dispatch capability envelope the tool-server enforces
+	// on every /execute (permitted tools/targets, run budget, expiry). Baked
+	// in at spawn as TSENGINE_EXEC_POLICY, so the sandbox refuses out-of-scope
+	// work even if the caller is later compromised or miswired. nil → the
+	// tool-server runs permissive (dev/back-compat, with a loud warning).
+	Policy *execpolicy.Policy
 
 	// Hardening is the per-sandbox security + resource confinement
 	// (docs/production-single-box.md, threat model T1/T2/T4/T5). When left
@@ -79,6 +88,36 @@ type Hardening struct {
 // a non-root user, or a network (those are opt-in via env / the prod profile).
 func DefaultHardening() Hardening {
 	return Hardening{Memory: "4g", CPUs: "2", PidsLimit: "1024", NoFile: "4096", TmpfsTmp: "512m"}
+}
+
+// StrictHardening is the fail-closed production profile: the DefaultHardening
+// resource caps PLUS a read-only root filesystem, a non-root user, and an
+// isolated network. This is what docker-compose.prod wires via the
+// TSENGINE_SANDBOX_* env — a tool that is compromised inside the sandbox gets
+// no writable rootfs, no root, and no route off its own dedicated network. The
+// network name is deployment-specific (the dedicated docker network the
+// platform joins), so it is a parameter; an empty name yields the prod caps
+// minus network isolation. Named + exported so the containment gate can assert
+// the production profile stays fail-closed.
+func StrictHardening(network string) Hardening {
+	h := DefaultHardening()
+	h.ReadOnly = true
+	h.User = "65534:65534" // nobody:nogroup — never uid 0
+	h.Network = network
+	return h
+}
+
+// ConfinementFlags are the always-on Docker security flags EVERY sandbox spawns
+// with, independent of the opt-in Hardening profile: drop ALL Linux
+// capabilities and forbid privilege escalation (a setuid/setgid binary inside
+// the sandbox can never gain new privileges). Docker's default seccomp +
+// AppArmor profiles also apply because buildRunArgs NEVER emits
+// seccomp=unconfined / apparmor=unconfined / --privileged. This is the single
+// source of truth for the escape boundary — buildRunArgs uses it, and the
+// containment release gate asserts over it so a future change cannot silently
+// weaken confinement.
+func ConfinementFlags() []string {
+	return []string{"--cap-drop=ALL", "--security-opt", "no-new-privileges"}
 }
 
 // HardeningFromEnv overlays TSENGINE_SANDBOX_* env vars on DefaultHardening.
@@ -244,8 +283,11 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	args := []string{
 		"run", "-d", "--rm",
 		"-e", "TSENGINE_AUTH_TOKEN=" + token,
-		"--cap-drop=ALL",
-		"--security-opt", "no-new-privileges",
+	}
+	// Always-on escape boundary (single source of truth — ConfinementFlags):
+	// cap-drop=ALL + no-new-privileges, and never seccomp/apparmor unconfined.
+	args = append(args, ConfinementFlags()...)
+	args = append(args,
 		// Make host.docker.internal resolve to the host gateway from
 		// inside the sandbox. Docker Desktop (macOS/Windows) injects this
 		// automatically, but Linux does not — without it, a target the
@@ -254,7 +296,7 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 		// fail. strix lost a full ip_address benchmark to exactly this
 		// (recall 1.0→0.0). The alias is harmless where it already exists.
 		"--add-host", "host.docker.internal:host-gateway",
-	}
+	)
 
 	// Per-sandbox hardening (docs/production-single-box.md §5 P1). Limits + a
 	// writable /tmp tmpfs apply by default; read-only rootfs / non-root user /
@@ -306,6 +348,14 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	}
 	for _, e := range opts.Env {
 		args = append(args, "-e", e)
+	}
+	// The capability envelope — baked in at container creation so it can't be widened by any later
+	// request. Best-effort: an encode failure (shouldn't happen for a plain struct) leaves the
+	// tool-server permissive, which it logs; the platform should surface it, but a scan must not crash.
+	if opts.Policy != nil {
+		if enc, err := opts.Policy.Encode(); err == nil {
+			args = append(args, "-e", "TSENGINE_EXEC_POLICY="+enc)
+		}
 	}
 	return append(args, opts.Image)
 }

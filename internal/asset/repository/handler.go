@@ -120,5 +120,10 @@ var registryNames = []string{
 	// kics — deeper IaC SAST (2400+ queries over Terraform/CloudFormation/K8s/Ansible/Helm/
 	// Pulumi) — the on-demand depth pass over checkov's anchor IaC coverage.
 	"kics",
+	// modelscan — ML/data supply-chain: scans serialized model/dataset artifacts (pickle/PyTorch/
+	// joblib/TF/Keras) for the unsafe-deserialization operators that run code ON LOAD (the
+	// OpenAI×Hugging Face-incident entry vector). Registry (not anchor): most repos carry no model
+	// artifacts, so it fires on demand / when the tree is an ML project, not on every scan.
+	"modelscan",
 	// Phase 3.x: CodeQL, brakeman, staticcheck, snyk-code, terrascan
 }
