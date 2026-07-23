@@ -326,6 +326,15 @@ var fileDiscRe = regexp.MustCompile(`(?i)(root:[^:]*:0:0:|daemon:[x*]:1:1:|\[fon
 // the response — the signal of OS command injection.
 var cmdOutRe = regexp.MustCompile(`(uid=\d+\([^)]*\)\s+gid=\d+\(|Linux [\w.-]+ \d+\.\d+\.|Darwin Kernel Version)`)
 
+// ssrfMetaRe matches cloud instance-metadata CREDENTIALS reflected in-band — the SSRF→metadata
+// credential-theft vector (the OpenAI×HuggingFace-incident shape). `"Type":"AWS-HMAC"` is the AWS IMDS
+// security-credentials response structure and `ASIA…` is an STS temporary access key: both appear ONLY
+// in an instance-metadata credential response, so seeing them in an app's HTTP response proves the app
+// fetched instance creds via a server-side request — as unambiguous as /etc/passwd for LFI. GCP's
+// metadata token is gated behind Metadata-Flavor:Google. This grounds IN-BAND SSRF (the OOB channel
+// grounds the blind case); together they cover both.
+var ssrfMetaRe = regexp.MustCompile(`(?i)("Type"\s*:\s*"AWS-HMAC"|"AccessKeyId"\s*:\s*"ASIA[0-9A-Z]{6,}|Metadata-Flavor:\s*Google)`)
+
 // indicators are deterministic, evidence-grade signals extracted from a response.
 // A finding may ONLY be recorded against a turn that carries the matching indicator.
 func indicators(payload, reqBody string, resp *Resp) []string {
@@ -341,6 +350,9 @@ func indicators(payload, reqBody string, resp *Resp) []string {
 	}
 	if cmdOutRe.MatchString(resp.Body) {
 		ind = append(ind, "cmd_output") // OS command injection
+	}
+	if ssrfMetaRe.MatchString(resp.Body) {
+		ind = append(ind, "ssrf_metadata") // cloud instance-metadata credentials reflected in-band ⇒ SSRF→metadata credential theft
 	}
 	if resp.Status >= 300 && resp.Status < 400 && resp.Location != "" {
 		ind = append(ind, "redirect:"+resp.Location) // informational

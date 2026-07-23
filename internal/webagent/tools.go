@@ -114,8 +114,11 @@ var requiredIndicator = map[string][]string{
 	"default_credentials": {"default_creds"}, "default_creds": {"default_creds"}, // login succeeded with a default pair
 	// server-side template injection: the engine COMPUTED an arithmetic probe (product present, literal gone).
 	"ssti": {"ssti_eval"}, "template_injection": {"ssti_eval"}, "ssti_rce": {"ssti_eval"},
-	// (blind) server-side request forgery: grounded ONLY by a REAL recorded OOB callback (§10).
-	"ssrf": {"oob_interaction"}, "blind_ssrf": {"oob_interaction"}, "server_side_request_forgery": {"oob_interaction"},
+	// server-side request forgery: grounded by a REAL recorded OOB callback (blind case) OR by cloud
+	// instance-metadata credentials reflected IN-BAND in the response (ssrf_metadata — the SSRF→metadata
+	// credential-theft vector). Either is FP-free (§10): a real callback, or an unmistakable IMDS
+	// credential fingerprint the app could only have gotten by making the server-side request.
+	"ssrf": {"oob_interaction", "ssrf_metadata"}, "blind_ssrf": {"oob_interaction", "ssrf_metadata"}, "server_side_request_forgery": {"oob_interaction", "ssrf_metadata"},
 	// broken object-level authorization (IDOR): the two-session differential (bola.go) OR a client-token
 	// tamper (a forged claim in an unverified auth-token exposes another user's data — tamper.go).
 	"idor": {"bola_confirmed", "tamper_confirmed"}, "bola": {"bola_confirmed", "tamper_confirmed"}, "broken_object_level_authorization": {"bola_confirmed", "tamper_confirmed"},
