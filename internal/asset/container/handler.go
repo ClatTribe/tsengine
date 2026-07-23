@@ -82,5 +82,8 @@ var anchorNames = []string{
 }
 
 var registryNames = []string{
-	// Phase 3.x: syft, anchore, clair, kube-bench, falco-rules
+	// kube-bench: CIS Kubernetes Benchmark auditor (KSPM) — runtime cluster posture (API-server flags,
+	// kubelet, etcd encryption, RBAC), distinct from checkov/kics manifest SAST. Live run needs a cluster.
+	"kube-bench",
+	// Phase 3.x: anchore, clair, falco-rules
 }

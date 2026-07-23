@@ -55,7 +55,8 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/anchore/grype/cm
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/projectdiscovery/httpx/cmd/httpx@latest \
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/goodwithtech/dockle/cmd/dockle@latest \
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/projectdiscovery/katana/cmd/katana@latest \
-    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/securego/gosec/v2/cmd/gosec@latest
+    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/securego/gosec/v2/cmd/gosec@latest \
+    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/aquasecurity/kube-bench@latest
 
 # naabu — fast port scanner, the ip_address recon tool (A1). Requires
 # libpcap + CGO (unlike the other ProjectDiscovery tools). Our wrapper
