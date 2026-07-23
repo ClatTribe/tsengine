@@ -105,6 +105,9 @@ func tResolve(cc *Context, args map[string]any) string {
 	if reachableFrom(cc.Snap, p)[r] {
 		return fmt.Sprintf("YES — %s can reach %s over the resolved access/assume graph (effective IAM already applied at ingest).", p, r)
 	}
+	if reachableFromCond(cc.Snap, p)[r] {
+		return fmt.Sprintf("YES (CONDITIONAL) — %s can reach %s, but only via an edge gated by an unresolved runtime condition (an IAM condition / group / unknown custom role the engine could not definitively resolve). The engine keeps such paths pending live confirmation (§10 keep-on-uncertainty), so treat it as reachable-until-disproven, NOT inert.", p, r)
+	}
 	return fmt.Sprintf("NO — %s has no effective path of access to %s. A prowler finding here is likely inert.", p, r)
 }
 
@@ -137,14 +140,19 @@ func tBlast(cc *Context, args map[string]any) string {
 	if cc.Snap.Node(p) == nil {
 		return "ERROR: no such principal " + p
 	}
-	reach := reachableFrom(cc.Snap, p)
+	uncond := reachableFrom(cc.Snap, p)
+	reach := reachableFromCond(cc.Snap, p) // include conditional edges (keep-on-uncertainty, §10) — don't under-report
 	var jewels []string
 	for id := range reach {
 		if id == p {
 			continue
 		}
 		if n := cc.Snap.Node(id); n != nil && (cloudgraph.SensitiveData(n) || cloudgraph.PrivilegedIdentity(n)) {
-			jewels = append(jewels, "  "+id+flagsOf(n))
+			tag := flagsOf(n)
+			if !uncond[id] {
+				tag += " (conditional — reachable only if a runtime condition holds; needs live confirmation)"
+			}
+			jewels = append(jewels, "  "+id+tag)
 		}
 	}
 	sort.Strings(jewels)
@@ -291,6 +299,8 @@ func entryPoints(snap *cloudgraph.Snapshot) []string {
 	return out
 }
 
+// reachableFrom returns nodes reachable from start over UNCONDITIONAL attack edges only — the
+// definitely-reachable set (no unresolved runtime condition stands between start and the node).
 func reachableFrom(snap *cloudgraph.Snapshot, start string) map[string]bool {
 	adj := adjacency(snap)
 	seen := map[string]bool{start: true}
@@ -300,6 +310,30 @@ func reachableFrom(snap *cloudgraph.Snapshot, start string) map[string]bool {
 		q = q[1:]
 		for _, e := range adj[n] {
 			if cloudgraph.AllAttackEdges[e.Kind] && e.Condition == "" && !seen[e.To] {
+				seen[e.To] = true
+				q = append(q, e.To)
+			}
+		}
+	}
+	return seen
+}
+
+// reachableFromCond returns nodes reachable from start when CONDITIONAL edges are ALSO traversed.
+// The engine keeps conditional paths — PruneUnauthorized/PruneUnreachable never drop an edge on
+// uncertain data, and the enumerator flags conditional paths rather than discarding them (§10:
+// keep-on-uncertainty). The agent must match that: traversing only unconditional edges made
+// resolve_access/blast_radius report a conditional-but-real path as "NO" — a FALSE NEGATIVE, the
+// dangerous direction for a defensive engineer. A node in this set but not in reachableFrom is
+// reachable only if the gating runtime condition holds (reachable-until-disproven).
+func reachableFromCond(snap *cloudgraph.Snapshot, start string) map[string]bool {
+	adj := adjacency(snap)
+	seen := map[string]bool{start: true}
+	q := []string{start}
+	for len(q) > 0 {
+		n := q[0]
+		q = q[1:]
+		for _, e := range adj[n] {
+			if cloudgraph.AllAttackEdges[e.Kind] && !seen[e.To] {
 				seen[e.To] = true
 				q = append(q, e.To)
 			}
