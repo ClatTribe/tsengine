@@ -128,7 +128,7 @@ RUN apt-get update \
 # heavy resolvers (semgrep/prowler/checkov/scoutsuite) often pin
 # incompatible shared deps; isolating each install avoids backtracking hell.
 RUN for p in "semgrep==1.96.0" sqlmap checkdmarc dnstwist "prowler==4.6.0" \
-             checkov scoutsuite schemathesis inql mobsfscan apkid bandit modelscan; do \
+             checkov scoutsuite schemathesis inql mobsfscan apkid bandit modelscan wapiti3; do \
         pip3 install --no-cache-dir --break-system-packages "$p" \
         || pip3 install --no-cache-dir "$p" \
         || echo "WARN: pip install $p failed (tool will be unavailable)"; \

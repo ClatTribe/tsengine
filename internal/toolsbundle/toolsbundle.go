@@ -54,4 +54,5 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/syft"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trivy"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trufflehog"
+	_ "github.com/ClatTribe/tsengine/internal/tool/wapiti"
 )

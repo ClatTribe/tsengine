@@ -341,7 +341,10 @@ var registryNames = []string{
 	// nikto: classic web-server scanner (legacy CGIs, default/backup files, outdated
 	// server software, missing headers) — distinct corpus from nuclei, on-demand depth.
 	"nikto",
-	// Phase 2.x: wapiti, jaeles, arachni, gobuster, ZAP active.
+	// wapiti: general active-scan fuzzer — the injection-class breadth (SSTI/XXE/LFI/cmd-inj/CRLF/SSRF)
+	// that rode nuclei templates only. On-demand depth (active fuzzing is slow).
+	"wapiti",
+	// Phase 2.x: jaeles, arachni, gobuster, ZAP active, jaeles, arachni, gobuster, ZAP active.
 }
 
 func resolveTools(names []string) []tool.Tool {
