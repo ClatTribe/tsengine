@@ -35,6 +35,7 @@ func tools() []toolDef {
 		{"blast_radius", "blast_radius(principal) — every crown jewel (sensitive data / privileged identity) reachable if this principal is compromised", tBlast},
 		{"enumerate_attack_paths", "enumerate_attack_paths() — the deterministic engine's candidate attack paths (a fast prepass to seed your investigation; verify/extend them)", tEnumerate},
 		{"detect_privesc", "detect_privesc(principal) — known IAM privilege-escalation moves available to the principal", tPrivesc},
+		{"rightsize_principal", "rightsize_principal(principal) — CIEM: is this principal over-privileged? Diffs its granted permissions against what it ACTUALLY USED in the observation window and reports the unused/dormant permissions (a dormant admin is the prime risk) + a least-privilege recommendation. Grounded: reports nothing without observed usage data (absence of logs is not non-use).", tRightsize},
 		{"get_findings", "get_findings(resource?) — prowler config-bad findings (the 'tools say' lens; most are NOT exploitable — your job is to tell which are)", tFindings},
 		{"record_issue", "record_issue(target, path[], severity, rationale, evidence[]) — commit a REAL attack path you've determined. REJECTED unless the path actually exists in the graph and ends at a crown jewel.", tRecord},
 		{"propose_fix", "propose_fix(issue_id) — generate an applyable, cloudiam-verified remediation that cuts the recorded issue's cheapest edge", tFix},
@@ -193,6 +194,27 @@ func tPrivesc(cc *Context, args map[string]any) string {
 		return fmt.Sprintf("%s has no known privilege-escalation move.", p)
 	}
 	return fmt.Sprintf("%s can privilege-escalate:\n%s", p, strings.Join(moves, "\n"))
+}
+
+// tRightsize is the agent's CIEM tool: it surfaces over-privilege on a specific principal so the AI
+// cloud engineer can reason about least-privilege during an investigation (not just as a background
+// finding). Reuses cloudengine.RightsizePrincipals over the snapshot, then filters to the principal —
+// grounded (§10): a verdict only when the node carries observed usage data.
+func tRightsize(cc *Context, args map[string]any) string {
+	p := argStr(args, "principal")
+	n := cc.Snap.Node(p)
+	if n == nil {
+		return "ERROR: no such principal " + p
+	}
+	for _, f := range cloudengine.RightsizePrincipals(cc.Snap) {
+		if f.Endpoint == p {
+			return fmt.Sprintf("%s is OVER-PRIVILEGED (%s): %s", p, f.Severity, f.Description)
+		}
+	}
+	if n.Attrs == nil || n.Attrs["usage_observed"] != "true" {
+		return fmt.Sprintf("%s: no usage data available — cannot rightsize. CIEM needs observed usage (CloudTrail / IAM last-accessed); absence of logs is NOT evidence of non-use (§10).", p)
+	}
+	return fmt.Sprintf("%s is right-sized: it exercised (or has no broader grant than) what it used in the observation window — no unused permissions to remove.", p)
 }
 
 func tFindings(cc *Context, args map[string]any) string {
