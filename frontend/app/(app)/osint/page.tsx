@@ -16,6 +16,10 @@ const CLASS_META: Record<string, { icon: string; about: string }> = {
   "osint::exposed-host": { icon: "network", about: "Internet-reachable infra that isn't monitored — add it or take it down." },
   "osint::data-exposure": { icon: "watch", about: "Org data found exposed publicly — confirm scope + breach duties." },
   "osint::typosquat-domain": { icon: "shield", about: "A look-alike domain imitating your brand — consider a takedown." },
+  "osint::subdomain-takeover": { icon: "network", about: "A dangling DNS record points at a deprovisioned service an attacker can claim to serve content on your subdomain — remove the record or reclaim the target." },
+  "osint::cert-unexpected-issuer": { icon: "shield", about: "A Certificate Transparency log shows a cert for your domain from an unexpected CA — possible mis-issuance or phishing prep. Verify you requested it, else report it for revocation." },
+  "osint::cert-expired": { icon: "watch", about: "A served certificate has expired — visitors get TLS errors. Renew it." },
+  "osint::cert-expiring": { icon: "watch", about: "A served certificate expires soon — renew before it lapses." },
   "osint::advisory": { icon: "alert", about: "A security advisory relevant to your stack — check if you're affected." },
 };
 
@@ -98,11 +102,16 @@ export default async function OSINTPage() {
 function labelFor(rule: string): string {
   return (
     {
+      "osint::stealer-log": "Stealer-log exposure (dark web)",
       "osint::breached-credential": "Breached credentials",
       "osint::leaked-secret": "Leaked secrets",
       "osint::exposed-host": "Exposed hosts",
+      "osint::subdomain-takeover": "Subdomain takeover",
       "osint::data-exposure": "Public data exposure",
       "osint::typosquat-domain": "Look-alike domains",
+      "osint::cert-unexpected-issuer": "Certificate issues",
+      "osint::cert-expired": "Certificate issues",
+      "osint::cert-expiring": "Certificate issues",
       "osint::advisory": "Relevant advisories",
     } as Record<string, string>
   )[rule] ?? "Other";

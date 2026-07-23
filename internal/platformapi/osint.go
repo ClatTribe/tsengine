@@ -258,13 +258,24 @@ func nz(s, dflt string) string {
 
 // osintClassLabel maps an osint:: rule to a human class for the UX summary.
 var osintClassLabel = map[string]string{
-	"osint::stealer-log":         "Stealer-log exposure (dark web)",
-	"osint::breached-credential": "Breached credentials",
-	"osint::leaked-secret":       "Leaked secrets",
-	"osint::exposed-host":        "Exposed hosts",
-	"osint::typosquat-domain":    "Look-alike domains",
-	"osint::data-exposure":       "Public data exposure",
-	"osint::advisory":            "Relevant advisories",
+	"osint::stealer-log":            "Stealer-log exposure (dark web)",
+	"osint::breached-credential":    "Breached credentials",
+	"osint::leaked-secret":          "Leaked secrets",
+	"osint::exposed-host":           "Exposed hosts",
+	"osint::subdomain-takeover":     "Subdomain takeover",
+	"osint::typosquat-domain":       "Look-alike domains",
+	"osint::data-exposure":          "Public data exposure",
+	"osint::cert-unexpected-issuer": "Certificate issues",
+	"osint::cert-expired":           "Certificate issues",
+	"osint::cert-expiring":          "Certificate issues",
+	"osint::advisory":               "Relevant advisories",
+}
+
+// osintSummaryOrder is the display order of the summary tiles (every label in osintClassLabel + "Other").
+var osintSummaryOrder = []string{
+	"Stealer-log exposure (dark web)", "Breached credentials", "Leaked secrets", "Exposed hosts",
+	"Subdomain takeover", "Public data exposure", "Look-alike domains", "Certificate issues",
+	"Relevant advisories", "Other",
 }
 
 // handleOSINTView (GET /v1/osint) returns the tenant's OSINT findings + a per-class summary — the
@@ -289,7 +300,7 @@ func (d Deps) handleOSINTView(w http.ResponseWriter, r *http.Request, tenantID s
 		classes[label]++
 	}
 	summary := make([]map[string]any, 0, len(classes))
-	for _, lbl := range []string{"Breached credentials", "Leaked secrets", "Exposed hosts", "Public data exposure", "Look-alike domains", "Relevant advisories", "Other"} {
+	for _, lbl := range osintSummaryOrder {
 		if n := classes[lbl]; n > 0 {
 			summary = append(summary, map[string]any{"label": lbl, "count": n})
 		}
