@@ -15,8 +15,49 @@ import (
 
 // ctRecord is the minimal crt.sh JSON row.
 type ctRecord struct {
-	NameValue string `json:"name_value"`
+	NameValue  string `json:"name_value"`
 	CommonName string `json:"common_name"`
+	IssuerName string `json:"issuer_name"`
+	NotAfter   string `json:"not_after"`
+}
+
+// ParseCTCerts turns a crt.sh JSON response into CertObservation entries — one per DISTINCT issuing CA
+// seen for the domain (deduped, so a domain with 200 Let's Encrypt certs yields one observation, not 200).
+// This drives the cert-unexpected-issuer check (a CT-logged cert from a CA not in the org's known set is
+// a mis-issuance / phishing-prep signal). Served is false: crt.sh is CT HISTORY, so it can't say which
+// cert is currently served — the expiry check stays gated on Served (a live TLS probe), never firing a
+// false "expired" on an old historical cert (§10). Pure + testable.
+func ParseCTCerts(domain string, body []byte) []CertObservation {
+	domain = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(domain, "*.")))
+	if domain == "" || len(body) == 0 {
+		return nil
+	}
+	var rows []ctRecord
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := make([]CertObservation, 0)
+	for _, r := range rows {
+		issuer := strings.TrimSpace(r.IssuerName)
+		if issuer == "" {
+			continue
+		}
+		key := strings.ToLower(issuer)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, CertObservation{
+			Domain: domain, CommonName: strings.TrimSpace(r.CommonName),
+			Issuer: issuer, NotAfter: strings.TrimSpace(r.NotAfter), Served: false, Source: "crtsh",
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Issuer < out[j].Issuer })
+	return out
 }
 
 // ParseCT turns a crt.sh JSON response for one domain into deduped ExposedHost entries (a host is "in
@@ -88,6 +129,9 @@ func CollectCT(ctx context.Context, org string, domains []string, known map[stri
 			}
 			snap.ExposedHosts = append(snap.ExposedHosts, h)
 		}
+		// Same crt.sh fetch also yields the cert-posture observations (distinct issuers) — free, no extra
+		// request. Drives the cert-unexpected-issuer check when the tenant declares ExpectedCertIssuers.
+		snap.Certificates = append(snap.Certificates, ParseCTCerts(d, body)...)
 	}
 	return snap
 }
