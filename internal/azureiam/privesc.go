@@ -7,8 +7,11 @@ package azureiam
 // attack-path reasoning is symmetric across all three clouds, not shallower on Azure (CLAUDE.md §10).
 //
 // Scope: the ARM control plane (Microsoft.* actions), matching azureiam.Authorize. The Azure AD / Entra
-// graph plane (app-credential add, owner-of-privileged-SP) is a DISTINCT authorization plane — its privesc
-// catalog is the documented next increment, not folded in here (we don't conflate the two planes, §10).
+// graph plane (app-credential add, owner-of-privileged-SP, privileged directory-role assignment) is a
+// DISTINCT authorization plane — its privesc catalog lives in entra_privesc.go (EntraTechniques /
+// DetectEntraPrivesc), wired into the graph by cloudgraph.AddAzureEntraPrivescEdges, and is NOT folded in
+// here (we don't conflate the two planes, §10). Together the two catalogs cover Azure privesc across both
+// planes.
 //
 // This is the documented, finite set of Azure RBAC privesc primitives mapped to a graph edge (CLAUDE.md
 // §13 — derivation logic, not a new in-house scanner).
