@@ -29,6 +29,13 @@ func (f Finding) L15Summary() string {
 		if strings.Contains(ti.CVSSVector, "AV:N") {
 			t = append(t, "av:network") // NVD CVSS vector says network-attackable (no local access needed) — the strongest reachability signal
 		}
+		if ti.SSVC != nil {
+			tag := "SSVC:" + ti.SSVC.Decision // the actionable act/attend/track decision (not just "9.8 critical")
+			if ti.SSVC.DueDate != "" {
+				tag += "(due " + ti.SSVC.DueDate + ")" // CISA BOD 22-01 deadline for a KEV CVE
+			}
+			t = append(t, tag)
+		}
 	}
 	if f.Exploitability != nil {
 		t = append(t, fmt.Sprintf("exploit:%d", f.Exploitability.Score))

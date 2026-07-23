@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
+	"github.com/ClatTribe/tsengine/internal/ssvc"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -170,6 +171,9 @@ func (h *ThreatIntel) Apply(f types.Finding) (types.Finding, []types.AuditEntry,
 		return f, nil, true
 	}
 	f.ThreatIntel = ti
+	// SSVC: turn the raw KEV/EPSS/exploit/CVSS signals into an actionable act/attend/track decision (§7).
+	// Computed from the just-attached intel + the finding's current severity; grounded (nil when no signal).
+	ti.SSVC = ssvc.FromThreatIntel(ti, f.Severity == types.SeverityHigh || f.Severity == types.SeverityCritical)
 
 	if ti.KEV != nil && ti.KEV.Listed {
 		// Opt-in escalation: a CVE actively exploited in the wild but rated below high is materially

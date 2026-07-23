@@ -11,6 +11,23 @@ type ThreatIntel struct {
 	EPSS       *EPSSScore `json:"epss,omitempty"`
 	Advisories []string   `json:"advisories,omitempty"`
 	Exploits   []string   `json:"exploits,omitempty"`
+	// SSVC is the CISA Stakeholder-Specific Vulnerability Categorization decision — the actionable
+	// prioritization ("act / attend / track") a mature vuln-management program uses instead of the raw
+	// CVSS number, derived deterministically from the exploitation + impact signals above (§7).
+	SSVC *SSVC `json:"ssvc,omitempty"`
+}
+
+// SSVC is a CISA Stakeholder-Specific Vulnerability Categorization result (the Deployer-tree decision,
+// reduced to the exploitation/impact signals we hold). Decision is the action: "act" (remediate now),
+// "attend" (out-of-cycle, supervise), or "track" (remediate on the normal schedule). It replaces "is
+// CVSS 9.8 scary?" with "what do I DO about it?".
+type SSVC struct {
+	Decision     string `json:"decision"`           // act | attend | track
+	Exploitation string `json:"exploitation"`       // active | poc | none
+	Impact       string `json:"impact"`             // high | low
+	Automatable  bool   `json:"automatable"`        // the exploit can be automated (AV:N + AC:L, or an exploit exists)
+	Rationale    string `json:"rationale"`          // one line explaining the decision
+	DueDate      string `json:"due_date,omitempty"` // CISA BOD 22-01 remediation deadline when KEV-listed (YYYY-MM-DD)
 }
 
 // KEVStatus is the CISA Known Exploited Vulnerabilities catalog state for
