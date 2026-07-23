@@ -117,6 +117,9 @@ var registryNames = []string{
 	// bandit — Python-specific security SAST (shell-injection, unsafe deserialization,
 	// hardcoded passwords, weak crypto) — complements semgrep's generic python packs.
 	"bandit",
+	// brakeman: Ruby-on-Rails SAST — Rails-idiom vulns (mass-assignment, unsafe finders, CSRF-skip,
+	// SSRF) that semgrep pattern packs miss. Registry/escalation-fired on a Rails tree.
+	"brakeman",
 	// kics — deeper IaC SAST (2400+ queries over Terraform/CloudFormation/K8s/Ansible/Helm/
 	// Pulumi) — the on-demand depth pass over checkov's anchor IaC coverage.
 	"kics",

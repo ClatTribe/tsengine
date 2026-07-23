@@ -15,6 +15,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
 	_ "github.com/ClatTribe/tsengine/internal/tool/apkid"
 	_ "github.com/ClatTribe/tsengine/internal/tool/bandit"
+	_ "github.com/ClatTribe/tsengine/internal/tool/brakeman"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"
 	_ "github.com/ClatTribe/tsengine/internal/tool/cloudfox"

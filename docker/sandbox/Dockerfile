@@ -140,6 +140,7 @@ RUN for p in "semgrep==1.96.0" sqlmap checkdmarc dnstwist "prowler==4.6.0" \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ruby ruby-dev build-essential \
     && (gem install wpscan --no-document || echo "WARN: gem install wpscan failed (tool will be unavailable)") \
+    && (gem install brakeman --no-document || echo "WARN: gem install brakeman failed (tool will be unavailable)") \
     && rm -rf /var/lib/apt/lists/*
 
 # padbuster (CRYPTO specialist — AES-CBC/block-cipher padding-oracle decrypt+forge; the dispatch_oss
