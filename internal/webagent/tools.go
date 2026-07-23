@@ -188,10 +188,32 @@ func tools() []toolDef {
 }
 
 func tRoutes(cc *Context, _ map[string]any) string {
+	// The structured WORLD-MODEL digest (ADR 0016 P2): endpoints (+ untested params + which classes were
+	// tested/blocked), sessions held, hosts + pivots — the agent reasons over structure, not a scrolling
+	// transcript. Derived purely from real evidence (History+Findings), so it can't invent surface (§10).
+	w := BuildWorldModel(cc.History, cc.Findings)
+	if digest := w.Digest(); digest != "" {
+		out := "TARGET MODEL (" + cc.Target + "):\n" + digest
+		// Seeded/discovered routes not yet PROBED (no Turn hit their shape) — the agent's to-do surface.
+		probed := map[string]bool{}
+		for _, e := range w.Endpoints {
+			probed[e.Shape] = true
+		}
+		var untried []string
+		for _, r := range cc.Routes {
+			if s := urlShape(r); s != "" && !probed[s] {
+				untried = append(untried, r)
+			}
+		}
+		if len(untried) > 0 {
+			out += "\nUNPROBED ROUTES (no request sent yet): " + strings.Join(untried, ", ")
+		}
+		return out
+	}
 	if len(cc.Routes) == 0 {
 		return "target: " + cc.Target + " (no routes discovered yet — send_request to probe)"
 	}
-	return "known routes:\n  " + strings.Join(cc.Routes, "\n  ")
+	return "known routes (none probed yet):\n  " + strings.Join(cc.Routes, "\n  ")
 }
 
 func tSend(cc *Context, args map[string]any) string {
