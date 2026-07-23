@@ -1,6 +1,6 @@
 # ADR 0016 — Offensive-agent persistent world-model + cross-host chaining
 
-Status: **Proposed** (scope only; not built)
+Status: **Accepted** — P1–P3 + P5 built; P4 revised (see §3)
 Date: 2026-07-23
 Lineage: extends [ADR 0008 — XBOW web-exploitation parity](0008-xbow-web-exploitation-parity.md)
 
@@ -95,18 +95,33 @@ mirroring the `CapturedSession` rule that never writes a live session to `vulner
 
 ## 3. Phases (incremental — each a tested, shippable unit)
 
-1. **P1 — the model + deterministic ingest (host-side, no behavior change).** `worldmodel.go` +
-   `World.Ingest(turn)` + `World.Digest()`; wire `Context.World`, keep `Routes`/`Defenses` as views.
-   Pure + fully unit-testable (feed synthetic Turns → assert the model). Grounding tests: an
-   un-evidenced entity never appears.
-2. **P2 — surface the digest to the LLM.** Replace the ad-hoc route list in the prompt with
-   `World.Digest()` (endpoints + untested params + attempt outcomes + held identities). Measurable on
-   the XBOW bench (does long-horizon coherence improve?).
-3. **P3 — cross-host chaining.** `Host`/`PivotEdge` ingestion from `ssh_exec` + source-disclosure;
-   the agent can enumerate + scan a pivoted host's surface (scope-guarded). This is the XBEN-042-class
-   "leaked cred → lateral movement → new surface" capability made durable.
-4. **P4 — unify pentest `engMem`.** ModeDeep consumes the `*WorldModel`; delete the parallel memory.
-5. **P5 — persistence (platform-gated).** `WorldStore` + per-engagement save/load; redacted identities.
+1. **P1 — the model + deterministic ingest (host-side, no behavior change). ✅ BUILT.**
+   `worldmodel.go`: `BuildWorldModel(History, Findings)` (pure) + `Digest()`. Pure + fully unit-tested
+   (synthetic Turns → assert the model). Grounding test: empty evidence → empty model. **Design note:**
+   the model is a *pure derivation* over the existing `History`/`Findings` rather than a mutable
+   `Context.World` written per-tool — this avoided touching all ~21 tool call-sites (no behavior change,
+   no churn) and keeps grounding trivially provable (the model *is* a function of the evidence).
+2. **P2 — surface the digest to the LLM. ✅ BUILT.** `list_routes` now returns `Digest()` (endpoints +
+   untested params + tested/blocked classes + auth + sessions + hosts) instead of a flat URL list, with
+   unprobed routes listed as a to-do surface. Long-horizon coherence is measurable on the XBOW bench.
+3. **P3 — cross-host chaining. ✅ BUILT.** An `ssh_exec` turn adds the SSH `Host` + a `PivotEdge` from the
+   web host (creds discovered over HTTP → leaked-cred pivot) — the XBEN-042 chain, durable + in the
+   digest. Source-disclosure pivots need no special parsing: reaching the new host ingests it like any
+   evidence. The scope guard still authorizes every request (the model surfaces, the guard authorizes).
+4. **P4 — unify pentest `engMem`. ⛔ REVISED (superseded by implementation reality).** The original plan
+   assumed one shared memory. In practice the webagent world-model is derived from **HTTP Turns**, while
+   the pentest ModeDeep `engMem` is **demo-predicate**-level (failed `DemoSpec` predicates across
+   findings) — genuinely different granularities. The pentest driver has no `Turn` stream to build a
+   world-model from, so a single shared model is the *wrong* abstraction; forcing it would only add a
+   lossy bridge and risk regressing the tested driver. **Decision: the two memories stay separate by
+   design.** The world-model is the webagent's substrate; `engMem` remains the pentest's finding-local
+   spec-refinement hint. (Recorded honestly as a finding of the build, not a silent skip.)
+5. **P5 — persistence (platform-gated). ✅ BUILT.** `worldstore.go`: `WorldStore` interface +
+   `MemoryWorldStore` (JSON round-trip) + `WorldModel.Merge(prior)` (union semantics: a resumed
+   engagement folds in the prior model — surface, held sessions, pivots, confirmed classes — deduped +
+   idempotent). Secret discipline preserved: only the redacted model (identity fingerprints, never live
+   tokens) is persisted. Platform wiring the store into the investigate loop is the gated half
+   (nil → today's ephemeral behavior); the seam + serialization + merge ship and are tested.
 
 ## 4. Consequences
 
@@ -121,7 +136,6 @@ mirroring the `CapturedSession` rule that never writes a live session to `vulner
   circuit-breakers (the [agent-containment work](../../CLAUDE.md)) still gate every action. A richer
   world-model reasons better *within* the authorized envelope; it never widens it.
 
-## 5. Not built
+## 5. Status
 
-This ADR is **scope only**. P1 (the model + ingest + digest, pure and testable) is the recommended first
-implementation increment; the later phases layer on it.
+P1–P3 + P5 are built + tested (host-side, no sandbox rebuild, §12.6). P4 is revised (the two offensive memories stay separate by design — different granularities). The remaining gated half is the platform wiring of the WorldStore into the investigate loop (nil → ephemeral, unchanged behavior).

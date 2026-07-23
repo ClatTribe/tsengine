@@ -29,7 +29,7 @@ type WorldModel struct {
 	Attempts   []*WMAttempt           `json:"attempts,omitempty"`
 	Edges      []*WMPivotEdge         `json:"edges,omitempty"` // host→host pivots (P3)
 
-	firstWebHost string // the engagement's initial web host (the pivot source) — evidence-order, deterministic
+	FirstWebHost string `json:"first_web_host,omitempty"` // engagement's initial web host (pivot source); evidence-order
 }
 
 // WMHost is one reachable host:port in the target's footprint (the cross-host graph's node).
@@ -61,8 +61,10 @@ type WMIdentity struct {
 	FromTurn    string `json:"from_turn"`
 }
 
-// WMAttempt is one (endpoint × class) outcome — the structured attempt memory (subsumes the pentest
-// engMem's FailedAttempt). Confirmed comes from a grounded Finding; blocked from a real 403.
+// WMAttempt is one (endpoint × class) outcome — the webagent's structured attempt memory. Confirmed comes
+// from a grounded Finding; blocked from a real 403. (The pentest ModeDeep engMem is a SEPARATE,
+// demo-predicate-level memory — a different granularity than these HTTP-turn-derived attempts, so the two
+// are deliberately NOT unified; see ADR 0016 §3 P4.)
 type WMAttempt struct {
 	Endpoint string `json:"endpoint"`
 	Class    string `json:"class,omitempty"`
@@ -119,7 +121,7 @@ func (w *WorldModel) ingest(t Turn) {
 				w.Hosts[sshHost] = h
 			}
 			h.Services = addUnique(h.Services, "ssh")
-			if from := w.firstWebHost; from != "" && from != sshHost {
+			if from := w.FirstWebHost; from != "" && from != sshHost {
 				w.addEdge(&WMPivotEdge{FromHost: from, ToHost: sshHost, Via: "leaked-cred", Evidence: t.ID})
 			}
 		}
@@ -138,8 +140,8 @@ func (w *WorldModel) ingest(t Turn) {
 		}
 		if s := schemeOf(t.URL); s == "http" || s == "https" {
 			h.Services = addUnique(h.Services, s)
-			if w.firstWebHost == "" {
-				w.firstWebHost = host
+			if w.FirstWebHost == "" {
+				w.FirstWebHost = host
 			}
 		}
 	}
