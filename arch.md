@@ -54,7 +54,7 @@ shape, bench.
 | | Deep exploit | sqlmap, dalfox, nuclei (template corpus), smuggler, ffuf, hydra (default creds) |
 | | DOM-aware | scan_xss, dom_xss_static_probe, scan_cache_deception, scan_websocket_auth, scan_prototype_pollution |
 | | Hygiene | http_security_headers_audit, tls_audit, cors_deep_check, csrf_check, open_redirect_check |
-| **Registry tier** | (on-demand via /replay) | **wrapped:** wpscan (WordPress CMS DAST — also escalation-fired), nikto (`internal/tool/nikto` — legacy/dangerous CGIs, default/backup files, outdated server software, missing headers; distinct corpus from nuclei); **planned:** wapiti, jaeles, arachni, w3af, skipfish, ZAP active, gobuster |
+| **Registry tier** | (on-demand via /replay) | **wrapped:** wpscan (WordPress CMS DAST — also escalation-fired), nikto (`internal/tool/nikto` — legacy/dangerous CGIs, default/backup files, outdated server software, missing headers; distinct corpus from nuclei), wapiti (`internal/tool/wapiti` — general active-scan fuzzer: the SSTI/XXE/LFI/cmd-inj/CRLF/SSRF injection-class breadth that rode nuclei templates only); **planned:** jaeles, arachni, w3af, skipfish, ZAP active, gobuster |
 | **L1 filtration** | Static-asset drop | `.css`, `.png`, `.woff`, bundled JS — extension filter |
 | | Destructive drop | `/admin/delete-*`, `/logout` — destructive-class filter |
 | | Scope | Same host or subdomain only; off-host (twitter, CDN) dropped. `scope.scope_hosts` whitelists extras |
@@ -106,7 +106,7 @@ shape, bench.
 > DOM-aware specialists (`scan_xss`, `dom_xss_static_probe`, prototype
 > pollution, cache deception), request-smuggling (`smuggler`), CSRF-token /
 > multi-step / SPA login in `seed_auth`, and the remaining registry-tier tools
-> (wapiti, ZAP active, … — nikto is now wrapped). The L2 catalog rows are Phase 6.
+> (ZAP active, … — nikto and wapiti are now wrapped). The L2 catalog rows are Phase 6.
 
 ---
 
@@ -172,7 +172,7 @@ NOT escalation — they fan out / anchor every scan.
 | | Secrets | gitleaks, trufflehog |
 | | IaC / Dockerfiles | checkov, hadolint, tfsec |
 | | SBOM | syft |
-| **Registry tier** | (on-demand) | **wrapped:** govulncheck (Go reachability), gosec (`internal/tool/gosec` — Go security SAST: weak crypto, hardcoded creds, SQL string-building, unhandled security errors), bandit (`internal/tool/bandit` — Python security SAST: shell-injection, unsafe deserialization, hardcoded passwords, weak crypto), codeql, hadolint (Dockerfile lint), kics (`internal/tool/kics` — deeper IaC SAST: 2400+ queries over Terraform/CloudFormation/K8s/Ansible/Helm/Pulumi, the on-demand depth over checkov's anchor coverage); **planned:** brakeman, staticcheck, snyk-code (free CLI), terrascan |
+| **Registry tier** | (on-demand) | **wrapped:** govulncheck (Go reachability), gosec (`internal/tool/gosec` — Go security SAST: weak crypto, hardcoded creds, SQL string-building, unhandled security errors), bandit (`internal/tool/bandit` — Python security SAST: shell-injection, unsafe deserialization, hardcoded passwords, weak crypto), codeql, hadolint (Dockerfile lint), kics (`internal/tool/kics` — deeper IaC SAST: 2400+ queries over Terraform/CloudFormation/K8s/Ansible/Helm/Pulumi, the on-demand depth over checkov's anchor coverage), brakeman (`internal/tool/brakeman` — Ruby-on-Rails SAST: Rails-idiom vulns (mass-assignment, unsafe finders, CSRF-skip, SSRF) that semgrep pattern packs miss; CWE from brakeman's own cwe_id, severity from its confidence); **planned:** staticcheck, snyk-code (free CLI), terrascan |
 | **L1 filtration** | Language detection | semgrep packs chosen per language |
 | | File-tree filter | Skip `node_modules/`, `vendor/`, `.git/`, `__pycache__/`, `dist/`, `build/`, `*.min.js`, binaries > 5MB |
 | **L2 catalog** | Specialists | build_code_map, terminal_execute; rest of catalog same as web |
