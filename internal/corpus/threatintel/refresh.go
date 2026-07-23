@@ -10,12 +10,13 @@ import (
 
 // RefreshOptions configures an out-of-band corpus refresh.
 type RefreshOptions struct {
-	OutDir       string       // output dir (default "./corpus")
-	HTTPClient   *http.Client // default: 120s timeout
-	KEVURL       string       // override for tests
-	EPSSURL      string       // override for tests
-	ExploitDBURL string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
-	NVDURL       string       // OPT-IN CVSS-vector source: only fetched when set. NVD is large + paginated, so
+	OutDir        string       // output dir (default "./corpus")
+	HTTPClient    *http.Client // default: 120s timeout
+	KEVURL        string       // override for tests
+	EPSSURL       string       // override for tests
+	ExploitDBURL  string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
+	MetasploitURL string       // override for tests; best-effort weaponization overlay (msf modules), merged with ExploitDB
+	NVDURL        string       // OPT-IN CVSS-vector source: only fetched when set. NVD is large + paginated, so
 	//             it's wired to a bulk mirror / paging fetcher (a single GET to the live API returns one page),
 	//             never defaulted on. Best-effort like ExploitDB (a fetch failure doesn't fail the refresh).
 }
@@ -35,6 +36,9 @@ func (o RefreshOptions) withDefaults() RefreshOptions {
 	}
 	if o.ExploitDBURL == "" {
 		o.ExploitDBURL = ExploitDBURL
+	}
+	if o.MetasploitURL == "" {
+		o.MetasploitURL = MetasploitURL
 	}
 	return o
 }
@@ -72,6 +76,17 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 	if body, ferr := httpGet(ctx, opts.HTTPClient, opts.ExploitDBURL); ferr == nil {
 		exploits, _ = ParseExploitDB(body)
 		_ = body.Close()
+	}
+	// Metasploit modules are the second weaponization overlay (framework-weaponized — a stronger rung than
+	// a raw PoC), merged into the same Exploits set. Best-effort like ExploitDB: a fetch/parse failure must
+	// NOT block the KEV+EPSS refresh. Skipped when the URL is explicitly cleared.
+	if opts.MetasploitURL != "" {
+		if body, ferr := httpGet(ctx, opts.HTTPClient, opts.MetasploitURL); ferr == nil {
+			if msf, perr := ParseMetasploit(body); perr == nil {
+				exploits = mergeExploitRefs(exploits, msf)
+			}
+			_ = body.Close()
+		}
 	}
 
 	// NVD CVSS vectors are OPT-IN + best-effort: only fetched when a URL is configured (a bulk mirror / pager),

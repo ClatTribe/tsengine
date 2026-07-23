@@ -137,15 +137,21 @@ func TestRefresh_OverHTTP(t *testing.T) {
 	mux.HandleFunc("/exploitdb", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("file,id,description,codes,verified\nx.txt,12345,Log4Shell,CVE-2021-44228,1\n"))
 	})
+	// Metasploit fixture: a framework-weaponized module for the SAME Log4Shell CVE, so the entry count
+	// stays 3 and exploit_count stays 1 while a metasploit: ref is unioned onto the ExploitDB overlay.
+	mux.HandleFunc("/metasploit", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"exploit/multi/http/log4shell":{"fullname":"exploit/multi/http/log4shell","type":"exploit","references":["CVE-2021-44228"]}}`))
+	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	dir := t.TempDir()
 	m, path, err := Refresh(context.Background(), RefreshOptions{
-		OutDir:       dir,
-		KEVURL:       srv.URL + "/kev",
-		EPSSURL:      srv.URL + "/epss",
-		ExploitDBURL: srv.URL + "/exploitdb",
+		OutDir:        dir,
+		KEVURL:        srv.URL + "/kev",
+		EPSSURL:       srv.URL + "/epss",
+		ExploitDBURL:  srv.URL + "/exploitdb",
+		MetasploitURL: srv.URL + "/metasploit",
 	})
 	if err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -155,6 +161,19 @@ func TestRefresh_OverHTTP(t *testing.T) {
 	}
 	if m.ExploitCount != 1 {
 		t.Errorf("refreshed corpus exploit_count = %d, want 1", m.ExploitCount)
+	}
+	// both weaponization overlays must be recorded in the pinned manifest's provenance.
+	var hasEDB, hasMSF bool
+	for _, s := range m.Sources {
+		if s == ExploitDBURL {
+			hasEDB = true
+		}
+		if s == MetasploitURL {
+			hasMSF = true
+		}
+	}
+	if !hasEDB || !hasMSF {
+		t.Errorf("manifest sources must list both exploit overlays, got %v", m.Sources)
 	}
 	if !strings.HasSuffix(path, DataFileName) {
 		t.Errorf("unexpected data path %q", path)

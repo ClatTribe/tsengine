@@ -107,7 +107,25 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 	}
 	sources := []string{KEVURL, EPSSURL}
 	if exploitCVEs > 0 {
-		sources = append(sources, ExploitDBURL)
+		// The Exploits set is a merged overlay (ExploitDB + Metasploit); list each source actually present
+		// so the pinned manifest's provenance stays honest (§10).
+		edb, msf := false, false
+		for _, refs := range exploits {
+			for _, r := range refs {
+				switch {
+				case strings.HasPrefix(r, "exploitdb:"):
+					edb = true
+				case strings.HasPrefix(r, "metasploit:"):
+					msf = true
+				}
+			}
+		}
+		if edb {
+			sources = append(sources, ExploitDBURL)
+		}
+		if msf {
+			sources = append(sources, MetasploitURL)
+		}
 	}
 	if cvssCVEs > 0 {
 		sources = append(sources, NVDURL)
