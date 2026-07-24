@@ -38,6 +38,8 @@ var synonym = map[string]string{
 	"passwords":       "creds",
 	"injection":       "inject",
 	"injections":      "inject",
+	"tampering":       "tamper",
+	"tampered":        "tamper",
 	"vulnerability":   "vuln",
 	"vulnerabilities": "vuln",
 	"remediation":     "fix",

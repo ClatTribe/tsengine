@@ -43,7 +43,7 @@ var toolTags = map[string][]string{
 	"bola_probe":         {"bola", "idor", "authz", "authorization", "object"},
 	"privesc_probe":      {"privesc", "privilege", "escalation", "mass", "assignment", "bfla"},
 	"session_idor_probe": {"idor", "session", "login", "authz"},
-	"tamper_probe":       {"tamper", "access", "control", "authz", "header"},
+	"tamper_probe":       {"tamper", "parameter", "access", "control", "authz", "header", "idor", "privilege"},
 	"race_probe":         {"race", "toctou", "limit", "concurrency"},
 	"jwt_crack":          {"jwt", "token", "hmac", "forge", "session"},
 	"crack_hash":         {"hash", "creds", "password", "md5", "sha1"},
