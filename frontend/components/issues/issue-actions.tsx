@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { EyeOff, Eye, Loader2 } from "lucide-react";
 import { ignoreIssue, unignoreIssue } from "@/app/(app)/issues/actions";
+import { useAction } from "@/lib/use-action";
 import { cn } from "@/lib/utils";
 
 const REASONS = [
@@ -17,12 +18,12 @@ const REASONS = [
 export function IssueActions({ issueKey, ignored }: { issueKey: string; ignored?: boolean }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState(REASONS[0].value);
-  const [pending, start] = useTransition();
+  const [pending, run] = useAction();
 
   if (ignored) {
     return (
       <button
-        onClick={() => start(() => unignoreIssue(issueKey))}
+        onClick={() => run(() => unignoreIssue(issueKey), issueKey)}
         disabled={pending}
         className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1 text-xs text-muted transition hover:border-accent/40 hover:text-ink disabled:opacity-50"
       >
@@ -54,7 +55,7 @@ export function IssueActions({ issueKey, ignored }: { issueKey: string; ignored?
         ))}
       </select>
       <button
-        onClick={() => start(() => ignoreIssue(issueKey, reason, ""))}
+        onClick={() => run(() => ignoreIssue(issueKey, reason, ""), issueKey)}
         disabled={pending}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition hover:border-accent disabled:opacity-50",
