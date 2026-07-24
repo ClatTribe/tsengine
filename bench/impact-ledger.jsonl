@@ -1,0 +1,3 @@
+{"crown_tp":0,"invented":1,"missed":0,"model":"claude-proxy","pass":false,"rank_quality":1,"scenario_id":"estate-mistagged"}
+{"crown_tp":0,"invented":0,"missed":0,"model":"claude-proxy","pass":true,"rank_quality":1,"scenario_id":"estate-mistagged"}
+{"crown_tp":1,"invented":0,"missed":0,"model":"claude-proxy","pass":true,"rank_quality":1,"scenario_id":"estate-priority"}
