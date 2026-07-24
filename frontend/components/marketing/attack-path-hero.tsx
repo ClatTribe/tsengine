@@ -14,7 +14,7 @@ export function AttackPathHero() {
         <span className="pulse-dot" /> Example · how the chain forms
       </div>
 
-      <svg viewBox="0 0 480 264" className="w-full" role="img" aria-labelledby="aph-t aph-d">
+      <svg viewBox="0 0 526 264" className="w-full" role="img" aria-labelledby="aph-t aph-d">
         <title id="aph-t">Cross-surface attack path</title>
         <desc id="aph-d">
           A leaked AWS key in code and a breached SaaS login both bridge through an over-permissioned
@@ -29,12 +29,12 @@ export function AttackPathHero() {
         {/* edges — drawn in, staggered. --len ≥ true path length so the "from" is fully hidden. */}
         <path d="M156 55 C190 55 188 104 214 116" fill="none" strokeWidth={2} className="draw-path stroke-accent" style={{ "--len": "230" } as CSSProperties} markerEnd="url(#aph-arrow)" />
         <path d="M156 185 C190 185 188 136 214 124" fill="none" strokeWidth={2} className="draw-path draw-path-2 stroke-accent" style={{ "--len": "230" } as CSSProperties} markerEnd="url(#aph-arrow)" />
-        <path d="M334 120 L368 120" fill="none" strokeWidth={2} className="draw-path draw-path-3 stroke-accent" style={{ "--len": "60" } as CSSProperties} markerEnd="url(#aph-arrow)" />
+        <path d="M334 120 L414 120" fill="none" strokeWidth={2} className="draw-path draw-path-3 stroke-accent" style={{ "--len": "80" } as CSSProperties} markerEnd="url(#aph-arrow)" />
 
         {/* edge labels — hidden < 420px */}
         <text x="186" y="80" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">shared ARN</text>
         <text x="186" y="160" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">same email</text>
-        <text x="351" y="110" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">assume role</text>
+        <text x="374" y="110" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">assume role</text>
 
         {/* entry: code */}
         <g className="node-pop">
@@ -56,10 +56,10 @@ export function AttackPathHero() {
         </g>
         {/* crown jewel: cloud root — soft halo + filled accent (the destination, strongest) */}
         <g className="node-pop node-pop-4">
-          <rect x="368" y="89" width="108" height="62" rx="15" className="fill-accent" opacity={0.12} />
-          <rect x="376" y="95" width="92" height="50" rx="12" className="fill-accent" />
-          <text x="392" y="120" fill="#fff" fontSize="14" fontWeight="600">cloud root</text>
-          <text x="392" y="135" fill="#fff" fontSize="11" opacity={0.85}>admin</text>
+          <rect x="414" y="89" width="108" height="62" rx="15" className="fill-accent" opacity={0.12} />
+          <rect x="422" y="95" width="92" height="50" rx="12" className="fill-accent" />
+          <text x="438" y="120" fill="#fff" fontSize="14" fontWeight="600">cloud root</text>
+          <text x="438" y="135" fill="#fff" fontSize="11" opacity={0.85}>admin</text>
         </g>
       </svg>
 
