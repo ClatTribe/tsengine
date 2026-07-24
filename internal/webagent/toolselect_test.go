@@ -19,11 +19,27 @@ func hasName(ts []toolDef, name string) bool {
 	return false
 }
 
-func TestSelectedTools_DefaultOffReturnsFullCatalog(t *testing.T) {
-	// Flag unset → no behavior change: every tool is rendered, exactly as before.
-	sel := selectedTools(&Context{}, nil)
+func TestSelectedTools_DefaultOnSelects(t *testing.T) {
+	// Default (no env) → selection is ON: an sqli seed yields a focused subset within the cap.
+	cc := &Context{Seeds: []SeedFinding{{Class: "sqli", Route: "https://x/search?q="}}}
+	sel := selectedTools(cc, nil)
+	if len(sel) > maxActiveTools {
+		t.Errorf("default-on must cap the catalog at %d, got %d", maxActiveTools, len(sel))
+	}
+	if len(sel) >= len(tools()) {
+		t.Errorf("default-on should focus the catalog below the full %d, got %d", len(tools()), len(sel))
+	}
+	if !hasName(sel, "sqli_bool_probe") {
+		t.Errorf("default-on sqli seed should surface sqli_bool_probe, got %v", toolDefNames(sel))
+	}
+}
+
+func TestSelectedTools_KillSwitchReturnsFullCatalog(t *testing.T) {
+	// The explicit opt-out renders every tool, exactly as before selection existed.
+	t.Setenv("TSENGINE_TOOL_SELECT", "0")
+	sel := selectedTools(&Context{Seeds: []SeedFinding{{Class: "sqli"}}}, nil)
 	if len(sel) != len(tools()) {
-		t.Fatalf("default (flag off) must return the full catalog: got %d, want %d", len(sel), len(tools()))
+		t.Fatalf("TSENGINE_TOOL_SELECT=0 must return the full catalog: got %d, want %d", len(sel), len(tools()))
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 //   - readable by the victim's OWN session (2xx) — proves the object belongs to the victim (baseline)
 //   - AND readable by a DISTINCT attacker session (2xx) — the cross-principal violation
 //   - AND NOT present to an unauthenticated request — proves it's access-controlled, not public.
+//
 // Any missing leg = not grounded (never assumed). This is what makes a one-session "different data on
 // another id" heuristic (FP-prone on public per-object endpoints) safe to replace.
 func TestBolaConfirmed_Predicate(t *testing.T) {
@@ -21,10 +22,10 @@ func TestBolaConfirmed_Predicate(t *testing.T) {
 	const marker = "victim@corp.example" // a victim-private datum
 
 	cases := []struct {
-		name                    string
+		name                     string
 		victim, attacker, unauth *Resp
-		marker                  string
-		want                    bool
+		marker                   string
+		want                     bool
 	}{
 		{"confirmed BOLA", mk(200, "acct "+marker), mk(200, "acct "+marker), mk(401, "login required"), marker, true},
 		{"public endpoint (unauth sees it) NOT bola", mk(200, marker), mk(200, marker), mk(200, "acct "+marker), marker, false},

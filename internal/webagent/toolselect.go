@@ -16,8 +16,9 @@ import (
 // SAFE BY CONSTRUCTION: this only shapes what the prompt SHOWS. The handler registry in Investigate is
 // built from the full tools(), so a hidden tool is still fully callable — if the model names one that
 // wasn't surfaced this turn, it still runs (and the "unknown tool" path lists every name for discovery).
-// So selection can only focus attention, never remove a capability. Opt-in via TSENGINE_TOOL_SELECT=1
-// until validated live; default OFF renders the full catalog exactly as before.
+// So selection can only focus attention, never remove a capability. ON BY DEFAULT (the best-practice:
+// keep the visible catalog within the L2-CAP); set TSENGINE_TOOL_SELECT=0 to disable and render the
+// full 23-tool catalog (an operator kill-switch for debugging / A-B).
 
 const maxActiveTools = 12
 
@@ -74,8 +75,9 @@ func toolCatalog() *toolselect.Catalog {
 	return webCatalog
 }
 
-// toolSelectEnabled reports whether dynamic selection is on (opt-in until validated live).
-func toolSelectEnabled() bool { return os.Getenv("TSENGINE_TOOL_SELECT") == "1" }
+// toolSelectEnabled reports whether dynamic selection is on. Default ON; disabled only by an explicit
+// TSENGINE_TOOL_SELECT=0 (the kill-switch), so the best-practice small catalog is the standard path.
+func toolSelectEnabled() bool { return os.Getenv("TSENGINE_TOOL_SELECT") != "0" }
 
 // selectedTools returns the toolDefs to render in the prompt this turn. Default (flag off) → the full
 // catalog, unchanged. Flag on → CORE + the specialists most relevant to the current subgoal.
