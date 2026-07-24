@@ -27,7 +27,20 @@ async function call<T>(path: string, init?: RequestInit, session?: Session): Pro
     },
     cache: "no-store",
   });
-  if (!res.ok) throw new ApiError(res.status, `${path}: HTTP ${res.status}`);
+  if (!res.ok) {
+    // Surface the backend's own error message when it sends one ({"error": "..."}). Those are
+    // written for the user — e.g. "the L2 translator needs a tool-calling LLM: configure one in
+    // Settings → LLM" — and are far more useful than a bare "/v1/l2/translate: HTTP 400". Fall
+    // back to the path + status when the body isn't a JSON error object.
+    let message = `${path}: HTTP ${res.status}`;
+    try {
+      const body = JSON.parse(await res.text());
+      if (body && typeof body.error === "string" && body.error.trim()) message = body.error;
+    } catch {
+      // non-JSON / empty error body — keep the status message
+    }
+    throw new ApiError(res.status, message);
+  }
   const ct = res.headers.get("content-type") ?? "";
   return (ct.includes("application/json") ? await res.json() : await res.text()) as T;
 }
