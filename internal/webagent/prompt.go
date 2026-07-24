@@ -83,7 +83,7 @@ RULES
 	fmt.Fprintf(&b, "REQUESTS USED: %d\n\n", cc.req.Sent())
 
 	b.WriteString("TOOLS:\n")
-	for _, t := range tools() {
+	for _, t := range selectedTools(cc, transcript) {
 		fmt.Fprintf(&b, "- %s\n", t.help)
 	}
 
