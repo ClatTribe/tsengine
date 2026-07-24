@@ -15,11 +15,28 @@ import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 import { ArchStack } from "@/components/marketing/arch-stack";
 import { AgenticActions } from "@/components/marketing/agentic-actions";
 
+const HOME_TITLE = "TensorShield — one AI engineer that finds the attack path across code, cloud, and SaaS";
+const HOME_DESCRIPTION =
+  "Connect your code, cloud, and SaaS. One AI engineer finds the attack path across all three — from a leaked key to your cloud root — and fixes it, with a named human signing the risky calls. SOC 2 and compliance built in.";
+
+// The homepage leads with the cross-surface-attack-path wedge, so its social card must match that —
+// otherwise a shared homepage link shows the site-wide "fractional security team" default (the other
+// door), a positioning mismatch with the H1. Override OG + Twitter to the wedge here.
 export const metadata = {
-  title: "TensorShield — one AI engineer that finds the attack path across code, cloud, and SaaS",
-  description:
-    "Connect your code, cloud, and SaaS. One AI engineer finds the attack path across all three — from a leaked key to your cloud root — and fixes it, with a named human signing the risky calls. SOC 2 and compliance built in.",
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
   alternates: { canonical: "/" },
+  openGraph: {
+    title: "One leaked secret is all it takes to reach your cloud root",
+    description:
+      "TensorShield connects your code, cloud, and SaaS and walks every attack path an attacker could — one AI engineer finds the chain across all three and fixes it, with a human signing the risky calls.",
+    url: "/",
+  },
+  twitter: {
+    title: "One leaked secret is all it takes to reach your cloud root",
+    description:
+      "TensorShield connects your code, cloud, and SaaS and walks every attack path an attacker could — one AI engineer finds the chain across all three and fixes it, with a human signing the risky calls.",
+  },
 };
 
 export default function Landing() {
