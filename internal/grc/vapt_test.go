@@ -207,3 +207,20 @@ func TestVAPTReport_SurfacesThreatIntelEnrichment(t *testing.T) {
 		}
 	}
 }
+
+func TestVAPT_DependencyPatchability(t *testing.T) {
+	findings := []types.Finding{
+		{ID: "1", Tool: "trivy", Severity: types.SeverityHigh, RuleID: "trivy::CVE-1", ToolArgs: map[string]string{"fixable": "true", "fixed_version": "2.0"}},
+		{ID: "2", Tool: "grype", Severity: types.SeverityHigh, RuleID: "grype::CVE-2", ToolArgs: map[string]string{"fixable": "true"}},
+		{ID: "3", Tool: "osv-scanner", Severity: types.SeverityMedium, RuleID: "osv-scanner::CVE-3", ToolArgs: map[string]string{"fixable": "false"}},
+		{ID: "4", Tool: "nuclei", Severity: types.SeverityHigh, RuleID: "nuclei::xss"}, // no fixable key → not counted
+	}
+	r := ReportFromFindings(findings, []string{"repo"}, "Acme", time.Now().UTC(), nil)
+	if r.Summary.PatchAvailable != 2 || r.Summary.PatchUnavailable != 1 {
+		t.Fatalf("patch counts wrong: available=%d unavailable=%d", r.Summary.PatchAvailable, r.Summary.PatchUnavailable)
+	}
+	md := RenderVAPTMarkdown(r)
+	if !strings.Contains(md, "2 of 3 dependency findings have an upstream fix") {
+		t.Errorf("patchability line missing from VAPT markdown:\n%s", md)
+	}
+}
