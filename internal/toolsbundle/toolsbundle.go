@@ -27,6 +27,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/ffuf"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gosec"
+	_ "github.com/ClatTribe/tsengine/internal/tool/govulncheck"
 	_ "github.com/ClatTribe/tsengine/internal/tool/grype"
 	_ "github.com/ClatTribe/tsengine/internal/tool/hadolint"
 	_ "github.com/ClatTribe/tsengine/internal/tool/httpx"
@@ -54,4 +55,5 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/syft"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trivy"
 	_ "github.com/ClatTribe/tsengine/internal/tool/trufflehog"
+	_ "github.com/ClatTribe/tsengine/internal/tool/wpscan"
 )

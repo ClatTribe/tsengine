@@ -5,6 +5,7 @@ package main
 // AND adding its binary to docker/sandbox/Dockerfile.
 import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
+	_ "github.com/ClatTribe/tsengine/internal/tool/bandit"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"
 	_ "github.com/ClatTribe/tsengine/internal/tool/cloudfox"
@@ -16,6 +17,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/ffuf"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"
+	_ "github.com/ClatTribe/tsengine/internal/tool/gosec"
 	_ "github.com/ClatTribe/tsengine/internal/tool/govulncheck"
 	_ "github.com/ClatTribe/tsengine/internal/tool/grype"
 	_ "github.com/ClatTribe/tsengine/internal/tool/hadolint"
@@ -23,10 +25,12 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/hydra"
 	_ "github.com/ClatTribe/tsengine/internal/tool/inql"
 	_ "github.com/ClatTribe/tsengine/internal/tool/katana"
+	_ "github.com/ClatTribe/tsengine/internal/tool/kics"
 	_ "github.com/ClatTribe/tsengine/internal/tool/kiterunner"
 	_ "github.com/ClatTribe/tsengine/internal/tool/mobsfscan"
 	_ "github.com/ClatTribe/tsengine/internal/tool/modelscan"
 	_ "github.com/ClatTribe/tsengine/internal/tool/naabu"
+	_ "github.com/ClatTribe/tsengine/internal/tool/nikto"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nmap"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
 	_ "github.com/ClatTribe/tsengine/internal/tool/openapi"
