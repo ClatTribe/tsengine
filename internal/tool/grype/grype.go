@@ -89,22 +89,45 @@ func parse(blob []byte, target string) []types.SandboxEmittedFinding {
 		if m.Artifact.Name != "" {
 			endpoint = fmt.Sprintf("%s [%s@%s]", target, m.Artifact.Name, m.Artifact.Version)
 		}
+		// Fix availability (competitor-parity signal): grype records the patched version(s) in
+		// vulnerability.fix.versions when fix.state == "fixed". Surface a normalized fixable flag +
+		// version so the enriched view / VAPT report can lead with fixable vulns.
+		fixedVer := ""
+		if m.Vulnerability.Fix.State == "fixed" && len(m.Vulnerability.Fix.Versions) > 0 {
+			fixedVer = m.Vulnerability.Fix.Versions[0]
+		}
 		out = append(out, types.SandboxEmittedFinding{
 			RuleID:          "grype::" + m.Vulnerability.ID,
 			Tool:            "grype",
 			Severity:        normalizeSeverity(m.Vulnerability.Severity),
 			Endpoint:        endpoint,
 			Title:           fmt.Sprintf("%s in %s", m.Vulnerability.ID, m.Artifact.Name),
-			Description:     m.Vulnerability.Description,
+			Description:     withFixNote(m.Vulnerability.Description, fixedVer),
 			RawOutput:       raw,
 			MITRETechniques: []string{"T1195.002"},
-			ToolArgs:        map[string]string{"pkg": m.Artifact.Name, "installed_version": m.Artifact.Version, "pkg_type": m.Artifact.Type, "fix_state": m.Vulnerability.Fix.State},
+			ToolArgs:        map[string]string{"pkg": m.Artifact.Name, "installed_version": m.Artifact.Version, "pkg_type": m.Artifact.Type, "fix_state": m.Vulnerability.Fix.State, "fixable": boolStr(fixedVer != ""), "fixed_version": fixedVer},
 		})
 	}
 	if len(out) == 0 {
 		return nil
 	}
 	return out
+}
+
+// withFixNote appends a concise, grounded fix-availability line to a finding description — the
+// competitor-parity "fixable vs no-fix" signal, immediately visible in the VAPT report / issue detail.
+func withFixNote(desc, fixedVer string) string {
+	if fixedVer != "" {
+		return strings.TrimSpace(desc + "\nFix available: upgrade to " + fixedVer + ".")
+	}
+	return strings.TrimSpace(desc + "\nNo fixed version available yet — mitigate (pin/replace/isolate) until upstream patches.")
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 func normalizeSeverity(s string) types.Severity {

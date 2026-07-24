@@ -1,6 +1,7 @@
 package osvscanner
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/tool"
@@ -40,5 +41,36 @@ func TestParse_Empty(t *testing.T) {
 func TestOSV_Identity(t *testing.T) {
 	if _, ok := tool.Get("osv-scanner"); !ok {
 		t.Error("osv-scanner not registered")
+	}
+}
+
+func TestParse_FixAvailability(t *testing.T) {
+	// A vuln with a `fixed` event → fixable + fixed_version + a "Fix available" note.
+	blob := []byte(`{"results":[{"source":{"path":"go.mod"},"packages":[
+	  {"package":{"name":"golang.org/x/net","version":"0.1.0","ecosystem":"Go"},
+	   "vulnerabilities":[{"id":"CVE-2023-1","summary":"bad","affected":[
+	     {"package":{"name":"golang.org/x/net"},"ranges":[{"events":[{"introduced":"0"},{"fixed":"0.7.0"}]}]}]}]}]}]}`)
+	fs := parse(blob)
+	if len(fs) != 1 {
+		t.Fatalf("got %d", len(fs))
+	}
+	if fs[0].ToolArgs["fixable"] != "true" || fs[0].ToolArgs["fixed_version"] != "0.7.0" {
+		t.Errorf("fixable/fixed_version wrong: %v", fs[0].ToolArgs)
+	}
+	if !strings.Contains(fs[0].Description, "upgrade to 0.7.0") {
+		t.Errorf("fix note missing: %q", fs[0].Description)
+	}
+
+	// No `fixed` event → not fixable + a mitigate note.
+	blob2 := []byte(`{"results":[{"source":{"path":"go.mod"},"packages":[
+	  {"package":{"name":"p","version":"1.0","ecosystem":"Go"},
+	   "vulnerabilities":[{"id":"CVE-2023-2","summary":"bad","affected":[
+	     {"package":{"name":"p"},"ranges":[{"events":[{"introduced":"0"}]}]}]}]}]}]}`)
+	fs2 := parse(blob2)
+	if fs2[0].ToolArgs["fixable"] != "false" {
+		t.Errorf("no-fix should be fixable=false, got %q", fs2[0].ToolArgs["fixable"])
+	}
+	if !strings.Contains(fs2[0].Description, "No fixed version available") {
+		t.Errorf("no-fix note missing: %q", fs2[0].Description)
 	}
 }

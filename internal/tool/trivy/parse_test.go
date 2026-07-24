@@ -3,6 +3,7 @@ package trivy
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -112,5 +113,16 @@ func TestVulnToFinding_CarriesClassAndFixState(t *testing.T) {
 	}
 	if normalizeFixState("affected") != "affected" {
 		t.Error("affected must pass through (still actionable)")
+	}
+}
+
+func TestVulnToFinding_FixAvailability(t *testing.T) {
+	f := vulnToFinding(vulnerability{VulnerabilityID: "CVE-1", PkgName: "p", FixedVersion: "2.0.0", Severity: "HIGH"}, "img", "lang-pkgs")
+	if f.ToolArgs["fixable"] != "true" || !strings.Contains(f.Description, "upgrade to 2.0.0") {
+		t.Errorf("fixable trivy wrong: args=%v desc=%q", f.ToolArgs, f.Description)
+	}
+	nf := vulnToFinding(vulnerability{VulnerabilityID: "CVE-2", PkgName: "p", FixedVersion: "", Severity: "HIGH"}, "img", "lang-pkgs")
+	if nf.ToolArgs["fixable"] != "false" || !strings.Contains(nf.Description, "No fixed version available") {
+		t.Errorf("no-fix trivy wrong: args=%v desc=%q", nf.ToolArgs, nf.Description)
 	}
 }

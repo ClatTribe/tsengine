@@ -60,3 +60,22 @@ func TestSurface(t *testing.T) {
 		t.Error("surface wrong")
 	}
 }
+
+func TestParse_FixAvailability(t *testing.T) {
+	// fixed → fixable + version + "Fix available" note.
+	fx := parse([]byte(`{"matches":[{"vulnerability":{"id":"CVE-1","severity":"High","fix":{"state":"fixed","versions":["1.2.3"]}},"artifact":{"name":"p","version":"1.0","type":"npm"}}]}`), "img")
+	if fx[0].ToolArgs["fixable"] != "true" || fx[0].ToolArgs["fixed_version"] != "1.2.3" {
+		t.Errorf("fixable/fixed_version wrong: %v", fx[0].ToolArgs)
+	}
+	if !strings.Contains(fx[0].Description, "Fix available: upgrade to 1.2.3") {
+		t.Errorf("fix note missing: %q", fx[0].Description)
+	}
+	// no fix → fixable false + "No fixed version" note.
+	nf := parse([]byte(`{"matches":[{"vulnerability":{"id":"CVE-2","severity":"High","fix":{"state":"not-fixed","versions":[]}},"artifact":{"name":"p","version":"1.0","type":"npm"}}]}`), "img")
+	if nf[0].ToolArgs["fixable"] != "false" {
+		t.Errorf("no-fix should be fixable=false, got %q", nf[0].ToolArgs["fixable"])
+	}
+	if !strings.Contains(nf[0].Description, "No fixed version available") {
+		t.Errorf("no-fix note missing: %q", nf[0].Description)
+	}
+}
