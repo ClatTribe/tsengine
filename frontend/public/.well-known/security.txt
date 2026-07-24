@@ -1,0 +1,6 @@
+# TensorShield security contact — https://tensorshield.io/security
+Contact: mailto:security@tensorshield.io
+Expires: 2027-07-24T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://tensorshield.io/.well-known/security.txt
+Policy: https://tensorshield.io/security

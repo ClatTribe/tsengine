@@ -181,7 +181,9 @@ function OSSBand() {
         </div>
         <p className="mx-auto mt-8 max-w-2xl text-center text-xs text-faint">
           All trademarks belong to their respective open-source projects. TensorShield orchestrates these tools; it is
-          not affiliated with or endorsed by them.
+          not affiliated with or endorsed by them. External-exposure (OSINT) collection runs live where it&apos;s keyless
+          (Certificate-Transparency monitoring, GitHub code-search); breach, dark-web, and port-exposure feeds run via a
+          posted snapshot or a credential-gated connector you configure.
         </p>
       </div>
     </section>
