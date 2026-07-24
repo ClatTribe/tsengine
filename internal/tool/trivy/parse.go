@@ -94,6 +94,22 @@ func parseReport(blob []byte) []types.SandboxEmittedFinding {
 // grype. Only a distro DECISION not to fix (will_not_fix) or an unsupported release (end_of_life)
 // becomes "wont-fix" (the unpatchable-noise signal); "affected"/"fix_deferred" (a fix may still land)
 // stays actionable and is passed through verbatim.
+// withFixNote appends a concise, grounded fix-availability line to a finding description — the
+// competitor-parity "fixable vs no-fix" signal, immediately visible in the VAPT report / issue detail.
+func withFixNote(desc, fixedVer string) string {
+	if fixedVer != "" {
+		return strings.TrimSpace(desc + "\nFix available: upgrade to " + fixedVer + ".")
+	}
+	return strings.TrimSpace(desc + "\nNo fixed version available yet — mitigate (pin/replace/isolate) until upstream patches.")
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
 func normalizeFixState(status string) string {
 	switch status {
 	case "will_not_fix", "end_of_life":
@@ -125,13 +141,14 @@ func vulnToFinding(v vulnerability, endpoint, class string) types.SandboxEmitted
 		CWE:             v.CweIDs, // trivy already emits canonical CWE-N form
 		Endpoint:        pkgEndpoint,
 		Title:           title,
-		Description:     v.Description,
+		Description:     withFixNote(v.Description, v.FixedVersion),
 		RawOutput:       raw,
 		MITRETechniques: []string{"T1195.002"}, // supply-chain-via-software-deps
 		ToolArgs: map[string]string{
 			"pkg":               v.PkgName,
 			"installed_version": v.InstalledVersion,
 			"fixed_version":     v.FixedVersion,
+			"fixable":           boolStr(v.FixedVersion != ""), // competitor-parity fixable signal
 			"primary_url":       v.PrimaryURL,
 			"pkg_class":         class,                       // "os-pkgs" (distro) vs "lang-pkgs" (app dep)
 			"fix_state":         normalizeFixState(v.Status), // tool-agnostic; "wont-fix" = distro won't patch

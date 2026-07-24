@@ -63,9 +63,20 @@ type osvReport struct {
 				Ecosystem string `json:"ecosystem"`
 			} `json:"package"`
 			Vulnerabilities []struct {
-				ID      string   `json:"id"`
-				Summary string   `json:"summary"`
-				Aliases []string `json:"aliases"`
+				ID       string   `json:"id"`
+				Summary  string   `json:"summary"`
+				Aliases  []string `json:"aliases"`
+				Affected []struct {
+					Package struct {
+						Name string `json:"name"`
+					} `json:"package"`
+					Ranges []struct {
+						Events []struct {
+							Introduced string `json:"introduced"`
+							Fixed      string `json:"fixed"`
+						} `json:"events"`
+					} `json:"ranges"`
+				} `json:"affected"`
 			} `json:"vulnerabilities"`
 		} `json:"packages"`
 	} `json:"results"`
@@ -86,20 +97,59 @@ func parse(blob []byte) []types.SandboxEmittedFinding {
 				// hooks — which extract CVEs from RuleID — agree across
 				// trivy/grype/osv-scanner on the same package-CVE.
 				id := preferCVE(v.ID, v.Aliases)
+				// Fix availability (competitor-parity signal): OSV records the patched version in
+				// affected[].ranges[].events[].fixed. Extract it (preferring the range for THIS
+				// package) so the enriched view / VAPT report can lead with fixable vulns.
+				var fixedVer string
+				for _, a := range v.Affected {
+					if a.Package.Name != "" && !strings.EqualFold(a.Package.Name, p.Package.Name) {
+						continue
+					}
+					for _, rng := range a.Ranges {
+						for _, e := range rng.Events {
+							if e.Fixed != "" {
+								fixedVer = e.Fixed
+								break
+							}
+						}
+						if fixedVer != "" {
+							break
+						}
+					}
+					if fixedVer != "" {
+						break
+					}
+				}
 				out = append(out, types.SandboxEmittedFinding{
 					RuleID:          "osv-scanner::" + id,
 					Tool:            "osv-scanner",
 					Severity:        types.SeverityMedium,
 					Endpoint:        pkg,
 					Title:           fmt.Sprintf("%s in %s (%s)", id, pkg, p.Package.Ecosystem),
-					Description:     v.Summary,
+					Description:     withFixNote(v.Summary, fixedVer),
 					MITRETechniques: []string{"T1195.001"},
-					ToolArgs:        map[string]string{"ecosystem": p.Package.Ecosystem, "source": res.Source.Path, "osv_id": v.ID},
+					ToolArgs:        map[string]string{"ecosystem": p.Package.Ecosystem, "source": res.Source.Path, "osv_id": v.ID, "fixable": boolStr(fixedVer != ""), "fixed_version": fixedVer},
 				})
 			}
 		}
 	}
 	return out
+}
+
+// withFixNote appends a concise, grounded fix-availability line to a finding description — the
+// competitor-parity "fixable vs no-fix" signal, immediately visible in the VAPT report / issue detail.
+func withFixNote(desc, fixedVer string) string {
+	if fixedVer != "" {
+		return strings.TrimSpace(desc + "\nFix available: upgrade to " + fixedVer + ".")
+	}
+	return strings.TrimSpace(desc + "\nNo fixed version available yet — mitigate (pin/replace/isolate) until upstream patches.")
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // preferCVE returns the first CVE alias if present, else the native OSV id.
