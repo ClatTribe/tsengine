@@ -39,3 +39,14 @@ func TestHydrateFileSecrets(t *testing.T) {
 		t.Errorf("unreadable *_FILE should leave the key unset, got %q", got)
 	}
 }
+
+func TestRequireSealedSecrets_FailsClosed(t *testing.T) {
+	// No opt-in → refuse to start (fail closed: plaintext creds are never a silent default).
+	if err := requireSealedSecrets(""); err == nil {
+		t.Error("missing sealing key without the dev opt-in must be fatal (fail closed)")
+	}
+	// Explicit dev opt-in → allowed.
+	if err := requireSealedSecrets("1"); err != nil {
+		t.Errorf("TSENGINE_ALLOW_UNSEALED_SECRETS=1 should permit plaintext for dev, got %v", err)
+	}
+}
