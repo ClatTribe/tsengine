@@ -121,6 +121,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench containment: %v\n", err)
 			os.Exit(1)
 		}
+	case "localize":
+		if err := localizeCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench localize: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()
@@ -142,6 +147,7 @@ Usage:
   tsbench agent    --objectives <fixture.json> --scan <scan.json>
   tsbench xbow     --suite <validation-benchmarks-dir> [--dry-run] [--only ID,…] [--level N] [--out <prefix>]
   tsbench defense  [--scenarios <dir>] [--only <id>] [--mode substrate] [--out <scoreboard.md>]
+  tsbench localize [--agent] [--out <scoreboard.md>] | --repo <dir> --cwe CWE-89 [--desc <text>]
   tsbench defense-ledger [--ledger <path>] [--out <file>]
   tsbench scoreboard [--results <json>] [--out <file>]
 
