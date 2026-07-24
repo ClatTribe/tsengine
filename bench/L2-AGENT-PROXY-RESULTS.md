@@ -12,6 +12,7 @@ score** — a recorded finding is rejected unless a tool result backs it.
 | **Impact accuracy** | `impact` | substrate ranks by tags: **0%** on the mistagged estate | **100% PASS, +100 pts, 0 invented** | `impact-ledger.jsonl` |
 | **Impact discovery** | `discover` (8 scenarios) | severity/keyword baseline **0–50%** | **8/8 PASS · recall 100% · precision 100% · 0 invented** | `discover-ledger.jsonl` |
 | **Cloud depth (attack-path)** | `cloud-engine --cloudquery --agent` | deterministic substrate | **2/2 recall · 0 invented · STRONG (1.00)** — matched, resisted 8 noise findings | `cloudengine-ledger.jsonl` |
+| **Cloud remediation** | same run, `propose_fix` each | — | **coverage 100% (2/2 fixed) · verified_rate 100% (2/2 proven to cut the path)** | `cloudengine-ledger.jsonl` |
 
 **What each proves against a competitor.**
 - *Accuracy*: the substrate (≈ any tag/severity-sorting scanner) ranks a throwaway "critical" RCE above an
@@ -39,9 +40,10 @@ score** — a recorded finding is rejected unless a tool result backs it.
    already finds 2/2, so the head-to-head measured parity, not lift. The `--discrimination` sweep shows
    large accounts leave **6 recoverable paths the bounded substrate misses**; driving the agent there
    (proxy, ~30 turns) is the pending lift measurement.
-2. **Remediation not exercised.** The cloud run recorded the paths but did not `propose_fix` each, so
-   remediation coverage read 0%. The full engineer job is detect **+ verified fix** (the defensive
-   remediation-capture metric) — the next drive should propose and verify a fix per path.
+2. ~~Remediation not exercised.~~ **CLOSED** — a follow-up drive ran the complete detect+fix job:
+   `propose_fix` on each recorded path → **remediation coverage 100% (2/2), verified_rate 100% (2/2 proven
+   by cloudiam.Authorize to cut the path)**. This is the defensive remediation-capture hero metric — not
+   just finding a path, but proving the emitted fix closes it — measured end-to-end through the proxy.
 
 ## AI offensive agent — gated on live targets (not on the LLM)
 
