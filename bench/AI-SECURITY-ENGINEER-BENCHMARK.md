@@ -12,7 +12,14 @@ fix it and explain what it means (`defense-xbow` + `impact`).
 
 **Suite scorecard** (8 scenarios, every one live-proven via the proxy at recall 100% / precision 100%, and
 deterministically self-validated by `tsbench discover-suite` — the oracle answer PASSES and flag-everything
-raises false alarms, so each genuinely tests precision, not just recall):
+raises false alarms, so each genuinely tests precision, not just recall).
+
+> **Re-verified 2026-07-24 through the frontier-LLM proxy** (ledger `bench/discover-ledger.jsonl`,
+> `model=claude-proxy` — a real LLM-call path, not a canned answer): **8/8 PASS, recall 100%, precision
+> 100%, 0 invented**, including the precision-hard cases (estate-decoy's explicit-Deny-broken AssumeRole
+> chain rejected; estate-clean flagged nothing; estate-combo composed two individually-low findings). The
+> impact-*accuracy* axis was measured the same way — **AI engineer +100 pts over the substrate-only
+> baseline on `estate-mistagged`** (0%→100%), matched on `estate-priority`; see [impact-results.md](impact-results.md).
 
 | Scenario | Dimension tested | Findings | Real impacts | AI engineer | Best severity/keyword baseline |
 |---|---|---|---|---|---|
