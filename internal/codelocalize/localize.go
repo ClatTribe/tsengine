@@ -83,7 +83,7 @@ type Candidate struct {
 // Result is a ranked localization: the most-likely-sink files first, plus the exploration trace.
 type Result struct {
 	Ranked []Candidate `json:"ranked"`
-	Trace  []string    `json:"trace"` // the investigator's steps (what was searched, why it ranked)
+	Trace  []string    `json:"trace"`  // the investigator's steps (what was searched, why it ranked)
 	Engine string      `json:"engine"` // "heuristic" | "llm+heuristic"
 }
 
