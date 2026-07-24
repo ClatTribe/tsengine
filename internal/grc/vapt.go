@@ -38,7 +38,12 @@ type VAPTSummary struct {
 	Unconfirmed   int            `json:"unconfirmed"`    // pattern-match only — leads to validate (FP-exposed)
 	KEV           int            `json:"kev"`            // actively exploited in the wild (CISA KEV)
 	FixesReady    int            `json:"fixes_ready"`    // findings with a remediation already prepared
-	RiskRating    string         `json:"risk_rating"`    // Critical | High | Medium | Low | Clear
+	// PatchAvailable / PatchUnavailable: of the dependency (SCA) findings, how many have an upstream
+	// patched version the customer can upgrade to right now vs. none available yet — the competitor
+	// "fixable vs no-fix" executive signal. Only SCA findings (grype/trivy/osv-scanner) carry it.
+	PatchAvailable   int    `json:"patch_available"`
+	PatchUnavailable int    `json:"patch_unavailable"`
+	RiskRating       string `json:"risk_rating"` // Critical | High | Medium | Low | Clear
 }
 
 // VAPTFinding is one assessed vulnerability, grounded in its scanner evidence.
@@ -125,6 +130,14 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 		}
 		if fixReady[f.ID] {
 			r.Summary.FixesReady++
+		}
+		// Upstream patch availability (SCA fixable signal, §competitor-parity). Only dependency
+		// scanners set this key, so the counts naturally scope to SCA findings.
+		switch f.ToolArgs["fixable"] {
+		case "true":
+			r.Summary.PatchAvailable++
+		case "false":
+			r.Summary.PatchUnavailable++
 		}
 		// Pull the active-driver exploitation proof out of the description so the report can
 		// render it as distinguished, reproducible evidence (the exploitation-proven tier) rather
@@ -218,6 +231,10 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		s.Total, s.BySeverity["critical"], s.BySeverity["high"], s.BySeverity["medium"], s.BySeverity["low"], s.BySeverity["info"])
 	fmt.Fprintf(&b, "- **%d exploitation-proven** (a benign proof-of-concept was captured — the strongest evidence tier) · **%d tool-confirmed** (verified/corroborated) · **%d unconfirmed** (pattern-match — validate before action) · **%d actively exploited** (CISA KEV) · **%d with a fix already prepared**\n",
 		s.ExploitProven, s.Verified, s.Unconfirmed, s.KEV, s.FixesReady)
+	if sca := s.PatchAvailable + s.PatchUnavailable; sca > 0 {
+		fmt.Fprintf(&b, "- **Dependency patchability:** %d of %d dependency findings have an upstream fix you can upgrade to now; %d have no fix available yet (mitigate)\n",
+			s.PatchAvailable, sca, s.PatchUnavailable)
+	}
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
 	b.WriteString("\n## Methodology & confidence\n\n")
 	b.WriteString("Assessment is performed by the TensorShield engine, which wraps best-in-class open-source " +
@@ -331,6 +348,9 @@ func RenderVAPTExecMarkdown(r *VAPTReport) string {
 		s.Total, s.BySeverity["critical"], s.BySeverity["high"], s.BySeverity["medium"], s.BySeverity["low"], s.BySeverity["info"])
 	fmt.Fprintf(&b, "- **%d exploitation-proven** (a benign proof-of-concept was captured) · **%d actively exploited in the wild** (CISA KEV) · **%d with a fix already prepared**\n",
 		s.ExploitProven, s.KEV, s.FixesReady)
+	if sca := s.PatchAvailable + s.PatchUnavailable; sca > 0 {
+		fmt.Fprintf(&b, "- **%d of %d dependency findings have an upstream fix available now**\n", s.PatchAvailable, sca)
+	}
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
 
 	// Top findings — title + severity + confidence tier only (the "what", not the "how"). Cap at 10
