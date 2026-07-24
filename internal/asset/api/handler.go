@@ -190,12 +190,17 @@ var anchorNames = []string{
 	"nuclei",
 }
 
-// registryNames are on-demand. kiterunner (shadow-route brute-force) +
-// inql (GraphQL deep introspection) are the documented next sources; the
-// BOLA/BFLA/mass-assignment authz specialists await an OSS wrapper (Akto)
-// or an ADR — no strong standalone OSS exists, and §13 forbids in-house.
+// registryNames are on-demand (the "dig deeper" replay tier, §4.2). kiterunner
+// (shadow-route brute-force) + inql (GraphQL deep introspection) also fire
+// automatically in PlanEscalation on their signals; exposing them here makes
+// them reachable via the tool-replay API without waiting for the signal. The
+// BOLA/BFLA/mass-assignment authz specialist is NOT an OSS wrapper (no strong
+// standalone OSS exists, §13 forbids in-house) — it's the internal/apiauthz
+// differential prober, run via POST /v1/assets/{id}/authz-test/run.
 var registryNames = []string{
-	// Phase 3.x: kiterunner, inql, akto, apiclarity, restler
+	"kiterunner",
+	"inql",
+	// Phase 3.x (await wrappers/ADR): akto, apiclarity, restler
 }
 
 // healthOrSpecPathPattern catches endpoints we don't want to fuzz.
