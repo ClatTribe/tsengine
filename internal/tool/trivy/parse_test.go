@@ -96,3 +96,21 @@ func TestTrivyTool_Surface(t *testing.T) {
 		t.Error("MITRETechniques empty")
 	}
 }
+
+func TestVulnToFinding_CarriesClassAndFixState(t *testing.T) {
+	// A distro OS package the distro won't fix → pkg_class os-pkgs + fix_state normalized to wont-fix.
+	f := vulnToFinding(vulnerability{VulnerabilityID: "CVE-2023-1", PkgName: "libx", InstalledVersion: "1", Status: "will_not_fix", Severity: "HIGH"}, "img", "os-pkgs")
+	if f.ToolArgs["pkg_class"] != "os-pkgs" {
+		t.Errorf("pkg_class not carried: %q", f.ToolArgs["pkg_class"])
+	}
+	if f.ToolArgs["fix_state"] != "wont-fix" {
+		t.Errorf("will_not_fix should normalize to wont-fix, got %q", f.ToolArgs["fix_state"])
+	}
+	// end_of_life also normalizes to wont-fix; affected passes through (fix may still land).
+	if normalizeFixState("end_of_life") != "wont-fix" {
+		t.Error("end_of_life should normalize to wont-fix")
+	}
+	if normalizeFixState("affected") != "affected" {
+		t.Error("affected must pass through (still actionable)")
+	}
+}

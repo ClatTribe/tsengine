@@ -118,14 +118,15 @@ func (h *FPFilter) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bo
 		}}, true
 	}
 
-	// Unpatchable base-image (distro) noise: an OS/distro package CVE (apk/deb/rpm) that the distro's
-	// own security team has marked "wont-fix" — no upstream patch is coming, so the customer cannot
-	// remediate it by upgrading, and the distro has already triaged it as not-worth-fixing. This is the
-	// classic base-image noise that inflates a container's critical/high count (the case Trivy's
+	// Unpatchable base-image (distro) noise: an OS/distro package CVE that the distro's own security
+	// team has marked "wont-fix" — no upstream patch is coming, so the customer cannot remediate it by
+	// upgrading, and the distro has already triaged it as not-worth-fixing. This is the classic
+	// base-image noise that inflates a container's critical/high count (the case Trivy's
 	// --ignore-unfixed targets). Demote to low (NOT dropped) + log, keeping findings_raw at full
 	// severity (§2.4). Scoped to a DISTRO "wont-fix" only — a "not-fixed" (fix may still land) or an
-	// app-dependency CVE stays actionable, and grounded on grype's real fix.state (never guessed).
-	if f.Tool == "grype" && osDistroPkg[f.ToolArgs["pkg_type"]] && f.ToolArgs["fix_state"] == "wont-fix" && f.Severity.Rank() > types.SeverityLow.Rank() {
+	// app-dependency CVE stays actionable — and grounded on the tool's real fix status (never guessed).
+	// Covers BOTH container CVE anchors (grype + trivy) via their native OS-package signal.
+	if isUnpatchableDistroCVE(f) && f.Severity.Rank() > types.SeverityLow.Rank() {
 		from := f.Severity
 		f.Severity = types.SeverityLow
 		return f, []types.AuditEntry{{
@@ -139,6 +140,23 @@ func (h *FPFilter) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bo
 	}
 
 	return f, nil, true
+}
+
+// isUnpatchableDistroCVE reports whether a container CVE finding is an OS/distro package the distro
+// itself won't patch. Both container anchors normalize fix_state to "wont-fix" for that case; the
+// OS-package signal is each tool's native field — grype's artifact type (apk/deb/rpm), trivy's result
+// class ("os-pkgs"). App-language dependencies (grype npm/pip/…, trivy "lang-pkgs") never match.
+func isUnpatchableDistroCVE(f types.Finding) bool {
+	if f.ToolArgs["fix_state"] != "wont-fix" {
+		return false
+	}
+	switch f.Tool {
+	case "grype":
+		return osDistroPkg[f.ToolArgs["pkg_type"]]
+	case "trivy":
+		return f.ToolArgs["pkg_class"] == "os-pkgs"
+	}
+	return false
 }
 
 // osDistroPkg are grype artifact types that denote a base-OS/distro package (as opposed to an
