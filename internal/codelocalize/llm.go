@@ -122,7 +122,7 @@ var allSinkTokens = func() []string {
 func groundableForLLM(f File, q Query) bool {
 	low := strings.ToLower(f.Content)
 	for _, s := range sourceTokens {
-		if strings.Contains(low, s) {
+		if matchToken(low, s) {
 			return true
 		}
 	}
@@ -132,7 +132,7 @@ func groundableForLLM(f File, q Query) bool {
 		}
 	}
 	for _, t := range allSinkTokens {
-		if strings.Contains(low, t) {
+		if matchToken(low, t) {
 			return true
 		}
 	}
@@ -192,7 +192,7 @@ func firstSinkHint(f File) string {
 	for _, raw := range strings.Split(f.Content, "\n") {
 		low := strings.ToLower(raw)
 		for _, t := range allSinkTokens {
-			if strings.Contains(low, t) {
+			if matchToken(low, t) {
 				h := strings.TrimSpace(raw)
 				if len(h) > 80 {
 					h = h[:80]

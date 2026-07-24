@@ -152,7 +152,7 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 		for i, raw := range lines {
 			low := strings.ToLower(raw)
 			for _, tok := range sig.strong {
-				if strings.Contains(low, tok) {
+				if matchToken(low, tok) {
 					cand.Score += wStrongSink
 					hasSink = true
 					addReason(fmt.Sprintf("%s:%d matched `%s` (%s sink)", f.Path, i+1, tok, cwe))
@@ -160,7 +160,7 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 				}
 			}
 			for _, tok := range sig.weak {
-				if strings.Contains(low, tok) {
+				if matchToken(low, tok) {
 					cand.Score += wWeakSink
 					hasSink = true
 					break
@@ -173,7 +173,7 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 	if hasSink {
 		low := strings.ToLower(f.Content)
 		for _, s := range sourceTokens {
-			if strings.Contains(low, s) {
+			if matchToken(low, s) {
 				cand.Score += wSource
 				addReason(fmt.Sprintf("%s carries a taint source `%s` near a sink", f.Path, s))
 				break
@@ -181,7 +181,8 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 		}
 	}
 
-	// free-text keyword corroboration (weak, capped).
+	// free-text keyword corroboration (weak, capped). Kept as a plain substring test — keywords are
+	// already whole words and low-weight, so a loose match here can't dominate a score.
 	if len(keywords) > 0 {
 		low := strings.ToLower(f.Content)
 		kw := 0.0
@@ -196,4 +197,33 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 		cand.Score += kw
 	}
 	return cand
+}
+
+// matchToken reports whether hay (already lowercased) contains tok with a left WORD BOUNDARY when tok
+// starts word-like — so `system(` does NOT match inside `ecosystem(`, and `select ` does NOT match
+// inside `reselect `. Symbol-leading tokens (`../`, `<%=`, `.query(`) skip the boundary check (there's no
+// identifier to falsely extend). This is the precision guard that stops incidental substrings from
+// scoring a clean file (I observed `system(`/`select ` false-hits on real code before this).
+func matchToken(hay, tok string) bool {
+	if tok == "" {
+		return false
+	}
+	needBoundary := isIdentByte(tok[0])
+	from := 0
+	for {
+		rel := strings.Index(hay[from:], tok)
+		if rel < 0 {
+			return false
+		}
+		i := from + rel
+		if !needBoundary || i == 0 || !isIdentByte(hay[i-1]) {
+			return true
+		}
+		from = i + 1
+	}
+}
+
+// isIdentByte reports whether b can be part of an identifier (so a match preceded by one is mid-word).
+func isIdentByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_'
 }
