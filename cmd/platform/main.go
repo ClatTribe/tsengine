@@ -52,6 +52,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
@@ -387,8 +388,10 @@ func main() {
 	// top of per-engagement explicit consent): only wire a live Prober when
 	// TSENGINE_ACTIVE_EXPLOIT=1. Absent → active engagements run the passive driver.
 	var prober pentest.Prober
+	var authzProber apiauthz.Prober
 	if os.Getenv("TSENGINE_ACTIVE_EXPLOIT") == "1" {
 		prober = pentest.NewHTTPProber()
+		authzProber = apiauthz.LiveProber() // enables POST /v1/assets/{id}/authz-test/run (BOLA/BFLA), consent-gated per request
 		log.Print("[platform] live active-exploitation ENABLED (TSENGINE_ACTIVE_EXPLOIT=1) — consent-gated per engagement")
 	}
 	// OAST collaborator for blind-class proof in deep (autonomous) mode (ADR-0008 D2). Absent
@@ -435,7 +438,7 @@ func main() {
 		// Defaults to the public base (same-origin behind the TLS edge), override with TSENGINE_APP_URL.
 		AppURL:             envOr("TSENGINE_APP_URL", os.Getenv("TSENGINE_PLATFORM_PUBLIC")),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
-		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, Interactor: interactor, Browser: browser, AgentLLM: agentLLM, LeadClient: leadClient,
+		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, AuthzProber: authzProber, Interactor: interactor, Browser: browser, AgentLLM: agentLLM, LeadClient: leadClient,
 		Mailer: email.FromEnv(), // transactional email (password reset/invite); no-op until SMTP_* is set
 	}
 	// Auto-review (framework: auto-invoke the AI Security Engineer after a scan): when a monitoring pass

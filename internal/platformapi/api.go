@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"reflect"
 
+	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/coverage"
@@ -67,6 +68,12 @@ type Deps struct {
 	// only when the operator has enabled live active exploitation; per-engagement
 	// explicit consent still gates every probe.
 	Prober pentest.Prober
+	// AuthzProber drives the LIVE BOLA/BFLA differential test (POST /v1/assets/{id}/authz-test/run).
+	// Nil → the run endpoint is gated (403): active authz testing is off. Set only when the operator
+	// enabled live active testing (TSENGINE_ACTIVE_EXPLOIT) → apiauthz.LiveProber(); per-request
+	// explicit consent (allow_active + authorized_by + consent) still gates every run. The differential
+	// test replays the victim's request as the attacker, so it is active-by-nature (§13 no-OSS exception).
+	AuthzProber apiauthz.Prober
 	// Interactor observes out-of-band (OAST) callbacks so the deep (autonomous) driver can
 	// prove blind classes (ADR-0008 D2). Nil → blind classes stay unproven leads (never a
 	// false positive). Set when the operator wired a collaborator (TSENGINE_OAST_POLL_URL).
@@ -135,6 +142,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/assets/{id}/data-tier", d.auth(d.handleSetAssetDataTier))             // tier a repo by customer-data exposure
 	mux.HandleFunc("POST /v1/assets/{id}/login-flow", d.auth(d.handleSetLoginFlow))                // configure authenticated web scanning (ADR 0010 Phase 3)
 	mux.HandleFunc("POST /v1/assets/{id}/authz-test", d.auth(d.handleSetAuthzTest))                // configure BOLA/BFLA authz test (ADR 0010 Phase 1)
+	mux.HandleFunc("POST /v1/assets/{id}/authz-test/run", d.auth(d.handleRunAuthzTest))            // EXECUTE the BOLA/BFLA differential test (consent-gated)
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/challenge", d.auth(d.handleOwnershipChallenge)) // issue DNS/file ownership token (p35 control)
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/verify", d.auth(d.handleOwnershipVerify))       // verify the token is published (grounded)
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
