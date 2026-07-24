@@ -118,7 +118,35 @@ func (h *FPFilter) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bo
 		}}, true
 	}
 
+	// Unpatchable base-image (distro) noise: an OS/distro package CVE (apk/deb/rpm) that the distro's
+	// own security team has marked "wont-fix" — no upstream patch is coming, so the customer cannot
+	// remediate it by upgrading, and the distro has already triaged it as not-worth-fixing. This is the
+	// classic base-image noise that inflates a container's critical/high count (the case Trivy's
+	// --ignore-unfixed targets). Demote to low (NOT dropped) + log, keeping findings_raw at full
+	// severity (§2.4). Scoped to a DISTRO "wont-fix" only — a "not-fixed" (fix may still land) or an
+	// app-dependency CVE stays actionable, and grounded on grype's real fix.state (never guessed).
+	if f.Tool == "grype" && osDistroPkg[f.ToolArgs["pkg_type"]] && f.ToolArgs["fix_state"] == "wont-fix" && f.Severity.Rank() > types.SeverityLow.Rank() {
+		from := f.Severity
+		f.Severity = types.SeverityLow
+		return f, []types.AuditEntry{{
+			FindingID:    f.ID,
+			Action:       "demote",
+			FromSeverity: from,
+			ToSeverity:   types.SeverityLow,
+			Rule:         "fp_filter::distro-wont-fix",
+			Reason:       "OS/distro package CVE the distro marked wont-fix — no upstream patch, unremediable by upgrade (findings_raw keeps full severity)",
+		}}, true
+	}
+
 	return f, nil, true
+}
+
+// osDistroPkg are grype artifact types that denote a base-OS/distro package (as opposed to an
+// app-language dependency). Only these participate in the distro-wont-fix demotion.
+var osDistroPkg = map[string]bool{
+	"apk": true, // Alpine
+	"deb": true, // Debian/Ubuntu
+	"rpm": true, // RHEL/CentOS/Fedora/SUSE
 }
 
 // sastTools are the code-pattern scanners whose findings point at a source file:line. A finding

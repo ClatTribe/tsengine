@@ -54,3 +54,34 @@ func TestFPFilter_VendoredGuards(t *testing.T) {
 		t.Errorf("a 'vendored_helpers' path must not be treated as a vendor dir, got %q", out.Severity)
 	}
 }
+
+func grypeFinding(pkgType, fixState string, sev types.Severity) types.Finding {
+	return types.Finding{ID: "g", RuleID: "grype::CVE-2023-0001", Tool: "grype", Severity: sev,
+		CWE: []string{"CWE-79"}, Title: "x", ToolArgs: map[string]string{"pkg_type": pkgType, "fix_state": fixState}}
+}
+
+func TestFPFilter_DemotesDistroWontFix(t *testing.T) {
+	h := NewFPFilter()
+
+	// An OS/distro package CVE the distro marked wont-fix → demoted to low + logged.
+	for _, pt := range []string{"deb", "rpm", "apk"} {
+		out, audit, keep := h.Apply(grypeFinding(pt, "wont-fix", types.SeverityHigh))
+		if !keep || out.Severity != types.SeverityLow {
+			t.Errorf("%s wont-fix should be demoted to low (kept), got sev=%q keep=%v", pt, out.Severity, keep)
+		}
+		if len(audit) != 1 || audit[0].Rule != "fp_filter::distro-wont-fix" {
+			t.Errorf("%s: distro-wont-fix demote not logged: %+v", pt, audit)
+		}
+	}
+
+	// Guards: a fixable/not-fixed distro CVE, an app-language package, and a non-grype tool are untouched.
+	if out, _, _ := h.Apply(grypeFinding("deb", "fixed", types.SeverityHigh)); out.Severity != types.SeverityHigh {
+		t.Errorf("a FIXED distro CVE must stay actionable, got %q", out.Severity)
+	}
+	if out, _, _ := h.Apply(grypeFinding("deb", "not-fixed", types.SeverityHigh)); out.Severity != types.SeverityHigh {
+		t.Errorf("a not-fixed (fix may land) CVE must stay actionable, got %q", out.Severity)
+	}
+	if out, _, _ := h.Apply(grypeFinding("npm", "wont-fix", types.SeverityHigh)); out.Severity != types.SeverityHigh {
+		t.Errorf("an APP-dependency wont-fix must stay actionable, got %q", out.Severity)
+	}
+}
