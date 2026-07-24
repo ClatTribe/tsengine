@@ -61,6 +61,26 @@ The agents reason over L1/L1.5 output; if that's weak, no agent can be strong. T
 | `sast` (OWASP Benchmark) | per-CWE Youden | 0.387 last measured (CLAUDE.md §16); **needs the OWASP corpus + sandbox** (`--target`/`--ground-truth`) — not runnable bare | Veracode 51% · Checkmarx 47% · Fortify 35% · SonarQube 6% |
 | `wavsep` | per-class Youden | needs a deployed WAVSEP target | Acunetix/Netsparker 87% · Burp 78% · ZAP 56% |
 
+## 3a. Measured through the frontier-LLM proxy (2026-07-24) — see [L2-AGENT-PROXY-RESULTS.md](L2-AGENT-PROXY-RESULTS.md)
+
+The security-engineer benches above were **driven end-to-end with a frontier LLM via the file-relay proxy**
+(ledgers under `bench/*-ledger.jsonl`, `model=claude-proxy`), so these are measured, not aspirational:
+
+- **Impact accuracy** `impact`: AI engineer **+100 pts over the substrate-only baseline** on the mistagged
+  estate (0%→100%), matched where tags are correct. 0 invented.
+- **Impact discovery** `discover`: **8/8 PASS, recall 100%, precision 100%, 0 invented** — incl. the
+  precision-hard cases (explicit-Deny-broken chain rejected, hardened estate flagged empty, wedge composed).
+- **Cloud depth** `cloud-engine --agent`: **2/2 recall, 0 invented, STRONG (1.00)**; **remediation coverage
+  100%, verified_rate 100%** (every path closed with a cloudiam-verified fix — the remediation-capture bar).
+- **The §10 grounding guard was observed firing live** (a crown-reach over-claim rejected; ungrounded cloud
+  paths un-recordable) — the anti-hallucination bar, not just asserted.
+
+The one AI-security-engineer number still **[proxy-at-scale]**: cloud-depth *lift* (agent recovers paths the
+budget-bounded substrate misses). Discrimination is inherently large-account (needs >20 real paths to
+exceed the production budget); the substrate-headroom half is measured LLM-free (**6+ recoverable paths**),
+but the agent-recovery half needs a real API key for an unattended scale run — a 40+-turn manual relay
+can't drive it to quality.
+
 ## 4. The honest constraint + how we improve
 
 The headline agent numbers (XBOW 89/104, impact 8/8) are `[proxy]` — they need a **frontier LLM** driving
