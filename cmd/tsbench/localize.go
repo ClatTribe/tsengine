@@ -53,7 +53,11 @@ func localizeCmd(argv []string) error {
 		}
 		fmt.Println("ranked candidates:")
 		for i, c := range res.Ranked {
-			fmt.Printf("  %2d. %-44s score=%.1f\n", i+1, c.Path, c.Score)
+			lines := ""
+			if len(c.SinkLines) > 0 {
+				lines = fmt.Sprintf(" lines=%v", c.SinkLines)
+			}
+			fmt.Printf("  %2d. %-44s score=%.1f conf=%.2f%s\n", i+1, c.Path, c.Score, c.Confidence, lines)
 			for _, r := range c.Reasons {
 				fmt.Printf("        %s\n", r)
 			}

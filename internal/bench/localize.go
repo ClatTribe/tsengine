@@ -221,6 +221,26 @@ func LocalizeScenarios() []LocalizeScenario {
 			},
 			Truth: []string{"svc/webhook.py"},
 		},
+		{
+			Name:  "cert-validation-disabled",
+			Query: codelocalize.Query{CWE: []string{"CWE-295"}, Title: "TLS certificate validation disabled"},
+			Repo: codelocalize.Repo{
+				clean("net/dial.go"),
+				{Path: "net/client.go", Content: "func newClient() *http.Client {\n tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}\n return &http.Client{Transport: tr}\n}"},
+				{Path: "net/const.go", Content: "const timeout = 30\n"},
+			},
+			Truth: []string{"net/client.go"},
+		},
+		{
+			Name:  "file-upload-unrestricted",
+			Query: codelocalize.Query{CWE: []string{"CWE-434"}, Title: "Unrestricted file upload"},
+			Repo: codelocalize.Repo{
+				clean("up/helpers.php"),
+				{Path: "up/handler.php", Content: "<?php\n$name = $_FILES['f']['name'];\nmove_uploaded_file($_FILES['f']['tmp_name'], \"/var/www/uploads/\" . $name);\n"},
+				{Path: "up/config.php", Content: "<?php\n$MAX = 1048576;\n"},
+			},
+			Truth: []string{"up/handler.php"},
+		},
 	}
 	// deterministic order (§10 reproducibility).
 	sort.Slice(scs, func(i, j int) bool { return scs[i].Name < scs[j].Name })

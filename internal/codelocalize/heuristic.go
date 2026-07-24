@@ -71,6 +71,18 @@ var sinkTable = map[string]cweSignals{
 	"CWE-601": {"Open Redirect",
 		[]string{"res.redirect(", "sendredirect(", "http.redirect", "window.location =", "location.href ="},
 		[]string{"returnurl", "redirect_uri", "next="}},
+	"CWE-295": {"Improper Certificate Validation",
+		[]string{"insecureskipverify", "verify=false", "cert_none", "trustallcerts", "sslverify=false", "rejectunauthorized: false", "rejectunauthorized:false", "curlopt_ssl_verifypeer, 0", "checkservertrusted"},
+		[]string{"verify: false", "allowallhostnames"}},
+	"CWE-434": {"Unrestricted File Upload",
+		[]string{"move_uploaded_file(", "multipartfile", ".transferto(", "formfile(", "saveas("},
+		[]string{"content-disposition", "originalfilename"}},
+	"CWE-90": {"LDAP Injection",
+		[]string{"dircontext.search", "ldap_search", "new searchrequest", "initialdircontext", "ldapconnection.search", "search_s("},
+		[]string{"(&(", "objectclass="}},
+	"CWE-643": {"XPath Injection",
+		[]string{"xpath.compile", "selectnodes(", "selectsinglenode(", "xpath.evaluate", "xpathexpression", "compile(\"//"},
+		[]string{"/text()", "createxpath"}},
 }
 
 // sourceTokens are generic taint-source indicators. Their presence NEAR a sink (same file) is the
@@ -139,7 +151,7 @@ func (HeuristicLocalizer) Localize(_ context.Context, q Query, repo Repo) (Resul
 func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 	lines := strings.Split(f.Content, "\n")
 	cand := Candidate{Path: f.Path}
-	hasSink := false
+	var hasStrong, hasWeak, hasSource, hasKeyword bool
 
 	addReason := func(r string) {
 		if len(cand.Reasons) < maxReasons {
@@ -152,17 +164,20 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 		for i, raw := range lines {
 			low := strings.ToLower(raw)
 			for _, tok := range sig.strong {
-				if strings.Contains(low, tok) {
+				if matchToken(low, tok) {
 					cand.Score += wStrongSink
-					hasSink = true
+					hasStrong = true
+					if len(cand.SinkLines) < maxReasons {
+						cand.SinkLines = append(cand.SinkLines, i+1)
+					}
 					addReason(fmt.Sprintf("%s:%d matched `%s` (%s sink)", f.Path, i+1, tok, cwe))
 					break // one strong hit per line is enough; avoid a token-stuffed line dominating
 				}
 			}
 			for _, tok := range sig.weak {
-				if strings.Contains(low, tok) {
+				if matchToken(low, tok) {
 					cand.Score += wWeakSink
-					hasSink = true
+					hasWeak = true
 					break
 				}
 			}
@@ -170,18 +185,20 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 	}
 
 	// source→sink co-occurrence bonus (only meaningful when a sink is present).
-	if hasSink {
+	if hasStrong || hasWeak {
 		low := strings.ToLower(f.Content)
 		for _, s := range sourceTokens {
-			if strings.Contains(low, s) {
+			if matchToken(low, s) {
 				cand.Score += wSource
+				hasSource = true
 				addReason(fmt.Sprintf("%s carries a taint source `%s` near a sink", f.Path, s))
 				break
 			}
 		}
 	}
 
-	// free-text keyword corroboration (weak, capped).
+	// free-text keyword corroboration (weak, capped). Kept as a plain substring test — keywords are
+	// already whole words and low-weight, so a loose match here can't dominate a score.
 	if len(keywords) > 0 {
 		low := strings.ToLower(f.Content)
 		kw := 0.0
@@ -194,6 +211,62 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 			}
 		}
 		cand.Score += kw
+		hasKeyword = kw > 0
 	}
+
+	cand.Confidence = confidence(hasStrong, hasWeak, hasSource, hasKeyword)
 	return cand
+}
+
+// confidence maps the KIND of evidence to a 0–1 scalar (not the raw score, which is unbounded). A strong
+// API-shaped sink is the backbone; a taint source near it and keyword corroboration lift it; a weak-token-
+// only hit is low; keyword-only (unknown-CWE fallback) is lowest. Capped below 1.0 — a token heuristic is
+// never certain (§10 humility; the LLM tier / a verifier is what earns higher trust).
+func confidence(hasStrong, hasWeak, hasSource, hasKeyword bool) float64 {
+	conf := 0.0
+	switch {
+	case hasStrong:
+		conf = 0.6
+	case hasWeak:
+		conf = 0.3
+	}
+	if hasSource {
+		conf += 0.25
+	}
+	if hasKeyword {
+		conf += 0.1
+	}
+	if conf > 0.95 {
+		conf = 0.95
+	}
+	return conf
+}
+
+// matchToken reports whether hay (already lowercased) contains tok with a left WORD BOUNDARY when tok
+// starts word-like — so `system(` does NOT match inside `ecosystem(`, and `select ` does NOT match
+// inside `reselect `. Symbol-leading tokens (`../`, `<%=`, `.query(`) skip the boundary check (there's no
+// identifier to falsely extend). This is the precision guard that stops incidental substrings from
+// scoring a clean file (I observed `system(`/`select ` false-hits on real code before this).
+func matchToken(hay, tok string) bool {
+	if tok == "" {
+		return false
+	}
+	needBoundary := isIdentByte(tok[0])
+	from := 0
+	for {
+		rel := strings.Index(hay[from:], tok)
+		if rel < 0 {
+			return false
+		}
+		i := from + rel
+		if !needBoundary || i == 0 || !isIdentByte(hay[i-1]) {
+			return true
+		}
+		from = i + 1
+	}
+}
+
+// isIdentByte reports whether b can be part of an identifier (so a match preceded by one is mid-word).
+func isIdentByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_'
 }

@@ -76,9 +76,10 @@ func (l LLMLocalizer) Localize(ctx context.Context, q Query, repo Repo) (Result,
 			merged = append(merged, hc)
 		} else {
 			merged = append(merged, Candidate{
-				Path:    p.Path,
-				Score:   wStrongSink, // a grounded model pick ranks alongside a strong sink
-				Reasons: []string{fmt.Sprintf("model-proposed sink (grounded): %s", strings.TrimSpace(p.Why))},
+				Path:       p.Path,
+				Score:      wStrongSink, // a grounded model pick ranks alongside a strong sink
+				Confidence: 0.5,         // model-proposed + grounded, but no deterministic strong-sink match — honest mid confidence
+				Reasons:    []string{fmt.Sprintf("model-proposed sink (grounded): %s", strings.TrimSpace(p.Why))},
 			})
 		}
 	}
@@ -122,7 +123,7 @@ var allSinkTokens = func() []string {
 func groundableForLLM(f File, q Query) bool {
 	low := strings.ToLower(f.Content)
 	for _, s := range sourceTokens {
-		if strings.Contains(low, s) {
+		if matchToken(low, s) {
 			return true
 		}
 	}
@@ -132,7 +133,7 @@ func groundableForLLM(f File, q Query) bool {
 		}
 	}
 	for _, t := range allSinkTokens {
-		if strings.Contains(low, t) {
+		if matchToken(low, t) {
 			return true
 		}
 	}
@@ -192,7 +193,7 @@ func firstSinkHint(f File) string {
 	for _, raw := range strings.Split(f.Content, "\n") {
 		low := strings.ToLower(raw)
 		for _, t := range allSinkTokens {
-			if strings.Contains(low, t) {
+			if matchToken(low, t) {
 				h := strings.TrimSpace(raw)
 				if len(h) > 80 {
 					h = h[:80]

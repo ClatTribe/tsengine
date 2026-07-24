@@ -75,9 +75,11 @@ var stopwords = map[string]bool{
 
 // Candidate is one ranked source file, with the evidence that ranked it.
 type Candidate struct {
-	Path    string   `json:"path"`
-	Score   float64  `json:"score"`
-	Reasons []string `json:"reasons"` // human-readable "file:line matched <token> (sink|source|keyword)"
+	Path       string   `json:"path"`
+	Score      float64  `json:"score"`
+	Confidence float64  `json:"confidence"`           // 0–1, derived from evidence KIND (strong sink + source > weak-only); capped <1 (a heuristic is never certain — §10). Lets a consumer threshold.
+	SinkLines  []int    `json:"sink_lines,omitempty"` // 1-based lines where a strong sink matched — localization to the LINE, not just the file (the anchor autofix/a reviewer jumps to)
+	Reasons    []string `json:"reasons"`              // human-readable "file:line matched <token> (sink|source|keyword)"
 }
 
 // Result is a ranked localization: the most-likely-sink files first, plus the exploration trace.
