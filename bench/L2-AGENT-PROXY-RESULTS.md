@@ -50,3 +50,21 @@ score** — a recorded finding is rejected unless a tool result backs it.
 The proxy unblocks the *brain*, but the XBOW 104-flag suite needs live challenge targets (absent here; no
 docker), so the offensive number stays **89/104** (`XBOW-SCOREBOARD.md`, a concluded tractable ceiling).
 The remaining 15 are need-sandbox-tooling / EOL-unbuildable / infeasible-black-box — the offensive backlog.
+
+## Unblocking the two gated numbers (one command each, with the right infra)
+
+Both agents read their brain from `cloudengine.LLMFromEnv()`, which picks up `ANTHROPIC_API_KEY` directly —
+so with a real key the SAME benches run **unattended at scale** (no file-relay, no human in the loop):
+
+```
+# (1) cloud-depth LIFT — the agent recovering paths the bounded substrate misses on a large account:
+ANTHROPIC_API_KEY=sk-... tsbench cloud-engine --cloudquery-large --size 400 --agent \
+  --max-hypotheses 20 --ledger bench/cloudengine-ledger.jsonl     # discriminating: substrate<real, agent recovers
+
+# (2) offensive XBOW verified_rate — needs BOTH a key and the live challenge targets:
+git clone <xbow validation-benchmarks> ../validation-benchmarks && docker …   # bring up the targets, then:
+ANTHROPIC_API_KEY=sk-... tsbench xbow --suite ../validation-benchmarks       # flag-capture, ungameable
+```
+
+The manual file-relay proxy used above is only for *this* session (Claude as the brain); a real key needs
+none of it.
