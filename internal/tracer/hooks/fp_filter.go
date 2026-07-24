@@ -98,8 +98,45 @@ func (h *FPFilter) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bo
 		}
 	}
 
+	// Vendored/third-party dependency de-prioritization: a SAST (code-pattern) finding whose
+	// endpoint sits inside a dependency directory (vendor/, node_modules/, site-packages/, …) is
+	// real but lives in code the team did NOT write and cannot patch in place — it inflates the
+	// first-party actionable count. Demote it to low (NOT dropped) and log it, so findings_raw keeps
+	// full severity for the security engineer (§2.4) and webappsec can override. Scoped to code
+	// scanners only: a vulnerable vendored DEPENDENCY (trivy/grype/osv) or a leaked secret
+	// (gitleaks/trufflehog) is still first-party-actionable, so those tools are never demoted here.
+	if sastTools[f.Tool] && f.Severity.Rank() > types.SeverityLow.Rank() && vendoredPathRe.MatchString(f.Endpoint) {
+		from := f.Severity
+		f.Severity = types.SeverityLow
+		return f, []types.AuditEntry{{
+			FindingID:    f.ID,
+			Action:       "demote",
+			FromSeverity: from,
+			ToSeverity:   types.SeverityLow,
+			Rule:         "fp_filter::vendored-path",
+			Reason:       "code finding in a vendored/third-party dependency path — not first-party code the team owns (findings_raw keeps full severity)",
+		}}, true
+	}
+
 	return f, nil, true
 }
+
+// sastTools are the code-pattern scanners whose findings point at a source file:line. A finding
+// from one of these inside a vendored path is de-prioritized; SCA (trivy/grype/osvscanner) and
+// secret (gitleaks/trufflehog) tools are intentionally absent — their vendored-path findings stay
+// first-party-actionable.
+var sastTools = map[string]bool{
+	"semgrep":   true,
+	"gosec":     true,
+	"bandit":    true,
+	"codeql":    true,
+	"mobsfscan": true,
+}
+
+// vendoredPathRe matches an unambiguous dependency directory anywhere in a file path. Deliberately
+// conservative — only directories that hold third-party code by universal convention (no dist/build,
+// which can be first-party output).
+var vendoredPathRe = regexp.MustCompile(`(?i)(^|/)(vendor|node_modules|third_party|thirdparty|site-packages|\.venv|venv|bower_components|\.yarn)/`)
 
 func compileAll(patterns []string) []*regexp.Regexp {
 	out := make([]*regexp.Regexp, 0, len(patterns))
