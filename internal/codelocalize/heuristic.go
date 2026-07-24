@@ -71,6 +71,18 @@ var sinkTable = map[string]cweSignals{
 	"CWE-601": {"Open Redirect",
 		[]string{"res.redirect(", "sendredirect(", "http.redirect", "window.location =", "location.href ="},
 		[]string{"returnurl", "redirect_uri", "next="}},
+	"CWE-295": {"Improper Certificate Validation",
+		[]string{"insecureskipverify", "verify=false", "cert_none", "trustallcerts", "sslverify=false", "rejectunauthorized: false", "rejectunauthorized:false", "curlopt_ssl_verifypeer, 0", "checkservertrusted"},
+		[]string{"verify: false", "allowallhostnames"}},
+	"CWE-434": {"Unrestricted File Upload",
+		[]string{"move_uploaded_file(", "multipartfile", ".transferto(", "formfile(", "saveas("},
+		[]string{"content-disposition", "originalfilename"}},
+	"CWE-90": {"LDAP Injection",
+		[]string{"dircontext.search", "ldap_search", "new searchrequest", "initialdircontext", "ldapconnection.search", "search_s("},
+		[]string{"(&(", "objectclass="}},
+	"CWE-643": {"XPath Injection",
+		[]string{"xpath.compile", "selectnodes(", "selectsinglenode(", "xpath.evaluate", "xpathexpression", "compile(\"//"},
+		[]string{"/text()", "createxpath"}},
 }
 
 // sourceTokens are generic taint-source indicators. Their presence NEAR a sink (same file) is the
