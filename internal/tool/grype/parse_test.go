@@ -40,6 +40,20 @@ func TestParse_Empty(t *testing.T) {
 	}
 }
 
+func TestParse_CarriesPkgTypeAndFixState(t *testing.T) {
+	blob := []byte(`{"matches":[{"vulnerability":{"id":"CVE-2023-0001","severity":"High","fix":{"state":"wont-fix","versions":[]}},"artifact":{"name":"libfoo","version":"1.0","type":"deb"}}]}`)
+	fs := parse(blob, "debian:11")
+	if len(fs) != 1 {
+		t.Fatalf("got %d", len(fs))
+	}
+	if fs[0].ToolArgs["pkg_type"] != "deb" {
+		t.Errorf("pkg_type not carried: %q", fs[0].ToolArgs["pkg_type"])
+	}
+	if fs[0].ToolArgs["fix_state"] != "wont-fix" {
+		t.Errorf("fix_state not carried: %q", fs[0].ToolArgs["fix_state"])
+	}
+}
+
 func TestSurface(t *testing.T) {
 	g := New()
 	if g.Name() != "grype" || !g.SandboxExecution() {

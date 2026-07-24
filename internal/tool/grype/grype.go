@@ -60,6 +60,10 @@ type match struct {
 		Severity    string   `json:"severity"`
 		Description string   `json:"description"`
 		URLs        []string `json:"urls"`
+		Fix         struct {
+			Versions []string `json:"versions"`
+			State    string   `json:"state"` // fixed | not-fixed | wont-fix | unknown
+		} `json:"fix"`
 	} `json:"vulnerability"`
 	Artifact struct {
 		Name    string `json:"name"`
@@ -94,7 +98,7 @@ func parse(blob []byte, target string) []types.SandboxEmittedFinding {
 			Description:     m.Vulnerability.Description,
 			RawOutput:       raw,
 			MITRETechniques: []string{"T1195.002"},
-			ToolArgs:        map[string]string{"pkg": m.Artifact.Name, "installed_version": m.Artifact.Version},
+			ToolArgs:        map[string]string{"pkg": m.Artifact.Name, "installed_version": m.Artifact.Version, "pkg_type": m.Artifact.Type, "fix_state": m.Vulnerability.Fix.State},
 		})
 	}
 	if len(out) == 0 {
