@@ -53,6 +53,48 @@ func TestIngestOSINT_StoresAndViews(t *testing.T) {
 	}
 }
 
+// TestOSINTView_SurfacesAllClasses guards the bug where stealer-log, subdomain-takeover, and cert-*
+// findings were stored but excluded from the /v1/osint summary (stealer-log had a label but was absent
+// from the ordering slice; the others had no label → rendered "Other").
+func TestOSINTView_SurfacesAllClasses(t *testing.T) {
+	st := store.NewMemory()
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	snap := `{"org":"acme",
+	  "stealer_logs":[{"email":"dev@acme.com","domain":"okta.acme.com","malware":"RedLine","source":"hudsonrock","password":true}],
+	  "dangling_records":[{"subdomain":"blog.acme.com","record":"acme.github.io","service":"github-pages","claimable":true,"source":"subjack"}],
+	  "expected_cert_issuers":["DigiCert Inc"],
+	  "certificates":[{"domain":"acme.com","issuer":"Evil CA","source":"crtsh"}]}`
+	if rec := do(h, "POST", "/v1/osint/ingest", "t1", snap); rec.Code != 200 {
+		t.Fatalf("ingest 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	view := do(h, "GET", "/v1/osint", "t1", "")
+	var vr struct {
+		Summary []struct {
+			Label string `json:"label"`
+			Count int    `json:"count"`
+		} `json:"summary"`
+	}
+	_ = json.Unmarshal(view.Body.Bytes(), &vr)
+	seen := map[string]int{}
+	for _, s := range vr.Summary {
+		seen[s.Label] += s.Count
+	}
+	for _, want := range []string{"Stealer-log exposure (dark web)", "Subdomain takeover", "Certificate mis-issuance"} {
+		if seen[want] == 0 {
+			t.Errorf("summary must surface %q, got %v", want, seen)
+		}
+	}
+	if seen["Other"] != 0 {
+		t.Errorf("no class should fall through to \"Other\", got %d", seen["Other"])
+	}
+	// Highest-signal class must lead the ordered summary.
+	if len(vr.Summary) == 0 || vr.Summary[0].Label != "Stealer-log exposure (dark web)" {
+		t.Errorf("stealer-log (dark web) should lead the summary order, got %v", vr.Summary)
+	}
+}
+
 func TestIngestOSINT_PivotsExposedHostsOnOwnDomains(t *testing.T) {
 	st := store.NewMemory()
 	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
