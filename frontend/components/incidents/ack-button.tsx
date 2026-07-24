@@ -1,13 +1,13 @@
 "use client";
 
-import { useTransition } from "react";
 import { Check, Loader2, UserCheck } from "lucide-react";
 import { acknowledgeIncident } from "@/app/(app)/incidents/actions";
+import { useAction } from "@/lib/use-action";
 
 // Acknowledge an open incident (the MDR "I'm on it") — stops the timed auto-escalation. When the
 // incident is already acknowledged, shows who took ownership instead of the button.
 export function AckButton({ id, acknowledged, by }: { id: string; acknowledged: boolean; by?: string }) {
-  const [pending, start] = useTransition();
+  const [pending, run] = useAction();
 
   if (acknowledged) {
     return (
@@ -22,7 +22,7 @@ export function AckButton({ id, acknowledged, by }: { id: string; acknowledged: 
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        start(() => acknowledgeIncident(id));
+        run(() => acknowledgeIncident(id), id);
       }}
       disabled={pending}
       title="Acknowledge — take ownership and stop auto-escalation"
