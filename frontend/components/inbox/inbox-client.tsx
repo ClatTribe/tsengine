@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useOptimistic, useState, useTransition } from "react";
+import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine } from "lucide-react";
 import type { Action, Finding } from "@/lib/types";
 import { decideAction } from "@/app/(app)/inbox/actions";
@@ -62,14 +63,31 @@ export function InboxClient({ actions, findings }: { actions: Action[]; findings
   const [sel, setSel] = useState(0);
   const [pending, startTransition] = useTransition();
 
+  const router = useRouter();
+  const inFlight = useRef<Set<string>>(new Set());
   const decide = useCallback(
     (id: string, approve: boolean) => {
+      // Guard against a re-entrant decision on the same action (a rapid double-click or a
+      // click racing the keyboard shortcut) firing two POSTs — the second lands as a spurious
+      // "already decided" 400. One decision per action stays in flight at a time.
+      if (inFlight.current.has(id)) return;
+      inFlight.current.add(id);
       startTransition(async () => {
         removeOptimistic(id);
-        await decideAction(id, approve);
+        try {
+          await decideAction(id, approve);
+        } catch {
+          // The decision can still fail benignly — the action was already decided (another
+          // operator/Slack got there first) or the API blipped. Reconcile the optimistic
+          // removal by refetching instead of throwing to the error boundary, which would nuke
+          // the whole inbox to "Something went sideways".
+          router.refresh();
+        } finally {
+          inFlight.current.delete(id);
+        }
       });
     },
-    [removeOptimistic],
+    [removeOptimistic, router],
   );
 
   useEffect(() => {
