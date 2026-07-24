@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ShieldAlert, X, Check, Loader2, Plus, Trash2, Pencil } from "lucide-react";
-import { setAuthzTest } from "@/app/(app)/assets/actions";
+import { setAuthzTest, runAuthzTest } from "@/app/(app)/assets/actions";
 import { cn } from "@/lib/utils";
 
 type Op = { method: string; url: string; class: string; marker: string };
@@ -22,6 +22,10 @@ export function AuthzTestConfig({ assetId, configured = false }: { assetId: stri
   const [victimAuth, setVictimAuth] = useState("");
   const [attackerAuth, setAttackerAuth] = useState("");
   const [ops, setOps] = useState<Op[]>([{ ...emptyOp }]);
+  const [runPending, startRun] = useTransition();
+  const [authorizedBy, setAuthorizedBy] = useState("");
+  const [consented, setConsented] = useState(false);
+  const [runRes, setRunRes] = useState<{ ok: boolean; bypasses?: number; error?: string } | null>(null);
 
   const setOp = (i: number, k: keyof Op, v: string) => setOps(ops.map((o, j) => (j === i ? { ...o, [k]: v } : o)));
   const addOp = () => setOps([...ops, { ...emptyOp }]);
@@ -32,6 +36,19 @@ export function AuthzTestConfig({ assetId, configured = false }: { assetId: stri
   function submit() {
     setResult(null);
     start(async () => setResult(await setAuthzTest(assetId, { victimAuth, attackerAuth, operations: ops })));
+  }
+
+  const canRun = authorizedBy.trim() !== "" && consented;
+  function run() {
+    setRunRes(null);
+    startRun(async () =>
+      setRunRes(
+        await runAuthzTest(assetId, {
+          authorizedBy,
+          consent: `Authorized active BOLA/BFLA test of this API asset by ${authorizedBy}.`,
+        }),
+      ),
+    );
   }
 
   return (
@@ -132,6 +149,39 @@ export function AuthzTestConfig({ assetId, configured = false }: { assetId: stri
               <p className="mt-3 flex items-center gap-1 text-xs text-pulse">
                 <Check className="h-3.5 w-3.5" /> Saved — the authorization test is configured.
               </p>
+            )}
+
+            {configured && (
+              <div className="mt-4 rounded-lg border border-border bg-surface-2 p-3">
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-faint">
+                  <ShieldAlert className="h-3 w-3 text-accent" /> Run the test now (active)
+                </div>
+                <p className="mb-2 text-xs leading-relaxed text-muted">
+                  Executing replays the victim&apos;s request as the attacker against the live API. This is an{" "}
+                  <span className="text-ink">active</span> test — it needs your explicit authorization, and the
+                  operator&apos;s live-testing flag must be enabled (otherwise the run is refused).
+                </p>
+                <Field label="Authorized by (your name)" value={authorizedBy} onChange={(e) => setAuthorizedBy(e.target.value)} placeholder="Jane Sec (CISO)" />
+                <label className="mt-2 flex items-start gap-2 text-xs text-muted">
+                  <input type="checkbox" checked={consented} onChange={(e) => setConsented(e.target.checked)} className="mt-0.5" />
+                  <span>I authorize an active BOLA/BFLA test of this API asset and confirm it is in scope.</span>
+                </label>
+                {runRes?.error && <p className="mt-2 text-xs text-critical">{runRes.error}</p>}
+                {runRes?.ok && (
+                  <p className="mt-2 flex items-center gap-1 text-xs text-pulse">
+                    <Check className="h-3.5 w-3.5" />
+                    {runRes.bypasses ? `${runRes.bypasses} proven bypass${runRes.bypasses > 1 ? "es" : ""} — see Issues.` : "No bypass found — the API enforced authorization."}
+                  </p>
+                )}
+                <button
+                  onClick={run}
+                  disabled={!canRun || runPending}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-critical/40 bg-critical/10 px-3 py-1.5 text-xs font-medium text-critical transition hover:border-critical/60 disabled:opacity-50"
+                >
+                  {runPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                  {runPending ? "Running…" : "Run test"}
+                </button>
+              </div>
             )}
 
             <div className="mt-4 flex items-center justify-between">

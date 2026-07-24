@@ -11,6 +11,46 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
+// handleGetAuthzTest (GET /v1/assets/{id}/authz-test) reports whether a BOLA/BFLA test is configured
+// for an asset and whether live testing is enabled deployment-wide — the status the UX needs to decide
+// whether to offer a "Run test" action. It NEVER returns the identities' credentials: only the
+// operation count (unsealed transiently to count) + booleans. Tenant-scoped.
+func (d Deps) handleGetAuthzTest(w http.ResponseWriter, r *http.Request, tenantID string) {
+	id := r.PathValue("id")
+	assets, err := d.Store.ListAssets(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	var found *platform.Asset
+	for i := range assets {
+		if assets[i].ID == id {
+			found = &assets[i]
+			break
+		}
+	}
+	if found == nil {
+		writeJSON(w, http.StatusNotFound, errBody("asset not found"))
+		return
+	}
+	sealed := found.Meta["authz_test"]
+	ops := 0
+	if sealed != "" && d.Vault != nil {
+		if blob, oerr := d.Vault.Open(sealed); oerr == nil {
+			var cfg apiauthz.TestConfig
+			if json.Unmarshal([]byte(blob), &cfg) == nil {
+				ops = len(cfg.Operations)
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"asset_id":               id,
+		"configured":             sealed != "",
+		"operations":             ops,
+		"active_testing_enabled": d.AuthzProber != nil, // operator wired live testing (TSENGINE_ACTIVE_EXPLOIT)
+	})
+}
+
 // handleRunAuthzTest (POST /v1/assets/{id}/authz-test/run) EXECUTES the BOLA/BFLA differential
 // test an owner previously configured via POST /v1/assets/{id}/authz-test. This is the missing
 // execution half — configuration + LLM discovery already existed, but nothing ran the stored

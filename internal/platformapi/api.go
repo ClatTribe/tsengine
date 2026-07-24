@@ -141,6 +141,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/assets", d.auth(d.handleCreateAsset))                                 // add a standalone scan target (web/api/domain/ip/image)
 	mux.HandleFunc("POST /v1/assets/{id}/data-tier", d.auth(d.handleSetAssetDataTier))             // tier a repo by customer-data exposure
 	mux.HandleFunc("POST /v1/assets/{id}/login-flow", d.auth(d.handleSetLoginFlow))                // configure authenticated web scanning (ADR 0010 Phase 3)
+	mux.HandleFunc("GET /v1/assets/{id}/authz-test", d.auth(d.handleGetAuthzTest))                 // BOLA/BFLA test status (configured? live enabled?)
 	mux.HandleFunc("POST /v1/assets/{id}/authz-test", d.auth(d.handleSetAuthzTest))                // configure BOLA/BFLA authz test (ADR 0010 Phase 1)
 	mux.HandleFunc("POST /v1/assets/{id}/authz-test/run", d.auth(d.handleRunAuthzTest))            // EXECUTE the BOLA/BFLA differential test (consent-gated)
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/challenge", d.auth(d.handleOwnershipChallenge)) // issue DNS/file ownership token (p35 control)

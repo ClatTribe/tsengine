@@ -375,6 +375,14 @@ export const api = {
       body: JSON.stringify(cfg),
     }),
 
+  // EXECUTE the configured BOLA/BFLA differential test. Double-gated server-side: the consent
+  // triplet here + the operator's live-testing flag. Returns the count of PROVEN bypasses.
+  runAuthzTest: (id: string, consent: { allow_active: boolean; authorized_by: string; consent: string }) =>
+    call<{ asset_id: string; tests_run: number; bypasses: number }>(`/v1/assets/${id}/authz-test/run`, {
+      method: "POST",
+      body: JSON.stringify(consent),
+    }),
+
   // Per-tenant LLM config for the engine agent / autonomous pentest. GET reports provider +
   // model + whether a key is set (never the key). PUT sets provider/model and seals the key
   // server-side (an empty api_key keeps the existing key).
