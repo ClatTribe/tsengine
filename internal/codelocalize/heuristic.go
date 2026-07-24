@@ -167,6 +167,9 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 				if matchToken(low, tok) {
 					cand.Score += wStrongSink
 					hasStrong = true
+					if len(cand.SinkLines) < maxReasons {
+						cand.SinkLines = append(cand.SinkLines, i+1)
+					}
 					addReason(fmt.Sprintf("%s:%d matched `%s` (%s sink)", f.Path, i+1, tok, cwe))
 					break // one strong hit per line is enough; avoid a token-stuffed line dominating
 				}
