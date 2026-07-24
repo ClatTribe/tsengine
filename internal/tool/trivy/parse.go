@@ -30,6 +30,7 @@ type vulnerability struct {
 	PkgName          string   `json:"PkgName"`
 	InstalledVersion string   `json:"InstalledVersion"`
 	FixedVersion     string   `json:"FixedVersion"`
+	Status           string   `json:"Status"` // fixed | affected | will_not_fix | fix_deferred | end_of_life
 	Severity         string   `json:"Severity"`
 	Title            string   `json:"Title"`
 	Description      string   `json:"Description"`
@@ -77,7 +78,7 @@ func parseReport(blob []byte) []types.SandboxEmittedFinding {
 			endpoint = r.ArtifactName
 		}
 		for _, v := range res.Vulnerabilities {
-			out = append(out, vulnToFinding(v, endpoint))
+			out = append(out, vulnToFinding(v, endpoint, res.Class))
 		}
 		for _, m := range res.Misconfigurations {
 			out = append(out, misconfToFinding(m, endpoint))
@@ -89,7 +90,20 @@ func parseReport(blob []byte) []types.SandboxEmittedFinding {
 	return out
 }
 
-func vulnToFinding(v vulnerability, endpoint string) types.SandboxEmittedFinding {
+// normalizeFixState maps trivy's per-vuln Status to the tool-agnostic fix_state contract shared with
+// grype. Only a distro DECISION not to fix (will_not_fix) or an unsupported release (end_of_life)
+// becomes "wont-fix" (the unpatchable-noise signal); "affected"/"fix_deferred" (a fix may still land)
+// stays actionable and is passed through verbatim.
+func normalizeFixState(status string) string {
+	switch status {
+	case "will_not_fix", "end_of_life":
+		return "wont-fix"
+	default:
+		return status
+	}
+}
+
+func vulnToFinding(v vulnerability, endpoint, class string) types.SandboxEmittedFinding {
 	raw, _ := json.Marshal(v)
 	title := v.Title
 	if title == "" {
@@ -119,6 +133,8 @@ func vulnToFinding(v vulnerability, endpoint string) types.SandboxEmittedFinding
 			"installed_version": v.InstalledVersion,
 			"fixed_version":     v.FixedVersion,
 			"primary_url":       v.PrimaryURL,
+			"pkg_class":         class,                       // "os-pkgs" (distro) vs "lang-pkgs" (app dep)
+			"fix_state":         normalizeFixState(v.Status), // tool-agnostic; "wont-fix" = distro won't patch
 		},
 	}
 }

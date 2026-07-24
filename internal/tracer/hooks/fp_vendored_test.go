@@ -85,3 +85,29 @@ func TestFPFilter_DemotesDistroWontFix(t *testing.T) {
 		t.Errorf("an APP-dependency wont-fix must stay actionable, got %q", out.Severity)
 	}
 }
+
+func trivyFinding(pkgClass, fixState string, sev types.Severity) types.Finding {
+	return types.Finding{ID: "tv", RuleID: "trivy::CVE-2023-2", Tool: "trivy", Severity: sev,
+		CWE: []string{"CWE-125"}, Title: "x", ToolArgs: map[string]string{"pkg_class": pkgClass, "fix_state": fixState}}
+}
+
+func TestFPFilter_DistroWontFix_CoversTrivy(t *testing.T) {
+	h := NewFPFilter()
+
+	// An os-pkgs (distro) CVE trivy normalized to wont-fix → demoted to low + logged.
+	out, audit, keep := h.Apply(trivyFinding("os-pkgs", "wont-fix", types.SeverityHigh))
+	if !keep || out.Severity != types.SeverityLow {
+		t.Errorf("trivy os-pkgs wont-fix should be demoted to low, got sev=%q keep=%v", out.Severity, keep)
+	}
+	if len(audit) != 1 || audit[0].Rule != "fp_filter::distro-wont-fix" {
+		t.Errorf("trivy distro-wont-fix demote not logged: %+v", audit)
+	}
+
+	// Guards: a lang-pkgs (app dep) wont-fix and an os-pkgs still-actionable status stay untouched.
+	if out, _, _ := h.Apply(trivyFinding("lang-pkgs", "wont-fix", types.SeverityHigh)); out.Severity != types.SeverityHigh {
+		t.Errorf("trivy app-dependency wont-fix must stay actionable, got %q", out.Severity)
+	}
+	if out, _, _ := h.Apply(trivyFinding("os-pkgs", "affected", types.SeverityHigh)); out.Severity != types.SeverityHigh {
+		t.Errorf("trivy os-pkgs 'affected' (fix may land) must stay actionable, got %q", out.Severity)
+	}
+}
