@@ -179,8 +179,13 @@ func main() {
 	}
 	if encrypted {
 		log.Print("[platform] OAuth tokens encrypted at rest (AES-256-GCM)")
+	} else if err := requireSealedSecrets(os.Getenv("TSENGINE_ALLOW_UNSEALED_SECRETS")); err != nil {
+		// FAIL CLOSED: without a sealing key, OAuth tokens / customer credentials would be written to
+		// the store in PLAINTEXT. For a security product that is never an acceptable silent default, so
+		// the platform refuses to start unless a dev has explicitly opted into plaintext.
+		log.Fatalf("[platform] %v", err)
 	} else {
-		log.Print("[platform] WARNING: tokens stored unsealed — set TSENGINE_SECRET_KEY (base64 32 bytes)")
+		log.Print("[platform] WARNING: tokens stored UNSEALED (TSENGINE_ALLOW_UNSEALED_SECRETS=1, dev only) — set TSENGINE_SECRET_KEY (base64 32 bytes) in production")
 	}
 	tokens := secret.Tokens{V: vault}
 
@@ -571,6 +576,17 @@ var fileSecretKeys = []string{
 // inline compose env — they ride as mounted files / Docker secrets instead. An already-set
 // KEY always wins; an unreadable KEY_FILE is warned and skipped (never fatal here — the
 // downstream required-secret checks still apply).
+// requireSealedSecrets fails closed when no AES sealing key is configured: without it OAuth tokens and
+// customer credentials would be persisted in PLAINTEXT. It returns an error (→ startup fatal) unless a
+// dev has explicitly opted into plaintext with TSENGINE_ALLOW_UNSEALED_SECRETS=1.
+func requireSealedSecrets(allowUnsealed string) error {
+	if allowUnsealed == "1" {
+		return nil
+	}
+	return errors.New("refusing to start without TSENGINE_SECRET_KEY: OAuth tokens/credentials would be stored in PLAINTEXT. " +
+		"Set TSENGINE_SECRET_KEY (base64 32 bytes), or set TSENGINE_ALLOW_UNSEALED_SECRETS=1 to allow plaintext in a dev environment")
+}
+
 func hydrateFileSecrets() {
 	for _, key := range fileSecretKeys {
 		if os.Getenv(key) != "" {
