@@ -101,10 +101,10 @@ func TestIdorTemplate_Grounded(t *testing.T) {
 		{"/invoice/1042", "/invoice/{id}", true},
 		{"https://app.test/company/55/edit", "/company/{id}/edit", true},
 		{"/orders/3fa85f64-5717-4562-b3fc-2c963f66afa6", "/orders/{id}", true},
-		{"/123", "", false},         // bare id, no resource
-		{"/about", "", false},       // no id segment
+		{"/123", "", false},           // bare id, no resource
+		{"/about", "", false},         // no id segment
 		{"/rest/products", "", false}, // words only
-		{"relative/7", "", false},   // not a path
+		{"relative/7", "", false},     // not a path
 	}
 	for _, c := range cases {
 		got, ok := idorTemplate(c.in)

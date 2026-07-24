@@ -181,8 +181,8 @@ func sshExec(ctx context.Context, addr, user string, auth []ssh.AuthMethod, comm
 	wg.Add(2)
 	go func() { defer wg.Done(); io.Copy(&outBuf, stdout) }() //nolint:errcheck // EOF-drain; content is the evidence
 	go func() { defer wg.Done(); io.Copy(&errBuf, stderr) }() //nolint:errcheck
-	wg.Wait()          // both pipes drained to channel-close — all output captured
-	waitErr := sess.Wait() // reap exit status; a non-zero exit is fine (output already in hand)
+	wg.Wait()                                                 // both pipes drained to channel-close — all output captured
+	waitErr := sess.Wait()                                    // reap exit status; a non-zero exit is fine (output already in hand)
 
 	out := outBuf.String()
 	if errBuf.Len() > 0 {

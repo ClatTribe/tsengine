@@ -174,7 +174,7 @@ func tDefaultCreds(cc *Context, args map[string]any) string {
 		cc.turnN++
 		cc.History = append(cc.History, Turn{
 			ID: fmt.Sprintf("t-%03d", cc.turnN), Method: "POST(login)", URL: loginURL,
-			Body: userField + "=" + c.user + "&" + passField + "=" + strings.Repeat("*", len(c.pass)),
+			Body:   userField + "=" + c.user + "&" + passField + "=" + strings.Repeat("*", len(c.pass)),
 			Status: resp.Status, Indicators: []string{"default_creds"}, Elapsed: resp.Elapsed.String(),
 			RespSnippet: why,
 		})

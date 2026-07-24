@@ -18,7 +18,7 @@ func TestLLMSnippet_ShowsMidBodyData(t *testing.T) {
 	b.WriteString(strings.Repeat("<link rel=stylesheet href=/x>", 55)) // ~1.6KB head, like a real page's <head>
 	b.WriteString("</head><body><table>\n")
 	b.WriteString("<tr><td>Order</td><td><a href=\"/order/30042\">receipt</a></td></tr>\n") // the object id the agent must read
-	b.WriteString(strings.Repeat("<tr><td>row</td><td>filler</td></tr>\n", 120))          // pushes total > cap
+	b.WriteString(strings.Repeat("<tr><td>row</td><td>filler</td></tr>\n", 120))            // pushes total > cap
 	b.WriteString("</body></html>")
 	body := b.String()
 	if len(body) < 5000 || len(body) > 9000 {
