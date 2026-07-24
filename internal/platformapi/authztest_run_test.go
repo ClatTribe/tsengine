@@ -104,6 +104,30 @@ func TestRunAuthzTest_OperatorGate(t *testing.T) {
 	}
 }
 
+func TestGetAuthzTest_Status(t *testing.T) {
+	// Unconfigured asset, no prober wired → configured:false, active_testing_enabled:false.
+	st := store.NewMemory()
+	_ = st.PutAsset(context.Background(), platform.Asset{ID: "a-api", TenantID: "t1", Type: "api"})
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", Vault: idSealer{}})
+	rec := do(h, "GET", "/v1/assets/a-api/authz-test", "t1", "")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"configured":false`) || !strings.Contains(rec.Body.String(), `"active_testing_enabled":false`) {
+		t.Fatalf("unconfigured status wrong: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// After configuring (with a prober wired) → configured:true, operations:1, active:true, no secret leak.
+	h2, _ := setupConfiguredAPI(t, &bolaProber{marker: "x"})
+	rec2 := do(h2, "GET", "/v1/assets/a-api/authz-test", "t1", "")
+	if !strings.Contains(rec2.Body.String(), `"configured":true`) || !strings.Contains(rec2.Body.String(), `"operations":1`) {
+		t.Errorf("configured status wrong: %s", rec2.Body.String())
+	}
+	if !strings.Contains(rec2.Body.String(), `"active_testing_enabled":true`) {
+		t.Errorf("active_testing_enabled should be true when a prober is wired: %s", rec2.Body.String())
+	}
+	if strings.Contains(rec2.Body.String(), "Bearer") {
+		t.Error("status must NOT leak the identities' auth headers")
+	}
+}
+
 func TestRunAuthzTest_NotConfigured(t *testing.T) {
 	st := store.NewMemory()
 	_ = st.PutAsset(context.Background(), platform.Asset{ID: "a-api", TenantID: "t1", Type: "api"})

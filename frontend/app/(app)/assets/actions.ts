@@ -108,3 +108,24 @@ export async function setAuthzTest(id: string, c: {
     return { ok: false, error: e instanceof Error ? e.message : "failed to save" };
   }
 }
+
+// Executes the configured BOLA/BFLA differential test with explicit consent (the named authorizer +
+// a recorded consent statement — signed into the ledger server-side). Active testing also requires
+// the operator's live-testing flag; without it the server returns a clear 403. Returns the count of
+// PROVEN bypasses (verified, no false positives) or an error string.
+export async function runAuthzTest(id: string, c: {
+  authorizedBy: string;
+  consent: string;
+}): Promise<{ ok: boolean; bypasses?: number; testsRun?: number; error?: string }> {
+  try {
+    const r = await api.runAuthzTest(id, {
+      allow_active: true,
+      authorized_by: c.authorizedBy,
+      consent: c.consent,
+    });
+    revalidatePath("/assets");
+    return { ok: true, bypasses: r.bypasses, testsRun: r.tests_run };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "failed to run test" };
+  }
+}
