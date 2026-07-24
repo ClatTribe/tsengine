@@ -13,7 +13,11 @@ const CLASS_META: Record<string, { icon: string; about: string }> = {
   "osint::stealer-log": { icon: "key", about: "Dark web: a corporate credential harvested by infostealer malware from an infected host — rotate it, revoke sessions, re-image the device." },
   "osint::breached-credential": { icon: "key", about: "A team email appears in a known breach — reset + confirm MFA." },
   "osint::leaked-secret": { icon: "lock", about: "A secret leaked in a public repo or paste — rotate immediately." },
+  "osint::subdomain-takeover": { icon: "network", about: "A dangling DNS record points at a deprovisioned service — an attacker can claim it and serve content on your subdomain. Remove the record or reclaim the target." },
   "osint::exposed-host": { icon: "network", about: "Internet-reachable infra that isn't monitored — add it or take it down." },
+  "osint::cert-unexpected-issuer": { icon: "shield", about: "A certificate for your domain was issued by an unexpected CA — possible mis-issuance or phishing prep. Verify and revoke if unauthorized." },
+  "osint::cert-expired": { icon: "alert", about: "A served certificate has expired — clients will see TLS errors. Renew it." },
+  "osint::cert-expiring": { icon: "watch", about: "A served certificate is expiring soon — renew before it lapses." },
   "osint::data-exposure": { icon: "watch", about: "Org data found exposed publicly — confirm scope + breach duties." },
   "osint::typosquat-domain": { icon: "shield", about: "A look-alike domain imitating your brand — consider a takedown." },
   "osint::advisory": { icon: "alert", about: "A security advisory relevant to your stack — check if you're affected." },
@@ -98,9 +102,16 @@ export default async function OSINTPage() {
 function labelFor(rule: string): string {
   return (
     {
+      // Mirrors internal/platformapi/osint.go osintClassLabel — must match exactly so the summary
+      // tile's icon lookup (labelFor(k) === s.label) resolves for every class.
+      "osint::stealer-log": "Stealer-log exposure (dark web)",
       "osint::breached-credential": "Breached credentials",
       "osint::leaked-secret": "Leaked secrets",
+      "osint::subdomain-takeover": "Subdomain takeover",
       "osint::exposed-host": "Exposed hosts",
+      "osint::cert-unexpected-issuer": "Certificate mis-issuance",
+      "osint::cert-expired": "Expired certificates",
+      "osint::cert-expiring": "Expiring certificates",
       "osint::data-exposure": "Public data exposure",
       "osint::typosquat-domain": "Look-alike domains",
       "osint::advisory": "Relevant advisories",

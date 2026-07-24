@@ -8,10 +8,25 @@ import (
 	"github.com/ClatTribe/tsengine/internal/tool"
 	"github.com/ClatTribe/tsengine/pkg/types"
 
+	_ "github.com/ClatTribe/tsengine/internal/tool/inql"
+	_ "github.com/ClatTribe/tsengine/internal/tool/kiterunner"
 	_ "github.com/ClatTribe/tsengine/internal/tool/nuclei"
 	_ "github.com/ClatTribe/tsengine/internal/tool/openapi"
 	_ "github.com/ClatTribe/tsengine/internal/tool/schemathesis"
 )
+
+func TestRegistryTier_ResolvesDigDeeperTools(t *testing.T) {
+	// The api registry (on-demand replay tier) exposes kiterunner (shadow routes) + inql (GraphQL
+	// introspection). Empty before — the "dig deeper" capability didn't exist for the api asset.
+	got := names(NewHandler().Registry())
+	want := map[string]bool{"kiterunner": true, "inql": true}
+	for _, n := range got {
+		delete(want, n)
+	}
+	if len(want) != 0 {
+		t.Errorf("api registry tier missing tools %v; got %v", want, got)
+	}
+}
 
 func TestHandler_TypeAndAnchors(t *testing.T) {
 	h := NewHandler()

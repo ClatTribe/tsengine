@@ -251,14 +251,38 @@ func nz(s, dflt string) string {
 }
 
 // osintClassLabel maps an osint:: rule to a human class for the UX summary.
+// osintSummaryOrder pins the display order (highest-signal first). The two MUST stay in sync:
+// every label value here must appear in osintSummaryOrder, or that class is silently dropped from
+// the summary (the bug this closed: stealer-log/subdomain-takeover/cert-* were stored but absent).
 var osintClassLabel = map[string]string{
-	"osint::stealer-log":         "Stealer-log exposure (dark web)",
-	"osint::breached-credential": "Breached credentials",
-	"osint::leaked-secret":       "Leaked secrets",
-	"osint::exposed-host":        "Exposed hosts",
-	"osint::typosquat-domain":    "Look-alike domains",
-	"osint::data-exposure":       "Public data exposure",
-	"osint::advisory":            "Relevant advisories",
+	"osint::stealer-log":            "Stealer-log exposure (dark web)",
+	"osint::breached-credential":    "Breached credentials",
+	"osint::leaked-secret":          "Leaked secrets",
+	"osint::subdomain-takeover":     "Subdomain takeover",
+	"osint::exposed-host":           "Exposed hosts",
+	"osint::cert-unexpected-issuer": "Certificate mis-issuance",
+	"osint::cert-expired":           "Expired certificates",
+	"osint::cert-expiring":          "Expiring certificates",
+	"osint::typosquat-domain":       "Look-alike domains",
+	"osint::data-exposure":          "Public data exposure",
+	"osint::advisory":               "Relevant advisories",
+}
+
+// osintSummaryOrder is the fixed, highest-signal-first order the summary tiles render in. Keep it a
+// superset of osintClassLabel's values (+ "Other" for any unmapped rule).
+var osintSummaryOrder = []string{
+	"Stealer-log exposure (dark web)",
+	"Breached credentials",
+	"Leaked secrets",
+	"Subdomain takeover",
+	"Exposed hosts",
+	"Certificate mis-issuance",
+	"Expired certificates",
+	"Expiring certificates",
+	"Public data exposure",
+	"Look-alike domains",
+	"Relevant advisories",
+	"Other",
 }
 
 // handleOSINTView (GET /v1/osint) returns the tenant's OSINT findings + a per-class summary — the
@@ -283,7 +307,7 @@ func (d Deps) handleOSINTView(w http.ResponseWriter, r *http.Request, tenantID s
 		classes[label]++
 	}
 	summary := make([]map[string]any, 0, len(classes))
-	for _, lbl := range []string{"Breached credentials", "Leaked secrets", "Exposed hosts", "Public data exposure", "Look-alike domains", "Relevant advisories", "Other"} {
+	for _, lbl := range osintSummaryOrder {
 		if n := classes[lbl]; n > 0 {
 			summary = append(summary, map[string]any{"label": lbl, "count": n})
 		}
