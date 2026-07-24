@@ -76,9 +76,10 @@ func (l LLMLocalizer) Localize(ctx context.Context, q Query, repo Repo) (Result,
 			merged = append(merged, hc)
 		} else {
 			merged = append(merged, Candidate{
-				Path:    p.Path,
-				Score:   wStrongSink, // a grounded model pick ranks alongside a strong sink
-				Reasons: []string{fmt.Sprintf("model-proposed sink (grounded): %s", strings.TrimSpace(p.Why))},
+				Path:       p.Path,
+				Score:      wStrongSink, // a grounded model pick ranks alongside a strong sink
+				Confidence: 0.5,         // model-proposed + grounded, but no deterministic strong-sink match — honest mid confidence
+				Reasons:    []string{fmt.Sprintf("model-proposed sink (grounded): %s", strings.TrimSpace(p.Why))},
 			})
 		}
 	}

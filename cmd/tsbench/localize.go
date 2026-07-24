@@ -53,7 +53,7 @@ func localizeCmd(argv []string) error {
 		}
 		fmt.Println("ranked candidates:")
 		for i, c := range res.Ranked {
-			fmt.Printf("  %2d. %-44s score=%.1f\n", i+1, c.Path, c.Score)
+			fmt.Printf("  %2d. %-44s score=%.1f conf=%.2f\n", i+1, c.Path, c.Score, c.Confidence)
 			for _, r := range c.Reasons {
 				fmt.Printf("        %s\n", r)
 			}

@@ -151,7 +151,7 @@ func (HeuristicLocalizer) Localize(_ context.Context, q Query, repo Repo) (Resul
 func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 	lines := strings.Split(f.Content, "\n")
 	cand := Candidate{Path: f.Path}
-	hasSink := false
+	var hasStrong, hasWeak, hasSource, hasKeyword bool
 
 	addReason := func(r string) {
 		if len(cand.Reasons) < maxReasons {
@@ -166,7 +166,7 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 			for _, tok := range sig.strong {
 				if matchToken(low, tok) {
 					cand.Score += wStrongSink
-					hasSink = true
+					hasStrong = true
 					addReason(fmt.Sprintf("%s:%d matched `%s` (%s sink)", f.Path, i+1, tok, cwe))
 					break // one strong hit per line is enough; avoid a token-stuffed line dominating
 				}
@@ -174,7 +174,7 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 			for _, tok := range sig.weak {
 				if matchToken(low, tok) {
 					cand.Score += wWeakSink
-					hasSink = true
+					hasWeak = true
 					break
 				}
 			}
@@ -182,11 +182,12 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 	}
 
 	// source→sink co-occurrence bonus (only meaningful when a sink is present).
-	if hasSink {
+	if hasStrong || hasWeak {
 		low := strings.ToLower(f.Content)
 		for _, s := range sourceTokens {
 			if matchToken(low, s) {
 				cand.Score += wSource
+				hasSource = true
 				addReason(fmt.Sprintf("%s carries a taint source `%s` near a sink", f.Path, s))
 				break
 			}
@@ -207,8 +208,35 @@ func scoreFile(f File, knownCWEs, keywords []string) Candidate {
 			}
 		}
 		cand.Score += kw
+		hasKeyword = kw > 0
 	}
+
+	cand.Confidence = confidence(hasStrong, hasWeak, hasSource, hasKeyword)
 	return cand
+}
+
+// confidence maps the KIND of evidence to a 0–1 scalar (not the raw score, which is unbounded). A strong
+// API-shaped sink is the backbone; a taint source near it and keyword corroboration lift it; a weak-token-
+// only hit is low; keyword-only (unknown-CWE fallback) is lowest. Capped below 1.0 — a token heuristic is
+// never certain (§10 humility; the LLM tier / a verifier is what earns higher trust).
+func confidence(hasStrong, hasWeak, hasSource, hasKeyword bool) float64 {
+	conf := 0.0
+	switch {
+	case hasStrong:
+		conf = 0.6
+	case hasWeak:
+		conf = 0.3
+	}
+	if hasSource {
+		conf += 0.25
+	}
+	if hasKeyword {
+		conf += 0.1
+	}
+	if conf > 0.95 {
+		conf = 0.95
+	}
+	return conf
 }
 
 // matchToken reports whether hay (already lowercased) contains tok with a left WORD BOUNDARY when tok
