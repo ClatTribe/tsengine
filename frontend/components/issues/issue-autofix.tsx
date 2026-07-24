@@ -31,7 +31,7 @@ export function IssueAutofix({ findingId, title }: { findingId: string; title: s
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 text-left" onClick={() => setOpen(false)}>
           <div
             className="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-2xl border border-border bg-bg p-5 shadow-elevated"
             onClick={(e) => e.stopPropagation()}
