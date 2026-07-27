@@ -76,6 +76,14 @@ services:
     build:
       context: .
       dockerfile: docker/platform/Dockerfile
+    # THE .env FILE IS THE SOURCE OF TRUTH. Without this, every credential documented in
+    # .env.example (SMTP_*, *_CLIENT_ID/SECRET, LLM_*, notify webhooks, threat-intel corpus)
+    # is silently DROPPED — the platform boots but has no email, no OAuth onboarding, no LLM
+    # (both AI agents degrade to the deterministic substrate), and frozen threat intel. The
+    # explicit `environment:` block below still wins for anything that needs a default or a
+    # compose-level guard, since `environment` takes precedence over `env_file`.
+    env_file:
+      - .env
     environment:
       TSENGINE_PLATFORM_TOKEN: ${TSENGINE_PLATFORM_TOKEN:?set TSENGINE_PLATFORM_TOKEN in .env}
       TSENGINE_SECRET_KEY: ${TSENGINE_SECRET_KEY:?set TSENGINE_SECRET_KEY in .env (openssl rand -base64 32)}
@@ -85,7 +93,12 @@ services:
       # Engine ON — but via the proxy, NOT a mounted socket:
       TSENGINE_PLATFORM_NO_ENGINE: "0"
       DOCKER_HOST: tcp://docker-socket-proxy:2375
-      TSENGINE_SANDBOX_IMAGE: ${TSENGINE_SANDBOX_IMAGE:-tsengine/sandbox:latest}
+      # PINNED, never `latest`. This container executes the security tooling, so an unpinned
+      # tag is both a supply-chain risk and a break of the §6 evidence contract (each scan
+      # records `sandbox_image_digest` — that is only meaningful against a fixed image).
+      # Keep in lockstep with SANDBOX_IMAGE in the Makefile. Prefer a @sha256:… digest once
+      # the image is published to a registry.
+      TSENGINE_SANDBOX_IMAGE: ${TSENGINE_SANDBOX_IMAGE:-tsengine/sandbox:0.1.0}
       # Per-scan sandbox isolation (P1 hardening; docs §5.1). The sandbox joins THIS
       # network (no host port published — the platform reaches it by container IP) and
       # gets a read-only rootfs. Resource/PID/file limits apply by default.
@@ -106,6 +119,11 @@ services:
       # port is unpublished (reachable only via Caddy on the private Docker network), so the Docker
       # private ranges are the trusted proxy set. Override if your proxy sits elsewhere.
       TSENGINE_TRUSTED_PROXY_CIDRS: ${TSENGINE_TRUSTED_PROXY_CIDRS:-172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,fc00::/7}
+      # Threat intel (KEV/EPSS/ExploitDB) refreshes onto the DURABLE volume. Without a path
+      # here the in-process CorpusRefresher stays disabled and every scan silently uses the
+      # small embedded snapshot forever — findings would carry stale KEV/EPSS (§7).
+      TSENGINE_THREAT_INTEL_CORPUS: ${TSENGINE_THREAT_INTEL_CORPUS:-/data/threat_intel.json}
+      TSENGINE_CORPUS_REFRESH_INTERVAL: ${TSENGINE_CORPUS_REFRESH_INTERVAL:-24h}
     # No published ports — reachable only via the caddy edge on the internal `edge` network.
     volumes:
       - platform-data:/data
@@ -115,6 +133,16 @@ services:
       - sandbox     # ↔ the sandboxes it spawns
     depends_on:
       - docker-socket-proxy
+    # The frontend gates on `condition: service_healthy`. The image ships a HEALTHCHECK too,
+    # but it probes the STATIC /healthz (liveness) — this override probes /readyz, which
+    # actually reaches the store, so a dead/unreachable DB marks the container unhealthy
+    # instead of silently serving errors behind a green check.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   frontend:
