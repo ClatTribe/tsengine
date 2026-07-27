@@ -125,6 +125,9 @@ func NewHandler(d Deps) http.Handler {
 	})
 	mux.HandleFunc("GET /readyz", d.handleReadyz)
 	mux.HandleFunc("POST /v1/tenants", d.platformAuth(d.handleCreateTenant)) // provisioning (no tenant header)
+	// Operator-only plan change — the fulfilment half of the contact-sales upgrade path. Must
+	// stay platformAuth: a tenant session upgrading itself would bypass the economic gate.
+	mux.HandleFunc("POST /v1/tenants/{id}/plan", d.platformAuth(d.handleSetTenantPlan))
 	// Real account auth: self-serve signup + email/password login (public), session-gated me/logout.
 	mux.HandleFunc("POST /v1/auth/signup", d.handleSignup)
 	mux.HandleFunc("POST /v1/auth/login", d.handleLogin)
