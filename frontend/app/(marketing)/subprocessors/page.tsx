@@ -1,4 +1,5 @@
 import { pageMeta } from "@/lib/seo";
+import { SMTP_SUBPROCESSOR } from "@/lib/site";
 
 export const metadata = pageMeta({
   title: "Subprocessors — TensorShield",
@@ -8,10 +9,19 @@ export const metadata = pageMeta({
 
 // Grounded in what the product actually uses. AI is only engaged on paid plans (and not at all
 // if a customer brings their own model key). Keep this list current as infrastructure changes.
+//
+// GDPR Art. 28(2) requires each subprocessor to be IDENTIFIED, so the email provider is named
+// from NEXT_PUBLIC_SMTP_SUBPROCESSOR at build time (e.g. "Amazon SES", "Postmark"). Until it is
+// set, the row says so explicitly rather than implying a disclosure we have not actually made.
 const SUBPROCESSORS = [
   { name: "Amazon Web Services (AWS)", purpose: "Cloud hosting, compute, and data storage", location: "India / configured region", data: "All service data (encrypted at rest)" },
   { name: "Anthropic", purpose: "LLM for the AI security engineer (paid plans; skipped if you bring your own model key)", location: "USA", data: "Finding context sent per-request; not used to train their models" },
-  { name: "Email delivery provider (SMTP)", purpose: "Transactional email — invites, password resets, alerts", location: "Configured by operator", data: "Recipient email + message content" },
+  {
+    name: SMTP_SUBPROCESSOR || "Email delivery provider — not yet disclosed",
+    purpose: "Transactional email — invites, password resets, alerts",
+    location: SMTP_SUBPROCESSOR ? "Provider region" : "Configured by operator",
+    data: "Recipient email + message content",
+  },
 ];
 
 export default function Subprocessors() {

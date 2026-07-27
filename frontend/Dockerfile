@@ -19,7 +19,23 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* values are INLINED INTO THE BUNDLE AT BUILD TIME — passing them only as
+# runtime container env has no effect. They must arrive here as build args or the published
+# pages silently keep their source defaults: canonical/sitemap URLs point at the placeholder
+# domain, and the legal documents render without a named entity or jurisdiction.
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_LEGAL_ENTITY
+ARG NEXT_PUBLIC_LEGAL_JURISDICTION_CITY
+ARG NEXT_PUBLIC_LEGAL_COUNTRY
+ARG NEXT_PUBLIC_LEGAL_ADDRESS
+ARG NEXT_PUBLIC_SMTP_SUBPROCESSOR
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} \
+    NEXT_PUBLIC_LEGAL_ENTITY=${NEXT_PUBLIC_LEGAL_ENTITY} \
+    NEXT_PUBLIC_LEGAL_JURISDICTION_CITY=${NEXT_PUBLIC_LEGAL_JURISDICTION_CITY} \
+    NEXT_PUBLIC_LEGAL_COUNTRY=${NEXT_PUBLIC_LEGAL_COUNTRY} \
+    NEXT_PUBLIC_LEGAL_ADDRESS=${NEXT_PUBLIC_LEGAL_ADDRESS} \
+    NEXT_PUBLIC_SMTP_SUBPROCESSOR=${NEXT_PUBLIC_SMTP_SUBPROCESSOR}
 RUN npm run build
 
 # ---- runtime ----

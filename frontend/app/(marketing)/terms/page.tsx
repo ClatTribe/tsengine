@@ -1,5 +1,6 @@
 import { pageMeta } from "@/lib/seo";
 import { LegalDoc, type LegalSection } from "@/components/marketing/legal-doc";
+import { governingLawSentence, legalPartyName } from "@/lib/site";
 
 export const metadata = pageMeta({
   title: "Terms of Service — TensorShield",
@@ -11,7 +12,7 @@ const SECTIONS: LegalSection[] = [
   {
     h: "Agreement",
     body: [
-      "These Terms are a binding agreement between you (and the organization you represent) and TensorShield ([legal entity name], India). By creating an account or using the service, you accept them. If you don't agree, don't use the service.",
+      `These Terms are a binding agreement between you (and the organization you represent) and ${legalPartyName()}. By creating an account or using the service, you accept them. If you don't agree, don't use the service.`,
     ],
   },
   {
@@ -72,7 +73,7 @@ const SECTIONS: LegalSection[] = [
   {
     h: "Governing law & contact",
     body: [
-      "These Terms are governed by the laws of India, with exclusive jurisdiction in the courts of [city]. Questions: legal@tensorshield.io.",
+      governingLawSentence(),
     ],
   },
 ];
