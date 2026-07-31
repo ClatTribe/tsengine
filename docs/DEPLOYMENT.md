@@ -31,6 +31,11 @@ out to `docker run` to spawn per-scan sandboxes — see below).
 > isolated per-scan sandboxes, secrets-from-file, backups, one-command `make deploy-prod`)
 > use **`docker-compose.prod.yml`** — see **[docs/production-single-box.md](production-single-box.md)**
 > (threat model + runbook). The quick-start above is the unhardened **dev** stack.
+>
+> **Deploying to AWS EC2?** Follow **[docs/deploy-aws-ec2.md](deploy-aws-ec2.md)** — the
+> end-to-end path: instance sizing, security-group rules (port 80 must be open or ACME cannot
+> issue), DNS/Elastic IP, the `.env` that actually matters, `make prod-validate` preflight,
+> verification, and backups.
 
 **Still single-box, not scale-grade** (tracked, each behind an existing code seam — see
 production-single-box.md §6): the store is single-node file/sqlite-backed (Postgres is the

@@ -21,6 +21,13 @@ services:
     environment:
       TSENGINE_SITE_ADDRESS: ${TSENGINE_SITE_ADDRESS:-localhost}
       TSENGINE_ACME_EMAIL: ${TSENGINE_ACME_EMAIL:-}
+      # Selects the Caddyfile's `tls` argument: unset -> `internal` (self-signed, localhost),
+      # or an ACME contact email -> automatic Let's Encrypt. Set by deploy-single-box.sh when
+      # the site address is a real domain, so public TLS needs no hand-edit.
+      # Explicitly "internal" rather than empty: compose always passes the variable, and an
+      # empty value would render a bare `tls` directive if Caddy treated "set but empty"
+      # differently from "unset". This way the rendered directive is always valid.
+      TSENGINE_TLS: ${TSENGINE_TLS:-internal}
     ports:
       - "80:80"
       - "443:443"

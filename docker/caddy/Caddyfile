@@ -10,10 +10,17 @@
 # below, and (optionally) add `email you@your.domain` here for ACME contact.
 
 {$TSENGINE_SITE_ADDRESS:localhost} {
-	# Default single-box: Caddy's internal CA (a self-signed root trusted on this box).
-	# For a real domain, set TSENGINE_SITE_ADDRESS=your.domain AND comment out `tls
-	# internal` to get automatic public HTTPS.
-	tls internal
+	# TLS mode is CONFIGURED, not hand-edited. This previously required commenting out
+	# `tls internal` by hand before a public deploy — easy to forget, and the failure mode
+	# (a browser-untrusted self-signed cert on a public domain) looks like a broken site.
+	#
+	# Both forms below are valid single-argument `tls` directives:
+	#   TSENGINE_TLS unset        -> `tls internal`       self-signed; right for localhost/IP
+	#   TSENGINE_TLS=you@dom.com  -> `tls you@dom.com`    automatic Let's Encrypt, that contact
+	#
+	# deploy-single-box.sh sets this from TSENGINE_ACME_EMAIL whenever the site address is a
+	# real domain, so a public deploy gets trusted HTTPS with no manual edit.
+	tls {$TSENGINE_TLS:internal}
 
 	# Security headers on every response (T7 + general hardening).
 	header {
