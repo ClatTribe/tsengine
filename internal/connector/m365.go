@@ -169,3 +169,8 @@ func (m *M365) disableUser(ctx context.Context, token, userID string) error {
 	}
 	return nil
 }
+
+// Configured reports whether this deployment supplied the OAuth credentials this
+// connector needs. Without them the authorize URL would be built with an empty
+// client_id and dead-end the customer on the provider's error page.
+func (m *M365) Configured() bool { return m.ClientID != "" && m.ClientSecret != "" }

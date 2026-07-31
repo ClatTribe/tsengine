@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
@@ -104,6 +105,18 @@ func (d Deps) handleConnectURL(w http.ResponseWriter, r *http.Request, tenantID 
 	conn, err := d.Connectors.Get(kind)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
+		return
+	}
+	// Fail loudly and EARLY when this deployment has no credentials for the provider. Without
+	// this the authorize URL is built with an empty client_id and the customer is bounced onto
+	// the provider's own error page, with nothing logged here to explain why.
+	if !connector.IsConfigured(conn) {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "the " + kind + " integration is not configured on this deployment — set its " +
+				"CLIENT_ID and CLIENT_SECRET (see .env.example) and restart the platform",
+			"reason": "connector_not_configured",
+			"kind":   kind,
+		})
 		return
 	}
 	redirect := d.PublicURL + "/v1/connect/" + kind + "/callback"

@@ -231,3 +231,8 @@ func (b *Bitbucket) Apply(ctx context.Context, c platform.Connection, token stri
 	}
 	return nil
 }
+
+// Configured reports whether this deployment supplied the OAuth credentials this
+// connector needs. Without them the authorize URL would be built with an empty
+// client_id and dead-end the customer on the provider's error page.
+func (b *Bitbucket) Configured() bool { return b.ClientID != "" && b.ClientSecret != "" }

@@ -31,4 +31,42 @@ docker run --rm \
   alpine:3 \
   tar czf "/backup/${ARCHIVE}" -C /data .
 
-echo "✓ backup → ${OUT_ABS}/${ARCHIVE}"
+echo "✓ volume backup → ${OUT_ABS}/${ARCHIVE}"
+
+# ---------------------------------------------------------------------------
+# Postgres.
+#
+# The tarball above captures the SQLite DB and the signing key. But if this deployment points
+# TSENGINE_PLATFORM_DB at a postgres:// DSN, the tenant data does NOT live in the volume at all
+# — it lives in Postgres, and a volume-only backup would capture almost nothing while still
+# printing a reassuring success line. Dump it too.
+#
+# Managed Postgres (RDS/Supabase/Neon) usually has its own automated backups; this is the
+# portable off-box copy that makes a restore reproducible.
+# ---------------------------------------------------------------------------
+DB_DSN="${TSENGINE_PLATFORM_DB:-}"
+if [ -z "$DB_DSN" ] && [ -f .env ]; then
+  DB_DSN="$(grep -E '^TSENGINE_PLATFORM_DB=' .env | tail -1 | cut -d= -f2- || true)"
+fi
+
+case "$DB_DSN" in
+  postgres://*|postgresql://*)
+    PG_DUMP="tsengine-pg-${TS}.sql.gz"
+    echo "· Postgres DSN detected — dumping the database as well"
+    # pg_dump from a throwaway container, so the host needs no postgres client.
+    # --no-owner/--no-acl keep the dump restorable into a differently-owned database.
+    if docker run --rm --network host \
+        -v "${OUT_ABS}:/backup" \
+        postgres:16-alpine \
+        sh -c "pg_dump --no-owner --no-acl '${DB_DSN}' | gzip > '/backup/${PG_DUMP}'"; then
+      echo "✓ postgres dump → ${OUT_ABS}/${PG_DUMP}"
+    else
+      # Loud and non-zero: a half-succeeded backup must never look like a success.
+      echo "✗ postgres dump FAILED — the volume tarball above does NOT contain your tenant data" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    # SQLite/file store: the volume tarball is the complete backup.
+    ;;
+esac

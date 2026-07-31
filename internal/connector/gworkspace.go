@@ -163,3 +163,8 @@ func (g *GWorkspace) suspendUser(ctx context.Context, token, userKey string) err
 	}
 	return nil
 }
+
+// Configured reports whether this deployment supplied the OAuth credentials this
+// connector needs. Without them the authorize URL would be built with an empty
+// client_id and dead-end the customer on the provider's error page.
+func (g *GWorkspace) Configured() bool { return g.ClientID != "" && g.ClientSecret != "" }

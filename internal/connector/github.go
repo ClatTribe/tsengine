@@ -214,3 +214,8 @@ func strFrom(m map[string]any, k string) string {
 	}
 	return ""
 }
+
+// Configured reports whether this deployment supplied the OAuth credentials this
+// connector needs. Without them the authorize URL would be built with an empty
+// client_id and dead-end the customer on the provider's error page.
+func (g *GitHub) Configured() bool { return g.ClientID != "" && g.ClientSecret != "" }

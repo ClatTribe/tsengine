@@ -24,6 +24,12 @@ func (d Deps) mailer() email.Mailer {
 	return email.Noop{}
 }
 
+// mailerConfigured reports whether this deployment can actually deliver mail, via the Mailer's
+// own Configured(). Callers use it to choose between emailing a credential straight to its owner
+// and handing it back for out-of-band relay — never both, so a credential is never exposed more
+// widely than it has to be.
+func (d Deps) mailerConfigured() bool { return d.mailer().Configured() }
+
 func sha256hex(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])

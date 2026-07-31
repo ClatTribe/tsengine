@@ -17,6 +17,34 @@ jobs:
       - run: go build ./...
       - run: go test -race ./...
 
+  # The Postgres store is the multi-node scale-out backend, but its conformance suite only runs
+  # when TEST_POSTGRES_URL is set — and nothing set it, so the backend a scaled production deploy
+  # would actually use was never executed in CI. memory/file/sqlite were covered; Postgres was
+  # "a mechanical port" verified only by a compile-time interface assertion.
+  postgres:
+    name: store conformance (postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tsengine_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - run: go test -race ./internal/store/...
+        env:
+          TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/tsengine_test?sslmode=disable
+
   vet:
     name: vet
     runs-on: ubuntu-latest
