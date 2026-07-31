@@ -118,10 +118,16 @@ type Deps struct {
 // NewHandler returns the platform's HTTP handler.
 func NewHandler(d Deps) http.Handler {
 	mux := http.NewServeMux()
+	// Liveness: is the process up? Static by design — a crash-loop probe must not depend on
+	// the store. Readiness (can we actually serve?) is /readyz, which reaches the store.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	mux.HandleFunc("GET /readyz", d.handleReadyz)
 	mux.HandleFunc("POST /v1/tenants", d.platformAuth(d.handleCreateTenant)) // provisioning (no tenant header)
+	// Operator-only plan change — the fulfilment half of the contact-sales upgrade path. Must
+	// stay platformAuth: a tenant session upgrading itself would bypass the economic gate.
+	mux.HandleFunc("POST /v1/tenants/{id}/plan", d.platformAuth(d.handleSetTenantPlan))
 	// Real account auth: self-serve signup + email/password login (public), session-gated me/logout.
 	mux.HandleFunc("POST /v1/auth/signup", d.handleSignup)
 	mux.HandleFunc("POST /v1/auth/login", d.handleLogin)

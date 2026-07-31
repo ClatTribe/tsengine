@@ -41,8 +41,12 @@ const TIERS = [
     cadence: "/ month + GST",
     annual: "or ₹79,990/yr — ~2 months free",
     blurb: "The full deterministic + ML-based scanning engine — every scanner, all 22 frameworks, continuous monitoring, signed evidence, the human-in-the-loop apply loop. Run it yourself, or have us / your MSP run it — the service model is yours to pick.",
-    cta: "Start free",
-    href: "/signup",
+    // Core is a PAID tier and there is no self-serve checkout, so it must not reuse the Free
+    // tier's "Start free → /signup" CTA — that dead-ends a buyer on a free account whose only
+    // upgrade signal is a 402. Fulfilment is contact-sales (an operator sets the plan once
+    // payment is arranged), so send them where that actually happens.
+    cta: "Talk to us to start",
+    href: "/demo?plan=core",
     highlight: true,
     persona: false,
     features: [

@@ -165,3 +165,9 @@ func (o *Okta) lifecycle(ctx context.Context, token, idOrLogin, action string) e
 	}
 	return nil
 }
+
+// Configured reports whether this deployment supplied the OAuth credentials this
+// connector needs. Without them the authorize URL would be built with an empty
+// client_id and dead-end the customer on the provider's error page.
+// OrgURL is required too: every Okta endpoint is relative to the org's own domain.
+func (o *Okta) Configured() bool { return o.OrgURL != "" && o.ClientID != "" && o.ClientSecret != "" }

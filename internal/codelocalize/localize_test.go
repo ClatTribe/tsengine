@@ -188,7 +188,9 @@ func TestLoadRepo(t *testing.T) {
 func TestLoadRepo_RespectsFileCap(t *testing.T) {
 	dir := t.TempDir()
 	big := make([]byte, 2048)
-	os.WriteFile(filepath.Join(dir, "big.go"), big, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "big.go"), big, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	repo, err := LoadRepo(dir, LoadOptions{MaxFileBytes: 1024})
 	if err != nil {
 		t.Fatal(err)

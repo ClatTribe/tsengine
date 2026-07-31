@@ -88,3 +88,37 @@ func (r *Registry) Kinds() []string {
 	}
 	return out
 }
+
+// Configurable is implemented by connectors whose usability depends on deploy-time credentials
+// (an OAuth client id/secret pair). It exists because an unconfigured connector failed SILENTLY
+// AND LATE: OAuthURL would happily build ".../authorize?client_id=&redirect_uri=..." and the
+// customer landed on a provider error page, with nothing logged server-side to explain it.
+//
+// This is an OPTIONAL interface — a connector that does not implement it is treated as
+// configured. That is correct for AWS/GCP/Azure, which onboard via a console/CloudFormation
+// link and need no client secret at all.
+type Configurable interface {
+	// Configured reports whether this connector has the credentials it needs to start an
+	// OAuth flow in this deployment.
+	Configured() bool
+}
+
+// IsConfigured reports whether c is usable in this deployment.
+func IsConfigured(c Connector) bool {
+	if cc, ok := c.(Configurable); ok {
+		return cc.Configured()
+	}
+	return true
+}
+
+// ConfiguredKinds lists only the kinds this deployment can actually complete an onboarding flow
+// for — what the UI should offer. Kinds() still returns everything registered.
+func (r *Registry) ConfiguredKinds() []string {
+	out := make([]string, 0, len(r.byKind))
+	for k, c := range r.byKind {
+		if IsConfigured(c) {
+			out = append(out, k)
+		}
+	}
+	return out
+}

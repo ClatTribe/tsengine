@@ -1,6 +1,9 @@
 package platform
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Plan tiers. The product sells three, matching the pricing page's sharp positioning (in CUSTOMER terms —
 // no internal layer jargon): the deterministic + ML-based scanning engine is the self-serve product; the
@@ -51,6 +54,46 @@ func NormalizePlan(plan string) string {
 	default:
 		return PlanFree
 	}
+}
+
+// knownAddOns are the "+"-joined add-on tokens a plan string may carry.
+var knownAddOns = map[string]bool{"pentest": true}
+
+// ValidatePlan is the STRICT counterpart to NormalizePlan, for the one place where guessing is
+// dangerous: an operator setting a paying customer's plan. NormalizePlan is deliberately
+// fail-safe — anything unrecognized becomes Free — which is right for reading a stored value
+// but catastrophic on write, where a typo ("groth") would silently DOWNGRADE a customer who
+// just paid. ValidatePlan instead returns an error for anything it does not recognize.
+//
+// It accepts the same aliases and "+"-joined add-ons as Entitlements (e.g. "pro+pentest") and
+// returns the canonical form to store.
+func ValidatePlan(plan string) (string, error) {
+	p := strings.ToLower(strings.TrimSpace(plan))
+	if p == "" {
+		return "", fmt.Errorf("plan is empty")
+	}
+	parts := strings.Split(p, "+")
+	base := strings.TrimSpace(parts[0])
+
+	var canonical string
+	switch base {
+	case PlanEnterprise, "scale", "custom", "unlimited":
+		canonical = PlanEnterprise
+	case PlanGrowth, "starter", "team", "pro":
+		canonical = PlanGrowth
+	case PlanFree, "":
+		canonical = PlanFree
+	default:
+		return "", fmt.Errorf("unknown plan tier %q (want free, growth, or enterprise)", base)
+	}
+	for _, add := range parts[1:] {
+		add = strings.TrimSpace(add)
+		if !knownAddOns[add] {
+			return "", fmt.Errorf("unknown add-on %q (want pentest)", add)
+		}
+		canonical += "+" + add
+	}
+	return canonical, nil
 }
 
 // Entitlements returns the limits for a plan. The pricing page and every server-side gate

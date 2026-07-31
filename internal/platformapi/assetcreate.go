@@ -72,7 +72,8 @@ func (d Deps) handleCreateAsset(w http.ResponseWriter, r *http.Request, tenantID
 	// expands, Enterprise is unlimited (-1). An over-cap add is refused with 402 so the UI can
 	// prompt an upgrade — not a silent failure.
 	if lim := d.planLimits(r.Context(), tenantID); lim.MaxAssets >= 0 && len(assets) >= lim.MaxAssets {
-		writeJSON(w, http.StatusPaymentRequired, errBody(fmt.Sprintf("the %s plan includes up to %d scan targets — upgrade to add more", lim.Label, lim.MaxAssets)))
+		entitlementBlocked(w, "asset_limit", fmt.Sprintf(
+			"the %s plan includes up to %d scan targets — talk to us to raise the limit", lim.Label, lim.MaxAssets))
 		return
 	}
 	asset := platform.Asset{

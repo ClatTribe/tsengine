@@ -3,6 +3,7 @@ package platformapi
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -272,5 +273,44 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 		return
 	}
 	u.PasswordHash = ""
-	writeJSON(w, http.StatusCreated, map[string]any{"user": u, "temp_password": temp})
+
+	// Deliver the credential. SMTP was wired for password reset but invites never used it, so
+	// every invite fell back to the owner relaying a password over chat — the weakest link in
+	// onboarding. When mail works we send it straight to the invitee and DO NOT return it, so
+	// the credential never transits the owner's browser or the API logs. With no mailer we keep
+	// the previous behaviour and say plainly that manual relay is required.
+	if d.mailerConfigured() {
+		if err := d.mailer().Send(r.Context(), email,
+			"You've been invited to TensorShield", inviteEmailHTML(d.PublicURL, email, temp)); err != nil {
+			// The account already exists, so failing the request would strand it. Fall back to
+			// returning the credential, and say delivery failed.
+			slog.Warn("[auth] invite email failed — returning the temp password for manual relay",
+				"email", email, "err", err)
+			writeJSON(w, http.StatusCreated, map[string]any{
+				"user": u, "temp_password": temp, "emailed": false,
+				"note": "invite email failed to send — share this one-time password securely; it must be changed at first login",
+			})
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"user": u, "emailed": true,
+			"note": "an invite email with a one-time password was sent; it must be changed at first login",
+		})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"user": u, "temp_password": temp, "emailed": false,
+		"note": "no SMTP configured — share this one-time password securely; it must be changed at first login",
+	})
+}
+
+// inviteEmailHTML renders the invite. The one-time password it carries must be changed at first
+// login (User.MustChangePassword), which is what keeps a mailed credential acceptable.
+func inviteEmailHTML(publicURL, addr, temp string) string {
+	login := strings.TrimSuffix(publicURL, "/") + "/login"
+	return `<p>You've been invited to TensorShield.</p>` +
+		`<p>Sign in at <a href="` + login + `">` + login + `</a> with:</p>` +
+		`<p><b>Email:</b> ` + addr + `<br><b>One-time password:</b> <code>` + temp + `</code></p>` +
+		`<p>You'll be asked to set your own password immediately after signing in.</p>` +
+		`<p>If you weren't expecting this invitation, you can ignore this email.</p>`
 }

@@ -1,5 +1,6 @@
 import { pageMeta } from "@/lib/seo";
 import { LegalDoc, type LegalSection } from "@/components/marketing/legal-doc";
+import { legalPartyName } from "@/lib/site";
 
 export const metadata = pageMeta({
   title: "Privacy Policy — TensorShield",
@@ -11,7 +12,7 @@ const SECTIONS: LegalSection[] = [
   {
     h: "Who we are",
     body: [
-      "TensorShield ([legal entity name], India) provides an autonomous security and compliance platform. This policy explains what personal and organizational data we process when you use our website and product, and your rights over it. It is written to align with the EU GDPR, India's DPDP Act 2023, and CCPA/CPRA.",
+      `${legalPartyName()} provides an autonomous security and compliance platform. This policy explains what personal and organizational data we process when you use our website and product, and your rights over it. It is written to align with the EU GDPR, India's DPDP Act 2023, and CCPA/CPRA.`,
     ],
   },
   {

@@ -41,8 +41,10 @@ ENV TSENGINE_PLATFORM_DB=/data/platform.json
 EXPOSE 8090
 VOLUME ["/data"]
 
-# /healthz needs no auth.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -fsS "http://127.0.0.1:8090/healthz" || exit 1
+# /readyz needs no auth and, unlike the static /healthz, actually reaches the store — so a
+# container whose database is unreachable reports unhealthy instead of sitting green in the
+# load balancer. start-period covers first-boot store open.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:8090/readyz" || exit 1
 
 ENTRYPOINT ["/usr/local/bin/platform"]
