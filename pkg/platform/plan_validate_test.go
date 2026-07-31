@@ -37,7 +37,9 @@ func TestValidatePlan_AcceptsAddOns(t *testing.T) {
 // The whole reason ValidatePlan exists: NormalizePlan is fail-safe-to-Free, which on a WRITE
 // would silently DOWNGRADE a customer who just paid because of a typo. Validation must reject.
 func TestValidatePlan_RejectsTyposInsteadOfDowngrading(t *testing.T) {
-	for _, bad := range []string{"groth", "gold", "enterprize", "", "   ", "growth+wat"} {
+	// NB: keep these far enough from real words that the misspell linter does not "correct"
+	// them — they are deliberately invalid input, not typos to be fixed.
+	for _, bad := range []string{"groth", "gold", "entrprse", "", "   ", "growth+wat"} {
 		if _, err := ValidatePlan(bad); err == nil {
 			t.Errorf("ValidatePlan(%q) should error, but it was accepted", bad)
 		}
