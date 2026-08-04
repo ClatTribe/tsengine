@@ -451,6 +451,13 @@ export interface Incident {
   // blast_radius: read-time impact sizing — does this incident chain to a crown jewel, and how far away?
   blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
   attacked?: boolean; // escalated because the issue is under attack in production
+  // Detection Skill triage (ADR 0017): the detection engineer's reasoning carried onto the alert, so
+  // whoever is on shift inherits it instead of rediscovering it. triage_skill is "name@digest" —
+  // provenance, so you can see exactly which skill version said this.
+  // ANNOTATION ONLY: a verdict never opened or closed this incident, it only explains it.
+  triage_verdict?: string; // malicious | suspicious | inconclusive | benign
+  triage_rationale?: string;
+  triage_skill?: string;
   opened_at: string;
   resolved_at?: string;
   acknowledged_at?: string; // a human took ownership → stops timed auto-escalation

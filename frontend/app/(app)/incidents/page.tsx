@@ -144,6 +144,7 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
             </span>
           )}
           <ConfidenceBadge verification={i.verification} confidence={i.confidence} />
+          <TriageBadge verdict={i.triage_verdict} skill={i.triage_skill} />
           <BlastRadiusBadge blast={i.blast_radius} />
           {respondPending && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30">
@@ -158,6 +159,14 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
           )}
         </div>
         <div className="mono mt-0.5 truncate text-[11px] text-faint">{i.rule_id}</div>
+        {/* The skill's reasoning — the point of Detection Skills is that the analyst inherits the
+            detection engineer's thinking instead of rediscovering it, so it belongs on the row
+            itself, not behind a click. */}
+        {i.triage_rationale && (
+          <div className="mt-1 truncate text-[11px] text-muted" title={i.triage_rationale}>
+            <span className="text-faint">triage:</span> {i.triage_rationale}
+          </div>
+        )}
       </div>
       <div className="shrink-0 text-right text-xs">
         {resolved ? (
@@ -201,6 +210,32 @@ function ConfidenceBadge({ verification, confidence }: { verification?: string; 
 // BlastRadiusBadge sizes the impact: an incident that chains to a crown jewel (e.g. cloud root) is far worse
 // than its own severity implies. Only shown when the engine actually found such a chain (grounded) — so a
 // contained issue never gets an inflated impact tag.
+// TriageBadge shows a Detection Skill's verdict (ADR 0017). The tooltip names the exact skill
+// version, so an analyst can see whose reasoning this is — and a wrong verdict is traceable to a
+// specific skill rather than to "the AI".
+//
+// A "benign" verdict is shown MUTED, never as a dismissal: the incident is open because a real
+// finding crossed the severity floor, and a third-party skill's opinion does not overrule that. The
+// verdict is context for the human, not a decision.
+function TriageBadge({ verdict, skill }: { verdict?: string; skill?: string }) {
+  if (!verdict) return null;
+  const tone: Record<string, string> = {
+    malicious: "bg-critical/10 text-critical",
+    suspicious: "bg-high/10 text-high",
+    inconclusive: "bg-surface text-muted ring-1 ring-border",
+    benign: "bg-surface text-faint ring-1 ring-border",
+  };
+  const title = skill ? `Detection Skill verdict — ${skill}` : "Detection Skill verdict";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone[verdict] ?? tone.inconclusive}`}
+      title={title}
+    >
+      {verdict}
+    </span>
+  );
+}
+
 function BlastRadiusBadge({ blast }: { blast?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number } }) {
   if (!blast?.reaches_crown_jewel) return null;
   const jewel = (blast.crown_jewel_type ?? "a crown jewel").replace(/_/g, " ");
