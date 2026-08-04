@@ -7,9 +7,9 @@ import "strings"
 // gives two leaner images:
 //
 //   - Scan    — the DETECTION toolset (SAST/SCA/CSPM/recon — the bulk: semgrep, codeql, trivy, prowler,
-//               grype, katana, …). Used by the per-asset scan dispatcher.
+//     grype, katana, …). Used by the per-asset scan dispatcher.
 //   - Pentest — the leaner EXPLOITATION toolset (sqlmap, dalfox, nuclei DAST, a headless browser for
-//               DOM-XSS proof, an OAST client). The AI Pentester's sandbox-backed re-fires + proof channels.
+//     DOM-XSS proof, an OAST client). The AI Pentester's sandbox-backed re-fires + proof channels.
 //
 // The active-exploitation Prober is host-side today (TSENGINE_ACTIVE_EXPLOIT); the pentest image backs the
 // sandbox-gated proof channels (browser/OAST) and future sandboxed tool re-fires.

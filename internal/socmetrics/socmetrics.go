@@ -17,7 +17,7 @@ type Report struct {
 
 	OpenIncidents     int `json:"open_incidents"`
 	ResolvedIncidents int `json:"resolved_incidents"`
-	Acknowledged      int `json:"acknowledged"`  // open incidents a human has taken ownership of
+	Acknowledged      int `json:"acknowledged"`   // open incidents a human has taken ownership of
 	Unacknowledged    int `json:"unacknowledged"` // open incidents awaiting ownership
 
 	// SLA compliance over SLA-tracked incidents (those whose severity has a target). Resolved

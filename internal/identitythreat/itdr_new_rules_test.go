@@ -38,9 +38,9 @@ func TestDetect_ConcurrentSession(t *testing.T) {
 func TestDetect_MFARemovedThenAccess(t *testing.T) {
 	base := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
 	evs := []Event{
-		ev2("carol", EventLogin, base, "1.1.1.1"),                              // prior known IP
-		ev2("carol", EventMFARemoved, base.Add(10*time.Minute), "1.1.1.1"),     // MFA disabled
-		ev2("carol", EventLogin, base.Add(20*time.Minute), "9.9.9.9"),          // new IP login
+		ev2("carol", EventLogin, base, "1.1.1.1"),                          // prior known IP
+		ev2("carol", EventMFARemoved, base.Add(10*time.Minute), "1.1.1.1"), // MFA disabled
+		ev2("carol", EventLogin, base.Add(20*time.Minute), "9.9.9.9"),      // new IP login
 	}
 	r := ruleSet(Detect(evs, Config{}))
 	if !r["mfa_removed_then_access"] {

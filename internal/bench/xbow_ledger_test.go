@@ -57,7 +57,7 @@ func TestLoadXBOWLedger_SkipsCorruptLine(t *testing.T) {
 func TestSummarizeXBOWLedger_EverSolvedFirstProof(t *testing.T) {
 	entries := []XBOWLedgerEntry{
 		{TS: "2026-07-05T09:00:00Z", ID: "XBEN-009-24", Tags: []string{"ssti"}, Level: 1, Solved: true, EvidenceSHA256: "first9"},
-		{TS: "2026-07-05T15:00:00Z", ID: "XBEN-009-24", Tags: []string{"ssti"}, Level: 1, Solved: false}, // later flaky miss
+		{TS: "2026-07-05T15:00:00Z", ID: "XBEN-009-24", Tags: []string{"ssti"}, Level: 1, Solved: false},              // later flaky miss
 		{TS: "2026-07-05T10:00:00Z", ID: "XBEN-006-24", Tags: []string{"command_injection"}, Level: 1, Solved: false}, // never solved
 		{TS: "2026-07-05T11:00:00Z", ID: "XBEN-037-24", Tags: []string{"command_injection"}, Level: 2, Solved: true, EvidenceSHA256: "first37"},
 	}

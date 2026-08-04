@@ -101,9 +101,7 @@ func (c *Catalog) SelectLLM(ctx context.Context, q Query, gen Generator) (sel Se
 
 	// DISPOSE: closed-set + cap + dedupe, core first.
 	sel = Selection{Scores: map[string]float64{}}
-	for _, t := range core {
-		sel.Tools = append(sel.Tools, t)
-	}
+	sel.Tools = append(sel.Tools, core...)
 	added := map[string]bool{}
 	for _, name := range picks {
 		if len(sel.Tools) >= max {

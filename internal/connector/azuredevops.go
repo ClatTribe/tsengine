@@ -241,4 +241,6 @@ func (a *AzureDevOps) org(c platform.Connection) string {
 // connector needs. Without them the authorize URL would be built with an empty
 // client_id and dead-end the customer on the provider's error page.
 // Org is required too: the API base is dev.azure.com/{Org}, so a blank org cannot work.
-func (a *AzureDevOps) Configured() bool { return a.ClientID != "" && a.ClientSecret != "" && a.Org != "" }
+func (a *AzureDevOps) Configured() bool {
+	return a.ClientID != "" && a.ClientSecret != "" && a.Org != ""
+}

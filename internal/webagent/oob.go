@@ -97,7 +97,7 @@ func NewCollector(baseHost string) *Collector {
 
 // Start binds an ephemeral port on all interfaces (so a dockerized target can reach it) and serves.
 func (c *Collector) Start() error {
-	ln, err := net.Listen("tcp", "0.0.0.0:0")
+	ln, err := net.Listen("tcp", "0.0.0.0:0") //nolint:gosec // G102: an OAST collector must listen on all interfaces so a dockerized/remote target can reach the callback
 	if err != nil {
 		return err
 	}

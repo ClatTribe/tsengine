@@ -7,10 +7,10 @@
 // descendant. A role grants a set of permissions; a binding may carry an IAM Condition (CEL) that gates it
 // at runtime. IAM DENY policies override allows. So "may member M do permission P on resource R?" is:
 //
-//	1. If a Deny rule denies P for M (condition holds, M not excepted) anywhere up the hierarchy → DENY.
-//	2. Else walk R and its ancestors; if any binding's role grants P AND M matches the binding's members →
-//	   ALLOW (conditional when the binding carries an unresolved condition).
-//	3. Else implicit-deny (GCP is deny-by-default).
+//  1. If a Deny rule denies P for M (condition holds, M not excepted) anywhere up the hierarchy → DENY.
+//  2. Else walk R and its ancestors; if any binding's role grants P AND M matches the binding's members →
+//     ALLOW (conditional when the binding carries an unresolved condition).
+//  3. Else implicit-deny (GCP is deny-by-default).
 //
 // Conservatism (matches cloudiam + the prune's recall-preserving contract, §10): this is used to DROP an
 // over-approximated edge ONLY on a DEFINITIVE deny. Anything uncertain — an unresolved condition, a group
@@ -58,8 +58,8 @@ const (
 
 // Binding is one IAM policy binding: a role granted to members, optionally condition-gated.
 type Binding struct {
-	Role      string   `json:"role"`              // e.g. "roles/storage.objectAdmin" or "projects/p/roles/custom"
-	Members   []string `json:"members"`           // "user:a@x", "serviceAccount:a@x", "group:g@x", "domain:x", "allUsers", "allAuthenticatedUsers"
+	Role      string   `json:"role"`                // e.g. "roles/storage.objectAdmin" or "projects/p/roles/custom"
+	Members   []string `json:"members"`             // "user:a@x", "serviceAccount:a@x", "group:g@x", "domain:x", "allUsers", "allAuthenticatedUsers"
 	Condition string   `json:"condition,omitempty"` // a CEL expression; non-empty → we treat the binding as condition-gated
 }
 

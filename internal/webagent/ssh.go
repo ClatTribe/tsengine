@@ -144,7 +144,7 @@ func sshExec(ctx context.Context, addr, user string, auth []ssh.AuthMethod, comm
 		// A pentest tool doesn't pre-know the target's host key (the whole point is reaching an
 		// unmanaged box with leaked creds), so we don't pin it — same posture as the app under test
 		// (paramiko AutoAddPolicy). We never persist a known_hosts, so there's nothing to poison.
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // G106: a pentest agent reaching an unmanaged box with leaked creds cannot pre-know its host key; no known_hosts is persisted, so nothing to poison
 		Timeout:         10 * time.Second,
 	}
 	d := net.Dialer{Timeout: 10 * time.Second}

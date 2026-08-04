@@ -10,7 +10,7 @@ import (
 func nmapSvc(product, version string, sev types.Severity) types.Finding {
 	return types.Finding{
 		ID: "f-1", Tool: "nmap", RuleID: "nmap::open-port::ssh", Severity: sev,
-		Title: "ssh on 22/tcp — " + product + " " + version,
+		Title:    "ssh on 22/tcp — " + product + " " + version,
 		ToolArgs: map[string]string{"product": product, "version": version},
 	}
 }

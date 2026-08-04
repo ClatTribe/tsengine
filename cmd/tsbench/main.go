@@ -96,6 +96,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench cloud-baseline: %v\n", err)
 			os.Exit(1)
 		}
+	case "defense":
+		if err := defenseCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench defense: %v\n", err)
+			os.Exit(1)
+		}
+	case "defense-ledger":
+		if err := defenseLedgerCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench defense-ledger: %v\n", err)
+			os.Exit(1)
+		}
 	case "defense-xbow":
 		if err := defenseXbowCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench defense-xbow: %v\n", err)

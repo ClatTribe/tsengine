@@ -16,3 +16,17 @@ linters-settings:
   gosec:
     excludes:
       - G104 # we use errcheck for unhandled errors
+
+issues:
+  # Do not cap the report — a truncated list hides new issues behind the standing ones.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # Test files are fixtures, not shipped surface. gosec on a test flags dummy "credentials",
+    # world-readable temp files, and deliberately-weak crypto under test; errcheck flags unchecked
+    # w.Write / helper returns in table tests. Both are noise in _test.go and drown the signal from
+    # production code. Standard golangci practice.
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck

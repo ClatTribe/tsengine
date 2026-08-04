@@ -1,6 +1,7 @@
 package govulncheck
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestKnownArgs(t *testing.T) {
 }
 
 func TestRun_MissingTarget(t *testing.T) {
-	if _, err := New().Run(nil, tool.Args{}); err == nil {
+	if _, err := New().Run(context.TODO(), tool.Args{}); err == nil {
 		t.Error("expected error for missing target")
 	}
 }

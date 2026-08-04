@@ -15,16 +15,14 @@ func baseline() *cloudgraph.Snapshot {
 	return s
 }
 
-func ruleSet(fs []interface{ GetRuleID() string }) {} // placeholder; not used
-
 func TestDiff_DetectsConfigDrift(t *testing.T) {
 	prev := baseline()
 
 	cur := baseline()
-	cur.Nodes["bucket-1"].Public = true                                 // became public
-	cur.Nodes["role-app"].Privileged = true                             // escalated to privileged
-	cur.AddNode(&cloudgraph.Node{ID: "role-new", Kind: cloudgraph.KindPrincipal, Name: "new-admin", Privileged: true}) // new privileged principal
-	cur.AddEdge(cloudgraph.Edge{From: cloudgraph.InternetID, To: "bucket-1", Kind: cloudgraph.EdgeNetworkReach})        // new internet exposure
+	cur.Nodes["bucket-1"].Public = true                                                                                   // became public
+	cur.Nodes["role-app"].Privileged = true                                                                               // escalated to privileged
+	cur.AddNode(&cloudgraph.Node{ID: "role-new", Kind: cloudgraph.KindPrincipal, Name: "new-admin", Privileged: true})    // new privileged principal
+	cur.AddEdge(cloudgraph.Edge{From: cloudgraph.InternetID, To: "bucket-1", Kind: cloudgraph.EdgeNetworkReach})          // new internet exposure
 	cur.AddEdge(cloudgraph.Edge{From: "role-app", To: "admin", Kind: cloudgraph.EdgePrivesc, Detail: "AttachRolePolicy"}) // new privesc
 
 	now := func() time.Time { return time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC) }

@@ -38,13 +38,13 @@ func discoverSuiteCmd(argv []string) error {
 	sort.Strings(entries)
 
 	type row struct {
-		id            string
-		findings      int
-		impacts       int
-		categories    []string
-		oraclePass    bool
-		flagAllFP     int
-		wellFormed    bool // oracle passes AND flag-all raises >=1 false alarm (tests precision)
+		id         string
+		findings   int
+		impacts    int
+		categories []string
+		oraclePass bool
+		flagAllFP  int
+		wellFormed bool // oracle passes AND flag-all raises >=1 false alarm (tests precision)
 	}
 	var rows []row
 	catTotals := map[bench.ImpactType]int{}

@@ -119,8 +119,8 @@ func TestChildAssets_GatedOnHttpxLiveness(t *testing.T) {
 	findings := []types.Finding{
 		{RuleID: "subfinder::subdomain-found", Tool: "subfinder", Endpoint: "live.example.com"},
 		{RuleID: "subfinder::subdomain-found", Tool: "subfinder", Endpoint: "dead1.example.com"}, // not live
-		{RuleID: "amass::subdomain-found", Tool: "amass", Endpoint: "dead2.example.com"},          // not live
-		{RuleID: "httpx::http-service", Tool: "httpx", Endpoint: "https://live.example.com"},      // the only live one
+		{RuleID: "amass::subdomain-found", Tool: "amass", Endpoint: "dead2.example.com"},         // not live
+		{RuleID: "httpx::http-service", Tool: "httpx", Endpoint: "https://live.example.com"},     // the only live one
 	}
 	kids := h.ChildAssets(findings)
 	if len(kids) != 1 {

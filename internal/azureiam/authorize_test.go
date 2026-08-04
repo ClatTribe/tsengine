@@ -53,9 +53,9 @@ func TestAuthorize_DenyAssignmentOverrides(t *testing.T) {
 
 func TestAuthorize_UncertaintyIsConditional(t *testing.T) {
 	cases := map[string]PolicySet{
-		"condition": {Scope: &Scope{Assignments: []Assignment{{Role: "Owner", Principals: []string{"user:x@acme.com"}, Condition: "@Resource[...]"}}}},
+		"condition":    {Scope: &Scope{Assignments: []Assignment{{Role: "Owner", Principals: []string{"user:x@acme.com"}, Condition: "@Resource[...]"}}}},
 		"unknown-role": {Scope: &Scope{Assignments: []Assignment{{Role: "SomeCustomRole", Principals: []string{"user:x@acme.com"}}}}},
-		"group": {Scope: &Scope{Assignments: []Assignment{{Role: "Owner", Principals: []string{"group:eng@acme.com"}}}}},
+		"group":        {Scope: &Scope{Assignments: []Assignment{{Role: "Owner", Principals: []string{"group:eng@acme.com"}}}}},
 	}
 	for name, ps := range cases {
 		t.Run(name, func(t *testing.T) {

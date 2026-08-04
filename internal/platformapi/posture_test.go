@@ -43,7 +43,9 @@ func TestPostureView_GroupsBySource(t *testing.T) {
 
 	// ?source=tprm filters to just that source
 	rec2 := do(h, "GET", "/v1/posture/sources?source=tprm", "t1", "")
-	var r2 struct{ Total int `json:"total"` }
+	var r2 struct {
+		Total int `json:"total"`
+	}
 	_ = json.Unmarshal(rec2.Body.Bytes(), &r2)
 	if r2.Total != 1 {
 		t.Errorf("?source=tprm should return only 1, got %d", r2.Total)

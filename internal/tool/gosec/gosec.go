@@ -39,6 +39,7 @@ func (*Gosec) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	}
 	// JSON to stdout, quiet, and -no-fail so a "found issues" run exits 0. The recursive package pattern
 	// scans the whole mounted tree.
+	//nolint:gosec // G204: this IS the gosec tool wrapper — launching the scanner over the operator-provided target path is its entire purpose; target is a scan path, not attacker input.
 	cmd := exec.CommandContext(ctx, "gosec", "-fmt=json", "-quiet", "-no-fail", strings.TrimRight(target, "/")+"/...")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
