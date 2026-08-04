@@ -24,6 +24,9 @@
 //	TSENGINE_PENTEST_SANDBOX_IMAGE  pentest (exploitation) sandbox image; unset → falls back to the scan image
 //	TSENGINE_PLATFORM_NO_ENGINE 1 → boot without the sandbox engine
 //	TSENGINE_MONITOR_INTERVAL  continuous re-scan cadence (e.g. 6h; default 12h; 0 disables)
+//	TSENGINE_SKILLS_DIR         Detection Skills library dir (ADR 0017); unset → ./skills if present,
+//	                           else triage annotation is off. A misconfigured path disables it rather
+//	                           than falling back to a library the operator did not choose.
 //	TSENGINE_THREAT_INTEL_CORPUS  path to the GLOBAL KEV/EPSS corpus file (else embedded snapshot)
 //	TSENGINE_CORPUS_REFRESH_INTERVAL  global threat-intel refresh cadence (default 24h; 0 disables)
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
@@ -62,6 +65,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/detect"
+	"github.com/ClatTribe/tsengine/internal/detectionskill"
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
@@ -414,6 +418,26 @@ func main() {
 	if llm, ok := cloudengine.LLMFromEnv(); ok {
 		agentLLM = llm
 		log.Print("[platform] ModeDeep D-agent wired (LLM spec generator) — open-ended exploitation proposals, deterministically validated")
+
+		// Detection Skills (ADR 0017): load the library and attach it to the detector so an opening
+		// incident carries the detection engineer's reasoning instead of only a severity.
+		// NewTriager returns nil for an empty library, so this is safe to assign unconditionally — a
+		// deploy with no skills keeps exactly today's behaviour.
+		//
+		// A skill is UNTRUSTED input: one that claims capability, or fails to parse, is refused at
+		// load and logged HERE rather than silently dropped. A hostile skill sitting in the directory
+		// should be visible in the boot log, not swallowed.
+		if dir := skillsDir(); dir != "" {
+			lib, skillErrs := detectionskill.LoadDir(dir)
+			for _, e := range skillErrs {
+				log.Printf("[platform] WARNING: skill refused: %v", e)
+			}
+			if tri := detectionskill.NewTriager(lib, llm); tri != nil {
+				detector.Triager = tri
+				log.Printf("[platform] Detection Skills wired (%d from %s): %v",
+					len(lib), dir, detectionskill.Library(lib).Names())
+			}
+		}
 	}
 	// The L2 Lead/translator's tool-calling client (POST /v1/l2/translate). Anthropic, OpenAI, or a
 	// local Ollama via l2.ClientFromEnv; nil → the translator endpoint is gated.
@@ -670,4 +694,26 @@ func openStore() store.Store {
 		log.Printf("[platform] sqlite store at %s", path)
 	}
 	return s
+}
+
+// skillsDir resolves the Detection Skills library directory (ADR 0017).
+//
+// TSENGINE_SKILLS_DIR wins when set — an operator pointing at a curated library must never be
+// silently overridden by a bundled one. Otherwise the repo's own ./skills is used when it exists,
+// which is what a source deploy gets. Returns "" when neither is present, so triage stays off
+// rather than the platform guessing at a path.
+func skillsDir() string {
+	if d := strings.TrimSpace(os.Getenv("TSENGINE_SKILLS_DIR")); d != "" {
+		if st, err := os.Stat(d); err == nil && st.IsDir() {
+			return d
+		}
+		// Configured but unusable is an operator error worth surfacing — not a silent fallback to a
+		// different library than the one they asked for.
+		log.Printf("[platform] WARNING: TSENGINE_SKILLS_DIR=%q is not a readable directory — Detection Skills disabled", d)
+		return ""
+	}
+	if st, err := os.Stat("skills"); err == nil && st.IsDir() {
+		return "skills"
+	}
+	return ""
 }
