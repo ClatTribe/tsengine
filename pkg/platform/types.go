@@ -602,10 +602,21 @@ type Incident struct {
 	// Attacked marks an incident opened/escalated because the issue is observed under
 	// attack in production (a runtime-protection signal, ADR-0007 Phase 0b) — escalated
 	// regardless of the severity floor, since a live exploit attempt is itself urgent.
-	Attacked   bool      `json:"attacked,omitempty"`
-	OpenedAt   time.Time `json:"opened_at"`
-	ResolvedAt time.Time `json:"resolved_at,omitempty"`
-	LedgerRef  string    `json:"ledger_ref,omitempty"`
+	Attacked bool `json:"attacked,omitempty"`
+	// Triage* carry a Detection Skill verdict onto the alert (ADR 0017). That is the whole point of
+	// the format: the detection engineer's reasoning travels WITH the alert instead of being
+	// rediscovered by whoever is on shift. TriageSkill is "name@digest", so an evidence pack can
+	// state exactly which skill version produced the verdict.
+	//
+	// ANNOTATION ONLY — a verdict never opens or closes an incident. A skill is third-party input,
+	// so letting a "benign" verdict silence a real alert would hand an injected skill a mute button
+	// on the SOC. The severity floor still decides whether an incident exists; the skill explains it.
+	TriageVerdict   string    `json:"triage_verdict,omitempty"`
+	TriageRationale string    `json:"triage_rationale,omitempty"`
+	TriageSkill     string    `json:"triage_skill,omitempty"`
+	OpenedAt        time.Time `json:"opened_at"`
+	ResolvedAt      time.Time `json:"resolved_at,omitempty"`
+	LedgerRef       string    `json:"ledger_ref,omitempty"`
 	// AcknowledgedAt/By record that a human took ownership of the incident (the MDR "I'm on it").
 	// An acknowledged incident is never auto-escalated. Zero = unacknowledged.
 	AcknowledgedAt time.Time `json:"acknowledged_at,omitempty"`
