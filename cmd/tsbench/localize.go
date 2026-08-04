@@ -88,7 +88,7 @@ func localizeCmd(argv []string) error {
 		}
 	}
 	if *out != "" {
-		if err := os.WriteFile(*out, []byte(report), 0o644); err != nil {
+		if err := os.WriteFile(*out, []byte(report), 0o600); err != nil {
 			return err
 		}
 	}
