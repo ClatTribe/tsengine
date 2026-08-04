@@ -15,7 +15,7 @@ import (
 
 // ctRecord is the minimal crt.sh JSON row.
 type ctRecord struct {
-	NameValue string `json:"name_value"`
+	NameValue  string `json:"name_value"`
 	CommonName string `json:"common_name"`
 }
 

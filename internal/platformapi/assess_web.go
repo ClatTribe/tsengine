@@ -58,7 +58,7 @@ func assessWeb(wp webPosture) (checks []assessCheck, findings []assessFinding, p
 	hsts := hasHeader(h, "Strict-Transport-Security")
 	checks = append(checks, assessCheck{Name: "HSTS", OK: hsts,
 		Detail: ternary(hsts, "Strict-Transport-Security header present.", "No HSTS header — browsers will still try HTTP first."),
-		Fix: ifFail(!hsts, hstsFix())})
+		Fix:    ifFail(!hsts, hstsFix())})
 	if !hsts {
 		findings = append(findings, assessFinding{Title: "Missing HSTS header", Severity: "low"})
 		penalty += severityPenalty(types.SeverityLow)
@@ -67,7 +67,7 @@ func assessWeb(wp webPosture) (checks []assessCheck, findings []assessFinding, p
 	csp := hasHeader(h, "Content-Security-Policy")
 	checks = append(checks, assessCheck{Name: "Content-Security-Policy", OK: csp,
 		Detail: ternary(csp, "CSP header present.", "No Content-Security-Policy — weaker defense against XSS/injection."),
-		Fix: ifFail(!csp, cspFix())})
+		Fix:    ifFail(!csp, cspFix())})
 	if !csp {
 		findings = append(findings, assessFinding{Title: "Missing Content-Security-Policy", Severity: "low"})
 		penalty += severityPenalty(types.SeverityLow)
@@ -145,8 +145,10 @@ func safeHTTPClient(timeout time.Duration) *http.Client {
 			}
 			return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
 		},
-		// Accept older TLS so we can OBSERVE+report it (cert verification stays on).
-		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS10},
+		// Accept older TLS so we can OBSERVE+report it (cert verification stays on). This is a
+		// posture PROBE of arbitrary customer sites — refusing old TLS would blind the very check
+		// this endpoint exists to make.
+		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS10}, //nolint:gosec // G402: deliberately low to assess a target's TLS posture; not a client we send data through
 		TLSHandshakeTimeout: timeout,
 		DisableKeepAlives:   true,
 	}

@@ -8,10 +8,10 @@ import (
 func TestAssess_VendorRisks(t *testing.T) {
 	now := func() time.Time { return time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC) }
 	vendors := []Vendor{
-		{Name: "AnalyticsCo", DataAccess: DataPII},                                              // uncertified data vendor
-		{Name: "DataPipe", Subprocessor: true, DataAccess: DataPII, Certifications: []string{"SOC2"}}, // subprocessor no DPA
-		{Name: "OldCRM", DataAccess: DataSensitive, Breached: true, BreachNote: "2024 leak", Certifications: []string{"ISO27001"}}, // breach + data
-		{Name: "PayGate", HandlesCardData: true, DataAccess: DataSensitive, Certifications: []string{"SOC2"}}, // card no PCI
+		{Name: "AnalyticsCo", DataAccess: DataPII},                                                                                           // uncertified data vendor
+		{Name: "DataPipe", Subprocessor: true, DataAccess: DataPII, Certifications: []string{"SOC2"}},                                        // subprocessor no DPA
+		{Name: "OldCRM", DataAccess: DataSensitive, Breached: true, BreachNote: "2024 leak", Certifications: []string{"ISO27001"}},           // breach + data
+		{Name: "PayGate", HandlesCardData: true, DataAccess: DataSensitive, Certifications: []string{"SOC2"}},                                // card no PCI
 		{Name: "CoreInfra", Criticality: "critical", DataAccess: DataMetadata, Certifications: []string{"SOC2"}, LastAssessed: "2024-01-01"}, // stale review
 	}
 	got := map[string]bool{}

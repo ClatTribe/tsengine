@@ -1,12 +1,16 @@
 package webagent
 
+// This is a HASH-CRACKING tool: MD5 and SHA-1 are the algorithms it must reverse, not algorithms
+// it uses to protect anything. The weak-crypto lints are therefore inverted here — the whole point
+// is to compute these digests to match a captured hash.
 import (
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/md5"  //nolint:gosec // G501: hash cracker — MD5 is a target algorithm to reverse, not a security control
+	"crypto/sha1" //nolint:gosec // G505: hash cracker — SHA-1 is a target algorithm to reverse, not a security control
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // crackhash.go closes a core post-exploitation gap: the agent regularly EXTRACTS password hashes (a
@@ -105,21 +109,32 @@ func tCrackHash(cc *Context, args map[string]any) string {
 
 func caseVariants(w string) []string {
 	out := []string{w}
-	if t := strings.Title(w); t != w { //nolint:staticcheck // ASCII passwords; Title is fine here
+	if t := titleFirst(w); t != w {
 		out = append(out, t)
 	}
-	if u := strings.ToUpper(w); u != w && u != strings.Title(w) {
+	if u := strings.ToUpper(w); u != w && u != titleFirst(w) {
 		out = append(out, u)
 	}
 	return out
 }
 
+// titleFirst upper-cases the first rune — the common "password"→"Password" wordlist mutation.
+// Replaces the deprecated strings.Title (SA1019), whose per-word behavior this cracker never needed.
+func titleFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
+}
+
 func digestFn(typ string) (func(string) string, bool) {
 	switch typ {
 	case "md5":
-		return func(s string) string { b := md5.Sum([]byte(s)); return hex.EncodeToString(b[:]) }, true
+		return func(s string) string { b := md5.Sum([]byte(s)); return hex.EncodeToString(b[:]) }, true //nolint:gosec // G401: computing the target digest to crack it
 	case "sha1":
-		return func(s string) string { b := sha1.Sum([]byte(s)); return hex.EncodeToString(b[:]) }, true
+		return func(s string) string { b := sha1.Sum([]byte(s)); return hex.EncodeToString(b[:]) }, true //nolint:gosec // G401: computing the target digest to crack it
 	case "sha256":
 		return func(s string) string { b := sha256.Sum256([]byte(s)); return hex.EncodeToString(b[:]) }, true
 	}

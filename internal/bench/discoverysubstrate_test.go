@@ -30,13 +30,13 @@ func TestSubstrateSurfacesDiscoveryChain(t *testing.T) {
 	findings := []types.Finding{
 		{
 			ID: "f-leak", RuleID: "gitleaks::aws-access-key", Tool: "gitleaks", Severity: types.SeverityHigh,
-			Title: "AWS access key committed in ci/deploy.sh",
+			Title:       "AWS access key committed in ci/deploy.sh",
 			Description: "Hardcoded long-lived key AKIAIOSFODNN7EXAMPLE in the CI deploy script",
 		},
 		{
 			ID: "f-role", RuleID: "prowler::iam_role_administratoraccess_policy", Tool: "prowler", Severity: types.SeverityHigh,
-			Title: "Role reachable by key has AdministratorAccess to customer data",
-			Endpoint: "AwsIamRole ci-deployer @global",
+			Title:       "Role reachable by key has AdministratorAccess to customer data",
+			Endpoint:    "AwsIamRole ci-deployer @global",
 			Description: "Key AKIAIOSFODNN7EXAMPLE assumes prod-backup with AdministratorAccess over the customer-pii export bucket",
 		},
 	}

@@ -17,7 +17,7 @@ import (
 
 // RawAzure mirrors the SUBSET of Azure API output the mapper reads (JSON-tagged so it's a wire format too).
 type RawAzure struct {
-	SubscriptionID string          `json:"subscription_id"`
+	SubscriptionID string           `json:"subscription_id"`
 	Principals     []RawAzPrincipal `json:"principals,omitempty"` // managed identities / SPs / users
 	VMs            []RawAzVM        `json:"vms,omitempty"`
 	Storage        []RawAzStorage   `json:"storage,omitempty"`

@@ -129,8 +129,8 @@ func TestScoreDiscovery_PerCategoryCorrelation(t *testing.T) {
 		decoy    string // a plausible-but-wrong finding a naive ranker flags
 	}{
 		{
-			name:     "privilege_escalation",
-			real:     "key-in-jenkins", realType: ImpactPrivEsc, decoy: "key-in-notebook",
+			name: "privilege_escalation",
+			real: "key-in-jenkins", realType: ImpactPrivEsc, decoy: "key-in-notebook",
 			sc: DiscoveryScenario{ID: "privesc", Findings: []DiscoveryFinding{
 				{ID: "key-in-jenkins", Severity: types.SeverityMedium, HighImpact: true, ImpactType: ImpactPrivEsc,
 					Detail: "leaked key → ci-build → PassRole+Lambda → account admin"},
@@ -138,8 +138,8 @@ func TestScoreDiscovery_PerCategoryCorrelation(t *testing.T) {
 			}},
 		},
 		{
-			name:     "external_exposure",
-			real:     "open-orders-db", realType: ImpactExternal, decoy: "open-bastion",
+			name: "external_exposure",
+			real: "open-orders-db", realType: ImpactExternal, decoy: "open-bastion",
 			sc: DiscoveryScenario{ID: "external", Findings: []DiscoveryFinding{
 				{ID: "open-orders-db", Severity: types.SeverityHigh, HighImpact: true, ImpactType: ImpactExternal,
 					Detail: "SG 0.0.0.0/0 on 5432 → financial DB"},

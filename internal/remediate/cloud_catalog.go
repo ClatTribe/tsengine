@@ -211,7 +211,7 @@ var cloudCatalog = []cloudMatcher{
 	},
 }
 
-// isIAMPrivescHay is the text-only core of isIAMPrivescFinding (so the catalog can reuse it over a
+// isIAMPrivescHay is the text-only IAM-privesc classifier (so the catalog can reuse it over a
 // pre-lowercased haystack without re-concatenating the finding fields).
 func isIAMPrivescHay(hay string) bool {
 	if !anyOf(hay, "iam", "role", "policy", "principal", "permission") {

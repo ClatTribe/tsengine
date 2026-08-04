@@ -65,9 +65,9 @@ type Scope struct {
 // PolicySet is everything bearing on the request. Roles may be empty — built-in roles (Owner/Contributor/Reader)
 // are understood inline; an unknown custom role is treated as possibly-granting (conditional) so we never over-prune.
 type PolicySet struct {
-	Scope   *Scope
-	Roles   map[string]RoleDef // role name → definition
-	Denies  []DenyAssignment
+	Scope  *Scope
+	Roles  map[string]RoleDef // role name → definition
+	Denies []DenyAssignment
 }
 
 // Request is one access question.

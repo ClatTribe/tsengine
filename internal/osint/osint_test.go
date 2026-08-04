@@ -25,8 +25,8 @@ func TestAssess_RulesFireWithComplianceAndSeverity(t *testing.T) {
 		BreachedAccounts: []BreachedAccount{{Email: "ceo@acme.com", Breach: "LinkedIn 2021", Classes: "passwords", Source: "hibp"}},
 		LeakedSecrets:    []LeakedSecret{{Kind: "AWS access key", Location: "https://github.com/x/y", Source: "trufflehog", Verified: true}},
 		ExposedHosts: []ExposedHost{
-			{Host: "legacy.acme.com", Services: []string{"rdp"}, Source: "shodan"},  // risky → high
-			{Host: "old.acme.com", Services: []string{"http"}, Source: "crtsh"},     // → medium
+			{Host: "legacy.acme.com", Services: []string{"rdp"}, Source: "shodan"}, // risky → high
+			{Host: "old.acme.com", Services: []string{"http"}, Source: "crtsh"},    // → medium
 		},
 		Typosquats: []TyposquatDomain{{Domain: "acme-login.com", Target: "acme.com", Registered: true, HasMX: true, Source: "dnstwist"}},
 		Exposures:  []DataExposure{{What: "customer list", Location: "pastebin.com/x", Source: "spiderfoot"}},

@@ -45,10 +45,10 @@ func TestHTTPDoer_RejectsNonHTTPScheme(t *testing.T) {
 func TestHTTPDoer_GuardRefusesInternalTargets(t *testing.T) {
 	d := NewHTTPDoer() // the production guarded client
 	for _, u := range []string{
-		"http://127.0.0.1:8090/v1/findings",          // the host platform API
-		"http://169.254.169.254/latest/meta-data/",   // cloud metadata
-		"http://10.0.0.5/internal",                    // RFC1918
-		"http://[::1]:8090/",                          // IPv6 loopback
+		"http://127.0.0.1:8090/v1/findings",        // the host platform API
+		"http://169.254.169.254/latest/meta-data/", // cloud metadata
+		"http://10.0.0.5/internal",                 // RFC1918
+		"http://[::1]:8090/",                       // IPv6 loopback
 	} {
 		if _, err := d.Do(context.Background(), "GET", u, nil, ""); err == nil {
 			t.Errorf("SSRF guard must refuse %s, but the request was allowed", u)

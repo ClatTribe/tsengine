@@ -62,9 +62,9 @@ func TestJiraSettings_SealRedactResolve(t *testing.T) {
 func TestJiraSettings_Validation(t *testing.T) {
 	d := jiraDeps(t)
 	cases := map[string]string{
-		"non-https base":     `{"base_url":"http://acme.atlassian.net","email":"a@b.c","project":"SEC","api_token":"t"}`,
-		"missing email":      `{"base_url":"https://acme.atlassian.net","project":"SEC","api_token":"t"}`,
-		"missing project":    `{"base_url":"https://acme.atlassian.net","email":"a@b.c","api_token":"t"}`,
+		"non-https base":      `{"base_url":"http://acme.atlassian.net","email":"a@b.c","project":"SEC","api_token":"t"}`,
+		"missing email":       `{"base_url":"https://acme.atlassian.net","project":"SEC","api_token":"t"}`,
+		"missing project":     `{"base_url":"https://acme.atlassian.net","email":"a@b.c","api_token":"t"}`,
 		"no token first time": `{"base_url":"https://acme.atlassian.net","email":"a@b.c","project":"SEC"}`,
 		// SSRF: a tenant must NOT point the server-side Jira filer at an internal/metadata host.
 		"ssrf metadata ip": `{"base_url":"https://169.254.169.254","email":"a@b.c","project":"SEC","api_token":"t"}`,

@@ -15,19 +15,19 @@ import (
 // genuinely-routable public addresses, including IPv4-mapped IPv6.
 func TestIsPublicIP_SpecialUseRanges(t *testing.T) {
 	blocked := []string{
-		"100.64.0.1",      // CGNAT (RFC 6598) — the headline gap
-		"100.127.255.255", // CGNAT upper edge
-		"0.1.2.3",         // 0.0.0.0/8
-		"192.0.0.1",       // IETF protocol assignments
-		"192.0.2.5",       // TEST-NET-1
-		"198.18.0.9",      // benchmarking
-		"198.51.100.7",    // TEST-NET-2
-		"203.0.113.10",    // TEST-NET-3
-		"240.0.0.1",       // class E
-		"::ffff:100.64.0.1", // CGNAT via IPv4-mapped IPv6 (must still be caught)
-		"64:ff9b::8.8.8.8",  // NAT64-embedded IPv4
-		"2002:0808:0808::",  // 6to4-embedded IPv4
-		"2001:db8::1",       // documentation
+		"100.64.0.1",                                      // CGNAT (RFC 6598) — the headline gap
+		"100.127.255.255",                                 // CGNAT upper edge
+		"0.1.2.3",                                         // 0.0.0.0/8
+		"192.0.0.1",                                       // IETF protocol assignments
+		"192.0.2.5",                                       // TEST-NET-1
+		"198.18.0.9",                                      // benchmarking
+		"198.51.100.7",                                    // TEST-NET-2
+		"203.0.113.10",                                    // TEST-NET-3
+		"240.0.0.1",                                       // class E
+		"::ffff:100.64.0.1",                               // CGNAT via IPv4-mapped IPv6 (must still be caught)
+		"64:ff9b::8.8.8.8",                                // NAT64-embedded IPv4
+		"2002:0808:0808::",                                // 6to4-embedded IPv4
+		"2001:db8::1",                                     // documentation
 		"127.0.0.1", "10.0.0.1", "169.254.169.254", "::1", // sanity: stdlib-covered still blocked
 	}
 	for _, s := range blocked {
@@ -37,8 +37,8 @@ func TestIsPublicIP_SpecialUseRanges(t *testing.T) {
 	}
 	allowed := []string{
 		"8.8.8.8", "1.1.1.1", "203.0.114.1", // 203.0.114/x is NOT the TEST-NET (113) — must stay allowed
-		"2606:4700:4700::1111",  // public IPv6 (Cloudflare)
-		"::ffff:8.8.8.8",        // public IPv4-mapped IPv6 must stay allowed
+		"2606:4700:4700::1111", // public IPv6 (Cloudflare)
+		"::ffff:8.8.8.8",       // public IPv4-mapped IPv6 must stay allowed
 	}
 	for _, s := range allowed {
 		if !isPublicIP(net.ParseIP(s)) {

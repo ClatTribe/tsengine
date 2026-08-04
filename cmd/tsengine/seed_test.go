@@ -23,9 +23,9 @@ func TestSeedRoutesFromScan(t *testing.T) {
 			"http://host.docker.internal:8000/jobs",              // dup
 		},
 		FindingsRaw: []types.Finding{
-			{Endpoint: "POST /jobs"},                              // method-prefixed bare path
-			{Endpoint: "http://host.docker.internal:8000/ping"},   // full URL, sandbox host
-			{Endpoint: ""},                                        // blank — dropped
+			{Endpoint: "POST /jobs"},                            // method-prefixed bare path
+			{Endpoint: "http://host.docker.internal:8000/ping"}, // full URL, sandbox host
+			{Endpoint: ""},                                      // blank — dropped
 		},
 		FindingsEnriched: []types.Finding{
 			{Endpoint: "/admin"}, // bare path

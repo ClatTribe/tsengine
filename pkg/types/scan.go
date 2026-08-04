@@ -17,24 +17,24 @@ import "time"
 // the canonical form of this struct. Required for compliance evidence
 // bundles.
 type Scan struct {
-	ScanID           string       `json:"scan_id"`
-	Asset            Asset        `json:"asset"`
-	StartedAt        time.Time    `json:"started_at"`
-	CompletedAt      time.Time    `json:"completed_at"`
-	Engine           Engine       `json:"engine"`
-	Corpus           Corpus       `json:"corpus"`
-	AnchorsFired     []string     `json:"anchors_fired"`
-	RegistryFired    []string     `json:"registry_fired,omitempty"`
+	ScanID        string    `json:"scan_id"`
+	Asset         Asset     `json:"asset"`
+	StartedAt     time.Time `json:"started_at"`
+	CompletedAt   time.Time `json:"completed_at"`
+	Engine        Engine    `json:"engine"`
+	Corpus        Corpus    `json:"corpus"`
+	AnchorsFired  []string  `json:"anchors_fired"`
+	RegistryFired []string  `json:"registry_fired,omitempty"`
 	// DiscoveredSurface is the deduped, filtered request surface the L1 recon stage found (katana
 	// crawl, spec ingest, etc.) — the endpoints the detection tools fanned out over. Persisted so a
 	// consumer can SEED the L2 offensive agent from it (web-investigate --scan) instead of running the
 	// agent blind. Recon output that was previously computed and thrown away. Empty for single-stage
 	// assets (repo/container) that have no crawl surface.
 	DiscoveredSurface []string     `json:"discovered_surface,omitempty"`
-	FindingsRaw      []Finding    `json:"findings_raw"`
-	FindingsEnriched []Finding    `json:"findings_enriched"`
-	L15AuditLog      []AuditEntry `json:"l15_audit_log,omitempty"`
-	ChildAssets      []ChildAsset `json:"child_assets,omitempty"`
+	FindingsRaw       []Finding    `json:"findings_raw"`
+	FindingsEnriched  []Finding    `json:"findings_enriched"`
+	L15AuditLog       []AuditEntry `json:"l15_audit_log,omitempty"`
+	ChildAssets       []ChildAsset `json:"child_assets,omitempty"`
 	// AIAssessment is the AI Cloud Security Engineer's "engineer says" lens
 	// (attack paths over the inventory snapshot), shipped alongside FindingsRaw
 	// ("tools say"). Present for cloud_account when the engineer runs. ADR 0002.

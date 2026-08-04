@@ -32,7 +32,7 @@ func dmarcFix(domain string) *checkFix {
 		Snippets: []fixSnippet{{
 			Label: "DNS TXT record",
 			Lang:  "dns",
-			Code: fmt.Sprintf("Name:  _dmarc.%s\nType:  TXT\nValue: v=DMARC1; p=reject; rua=mailto:dmarc@%s; adkim=s; aspf=s", domain, domain),
+			Code:  fmt.Sprintf("Name:  _dmarc.%s\nType:  TXT\nValue: v=DMARC1; p=reject; rua=mailto:dmarc@%s; adkim=s; aspf=s", domain, domain),
 		}},
 	}
 }

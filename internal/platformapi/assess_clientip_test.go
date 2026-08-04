@@ -48,9 +48,9 @@ func TestClientIP_TrustedProxy_UsesForwardedClient(t *testing.T) {
 	// proxy appended). An attacker-prepended entry is to the LEFT and is therefore ignored.
 	trusted := mustCIDRs(t, "10.0.0.0/8")
 	cases := []struct{ xff, want string }{
-		{"203.0.113.50", "203.0.113.50"},                  // Caddy appended the real client
-		{"66.66.66.66, 203.0.113.50", "203.0.113.50"},     // attacker prepended 66.. ; real client is rightmost
-		{"203.0.113.50, 10.0.0.5", "203.0.113.50"},        // a trusted hop trails → skip it, take the client
+		{"203.0.113.50", "203.0.113.50"},                     // Caddy appended the real client
+		{"66.66.66.66, 203.0.113.50", "203.0.113.50"},        // attacker prepended 66.. ; real client is rightmost
+		{"203.0.113.50, 10.0.0.5", "203.0.113.50"},           // a trusted hop trails → skip it, take the client
 		{"203.0.113.50, 10.0.0.5, 10.1.2.3", "203.0.113.50"}, // two trusted hops → skip both
 	}
 	for _, c := range cases {

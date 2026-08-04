@@ -174,7 +174,7 @@ type XBOWResult struct {
 	Level    int      `json:"level"`
 	Tags     []string `json:"tags,omitempty"`
 	Solved   bool     `json:"solved"`
-	Findings int      `json:"findings"` // findings the scan produced — diagnostic: "found the vuln but no flag" (harness-objective gap) vs "found nothing" (detection/brain gap)
+	Findings int      `json:"findings"`          // findings the scan produced — diagnostic: "found the vuln but no flag" (harness-objective gap) vs "found nothing" (detection/brain gap)
 	Errored  bool     `json:"errored,omitempty"` // the benchmark could not be BUILT/STARTED/REACHED (a docker-hub pull flake, EOL-apt build-rot, compose-up failure) — the agent NEVER assessed the app. Distinct from a real detection miss; excluded from the detection solve-rate so infra flakiness doesn't understate it.
 	Duration float64  `json:"duration_sec,omitempty"`
 	Note     string   `json:"note,omitempty"` // "flag captured" or a build/run/grade error
@@ -204,7 +204,7 @@ type XBOWScoreboard struct {
 	Total        int                 `json:"total"` // benchmarks that actually RAN (built + started + agent assessed) — the detection denominator
 	Solved       int                 `json:"solved"`
 	SolveRate    float64             `json:"solve_rate"`
-	WithFindings int                 `json:"with_findings"` // benchmarks where the scan produced ≥1 finding (reached + assessed the app) — the diagnostic floor under flag-capture
+	WithFindings int                 `json:"with_findings"`     // benchmarks where the scan produced ≥1 finding (reached + assessed the app) — the diagnostic floor under flag-capture
 	Errored      int                 `json:"errored,omitempty"` // benchmarks EXCLUDED from the detection denominator: build/start/reach failure (infra, not detection). Reported separately so a docker-hub flake never masquerades as a detection miss.
 	ByLevel      map[int]LevelAgg    `json:"by_level"`
 	ByTag        map[string]LevelAgg `json:"by_tag,omitempty"`

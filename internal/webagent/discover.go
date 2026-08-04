@@ -28,7 +28,7 @@ var (
 	reFormName = regexp.MustCompile("(?is)<(?:input|textarea|select|button)\\b[^>]*?\\bname\\s*=\\s*[\"']([^\"']+)")
 	// the <form action="..."> POST target -- the injection SINK the agent must submit to.
 	reFormAction = regexp.MustCompile("(?is)<form\\b[^>]*?\\baction\\s*=\\s*[\"']([^\"'#][^\"']*)")
-	reStringify  = regexp.MustCompile("(?is)JSON\\.stringify\\(\\s*\\{([^}]{0,400})\\}")
+	reStringify  = regexp.MustCompile(`(?is)JSON\.stringify\(\s*\{([^}]{0,400})\}`)
 	reObjKey     = regexp.MustCompile("[\"']?([a-zA-Z_][a-zA-Z0-9_]{1,40})[\"']?\\s*:")
 )
 
