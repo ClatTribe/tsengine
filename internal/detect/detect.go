@@ -14,6 +14,7 @@ package detect
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/ledger"
@@ -34,11 +35,32 @@ type Alerter interface {
 	IncidentOpened(ctx context.Context, i platform.Incident) error
 }
 
+// SkillVerdict is a Detection Skill's triage annotation for an opening incident (ADR 0017).
+// Skill is "name@digest" so provenance is pinned.
+type SkillVerdict struct {
+	Verdict   string // malicious | suspicious | inconclusive | benign
+	Rationale string
+	Skill     string
+}
+
+// SkillTriager optionally annotates an opening incident with a Detection Skill verdict.
+//
+// The interface lives here, and returns a local type, so `detect` takes no dependency on the skill
+// machinery — the composition root supplies an implementation. It CANNOT veto an incident: the only
+// thing it returns is annotation. That is deliberate (see openNew) — a skill is third-party input,
+// and a verdict that could suppress an alert would be a mute button on the SOC.
+type SkillTriager interface {
+	// Triage returns an annotation for f, or ok=false when no skill matched or triage failed.
+	// Implementations must be best-effort: never block, never error the pass.
+	Triage(ctx context.Context, f types.Finding, siblings []types.Finding) (SkillVerdict, bool)
+}
+
 // Detector reconciles a tenant's findings into incidents.
 type Detector struct {
 	Store     Store
 	Recorder  *ledger.Recorder // optional: signs every open/resolve into the ledger
 	Alerter   Alerter          // optional: alerts a human when an incident opens
+	Triager   SkillTriager     // optional: annotates an opening incident with a Detection Skill verdict
 	Threshold types.Severity   // minimum severity to open an incident (default high)
 	// AlertCap bounds how many per-pass incident-opened alerts the Alerter fires. A bulk event (e.g.
 	// 300 accounts lose MFA in one IdP export) still OPENS every incident — they're all in the UI for
@@ -171,6 +193,19 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 			// low-confidence pattern_match as a verified incident (the "no high false positive" rule).
 			Verification: string(f.VerificationStatus), Confidence: f.Confidence,
 		}
+		// Detection Skill triage (ADR 0017): attach the detection engineer's reasoning to the alert so
+		// whoever is on shift inherits it instead of rediscovering it.
+		//
+		// Deliberately placed AFTER the incident is constructed, and structurally unable to prevent
+		// it: a verdict only fills annotation fields. A skill is third-party input, so a "benign"
+		// verdict must not be able to stop an incident from opening — that would hand anyone who can
+		// publish a skill a mute button on the SOC. Best-effort throughout: a triager that errors, or
+		// finds no matching skill, leaves the alert exactly as it is today.
+		if d.Triager != nil {
+			if v, ok := d.Triager.Triage(ctx, f, presentFindings(present)); ok {
+				inc.TriageVerdict, inc.TriageRationale, inc.TriageSkill = v.Verdict, v.Rationale, v.Skill
+			}
+		}
 		d.record("incident_opened", inc)
 		if err := d.Store.PutIncident(ctx, inc); err != nil {
 			return res, err
@@ -262,4 +297,16 @@ func (d *Detector) record(action string, inc platform.Incident) {
 		"incident_id": inc.ID, "tenant_id": inc.TenantID, "key": inc.Key,
 		"severity": inc.Severity, "finding_id": inc.FindingID,
 	}, inc.Status)
+}
+
+// presentFindings flattens the pass's findings into the evidence universe a skill may cite. A
+// verdict may only reference findings that were actually observed this pass (§10 grounding).
+func presentFindings(present map[string]types.Finding) []types.Finding {
+	out := make([]types.Finding, 0, len(present))
+	for _, f := range present {
+		out = append(out, f)
+	}
+	// Deterministic order so a prompt (and therefore a verdict) does not vary with map iteration.
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
