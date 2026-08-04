@@ -42,16 +42,19 @@ named human behind it, because `internal/grc` + `pkg/ledger` + the HITL desk alr
 
 ### The leverage stack (build order)
 
-1. **Consume** — a `SKILL.md` loader, so community skills run on our substrate. Fills our weakest link
-   with someone else's labour. *(This ADR.)*
-2. **Certify** — a skill verdict becomes compliance evidence across the 22 frameworks, signed, with a
-   named human. Cheapest unique differentiator; the machinery exists.
-3. **Convert** — export the 8 identity runbooks and 4 escalation trigger tables as skills. Mechanical,
-   seeds our library, and makes them customer-editable with no code change.
-4. **Compose** — skills are per-detection and single-surface; `crossdetect` correlates many verdicts
-   into one cross-surface attack path. We are the layer that makes N skills worth more than their sum.
+1. **Consume** ✅ — a `SKILL.md` loader, so community skills run on our substrate. Fills our weakest
+   link with someone else's labour. Wired at the composition root: `TSENGINE_SKILLS_DIR`, or the
+   bundled `./skills`, attached to `detect.Detector.Triager`.
+2. **Certify** ✅ — a skill verdict becomes compliance evidence across the 22 frameworks, with a named
+   human. `Certify` inherits controls from the cited findings and never invents one.
+3. **Convert** ✅ — the 8 identity runbooks are now 5 portable skills, authored around investigations
+   rather than 1:1 with rules. The 4 escalation trigger tables remain.
+4. **Compose** ✅ — skills are per-detection and single-surface; `ComposeChain` runs verdicts along a
+   `correlate.Chain` to produce **cross-surface corroboration**: two skills, different authors,
+   different systems, independently flagging two hops of one attack path. No single-detection skill
+   can observe that. Composition AGGREGATES but never ESCALATES beyond what its steps support.
 5. **Distribute** — publish our FP-free primitives (`bola_probe`, `privesc_probe`, `cloudiam.Authorize`,
-   reachability) so *other people's* skills call them. Load-bearing inside the standard.
+   reachability) so *other people's* skills call them. Load-bearing inside the standard. *(Open.)*
 
 ## The trust boundary (the part to get right)
 
