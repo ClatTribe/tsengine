@@ -58,7 +58,7 @@ export default function Landing() {
                 href="/product"
                 className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur transition hover:border-accent/40"
               >
-                <Sparkles className="h-3.5 w-3.5 text-accent" /> AI security HERE + compliance, human-in-the-loop
+                <Sparkles className="h-3.5 w-3.5 text-accent" /> AI security + compliance, human-in-the-loop
               </Link>
 
               <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
