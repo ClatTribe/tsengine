@@ -175,10 +175,28 @@ func (g *GitHub) Apply(ctx context.Context, c platform.Connection, token string,
 	if full == "" {
 		return fmt.Errorf("github: action missing full_name")
 	}
+	head := strFrom(a.Payload, "head")
+	base := nz(strFrom(a.Payload, "base"), "main")
+
+	// If the action carries patched file contents, COMMIT them to `head` first. Without this the PR
+	// referenced a branch nothing had created, so an "AI fix" could never actually carry a diff — the
+	// agent's patch had no path into the repository (see github_commit.go). Still HITL-gated: Apply is
+	// reached only after the desk approves, and the result is a PR a human reviews, never a write to
+	// the default branch.
+	if files := filesFrom(a.Payload); len(files) > 0 {
+		if head == "" {
+			return fmt.Errorf("github: a patch was supplied but the action has no head branch to commit it to")
+		}
+		msg := nz(strFrom(a.Payload, "commit_message"), nz(a.Title, "tsengine: security fix"))
+		if err := g.CommitFiles(ctx, token, full, base, head, msg, files); err != nil {
+			return err // surfaced, never a silent "fixed" (a 403 here = the App lacks contents: write)
+		}
+	}
+
 	body := pullRequestReq{
 		Title: nz(a.Title, "tsengine: verified security fix"),
-		Head:  strFrom(a.Payload, "head"),
-		Base:  nz(strFrom(a.Payload, "base"), "main"),
+		Head:  head,
+		Base:  base,
 		Body:  strFrom(a.Payload, "body"),
 	}
 	b, _ := json.Marshal(body)
