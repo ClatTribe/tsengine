@@ -263,21 +263,23 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                                                       // "search your cloud like a database" — query the inventory + relationships
 	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                                                         // third-party / vendor risk (TPRM) inventory → findings
 	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))                                             // endpoint/device posture (MDM-lite) inventory → findings
-	mux.HandleFunc("POST /v1/agents/ingest", d.auth(d.handleAgentPostureIngest))                                               // AI-agent estate posture (shadow AI + MCP supply chain) → findings
-	mux.HandleFunc("GET /v1/posture/sources", d.auth(d.handlePostureView))                                                     // unified vendor/device/cloud-drift posture-source view
-	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))                                                // list runtime-protection events
-	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                                                          // create + authorize a pentest engagement
-	mux.HandleFunc("POST /v1/assets/{id}/pentest", d.auth(d.handleCreatePentestFromAsset))                                     // create a pentest pre-scoped to an asset ("pentest this asset")
-	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                                                            // list engagements
-	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))                                                      // portfolio scorecard (verified_rate, SLA)
-	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))                                                         // one engagement + findings
-	mux.HandleFunc("GET /v1/pentest/{id}/readiness", d.auth(d.handlePentestReadiness))                                         // pre-flight: per-target ownership + consent + LLM-key status
-	mux.HandleFunc("GET /v1/pentest/{id}/progress", d.auth(d.handlePentestProgress))                                           // live run progress (requests sent / findings so far) for the watch-it-work view
-	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                                                    // run/retest the engagement (passive, RoE-gated)
-	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))                                               // the engagement's VAPT report (md/json)
-	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))                                            // HITL: named human signs the report → signed ledger
-	mux.HandleFunc("POST /v1/pentest/{id}/schedule", d.auth(d.handleSetPentestSchedule))                                       // set a recurring re-test cadence (safe passive re-verify)
-	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                                                                   // SSE live state feed
+	mux.HandleFunc("POST /v1/agents/ingest", d.auth(d.handleAgentPostureIngest))
+	// Live collector path: Uber ADR Sensor JSONL straight in (github.com/uber/ADR, Apache-2.0).
+	mux.HandleFunc("POST /v1/agents/telemetry", d.auth(d.handleAgentTelemetry))            // AI-agent estate posture (shadow AI + MCP supply chain) → findings
+	mux.HandleFunc("GET /v1/posture/sources", d.auth(d.handlePostureView))                 // unified vendor/device/cloud-drift posture-source view
+	mux.HandleFunc("GET /v1/runtime/events", d.auth(d.handleListRuntimeEvents))            // list runtime-protection events
+	mux.HandleFunc("POST /v1/pentest", d.auth(d.handleCreatePentest))                      // create + authorize a pentest engagement
+	mux.HandleFunc("POST /v1/assets/{id}/pentest", d.auth(d.handleCreatePentestFromAsset)) // create a pentest pre-scoped to an asset ("pentest this asset")
+	mux.HandleFunc("GET /v1/pentest", d.auth(d.handleListPentests))                        // list engagements
+	mux.HandleFunc("GET /v1/pentest/stats", d.auth(d.handlePentestStats))                  // portfolio scorecard (verified_rate, SLA)
+	mux.HandleFunc("GET /v1/pentest/{id}", d.auth(d.handleGetPentest))                     // one engagement + findings
+	mux.HandleFunc("GET /v1/pentest/{id}/readiness", d.auth(d.handlePentestReadiness))     // pre-flight: per-target ownership + consent + LLM-key status
+	mux.HandleFunc("GET /v1/pentest/{id}/progress", d.auth(d.handlePentestProgress))       // live run progress (requests sent / findings so far) for the watch-it-work view
+	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                // run/retest the engagement (passive, RoE-gated)
+	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))           // the engagement's VAPT report (md/json)
+	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))        // HITL: named human signs the report → signed ledger
+	mux.HandleFunc("POST /v1/pentest/{id}/schedule", d.auth(d.handleSetPentestSchedule))   // set a recurring re-test cadence (safe passive re-verify)
+	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                               // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("GET /v1/identities", d.auth(d.handleNonHumanIdentities)) // non-human / AI-agent identity posture (ACSP agentic lens)
