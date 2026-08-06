@@ -65,15 +65,22 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 // Anthropic, OpenAI, or a local Ollama). nil when neither is set. A tenant's OWN key is honoured on ANY
 // plan (they pay for it); the operator-global client is gated to AI-entitled plans.
 func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client {
-	if provider, model, key, ok := d.ResolveTenantLLM(ctx, tenantID); ok {
-		switch strings.ToLower(provider) {
+	// resolveTenantLLMConfig, NOT the ResolveTenantLLM wrapper: the wrapper returns only
+	// (provider, model, key) and DROPS cfg.BaseURL. That silently broke every self-hosted tenant —
+	// the switch below accepts ollama/vllm/lmstudio/openrouter, but an empty base URL sent their
+	// requests to the OpenAI default instead of their own endpoint. resolveAgentLLM already threads
+	// the URL (via ClientForURL); the tool-calling Lead was the one path that did not.
+	if cfg, key, ok := d.resolveTenantLLMConfig(ctx, tenantID); ok {
+		switch strings.ToLower(cfg.Provider) {
 		case "anthropic", "claude":
-			return l2.NewAnthropicClientWithKey(model, key) // customer's own Claude key → drives Triage/Investigate
+			return l2.NewAnthropicClientWithKey(cfg.Model, key) // customer's own Claude key → drives Triage/Investigate
 		case "gemini", "google", "googleai":
 			// Gemini exposes an OpenAI-compatible surface; route the tenant key there so tool-calling works.
-			return l2.NewOpenAICompatClient(model, "https://generativelanguage.googleapis.com/v1beta/openai", key)
+			// An explicit BaseURL still wins, so a proxy in front of Gemini is reachable.
+			return l2.NewOpenAICompatClient(cfg.Model, orDefault(cfg.BaseURL, "https://generativelanguage.googleapis.com/v1beta/openai"), key)
 		case "openai", "openai-compat", "ollama", "vllm", "openrouter", "lmstudio":
-			return l2.NewOpenAICompatClient(model, "", key) // tenant's OWN key → allowed on any plan
+			// cfg.BaseURL is the tenant's own endpoint; empty keeps the OpenAI default.
+			return l2.NewOpenAICompatClient(cfg.Model, cfg.BaseURL, key)
 		}
 	}
 	// Operator-global client → only for AI-entitled plans (the economic invariant: a Free tenant
@@ -241,4 +248,13 @@ func renderChains(chains []correlate.Chain) []string {
 		out = append(out, fmt.Sprintf("[%s] %s", ch.Severity, strings.Join(parts, " → ")))
 	}
 	return out
+}
+
+// orDefault returns v when set, else def. Used so an explicitly-configured endpoint always wins over
+// a provider's vendor default — a tenant fronting a cloud model with their own proxy must be reached.
+func orDefault(v, def string) string {
+	if strings.TrimSpace(v) != "" {
+		return v
+	}
+	return def
 }

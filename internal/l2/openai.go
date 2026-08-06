@@ -258,3 +258,10 @@ func ClientFromEnv() Client {
 	}
 	return nil
 }
+
+// BaseURL returns the resolved endpoint this client will call.
+//
+// Exported deliberately: the endpoint being silently wrong is the exact failure this accessor makes
+// testable — a self-hosted tenant's requests went to the OpenAI default because the base URL was
+// dropped upstream, and nothing surfaced it. Callers can now assert where traffic actually goes.
+func (c *OpenAICompatClient) BaseURL() string { return c.baseURL }
