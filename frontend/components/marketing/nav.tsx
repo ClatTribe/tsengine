@@ -45,7 +45,10 @@ const COMPLIANCE: Item[] = [
 ];
 const AGENT_CONTROLS: Item = { href: "/agent-controls", label: "AI agent controls", desc: "Kill-switch, isolation, human gate, signed log", icon: ShieldCheck };
 // The combined "Security" set for the mobile accordion (personas + coverage + controls under one heading).
-const SECURITY_MOBILE: Item[] = [...PERSONAS, ...COVERAGE, AGENT_CONTROLS];
+// Mobile has no mega-menu room, so the hub link matters MORE here: it is the only route to the
+// surfaces and comparisons that do not fit in the list.
+const SOLUTIONS_HUB: Item = { href: "/solutions", label: "All solutions", desc: "By scenario, by surface, or vs what you use today", icon: Layers };
+const SECURITY_MOBILE: Item[] = [...PERSONAS, ...COVERAGE, AGENT_CONTROLS, SOLUTIONS_HUB];
 
 // Free tools — the founder ICP's top-of-funnel hook. Lead with the questionnaire scan.
 const TOOLS: Item[] = [
@@ -423,6 +426,22 @@ function SolutionsMenu({
                 </span>
               </Link>
             </div>
+
+            {/* Route to the hub. A menu can only ever show a handful of pages, so without this the
+                other surfaces (web, API, containers, network, domains, mobile, CI/CD) and every
+                competitor comparison stay unreachable from the nav — written, indexed by search, and
+                invisible to anyone actually browsing. The hub also lets a visitor enter by SCENARIO
+                or by ALTERNATIVE, not only by the product taxonomy this menu is organised around. */}
+            <Link
+              href="/solutions"
+              className="mt-3 flex items-center justify-between rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2.5 transition hover:border-accent/50"
+            >
+              <span className="text-sm">
+                <span className="font-medium text-ink">Browse all solutions</span>
+                <span className="ml-2 text-xs text-muted">by scenario · by surface · vs alternatives</span>
+              </span>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-faint" />
+            </Link>
           </div>
         </div>
       )}

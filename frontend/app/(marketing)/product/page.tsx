@@ -6,6 +6,8 @@ import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/framework
 import { ASSET_SURFACES } from "@/lib/assets";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { Reveal } from "@/components/marketing/reveal";
+import { PlatformOverview } from "@/components/marketing/platform-overview";
+import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 
 export const metadata = pageMeta({
   title: "Product — how TensorShield works",
@@ -110,6 +112,13 @@ export default function Product() {
 
       {/* Compliance coverage */}
       <ComplianceBand />
+
+      {/* The whole product in one view: the five surfaces + the HITL spine. Lives HERE rather than on
+          the homepage — this is the page someone opens when they've decided they want the detail. */}
+      <PlatformOverview />
+
+      {/* Every product + asset feeds one finding graph (better detection AND better compliance). */}
+      <UnifiedPlatform />
 
       {/* Personas */}
       <section className="mx-auto max-w-6xl px-5 py-20">
