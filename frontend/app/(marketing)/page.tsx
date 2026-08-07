@@ -8,12 +8,9 @@ import { ProviderIcon } from "@/components/brand/provider-icon";
 import { AttackPathHero } from "@/components/marketing/attack-path-hero";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
-import { EngageModels } from "@/components/marketing/engage-models";
 import { Prioritize } from "@/components/marketing/prioritize";
-import { PlatformOverview } from "@/components/marketing/platform-overview";
-import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 import { ArchStack } from "@/components/marketing/arch-stack";
-import { AgenticActions } from "@/components/marketing/agentic-actions";
+import { SCENARIOS, SURFACES, ALTERNATIVES } from "@/lib/solutions";
 
 const HOME_TITLE = "TensorShield — one AI engineer that finds the attack path across code, cloud, and SaaS";
 const HOME_DESCRIPTION =
@@ -106,9 +103,6 @@ export default function Landing() {
       {/* The architecture, made legible — a free substrate + the two AI teammates + a human who signs.
           (Was a black box; the AI Pentester was absent above the fold.) */}
       <ArchStack />
-
-      {/* The interaction model — one-click agentic actions (auto-fix, launch a pentest…), not a chat box. */}
-      <AgenticActions />
 
       {/* USP #1 — we prioritize the alerts so you don't have to (noise-reduction funnel) */}
       <Prioritize />
@@ -208,9 +202,6 @@ export default function Landing() {
         </Reveal>
       </section>
 
-      {/* Two ways to engage — the two-sided GTM (bring your own expert, or use ours) */}
-      <EngageModels />
-
       {/* How it works */}
       <Section eyebrow="How it works" title="Set up once. It runs itself." sub="Connect a system and the agent takes it from there — you stay in control of anything risky.">
         <div className="grid gap-5 md:grid-cols-3">
@@ -233,14 +224,13 @@ export default function Landing() {
         </div>
       </Section>
 
-      {/* Platform overview — the whole product in one view: the five surfaces + the HITL spine */}
-      <PlatformOverview />
-
-      {/* Unified platform — every product + asset feeds one finding graph (better detection + compliance) */}
-      <UnifiedPlatform />
-
-      {/* Compare — the category wedge */}
-      <Compare />
+      {/* Where do you want to start — the router.
+          This replaced three consecutive sections that each re-argued "we are one platform"
+          (platform overview, unified graph, competitor table). Restating the same claim three times
+          doesn't make it more convincing; it just makes the page longer. The visitor's next question
+          isn't "is it one platform?" — it's "which of my problems does this solve?", and that has
+          three different answers depending on who's asking. So we ask, instead of telling. */}
+      <SolutionsRouter />
 
       {/* Trust / signed evidence */}
       <section className="bg-surface">
@@ -295,9 +285,85 @@ export default function Landing() {
   );
 }
 
+// SolutionsRouter — the homepage's hand-off.
+//
+// A landing page can only make one argument well. Ours is the wedge (hero) plus the two things that
+// actually differentiate us (we prioritise; we ship the fix). Everything after that is a DIFFERENT
+// visitor's question, and the honest move is to route rather than to keep talking.
+//
+// The three lanes mirror /solutions exactly — someone arrives with a situation, a surface, or an
+// incumbent they're comparing against. We show a few of each and link to the full hub, so the page
+// stays short while every one of the 39 marketing pages stays one or two clicks away.
+function SolutionsRouter() {
+  const lanes = [
+    {
+      href: "/solutions#scenarios",
+      eyebrow: "By situation",
+      title: "Something forced the issue",
+      items: SCENARIOS.slice(0, 3),
+    },
+    {
+      href: "/solutions#surfaces",
+      eyebrow: "By surface",
+      title: "You know the gap already",
+      items: SURFACES.slice(0, 3),
+    },
+    {
+      href: "/solutions#alternatives",
+      eyebrow: "By alternative",
+      title: "You're comparing us to something",
+      items: ALTERNATIVES.slice(0, 3),
+    },
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-5 py-20">
+      <Reveal className="mx-auto mb-12 max-w-2xl text-center">
+        <span className="text-xs font-semibold uppercase tracking-wider text-accent">Where to start</span>
+        <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
+          What brought you here?
+        </h2>
+        <p className="mt-3 text-base leading-relaxed text-muted">
+          People arrive at this from very different places. Pick whichever sounds like you — each one
+          lands on a page written for that question, not a generic tour.
+        </p>
+      </Reveal>
+
+      <Reveal delay={70} className="grid gap-5 md:grid-cols-3">
+        {lanes.map((lane) => (
+          <div key={lane.href} className="card flex flex-col p-6">
+            <span className="text-xs font-semibold uppercase tracking-wider text-faint">{lane.eyebrow}</span>
+            <h3 className="mt-2 text-lg font-semibold leading-snug">{lane.title}</h3>
+            <ul className="mt-4 flex-1 space-y-2.5">
+              {lane.items.map((it) => (
+                <li key={it.href}>
+                  <Link
+                    href={it.href}
+                    className="group flex items-start gap-2 text-sm leading-relaxed text-muted transition hover:text-ink"
+                  >
+                    <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
+                    <span>{it.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href={lane.href}
+              className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline"
+            >
+              See all <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        ))}
+      </Reveal>
+    </section>
+  );
+}
+
 // Compare — the category wedge. SMB buyers are choosing between a compliance platform, a
 // point scanner, and hiring. We're the one box that does all three, autonomously. Honest
 // category comparison (capabilities vary by vendor/plan — footnoted), no fabricated metrics.
+// Still rendered on /pricing and /vapt, where a buyer is explicitly weighing options; it left the
+// homepage because a cold visitor hasn't yet decided they're shopping in this category at all.
 function Compare() {
   const cols = [
     { name: "TensorShield", sub: "the autonomous team", highlight: true },
