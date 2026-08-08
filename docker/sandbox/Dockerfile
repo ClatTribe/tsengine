@@ -55,7 +55,8 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/anchore/grype/cm
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/projectdiscovery/httpx/cmd/httpx@latest \
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/goodwithtech/dockle/cmd/dockle@latest \
     && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/projectdiscovery/katana/cmd/katana@latest \
-    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/securego/gosec/v2/cmd/gosec@latest
+    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install github.com/securego/gosec/v2/cmd/gosec@latest \
+    && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go install golang.org/x/vuln/cmd/govulncheck@latest
 
 # naabu — fast port scanner, the ip_address recon tool (A1). Requires
 # libpcap + CGO (unlike the other ProjectDiscovery tools). Our wrapper
@@ -177,6 +178,13 @@ COPY --from=builder /go/bin/cloudfox /usr/local/bin/cloudfox
 COPY --from=builder /go/bin/ffuf /usr/local/bin/ffuf
 COPY --from=builder /go/bin/kr /usr/local/bin/kr
 COPY --from=builder /go/bin/cosign /usr/local/bin/cosign
+# gosec was `go install`ed in the builder but never copied here, so the wrapper's exec("gosec") could
+# only ever fail — registered and dispatchable on both sides, yet unrunnable. govulncheck (repository
+# escalation: the Go module/stdlib advisory check) was registered on both sides but its binary was
+# missing from this image entirely. Registration parity is necessary but NOT sufficient: the binary has
+# to be in the final stage too, which is what internal/toolsbundle's image-coverage test now asserts.
+COPY --from=builder /go/bin/gosec /usr/local/bin/gosec
+COPY --from=builder /go/bin/govulncheck /usr/local/bin/govulncheck
 
 # ffuf content-discovery wordlist (SecLists common.txt). Not packaged for
 # Ubuntu, so fetch the single list to the path the ffuf wrapper defaults to.
