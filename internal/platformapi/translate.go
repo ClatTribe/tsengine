@@ -136,6 +136,10 @@ func (d Deps) runEstateAgent(ctx context.Context, tenantID string, client l2.Cli
 	// Code-depth delegation: when a GitHub repo is connected, the generalist can call investigate_code to
 	// run the code specialist over its live source. nil when no connected repo → tool not exposed (cap-safe).
 	dep.CodeInvestigator = d.codeInvestigator(tenantID)
+	// The ACTING half of the belt: search the estate, propose a fix, request proof, check a fix, file a
+	// ticket. This is what makes the Lead an engineer rather than an analyst — every other tool it has
+	// is read-only or writes only to our own store. Phase-scoped in BuildCatalog so the ≤12 cap holds.
+	dep.Engineer = d.EngineerCatalog(tenantID)
 	budget := l2.DefaultBudget()
 	budget.MaxIterations = maxIter
 	agent, err := l2.New(client, l2.BuildCatalog(dep), budget)
