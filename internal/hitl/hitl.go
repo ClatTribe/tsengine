@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -102,6 +103,12 @@ type Verdict struct {
 	Approver string
 	Approve  bool
 	Edit     map[string]any // optional payload overrides (e.g. tweak the PR branch)
+	// RequestChanges is the third verdict — "almost, change this". It is checked BEFORE Approve, so a
+	// malformed verdict with both set can only ever withhold an apply, never cause one.
+	RequestChanges bool
+	// Feedback is what to change. Required when RequestChanges is set: "change this" with no "this"
+	// is indistinguishable from a rejection and leaves the next proposal nothing to act on.
+	Feedback string
 }
 
 // Decide records a human's verdict on a pending action. Approve → apply (via the
@@ -116,6 +123,24 @@ func (d *Desk) Decide(ctx context.Context, tenantID, actionID string, v Verdict)
 	}
 	if v.Approver == "" {
 		return a, fmt.Errorf("hitl: a decision needs an approver")
+	}
+	// Changes-requested is handled FIRST and returns early: it is the only verdict that leaves the
+	// action open, so it must not fall through into the approve/reject paths that close it. Checking it
+	// before Approve also means a verdict with both flags set degrades to withholding the apply.
+	if v.RequestChanges {
+		if strings.TrimSpace(v.Feedback) == "" {
+			return a, fmt.Errorf("hitl: requesting changes needs feedback saying what to change")
+		}
+		a.Status = platform.ActChangesRequested
+		a.Feedback = strings.TrimSpace(v.Feedback)
+		a.ReviewedBy = v.Approver
+		a.ReviewedAt = d.now()
+		// Deliberately NOT setting Approver/DecidedAt — the action is not decided, it is sent back.
+		if err := d.Store.PutAction(ctx, a); err != nil {
+			return a, err
+		}
+		d.record("changes_requested", a, v.Approver)
+		return a, nil
 	}
 	a.Approver = v.Approver
 	a.DecidedAt = d.now()

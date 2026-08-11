@@ -540,6 +540,18 @@ const (
 	ActApproved        = "approved"
 	ActApplied         = "applied"
 	ActRejected        = "rejected"
+	// ActChangesRequested is the reviewer's THIRD verdict, and the one a senior engineer actually
+	// reaches for most often: "almost — change this."
+	//
+	// With only approve/reject, a reviewer who spots one wrong line has to destroy the whole proposal
+	// to say so. That trains two bad habits: rubber-stamping (rejecting throws away work that was 90%
+	// right) and disengagement (the desk stops being worth reading). Both turn human-in-the-loop into
+	// theatre, which is the opposite of the §18.2 inv. 3 intent.
+	//
+	// A changes-requested action is NOT applied and NOT closed: it stays actionable, carries the
+	// reviewer's Feedback, and can be re-proposed. The gate is unchanged — this verdict can only ever
+	// withhold an apply, never cause one.
+	ActChangesRequested = "changes_requested"
 )
 
 // Action is a remediation the agent proposes. Tier is the autonomy tier (§3 of the
@@ -561,6 +573,24 @@ type Action struct {
 	Payload      map[string]any `json:"payload,omitempty"`
 	Approver     string         `json:"approver,omitempty"`
 	LedgerRef    string         `json:"ledger_ref,omitempty"`
+	// Diff is the unified diff this action would apply, rendered for a human to READ before
+	// approving. It exists because the payload is an untyped map: a reviewer approving an ActOpenPR
+	// was approving a code change they could not see, which is not a review — it is a signature.
+	//
+	// Empty for actions that change no code (a ticket, a notification draft). Never a substitute for
+	// the payload: the payload is what gets applied, Diff is the human-readable rendering of it, so a
+	// mismatch is a rendering bug and can never alter what is executed.
+	Diff string `json:"diff,omitempty"`
+	// Feedback is the reviewer's note when they request changes — the "change this one thing" that
+	// approve/reject cannot express. Carried back so the next proposal can act on it.
+	Feedback string `json:"feedback,omitempty"`
+	// ReviewedBy / ReviewedAt record who asked for changes and when. Distinct from Approver/DecidedAt,
+	// which mean the action was finally decided; a changes-requested action is still open.
+	ReviewedBy string    `json:"reviewed_by,omitempty"`
+	ReviewedAt time.Time `json:"reviewed_at,omitempty"`
+	// Supersedes is the id of the action this one re-proposes after changes were requested, so the
+	// desk shows a review THREAD rather than two unrelated rows.
+	Supersedes string `json:"supersedes,omitempty"`
 	// FindingKeys are the STABLE identities (rule_id|endpoint) of the findings this action
 	// resolves — captured at propose time so the fix can be re-tested after it's applied. Stable
 	// across scans (finding IDs are regenerated per scan; keys are not). Drives FixVerification.

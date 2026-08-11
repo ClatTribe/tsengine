@@ -83,13 +83,20 @@ func (d Deps) handleApprovalDecide(w http.ResponseWriter, r *http.Request, tenan
 		Approver string         `json:"approver"`
 		Approve  bool           `json:"approve"`
 		Edit     map[string]any `json:"edit,omitempty"`
+		// The third verdict: send it back for rework instead of destroying a proposal that was
+		// mostly right (platform.ActChangesRequested).
+		RequestChanges bool   `json:"request_changes,omitempty"`
+		Feedback       string `json:"feedback,omitempty"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("bad body: "+err.Error()))
 		return
 	}
 	act, err := d.Desk.Decide(r.Context(), tenantID, r.PathValue("id"),
-		hitl.Verdict{Approver: body.Approver, Approve: body.Approve, Edit: body.Edit})
+		hitl.Verdict{
+			Approver: body.Approver, Approve: body.Approve, Edit: body.Edit,
+			RequestChanges: body.RequestChanges, Feedback: body.Feedback,
+		})
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
 		return
