@@ -69,7 +69,7 @@ func cwemapCmd(argv []string) error {
 	}
 
 	if *out != "" {
-		if werr := os.WriteFile(*out, []byte(table), 0o644); werr != nil {
+		if werr := os.WriteFile(*out, []byte(table), 0o644); werr != nil { //nolint:gosec // bench artifact
 			return werr
 		}
 		fmt.Fprintf(os.Stderr, "wrote %s\n", *out)
