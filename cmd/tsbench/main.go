@@ -136,6 +136,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench localize: %v\n", err)
 			os.Exit(1)
 		}
+	case "triage":
+		if err := triageCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench triage: %v\n", err)
+			os.Exit(1)
+		}
 	case "cwemap":
 		if err := cwemapCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench cwemap: %v\n", err)
