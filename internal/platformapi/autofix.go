@@ -7,6 +7,8 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/types"
+
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 // handleAutofix (POST /v1/findings/{id}/autofix) is the AI autofix agent — competitor parity with Snyk
@@ -18,7 +20,7 @@ import (
 // no LLM → 400. Grounded (§10): the prompt cites the real finding; the model never invents a vuln.
 func (d Deps) handleAutofix(w http.ResponseWriter, r *http.Request, tenantID string) {
 	id := r.PathValue("id")
-	llm := d.resolveAgentLLM(r.Context(), tenantID)
+	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleCode)
 	if llm == nil {
 		writeJSON(w, http.StatusBadRequest, errBody("AI autofix needs an LLM: configure one in Settings → LLM, or set LLM_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
 		return
