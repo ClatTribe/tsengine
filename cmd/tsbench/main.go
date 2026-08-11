@@ -136,6 +136,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench localize: %v\n", err)
 			os.Exit(1)
 		}
+	case "cvepatch":
+		if err := cvepatchCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench cvepatch: %v\n", err)
+			os.Exit(1)
+		}
 	case "scorecard":
 		if err := scorecardCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench scorecard: %v\n", err)
