@@ -338,6 +338,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ approver, approve }),
     }),
+  // The third verdict — "almost, change this". Sends the proposal back with a note instead of
+  // destroying work that was mostly right. The action stays open; nothing is applied.
+  requestChanges: (id: string, feedback: string, approver: string) =>
+    call<Action>(`/v1/approvals/${id}`, {
+      method: "POST",
+      body: JSON.stringify({ approver, request_changes: true, feedback }),
+    }),
   // 202 + a job (async, the platform default) or { assets_scanned } (synchronous fallback).
   rescan: () => call<{ assets_scanned?: number; id?: string; status?: string; kind?: string }>("/v1/rescan", { method: "POST" }),
 

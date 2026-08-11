@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine } from "lucide-react";
+import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine, MessageSquare } from "lucide-react";
 import type { Action, Finding } from "@/lib/types";
-import { decideAction } from "@/app/(app)/inbox/actions";
+import { decideAction, requestChangesAction } from "@/app/(app)/inbox/actions";
 import { SeverityBadge } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
@@ -267,6 +267,24 @@ function DetailPane({
             <div className="text-sm text-faint">No additional detail provided.</div>
           )}
         </section>
+
+        {/* The code itself. Approving a change you cannot see is a signature, not a review — so when
+            the action carries a diff, it leads. */}
+        {action.diff && <DiffView diff={action.diff} />}
+
+        {/* A returned proposal shows what was asked for, so the reviewer sees the thread rather than
+            an unexplained second attempt. */}
+        {action.feedback && (
+          <section>
+            <div className="mb-2 text-xs uppercase tracking-wider text-muted">Changes requested</div>
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+              <p className="text-sm text-ink">{action.feedback}</p>
+              {action.reviewed_by && (
+                <div className="mt-1.5 text-xs text-faint">— {action.reviewed_by}</div>
+              )}
+            </div>
+          </section>
+        )}
       </div>
 
       {/* Actions */}
@@ -279,6 +297,9 @@ function DetailPane({
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : sign ? <PenLine className="h-4 w-4" /> : <Check className="h-4 w-4" />}
           {sign ? "Sign & file" : "Approve"} <kbd className="mono ml-1 rounded border border-pulse/30 px-1 text-[10px]">a</kbd>
         </button>
+        {/* The verdict a senior engineer reaches for most often. Without it, spotting one wrong line
+            means destroying a proposal that was 90% right — which trains rubber-stamping. */}
+        <RequestChangesButton actionId={action.id} disabled={pending} />
         <button
           disabled={pending}
           onClick={() => onDecide(action.id, false)}
@@ -293,5 +314,107 @@ function DetailPane({
         </div>
       </div>
     </>
+  );
+}
+
+// DiffView renders the unified diff the action would apply.
+//
+// This is the difference between a review and a signature. The colouring is deliberately plain —
+// added/removed/context — because a reviewer scanning for one wrong line needs contrast, not syntax
+// highlighting. Long diffs scroll inside their own box so the panel never grows unbounded.
+function DiffView({ diff }: { diff: string }) {
+  const lines = diff.split("\n");
+  return (
+    <section>
+      <div className="mb-2 text-xs uppercase tracking-wider text-muted">The change</div>
+      <div className="max-h-80 overflow-auto rounded-lg border border-border bg-bg">
+        <pre className="mono min-w-max p-3 text-[11px] leading-relaxed">
+          {lines.map((l, i) => {
+            const kind =
+              l.startsWith("+++") || l.startsWith("---")
+                ? "text-faint"
+                : l.startsWith("@@")
+                  ? "text-accent"
+                  : l.startsWith("+")
+                    ? "bg-pulse/10 text-pulse"
+                    : l.startsWith("-")
+                      ? "bg-critical/10 text-critical"
+                      : "text-muted";
+            return (
+              <div key={i} className={cn("px-1", kind)}>
+                {l || " "}
+              </div>
+            );
+          })}
+        </pre>
+      </div>
+    </section>
+  );
+}
+
+// RequestChangesButton opens a note box and sends the proposal BACK — it is not applied and not
+// closed, so the agent can re-propose against the feedback.
+function RequestChangesButton({ actionId, disabled }: { actionId: string; disabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3.5 py-2 text-sm font-medium text-amber-600 transition hover:bg-amber-500/20 disabled:opacity-50 dark:text-amber-400"
+      >
+        <MessageSquare className="h-4 w-4" />
+        Request changes
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-1 items-start gap-2">
+      <div className="flex-1">
+        <textarea
+          autoFocus
+          rows={2}
+          value={note}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setErr(null);
+          }}
+          placeholder="What should change? e.g. parameterise the ORDER BY clause too"
+          className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
+        />
+        {err && <div className="mt-1 text-xs text-critical">{err}</div>}
+      </div>
+      <button
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          const res = await requestChangesAction(actionId, note);
+          setBusy(false);
+          if (res?.error) {
+            setErr(res.error);
+            return;
+          }
+          setOpen(false);
+          setNote("");
+        }}
+        className="flex items-center gap-2 rounded-lg bg-amber-500/15 px-3.5 py-2 text-sm font-medium text-amber-600 transition hover:bg-amber-500/25 disabled:opacity-50 dark:text-amber-400"
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+        Send back
+      </button>
+      <button
+        onClick={() => {
+          setOpen(false);
+          setErr(null);
+        }}
+        className="rounded-lg px-3 py-2 text-sm text-muted transition hover:text-ink"
+      >
+        Cancel
+      </button>
+    </div>
   );
 }
