@@ -49,6 +49,32 @@ so this is a real separation rather than sampling noise on a 6-scenario corpus.
 Foundation-Sec added nothing at the median, and in one of three trials it went **negative** (0.50 vs
 the substrate's 0.67) — it actively displaced correct heuristic rankings.
 
+### The gap is partly formatting, not only reasoning
+
+`+0.00 lift` is an ambiguous number, and it took a second look to see why. `LLMLocalizer` degrades
+**silently** to the heuristic when a model errors or returns an unparseable proposal (deliberate — a
+broken model must never yield a falsely-confident ranking). So a model that never produced a usable
+answer scores EXACTLY the substrate, which is indistinguishable from one that reasoned well and simply
+agreed with it.
+
+Measuring the parse rate separates them:
+
+| Arm | usable proposals (observed) |
+|---|---|
+| `qwen3:8b` | 6/6 |
+| `foundation-sec-8b` | 5/6, then 6/6 on a re-run — **intermittent**, and a different scenario each time |
+
+So Foundation-Sec did genuinely reason on most scenarios — traces show its proposals grounded and
+kept, it was simply ranking worse — but it *intermittently* emits output the harness cannot parse and
+falls back. The rate is somewhere around zero-to-one scenario in six and is not stable enough from
+these runs to quote as a figure; the point is that it is **nonzero for one arm and zero for the
+other**, so part of the headline gap is format adherence rather than security reasoning.
+
+That distinction matters for the conclusion. The defensible claim is *"weaker at this task, with a
+real instruction-format weakness"* — not the flat *"the security model does not help"* the headline
+number alone implies. `TestLocalizeParseRate` now reports this so a future comparison cannot repeat
+the conflation.
+
 ## Why this is the expected result
 
 Localization is *code navigation*: following untrusted data across a file boundary to the sink. That
@@ -74,6 +100,10 @@ Stated plainly, because it is the more interesting half:
 2. **It is not a verdict on Foundation-Sec.** It is a verdict on Foundation-Sec *for localization*.
 3. **N=6.** Non-overlapping ranges across 3 trials make the direction credible; the exact magnitudes
    should not be quoted precisely.
+4. **The result is confounded by output format.** ~1 scenario in 6 was unparseable (above), so the
+   measured gap mixes ranking quality with instruction-format adherence. A prompt or grammar tuned to
+   this model's output style would likely close part — not necessarily all — of the difference. Anyone
+   re-running this should check parse rate first and treat a low one as a harness problem.
 
 ## Reproducing
 
