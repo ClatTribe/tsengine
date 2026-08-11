@@ -47,6 +47,11 @@ func triageCmd(argv []string) error {
 				return err
 			}
 			scores = append(scores, s)
+			// The TUNED arm: the same model, with the deterministic disposer the benchmark said it needs.
+			if cs, cmisses, cerr := bench.ScoreTriage(ctx, bench.ComposedTriager{Model: bench.LLMTriager{LLM: llm, Label: lbl}}, cases); cerr == nil {
+				scores = append(scores, cs)
+				_ = cmisses
+			}
 			if len(misses) > 0 {
 				fmt.Fprintln(os.Stderr, "\nwhere the model went wrong:")
 				for _, m := range misses {

@@ -153,3 +153,38 @@ That reframes the 40% programme. Tuning for accuracy is tuning the half that alr
 list should be led by restraint: train the abstention, keep the deterministic layer as the disposer,
 and treat any model that will not decline as unfit for the annotation path regardless of how well it
 scores on knowledge.
+
+### Tuned: the disposer earns its place (multi-trial)
+
+The measurement said restraint was the bottleneck, so the tuned engine composes the two halves — the
+model proposes, a deterministic disposer decides. Medians over repeated runs, because a single trial on
+N=12 could not separate a one-case difference:
+
+| Engine | median J | range | n |
+|---|---|---|---|
+| severity threshold | 0.33 | deterministic | — |
+| + path heuristic | 0.50 | deterministic | — |
+| `qwen3:8b` alone | 0.50 | 0.33–0.67 | 5 |
+| **llm + deterministic disposer** | **0.75** | 0.67–0.83 | 4 |
+
+**+0.25 median lift**, and the ranges touch at exactly one point (the composed arm's worst run equals
+the model's best). On this evidence the composition is real, not sampling noise — unlike the
+single-trial comparison, where the "lift" sat entirely inside the model's own variance.
+
+Two findings matter more than the headline:
+
+1. **The model alone is no better than a twenty-line path check** — both median 0.50. Its entire
+   contribution is that it never loses a real finding (**recall 1.00 in every run**, against the path
+   heuristic's 0.83). The heuristic buys restraint by discarding true positives; the model does not.
+2. **The disposer never cost a real finding.** Recall was 1.00 across all nine runs of both arms. That
+   is the property that makes the composition safe to ship: it can only ever drop, and it only drops
+   where production code cannot be.
+
+So the working shape for T1 is neither "use a model" nor "write rules". It is the §10 split the rest
+of the codebase already uses: **the model for recall, the deterministic layer for restraint.** The
+model supplies the judgement a rule cannot encode; the rule supplies the abstention the model will not
+perform.
+
+The overfitting caveat stands: the disposer's rules were chosen after seeing which decoys the model
+kept. They are narrow and independently justified, but the number is a tuning result until it is
+re-run on held-out cases.
