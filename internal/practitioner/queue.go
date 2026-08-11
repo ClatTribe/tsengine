@@ -15,12 +15,18 @@ import (
 type Pending struct {
 	TenantID   string   `json:"tenant_id"`
 	TenantName string   `json:"tenant_name"`
-	Kind       string   `json:"kind"`               // risk | audit | pentest | policy
+	Kind       string   `json:"kind"`               // action | risk | audit | pentest | policy
 	ItemID     string   `json:"item_id"`            // the underlying entity id — lets the operator act on it from the desk
 	Controls   []string `json:"controls,omitempty"` // for audits: the control ids still awaiting attestation (act-on-behalf)
 	Title      string   `json:"title"`
 	Detail     string   `json:"detail,omitempty"`
 	Link       string   `json:"link"` // the in-app path to act on it
+	// Diff is the code change a remediation would apply, so the desk can show WHAT is being approved
+	// rather than only its title. Empty for the ceremonies that change no code.
+	Diff string `json:"diff,omitempty"`
+	// Feedback is a reviewer's "change this" note on an action that was sent back — it belongs in the
+	// queue so a returned proposal reads as part of a thread, not as a fresh item.
+	Feedback string `json:"feedback,omitempty"`
 }
 
 // TenantData is one assigned tenant's HITL-relevant state. The caller loads it tenant-scoped (it is
@@ -34,6 +40,12 @@ type TenantData struct {
 	Audits     []platform.AuditEngagement
 	Pentests   []pentest.Engagement
 	Policies   []platform.Policy
+	// Actions are the remediations queued at the HITL desk. This was the conspicuous omission: the
+	// desk aggregated the four judgement ceremonies (risk, audit, pentest sign-off, policy publish)
+	// but not the one a practitioner meets MOST OFTEN — "should this fix be applied?". The result was
+	// two half-views of the same job: the operator's queue had everything except approvals, and the
+	// tenant's inbox had approvals and nothing else. Neither answered "what needs a human right now".
+	Actions []platform.Action
 }
 
 // Queue aggregates the pending HITL items across the assigned tenants, each filtered to the
@@ -43,6 +55,21 @@ func Queue(data []TenantData) []Pending {
 	var out []Pending
 	for _, td := range data {
 		want := scopeSet(td.Scope)
+		// Remediation approvals lead, because they are the item a practitioner meets most often and
+		// the only one with a real deadline attached — a queued fix is a vulnerability still open.
+		if want("action") {
+			for _, a := range td.Actions {
+				detail, ok := actionDetail(a)
+				if !ok {
+					continue
+				}
+				out = append(out, Pending{
+					TenantID: td.TenantID, TenantName: td.TenantName, Kind: "action", ItemID: a.ID,
+					Title: actionTitle(a), Detail: detail, Link: "/inbox",
+					Diff: a.Diff, Feedback: a.Feedback,
+				})
+			}
+		}
 		if want("risk") {
 			for _, r := range td.Risks {
 				if r.Proposed || r.Status == platform.RiskOpen {
@@ -93,6 +120,11 @@ func scopeSet(scope []string) func(kind string) bool {
 		case "vciso":
 			allowed["risk"] = true
 			allowed["policy"] = true
+		case "security":
+			// A security-scoped practitioner owns the remediation queue and the pentest sign-off —
+			// the hands-on half, as distinct from the vCISO judgement half above.
+			allowed["action"] = true
+			allowed["pentest"] = true
 		default:
 			allowed[s] = true
 		}
@@ -118,4 +150,36 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(d)
+}
+
+// actionDetail describes what the practitioner is being asked for, and reports whether the action
+// belongs in the queue at all.
+//
+// Only two states are genuinely awaiting a person:
+//
+//	pending_approval   nobody has looked at it yet
+//	changes_requested  a reviewer sent it back and it is waiting on a revised proposal
+//
+// Everything else — proposed (not yet gated), approved, applied, rejected — is either the agent's turn
+// or already settled, and listing it would pad the desk with work that is not work. A queue that shows
+// resolved items is a queue people stop reading.
+func actionDetail(a platform.Action) (string, bool) {
+	switch a.Status {
+	case platform.ActPendingApproval:
+		if a.Tier >= platform.TierIrreversible {
+			return "irreversible — needs a named signature", true
+		}
+		return "fix awaiting your approval", true
+	case platform.ActChangesRequested:
+		return "sent back for changes — awaiting a revised proposal", true
+	}
+	return "", false
+}
+
+// actionTitle prefers the action's own title and falls back to its kind, so a row is never blank.
+func actionTitle(a platform.Action) string {
+	if a.Title != "" {
+		return a.Title
+	}
+	return a.Kind
 }
