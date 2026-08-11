@@ -1,0 +1,77 @@
+[
+  {
+    "id": "seed-path-traversal-node",
+    "cve": "n/a \u2014 first-party seed",
+    "fix_commit": "n/a",
+    "lang": "js",
+    "class": "lfi",
+    "endpoint": "readTemplate(name)",
+    "detail": "readTemplate joins a caller-supplied name onto the template root without rejecting parent-directory segments, so a caller can read files outside the root.",
+    "vuln_files": [
+      {
+        "path": "lib/templates.js",
+        "content": "const path = require('path');\nconst fs = require('fs');\n\nconst ROOT = path.join(__dirname, 'templates');\n\nfunction readTemplate(name) {\n  const p = path.join(ROOT, name);\n  return fs.readFileSync(p, 'utf8');\n}\n\nmodule.exports = { readTemplate, ROOT };\n"
+      }
+    ],
+    "gold_files": [
+      "lib/templates.js"
+    ],
+    "verify": {
+      "runtime": "node",
+      "ext": "js",
+      "aux_files": {
+        "lib/templates/welcome.txt": "hello from the template\n",
+        "lib/secret.txt": "TOP_SECRET_VALUE\n"
+      },
+      "driver": "const path = require('path');\nconst fs = require('fs');\nconst m = require('./lib/templates.js');\n\nlet exploited = false;\ntry {\n  const out = m.readTemplate('../secret.txt');\n  if (String(out).includes('TOP_SECRET_VALUE')) exploited = true;\n} catch (e) { /* refusing is the correct behaviour */ }\n\nlet regressionOK = false;\ntry {\n  const out = m.readTemplate('welcome.txt');\n  regressionOK = String(out).includes('hello from the template');\n} catch (e) { regressionOK = false; }\n\nconsole.log(!exploited && regressionOK ? 'FIXED' : 'NOT_FIXED');\n"
+    }
+  },
+  {
+    "id": "seed-command-injection-py",
+    "cve": "n/a \u2014 first-party seed",
+    "fix_commit": "n/a",
+    "lang": "python",
+    "class": "rce",
+    "endpoint": "ping(host)",
+    "detail": "ping interpolates a caller-supplied host into a shell string executed with shell=True, so shell metacharacters run as commands.",
+    "vuln_files": [
+      {
+        "path": "netutil.py",
+        "content": "import subprocess\n\n\ndef ping(host):\n    cmd = 'echo PING ' + host\n    out = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n    return out.stdout\n"
+      }
+    ],
+    "gold_files": [
+      "netutil.py"
+    ],
+    "verify": {
+      "runtime": "python3",
+      "ext": "py",
+      "aux_files": {},
+      "driver": "import netutil\n\nexploited = False\ntry:\n    out = netutil.ping('$(echo PWNED)')\n    # Only a shell can turn the substitution into the bare word; the literal keeps the '$('.\n    exploited = ('PWNED' in out) and ('$(' not in out)\nexcept Exception:\n    pass\n\nregression_ok = False\ntry:\n    out = netutil.ping('example.com')\n    regression_ok = 'example.com' in out\nexcept Exception:\n    regression_ok = False\n\nprint('FIXED' if (not exploited and regression_ok) else 'NOT_FIXED')\n"
+    }
+  },
+  {
+    "id": "seed-xss-render-node",
+    "cve": "n/a \u2014 first-party seed",
+    "fix_commit": "n/a",
+    "lang": "js",
+    "class": "xss",
+    "endpoint": "renderGreeting(name)",
+    "detail": "renderGreeting interpolates a caller-supplied name into an HTML fragment without contextual encoding, so markup supplied by the caller is emitted as markup.",
+    "vuln_files": [
+      {
+        "path": "render.js",
+        "content": "function renderGreeting(name) {\n  return '<div class=\"greet\">Hello, ' + name + '!</div>';\n}\n\nmodule.exports = { renderGreeting };\n"
+      }
+    ],
+    "gold_files": [
+      "render.js"
+    ],
+    "verify": {
+      "runtime": "node",
+      "ext": "js",
+      "aux_files": {},
+      "driver": "const { renderGreeting } = require('./render.js');\n\nconst out = renderGreeting('<script>alert(1)</script>');\nconst exploited = out.includes('<script>');\n\nconst plain = renderGreeting('Ada');\nconst regressionOK = plain.includes('Ada') && plain.includes('greet');\n\nconsole.log(!exploited && regressionOK ? 'FIXED' : 'NOT_FIXED');\n"
+    }
+  }
+]
