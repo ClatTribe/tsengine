@@ -261,6 +261,15 @@ export interface Action {
   finding_keys?: string[];
   verification?: FixVerification; // set once an applied fix is re-tested (KF#4)
   created_at?: string;
+  // diff is the unified diff this action would apply, rendered for a human to READ. Without it a
+  // reviewer approving a code change is signing for something they cannot see.
+  diff?: string;
+  // The review thread: feedback is what the reviewer asked to change; supersedes points at the
+  // proposal this one replaces. Set when status is "changes_requested" / on a re-proposal.
+  feedback?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  supersedes?: string;
 }
 
 // FixVerification — did an applied remediation actually close the finding? "fixed" only when the
