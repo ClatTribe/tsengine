@@ -195,8 +195,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                         // PUBLIC: book-a-demo / talk-to-sales lead capture
 	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                           // PUBLIC: embeddable SVG grade badge (viral loop)
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
-	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))   // all remediations + fix-verification status
-	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage)) // per-asset "what was actually tested"
+	mux.HandleFunc("GET /v1/proof-queue", d.auth(d.handleProofQueue)) // doubt→prove: findings the engineer surfaced that the pentester has not settled
+	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))        // all remediations + fix-verification status
+	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage))      // per-asset "what was actually tested"
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
