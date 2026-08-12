@@ -137,7 +137,7 @@ func PentesterAutonomy() []AutonomyTask {
 		{ID: "P3", Job: "pentester", Name: "Discover — map the attack surface",
 			Level: LevelAutonomous, Evidence: "L1 recon→fan-out (katana/subfinder/naabu) + cmd/tsbench discover; deterministic prepass"},
 		{ID: "P4", Job: "pentester", Name: "Exploit — prove it, don't guess",
-			Level: LevelAutonomous, NeedsModel: true, Evidence: "pentest ActiveDriver / webagent under RoE.Check; predicate-gated upgrade to verified"},
+			Level: LevelAutonomous, NeedsModel: true, Evidence: "pentest ActiveDriver / webagent under RoE.Check; predicate-gated upgrade to verified. COVERAGE CAVEAT (not an autonomy one): business-logic flaws are attempted only where a deterministic predicate can ground them — bola_probe, privesc_probe. General BFLA is deliberately NOT attempted, because \"this function is privileged\" is a policy fact no response can prove (§12.6)"},
 		{ID: "P5", Job: "pentester", Name: "Chain — escalate and measure blast radius",
 			Level: LevelAutonomous, Evidence: "crossdetect.Correlate + cloudgraph attack paths; runs on every pass"},
 		{ID: "P6", Job: "pentester", Name: "Report — the VAPT deliverable",
@@ -158,6 +158,17 @@ func PentesterAutonomy() []AutonomyTask {
 		},
 		{ID: "P8", Job: "pentester", Name: "Sign off — a named human stands behind it",
 			Level: LevelApproval, Evidence: "POST /v1/pentest/{id}/signoff — refuses without a named signer (§18.4)"},
+		{ID: "P9", Job: "pentester", Name: "Social-engineer — will a person hand over access?",
+			Level: LevelHumanDoes, Evidence: "every phishing reference in the tree is DEFENSIVE (DMARC posture in assess.go, SaaS config in sspm); no lure is ever sent",
+			Gap: "A standard engagement tests whether a HUMAN can be talked into access, and this tests only " +
+				"machines. The platform already holds the whole target list — it enumerates staff, their " +
+				"MFA state and their admin roles through operate — and never once tests whether one of them " +
+				"would click. It may be a deliberate scope choice rather than an oversight (sending lures " +
+				"to a customer's staff needs consent machinery beyond an RoE, and getting it wrong is " +
+				"worse than not doing it). Either way the metric must show it: a buyer comparing this to a " +
+				"human pentest firm will assume social engineering is included, because from that firm it " +
+				"would be.",
+		},
 	}
 }
 
