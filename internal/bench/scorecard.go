@@ -38,6 +38,18 @@ type TaskState struct {
 	// because a 1.00 on three cases the author invented and a 0.86 on a hundred a competitor
 	// published render identically in a score column, and they are not remotely the same claim.
 	Corpus string
+	// Shipped reports whether the benchmarked engine is reachable from a CUSTOMER REQUEST, as opposed
+	// to only from the CLI and the bench harness.
+	//
+	// This distinction was missing and it hid two real defects. tsbench cvepatch graded
+	// codeagent.ProposePatch at 3/3 while /v1/findings/{id}/autofix called the LLM with its own prompt
+	// and never touched codeagent — so the number described code no request could reach. codelocalize
+	// scores 1.00 and is not wired into the platform at all. A score on an unshipped engine is a claim
+	// about a capability customers do not have, and a scorecard that cannot express that will keep
+	// making it.
+	Shipped bool
+	// ShipNote explains an unshipped engine — what is missing, not just that something is.
+	ShipNote string
 	// Confidence grades that evidence, so a reader does not have to work it out:
 	//   strong      external corpus, ungameable oracle, enough cases to mean something
 	//   provisional first-party corpus or too few cases — the bar is met, the capability is unproven
@@ -57,63 +69,69 @@ func EngineerScorecard() []TaskState {
 			Bench: "tsbench triage", Bar: "Youden J ≥ 0.50 (beat the best deterministic baseline)",
 			Score: "0.75", Done: true,
 			Corpus: "12 cases, first-party synthetic", Confidence: "provisional",
-			Note: "llm + deterministic disposer, median of 4 runs (0.67–0.83). Model alone: 0.50, no better than a path check. Tuning result — the disposer's rules were chosen after seeing the failures.",
+			Shipped: true, Note: "llm + deterministic disposer, median of 4 runs (0.67–0.83). Model alone: 0.50, no better than a path check. Tuning result — the disposer's rules were chosen after seeing the failures.",
 		},
 		{
 			ID: "T2", Name: "Localize — where is the fix?",
 			Bench: "tsbench localize --hard", Bar: "recall@1 ≥ 0.80",
 			Score: "1.00", Done: true,
 			Corpus: "6 cases, first-party synthetic", Confidence: "provisional",
-			Note: "median of 3 runs on the hard corpus. The DEFAULT corpus saturates at 1.00 on the substrate and cannot discriminate — only --hard has headroom.",
+			Shipped: false, ShipNote: "codelocalize is CLI/bench only — no platform call site, so no customer ever receives a localization. Deferred during its campaign (the L1.5 hook chain was churning); the score describes an engine nobody can reach.", Note: "median of 3 runs on the hard corpus. The DEFAULT corpus saturates at 1.00 on the substrate and cannot discriminate — only --hard has headroom.",
 		},
 		{
 			ID: "T3", Name: "Assess — is it reachable/exploitable?",
 			Bench: "tsbench xbow", Bar: "≥ 40% of the suite captured",
 			Score: "89/104 (0.86)", Done: true,
 			Corpus: "104 challenges, EXTERNAL (XBOW's own public suite)", Confidence: "strong",
-			Note: "PROXY, and stated as one: XBOW grades END-TO-END exploitation (find it, then exploit it) — the AI PENTESTER's job — while T3 asks the narrower question 'is THIS already-surfaced finding exploitable'. It is the closest honest instrument we have and it strictly dominates the alternative of no measurement, but it over-states T3 by measuring discovery as well. The best evidence in this repo, and it was missing from earlier versions of this scorecard. XBOW's own 104-challenge suite, graded on FLAG CAPTURE — a random flag injected at build time, retrievable only by real exploitation, so it cannot be gamed by plausible output. Every capture carries an evidence SHA-256. Directly comparable to the suite authors' published rate, unlike every first-party corpus here.",
+			Shipped: true, Note: "PROXY, and stated as one: XBOW grades END-TO-END exploitation (find it, then exploit it) — the AI PENTESTER's job — while T3 asks the narrower question 'is THIS already-surfaced finding exploitable'. It is the closest honest instrument we have and it strictly dominates the alternative of no measurement, but it over-states T3 by measuring discovery as well. The best evidence in this repo, and it was missing from earlier versions of this scorecard. XBOW's own 104-challenge suite, graded on FLAG CAPTURE — a random flag injected at build time, retrievable only by real exploitation, so it cannot be gamed by plausible output. Every capture carries an evidence SHA-256. Directly comparable to the suite authors' published rate, unlike every first-party corpus here.",
 		},
 		{
 			ID: "T4", Name: "Fix — produce the change",
 			Bench: "tsbench cvepatch --dataset fixtures/cvepatch/seed.json", Bar: "≥ 40% of seeded CVEs closed, execution-verified",
 			Score: "3/3 (1.00)", Done: true,
 			Corpus: "3 cases, first-party synthetic", Confidence: "provisional",
-			Note: "EXECUTION-VERIFIED, the only ungameable oracle here: a driver runs the exploit AND a regression, so a plausible-looking diff cannot pass. qwen3:8b produced, localized and genuinely FIXED all three seeds (path traversal, command injection, XSS). Small (n=3) and first-party synthetic rather than real CVEs — the instrument was recovered from history, the case set is new. Real-CVE data stays operator-provided.",
+			Shipped: true, Note: "EXECUTION-VERIFIED, the only ungameable oracle here: a driver runs the exploit AND a regression, so a plausible-looking diff cannot pass. qwen3:8b produced, localized and genuinely FIXED all three seeds (path traversal, command injection, XSS). Small (n=3) and first-party synthetic rather than real CVEs — the instrument was recovered from history, the case set is new. Real-CVE data stays operator-provided.",
 		},
 		{
 			ID: "T5", Name: "Verify — did the fix hold?",
 			Bench: "tsbench defense", Bar: "remediation-capture ≥ 0.40",
 			Score: "1.00 · 3/3 PASS", Done: true,
 			Corpus: "3 scenarios, first-party synthetic", Confidence: "provisional",
-			Note: "100% remediation-capture across repository, cloud and identity scenarios, execution-checked by the product's own retest.Verify so bench and product cannot drift. All three now clear the STRICT pass (closed everything closeable, no decoy actioned, nothing invented) after remediate.WorthProposing put triage in front of the proposer — decoy-actions went 1→0 per scenario with remediation unchanged.",
+			Shipped: true, Note: "100% remediation-capture across repository, cloud and identity scenarios, execution-checked by the product's own retest.Verify so bench and product cannot drift. All three now clear the STRICT pass (closed everything closeable, no decoy actioned, nothing invented) after remediate.WorthProposing put triage in front of the proposer — decoy-actions went 1→0 per scenario with remediation unchanged.",
 		},
 		{
 			ID: "T6", Name: "Answer — query the estate",
 			Bench: "", Bar: "correct answer from our own data on a seeded question set",
 			Score: "", Done: false, Corpus: "none", Confidence: "none",
-			Note: "search_estate now exists as an agent tool, so the capability is there. Nothing scores whether its answers are right.",
+			Shipped: true, Note: "search_estate now exists as an agent tool, so the capability is there. Nothing scores whether its answers are right.",
 		},
 		{
 			ID: "T7", Name: "Report — evidence an auditor accepts",
 			Bench: "", Bar: "signed, grounded, control-mapped",
 			Score: "", Done: false, Corpus: "none", Confidence: "none",
-			Note: "Strong unit coverage (grc, OSCAL) but no end-to-end efficacy score. Arguably the closest to done of the unmeasured five.",
+			Shipped: true, Note: "Strong unit coverage (grc, OSCAL) but no end-to-end efficacy score. Arguably the closest to done of the unmeasured five.",
 		},
 		{
 			ID: "T8", Name: "Hand off — raise what isn't ours",
 			Bench: "", Bar: "ticket filed with the context a receiver can act on",
 			Score: "", Done: false, Corpus: "none", Confidence: "none",
-			Note: "open_ticket exists as an agent tool. Unmeasured.",
+			Shipped: true, Note: "open_ticket exists as an agent tool. Unmeasured.",
 		},
 	}
 }
 
 // RenderEngineerScorecard renders the composite against the 40% bar.
 func RenderEngineerScorecard(tasks []TaskState) string {
-	done, measurable := 0, 0
+	done, measurable, benchedOnly := 0, 0, 0
 	for _, t := range tasks {
-		if t.Done {
+		// A task only counts as DONE when it both clears its bar AND is reachable from a customer
+		// request. A high score on an engine nobody can reach is a claim about a capability customers
+		// do not have — counting it would be the exact overclaiming this field exists to prevent.
+		if t.Done && t.Shipped {
 			done++
+		}
+		if t.Done && !t.Shipped {
+			benchedOnly++
 		}
 		if t.Bench != "" {
 			measurable++
@@ -137,7 +155,12 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 	b.WriteString("The rest pass on first-party corpora of 3–12 cases the author also wrote — the bar is met, ")
 	b.WriteString("the capability is unproven. A 1.00 on three self-authored cases is a bug report about the ")
 	b.WriteString("benchmark, not a capability claim.\n\n")
-	b.WriteString("| | Task | Benchmark | Score | Evidence | Confidence | Done |\n|---|---|---|---|---|---|---|\n")
+	if benchedOnly > 0 {
+		fmt.Fprintf(&b, "**%d task(s) clear their bar but are NOT SHIPPED** — the benchmarked engine has no "+
+			"customer-reachable call site, so the score describes a capability nobody can use. They are "+
+			"excluded from the efficacy number.\n\n", benchedOnly)
+	}
+	b.WriteString("| | Task | Benchmark | Score | Evidence | Confidence | Shipped | Done |\n|---|---|---|---|---|---|---|---|\n")
 	for _, t := range tasks {
 		bench, score, corpus, conf := t.Bench, t.Score, t.Corpus, t.Confidence
 		if bench == "" {
@@ -153,10 +176,14 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 			conf = "—"
 		}
 		mark := "no"
-		if t.Done {
+		if t.Done && t.Shipped {
 			mark = "**yes**"
 		}
-		fmt.Fprintf(&b, "| %s | %s | `%s` | %s | %s | %s | %s |\n", t.ID, t.Name, bench, score, corpus, conf, mark)
+		ship := "**no**"
+		if t.Shipped {
+			ship = "yes"
+		}
+		fmt.Fprintf(&b, "| %s | %s | `%s` | %s | %s | %s | %s | %s |\n", t.ID, t.Name, bench, score, corpus, conf, ship, mark)
 	}
 
 	b.WriteString("\n## The other persona\n\n")
@@ -174,7 +201,10 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 
 	b.WriteString("## The gaps, in the order they should be closed\n\n")
 	for _, t := range tasks {
-		if !t.Done {
+		switch {
+		case t.Done && !t.Shipped:
+			fmt.Fprintf(&b, "- **%s %s** — SCORES %s BUT IS NOT SHIPPED. %s\n", t.ID, t.Name, t.Score, t.ShipNote)
+		case !t.Done:
 			fmt.Fprintf(&b, "- **%s %s** — %s\n", t.ID, t.Name, t.Note)
 		}
 	}
