@@ -70,8 +70,8 @@ func EngineerScorecard() []TaskState {
 		{
 			ID: "T5", Name: "Verify — did the fix hold?",
 			Bench: "tsbench defense", Bar: "remediation-capture ≥ 0.40",
-			Score: "1.00 (3 scenarios)", Done: true,
-			Note: "Clears its bar: 100% remediation-capture across repository, cloud and identity scenarios, execution-checked by the product's own retest.Verify so bench and product cannot drift. BUT the strict scenario Pass still fails on all three — the substrate actions the DECOY every time. Remediation works; triage precision does not, which is the same restraint gap T1 measured.",
+			Score: "1.00 · 3/3 PASS", Done: true,
+			Note: "100% remediation-capture across repository, cloud and identity scenarios, execution-checked by the product's own retest.Verify so bench and product cannot drift. All three now clear the STRICT pass (closed everything closeable, no decoy actioned, nothing invented) after remediate.WorthProposing put triage in front of the proposer — decoy-actions went 1→0 per scenario with remediation unchanged.",
 		},
 		{
 			ID: "T6", Name: "Answer — query the estate",
