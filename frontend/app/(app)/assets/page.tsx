@@ -13,6 +13,7 @@ import { DisconnectButton } from "@/components/assets/disconnect-button";
 import { LoginFlowConfig } from "@/components/assets/login-flow-config";
 import { AuthzTestConfig } from "@/components/assets/authz-test-config";
 import { PageIntro } from "@/components/ui/page-intro";
+import { VerifyOwnership } from "@/components/assets/verify-ownership";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { CONNECTION_TABS } from "@/lib/tabs";
 import { timeAgo, cn } from "@/lib/utils";
@@ -201,6 +202,36 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
             finding on a low-sensitivity one — so triage starts where a breach would hurt most.
           </p>
         )}
+        {/* AUTONOMY GAP T3, MADE VISIBLE. The engineer will not attempt to PROVE a finding on a target
+            the customer has not shown they control — the right gate, and it does not move. But it was
+            SILENT: an unverified asset produced an empty proof queue, which reads exactly like an
+            estate with nothing worth proving, and the only place to resolve it was inside a pentest
+            engagement you had to create first. Surfaced here, where assets are managed and where the
+            blockage is actually caused. Connection-backed assets are already proven by the OAuth grant,
+            so they never appear. */}
+        {(() => {
+          const unproven = assets.filter(
+            (a) => PENTESTABLE.has(a.type) && !a.connection_id && a.meta?.ownership_verified !== "true",
+          );
+          if (unproven.length === 0) return null;
+          return (
+            <div className="mb-4 space-y-2">
+              <p className="text-xs leading-relaxed text-muted">
+                <span className="font-medium text-ink">
+                  {unproven.length} asset{unproven.length === 1 ? "" : "s"} can be scanned but not proven.
+                </span>{" "}
+                Verify you control {unproven.length === 1 ? "it" : "them"} and the AI Pentester can start
+                settling whether findings there are actually exploitable.
+              </p>
+              {unproven.slice(0, 3).map((a) => (
+                <VerifyOwnership key={a.id} assetId={a.id} target={a.target} />
+              ))}
+              {unproven.length > 3 && (
+                <p className="text-xs text-faint">and {unproven.length - 3} more below.</p>
+              )}
+            </div>
+          );
+        })()}
         {assets.length === 0 ? (
           <Empty>No assets discovered yet. Connect a system and the agent enumerates what to watch.</Empty>
         ) : (

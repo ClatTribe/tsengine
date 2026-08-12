@@ -66,9 +66,18 @@ func EngineerAutonomy() []AutonomyTask {
 			Level: LevelAutonomous, Evidence: "vulnLocalizer (agent tool) + GET /v1/findings/{id}/localize; grounded in repo contents"},
 		{ID: "T3", Job: "engineer", Name: "Assess — is it reachable/exploitable?",
 			Level: LevelHumanInput, Evidence: "pentest.SelectForProof requires an ownership-VERIFIED target (ownership_gate.go)",
-			Gap: "Proof is skipped entirely until a human completes the DNS/well-known ownership challenge per asset. " +
-				"Correct as a safety gate — we must not attack what we cannot show the customer owns — but it is " +
-				"a human input, and an unverified estate is silently unprovable rather than visibly blocked."},
+			Gap: "Nothing is PROVEN on a target until a human publishes a DNS TXT record or a well-known file " +
+				"for it. That gate is right and must not move — we do not attack what the customer has not " +
+				"shown they control — but it is genuinely an INPUT, not an approval: the work happens at " +
+				"their DNS provider, outside the product, and no amount of UI makes the agent able to do it. " +
+				"What DID improve is that it is no longer silent (/assets names every unproven asset, states " +
+				"'scanned but not proven', and hands over the record to publish) — but a visible input is " +
+				"still an input, and grading it as an approval would be scoring the label rather than the " +
+				"capability.",
+			// I BRIEFLY GRADED THIS approval after adding the UI and it took the metric to 100%, which is
+			// how I noticed: the number moved because I relabelled a task, not because the agent could do
+			// anything it could not do before. A metric that rewards relabelling is worse than none.
+		},
 		{ID: "T4", Job: "engineer", Name: "Fix — produce the change",
 			Level: LevelApproval, Evidence: "remediate.Propose → hitl.Desk; tier ≥ GateTier queues for a named human"},
 		{ID: "T5", Job: "engineer", Name: "Verify — did the fix hold?",
@@ -107,10 +116,19 @@ func PentesterAutonomy() []AutonomyTask {
 		{ID: "P6", Job: "pentester", Name: "Report — the VAPT deliverable",
 			Level: LevelAutonomous, Evidence: "runner sets StatusReporting; grc.VAPTReport renders unattended"},
 		{ID: "P7", Job: "pentester", Name: "Retest — did the fix actually close it?",
-			Level: LevelHumanInput, Evidence: "handleRunPentest → eng.Retest(); only ever entered by a human pressing Run",
-			Gap: "A completed engagement never re-tests itself. pentest.Schedule (Cadence/Due/NextRunAt) exists " +
-				"and nothing drives it from the monitoring pass, so 'we fixed it, confirm the exploit is dead' " +
-				"waits on someone remembering."},
+			Level: LevelAutonomous, Evidence: "RunDuePentests wired at cmd/platform/main.go — the runner's per-pass hook; Due() gates it, kill-switch respected",
+			// I FIRST GRADED THIS human_input AND WAS WRONG. The claim was "a completed engagement never
+			// re-tests itself" — but RunDuePentests already drives pentest.Schedule from every monitoring
+			// pass, re-running a due engagement as a PASSIVE re-verify (no discovery, no active traffic)
+			// and advancing the schedule even on error so a broken one cannot retry-storm. Reading the
+			// code before building the fix is what caught it; the fix was already there.
+			//
+			// The honest residual is a DEFAULT, not a missing capability: an engagement is one-shot unless
+			// someone sets a cadence via POST /v1/pentest/{id}/schedule, so "did the fix hold" is
+			// automatic only for engagements a human opted in. Flipping that default means recurring
+			// traffic against customer systems on our initiative — safe as designed (passive only) but a
+			// product decision, not a code cleanup, so it is named here rather than quietly changed.
+		},
 		{ID: "P8", Job: "pentester", Name: "Sign off — a named human stands behind it",
 			Level: LevelApproval, Evidence: "POST /v1/pentest/{id}/signoff — refuses without a named signer (§18.4)"},
 	}
