@@ -1,6 +1,9 @@
 package bench
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The autonomy number is a self-assessment, which is exactly the kind of claim that rots. These keep it
 // honest in the two ways it could go wrong: a gap with no stated remedy, and evidence nobody can check.
@@ -87,5 +90,35 @@ func TestAutonomy_ApprovalCountsAsSuccess(t *testing.T) {
 	}
 	if LevelHumanInput.counts() {
 		t.Error("human_input must NOT count — that is the gap this measures")
+	}
+}
+
+// The headline assumes a configured model. A tenant without one does not get a weaker engineer, it gets
+// no engineer — AutoReviewAfterScan returns before starting — so a single number would describe a
+// product some customers do not have.
+func TestAutonomy_NoModelReadingIsLowerAndReported(t *testing.T) {
+	tasks := AllAutonomyTasks()
+	withModel := ScoreAutonomy(tasks).Percent()
+	without := ScoreWithoutModel(tasks).Percent()
+
+	if without >= withModel {
+		t.Errorf("the no-model reading (%.0f%%) is not below the headline (%.0f%%) — either no task is "+
+			"marked NeedsModel, or the model-dependent half is not being excluded", without, withModel)
+	}
+	// The denominator must stay the whole job: a task that cannot run is missing, not excused.
+	if got := ScoreWithoutModel(tasks).Total; got != len(tasks) {
+		t.Errorf("no-model total is %d, want %d — shrinking the denominator would flatter the reading by "+
+			"pretending the absent tasks were never part of the job", got, len(tasks))
+	}
+	if !strings.Contains(RenderAutonomy(tasks), "Without a configured model") {
+		t.Error("the report does not state the no-model reading — a reader would take the headline as " +
+			"what every tenant gets")
+	}
+}
+
+// Every model-dependent task must be marked. An unmarked one silently inflates the no-model reading.
+func TestAutonomy_ModelDependentTasksAreMarked(t *testing.T) {
+	if countModelTasks(AllAutonomyTasks()) == 0 {
+		t.Fatal("no task is marked NeedsModel — the two readings would be identical and the caveat meaningless")
 	}
 }

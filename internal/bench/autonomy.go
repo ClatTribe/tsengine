@@ -54,6 +54,15 @@ type AutonomyTask struct {
 	// Gap states what a human currently has to do, and is required whenever Level does not count.
 	// Empty on a counting level.
 	Gap string
+	// NeedsModel reports whether this task STOPS EXISTING without a configured LLM.
+	//
+	// The headline autonomy number silently assumes a model. AutoReviewAfterScan — the hook that runs
+	// the engineer unattended after a scan — returns early when no client resolves, and the economic
+	// gate means a Free tenant without its own key never gets one. So for that tenant the
+	// model-dependent tasks are not "less autonomous", they do not run at all, and a single percentage
+	// that hides which half of the product a customer actually has is the kind of number this file
+	// exists to avoid.
+	NeedsModel bool
 }
 
 // EngineerAutonomy is the defensive job — the eight tasks scorecard.go already grades for quality,
@@ -61,11 +70,11 @@ type AutonomyTask struct {
 func EngineerAutonomy() []AutonomyTask {
 	return []AutonomyTask{
 		{ID: "T1", Job: "engineer", Name: "Triage — is this real, does it matter?",
-			Level: LevelAutonomous, Evidence: "runner.RescanTenant → crossdetect + triage on every pass; no human touch"},
+			Level: LevelAutonomous, NeedsModel: true, Evidence: "runner.RescanTenant → crossdetect + triage on every pass; no human touch"},
 		{ID: "T2", Job: "engineer", Name: "Localize — where is the fix?",
-			Level: LevelAutonomous, Evidence: "vulnLocalizer (agent tool) + GET /v1/findings/{id}/localize; grounded in repo contents"},
+			Level: LevelAutonomous, NeedsModel: true, Evidence: "vulnLocalizer (agent tool) + GET /v1/findings/{id}/localize; grounded in repo contents"},
 		{ID: "T3", Job: "engineer", Name: "Assess — is it reachable/exploitable?",
-			Level: LevelHumanInput, Evidence: "pentest.SelectForProof requires an ownership-VERIFIED target (ownership_gate.go)",
+			Level: LevelHumanInput, NeedsModel: true, Evidence: "pentest.SelectForProof requires an ownership-VERIFIED target (ownership_gate.go)",
 			Gap: "Nothing is PROVEN on a target until a human publishes a DNS TXT record or a well-known file " +
 				"for it. That gate is right and must not move — we do not attack what the customer has not " +
 				"shown they control — but it is genuinely an INPUT, not an approval: the work happens at " +
@@ -79,7 +88,7 @@ func EngineerAutonomy() []AutonomyTask {
 			// anything it could not do before. A metric that rewards relabelling is worse than none.
 		},
 		{ID: "T4", Job: "engineer", Name: "Fix — produce the change",
-			Level: LevelApproval, Evidence: "remediate.Propose → hitl.Desk; tier ≥ GateTier queues for a named human"},
+			Level: LevelApproval, NeedsModel: true, Evidence: "remediate.Propose → hitl.Desk; tier ≥ GateTier queues for a named human"},
 		{ID: "T5", Job: "engineer", Name: "Verify — did the fix hold?",
 			Level: LevelAutonomous, Evidence: "retest.Verify inside runner.RescanTenant; deterministic re-test, no human"},
 		{ID: "T6", Job: "engineer", Name: "Answer — query the estate",
@@ -110,7 +119,7 @@ func PentesterAutonomy() []AutonomyTask {
 		{ID: "P3", Job: "pentester", Name: "Discover — map the attack surface",
 			Level: LevelAutonomous, Evidence: "L1 recon→fan-out (katana/subfinder/naabu) + cmd/tsbench discover; deterministic prepass"},
 		{ID: "P4", Job: "pentester", Name: "Exploit — prove it, don't guess",
-			Level: LevelAutonomous, Evidence: "pentest ActiveDriver / webagent under RoE.Check; predicate-gated upgrade to verified"},
+			Level: LevelAutonomous, NeedsModel: true, Evidence: "pentest ActiveDriver / webagent under RoE.Check; predicate-gated upgrade to verified"},
 		{ID: "P5", Job: "pentester", Name: "Chain — escalate and measure blast radius",
 			Level: LevelAutonomous, Evidence: "crossdetect.Correlate + cloudgraph attack paths; runs on every pass"},
 		{ID: "P6", Job: "pentester", Name: "Report — the VAPT deliverable",
@@ -152,6 +161,23 @@ func (s AutonomyScore) Percent() float64 {
 	return float64(s.Autonomous+s.Approval) / float64(s.Total) * 100
 }
 
+// ScoreWithoutModel is the reading for a tenant with NO configured LLM — the Free-plan reality.
+//
+// A model-dependent task does not degrade there, it is ABSENT: AutoReviewAfterScan returns before
+// running the engineer, so nobody triages, localizes or proposes a fix. Counting it as "not autonomous"
+// would still overstate it, so it is counted as not-done at all.
+func ScoreWithoutModel(tasks []AutonomyTask) AutonomyScore {
+	var kept []AutonomyTask
+	for _, t := range tasks {
+		if !t.NeedsModel {
+			kept = append(kept, t)
+		}
+	}
+	s := ScoreAutonomy(kept)
+	s.Total = len(tasks) // denominator stays the whole job — the missing tasks are missing, not excused
+	return s
+}
+
 // ScoreAutonomy tallies a task set.
 func ScoreAutonomy(tasks []AutonomyTask) AutonomyScore {
 	var s AutonomyScore
@@ -187,6 +213,19 @@ func RenderAutonomy(tasks []AutonomyTask) string {
 	b.WriteString("approvals\". What counts against us is a task where the agent cannot start until a person ")
 	b.WriteString("hands it something the product already knows.\n\n")
 
+	// WHICH PRODUCT DID THEY BUY. The headline assumes a configured model. Without one the engineer's
+	// unattended hook returns before it runs, so the model-dependent tasks are not weaker — they are
+	// absent. Reporting one number would describe a product some tenants do not have.
+	noModel := ScoreWithoutModel(tasks)
+	if noModel.Percent() < all.Percent() {
+		fmt.Fprintf(&b, "> **Without a configured model this reads %.0f%%, not %.0f%%.** %d of the %d tasks "+
+			"depend on an LLM, and for a tenant with no key and no AI entitlement they do not run at all "+
+			"— AutoReviewAfterScan returns before the engineer starts. Those tasks are ABSENT rather than "+
+			"degraded, so they are counted as not done. The deterministic half (scanning, correlation, "+
+			"re-test, evidence, reporting) still runs unattended.\n\n",
+			noModel.Percent(), all.Percent(), countModelTasks(tasks), all.Total)
+	}
+
 	if gaps := gapsIn(tasks); len(gaps) > 0 {
 		b.WriteString("## The gaps, in the order they cost the most\n\n")
 		for _, t := range gaps {
@@ -195,15 +234,29 @@ func RenderAutonomy(tasks []AutonomyTask) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString("| | Job | Task | Level | Determined by |\n|---|---|---|---|---|\n")
+	b.WriteString("| | Job | Task | Level | Needs a model | Determined by |\n|---|---|---|---|---|---|\n")
 	for _, t := range tasks {
 		mark := t.Level
 		if !t.Level.counts() {
 			mark = AutonomyLevel("**" + string(t.Level) + "**")
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", t.ID, t.Job, t.Name, mark, t.Evidence)
+		model := "—"
+		if t.NeedsModel {
+			model = "yes"
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", t.ID, t.Job, t.Name, mark, model, t.Evidence)
 	}
 	return b.String()
+}
+
+func countModelTasks(tasks []AutonomyTask) int {
+	n := 0
+	for _, t := range tasks {
+		if t.NeedsModel {
+			n++
+		}
+	}
+	return n
 }
 
 func filterJob(tasks []AutonomyTask, job string) []AutonomyTask {
