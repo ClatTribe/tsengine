@@ -97,6 +97,24 @@ func EngineerAutonomy() []AutonomyTask {
 			Level: LevelApproval, Evidence: "grc report generated unattended; ControlAttestation needs a NAMED auditor (§18.4)"},
 		{ID: "T8", Job: "engineer", Name: "Hand off — raise what isn't ours",
 			Level: LevelApproval, Evidence: "ticketFiler → hitl.Desk at tier 1; auto-delivers unless halted"},
+		{ID: "T9", Job: "engineer", Name: "Respond — contain an incident",
+			Level: LevelApproval, Evidence: "runner calls remediate.ProposeIncidentResponse on a CRITICAL incident → tier-2 containment + a T3 breach draft needing a signature"},
+		{ID: "T10", Job: "engineer", Name: "Attest — answer a customer's security questionnaire",
+			Level: LevelAutonomous, Evidence: "grc.Questionnaire auto-answers the CAIQ/SIG-lite set from real control state; GET /v1/questionnaire"},
+		{ID: "T11", Job: "engineer", Name: "Review — threat-model a change before it ships",
+			Level: LevelHumanDoes, Evidence: "no design-time capability exists — the only 'threat model' in the tree is our own, in comments",
+			Gap: "The product is entirely POST-HOC: it reasons about what already exists and has already been " +
+				"scanned. A security engineer also reviews designs BEFORE they ship — the cheapest place to " +
+				"remove a vulnerability, and the one this does not attempt at all. Nothing here is broken; " +
+				"the task is simply absent, which is worse for a score than a task done badly and easy to " +
+				"miss when you decompose a job by looking at what the product already does."},
+		{ID: "T12", Job: "engineer", Name: "Recertify — run a periodic access review",
+			Level: LevelHumanDoes, Evidence: "no recertification workflow; operate detects stale/over-privileged accounts but nothing collects attestations",
+			Gap: "The DETECTION half exists and is good — operate finds stale accounts, admins without MFA, " +
+				"and standing privilege that survived offboarding. The ATTESTATION half does not: a periodic " +
+				"review where each manager confirms their people still need their access is required by " +
+				"SOC 2 CC6.2/6.3, and the platform already has the HITL machinery to run one. Nobody is " +
+				"asked, so it does not happen."},
 	}
 }
 

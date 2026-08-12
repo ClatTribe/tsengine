@@ -122,3 +122,46 @@ func TestAutonomy_ModelDependentTasksAreMarked(t *testing.T) {
 		t.Fatal("no task is marked NeedsModel — the two readings would be identical and the caveat meaningless")
 	}
 }
+
+// THE FAILURE MODE THIS FILE IS MOST EXPOSED TO: decomposing a job by looking at what the product
+// already does, which yields a flattering list and a meaningless percentage.
+//
+// It happened. The first version had 16 tasks and read 94%. Auditing it against what practitioners
+// actually do — rather than against the API surface — surfaced four omitted ones, two of which the
+// product does not attempt at all (design-time threat modelling, access recertification). Adding them
+// took the reading to 85%.
+//
+// So the list must always contain at least one task graded human_does. Not because a good product has
+// gaps forever, but because a decomposition with no unattempted work is far more likely to be
+// incomplete than to be finished — and if these two are ever genuinely closed, whoever closes them
+// should have to think about what else the job contains before deleting this.
+func TestAutonomy_DecompositionIncludesWorkTheProductDoesNotDo(t *testing.T) {
+	var notAttempted []string
+	for _, task := range AllAutonomyTasks() {
+		if task.Level == LevelHumanDoes {
+			notAttempted = append(notAttempted, task.ID)
+		}
+	}
+	if len(notAttempted) == 0 {
+		t.Error("no task is graded human_does. Either the product now does the whole job of both roles — " +
+			"in which case this test should be deleted deliberately, with a note about what was checked — " +
+			"or the task list was written by looking at what the product does, which is how a decomposition " +
+			"flatters itself. The first version of this file made exactly that mistake and read 94% until " +
+			"the missing work was added.")
+	}
+}
+
+// A task the product does not attempt still has to say what the job actually requires, or it is a
+// placeholder rather than a finding.
+func TestAutonomy_NotAttemptedTasksExplainTheMissingWork(t *testing.T) {
+	for _, task := range AllAutonomyTasks() {
+		if task.Level != LevelHumanDoes {
+			continue
+		}
+		if len(task.Gap) < 80 {
+			t.Errorf("%s is graded human_does with a %d-character explanation. An unattempted task is the "+
+				"most consequential entry here — it needs to say what the practitioner does and why the "+
+				"absence matters, not just that something is missing", task.ID, len(task.Gap))
+		}
+	}
+}
