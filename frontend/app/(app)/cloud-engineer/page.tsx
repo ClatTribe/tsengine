@@ -24,7 +24,7 @@ export default async function CloudEngineerPage() {
         title="Cloud depth"
         description="The cloud-graph specialist your AI Security Engineer delegates to for depth. It investigates a cloud account by querying its graph — resolving effective permissions, tracing reachability, and measuring blast radius — to find the attack paths an external attacker could actually use to reach a crown jewel. It tells real, exploitable paths apart from config-bad-but-inert noise, and every path it records is backed by a tool result with a verified fix. Results flow into your issues, attack paths, and compliance posture."
       />
-      <Link href="/brief" className="-mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
+      <Link href="/engineer" className="-mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
         <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Back to the AI Security Engineer
       </Link>
 

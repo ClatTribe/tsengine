@@ -129,7 +129,7 @@ export default async function OverviewPage() {
       </Card>
 
       {/* Plain-English brief — the founder's narrative, surfaced on Overview instead of a separate tab */}
-      <Link href="/brief" className="card lift group flex items-center gap-3 p-4">
+      <Link href="/engineer" className="card lift group flex items-center gap-3 p-4">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
           <Sparkles className="h-5 w-5" />
         </span>
@@ -147,7 +147,7 @@ export default async function OverviewPage() {
           <SectionTitle>Get ahead</SectionTitle>
           <div className="grid gap-3 sm:grid-cols-3">
             <GetAhead href="/assets" icon={ScanLine} title="Run a scan" desc="Add or re-scan an asset to keep coverage fresh." />
-            <GetAhead href="/brief" icon={Layers} title="Board brief" desc="Generate a plain-English security update to share." />
+            <GetAhead href="/engineer" icon={Layers} title="Board brief" desc="Generate a plain-English security update to share." />
             <GetAhead href="/reports" icon={Wrench} title="Download a report" desc="Pull a VAPT or compliance evidence pack." />
           </div>
         </section>

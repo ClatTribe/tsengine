@@ -233,6 +233,11 @@ export const api = {
     }>("/v1/code/investigate", { method: "POST", body: JSON.stringify({ repo, findings, source }) }),
 
   // AI Code Engineer — the stored, confirmed-exploitable source assessments (read-only view) + runnable flag.
+  // T6 — ask your estate. The SAME search the AI Security Engineer's search_estate tool runs, so the
+  // answer a human gets and the answer the agent reasons over cannot drift. Grounded: no model is
+  // involved, so an empty result means the estate has no match rather than that a model forgot one.
+  ask: (q: string) =>
+    safe<{ query: string; answer: string }>(`/v1/ask?q=${encodeURIComponent(q)}`, { query: q, answer: "" }),
   codeInvestigation: () =>
     safe<{ total: number; enabled: boolean; confirmed: Finding[] }>("/v1/code/investigate", { total: 0, enabled: false, confirmed: [] }),
 

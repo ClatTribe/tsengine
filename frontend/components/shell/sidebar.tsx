@@ -16,6 +16,7 @@ import {
   Scale,
   ChevronDown,
   Gauge,
+  Sparkles,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -23,58 +24,60 @@ import { cn } from "@/lib/utils";
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badgeKey?: "pending" };
 
 // Grouped IA — the nav mirrors the product's architecture so a founder reads the thesis from the
-// sidebar: a deterministic POSTURE substrate, two AI teammates that reason over it (a defender and an
-// attacker), Compliance, and the human-judgment (HITL) Governance layer. Two pinned items on top (the
-// daily driver). Adding a route → drop it in the layer it belongs to, don't grow a flat list.
+// sidebar: the product sells TWO THINGS — an AI Security Engineer (defence) and an AI Pentester
+// (attack) — so the navigation is shaped like that, not like a catalogue of surfaces.
+//
+// It used to be outcome-led (Security / GRC / Connections) with the engineer deliberately "sprinkled"
+// as verbs on objects and no destination of its own. That produced a real asymmetry: the Pentester had
+// a row and a page, the Engineer had a console at /brief that NOTHING in the navigation reached — its
+// own depth specialists linked "back to the AI Security Engineer" at a place you could not get to. One
+// of the two products was invisible.
+//
+// Now each agent is a top-level product with everything its job needs, and the surfaces they produce
+// sit underneath the agent that produces them: Issues is what the Engineer found; the pentest report is
+// what the Pentester proved. Inbox stays pinned at the top because it is the HUMAN's half of the loop —
+// the agent proposes, you approve — and it belongs to both agents, not to either one.
+//
+// Adding a route → put it under the agent whose work it is, or under the outcome it serves. Do not grow
+// a flat list.
 const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
   {
     items: [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+      // The human's half of the loop: every change either agent proposes waits here with its diff.
       { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "pending" },
     ],
   },
   {
-    // SECURITY outcome — "Am I secure?". ONE problems list (Issues) the founder/dev acts on. We do NOT
-    // make them learn issue vs finding vs incident: the raw per-tool detail is a tab INSIDE Issues,
-    // SECURITY outcome — "Am I secure?" = ONE list, Issues. Everything else is context ON an issue, not a
-    // separate destination: raw findings / incidents / OSINT are the same findings re-sliced (filters on
-    // Issues); ATTACK PATHS already drive an issue's priority (live/in_attack_path) and show as an
-    // "on attack path" badge on the row → /attack-paths; WHAT WE TEST is per-asset assurance context
-    // (Overview strip + palette). Vendors & devices + Connected apps are inventories → Connections.
-    header: "Security",
+    // PRODUCT 1 — the defender. The console is the front door (ask your estate, triage, propose fixes,
+    // delegate to the code/cloud specialists); Issues is what it found, kept one click away because it
+    // is the daily driver for a developer who does not want to go through the agent every time.
+    header: "AI Security Engineer",
     items: [
+      { href: "/engineer", label: "Console", icon: Sparkles },
       { href: "/issues", label: "Issues", icon: Layers },
     ],
   },
   {
-    // GRC outcome — "am I audit-ready + governed?". ONE menu (was two: Compliance + GRC — clubbed per the
-    // user). Four DISTINCT artifacts (each carries info the others don't): Compliance = the live control
-    // posture (findings→controls); Risks = the risk register (accept/mitigate decisions); Audits = the
-    // external-auditor attestation engagement; Program = the policy set. Reports is DERIVATIVE (the SAME
-    // posture call rendered as downloadable evidence) → reachable from Compliance + the palette, not a row.
-    header: "GRC",
+    // PRODUCT 2 — the attacker. A scope → authorize → run → report engagement, unchanged.
+    header: "AI Pentester",
     items: [
-      { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+      { href: "/pentest", label: "Engagements", icon: Crosshair },
+    ],
+  },
+  {
+    // The second OUTCOME (audit-readiness), which neither agent owns alone — both feed it. Four distinct
+    // artifacts: live control posture, the risk register, the external-auditor engagement, the policy set.
+    header: "Compliance",
+    items: [
+      { href: "/compliance", label: "Posture", icon: ShieldCheck },
       { href: "/risks", label: "Risks", icon: Scale },
       { href: "/audits", label: "Audits", icon: FileCheck2 },
       { href: "/program", label: "Program", icon: ScrollText },
     ],
   },
   {
-    // The AI Security Engineer is SPRINKLED onto the outcome surfaces — not a dedicated page: its verbs
-    // live where the work is (Investigate / AI Fix / Start-here on Security·Issues; advisor + fix-guidance
-    // on GRC·Compliance), and the whole-estate triage console (/brief) is reached from the Issues AI strip
-    // + the command palette, not a nav row. So the only AI agent that stays a PAGE is the AI Pentester —
-    // a distinct scope→launch→report engagement, not an inline action.
-    header: "AI Pentester",
-    items: [
-      { href: "/pentest", label: "Pentest", icon: Crosshair },
-    ],
-  },
-  {
-    // INTEGRATION outcome — "what I've connected." The inventory: targets/repos/cloud (Assets) plus the
-    // two surfaces that are INVENTORIES, not finding-views — Vendors & devices and Connected apps (their
-    // risk findings already appear in Security via Issues; here you see WHAT you have, not what's wrong).
+    // What you have connected — inventories, not finding-views (their risk shows up under the Engineer).
     header: "Connections",
     items: [
       { href: "/assets", label: "Assets", icon: Boxes },
@@ -82,9 +85,6 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
       { href: "/saas-apps", label: "Connected apps", icon: AppWindow },
     ],
   },
-  // "Your security team" (who's accountable) + "Activity" (audit log) are ACCOUNT CONTEXT, not daily
-  // destinations — they live under Settings now, reachable from there + the command palette, off the
-  // daily sidebar.
 ];
 
 const COLLAPSE_KEY = "ts.nav.collapsed";
