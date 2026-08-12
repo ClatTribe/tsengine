@@ -89,10 +89,13 @@ func EngineerAutonomy() []AutonomyTask {
 func PentesterAutonomy() []AutonomyTask {
 	return []AutonomyTask{
 		{ID: "P1", Job: "pentester", Name: "Scope — what am I allowed to touch?",
-			Level: LevelHumanInput, Evidence: "components/pentest/new-engagement.tsx — `targets` is a free-text textarea",
-			Gap: "A human retypes the scope as text, even though the tenant's assets are already known, " +
-				"already inventoried, and (for proof) already ownership-verified. The product makes you " +
-				"tell it what it knows."},
+			Level: LevelApproval, Evidence: "GET /v1/pentest/scope-suggestion → pre-fills the engagement form; the human edits and signs",
+			// WAS human_input: the form was an empty textarea, so a person retyped the scope while the
+			// platform already held the inventory, knew which assets were OAuth-connected, and had run
+			// ownership challenges against the rest. Now proposed from exactly those, with what was left
+			// out shown and why — a scope quietly narrower than the estate would read as full coverage.
+			// The human still signs for it, which is the intended shape rather than a shortfall.
+		},
 		{ID: "P2", Job: "pentester", Name: "Authorize — signed rules of engagement",
 			Level: LevelApproval, Evidence: "pentest.RoE.ActiveAuthorized() — AllowActive + named AuthorizedBy + recorded Consent"},
 		{ID: "P3", Job: "pentester", Name: "Discover — map the attack surface",
