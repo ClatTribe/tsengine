@@ -90,7 +90,7 @@ func EngineerScorecard() []TaskState {
 			Bench: "tsbench localize --hard", Bar: "recall@1 ≥ 0.80",
 			Score: "1.00", Done: true,
 			Corpus: "6 cases, first-party synthetic", Engine: "model", Confidence: "provisional",
-			Shipped: true, Note: "median of 3 runs on the hard corpus. The DEFAULT corpus saturates at 1.00 on the substrate and cannot discriminate — only --hard has headroom.",
+			Shipped: true, Note: "THE SHIPPED TIER WAS NOT THE BENCHMARKED TIER until now. This entry quoted 1.00 (the LLM tier) while the customer-reachable adapter hardcoded HeuristicLocalizer — the 0.67 floor. The engine shipped; the tier did not, which is the Shipped column's own failure mode one layer deeper. The adapter now runs LLMLocalizer, which uses the heuristic as its floor and fallback, grounds every model proposal against real repo files, and degrades to the pure heuristic on a nil or erroring model — so a deployment without a model behaves exactly as before and one with a model can only rank up, never drop a heuristic hit. Reachable by a human too as of GET /v1/findings/{id}/localize. Median of 3 runs on the hard corpus. The DEFAULT corpus saturates at 1.00 on the substrate and cannot discriminate — only --hard has headroom.",
 		},
 		{
 			ID: "T3", Name: "Assess — is it reachable/exploitable?",

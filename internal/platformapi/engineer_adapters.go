@@ -388,7 +388,16 @@ func (v vulnLocalizer) Locate(ctx context.Context, findingID string) (string, er
 	if len(repoFiles) == 0 {
 		return "No readable source files in " + repo + " — cannot localize.", nil
 	}
-	res, lerr := codelocalize.HeuristicLocalizer{}.Localize(ctx,
+	// THE BENCHMARKED TIER, NOT THE FLOOR. This called HeuristicLocalizer directly, so the customer path
+	// ran the 0.67-recall@1 tier while the scorecard quoted 1.00 — that number is the LLM tier's, and it
+	// was unreachable from any request. The same "benchmarked engine is not the shipped engine" gap the
+	// Shipped column exists to catch, one layer deeper: the engine shipped, the tier did not.
+	//
+	// Safe by construction: LLMLocalizer runs the heuristic FIRST as its floor and fallback, grounds every
+	// model proposal against real repo files, and degrades to the pure heuristic result on a nil or
+	// erroring model. So a deployment with no model configured behaves exactly as before, and one with a
+	// model can only rank up or add — never drop a heuristic hit (§10).
+	res, lerr := codelocalize.LLMLocalizer{LLM: v.d.resolveAgentLLMForRole(ctx, v.tenantID, platform.RoleCode)}.Localize(ctx,
 		codelocalize.Query{CWE: target.CWE, Title: target.Title, Description: target.Description}, repoFiles)
 	if lerr != nil {
 		return "", lerr
