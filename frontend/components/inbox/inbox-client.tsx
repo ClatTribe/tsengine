@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
+
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine, MessageSquare } from "lucide-react";
 import type { Action, Finding } from "@/lib/types";
 import { decideAction, requestChangesAction } from "@/app/(app)/inbox/actions";
 import { SeverityBadge } from "@/components/ui/primitives";
+import { ConfidencePill } from "@/components/findings/confidence-pill";
 import { cn } from "@/lib/utils";
 
 const KIND_META: Record<string, { icon: typeof Check; label: string }> = {
@@ -241,12 +244,25 @@ function DetailPane({
           <div className="mb-2 text-xs uppercase tracking-wider text-muted">Why the agent proposed this</div>
           {finding ? (
             <div className="rounded-lg border border-border bg-surface-2 p-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <SeverityBadge severity={finding.severity} />
+                {/* HOW SURE ARE WE. The pill is on every other agent-output surface and was missing from
+                    the ONE place a human authorises a change. Approving a fix for a single-tool pattern
+                    match is a different decision from approving one for a proven exploit, and without
+                    this they look identical. */}
+                <ConfidencePill verification={finding.verification_status} confidence={finding.confidence} />
                 <span className="text-sm">{finding.title}</span>
               </div>
               {finding.endpoint && <div className="mono mt-1.5 truncate text-xs text-faint">{finding.endpoint}</div>}
               {finding.description && <p className="mt-2 text-sm text-muted">{finding.description}</p>}
+              {finding.verification_status && finding.verification_status !== "verified" && (
+                <p className="mt-2 border-t border-border pt-2 text-xs leading-relaxed text-muted">
+                  This finding is <span className="font-medium text-ink">not exploit-proven</span> — a tool
+                  matched a pattern. Approving fixes it either way; if you would rather know first, the AI
+                  Pentester can try to settle it from the{" "}
+                  <Link href="/pentest" className="text-accent hover:underline">proof queue</Link>.
+                </p>
+              )}
             </div>
           ) : (
             <div className="mono text-xs text-faint">finding {action.finding_id}</div>
