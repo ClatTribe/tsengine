@@ -83,6 +83,11 @@ const (
 	// finding. Grounded like every edge: the ingest emits it ONLY where the secret is both readable by src
 	// AND confirmed to hold dst's credential (never guessed from a name). `Detail` names the secret.
 	EdgeSecretAccess EdgeKind = "secret_access"
+
+	// EdgeCopyOf: dst holds the same data as src — a snapshot, replica or analytics export. The edge
+	// exists so sensitivity can flow to the copy: a public snapshot of a locked-down sensitive database
+	// is the breach, and without the lineage it reads as an unremarkable public bucket.
+	EdgeCopyOf EdgeKind = "copy_of"
 )
 
 // Edge is a directed relationship from→to of a given kind. Condition records a
