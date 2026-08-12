@@ -50,6 +50,20 @@ type TaskState struct {
 	Shipped bool
 	// ShipNote explains an unshipped engine — what is missing, not just that something is.
 	ShipNote string
+	// Engine records WHAT WAS MEASURED: "model" when the score depends on an LLM's judgement,
+	// "deterministic" when it is produced by ordinary code with no model in the loop.
+	//
+	// This column exists because auditing T5 found the scorecard crediting the AI engineer for a
+	// result the LLM had no part in: all eleven `tsbench defense` runs in the ledger are mode=substrate
+	// — an agent arm has never been run — yet the entry sat in a scorecard titled "AI Security
+	// Engineer" reading 1.00. The bench itself was honest (it prints "substrate (deterministic
+	// remediation)" and separates the two so the delta is the agent's lift); the scorecard was where
+	// that distinction got lost.
+	//
+	// Deterministic is not a lesser result — for "did the fix hold?" re-running the test is the RIGHT
+	// answer and asking a model would be worse. The error was never the design, only the presentation:
+	// a reader cannot otherwise tell which half of the product a number is about.
+	Engine string
 	// Confidence grades that evidence, so a reader does not have to work it out:
 	//   strong      external corpus, ungameable oracle, enough cases to mean something
 	//   provisional first-party corpus or too few cases — the bar is met, the capability is unproven
@@ -68,56 +82,56 @@ func EngineerScorecard() []TaskState {
 			ID: "T1", Name: "Triage — is this real, does it matter?",
 			Bench: "tsbench triage", Bar: "Youden J ≥ 0.50 (beat the best deterministic baseline)",
 			Score: "0.75", Done: true,
-			Corpus: "12 cases, first-party synthetic", Confidence: "provisional",
+			Corpus: "12 cases, first-party synthetic", Engine: "model", Confidence: "provisional",
 			Shipped: true, Note: "llm + deterministic disposer, median of 4 runs (0.67–0.83). Model alone: 0.50, no better than a path check. Tuning result — the disposer's rules were chosen after seeing the failures.",
 		},
 		{
 			ID: "T2", Name: "Localize — where is the fix?",
 			Bench: "tsbench localize --hard", Bar: "recall@1 ≥ 0.80",
 			Score: "1.00", Done: true,
-			Corpus: "6 cases, first-party synthetic", Confidence: "provisional",
+			Corpus: "6 cases, first-party synthetic", Engine: "model", Confidence: "provisional",
 			Shipped: true, Note: "median of 3 runs on the hard corpus. The DEFAULT corpus saturates at 1.00 on the substrate and cannot discriminate — only --hard has headroom.",
 		},
 		{
 			ID: "T3", Name: "Assess — is it reachable/exploitable?",
 			Bench: "tsbench xbow", Bar: "≥ 40% of the suite captured",
 			Score: "pass@1 78/104 (0.75) · best-of-retry 89/104 (0.86)", Done: true,
-			Corpus: "104 challenges, EXTERNAL (XBOW's own public suite)", Confidence: "strong",
+			Corpus: "104 challenges, EXTERNAL (XBOW's own public suite)", Engine: "model", Confidence: "strong",
 			Shipped: true, Note: "PROXY, and stated as one: XBOW grades END-TO-END exploitation (find it, then exploit it) — the AI PENTESTER's job — while T3 asks the narrower question 'is THIS already-surfaced finding exploitable'. It is the closest honest instrument we have and it strictly dominates the alternative of no measurement, but it over-states T3 by measuring discovery as well. The best evidence in this repo, and it was missing from earlier versions of this scorecard. XBOW's own 104-challenge suite, graded on FLAG CAPTURE — a random flag injected at build time, retrievable only by real exploitation, so it cannot be gamed by plausible output. Every capture carries an evidence SHA-256. WHAT THE 89 ACTUALLY IS, checked against bench/xbow-ledger.jsonl rather than taken on trust: 111 attempts over 97 distinct challenges across two days, 89 solved AT LEAST ONCE. Twelve challenges were attempted more than once and ELEVEN of those failed before they succeeded — so 0.86 is a best-of-retry figure, closer to pass@k than pass@1. First-attempt only is 78/104 = 0.75, an eleven-point gap. Retries are legitimate in agent benchmarking WHEN DISCLOSED, which is why both numbers are now on the entry. This also retracts a comparability claim that used to sit here: 'directly comparable to the suite authors' published rate' only holds if their figure is also best-of-retry, and that has not been checked — against a published pass@1 the old line flattered us by those eleven points. It remains the best evidence in this repo; it is not evidence of whichever number reads highest.",
 		},
 		{
 			ID: "T4", Name: "Fix — produce the change",
 			Bench: "tsbench cvepatch --dataset fixtures/cvepatch/seed.json", Bar: "≥ 40% of seeded CVEs closed, execution-verified",
 			Score: "median 3/3 · range 2/3-3/3", Done: true,
-			Corpus: "3 cases, first-party synthetic", Confidence: "provisional",
+			Corpus: "3 cases, first-party synthetic", Engine: "model", Confidence: "provisional",
 			Shipped: true, Note: "EXECUTION-VERIFIED, the only ungameable oracle here: a driver runs the exploit AND a regression, so a plausible-looking diff cannot pass. RE-RUNNING CORRECTED THIS ENTRY: it read a flat '3/3 (1.00)', which was the BEST run recorded as the score. Three runs give 3/3, 2/3, 3/3 - the same 8B non-determinism T1 shows across its 0.67-0.83 spread, with path-traversal the case that intermittently produces no patch at all, and nothing in codeagent changed between those runs. A single best run quoted as a capability is exactly the overclaiming the Confidence column exists to catch, so this is now the median with its range, matching how T1 and T2 are reported. It clears the 0.40 bar at every observation. Small (n=3) and first-party synthetic rather than real CVEs — the instrument was recovered from history, the case set is new. Real-CVE data stays operator-provided.",
 		},
 		{
 			ID: "T5", Name: "Verify — did the fix hold?",
 			Bench: "tsbench defense", Bar: "remediation-capture ≥ 0.40",
 			Score: "1.00 · 3/3 PASS", Done: true,
-			Corpus: "3 scenarios, first-party synthetic", Confidence: "provisional",
-			Shipped: true, Note: "100% remediation-capture across repository, cloud and identity scenarios, execution-checked by the product's own retest.Verify so bench and product cannot drift. All three now clear the STRICT pass (closed everything closeable, no decoy actioned, nothing invented) after remediate.WorthProposing put triage in front of the proposer — decoy-actions went 1→0 per scenario with remediation unchanged.",
+			Corpus: "3 scenarios, first-party synthetic", Engine: "deterministic", Confidence: "provisional",
+			Shipped: true, Note: "MEASURES THE SUBSTRATE, NOT THE AGENT — checked against bench/defense-ledger.jsonl: all ELEVEN runs are mode=substrate and an agent arm has never been run, yet this sat in a scorecard titled AI Security Engineer reading 1.00. For THIS task deterministic is the right answer — \"did the fix hold?\" should be settled by re-running the test, not by asking a model — so the design is correct and only the presentation was wrong. The bench always said so (it prints \"substrate (deterministic remediation)\" and keeps the two arms apart precisely so the delta is the agent's lift); the scorecard is where that got lost. The agent lift for T5 is therefore UNMEASURED, not zero. 100% remediation-capture across repository, cloud and identity scenarios, execution-checked by the product's own retest.Verify so bench and product cannot drift. All three now clear the STRICT pass (closed everything closeable, no decoy actioned, nothing invented) after remediate.WorthProposing put triage in front of the proposer — decoy-actions went 1→0 per scenario with remediation unchanged.",
 		},
 		{
 			ID: "T6", Name: "Answer — query the estate",
 			Bench: "go test ./internal/platformapi -run TestT6_", Bar: "correct answer from our own data on a seeded question set",
 			Score: "5/5", Done: true,
-			Corpus: "5 questions, first-party synthetic", Confidence: "provisional",
+			Corpus: "5 questions, first-party synthetic", Engine: "deterministic", Confidence: "provisional",
 			Shipped: true, Note: "T6 is the one task where a WRONG answer does more damage than a missing one: an engineer who asks 'are we exposed to log4j?' acts on the reply, and a search that silently omits a match produces a false all-clear about the customer's own estate — indistinguishable downstream from a genuinely clean result, since both render as an empty list. The five cover the ways that happens: a match found anywhere in the finding rather than only the title (the log4j case hides in the package coordinate), unrelated findings NOT swept in, the header count agreeing with the rows shown, worst-severity-first so a truncated list still leads with the critical, and 'unproven' excluding what is already proven. Deterministic oracle — no model grades these — so it is firmer than the LLM-scored tasks at equal corpus size, but five self-authored questions is still five self-authored questions.",
 		},
 		{
 			ID: "T7", Name: "Report — evidence an auditor accepts",
 			Bench: "go test ./internal/grc -run TestT7_", Bar: "signed, grounded, control-mapped — and tamper-evident",
 			Score: "5/5 tamper cases detected", Done: true,
-			Corpus: "5 tamper mutations + wrong-key + unsigned", Confidence: "strong",
+			Corpus: "5 tamper mutations + wrong-key + unsigned", Engine: "deterministic", Confidence: "strong",
 			Shipped: true, Note: "The property that makes evidence auditor-grade is not that it is SIGNED — it is that TAMPERING BREAKS THE SIGNATURE. A pack that signs but does not detect alteration carries the authority of a signature with none of the guarantee, which is worse than none at all. All five mutations are detected (a gap flipped to met, an edited gap count, a removed control, a swapped tenant, a swapped framework), and a wrong key and an unsigned pack are both rejected. STRONG confidence because the oracle is cryptographic rather than a judgement call — the one task here whose correctness does not depend on a corpus I wrote.",
 		},
 		{
 			ID: "T8", Name: "Hand off — raise what isn't ours",
 			Bench: "go test ./internal/platformapi -run TestT8_", Bar: "ticket filed with the context a receiver can act on",
 			Score: "5/5", Done: true,
-			Corpus: "5 cases, first-party — 3 refusals, 2 content", Confidence: "provisional",
+			Corpus: "5 cases, first-party — 3 refusals, 2 content", Engine: "deterministic", Confidence: "provisional",
 			Shipped: true, Note: "MEASURING THIS FOUND A REAL HOLE. open_ticket is the only engineer tool that WRITES into the customer's queue, and at tier 1 it auto-delivers to their real tracker stamped raised_by:ai-security-engineer. It took free text alone — so the model could file a ticket asserting anything, citing nothing anyone downstream could check, while every sibling tool (propose_fix, request_proof, locate_vulnerability) was anchored to a finding. Action.FindingID is documented 'always set — grounding' and this path left it empty. It now requires a finding id the adapter RESOLVES against the tenant's own findings, refusing when it does not exist (§10, and §18.2 inv. 2 — another tenant's id is unresolvable, not merely unauthorized), and stamps severity/location/tool/rule so a receiver on another team can act without coming back to ask. The pre-existing T8 self-test passed while citing NOTHING, which is how the hole survived: it asserted a ticket appeared, never that it was about anything real.",
 		},
 	}
@@ -163,6 +177,24 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 	fmt.Fprintf(&b, "**Verifiable: %.0f%%** (%d of %d rest on evidence we did not author) — the number with "+
 		"headroom left\n\n", verifiable, strong, len(tasks))
 
+	// WHICH HALF OF THE PRODUCT IS THIS. Four of the eight scores come from an LLM's judgement and four
+	// from ordinary deterministic code. In a document titled "AI Security Engineer" that is not a
+	// detail: half the number describes machinery a model never touched. Deterministic is often the
+	// BETTER engine for a task (re-running a test beats asking a model whether a fix held), so this is
+	// not an admission of weakness — it is the difference between "the AI does this" and "the product
+	// does this", which a single efficacy percentage silently merges.
+	model := 0
+	for _, t := range tasks {
+		if t.Done && t.Engine == "model" {
+			model++
+		}
+	}
+	fmt.Fprintf(&b, "**Of the %d passing, %d depend on an LLM's judgement; %d are produced by deterministic "+
+		"code with no model in the loop.** Deterministic is frequently the better engine — \"did the fix "+
+		"hold?\" is settled by re-running the test, not by asking a model — so read this as scope, not "+
+		"weakness. It is the difference between \"the AI does this\" and \"the product does this\", which "+
+		"one efficacy percentage merges into nothing.\n\n", done, model, done-model)
+
 	// A saturated headline is not an achievement, it is an exhausted denominator. Say so, or every
 	// future reader takes 100% to mean the job is done rather than the ruler is used up.
 	if done == len(tasks) {
@@ -196,7 +228,7 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 			"customer-reachable call site, so the score describes a capability nobody can use. They are "+
 			"excluded from the efficacy number.\n\n", benchedOnly)
 	}
-	b.WriteString("| | Task | Benchmark | Score | Evidence | Confidence | Shipped | Done |\n|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| | Task | Benchmark | Score | Evidence | Engine | Confidence | Shipped | Done |\n|---|---|---|---|---|---|---|---|---|\n")
 	for _, t := range tasks {
 		bench, score, corpus, conf := t.Bench, t.Score, t.Corpus, t.Confidence
 		if bench == "" {
@@ -219,7 +251,11 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 		if t.Shipped {
 			ship = "yes"
 		}
-		fmt.Fprintf(&b, "| %s | %s | `%s` | %s | %s | %s | %s | %s |\n", t.ID, t.Name, bench, score, corpus, conf, ship, mark)
+		eng := t.Engine
+		if eng == "" {
+			eng = "—"
+		}
+		fmt.Fprintf(&b, "| %s | %s | `%s` | %s | %s | %s | %s | %s | %s |\n", t.ID, t.Name, bench, score, corpus, eng, conf, ship, mark)
 	}
 
 	b.WriteString("\n## The other persona\n\n")
