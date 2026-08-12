@@ -88,9 +88,9 @@ func EngineerScorecard() []TaskState {
 		{
 			ID: "T4", Name: "Fix — produce the change",
 			Bench: "tsbench cvepatch --dataset fixtures/cvepatch/seed.json", Bar: "≥ 40% of seeded CVEs closed, execution-verified",
-			Score: "3/3 (1.00)", Done: true,
+			Score: "median 3/3 · range 2/3-3/3", Done: true,
 			Corpus: "3 cases, first-party synthetic", Confidence: "provisional",
-			Shipped: true, Note: "EXECUTION-VERIFIED, the only ungameable oracle here: a driver runs the exploit AND a regression, so a plausible-looking diff cannot pass. qwen3:8b produced, localized and genuinely FIXED all three seeds (path traversal, command injection, XSS). Small (n=3) and first-party synthetic rather than real CVEs — the instrument was recovered from history, the case set is new. Real-CVE data stays operator-provided.",
+			Shipped: true, Note: "EXECUTION-VERIFIED, the only ungameable oracle here: a driver runs the exploit AND a regression, so a plausible-looking diff cannot pass. RE-RUNNING CORRECTED THIS ENTRY: it read a flat '3/3 (1.00)', which was the BEST run recorded as the score. Three runs give 3/3, 2/3, 3/3 - the same 8B non-determinism T1 shows across its 0.67-0.83 spread, with path-traversal the case that intermittently produces no patch at all, and nothing in codeagent changed between those runs. A single best run quoted as a capability is exactly the overclaiming the Confidence column exists to catch, so this is now the median with its range, matching how T1 and T2 are reported. It clears the 0.40 bar at every observation. Small (n=3) and first-party synthetic rather than real CVEs — the instrument was recovered from history, the case set is new. Real-CVE data stays operator-provided.",
 		},
 		{
 			ID: "T5", Name: "Verify — did the fix hold?",
