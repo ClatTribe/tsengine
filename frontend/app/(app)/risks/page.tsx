@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 import type { Risk } from "@/lib/types";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
+import { COMPLIANCE_TABS } from "@/lib/tabs";
 import { DecideRisk } from "@/components/risks/decide-risk";
 import { CapacityBadge } from "@/components/ui/capacity-badge";
 import { hitlOwner, capitalize } from "@/lib/service-model";
@@ -48,6 +50,7 @@ export default async function RisksPage() {
 
   return (
     <div className="space-y-6">
+      <PageTabs tabs={COMPLIANCE_TABS} />
       <PageIntro
         icon={Scale}
         title="Risk register"

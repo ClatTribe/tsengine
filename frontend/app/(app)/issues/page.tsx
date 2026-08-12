@@ -11,6 +11,7 @@ import { ExclusionRules } from "@/components/issues/exclusion-rules";
 import { TriageFunnel } from "@/components/issues/triage-funnel";
 import { PageIntro } from "@/components/ui/page-intro";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { SECURITY_TABS } from "@/lib/tabs";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
         }
       />
 
-      <PageTabs tabs={[{ href: "/issues", label: "Issues" }, { href: "/findings", label: "All findings" }]} />
+      <PageTabs tabs={SECURITY_TABS} />
 
       {/* AI Security Engineer presence — SPRINKLED, not a page. The list is deterministically ranked; the
           AI is an ACTION you run. When on, "Triage everything" runs the whole-estate triage INLINE (a

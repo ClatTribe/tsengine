@@ -3,6 +3,8 @@ import { ShieldCheck, ArrowRight, FileText, CircleDashed, Plug, CircleCheck, Cir
 import { api, FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/api";
 import { ASSET_TYPE_LABEL } from "@/lib/connectors";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
+import { COMPLIANCE_TABS } from "@/lib/tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,7 @@ export default async function CompliancePage() {
 
   return (
     <div className="space-y-5">
+      <PageTabs tabs={COMPLIANCE_TABS} />
       <PageIntro
         icon={ShieldCheck}
         title="Compliance"

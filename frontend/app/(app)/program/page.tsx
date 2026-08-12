@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 import type { Policy } from "@/lib/types";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
+import { COMPLIANCE_TABS } from "@/lib/tabs";
 import { PublishButton, AckButton } from "@/components/program/policy-actions";
 import { CapacityBadge } from "@/components/ui/capacity-badge";
 import { hitlOwner, capitalize } from "@/lib/service-model";
@@ -27,6 +29,7 @@ export default async function ProgramPage() {
 
   return (
     <div className="space-y-6">
+      <PageTabs tabs={COMPLIANCE_TABS} />
       <PageIntro
         icon={ScrollText}
         title="Security program"

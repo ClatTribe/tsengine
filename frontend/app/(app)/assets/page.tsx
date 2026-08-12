@@ -13,6 +13,8 @@ import { DisconnectButton } from "@/components/assets/disconnect-button";
 import { LoginFlowConfig } from "@/components/assets/login-flow-config";
 import { AuthzTestConfig } from "@/components/assets/authz-test-config";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
+import { CONNECTION_TABS } from "@/lib/tabs";
 import { timeAgo, cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +55,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-8">
+      <PageTabs tabs={CONNECTION_TABS} />
       <PageIntro
         icon={Boxes}
         title="Assets & connections"

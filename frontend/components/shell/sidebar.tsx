@@ -8,14 +8,9 @@ import {
   Inbox,
   ShieldCheck,
   Boxes,
-  ScrollText,
-  FileCheck2,
-  AppWindow,
   Layers,
   Crosshair,
-  Scale,
   ChevronDown,
-  Gauge,
   Sparkles,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
@@ -59,30 +54,21 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     ],
   },
   {
-    // PRODUCT 2 — the attacker. A scope → authorize → run → report engagement, unchanged.
+    // PRODUCT 2 — the attacker. A scope → authorize → run → report engagement.
     header: "AI Pentester",
     items: [
       { href: "/pentest", label: "Engagements", icon: Crosshair },
     ],
   },
   {
-    // The second OUTCOME (audit-readiness), which neither agent owns alone — both feed it. Four distinct
-    // artifacts: live control posture, the risk register, the external-auditor engagement, the policy set.
-    header: "Compliance",
+    // ONE ROW PER DESTINATION, artifacts as tabs on it (lib/tabs.ts). Compliance was four rows —
+    // Posture, Risks, Audits, Program — and Connections three. Seven rows for two ideas: "am I
+    // audit-ready" and "what have I connected". A reader had to know what "Program" meant before
+    // deciding whether they wanted it, and the sidebar grew with every page added. Same pages, same
+    // click count, far less to hold in your head.
     items: [
-      { href: "/compliance", label: "Posture", icon: ShieldCheck },
-      { href: "/risks", label: "Risks", icon: Scale },
-      { href: "/audits", label: "Audits", icon: FileCheck2 },
-      { href: "/program", label: "Program", icon: ScrollText },
-    ],
-  },
-  {
-    // What you have connected — inventories, not finding-views (their risk shows up under the Engineer).
-    header: "Connections",
-    items: [
-      { href: "/assets", label: "Assets", icon: Boxes },
-      { href: "/posture", label: "Vendors & devices", icon: Gauge },
-      { href: "/saas-apps", label: "Connected apps", icon: AppWindow },
+      { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+      { href: "/assets", label: "Connections", icon: Boxes },
     ],
   },
 ];
