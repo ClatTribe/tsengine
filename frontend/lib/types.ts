@@ -863,3 +863,13 @@ export interface SaaSAppsResponse {
     multi_user_apps: number;
   };
 }
+
+// ProofRequest — one finding the AI Security Engineer routed to the AI Pentester to settle.
+// Mirrors internal/pentest.ProofRequest (snake_case on the wire).
+export type ProofRequest = {
+  finding_id: string;
+  target: string;
+  class: string;
+  severity: string;
+  why: string;
+};

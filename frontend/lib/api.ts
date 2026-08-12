@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -236,6 +236,15 @@ export const api = {
   // T6 — ask your estate. The SAME search the AI Security Engineer's search_estate tool runs, so the
   // answer a human gets and the answer the agent reasons over cannot drift. Grounded: no model is
   // involved, so an empty result means the estate has no match rather than that a model forgot one.
+  // The doubt→prove handoff between the two agents: unproven high/critical findings the Engineer
+  // surfaced whose class an offensive driver can actually demonstrate. An empty queue is NOT
+  // necessarily "nothing to prove" — it also means no ownership-verified target, which the server says
+  // in `note` and the UI must repeat rather than render as an all-clear.
+  proofQueue: () =>
+    safe<{ requests: ProofRequest[]; count: number; note: string; max_batch: string }>(
+      "/v1/proof-queue",
+      { requests: [], count: 0, note: "", max_batch: "0" },
+    ),
   ask: (q: string) =>
     safe<{ query: string; answer: string }>(`/v1/ask?q=${encodeURIComponent(q)}`, { query: q, answer: "" }),
   codeInvestigation: () =>
