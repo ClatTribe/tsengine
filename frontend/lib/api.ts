@@ -233,9 +233,6 @@ export const api = {
     }>("/v1/code/investigate", { method: "POST", body: JSON.stringify({ repo, findings, source }) }),
 
   // AI Code Engineer — the stored, confirmed-exploitable source assessments (read-only view) + runnable flag.
-  // T6 — ask your estate. The SAME search the AI Security Engineer's search_estate tool runs, so the
-  // answer a human gets and the answer the agent reasons over cannot drift. Grounded: no model is
-  // involved, so an empty result means the estate has no match rather than that a model forgot one.
   // The doubt→prove handoff between the two agents: unproven high/critical findings the Engineer
   // surfaced whose class an offensive driver can actually demonstrate. An empty queue is NOT
   // necessarily "nothing to prove" — it also means no ownership-verified target, which the server says
@@ -245,6 +242,17 @@ export const api = {
       "/v1/proof-queue",
       { requests: [], count: 0, note: "", max_batch: "0" },
     ),
+  // T2 — "where is the fix?". The SAME localizer the agent's locate_vulnerability tool runs, so the
+  // answer a human reads and the one the agent reasons over cannot drift. Honest negatives are answers,
+  // not errors: no repo connected, no readable source, or no file carrying sink evidence for the class.
+  localize: (findingID: string) =>
+    safe<{ finding_id: string; answer: string }>(
+      `/v1/findings/${encodeURIComponent(findingID)}/localize`,
+      { finding_id: findingID, answer: "" },
+    ),
+  // T6 — ask your estate. The SAME search the AI Security Engineer's search_estate tool runs, so the
+  // answer a human gets and the answer the agent reasons over cannot drift. Grounded: no model is
+  // involved, so an empty result means the estate has no match rather than that a model forgot one.
   ask: (q: string) =>
     safe<{ query: string; answer: string }>(`/v1/ask?q=${encodeURIComponent(q)}`, { query: q, answer: "" }),
   codeInvestigation: () =>

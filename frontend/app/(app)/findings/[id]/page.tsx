@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ShieldAlert, Flame, Wrench, GitPullRequest, Settings2, Ticket, FileWarning, ArrowRight, Radar, FileCode2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { LocalizeFinding } from "@/components/findings/localize-finding";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import { AutofixButton } from "@/components/findings/autofix-button";
 import { SeverityBadge, Tag } from "@/components/ui/primitives";
@@ -102,6 +103,10 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
           <div className="card p-5 text-sm leading-relaxed text-muted">{f.description}</div>
         </section>
       )}
+
+      {/* LOCATE BEFORE FIX. A patch is only as good as knowing which file it belongs in, and a
+          scanner's file:line is often approximate or absent — so this sits immediately above AI fix. */}
+      <LocalizeFinding findingID={id} />
 
       <section>
         <div className="mb-2 text-xs uppercase tracking-wider text-muted">AI fix</div>
