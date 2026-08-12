@@ -97,6 +97,24 @@ func EngineerAutonomy() []AutonomyTask {
 			Level: LevelApproval, Evidence: "grc report generated unattended; ControlAttestation needs a NAMED auditor (§18.4)"},
 		{ID: "T8", Job: "engineer", Name: "Hand off — raise what isn't ours",
 			Level: LevelApproval, Evidence: "ticketFiler → hitl.Desk at tier 1; auto-delivers unless halted"},
+		{ID: "T9", Job: "engineer", Name: "Respond — contain an incident",
+			Level: LevelApproval, Evidence: "runner calls remediate.ProposeIncidentResponse on a CRITICAL incident → tier-2 containment + a T3 breach draft needing a signature"},
+		{ID: "T10", Job: "engineer", Name: "Attest — answer a customer's security questionnaire",
+			Level: LevelAutonomous, Evidence: "grc.Questionnaire auto-answers the CAIQ/SIG-lite set from real control state; GET /v1/questionnaire"},
+		{ID: "T11", Job: "engineer", Name: "Review — threat-model a change before it ships",
+			Level: LevelHumanDoes, Evidence: "no design-time capability exists — the only 'threat model' in the tree is our own, in comments",
+			Gap: "The product is entirely POST-HOC: it reasons about what already exists and has already been " +
+				"scanned. A security engineer also reviews designs BEFORE they ship — the cheapest place to " +
+				"remove a vulnerability, and the one this does not attempt at all. Nothing here is broken; " +
+				"the task is simply absent, which is worse for a score than a task done badly and easy to " +
+				"miss when you decompose a job by looking at what the product already does."},
+		{ID: "T12", Job: "engineer", Name: "Recertify — run a periodic access review",
+			Level: LevelHumanDoes, Evidence: "no recertification workflow; operate detects stale/over-privileged accounts but nothing collects attestations",
+			Gap: "The DETECTION half exists and is good — operate finds stale accounts, admins without MFA, " +
+				"and standing privilege that survived offboarding. The ATTESTATION half does not: a periodic " +
+				"review where each manager confirms their people still need their access is required by " +
+				"SOC 2 CC6.2/6.3, and the platform already has the HITL machinery to run one. Nobody is " +
+				"asked, so it does not happen."},
 	}
 }
 
@@ -119,7 +137,7 @@ func PentesterAutonomy() []AutonomyTask {
 		{ID: "P3", Job: "pentester", Name: "Discover — map the attack surface",
 			Level: LevelAutonomous, Evidence: "L1 recon→fan-out (katana/subfinder/naabu) + cmd/tsbench discover; deterministic prepass"},
 		{ID: "P4", Job: "pentester", Name: "Exploit — prove it, don't guess",
-			Level: LevelAutonomous, NeedsModel: true, Evidence: "pentest ActiveDriver / webagent under RoE.Check; predicate-gated upgrade to verified"},
+			Level: LevelAutonomous, NeedsModel: true, Evidence: "pentest ActiveDriver / webagent under RoE.Check; predicate-gated upgrade to verified. COVERAGE CAVEAT (not an autonomy one): business-logic flaws are attempted only where a deterministic predicate can ground them — bola_probe, privesc_probe. General BFLA is deliberately NOT attempted, because \"this function is privileged\" is a policy fact no response can prove (§12.6)"},
 		{ID: "P5", Job: "pentester", Name: "Chain — escalate and measure blast radius",
 			Level: LevelAutonomous, Evidence: "crossdetect.Correlate + cloudgraph attack paths; runs on every pass"},
 		{ID: "P6", Job: "pentester", Name: "Report — the VAPT deliverable",
@@ -140,6 +158,17 @@ func PentesterAutonomy() []AutonomyTask {
 		},
 		{ID: "P8", Job: "pentester", Name: "Sign off — a named human stands behind it",
 			Level: LevelApproval, Evidence: "POST /v1/pentest/{id}/signoff — refuses without a named signer (§18.4)"},
+		{ID: "P9", Job: "pentester", Name: "Social-engineer — will a person hand over access?",
+			Level: LevelHumanDoes, Evidence: "every phishing reference in the tree is DEFENSIVE (DMARC posture in assess.go, SaaS config in sspm); no lure is ever sent",
+			Gap: "A standard engagement tests whether a HUMAN can be talked into access, and this tests only " +
+				"machines. The platform already holds the whole target list — it enumerates staff, their " +
+				"MFA state and their admin roles through operate — and never once tests whether one of them " +
+				"would click. It may be a deliberate scope choice rather than an oversight (sending lures " +
+				"to a customer's staff needs consent machinery beyond an RoE, and getting it wrong is " +
+				"worse than not doing it). Either way the metric must show it: a buyer comparing this to a " +
+				"human pentest firm will assume social engineering is included, because from that firm it " +
+				"would be.",
+		},
 	}
 }
 
