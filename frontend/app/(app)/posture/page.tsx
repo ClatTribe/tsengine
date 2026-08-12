@@ -2,6 +2,8 @@ import { ShieldCheck, Building2, Laptop, CloudCog } from "lucide-react";
 import { api } from "@/lib/api";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
+import { CONNECTION_TABS } from "@/lib/tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,7 @@ export default async function PosturePage() {
 
   return (
     <div className="space-y-8">
+      <PageTabs tabs={CONNECTION_TABS} />
       <PageIntro
         icon={ShieldCheck}
         title="Vendors & devices"

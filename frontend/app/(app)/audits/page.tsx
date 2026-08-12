@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 import type { AuditEngagement } from "@/lib/types";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
+import { COMPLIANCE_TABS } from "@/lib/tabs";
 import { CreateAudit } from "@/components/audits/create-audit";
 import { AttestControl } from "@/components/audits/attest-control";
 import { issueAudit } from "./actions";
@@ -20,6 +22,7 @@ export default async function AuditsPage() {
 
   return (
     <div className="space-y-6">
+      <PageTabs tabs={COMPLIANCE_TABS} />
       <PageIntro
         icon={FileCheck2}
         title="Audits"
