@@ -34,6 +34,15 @@ type TaskState struct {
 	Done bool
 	// Note is the honest caveat — too few readings, a tuning result, no instrument at all.
 	Note string
+	// Corpus describes the EVIDENCE behind Score: how many cases, and who wrote them. It exists
+	// because a 1.00 on three cases the author invented and a 0.86 on a hundred a competitor
+	// published render identically in a score column, and they are not remotely the same claim.
+	Corpus string
+	// Confidence grades that evidence, so a reader does not have to work it out:
+	//   strong      external corpus, ungameable oracle, enough cases to mean something
+	//   provisional first-party corpus or too few cases — the bar is met, the capability is unproven
+	//   none        unmeasured
+	Confidence string
 }
 
 // EngineerScorecard is the current state of the eight tasks.
@@ -47,48 +56,53 @@ func EngineerScorecard() []TaskState {
 			ID: "T1", Name: "Triage — is this real, does it matter?",
 			Bench: "tsbench triage", Bar: "Youden J ≥ 0.50 (beat the best deterministic baseline)",
 			Score: "0.75", Done: true,
+			Corpus: "12 cases, first-party synthetic", Confidence: "provisional",
 			Note: "llm + deterministic disposer, median of 4 runs (0.67–0.83). Model alone: 0.50, no better than a path check. Tuning result — the disposer's rules were chosen after seeing the failures.",
 		},
 		{
 			ID: "T2", Name: "Localize — where is the fix?",
 			Bench: "tsbench localize --hard", Bar: "recall@1 ≥ 0.80",
 			Score: "1.00", Done: true,
+			Corpus: "6 cases, first-party synthetic", Confidence: "provisional",
 			Note: "median of 3 runs on the hard corpus. The DEFAULT corpus saturates at 1.00 on the substrate and cannot discriminate — only --hard has headroom.",
 		},
 		{
 			ID: "T3", Name: "Assess — is it reachable/exploitable?",
-			Bench: "", Bar: "proven-or-honestly-unproven on a seeded set",
-			Score: "", Done: false,
-			Note: "The doubt→prove edge is wired and gated, but nothing SCORES it. No instrument.",
+			Bench: "tsbench xbow", Bar: "≥ 40% of the suite captured",
+			Score: "89/104 (0.86)", Done: true,
+			Corpus: "104 challenges, EXTERNAL (XBOW's own public suite)", Confidence: "strong",
+			Note: "PROXY, and stated as one: XBOW grades END-TO-END exploitation (find it, then exploit it) — the AI PENTESTER's job — while T3 asks the narrower question 'is THIS already-surfaced finding exploitable'. It is the closest honest instrument we have and it strictly dominates the alternative of no measurement, but it over-states T3 by measuring discovery as well. The best evidence in this repo, and it was missing from earlier versions of this scorecard. XBOW's own 104-challenge suite, graded on FLAG CAPTURE — a random flag injected at build time, retrievable only by real exploitation, so it cannot be gamed by plausible output. Every capture carries an evidence SHA-256. Directly comparable to the suite authors' published rate, unlike every first-party corpus here.",
 		},
 		{
 			ID: "T4", Name: "Fix — produce the change",
 			Bench: "tsbench cvepatch --dataset fixtures/cvepatch/seed.json", Bar: "≥ 40% of seeded CVEs closed, execution-verified",
 			Score: "3/3 (1.00)", Done: true,
+			Corpus: "3 cases, first-party synthetic", Confidence: "provisional",
 			Note: "EXECUTION-VERIFIED, the only ungameable oracle here: a driver runs the exploit AND a regression, so a plausible-looking diff cannot pass. qwen3:8b produced, localized and genuinely FIXED all three seeds (path traversal, command injection, XSS). Small (n=3) and first-party synthetic rather than real CVEs — the instrument was recovered from history, the case set is new. Real-CVE data stays operator-provided.",
 		},
 		{
 			ID: "T5", Name: "Verify — did the fix hold?",
 			Bench: "tsbench defense", Bar: "remediation-capture ≥ 0.40",
 			Score: "1.00 · 3/3 PASS", Done: true,
+			Corpus: "3 scenarios, first-party synthetic", Confidence: "provisional",
 			Note: "100% remediation-capture across repository, cloud and identity scenarios, execution-checked by the product's own retest.Verify so bench and product cannot drift. All three now clear the STRICT pass (closed everything closeable, no decoy actioned, nothing invented) after remediate.WorthProposing put triage in front of the proposer — decoy-actions went 1→0 per scenario with remediation unchanged.",
 		},
 		{
 			ID: "T6", Name: "Answer — query the estate",
 			Bench: "", Bar: "correct answer from our own data on a seeded question set",
-			Score: "", Done: false,
+			Score: "", Done: false, Corpus: "none", Confidence: "none",
 			Note: "search_estate now exists as an agent tool, so the capability is there. Nothing scores whether its answers are right.",
 		},
 		{
 			ID: "T7", Name: "Report — evidence an auditor accepts",
 			Bench: "", Bar: "signed, grounded, control-mapped",
-			Score: "", Done: false,
+			Score: "", Done: false, Corpus: "none", Confidence: "none",
 			Note: "Strong unit coverage (grc, OSCAL) but no end-to-end efficacy score. Arguably the closest to done of the unmeasured five.",
 		},
 		{
 			ID: "T8", Name: "Hand off — raise what isn't ours",
 			Bench: "", Bar: "ticket filed with the context a receiver can act on",
-			Score: "", Done: false,
+			Score: "", Done: false, Corpus: "none", Confidence: "none",
 			Note: "open_ticket exists as an agent tool. Unmeasured.",
 		},
 	}
@@ -113,23 +127,47 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 	fmt.Fprintf(&b, "**Efficacy: %.0f%%** (%d of %d tasks clear their bar) — target 40%%\n\n", efficacy, done, len(tasks))
 	fmt.Fprintf(&b, "**Measurement coverage: %.0f%%** (%d of %d tasks have a runnable benchmark)\n\n",
 		coverage, measurable, len(tasks))
-	b.WriteString("| | Task | Benchmark | Bar | Score | Done |\n|---|---|---|---|---|---|\n")
+	strong := 0
 	for _, t := range tasks {
-		bench, score := t.Bench, t.Score
+		if t.Done && t.Confidence == "strong" {
+			strong++
+		}
+	}
+	fmt.Fprintf(&b, "**Of the %d passing, %d rests on STRONG evidence** (external corpus, ungameable oracle). ", done, strong)
+	b.WriteString("The rest pass on first-party corpora of 3–12 cases the author also wrote — the bar is met, ")
+	b.WriteString("the capability is unproven. A 1.00 on three self-authored cases is a bug report about the ")
+	b.WriteString("benchmark, not a capability claim.\n\n")
+	b.WriteString("| | Task | Benchmark | Score | Evidence | Confidence | Done |\n|---|---|---|---|---|---|---|\n")
+	for _, t := range tasks {
+		bench, score, corpus, conf := t.Bench, t.Score, t.Corpus, t.Confidence
 		if bench == "" {
 			bench = "*none*"
 		}
 		if score == "" {
 			score = "—"
 		}
+		if corpus == "" {
+			corpus = "—"
+		}
+		if conf == "" {
+			conf = "—"
+		}
 		mark := "no"
 		if t.Done {
 			mark = "**yes**"
 		}
-		fmt.Fprintf(&b, "| %s | %s | `%s` | %s | %s | %s |\n", t.ID, t.Name, bench, t.Bar, score, mark)
+		fmt.Fprintf(&b, "| %s | %s | `%s` | %s | %s | %s | %s |\n", t.ID, t.Name, bench, score, corpus, conf, mark)
 	}
 
-	b.WriteString("\n## Why the denominator is eight\n\n")
+	b.WriteString("\n## The other persona\n\n")
+	b.WriteString("This scorecard grades the AI Security **Engineer**. The AI **Pentester** is a separate job and ")
+	b.WriteString("has, by some distance, the better evidence: `tsbench xbow` — **89 of 104** on the suite ")
+	b.WriteString("author's own public challenges, every capture carrying an evidence SHA-256, directly ")
+	b.WriteString("comparable to their published rate. That the offensive side is measured this much better ")
+	b.WriteString("than the defensive one is itself the finding: the hard external benchmark existed for ")
+	b.WriteString("attack and had to be invented for defence.\n\n")
+
+	b.WriteString("## Why the denominator is eight\n\n")
 	b.WriteString("A task with no benchmark counts as NOT done. Scoring only the tasks we can measure would ")
 	b.WriteString("produce a flattering number that nobody could check — and the missing instruments are ")
 	b.WriteString("currently the bigger problem than the scores.\n\n")
