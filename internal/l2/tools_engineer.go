@@ -111,6 +111,7 @@ func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester
 				"query": str("what to look for, in plain language"),
 			}, "query"),
 		},
+		Phases: []Phase{PhaseTriage, PhaseInvestigate},
 		Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 			q := engArg(args, "query")
 			if q == "" {
@@ -138,6 +139,7 @@ func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester
 				"rationale":  str("why this fix, in one or two sentences"),
 			}, "finding_id"),
 		},
+		Phases: []Phase{PhaseReport},
 		Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 			id := engArg(args, "finding_id")
 			if id == "" {
@@ -168,6 +170,7 @@ func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester
 				"finding_id": str("the unproven finding to settle"),
 			}, "finding_id"),
 		},
+		Phases: []Phase{PhaseInvestigate},
 		Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 			id := engArg(args, "finding_id")
 			if id == "" {
@@ -192,6 +195,7 @@ func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester
 				"action_id": str("the remediation to check"),
 			}, "action_id"),
 		},
+		Phases: []Phase{PhaseTriage},
 		Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 			id := engArg(args, "action_id")
 			if id == "" {
@@ -218,6 +222,7 @@ func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester
 				"finding_id": str("the finding to locate"),
 			}, "finding_id"),
 		},
+		Phases: []Phase{PhaseInvestigate},
 		Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 			id := engArg(args, "finding_id")
 			if id == "" {
@@ -246,6 +251,7 @@ func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester
 				"body":       str("what needs doing and why it matters"),
 			}, "finding_id", "title"),
 		},
+		Phases: []Phase{PhaseReport},
 		// GROUNDING (§10). This is the one engineer tool that writes into the customer's action queue,
 		// and it used to take free text alone. That let the model file a real ticket — auto-delivered at
 		// tier 1, stamped raised_by:ai-security-engineer — asserting anything it liked, citing nothing a

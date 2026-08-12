@@ -80,20 +80,13 @@ func (d Deps) engineerTools() Catalog {
 	if len(d.Engineer) == 0 {
 		return nil // not wired → the cap is never spent on tools that cannot act
 	}
-	phases := map[string][]Phase{
-		"search_estate":        {PhaseTriage, PhaseInvestigate},
-		"locate_vulnerability": {PhaseInvestigate},
-		"check_fix_status":     {PhaseTriage},
-		"request_proof":        {PhaseInvestigate},
-		"propose_fix":          {PhaseReport},
-		"open_ticket":          {PhaseReport},
-	}
+	// Phases are declared on the tools themselves (tools_engineer.go), the same as every other tool in
+	// this package. They used to be bolted on here, which meant a belt obtained any other way — say by
+	// appending EngineerCatalog straight onto CoreTools — arrived UNGATED: an empty phase set reads as
+	// "every phase", so propose_fix and open_ticket were offered during triage and the per-phase ≤12 cap
+	// (§2.6) was computed against a list nobody would actually be handed. A tool should carry its own
+	// gating rather than depend on the assembler remembering to apply it.
 	out := make(Catalog, 0, len(d.Engineer))
-	for _, t := range d.Engineer {
-		if p, ok := phases[t.Schema.Name]; ok {
-			t.Phases = p
-		}
-		out = append(out, t)
-	}
+	out = append(out, d.Engineer...)
 	return out
 }
