@@ -1,0 +1,58 @@
+{
+  "id": "public-storage-exposure",
+  "name": "World-readable bucket holding customer exports (the cloud-surface remediation)",
+  "assets": [
+    {
+      "id": "cloud-1",
+      "type": "cloud_account",
+      "target": "123456789012",
+      "meta": {
+        "provider": "aws"
+      }
+    }
+  ],
+  "before": [
+    {
+      "id": "f-public-bucket",
+      "rule_id": "prowler::s3-bucket-public-read-prohibited",
+      "tool": "prowler",
+      "severity": "high",
+      "endpoint": "arn:aws:s3:::acme-customer-exports",
+      "title": "S3 bucket acme-customer-exports is readable by anyone",
+      "description": "The bucket policy grants s3:GetObject to the * principal. The bucket holds nightly customer exports, so every object is world-readable."
+    },
+    {
+      "id": "f-no-mfa-root",
+      "rule_id": "prowler::root-account-mfa-enabled",
+      "tool": "prowler",
+      "severity": "high",
+      "endpoint": "arn:aws:iam::123456789012:root",
+      "title": "Root account has no MFA",
+      "description": "The account root user can authenticate with a password alone."
+    },
+    {
+      "id": "f-decoy-tag",
+      "rule_id": "prowler::resource-missing-owner-tag",
+      "tool": "prowler",
+      "severity": "low",
+      "endpoint": "arn:aws:s3:::acme-build-cache",
+      "title": "Bucket missing an owner tag",
+      "description": "A build-cache bucket has no owner tag. A tagging-hygiene gap, not a security exposure."
+    }
+  ],
+  "after": [
+    {
+      "id": "f-decoy-tag",
+      "rule_id": "prowler::resource-missing-owner-tag",
+      "tool": "prowler",
+      "severity": "low",
+      "endpoint": "arn:aws:s3:::acme-build-cache",
+      "title": "Bucket missing an owner tag",
+      "description": "Still present after remediation \u2014 it was never a security exposure."
+    }
+  ],
+  "decoys": [
+    "prowler::resource-missing-owner-tag|arn:aws:s3:::acme-build-cache"
+  ],
+  "attack_paths": []
+}
