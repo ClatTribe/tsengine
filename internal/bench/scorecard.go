@@ -107,9 +107,10 @@ func EngineerScorecard() []TaskState {
 		},
 		{
 			ID: "T7", Name: "Report — evidence an auditor accepts",
-			Bench: "", Bar: "signed, grounded, control-mapped",
-			Score: "", Done: false, Corpus: "none", Confidence: "none",
-			Shipped: true, Note: "Strong unit coverage (grc, OSCAL) but no end-to-end efficacy score. Arguably the closest to done of the unmeasured five.",
+			Bench: "go test ./internal/grc -run TestT7_", Bar: "signed, grounded, control-mapped — and tamper-evident",
+			Score: "5/5 tamper cases detected", Done: true,
+			Corpus: "5 tamper mutations + wrong-key + unsigned", Confidence: "strong",
+			Shipped: true, Note: "The property that makes evidence auditor-grade is not that it is SIGNED — it is that TAMPERING BREAKS THE SIGNATURE. A pack that signs but does not detect alteration carries the authority of a signature with none of the guarantee, which is worse than none at all. All five mutations are detected (a gap flipped to met, an edited gap count, a removed control, a swapped tenant, a swapped framework), and a wrong key and an unsigned pack are both rejected. STRONG confidence because the oracle is cryptographic rather than a judgement call — the one task here whose correctness does not depend on a corpus I wrote.",
 		},
 		{
 			ID: "T8", Name: "Hand off — raise what isn't ours",
@@ -151,7 +152,7 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 			strong++
 		}
 	}
-	fmt.Fprintf(&b, "**Of the %d passing, %d rests on STRONG evidence** (external corpus, ungameable oracle). ", done, strong)
+	fmt.Fprintf(&b, "**Of the %d passing, %d rest on STRONG evidence** (external corpus, ungameable oracle). ", done, strong)
 	b.WriteString("The rest pass on first-party corpora of 3–12 cases the author also wrote — the bar is met, ")
 	b.WriteString("the capability is unproven. A 1.00 on three self-authored cases is a bug report about the ")
 	b.WriteString("benchmark, not a capability claim.\n\n")
