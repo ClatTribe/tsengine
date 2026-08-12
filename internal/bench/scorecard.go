@@ -81,9 +81,9 @@ func EngineerScorecard() []TaskState {
 		{
 			ID: "T3", Name: "Assess — is it reachable/exploitable?",
 			Bench: "tsbench xbow", Bar: "≥ 40% of the suite captured",
-			Score: "89/104 (0.86)", Done: true,
+			Score: "pass@1 78/104 (0.75) · best-of-retry 89/104 (0.86)", Done: true,
 			Corpus: "104 challenges, EXTERNAL (XBOW's own public suite)", Confidence: "strong",
-			Shipped: true, Note: "PROXY, and stated as one: XBOW grades END-TO-END exploitation (find it, then exploit it) — the AI PENTESTER's job — while T3 asks the narrower question 'is THIS already-surfaced finding exploitable'. It is the closest honest instrument we have and it strictly dominates the alternative of no measurement, but it over-states T3 by measuring discovery as well. The best evidence in this repo, and it was missing from earlier versions of this scorecard. XBOW's own 104-challenge suite, graded on FLAG CAPTURE — a random flag injected at build time, retrievable only by real exploitation, so it cannot be gamed by plausible output. Every capture carries an evidence SHA-256. Directly comparable to the suite authors' published rate, unlike every first-party corpus here.",
+			Shipped: true, Note: "PROXY, and stated as one: XBOW grades END-TO-END exploitation (find it, then exploit it) — the AI PENTESTER's job — while T3 asks the narrower question 'is THIS already-surfaced finding exploitable'. It is the closest honest instrument we have and it strictly dominates the alternative of no measurement, but it over-states T3 by measuring discovery as well. The best evidence in this repo, and it was missing from earlier versions of this scorecard. XBOW's own 104-challenge suite, graded on FLAG CAPTURE — a random flag injected at build time, retrievable only by real exploitation, so it cannot be gamed by plausible output. Every capture carries an evidence SHA-256. WHAT THE 89 ACTUALLY IS, checked against bench/xbow-ledger.jsonl rather than taken on trust: 111 attempts over 97 distinct challenges across two days, 89 solved AT LEAST ONCE. Twelve challenges were attempted more than once and ELEVEN of those failed before they succeeded — so 0.86 is a best-of-retry figure, closer to pass@k than pass@1. First-attempt only is 78/104 = 0.75, an eleven-point gap. Retries are legitimate in agent benchmarking WHEN DISCLOSED, which is why both numbers are now on the entry. This also retracts a comparability claim that used to sit here: 'directly comparable to the suite authors' published rate' only holds if their figure is also best-of-retry, and that has not been checked — against a published pass@1 the old line flattered us by those eleven points. It remains the best evidence in this repo; it is not evidence of whichever number reads highest.",
 		},
 		{
 			ID: "T4", Name: "Fix — produce the change",
@@ -224,11 +224,14 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 
 	b.WriteString("\n## The other persona\n\n")
 	b.WriteString("This scorecard grades the AI Security **Engineer**. The AI **Pentester** is a separate job and ")
-	b.WriteString("has, by some distance, the better evidence: `tsbench xbow` — **89 of 104** on the suite ")
-	b.WriteString("author's own public challenges, every capture carrying an evidence SHA-256, directly ")
-	b.WriteString("comparable to their published rate. That the offensive side is measured this much better ")
-	b.WriteString("than the defensive one is itself the finding: the hard external benchmark existed for ")
-	b.WriteString("attack and had to be invented for defence.\n\n")
+	b.WriteString("has, by some distance, the better evidence: `tsbench xbow` — **78 of 104 first-attempt ")
+	b.WriteString("(0.75), 89 of 104 allowing retries (0.86)** on the suite author's own public challenges, ")
+	b.WriteString("every capture carrying an evidence SHA-256. Both are quoted because the ledger shows ")
+	b.WriteString("eleven of the 89 needed more than one attempt, and a single figure hides which question ")
+	b.WriteString("it answers. Whether either is comparable to the suite author's published rate depends on ")
+	b.WriteString("whether theirs is pass@1 or best-of-retry — unchecked, so no longer claimed. That the ")
+	b.WriteString("offensive side is measured this much better than the defensive one is itself the finding: ")
+	b.WriteString("the hard external benchmark existed for attack and had to be invented for defence.\n\n")
 
 	b.WriteString("## Why the denominator is eight\n\n")
 	b.WriteString("A task with no benchmark counts as NOT done. Scoring only the tasks we can measure would ")
