@@ -70,7 +70,7 @@ type AutonomyTask struct {
 func EngineerAutonomy() []AutonomyTask {
 	return []AutonomyTask{
 		{ID: "T1", Job: "engineer", Name: "Triage — is this real, does it matter?",
-			Level: LevelAutonomous, NeedsModel: true, Evidence: "runner.RescanTenant → crossdetect + triage on every pass; no human touch"},
+			Level: LevelAutonomous, NeedsModel: true, Evidence: "runner/autonomy_e2e_test.go proves one pass detects + closes its own incidents with no human call; RescanTenant → crossdetect + triage"},
 		{ID: "T2", Job: "engineer", Name: "Localize — where is the fix?",
 			Level: LevelAutonomous, NeedsModel: true, Evidence: "vulnLocalizer (agent tool) + GET /v1/findings/{id}/localize; grounded in repo contents"},
 		{ID: "T3", Job: "engineer", Name: "Assess — is it reachable/exploitable?",
@@ -88,7 +88,7 @@ func EngineerAutonomy() []AutonomyTask {
 			// anything it could not do before. A metric that rewards relabelling is worse than none.
 		},
 		{ID: "T4", Job: "engineer", Name: "Fix — produce the change",
-			Level: LevelApproval, NeedsModel: true, Evidence: "remediate.Propose → hitl.Desk; tier ≥ GateTier queues for a named human"},
+			Level: LevelApproval, NeedsModel: true, Evidence: "runner/autonomy_e2e_test.go — an unattended pass finds, proposes and STOPS at the desk (mutation-checked); remediate.Propose → hitl.Desk"},
 		{ID: "T5", Job: "engineer", Name: "Verify — did the fix hold?",
 			Level: LevelAutonomous, Evidence: "retest.Verify inside runner.RescanTenant; deterministic re-test, no human"},
 		{ID: "T6", Job: "engineer", Name: "Answer — query the estate",
