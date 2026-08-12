@@ -101,9 +101,10 @@ func EngineerScorecard() []TaskState {
 		},
 		{
 			ID: "T6", Name: "Answer — query the estate",
-			Bench: "", Bar: "correct answer from our own data on a seeded question set",
-			Score: "", Done: false, Corpus: "none", Confidence: "none",
-			Shipped: true, Note: "search_estate now exists as an agent tool, so the capability is there. Nothing scores whether its answers are right.",
+			Bench: "go test ./internal/platformapi -run TestT6_", Bar: "correct answer from our own data on a seeded question set",
+			Score: "5/5", Done: true,
+			Corpus: "5 questions, first-party synthetic", Confidence: "provisional",
+			Shipped: true, Note: "T6 is the one task where a WRONG answer does more damage than a missing one: an engineer who asks 'are we exposed to log4j?' acts on the reply, and a search that silently omits a match produces a false all-clear about the customer's own estate — indistinguishable downstream from a genuinely clean result, since both render as an empty list. The five cover the ways that happens: a match found anywhere in the finding rather than only the title (the log4j case hides in the package coordinate), unrelated findings NOT swept in, the header count agreeing with the rows shown, worst-severity-first so a truncated list still leads with the critical, and 'unproven' excluding what is already proven. Deterministic oracle — no model grades these — so it is firmer than the LLM-scored tasks at equal corpus size, but five self-authored questions is still five self-authored questions.",
 		},
 		{
 			ID: "T7", Name: "Report — evidence an auditor accepts",
@@ -156,6 +157,20 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 	b.WriteString("The rest pass on first-party corpora of 3–12 cases the author also wrote — the bar is met, ")
 	b.WriteString("the capability is unproven. A 1.00 on three self-authored cases is a bug report about the ")
 	b.WriteString("benchmark, not a capability claim.\n\n")
+
+	// A rising efficacy number sitting on a flat evidence base is the specific way this scorecard could
+	// go bad, and it is invisible if you read only the headline. Every task here was benchmarked by the
+	// same person who wrote the engine, so the percentage climbs whenever a task gets an instrument —
+	// whether or not the capability improved. Stating that mechanically is the only version that
+	// survives the author wanting a good number.
+	if done > 0 && float64(strong)/float64(done) < 0.5 {
+		fmt.Fprintf(&b, "> **Read the efficacy number with this beside it.** %d of the %d passes rest on "+
+			"corpora written by the same person who wrote the engine being graded. That percentage rises "+
+			"whenever a task gains an instrument, whether or not anything got better — so read a rise as "+
+			"\"one more thing is now measured\", never as \"the engineer got smarter\". The part that would "+
+			"survive a customer checking it is the %d backed by evidence we did not author.\n\n",
+			done-strong, done, strong)
+	}
 	if benchedOnly > 0 {
 		fmt.Fprintf(&b, "**%d task(s) clear their bar but are NOT SHIPPED** — the benchmarked engine has no "+
 			"customer-reachable call site, so the score describes a capability nobody can use. They are "+
