@@ -65,7 +65,7 @@ export function CommandPalette() {
       { id: "issues", label: "Issues", group: "Go to", icon: Layers, keywords: "unified deduped confirmed prioritized noise", run: go("/issues") },
       { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities raw scanners", run: go("/findings") },
       { id: "pentest", label: "Pentest", group: "Go to", icon: Crosshair, keywords: "vapt exploit proven engagement penetration", run: go("/pentest") },
-      { id: "brief", label: "AI Security Engineer", group: "Go to", icon: Sparkles, keywords: "ai security engineer console triage brief auto-fix translate plain english remediation l2 agent actions", run: go("/brief") },
+      { id: "brief", label: "AI Security Engineer", group: "Go to", icon: Sparkles, keywords: "ai security engineer console triage brief auto-fix translate plain english remediation l2 agent actions", run: go("/engineer") },
       { id: "cloud-engineer", label: "Cloud engineer", group: "Go to", icon: Cloud, keywords: "cloud agent attack path investigate aws gcp azure iam blast radius vulnagent crown jewel", run: go("/cloud-engineer") },
       { id: "attack-paths", label: "Attack paths", group: "Go to", icon: Spline, keywords: "chain correlation crown jewel lateral priority", run: go("/attack-paths") },
       { id: "coverage", label: "What we test", group: "Go to", icon: ScanSearch, keywords: "coverage scanned tools clean tested assurance no black box", run: go("/coverage") },
