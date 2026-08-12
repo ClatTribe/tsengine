@@ -250,6 +250,14 @@ export const api = {
       `/v1/findings/${encodeURIComponent(findingID)}/localize`,
       { finding_id: findingID, answer: "" },
     ),
+  // P1 autonomy: the scope the pentester PROPOSES, from assets you connected or proved you own. The
+  // human still signs for it — this replaces composing a scope with reviewing one. `skipped` carries
+  // what was left out and why, because a scope quietly narrower than the estate reads as full coverage.
+  pentestScopeSuggestion: () =>
+    safe<{ targets: string[]; skipped: { target: string; reason: string }[]; note: string }>(
+      "/v1/pentest/scope-suggestion",
+      { targets: [], skipped: [], note: "" },
+    ),
   // T6 — ask your estate. The SAME search the AI Security Engineer's search_estate tool runs, so the
   // answer a human gets and the answer the agent reasons over cannot drift. Grounded: no model is
   // involved, so an empty result means the estate has no match rather than that a model forgot one.

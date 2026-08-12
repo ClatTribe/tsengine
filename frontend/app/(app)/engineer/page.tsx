@@ -5,6 +5,7 @@ import { PageIntro } from "@/components/ui/page-intro";
 import { GenerateBrief } from "@/components/brief/generate-brief";
 import { lastTriage } from "../brief/actions";
 import { AskEstate } from "@/components/engineer/ask-estate";
+import { EngineStatus } from "@/components/engineer/engine-status";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -53,8 +54,8 @@ const ACTIONS = [
 
 export default async function EngineerConsolePage() {
   // Scope so the founder sees WHAT the engineer reasons over (coverage honesty) before triggering an action.
-  const [findings, assets, engagements, priorBrief, approvals] = await Promise.all([
-    api.findings(), api.assets(), api.engagements(), lastTriage(), api.approvals(),
+  const [findings, assets, engagements, priorBrief, approvals, llm] = await Promise.all([
+    api.findings(), api.assets(), api.engagements(), lastTriage(), api.approvals(), api.llmSettings(),
   ]);
   const freshest = engagements.map((e) => e.completed_at).filter(Boolean).sort().pop();
 
@@ -65,6 +66,10 @@ export default async function EngineerConsolePage() {
         title="AI Security Engineer"
         description="More than a fix button. Your AI security engineer does three jobs: investigates deeper to surface what a routine scan missed, prioritizes what's actually exploitable, then proposes the fix. Pick an action — it reasons over your real findings, grounded in evidence (nothing invented), and anything it would change routes to you (or your expert) for approval."
       />
+
+      {/* IS IT ACTUALLY RUNNING. Everything below describes an agent that reasons; without a model that
+          half is idle, and the console used to describe it anyway. */}
+      <EngineStatus hasKey={llm.has_key} aiEnabled={llm.ai_enabled} />
 
       {/* ASK FIRST. The question the job actually opens with, and the one capability the agent had
           all along that no human could reach. */}
