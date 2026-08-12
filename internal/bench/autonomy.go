@@ -88,7 +88,7 @@ func EngineerAutonomy() []AutonomyTask {
 			// anything it could not do before. A metric that rewards relabelling is worse than none.
 		},
 		{ID: "T4", Job: "engineer", Name: "Fix — produce the change",
-			Level: LevelApproval, NeedsModel: true, Evidence: "runner/autonomy_e2e_test.go — an unattended pass finds, proposes and STOPS at the desk (mutation-checked); remediate.Propose → hitl.Desk"},
+			Level: LevelApproval, NeedsModel: true, Evidence: "runner/autonomy_e2e_test.go — an unattended pass finds, proposes and STOPS at the desk (mutation-checked). NOTE WHICH GATE: a CONFIG mutation is tier 2 and queues in our Inbox; a CODE-FIX PR is tier 1 (remediate: reversible, review before merge) and AUTO-APPLIES — the human is the customer's own PR review, not our desk. Both are real gates and they are not the same one; this entry used to describe only the first."},
 		{ID: "T5", Job: "engineer", Name: "Verify — did the fix hold?",
 			Level: LevelAutonomous, Evidence: "retest.Verify inside runner.RescanTenant; deterministic re-test, no human"},
 		{ID: "T6", Job: "engineer", Name: "Answer — query the estate",

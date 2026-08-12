@@ -180,9 +180,13 @@ func (g *GitHub) Apply(ctx context.Context, c platform.Connection, token string,
 
 	// If the action carries patched file contents, COMMIT them to `head` first. Without this the PR
 	// referenced a branch nothing had created, so an "AI fix" could never actually carry a diff — the
-	// agent's patch had no path into the repository (see github_commit.go). Still HITL-gated: Apply is
-	// reached only after the desk approves, and the result is a PR a human reviews, never a write to
-	// the default branch.
+	// agent's patch had no path into the repository (see github_commit.go). WHERE THE HUMAN ACTUALLY IS, stated
+	// precisely because this comment used to overstate it. A code-fix PR is tier 1 (remediate: "reversible
+	// — review before merge"), which is BELOW platform.GateTier, so Desk.Submit AUTO-APPLIES it: nobody
+	// approves this in our Inbox. The gate is the customer's OWN pull-request review, in their repo, under
+	// their branch protection — a legitimate gate, and a different one from the desk. What is guaranteed
+	// here is narrower than "a human approved it": the write lands on a FEATURE BRANCH and a pull request,
+	// never on the default branch, and the kill-switch still stops it.
 	if files := filesFrom(a.Payload); len(files) > 0 {
 		if head == "" {
 			return fmt.Errorf("github: a patch was supplied but the action has no head branch to commit it to")
