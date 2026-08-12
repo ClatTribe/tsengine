@@ -88,7 +88,9 @@ type VulnLocalizer interface {
 // real remediation is somebody else's change; being unable to hand it over means the agent silently
 // drops it.
 type TicketFiler interface {
-	FileTicket(ctx context.Context, title, body string) (ref string, err error)
+	// FileTicket raises a ticket ABOUT A FINDING. findingID is not optional, and the implementation is
+	// expected to REFUSE when it does not resolve — see the tool handler for why.
+	FileTicket(ctx context.Context, findingID, title, body string) (ref string, err error)
 }
 
 // EngineerTools builds the act-on-the-world half of the catalogue.
@@ -235,22 +237,41 @@ func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester
 	out = append(out, Tool{
 		Schema: ToolSchema{
 			Name: "open_ticket",
-			Description: "Raise a ticket for work that is not ours to change directly — a vendor fix, a " +
-				"decision someone else owns, an upgrade that needs planning.",
+			Description: "Raise a ticket about a finding that is not ours to change directly — a vendor " +
+				"fix, a decision someone else owns, an upgrade that needs planning. Requires the id of " +
+				"the finding it is about; a ticket citing nothing cannot be acted on or checked.",
 			Params: obj(map[string]any{
-				"title": str("a one-line summary"),
-				"body":  str("what needs doing and why it matters"),
-			}, "title"),
+				"finding_id": str("the id of the finding this ticket is about"),
+				"title":      str("a one-line summary"),
+				"body":       str("what needs doing and why it matters"),
+			}, "finding_id", "title"),
 		},
+		// GROUNDING (§10). This is the one engineer tool that writes into the customer's action queue,
+		// and it used to take free text alone. That let the model file a real ticket — auto-delivered at
+		// tier 1, stamped raised_by:ai-security-engineer — asserting anything it liked, citing nothing a
+		// receiver could check. A hallucinated "vendor X has a critical RCE, upgrade urgently" was
+		// indistinguishable from a real one at the desk.
+		//
+		// Every sibling tool is anchored to a finding; this one now is too. The model PROPOSES the
+		// finding id, the adapter DISPOSES by resolving it against the store and refusing when it does
+		// not exist — so a ticket can only ever describe something the engine actually found.
 		Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
-			title := engArg(args, "title")
-			if title == "" {
-				return ToolResult{Content: "open_ticket needs a title."}, nil
-			}
+			// Unwired is reported BEFORE any argument complaint. Telling the agent to go find a finding
+			// id when no tracker exists sends it to satisfy a requirement that cannot help, and
+			// misdescribes why the call failed — the honest gate is to say the capability is absent.
 			if filer == nil {
 				return ToolResult{Content: "Ticketing is not connected in this deployment — no ticket was filed."}, nil
 			}
-			ref, err := filer.FileTicket(ctx, title, engArg(args, "body"))
+			findingID, title := engArg(args, "finding_id"), engArg(args, "title")
+			if findingID == "" {
+				return ToolResult{Content: "open_ticket needs the finding_id it is about — a ticket that " +
+					"cites no finding cannot be verified by whoever receives it. Use search_estate to " +
+					"find the id."}, nil
+			}
+			if title == "" {
+				return ToolResult{Content: "open_ticket needs a title."}, nil
+			}
+			ref, err := filer.FileTicket(ctx, findingID, title, engArg(args, "body"))
 			if err != nil {
 				return ToolResult{Content: "Could not file the ticket: " + err.Error()}, nil
 			}

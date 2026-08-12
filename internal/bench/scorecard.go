@@ -115,9 +115,10 @@ func EngineerScorecard() []TaskState {
 		},
 		{
 			ID: "T8", Name: "Hand off — raise what isn't ours",
-			Bench: "", Bar: "ticket filed with the context a receiver can act on",
-			Score: "", Done: false, Corpus: "none", Confidence: "none",
-			Shipped: true, Note: "open_ticket exists as an agent tool. Unmeasured.",
+			Bench: "go test ./internal/platformapi -run TestT8_", Bar: "ticket filed with the context a receiver can act on",
+			Score: "5/5", Done: true,
+			Corpus: "5 cases, first-party — 3 refusals, 2 content", Confidence: "provisional",
+			Shipped: true, Note: "MEASURING THIS FOUND A REAL HOLE. open_ticket is the only engineer tool that WRITES into the customer's queue, and at tier 1 it auto-delivers to their real tracker stamped raised_by:ai-security-engineer. It took free text alone — so the model could file a ticket asserting anything, citing nothing anyone downstream could check, while every sibling tool (propose_fix, request_proof, locate_vulnerability) was anchored to a finding. Action.FindingID is documented 'always set — grounding' and this path left it empty. It now requires a finding id the adapter RESOLVES against the tenant's own findings, refusing when it does not exist (§10, and §18.2 inv. 2 — another tenant's id is unresolvable, not merely unauthorized), and stamps severity/location/tool/rule so a receiver on another team can act without coming back to ask. The pre-existing T8 self-test passed while citing NOTHING, which is how the hole survived: it asserted a ticket appeared, never that it was about anything real.",
 		},
 	}
 }
@@ -143,15 +144,34 @@ func RenderEngineerScorecard(tasks []TaskState) string {
 	coverage := float64(measurable) / float64(len(tasks)) * 100
 
 	var b strings.Builder
-	b.WriteString("# AI Security Engineer — efficacy scorecard\n\n")
-	fmt.Fprintf(&b, "**Efficacy: %.0f%%** (%d of %d tasks clear their bar) — target 40%%\n\n", efficacy, done, len(tasks))
-	fmt.Fprintf(&b, "**Measurement coverage: %.0f%%** (%d of %d tasks have a runnable benchmark)\n\n",
-		coverage, measurable, len(tasks))
 	strong := 0
 	for _, t := range tasks {
 		if t.Done && t.Confidence == "strong" {
 			strong++
 		}
+	}
+	// VERIFIABLE is the number that still has headroom. Efficacy counts tasks that clear a bar; once
+	// every task has an instrument it pins at 100% and stops carrying information, while the thing that
+	// actually limits the claim — how much of it rests on evidence we did not author — is unchanged at
+	// 2 of 8. Reporting only the saturated number is how a scorecard turns into marketing.
+	verifiable := float64(strong) / float64(len(tasks)) * 100
+
+	b.WriteString("# AI Security Engineer — efficacy scorecard\n\n")
+	fmt.Fprintf(&b, "**Efficacy: %.0f%%** (%d of %d tasks clear their bar) — target 40%%\n\n", efficacy, done, len(tasks))
+	fmt.Fprintf(&b, "**Measurement coverage: %.0f%%** (%d of %d tasks have a runnable benchmark)\n\n",
+		coverage, measurable, len(tasks))
+	fmt.Fprintf(&b, "**Verifiable: %.0f%%** (%d of %d rest on evidence we did not author) — the number with "+
+		"headroom left\n\n", verifiable, strong, len(tasks))
+
+	// A saturated headline is not an achievement, it is an exhausted denominator. Say so, or every
+	// future reader takes 100% to mean the job is done rather than the ruler is used up.
+	if done == len(tasks) {
+		b.WriteString("> **100% here means the denominator is exhausted, not that the work is finished.** ")
+		b.WriteString("This scorecard was built to make the missing instruments louder than the readings; ")
+		b.WriteString("with every task instrumented it has done that job and can no longer tell you ")
+		b.WriteString("anything by going up. The binding constraint has moved from COVERAGE to EVIDENCE — ")
+		fmt.Fprintf(&b, "read **Verifiable (%.0f%%)** from here, and treat the efficacy line as a "+
+			"completed checklist rather than a score.\n\n", verifiable)
 	}
 	fmt.Fprintf(&b, "**Of the %d passing, %d rest on STRONG evidence** (external corpus, ungameable oracle). ", done, strong)
 	b.WriteString("The rest pass on first-party corpora of 3–12 cases the author also wrote — the bar is met, ")
