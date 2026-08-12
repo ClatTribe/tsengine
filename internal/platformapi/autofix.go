@@ -47,7 +47,18 @@ func (d Deps) handleAutofix(w http.ResponseWriter, r *http.Request, tenantID str
 	// Prefer the BENCHMARKED engine. codeagent.ProposePatch is what tsbench cvepatch grades
 	// (execution-verified: the exploit must stop working and the regression must still pass), so when
 	// source is reachable the customer gets the implementation the number actually describes.
-	if patch, repo, ok := d.autofixViaCodeagent(r.Context(), tenantID, *f, llm); ok {
+	if patch, repo, sources, ok := d.autofixViaCodeagent(r.Context(), tenantID, *f, llm); ok {
+		// THE TEST TRAVELS WITH THE FIX. A fix without one silently regresses the next time somebody
+		// refactors the sanitizer. Best-effort by design: a failure here must never cost the customer the
+		// patch, and the generator DROPS a proposal it cannot ground rather than shipping a test that
+		// passes trivially — which would be worse than none, since it goes green forever and claims the
+		// vulnerability is covered.
+		reg, regErr := codeagent.ProposeRegressionTest(r.Context(), llm, codeagent.Finding{
+			Class:    strings.ToLower(strings.Join(f.CWE, " ")),
+			Endpoint: f.Endpoint,
+			Detail:   nz(f.Description, f.Title),
+		}, patch, sources)
+		_ = regErr // a missing test is a smaller problem than a missing fix
 		if d.Recorder != nil {
 			d.Recorder.Record("autofix drafted (codeagent)", "l2-autofix",
 				map[string]any{"tenant_id": tenantID, "finding_id": id, "rule": f.RuleID, "repo": repo,
@@ -59,6 +70,10 @@ func (d Deps) handleAutofix(w http.ResponseWriter, r *http.Request, tenantID str
 			// The DIFF is what a reviewer reads; whole-file contents are what gets applied.
 			"diff":   patch.UnifiedDiff(map[string]string{}),
 			"engine": "codeagent.ProposePatch (execution-verified in tsbench cvepatch)",
+			// Present only when a test survived the grounding gate. Absent means none was produced —
+			// stated as absence rather than an empty string, so a caller cannot render "" as a test.
+			"regression_test":      regressionPayload(reg),
+			"regression_test_note": reg.Note,
 		})
 		return
 	}
@@ -155,10 +170,10 @@ func (d Deps) codeSourceFor(ctx context.Context, tenantID string) (src codeagent
 // Returns ok=false when source is unreachable, so the caller can fall back to the prompt-only path
 // instead of failing. That fallback is honest but weaker: it is the un-benchmarked implementation,
 // and the response says so rather than presenting both as the same product.
-func (d Deps) autofixViaCodeagent(ctx context.Context, tenantID string, f types.Finding, llm codeagent.LLM) (patch codeagent.Patch, repo string, ok bool) {
+func (d Deps) autofixViaCodeagent(ctx context.Context, tenantID string, f types.Finding, llm codeagent.LLM) (patch codeagent.Patch, repo string, sources []codeagent.SourceFile, ok bool) {
 	src, repo := d.codeSourceFor(ctx, tenantID)
 	if src == nil {
-		return codeagent.Patch{}, "", false
+		return codeagent.Patch{}, "", nil, false
 	}
 	cf := codeagent.Finding{
 		Class:    strings.ToLower(strings.Join(f.CWE, " ")),
@@ -174,12 +189,23 @@ func (d Deps) autofixViaCodeagent(ctx context.Context, tenantID string, f types.
 	}
 	content, rerr := src.ReadFile(ctx, path, 0, 0)
 	if rerr != nil || strings.TrimSpace(content) == "" {
-		return codeagent.Patch{}, repo, false
+		return codeagent.Patch{}, repo, nil, false
 	}
 	files := []codeagent.SourceFile{{Path: path, Content: content}}
 	p, err := codeagent.ProposePatch(ctx, llm, cf, files)
 	if err != nil || p.Empty() {
-		return codeagent.Patch{}, repo, false
+		return codeagent.Patch{}, repo, nil, false
 	}
-	return p, repo, true
+	return p, repo, files, true
+}
+
+// regressionPayload renders the proposed test, or nil when none survived the grounding gate.
+//
+// nil rather than an empty object: a caller that renders a blank test panel teaches the reader that a
+// test exists and is trivial, which is the opposite of what happened. Absence must read as absence.
+func regressionPayload(r codeagent.RegressionTest) map[string]any {
+	if r.Empty() {
+		return nil
+	}
+	return map[string]any{"path": r.File.Path, "content": r.File.Content}
 }
