@@ -58,6 +58,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
@@ -456,9 +457,22 @@ func main() {
 			cloudSnaps = fs
 		}
 	}
+	// The estate TIMELINE — the other half of the snapshot store. cloudsnap is latest-wins (what the
+	// agent reasons over now); this is append-only with change detection, so "when did this bucket become
+	// public?" is answerable. Shares TSENGINE_CLOUDSNAP_DIR: both are cloud-state at rest, and a deployment
+	// that wants one durable wants the other, so a second env var would only be a way to get it half-on.
+	var cloudHist cloudhistory.Store = cloudhistory.NewMemStore()
+	if dir := os.Getenv("TSENGINE_CLOUDSNAP_DIR"); dir != "" {
+		if fs, ferr := cloudhistory.NewFileStore(dir); ferr != nil {
+			log.Printf("[platform] cloud history file store (%s): %v — using in-process", dir, ferr)
+		} else {
+			cloudHist = fs
+		}
+	}
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		CloudSnapshots: cloudSnaps,
+		CloudHistory:   cloudHist,
 		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
 		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
 		Detector:       detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)

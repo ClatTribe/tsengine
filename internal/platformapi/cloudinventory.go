@@ -10,6 +10,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/clouddrift"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/azinventory"
@@ -105,6 +106,15 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
+	// CAPTURE THE TIMELINE. Append-only, with change detection inside the store: an estate that has not
+	// moved records nothing, so the history stays a record of CHANGE rather than one row per scan. This
+	// is what turns "is this bucket public?" into "when did it become public?" — the first question asked
+	// in an incident, and one the latest-wins snapshot store structurally could not answer.
+	if d.CloudHistory != nil {
+		dg := cloudhistory.DigestOf(cloudgraph.Ingest(inv), tenantID, inv.Provider, inv.AccountID, time.Now().UTC())
+		_, _ = d.CloudHistory.Append(r.Context(), dg) // best-effort: history must never block the ingest
+	}
+
 	internetEdges := 0
 	for _, e := range inv.Reaches {
 		if e.From == cloudgraph.InternetID {
