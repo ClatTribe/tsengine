@@ -81,11 +81,12 @@ func (d Deps) engineerTools() Catalog {
 		return nil // not wired → the cap is never spent on tools that cannot act
 	}
 	phases := map[string][]Phase{
-		"search_estate":    {PhaseTriage, PhaseInvestigate},
-		"check_fix_status": {PhaseTriage},
-		"request_proof":    {PhaseInvestigate},
-		"propose_fix":      {PhaseReport},
-		"open_ticket":      {PhaseReport},
+		"search_estate":        {PhaseTriage, PhaseInvestigate},
+		"locate_vulnerability": {PhaseInvestigate},
+		"check_fix_status":     {PhaseTriage},
+		"request_proof":        {PhaseInvestigate},
+		"propose_fix":          {PhaseReport},
+		"open_ticket":          {PhaseReport},
 	}
 	out := make(Catalog, 0, len(d.Engineer))
 	for _, t := range d.Engineer {

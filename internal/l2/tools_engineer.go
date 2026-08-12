@@ -72,6 +72,18 @@ type FixVerifier interface {
 	VerifyStatus(ctx context.Context, actionID string) (summary string, err error)
 }
 
+// VulnLocalizer answers "where in the code does this finding actually live?".
+//
+// It ships the T2 engine. codelocalize scored 1.00 on its benchmark and had NO customer-reachable call
+// site — CLI and bench only — so no customer had ever received a localization. A capability we measure,
+// publish and do not deliver is worse than one we never claimed.
+//
+// It matters for the agent specifically: propose_fix is only as good as knowing WHICH file to fix, and
+// a repo finding's endpoint is a relative file:line that is often approximate or missing entirely.
+type VulnLocalizer interface {
+	Locate(ctx context.Context, findingID string) (summary string, err error)
+}
+
 // TicketFiler raises work that is not ours to do — the productivity half of the tool belt. Plenty of
 // real remediation is somebody else's change; being unable to hand it over means the agent silently
 // drops it.
@@ -84,7 +96,7 @@ type TicketFiler interface {
 // Each is nil-safe: an unwired capability yields a tool that SAYS it is unavailable rather than one
 // that silently no-ops or, worse, claims success. A deployment without a ticketing connector must not
 // have an agent that believes it filed a ticket.
-func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester, verifier FixVerifier, filer TicketFiler) Catalog {
+func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester, verifier FixVerifier, filer TicketFiler, locator VulnLocalizer) Catalog {
 	var out Catalog
 
 	out = append(out, Tool{
@@ -189,6 +201,32 @@ func EngineerTools(search EstateSearch, fixer FixProposer, prover ProofRequester
 			s, err := verifier.VerifyStatus(ctx, id)
 			if err != nil {
 				return ToolResult{Content: "Could not check the fix: " + err.Error()}, nil
+			}
+			return ToolResult{Content: s}, nil
+		},
+	})
+
+	out = append(out, Tool{
+		Schema: ToolSchema{
+			Name: "locate_vulnerability",
+			Description: "Find WHICH source file a finding actually lives in, ranked with the evidence " +
+				"for each candidate. Use it before proposing a fix when the finding's location is vague, " +
+				"missing, or points at the wrong layer.",
+			Params: obj(map[string]any{
+				"finding_id": str("the finding to locate"),
+			}, "finding_id"),
+		},
+		Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
+			id := engArg(args, "finding_id")
+			if id == "" {
+				return ToolResult{Content: "locate_vulnerability needs a finding_id."}, nil
+			}
+			if locator == nil {
+				return ToolResult{Content: "Localization is not available in this deployment (it needs source access)."}, nil
+			}
+			s, err := locator.Locate(ctx, id)
+			if err != nil {
+				return ToolResult{Content: "Could not localize: " + err.Error()}, nil
 			}
 			return ToolResult{Content: s}, nil
 		},

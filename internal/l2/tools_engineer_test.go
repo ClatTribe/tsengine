@@ -56,7 +56,7 @@ func call(t *testing.T, c Catalog, name string, args map[string]any) string {
 // The catalogue exists to let the agent ACT. If these names drift, the persona silently reverts to an
 // analyst that can only read and report.
 func TestEngineerTools_ExposesTheActingToolBelt(t *testing.T) {
-	c := EngineerTools(stubSearch{}, &stubFixer{}, stubProver{}, stubVerifier{}, stubFiler{})
+	c := EngineerTools(stubSearch{}, &stubFixer{}, stubProver{}, stubVerifier{}, stubFiler{}, nil)
 	want := map[string]bool{"search_estate": false, "propose_fix": false, "request_proof": false,
 		"check_fix_status": false, "open_ticket": false}
 	for _, tool := range c {
@@ -75,7 +75,7 @@ func TestEngineerTools_ExposesTheActingToolBelt(t *testing.T) {
 // voice, not authority — the tool queues a change and a human decides.
 func TestProposeFix_QueuesForApprovalAndNeverApplies(t *testing.T) {
 	f := &stubFixer{id: "act-42"}
-	c := EngineerTools(nil, f, nil, nil, nil)
+	c := EngineerTools(nil, f, nil, nil, nil, nil)
 
 	got := call(t, c, "propose_fix", map[string]any{"finding_id": "f-1", "rationale": "parameterise the query"})
 
@@ -93,7 +93,7 @@ func TestProposeFix_QueuesForApprovalAndNeverApplies(t *testing.T) {
 // A refusal is usually grounding working (an unknown finding id). It must read as a refusal, so the
 // agent stops rather than retrying blindly — and must not look like success.
 func TestProposeFix_SurfacesARefusalHonestly(t *testing.T) {
-	c := EngineerTools(nil, &stubFixer{err: errors.New("no finding f-9")}, nil, nil, nil)
+	c := EngineerTools(nil, &stubFixer{err: errors.New("no finding f-9")}, nil, nil, nil, nil)
 	got := call(t, c, "propose_fix", map[string]any{"finding_id": "f-9"})
 	if !strings.Contains(got, "Could not propose") || !strings.Contains(got, "no finding f-9") {
 		t.Errorf("a refusal must say why, got %q", got)
@@ -103,7 +103,7 @@ func TestProposeFix_SurfacesARefusalHonestly(t *testing.T) {
 // An unwired capability must SAY it is unavailable. The dangerous failure is an agent that believes it
 // filed a ticket in a deployment with no ticketing connector.
 func TestEngineerTools_UnwiredCapabilitiesAdmitIt(t *testing.T) {
-	c := EngineerTools(nil, nil, nil, nil, nil)
+	c := EngineerTools(nil, nil, nil, nil, nil, nil)
 	for _, tc := range []struct{ tool, arg string }{
 		{"search_estate", "query"}, {"propose_fix", "finding_id"},
 		{"request_proof", "finding_id"}, {"check_fix_status", "action_id"}, {"open_ticket", "title"},
@@ -118,7 +118,7 @@ func TestEngineerTools_UnwiredCapabilitiesAdmitIt(t *testing.T) {
 
 // Missing arguments are a model mistake, not a crash. The tool should correct it and let the agent retry.
 func TestEngineerTools_MissingArgsAreCorrectedNotFatal(t *testing.T) {
-	c := EngineerTools(stubSearch{out: "x"}, &stubFixer{id: "a"}, stubProver{}, stubVerifier{}, stubFiler{})
+	c := EngineerTools(stubSearch{out: "x"}, &stubFixer{id: "a"}, stubProver{}, stubVerifier{}, stubFiler{}, nil)
 	if got := call(t, c, "propose_fix", map[string]any{}); !strings.Contains(got, "needs a finding_id") {
 		t.Errorf("got %q, want a corrective message", got)
 	}
@@ -130,7 +130,7 @@ func TestEngineerTools_MissingArgsAreCorrectedNotFatal(t *testing.T) {
 // request_proof must never let a failed exploit read as an all-clear — the asymmetry the whole
 // doubt→prove edge rests on.
 func TestRequestProof_PassesTheProverVerdictThrough(t *testing.T) {
-	c := EngineerTools(nil, nil, stubProver{out: "no working exploit found — NOT evidence of a false positive"}, nil, nil)
+	c := EngineerTools(nil, nil, stubProver{out: "no working exploit found — NOT evidence of a false positive"}, nil, nil, nil)
 	got := call(t, c, "request_proof", map[string]any{"finding_id": "f-1"})
 	if !strings.Contains(got, "NOT evidence") {
 		t.Errorf("the prover's caveat must reach the agent verbatim, got %q", got)
