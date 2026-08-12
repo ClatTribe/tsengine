@@ -155,8 +155,11 @@ func TestEngineerWorks_T6_Answer(t *testing.T) {
 // T8 — HAND OFF. Work that is not ours must reach the desk as a ticket.
 func TestEngineerWorks_T8_HandOff(t *testing.T) {
 	d, tid := seedEngineerTenant(t)
+	// Cites the seeded finding. That this test previously passed citing NOTHING is what exposed the
+	// hole: open_ticket was the one engineer tool that could write into the customer's queue without
+	// naming anything the engine had actually found. See handoff_test.go.
 	ref, err := (ticketFiler{d: d, tenantID: tid}).FileTicket(context.Background(),
-		"Upgrade the vulnerable dependency", "The pinned version carries a published advisory.")
+		"f-sqli", "Upgrade the vulnerable dependency", "The pinned version carries a published advisory.")
 	if err != nil {
 		t.Fatalf("T8 BROKEN: %v", err)
 	}

@@ -36,7 +36,9 @@ func (v stubVerifier) VerifyStatus(context.Context, string) (string, error) { re
 
 type stubFiler struct{ ref string }
 
-func (f stubFiler) FileTicket(context.Context, string, string) (string, error) { return f.ref, nil }
+func (f stubFiler) FileTicket(context.Context, string, string, string) (string, error) {
+	return f.ref, nil
+}
 
 func call(t *testing.T, c Catalog, name string, args map[string]any) string {
 	t.Helper()

@@ -266,16 +266,57 @@ type ticketFiler struct {
 	tenantID string
 }
 
-func (t ticketFiler) FileTicket(ctx context.Context, title, body string) (string, error) {
+// FileTicket raises a ticket about a real finding, and REFUSES otherwise.
+//
+// The refusal is the point. This adapter writes an Action into the tenant's queue that auto-delivers
+// at tier 1, so whatever the model says here reaches a human's tracker unreviewed. Resolving the
+// finding first is what stops that from being a channel for anything the model believes: the id has to
+// name something the engine actually found, in THIS tenant, or nothing is filed.
+//
+// It also fills the context a receiver needs. A handoff reading "upgrade the vendor library" is not
+// actionable by someone on another team who was not in the conversation — they need what was found,
+// how bad it is, where it lives, and which tool said so, without coming back to ask.
+func (t ticketFiler) FileTicket(ctx context.Context, findingID, title, body string) (string, error) {
 	if t.d.Submitter == nil || t.d.NewID == nil {
 		return "", fmt.Errorf("ticketing is not configured")
 	}
+	if strings.TrimSpace(findingID) == "" {
+		return "", fmt.Errorf("a ticket must cite the finding it is about")
+	}
+	// Resolve against THIS tenant's findings — which also makes a cross-tenant id unresolvable rather
+	// than merely unauthorized (§18.2 inv. 2).
+	findings, err := t.d.Store.ListFindings(ctx, t.tenantID, store.FindingFilter{})
+	if err != nil {
+		return "", err
+	}
+	var found *types.Finding
+	for i := range findings {
+		if findings[i].ID == findingID {
+			found = &findings[i]
+			break
+		}
+	}
+	if found == nil {
+		return "", fmt.Errorf("no finding %q in this tenant — a ticket must describe something the "+
+			"engine actually found, so nothing was filed", findingID)
+	}
+
 	// A ticket is informational and reversible, so it rides as a tier-1 action through the same desk
 	// rather than getting its own delivery path.
 	act := platform.Action{
 		ID: t.d.newID("rem"), TenantID: t.tenantID, Kind: platform.ActFileTicket, Tier: 1,
-		Status: platform.ActProposed, Title: title,
-		Payload: map[string]any{"summary": body, "raised_by": "ai-security-engineer"},
+		Status: platform.ActProposed, Title: title, FindingID: found.ID,
+		Payload: map[string]any{
+			"summary":    body,
+			"raised_by":  "ai-security-engineer",
+			"finding_id": found.ID,
+			// The evidence a receiver on another team needs to act without coming back to ask.
+			"severity":    string(found.Severity),
+			"location":    found.Endpoint,
+			"detected_by": found.Tool,
+			"rule":        found.RuleID,
+			"finding":     found.Title,
+		},
 	}
 	queued, err := t.d.Submitter.Submit(ctx, act)
 	if err != nil {
