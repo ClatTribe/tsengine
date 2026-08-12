@@ -11,6 +11,7 @@ package remediate
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/runner"
@@ -257,4 +258,37 @@ func nz(s, def string) string {
 		return def
 	}
 	return s
+}
+
+// WorthProposing is the triage gate in front of the proposer: should this finding become a
+// remediation a human is asked to approve at all?
+//
+// WHY IT EXISTS. Propose answers "what is the fix for this finding"; nothing answered "does this
+// finding deserve a fix proposal". So every finding produced one, including the low-severity noise
+// every scanner emits. Measured on the defense benchmark, the substrate actioned the planted DECOY in
+// 3 of 3 scenarios — a missing owner tag on a build-cache bucket, a guest identity with no role
+// bindings, a missing frame-options header. Each one costs a human a review, and a queue that is
+// mostly noise is a queue people stop reading.
+//
+// The rule is deliberately blunt and deterministic:
+//
+//	verified            an exploit proved it — always worth fixing, whatever the severity label says
+//	high or critical    worth a human's review slot
+//	everything else     real, recorded, and NOT worth interrupting someone over
+//
+// A dropped finding is not dismissed — it stays in the store, on the dashboard and in the compliance
+// mapping. It simply does not manufacture an approval request. That distinction is the whole point:
+// this filters the WORK QUEUE, never the evidence.
+//
+// Callers that already have their own gate (proposePentestRemediations) keep it; this is for the paths
+// that had none.
+func WorthProposing(f types.Finding) bool {
+	if f.VerificationStatus == types.VerificationVerified {
+		return true
+	}
+	switch strings.ToLower(string(f.Severity)) {
+	case "critical", "high":
+		return true
+	}
+	return false
 }

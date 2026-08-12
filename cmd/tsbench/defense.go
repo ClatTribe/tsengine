@@ -118,6 +118,11 @@ func substratePropose(sc bench.DefenseScenario) []platform.Action {
 	idgen := func() string { n++; return fmt.Sprintf("act-%d", n) }
 	out := make([]platform.Action, 0, len(sc.Before))
 	for _, f := range sc.Before {
+		// Triage BEFORE proposing. Without this the substrate actioned the planted decoy in every
+		// scenario — each one a human review slot spent on noise.
+		if !remediate.WorthProposing(f) {
+			continue
+		}
 		asset := assetForFinding(f, sc.Assets)
 		if a, ok := remediate.Propose(f, asset, idgen); ok {
 			out = append(out, a)
