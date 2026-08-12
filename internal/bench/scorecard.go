@@ -76,7 +76,7 @@ func EngineerScorecard() []TaskState {
 			Bench: "tsbench localize --hard", Bar: "recall@1 ≥ 0.80",
 			Score: "1.00", Done: true,
 			Corpus: "6 cases, first-party synthetic", Confidence: "provisional",
-			Shipped: false, ShipNote: "codelocalize is CLI/bench only — no platform call site, so no customer ever receives a localization. Deferred during its campaign (the L1.5 hook chain was churning); the score describes an engine nobody can reach.", Note: "median of 3 runs on the hard corpus. The DEFAULT corpus saturates at 1.00 on the substrate and cannot discriminate — only --hard has headroom.",
+			Shipped: true, Note: "median of 3 runs on the hard corpus. The DEFAULT corpus saturates at 1.00 on the substrate and cannot discriminate — only --hard has headroom.",
 		},
 		{
 			ID: "T3", Name: "Assess — is it reachable/exploitable?",

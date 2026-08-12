@@ -9,7 +9,7 @@ import "testing"
 // Phase-scoping is what makes the belt fit. These tests fail if someone unscopes a tool, which is the
 // easy mistake: it looks harmless and quietly makes the Lead worse.
 func TestEngineerCatalog_StaysUnderTheToolCap(t *testing.T) {
-	d := Deps{Engineer: EngineerTools(nil, nil, nil, nil, nil)}
+	d := Deps{Engineer: EngineerTools(nil, nil, nil, nil, nil, nil)}
 	c := BuildCatalog(d)
 
 	if err := c.Validate(); err != nil {
@@ -25,7 +25,7 @@ func TestEngineerCatalog_StaysUnderTheToolCap(t *testing.T) {
 // The belt has to actually be REACHABLE — a cap satisfied by hiding every acting tool would be a
 // regression dressed as compliance.
 func TestEngineerCatalog_ActingToolsAreReachableInTheRightPhase(t *testing.T) {
-	c := BuildCatalog(Deps{Engineer: EngineerTools(nil, nil, nil, nil, nil)})
+	c := BuildCatalog(Deps{Engineer: EngineerTools(nil, nil, nil, nil, nil, nil)})
 
 	want := map[string]Phase{
 		"search_estate":    PhaseTriage,
@@ -52,9 +52,9 @@ func TestEngineerCatalog_ActingToolsAreReachableInTheRightPhase(t *testing.T) {
 // on tools that can only answer "not available".
 func TestEngineerCatalog_UnwiredLeavesTheCatalogUntouched(t *testing.T) {
 	base := len(BuildCatalog(Deps{}))
-	withBelt := len(BuildCatalog(Deps{Engineer: EngineerTools(nil, nil, nil, nil, nil)}))
-	if base != withBelt-5 {
-		t.Errorf("base=%d withBelt=%d — expected exactly the 5 acting tools to be added", base, withBelt)
+	withBelt := len(BuildCatalog(Deps{Engineer: EngineerTools(nil, nil, nil, nil, nil, nil)}))
+	if base != withBelt-6 {
+		t.Errorf("base=%d withBelt=%d — expected exactly the 6 acting tools to be added", base, withBelt)
 	}
 	if got := len(BuildCatalog(Deps{Engineer: nil})); got != base {
 		t.Errorf("nil Engineer changed the catalog size (%d vs %d)", got, base)

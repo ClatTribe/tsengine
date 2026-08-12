@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/codelocalize"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/remediate"
@@ -294,5 +295,82 @@ func (d Deps) EngineerCatalog(tenantID string) l2.Catalog {
 		proofRequester{d: d, tenantID: tenantID},
 		fixVerifier{d: d, tenantID: tenantID},
 		ticketFiler{d: d, tenantID: tenantID},
+		vulnLocalizer{d: d, tenantID: tenantID},
 	)
+}
+
+// ---------- localize ----------
+
+// vulnLocalizer ships T2. codelocalize scored 1.00 on its benchmark with NO customer-reachable call
+// site, so no customer had ever received a localization — a capability measured, published and not
+// delivered.
+//
+// It is wired here rather than into the L1.5 hook chain deliberately. The hook chain runs on EVERY
+// finding at emission and must stay reproducible for the evidence pack; localization is a question the
+// engineer asks about ONE finding when the location is in doubt, which is exactly a tool call. This
+// also avoids changing a hot path for a capability whose value is per-investigation, not per-finding.
+type vulnLocalizer struct {
+	d        Deps
+	tenantID string
+}
+
+func (v vulnLocalizer) Locate(ctx context.Context, findingID string) (string, error) {
+	findings, err := v.d.Store.ListFindings(ctx, v.tenantID, store.FindingFilter{})
+	if err != nil {
+		return "", err
+	}
+	var target *types.Finding
+	for i := range findings {
+		if findings[i].ID == findingID {
+			target = &findings[i]
+			break
+		}
+	}
+	if target == nil {
+		return "", fmt.Errorf("no finding %q in this tenant", findingID)
+	}
+	src, repo := v.d.codeSourceFor(ctx, v.tenantID)
+	if src == nil {
+		return "Localization needs source access — connect a repository first. " +
+			"This is not a statement about the finding.", nil
+	}
+	// Build the candidate set from the repo's own file list, so a ranking can only ever cite files that
+	// really exist (§10 — never a localization onto an invented path).
+	var repoFiles codelocalize.Repo
+	for _, p := range src.Files() {
+		content, rerr := src.ReadFile(ctx, p, 0, 0)
+		if rerr != nil || strings.TrimSpace(content) == "" {
+			continue
+		}
+		repoFiles = append(repoFiles, codelocalize.File{Path: p, Content: content})
+	}
+	if len(repoFiles) == 0 {
+		return "No readable source files in " + repo + " — cannot localize.", nil
+	}
+	res, lerr := codelocalize.HeuristicLocalizer{}.Localize(ctx,
+		codelocalize.Query{CWE: target.CWE, Title: target.Title, Description: target.Description}, repoFiles)
+	if lerr != nil {
+		return "", lerr
+	}
+	if len(res.Ranked) == 0 {
+		// An honest negative: no sink evidence for this class is a real answer, not a failure.
+		return fmt.Sprintf("No file in %s carries sink evidence for %s — the finding may be a "+
+			"configuration or dependency issue rather than a code one.", repo, strings.Join(target.CWE, ",")), nil
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Ranked candidates in %s for %s:\n", repo, strings.Join(target.CWE, ","))
+	for i, c := range res.Ranked {
+		if i >= 5 {
+			break
+		}
+		fmt.Fprintf(&b, "  %d. %s (score %.1f)", i+1, c.Path, c.Score)
+		if len(c.SinkLines) > 0 {
+			fmt.Fprintf(&b, " lines=%v", c.SinkLines)
+		}
+		b.WriteString("\n")
+		for _, r := range c.Reasons {
+			fmt.Fprintf(&b, "       %s\n", r)
+		}
+	}
+	return b.String(), nil
 }
