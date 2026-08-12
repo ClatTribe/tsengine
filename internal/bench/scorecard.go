@@ -83,7 +83,7 @@ func EngineerScorecard() []TaskState {
 			Bench: "tsbench triage", Bar: "Youden J ≥ 0.50 (beat the best deterministic baseline)",
 			Score: "0.75", Done: true,
 			Corpus: "12 cases, first-party synthetic", Engine: "model", Confidence: "provisional",
-			Shipped: true, Note: "llm + deterministic disposer, median of 4 runs (0.67–0.83). Model alone: 0.50, no better than a path check. Tuning result — the disposer's rules were chosen after seeing the failures.",
+			Shipped: true, Note: "llm + deterministic disposer, median of 4 runs (0.67–0.83). Model alone: 0.50, no better than a path check. Tuning result — the disposer's rules were chosen after seeing the failures. THE SCORER ITSELF HAD NO TESTS until now: every triage number quoted here came out of untested arithmetic, and the rendered table asserts to the reader that keep-everything and drop-everything both score 0 — the entire argument for Youden over accuracy — with nothing behind it. Now pinned: degenerate strategies score 0, a perfect engine scores 1, a hand-worked case matches, and an engine that ERRORS is not scored as if it answered. Mutation-checked — replacing Youden with plain recall makes keep-everything score 1.00 and two tests fail.",
 		},
 		{
 			ID: "T2", Name: "Localize — where is the fix?",
