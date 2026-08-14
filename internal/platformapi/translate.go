@@ -65,6 +65,12 @@ func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID
 // Anthropic, OpenAI, or a local Ollama). nil when neither is set. A tenant's OWN key is honoured on ANY
 // plan (they pay for it); the operator-global client is gated to AI-entitled plans.
 func (d Deps) resolveLeadClient(ctx context.Context, tenantID string) l2.Client {
+	// The customer's AIMode choice gates the Lead the same way it gates the agents — see
+	// resolveAgentLLMForRole. Checked before the tenant key, because it is an instruction, not a
+	// cost gate.
+	if !d.aiAllowed(ctx, tenantID).Engineer {
+		return nil
+	}
 	// resolveTenantLLMConfig, NOT the ResolveTenantLLM wrapper: the wrapper returns only
 	// (provider, model, key) and DROPS cfg.BaseURL. That silently broke every self-hosted tenant —
 	// the switch below accepts ollama/vllm/lmstudio/openrouter, but an empty base URL sent their

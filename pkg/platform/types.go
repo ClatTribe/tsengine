@@ -28,6 +28,14 @@ type Tenant struct {
 	// halted tenant's actions queue instead of executing until a human disengages it. The
 	// one human "on the loop" can freeze the whole roster instantly.
 	AgentsHalted bool `json:"agents_halted,omitempty"`
+	// AIMode is the customer's own choice of how much AI to run. See AIMode.
+	//
+	// Distinct from the PLAN (what they are entitled to) and from AgentsHalted (an emergency
+	// freeze). This is a standing preference: a tenant entitled to both agents may deliberately
+	// run deterministic-only — for cost, for a trust ramp, or because they are not ready to send
+	// their code to a model. The zero value means "not chosen", which resolves to whatever the
+	// plan allows, so every existing tenant is unaffected.
+	AIMode AIMode `json:"ai_mode,omitempty"`
 	// LLM is the tenant's bring-your-own-LLM config for the agent / autonomous pentest. The
 	// API key is sealed (LLMConfig.KeyRef holds only the sealed ref); it is NEVER returned to
 	// the client — Redacted() strips it, and every tenant response uses that.
