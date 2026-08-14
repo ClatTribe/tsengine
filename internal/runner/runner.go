@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -104,6 +105,19 @@ type Service struct {
 	// re-scanned every pass — so the engine runs continuously without re-spending the LLM idly, and a
 	// Free tenant never auto-spends the operator's budget. Best-effort. nil → no auto-review.
 	AfterScan func(ctx context.Context, tenantID string, findings []types.Finding, openedIncidents int)
+
+	// Reattacker, when set, RE-RUNS THE EXPLOIT for findings an applied fix claimed to close, so a
+	// verification can be upgraded from absence ("the scanner no longer sees it") to closure ("the
+	// exploit no longer works"). nil → rescan-only, which is today's behaviour.
+	//
+	// It takes finding KEYS rather than findings, and that is the important detail: a fix that worked
+	// makes its finding ABSENT from the fresh scan, so the thing we need to re-attack is precisely the
+	// thing `current` no longer contains. The implementation resolves each key against the stored
+	// findings, which is why this is a hook rather than an inline call.
+	//
+	// Func-typed so the runner never imports the pentest machinery or its network reach; the
+	// composition root wires the prober.
+	Reattacker func(ctx context.Context, tenantID string, keys []string) map[string]retest.ReattackVerdict
 
 	// AfterPass, when set, fires on EVERY monitoring pass (unconditionally, unlike AfterScan) — the
 	// hook for time-driven, change-independent work like running due SCHEDULED pentests. Any gating
@@ -256,9 +270,31 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		// when its finding keys are absent (grounded §10); still-present means the fix didn't close
 		// it. Best-effort — a store error never aborts the pass; the verdict rides on the action.
 		if acts, lerr := s.Store.ListActions(ctx, tenantID); lerr == nil {
+			// Rescan verification: absence of the finding key from this pass's authoritative findings.
+			byID := map[string]platform.Action{}
+			for _, a := range acts {
+				byID[a.ID] = a
+			}
 			for _, verified := range retest.Verify(acts, current, s.now()) {
+				byID[verified.ID] = verified // carry the fresh verdict into the re-attack step
 				if perr := s.Store.PutAction(ctx, verified); perr != nil && firstErr == nil {
 					firstErr = perr
+				}
+			}
+			// Re-attack verification: does the exploit still work? This can OVERRIDE the rescan —
+			// "the scanner no longer sees it" and "an attacker can no longer do it" are different
+			// claims, and only the second is closure. Best-effort and optional.
+			if s.Reattacker != nil {
+				merged := make([]platform.Action, 0, len(byID))
+				for _, a := range byID {
+					merged = append(merged, a)
+				}
+				if verdicts := s.Reattacker(ctx, tenantID, appliedFindingKeys(merged)); len(verdicts) > 0 {
+					for _, up := range retest.ApplyReattack(merged, verdicts, s.now()) {
+						if perr := s.Store.PutAction(ctx, up); perr != nil && firstErr == nil {
+							firstErr = perr
+						}
+					}
 				}
 			}
 		}
@@ -527,4 +563,25 @@ func stampFindingKeys(act platform.Action, findings []types.Finding) platform.Ac
 		act.FindingKeys = keys
 	}
 	return act
+}
+
+// appliedFindingKeys collects the de-duplicated finding keys that APPLIED remediations claimed to
+// close — exactly the set worth re-attacking, and no more. Re-attacking anything else would spend
+// live probes on findings nobody has tried to fix yet.
+func appliedFindingKeys(actions []platform.Action) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, a := range actions {
+		if a.Status != platform.ActApplied {
+			continue
+		}
+		for _, k := range a.FindingKeys {
+			if k != "" && !seen[k] {
+				seen[k] = true
+				out = append(out, k)
+			}
+		}
+	}
+	sort.Strings(out) // stable order so a pass is reproducible and diffable
+	return out
 }
