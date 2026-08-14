@@ -938,3 +938,20 @@ export interface AIModeResponse {
   budget_usd: number;
   remaining_usd: number;
 }
+
+// DatabaseScanResult — a one-shot Postgres inventory scan (Supabase / Neon / RDS / self-hosted).
+//
+// credential_retained is part of the contract, not decoration: someone pasting a production
+// connection string is owed a plain statement of what happened to it.
+export interface DatabaseScanResult {
+  tables: number;
+  grants: number;
+  issues_detected: number;
+  schemas_scanned?: string[];
+  findings: Finding[];
+  note?: string;
+  credential_retained: boolean;
+  credential_note?: string;
+  discovered_sensitive?: string[];
+  deeper_scan_available?: string;
+}
