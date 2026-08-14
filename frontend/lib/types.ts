@@ -130,6 +130,23 @@ export interface Issue {
   public_exploit?: boolean; // a public exploit/PoC exists (ExploitDB/Metasploit)
 }
 
+// Explanation is the plain-English answer for a reader with no security background: what broke, why it
+// matters HERE, what to do, how soon. Produced deterministically by the server (internal/explain), so
+// it is present with the AI turned OFF — that is what makes the deterministic tier readable rather
+// than raw.
+export interface Explanation {
+  headline: string;
+  what: string;
+  why: string;
+  fix: string;
+  urgency: "now" | "this_week" | "this_month" | "whenever";
+  urgency_label: string;
+  // because lists the FACTS behind the urgency, so a reader can check our reasoning instead of
+  // trusting a label. This is the anti-"everything is critical" mechanism; render it, do not drop it.
+  because?: string[];
+  technical: { rule_id?: string; tool?: string; cwe?: string[]; severity?: string; endpoint?: string };
+}
+
 export interface IssuesResponse {
   issues: Issue[];
   count: number;
@@ -139,6 +156,9 @@ export interface IssuesResponse {
   excluded?: number; // findings dropped by custom exclusion rules
   attacked?: number; // issues observed under attack in production
   live?: number; // issues that are genuinely live-exploitable (the ACSP fusion)
+  // explanations is keyed by issue key. Optional so an older server (or an empty estate) renders the
+  // raw title rather than a blank row.
+  explanations?: Record<string, Explanation>;
 }
 
 // A custom noise-filter rule (Aikido "custom rules": exclude paths/packages/conditions).
