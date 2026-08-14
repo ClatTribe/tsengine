@@ -31,6 +31,15 @@ type aiModeResponse struct {
 	Mode      string `json:"mode"`
 	Engineer  bool   `json:"engineer"`
 	Pentester bool   `json:"pentester"`
+	// Chosen reports whether the customer actually PICKED this mode, as opposed to it being what they
+	// were left with. Mode alone cannot answer that: a Free tenant with no key resolves to
+	// "deterministic" having never chosen anything, and reads identically to someone who deliberately
+	// selected deterministic-only.
+	//
+	// The difference decides whether nudging them toward AI is helpful or insulting. Someone who has
+	// not chosen should be shown how to turn it on; someone who declined should not be told on every
+	// page that their decision is a problem.
+	Chosen bool `json:"chosen"`
 	// Reason explains the current state in the customer's terms — including WHY something is off, so a
 	// disabled surface reads as a choice rather than a broken feature.
 	Reason string `json:"reason"`
@@ -76,6 +85,7 @@ func (d Deps) handleGetAIMode(w http.ResponseWriter, r *http.Request, tenantID s
 
 	writeJSON(w, http.StatusOK, aiModeResponse{
 		Mode: string(perms.Mode), Engineer: perms.Engineer, Pentester: perms.Pentester,
+		Chosen: t.AIMode != platform.AIModeUnset,
 		Reason: perms.Reason, SpendUSD: spend, Runs: runs, UsingOwnKey: ownKey,
 		BudgetUSD: t.MonthlyAIBudgetUSD, RemainingUSD: remainingBudget(t.MonthlyAIBudgetUSD, spend),
 		Choices: []aiChoice{

@@ -116,3 +116,61 @@ func TestAIMode_StoreErrorFallsBackToPlanNotOff(t *testing.T) {
 		t.Error("the entitled tenant lost AI")
 	}
 }
+
+// ── "CHOSE IT" vs "WAS LEFT WITH IT" ─────────────────────────────────────────────────────────────
+
+// The resolved mode cannot answer whether the customer DECIDED anything. A Free workspace with no key
+// resolves to deterministic having chosen nothing, and reads identically to someone who deliberately
+// picked deterministic-only. The UI needs the difference: the first should be shown how to turn AI on,
+// the second should not be told on every page that their decision is a defect.
+func TestAIMode_ChosenDistinguishesADecisionFromADefault(t *testing.T) {
+	d, tid, _ := httpEngineerDeps(t, nil)
+	d.Token = "platform-tok"
+	h := NewHandler(d)
+	ctx := context.Background()
+
+	get := func() aiModeResponse {
+		t.Helper()
+		rec := do(h, "GET", "/v1/settings/ai-mode", tid, "")
+		if rec.Code != 200 {
+			t.Fatalf("GET ai-mode = %d: %s", rec.Code, rec.Body.String())
+		}
+		var got aiModeResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	// A workspace that has never touched the setting has chosen nothing, whatever it resolves to.
+	if got := get(); got.Chosen {
+		t.Error("a workspace that never set a mode reported chosen=true — the nudge would be suppressed " +
+			"for exactly the people it exists for")
+	}
+
+	// Choosing deterministic-only is a decision, and must be reported as one.
+	tn, _ := d.Store.GetTenant(ctx, tid)
+	tn.AIMode = platform.AIModeDeterministic
+	if err := d.Store.PutTenant(ctx, tn); err != nil {
+		t.Fatal(err)
+	}
+	got := get()
+	if !got.Chosen {
+		t.Error("an explicitly chosen mode reported chosen=false — the customer would be nagged to " +
+			"enable the thing they just declined")
+	}
+	if got.Mode != string(platform.AIModeDeterministic) {
+		t.Errorf("mode = %q, want deterministic", got.Mode)
+	}
+
+	// Choosing an AI mode is equally a decision — chosen is about whether they DECIDED, not about
+	// which way they went.
+	tn, _ = d.Store.GetTenant(ctx, tid)
+	tn.AIMode = platform.AIModeFull
+	if err := d.Store.PutTenant(ctx, tn); err != nil {
+		t.Fatal(err)
+	}
+	if got := get(); !got.Chosen {
+		t.Error("choosing full AI reported chosen=false")
+	}
+}

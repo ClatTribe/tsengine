@@ -26,12 +26,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // — send them to the rotation screen, which also lives outside (app) so this check can't loop.
   if (me.must_change_password) redirect("/change-password");
 
-  const [findings, approvals, tenant, practitioners, llm] = await Promise.all([
+  const [findings, approvals, tenant, practitioners, llm, ai] = await Promise.all([
     api.findings(),
     api.approvals(),
     api.tenant(),
     api.practitioners(),
     api.llmSettings(),
+    api.aiMode(),
   ]);
   const risk = riskRating(severityCounts(findings));
   // Service model: a managed/MSP customer's expert owns the HITL acts, so the pending badge is
@@ -57,10 +58,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Automation is halted — no scans or fixes are running. Resume in Settings.
           </Link>
         )}
-        {/* AI Security Engineer OFF — the product's core is the AI engineer, but it can't run without an LLM
-            key. This global nudge (only when not halted) makes "add your key" prominent instead of buried in
-            Settings, so a new SMB isn't left with a silent, do-nothing engineer. Disappears once a key is set. */}
-        {!tenant?.agents_halted && !llm.ai_enabled && (
+        {/* AI Security Engineer OFF — the AI engineer can't run without an LLM key, so this global nudge
+            makes "add your key" prominent instead of buried in Settings, and a new workspace isn't left with
+            a silent, do-nothing engineer. Disappears once a key is set.
+
+            IT MUST NOT FIRE WHEN DETERMINISTIC-ONLY WAS CHOSEN. Running without AI is a supported choice —
+            some customers pick it for predictable cost, some because their source may not go to a model at
+            all — and telling those people on every single page that their engineer is "off" reframes their
+            decision as a defect. It also contradicts the toggle we just showed them, which said scanning and
+            correlation keep running. A nudge toward the thing they declined is nagging, not onboarding.
+
+            But it must key off CHOSEN, not the mode alone. A Free workspace with no key RESOLVES to
+            deterministic without anyone having chosen it, and suppressing on the mode alone silenced the
+            nudge for exactly the people it was built for. */}
+        {!tenant?.agents_halted && !llm.ai_enabled && !(ai.chosen && ai.mode === "deterministic") && (
           <Link
             href="/settings"
             className="flex items-center justify-center gap-2 border-b border-accent/30 bg-accent-soft/40 px-6 py-2 text-xs font-medium text-accent transition hover:bg-accent-soft"

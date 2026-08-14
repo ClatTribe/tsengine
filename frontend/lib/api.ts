@@ -223,7 +223,7 @@ export const api = {
   // budget), so a disabled surface reads as a decision rather than a bug.
   aiMode: () =>
     safe<AIModeResponse>("/v1/settings/ai-mode", {
-      mode: "deterministic", engineer: false, pentester: false, reason: "",
+      mode: "deterministic", chosen: false, engineer: false, pentester: false, reason: "",
       choices: [], spend_usd: 0, runs: 0, using_own_key: false, budget_usd: 0, remaining_usd: 0,
     }),
   setAIMode: (mode: string, monthlyBudgetUSD?: number) =>
