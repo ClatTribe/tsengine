@@ -912,6 +912,10 @@ export interface AIModeResponse {
   mode: string;
   engineer: boolean;
   pentester: boolean;
+  // Did the customer PICK this mode, or is it just what they were left with? A Free workspace with no
+  // key resolves to "deterministic" having chosen nothing, and looks identical to someone who chose it
+  // deliberately — so mode alone cannot tell you whether nudging them toward AI is helpful or rude.
+  chosen: boolean;
   reason: string;
   choices: AIChoice[];
   spend_usd: number;
