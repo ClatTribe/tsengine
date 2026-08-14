@@ -35,6 +35,11 @@ func (d Deps) handleDataPlatformIngest(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 
+	// DISCOVER sensitivity from any sampled columns before assessing, so the sensitivity-dependent
+	// checks (account-wide severity, external-grant-on-sensitive, write-on-sensitive) see a crown jewel
+	// the data proves rather than only one the customer declared. Purely additive: an estate with no
+	// sampled columns is unchanged.
+	est, discoveries := dataplatform.Classify(est)
 	findings := dataplatform.Assess(est, dataplatform.Options{})
 	findings = enrichFindings(findings) // L1.5 parity (§11)
 	stored := 0
@@ -69,6 +74,11 @@ func (d Deps) handleDataPlatformIngest(w http.ResponseWriter, r *http.Request, t
 	resp := map[string]any{
 		"objects": len(est.Objects), "grants": grants, "issues_detected": stored, "findings": findings,
 	}
+	// Surface what was DISCOVERED, not just declared — a crown jewel the owner didn't know they had is
+	// exactly the thing worth telling them, and it carries the evidence so it's auditable.
+	if len(discoveries) > 0 {
+		resp["discovered_sensitive"] = discoveries
+	}
 	// Say which checks did NOT run, rather than letting a clean result read as a clean warehouse. Both
 	// gaps are silent by design (§10 — we will not guess who is internal, and unknown is not unused), so
 	// silence about the gap is the one thing that would make the refusal dishonest.
@@ -82,8 +92,9 @@ func (d Deps) handleDataPlatformIngest(w http.ResponseWriter, r *http.Request, t
 			"run. An unrecorded grant is unknown, not unused.")
 	}
 	if !anySensitive(est) {
-		limits = append(limits, "No object is declared sensitive, so regulated-data checks did not run. "+
-			"Sensitivity is a declared fact here — we do not infer it from table names.")
+		limits = append(limits, "No object is sensitive (declared or discovered), so regulated-data checks "+
+			"did not run. Sensitivity is declared by you or discovered from sampled column values — never "+
+			"guessed from a table name. Post `columns` samples to have it discovered.")
 	}
 	if len(limits) > 0 {
 		resp["checks_not_run"] = limits

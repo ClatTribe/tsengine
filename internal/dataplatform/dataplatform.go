@@ -13,10 +13,11 @@
 //
 // GROUNDED (§10), with four refusals that carry most of the value:
 //
-//   - SENSITIVITY IS A DECLARED FACT, never inferred. We do not sample rows and we do not guess from a
-//     table called "customers" — a name is not a classification, and a wrong one either cries wolf or
-//     grants false comfort. An estate that declares nothing still gets every public-grant finding (those
-//     do not need it); it just does not get the sensitivity-specific ones. Honest degradation.
+//   - SENSITIVITY IS DECLARED OR DISCOVERED, never GUESSED FROM A NAME. We do not guess from a table
+//     called "customers" — a name is not a classification, and a wrong one either cries wolf or grants
+//     false comfort. It may be DECLARED by the owner, or DISCOVERED by Classify from a sampled column's
+//     actual values (value-proven only — see Classify). An estate that supplies neither still gets every
+//     public-grant finding (those do not need it); it just does not get the sensitivity-specific ones.
 //   - EXTERNAL REQUIRES KNOWING WHO IS INTERNAL. Without OrgDomains we cannot tell a contractor from an
 //     employee, so the external-grant check does not run at all rather than guess a domain.
 //   - STALENESS REQUIRES A LAST-USED TIMESTAMP. Absent, no finding — an unrecorded grant is unknown, not
@@ -38,6 +39,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/dataclass"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -71,6 +73,10 @@ type Object struct {
 	Sensitive bool `json:"sensitive,omitempty"`
 	// DataClasses optionally names what kind (pii, phi, pci, secrets), for the finding text.
 	DataClasses []string `json:"data_classes,omitempty"`
+	// Columns is an OPTIONAL sample of the object's fields — names and a bounded sample of values —
+	// used to DISCOVER sensitivity rather than wait for it to be declared. Empty → the object's
+	// sensitivity is whatever was declared (today's behaviour). See Classify.
+	Columns []dataclass.Column `json:"columns,omitempty"`
 	// Grants is who can do what to it.
 	Grants []Grant `json:"grants,omitempty"`
 }
@@ -93,6 +99,78 @@ const DefaultStaleDays = 90
 type Options struct {
 	Now   func() time.Time
 	NewID func() string
+}
+
+// Discovery records that an object's sensitivity was DISCOVERED from its data rather than declared — the
+// evidence a crown jewel now rests on instead of a checkbox.
+type Discovery struct {
+	Object   string   `json:"object"`
+	Classes  []string `json:"classes"`  // the discovered data classes (pii, pci, …)
+	Evidence []string `json:"evidence"` // the per-column, value-proven reasons
+}
+
+// Classify DISCOVERS sensitivity from any object carrying sampled Columns, and returns the estate with
+// discovered objects marked sensitive plus a record of what was found. This is what turns dataplatform's
+// declared flag into an evidence-based one, so the graph's crown jewel is a fact.
+//
+// The discipline is deliberately asymmetric and grounded (§10):
+//
+//   - UPGRADE ONLY, NEVER DOWNGRADE. An object the customer declared sensitive stays sensitive whatever
+//     a sample shows — a sample is a few rows, and its silence is not proof the column is clean. We can
+//     add a crown jewel the owner missed; we must never remove one they asserted.
+//   - VALUE-PROVEN ONLY. Only a Confirmed classification (actual values matched a structure-checked
+//     pattern) flips an undeclared object to sensitive. A Suspected, name-only signal is a prompt to
+//     sample, not a verdict — and treating a column NAME as proof is the exact inference dataplatform
+//     refuses at the object level. So the bar to CREATE a crown jewel is the data itself testifying.
+//   - CARRIES ITS EVIDENCE. Each discovery names the classes and the per-column reasons, so an
+//     upgraded object is auditable — never "trust me, it's sensitive now".
+//
+// An estate with no sampled columns comes back unchanged (nil discoveries), so this is purely additive.
+func Classify(est Estate) (Estate, []Discovery) {
+	var discoveries []Discovery
+	for i := range est.Objects {
+		o := &est.Objects[i]
+		if len(o.Columns) == 0 {
+			continue
+		}
+		res := dataclass.Classify(dataclass.Object{Name: o.Name, Columns: o.Columns})
+		// Only value-proven evidence may CREATE a crown jewel. A name-only suspicion does not.
+		if res.HighestConfidence != dataclass.Confirmed {
+			continue
+		}
+		classes := make([]string, 0, len(res.Classes))
+		for _, c := range res.Classes {
+			classes = append(classes, string(c))
+		}
+		var evidence []string
+		for _, m := range res.Matches {
+			if m.Confidence == dataclass.Confirmed {
+				evidence = append(evidence, m.Column+": "+m.Evidence)
+			}
+		}
+		discoveries = append(discoveries, Discovery{Object: o.Name, Classes: classes, Evidence: evidence})
+
+		// Upgrade: mark sensitive and union the discovered classes into whatever was declared. Never
+		// clears a declaration; a declared-sensitive object simply gains the discovered class labels.
+		o.Sensitive = true
+		o.DataClasses = unionClasses(o.DataClasses, classes)
+	}
+	return est, discoveries
+}
+
+func unionClasses(declared, discovered []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range append(append([]string{}, declared...), discovered...) {
+		c = strings.TrimSpace(c)
+		if c == "" || seen[c] {
+			continue
+		}
+		seen[c] = true
+		out = append(out, c)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Assess turns the estate into grounded access-posture findings. A well-governed warehouse — no public

@@ -18,10 +18,11 @@ func dpHandler(t *testing.T) (http.Handler, *store.Memory) {
 }
 
 type dpResp struct {
-	Objects        int      `json:"objects"`
-	Grants         int      `json:"grants"`
-	IssuesDetected int      `json:"issues_detected"`
-	ChecksNotRun   []string `json:"checks_not_run"`
+	Objects        int              `json:"objects"`
+	Grants         int              `json:"grants"`
+	IssuesDetected int              `json:"issues_detected"`
+	ChecksNotRun   []string         `json:"checks_not_run"`
+	Discovered     []map[string]any `json:"discovered_sensitive"`
 }
 
 func postEstate(t *testing.T, h http.Handler, body string) dpResp {
@@ -127,5 +128,22 @@ func TestDataPlatform_RejectsGarbage(t *testing.T) {
 	h, _ := dpHandler(t)
 	if rec := do(h, "POST", "/v1/dataplatform/ingest", "t1", `{"objects":`); rec.Code != 400 {
 		t.Errorf("malformed snapshot got %d, want 400", rec.Code)
+	}
+}
+
+// Discovered sensitivity must reach the response AND drive the stored finding — the end-to-end proof
+// that a crown jewel found in the data flows through the platform like a declared one.
+func TestDataPlatform_DiscoversSensitivityFromSampledColumns(t *testing.T) {
+	h, st := dpHandler(t)
+	got := postEstate(t, h, `{
+	  "objects":[{"platform":"snowflake","name":"prod.public.users","type":"table",
+	    "columns":[{"name":"national_number","values":["123-45-6789","078-05-1120"]}],
+	    "grants":[{"grantee":"PUBLIC","privilege":"SELECT"}]}]}`)
+	if got.IssuesDetected != 1 {
+		t.Fatalf("want the account-wide grant on discovered-sensitive data, got %d", got.IssuesDetected)
+	}
+	fs, _ := st.ListFindings(context.Background(), "t1", store.FindingFilter{})
+	if len(fs) != 1 || fs[0].Severity != "high" {
+		t.Fatalf("discovered-sensitive account-wide grant should be high, got %+v", fs)
 	}
 }
