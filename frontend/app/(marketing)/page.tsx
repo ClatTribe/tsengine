@@ -126,7 +126,7 @@ export default function Landing() {
                 <XCircle className="h-4 w-4 text-faint" /> Advise-only tools
               </div>
               <ul className="mt-4 space-y-2.5 text-sm text-muted">
-                {["Hand you a list of risks", "“Remediation guidance” you implement yourself", "You still need an engineer to act", "Evidence you assemble by hand"].map((x) => (
+                {["Hand you a list of risks", "“Remediation guidance” you implement yourself", "You still need an engineer to act", "“Fixed” means the scanner stopped flagging it", "Evidence you assemble by hand"].map((x) => (
                   <li key={x} className="flex items-start gap-2.5">
                     <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-faint" /> {x}
                   </li>
@@ -138,7 +138,7 @@ export default function Landing() {
                 <Wrench className="h-4 w-4" /> TensorShield
               </div>
               <ul className="mt-4 space-y-2.5 text-sm text-ink">
-                {["Opens the pull request with the fix", "Applies the cloud / identity change on approval", "Auto-handles the low-risk work; gates the rest", "Signs the evidence pack automatically"].map((x) => (
+                {["Opens the pull request with the fix", "Applies the cloud / identity change on approval", "Re-runs the exploit afterwards to prove it is actually dead", "Auto-handles the low-risk work; gates the rest", "Signs the evidence pack automatically"].map((x) => (
                   <li key={x} className="flex items-start gap-2.5">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-pulse" /> {x}
                   </li>
@@ -150,7 +150,7 @@ export default function Landing() {
           {/* From alert to fixed — USP #2 made tangible: the concrete remediation path, animated */}
           <Reveal delay={150} className="mt-8 rounded-2xl border border-border bg-bg p-4 sm:p-5">
             <div className="mb-4 text-center text-[11px] font-semibold uppercase tracking-wider text-faint">
-              From alert to fixed — automatically, with you approving what matters
+              From alert to proven closed — automatically, with you approving what matters
             </div>
             <div className="flex min-w-max items-stretch gap-1.5 overflow-x-auto sm:min-w-0 sm:justify-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {[

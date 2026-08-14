@@ -41,6 +41,21 @@ func (d Deps) ReattackVerdicts(ctx context.Context, tenantID string, keys []stri
 	}
 	out := make(map[string]retest.ReattackVerdict, len(keys))
 
+	// GATE 0: the tenant must actually have the AI Pentester.
+	//
+	// Re-attack verification IS the pentester's capability — re-running an exploit to prove closure —
+	// and it is sold as such ("re-tests after every fix" is the Growth tier). Gating it only on the
+	// operator's config would have given it to every tier, which would make the pricing page a lie
+	// about the product rather than a description of it. This also honours the customer's own AIMode
+	// choice: someone who turned the pentester off does not get exploits fired on their behalf.
+	if !d.aiAllowed(ctx, tenantID).Pentester {
+		for _, k := range keys {
+			out[k] = retest.ReattackVerdict{Verified: false,
+				Evidence: "Re-attack verification is part of the AI Pentester, which is not enabled for this " +
+					"workspace. The scan-based fix check still runs."}
+		}
+		return out
+	}
 	// GATE 1: live probing must be enabled by the operator.
 	//
 	// REDUNDANT ON PURPOSE. pentest.Reattack independently refuses a nil prober, so removing this
