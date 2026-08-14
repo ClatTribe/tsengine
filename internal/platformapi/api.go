@@ -19,6 +19,7 @@ import (
 	"reflect"
 
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
+	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/coverage"
@@ -96,6 +97,11 @@ type Deps struct {
 	// delegating cloud-depth to cloudagent. Nil → no persistence (POST /v1/cloud/investigate still works
 	// over the posted inventory; nothing is stored for later).
 	CloudSnapshots cloudsnap.Store
+	// CloudHistory is the APPEND-ONLY timeline of the estate's security-relevant state — what makes
+	// "when did this bucket become public?" answerable. CloudSnapshots is latest-wins by design (the
+	// agent reasons over current state); this is the other half. nil → no history is kept and the
+	// history endpoint says so rather than returning an empty timeline that reads as "nothing changed".
+	CloudHistory cloudhistory.Store
 	// Mailer sends transactional email (password-reset links, invites). Nil → a no-op (the
 	// platform falls back to the in-UI temp-password flow and logs reset links for the operator).
 	// Wired from email.FromEnv (SMTP_*); the SMTP provider is the credential-gated half.
@@ -263,6 +269,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
 	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                                                         // continuous config-snapshot drift: prev+cur inventory → change-control findings
 	mux.HandleFunc("GET /v1/ask", d.auth(d.handleAsk))                                                                         // T6 "ask your estate" — the SAME search the agent uses, exposed to a human
+	mux.HandleFunc("GET /v1/cloud/history", d.auth(d.handleCloudHistory))                                                      // "when did this become public?" — the estate timeline (append-only, change-detected)
 	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                                                       // "search your cloud like a database" — query the inventory + relationships
 	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                                                         // third-party / vendor risk (TPRM) inventory → findings
 	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))                                             // endpoint/device posture (MDM-lite) inventory → findings
