@@ -22,6 +22,14 @@ type Context struct {
 	Seeds    []SeedFinding // suspected L1 findings the agent should confirm
 	Defenses []string      // WAF/filter signatures the agent has hit
 
+	// Leads is grounded ESTATE CONTEXT: what a route actually reaches, derived from the estate graph.
+	// The pentester otherwise sees a flat list of URLs and cannot tell the login form that fronts a PII
+	// warehouse from the one that fronts a marketing page — so it spends its budget by shape, not by
+	// stakes. This is the web-agent twin of cloudagent.Context.Bridges: the graph tells it WHERE to look
+	// hardest, and the deterministic indicators still DISPOSE, so a lead can never fabricate a finding
+	// (§10). Empty → today's behaviour exactly; the agent just has less reason to prioritise.
+	Leads []EstateLead
+
 	History  []Turn    // every request/response (the evidence substrate)
 	Findings []Finding // grounded, recorded vulns
 	Summary  string
@@ -73,6 +81,22 @@ type Report struct {
 // (nuclei/sqlmap/dalfox). The agent's job is to CONFIRM it (send the request,
 // elicit the indicator, record-grounded) rather than rediscover it — "seed from
 // scanners, don't start blind" (docs/design/web-agent.md).
+// EstateLead tells the pentester what a route LEADS TO, so it prioritises by stakes rather than by the
+// shape of the URL. Every field is a grounded fact from the estate graph — a real path the graph holds,
+// not a hunch. The agent uses it to choose where to spend its request budget; it never lets a lead stand
+// in for proof (a finding still requires the class's deterministic indicator, §10).
+type EstateLead struct {
+	// Route is the endpoint this lead is about — matched against the agent's known routes.
+	Route string `json:"route"`
+	// Reaches is the crown jewel at the end of the path, in plain terms ("a table declared to hold PII",
+	// "an admin identity"). It is what makes the route worth the budget.
+	Reaches string `json:"reaches"`
+	// Why is the one-sentence chain: how this route connects to that crown jewel.
+	Why string `json:"why"`
+	// Evidence is the graph's proof refs for the path, so the lead is auditable rather than asserted.
+	Evidence []string `json:"evidence,omitempty"`
+}
+
 type SeedFinding struct {
 	Route      string `json:"route"`                // URL to probe (may carry a param marker)
 	Class      string `json:"class"`                // suspected class: sqli|xss|open_redirect|path_traversal|command_injection

@@ -77,6 +77,16 @@ RULES
 			b.WriteString(line + "\n")
 		}
 	}
+	if len(cc.Leads) > 0 {
+		b.WriteString("\nWHAT THESE ROUTES REACH (from the estate graph — spend your budget where the stakes are\nhighest). A lead tells you WHERE a route leads; it is NOT proof of a vulnerability. You still have\nto find and ground the vuln with the class's indicator — a lead only tells you which door is worth\npicking:\n")
+		for _, l := range cc.Leads {
+			line := fmt.Sprintf("  - %s reaches %s", l.Route, l.Reaches)
+			if l.Why != "" {
+				line += " — " + l.Why
+			}
+			b.WriteString(line + "\n")
+		}
+	}
 	if len(cc.Defenses) > 0 {
 		fmt.Fprintf(&b, "DEFENSES OBSERVED: %s\n", strings.Join(cc.Defenses, "; "))
 	}
