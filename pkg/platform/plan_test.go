@@ -37,38 +37,69 @@ func TestEntitlements_FreeIsActuallyFree(t *testing.T) {
 // Positioning: AI is the PREMIUM. The two AI teammates (operator-funded) live ONLY on Enterprise
 // ("talk to us"); the Substrate tier (plan key "growth") is the full deterministic L1.7 substrate
 // WITHOUT operator AI. Both paid tiers still include all frameworks + continuous monitoring.
-func TestEntitlements_AIIsEnterpriseOnly(t *testing.T) {
-	// Substrate ("growth"): full substrate, NO operator AI.
-	sub := Entitlements("growth")
-	if sub.AIEnabled {
-		t.Error("Substrate (growth) must NOT have operator-funded AI — AI is the Enterprise/talk-to-us premium")
+// THE ECONOMIC INVARIANT, which survived the pricing change and is the one that actually matters:
+// a tenant on a plan we do not charge for must never spend the operator's LLM budget.
+//
+// This test used to assert "AI is Enterprise-only". That policy was deliberately changed — the product
+// IS the two agents, and putting them behind "talk to us" meant the buyer who decides in a week and
+// pays by card could not purchase the thing we sell. What must NOT change is Free's economics, so that
+// is what this pins now.
+func TestEntitlements_FreeNeverSpendsOperatorBudget(t *testing.T) {
+	free := Entitlements("free")
+	if free.AIEnabled {
+		t.Error("Free must NEVER have operator-funded AI — it is the tier we give away")
 	}
-	if !sub.AllFrameworks || !sub.ContinuousMonitoring {
-		t.Error("Substrate is the FULL deterministic substrate — all frameworks + continuous monitoring")
+	if free.AutonomousPentest {
+		t.Error("Free must not include the autonomous pentester")
 	}
-	if sub.MaxAssets < 0 {
-		t.Error("Substrate is asset-capped, not unlimited")
+	if free.MaxAssets < 0 {
+		t.Error("Free must be asset-capped")
 	}
-	if sub.AutonomousPentest {
-		t.Error("autonomous pentest is Enterprise-only (or an add-on), not base Substrate")
+}
+
+// Core ("growth") is the self-serve tier that includes the AI Security Engineer. This is the change:
+// the engineer is purchasable by card, not behind a sales call.
+func TestEntitlements_CoreIncludesTheEngineerSelfServe(t *testing.T) {
+	core := Entitlements("growth")
+	if !core.AIEnabled {
+		t.Error("Core must include the AI Security Engineer — AI behind talk-to-us was the blocker")
 	}
-	// Enterprise: BOTH AI teammates + unlimited.
+	if core.AutonomousPentest {
+		t.Error("Core must NOT include the pentester; that is the +pentest tier above it")
+	}
+	if !core.AllFrameworks || !core.ContinuousMonitoring {
+		t.Error("Core is the FULL deterministic engine — all frameworks + continuous monitoring")
+	}
+	if core.MaxAssets < 0 {
+		t.Error("Core is asset-capped, not unlimited")
+	}
+}
+
+// The pentester rides the EXISTING "+pentest" add-on, which is why this restructure needed no new plan
+// key and left the "scale"/"custom" aliases (which resolve to Enterprise) untouched.
+func TestEntitlements_PentesterRidesTheAddOn(t *testing.T) {
+	if !Entitlements("growth+pentest").AutonomousPentest {
+		t.Error("the +pentest add-on must unlock the AI Pentester on the Core base tier")
+	}
+	if !Entitlements("growth+pentest").AIEnabled {
+		t.Error("the pentest tier must still include the engineer it builds on")
+	}
+}
+
+// Enterprise remains talk-to-us for what genuinely needs a conversation — unlimited assets, MSP, SSO —
+// and still includes both agents.
+func TestEntitlements_EnterpriseIsScaleNotAnAIGate(t *testing.T) {
 	ent := Entitlements("enterprise")
-	if !ent.AIEnabled {
-		t.Error("Enterprise must enable the AI Security Engineer")
-	}
-	if !ent.AutonomousPentest {
-		t.Error("Enterprise must include the AI Pentester (autonomous pentest)")
-	}
-	if !ent.AllFrameworks {
-		t.Error("Enterprise must include all frameworks")
+	if !ent.AIEnabled || !ent.AutonomousPentest {
+		t.Error("Enterprise must include both agents")
 	}
 	if ent.MaxAssets != -1 {
-		t.Error("Enterprise is unlimited assets")
+		t.Error("Enterprise is unlimited assets — that, not AI, is what it gates")
 	}
-	// The à-la-carte escape hatch: the autonomous-pentest ADD-ON still unlocks AutonomousPentest on
-	// the Substrate base tier without buying Enterprise (no string-match drift — §Entitlements).
-	if !Entitlements("growth+pentest").AutonomousPentest {
-		t.Error("the pentest add-on must unlock AutonomousPentest on the Substrate base tier")
+	// The aliases must still resolve, or a stored plan value would silently downgrade a paying customer.
+	for _, alias := range []string{"scale", "custom", "unlimited"} {
+		if Entitlements(alias).MaxAssets != -1 {
+			t.Errorf("alias %q no longer resolves to Enterprise — a stored plan value would downgrade", alias)
+		}
 	}
 }

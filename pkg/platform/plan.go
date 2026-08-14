@@ -11,16 +11,18 @@ import (
 //
 //   - Free       — a taste of the deterministic + ML-based scanning engine: OSS scanners only, NO LLM
 //     spend (the marginal cost), a hard asset cap, core compliance only.
-//   - Core       — the FULL deterministic + ML-based scanning engine (all frameworks, continuous monitoring,
-//     HITL apply) with NO operator-funded AI. The self-serve vs managed SERVICE MODEL differentiates
-//     how it's delivered, not the entitlements. (Plan key stays "growth" — no stored-value migration.)
-//   - Enterprise — "talk to us": the two AI agents (AI Security Engineer + AI Pentester) on top of the
-//     scanning engine, plus unlimited assets, MSP/managed, SSO. The ONLY operator-AI-funded tier.
+//   - Core       — the full deterministic engine PLUS the AI Security Engineer, self-serve. (Plan key
+//     stays "growth" — no stored-value migration.)
+//   - Core+pentest — Core plus the AI Pentester, via the existing "+pentest" add-on token. This is the
+//     "Growth" tier on the pricing page; it needs no new plan key.
+//   - Enterprise — "talk to us" for what genuinely needs a conversation: unlimited assets, MSP/managed
+//     delivery, SSO. NOT a gate on the AI agents — those are self-serve above.
 //
-// The economic invariant: a tenant whose plan is not AI-enabled must never consume the OPERATOR's LLM
-// budget. With AI now ENTERPRISE-ONLY, both Free AND Core are non-AI. (A tenant who brings their
+// The economic invariant is unchanged: a tenant whose plan is not AI-enabled must never consume the
+// OPERATOR's LLM budget. Free is that tenant. What changed is only WHERE the line sits — a paying
+// self-serve tier now funds the operator model, because the price covers it. (A tenant who brings their
 // OWN key — §18.5 — may use AI on any plan, because that cost isn't ours; that exception lives in
-// resolveAgentLLM, not here.)
+// resolveAgentLLM, not here. And a customer may still choose to run less than they bought — AIMode.)
 const (
 	PlanFree       = "free"
 	PlanGrowth     = "growth"
@@ -120,12 +122,21 @@ func baseEntitlements(plan string) PlanLimits {
 			ContinuousMonitoring: true, HumanInLoopApply: true,
 		}
 	case PlanGrowth:
-		// The "Core" tier: the full deterministic + ML-based scanning engine, but NO operator-funded AI —
-		// the two AI agents are Enterprise-only. (Plan key stays "growth"; the customer-facing label is
-		// "Core" — no internal layer jargon. A tenant here can still use AI by bringing its own LLM key — §18.5.)
+		// The "Core" tier: the full deterministic engine PLUS the AI Security Engineer.
+		//
+		// AI USED TO BE ENTERPRISE-ONLY, AND THAT WAS THE WRONG SHAPE FOR THIS BUYER. The product IS the
+		// two agents; putting them behind "talk to us" meant a company that decides in a week and pays by
+		// card could not buy the thing we sell. So the engineer is now purchasable self-serve, and the
+		// AI Pentester rides the existing "+pentest" add-on (Entitlements unlocks AutonomousPentest for
+		// any plan carrying the token) — which is why this needed no new plan key and no change to the
+		// "scale"/"custom" aliases that already resolve to Enterprise.
+		//
+		// The economic invariant is unchanged in KIND, only in where the line sits: Free still never
+		// spends operator LLM budget, and a tenant's own key still works on any plan (§18.5). What moved
+		// is that a PAYING self-serve tier now funds the operator model, which is what the price covers.
 		return PlanLimits{
 			Plan: PlanGrowth, Label: "Core", MaxAssets: 25,
-			AIEnabled: false, AutonomousPentest: false, AllFrameworks: true,
+			AIEnabled: true, AutonomousPentest: false, AllFrameworks: true,
 			ContinuousMonitoring: true, HumanInLoopApply: true,
 		}
 	default:
