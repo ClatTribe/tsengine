@@ -25,7 +25,7 @@ func (d Deps) handleAutofix(w http.ResponseWriter, r *http.Request, tenantID str
 	id := r.PathValue("id")
 	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleCode)
 	if llm == nil {
-		writeJSON(w, http.StatusBadRequest, errBody("AI autofix needs an LLM: configure one in Settings → LLM, or set LLM_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
+		writeJSON(w, http.StatusBadRequest, llmRequiredBody("AI autofix"))
 		return
 	}
 	findings, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})

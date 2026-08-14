@@ -103,7 +103,7 @@ func (d Deps) codeInvestigator(tenantID string) func(ctx context.Context, focus 
 func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tenantID string) {
 	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleCode)
 	if llm == nil {
-		writeJSON(w, http.StatusBadRequest, errBody("code investigation needs an LLM (the agent's brain): configure one in Settings → LLM, or set LLM_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
+		writeJSON(w, http.StatusBadRequest, llmRequiredBody("Code investigation"))
 		return
 	}
 	var body struct {
