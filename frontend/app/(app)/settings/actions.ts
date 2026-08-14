@@ -111,6 +111,15 @@ export async function setLLMConfig(
   return r;
 }
 
+// Set how much AI runs (deterministic-only / + engineer / + pentester) and the hard monthly ceiling.
+// Passing the budget as undefined leaves an existing ceiling ALONE — changing the mode must never
+// silently clear a budget the customer set.
+export async function setAIMode(mode: string, monthlyBudgetUSD?: number) {
+  const r = await api.setAIMode(mode, monthlyBudgetUSD);
+  revalidatePath("/settings");
+  return r;
+}
+
 // Set the repository PR-review-bot policy: enable inline review + a merge-gating check-run, and
 // the severity floor that fails the check ("off" = comment-only). The live GitHub post stays
 // gated on a connected GitHub App with the PR scope.

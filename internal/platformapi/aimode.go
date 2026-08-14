@@ -43,6 +43,11 @@ type aiModeResponse struct {
 	// UsingOwnKey reports whether the spend lands on the customer's LLM bill rather than ours — which
 	// changes what the number means to them entirely.
 	UsingOwnKey bool `json:"using_own_key"`
+	// BudgetUSD is the tenant's hard monthly ceiling (0 = none), and RemainingUSD is what is left.
+	// Showing the remainder rather than only the spend is the difference between a number someone reads
+	// and a number someone can plan against.
+	BudgetUSD    float64 `json:"budget_usd"`
+	RemainingUSD float64 `json:"remaining_usd"`
 }
 
 type aiChoice struct {
@@ -72,6 +77,7 @@ func (d Deps) handleGetAIMode(w http.ResponseWriter, r *http.Request, tenantID s
 	writeJSON(w, http.StatusOK, aiModeResponse{
 		Mode: string(perms.Mode), Engineer: perms.Engineer, Pentester: perms.Pentester,
 		Reason: perms.Reason, SpendUSD: spend, Runs: runs, UsingOwnKey: ownKey,
+		BudgetUSD: t.MonthlyAIBudgetUSD, RemainingUSD: remainingBudget(t.MonthlyAIBudgetUSD, spend),
 		Choices: []aiChoice{
 			{
 				Mode: string(platform.AIModeDeterministic), Label: "Deterministic only",
@@ -127,6 +133,9 @@ func (d Deps) handleSetAIMode(w http.ResponseWriter, r *http.Request, tenantID s
 	}
 	var req struct {
 		Mode string `json:"mode"`
+		// MonthlyBudgetUSD is optional. A nil pointer leaves the existing ceiling alone — so a client
+		// changing only the mode cannot silently clear a budget the customer set.
+		MonthlyBudgetUSD *float64 `json:"monthly_budget_usd,omitempty"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid body: "+err.Error()))
@@ -141,6 +150,13 @@ func (d Deps) handleSetAIMode(w http.ResponseWriter, r *http.Request, tenantID s
 	if err != nil {
 		respond(w, nil, err)
 		return
+	}
+	if req.MonthlyBudgetUSD != nil {
+		if *req.MonthlyBudgetUSD < 0 {
+			writeJSON(w, http.StatusBadRequest, errBody("monthly_budget_usd cannot be negative"))
+			return
+		}
+		t.MonthlyAIBudgetUSD = *req.MonthlyBudgetUSD
 	}
 	t.AIMode = platform.NormalizeAIMode(req.Mode)
 	if err := d.Store.PutTenant(r.Context(), t); err != nil {
@@ -177,4 +193,16 @@ func (d Deps) monthlyAISpend(ctx context.Context, tenantID string) (float64, int
 		runs++
 	}
 	return total, runs
+}
+
+// remainingBudget is what is left of the month's ceiling. Never negative: an overshoot reads as zero
+// remaining rather than a negative number, which tells the reader nothing useful and looks like a bug.
+func remainingBudget(budget, spent float64) float64 {
+	if budget <= 0 {
+		return 0
+	}
+	if spent >= budget {
+		return 0
+	}
+	return budget - spent
 }
