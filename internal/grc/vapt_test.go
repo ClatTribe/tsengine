@@ -284,3 +284,25 @@ func TestVAPT_ScannedAndCleanStillReadsClean(t *testing.T) {
 		t.Error("a genuinely clean report lost its clean statement")
 	}
 }
+
+// A rating stated over a partly-examined scope must carry the qualification WHERE THE RATING IS —
+// the executive summary is what gets read and quoted, not the scope list further down.
+func TestVAPT_RatingWithFindingsStillNamesUnassessedScope(t *testing.T) {
+	f := types.Finding{ID: "f1", RuleID: "r", Tool: "nuclei", Severity: types.SeverityHigh,
+		Title: "Something", Endpoint: "https://a.example.com"}
+	r := ReportFromFindings([]types.Finding{f},
+		[]string{"https://a.example.com", "https://b.example.com"}, "Acme",
+		time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC), nil)
+	r.Untested = []string{"https://b.example.com"}
+	Reassess(r)
+
+	md := RenderVAPTMarkdown(r)
+	summary := md
+	if i := strings.Index(md, "## Methodology"); i > 0 {
+		summary = md[:i] // the executive summary alone
+	}
+	if !strings.Contains(summary, "b.example.com") {
+		t.Errorf("the executive summary states a rating without saying part of the scope was never "+
+			"assessed:\n%s", summary)
+	}
+}

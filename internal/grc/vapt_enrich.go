@@ -149,8 +149,8 @@ func narrativeSummary(r *VAPTReport) string {
 		lead = "no critical or high-severity issues were found; the remaining items are lower-risk hardening opportunities"
 	}
 	return fmt.Sprintf(
-		"This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**. %s. Of these, %d are tool-confirmed (corroborated or re-verified)%s and %d are unconfirmed single-tool pattern matches to validate before action — the latter are listed after the confirmed findings of the same severity and labelled inline, so no false positive is presented as a proven result. A remediation is already prepared for %d. Each finding below is grounded in the scanner evidence that proves it, mapped to its CWE and OWASP Top 10 category, with a recommended fix.",
-		r.TenantName, s.Total, s.RiskRating, capitalize(lead), s.Verified, kevClause(s.KEV), s.Unconfirmed, s.FixesReady)
+		"This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**.%s %s. Of these, %d are tool-confirmed (corroborated or re-verified)%s and %d are unconfirmed single-tool pattern matches to validate before action — the latter are listed after the confirmed findings of the same severity and labelled inline, so no false positive is presented as a proven result. A remediation is already prepared for %d. Each finding below is grounded in the scanner evidence that proves it, mapped to its CWE and OWASP Top 10 category, with a recommended fix.",
+		r.TenantName, s.Total, s.RiskRating, untestedClause(r), capitalize(lead), s.Verified, kevClause(s.KEV), s.Unconfirmed, s.FixesReady)
 }
 
 func kevClause(kev int) string {
@@ -200,4 +200,16 @@ func pronounFor(n int) string {
 		return "it"
 	}
 	return "them"
+}
+
+// untestedClause qualifies "across the monitored assets" when some of them were not, in fact,
+// assessed. The findings section marks them, but the executive summary is the part that gets read and
+// quoted — a rating stated over a scope that was only partly examined has to say so where the rating
+// is stated, not only in a list further down.
+func untestedClause(r *VAPTReport) string {
+	if len(r.Untested) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" %s %s NOT assessed and is not covered by this rating.",
+		joinTargets(r.Untested), verbFor(len(r.Untested)))
 }
