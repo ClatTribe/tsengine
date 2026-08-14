@@ -77,9 +77,22 @@ func ProposePatch(ctx context.Context, llm LLM, f Finding, sources []SourceFile)
 // same information a human AppSec engineer would, and must reason the fix itself.
 func buildPatchPrompt(f Finding, sources []SourceFile) string {
 	var b strings.Builder
-	b.WriteString("You are an application security engineer. A penetration test PROVED a real, exploitable\n")
-	b.WriteString("vulnerability in the web application below. Produce a minimal source patch that CLOSES the\n")
-	b.WriteString("vulnerability while keeping the application fully functional (do not disable or break features).\n\n")
+	// FRAMING IS PART OF THE TASK, and this was overfit to one shape of it.
+	//
+	// It used to say "a penetration test PROVED a vulnerability in the WEB APPLICATION below" and to
+	// demand that "the homepage still responds". That is exactly right for the offensive-agent case it
+	// was written for, and wrong for the other half of the engineer's job: most real fixes are library
+	// CVEs — a path traversal in an archive extractor, a prototype pollution in a merge helper — where
+	// there is no pentest, no web app, and no homepage, and where correctness is judged by the
+	// project's own test suite. Telling the model to protect a homepage that does not exist steers it
+	// toward request-level patches for defects that live in a function.
+	//
+	// So the wording now describes what is true of BOTH shapes: a software component, whose existing
+	// behaviour and tests must still pass. A web app has tests and normal behaviour too, so nothing is
+	// lost on the case this was originally tuned for.
+	b.WriteString("You are an application security engineer. A real, exploitable vulnerability has been\n")
+	b.WriteString("identified in the software below. Produce a minimal source patch that CLOSES the\n")
+	b.WriteString("vulnerability while preserving existing behaviour (do not disable or break features).\n\n")
 	fmt.Fprintf(&b, "VULNERABILITY\n- class: %s\n- endpoint: %s\n", f.Class, f.Endpoint)
 	if strings.TrimSpace(f.Detail) != "" {
 		fmt.Fprintf(&b, "- evidence: %s\n", strings.TrimSpace(f.Detail))
@@ -87,7 +100,8 @@ func buildPatchPrompt(f Finding, sources []SourceFile) string {
 	b.WriteString("\nRULES\n")
 	b.WriteString("- Fix the ROOT CAUSE (e.g. parameterise the query, encode output, validate the path/identifier,\n")
 	b.WriteString("  enforce authorization) — do NOT just block one payload or break the endpoint.\n")
-	b.WriteString("- Keep the app working: the homepage and normal flows must still respond.\n")
+	b.WriteString("- Keep it working: existing tests and normal behaviour must still pass. A patch that breaks\n")
+	b.WriteString("  the build or the project's test suite is a failed patch, not a fix.\n")
 	b.WriteString("- Output ONLY the files you changed, each as the COMPLETE new file content between markers:\n")
 	b.WriteString("    === FILE: <relative/path> ===\n    <full new file content>\n    === END FILE ===\n")
 	b.WriteString("- Change as few files as possible. If you cannot fix it safely, output nothing.\n\n")
