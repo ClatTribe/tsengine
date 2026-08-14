@@ -283,6 +283,12 @@ func (d Deps) handleVAPTReport(w http.ResponseWriter, r *http.Request, tenantID 
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
+	// Same honesty as the per-engagement report: name the scope nothing has assessed, and do not
+	// rate an unassessed estate. This is the WIDER of the two paths — the tenant-wide report covers
+	// every asset, so a workspace that has connected assets but not yet scanned them is exactly the
+	// case that would have read "every monitored asset is currently clean".
+	rep.Untested = d.untestedScope(r.Context(), tenantID, rep.Scope)
+	grc.Reassess(rep)
 	if r.URL.Query().Get("format") == "json" {
 		writeJSON(w, http.StatusOK, rep)
 		return

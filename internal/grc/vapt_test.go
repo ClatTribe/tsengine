@@ -224,3 +224,85 @@ func TestVAPT_DependencyPatchability(t *testing.T) {
 		t.Errorf("patchability line missing from VAPT markdown:\n%s", md)
 	}
 }
+
+// ── "NOTHING FOUND" AND "NOTHING TESTED" ARE DIFFERENT REPORTS ───────────────────────────────────
+
+// The VAPT report is the artifact that leaves the building. It said "Overall risk rating: Clear …
+// every monitored asset is currently clean" for a scope target no tool had ever run against, because
+// zero findings from a scanned target and zero from an unscanned one are the same zero.
+func TestVAPT_UnscannedScopeIsNotRatedClear(t *testing.T) {
+	r := ReportFromFindings(nil, []string{"https://app.example.com"}, "Q3 pentest", time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC), nil)
+	r.Untested = []string{"https://app.example.com"}
+	Reassess(r)
+
+	if r.Summary.RiskRating == "Clear" {
+		t.Error("a scope nothing assessed was rated Clear — that is a verdict with no assessment behind it")
+	}
+	md := RenderVAPTMarkdown(r)
+	if strings.Contains(md, "every monitored asset is currently clean") {
+		t.Errorf("the report claims every asset is clean when none was scanned:\n%s", md)
+	}
+	if !strings.Contains(md, "app.example.com") {
+		t.Error("the report does not name the target it could not assess")
+	}
+	// It has to be unmistakable, not a footnote.
+	low := strings.ToLower(md)
+	if !strings.Contains(low, "not assessed") && !strings.Contains(low, "not been assessed") {
+		t.Errorf("the report does not say plainly that nothing was assessed:\n%s", md)
+	}
+}
+
+// A PARTIALLY tested scope must credit what was tested and name what was not — collapsing to either
+// extreme loses information the reader needs.
+func TestVAPT_PartiallyTestedScopeNamesTheGap(t *testing.T) {
+	r := ReportFromFindings(nil, []string{"https://a.example.com", "https://b.example.com"}, "Q3", time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC), nil)
+	r.Untested = []string{"https://b.example.com"}
+	Reassess(r)
+
+	md := RenderVAPTMarkdown(r)
+	if strings.Contains(md, "every monitored asset is currently clean") {
+		t.Error("a partially-tested scope still claimed every asset is clean")
+	}
+	if !strings.Contains(md, "b.example.com") {
+		t.Error("the untested target is not named")
+	}
+	// The rating still applies to what WAS tested — a partial scope is not "Not assessed".
+	if r.Summary.RiskRating == "Not assessed" {
+		t.Error("a partially-tested scope was reported as wholly unassessed")
+	}
+}
+
+// THE OTHER DIRECTION, which matters just as much: a genuinely scanned-and-clean scope must still
+// read as clean. An honesty fix that makes every report hedge is its own kind of useless.
+func TestVAPT_ScannedAndCleanStillReadsClean(t *testing.T) {
+	r := ReportFromFindings(nil, []string{"https://a.example.com"}, "Q3", time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC), nil)
+	Reassess(r) // no Untested — everything in scope was scanned
+	if r.Summary.RiskRating != "Clear" {
+		t.Errorf("a scanned, clean scope was rated %q, want Clear", r.Summary.RiskRating)
+	}
+	if !strings.Contains(RenderVAPTMarkdown(r), "every monitored asset is currently clean") {
+		t.Error("a genuinely clean report lost its clean statement")
+	}
+}
+
+// A rating stated over a partly-examined scope must carry the qualification WHERE THE RATING IS —
+// the executive summary is what gets read and quoted, not the scope list further down.
+func TestVAPT_RatingWithFindingsStillNamesUnassessedScope(t *testing.T) {
+	f := types.Finding{ID: "f1", RuleID: "r", Tool: "nuclei", Severity: types.SeverityHigh,
+		Title: "Something", Endpoint: "https://a.example.com"}
+	r := ReportFromFindings([]types.Finding{f},
+		[]string{"https://a.example.com", "https://b.example.com"}, "Acme",
+		time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC), nil)
+	r.Untested = []string{"https://b.example.com"}
+	Reassess(r)
+
+	md := RenderVAPTMarkdown(r)
+	summary := md
+	if i := strings.Index(md, "## Methodology"); i > 0 {
+		summary = md[:i] // the executive summary alone
+	}
+	if !strings.Contains(summary, "b.example.com") {
+		t.Errorf("the executive summary states a rating without saying part of the scope was never "+
+			"assessed:\n%s", summary)
+	}
+}

@@ -116,6 +116,25 @@ func owaspFor(cwes []string, tool string) []string {
 func narrativeSummary(r *VAPTReport) string {
 	s := r.Summary
 	if s.Total == 0 {
+		// NOTHING FOUND AND NOTHING TESTED ARE DIFFERENT REPORTS.
+		//
+		// A scope target that no tool has ever run against produces exactly the same zero as a target
+		// that was scanned clean. Rendering both as "no open vulnerabilities … every monitored asset is
+		// currently clean" turns an absence of assessment into an assurance — on the one artifact that
+		// gets forwarded to an auditor or a prospect.
+		if len(r.Untested) == len(r.Scope) && len(r.Scope) > 0 {
+			return fmt.Sprintf("**No assessment has run against the scope of %s yet**, so this report states "+
+				"nothing about its security. %s %s not been scanned. This is not a clean result — it is an "+
+				"empty one. Connect or scan the target, then re-generate this report.",
+				r.TenantName, joinTargets(r.Untested), verbFor(len(r.Untested)))
+		}
+		if len(r.Untested) > 0 {
+			return fmt.Sprintf("This assessment of %s found no open vulnerabilities in the targets that were "+
+				"scanned. %s %s NOT been assessed, so this report says nothing about %s. Posture across the "+
+				"tested scope is rated **%s**.",
+				r.TenantName, joinTargets(r.Untested), verbFor(len(r.Untested)),
+				pronounFor(len(r.Untested)), s.RiskRating)
+		}
 		return fmt.Sprintf("This assessment of %s found no open vulnerabilities across the monitored assets. Posture is rated **%s**. TensorShield continues to monitor continuously and will surface any new issue as it appears.",
 			r.TenantName, s.RiskRating)
 	}
@@ -130,8 +149,8 @@ func narrativeSummary(r *VAPTReport) string {
 		lead = "no critical or high-severity issues were found; the remaining items are lower-risk hardening opportunities"
 	}
 	return fmt.Sprintf(
-		"This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**. %s. Of these, %d are tool-confirmed (corroborated or re-verified)%s and %d are unconfirmed single-tool pattern matches to validate before action — the latter are listed after the confirmed findings of the same severity and labelled inline, so no false positive is presented as a proven result. A remediation is already prepared for %d. Each finding below is grounded in the scanner evidence that proves it, mapped to its CWE and OWASP Top 10 category, with a recommended fix.",
-		r.TenantName, s.Total, s.RiskRating, capitalize(lead), s.Verified, kevClause(s.KEV), s.Unconfirmed, s.FixesReady)
+		"This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**.%s %s. Of these, %d are tool-confirmed (corroborated or re-verified)%s and %d are unconfirmed single-tool pattern matches to validate before action — the latter are listed after the confirmed findings of the same severity and labelled inline, so no false positive is presented as a proven result. A remediation is already prepared for %d. Each finding below is grounded in the scanner evidence that proves it, mapped to its CWE and OWASP Top 10 category, with a recommended fix.",
+		r.TenantName, s.Total, s.RiskRating, untestedClause(r), capitalize(lead), s.Verified, kevClause(s.KEV), s.Unconfirmed, s.FixesReady)
 }
 
 func kevClause(kev int) string {
@@ -146,4 +165,51 @@ func capitalize(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// joinTargets renders scope targets for prose, naming them rather than counting them — "two targets
+// were not scanned" sends nobody anywhere; the hostname does.
+func joinTargets(t []string) string {
+	switch len(t) {
+	case 0:
+		return ""
+	case 1:
+		return "`" + t[0] + "`"
+	case 2:
+		return "`" + t[0] + "` and `" + t[1] + "`"
+	}
+	out := ""
+	for i, x := range t[:len(t)-1] {
+		if i > 0 {
+			out += ", "
+		}
+		out += "`" + x + "`"
+	}
+	return out + " and `" + t[len(t)-1] + "`"
+}
+
+func verbFor(n int) string {
+	if n == 1 {
+		return "has"
+	}
+	return "have"
+}
+
+func pronounFor(n int) string {
+	if n == 1 {
+		return "it"
+	}
+	return "them"
+}
+
+// untestedClause qualifies "across the monitored assets" when some of them were not, in fact,
+// assessed. The findings section marks them, but the executive summary is the part that gets read and
+// quoted — a rating stated over a scope that was only partly examined has to say so where the rating
+// is stated, not only in a list further down.
+func untestedClause(r *VAPTReport) string {
+	if len(r.Untested) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" %s %s NOT assessed and is not covered by this rating.",
+		joinTargets(r.Untested), verbFor(len(r.Untested)))
 }
