@@ -49,3 +49,4 @@ platform.db
 # Compiled bench binary + committed run artifacts (built/generated locally; never commit)
 /tsbench
 scratchpad/
+/tsmcp
