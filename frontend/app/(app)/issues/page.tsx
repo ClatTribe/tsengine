@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug, Globe, Spline, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Issue } from "@/lib/types";
+import type { Issue, Explanation } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { IssueActions } from "@/components/issues/issue-actions";
 import { IssueAutofix } from "@/components/issues/issue-autofix";
@@ -21,7 +21,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const showingIgnored = show === "ignored";
   const showingLive = show === "live";
   const showingExternal = show === "external";
-  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live }, exclResp, funnel, llm, priorInv] = await Promise.all([
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live, explanations }, exclResp, funnel, llm, priorInv] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
     api.triageFunnel(),
@@ -118,7 +118,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
       {/* "Start here" — the AI Security Engineer's outcome #1 (figure out what to work on). The list is
           already risk-ranked (severity × data-tier × attack-path), so the top row IS the #1 fix; we just
           make it prominent with its impact reason + the agentic verbs, so a founder isn't parsing a table. */}
-      {mainView && visible.length > 0 && <LeadCard issue={visible[0]} prior={priorByIssue.get(visible[0].key)} />}
+      {mainView && visible.length > 0 && <LeadCard issue={visible[0]} prior={priorByIssue.get(visible[0].key)} explain={explanations?.[visible[0].key]} />}
 
       {visible.length === 0 ? (
         <Empty>
@@ -143,7 +143,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
             </thead>
             <tbody>
               {visible.map((it) => (
-                <IssueRow key={it.key} issue={it} ignored={showingIgnored} prior={priorByIssue.get(it.key)} />
+                <IssueRow key={it.key} issue={it} ignored={showingIgnored} prior={priorByIssue.get(it.key)} explain={explanations?.[it.key]} />
               ))}
             </tbody>
           </table>
@@ -169,10 +169,27 @@ function Tab({ href, active, children }: { href: string; active: boolean; childr
 // outcome #1 of the AI Security Engineer — "figure out the issue to work on" — without making a founder
 // parse a table. Deterministic + grounded (the reason comes from real signals on the issue).
 // PriorInv is the persisted per-issue investigation threaded to the Investigate button (survives navigation).
+// UrgencyChip shows how soon, using the grounded urgency rather than the severity label. Severity is
+// every scanner's opinion and reads CRITICAL on everything; urgency only reaches "today" on real
+// evidence (KEV, observed under attack, proven exploitable), which is why it is worth its own colour.
+function UrgencyChip({ urgency, label }: { urgency: Explanation["urgency"]; label: string }) {
+  const tone =
+    urgency === "now" ? "border-danger/40 bg-danger/10 text-danger"
+      : urgency === "this_week" ? "border-warning/40 bg-warning/10 text-warning"
+      : "border-border bg-surface-2 text-muted";
+  return (
+    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
+  );
+}
+
 type PriorInv = { summary?: string; recommends?: string; reports?: { title: string; severity?: string; body?: string }[]; model?: string; created_at?: string } | undefined;
 
-function LeadCard({ issue, prior }: { issue: Issue; prior?: PriorInv }) {
+function LeadCard({ issue, prior, explain }: { issue: Issue; prior?: PriorInv; explain?: Explanation }) {
+  // The plain-English answer leads when we have one. "Anyone can read the database behind your app"
+  // moves a founder; "nuclei::sqli-error-based" does not. The scanner's own title stays visible
+  // underneath rather than being replaced — a developer still wants to know what fired.
   const reason =
+    explain?.why ||
     issue.live_reason ||
     (issue.attacked ? "Seen under attack in your live traffic — fix this now." : "") ||
     (issue.kev ? "On CISA KEV — actively exploited in the wild (BOD 22-01: patch now)." : "") ||
@@ -188,9 +205,20 @@ function LeadCard({ issue, prior }: { issue: Issue; prior?: PriorInv }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <SeverityBadge severity={issue.severity} />
-            <span className="truncate text-sm font-medium text-ink">{issue.title}</span>
+            <span className="truncate text-sm font-medium text-ink">{explain?.headline || issue.title}</span>
+            {explain && <UrgencyChip urgency={explain.urgency} label={explain.urgency_label} />}
           </div>
           <p className="mt-1.5 text-sm leading-relaxed text-muted">{reason}</p>
+          {explain?.fix && <p className="mt-1.5 text-sm leading-relaxed text-ink"><span className="font-medium">Fix:</span> {explain.fix}</p>}
+          {/* The FACTS behind the urgency, so the reader checks our reasoning instead of trusting a
+              label — the anti-"everything is critical" mechanism. Dropping these would put the label
+              back on its own. */}
+          {explain?.because && explain.because.length > 0 && (
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-muted">
+              {explain.because.map((b) => <li key={b}>{b}</li>)}
+            </ul>
+          )}
+          {explain && <p className="mt-1.5 truncate text-xs text-muted/70">Detected as: {issue.title}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <IssueInvestigate issueKey={issue.key} title={issue.title} prior={prior} />
@@ -201,10 +229,15 @@ function LeadCard({ issue, prior }: { issue: Issue; prior?: PriorInv }) {
   );
 }
 
-function IssueRow({ issue, ignored, prior }: { issue: Issue; ignored: boolean; prior?: PriorInv }) {
+function IssueRow({ issue, ignored, prior, explain }: { issue: Issue; ignored: boolean; prior?: PriorInv; explain?: Explanation }) {
   // The issue links to one of its underlying findings (the evidence).
   const href = issue.finding_ids[0] ? `/findings/${issue.finding_ids[0]}` : undefined;
-  const title = <span className="truncate text-sm">{issue.title}</span>;
+  const title = (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="truncate text-sm">{explain?.headline || issue.title}</span>
+      {explain && <UrgencyChip urgency={explain.urgency} label={explain.urgency_label} />}
+    </span>
+  );
   return (
     <tr className="group border-b border-border last:border-0 transition hover:bg-surface-2">
       <td className="py-3 pl-5 pr-2 align-top">

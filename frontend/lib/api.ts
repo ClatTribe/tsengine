@@ -290,7 +290,7 @@ export const api = {
       summary: { total: 0, ai_agents: 0, automations: 0, write_or_admin: 0, risky: 0 },
     }),
   issues: (showIgnored?: boolean) =>
-    safe<IssuesResponse>(`/v1/issues${showIgnored ? "?show=ignored" : ""}`, { issues: [], count: 0, raw_findings: 0, confirmed: 0, ignored: 0 }),
+    safe<IssuesResponse>(`/v1/issues${showIgnored ? "?show=ignored" : ""}`, { issues: [], count: 0, raw_findings: 0, confirmed: 0, ignored: 0, explanations: {} }),
   pentests: () => safe<PentestEngagement[]>("/v1/pentest", []),
   // getOr404 → null only when the engagement genuinely doesn't exist (page notFound()); a
   // transient/5xx error throws to the recoverable error boundary instead of a false 404.
