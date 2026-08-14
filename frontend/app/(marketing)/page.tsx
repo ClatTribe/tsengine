@@ -138,7 +138,19 @@ export default function Landing() {
                 <Wrench className="h-4 w-4" /> TensorShield
               </div>
               <ul className="mt-4 space-y-2.5 text-sm text-ink">
-                {["Opens the pull request with the fix", "Applies the cloud / identity change on approval", "Re-runs the exploit afterwards to prove it is actually dead", "Auto-handles the low-risk work; gates the rest", "Signs the evidence pack automatically"].map((x) => (
+                {[
+                  "Opens the pull request with the fix",
+                  "Applies the cloud / identity change on approval",
+                  // The strongest claim on this page, and the one it would be easiest to overstate.
+                  // Re-testing after a fix runs for everyone. Re-running the actual EXPLOIT needs the
+                  // AI Pentester and an engagement you have authorised for active testing — so the
+                  // condition is stated here rather than discovered later. The neighbouring column
+                  // mocks "fixed means the scanner stopped flagging it"; claiming more than we do by
+                  // default would put us in that column.
+                  "Re-tests every fix — and on an authorised engagement, re-runs the exploit to prove it is dead",
+                  "Auto-handles the low-risk work; gates the rest",
+                  "Signs the evidence pack automatically",
+                ].map((x) => (
                   <li key={x} className="flex items-start gap-2.5">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-pulse" /> {x}
                   </li>
