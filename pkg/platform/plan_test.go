@@ -25,8 +25,20 @@ func TestEntitlements_FreeIsActuallyFree(t *testing.T) {
 	if free.MaxAssets <= 0 || free.MaxAssets > 5 {
 		t.Errorf("Free must have a small hard asset cap, got %d", free.MaxAssets)
 	}
-	if free.AllFrameworks || free.ContinuousMonitoring {
-		t.Error("Free is core-only, on-demand")
+	// The economic line is AI spend and the SCAN CADENCE, not the compliance mapping.
+	//
+	// AllFrameworks used to be asserted false here while nothing enforced it, so Free tenants had all
+	// 22 in practice and the declaration was fiction. Framework mapping is pure computation over
+	// findings we already have; gating it would have cost an evaluator most of what convinces them and
+	// saved us nothing.
+	if !free.AllFrameworks {
+		t.Error("Free maps all frameworks — it is computation over findings we already have, and it " +
+			"was never enforced as a limit anyway")
+	}
+	// The heartbeat IS the cost, and it is now genuinely enforced in scheduler.Tick.
+	if free.ContinuousMonitoring {
+		t.Error("Free must not get the unattended re-scan heartbeat — that is the one limit with a " +
+			"real per-tick, per-asset cost")
 	}
 	// empty/unknown plan defaults to Free entitlements (fail-safe).
 	if Entitlements("").AIEnabled {

@@ -54,7 +54,7 @@ export default async function OverviewPage() {
   // One concurrent wave for the whole dashboard. Compliance posture for every framework arrives
   // in a SINGLE batched call (postureSummary) instead of fanning out 14 per-framework requests,
   // and it rides in the same Promise.all as everything else.
-  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, postureResp, practitioners, ai] = await Promise.all([
+  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, postureResp, practitioners, ai, tenant] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
@@ -65,6 +65,7 @@ export default async function OverviewPage() {
     api.postureSummary(),
     api.practitioners(),
     api.aiMode(),
+    api.tenant(),
   ]);
   // Service model: a managed/MSP customer's expert owns the approvals — the hero shouldn't tell them a fix
   // is "waiting for YOUR approval" (it's their team's call), so the framing defers to the named expert.
@@ -117,9 +118,18 @@ export default async function OverviewPage() {
           </div>
         </div>
         <div className="sm:ml-auto">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-pulse-soft px-2.5 py-1 text-xs font-medium text-pulse">
-            <span className="pulse-dot" /> Monitoring 24/7
-          </div>
+          {/* Only claim the heartbeat when the plan actually includes it. This badge said
+              "Monitoring 24/7" to every tenant, including the ones the scheduler now deliberately
+              skips — the same failure as an activity feed crediting an agent that is switched off. */}
+          {tenant?.limits?.continuous_monitoring === false ? (
+            <Link href="/pricing" className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted transition hover:text-ink">
+              Scans on demand · add continuous monitoring
+            </Link>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-pulse-soft px-2.5 py-1 text-xs font-medium text-pulse">
+              <span className="pulse-dot" /> Monitoring 24/7
+            </div>
+          )}
           <div className="mt-3 flex gap-1.5">
             {(["critical", "high", "medium", "low"] as const).map((s) => (
               <div key={s} className="min-w-[3.25rem] rounded-xl border border-border bg-surface-2 px-2.5 py-1.5 text-center">
