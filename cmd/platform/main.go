@@ -39,15 +39,15 @@
 package main
 
 import (
-	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
-git "github.com/go-git/go-git/v5"
-"github.com/go-git/go-git/v5/plumbing/transport"
-githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
+	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"io"
 	"log"
 	"net/http"
@@ -600,32 +600,50 @@ func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ct
 		}
 		info, err := sandbox.Spawn(ctx, opts)
 		if err != nil {
-			if cloneDir != "" { _ = os.RemoveAll(cloneDir) }
+			if cloneDir != "" {
+				_ = os.RemoveAll(cloneDir)
+			}
 			return nil, nil, err
 		}
 		cleanup := func() {
 			_ = sandbox.Destroy(context.Background(), info)
-			if cloneDir != "" { _ = os.RemoveAll(cloneDir) }
+			if cloneDir != "" {
+				_ = os.RemoveAll(cloneDir)
+			}
 		}
 		return sandbox.NewClient(info), cleanup, nil
 	}
 }
 
 func repoCloneURL(a platform.Asset) string {
-	if a.Target != "" { return a.Target }
-	if full := a.Meta["full_name"]; full != "" { return "https://github.com/" + full + ".git" }
+	if a.Target != "" {
+		return a.Target
+	}
+	if full := a.Meta["full_name"]; full != "" {
+		return "https://github.com/" + full + ".git"
+	}
 	return a.Target
 }
 
 func repoAuth(ctx context.Context, st store.Store, vault secret.Vault, a platform.Asset) (transport.AuthMethod, error) {
-	if a.Meta["private"] != "true" { return nil, nil }
+	if a.Meta["private"] != "true" {
+		return nil, nil
+	}
 	conns, err := st.ListConnections(ctx, a.TenantID)
-	if err != nil { return nil, fmt.Errorf("sandboxDispatcher: list connections: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("sandboxDispatcher: list connections: %w", err)
+	}
 	for _, c := range conns {
-		if c.ID != a.ConnectionID { continue }
+		if c.ID != a.ConnectionID {
+			continue
+		}
 		token, oerr := vault.Open(c.SecretRef)
-		if oerr != nil { return nil, fmt.Errorf("sandboxDispatcher: open token: %w", oerr) }
-		if token == "" { return nil, fmt.Errorf("sandboxDispatcher: empty token %s", c.ID) }
+		if oerr != nil {
+			return nil, fmt.Errorf("sandboxDispatcher: open token: %w", oerr)
+		}
+		if token == "" {
+			return nil, fmt.Errorf("sandboxDispatcher: empty token %s", c.ID)
+		}
 		return &githttp.BasicAuth{Username: "x-access-token", Password: token}, nil
 	}
 	return nil, fmt.Errorf("sandboxDispatcher: connection %s not found", a.ConnectionID)

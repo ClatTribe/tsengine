@@ -729,6 +729,27 @@ type Incident struct {
 	// cross-surface chain reaching a crown jewel (how big it can get). Computed by the API from the
 	// correlate chains when returning incidents, NEVER persisted. nil = not on a crown-jewel chain.
 	BlastRadius *BlastRadius `json:"blast_radius,omitempty"`
+	// Onset is a TRANSIENT, read-time annotation naming WHEN the underlying state changed, read from the
+	// estate timeline. Same pattern as SLABreach/BlastRadius: computed on return, never persisted.
+	//
+	// It is the difference between two very different alerts that otherwise look identical. "This bucket
+	// is public" is a fact; "this bucket became public forty minutes ago" is an incident. The first gets
+	// triaged next week, the second gets someone's attention now — and a responder currently has to go
+	// and find out which one they are holding. nil = the timeline has nothing to say about it.
+	Onset *Onset `json:"onset,omitempty"`
+}
+
+// Onset is when the state behind an incident actually changed.
+type Onset struct {
+	// At is the capture in which the change was first observed.
+	At time.Time `json:"at"`
+	// What happened, in the responder's terms ("became internet-facing").
+	What string `json:"what"`
+	// ResourceID is what changed.
+	ResourceID string `json:"resource_id"`
+	// Note carries the honest limit: we observe BETWEEN captures, so At is when we first SAW it, not
+	// necessarily when it happened. A responder reconstructing a timeline must not read one as the other.
+	Note string `json:"note,omitempty"`
 }
 
 // Acknowledged reports whether a human has taken ownership of the incident.
