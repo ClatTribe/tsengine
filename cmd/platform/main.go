@@ -493,6 +493,13 @@ func main() {
 	// human to click /v1/l2/translate. The hook self-gates (AIEnabled + an available LLM), so it's a
 	// no-op when AI isn't entitled/configured — a Free tenant never auto-spends the operator's budget.
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
+	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
+	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
+	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the
+	// operator must have enabled live probing (TSENGINE_ACTIVE_EXPLOIT), and the tenant must have
+	// proven ownership of the target. Both fail closed and report "unverified" rather than "clean".
+	svc.Reattacker = apiDeps.ReattackVerdicts
+
 	// The RESPOND half for EVENT-DRIVEN incidents: when an ingest path (identity/cloud-drift/OSINT/…)
 	// opens a new incident via detector.OpenFor, put the AI engineer on it immediately instead of
 	// waiting for the next scan. Same gating as AfterScan (own key any plan; operator LLM AI-entitled
