@@ -47,6 +47,13 @@ type Deps struct {
 	// desk. Empty → the Lead keeps its read-only catalog and the ≤12 cap is not spent on tools that
 	// cannot act.
 	Engineer Catalog
+
+	// Graph is the estate-graph traversal slot (traverse_estate). It is what lets the engineer WALK the
+	// cross-surface map instead of reading EstateContext.AttackPaths, which is []string — pre-rendered
+	// summaries the model cannot pivot from. Injected by the platform (l2 stays engine-pure and never
+	// imports estategraph); nil → the tool is not exposed and the ≤12 cap is not spent on a traversal
+	// that has nothing to traverse.
+	Graph EstateGraph
 }
 
 // BuildCatalog assembles the per-asset L2 catalog from Deps. The catalog is
@@ -60,6 +67,7 @@ func BuildCatalog(d Deps) Catalog {
 	c = append(c, reportTools(d)...)   // L2-2: create/update report + record_hypothesis
 	c = append(c, externalTools(d)...) // L2-3: threat-intel / compliance / probe / send_request
 	c = append(c, d.engineerTools()...)
+	c = append(c, GraphTools(d.Graph)...) // phase-scoped to investigate+chain; nil Graph adds nothing
 	return c
 }
 

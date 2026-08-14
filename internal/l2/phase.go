@@ -52,6 +52,22 @@ func phaseIndex(p Phase) int {
 // phases" (e.g. think). A tool allowed in phase X is also allowed in every
 // LATER phase — later phases can still use earlier capabilities (read
 // state, probe) — but not earlier ones (no finish_scan before report).
+// exactlyInPhase is the non-cumulative test: the tool appears ONLY in the phases it lists. Used by
+// exploratory tools, which have no reason to linger into later phases and whose lingering inflates the
+// terminal phase against the ≤12 cap. An empty set still means every phase (same as allowedInPhase), so
+// the flag alone can never hide a tool completely.
+func exactlyInPhase(toolPhases []Phase, current Phase) bool {
+	if len(toolPhases) == 0 {
+		return true
+	}
+	for _, p := range toolPhases {
+		if p == current {
+			return true
+		}
+	}
+	return false
+}
+
 func allowedInPhase(toolPhases []Phase, current Phase) bool {
 	if len(toolPhases) == 0 {
 		return true
