@@ -24,9 +24,19 @@ type ToolResult struct {
 // Handlers are the ONLY place a tool's side-effect happens — reasoning
 // never is a tool (§2.7).
 type Tool struct {
-	Schema  ToolSchema
-	Phases  []Phase // allowed phases; empty = all
-	Handler func(ctx context.Context, args map[string]any, st *State) (ToolResult, error)
+	Schema ToolSchema
+	Phases []Phase // allowed phases; empty = all
+	// OnlyInPhases makes Phases an EXACT set instead of the default "from this phase onward".
+	//
+	// Phase gating is cumulative by design (allowedInPhase: ci >= pi), which is right for ACTING tools —
+	// once propose_fix becomes available it should stay available. It is wrong for EXPLORATORY ones, and
+	// the cost is structural: because every phase inherits every earlier phase's tools, the terminal
+	// report phase accumulates the whole catalog and is the binding constraint for all of it. Report sat
+	// at exactly 12, so any tool added at ANY earlier phase pushed it over the §2.6 cap.
+	//
+	// Opt-in and defaults to false, so every existing tool keeps its cumulative behaviour untouched.
+	OnlyInPhases bool
+	Handler      func(ctx context.Context, args map[string]any, st *State) (ToolResult, error)
 }
 
 // Catalog is the per-asset tool set exposed to the Lead.
@@ -37,6 +47,12 @@ type Catalog []Tool
 func (c Catalog) exposedIn(p Phase) []ToolSchema {
 	var out []ToolSchema
 	for _, t := range c {
+		if t.OnlyInPhases {
+			if exactlyInPhase(t.Phases, p) {
+				out = append(out, t.Schema)
+			}
+			continue
+		}
 		if allowedInPhase(t.Phases, p) {
 			out = append(out, t.Schema)
 		}
