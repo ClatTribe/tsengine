@@ -8,6 +8,40 @@ so future turns see the new layout.
 
 ---
 
+## 0. Prioritization principle — customer value first (read before ranking any roadmap)
+
+**Rank work by what it is worth to the customer, done to the standard they will actually
+trust — never by how hard or fast it is to build.** Effort and value are different axes;
+a one-day build can be the highest-value thing on the list and a multi-week build can be
+worth little. When you rank a backlog, competitive gap, or set of PRs, the first question
+is *"what is this worth to the customer, done right?"*, and only then *"what does it
+cost?"*. Sequencing may use cost as a tiebreak; the ranking itself is value-led.
+
+**"Done right" is the customer's trust bar, not "compiles + passes CI."** For most
+security/compliance work the small, mechanical version and the version a regulated buyer
+will stake their audit on are far apart, and the gap between them *is* the value. A card
+masker is a day; a redactor a healthcare CISO will run against production PHI — provably
+complete, auditable, non-destructive of the evidence — is the actual deliverable. Scope
+the unit of work as the trustworthy version.
+
+**A shallow version that manufactures false confidence is worse than not building it.**
+This is §10 grounding applied to the roadmap: a half-right sanitizer that misses one SSN,
+or a root-cause dedup that collapses two real defects into one "fixed" banner, fails the
+same way a hallucinated finding does — it tells the customer something is handled when it
+is not. "Small to start, expensive to make trustworthy" is the honest description of most
+of this backlog; do not let the first clause hide the second.
+
+**Do not confuse catch-up with moat.** Closing a competitor's *claimed* capability
+(often marketing, not verified) is worth less than deepening a lead a customer can feel
+in an audit or an exploitation number. Weigh moat-widening above catch-up at equal cost,
+and verify a competitor actually ships a thing before ranking work to match it.
+
+Corollary for competitive analysis: **score against our own verified capability, never
+against a claim.** Our column is checkable in this tree; theirs is their website. Rank
+only the gaps confirmed absent here.
+
+---
+
 ## 1. Repository identity
 
 `tsengine` is a Go-native two-layer security + compliance engine. The
