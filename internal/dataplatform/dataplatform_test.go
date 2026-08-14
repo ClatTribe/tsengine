@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/dataclass"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -280,5 +281,73 @@ func TestFindings_AreOrderedWorstFirst(t *testing.T) {
 	if got[0].Severity != types.SeverityCritical {
 		t.Errorf("leads with %s (%s); the internet-readable table must come first",
 			got[0].Severity, got[0].RuleID)
+	}
+}
+
+// ── DISCOVERED SENSITIVITY (dataclass wiring) ────────────────────────────────────────────────────
+//
+// The point of the whole substrate: a crown jewel discovered from the data, not declared on a checkbox.
+
+// A table nobody declared sensitive, whose sampled column holds real SSNs, must be treated as sensitive
+// — and the account-wide-grant on it must escalate to the sensitive severity it now deserves.
+func TestClassify_DiscoveredSensitivityDrivesTheAssessment(t *testing.T) {
+	est := Estate{Objects: []Object{{
+		Platform: "snowflake", Name: "prod.public.users", Type: "table",
+		// NOT declared sensitive.
+		Columns: []dataclass.Column{{Name: "national_number", Values: []string{"123-45-6789", "078-05-1120"}}},
+		Grants:  []Grant{{Grantee: "PUBLIC", Privilege: "SELECT"}},
+	}}}
+	classified, disc := Classify(est)
+	if !classified.Objects[0].Sensitive {
+		t.Fatal("an object with sampled SSN values was not discovered sensitive")
+	}
+	if len(disc) != 1 || len(disc[0].Evidence) == 0 {
+		t.Fatalf("discovery not recorded with evidence: %+v", disc)
+	}
+	// The account-wide finding must now carry the sensitive (high) severity, not the ordinary (medium).
+	f := has(Assess(classified, fixedNow()), "dataplatform::account-wide-grant")
+	if f == nil || f.Severity != types.SeverityHigh {
+		t.Errorf("account-wide grant on DISCOVERED-sensitive data did not escalate: %+v", f)
+	}
+}
+
+// A column merely NAMED like PII, with no values, is a suspicion — NOT enough to mint a crown jewel.
+// Treating a name as proof is the exact inference the package refuses.
+func TestClassify_NameOnlySignalDoesNotMintACrownJewel(t *testing.T) {
+	est := Estate{Objects: []Object{{
+		Platform: "snowflake", Name: "prod.public.t", Type: "table",
+		Columns: []dataclass.Column{{Name: "ssn"}}, // named, no values
+	}}}
+	classified, disc := Classify(est)
+	if classified.Objects[0].Sensitive {
+		t.Error("a name-only signal flipped the object to sensitive — that is inference, not discovery")
+	}
+	if len(disc) != 0 {
+		t.Errorf("a name-only signal produced a discovery: %+v", disc)
+	}
+}
+
+// Discovery UPGRADES, never DOWNGRADES. A declared-sensitive object whose sample happens to show nothing
+// stays sensitive — a few sampled rows are not proof the column is clean.
+func TestClassify_NeverDowngradesADeclaration(t *testing.T) {
+	est := Estate{Objects: []Object{{
+		Platform: "snowflake", Name: "prod.public.t", Type: "table", Sensitive: true,
+		Columns: []dataclass.Column{{Name: "widget_count", Values: []string{"3", "7"}}},
+	}}}
+	classified, _ := Classify(est)
+	if !classified.Objects[0].Sensitive {
+		t.Error("a clean sample cleared a customer's sensitive declaration")
+	}
+}
+
+// No sampled columns → unchanged, no discoveries. Purely additive.
+func TestClassify_NoColumnsIsANoOp(t *testing.T) {
+	est := Estate{Objects: []Object{{Platform: "snowflake", Name: "t", Grants: []Grant{{Grantee: "PUBLIC", Privilege: "SELECT"}}}}}
+	classified, disc := Classify(est)
+	if disc != nil {
+		t.Errorf("an estate with no sampled columns produced discoveries: %+v", disc)
+	}
+	if classified.Objects[0].Sensitive {
+		t.Error("an object with no columns was marked sensitive")
 	}
 }
