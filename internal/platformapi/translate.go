@@ -148,6 +148,19 @@ func (d Deps) runEstateAgent(ctx context.Context, tenantID string, client l2.Cli
 	dep.Engineer = d.EngineerCatalog(tenantID)
 	budget := l2.DefaultBudget()
 	budget.MaxIterations = maxIter
+	// CLAMP THE RUN TO WHAT IS LEFT OF THE MONTH.
+	//
+	// aiAllowed refuses to START a run once the ceiling is spent, which is a pre-flight check, not a
+	// cap. A tenant with $0.05 left of a $5 ceiling passed that check and then got a run allowed to
+	// spend $1.00, finishing the month at $5.95 — while Tenant.MonthlyAIBudgetUSD is documented as "a
+	// hard ceiling" and Settings tells them the agents pause when it is reached.
+	//
+	// l2.Budget already enforces MaxCostUSD mid-run (it is the strix-incident cap), so handing it the
+	// remaining allowance is all it takes to make the monthly number mean what we say it means. The
+	// floor keeps a nearly-exhausted budget from starting a run that dies before it can report
+	// anything: below that we would rather stop cleanly at the gate than burn the remainder producing
+	// nothing.
+	budget.MaxCostUSD = clampToRemaining(budget.MaxCostUSD, d.remainingAIBudget(ctx, tenantID))
 	agent, err := l2.New(client, l2.BuildCatalog(dep), budget)
 	if err != nil {
 		return l2.Outcome{}, err
