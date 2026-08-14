@@ -276,6 +276,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/settings/ai-mode", d.auth(d.handleGetAIMode))                                                      // what AI is running, why, and this month's spend
 	mux.HandleFunc("PUT /v1/settings/ai-mode", d.auth(d.handleSetAIMode))                                                      // deterministic-only | +engineer | +pentester
 	mux.HandleFunc("POST /v1/database/scan", d.auth(d.handleDatabaseScan))                                                     // connect Postgres (Supabase/Neon/RDS) — DSN used once, never stored
+	mux.HandleFunc("POST /v1/vercel/ingest", d.auth(d.handleVercelIngest))                                                     // deployment-platform posture (preview exposure, prod secrets in preview)
 	mux.HandleFunc("POST /v1/dataplatform/ingest", d.auth(d.handleDataPlatformIngest))                                         // warehouse grants (snowflake/bigquery/postgres) → who can read which table
 	mux.HandleFunc("POST /v1/agents/ingest", d.auth(d.handleAgentPostureIngest))
 	// Live collector path: Uber ADR Sensor JSONL straight in (github.com/uber/ADR, Apache-2.0).
