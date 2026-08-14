@@ -30,7 +30,7 @@ func (d Deps) handleComplianceAdvisor(w http.ResponseWriter, r *http.Request, te
 	}
 	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleAnalysis)
 	if llm == nil {
-		writeJSON(w, http.StatusBadRequest, errBody("the compliance advisor needs an LLM: configure one in Settings → LLM, or set LLM_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
+		writeJSON(w, http.StatusBadRequest, llmRequiredBody("The compliance advisor"))
 		return
 	}
 	rep, err := d.GRC.Report(r.Context(), tenantID, framework)

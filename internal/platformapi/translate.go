@@ -26,7 +26,7 @@ import (
 func (d Deps) handleL2Translate(w http.ResponseWriter, r *http.Request, tenantID string) {
 	client := d.resolveLeadClient(r.Context(), tenantID)
 	if client == nil {
-		writeJSON(w, http.StatusBadRequest, errBody("the L2 translator needs a tool-calling LLM: configure one in Settings → LLM, or set ANTHROPIC_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
+		writeJSON(w, http.StatusBadRequest, llmRequiredBody("The plain-English translator"))
 		return
 	}
 	findings, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})

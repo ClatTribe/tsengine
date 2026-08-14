@@ -30,7 +30,7 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	// The tenant's OWN model (Settings → LLM) takes precedence over the operator-global one (§18.5).
 	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleAnalysis)
 	if llm == nil {
-		writeJSON(w, http.StatusBadRequest, errBody("cloud investigation needs an LLM (the agent's brain): configure one in Settings → LLM, or set LLM_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
+		writeJSON(w, http.StatusBadRequest, llmRequiredBody("Cloud investigation"))
 		return
 	}
 	var body struct {
