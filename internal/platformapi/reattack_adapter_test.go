@@ -41,6 +41,11 @@ func seedTenant(t *testing.T, ownershipVerified bool) (Deps, string, *stubProber
 	ctx := context.Background()
 	st := store.NewMemory()
 	const tid = "tenant-abcd"
+	// Enterprise: re-attack is the AI Pentester's capability, so the tenant must be entitled to it.
+	// The gate itself is asserted separately below.
+	if err := st.PutTenant(ctx, platform.Tenant{ID: tid, Plan: platform.PlanEnterprise}); err != nil {
+		t.Fatal(err)
+	}
 	f := xssFinding()
 	if err := st.PutFinding(ctx, tid, f); err != nil {
 		t.Fatal(err)
@@ -168,5 +173,49 @@ func TestReattackVerdicts_EmptyInputIsNil(t *testing.T) {
 	d, tid, _ := seedTenant(t, true)
 	if got := d.ReattackVerdicts(context.Background(), tid, nil); got != nil {
 		t.Errorf("no keys should yield nil, got %v", got)
+	}
+}
+
+// GATE 0: re-attack is the AI Pentester's capability, and it is SOLD as the Growth tier
+// ("re-tests after every fix"). A tenant without the pentester must not get it — otherwise the
+// pricing page describes a product we do not ship, and a customer who turned the pentester off gets
+// exploits fired on their behalf anyway.
+func TestReattackVerdicts_RequiresThePentesterEntitlement(t *testing.T) {
+	ctx := context.Background()
+	d, tid, p := seedTenant(t, true)
+	// Downgrade to the engineer-only tier.
+	tn, _ := d.Store.GetTenant(ctx, tid)
+	tn.Plan = platform.PlanGrowth // Core: engineer yes, pentester no
+	if err := d.Store.PutTenant(ctx, tn); err != nil {
+		t.Fatal(err)
+	}
+	key := detect.Key(xssFinding())
+
+	got := d.ReattackVerdicts(ctx, tid, []string{key})
+	if p.sent != 0 {
+		t.Fatalf("SENT %d PROBES for a tenant without the AI Pentester — the tier sells this capability", p.sent)
+	}
+	v := got[key]
+	if v.Verified {
+		t.Error("an un-probed finding was reported verified")
+	}
+	if !strings.Contains(strings.ToLower(v.Evidence), "ai pentester") {
+		t.Errorf("evidence does not name the missing capability: %q", v.Evidence)
+	}
+}
+
+// And the customer's own choice is honoured: someone who turned the pentester OFF does not get
+// exploits fired on their behalf, even on an entitled plan.
+func TestReattackVerdicts_RespectsTheCustomersAIModeChoice(t *testing.T) {
+	ctx := context.Background()
+	d, tid, p := seedTenant(t, true)
+	tn, _ := d.Store.GetTenant(ctx, tid)
+	tn.AIMode = platform.AIModeEngineer // entitled to both, chose engineer only
+	if err := d.Store.PutTenant(ctx, tn); err != nil {
+		t.Fatal(err)
+	}
+	d.ReattackVerdicts(ctx, tid, []string{detect.Key(xssFinding())})
+	if p.sent != 0 {
+		t.Fatalf("SENT %d PROBES after the customer turned the pentester off", p.sent)
 	}
 }
