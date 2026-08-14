@@ -682,6 +682,7 @@ func (d Deps) handleIncidents(w http.ResponseWriter, r *http.Request, tenantID s
 	}
 	d.annotateSLA(r.Context(), tenantID, all)         // transient sla_breach per incident (read-time)
 	d.annotateBlastRadius(r.Context(), tenantID, all) // transient blast_radius per incident (read-time impact)
+	d.annotateOnset(r.Context(), tenantID, all)       // transient onset per incident (read-time: WHEN the state changed)
 	if r.URL.Query().Get("status") == "all" {
 		respond(w, all, nil)
 		return
