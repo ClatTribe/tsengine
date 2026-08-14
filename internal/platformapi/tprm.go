@@ -62,5 +62,16 @@ func (d Deps) handleTPRMIngest(w http.ResponseWriter, r *http.Request, tenantID 
 	if findings == nil {
 		findings = []types.Finding{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"vendors": len(req.Vendors), "risks_detected": stored, "findings": findings})
+	resp := map[string]any{"vendors": len(req.Vendors), "risks_detected": stored, "findings": findings}
+	// Same honesty as the device ingest: an unnamed vendor is skipped, and a skipped vendor must not be
+	// counted as a reviewed one. "0 risks across 12 vendors" is what someone puts in front of an auditor.
+	names := make([]string, 0, len(req.Vendors))
+	for _, v := range req.Vendors {
+		names = append(names, v.Name)
+	}
+	if note := unjudgedNote(len(req.Vendors), countNamed(names), "vendor", "vendors",
+		"they did not carry a vendor name"); note != "" {
+		resp["checks_not_run"] = []string{note}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

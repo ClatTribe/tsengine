@@ -56,5 +56,17 @@ func (d Deps) handleDevicePostureIngest(w http.ResponseWriter, r *http.Request, 
 	if findings == nil {
 		findings = []types.Finding{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"devices": len(req.Devices), "issues_detected": stored, "findings": findings})
+	resp := map[string]any{"devices": len(req.Devices), "issues_detected": stored, "findings": findings}
+	// Say how many devices we could not read, rather than letting a silent skip read as a clean fleet.
+	// "0 issues over 2 devices" is a compliance claim about disk encryption; if the export did not name
+	// the devices we assessed none of them, and that has to be visible here (§10).
+	names := make([]string, 0, len(req.Devices))
+	for _, dv := range req.Devices {
+		names = append(names, dv.Name)
+	}
+	if note := unjudgedNote(len(req.Devices), countNamed(names), "device", "devices",
+		"they did not carry a device name"); note != "" {
+		resp["checks_not_run"] = []string{note}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
