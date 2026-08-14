@@ -39,6 +39,10 @@
 package main
 
 import (
+	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
+git "github.com/go-git/go-git/v5"
+"github.com/go-git/go-git/v5/plumbing/transport"
+githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -381,7 +385,7 @@ func main() {
 	}
 	workspaceRunner := &runner.OperateRunner{Source: workspaceSource, Apps: st}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
-		engine := &runner.EngineRunner{Resolve: assetregistry.HandlerFor, NewDispatcher: sandboxDispatcher(sandboxImages.Scan)}
+		engine := &runner.EngineRunner{Resolve: assetregistry.HandlerFor, NewDispatcher: sandboxDispatcher(sandboxImages.Scan, st, vault)}
 		svc.Scanner = &runner.MuxRunner{Engine: engine, Workspace: workspaceRunner}
 	} else {
 		log.Print("[platform] NO_ENGINE mode: tech-asset scanning disabled (operate workspace assets still run)")
@@ -549,19 +553,63 @@ func scanJobTimeout() time.Duration {
 
 // sandboxDispatcher returns a factory that spawns a per-asset sandbox and hands back
 // the orchestrator Dispatcher + a teardown. Mirrors cmd/tsengine's scan path.
-func sandboxDispatcher(image string) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
+func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
 	return func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
 		opts := sandbox.SpawnOptions{Image: image}
-		if types.AssetType(a.Type) == types.AssetCloudAccount {
+		var cloneDir string
+		switch types.AssetType(a.Type) {
+		case types.AssetCloudAccount:
 			opts.Env = cloudCredentialEnv()
+		case types.AssetRepository:
+			dir, err := os.MkdirTemp("", "tsengine-repo-*")
+			if err != nil {
+				return nil, nil, fmt.Errorf("sandboxDispatcher: temp dir: %w", err)
+			}
+			auth, aerr := repoAuth(ctx, st, vault, a)
+			if aerr != nil {
+				_ = os.RemoveAll(dir)
+				return nil, nil, aerr
+			}
+			if _, cerr := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
+				URL: repoCloneURL(a), Auth: auth, Depth: 1, SingleBranch: true,
+			}); cerr != nil {
+				_ = os.RemoveAll(dir)
+				return nil, nil, fmt.Errorf("sandboxDispatcher: clone %s: %w", a.Target, cerr)
+			}
+			cloneDir = dir
+			opts.Mounts = append(opts.Mounts, sandbox.Mount{HostPath: dir, ContainerPath: repoasset.WorkspacePath})
 		}
 		info, err := sandbox.Spawn(ctx, opts)
 		if err != nil {
+			if cloneDir != "" { _ = os.RemoveAll(cloneDir) }
 			return nil, nil, err
 		}
-		cleanup := func() { _ = sandbox.Destroy(context.Background(), info) }
+		cleanup := func() {
+			_ = sandbox.Destroy(context.Background(), info)
+			if cloneDir != "" { _ = os.RemoveAll(cloneDir) }
+		}
 		return sandbox.NewClient(info), cleanup, nil
 	}
+}
+
+func repoCloneURL(a platform.Asset) string {
+	if a.Target != "" { return a.Target }
+	if full := a.Meta["full_name"]; full != "" { return "https://github.com/" + full + ".git" }
+	return a.Target
+}
+
+func repoAuth(ctx context.Context, st store.Store, vault secret.Vault, a platform.Asset) (transport.AuthMethod, error) {
+	if a.Meta["private"] != "true" { return nil, nil }
+	conns, err := st.ListConnections(ctx, a.TenantID)
+	if err != nil { return nil, fmt.Errorf("sandboxDispatcher: list connections: %w", err) }
+	for _, c := range conns {
+		if c.ID != a.ConnectionID { continue }
+		token, oerr := vault.Open(c.SecretRef)
+		if oerr != nil { return nil, fmt.Errorf("sandboxDispatcher: open token: %w", oerr) }
+		if token == "" { return nil, fmt.Errorf("sandboxDispatcher: empty token %s", c.ID) }
+		return &githttp.BasicAuth{Username: "x-access-token", Password: token}, nil
+	}
+	return nil, fmt.Errorf("sandboxDispatcher: connection %s not found", a.ConnectionID)
 }
 
 // cloudCredentialEnv forwards scoped, read-only cloud credentials into the sandbox
