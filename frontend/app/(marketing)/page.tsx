@@ -12,9 +12,9 @@ import { Prioritize } from "@/components/marketing/prioritize";
 import { ArchStack } from "@/components/marketing/arch-stack";
 import { SCENARIOS, SURFACES, ALTERNATIVES } from "@/lib/solutions";
 
-const HOME_TITLE = "TensorShield — one AI engineer that finds the attack path across code, cloud, and SaaS";
+const HOME_TITLE = "TensorShield — an AI security engineer and an AI pentester for Series A teams";
 const HOME_DESCRIPTION =
-  "Connect your code, cloud, and SaaS. One AI engineer finds the attack path across all three — from a leaked key to your cloud root — and fixes it, with a named human signing the risky calls. SOC 2 and compliance built in.";
+  "Two AI teammates for a 20–100 person team with no security hire: an AI security engineer that finds what is genuinely exploitable across code, cloud and SaaS and writes the fix, and an AI pentester that proves it by exploiting it. You approve anything that touches your systems. SOC 2 evidence built in.";
 
 // The homepage leads with the cross-surface-attack-path wedge, so its social card must match that —
 // otherwise a shared homepage link shows the site-wide "fractional security team" default (the other
@@ -24,15 +24,15 @@ export const metadata = {
   description: HOME_DESCRIPTION,
   alternates: { canonical: "/" },
   openGraph: {
-    title: "One leaked secret is all it takes to reach your cloud root",
+    title: "Your AI security engineer. And your AI pentester.",
     description:
-      "TensorShield connects your code, cloud, and SaaS and walks every attack path an attacker could — one AI engineer finds the chain across all three and fixes it, with a human signing the risky calls.",
+      "For Series A teams with no security hire: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. You approve anything that touches your systems.",
     url: "/",
   },
   twitter: {
-    title: "One leaked secret is all it takes to reach your cloud root",
+    title: "Your AI security engineer. And your AI pentester.",
     description:
-      "TensorShield connects your code, cloud, and SaaS and walks every attack path an attacker could — one AI engineer finds the chain across all three and fixes it, with a human signing the risky calls.",
+      "For Series A teams with no security hire: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. You approve anything that touches your systems.",
   },
 };
 
@@ -55,16 +55,27 @@ export default function Landing() {
                 href="/product"
                 className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur transition hover:border-accent/40"
               >
-                <Sparkles className="h-3.5 w-3.5 text-accent" /> AI security + compliance, human-in-the-loop
+                <Sparkles className="h-3.5 w-3.5 text-accent" /> For Series A teams with no security hire
               </Link>
 
+              {/* THE HEADLINE NAMES THE PRODUCT, NOT A THREAT.
+                  It used to open "One leaked secret is all it takes to reach your cloud root" — a strong
+                  line, but it sells the fear and leaves the visitor to work out what we actually are. The
+                  two agents sat four sections down under "How it works", so a founder had to scroll past
+                  frameworks and trust badges to learn what they would be buying. Lead with the product. */}
               <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
-                One leaked secret is all it takes to reach{" "}
-                <span className="text-accent">your cloud root.</span>
+                Your AI security engineer.{" "}
+                <span className="text-accent">And your AI pentester.</span>
               </h1>
               <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-                TensorShield connects your code, cloud, and SaaS, walks every attack path an attacker could, and shuts
-                it. One AI engineer finds the chain across all three and fixes it — a named human signs the risky calls.
+                One reasons across your code, cloud and SaaS to find what is genuinely exploitable — then writes
+                the fix. The other proves it by actually exploiting it, and re-tests once you have shipped the
+                patch. You approve anything that touches your systems.
+              </p>
+              {/* The qualifier. A visitor should be able to rule themselves in or out in one line. */}
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-faint lg:mx-0">
+                Built for 20–100 person teams with an enterprise deal waiting on SOC 2 — and nobody whose job
+                is security.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
@@ -96,6 +107,13 @@ export default function Landing() {
           <StackPipeline />
         </div>
       </section>
+
+      {/* THE TWO AGENTS — the product itself, immediately after the hero.
+          This used to live under "How it works", four sections down, behind the trust bar, the
+          noise-reduction funnel and the differentiator band. Someone deciding whether this is for them
+          should not have to scroll that far to find out what the two things they are buying actually
+          do. Each card says what the agent does, and the one thing it will never do without them. */}
+      <TwoAgents />
 
       {/* Trust signals — who built it, what it runs on, how it's built, who it's for */}
       <TrustBar />
@@ -306,6 +324,103 @@ export default function Landing() {
 // The three lanes mirror /solutions exactly — someone arrives with a situation, a surface, or an
 // incumbent they're comparing against. We show a few of each and link to the full hub, so the page
 // stays short while every one of the 39 marketing pages stays one or two clicks away.
+// TwoAgents is the answer to "what am I actually buying, and is it for me?".
+//
+// The homepage previously made a visitor scroll through the trust bar, the noise funnel and the
+// differentiator band before naming the two agents. That is the wrong order for a founder who has
+// thirty seconds and one question. Each card leads with the job title, states the work in the
+// customer's words, and ends with the boundary — what the agent will not do on its own — because for
+// this buyer "it opens a PR" and "it merges to main" are very different products.
+function TwoAgents() {
+  const agents = [
+    {
+      Icon: ShieldCheck,
+      kicker: "Defends",
+      title: "AI Security Engineer",
+      lede: "Finds what is genuinely exploitable, and writes the fix.",
+      does: [
+        "Cuts a thousand scanner alerts down to the handful that matter",
+        "Chains code → cloud → SaaS into one attack path, not three tickets",
+        "Explains each issue in plain English, then opens the PR or config change",
+      ],
+      boundary: "Never applies anything on its own — you approve every change.",
+      href: "/ai-security-engineer",
+      cta: "How the engineer works",
+    },
+    {
+      Icon: Wrench,
+      kicker: "Attacks",
+      title: "AI Pentester",
+      lede: "Proves it by exploiting it — not a scanner's opinion.",
+      does: [
+        "Actually exploits the finding, benignly, inside limits you set",
+        "Upgrades it to verified with a captured proof-of-concept",
+        "Re-tests after your fix to show the hole is really closed",
+      ],
+      boundary: "Only runs against targets you scope and sign off on.",
+      href: "/ai-pentest",
+      cta: "How the pentester works",
+    },
+  ];
+
+  return (
+    <section className="border-y border-border bg-surface">
+      <div className="mx-auto max-w-6xl px-5 py-16">
+        <Reveal className="mx-auto mb-10 max-w-2xl text-center">
+          <div className="text-xs font-medium uppercase tracking-wider text-faint">What you get</div>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Two AI teammates, one human in charge</h2>
+          <p className="mt-3 text-base leading-relaxed text-muted">
+            Not a dashboard you have to staff. Two agents that do the work a security hire would, on the
+            deterministic scanning engine underneath — with you signing anything consequential.
+          </p>
+        </Reveal>
+
+        <Reveal delay={80} className="grid gap-5 md:grid-cols-2">
+          {agents.map(({ Icon, kicker, title, lede, does, boundary, href, cta }) => (
+            <div key={title} className="card flex flex-col p-6">
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-accent">{kicker}</div>
+                  <div className="text-lg font-semibold text-ink">{title}</div>
+                </div>
+              </div>
+              <p className="mt-4 text-sm font-medium text-ink">{lede}</p>
+              <ul className="mt-3 space-y-2">
+                {does.map((d) => (
+                  <li key={d} className="flex items-start gap-2.5 text-sm leading-relaxed text-muted">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-pulse" /> {d}
+                  </li>
+                ))}
+              </ul>
+              {/* The boundary matters as much as the capability for this buyer. */}
+              <p className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-xs leading-relaxed text-muted">
+                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint" /> {boundary}
+              </p>
+              <Link
+                href={href}
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent transition hover:underline"
+              >
+                {cta} <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          ))}
+        </Reveal>
+
+        <Reveal delay={140} className="mt-6 text-center text-sm text-muted">
+          Prefer to start without AI?{" "}
+          <Link href="/pricing" className="font-medium text-accent hover:underline">
+            The scanning engine is free
+          </Link>{" "}
+          — turn either agent on when you are ready.
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
 function SolutionsRouter() {
   const lanes = [
     {
