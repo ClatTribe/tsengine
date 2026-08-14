@@ -18,12 +18,16 @@ import (
 // asserted that a tool did not prove. This is the deterministic, evidence-grounded analogue
 // of a manual pentest report — continuously regenerable, never stale.
 type VAPTReport struct {
-	TenantName  string        `json:"tenant_name"`
-	GeneratedAt time.Time     `json:"generated_at"`
-	Engine      string        `json:"engine"`
-	Scope       []string      `json:"scope"` // the monitored asset targets assessed
-	Summary     VAPTSummary   `json:"summary"`
-	Findings    []VAPTFinding `json:"findings"` // worst-severity first
+	TenantName  string    `json:"tenant_name"`
+	GeneratedAt time.Time `json:"generated_at"`
+	Engine      string    `json:"engine"`
+	Scope       []string  `json:"scope"` // the monitored asset targets assessed
+	// Untested names scope targets that NOTHING has assessed yet. Zero findings across a scope
+	// nobody scanned is not a clean result, and this report is the document a customer hands an
+	// auditor or a prospect — it is the last place a silence should read as an all-clear.
+	Untested []string      `json:"untested,omitempty"`
+	Summary  VAPTSummary   `json:"summary"`
+	Findings []VAPTFinding `json:"findings"` // worst-severity first
 	// Attestation, when the report is signed (same scheme as the evidence pack).
 	Signer string `json:"signer,omitempty"`
 	SHA256 string `json:"sha256,omitempty"`
@@ -179,6 +183,12 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 		return r.Findings[i].ID < r.Findings[j].ID
 	})
 	r.Summary.RiskRating = vaptRisk(r.Summary.BySeverity)
+	// A scope nothing has assessed cannot be rated. "Clear" is a verdict; with no assessment behind it
+	// there is no verdict to give, and the word would be doing all the work in a document that gets
+	// forwarded to auditors.
+	if len(r.Untested) > 0 && len(r.Untested) == len(r.Scope) && r.Summary.Total == 0 {
+		r.Summary.RiskRating = "Not assessed"
+	}
 	return r
 }
 
@@ -250,7 +260,17 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	if len(r.Scope) == 0 {
 		b.WriteString("_No assets in scope yet — connect a system to begin the assessment._\n\n")
 	} else {
+		// Mark what was never assessed inline. A reader scanning the scope list should not have to
+		// cross-reference the summary to learn that half of it was never touched.
+		untested := map[string]bool{}
+		for _, t := range r.Untested {
+			untested[t] = true
+		}
 		for _, t := range r.Scope {
+			if untested[t] {
+				fmt.Fprintf(&b, "- `%s` — **not assessed** (no scan has run against this target)\n", t)
+				continue
+			}
 			fmt.Fprintf(&b, "- `%s`\n", t)
 		}
 		b.WriteString("\n")
@@ -258,7 +278,14 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 
 	fmt.Fprintf(&b, "## Findings (%d)\n\n", len(r.Findings))
 	if len(r.Findings) == 0 {
-		b.WriteString("_No open vulnerabilities — every monitored asset is currently clean._\n")
+		if len(r.Untested) == len(r.Scope) && len(r.Scope) > 0 {
+			b.WriteString("_Nothing has been assessed yet — this is an empty result, not a clean one._\n")
+		} else if len(r.Untested) > 0 {
+			b.WriteString("_No open vulnerabilities in the scanned targets. " + joinTargets(r.Untested) +
+				" " + verbFor(len(r.Untested)) + " not been assessed._\n")
+		} else {
+			b.WriteString("_No open vulnerabilities — every monitored asset is currently clean._\n")
+		}
 		return b.String()
 	}
 	for _, f := range r.Findings {
@@ -378,4 +405,20 @@ func RenderVAPTExecMarkdown(r *VAPTReport) string {
 	}
 	b.WriteString("\n---\n_This is the executive summary. The full technical report includes every finding with its evidence, request/response proof, CWE/OWASP mapping, and developer-ready remediation._\n")
 	return b.String()
+}
+
+// Reassess re-derives the parts of a report that depend on Untested, which callers fill in after
+// ReportFromFindings has run (only the platform layer knows what has actually been scanned).
+//
+// It exists because the alternative — threading an untested list through the pure constructor — would
+// push a store-shaped concern into a function whose whole value is being pure and testable. Calling
+// this is required for the rating to be honest; ReportFromFindings alone cannot know.
+func Reassess(r *VAPTReport) {
+	if r == nil {
+		return
+	}
+	r.Summary.RiskRating = vaptRisk(r.Summary.BySeverity)
+	if len(r.Untested) > 0 && len(r.Untested) == len(r.Scope) && r.Summary.Total == 0 {
+		r.Summary.RiskRating = "Not assessed"
+	}
 }

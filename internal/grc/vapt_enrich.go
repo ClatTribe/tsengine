@@ -116,6 +116,25 @@ func owaspFor(cwes []string, tool string) []string {
 func narrativeSummary(r *VAPTReport) string {
 	s := r.Summary
 	if s.Total == 0 {
+		// NOTHING FOUND AND NOTHING TESTED ARE DIFFERENT REPORTS.
+		//
+		// A scope target that no tool has ever run against produces exactly the same zero as a target
+		// that was scanned clean. Rendering both as "no open vulnerabilities … every monitored asset is
+		// currently clean" turns an absence of assessment into an assurance — on the one artifact that
+		// gets forwarded to an auditor or a prospect.
+		if len(r.Untested) == len(r.Scope) && len(r.Scope) > 0 {
+			return fmt.Sprintf("**No assessment has run against the scope of %s yet**, so this report states "+
+				"nothing about its security. %s %s not been scanned. This is not a clean result — it is an "+
+				"empty one. Connect or scan the target, then re-generate this report.",
+				r.TenantName, joinTargets(r.Untested), verbFor(len(r.Untested)))
+		}
+		if len(r.Untested) > 0 {
+			return fmt.Sprintf("This assessment of %s found no open vulnerabilities in the targets that were "+
+				"scanned. %s %s NOT been assessed, so this report says nothing about %s. Posture across the "+
+				"tested scope is rated **%s**.",
+				r.TenantName, joinTargets(r.Untested), verbFor(len(r.Untested)),
+				pronounFor(len(r.Untested)), s.RiskRating)
+		}
 		return fmt.Sprintf("This assessment of %s found no open vulnerabilities across the monitored assets. Posture is rated **%s**. TensorShield continues to monitor continuously and will surface any new issue as it appears.",
 			r.TenantName, s.RiskRating)
 	}
@@ -146,4 +165,39 @@ func capitalize(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// joinTargets renders scope targets for prose, naming them rather than counting them — "two targets
+// were not scanned" sends nobody anywhere; the hostname does.
+func joinTargets(t []string) string {
+	switch len(t) {
+	case 0:
+		return ""
+	case 1:
+		return "`" + t[0] + "`"
+	case 2:
+		return "`" + t[0] + "` and `" + t[1] + "`"
+	}
+	out := ""
+	for i, x := range t[:len(t)-1] {
+		if i > 0 {
+			out += ", "
+		}
+		out += "`" + x + "`"
+	}
+	return out + " and `" + t[len(t)-1] + "`"
+}
+
+func verbFor(n int) string {
+	if n == 1 {
+		return "has"
+	}
+	return "have"
+}
+
+func pronounFor(n int) string {
+	if n == 1 {
+		return "it"
+	}
+	return "them"
 }
