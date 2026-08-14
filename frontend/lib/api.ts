@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIAnalysis, AIBom, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -217,6 +217,22 @@ export const api = {
       cost_usd: number;
       model: string;
     }>("/v1/l2/translate", { method: "POST", body: "{}" }),
+
+  // AI mode + monthly budget — what the customer has CHOSEN to run, and the ceiling they set. The
+  // reason field explains WHY something is off (plan, their own choice, kill-switch, or an exhausted
+  // budget), so a disabled surface reads as a decision rather than a bug.
+  aiMode: () =>
+    safe<AIModeResponse>("/v1/settings/ai-mode", {
+      mode: "deterministic", engineer: false, pentester: false, reason: "",
+      choices: [], spend_usd: 0, runs: 0, using_own_key: false, budget_usd: 0, remaining_usd: 0,
+    }),
+  setAIMode: (mode: string, monthlyBudgetUSD?: number) =>
+    call<AIModeResponse>("/v1/settings/ai-mode", {
+      method: "PUT",
+      body: JSON.stringify(
+        monthlyBudgetUSD === undefined ? { mode } : { mode, monthly_budget_usd: monthlyBudgetUSD },
+      ),
+    }),
 
   // AI Code Engineer — run the code-depth specialist over posted code findings + source; returns its
   // grounded, source-read assessment (exploitable vs contained, blast radius, right-layer fix).

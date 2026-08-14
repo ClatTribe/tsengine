@@ -893,3 +893,30 @@ export type ProofRequest = {
   severity: string;
   why: string;
 };
+
+
+// AIChoice is one selectable AI mode, with what it does and what it costs. Unavailable choices carry
+// a `why` rather than just greying out — a control that refuses without explaining sends the customer
+// looking in the wrong place.
+export interface AIChoice {
+  mode: string;
+  label: string;
+  detail: string;
+  cost: string;
+  available: boolean;
+  why?: string;
+}
+
+// AIModeResponse is the AI-engine control surface: what is running, why, the options, and the money.
+export interface AIModeResponse {
+  mode: string;
+  engineer: boolean;
+  pentester: boolean;
+  reason: string;
+  choices: AIChoice[];
+  spend_usd: number;
+  runs: number;
+  using_own_key: boolean;
+  budget_usd: number;
+  remaining_usd: number;
+}

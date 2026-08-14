@@ -22,6 +22,7 @@ import { ContactsControl } from "@/components/settings/contacts-control";
 import { PractitionersControl } from "@/components/settings/practitioners-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
+import { AIModeControl } from "@/components/settings/ai-mode";
 import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
 import { PageIntro } from "@/components/ui/page-intro";
 
@@ -35,8 +36,8 @@ const STATUS_CLS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation] = await Promise.all([
-    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(),
+  const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation, aiMode] = await Promise.all([
+    api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(), api.aiMode(),
   ]);
   const [sla, maintenance, contacts, practitioners] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners()]);
   const orgName = tenant?.name ?? "Your organization";
@@ -93,7 +94,12 @@ export default async function SettingsPage() {
       <div id="ai-engine" className="scroll-mt-20">
         <SectionTitle>AI engine</SectionTitle>
         <Card className="p-5">
-          <LLMSettings initial={llm} />
+          {/* How much AI runs, and the ceiling on what it costs — above the key, because deciding
+              WHETHER to run the agents comes before choosing which model runs them. */}
+          <AIModeControl initial={aiMode} />
+          <div className="mt-5 border-t border-border pt-5">
+            <LLMSettings initial={llm} />
+          </div>
         </Card>
       </div>
 
