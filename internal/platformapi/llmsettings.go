@@ -3,6 +3,7 @@ package platformapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -249,6 +250,18 @@ func (d Deps) aiAllowed(ctx context.Context, tenantID string) platform.AIPermiss
 		return platform.Tenant{}.ResolveAI()
 	}
 	p := t.ResolveAI()
+	// THE MONTHLY CEILING. Checked after the plan/choice resolution so the reason reflects the actual
+	// cause: a tenant who is entitled and opted in but out of budget gets a budget message, not a
+	// misleading "not enabled". Stops the agents and says so — never a silent downgrade, because
+	// "the budget ran out" and "the agent found nothing" must not look the same to a customer.
+	if p.Engineer && t.MonthlyAIBudgetUSD > 0 {
+		if spent, _ := d.monthlyAISpend(ctx, tenantID); spent >= t.MonthlyAIBudgetUSD {
+			return platform.AIPermissions{Mode: platform.AIModeDeterministic,
+				Reason: fmt.Sprintf("This month's AI budget of $%.2f is used up ($%.2f spent), so the agents are "+
+					"paused until it resets. Deterministic scanning continues. Raise the budget in Settings to "+
+					"resume now.", t.MonthlyAIBudgetUSD, spent)}
+		}
+	}
 	// DEV-ONLY override: TSENGINE_DEV_LLM_ALL_PLANS lets a test tenant drive the agents regardless of
 	// PLAN (it powers `make dev` + the file-relay proxy). It deliberately does NOT override an
 	// explicit deterministic-only choice or the kill-switch: those are INSTRUCTIONS, not entitlements,

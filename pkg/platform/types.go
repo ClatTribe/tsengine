@@ -28,6 +28,17 @@ type Tenant struct {
 	// halted tenant's actions queue instead of executing until a human disengages it. The
 	// one human "on the loop" can freeze the whole roster instantly.
 	AgentsHalted bool `json:"agents_halted,omitempty"`
+	// MonthlyAIBudgetUSD is a hard ceiling on what the AI agents may cost this calendar month, in USD.
+	// 0 means no ceiling.
+	//
+	// l2.Budget already bounds a single RUN; this bounds the month, which is the number a founder
+	// actually needs to predict. Unpredictable spend is a real reason people decline to switch AI on at
+	// all, so the ability to say "never more than fifty dollars" is what makes saying yes safe.
+	//
+	// When it is reached the agents STOP and the product SAYS SO — it never silently returns thinner
+	// results, because a customer who cannot tell "the budget ran out" from "the agent found nothing"
+	// has been told their estate is clean when it was not examined.
+	MonthlyAIBudgetUSD float64 `json:"monthly_ai_budget_usd,omitempty"`
 	// AIMode is the customer's own choice of how much AI to run. See AIMode.
 	//
 	// Distinct from the PLAN (what they are entitled to) and from AgentsHalted (an emergency
