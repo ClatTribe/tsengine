@@ -32,6 +32,10 @@ type Tenant struct {
 	// API key is sealed (LLMConfig.KeyRef holds only the sealed ref); it is NEVER returned to
 	// the client — Redacted() strips it, and every tenant response uses that.
 	LLM *LLMConfig `json:"llm,omitempty"`
+	// LLMRoles are OPTIONAL per-role model overrides (see AgentRole). A role absent here falls back to
+	// LLM above, so this is purely additive — an existing tenant is unaffected. Each entry's key is
+	// sealed exactly like LLM's, and Redacted() drops the whole map for the same reason.
+	LLMRoles map[AgentRole]*LLMConfig `json:"llm_roles,omitempty"`
 	// PRBot is the per-tenant policy for the repository PR-review bot (ADR 0010). nil = the
 	// default (disabled). The live GitHub post is separately gated on the GitHub App PR scope.
 	PRBot *PRBotPolicy `json:"pr_bot,omitempty"`
@@ -351,9 +355,67 @@ type LLMConfig struct {
 	KeyRef  string `json:"key_ref,omitempty"`
 }
 
+// AgentRole names the KIND of reasoning an L2 agent does, so a tenant can point different agents at
+// different models. The split is not cosmetic — the two lanes reward genuinely different training:
+//
+//   - RoleCode is code and exploitation reasoning (patch generation, the XBOW-style pursuit, spec
+//     synthesis). General frontier models are strongest here, and it is exactly the work the
+//     defensive-security model vendors say their models are NOT for.
+//   - RoleAnalysis is reasoning OVER security data that tools already produced — triage, correlation,
+//     attack-path narration, control mapping. This is the lane a security-specialized model targets:
+//     large volumes of findings/logs/graph, weak signals, consistency across many decisions.
+//
+// A deployment can therefore run a small self-hosted security model for analysis (cheap, private,
+// sovereign) while keeping a frontier model for code — instead of paying frontier prices for triage or
+// accepting an 8B model's patch quality. Unset roles fall back to the tenant's single LLM config, so
+// this is additive: an existing tenant behaves exactly as before.
+type AgentRole string
+
+const (
+	// RoleAnalysis — triage, correlation, compliance mapping, attack-path reasoning.
+	RoleAnalysis AgentRole = "analysis"
+	// RoleCode — patch generation, exploitation, code and spec reasoning.
+	RoleCode AgentRole = "code"
+)
+
+// AgentRoles is the closed set, for validation and for the settings UI.
+func AgentRoles() []AgentRole { return []AgentRole{RoleAnalysis, RoleCode} }
+
+// ValidAgentRole reports whether s names a known role.
+func ValidAgentRole(s string) bool {
+	for _, r := range AgentRoles() {
+		if string(r) == s {
+			return true
+		}
+	}
+	return false
+}
+
 // SelfHosted reports whether this config points at a self-hosted OpenAI-compatible endpoint (which
 // may legitimately have NO API key — Ollama doesn't require one).
 func (c *LLMConfig) SelfHosted() bool { return c != nil && strings.TrimSpace(c.BaseURL) != "" }
+
+// Usable reports whether this config can actually drive an agent: it needs either an API key (cloud)
+// or a self-hosted endpoint (Ollama et al. legitimately have no key). A config with neither is inert,
+// and callers must fall back rather than build a client that cannot reach anything.
+func (c *LLMConfig) Usable() bool { return c != nil && (c.HasKey() || c.SelfHosted()) }
+
+// LLMForRole returns the config that should drive the given role: the tenant's per-role override when
+// one is set AND usable, else the tenant's single default. Returns nil when neither exists, so the
+// caller falls back to the operator-global model.
+//
+// Grounded fallback (§10 in spirit): a role override that carries neither a key nor an endpoint is
+// treated as ABSENT rather than honoured, so a half-filled override can never silently disable an
+// agent that the tenant's default config could have driven.
+func (t Tenant) LLMForRole(role AgentRole) *LLMConfig {
+	if c, ok := t.LLMRoles[role]; ok && c.Usable() {
+		return c
+	}
+	if t.LLM.Usable() {
+		return t.LLM
+	}
+	return nil
+}
 
 // HasKey reports whether an API key is configured (without exposing it).
 func (c *LLMConfig) HasKey() bool { return c != nil && c.KeyRef != "" }
@@ -361,7 +423,13 @@ func (c *LLMConfig) HasKey() bool { return c != nil && c.KeyRef != "" }
 // Redacted returns a copy of the tenant safe to return to a client: the LLM block (which
 // carries the sealed key ref) is dropped. LLM provider/model are served only by the dedicated
 // GET /v1/settings/llm endpoint.
-func (t Tenant) Redacted() Tenant { t.LLM = nil; t.SlackWebhookRef = ""; t.Jira = nil; return t }
+func (t Tenant) Redacted() Tenant {
+	t.LLM = nil
+	t.LLMRoles = nil // per-role overrides carry sealed key refs too — same reason as LLM
+	t.SlackWebhookRef = ""
+	t.Jira = nil
+	return t
+}
 
 // Connection kinds — the external systems the platform can link via OAuth.
 const (
@@ -472,6 +540,18 @@ const (
 	ActApproved        = "approved"
 	ActApplied         = "applied"
 	ActRejected        = "rejected"
+	// ActChangesRequested is the reviewer's THIRD verdict, and the one a senior engineer actually
+	// reaches for most often: "almost — change this."
+	//
+	// With only approve/reject, a reviewer who spots one wrong line has to destroy the whole proposal
+	// to say so. That trains two bad habits: rubber-stamping (rejecting throws away work that was 90%
+	// right) and disengagement (the desk stops being worth reading). Both turn human-in-the-loop into
+	// theatre, which is the opposite of the §18.2 inv. 3 intent.
+	//
+	// A changes-requested action is NOT applied and NOT closed: it stays actionable, carries the
+	// reviewer's Feedback, and can be re-proposed. The gate is unchanged — this verdict can only ever
+	// withhold an apply, never cause one.
+	ActChangesRequested = "changes_requested"
 )
 
 // Action is a remediation the agent proposes. Tier is the autonomy tier (§3 of the
@@ -493,6 +573,24 @@ type Action struct {
 	Payload      map[string]any `json:"payload,omitempty"`
 	Approver     string         `json:"approver,omitempty"`
 	LedgerRef    string         `json:"ledger_ref,omitempty"`
+	// Diff is the unified diff this action would apply, rendered for a human to READ before
+	// approving. It exists because the payload is an untyped map: a reviewer approving an ActOpenPR
+	// was approving a code change they could not see, which is not a review — it is a signature.
+	//
+	// Empty for actions that change no code (a ticket, a notification draft). Never a substitute for
+	// the payload: the payload is what gets applied, Diff is the human-readable rendering of it, so a
+	// mismatch is a rendering bug and can never alter what is executed.
+	Diff string `json:"diff,omitempty"`
+	// Feedback is the reviewer's note when they request changes — the "change this one thing" that
+	// approve/reject cannot express. Carried back so the next proposal can act on it.
+	Feedback string `json:"feedback,omitempty"`
+	// ReviewedBy / ReviewedAt record who asked for changes and when. Distinct from Approver/DecidedAt,
+	// which mean the action was finally decided; a changes-requested action is still open.
+	ReviewedBy string    `json:"reviewed_by,omitempty"`
+	ReviewedAt time.Time `json:"reviewed_at,omitempty"`
+	// Supersedes is the id of the action this one re-proposes after changes were requested, so the
+	// desk shows a review THREAD rather than two unrelated rows.
+	Supersedes string `json:"supersedes,omitempty"`
 	// FindingKeys are the STABLE identities (rule_id|endpoint) of the findings this action
 	// resolves — captured at propose time so the fix can be re-tested after it's applied. Stable
 	// across scans (finding IDs are regenerated per scan; keys are not). Drives FixVerification.

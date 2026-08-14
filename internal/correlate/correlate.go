@@ -217,7 +217,13 @@ func buildChain(nodes []*node, path []int, via map[int]Entity) Chain {
 
 var (
 	awsKeyRe = regexp.MustCompile(`A[KS]IA[0-9A-Z]{16}`)
-	arnRe    = regexp.MustCompile(`arn:aws:[a-z0-9-]*:[a-z0-9-]*:\d{12}:[\w./:*-]+`)
+	// The resource part may contain dots and slashes, but must not END on punctuation. A finding
+	// description routinely closes a sentence with the ARN ("...assumed by arn:aws:iam::…:role/app."),
+	// and swallowing that trailing '.' yielded a DIFFERENT entity string than the cloud-side finding
+	// carried — so the shared identifier never matched and the code→cloud bridge silently vanished.
+	// That is the wedge's core join failing on a full stop, with no error anywhere. The final
+	// character is therefore restricted to [\w*].
+	arnRe    = regexp.MustCompile(`arn:aws:[a-z0-9-]*:[a-z0-9-]*:\d{12}:[\w./:*-]*[\w*]`)
 	bucketRe = regexp.MustCompile(`(?:s3://|arn:aws:s3:::)([a-z0-9.-]{3,63})`)
 	ipRe     = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	emailRe  = regexp.MustCompile(`[\w.+-]+@[\w-]+\.[\w.-]+`)

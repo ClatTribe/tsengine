@@ -175,10 +175,32 @@ func (g *GitHub) Apply(ctx context.Context, c platform.Connection, token string,
 	if full == "" {
 		return fmt.Errorf("github: action missing full_name")
 	}
+	head := strFrom(a.Payload, "head")
+	base := nz(strFrom(a.Payload, "base"), "main")
+
+	// If the action carries patched file contents, COMMIT them to `head` first. Without this the PR
+	// referenced a branch nothing had created, so an "AI fix" could never actually carry a diff — the
+	// agent's patch had no path into the repository (see github_commit.go). WHERE THE HUMAN ACTUALLY IS, stated
+	// precisely because this comment used to overstate it. A code-fix PR is tier 1 (remediate: "reversible
+	// — review before merge"), which is BELOW platform.GateTier, so Desk.Submit AUTO-APPLIES it: nobody
+	// approves this in our Inbox. The gate is the customer's OWN pull-request review, in their repo, under
+	// their branch protection — a legitimate gate, and a different one from the desk. What is guaranteed
+	// here is narrower than "a human approved it": the write lands on a FEATURE BRANCH and a pull request,
+	// never on the default branch, and the kill-switch still stops it.
+	if files := filesFrom(a.Payload); len(files) > 0 {
+		if head == "" {
+			return fmt.Errorf("github: a patch was supplied but the action has no head branch to commit it to")
+		}
+		msg := nz(strFrom(a.Payload, "commit_message"), nz(a.Title, "tsengine: security fix"))
+		if err := g.CommitFiles(ctx, token, full, base, head, msg, files); err != nil {
+			return err // surfaced, never a silent "fixed" (a 403 here = the App lacks contents: write)
+		}
+	}
+
 	body := pullRequestReq{
 		Title: nz(a.Title, "tsengine: verified security fix"),
-		Head:  strFrom(a.Payload, "head"),
-		Base:  nz(strFrom(a.Payload, "base"), "main"),
+		Head:  head,
+		Base:  base,
 		Body:  strFrom(a.Payload, "body"),
 	}
 	b, _ := json.Marshal(body)

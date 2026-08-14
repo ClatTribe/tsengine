@@ -37,7 +37,17 @@ func (d Deps) handleAttackPaths(w http.ResponseWriter, r *http.Request, tenantID
 	if chains == nil {
 		chains = []correlate.Chain{} // never null — the frontend maps over this (nil-slice→null guard)
 	}
-	respond(w, map[string]any{"attack_paths": chains, "count": len(chains)}, nil)
+	// CHOKE POINTS — what appears in the MOST paths, so the answer is "fix this one thing" rather than
+	// "here are twelve pieces of work". Empty when the paths share nothing, which is a real answer: they
+	// are genuinely separate work and pretending otherwise would invent leverage that does not exist.
+	choke := crossdetect.ChokePoints(chains)
+	if choke == nil {
+		choke = []crossdetect.ChokePoint{} // never null — the frontend maps over this
+	}
+	respond(w, map[string]any{
+		"attack_paths": chains, "count": len(chains),
+		"choke_points": choke,
+	}, nil)
 }
 
 // handleTriageFunnel returns the auto-triage funnel — the quantified noise reduction: of all

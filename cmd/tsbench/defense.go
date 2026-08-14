@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/remediate"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -39,8 +41,22 @@ func defenseCmd(argv []string) error {
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
-	if *mode != "substrate" {
-		return fmt.Errorf("mode %q not available in this runner yet — only 'substrate' (the deterministic baseline) is wired; agent mode is the documented follow-on (needs a live LLM, like the cloud-investigate path)", *mode)
+	var triager bench.Triager
+	switch *mode {
+	case "substrate":
+	case "agent":
+		llm, ok := cloudengine.LLMFromEnv()
+		if !ok {
+			return fmt.Errorf("mode=agent needs a live model: set ANTHROPIC_API_KEY, or LLM_BASE_URL + LLM_MODEL " +
+				"(e.g. LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen3:8b for a local Ollama). Refusing " +
+				"rather than silently scoring the substrate and labelling the run 'agent'")
+		}
+		// The SAME composed engine the product ships for triage (T1): the model proposes which findings
+		// deserve work, a deterministic disposer can only ever drop. Reusing it — rather than a
+		// bench-only prompt — is what stops this measuring something the customer never gets.
+		triager = bench.ComposedTriager{Model: bench.LLMTriager{LLM: llm, Label: "agent"}}
+	default:
+		return fmt.Errorf("mode %q unknown — expected 'substrate' or 'agent'", *mode)
 	}
 
 	scenarios, err := loadDefenseScenarios(*dir)
@@ -56,7 +72,10 @@ func defenseCmd(argv []string) error {
 		if *only != "" && sc.ID != *only {
 			continue
 		}
-		proposed := substratePropose(sc)
+		proposed, perr := proposeFor(sc, triager)
+		if perr != nil {
+			return fmt.Errorf("scenario %s: %w", sc.ID, perr)
+		}
 		score := bench.ScoreDefense(sc, proposed, nil) // substrate records no findings of its own → nil
 		fmt.Println(bench.RenderDefenseScore(score))
 
@@ -113,11 +132,48 @@ func defenseLedgerCmd(argv []string) error {
 // substratePropose is the deterministic SUT: for each seeded finding, map it to the scenario asset it
 // belongs to and run remediate.Propose (the SAME proposer the platform uses). This is the baseline the
 // LLM engineer's lift is measured against.
+// proposeFor produces the actions to score. The two arms differ in ONE decision — which findings deserve
+// work — and share everything after it.
+//
+// That is the whole point of the comparison. Substrate answers with remediate.WorthProposing, a severity
+// and verification heuristic. Agent mode answers with the model's judgement, then hands off to the SAME
+// remediate.Propose to build the action. So the measured delta is the agent's TRIAGE, not a different
+// remediation pipeline dressed up as a smarter one — and the model can only ever change which findings
+// are actioned, never invent an action the deterministic proposer would not produce (§10).
+func proposeFor(sc bench.DefenseScenario, tri bench.Triager) ([]platform.Action, error) {
+	if tri == nil {
+		return substratePropose(sc), nil
+	}
+	n := 0
+	idgen := func() string { n++; return fmt.Sprintf("act-%d", n) }
+	out := make([]platform.Action, 0, len(sc.Before))
+	ctx := context.Background()
+	for _, f := range sc.Before {
+		keep, err := tri.Triage(ctx, f)
+		if err != nil {
+			return nil, fmt.Errorf("triage %s: %w", f.ID, err)
+		}
+		if !keep {
+			continue
+		}
+		asset := assetForFinding(f, sc.Assets)
+		if a, ok := remediate.Propose(f, asset, idgen); ok {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
 func substratePropose(sc bench.DefenseScenario) []platform.Action {
 	n := 0
 	idgen := func() string { n++; return fmt.Sprintf("act-%d", n) }
 	out := make([]platform.Action, 0, len(sc.Before))
 	for _, f := range sc.Before {
+		// Triage BEFORE proposing. Without this the substrate actioned the planted decoy in every
+		// scenario — each one a human review slot spent on noise.
+		if !remediate.WorthProposing(f) {
+			continue
+		}
 		asset := assetForFinding(f, sc.Assets)
 		if a, ok := remediate.Propose(f, asset, idgen); ok {
 			out = append(out, a)

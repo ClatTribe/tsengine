@@ -481,7 +481,12 @@ func main() {
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
 	// Continuous pentesting: each monitoring pass runs any engagement whose recurring schedule is due
 	// (a safe PASSIVE re-verify — never auto active exploitation). Self-gating (no-op when nothing is due).
-	svc.AfterPass = func(ctx context.Context, tenantID string) { apiDeps.RunDuePentests(ctx, tenantID) }
+	svc.AfterPass = func(ctx context.Context, tenantID string) {
+		apiDeps.RunDuePentests(ctx, tenantID)
+		// Doubt→prove: record which unproven findings are worth an exploit attempt. Proposes only —
+		// active exploitation stays consent-gated, so this never launches an engagement by itself.
+		apiDeps.RecordProofQueue(ctx, tenantID)
+	}
 	api := platformapi.NewHandler(apiDeps)
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
 	// browser session cookie) and drives the SAME gated desk for approvals. It falls

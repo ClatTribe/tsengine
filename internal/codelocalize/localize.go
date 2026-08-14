@@ -117,3 +117,19 @@ func rankCandidates(cs []Candidate) {
 		return cs[i].Path < cs[j].Path
 	})
 }
+
+// LocalizableCWEs returns every CWE class this package can localize, sorted. It is the natural task
+// universe for a caller that wants to sweep a repo for everything we know how to look for, rather
+// than hard-coding a list that silently drifts from the sink table.
+func LocalizableCWEs() []string {
+	out := make([]string, 0, len(sinkTable))
+	for cwe := range sinkTable {
+		out = append(out, cwe)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Index maps repo paths to files. Exported so a caller can resolve a ranked candidate path back to
+// its content without re-walking the tree.
+func (r Repo) Index() map[string]File { return r.index() }

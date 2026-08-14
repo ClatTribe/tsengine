@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { FindingsTable } from "@/components/findings/findings-table";
 import { PageIntro } from "@/components/ui/page-intro";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { SECURITY_TABS } from "@/lib/tabs";
 import { severityCounts } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export default async function FindingsPage() {
         description="The raw, detailed list of every weakness the agent has detected across your stack — each one backed by tool evidence, ranked by real-world risk, and showing what the agent is already doing about it."
       />
 
-      <PageTabs tabs={[{ href: "/issues", label: "Issues" }, { href: "/findings", label: "All findings (raw)" }]} />
+      <PageTabs tabs={SECURITY_TABS} />
       {/* At-a-glance rollup: how bad, how many, and how many already have a fix queued — so the
           founder reads severity + workload before the row-by-row table. */}
       {findings.length > 0 && (

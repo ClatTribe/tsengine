@@ -26,6 +26,7 @@ func localizeCmd(argv []string) error {
 	cwe := fs.String("cwe", "", "CWE to localize when --repo is set, e.g. CWE-89")
 	desc := fs.String("desc", "", "optional vuln description/title when --repo is set (adds keyword signal)")
 	out := fs.String("out", "", "also write the rendered scoreboard markdown to this path")
+	hard := fs.Bool("hard", false, "use the HARD corpus (sanitized decoys, indirect + cross-file flows). The default corpus saturates at 1.00 on the heuristic alone, so only this one can discriminate between models")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -66,6 +67,9 @@ func localizeCmd(argv []string) error {
 	}
 
 	scenarios := bench.LocalizeScenarios()
+	if *hard {
+		scenarios = bench.LocalizeHardScenarios()
+	}
 	base, err := bench.RunLocalize(ctx, codelocalize.HeuristicLocalizer{}, scenarios)
 	if err != nil {
 		return err

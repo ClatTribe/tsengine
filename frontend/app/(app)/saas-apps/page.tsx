@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 import type { SaaSApp, NonHumanIdentity } from "@/lib/types";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
+import { CONNECTION_TABS } from "@/lib/tabs";
 import { FlagForReview } from "@/components/saas/flag-for-review";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +21,7 @@ export default async function SaaSAppsPage() {
 
   return (
     <div className="space-y-8">
+      <PageTabs tabs={CONNECTION_TABS} />
       <PageIntro
         icon={AppWindow}
         title="Connected apps"

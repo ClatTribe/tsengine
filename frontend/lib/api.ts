@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { AIAnalysis, AIBom, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -233,6 +233,36 @@ export const api = {
     }>("/v1/code/investigate", { method: "POST", body: JSON.stringify({ repo, findings, source }) }),
 
   // AI Code Engineer — the stored, confirmed-exploitable source assessments (read-only view) + runnable flag.
+  // The doubt→prove handoff between the two agents: unproven high/critical findings the Engineer
+  // surfaced whose class an offensive driver can actually demonstrate. An empty queue is NOT
+  // necessarily "nothing to prove" — it also means no ownership-verified target, which the server says
+  // in `note` and the UI must repeat rather than render as an all-clear.
+  proofQueue: () =>
+    safe<{ requests: ProofRequest[]; count: number; note: string; max_batch: string }>(
+      "/v1/proof-queue",
+      { requests: [], count: 0, note: "", max_batch: "0" },
+    ),
+  // T2 — "where is the fix?". The SAME localizer the agent's locate_vulnerability tool runs, so the
+  // answer a human reads and the one the agent reasons over cannot drift. Honest negatives are answers,
+  // not errors: no repo connected, no readable source, or no file carrying sink evidence for the class.
+  localize: (findingID: string) =>
+    safe<{ finding_id: string; answer: string }>(
+      `/v1/findings/${encodeURIComponent(findingID)}/localize`,
+      { finding_id: findingID, answer: "" },
+    ),
+  // P1 autonomy: the scope the pentester PROPOSES, from assets you connected or proved you own. The
+  // human still signs for it — this replaces composing a scope with reviewing one. `skipped` carries
+  // what was left out and why, because a scope quietly narrower than the estate reads as full coverage.
+  pentestScopeSuggestion: () =>
+    safe<{ targets: string[]; skipped: { target: string; reason: string }[]; note: string }>(
+      "/v1/pentest/scope-suggestion",
+      { targets: [], skipped: [], note: "" },
+    ),
+  // T6 — ask your estate. The SAME search the AI Security Engineer's search_estate tool runs, so the
+  // answer a human gets and the answer the agent reasons over cannot drift. Grounded: no model is
+  // involved, so an empty result means the estate has no match rather than that a model forgot one.
+  ask: (q: string) =>
+    safe<{ query: string; answer: string }>(`/v1/ask?q=${encodeURIComponent(q)}`, { query: q, answer: "" }),
   codeInvestigation: () =>
     safe<{ total: number; enabled: boolean; confirmed: Finding[] }>("/v1/code/investigate", { total: 0, enabled: false, confirmed: [] }),
 
@@ -337,6 +367,13 @@ export const api = {
     call<Action>(`/v1/approvals/${id}`, {
       method: "POST",
       body: JSON.stringify({ approver, approve }),
+    }),
+  // The third verdict — "almost, change this". Sends the proposal back with a note instead of
+  // destroying work that was mostly right. The action stays open; nothing is applied.
+  requestChanges: (id: string, feedback: string, approver: string) =>
+    call<Action>(`/v1/approvals/${id}`, {
+      method: "POST",
+      body: JSON.stringify({ approver, request_changes: true, feedback }),
     }),
   // 202 + a job (async, the platform default) or { assets_scanned } (synchronous fallback).
   rescan: () => call<{ assets_scanned?: number; id?: string; status?: string; kind?: string }>("/v1/rescan", { method: "POST" }),

@@ -53,7 +53,7 @@ func (d Deps) codeInvestigator(tenantID string) func(ctx context.Context, focus 
 	}
 	owner, repo := gh.Account, gh.Config["repo"]
 	return func(ctx context.Context, focus string) (string, error) {
-		llm := d.resolveAgentLLM(ctx, tenantID)
+		llm := d.resolveAgentLLMForRole(ctx, tenantID, platform.RoleCode)
 		if llm == nil {
 			return "Code-depth investigation needs an LLM (not configured for this tenant).", nil
 		}
@@ -101,7 +101,7 @@ func (d Deps) codeInvestigator(tenantID string) func(ctx context.Context, focus 
 
 // handleCodeInvestigate (POST /v1/code/investigate) runs one code-depth investigation.
 func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tenantID string) {
-	llm := d.resolveAgentLLM(r.Context(), tenantID)
+	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleCode)
 	if llm == nil {
 		writeJSON(w, http.StatusBadRequest, errBody("code investigation needs an LLM (the agent's brain): configure one in Settings → LLM, or set LLM_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
 		return
@@ -193,7 +193,7 @@ func (d Deps) handleCodeInvestigationView(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{
 		"total":     len(assessed),
 		"confirmed": assessed,
-		"enabled":   d.resolveAgentLLM(r.Context(), tenantID) != nil,
+		"enabled":   d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleCode) != nil,
 	})
 }
 

@@ -136,6 +136,31 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench localize: %v\n", err)
 			os.Exit(1)
 		}
+	case "cvepatch":
+		if err := cvepatchCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench cvepatch: %v\n", err)
+			os.Exit(1)
+		}
+	case "autonomy":
+		if err := autonomyCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench autonomy: %v\n", err)
+			os.Exit(1)
+		}
+	case "scorecard":
+		if err := scorecardCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench scorecard: %v\n", err)
+			os.Exit(1)
+		}
+	case "triage":
+		if err := triageCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench triage: %v\n", err)
+			os.Exit(1)
+		}
+	case "cwemap":
+		if err := cwemapCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench cwemap: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "tsbench: unknown subcommand %q\n", args[0])
 		usage()

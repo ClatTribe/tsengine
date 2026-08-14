@@ -129,3 +129,25 @@ export async function runAuthzTest(id: string, c: {
     return { ok: false, error: e instanceof Error ? e.message : "failed to run test" };
   }
 }
+
+// ---------- ownership verification (autonomy T3) ----------
+//
+// The AI Security Engineer will not attempt to PROVE a finding on a target the customer has not shown
+// they control — the right gate, and it must not move. What was wrong is that the gate was silent: an
+// unverified estate simply produced an empty proof queue, indistinguishable from an estate with nothing
+// worth proving, and the only place to fix it was inside a pentest engagement you had to create first.
+//
+// Verification belongs where assets are managed, so the blockage is visible at the point it is caused.
+
+export async function assetOwnershipChallenge(assetId: string) {
+  return api.ownershipChallenge(assetId);
+}
+
+// verifyAssetOwnership checks the published token against the LIVE target (DNS first, then the
+// well-known file) and records the grounded result — owner-verified ONLY when the token is really
+// found. A lookup failure or an absent token leaves it unverified; it never assumes.
+export async function verifyAssetOwnership(assetId: string) {
+  const res = await api.ownershipVerify(assetId);
+  revalidatePath("/assets");
+  return res;
+}

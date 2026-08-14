@@ -33,6 +33,28 @@ type Inventory struct {
 	Privescs   []InvPrivesc      `json:"privescs,omitempty"` // known IAM privesc edges (PMapper-style)
 	Triggers   []InvTrigger      `json:"triggers,omitempty"` // service-coupling: a service can invoke a compute resource
 	Secrets    []InvSecretAccess `json:"secrets,omitempty"`  // secret-held-credential reuse (lateral movement)
+	// Copies record that one store is a COPY of another — a snapshot, a read replica, an analytics
+	// export. See InvCopy: this is what lets a locked-down primary's sensitivity reach the forgotten
+	// public snapshot of it.
+	Copies []InvCopy `json:"copies,omitempty"`
+}
+
+// InvCopy asserts that Copy holds the same data as Source: an RDS snapshot of a database, a read
+// replica, a nightly export into an analytics bucket.
+//
+// WHY IT EARNS AN EDGE KIND. The classic breach is not a public primary — those get locked down. It is
+// the SNAPSHOT of the locked-down primary, sitting public in another region because it inherited none
+// of the parent's care. Without this relationship the graph sees an unremarkable public bucket and the
+// DSPM check (public AND sensitive) never fires, because nobody tagged the copy.
+//
+// Grounded (§10): a collector emits this ONLY where the provider states the lineage (a snapshot's
+// SourceDBInstanceIdentifier, a replica's source, an export job's target). It is never inferred from a
+// name that looks like "prod-backup".
+type InvCopy struct {
+	Copy   string `json:"copy"`
+	Source string `json:"source"`
+	// Detail names the kind of copy for the human ("rds snapshot", "read replica", "analytics export").
+	Detail string `json:"detail,omitempty"`
 }
 
 // InvResource is one resource or identity.
@@ -201,6 +223,20 @@ func Ingest(inv Inventory) *Snapshot {
 	for _, p := range inv.Passes {
 		s.AddEdge(Edge{From: p.Principal, To: p.Role, Kind: EdgePassRole})
 	}
+	for _, c := range inv.Copies {
+		s.AddEdge(Edge{From: c.Source, To: c.Copy, Kind: EdgeCopyOf, Detail: c.Detail})
+	}
+	// SENSITIVITY FLOWS TO COPIES, and this is the whole reason the edge exists. A snapshot inherits its
+	// source's classification because it inherits its source's DATA — the copy is as sensitive as what
+	// was copied, whatever anyone remembered to tag. Without this the DSPM check (public AND sensitive)
+	// silently misses the single most common cloud breach: a locked-down primary whose forgotten public
+	// snapshot nobody classified.
+	//
+	// Grounded (§10): it propagates ONLY along collector-asserted lineage, never from a name that looks
+	// like a backup, and only UPWARD in severity — a copy already marked more sensitive than its source
+	// keeps its own classification rather than being downgraded by inheritance.
+	propagateSensitivity(s, inv.Copies)
+
 	for _, g := range inv.Grants {
 		s.AddEdge(Edge{From: g.Principal, To: g.Resource, Kind: EdgeHasAccess, Condition: g.Condition})
 	}
@@ -222,4 +258,43 @@ func Ingest(inv Inventory) *Snapshot {
 		s.AddEdge(Edge{From: sa.Principal, To: sa.Yields, Kind: EdgeSecretAccess, Detail: "via secret " + sa.Secret, Condition: sa.Condition})
 	}
 	return s
+}
+
+// propagateSensitivity flows each source's sensitivity onto its copies, transitively (a snapshot of a
+// replica of a sensitive database is sensitive), and never downgrades.
+//
+// Iterates to a fixed point rather than recursing so a cycle in the asserted lineage — which should not
+// happen, but is cheap to survive — terminates instead of hanging. The bound is the number of copies:
+// each pass either raises at least one node or stops.
+func propagateSensitivity(s *Snapshot, copies []InvCopy) {
+	if s == nil || len(copies) == 0 {
+		return
+	}
+	for pass := 0; pass <= len(copies); pass++ {
+		changed := false
+		for _, c := range copies {
+			src, dst := s.Node(c.Source), s.Node(c.Copy)
+			if src == nil || dst == nil {
+				continue // a copy of something we never saw asserts nothing
+			}
+			if sensRank(src.Sensitive) > sensRank(dst.Sensitive) {
+				dst.Sensitive = src.Sensitive
+				changed = true
+			}
+		}
+		if !changed {
+			return
+		}
+	}
+}
+
+// sensRank orders sensitivity so propagation can only ever raise it.
+func sensRank(s Sensitivity) int {
+	switch s {
+	case SensHigh:
+		return 2
+	case SensLow:
+		return 1
+	}
+	return 0
 }

@@ -6,6 +6,7 @@ package hooks
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -118,6 +119,29 @@ func (h *FPFilter) Apply(f types.Finding) (types.Finding, []types.AuditEntry, bo
 		}}, true
 	}
 
+	// Documented PUBLIC SAMPLE credential: a leaked-secret finding whose value is a well-known example
+	// from vendor documentation (AWS's own AKIAIOSFODNN7EXAMPLE has appeared in their tutorials for
+	// over a decade). It is not a live credential and never was — but left at high/critical it pages a
+	// real on-call, which is precisely the alert fatigue an AI-SOC exists to remove. Demote to info +
+	// log, so findings_raw keeps it for the security engineer and l15_audit_log makes it recoverable.
+	//
+	// Matched on the exact known VALUE — never on a rule id, a filename, or a "looks like an example"
+	// heuristic. A real key sitting in a file called example.go must keep its severity. Narrowness IS
+	// the safety property: this rule suppresses alerts, so a loose match would hide a live leak.
+	if sample := documentedPublicSample(f); sample != "" && f.Severity.Rank() > types.SeverityInfo.Rank() {
+		from := f.Severity
+		f.Severity = types.SeverityInfo
+		return f, []types.AuditEntry{{
+			FindingID:    f.ID,
+			Action:       "demote",
+			FromSeverity: from,
+			ToSeverity:   types.SeverityInfo,
+			Rule:         "fp_filter::documented-sample-credential",
+			Reason: "the secret is " + sample + ", a credential published in vendor documentation — not a live " +
+				"secret (findings_raw keeps full severity; recoverable via l15_audit_log)",
+		}}, true
+	}
+
 	// Unpatchable base-image (distro) noise: an OS/distro package CVE that the distro's own security
 	// team has marked "wont-fix" — no upstream patch is coming, so the customer cannot remediate it by
 	// upgrading, and the distro has already triaged it as not-worth-fixing. This is the classic
@@ -190,4 +214,33 @@ func compileAll(patterns []string) []*regexp.Regexp {
 		out = append(out, regexp.MustCompile(p))
 	}
 	return out
+}
+
+// publicSampleCredentials are credential values published in vendor documentation. Each is a literal
+// that appears verbatim in official docs/tutorials, so a scanner matching one has matched a document,
+// not a secret.
+//
+// The map is deliberately TINY and exact. This rule lowers severity, so every entry must be a value
+// that is provably not live — a broad "example-looking" pattern here would silently bury a real leak,
+// which is far worse than the noise it removes. Add an entry only with a citable public source.
+var publicSampleCredentials = map[string]string{
+	// AWS's canonical example pair, in their docs since ~2010.
+	"AKIAIOSFODNN7EXAMPLE":                     "AWS's documented example access-key id (AKIAIOSFODNN7EXAMPLE)",
+	"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY": "AWS's documented example secret access key",
+	"ASIAIOSFODNN7EXAMPLE":                     "AWS's documented example session access-key id (ASIAIOSFODNN7EXAMPLE)",
+}
+
+// documentedPublicSample returns a human-readable description when the finding's evidence contains a
+// known documented sample credential, else "".
+//
+// It scans the fields a secret scanner puts the matched value into (title, description, endpoint) —
+// the same blob the correlator reads — because the concrete value is what makes this safe to act on.
+func documentedPublicSample(f types.Finding) string {
+	blob := f.Title + " " + f.Description + " " + f.Endpoint
+	for value, desc := range publicSampleCredentials {
+		if strings.Contains(blob, value) {
+			return desc
+		}
+	}
+	return ""
 }

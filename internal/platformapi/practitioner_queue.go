@@ -54,6 +54,14 @@ func (d Deps) practitionerQueue(r *http.Request, who string) (map[string]any, er
 		td.Audits, _ = d.Store.ListAuditEngagements(ctx, t.ID)
 		td.Pentests, _ = d.Store.ListPentests(ctx, t.ID)
 		td.Policies, _ = d.Store.ListPolicies(ctx, t.ID)
+		// Remediation approvals — the item a practitioner meets most often, and the one this desk was
+		// missing. PendingApprovals covers what is queued; ListActions is needed too because a
+		// changes-requested action is no longer "pending" yet is still waiting on a revised proposal.
+		if acts, err := d.Store.ListActions(ctx, t.ID); err == nil {
+			td.Actions = acts
+		} else {
+			td.Actions, _ = d.Store.PendingApprovals(ctx, t.ID)
+		}
 		data = append(data, td)
 	}
 	items := practitioner.Queue(data)

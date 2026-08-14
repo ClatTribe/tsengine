@@ -45,6 +45,17 @@ func (d Deps) handleGetLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 		resp["model"] = t.LLM.Model
 		resp["base_url"] = t.LLM.BaseURL // a self-hosted endpoint is not a secret — safe to echo
 	}
+	// Per-role overrides, so the UI can show which model actually drives each agent lane. Keys are
+	// never echoed here either — only whether one is set.
+	roles := map[string]any{}
+	for _, role := range platform.AgentRoles() {
+		if c, ok := t.LLMRoles[role]; ok && c != nil {
+			roles[string(role)] = map[string]any{
+				"provider": c.Provider, "model": c.Model, "base_url": c.BaseURL, "has_key": c.HasKey(),
+			}
+		}
+	}
+	resp["roles"] = roles
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -57,9 +68,18 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 		Model    string `json:"model"`
 		APIKey   string `json:"api_key"`
 		BaseURL  string `json:"base_url"`
+		// Role optionally scopes this config to ONE kind of agent reasoning (see platform.AgentRole).
+		// Empty = the tenant's default model, i.e. the original behaviour. This is what lets a tenant
+		// run a self-hosted security model for triage while keeping a frontier model for code.
+		Role string `json:"role"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	role := strings.ToLower(strings.TrimSpace(body.Role))
+	if role != "" && !platform.ValidAgentRole(role) {
+		writeJSON(w, http.StatusBadRequest, errBody("role must be one of: analysis, code (or omitted for the default model)"))
 		return
 	}
 	body.Provider = strings.ToLower(strings.TrimSpace(body.Provider))
@@ -87,8 +107,14 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 		return
 	}
 	cfg := &platform.LLMConfig{Provider: body.Provider, Model: strings.TrimSpace(body.Model), BaseURL: baseURL}
-	if t.LLM != nil {
-		cfg.KeyRef = t.LLM.KeyRef // preserve the existing key by default
+	// Preserve the existing key for THIS slot, so the model can be changed without re-entering the key.
+	// A role override keeps its own key; only the default slot inherits t.LLM's.
+	if role != "" {
+		if prev, ok := t.LLMRoles[platform.AgentRole(role)]; ok && prev != nil {
+			cfg.KeyRef = prev.KeyRef
+		}
+	} else if t.LLM != nil {
+		cfg.KeyRef = t.LLM.KeyRef
 	}
 	if k := strings.TrimSpace(body.APIKey); k != "" {
 		if d.Vault == nil {
@@ -102,43 +128,64 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 		}
 		cfg.KeyRef = ref
 	}
-	t.LLM = cfg
+	if role != "" {
+		if t.LLMRoles == nil {
+			t.LLMRoles = map[platform.AgentRole]*platform.LLMConfig{}
+		}
+		t.LLMRoles[platform.AgentRole(role)] = cfg
+	} else {
+		t.LLM = cfg
+	}
 	if err := d.Store.PutTenant(r.Context(), t); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
 	if d.Recorder != nil {
 		d.Recorder.Record("LLM config updated", "llm_config",
-			map[string]any{"tenant_id": tenantID, "provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey()},
+			map[string]any{"tenant_id": tenantID, "provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey(), "role": role},
 			"tenant LLM configured")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey(), "base_url": cfg.BaseURL})
+	writeJSON(w, http.StatusOK, map[string]any{"provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey(), "base_url": cfg.BaseURL, "role": role})
 }
 
 // resolveTenantLLMConfig returns the tenant's FULL LLM config (incl. BaseURL for a self-hosted model)
 // + the opened key. Usable (ok=true) when it carries a key (cloud) OR a self-hosted endpoint (Ollama
 // et al. may legitimately have no key). The key is never logged.
 func (d Deps) resolveTenantLLMConfig(ctx context.Context, tenantID string) (platform.LLMConfig, string, bool) {
+	return d.resolveTenantLLMConfigForRole(ctx, tenantID, "")
+}
+
+// resolveTenantLLMConfigForRole is the role-aware form. An empty role means "the tenant's default",
+// preserving the original single-model behaviour for every existing caller.
+//
+// Resolution order is per-role override → tenant default → (caller's) operator-global. The override is
+// only honoured when it is USABLE, so a partially-filled role config degrades to the tenant default
+// rather than disabling the agent — a misconfiguration must never look like "no AI configured".
+func (d Deps) resolveTenantLLMConfigForRole(ctx context.Context, tenantID string, role platform.AgentRole) (platform.LLMConfig, string, bool) {
 	t, err := d.Store.GetTenant(ctx, tenantID)
-	if err != nil || t.LLM == nil {
+	if err != nil {
+		return platform.LLMConfig{}, "", false
+	}
+	cfg := t.LLMForRole(role)
+	if cfg == nil {
 		return platform.LLMConfig{}, "", false
 	}
 	key := ""
-	if t.LLM.HasKey() {
+	if cfg.HasKey() {
 		if d.Vault == nil {
 			return platform.LLMConfig{}, "", false
 		}
-		k, oerr := d.Vault.Open(t.LLM.KeyRef)
+		k, oerr := d.Vault.Open(cfg.KeyRef)
 		if oerr != nil || k == "" {
 			return platform.LLMConfig{}, "", false
 		}
 		key = k
 	}
 	// A config with neither a key nor a self-hosted endpoint can't drive anything.
-	if key == "" && !t.LLM.SelfHosted() {
+	if key == "" && !cfg.SelfHosted() {
 		return platform.LLMConfig{}, "", false
 	}
-	return *t.LLM, key, true
+	return *cfg, key, true
 }
 
 // ResolveTenantLLM returns the tenant's configured (provider, model, apiKey) for engine agent work.
@@ -155,10 +202,23 @@ func (d Deps) ResolveTenantLLM(ctx context.Context, tenantID string) (provider, 
 // model (the §18.5 "bring your own brain" — a cloud key or a SELF-HOSTED Ollama/vLLM endpoint) when
 // set + buildable, else the operator-global model (d.AgentLLM). nil when neither is configured.
 func (d Deps) resolveAgentLLM(ctx context.Context, tenantID string) pentest.SpecLLM {
+	return d.resolveAgentLLMForRole(ctx, tenantID, "")
+}
+
+// resolveAgentLLMForRole is the role-aware form: it drives an L2 agent with the model the tenant
+// assigned to that KIND of reasoning (platform.AgentRole), falling back to their single default and
+// then to the operator-global model.
+//
+// This exists because the two agent lanes reward different models. Code and exploitation work wants a
+// frontier general model; triage/correlation/compliance work is the lane security-specialized models
+// are trained for and can be served by a small self-hosted one. Routing per role lets a deployment use
+// each where it is actually better, instead of paying frontier prices for triage or accepting an 8B
+// model's patch quality. Passing "" keeps the previous single-model behaviour exactly.
+func (d Deps) resolveAgentLLMForRole(ctx context.Context, tenantID string, role platform.AgentRole) pentest.SpecLLM {
 	// A tenant's OWN model (§18.5 "bring your own brain") costs the operator nothing, so it's
 	// allowed on ANY plan, Free included. ClientForURL threads the base URL so a self-hosted endpoint
 	// is actually reached (and handles anthropic — the UI default — which ClientFor used to drop).
-	if cfg, key, ok := d.resolveTenantLLMConfig(ctx, tenantID); ok {
+	if cfg, key, ok := d.resolveTenantLLMConfigForRole(ctx, tenantID, role); ok {
 		if c, ok := cloudengine.ClientForURL(cfg.Provider, cfg.Model, key, cfg.BaseURL); ok {
 			return c // cloudengine.LLM satisfies pentest.SpecLLM (same Generate method)
 		}

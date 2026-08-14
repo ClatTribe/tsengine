@@ -1,0 +1,70 @@
+{
+  "id": "high-severity-noise",
+  "name": "High-severity noise (the scenario that can actually discriminate)",
+  "_why": "The other three scenarios cannot measure an engine. Their decoys are LOW severity, so remediate.WorthProposing drops them on severity alone and the substrate scores a perfect 0 decoy-actions without exercising any judgement — no headroom, so agent and substrate must tie. Here every decoy is HIGH and sits in ordinary application code, outside any test/fixture/docs path, so neither the severity rule nor the path heuristic can save an engine. Only knowing what the finding MEANS separates them. Descriptions state facts only and never the verdict: the earlier triage corpus leaked by writing conclusions into the decoy text, and a corpus that says the answer measures reading, not judgement.",
+  "assets": [
+    { "id": "repo-1", "type": "repository", "target": "acme/storefront", "meta": { "full_name": "acme/storefront" } }
+  ],
+  "before": [
+    {
+      "id": "f-real-sqli",
+      "rule_id": "semgrep::sql-injection",
+      "tool": "semgrep",
+      "severity": "critical",
+      "endpoint": "acme/storefront/orders/search.py:41",
+      "title": "Query built by string concatenation in order search",
+      "description": "The value of the request parameter q is concatenated into the SQL statement before execution. The handler is routed at /orders/search and requires no authentication."
+    },
+    {
+      "id": "f-real-key",
+      "rule_id": "gitleaks::aws-access-key",
+      "tool": "gitleaks",
+      "severity": "high",
+      "endpoint": "acme/storefront/deploy/settings.py:8",
+      "title": "AWS access key id and secret present as literals",
+      "description": "AKIAIOSFODNN7EXAMPLE and a 40-character secret are assigned at module scope in the deploy settings module, which is imported by the release job."
+    },
+    {
+      "id": "f-decoy-publishable",
+      "rule_id": "gitleaks::stripe-key",
+      "tool": "gitleaks",
+      "severity": "high",
+      "endpoint": "acme/storefront/web/checkout.jsx:17",
+      "title": "Stripe key literal in checkout component",
+      "description": "The literal pk_test_51H8yQ2eZvKYlo2C0publishable is passed to loadStripe() in a React component. The value is compiled into the client bundle and served to every visitor's browser."
+    },
+    {
+      "id": "f-decoy-example-host",
+      "rule_id": "semgrep::hardcoded-credentials",
+      "tool": "semgrep",
+      "severity": "high",
+      "endpoint": "acme/storefront/web/onboarding.jsx:63",
+      "title": "Credentials in onboarding sample text",
+      "description": "The strings demo@example.com and hunter2 appear in a JSX string constant rendered inside a grey box captioned 'your admin will send you something like this', on a page describing the invitation email format."
+    }
+  ],
+  "after": [
+    {
+      "id": "f-decoy-publishable",
+      "rule_id": "gitleaks::stripe-key",
+      "tool": "gitleaks",
+      "severity": "high",
+      "endpoint": "acme/storefront/web/checkout.jsx:17",
+      "title": "Stripe key literal in checkout component",
+      "description": "The literal pk_test_51H8yQ2eZvKYlo2C0publishable is passed to loadStripe() in a React component. The value is compiled into the client bundle and served to every visitor's browser."
+    },
+    {
+      "id": "f-decoy-example-host",
+      "rule_id": "semgrep::hardcoded-credentials",
+      "tool": "semgrep",
+      "severity": "high",
+      "endpoint": "acme/storefront/web/onboarding.jsx:63",
+      "title": "Credentials in onboarding sample text",
+      "description": "The strings demo@example.com and hunter2 appear in a JSX string constant rendered inside a grey box captioned 'your admin will send you something like this', on a page describing the invitation email format."
+    }
+  ],
+  "decoys": [
+    "gitleaks::stripe-key|acme/storefront/web/checkout.jsx:17",
+    "semgrep::hardcoded-credentials|acme/storefront/web/onboarding.jsx:63"
+  ]
+}

@@ -14,6 +14,8 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/types"
+
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 // cloudinvestigate.go is the platform surface for the AI Cloud Security Engineer (the CLI
@@ -26,7 +28,7 @@ import (
 // handleCloudInvestigate (POST /v1/cloud/investigate) runs one investigation.
 func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, tenantID string) {
 	// The tenant's OWN model (Settings → LLM) takes precedence over the operator-global one (§18.5).
-	llm := d.resolveAgentLLM(r.Context(), tenantID)
+	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleAnalysis)
 	if llm == nil {
 		writeJSON(w, http.StatusBadRequest, errBody("cloud investigation needs an LLM (the agent's brain): configure one in Settings → LLM, or set LLM_API_KEY / LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen2.5 for a local Ollama, then restart the platform"))
 		return
@@ -121,7 +123,7 @@ func (d Deps) handleCloudInvestigationView(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{
 		"total":   len(paths),
 		"paths":   paths,
-		"enabled": d.resolveAgentLLM(r.Context(), tenantID) != nil, // tenant model OR operator-global → runnable
+		"enabled": d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleAnalysis) != nil, // tenant model OR operator-global → runnable
 	})
 }
 
@@ -165,7 +167,7 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 		if err != nil || !ok {
 			return "No cloud inventory has been ingested for this tenant yet — run a cloud investigation first.", nil
 		}
-		llm := d.resolveAgentLLM(ctx, tenantID)
+		llm := d.resolveAgentLLMForRole(ctx, tenantID, platform.RoleAnalysis)
 		if llm == nil {
 			return "Cloud-depth investigation needs an LLM (not configured for this tenant).", nil
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/azinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
+	"github.com/ClatTribe/tsengine/internal/connector/k8sinventory"
 )
 
 // handleIngestAWSInventory (POST /v1/cloud/inventory) is the live-collector ingest for the wedge's CLOUD
@@ -48,8 +49,19 @@ func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, er
 			return cloudgraph.Inventory{}, fmt.Errorf("invalid Azure inventory body")
 		}
 		return azinventory.Build(raw), nil
+	case "kubernetes", "k8s":
+		// The orchestrator is a cloud in its own right, and its security model is the SAME graph: a
+		// ServiceAccount is a principal, a RoleBinding a grant, a pod runs-as its SA, an exposed Service
+		// an internet edge, and the RBAC verbs that let one identity become another (bind / escalate /
+		// impersonate / create-pods / read-secrets) are privesc edges. So it needed a fourth collector,
+		// not a fourth engine — reachability, chaining, pruning and remediation all come for free.
+		var raw k8sinventory.RawK8s
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return cloudgraph.Inventory{}, fmt.Errorf("invalid Kubernetes inventory body")
+		}
+		return k8sinventory.Build(raw), nil
 	default:
-		return cloudgraph.Inventory{}, fmt.Errorf("unknown provider %q (expected aws|gcp|azure)", provider)
+		return cloudgraph.Inventory{}, fmt.Errorf("unknown provider %q (expected aws|gcp|azure|kubernetes)", provider)
 	}
 }
 
