@@ -493,7 +493,19 @@ func (d Deps) handleGetTenant(w http.ResponseWriter, r *http.Request, tenantID s
 		respond(w, nil, err)
 		return
 	}
-	respond(w, t.Redacted(), nil) // never leak the sealed LLM key ref
+	// Ship the resolved entitlements alongside the tenant. The UI has to be able to tell the truth
+	// about what is actually running — the Overview badge said "Monitoring 24/7" unconditionally, which
+	// became false the moment the scheduler started honouring the plan. A surface that cannot see a
+	// limit will always end up claiming the capability.
+	red := t.Redacted()
+	respond(w, tenantView{Tenant: red, Limits: platform.Entitlements(t.Plan)}, nil)
+}
+
+// tenantView is the tenant plus its resolved plan limits, so the client never has to infer
+// entitlements from the plan string (which is exactly how the pricing page and the code drifted).
+type tenantView struct {
+	platform.Tenant
+	Limits platform.PlanLimits `json:"limits"`
 }
 
 // handleKillSwitch engages/disengages the tenant's global kill-switch (agentic-SMB spec

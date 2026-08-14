@@ -567,12 +567,26 @@ export interface EscalationPolicy {
   tiers: EscalationTier[];
 }
 
+export interface PlanLimits {
+  plan: string;
+  label: string;
+  max_assets: number; // -1 = unlimited
+  ai_enabled: boolean;
+  autonomous_pentest: boolean;
+  all_frameworks: boolean;
+  continuous_monitoring: boolean; // the unattended re-scan heartbeat (on-demand scanning is separate)
+  human_in_loop_apply: boolean;
+}
+
 export interface Tenant {
   id: string;
   name: string;
   plan?: string;
   created_at?: string;
   agents_halted?: boolean; // global kill-switch: when true, no autonomous agent action runs
+  // The resolved entitlements, so a surface never has to infer them from the plan string — which is
+  // exactly how the pricing page and the backend drifted apart.
+  limits?: PlanLimits;
 }
 
 // AI-BOM (agent capability manifest, WRD-1): what the autonomous agent can touch.

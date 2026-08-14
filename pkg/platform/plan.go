@@ -157,10 +157,24 @@ func baseEntitlements(plan string) PlanLimits {
 			ContinuousMonitoring: true, HumanInLoopApply: true,
 		}
 	default:
+		// Free: everything the deterministic engine does, on demand, capped by asset count.
+		//
+		// AllFrameworks and HumanInLoopApply were declared false here and enforced NOWHERE, so Free
+		// tenants had both in practice while the pricing page said they did not. Rather than take them
+		// away — they cost us almost nothing and they are most of what convinces an evaluator — the
+		// declaration now matches what the product actually does.
+		//
+		// ContinuousMonitoring stays false and is now genuinely enforced (scheduler.Tick). It is the
+		// one limit with a real marginal cost: a sandbox scan per asset, per tick, per tenant, with
+		// signups unbounded. Free keeps on-demand scanning; what it does not get is the unattended
+		// heartbeat.
+		//
+		// A declared-but-unenforced limit is worse than either choice. It quietly becomes a claim on
+		// the pricing page and a "no" in any surface that reads it, while the code does the opposite.
 		return PlanLimits{
 			Plan: PlanFree, Label: "Free", MaxAssets: 2,
-			AIEnabled: false, AutonomousPentest: false, AllFrameworks: false,
-			ContinuousMonitoring: false, HumanInLoopApply: false,
+			AIEnabled: false, AutonomousPentest: false, AllFrameworks: true,
+			ContinuousMonitoring: false, HumanInLoopApply: true,
 		}
 	}
 }

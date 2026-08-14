@@ -24,8 +24,8 @@ func TestTick_RescansEveryTenantsAssets(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
 	// two tenants, 2 + 1 assets
-	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
-	_ = st.PutTenant(ctx, platform.Tenant{ID: "t2"})
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Plan: platform.PlanGrowth})
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t2", Plan: platform.PlanGrowth})
 	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "t1", Type: "repository", Target: "r1"})
 	_ = st.PutAsset(ctx, platform.Asset{ID: "a2", TenantID: "t1", Type: "repository", Target: "r2"})
 	_ = st.PutAsset(ctx, platform.Asset{ID: "a3", TenantID: "t2", Type: "repository", Target: "r3"})
@@ -62,7 +62,7 @@ func TestRun_DisabledWhenIntervalZero(t *testing.T) {
 func TestRun_FiresThenStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	st := store.NewMemory()
-	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Plan: platform.PlanGrowth})
 	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "t1", Type: "repository", Target: "r1"})
 	sc := &countScanner{}
 	svc := &runner.Service{Store: st, Connectors: connector.NewRegistry(), Scanner: sc}
@@ -77,5 +77,61 @@ func TestRun_FiresThenStopsOnCancel(t *testing.T) {
 	}
 	if sc.scans == 0 {
 		t.Error("Run should have fired at least the initial scan")
+	}
+}
+
+// ── CONTINUOUS MONITORING IS A PAID CAPABILITY ───────────────────────────────────────────────────
+
+// PlanLimits.ContinuousMonitoring was declared and enforced nowhere, so every tenant got the
+// unattended heartbeat whatever they paid — the one plan limit with a real marginal cost (a sandbox
+// scan per asset, per tenant, per tick, with Free signups unbounded).
+func TestTick_SkipsTenantsWithoutContinuousMonitoring(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "paid", Plan: platform.PlanGrowth})
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "free", Plan: platform.PlanFree})
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "noplan"}) // empty plan resolves to Free
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "paid", Type: "repository", Target: "r1"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a2", TenantID: "free", Type: "repository", Target: "r2"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a3", TenantID: "noplan", Type: "repository", Target: "r3"})
+
+	sc := &countScanner{}
+	svc := &runner.Service{Store: st, Connectors: connector.NewRegistry(), Scanner: sc}
+	s := &Scheduler{Store: st, Runner: svc, Interval: time.Hour}
+
+	n, err := s.Tick(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || sc.scans != 1 {
+		t.Fatalf("only the entitled tenant should be re-scanned on the cadence, got n=%d scans=%d", n, sc.scans)
+	}
+	// And the unentitled tenants must have no findings from the scheduled pass.
+	for _, id := range []string{"free", "noplan"} {
+		fs, _ := st.ListFindings(ctx, id, store.FindingFilter{})
+		if len(fs) != 0 {
+			t.Errorf("tenant %s was scanned on the cadence without the entitlement (%d findings)", id, len(fs))
+		}
+	}
+}
+
+// THE LINE THIS MUST NOT CROSS. Free is sold with on-demand scanning; only the unattended heartbeat is
+// paid. The gate lives in the scheduler for exactly this reason — putting it in RescanTenant would
+// have taken the button away too.
+func TestOnDemandRescanStillWorksWithoutTheEntitlement(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "free", Plan: platform.PlanFree})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "free", Type: "repository", Target: "r1"})
+
+	sc := &countScanner{}
+	svc := &runner.Service{Store: st, Connectors: connector.NewRegistry(), Scanner: sc}
+
+	n, err := svc.RescanTenant(ctx, "free")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || sc.scans != 1 {
+		t.Fatalf("a Free tenant lost on-demand scanning, which it is sold: n=%d scans=%d", n, sc.scans)
 	}
 }

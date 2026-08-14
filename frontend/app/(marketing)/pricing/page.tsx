@@ -30,7 +30,8 @@ const TIERS = [
       "2 scan targets",
       "All 5 categories — code · cloud · attack surface · identity · compliance",
       "30+ OSS scanners (deterministic, on-demand)",
-      "Findings dashboard + SOC 2 readiness view",
+      "Findings dashboard + all 22 frameworks mapped",
+      "Human-in-the-loop approvals — you approve every fix",
       "Signed decision ledger",
       // The bring-your-own-key route lived only in the FAQ and the comparison table — both below
       // the fold, read after someone scanning this card has already concluded the free tier has no
@@ -137,10 +138,10 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
   {
     section: "Compliance & evidence",
     rows: [
-      { label: "Frameworks mapped", cells: ["SOC 2 readiness", "All 22", "All 22", "All 22 + custom"] },
+      { label: "Frameworks mapped", cells: ["All 22", "All 22", "All 22", "All 22 + custom"] },
       { label: "Signed evidence packs + Trust Center", cells: ["no", "yes", "yes", "yes"] },
       { label: "Questionnaire automation", cells: ["no", "yes", "yes", "yes"] },
-      { label: "Human-in-the-loop approvals + apply", cells: ["no", "yes", "yes", "yes"] },
+      { label: "Human-in-the-loop approvals + apply", cells: ["yes", "yes", "yes", "yes"] },
       { label: "Signed decision ledger", cells: ["yes", "yes", "yes", "yes"] },
     ],
   },

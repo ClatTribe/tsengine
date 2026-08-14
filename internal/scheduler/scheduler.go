@@ -12,6 +12,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 // Scheduler re-scans every tenant on Interval.
@@ -37,16 +38,36 @@ func (s *Scheduler) Tick(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	total := 0
+	total, skipped := 0, 0
 	for _, t := range tenants {
 		if ctx.Err() != nil {
 			return total, ctx.Err()
+		}
+		// CONTINUOUS MONITORING IS A PAID CAPABILITY, and this is the loop that delivers it.
+		//
+		// The limit was declared in PlanLimits and enforced nowhere, so every tenant was re-scanned on
+		// the cadence whatever they paid. That is the one plan limit with a real marginal cost — a
+		// sandbox scan per asset, twice a day, per tenant, with Free signups unbounded — so it is the
+		// one worth gating.
+		//
+		// The gate is HERE and not in RescanTenant on purpose. Free keeps on-demand scanning, which is
+		// what it is sold as; what it does not get is the unattended heartbeat. Putting the check in
+		// RescanTenant would have taken away the button too.
+		if !platform.Entitlements(t.Plan).ContinuousMonitoring {
+			skipped++
+			continue
 		}
 		n, rerr := s.Runner.RescanTenant(ctx, t.ID)
 		total += n
 		if rerr != nil {
 			s.logf("[scheduler] tenant %s: %v (scanned %d)", t.ID, rerr, n)
 		}
+	}
+	if skipped > 0 {
+		// Say it rather than silently doing less. A pass that scanned nothing because nobody is
+		// entitled must not read the same as a pass that found nothing to do.
+		s.logf("[scheduler] %d tenant(s) skipped — continuous monitoring is not included in their plan "+
+			"(on-demand scanning is unaffected)", skipped)
 	}
 	return total, nil
 }
