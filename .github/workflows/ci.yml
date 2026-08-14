@@ -72,6 +72,21 @@ jobs:
         with:
           version: v1.64.8
           install-mode: goinstall
+          # Skip `golangci-lint config verify`. It validates .golangci.yml against a schema the
+          # action FETCHES FROM golangci-lint.run at run time, so a job that otherwise needs no
+          # network fails whenever that host is slow:
+          #
+          #   compile schema: failing loading ".../golangci.v1.64.jsonschema.json":
+          #   context deadline exceeded
+          #
+          # That is a red X on an unrelated PR, and the cost is not the lost minute — it is that a
+          # lint failure stops meaning anything. Once "lint is probably just flaky" is the reflex, a
+          # real one gets waved through.
+          #
+          # Little is given up: golangci-lint still rejects an unknown key in .golangci.yml when it
+          # actually runs, so a broken config fails the same job either way. `config verify` only
+          # adds schema-level detail on a file that changes a couple of times a year.
+          verify: false
 
   vulncheck:
     name: vulncheck
