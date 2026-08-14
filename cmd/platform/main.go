@@ -493,6 +493,12 @@ func main() {
 	// human to click /v1/l2/translate. The hook self-gates (AIEnabled + an available LLM), so it's a
 	// no-op when AI isn't entitled/configured — a Free tenant never auto-spends the operator's budget.
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
+	// The RESPOND half for EVENT-DRIVEN incidents: when an ingest path (identity/cloud-drift/OSINT/…)
+	// opens a new incident via detector.OpenFor, put the AI engineer on it immediately instead of
+	// waiting for the next scan. Same gating as AfterScan (own key any plan; operator LLM AI-entitled
+	// only), detached so it never blocks the ingest request. Set after apiDeps is built (the detector
+	// holds a back-reference to the Deps that drive the review) — the same wiring shape as AfterScan.
+	detector.Responder = apiDeps
 	// Continuous pentesting: each monitoring pass runs any engagement whose recurring schedule is due
 	// (a safe PASSIVE re-verify — never auto active exploitation). Self-gating (no-op when nothing is due).
 	svc.AfterPass = func(ctx context.Context, tenantID string) {

@@ -35,6 +35,23 @@ type Alerter interface {
 	IncidentOpened(ctx context.Context, i platform.Incident) error
 }
 
+// Responder is invoked ONCE when a batch of event-driven incidents opens, so the AI security engineer
+// INVESTIGATES a new incident the moment it is ingested instead of waiting for the next scheduled scan.
+//
+// This is the "respond" half of detect-and-respond for the EVENT-DRIVEN paths (identity ATO, cloud
+// drift, a runtime attack, a warehouse grant). Alerter tells a human; Responder puts the engineer on
+// it. It fires only from OpenFor — the scan path (Reconcile) already triggers the engineer via
+// AutoReviewAfterScan, so wiring a responder there too would double-review the same estate.
+//
+// Optional + best-effort by contract: the implementation must never block reconciliation (it detaches
+// its own work) and never return an error that fails the ingest. detect takes no dependency on the LLM
+// engineer — the composition root supplies the implementation, exactly like Alerter.
+type Responder interface {
+	// RespondToIncidents is handed every incident opened in this batch. Fire-and-forget: it must return
+	// promptly (kick off async work and return), because the caller is on an ingest request path.
+	RespondToIncidents(ctx context.Context, tenantID string, opened []platform.Incident)
+}
+
 // SkillVerdict is a Detection Skill's triage annotation for an opening incident (ADR 0017).
 // Skill is "name@digest" so provenance is pinned.
 type SkillVerdict struct {
@@ -60,6 +77,7 @@ type Detector struct {
 	Store     Store
 	Recorder  *ledger.Recorder // optional: signs every open/resolve into the ledger
 	Alerter   Alerter          // optional: alerts a human when an incident opens
+	Responder Responder        // optional: puts the AI engineer on event-driven incidents (OpenFor only)
 	Triager   SkillTriager     // optional: annotates an opening incident with a Detection Skill verdict
 	Threshold types.Severity   // minimum severity to open an incident (default high)
 	// AlertCap bounds how many per-pass incident-opened alerts the Alerter fires. A bulk event (e.g.
@@ -135,7 +153,18 @@ func (d *Detector) OpenFor(ctx context.Context, tenantID string, current []types
 	if err != nil {
 		return Result{}, err
 	}
-	return d.openNew(ctx, tenantID, present, openByKey, attacked)
+	res, err := d.openNew(ctx, tenantID, present, openByKey, attacked)
+	if err != nil {
+		return res, err
+	}
+	// The RESPOND half, event-driven only: put the AI engineer on the batch the moment it opens. Fired
+	// here and NOT in Reconcile because the scan path already reviews via AutoReviewAfterScan; doing both
+	// would review the same estate twice. Best-effort by the interface's contract — it detaches its own
+	// work, so this never blocks the ingest request.
+	if d.Responder != nil && len(res.Opened) > 0 {
+		d.Responder.RespondToIncidents(ctx, tenantID, res.Opened)
+	}
+	return res, nil
 }
 
 // presentIssues filters findings to the ones that warrant an incident: at/above the severity floor,
