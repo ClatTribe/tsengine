@@ -75,3 +75,54 @@ func TestParsePatch(t *testing.T) {
 		t.Error("unterminated block must error")
 	}
 }
+
+// ── THE PROMPT MUST FIT BOTH SHAPES OF THE JOB ───────────────────────────────────────────────────
+
+// The framing was overfit to the offensive-agent case: "a penetration test proved a vulnerability in
+// the WEB APPLICATION below" and "the homepage must still respond". Most real fixes are library CVEs —
+// a traversal in an archive extractor, a prototype pollution in a merge helper — with no pentest, no
+// web app and no homepage, judged by the project's own test suite. Protecting a homepage that does not
+// exist steers the model toward request-level patches for defects that live in a function.
+func TestPatchPrompt_DoesNotAssumeAWebApp(t *testing.T) {
+	p := buildPatchPrompt(
+		Finding{Class: "CWE-22", Endpoint: "example/archiver", Detail: "Path traversal in tar extraction."},
+		[]SourceFile{{Path: "extract.go", Content: "package main\n"}},
+	)
+	low := strings.ToLower(p)
+	for _, overfit := range []string{"homepage", "web application", "penetration test"} {
+		if strings.Contains(low, overfit) {
+			t.Errorf("the prompt assumes a web-app pentest (%q) — wrong for a library CVE, which is most "+
+				"of the real work:\n%s", overfit, p)
+		}
+	}
+}
+
+// What replaced it has to be stronger, not just vaguer: the benchmark oracle for a real patch is the
+// project's build and test suite, so the model must be told that breaking them is a failed patch.
+func TestPatchPrompt_SaysBreakingTestsIsAFailedPatch(t *testing.T) {
+	p := strings.ToLower(buildPatchPrompt(Finding{Class: "CWE-89"}, []SourceFile{{Path: "a.go", Content: "x"}}))
+	if !strings.Contains(p, "test") {
+		t.Error("the prompt never mentions tests, which is what actually judges a real-world patch")
+	}
+	if !strings.Contains(p, "build") {
+		t.Error("the prompt never mentions the build")
+	}
+}
+
+// And the properties that were already right must survive: root-cause fixing, minimal changes, and the
+// file-block output format the parser depends on.
+func TestPatchPrompt_KeepsWhatWasAlreadyCorrect(t *testing.T) {
+	p := buildPatchPrompt(
+		Finding{Class: "sqli", Endpoint: "/search", Detail: "boolean differential confirmed"},
+		[]SourceFile{{Path: "app.py", Content: "q = 'SELECT '+x"}},
+	)
+	for _, want := range []string{"ROOT CAUSE", "=== FILE:", "=== END FILE ===", "as few files as possible"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the prompt lost %q, which the parser or the fix quality depends on", want)
+		}
+	}
+	// The evidence and the source still have to reach the model.
+	if !strings.Contains(p, "boolean differential confirmed") || !strings.Contains(p, "SELECT ") {
+		t.Error("the prompt dropped the evidence or the source")
+	}
+}
