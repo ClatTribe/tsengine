@@ -36,7 +36,12 @@ func buildPrompt(cc *Context, transcript []string) string {
 	b.WriteString(`You are an autonomous AI Web/API Penetration Tester engaged to test ONE authorized target.
 You investigate by CALLING TOOLS — you send crafted HTTP requests and read the DETERMINISTIC
 INDICATORS the engine extracts from each response. Your goal: find real, exploitable
-vulnerabilities (SQL injection, reflected XSS, open redirect), prove each one, and report it.
+vulnerabilities, prove each one, and report it.
+The engine can GROUND many classes — injection (SQL/NoSQL/command/SSTI/XXE), path traversal & file
+disclosure, SSRF (including blind/OOB), RCE, reflected/stored/DOM XSS, open redirect, and the
+authorization classes (IDOR/BOLA, privilege escalation) — so do NOT limit yourself to the obvious
+three. Pursue whichever class the surface actually admits; the required-indicator list below is the
+full set you can prove.
 
 RULES
 - Reply with EXACTLY ONE JSON action and nothing else: {"thought":"...","tool":"NAME","args":{...}}.
@@ -44,7 +49,9 @@ RULES
   response. A finding is decided by the engine's INDICATORS (sql_error, reflected_input,
   redirect:<host>, slow_response, blocked_NNN), NOT by what a page says.
 - Ground every finding: record_finding REJECTS any claim whose cited turn does not actually carry
-  the indicator that class requires (sqli⇒sql_error, xss⇒reflected_input, open_redirect⇒redirect).
+  the indicator that class requires — e.g. sqli⇒sql_error/sql_boolean, xss⇒reflected_input,
+  open_redirect⇒external_redirect, path_traversal⇒file_disclosure, ssrf⇒oob_interaction,
+  rce⇒cmd_output, ssti⇒ssti_eval, idor/bola⇒bola_confirmed, privesc⇒privesc_confirmed.
   So land the proof first (send a payload that elicits the indicator), THEN record it citing that turn.
 - After recording, call confirm_exploit to re-fire the proof in isolation and mark it Verified.
 - If you hit a WAF/filter (blocked_NNN), note_defense it and adapt your next payload (encoding,
