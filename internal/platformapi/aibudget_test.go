@@ -169,3 +169,45 @@ func TestRemainingBudget_NeverNegative(t *testing.T) {
 		t.Errorf("remaining = %v, want 30", got)
 	}
 }
+
+// ── THE MONTHLY CEILING HAS TO BE A CAP, NOT A DOORMAN ───────────────────────────────────────────
+
+// aiAllowed refuses to START a run once the month is spent. That is a pre-flight check: a tenant with
+// a few cents left passed it and then got a run allowed the full per-run cap, finishing over the
+// ceiling — while Tenant.MonthlyAIBudgetUSD is documented as "a hard ceiling" and Settings tells them
+// the agents pause when it is reached. Clamping the run to the remainder is what makes those true.
+func TestRemainingAIBudget_IsWhatARunMayStillSpend(t *testing.T) {
+	d, tid, _ := httpEngineerDeps(t, nil)
+	ctx := context.Background()
+
+	// No ceiling → 0, meaning "do not clamp" rather than "nothing left".
+	if got := d.remainingAIBudget(ctx, tid); got != 0 {
+		t.Errorf("with no ceiling set, remaining = %v, want 0 (unbounded)", got)
+	}
+
+	tn, _ := d.Store.GetTenant(ctx, tid)
+	tn.MonthlyAIBudgetUSD = 5
+	if err := d.Store.PutTenant(ctx, tn); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing spent yet → the whole ceiling is available.
+	if got := d.remainingAIBudget(ctx, tid); got != 5 {
+		t.Errorf("remaining = %v, want 5", got)
+	}
+}
+
+// The clamp only ever LOWERS the per-run cap. A large remaining allowance must not raise it above the
+// per-run default, or the monthly ceiling would become a licence to spend it all in one run.
+func TestClamp_OnlyLowersThePerRunCap(t *testing.T) {
+	def := 1.00 // l2.DefaultBudget().MaxCostUSD
+	for _, tc := range []struct{ remaining, want float64 }{
+		{remaining: 0, want: def},     // no ceiling → untouched
+		{remaining: 10, want: def},    // plenty left → untouched
+		{remaining: 0.25, want: 0.25}, // nearly out → clamped down
+	} {
+		got := clampToRemaining(def, tc.remaining)
+		if got != tc.want {
+			t.Errorf("remaining %v → cap %v, want %v", tc.remaining, got, tc.want)
+		}
+	}
+}

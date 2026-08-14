@@ -216,3 +216,36 @@ func remainingBudget(budget, spent float64) float64 {
 	}
 	return budget - spent
 }
+
+// remainingAIBudget is what the tenant may still spend on agents this calendar month, or 0 when no
+// ceiling is set (meaning "unbounded", not "nothing left" — callers treat 0 as "do not clamp").
+//
+// It exists so a RUN can be clamped to the remainder rather than merely refused once the month is
+// already over budget. Without it the ceiling is a pre-flight check that the next run can overshoot.
+func (d Deps) remainingAIBudget(ctx context.Context, tenantID string) float64 {
+	if d.Store == nil {
+		return 0
+	}
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil || t.MonthlyAIBudgetUSD <= 0 {
+		return 0
+	}
+	spent, _ := d.monthlyAISpend(ctx, tenantID)
+	return remainingBudget(t.MonthlyAIBudgetUSD, spent)
+}
+
+// clampToRemaining lowers a per-run cost cap to what is left of the month's ceiling.
+//
+// remaining == 0 means NO CEILING IS SET (unbounded), not "nothing left" — those are different facts
+// and only one of them should stop a run. remainingAIBudget returns 0 for both "no ceiling" and
+// "exhausted", which is safe here only because aiAllowed refuses to start a run at all once the
+// ceiling is spent; this function's job is the near-empty case that gate lets through.
+//
+// It only ever lowers. A large remaining allowance must not raise the per-run cap, or the monthly
+// ceiling would become a licence to spend the whole month in a single run.
+func clampToRemaining(perRun, remaining float64) float64 {
+	if remaining > 0 && remaining < perRun {
+		return remaining
+	}
+	return perRun
+}
