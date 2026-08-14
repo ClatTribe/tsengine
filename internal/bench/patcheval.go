@@ -150,7 +150,9 @@ func WriteSubmission(dir string, s PatchEvalSubmission) error {
 		return err
 	}
 	name := filepath.Join(dir, safeCVEName(s.CVE)+".json")
-	if err := os.WriteFile(name, append(b, '\n'), 0o644); err != nil {
+	// 0600: a submission is written by this process and read by the evaluator running as the same
+	// user, so nothing needs group or world read (gosec G306).
+	if err := os.WriteFile(name, append(b, '\n'), 0o600); err != nil {
 		return fmt.Errorf("patcheval: write %s: %w", name, err)
 	}
 	return nil
