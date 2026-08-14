@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
@@ -215,6 +216,13 @@ func (d Deps) resolveAgentLLM(ctx context.Context, tenantID string) pentest.Spec
 // each where it is actually better, instead of paying frontier prices for triage or accepting an 8B
 // model's patch quality. Passing "" keeps the previous single-model behaviour exactly.
 func (d Deps) resolveAgentLLMForRole(ctx context.Context, tenantID string, role platform.AgentRole) pentest.SpecLLM {
+	// THE CUSTOMER'S OWN CHOICE COMES FIRST — before the tenant key, before the plan. AIMode is an
+	// instruction about what may run, not a cost gate, so it also blocks a tenant's own key: someone
+	// who chose deterministic-only means it, and is not asking us to spend their money instead of
+	// ours. (The kill-switch is folded into ResolveAI, so a frozen tenant lands here too.)
+	if !d.aiAllowed(ctx, tenantID).Engineer {
+		return nil
+	}
 	// A tenant's OWN model (§18.5 "bring your own brain") costs the operator nothing, so it's
 	// allowed on ANY plan, Free included. ClientForURL threads the base URL so a self-hosted endpoint
 	// is actually reached (and handles anthropic — the UI default — which ClientFor used to drop).
@@ -230,4 +238,26 @@ func (d Deps) resolveAgentLLMForRole(ctx context.Context, tenantID string, role 
 		return d.AgentLLM
 	}
 	return nil
+}
+
+// aiAllowed resolves what the tenant has chosen and is entitled to run. A store error resolves to the
+// plan default rather than silently disabling the agents — a transient read failure must not look
+// like the customer turned AI off.
+func (d Deps) aiAllowed(ctx context.Context, tenantID string) platform.AIPermissions {
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		return platform.Tenant{}.ResolveAI()
+	}
+	p := t.ResolveAI()
+	// DEV-ONLY override: TSENGINE_DEV_LLM_ALL_PLANS lets a test tenant drive the agents regardless of
+	// PLAN (it powers `make dev` + the file-relay proxy). It deliberately does NOT override an
+	// explicit deterministic-only choice or the kill-switch: those are INSTRUCTIONS, not entitlements,
+	// and a dev flag that quietly ran the agents against a customer's stated "no" would be the wrong
+	// kind of convenient.
+	if !p.Engineer && t.AIMode == platform.AIModeUnset && !t.AgentsHalted &&
+		os.Getenv("TSENGINE_DEV_LLM_ALL_PLANS") == "1" {
+		return platform.AIPermissions{Engineer: true, Pentester: true, Mode: platform.AIModeFull,
+			Reason: "Dev override (TSENGINE_DEV_LLM_ALL_PLANS) — never set this in production."}
+	}
+	return p
 }
