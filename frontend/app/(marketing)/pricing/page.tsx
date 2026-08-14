@@ -32,6 +32,12 @@ const TIERS = [
       "30+ OSS scanners (deterministic, on-demand)",
       "Findings dashboard + SOC 2 readiness view",
       "Signed decision ledger",
+      // The bring-your-own-key route lived only in the FAQ and the comparison table — both below
+      // the fold, read after someone scanning this card has already concluded the free tier has no
+      // AI and moved on. It is the entire self-serve story (sign up, paste a key, get both agents,
+      // no sales call), so it belongs where that conclusion gets made. Honest as written: their
+      // model, their bill, and server-side it genuinely works on Free (byok_free_test.go).
+      "Bring your own LLM key → both AI agents, at your model cost",
       "Community support",
     ],
   },
