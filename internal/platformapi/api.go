@@ -711,15 +711,69 @@ func respond(w http.ResponseWriter, v any, err error) {
 	writeJSON(w, http.StatusOK, emptyIfNilSlice(v))
 }
 
-// emptyIfNilSlice replaces a nil slice with a non-nil empty one so it serializes as [] not null.
-// A JSON null crashes a frontend that does .map/.filter on the response (the Go nil-slice →
-// JSON-null footgun); every list endpoint must return [] when empty, like the rest already do.
+// emptyIfNilSlice replaces nil slices and maps with empty ones so they serialize as [] / {} rather
+// than null. A JSON null crashes a frontend that does .map/.filter/for-of on the response (the Go
+// nil-slice → JSON-null footgun); every list endpoint must return [] when empty.
+//
+// IT MUST REACH NESTED FIELDS, NOT JUST THE TOP LEVEL. The original version only rewrote a response
+// that WAS a slice, which quietly missed the more common shape: a response OBJECT whose list field is
+// nil. Both /v1/coverage ({"assets":null,…}) and /v1/actions ({"actions":null,…}) returned null on a
+// brand-new workspace, and both frontend pages threw on it — so two of the tabs a new customer is most
+// likely to open were broken for exactly the people evaluating us. It also has to walk slice ELEMENTS,
+// because a per-item list (an asset's runs_tools) gets mapped over the same way.
+//
+// A nil slice and an empty one are the same fact — "nothing here" — so normalising loses no
+// information. That is what makes this safe to do generically: it is a serialization detail, not a
+// judgement about the data.
 func emptyIfNilSlice(v any) any {
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Slice && rv.IsNil() {
-		return reflect.MakeSlice(rv.Type(), 0, 0).Interface()
+	if v == nil {
+		return nil
 	}
-	return v
+	rv := reflect.ValueOf(v)
+	// Copy into an addressable value so nil members can be filled in. The response is about to be
+	// written and discarded, so the caller's own value is never mutated.
+	out := reflect.New(rv.Type()).Elem()
+	out.Set(rv)
+	fillEmpty(out, 0)
+	return out.Interface()
+}
+
+// maxFillDepth bounds the walk. Response shapes are shallow; the cap exists so a self-referential type
+// can never turn a response into a hang.
+const maxFillDepth = 8
+
+func fillEmpty(v reflect.Value, depth int) {
+	if depth > maxFillDepth {
+		return
+	}
+	switch v.Kind() {
+	case reflect.Slice:
+		if v.IsNil() {
+			if v.CanSet() {
+				v.Set(reflect.MakeSlice(v.Type(), 0, 0))
+			}
+			return
+		}
+		for i := 0; i < v.Len(); i++ {
+			fillEmpty(v.Index(i), depth+1)
+		}
+	case reflect.Map:
+		// A nil map serializes as null too, and Object.entries(null) throws just like [].map does.
+		if v.IsNil() && v.CanSet() {
+			v.Set(reflect.MakeMap(v.Type()))
+		}
+		// Map VALUES are not addressable, so they are left as-is rather than rebuilt.
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if f := v.Field(i); f.CanSet() { // unexported fields are skipped, and are not serialized anyway
+				fillEmpty(f, depth+1)
+			}
+		}
+	case reflect.Pointer:
+		if !v.IsNil() {
+			fillEmpty(v.Elem(), depth+1)
+		}
+	}
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
