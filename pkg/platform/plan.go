@@ -51,7 +51,9 @@ func NormalizePlan(plan string) string {
 	switch {
 	case p == PlanEnterprise || p == "scale" || p == "custom" || p == "unlimited":
 		return PlanEnterprise
-	case p == PlanGrowth || p == "starter" || p == "team" || p == "pro":
+	// "core" is the name this tier carries on the pricing page and in PlanLimits.Label. It was not an
+	// accepted alias, so the one word a customer or operator actually reads did not resolve.
+	case p == PlanGrowth || p == "core" || p == "starter" || p == "team" || p == "pro":
 		return PlanGrowth
 	default:
 		return PlanFree
@@ -81,12 +83,12 @@ func ValidatePlan(plan string) (string, error) {
 	switch base {
 	case PlanEnterprise, "scale", "custom", "unlimited":
 		canonical = PlanEnterprise
-	case PlanGrowth, "starter", "team", "pro":
+	case PlanGrowth, "core", "starter", "team", "pro":
 		canonical = PlanGrowth
 	case PlanFree, "":
 		canonical = PlanFree
 	default:
-		return "", fmt.Errorf("unknown plan tier %q (want free, growth, or enterprise)", base)
+		return "", fmt.Errorf("unknown plan tier %q (want free, core, growth, or enterprise)", base)
 	}
 	for _, add := range parts[1:] {
 		add = strings.TrimSpace(add)
@@ -105,8 +107,23 @@ func ValidatePlan(plan string) (string, error) {
 // base tier. This is the ONE source of truth for the autonomous-pentest gate (no string-match drift).
 func Entitlements(plan string) PlanLimits {
 	p := strings.ToLower(strings.TrimSpace(plan))
-	lim := baseEntitlements(strings.SplitN(p, "+", 2)[0]) // base tier = the part before the first add-on
-	if strings.Contains(p, "pentest") {                   // the autonomous-pentest add-on (any plan carrying the token)
+	base := strings.SplitN(p, "+", 2)[0] // base tier = the part before the first add-on
+	lim := baseEntitlements(base)
+
+	// AN ADD-ON RIDES A REAL TIER OR IT DOES NOT RIDE AT ALL.
+	//
+	// This used to be a bare substring test, so "core+pentest" — a typo of our own public tier name —
+	// returned Free's limits WITH AutonomousPentest set. The base fell through NormalizePlan to Free
+	// (correctly fail-safe) while the add-on was granted anyway, which is the one combination that
+	// should be impossible: an unrecognized plan handing out the most privileged capability we have.
+	//
+	// Checking the base here means Entitlements is safe on its own, rather than safe only because some
+	// caller validated first. That matters because Entitlements IS the gate — autonomousPentestEntitled
+	// reads AutonomousPentest with no other condition.
+	if _, err := ValidatePlan(base); err != nil {
+		return lim
+	}
+	if strings.Contains(p, "pentest") { // the autonomous-pentest add-on (any RECOGNIZED tier carrying the token)
 		lim.AutonomousPentest = true
 	}
 	return lim

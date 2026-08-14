@@ -103,3 +103,45 @@ func TestEntitlements_EnterpriseIsScaleNotAnAIGate(t *testing.T) {
 		}
 	}
 }
+
+// ── AN ADD-ON MUST RIDE A REAL TIER ──────────────────────────────────────────────────────────────
+
+// Entitlements used to grant the add-on from a bare substring test, so an unrecognized base tier came
+// back with Free's limits AND AutonomousPentest set — the one combination that must be impossible.
+// "core+pentest" produced it, and "core" is our own public tier name.
+func TestEntitlements_AddOnRequiresARecognizedTier(t *testing.T) {
+	for _, p := range []string{"core+pentest", "growth+pentest", "free+pentest", "enterprise"} {
+		if !Entitlements(p).AutonomousPentest {
+			t.Errorf("%q: a real tier with the add-on lost its entitlement", p)
+		}
+	}
+	for _, p := range []string{"autonomous-pentest", "pentest", "groth+pentest", "bogus+pentest"} {
+		lim := Entitlements(p)
+		if lim.AutonomousPentest {
+			t.Errorf("%q names no tier but was granted AutonomousPentest — an unrecognized plan must "+
+				"never hand out the most privileged capability", p)
+		}
+		// And it still falls back to Free, never to a paid tier.
+		if lim.AIEnabled {
+			t.Errorf("%q was granted AI on an unrecognized tier", p)
+		}
+	}
+}
+
+// The name on the pricing page has to resolve to the tier it describes.
+func TestPlan_CoreIsAnAliasForGrowth(t *testing.T) {
+	if got := NormalizePlan("core"); got != PlanGrowth {
+		t.Errorf(`NormalizePlan("core") = %q, want %q — "Core" is the public name for this tier`, got, PlanGrowth)
+	}
+	got, err := ValidatePlan("core+pentest")
+	if err != nil {
+		t.Fatalf(`ValidatePlan("core+pentest") errored: %v`, err)
+	}
+	if got != PlanGrowth+"+pentest" {
+		t.Errorf("canonical = %q, want %q", got, PlanGrowth+"+pentest")
+	}
+	// The label round-trips: what we call it is what we accept.
+	if lbl := Entitlements("core").Label; lbl != "Core" {
+		t.Errorf("Entitlements(\"core\").Label = %q, want Core", lbl)
+	}
+}

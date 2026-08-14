@@ -7,7 +7,7 @@ import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 export const metadata = pageMeta({
   title: "Pricing — TensorShield",
   description:
-    "Simple, transparent pricing in ₹ for Indian teams. A free tier for your deterministic + ML-based security & compliance posture, a Core plan for the full scanning engine (self-serve or managed), and Enterprise for the two AI agents — AI Security Engineer + AI Pentester.",
+    "Simple, transparent pricing in ₹ for Indian teams. Free to see your real posture with the deterministic + ML-based engine. Core adds your AI Security Engineer, Growth adds your AI Pentester — both self-serve, no sales call. Enterprise is for scale and delivery: unlimited targets, SSO, managed/MSP.",
   path: "/pricing",
 });
 
@@ -117,9 +117,12 @@ const FAQ = [
 ];
 
 // ComparePlans — the at-a-glance matrix. Cell value: "yes" | "no" | a literal string. Mirrors
-// the TIERS lists + the backend Entitlements, no new claims. Order: Free · Core · Enterprise.
-// The load-bearing line: the AI agents are ENTERPRISE-ONLY (plan.go: AIEnabled/AutonomousPentest
-// are Enterprise) — Core is the FULL deterministic + ML-based scanning engine, differentiated by service model.
+// the TIERS lists + the backend Entitlements, no new claims. Order: Free · Core · Growth · Enterprise.
+// The load-bearing line: the AI agents are SELF-SERVE, not Enterprise-only. Core carries the AI Security
+// Engineer (plan.go: PlanGrowth, labelled "Core", has AIEnabled) and Growth adds the AI Pentester via
+// the "+pentest" add-on. Enterprise is scale and delivery — unlimited targets, SSO, managed/MSP — not a
+// capability gate. This comment said the opposite long after the code changed, which is how a stale
+// claim ends up in the page description search engines show.
 const COMPARE: { section: string; rows: { label: string; cells: [string, string, string, string] }[] }[] = [
   {
     section: "Deterministic + ML-based scanning",

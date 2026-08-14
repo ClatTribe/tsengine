@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
@@ -386,7 +387,20 @@ func (d Deps) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errBody("a tenant needs a name"))
 		return
 	}
-	t := platform.Tenant{ID: d.newID("ten"), Name: body.Name, Plan: body.Plan}
+	// Validate the plan on the way IN, the same as the plan-change endpoint does. Creation used to
+	// store whatever string arrived, so a tenant could be provisioned on a plan that no gate
+	// recognises — including our own public tier name, which was not an accepted alias. An empty plan
+	// is fine and means Free; a non-empty one has to be real.
+	plan := body.Plan
+	if strings.TrimSpace(plan) != "" {
+		canonical, err := platform.ValidatePlan(plan)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
+			return
+		}
+		plan = canonical
+	}
+	t := platform.Tenant{ID: d.newID("ten"), Name: body.Name, Plan: plan}
 	if err := d.Store.PutTenant(r.Context(), t); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
