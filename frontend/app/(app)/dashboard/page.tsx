@@ -40,8 +40,12 @@ const RISK_RING: Record<string, string> = {
 type Event = { at: string; kind: "detected" | "resolved" | "scanned"; title: string; meta?: string };
 
 export default async function OverviewPage() {
-  const connections = await api.connections();
-  if (connections.length === 0) {
+  // Cold start means "there is nothing to show", which is NOT the same as "no OAuth connection".
+  // Findings also arrive by posted snapshot — the device, vendor, Vercel, OSINT and SaaS ingests all
+  // work without a connection, by design. Branching on connections alone hid a workspace's real
+  // findings, highs included, behind a get-started screen telling them to connect something.
+  const [connections, coldFindings] = await Promise.all([api.connections(), api.findings()]);
+  if (connections.length === 0 && coldFindings.length === 0) {
     // Cold start: ask the service model here so a managed/MSP tenant isn't silently defaulted to self_serve.
     const { service_model } = await api.practitioners();
     return <FirstRun serviceModel={service_model} />;
@@ -50,7 +54,7 @@ export default async function OverviewPage() {
   // One concurrent wave for the whole dashboard. Compliance posture for every framework arrives
   // in a SINGLE batched call (postureSummary) instead of fanning out 14 per-framework requests,
   // and it rides in the same Promise.all as everything else.
-  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, postureResp, practitioners] = await Promise.all([
+  const [findings, incidents, approvals, engagements, assets, attackPaths, issuesResp, postureResp, practitioners, ai] = await Promise.all([
     api.findings(),
     api.incidents("all"),
     api.approvals(),
@@ -60,6 +64,7 @@ export default async function OverviewPage() {
     api.issues(),
     api.postureSummary(),
     api.practitioners(),
+    api.aiMode(),
   ]);
   // Service model: a managed/MSP customer's expert owns the approvals — the hero shouldn't tell them a fix
   // is "waiting for YOUR approval" (it's their team's call), so the framing defers to the named expert.
@@ -186,12 +191,18 @@ export default async function OverviewPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Agent activity */}
         <div className="lg:col-span-2">
+          {/* Whose work is this? With the AI Security Engineer off, this feed is scanner detections and
+              deterministic correlation — real work, but not an agent's. Labelling it "the agent" either
+              way makes the deterministic choice look like it changed nothing, or claims activity from a
+              model that was never called. */}
           <SectionTitle action={<span className="inline-flex items-center gap-1 text-[11px] text-pulse"><span className="pulse-dot" /> live</span>}>
-            What the agent is doing
+            {ai.engineer ? "What the agent is doing" : "What's happening"}
           </SectionTitle>
           <Card className="p-0">
             {events.length === 0 ? (
-              <div className="p-5"><Empty>No activity yet — the agent will start as soon as a scan completes.</Empty></div>
+              <div className="p-5"><Empty>{ai.engineer
+                ? "No activity yet — the agent will start as soon as a scan completes."
+                : "No activity yet — this fills in as soon as a scan completes."}</Empty></div>
             ) : (
               <ul className="divide-y divide-border">
                 {events.slice(0, 10).map((e, i) => (
