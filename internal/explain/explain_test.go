@@ -208,3 +208,78 @@ func TestExplain_HandlesEmptyFinding(t *testing.T) {
 		t.Error("an empty finding produced an empty explanation rather than an honest one")
 	}
 }
+
+// ── TWO BUGS FOUND BY RUNNING IT, NOT BY UNIT TESTS ──────────────────────────────────────────────
+//
+// Both surfaced only in a live end-to-end run: a real Vercel snapshot through the real API produced
+// output that was confidently wrong. Pinned here so they cannot come back.
+
+// BUG 1: an assessor's "verified" is not an exploitation proof.
+//
+// vercelposture marks its findings VerificationVerified meaning "I read the configuration and it says
+// this". explain read that as "we ran an exploit and it worked", and printed "Fix today — we proved it
+// is exploitable on your system" over a Vercel setting nobody had attacked. Certainty about a fact is
+// not evidence of exploitation, and this is exactly the overstatement the urgency ladder exists to
+// prevent.
+func TestUrgency_AssessorVerifiedIsNotAnExploitationProof(t *testing.T) {
+	f := types.Finding{
+		ID: "f-vp", RuleID: "vercel::preview-unprotected", Tool: "vercelposture",
+		Severity: types.SeverityHigh, Title: "Preview deployments are public: acme-web",
+		Description:        "Every pull request on acme-web publishes a preview URL that anyone can open. Turn on Deployment Protection for Preview in the project's settings.",
+		VerificationStatus: types.VerificationVerified,
+	}
+	e := Explain(f, Context{})
+	if e.Urgency == UrgencyNow {
+		t.Errorf("a config assessor's finding was graded 'fix today' as if an exploit had been run: %v", e.Because)
+	}
+	for _, b := range e.Because {
+		if strings.Contains(strings.ToLower(b), "proved it is exploitable") {
+			t.Errorf("claimed exploitation proof for a config reading: %q", b)
+		}
+	}
+}
+
+// A pentest tool's "verified" DOES mean the exploit ran — that distinction is the whole point, so the
+// other half is asserted too.
+func TestUrgency_PentestVerifiedStillMeansProven(t *testing.T) {
+	f := sqli()
+	f.VerificationStatus = types.VerificationVerified
+	if e := Explain(f, Context{}); e.Urgency != UrgencyNow {
+		t.Errorf("a genuinely proven exploit was graded %q", e.Urgency)
+	}
+}
+
+// BUG 2: an assessor's own prose must not be re-classified.
+//
+// Keyword-matching "production-secret-in-preview" landed on the hardcoded-credential template and told
+// the reader to "move it to your secret manager" — it is already in one, scoped too broadly. A wrong
+// diagnosis produces a wrong FIX, which is worse than no translation at all.
+func TestClassify_AssessorProseIsNotReClassified(t *testing.T) {
+	f := types.Finding{
+		ID: "f-vp2", RuleID: "vercel::production-secret-in-preview", Tool: "vercelposture",
+		Severity: types.SeverityHigh, Title: "Production secrets are available to preview builds: acme-web",
+		Description: "On acme-web these variables are exposed to the preview environment as well as production: STRIPE_SECRET_KEY. Scope them to Production only, and give preview its own credentials.",
+	}
+	e := Explain(f, Context{})
+	if strings.Contains(strings.ToLower(e.What), "written into the source") {
+		t.Errorf("an env-var scoping finding was diagnosed as a hardcoded credential: %q", e.What)
+	}
+	if strings.Contains(strings.ToLower(e.Fix), "move it to your secret manager") {
+		t.Errorf("the fix instructs a move that is already done — wrong diagnosis, wrong fix: %q", e.Fix)
+	}
+	// It must carry the assessor's OWN words, which were written for this reader.
+	if !strings.Contains(e.What, "STRIPE_SECRET_KEY") {
+		t.Errorf("the assessor's specifics were lost: %q", e.What)
+	}
+	if !strings.Contains(strings.ToLower(e.Fix), "scope them to production") {
+		t.Errorf("the assessor's own remediation was not used as the fix: %q", e.Fix)
+	}
+}
+
+// A raw scanner finding is still translated — the assessor rule must not disable classification
+// generally.
+func TestClassify_RawScannerIsStillTranslated(t *testing.T) {
+	if e := Explain(sqli(), Context{}); !strings.Contains(strings.ToLower(e.What), "database") {
+		t.Errorf("a raw nuclei finding stopped being translated: %q", e.What)
+	}
+}

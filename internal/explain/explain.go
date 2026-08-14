@@ -191,7 +191,12 @@ func urgency(f types.Finding, ctx Context) (Urgency, []string) {
 	if kev {
 		because = append(because, "this vulnerability is on CISA's actively-exploited list — attackers are using it in the wild today")
 	}
-	proven := f.VerificationStatus == types.VerificationVerified
+	// An ASSESSOR's "verified" means "I read the configuration and it says this" — it is certainty
+	// about a fact, not evidence that anyone can exploit it. A pentest tool's "verified" means the
+	// exploit ran and worked. Conflating them put "Fix today — we proved it is exploitable" on a
+	// Vercel setting nobody had attacked, which is the precise overstatement the urgency ladder
+	// exists to prevent. Certainty is not urgency.
+	proven := f.VerificationStatus == types.VerificationVerified && !isAssessor(f.Tool)
 	if proven {
 		because = append(because, "we proved it is exploitable on your system, not just possible")
 	}
@@ -240,6 +245,14 @@ type class struct {
 // template — inventing an explanation for a class we do not model would be exactly the false
 // confidence the rest of the engine refuses.
 func classify(f types.Finding) class {
+	// An ASSESSOR (vercelposture, dataplatform, deviceposture, …) already writes a plain-English
+	// title and description aimed at this exact reader. Re-classifying it is not just redundant, it is
+	// actively wrong: keyword-matching "production-secret-in-preview" landed on the hardcoded-credential
+	// template and told someone to "move it to your secret manager" — it is already in one, scoped too
+	// broadly. A wrong diagnosis produces a wrong fix, which is worse than no translation at all.
+	if isAssessor(f.Tool) && strings.TrimSpace(f.Description) != "" {
+		return class{headlineVerb: assessorVerb(f.Title), what: f.Description, fix: assessorFix(f.Description)}
+	}
 	for _, cwe := range f.CWE {
 		if c, ok := cweClasses[normalizeCWE(cwe)]; ok {
 			return c
@@ -363,4 +376,47 @@ func humanList(items []string) string {
 	default:
 		return strings.Join(c[:len(c)-1], ", ") + " and " + c[len(c)-1]
 	}
+}
+
+// assessorTools are the packages that produce customer-ready prose by design — they are written for a
+// non-security reader already, so translating them again can only lose fidelity or invent a class.
+var assessorTools = map[string]bool{
+	"vercelposture": true, "dataplatform": true, "deviceposture": true, "tprm": true,
+	"osint": true, "sspm": true, "operate": true, "clouddrift": true, "identitythreat": true,
+}
+
+func isAssessor(tool string) bool { return assessorTools[strings.ToLower(strings.TrimSpace(tool))] }
+
+// assessorVerb turns the assessor's own title into the headline, minus the trailing ": <subject>" that
+// the list view already shows as context. Falls back to the whole title rather than risking an empty
+// headline.
+func assessorVerb(title string) string {
+	t := strings.TrimSpace(title)
+	if i := strings.LastIndex(t, ": "); i > 0 {
+		if head := strings.TrimSpace(t[:i]); head != "" {
+			return head + " —"
+		}
+	}
+	if t == "" {
+		return "A security issue was found in"
+	}
+	return t + " —"
+}
+
+// assessorFix pulls the remediation sentence out of the assessor's description. Assessors end with the
+// action ("Turn on Deployment Protection…", "Scope them to Production only…"), so the last sentence is
+// the instruction. Empty when there is no clear one — better silent than a fabricated instruction.
+func assessorFix(desc string) string {
+	d := strings.TrimSpace(desc)
+	if d == "" {
+		return ""
+	}
+	parts := strings.Split(d, ". ")
+	last := strings.TrimSpace(parts[len(parts)-1])
+	// A trailing fragment that is not an instruction is worse than nothing: it reads as advice while
+	// telling the reader to do something they cannot act on.
+	if len(last) < 15 {
+		return ""
+	}
+	return last
 }
