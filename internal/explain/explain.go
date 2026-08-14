@@ -124,7 +124,7 @@ type Explanation struct {
 
 // Explain renders a finding for a non-security reader.
 func Explain(f types.Finding, ctx Context) Explanation {
-	cls := classify(f)
+	cls, subject := classify(f)
 	urg, because := urgency(f, ctx)
 
 	e := Explanation{
@@ -139,7 +139,7 @@ func Explain(f types.Finding, ctx Context) Explanation {
 		},
 	}
 	e.Why = why(ctx)
-	e.Headline = headline(cls, ctx)
+	e.Headline = headline(cls, subject, ctx)
 	return e
 }
 
@@ -165,8 +165,14 @@ func why(ctx Context) string {
 // headline is the one line someone reads in a list. It leads with CONSEQUENCE where the graph proved
 // one, because "anyone can read your customer table" moves a founder and "SQL Injection (CWE-89)"
 // does not.
-func headline(c class, ctx Context) string {
+func headline(c class, subject string, ctx Context) string {
+	// Prefer the caller's asset label, then the subject the source itself named, and only then a
+	// generic. "your app" is a last resort, not a default: someone running six services cannot act on
+	// it, and we usually know better.
 	where := strings.TrimSpace(ctx.AssetLabel)
+	if where == "" {
+		where = strings.TrimSpace(subject)
+	}
 	if where == "" {
 		where = "your app"
 	}
@@ -244,29 +250,30 @@ type class struct {
 // (broad). An unrecognised class falls back to the tool's own words rather than a confident-sounding
 // template — inventing an explanation for a class we do not model would be exactly the false
 // confidence the rest of the engine refuses.
-func classify(f types.Finding) class {
+func classify(f types.Finding) (class, string) {
 	// An ASSESSOR (vercelposture, dataplatform, deviceposture, …) already writes a plain-English
 	// title and description aimed at this exact reader. Re-classifying it is not just redundant, it is
 	// actively wrong: keyword-matching "production-secret-in-preview" landed on the hardcoded-credential
 	// template and told someone to "move it to your secret manager" — it is already in one, scoped too
 	// broadly. A wrong diagnosis produces a wrong fix, which is worse than no translation at all.
 	if isAssessor(f.Tool) && strings.TrimSpace(f.Description) != "" {
-		return class{headlineVerb: assessorVerb(f.Title), what: f.Description, fix: assessorFix(f.Description)}
+		verb, subj := assessorVerb(f.Title)
+		return class{headlineVerb: verb, what: f.Description, fix: assessorFix(f.Description)}, subj
 	}
 	for _, cwe := range f.CWE {
 		if c, ok := cweClasses[normalizeCWE(cwe)]; ok {
-			return c
+			return c, ""
 		}
 	}
 	hay := strings.ToLower(f.RuleID + " " + f.Title)
 	for _, kc := range keywordClasses {
 		for _, k := range kc.keys {
 			if strings.Contains(hay, k) {
-				return kc.c
+				return kc.c, ""
 			}
 		}
 	}
-	return fallbackClass(f)
+	return fallbackClass(f), ""
 }
 
 // fallbackClass reports what the tool said, flagged as un-translated. Honest degradation: the reader
@@ -387,20 +394,24 @@ var assessorTools = map[string]bool{
 
 func isAssessor(tool string) bool { return assessorTools[strings.ToLower(strings.TrimSpace(tool))] }
 
-// assessorVerb turns the assessor's own title into the headline, minus the trailing ": <subject>" that
-// the list view already shows as context. Falls back to the whole title rather than risking an empty
-// headline.
-func assessorVerb(title string) string {
+// assessorVerb splits the assessor's own title into the headline verb and the SUBJECT it names, so the
+// headline can say which project rather than a generic one.
+//
+// It returns the subject instead of discarding it because dropping it and then substituting "your app"
+// was strictly worse than either: a customer with six Vercel projects was told "Preview deployments are
+// public — your app", when the assessor had written "…: acme-web" and we threw the name away. Falls
+// back to the whole title rather than risking an empty headline.
+func assessorVerb(title string) (verb, subject string) {
 	t := strings.TrimSpace(title)
 	if i := strings.LastIndex(t, ": "); i > 0 {
 		if head := strings.TrimSpace(t[:i]); head != "" {
-			return head + " —"
+			return head + " —", strings.TrimSpace(t[i+2:])
 		}
 	}
 	if t == "" {
-		return "A security issue was found in"
+		return "A security issue was found in", ""
 	}
-	return t + " —"
+	return t + " —", ""
 }
 
 // assessorFix pulls the remediation sentence out of the assessor's description. Assessors end with the

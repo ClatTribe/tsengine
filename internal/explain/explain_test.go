@@ -283,3 +283,50 @@ func TestClassify_RawScannerIsStillTranslated(t *testing.T) {
 		t.Errorf("a raw nuclei finding stopped being translated: %q", e.What)
 	}
 }
+
+// ── THE HEADLINE MUST NAME WHAT IT IS ABOUT ──────────────────────────────────────────────────────
+
+// An assessor writes "Preview deployments are public: acme-web". We used to strip the project name as
+// redundant and then substitute a generic "your app" — strictly worse than either choice, and
+// unactionable for a customer running six services. The name the source gave us must survive.
+func TestAssessorHeadline_NamesTheSubjectInsteadOfSayingYourApp(t *testing.T) {
+	e := Explain(types.Finding{
+		RuleID: "vercel::preview-unprotected", Tool: "vercelposture", Severity: types.SeverityHigh,
+		Title:       "Preview deployments are public: acme-web",
+		Description: "Every pull request on acme-web publishes a preview URL that anyone can open. Turn on Deployment Protection for Preview.",
+		Endpoint:    "vercel:acme-web",
+	}, Context{})
+
+	if !strings.Contains(e.Headline, "acme-web") {
+		t.Errorf("the headline does not name the project: %q", e.Headline)
+	}
+	if strings.Contains(e.Headline, "your app") {
+		t.Errorf("the headline fell back to a generic subject when the name was available: %q", e.Headline)
+	}
+}
+
+// A caller-supplied asset label still wins — it is what the CUSTOMER calls the thing, which beats
+// what the tool called it.
+func TestAssetLabel_BeatsTheSourcesSubject(t *testing.T) {
+	e := Explain(types.Finding{
+		Tool: "vercelposture", Title: "Preview deployments are public: acme-web",
+		Description: "Turn on Deployment Protection for Preview.",
+	}, Context{AssetLabel: "the marketing site"})
+	if !strings.Contains(e.Headline, "the marketing site") {
+		t.Errorf("the customer's own label was ignored: %q", e.Headline)
+	}
+}
+
+// And with no label and no subject we must still say something, not produce a dangling sentence.
+func TestNoLabelNoSubject_StillReadsAsASentence(t *testing.T) {
+	e := Explain(types.Finding{
+		Tool: "nuclei", RuleID: "nuclei::sqli", CWE: []string{"CWE-89"}, Severity: types.SeverityHigh,
+		Title: "SQL injection",
+	}, Context{})
+	if !strings.Contains(e.Headline, "your app") {
+		t.Errorf("expected the generic fallback when nothing named the subject: %q", e.Headline)
+	}
+	if strings.HasSuffix(strings.TrimSpace(e.Headline), "—") {
+		t.Errorf("headline ends mid-sentence: %q", e.Headline)
+	}
+}
