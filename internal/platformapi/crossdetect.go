@@ -9,6 +9,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
+	"github.com/ClatTribe/tsengine/internal/explain"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -141,16 +142,29 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 	// few genuinely-live issues surface above the static-posture noise. Grounded; prioritization
 	// only — never blocks (§13).
 	assets, _ := d.Store.ListAssets(ctx, tenantID)
-	live := crossdetect.AnnotateLiveRisk(issues, crossdetect.Correlate(assets, findings))
+	chains := crossdetect.Correlate(assets, findings)
+	live := crossdetect.AnnotateLiveRisk(issues, chains)
 
 	// Data-tier prioritization: attribute each issue to a tiered asset and re-rank so the
 	// highest-risk issues lead (live first, then a finding on a customer-data asset jumps a finding
 	// on a low-sensitivity one). No-op on ranking while every asset is at the default Standard tier.
 	issues = crossdetect.PrioritizeByDataTier(issues, assets)
 
+	// Plain-English explanations — what broke, why it matters here, what to do, how soon. Our reader
+	// has no security engineer, so a list of rule ids is a list they cannot act on. Deterministic
+	// (model-free), so this is exactly as readable with the AI turned off. Blast radius comes from the
+	// chains computed just above, or the explanation says it is untraced — never boilerplate.
+	explanations := annotateExplanations(issues, findings, assets, chains)
+	if explanations == nil {
+		// Never serialize a JSON null into a map the frontend indexes — that is the .map/.filter
+		// crash class the null-array guard exists to catch (and did catch this).
+		explanations = map[string]explain.Explanation{}
+	}
+
 	respond(w, map[string]any{
 		"issues": issues, "count": len(issues), "raw_findings": rawCount,
-		"confirmed": confirmed, "ignored": len(ignored), "excluded": excludedCount,
+		"explanations": explanations,
+		"confirmed":    confirmed, "ignored": len(ignored), "excluded": excludedCount,
 		"attacked": attacked, "live": live,
 	}, nil)
 }
