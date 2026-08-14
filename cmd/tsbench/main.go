@@ -51,6 +51,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench wavsep: %v\n", err)
 			os.Exit(1)
 		}
+	case "patcheval":
+		if err := patchevalCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench patcheval: %v\n", err)
+			os.Exit(1)
+		}
 	case "sast":
 		if err := sastCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench sast: %v\n", err)

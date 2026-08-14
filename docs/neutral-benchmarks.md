@@ -119,6 +119,7 @@ git clone https://github.com/bytedance/PatchEval && cd PatchEval
 
 # 2. Our agent proposes; writes their submission format into the patches dir
 tsbench patcheval --instances patcheval_verified.json \
+                  --sources <dir of per-CVE checkouts materialised from their images> \
                   --out patcheval/exp_agent/agent_runs/<timestamp>-tsengine/patches
 
 # 3. THEIR evaluator decides
