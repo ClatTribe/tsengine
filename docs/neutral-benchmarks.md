@@ -86,3 +86,52 @@ PatchEval, CVE-Bench and SEC-bench all require **Docker + Linux + substantial di
 for all images). None can run on a laptop without Docker. Producing real numbers needs a build host —
 that is a provisioning task, not an engineering one, and no number should be published until it runs
 there. An adapter that cannot yet be executed is wired code, not a result.
+
+---
+
+## 6. Running PatchEval
+
+The adapter is `internal/bench/patcheval.go`. It does three things and deliberately no more:
+
+1. **Loads** `patcheval_verified.json` (not vendored — it is theirs, and a copy in our tree would drift
+   from theirs and quietly stop being their benchmark).
+2. **Extracts only what an agent may see** — `PromptFields` returns a type with nowhere to put
+   `fix_func` or `patch_url`, so leaking the answer is a compile error rather than a code review.
+   `LeakedInto` is the second lock over the finally-rendered prompt.
+3. **Writes their submission format** — `{"cve": …, "fix_patch": "<unified diff>"}`, one file per CVE,
+   into the patches directory their evaluator mounts. `codeagent.Patch.UnifiedDiff` converts our
+   whole-file rewrites into the diff they expect.
+
+**There is no scoring in it.** Their `fix-run.sh` decides, in their container. Adding a scorer would
+put us back to grading our own homework, which is the whole reason for using their benchmark.
+
+### Prerequisites (none of which exist on a laptop)
+
+- Linux + Docker
+- ~500 GB free for the images
+- An LLM key for the engineer under test
+
+### Sequence
+
+```bash
+# 1. Their repo and dataset
+git clone https://github.com/bytedance/PatchEval && cd PatchEval
+
+# 2. Our agent proposes; writes their submission format into the patches dir
+tsbench patcheval --instances patcheval_verified.json \
+                  --out patcheval/exp_agent/agent_runs/<timestamp>-tsengine/patches
+
+# 3. THEIR evaluator decides
+bash patcheval/exp_agent/run_eval.sh <timestamp>-tsengine
+```
+
+### Status, stated honestly
+
+**Not yet run.** This machine has no Docker, so the adapter has never executed end to end and there is
+no number. What IS verified is every pure part — instance parsing against their field names (including
+`programing_language`, their spelling), the leak guard in both directions, the submission shape, and
+the refusal to silently skip a failed case. The rest is wired code, not a result, and must not be
+described as one until it runs on a build host.
+
+Baselines to sit beside when it does run: **GPT-5.6-Sol 83.9%**, **GPT-5.5 81.3%**,
+**DeepSeek-V4-Flash 80.4%** (230-case verified subset).
