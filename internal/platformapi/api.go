@@ -744,7 +744,7 @@ func respond(w http.ResponseWriter, v any, err error) {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
-	writeJSON(w, http.StatusOK, emptyIfNilSlice(v))
+	writeJSON(w, http.StatusOK, v) // writeJSON normalises
 }
 
 // emptyIfNilSlice replaces nil slices and maps with empty ones so they serialize as [] / {} rather
@@ -778,6 +778,16 @@ func emptyIfNilSlice(v any) any {
 // can never turn a response into a hang.
 const maxFillDepth = 8
 
+// normalizable reports whether a value is worth walking — the kinds that can contain a nil slice or
+// map. Anything else (a string, a number, a bool) is copied for nothing.
+func normalizable(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Struct, reflect.Pointer:
+		return true
+	}
+	return false
+}
+
 func fillEmpty(v reflect.Value, depth int) {
 	if depth > maxFillDepth {
 		return
@@ -795,10 +805,37 @@ func fillEmpty(v reflect.Value, depth int) {
 		}
 	case reflect.Map:
 		// A nil map serializes as null too, and Object.entries(null) throws just like [].map does.
-		if v.IsNil() && v.CanSet() {
-			v.Set(reflect.MakeMap(v.Type()))
+		if v.IsNil() {
+			if v.CanSet() {
+				v.Set(reflect.MakeMap(v.Type()))
+			}
+			return
 		}
-		// Map VALUES are not addressable, so they are left as-is rather than rebuilt.
+		// MAP VALUES MATTER MORE THAN THE MAP. map[string]any is the most common response shape in
+		// this package — 71 handlers emit one — and a nil slice inside it serializes as null exactly
+		// like a nil struct field does. The first version of this walker skipped them because map
+		// values are not ADDRESSABLE, which is true but not a reason to give up: a value can still be
+		// rebuilt into a fresh addressable copy and written back with SetMapIndex.
+		//
+		// Without this, `writeJSON(w, 200, map[string]any{"threats": threats})` with a nil `threats`
+		// sent `"threats": null` to a frontend that maps over it — the same crash #1129 was supposed
+		// to have ended, surviving in the shape the codebase actually uses.
+		for _, k := range v.MapKeys() {
+			mv := v.MapIndex(k)
+			// Unwrap the interface so the concrete slice/map underneath is what gets inspected;
+			// otherwise every value in a map[string]any looks like an opaque interface.
+			cv := mv
+			if cv.Kind() == reflect.Interface && !cv.IsNil() {
+				cv = cv.Elem()
+			}
+			if !normalizable(cv) {
+				continue
+			}
+			fresh := reflect.New(cv.Type()).Elem()
+			fresh.Set(cv)
+			fillEmpty(fresh, depth+1)
+			v.SetMapIndex(k, fresh)
+		}
 	case reflect.Struct:
 		for i := 0; i < v.NumField(); i++ {
 			if f := v.Field(i); f.CanSet() { // unexported fields are skipped, and are not serialized anyway
@@ -812,10 +849,18 @@ func fillEmpty(v reflect.Value, depth int) {
 	}
 }
 
+// writeJSON is the single exit for every response, so the nil-slice normalisation lives HERE rather
+// than in respond() alone.
+//
+// respond() was the only caller that normalised, but 71 handlers across 50 files call writeJSON
+// directly with a map[string]any — which is how `"threats": null` and `"to_scan": null` were still
+// reaching a frontend that maps over them, after #1129 was supposed to have ended exactly that. A fix
+// that covers one of two exits is not a fix; putting it at the choke point means a handler cannot
+// opt out by accident.
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(emptyIfNilSlice(v))
 }
 
 func errBody(msg string) map[string]string { return map[string]string{"error": msg} }
