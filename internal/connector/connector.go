@@ -103,6 +103,28 @@ type Configurable interface {
 	Configured() bool
 }
 
+// ConfigHinter names the settings a connector needs, for the operator who has to supply them.
+//
+// Without this the not-configured error said "set its CLIENT_ID and CLIENT_SECRET" for EVERY kind.
+// That is right for the OAuth connectors and wrong for the three cloud ones, which are role-assumption
+// flows with no client secret at all — so an operator connecting AWS, the product's headline surface,
+// was sent looking for a variable that does not exist for it.
+type ConfigHinter interface {
+	// ConfigHint returns the env var names this deployment must set, most specific first.
+	ConfigHint() string
+}
+
+// ConfigHint returns operator-facing guidance for an unconfigured connector, falling back to the
+// OAuth pair that most connectors do use.
+func ConfigHint(c Connector) string {
+	if ch, ok := c.(ConfigHinter); ok {
+		if h := ch.ConfigHint(); h != "" {
+			return h
+		}
+	}
+	return "its CLIENT_ID and CLIENT_SECRET"
+}
+
 // IsConfigured reports whether c is usable in this deployment.
 func IsConfigured(c Connector) bool {
 	if cc, ok := c.(Configurable); ok {

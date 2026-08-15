@@ -119,8 +119,8 @@ func (d Deps) handleConnectURL(w http.ResponseWriter, r *http.Request, tenantID 
 	// the provider's own error page, with nothing logged here to explain why.
 	if !connector.IsConfigured(conn) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error": "the " + kind + " integration is not configured on this deployment — set its " +
-				"CLIENT_ID and CLIENT_SECRET (see .env.example) and restart the platform",
+			"error": "the " + kind + " integration is not configured on this deployment — set " +
+				connector.ConfigHint(conn) + " (see .env.example) and restart the platform",
 			"reason": "connector_not_configured",
 			"kind":   kind,
 		})

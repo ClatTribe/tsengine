@@ -64,6 +64,11 @@ type GCPWriter interface {
 // sends them to the IAM console with nothing to paste (see the AWS note).
 func (g *GCP) Configured() bool { return g.TrustServiceAccount != "" }
 
+// ConfigHint: GCP onboards by service-account impersonation, not OAuth.
+func (g *GCP) ConfigHint() string {
+	return "GCP_TRUST_SERVICE_ACCOUNT (GCP onboards via service-account impersonation, not OAuth)"
+}
+
 func NewGCP(trustServiceAccount string) *GCP {
 	return &GCP{TrustServiceAccount: trustServiceAccount, ConsoleBase: "https://console.cloud.google.com"}
 }
