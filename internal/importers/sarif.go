@@ -95,7 +95,7 @@ func FromSARIF(data []byte, target string, now time.Time) (types.Scan, error) {
 			rule := rules[res.RuleID]
 			f := types.Finding{
 				ID:              fmt.Sprintf("imp-%s-%04d", short(tool), n),
-				RuleID:          tool + "::" + res.RuleID,
+				RuleID:          namespacedRule(tool, res.RuleID),
 				Tool:            tool,
 				Severity:        sarifSeverity(rule, res),
 				Title:           firstNonEmpty(rule.ShortDescription.Text, res.Message.Text, res.RuleID),
@@ -180,4 +180,25 @@ func severityFromCVSS(c float64) types.Severity {
 		return types.SeverityLow
 	}
 	return types.SeverityInfo
+}
+
+// namespacedRule prefixes the tool onto a rule id WITHOUT doubling it.
+//
+// SARIF is emitted by tools that namespace their own rule ids, and prefixing unconditionally
+// produced "operate::operate::stale-account". That is not cosmetic: rule ids are matched by PREFIX
+// all over this codebase — exclusion rules, ignore rules, the readiness checklist's gap matching,
+// the access review's identity rules — so a double-prefixed finding silently fails every one of
+// them. It is stored, it is displayed, and it participates in nothing.
+//
+// Found by driving the access review against an imported SARIF: the findings landed, and the review
+// stayed empty.
+func namespacedRule(tool, ruleID string) string {
+	ruleID = strings.TrimSpace(ruleID)
+	if ruleID == "" {
+		return tool
+	}
+	if tool == "" || strings.HasPrefix(ruleID, tool+"::") || strings.HasPrefix(ruleID, tool+".") {
+		return ruleID
+	}
+	return tool + "::" + ruleID
 }
