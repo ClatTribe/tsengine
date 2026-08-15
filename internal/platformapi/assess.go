@@ -290,6 +290,22 @@ func (d Deps) handlePublicAssess(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 9*time.Second)
 	defer cancel()
+	// A domain that does not exist must not be reported as failing anything. FetchDomain treats a
+	// lookup miss as the finding — "we queried and the record is absent" — which is exactly right
+	// for a real domain, and wrong for one that was never registered: every DNS record is trivially
+	// absent, so a typo scored D and was told "No DMARC record — anyone can spoof your domain",
+	// complete with a fix quoting the domain that does not exist.
+	//
+	// That is the §10 rule inverted. The engine's whole claim is that it never asserts what it did
+	// not observe, and here it asserted a security failing about an entity it could not resolve. On
+	// the public lead magnet the cost is direct: a founder who mistypes their domain is shown a
+	// fake problem by the tool whose entire pitch is that its findings are real. The web half
+	// already degrades correctly — probeWeb fails and those checks drop out — so only the DNS half
+	// needed the guard.
+	if !domainResolves(ctx, domain) {
+		writeJSON(w, http.StatusBadRequest, errBody("that domain doesn't resolve — check the spelling, e.g. acme.com"))
+		return
+	}
 	// Email-auth (DNS) and web posture (HTTPS) are independent — run them concurrently to keep the
 	// public endpoint snappy. Both are read-only and public-safe.
 	var dc operate.DomainConfig
@@ -300,4 +316,19 @@ func (d Deps) handlePublicAssess(w http.ResponseWriter, r *http.Request) {
 	go func() { defer wg.Done(); wp = probeWeb(ctx, domain) }()
 	wg.Wait()
 	writeJSON(w, http.StatusOK, assess(dc, wp))
+}
+
+// domainResolves reports whether the domain exists in DNS at all. Any ONE of NS, address or MX
+// records is enough — a parked domain with no A record still exists and still needs DMARC, so
+// requiring all three would swing the error the other way and refuse to scan real domains.
+func domainResolves(ctx context.Context, domain string) bool {
+	var r net.Resolver
+	if ns, err := r.LookupNS(ctx, domain); err == nil && len(ns) > 0 {
+		return true
+	}
+	if hosts, err := r.LookupHost(ctx, domain); err == nil && len(hosts) > 0 {
+		return true
+	}
+	mx, err := r.LookupMX(ctx, domain)
+	return err == nil && len(mx) > 0
 }
