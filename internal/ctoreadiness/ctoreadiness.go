@@ -130,6 +130,14 @@ type Input struct {
 	// ConnKinds of ACTIVE connections (github, aws, gworkspace, …). Inactive ones do not count:
 	// the runner skips their assets, so counting them would claim coverage that is not happening.
 	ConnKinds map[string]bool
+	// Scanned names the asset types and connection kinds a scan has ACTUALLY COMPLETED for.
+	//
+	// Deliberately separate from AssetTypes/ConnKinds, which say only that the tenant ADDED
+	// something. Adding a domain does not run nuclei against it, and the gap between those two facts
+	// covers every customer's first hours — exactly when they are deciding whether to trust this.
+	// Without it, a row reported "Checked by nuclei, hydra, naabu — nothing open" about an asset the
+	// engine had never touched, while the coverage endpoint said scanned:false about the same asset.
+	Scanned map[string]bool
 	// FindingKeys are `tool` and `rule_id` values from the tenant's live findings, used to detect gaps.
 	FindingTools map[string]int
 	FindingRules map[string]int
@@ -221,10 +229,26 @@ func resolve(it Item, in Input) Result {
 		if n > 0 {
 			r.Status, r.GapCount = StatusGap, n
 			r.Detail = plural(n, "open finding", "open findings") + " from " + strings.Join(it.Tools, ", ")
-		} else {
-			r.Status = StatusPass
-			r.Detail = "Checked by " + strings.Join(it.Tools, ", ") + " — nothing open."
+			break
 		}
+		// CONNECTED IS NOT SCANNED. The clause above catches an empty estate, but having the asset is
+		// not evidence a tool ever ran on it — a domain added a minute ago has been scanned by
+		// nothing. Reporting PASS here named specific tools and asserted "nothing open" about work
+		// that had not happened, which is the worst shape this row can take: a CTO reads it as "we
+		// tested for default credentials and found none".
+		//
+		// This deliberately UNDERSTATES where it cannot prove a run. A source whose clean result
+		// leaves no finding and no engagement — a device inventory that came back compliant — reads
+		// as not-yet-checked rather than pass. Saying "we cannot show you we looked" costs a tick;
+		// saying "we looked and it was clean" when we did not is the failure this whole surface
+		// exists to avoid.
+		if !hasAny(it.Needs, in.Scanned, in.Scanned) {
+			r.Status = StatusNotChecked
+			r.Detail = "Connected, but not scanned yet — this is checked on the first scan."
+			break
+		}
+		r.Status = StatusPass
+		r.Detail = "Checked by " + strings.Join(it.Tools, ", ") + " — nothing open."
 	}
 	return r
 }

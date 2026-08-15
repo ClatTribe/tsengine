@@ -71,23 +71,47 @@ func (d Deps) readinessInput(ctx context.Context, tenantID string, t platform.Te
 		Stage:        stage,
 		AssetTypes:   map[string]bool{},
 		ConnKinds:    map[string]bool{},
+		Scanned:      map[string]bool{},
 		FindingTools: map[string]int{},
 		FindingRules: map[string]int{},
 		Capabilities: map[string]bool{},
 		Attestations: map[string]ctoreadiness.Attestation{},
 	}
 
+	assetByID := map[string]platform.Asset{}
+	connKindByID := map[string]string{}
 	if assets, err := d.Store.ListAssets(ctx, tenantID); err == nil {
 		for _, a := range assets {
 			in.AssetTypes[string(a.Type)] = true
+			assetByID[a.ID] = a
 		}
 	}
 	// ACTIVE connections only. The runner skips assets behind an inactive connection, so counting one
 	// here would claim coverage that is not happening — the same false-clean this file guards against.
 	if conns, err := d.Store.ListConnections(ctx, tenantID); err == nil {
 		for _, c := range conns {
+			connKindByID[c.ID] = c.Kind
 			if c.Status == platform.ConnActive {
 				in.ConnKinds[c.Kind] = true
+			}
+		}
+	}
+	// WHAT HAS ACTUALLY BEEN SCANNED, as opposed to merely added. A completed engagement is the
+	// evidence that the engine ran against an asset; the asset's type — and the connection that
+	// delivered it — are then things we can honestly say were checked. Without this the checklist
+	// claimed specific tools had run on assets the engine had never touched.
+	if engs, err := d.Store.ListEngagements(ctx, tenantID); err == nil {
+		for _, e := range engs {
+			if e.CompletedAt.IsZero() {
+				continue // still running, or it failed — neither is a completed check
+			}
+			a, ok := assetByID[e.AssetID]
+			if !ok {
+				continue // the asset is gone; we cannot say what was scanned
+			}
+			in.Scanned[string(a.Type)] = true
+			if k := connKindByID[a.ConnectionID]; k != "" {
+				in.Scanned[k] = true
 			}
 		}
 	}
