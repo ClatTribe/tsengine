@@ -53,6 +53,32 @@ type FindingFilter struct {
 	AssetID  string
 	Severity types.Severity
 	Status   string // verification_status
+	// Limit/Offset bound the page. Zero Limit means "everything", which keeps every existing caller
+	// working unchanged — the internal ones (compliance roll-ups, readiness, correlation) genuinely
+	// need the whole set and would be wrong with a page.
+	//
+	// This exists because a workspace that imports its scanner backlog is not small. A measured
+	// 50,000-finding import serialized to 27MB; bounding the RESPONSE is what makes the list usable.
+	// The stores slice after filtering, so a Limit counts MATCHING findings rather than rows scanned —
+	// a page of 50 means 50 findings you asked for, not 50 rows of which 3 matched.
+	Limit  int
+	Offset int
+}
+
+// Page applies Offset then Limit to an already-filtered set. Shared by every store implementation so
+// they cannot drift on the edges: an Offset past the end is an empty page rather than an error, and a
+// zero Limit returns everything.
+func Page[T any](out []T, filter FindingFilter) []T {
+	if filter.Offset > 0 {
+		if filter.Offset >= len(out) {
+			return nil
+		}
+		out = out[filter.Offset:]
+	}
+	if filter.Limit > 0 && filter.Limit < len(out) {
+		out = out[:filter.Limit]
+	}
+	return out
 }
 
 // Store is the tenant-scoped system-of-record. Implementations must enforce that a

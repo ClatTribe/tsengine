@@ -310,7 +310,7 @@ func (m *Memory) ListFindings(_ context.Context, tenantID string, filter Finding
 		}
 		out = append(out, f)
 	}
-	return out, nil
+	return Page(out, filter), nil
 }
 
 func (m *Memory) PutAction(_ context.Context, a platform.Action) error {

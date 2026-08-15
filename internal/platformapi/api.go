@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
@@ -317,6 +318,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/readiness/stage", d.auth(d.handleSetStage))              // the one onboarding question: what stage are you
 	mux.HandleFunc("POST /v1/readiness/attest/{id}", d.auth(d.handleAttest))
 	mux.HandleFunc("POST /v1/readiness/fix/{id}", d.auth(d.handleReadinessFix)) // a gap row hands its findings to the proposer → the same approval desk          // a named human answers what no scan can see
+	mux.HandleFunc("POST /v1/import", d.auth(d.handleImportScan))               // a customer's EXISTING Snyk/Dependabot/SARIF backlog
+	mux.HandleFunc("GET /v1/findings/summary", d.auth(d.handleFindingsSummary)) // severity counts only — the shell must not pull every finding to render a badge
 	mux.HandleFunc("GET /v1/system-state", d.auth(d.handleSystemState))         // every active reason the view may be incomplete
 	mux.HandleFunc("GET /v1/jobs", d.auth(d.handleJobs))
 	mux.HandleFunc("GET /v1/jobs/{id}", d.auth(d.handleJob))
@@ -479,8 +482,16 @@ func (d Deps) handleWebhook(w http.ResponseWriter, r *http.Request, tenantID str
 }
 
 func (d Deps) handleFindings(w http.ResponseWriter, r *http.Request, tenantID string) {
+	// UNPAGINATED BY DEFAULT, deliberately. Every existing caller — the compliance roll-ups, the
+	// readiness assessment, correlation — needs the whole set and would be silently wrong with a page.
+	// Changing the default would break them quietly, which is worse than a large response.
+	//
+	// ?limit= opts in. A workspace that imported its scanner backlog is not small: a measured
+	// 50,000-finding import serializes to 27MB, so the list surface should ask for a page.
+	limit, offset := pageParams(r)
 	f, err := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{
 		Severity: severityParam(r), Status: r.URL.Query().Get("status"),
+		Limit: limit, Offset: offset,
 	})
 	if err != nil {
 		respond(w, nil, err)
@@ -898,4 +909,23 @@ func redactConnections(cs []platform.Connection) []platform.Connection {
 		out[i] = c
 	}
 	return out
+}
+
+// pageParams reads ?limit= and ?offset=.
+//
+// An absent limit means everything (see handleFindings). A limit is CAPPED rather than rejected: a
+// caller asking for a million rows has misunderstood, and answering with the maximum page is more
+// useful than an error they have to handle.
+func pageParams(r *http.Request) (limit, offset int) {
+	const maxPage = 1000
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
+		limit = v
+		if limit > maxPage {
+			limit = maxPage
+		}
+	}
+	if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && v > 0 {
+		offset = v
+	}
+	return limit, offset
 }
