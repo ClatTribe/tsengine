@@ -192,15 +192,60 @@ func TestConnectedWithFindings_ReadsAsGap(t *testing.T) {
 	}
 }
 
-// With the asset connected and nothing found, it passes — and says which tool established that.
-func TestConnectedAndClean_PassesAndCitesTheTool(t *testing.T) {
-	in := Input{Stage: TierSeed, AssetTypes: map[string]bool{"repository": true}}
+// With the asset connected, SCANNED, and nothing found, it passes — and says which tool established
+// that. The scan is the load-bearing half: see the test below for why presence alone is not enough.
+func TestConnectedScannedAndClean_PassesAndCitesTheTool(t *testing.T) {
+	in := Input{Stage: TierSeed,
+		AssetTypes: map[string]bool{"repository": true},
+		Scanned:    map[string]bool{"repository": true}}
 	r := byID(Assess(in), "data.secrets_out_of_vcs")
 	if r == nil || r.Status != StatusPass {
-		t.Fatalf("a connected clean repo did not pass: %+v", r)
+		t.Fatalf("a connected, scanned, clean repo did not pass: %+v", r)
 	}
 	if !strings.Contains(r.Detail, "gitleaks") {
 		t.Errorf("a passing row does not say what established it: %q", r.Detail)
+	}
+}
+
+// CONNECTED IS NOT SCANNED — the false pass this guard exists for.
+//
+// Found by driving a live tenant: adding one domain asset and never scanning it flipped six rows to
+// pass, including "Checked by nuclei, hydra, naabu — nothing open" for an asset the engine had never
+// touched. The coverage endpoint said scanned:false about that same asset at that same moment, so the
+// product was contradicting itself; a CTO reads that row as "we tested for default credentials and
+// found none".
+func TestConnectedButNeverScanned_DoesNotPass(t *testing.T) {
+	in := Input{Stage: TierSeed, AssetTypes: map[string]bool{"repository": true}} // no Scanned
+	r := byID(Assess(in), "data.secrets_out_of_vcs")
+	if r == nil {
+		t.Fatal("row missing")
+	}
+	if r.Status == StatusPass {
+		t.Fatalf("an asset that was never scanned reported PASS (%q) — that names tools which never "+
+			"ran and asserts nothing was found", r.Detail)
+	}
+	if r.Status != StatusNotChecked {
+		t.Errorf("status = %q, want not_checked", r.Status)
+	}
+	// And it must say WHY, or the customer cannot tell this from "connect a repository".
+	if !strings.Contains(r.Detail, "not scanned yet") {
+		t.Errorf("detail does not explain the state: %q", r.Detail)
+	}
+}
+
+// A real finding still proves the check ran, even with no scan evidence recorded — an ingested
+// posture snapshot produces findings without an engagement, and that row must stay a GAP rather than
+// regress to "not scanned yet".
+func TestFindingsStillProveTheCheckRan_WithoutScanEvidence(t *testing.T) {
+	in := Input{Stage: TierSeed,
+		AssetTypes:   map[string]bool{"repository": true},
+		FindingTools: map[string]int{"gitleaks": 2}} // no Scanned
+	r := byID(Assess(in), "data.secrets_out_of_vcs")
+	if r == nil || r.Status != StatusGap {
+		t.Fatalf("real findings did not produce a gap: %+v", r)
+	}
+	if r.GapCount != 2 {
+		t.Errorf("gap count = %d, want 2", r.GapCount)
 	}
 }
 
