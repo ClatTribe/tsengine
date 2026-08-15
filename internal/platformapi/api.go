@@ -313,6 +313,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("GET /v1/identities", d.auth(d.handleNonHumanIdentities)) // non-human / AI-agent identity posture (ACSP agentic lens)
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
+	mux.HandleFunc("GET /v1/system-state", d.auth(d.handleSystemState)) // every active reason the view may be incomplete
 	mux.HandleFunc("GET /v1/jobs", d.auth(d.handleJobs))
 	mux.HandleFunc("GET /v1/jobs/{id}", d.auth(d.handleJob))
 	mux.HandleFunc("POST /v1/approvals/{id}", d.auth(d.handleApprovalDecide))

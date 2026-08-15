@@ -976,3 +976,21 @@ export interface Job {
   finished_at?: string;
 }
 
+/** One reason the current view may be incomplete or the product is not acting.
+ *
+ *  Computed server-side so a new reason is visible by default. The three defects this replaces were
+ *  each a signal the backend held and no page rendered; keeping the list on the server means a page
+ *  cannot forget to fetch one. */
+export interface Degradation {
+  kind: string;
+  severity: "critical" | "warning" | "info";
+  title: string;
+  detail: string;
+  action_label?: string;
+  action_href?: string;
+}
+
+export interface SystemState {
+  degradations: Degradation[];
+}
+
