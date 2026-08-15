@@ -56,6 +56,9 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 	}
 	// Open an incident for any high-severity SaaS misconfig now (the scan-pass reconcile never sees
 	// these ingested findings). Open-only, best-effort.
+	// Findings that arrive by ingest reach the approval desk too — the same remediate.Propose
+	// the runner uses for engine-scanned findings. Nil ProposeFix/Submitter → no-op.
+	d.proposeForFindings(r.Context(), tenantID, saved)
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}

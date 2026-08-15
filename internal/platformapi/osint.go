@@ -57,6 +57,9 @@ func (d Deps) ingestOSINTSnapshot(ctx context.Context, tenantID string, snap osi
 		saved = append(saved, f)
 		stored++
 	}
+	// Findings that arrive by ingest reach the approval desk too — the same remediate.Propose
+	// the runner uses for engine-scanned findings. Nil ProposeFix/Submitter → no-op.
+	d.proposeForFindings(ctx, tenantID, saved)
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(ctx, tenantID, saved, nil)
 	}
