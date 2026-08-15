@@ -26,15 +26,25 @@ import (
 // the team. Every field is a stated fact, never inferred. Bool fields default to the INSECURE reading only
 // where the inventory explicitly says so (a missing field is not a finding — absent data never invents risk).
 type Device struct {
-	Name          string `json:"name"`
-	Owner         string `json:"owner,omitempty"` // employee email
-	OS            string `json:"os,omitempty"`    // macos | windows | linux | ios | android
-	OSVersion     string `json:"os_version,omitempty"`
-	DiskEncrypted bool   `json:"disk_encrypted"`           // FileVault / BitLocker / LUKS on
-	ScreenLock    bool   `json:"screen_lock"`              // auto-lock / password-on-wake enabled
-	FirewallOn    bool   `json:"firewall_on"`              // host firewall enabled
-	EDR           bool   `json:"edr"`                      // antivirus / EDR agent present
-	AutoUpdate    bool   `json:"auto_update"`              // automatic OS updates enabled
+	Name      string `json:"name"`
+	Owner     string `json:"owner,omitempty"` // employee email
+	OS        string `json:"os,omitempty"`    // macos | windows | linux | ios | android
+	OSVersion string `json:"os_version,omitempty"`
+	// The five protective settings are POINTERS because absent and false are different facts.
+	//
+	// As plain bools they could not express "not reported", so an MDM export that omitted a field —
+	// or named it differently, which Jamf, Kandji and Intune all do — was read as the setting being
+	// OFF. A device that reported only its name and disk state produced four findings about settings
+	// it never mentioned, and checks_not_run said nothing had been skipped. Those findings open
+	// incidents, map to compliance controls, and reach an auditor's evidence pack, so the fabrication
+	// does not stop at the screen.
+	//
+	// This is the contract the type comment above always stated; it just could not be expressed.
+	DiskEncrypted *bool  `json:"disk_encrypted,omitempty"` // FileVault / BitLocker / LUKS on
+	ScreenLock    *bool  `json:"screen_lock,omitempty"`    // auto-lock / password-on-wake enabled
+	FirewallOn    *bool  `json:"firewall_on,omitempty"`    // host firewall enabled
+	EDR           *bool  `json:"edr,omitempty"`            // antivirus / EDR agent present
+	AutoUpdate    *bool  `json:"auto_update,omitempty"`    // automatic OS updates enabled
 	OSEndOfLife   bool   `json:"os_end_of_life,omitempty"` // the OS version is past vendor support
 	Jailbroken    bool   `json:"jailbroken,omitempty"`     // jailbroken / rooted (tampered)
 	LastCheckIn   string `json:"last_check_in,omitempty"`  // RFC3339 / "2006-01-02"
@@ -73,7 +83,7 @@ func Assess(devices []Device, opts Options) []types.Finding {
 			who = name + " (" + dv.Owner + ")"
 		}
 
-		if !dv.DiskEncrypted {
+		if isFalse(dv.DiskEncrypted) {
 			out = append(out, finding(id(), "deviceposture::disk-unencrypted", types.SeverityHigh,
 				"Device disk is not encrypted: "+who, name,
 				fmt.Sprintf("%s has no full-disk encryption — if it's lost or stolen, all data on it is readable. Enable FileVault / BitLocker / LUKS and enforce it via MDM.", who),
@@ -91,25 +101,25 @@ func Assess(devices []Device, opts Options) []types.Finding {
 				fmt.Sprintf("%s runs %s, which is past vendor support and no longer receives security patches — a standing unpatched-vulnerability risk. Upgrade to a supported OS version.", who, nz(dv.OSVersion, dv.OS)),
 				now, comp(types.Compliance{SOC2: []string{"CC7.1"}, PCI: []string{"6.3.3"}, CISv8: []string{"2.2", "7.3"}, NISTCSF: []string{"ID.AM-2", "PR.IP-12"}, NIST80053: []string{"SI-2"}})))
 		}
-		if !dv.ScreenLock {
+		if isFalse(dv.ScreenLock) {
 			out = append(out, finding(id(), "deviceposture::no-screen-lock", types.SeverityMedium,
 				"Device has no auto screen-lock: "+who, name,
 				fmt.Sprintf("%s does not auto-lock — an unattended, unlocked device is an open door to corporate data and sessions. Enforce a short auto-lock + password-on-wake via MDM.", who),
 				now, comp(types.Compliance{SOC2: []string{"CC6.1"}, HIPAA: []string{"164.310(d)(1)"}, CISv8: []string{"4.3"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-11"}})))
 		}
-		if !dv.FirewallOn {
+		if isFalse(dv.FirewallOn) {
 			out = append(out, finding(id(), "deviceposture::firewall-off", types.SeverityMedium,
 				"Device host firewall is off: "+who, name,
 				fmt.Sprintf("%s has its host firewall disabled — inbound network exposure on untrusted networks. Enable and enforce the host firewall.", who),
 				now, comp(types.Compliance{SOC2: []string{"CC6.6"}, CISv8: []string{"4.5"}, NISTCSF: []string{"PR.AC-5"}, NIST80053: []string{"SC-7"}})))
 		}
-		if !dv.EDR {
+		if isFalse(dv.EDR) {
 			out = append(out, finding(id(), "deviceposture::no-edr", types.SeverityMedium,
 				"Device has no antivirus / EDR: "+who, name,
 				fmt.Sprintf("%s has no endpoint antivirus / EDR agent — malware and intrusions go undetected on it. Deploy and enforce an EDR agent.", who),
 				now, comp(types.Compliance{SOC2: []string{"CC7.1"}, PCI: []string{"5.2.1"}, HIPAA: []string{"164.308(a)(5)(ii)(B)"}, CISv8: []string{"10.1"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3"}})))
 		}
-		if !dv.AutoUpdate {
+		if isFalse(dv.AutoUpdate) {
 			out = append(out, finding(id(), "deviceposture::auto-update-off", types.SeverityLow,
 				"Device automatic updates are off: "+who, name,
 				fmt.Sprintf("%s does not auto-install OS security updates — patches lag, widening the window of exposure. Enable automatic updates via MDM.", who),
@@ -141,3 +151,8 @@ func nz(s, dflt string) string {
 	}
 	return s
 }
+
+// isFalse reports a setting EXPLICITLY recorded as off. A nil pointer is "not reported" and is never
+// a finding — see the Device field comments. The counterpart to this is Report.ChecksNotRun, which
+// says out loud which settings went unassessed rather than letting silence read as a clean fleet.
+func isFalse(b *bool) bool { return b != nil && !*b }
