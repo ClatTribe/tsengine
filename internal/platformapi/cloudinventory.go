@@ -83,6 +83,30 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		writeJSON(w, http.StatusBadRequest, errBody(perr.Error()))
 		return
 	}
+	// AN EMPTY INVENTORY IS REFUSED, NOT STORED.
+	//
+	// The FETCH path already refuses this exact case, in as many words: "an empty inventory would
+	// read as an account with nothing in it". The posted path accepted it — POST {"account_id":"…"}
+	// with nothing else returned stored:true, resources:0 — so the same danger the fetcher guards
+	// against walked in through the other door.
+	//
+	// Two things go wrong once it is stored. The AI Cloud Engineer reasons over the snapshot, finds
+	// no principals and no edges, and reports no attack paths for an account it has never seen.
+	// And the snapshot becomes the DRIFT BASELINE, so the next real ingest diffs against "empty"
+	// and reports every existing resource as newly created.
+	//
+	// A genuinely empty account loses nothing by this: there is nothing in it to analyse. A broken
+	// collector gains a loud error instead of a silent clean bill.
+	if len(inv.Resources) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "this inventory contains no resources, so it was not stored — an empty " +
+				"inventory cannot be told apart from a collector that failed, and storing it would " +
+				"both hide the account from the AI cloud engineer and make every real resource look " +
+				"newly created on the next sync. Check the collector's output and post again.",
+			"code": "empty_inventory",
+		})
+		return
+	}
 	invJSON, err := json.Marshal(inv)
 	if err != nil {
 		respond(w, nil, err)
