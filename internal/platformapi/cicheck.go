@@ -37,16 +37,13 @@ func (d Deps) handleCIPRCheck(w http.ResponseWriter, r *http.Request, tenantID s
 		return
 	}
 
-	// Block floor: the tenant's PR-bot policy (default high), overridable per call. A disabled policy
-	// makes the check informational (it still comments, but never blocks the merge).
-	blockAt := types.SeverityHigh
-	enabled := true
-	if t, terr := d.Store.GetTenant(r.Context(), tenantID); terr == nil && t.PRBot != nil {
-		enabled = t.PRBot.Enabled
-		if t.PRBot.BlockSeverity != "" {
-			blockAt = types.Severity(t.PRBot.BlockSeverity)
-		}
-	}
+	// Block floor + on/off come from the SHARED resolver, so this can never disagree with what
+	// /v1/settings/pr-bot shows the customer. It used to default `enabled` to true for an
+	// unconfigured tenant while the settings view reported false — every new workspace read
+	// "disabled" and had its merges blocked anyway. A disabled policy makes the check informational
+	// (it still comments, it never gates the merge).
+	pol := d.resolvePRBotPolicy(r.Context(), tenantID)
+	blockAt, enabled := pol.BlockAt, pol.Enabled
 	if in.BlockSeverity != "" {
 		blockAt = types.Severity(strings.ToLower(strings.TrimSpace(in.BlockSeverity)))
 	}
