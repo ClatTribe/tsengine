@@ -222,6 +222,13 @@ export interface PentestStats {
   verified_rate: number; // 0..1
   high_plus_found: boolean;
   needs_review: number; // high+ findings actively probed but not auto-proven → manual HITL sign-off
+  // assessed_runs is the subset of completed_runs that actually examined something. A run reaching
+  // "complete" is a statement about the workflow, not about the target.
+  assessed_runs: number;
+  // caveat is set when the numbers must not be read as a result — e.g. a completed run that sent no
+  // probes and saw no findings, where "0 findings" says nothing about the target. Empty otherwise,
+  // deliberately: a disclaimer on every scorecard is one nobody reads.
+  caveat?: string;
 }
 
 // Pre-flight readiness for an engagement (GET /v1/pentest/{id}/readiness) — surfaces, before a
