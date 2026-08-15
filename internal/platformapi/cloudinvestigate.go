@@ -186,6 +186,17 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 			return "Cloud investigation error: " + ierr.Error(), nil
 		}
 		_ = focus // the specialist explores the whole graph; focus is the generalist's framing hint
-		return cloudagent.Render(rep), nil
+
+		// SAY HOW OLD THE PICTURE IS. This path reasons over a STORED snapshot, and until the live
+		// describe-* fetcher lands, its age is bounded only by when someone last posted one. A
+		// conclusion drawn from a month-old inventory reads exactly like one drawn from this
+		// morning's unless we say otherwise — and the reader cannot tell, because only we know
+		// CapturedAt. Leading with it means the generalist carries the caveat into whatever it tells
+		// the customer, rather than the caveat living in a field nobody surfaces.
+		out := cloudagent.Render(rep)
+		if note := snapshotAgeNote(snap.CapturedAt, time.Now().UTC()); note != "" {
+			out = note + "\n\n" + out
+		}
+		return out, nil
 	}
 }
