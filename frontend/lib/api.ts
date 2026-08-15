@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { Job, SystemState, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { Job, SystemState, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -411,6 +411,31 @@ export const api = {
   // failed, a connection we cannot act through. One server-computed list so the shell renders any
   // new reason without a page having to know it exists.
   systemState: () => safe<SystemState>("/v1/system-state", { degradations: [] }),
+
+  // The staged CTO practice checklist, resolved against what we can actually see. ?stage= previews
+  // another stage without committing to it.
+  readiness: (stage?: string) =>
+    safe<ReadinessChecklist>("/v1/readiness/checklist" + (stage ? `?stage=${stage}` : ""), {
+      stage: "seed", stage_set: false, items: [], stages: [],
+      summary: { stage: "seed", total: 0, pass: 0, gap: 0, not_checked: 0, needs_you: 0, not_covered: 0 },
+    }),
+
+  // Records the company's funding stage — the one onboarding question, which decides which practices
+  // they are measured against.
+  setReadinessStage: (stage: string) =>
+    call<{ stage: string }>("/v1/readiness/stage", { method: "POST", body: JSON.stringify({ stage }) }),
+
+  // Hands a gap row's findings to the same proposer the runner uses. Whatever it produces is gated at
+  // the approval desk exactly like any other proposed change.
+  closeReadinessGap: (id: string) =>
+    call<{ detail: string; queued: number; pending: number; applied: number }>(
+      `/v1/readiness/fix/${id}`, { method: "POST" }),
+
+  // A named human answers a practice no scan can see. The server refuses this on a measured row.
+  attestReadiness: (id: string, inPlace: boolean, by: string) =>
+    call<{ item: string }>(`/v1/readiness/attest/${id}`, {
+      method: "POST", body: JSON.stringify({ in_place: inPlace, by }),
+    }),
 
   // Change the signed-in user's password (also clears the forced-rotation flag for an
   // invited member). The session stays valid afterward.
