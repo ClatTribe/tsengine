@@ -50,6 +50,9 @@ func (d Deps) handleVercelIngest(w http.ResponseWriter, r *http.Request, tenantI
 		saved = append(saved, f)
 		stored++
 	}
+	// Findings that arrive by ingest reach the approval desk too — the same remediate.Propose
+	// the runner uses for engine-scanned findings. Nil ProposeFix/Submitter → no-op.
+	d.proposeForFindings(r.Context(), tenantID, saved)
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}

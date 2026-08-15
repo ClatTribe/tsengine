@@ -98,6 +98,12 @@ type Deps struct {
 	// delegating cloud-depth to cloudagent. Nil → no persistence (POST /v1/cloud/investigate still works
 	// over the posted inventory; nothing is stored for later).
 	CloudSnapshots cloudsnap.Store
+	// ProposeFix lets findings that arrive by INGEST reach the approval desk, the same way
+	// engine-scanned ones do via the runner (which owns the identical remediate.Propose). It pairs
+	// with the EXISTING Submitter above — this only supplies the missing proposer. Nil → today's
+	// behaviour (ingest stores the finding and stops). The desk still decides: this proposes and
+	// submits, it never applies (§18.2 inv. 3).
+	ProposeFix func(types.Finding, platform.Asset) (platform.Action, bool)
 	// CloudHistory is the APPEND-ONLY timeline of the estate's security-relevant state — what makes
 	// "when did this bucket become public?" answerable. CloudSnapshots is latest-wins by design (the
 	// agent reasons over current state); this is the other half. nil → no history is kept and the
