@@ -70,5 +70,20 @@ func (d Deps) handleIngestIdentityEvents(w http.ResponseWriter, r *http.Request,
 		d.Recorder.Record("identity threats detected", "identity_threat",
 			map[string]any{"tenant_id": tenantID, "events": len(events), "threats": stored}, "ITDR ingest")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"events_ingested": len(events), "threats_detected": stored, "threats": threats})
+	// WHAT THIS BATCH COULD NOT LOOK FOR. Detection is correlation-based and runs over the batch it
+	// is given: impossible travel needs two sign-ins in different countries, spray needs a run of
+	// failures, MFA fatigue needs repeated challenges. Post a single login and none of the nine rules
+	// can fire — yet "threats_detected: 0" reads as "identity is clean". It matters most for a
+	// customer streaming IdP events one per request, who would get zero forever while it looked like
+	// it was working. The device-posture ingest already reports checks_not_run for exactly this
+	// reason; the field name is shared so the two read the same way.
+	resp := map[string]any{
+		"events_ingested":  len(events),
+		"threats_detected": stored,
+		"threats":          threats,
+	}
+	if notRun := identitythreat.Unevaluated(events); len(notRun) > 0 {
+		resp["checks_not_run"] = notRun
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
