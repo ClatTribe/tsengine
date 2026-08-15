@@ -2,9 +2,11 @@ package platformapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/deviceposture"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -67,9 +69,56 @@ func (d Deps) handleDevicePostureIngest(w http.ResponseWriter, r *http.Request, 
 	for _, dv := range req.Devices {
 		names = append(names, dv.Name)
 	}
+	notes := []string{}
 	if note := unjudgedNote(len(req.Devices), countNamed(names), "device", "devices",
 		"they did not carry a device name"); note != "" {
-		resp["checks_not_run"] = []string{note}
+		notes = append(notes, note)
+	}
+	// The same reasoning one level down: a device can be READ and still not report a given setting.
+	// Those settings are no longer treated as "off" (they used to be, which manufactured findings from
+	// missing data), so the silence has to be said out loud — otherwise "0 issues" reads as "firewalls
+	// are on" when the export never mentioned firewalls.
+	if note := unreportedSettingsNote(req.Devices); note != "" {
+		notes = append(notes, note)
+	}
+	if len(notes) > 0 {
+		resp["checks_not_run"] = notes
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// unreportedSettingsNote names the protective settings the export did not carry, and how many
+// devices were silent on each. Grounded (§10): it counts real absences and claims nothing about what
+// those settings actually are.
+func unreportedSettingsNote(devices []deviceposture.Device) string {
+	type gap struct {
+		label string
+		count int
+	}
+	gaps := []gap{
+		{"disk encryption", 0}, {"screen lock", 0}, {"host firewall", 0},
+		{"EDR / antivirus", 0}, {"automatic updates", 0},
+	}
+	for _, dv := range devices {
+		for i, present := range []bool{
+			dv.DiskEncrypted != nil, dv.ScreenLock != nil, dv.FirewallOn != nil,
+			dv.EDR != nil, dv.AutoUpdate != nil,
+		} {
+			if !present {
+				gaps[i].count++
+			}
+		}
+	}
+	var parts []string
+	for _, g := range gaps {
+		if g.count > 0 {
+			parts = append(parts, fmt.Sprintf("%s (%d)", g.label, g.count))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "These settings were not reported by every device, so they were not assessed: " +
+		strings.Join(parts, ", ") + ". A setting your export omits is unknown, not compliant — check " +
+		"the field names in your MDM export."
 }
