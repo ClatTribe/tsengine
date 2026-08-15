@@ -117,6 +117,13 @@ func (d Deps) assessAgentEstate(w http.ResponseWriter, r *http.Request, tenantID
 	body := map[string]any{
 		"agents": len(snap.Agents), "issues_detected": stored, "findings": findings,
 	}
+	// Say what we could not read. Assess skips an agent with no name — a finding that identifies
+	// nobody is unactionable — and without this the response would report those agents in the count
+	// while silently assessing none of them, which reads as coverage we did not have (§10).
+	if n := agentposture.Unnamed(snap); n > 0 {
+		body["checks_not_run"] = []string{unjudgedNote(len(snap.Agents), len(snap.Agents)-n,
+			"AI agent", "AI agents", "they did not carry an agent name")}
+	}
 	for k, v := range extra {
 		body[k] = v
 	}
