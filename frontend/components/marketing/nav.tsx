@@ -48,7 +48,12 @@ const AGENT_CONTROLS: Item = { href: "/agent-controls", label: "AI agent control
 // Mobile has no mega-menu room, so the hub link matters MORE here: it is the only route to the
 // surfaces and comparisons that do not fit in the list.
 const SOLUTIONS_HUB: Item = { href: "/solutions", label: "All solutions", desc: "By scenario, by surface, or vs what you use today", icon: Layers };
-const SECURITY_MOBILE: Item[] = [...PERSONAS, ...COVERAGE, AGENT_CONTROLS, SOLUTIONS_HUB];
+// The ICP entry, listed FIRST on mobile. The rest of this menu is organised around the product
+// taxonomy — what it does, what it scans — which serves someone already evaluating us. A Series A
+// team whose deal is stuck behind a security review has not got that far, and on mobile there is no
+// mega-menu room for a second-chance route, so it leads.
+const STARTUPS: Item = { href: "/startups", label: "A deal blocked on a security review?", desc: "For Series A teams with no security hire", icon: Rocket };
+const SECURITY_MOBILE: Item[] = [STARTUPS, ...PERSONAS, ...COVERAGE, AGENT_CONTROLS, SOLUTIONS_HUB];
 
 // Free tools — the founder ICP's top-of-funnel hook. Lead with the questionnaire scan.
 const TOOLS: Item[] = [
@@ -432,9 +437,28 @@ function SolutionsMenu({
                 competitor comparison stay unreachable from the nav — written, indexed by search, and
                 invisible to anyone actually browsing. The hub also lets a visitor enter by SCENARIO
                 or by ALTERNATIVE, not only by the product taxonomy this menu is organised around. */}
+            {/* The ICP entry. This menu is organised around the product taxonomy — what it does and
+                what it scans — which serves someone already evaluating us. It had no route for the
+                visitor who has not got that far: a Series A team whose enterprise deal is stuck behind
+                a security review. That page existed but was reachable only from the homepage router and
+                the hub, so the nav answered "what is it" and never "is this for me". */}
+            <Link
+              href="/startups"
+              className={cn(
+                "mt-3 flex items-center justify-between rounded-lg border border-accent/30 bg-accent-soft px-3 py-2.5 transition hover:border-accent/60",
+                path === "/startups" && "border-accent/60",
+              )}
+            >
+              <span className="text-sm">
+                <span className="font-medium text-ink">A deal blocked on a security review?</span>
+                <span className="ml-2 text-xs text-muted">for Series A teams with no security hire</span>
+              </span>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-accent" />
+            </Link>
+
             <Link
               href="/solutions"
-              className="mt-3 flex items-center justify-between rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2.5 transition hover:border-accent/50"
+              className="mt-2 flex items-center justify-between rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2.5 transition hover:border-accent/50"
             >
               <span className="text-sm">
                 <span className="font-medium text-ink">Browse all solutions</span>
