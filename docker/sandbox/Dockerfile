@@ -128,8 +128,13 @@ RUN apt-get update \
 # fail the whole image — a missing tool degrades gracefully at runtime. The
 # heavy resolvers (semgrep/prowler/checkov/scoutsuite) often pin
 # incompatible shared deps; isolating each install avoids backtracking hell.
+#
+# garak (NVIDIA's LLM vulnerability scanner) is the ai_application anchor. It is deliberately LAST:
+# it pulls a large ML dependency set, and the per-tool isolation above means a resolver conflict
+# there degrades garak alone rather than taking the image down with it.
 RUN for p in "semgrep==1.96.0" sqlmap checkdmarc dnstwist "prowler==4.6.0" \
-             checkov scoutsuite schemathesis inql mobsfscan apkid bandit modelscan; do \
+             checkov scoutsuite schemathesis inql mobsfscan apkid bandit modelscan \
+             garak; do \
         pip3 install --no-cache-dir --break-system-packages "$p" \
         || pip3 install --no-cache-dir "$p" \
         || echo "WARN: pip install $p failed (tool will be unavailable)"; \
