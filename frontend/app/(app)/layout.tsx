@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { api } from "@/lib/api";
-import { riskRating, severityCounts } from "@/lib/utils";
+import { riskRating } from "@/lib/utils";
 import { DegradationBar } from "@/components/shell/degradation-bar";
 import { Sidebar } from "@/components/shell/sidebar";
 import { TopBar } from "@/components/shell/topbar";
@@ -26,8 +26,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // — send them to the rotation screen, which also lives outside (app) so this check can't loop.
   if (me.must_change_password) redirect("/change-password");
 
-  const [findings, approvals, tenant, practitioners, llm, ai, system] = await Promise.all([
-    api.findings(),
+  // Severity COUNTS, not every finding. The shell renders on every navigation and needs one number;
+  // pulling the full list cost 27MB per page load for a workspace that imported a 50,000-finding
+  // scanner backlog, which made importing your own data a punishment.
+  const [summary, approvals, tenant, practitioners, llm, ai, system] = await Promise.all([
+    api.findingsSummary(),
     api.approvals(),
     api.tenant(),
     api.practitioners(),
@@ -35,7 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     api.aiMode(),
     api.systemState(),
   ]);
-  const risk = riskRating(severityCounts(findings));
+  const risk = riskRating(summary.severity);
   // Service model: a managed/MSP customer's expert owns the HITL acts, so the pending badge is
   // informational, not the founder's accent to-do.
   const { selfOwned } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);

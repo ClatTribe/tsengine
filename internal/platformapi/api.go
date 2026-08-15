@@ -317,6 +317,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/readiness/stage", d.auth(d.handleSetStage))              // the one onboarding question: what stage are you
 	mux.HandleFunc("POST /v1/readiness/attest/{id}", d.auth(d.handleAttest))
 	mux.HandleFunc("POST /v1/readiness/fix/{id}", d.auth(d.handleReadinessFix)) // a gap row hands its findings to the proposer → the same approval desk          // a named human answers what no scan can see
+	mux.HandleFunc("POST /v1/import", d.auth(d.handleImportScan))               // a customer's EXISTING Snyk/Dependabot/SARIF backlog
+	mux.HandleFunc("GET /v1/findings/summary", d.auth(d.handleFindingsSummary)) // severity counts only — the shell must not pull every finding to render a badge
 	mux.HandleFunc("GET /v1/system-state", d.auth(d.handleSystemState))         // every active reason the view may be incomplete
 	mux.HandleFunc("GET /v1/jobs", d.auth(d.handleJobs))
 	mux.HandleFunc("GET /v1/jobs/{id}", d.auth(d.handleJob))

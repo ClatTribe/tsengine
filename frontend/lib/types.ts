@@ -1035,3 +1035,11 @@ export interface ReadinessChecklist {
   stages: { value: string; label: string; detail: string }[];
 }
 
+/** Severity counts only. The shell renders a risk badge from this instead of pulling every finding —
+ *  measured at 27MB per page load for a workspace that imported a 50,000-finding backlog. */
+export interface FindingsSummary {
+  total: number;
+  severity: Record<string, number>;
+  truncated: boolean;
+}
+
