@@ -104,6 +104,9 @@ type Deps struct {
 	// behaviour (ingest stores the finding and stops). The desk still decides: this proposes and
 	// submits, it never applies (§18.2 inv. 3).
 	ProposeFix func(types.Finding, platform.Asset) (platform.Action, bool)
+	// AWSFetcher builds a LIVE read-only fetcher for a connected AWS account. Nil → POST
+	// /v1/cloud/sync reports that live read is unavailable rather than returning an empty account.
+	AWSFetcher AWSFetcherFor
 	// CloudHistory is the APPEND-ONLY timeline of the estate's security-relevant state — what makes
 	// "when did this bucket become public?" answerable. CloudSnapshots is latest-wins by design (the
 	// agent reasons over current state); this is the other half. nil → no history is kept and the
@@ -260,6 +263,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/osint/ingest", d.auth(d.handleIngestOSINT))                                                       // OSINT external-exposure snapshot → findings (ADR 0011)
 	mux.HandleFunc("POST /v1/osint/scan", d.auth(d.handleOSINTScan))                                                           // LIVE keyless OSINT (crt.sh CT) over the tenant's domains
 	mux.HandleFunc("POST /v1/cloud/inventory", d.auth(d.handleIngestAWSInventory))                                             // live collector: posted raw AWS state → attack-path Inventory → stored (wedge gap #1)
+	mux.HandleFunc("POST /v1/cloud/sync", d.auth(d.handleCloudSync))                                                           // LIVE read of the connected AWS account (read-only role); reports coverage
 	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))                                             // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
 	mux.HandleFunc("POST /v1/code/investigate", d.auth(d.handleCodeInvestigate))                                               // AI Code Engineer (codeagent) — depth over code findings + source (LLM-gated)
 	mux.HandleFunc("GET /v1/code/investigate", d.auth(d.handleCodeInvestigationView))                                          // stored code-agent confirmed-exploitable assessments
