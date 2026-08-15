@@ -165,3 +165,50 @@ func TestRecursiveType_Terminates(t *testing.T) {
 		t.Fatal("emptyIfNilSlice did not terminate on a deeply nested value")
 	}
 }
+
+// ── THE SHAPE THE CODEBASE ACTUALLY USES ─────────────────────────────────────────────────────────
+
+// #1129 normalised struct fields and slice elements, and skipped map VALUES because they are not
+// addressable. But map[string]any is the most common response shape here — 71 handlers emit one — so
+// `writeJSON(w, 200, map[string]any{"threats": threats})` with a nil slice was still sending
+// `"threats": null` to a frontend that maps over it. A fix covering one of two exits is not a fix.
+func TestNilSliceInsideAMap_IsNormalised(t *testing.T) {
+	var threats []innerRow
+	got := encode(t, map[string]any{"events_ingested": 1, "threats": threats})
+	if strings.Contains(got, "null") {
+		t.Fatalf("a nil slice inside map[string]any serialized as null: %s", got)
+	}
+	if !strings.Contains(got, `"threats":[]`) {
+		t.Errorf(`want "threats":[], got %s`, got)
+	}
+}
+
+// The value inside a map[string]any is an interface; without unwrapping it, every entry looks opaque
+// and nothing is normalised.
+func TestNilSliceInsideAMap_UnwrapsTheInterface(t *testing.T) {
+	var rows []innerRow
+	var m map[string]string
+	got := encode(t, map[string]any{"rows": rows, "meta": m, "n": 3})
+	for _, want := range []string{`"rows":[]`, `"meta":{}`, `"n":3`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("want %s in %s", want, got)
+		}
+	}
+}
+
+// Nested one level deeper — a map holding a struct whose field is nil.
+func TestNilSliceInAStructInsideAMap(t *testing.T) {
+	got := encode(t, map[string]any{"result": responseObject{Total: 1}})
+	if strings.Contains(got, "null") {
+		t.Errorf("a nil field on a struct inside a map serialized as null: %s", got)
+	}
+}
+
+// Real data inside a map must survive untouched.
+func TestPopulatedMap_IsUnchanged(t *testing.T) {
+	in := map[string]any{"rows": []innerRow{{Name: "a", Tools: []string{"nuclei"}}}, "n": 1}
+	before, _ := json.Marshal(in)
+	if after := encode(t, in); string(before) != after {
+		t.Errorf("a populated map was modified:\n before %s\n after  %s", before, after)
+	}
+}
