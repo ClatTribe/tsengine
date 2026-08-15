@@ -72,12 +72,15 @@ func (d Deps) handleVercelIngest(w http.ResponseWriter, r *http.Request, tenantI
 	// account. The assessor deliberately stays silent on settings a snapshot did not carry (§10 —
 	// absent config is not insecure config), so silence about THAT silence is the one thing that
 	// would make the refusal dishonest.
+	notes := ingestNotes(len(snap.Projects), len(snap.Projects), "project", "projects", "")
 	if incomplete := projectsMissingProtectionData(snap); len(incomplete) > 0 {
-		resp["checks_not_run"] = []string{
-			"These projects did not report their deployment-protection settings, so we could not " +
-				"judge them: " + joinNames(incomplete) + ". An export without those fields is not a " +
-				"clean bill of health — include them, or check Deployment Protection in each project.",
-		}
+		notes = append(notes,
+			"These projects did not report their deployment-protection settings, so we could not "+
+				"judge them: "+joinNames(incomplete)+". An export without those fields is not a "+
+				"clean bill of health — include them, or check Deployment Protection in each project.")
+	}
+	if len(notes) > 0 {
+		resp["checks_not_run"] = notes
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -69,6 +69,12 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 	if findings == nil {
 		findings = []types.Finding{} // never serialize a nil slice as null
 	}
+	// NOT YET COVERED: a snapshot that parses but carries no assessable settings — POST {"org":"x"}
+	// assesses nothing and still answers findings_detected:0, which reads as a hardened org. Unlike
+	// the list-shaped ingests there is nothing to count here, so the honest signal has to come from
+	// the provider assessors themselves (which settings did this snapshot actually carry?). That is
+	// sspm-side work, deliberately left rather than approximated with a body-length check that would
+	// make the gap look closed while leaving it open.
 	writeJSON(w, http.StatusOK, map[string]any{"provider": provider, "findings_detected": stored, "findings": findings})
 }
 
