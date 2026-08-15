@@ -7,15 +7,25 @@ import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 export const metadata = pageMeta({
   title: "Pricing — TensorShield",
   description:
-    "Simple, transparent pricing in ₹ for Indian teams. Free to see your real posture with the deterministic + ML-based engine. Core adds your AI Security Engineer, Growth adds your AI Pentester — both self-serve, no sales call. Enterprise is for scale and delivery: unlimited targets, SSO, managed/MSP.",
+    "Simple, transparent pricing in ₹ for Indian teams. Free to see your real posture with the deterministic + ML-based engine — and bring your own LLM key to run both AI agents at your model cost. Core adds your AI Security Engineer; Core + Pentest adds your AI Pentester, for when a security review is blocking a deal. Enterprise is for scale and delivery: unlimited targets, SSO, managed/MSP.",
   path: "/pricing",
 });
 
-// Three tiers, backed 1:1 by pkg/platform/plan.go Entitlements so the product never drifts from the page.
-// The sharp positioning, in CUSTOMER terms (no internal layer jargon): the deterministic + ML-based
-// scanning engine is the self-serve product (Free = a taste, Core = the full thing, differentiated only by
-// SERVICE MODEL); the two AI agents — AI Security Engineer (defense) + AI Pentester (attack) — are the
-// Enterprise premium.
+// Backed 1:1 by pkg/platform/plan.go Entitlements so the product never drifts from the page.
+//
+// The comment here used to say the two AI agents were "the Enterprise premium". That was never true of
+// the code and had drifted badly: plan.go gates the AI Pentester on the "+pentest" ADD-ON, which by its
+// own comment "unlocks AutonomousPentest on any base tier", and aimode.go resolves availability as
+// `lim.AutonomousPentest || ownKey` — so a bring-your-own-key customer gets BOTH agents on ANY tier,
+// Free included. The page was showing a three-rung ladder with the Pentester stranded on rung three
+// while the product had already made it reachable from rung zero.
+//
+// That mattered commercially, not just for accuracy. For the Series A buyer the trigger is almost always
+// "an enterprise customer's security review is blocking a deal", and the artifact that unblocks it is the
+// pentest report — an ACUTE need, with an existing budget line and a date on it. The AI Security Engineer
+// is the CHRONIC need: real, valuable, and deferrable. Stranding the acute product on the most expensive
+// rung inverted the funnel. The copy below now matches both the code and the motion: the Pentester is
+// reachable at your-own-API-key cost on Free, and as an add-on to Core.
 const TIERS = [
   {
     name: "Free",
@@ -27,18 +37,21 @@ const TIERS = [
     highlight: false,
     persona: false,
     features: [
+      // The bring-your-own-key route was position 7 of 8 on this card — read only by someone who had
+      // already scanned the list, concluded "no AI on Free", and moved on. It is in fact the strongest
+      // line on the page: paste an API key and BOTH agents run, including the Pentester, with no sales
+      // call and no upgrade. Verified in code, not marketing licence — aimode.go resolves availability
+      // as `lim.AutonomousPentest || ownKey`, so ownKey unlocks the Pentester on ANY tier, and
+      // byok_free_test.go pins that it genuinely works on Free. Naming the Pentester explicitly matters
+      // because that is the product a blocked deal actually needs, and burying it cost us the buyer
+      // whose review is due next week.
+      "Bring your own LLM key → both AI agents (Security Engineer + Pentester), at your model cost",
       "2 scan targets",
       "All 5 categories — code · cloud · attack surface · identity · compliance",
       "30+ OSS scanners (deterministic, on-demand)",
       "Findings dashboard + all 22 frameworks mapped",
       "Human-in-the-loop approvals — you approve every fix",
       "Signed decision ledger",
-      // The bring-your-own-key route lived only in the FAQ and the comparison table — both below
-      // the fold, read after someone scanning this card has already concluded the free tier has no
-      // AI and moved on. It is the entire self-serve story (sign up, paste a key, get both agents,
-      // no sales call), so it belongs where that conclusion gets made. Honest as written: their
-      // model, their bill, and server-side it genuinely works on Free (byok_free_test.go).
-      "Bring your own LLM key → both AI agents, at your model cost",
       "Community support",
     ],
   },
@@ -54,7 +67,9 @@ const TIERS = [
     // payment is arranged), so send them where that actually happens.
     cta: "Talk to us to start",
     href: "/demo?plan=core",
-    highlight: true,
+    // Highlight moved to Core + Pentest — see the note there. Core remains the right tier for a team
+    // whose deal is not currently blocked, which is the calmer, later conversation.
+    highlight: false,
     persona: false,
     features: [
       "★ AI Security Engineer — triages, explains in plain English, proposes fixes you approve",
@@ -69,20 +84,24 @@ const TIERS = [
     ],
   },
   {
-    name: "Growth",
+    // Named "Core + Pentest" rather than "Growth" because that is literally the plan string the code
+    // models ("core+pentest" — plan.go knownAddOns), and because "Growth" told the buyer nothing about
+    // what it does. It is highlighted rather than Core: for this buyer the entry point is the security
+    // review that is blocking a deal today, not the continuous programme they will want next quarter.
+    name: "Core + Pentest",
     price: "₹64,999",
     cadence: "/ month + GST",
     annual: "or ₹6,49,990/yr — ~2 months free",
-    blurb: "Adds your AI Pentester. It doesn't just flag issues — it proves which ones are actually exploitable, and re-tests after a fix to show the hole is really closed. Replaces the annual pentest you book and forget.",
+    blurb: "For when a customer's security review is holding up a deal. Your AI Pentester proves which issues are actually exploitable — with the request to replay — and re-tests after the fix to show the hole is really closed. One artifact instead of three purchases: the report, the evidence, and the proof it got fixed.",
     cta: "Talk to us to start",
     href: "/demo?plan=growth",
-    highlight: false,
+    highlight: true,
     persona: true,
     features: [
       "Everything in Core, plus:",
       "★ AI Pentester — exploitation-proven, not just flagged (XBOW-class)",
+      "VAPT report with a named human sign-off — what the reviewer is checking for",
       "Re-tests after every fix — proof the hole is closed",
-      "VAPT report with a named human sign-off",
       "Continuous testing, not once a year",
     ],
   },
@@ -96,7 +115,7 @@ const TIERS = [
     highlight: false,
     persona: false,
     features: [
-      "Everything in Growth, plus:",
+      "Everything in Core + Pentest, plus:",
       "Unlimited scan targets",
       "Managed service + MSP / partner desk",
       "SSO / SAML + role-based access",
@@ -109,7 +128,7 @@ const TIERS = [
 const FAQ = [
   ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the deterministic open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
   ["What do I get on Core that Free doesn't have?", "Your AI Security Engineer — it triages what actually matters, explains each issue in plain English, and proposes the fix for you to approve. Plus the full scanning engine: every scanner with cross-surface correlation, continuous monitoring with incidents, all 22 frameworks with signed evidence packs, and the human-in-the-loop apply loop that actually closes findings. ₹24,999/mo (or ₹2,49,990/yr), up to 25 targets."],
-  ["How are the tiers structured?", "Free to see your real posture with the deterministic engine. Core adds your AI Security Engineer (defense). Growth adds your AI Pentester (attack) — the one that proves which findings are actually exploitable and re-tests after each fix. Enterprise is for when the constraint is scale or delivery rather than capability: unlimited targets, SSO, managed/MSP. Both AI agents are self-serve — you do not need a sales call to buy the product."],
+  ["How are the tiers structured?", "Free to see your real posture with the deterministic engine — and if you paste in your own LLM key, both AI agents run on Free at your model cost, no upgrade and no sales call. Core adds your AI Security Engineer (defense) on our side. Core + Pentest adds your AI Pentester (attack) — the one that proves which findings are actually exploitable, re-tests after each fix, and produces the VAPT report a customer's security review asks for. Enterprise is for when the constraint is scale or delivery rather than capability: unlimited targets, SSO, managed/MSP."],
   ["Can I run the AI on my own LLM key?", "Yes, on any plan including Free. Connect your own key in Settings → AI engine — any OpenAI-compatible provider, or a local Ollama — and the agents run at your model cost instead of ours. Useful if you already have credits, or if your policy is that your code only goes to a model you control."],
   ["Do I need a security engineer to use it?", "No — that's the point. TensorShield does the security engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. Built for a non-technical founder or ops lead."],
   ["What does \"human in the loop\" mean?", "Low-risk fixes apply automatically. Anything consequential (a config change, an identity action) waits for one tap of your approval — and every decision, automated or human, is signed into a tamper-evident ledger."],
@@ -118,10 +137,11 @@ const FAQ = [
 ];
 
 // ComparePlans — the at-a-glance matrix. Cell value: "yes" | "no" | a literal string. Mirrors
-// the TIERS lists + the backend Entitlements, no new claims. Order: Free · Core · Growth · Enterprise.
+// the TIERS lists + the backend Entitlements, no new claims. Order: Free · Core · Core + Pentest · Enterprise.
 // The load-bearing line: the AI agents are SELF-SERVE, not Enterprise-only. Core carries the AI Security
-// Engineer (plan.go: PlanGrowth, labelled "Core", has AIEnabled) and Growth adds the AI Pentester via
-// the "+pentest" add-on. Enterprise is scale and delivery — unlimited targets, SSO, managed/MSP — not a
+// Engineer (plan.go: PlanGrowth, labelled "Core", has AIEnabled) and Core + Pentest adds the AI Pentester
+// via the "+pentest" add-on — the same add-on token the code already models, which is also why the tier
+// is named for it now. Enterprise is scale and delivery — unlimited targets, SSO, managed/MSP — not a
 // capability gate. This comment said the opposite long after the code changed, which is how a stale
 // claim ends up in the page description search engines show.
 const COMPARE: { section: string; rows: { label: string; cells: [string, string, string, string] }[] }[] = [
@@ -166,7 +186,7 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
 ];
 
 function ComparePlans() {
-  const tiers = ["Free", "Core", "Growth", "Enterprise"];
+  const tiers = ["Free", "Core", "Core + Pentest", "Enterprise"];
   return (
     <section className="mx-auto max-w-4xl px-5 pb-4 pt-14">
       <h2 className="text-center text-2xl font-semibold tracking-tight">Compare plans</h2>
@@ -237,20 +257,28 @@ export default function Pricing() {
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-accent" /> Built for Indian teams · priced in ₹
           </span>
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">The scanning is the product. The AI agents are the premium.</h1>
+          {/* This H1 used to read "The scanning is the product. The AI agents are the premium." and the
+              paragraph under it sent buyers to "Enterprise (talk to us) for the two AI agents". Both were
+              false against the code — plan.go's "+pentest" add-on unlocks the Pentester on ANY base tier,
+              and aimode.go resolves availability as `lim.AutonomousPentest || ownKey`, so a customer with
+              their own API key runs BOTH agents on Free. The page was therefore telling its highest-intent
+              visitor that the thing they came for needs a sales call. */}
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">The AI agents aren&apos;t the premium. They&apos;re the product.</h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            Free to see your posture, a <strong className="font-semibold text-ink">Core</strong> plan for the full
-            deterministic + ML-based security + compliance product, and Enterprise (talk to us) for the two AI agents. The
-            service model — you run it, we run it, or your MSP does — is yours to pick.
+            Free to see your real posture — and if you bring your own LLM key, <strong className="font-semibold text-ink">both agents run on it</strong>, at your model cost, with no upgrade.{" "}
+            <strong className="font-semibold text-ink">Core</strong> funds the AI Security Engineer on our side.{" "}
+            <strong className="font-semibold text-ink">Core + Pentest</strong> adds the AI Pentester and the signed VAPT
+            report a customer&apos;s security review asks for. The service model — you run it, we run it, or your MSP
+            does — is yours to pick.
           </p>
-          {/* The pricing spine in customer terms: deterministic + ML-based scanning (Free + Core), the two AI
-              agents on the talk-to-us tier, and a named human accountable. Personas cross-link out. */}
+          {/* The pricing spine in customer terms: deterministic + ML-based scanning on every tier, both AI
+              agents reachable from Free via your own key, and a named human accountable. Personas cross-link out. */}
           <div className="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs">
-            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Deterministic + ML scanning <span className="text-faint">· Free + Core</span></span>
+            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Deterministic + ML scanning <span className="text-faint">· every tier</span></span>
             <span className="text-faint">+</span>
-            <Link href="/ai-security-engineer" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Security Engineer <span className="text-faint">· Talk to us</span></Link>
+            <Link href="/ai-security-engineer" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Security Engineer <span className="text-faint">· Core, or your key on Free</span></Link>
             <span className="text-faint">+</span>
-            <Link href="/ai-pentest" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Pentester <span className="text-faint">· Talk to us</span></Link>
+            <Link href="/ai-pentest" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Pentester <span className="text-faint">· + Pentest, or your key on Free</span></Link>
             <span className="text-faint">+</span>
             <span className="rounded-md border border-dashed border-border px-2.5 py-1 font-medium text-muted">a named human (HITL)</span>
           </div>
@@ -268,9 +296,14 @@ export default function Pricing() {
                   : "relative flex flex-col rounded-2xl border border-border bg-surface p-6 shadow-card transition hover:-translate-y-1 hover:border-accent/40 hover:shadow-card-hover"
               }
             >
+              {/* Was "Most popular". Moving the highlight to Core + Pentest would have moved that claim
+                  with it — and we have no sales data that makes it true of either tier. On a page whose
+                  whole job this pass was removing claims the code doesn't support, shipping an unevidenced
+                  one would be the same mistake in a nicer font. "If a review is blocking a deal" says why
+                  it is highlighted, is verifiable, and is more useful to the buyer than a popularity claim. */}
               {t.highlight && (
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-1 text-[11px] font-semibold text-white shadow-sm">
-                  Most popular
+                  If a review is blocking a deal
                 </span>
               )}
               <div className="text-sm font-semibold text-ink">{t.name}</div>
