@@ -52,7 +52,7 @@ const SOLUTIONS_HUB: Item = { href: "/solutions", label: "All solutions", desc: 
 // taxonomy — what it does, what it scans — which serves someone already evaluating us. A Series A
 // team whose deal is stuck behind a security review has not got that far, and on mobile there is no
 // mega-menu room for a second-chance route, so it leads.
-const STARTUPS: Item = { href: "/startups", label: "A deal blocked on a security review?", desc: "For Series A teams with no security hire", icon: Rocket };
+const STARTUPS: Item = { href: "/startups", label: "A deal blocked on a security review?", desc: "For Series A and B teams stretched thin on security", icon: Rocket };
 const SECURITY_MOBILE: Item[] = [STARTUPS, ...PERSONAS, ...COVERAGE, AGENT_CONTROLS, SOLUTIONS_HUB];
 
 // Free tools — the founder ICP's top-of-funnel hook. Lead with the questionnaire scan.
@@ -439,7 +439,7 @@ function SolutionsMenu({
                 or by ALTERNATIVE, not only by the product taxonomy this menu is organised around. */}
             {/* The ICP entry. This menu is organised around the product taxonomy — what it does and
                 what it scans — which serves someone already evaluating us. It had no route for the
-                visitor who has not got that far: a Series A team whose enterprise deal is stuck behind
+                visitor who has not got that far: a Series A or B team whose enterprise deal is stuck behind
                 a security review. That page existed but was reachable only from the homepage router and
                 the hub, so the nav answered "what is it" and never "is this for me". */}
             <Link
@@ -451,7 +451,7 @@ function SolutionsMenu({
             >
               <span className="text-sm">
                 <span className="font-medium text-ink">A deal blocked on a security review?</span>
-                <span className="ml-2 text-xs text-muted">for Series A teams with no security hire</span>
+                <span className="ml-2 text-xs text-muted">for Series A and B teams stretched thin on security</span>
               </span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-accent" />
             </Link>

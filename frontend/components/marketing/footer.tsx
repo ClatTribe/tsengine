@@ -8,7 +8,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
       // Listed first, and in the footer at all, because the footer is server-rendered — it is the
       // one route to this page that works without opening a hover menu, and the only one search
       // engines and anyone browsing on a phone will reliably follow.
-      { href: "/startups", label: "For Series A teams" },
+      { href: "/startups", label: "For Series A and B teams" },
       { href: "/product", label: "How it works" },
       { href: "/cross-detection", label: "Unified platform" },
       { href: "/ai-security-engineer", label: "AI security engineer" },

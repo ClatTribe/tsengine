@@ -9,7 +9,7 @@ const MODELS = [
     icon: Rocket,
     tag: "Self-serve",
     title: "Run it yourself",
-    body: "Connect your stack and the agent finds, fixes, and proves your security. Your team approves anything that matters — no security hire needed.",
+    body: "Connect your stack and the agent finds, fixes, and proves your security. A named person on your team approves anything that touches your systems — the agent does the work, your engineer keeps the call.",
     cta: "Start free",
     href: "/signup",
     highlight: false,

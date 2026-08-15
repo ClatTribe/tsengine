@@ -65,7 +65,7 @@ export async function generateMetadata({ params }: { params: Promise<{ framework
   const i = info(framework);
   if (!i) return {};
   const title = `${i.label} Compliance Automation for SMBs — TensorShield`;
-  const description = `Get ${i.label}-ready without a security hire. TensorShield continuously maps your findings to ${i.label} controls, prepares fixes, and produces signed, auditor-ready evidence. ${i.desc}`;
+  const description = `Get ${i.label}-ready without a compliance consultant. TensorShield continuously maps your findings to ${i.label} controls, prepares fixes, and produces signed, auditor-ready evidence. ${i.desc}`;
   return pageMeta({ title, description, path: `/frameworks/${framework}` });
 }
 
@@ -90,7 +90,7 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
             {i.label} compliance, <span className="text-accent">automated.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted">
-            {i.desc} TensorShield gets you {i.label}-ready without a security hire — covering {i.angle}.
+            {i.desc} TensorShield gets you {i.label}-ready without a compliance consultant — covering {i.angle}.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px">
