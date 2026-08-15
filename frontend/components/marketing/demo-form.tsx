@@ -19,10 +19,27 @@ export function DemoForm() {
     setLoading(true);
     setError("");
     try {
+      // Two things were being dropped between this form and the sales inbox.
+      //
+      // 1. THE PLAN. Every paid CTA on /pricing links here as /demo?plan=core or ?plan=growth — that
+      //    click is the highest-intent action on the site, and on the pentest tier it means "a customer's
+      //    security review is blocking a deal". The form never read the query string, so sales received
+      //    an undifferentiated lead and the intent was lost. Read at submit time from window.location
+      //    rather than useSearchParams(): this is a click handler, so it is client-only by definition,
+      //    and it avoids forcing a Suspense boundary / dynamic rendering on an otherwise static page.
+      //    It rides on `source`, which the backend already defines as "where the form was submitted
+      //    from (pricing, demo-page, …)" and already logs — so no API change is needed.
+      //
+      // 2. THE INTEREST ANSWER. The form collects `interest` and POSTs it, but leadRequest has no such
+      //    field, so the server silently discarded whatever the person selected. Folding it into the
+      //    message keeps the answer instead of throwing away something a human deliberately filled in.
+      const plan = new URLSearchParams(window.location.search).get("plan")?.trim();
+      const source = plan ? `pricing:${plan}` : "demo-page";
+      const message = [form.interest && `Interest: ${form.interest}`, form.message].filter(Boolean).join("\n\n");
       const res = await fetch("/api/lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, source: "demo-page" }),
+        body: JSON.stringify({ ...form, message, source }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) setError(data?.error ?? "Couldn't submit — try again.");
