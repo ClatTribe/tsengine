@@ -1,4 +1,4 @@
-import { Radio, CheckCircle2 } from "lucide-react";
+import { Radio, CheckCircle2, XCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { ActivityTimeline, type ActivityEvent } from "@/components/activity/activity-timeline";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -56,6 +56,22 @@ export default async function ActivityPage() {
     }
   }
 
+  // Actions whose delivery FAILED. These sit at "approved" so they are not lost, which also means
+  // they are invisible: not in the inbox (nothing left to approve) and not a verified fix. Without
+  // this the customer's ticket simply never arrives and nothing anywhere says why.
+  for (const a of actions.actions) {
+    if (!a.delivery_error) continue;
+    events.push({
+      id: `err-${a.id}`,
+      at: a.decided_at || a.created_at || "",
+      day: "",
+      kind: "failed",
+      title: `Could not deliver — ${a.title || a.kind}`,
+      meta: a.delivery_error,
+      href: "/inbox",
+    });
+  }
+
   events.sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
   const now = new Date();
   for (const ev of events) ev.day = dayLabel(ev.at, now);
@@ -67,6 +83,17 @@ export default async function ActivityPage() {
         title="Activity"
         description="A live, plain-English log of everything the agent has done for you — every weakness it found, every fix it queued, and every scan it ran. Watch it work in real time."
       />
+      {actions.failed_delivery > 0 && (
+        <div className="card flex items-center gap-3 border-high/30 px-4 py-3 text-sm">
+          <XCircle className="h-4 w-4 shrink-0 text-high" />
+          <span className="text-muted">
+            <span className="font-medium text-high">{actions.failed_delivery}</span>{" "}
+            {actions.failed_delivery === 1 ? "approved fix" : "approved fixes"} could not be delivered — the
+            integration rejected them. They are approved but never reached their destination; check the
+            connection and re-approve.
+          </span>
+        </div>
+      )}
       {actions.verified > 0 && (
         <div className="card flex items-center gap-3 px-4 py-3 text-sm">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-pulse" />
