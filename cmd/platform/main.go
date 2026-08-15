@@ -65,6 +65,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/connector/awsfetch"
 	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
@@ -476,7 +477,16 @@ func main() {
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		// Ingested findings reach the approval desk with the SAME proposer the runner uses.
-		ProposeFix:     func(f types.Finding, a platform.Asset) (platform.Action, bool) { return remediate.Propose(f, a, newID) },
+		ProposeFix: func(f types.Finding, a platform.Asset) (platform.Action, bool) { return remediate.Propose(f, a, newID) },
+		// LIVE cloud read: assume the customer's read-only role recorded at connect time. The role ARN
+		// IS the credential (connector.AWS.Exchange), and the tenant id is the external-id guard issued
+		// on the connect link (confused-deputy protection).
+		AWSFetcher: func(c platform.Connection) awsfetch.Fetcher {
+			return awsfetch.Fetcher{
+				AccountID: c.Account,
+				Buckets:   awsfetch.NewS3Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+			}
+		},
 		CloudSnapshots: cloudSnaps,
 		CloudHistory:   cloudHist,
 		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
