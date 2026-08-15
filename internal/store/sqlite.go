@@ -205,7 +205,7 @@ func (s *SQLite) ListFindings(ctx context.Context, tenantID string, filter Findi
 		}
 		out = append(out, f)
 	}
-	return out, nil
+	return Page(out, filter), nil
 }
 
 func (s *SQLite) PutAction(ctx context.Context, a platform.Action) error {

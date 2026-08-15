@@ -185,7 +185,7 @@ func (p *Postgres) ListFindings(ctx context.Context, tenantID string, filter Fin
 		}
 		out = append(out, f)
 	}
-	return out, nil
+	return Page(out, filter), nil
 }
 
 func (p *Postgres) PutAction(ctx context.Context, a platform.Action) error {
