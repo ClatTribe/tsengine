@@ -1,6 +1,6 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { Job, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type { Job, SystemState, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -406,6 +406,11 @@ export const api = {
   // real cause (a missing sandbox image, an unreachable Docker daemon), and without this nothing
   // ever read it, so the customer saw an empty findings list and no reason for it.
   jobs: () => safe<Job[]>("/v1/jobs", []),
+
+  // Every active reason this workspace's view may be incomplete — halted automation, a scan that
+  // failed, a connection we cannot act through. One server-computed list so the shell renders any
+  // new reason without a page having to know it exists.
+  systemState: () => safe<SystemState>("/v1/system-state", { degradations: [] }),
 
   // Change the signed-in user's password (also clears the forced-rotation flag for an
   // invited member). The session stays valid afterward.
