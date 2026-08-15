@@ -280,7 +280,12 @@ export interface Action {
   payload?: Record<string, unknown>;
   finding_keys?: string[];
   verification?: FixVerification; // set once an applied fix is re-tested (KF#4)
+  // Why the last apply attempt failed, redacted server-side. A failed action deliberately stays at
+  // "approved" so it is not lost, which also makes it look identical to one merely waiting — this is
+  // what tells the two apart.
+  delivery_error?: string;
   created_at?: string;
+  decided_at?: string; // when the approve/reject verdict landed
   // diff is the unified diff this action would apply, rendered for a human to READ. Without it a
   // reviewer approving a code change is signing for something they cannot see.
   diff?: string;
@@ -310,6 +315,8 @@ export interface ActionsView {
   verified: number;
   confirmed_fix: number;
   still_present: number;
+  /** Approved actions whose apply attempt failed — they are stuck, not pending. */
+  failed_delivery: number;
 }
 
 // AssetCoverage — the per-asset "what was actually tested" statement (visibility most teams lack).
