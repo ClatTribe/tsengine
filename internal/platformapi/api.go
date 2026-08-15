@@ -680,6 +680,24 @@ func (d Deps) handleRescan(w http.ResponseWriter, r *http.Request, tenantID stri
 		writeJSON(w, http.StatusNotImplemented, errBody("scanning not configured"))
 		return
 	}
+	// A HALTED TENANT MUST BE TOLD, NOT HANDED A JOB THAT SAYS "done".
+	//
+	// The kill-switch already stops the runner, so nothing was ever scanned while halted — the
+	// enforcement was right. What was wrong was the report: the job completed instantly with
+	// status "done" and assets_scanned:0, which a person who just pressed "Scan now" reads as "it
+	// ran and there was nothing to do". The identical request with the switch OFF honestly returns
+	// "failed". So the one path that refused work was the one that looked successful.
+	//
+	// Refusing here rather than queueing also means the answer arrives at the click instead of
+	// after polling a job to a misleading conclusion.
+	if d.tenantHalted(r.Context(), tenantID) {
+		writeJSON(w, http.StatusConflict, map[string]string{
+			"error": "automation is halted for this workspace, so no scan was started — " +
+				"resume it in Settings to scan again",
+			"code": "automation_halted",
+		})
+		return
+	}
 	if d.Jobs == nil {
 		n, err := d.Runner.RescanTenant(r.Context(), tenantID)
 		// Partial success is success: RescanTenant continues past a per-asset error (e.g. one stale/401
@@ -933,4 +951,19 @@ func pageParams(r *http.Request) (limit, offset int) {
 		offset = v
 	}
 	return limit, offset
+}
+
+// tenantHalted reports whether the global kill-switch is engaged for this tenant.
+//
+// FAILS OPEN on a read error, deliberately and against the usual instinct: §18.2 invariant 7 makes
+// the switch fail CLOSED where it matters — hitl.Desk refuses every apply and the runner pauses —
+// while a transient store error here must not freeze a tenant out of scanning. This function only
+// decides whether to explain a refusal, so guessing "halted" on an error would invent a halt that
+// is not in effect.
+func (d Deps) tenantHalted(ctx context.Context, tenantID string) bool {
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		return false
+	}
+	return t.AgentsHalted
 }
