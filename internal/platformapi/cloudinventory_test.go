@@ -169,3 +169,60 @@ func TestIngestAWSInventory_NoStore503(t *testing.T) {
 		t.Fatalf("want 503 with no store, got %d", rec.Code)
 	}
 }
+
+// ── AN EMPTY INVENTORY IS NOT AN EMPTY ACCOUNT ───────────────────────────────────────────────────
+
+// The FETCH path refuses to return an empty inventory because it "would read as an account with
+// nothing in it". The POSTED path accepted one — POST {"account_id":"…"} returned stored:true,
+// resources:0 — so the same danger walked in through the other door.
+//
+// Storing it does two things. The AI Cloud Engineer reasons over the snapshot, finds no principals
+// and no edges, and reports no attack paths for an account it has never seen. And the snapshot
+// becomes the DRIFT BASELINE, so the next real ingest diffs against "empty" and reports every
+// existing resource as newly created.
+func TestIngestInventory_EmptyIsRefusedNotStored(t *testing.T) {
+	snaps := cloudsnap.NewMemStore()
+	d := Deps{CloudSnapshots: snaps}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/cloud/inventory",
+		strings.NewReader(`{"account_id":"111122223333"}`))
+	d.handleIngestAWSInventory(rec, req, "ten-empty")
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("an inventory with no resources was accepted (%s) — the account is now recorded "+
+			"as empty, which the cloud engineer will read as \"nothing to find\"", rec.Body.String())
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+	var body map[string]string
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if body["code"] != "empty_inventory" {
+		t.Errorf("no machine-readable reason: %v", body)
+	}
+
+	// And nothing was written — a refused ingest must not leave a baseline behind.
+	if _, ok, _ := snaps.Get(context.Background(), "ten-empty"); ok {
+		t.Error("a refused inventory was still stored as the tenant's snapshot, so it will be the " +
+			"baseline the next real sync is diffed against")
+	}
+}
+
+// A REAL inventory is unaffected — the guard must not reject accounts that have something in them.
+func TestIngestInventory_NonEmptyStillStores(t *testing.T) {
+	snaps := cloudsnap.NewMemStore()
+	d := Deps{CloudSnapshots: snaps}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/cloud/inventory",
+		strings.NewReader(`{"account_id":"1","buckets":[{"name":"logs"}]}`))
+	d.handleIngestAWSInventory(rec, req, "ten-real")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("a real inventory was refused: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, ok, _ := snaps.Get(context.Background(), "ten-real"); !ok {
+		t.Error("a real inventory was not stored")
+	}
+}
