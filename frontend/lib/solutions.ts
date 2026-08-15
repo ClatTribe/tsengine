@@ -33,7 +33,11 @@ export type SolutionLink = {
 /** SCENARIO — the situation that made them look. Ordered by how often it drives an SMB search. */
 export const SCENARIOS: SolutionLink[] = [
   {
-    href: "/soc2-readiness",
+    // Routed to /startups rather than /soc2-readiness. The readiness page is a good lead magnet, but
+    // it puts a 15-question quiz in front of someone whose deal is stuck today: it tells them how
+    // ready they are, when what they came for is the report and the evidence that unblocks the deal.
+    // /startups leads with that, and still links out to the free checks for anyone not ready to talk.
+    href: "/startups",
     label: "A deal is blocked on a security questionnaire",
     prompt: "Enterprise sent a 200-row questionnaire and we don't know what we'd fail.",
   },
