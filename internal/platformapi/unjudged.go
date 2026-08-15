@@ -51,3 +51,41 @@ func countNamed(names []string) int {
 	}
 	return n
 }
+
+// noInputNote returns an honest note when the post contained NOTHING to assess, and an empty string
+// otherwise.
+//
+// This is a different fact from unjudgedNote's, which is why it is a different sentence. That one
+// says "you sent 12 and we could read 9"; this one says "you sent none". Overloading one function
+// with both would make the empty case read as a skip, and a reader would go looking for the items
+// that were dropped.
+//
+// The gap it closes: posting an empty list returned {"devices": 0, "issues_detected": 0} with no
+// comment. Every assessor correctly found nothing — there was nothing to find — but the response is
+// indistinguishable from a fleet that was examined and came back clean, and disk encryption is a
+// claim that ends up in front of an auditor. A collector that ran and returned nothing looks exactly
+// like this, which is the case worth catching.
+func noInputNote(posted int, plural string) string {
+	if posted > 0 {
+		return ""
+	}
+	return "No " + plural + " were in this submission, so none were assessed. This is not a clean " +
+		"result — if you expected data here, check that the collector or export actually produced it."
+}
+
+// ingestNotes composes the two honest notes an ingest can owe its caller: nothing was sent, or some
+// of what was sent could not be read. Returns nil when the whole batch was assessed, so a response
+// carries no note when it has nothing to disclose.
+//
+// Kept next to both notes so an ingest cannot pick up one check and miss the other — which is how
+// the empty case survived: every ingest adopted unjudgedNote and none of them covered zero.
+func ingestNotes(posted, judged int, singular, plural, why string) []string {
+	var out []string
+	if n := noInputNote(posted, plural); n != "" {
+		out = append(out, n)
+	}
+	if n := unjudgedNote(posted, judged, singular, plural, why); n != "" {
+		out = append(out, n)
+	}
+	return out
+}

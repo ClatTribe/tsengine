@@ -69,11 +69,8 @@ func (d Deps) handleDevicePostureIngest(w http.ResponseWriter, r *http.Request, 
 	for _, dv := range req.Devices {
 		names = append(names, dv.Name)
 	}
-	notes := []string{}
-	if note := unjudgedNote(len(req.Devices), countNamed(names), "device", "devices",
-		"they did not carry a device name"); note != "" {
-		notes = append(notes, note)
-	}
+	notes := ingestNotes(len(req.Devices), countNamed(names), "device", "devices",
+		"they did not carry a device name")
 	// The same reasoning one level down: a device can be READ and still not report a given setting.
 	// Those settings are no longer treated as "off" (they used to be, which manufactured findings from
 	// missing data), so the silence has to be said out loud — otherwise "0 issues" reads as "firewalls

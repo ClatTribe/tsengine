@@ -67,3 +67,51 @@ func TestCountNamed_MatchesWhatTheAssessorsAccept(t *testing.T) {
 		t.Errorf("countNamed(nil) = %d, want 0", got)
 	}
 }
+
+// ── "YOU SENT NOTHING" IS ALSO A FACT ────────────────────────────────────────────────────────────
+
+// unjudgedNote answers "you sent 12 and we could read 9". It is silent on an empty batch, correctly:
+// nothing was skipped. But every ingest adopted only that note, so posting an empty list returned
+// {"devices": 0, "issues_detected": 0} with no comment — indistinguishable from a fleet that was
+// examined and came back clean. A collector that ran and produced nothing looks exactly like this.
+//
+// Found by driving all nine ingests with an empty payload: five reported zero findings and said
+// nothing about having assessed nothing.
+
+func TestNoInputNote_EmptySubmissionSaysSo(t *testing.T) {
+	got := noInputNote(0, "devices")
+	if got == "" {
+		t.Fatal("an empty submission produced no note — \"0 devices, 0 issues\" reads as a clean fleet")
+	}
+	if !strings.Contains(got, "not a clean result") {
+		t.Errorf("the note does not say the zero means nothing: %q", got)
+	}
+}
+
+// A non-empty submission gets no empty-note — that is unjudgedNote's job, and duplicating it would
+// make every response carry two sentences about the same batch.
+func TestNoInputNote_SilentWhenSomethingWasSent(t *testing.T) {
+	if got := noInputNote(3, "devices"); got != "" {
+		t.Errorf("a submission with 3 devices produced an empty-batch note: %q", got)
+	}
+}
+
+// The composer carries BOTH facts and keeps them distinct: nothing sent, and some of what was sent
+// unreadable. They are different sentences because they send the reader to different places — one to
+// the collector, the other to the export's field names.
+func TestIngestNotes_CarriesEachFactSeparately(t *testing.T) {
+	// nothing sent
+	empty := ingestNotes(0, 0, "vendor", "vendors", "they did not carry a vendor name")
+	if len(empty) != 1 || !strings.Contains(empty[0], "No vendors were in this submission") {
+		t.Errorf("empty batch notes = %v", empty)
+	}
+	// sent, partially unreadable
+	partial := ingestNotes(5, 3, "vendor", "vendors", "they did not carry a vendor name")
+	if len(partial) != 1 || !strings.Contains(partial[0], "2 of 5") {
+		t.Errorf("partial batch notes = %v", partial)
+	}
+	// fully assessed → nothing to disclose, so no note at all
+	if full := ingestNotes(4, 4, "vendor", "vendors", "x"); len(full) != 0 {
+		t.Errorf("a fully-assessed batch produced notes: %v", full)
+	}
+}

@@ -72,9 +72,9 @@ func (d Deps) handleTPRMIngest(w http.ResponseWriter, r *http.Request, tenantID 
 	for _, v := range req.Vendors {
 		names = append(names, v.Name)
 	}
-	if note := unjudgedNote(len(req.Vendors), countNamed(names), "vendor", "vendors",
-		"they did not carry a vendor name"); note != "" {
-		resp["checks_not_run"] = []string{note}
+	if notes := ingestNotes(len(req.Vendors), countNamed(names), "vendor", "vendors",
+		"they did not carry a vendor name"); len(notes) > 0 {
+		resp["checks_not_run"] = notes
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
