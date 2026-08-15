@@ -37,7 +37,13 @@ function coverageNote(type: string): string {
 
 export default async function AssetsPage({ searchParams }: { searchParams: Promise<{ connect_error?: string; connected?: string; scanned?: string }> }) {
   const { connect_error, connected, scanned } = await searchParams;
-  const [connections, assets, engagements, byAsset, secByAsset] = await Promise.all([api.connections(), api.assets(), api.engagements(), api.complianceByAsset(), api.securityByAsset()]);
+  const [connections, assets, engagements, byAsset, secByAsset, jobs] = await Promise.all([api.connections(), api.assets(), api.engagements(), api.complianceByAsset(), api.securityByAsset(), api.jobs()]);
+  // The most recent scan run, and whether it FAILED. The platform records the real cause (an
+  // unreachable Docker daemon, a missing sandbox image) but nothing read it, so a scan that never
+  // ran left an empty findings list and no explanation — which on a security product reads as
+  // "you have no vulnerabilities". That is the one misreading worth going out of our way to prevent.
+  const lastScanJob = jobs.filter((j) => j.kind === "rescan")[0];
+  const scanFailed = lastScanJob?.status === "failed" ? lastScanJob : undefined;
   // per-asset compliance signal (grounded: only assets a finding ties to) — shown inline so "is this asset
   // compliant?" is answered right where assets are managed (#554).
   const postureByAsset = new Map(byAsset.assets.map((p) => [p.asset_id, p]));
@@ -63,6 +69,23 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         description="Everything we watch for you, in one place. Connect a system once — your code, cloud, identity provider, or SaaS — and the agent finds every asset inside it and keeps scanning them automatically."
         right={<ScanNow disabled={assets.length === 0} />}
       />
+      {scanFailed && (
+        <div className="card border-critical/30 px-4 py-3">
+          <div className="flex items-start gap-3 text-sm">
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-critical" />
+            <div className="min-w-0">
+              <p className="font-medium text-ink">The last scan did not run</p>
+              <p className="mt-1 text-muted">
+                Findings below are from earlier scans, not from this one — an empty result here does
+                not mean nothing was found.
+              </p>
+              {scanFailed.error && (
+                <p className="mt-2 break-words font-mono text-[11px] text-faint">{scanFailed.error}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {connect_error && (
         <div className="flex items-center gap-2 rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-sm text-critical">
