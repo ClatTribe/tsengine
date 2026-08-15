@@ -2,7 +2,7 @@
   "name": "repo-owasp-benchmark",
   "asset": "repository",
   "target": "/fixtures/BenchmarkJava",
-  "description": "STUB. OWASP Benchmark v1.2 — the neutral SAST leaderboard (2,740 Java cases). Requires semgrep wrapped (Phase 3.x) and the BenchmarkJava source tree volume-mounted into the sandbox. Score per-CWE Youden.",
+  "description": "OWASP Benchmark v1.2 — the neutral SAST leaderboard (2,740 Java cases), scored per-CWE Youden. Run it with `scripts/bench-box.sh sast`, which clones OWASP-Benchmark/BenchmarkJava and invokes `tsbench sast --target <tree> --ground-truth expectedresults-1.2.csv` (the scorer consumes upstream's CSV verbatim). Pure static analysis — nothing is executed — so this is the safest target in the benchmark set. Kept runnable:false because it is scored by `tsbench sast`, not by `tsbench run --fixture`.",
   "metric": "youden",
   "competitors": {
     "leaderboard": "OWASP Benchmark v1.2 SAST leaderboard",
@@ -12,7 +12,7 @@
       "Fortify": "35%",
       "SonarQube": "6%"
     },
-    "note": "Per-CWE Youden index against OWASP Benchmark v1.2. Blocked on (1) a semgrep wrapper for the repository asset and (2) repo source-tree mounting into the sandbox. DAST tools on the same corpus (ZAP 13%) are NOT the SAST comparison — see CLAUDE.md §6.1.1. This stub records the SAST cohort numbers."
+    "note": "Per-CWE Youden index against OWASP Benchmark v1.2. Both original blockers are CLOSED — semgrep is wrapped and sits in the repository asset's anchor list (internal/asset/repository/handler.go), and repo source-tree mounting works (fixtures/repo/sca-vuln is runnable proof). What remains is fetching the 2,740-case corpus, which scripts/bench-box.sh does. DAST tools on the same corpus (ZAP 13%) are NOT the SAST comparison — see CLAUDE.md §6.1.1."
   },
   "runnable": false
 }

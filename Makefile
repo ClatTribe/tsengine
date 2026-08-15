@@ -78,6 +78,14 @@ bench: cli tsbench sandbox-image ## run the runnable L1 benchmarks
 	./bin/tsbench run --fixture fixtures/container/alpine-clean
 	./bin/tsbench run --fixture fixtures/repo/sca-vuln
 
+.PHONY: bench-box
+bench-box: cli tsbench sandbox-image ## ALL per-asset benchmarks incl. WAVSEP + OWASP Benchmark — deploys the targets on one box (docs/benchmark-box.md)
+	./scripts/bench-box.sh
+
+.PHONY: bench-box-list
+bench-box-list: ## what each per-asset benchmark needs, and which two have a neutral leaderboard
+	./scripts/bench-box.sh --list
+
 .PHONY: bench-ablation
 bench-ablation: cli tsbench sandbox-image ## run the L1.5 ablation on the container fixture
 	./bin/tsbench ablation --fixture fixtures/container/nginx-vuln
