@@ -113,22 +113,33 @@ func (l *S3Lister) client(ctx context.Context) (s3API, error) {
 	if l.api != nil {
 		return l.api, nil
 	}
-	region := l.Region
+	cfg, err := assumeRoleConfig(ctx, l.Region, l.RoleARN, l.ExternalID)
+	if err != nil {
+		return nil, err
+	}
+	return s3.NewFromConfig(cfg), nil
+}
+
+// assumeRoleConfig builds an AWS config that assumes the customer's read-only role with the
+// per-tenant external id (the confused-deputy guard). Shared by every lister so they cannot drift
+// into assuming the role differently — one of them getting the external id wrong would fail in a way
+// that looks like a permissions problem on the customer's side.
+func assumeRoleConfig(ctx context.Context, region, roleARN, externalID string) (aws.Config, error) {
 	if region == "" {
 		region = "us-east-1"
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
-		return nil, fmt.Errorf("awsfetch: load aws config: %w", err)
+		return aws.Config{}, fmt.Errorf("awsfetch: load aws config: %w", err)
 	}
-	if l.RoleARN != "" {
-		provider := stscreds.NewAssumeRoleProvider(sts.NewFromConfig(cfg), l.RoleARN,
+	if roleARN != "" {
+		provider := stscreds.NewAssumeRoleProvider(sts.NewFromConfig(cfg), roleARN,
 			func(o *stscreds.AssumeRoleOptions) {
-				if l.ExternalID != "" {
-					o.ExternalID = aws.String(l.ExternalID)
+				if externalID != "" {
+					o.ExternalID = aws.String(externalID)
 				}
 			})
 		cfg.Credentials = aws.NewCredentialsCache(provider)
 	}
-	return s3.NewFromConfig(cfg), nil
+	return cfg, nil
 }
