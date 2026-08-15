@@ -91,6 +91,16 @@ type Snapshot struct {
 func Assess(s Snapshot, now time.Time) []types.Finding {
 	var out []types.Finding
 	for i, a := range s.Agents {
+		// An agent we cannot NAME is not assessed.
+		//
+		// Every finding here identifies its subject in the title and description, so a nameless agent
+		// produced "Unsanctioned AI agent in use: " — a HIGH-severity finding, carrying SOC 2 CC1.4 and
+		// ISO 42001 mappings into an auditor's evidence pack, about nothing anyone could act on. An
+		// export whose field names we do not recognise is unreadable, not a clean estate, and the
+		// caller is told which agents were skipped rather than left to read silence as coverage.
+		if strings.TrimSpace(a.Name) == "" {
+			continue
+		}
 		out = append(out, assessAgent(a, i, now)...)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
@@ -300,4 +310,17 @@ func nz(s, dflt string) string {
 		return dflt
 	}
 	return s
+}
+
+// Unnamed reports how many agents in the snapshot carry no name, so the ingest can say what it
+// skipped. Assess drops them (a finding about an agent nobody can identify is unactionable), and
+// silence about that would read as "we looked at your whole estate".
+func Unnamed(s Snapshot) int {
+	n := 0
+	for _, a := range s.Agents {
+		if strings.TrimSpace(a.Name) == "" {
+			n++
+		}
+	}
+	return n
 }

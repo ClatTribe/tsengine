@@ -205,3 +205,47 @@ func keys(m map[string]types.Finding) []string {
 	}
 	return out
 }
+
+// ── AN AGENT WE CANNOT NAME IS NOT ASSESSED ──────────────────────────────────────────────────────
+
+// Every finding here identifies its subject in the title and description. An agent with no name
+// produced "Unsanctioned AI agent in use: " — a HIGH-severity finding carrying SOC 2 CC1.4 and
+// ISO 42001 mappings into an auditor's evidence pack, about nothing anyone could act on.
+//
+// It is reachable by ordinary means: an export using its own field names ("title" rather than
+// "name") decodes into a struct whose Name is empty, and every agent in it became a nameless HIGH.
+func TestUnnamedAgent_ProducesNoFindings(t *testing.T) {
+	got := Assess(Snapshot{Agents: []Agent{{User: "dev@acme.io", Autonomy: AutonomyAutoApprove}}},
+		time.Unix(0, 0))
+	if len(got) != 0 {
+		t.Fatalf("an agent with no name produced %d finding(s) that identify nobody: %+v", len(got), got)
+	}
+}
+
+// The other half: a NAMED agent is still assessed exactly as before. The fix must not buy silence
+// by dropping real findings.
+func TestNamedAgent_IsStillAssessed(t *testing.T) {
+	got := Assess(Snapshot{Agents: []Agent{{Name: "cursor", User: "dev@acme.io"}}}, time.Unix(0, 0))
+	if len(got) == 0 {
+		t.Fatal("a named, unsanctioned agent produced no findings")
+	}
+	for _, f := range got {
+		if strings.TrimSpace(f.Title) == "" || strings.HasSuffix(f.Title, ": ") {
+			t.Errorf("finding title names no subject: %q", f.Title)
+		}
+	}
+}
+
+// A mixed snapshot assesses what it can and counts what it cannot, so the caller can tell the
+// difference between a clean estate and an unreadable export.
+func TestMixedSnapshot_AssessesNamedAndCountsUnnamed(t *testing.T) {
+	snap := Snapshot{Agents: []Agent{{Name: "cursor"}, {User: "x@acme.io"}, {Name: "claude-code"}}}
+	if got := Unnamed(snap); got != 1 {
+		t.Errorf("Unnamed() = %d, want 1", got)
+	}
+	for _, f := range Assess(snap, time.Unix(0, 0)) {
+		if strings.HasSuffix(f.Title, ": ") {
+			t.Errorf("a nameless agent still produced a finding: %q", f.Title)
+		}
+	}
+}
