@@ -82,6 +82,8 @@ export function SOC2Assessment() {
           </div>
         </div>
 
+        <SOC2LeadCapture grade={result.grade} score={result.score} gaps={result.gaps.length} />
+
         <button onClick={reset} className="mx-auto flex items-center gap-1.5 text-xs text-muted transition hover:text-accent">
           <RotateCcw className="h-3.5 w-3.5" /> Start over
         </button>
@@ -141,5 +143,105 @@ export function SOC2Assessment() {
         </button>
       </div>
     </div>
+  );
+}
+
+// SOC2LeadCapture closes the other half of the inbound funnel. /scan captures a lead once the
+// visitor has their grade; this page — a fifteen-question assessment somebody has just finished,
+// which makes them far more engaged than a drive-by scanner — captured nothing at all. They saw
+// their score, saw their prioritised gaps, and left anonymous.
+//
+// The same two rules the /scan capture follows:
+//
+//  1. It renders AFTER the result. Everything the visitor came for is already on screen and free.
+//     Gating a self-assessment behind an email would be the fastest way to kill the thing that
+//     makes it worth linking to.
+//  2. The offer is only what we actually do. Not "email me my results" — nothing sends a results
+//     email, and promising one on the page that is meant to demonstrate rigour would be exactly
+//     the kind of unbacked claim this product sells against. We help people close the gaps, so
+//     that is what it says.
+//
+// Posts to the same public /api/lead as the demo form and the scan, with source
+// "soc2-readiness:<grade>" and the score and gap count in the message, so a reply can open on the
+// person's real result instead of a generic pitch.
+function SOC2LeadCapture({ grade, score, gaps }: { grade: string; score: number; gaps: number }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !email.trim()) return;
+    setState("sending");
+    try {
+      const res = await fetch("/api/lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // /v1/lead requires a name, so it is asked for rather than guessed from the email.
+          name: name.trim(),
+          email: email.trim(),
+          company: "",
+          source: `soc2-readiness:${grade}`,
+          message:
+            gaps > 0
+              ? `Completed the SOC 2 self-assessment — grade ${grade}, ${score}%, ${gaps} gap(s) to close. Asked for help closing them.`
+              : `Completed the SOC 2 self-assessment — grade ${grade}, ${score}%, no gaps flagged. Asked to talk.`,
+        }),
+      });
+      setState(res.ok ? "done" : "error");
+    } catch {
+      setState("error");
+    }
+  }
+
+  if (state === "done") {
+    return (
+      <div className="card flex items-start gap-3 p-5">
+        <Check className="mt-0.5 h-4 w-4 shrink-0 text-pulse" />
+        <p className="text-sm text-muted">
+          Got it — we&apos;ll be in touch about closing these. Nothing else happens to your address.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="card p-5">
+      <div className="text-sm font-medium text-ink">
+        {gaps > 0 ? "Want a hand closing these gaps?" : "Want to check the parts a self-assessment can't?"}
+      </div>
+      <p className="mt-1 text-xs leading-relaxed text-muted">
+        {gaps > 0
+          ? "Leave your email and we'll get in touch. Your results above are yours either way — no signup needed."
+          : "This is your own answers scored. Leave your email and we'll talk about verifying them against your real code, cloud and identity."}
+      </p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          type="text"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Your name"
+          className="min-w-0 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-accent/60 sm:w-36"
+        />
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@company.com"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-accent/60"
+        />
+        <button
+          type="submit"
+          disabled={state === "sending"}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-60"
+        >
+          {state === "sending" ? "Sending…" : "Get in touch"}
+        </button>
+      </div>
+      {state === "error" && <p className="mt-2 text-xs text-high">Couldn&apos;t send that — try again.</p>}
+    </form>
   );
 }
