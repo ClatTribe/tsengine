@@ -40,6 +40,42 @@ send costs a real scan.
 have a live job post mentioning SOC 2 or compliance. Two independent trigger signals; expect
 this list to be small and to convert several times better than anything broader.
 
+## What happened when this was actually run (2026-08-15)
+
+The table above was written from reasoning. The first real attempt found two of its
+assumptions wrong, so they are recorded here rather than quietly left in place.
+
+**Searching job posts for the words "SOC 2" selects the wrong companies.** The query
+surfaced four: a Series B healthtech, an FDA-cleared medical-imaging company already
+holding ISO 27001, and two security/risk vendors. **Zero qualified** under `icp.md` —
+two are hard-disqualified (healthcare/PHI), and the other two *sell* security, which
+makes "we found gaps on your site" a hostile opener.
+
+The reason is a selection effect worth internalising: a job post containing "SOC 2"
+mostly identifies companies for whom compliance is already **routine** — regulated
+industries and compliance vendors. Our buyer is the opposite: a company meeting the
+requirement for the *first* time, who is more likely to be quietly panicking than
+writing "SOC 2" into a job description.
+
+So search the **symptom, not the vocabulary**:
+
+- "first security hire" / "first security engineer" — the company admitting it has none
+- a founder or exec publicly asking how to get through a security questionnaire
+- a careers page whose *only* compliance-adjacent role is brand new
+- an enterprise-logo announcement from a company that had none before
+
+**Generic funding searches are unusable.** "B2B SaaS Series A funding 2026" returns
+lead-broker SEO pages selling lists, not announcements. Use named sources — a specific
+funding newsletter, an accelerator directory, a press feed — never an open web query.
+
+**One result worth keeping:** of the two marginal domains scanned, `oscilar.com` — an
+AI risk-and-compliance company — came back grade C with **no DMARC enforcement**. It is
+the first time the DMARC hook fired in any run here (see `signals.md`, where eight
+demo domains produced none), and it fired on a compliance vendor. Treat "they sell
+security so they must have it" as an assumption to test, not a disqualifier.
+
+Raw output: `tools/sourced-run-2026-08-15.csv`.
+
 ## The pipeline
 
 ```
