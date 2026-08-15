@@ -102,6 +102,10 @@ type Item struct {
 	Instead string `json:"instead,omitempty"`
 	// Why explains an ATTESTED item — what we would need to see to answer it ourselves.
 	Why string `json:"why,omitempty"`
+	// Agent names which of the two agents owns this practice, so the row routes to the one that can
+	// actually act on it: the engineer proposes fixes for what a scanner found, the pentester proves
+	// which of them an attacker can really reach. A row owned by neither is infrastructure or process.
+	Agent string `json:"agent,omitempty"`
 }
 
 // Result is an item plus its resolved status for a tenant.
@@ -233,6 +237,18 @@ func hasAny(needs []string, assets, conns map[string]bool) bool {
 	}
 	for _, n := range needs {
 		if assets[n] || conns[n] {
+			return true
+		}
+	}
+	return false
+}
+
+// Matches reports whether a finding belongs to this practice. Exported so a caller can select the
+// exact findings behind a gap row and hand them to the remediation proposer — the row is only
+// actionable if we can say WHICH findings it is made of.
+func Matches(it Item, tool, ruleID string) bool {
+	for _, p := range it.GapRules {
+		if tool == p || strings.HasPrefix(ruleID, p) {
 			return true
 		}
 	}

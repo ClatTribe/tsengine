@@ -282,3 +282,51 @@ func TestEncryption_NeedsCloudNotJustADomain(t *testing.T) {
 		t.Fatalf("a connected domain alone passed an encryption-at-rest row: %+v", r)
 	}
 }
+
+// ── THE AGENTS ───────────────────────────────────────────────────────────────────────────────────
+
+// A row is only actionable if we can say which findings it is made of. Matches is what lets a gap
+// row hand its findings to the proposer instead of asking an agent to guess what to fix.
+func TestMatches_SelectsTheFindingsBehindARow(t *testing.T) {
+	var secrets Item
+	for _, it := range Items() {
+		if it.ID == "data.secrets_out_of_vcs" {
+			secrets = it
+		}
+	}
+	if !Matches(secrets, "gitleaks", "gitleaks::aws-key") {
+		t.Error("a gitleaks finding does not match the secrets practice")
+	}
+	if Matches(secrets, "prowler", "prowler::s3-public") {
+		t.Error("a cloud misconfiguration matched the source-secrets practice — a row that claims " +
+			"unrelated findings would queue fixes for work the customer did not ask for")
+	}
+}
+
+// Only measured rows belong to an agent. Asking an agent to "fix" whether your company reviews code
+// is how a checklist starts inventing work, so process rows are owned by nobody.
+func TestAgentOwnership_OnlyOnMeasuredRows(t *testing.T) {
+	for _, it := range Items() {
+		if it.Agent == "" {
+			continue
+		}
+		if it.Evidence != EvidenceObserved {
+			t.Errorf("%s is owned by the %s but is not measured by a scanner — there is nothing for "+
+				"an agent to act on", it.ID, it.Agent)
+		}
+		if it.Agent != "engineer" && it.Agent != "pentester" {
+			t.Errorf("%s names an unknown agent %q", it.ID, it.Agent)
+		}
+	}
+}
+
+// Both agents must own something, or the checklist is a report rather than a worklist.
+func TestBothAgentsOwnRows(t *testing.T) {
+	seen := map[string]int{}
+	for _, it := range Items() {
+		seen[it.Agent]++
+	}
+	if seen["engineer"] == 0 || seen["pentester"] == 0 {
+		t.Errorf("one of the agents owns no practices: %v", seen)
+	}
+}

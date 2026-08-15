@@ -23,14 +23,14 @@ func Items() []Item {
 				"a scan can see. Confirm it and we'll record who did.",
 		},
 		{
-			ID: "appsec.dependency_scanning", Category: "Application Security", Tier: TierSeed,
+			ID: "appsec.dependency_scanning", Category: "Application Security", Tier: TierSeed, Agent: "engineer",
 			Text:     "Scan dependencies and container images for known vulnerabilities in CI",
 			Evidence: EvidenceObserved, Needs: []string{"repository", "container_image", "github"},
 			Tools:    []string{"trivy", "govulncheck", "grype", "osv-scanner"},
 			GapRules: []string{"trivy", "grype", "govulncheck", "osv", "sca"},
 		},
 		{
-			ID: "appsec.continuous_pentest", Category: "Application Security", Tier: TierSeriesA,
+			ID: "appsec.continuous_pentest", Category: "Application Security", Tier: TierSeriesA, Agent: "pentester",
 			Text:     "Continuously test production for real, exploitable vulnerabilities",
 			Evidence: EvidenceObserved, Needs: []string{"web_application", "api"},
 			Tools:    []string{"nuclei", "sqlmap", "dalfox", "wpscan"},
@@ -50,7 +50,7 @@ func Items() []Item {
 
 		// ── Cloud & Infrastructure ────────────────────────────────────────────────────────────────
 		{
-			ID: "cloud.encryption", Category: "Cloud & Infrastructure", Tier: TierSeed,
+			ID: "cloud.encryption", Category: "Cloud & Infrastructure", Tier: TierSeed, Agent: "engineer",
 			Text: "Encrypt data at rest and in transit by default", Evidence: EvidenceObserved,
 			// Cloud only. This row claims BOTH at-rest and in-transit; a connected domain alone
 			// establishes neither, and passing it because a hostname exists would be the same
@@ -60,26 +60,26 @@ func Items() []Item {
 			GapRules: []string{"prowler", "tlsscan", "cloudengine::encryption"},
 		},
 		{
-			ID: "cloud.least_privilege", Category: "Cloud & Infrastructure", Tier: TierSeed,
+			ID: "cloud.least_privilege", Category: "Cloud & Infrastructure", Tier: TierSeed, Agent: "engineer",
 			Text: "Apply least-privilege IAM and offboard promptly", Evidence: EvidenceObserved,
 			Needs:    []string{"cloud_account", "aws", "gcp", "azure", "workspace", "okta", "gworkspace", "m365"},
 			Tools:    []string{"prowler", "scoutsuite"},
 			GapRules: []string{"prowler", "operate::stale", "operate::admin", "operate::offboard", "cloudengine::iam"},
 		},
 		{
-			ID: "cloud.iac_policy", Category: "Cloud & Infrastructure", Tier: TierSeriesA,
+			ID: "cloud.iac_policy", Category: "Cloud & Infrastructure", Tier: TierSeriesA, Agent: "engineer",
 			Text:     "Manage infrastructure as code with policy-as-code checks in CI",
 			Evidence: EvidenceObserved, Needs: []string{"repository", "github"},
 			Tools: []string{"checkov"}, GapRules: []string{"checkov"},
 		},
 		{
-			ID: "cloud.attack_paths", Category: "Cloud & Infrastructure", Tier: TierSeriesB,
+			ID: "cloud.attack_paths", Category: "Cloud & Infrastructure", Tier: TierSeriesB, Agent: "engineer",
 			Text:     "Map privilege-escalation and lateral-movement paths across accounts",
 			Evidence: EvidenceObserved, Needs: []string{"cloud_account", "aws", "gcp", "azure"},
 			Tools: []string{"prowler", "cloudgraph"}, GapRules: []string{"attack-path", "privesc", "lateral"},
 		},
 		{
-			ID: "cloud.drift", Category: "Cloud & Infrastructure", Tier: TierSeriesC,
+			ID: "cloud.drift", Category: "Cloud & Infrastructure", Tier: TierSeriesC, Agent: "engineer",
 			Text:     "Detect drift and what changed since yesterday across cloud accounts",
 			Evidence: EvidenceObserved, Needs: []string{"cloud_account", "aws", "gcp", "azure"},
 			Tools: []string{"prowler", "clouddrift"}, GapRules: []string{"clouddrift", "cloudcdr"},
@@ -87,20 +87,20 @@ func Items() []Item {
 
 		// ── Business Logic & Access ───────────────────────────────────────────────────────────────
 		{
-			ID: "access.sso_mfa", Category: "Business Logic & Access", Tier: TierSeed,
+			ID: "access.sso_mfa", Category: "Business Logic & Access", Tier: TierSeed, Agent: "engineer",
 			Text:     "Enforce SSO and phishing-resistant MFA on all critical systems",
 			Evidence: EvidenceObserved, Needs: []string{"workspace", "okta", "gworkspace", "m365", "github"},
 			Tools:    []string{"operate", "sspm"},
 			GapRules: []string{"operate::mfa", "sspm::", "operate::sso"},
 		},
 		{
-			ID: "access.authorize_endpoints", Category: "Business Logic & Access", Tier: TierSeed,
+			ID: "access.authorize_endpoints", Category: "Business Logic & Access", Tier: TierSeed, Agent: "pentester",
 			Text: "Authorize every endpoint; deny by default", Evidence: EvidenceObserved,
 			Needs: []string{"api"}, Tools: []string{"apiauthz", "schemathesis"},
 			GapRules: []string{"apiauthz", "bfla", "missing-auth"},
 		},
 		{
-			ID: "access.authz_testing", Category: "Business Logic & Access", Tier: TierSeriesA,
+			ID: "access.authz_testing", Category: "Business Logic & Access", Tier: TierSeriesA, Agent: "pentester",
 			Text: "Test for auth bypass, IDOR, and privilege escalation", Evidence: EvidenceObserved,
 			Needs: []string{"web_application", "api"}, Tools: []string{"apiauthz", "nuclei"},
 			GapRules: []string{"idor", "bola", "privesc", "auth-bypass", "apiauthz"},
@@ -122,34 +122,34 @@ func Items() []Item {
 
 		// ── Attack Surface ────────────────────────────────────────────────────────────────────────
 		{
-			ID: "surface.inventory", Category: "Attack Surface", Tier: TierSeed,
+			ID: "surface.inventory", Category: "Attack Surface", Tier: TierSeed, Agent: "engineer",
 			Text: "Keep a continuous inventory of internet-facing assets", Evidence: EvidenceObserved,
 			Needs: []string{"domain", "ip_address"}, Tools: []string{"subfinder", "amass", "naabu"},
 			GapRules: []string{"osint::exposed-host"},
 		},
 		{
-			ID: "surface.default_creds", Category: "Attack Surface", Tier: TierSeed,
+			ID: "surface.default_creds", Category: "Attack Surface", Tier: TierSeed, Agent: "pentester",
 			Text: "Remove default credentials and unused services", Evidence: EvidenceObserved,
 			Needs:    []string{"ip_address", "web_application", "domain"},
 			Tools:    []string{"nuclei", "hydra", "naabu"},
 			GapRules: []string{"default-login", "default-credential", "hydra"},
 		},
 		{
-			ID: "surface.change_monitoring", Category: "Attack Surface", Tier: TierSeriesA,
+			ID: "surface.change_monitoring", Category: "Attack Surface", Tier: TierSeriesA, Agent: "engineer",
 			Text:     "Monitor domains, endpoints, and exposed services for changes",
 			Evidence: EvidenceObserved, Needs: []string{"domain"},
 			Tools:    []string{"crt.sh", "subfinder", "naabu"},
 			GapRules: []string{"osint::cert", "osint::exposed-host"},
 		},
 		{
-			ID: "surface.shadow_it", Category: "Attack Surface", Tier: TierSeriesB,
+			ID: "surface.shadow_it", Category: "Attack Surface", Tier: TierSeriesB, Agent: "engineer",
 			Text: "Track shadow IT and forgotten subdomains", Evidence: EvidenceObserved,
 			Needs:    []string{"domain", "workspace", "okta", "gworkspace", "m365"},
 			Tools:    []string{"subfinder", "crt.sh", "dnstwist"},
 			GapRules: []string{"osint::subdomain-takeover", "osint::typosquat", "shadowit"},
 		},
 		{
-			ID: "surface.perimeter_map", Category: "Attack Surface", Tier: TierSeriesC,
+			ID: "surface.perimeter_map", Category: "Attack Surface", Tier: TierSeriesC, Agent: "engineer",
 			Text: "Continuously map the external perimeter", Evidence: EvidenceObserved,
 			Needs:    []string{"domain", "ip_address"},
 			Tools:    []string{"subfinder", "amass", "naabu", "httpx"},
@@ -158,27 +158,27 @@ func Items() []Item {
 
 		// ── Sensitive Data & Secrets ──────────────────────────────────────────────────────────────
 		{
-			ID: "data.secrets_out_of_vcs", Category: "Sensitive Data & Secrets", Tier: TierSeed,
+			ID: "data.secrets_out_of_vcs", Category: "Sensitive Data & Secrets", Tier: TierSeed, Agent: "engineer",
 			Text:     "Keep secrets out of source control; use a secrets manager",
 			Evidence: EvidenceObserved, Needs: []string{"repository", "github"},
 			Tools:    []string{"gitleaks", "trufflehog"},
 			GapRules: []string{"gitleaks", "trufflehog", "secret"},
 		},
 		{
-			ID: "data.pii_inventory", Category: "Sensitive Data & Secrets", Tier: TierSeed,
+			ID: "data.pii_inventory", Category: "Sensitive Data & Secrets", Tier: TierSeed, Agent: "engineer",
 			Text: "Classify and inventory where PII lives", Evidence: EvidenceObserved,
 			Needs: []string{"cloud_account", "aws", "gcp", "azure", "repository"},
 			Tools: []string{"prowler", "dataclass"}, GapRules: []string{"dspm", "dataclass"},
 		},
 		{
-			ID: "data.secret_pii_scanning", Category: "Sensitive Data & Secrets", Tier: TierSeriesA,
+			ID: "data.secret_pii_scanning", Category: "Sensitive Data & Secrets", Tier: TierSeriesA, Agent: "engineer",
 			Text:     "Scan code, cloud storage, and pipelines for secrets and PII",
 			Evidence: EvidenceObserved, Needs: []string{"repository", "cloud_account", "github", "aws"},
 			Tools:    []string{"gitleaks", "trufflehog", "prowler"},
 			GapRules: []string{"gitleaks", "trufflehog", "dspm", "secret"},
 		},
 		{
-			ID: "data.leaked_credentials", Category: "Sensitive Data & Secrets", Tier: TierSeriesB,
+			ID: "data.leaked_credentials", Category: "Sensitive Data & Secrets", Tier: TierSeriesB, Agent: "engineer",
 			Text: "Validate leaked credentials and rotate on exposure", Evidence: EvidenceObserved,
 			Needs: []string{"domain", "workspace"}, Tools: []string{"theHarvester", "dnstwist"},
 			GapRules: []string{"osint::stealer-log", "osint::breached-credential", "osint::leaked-secret"},
@@ -200,7 +200,7 @@ func Items() []Item {
 				"OSS answers, Datadog or Splunk the commercial ones.",
 		},
 		{
-			ID: "monitor.disclosure_policy", Category: "Monitoring & Response", Tier: TierSeed,
+			ID: "monitor.disclosure_policy", Category: "Monitoring & Response", Tier: TierSeed, Agent: "engineer",
 			Text:     "Publish a vulnerability disclosure policy and a security contact",
 			Evidence: EvidenceObserved, Needs: []string{"domain", "web_application"},
 			Tools: []string{"security.txt"}, GapRules: []string{"security-txt", "missing-security-txt"},
