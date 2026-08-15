@@ -96,6 +96,15 @@ type Tenant struct {
 	// the customer needs — not all 14. Empty = no declared scope (the UI shows the full catalog). Keys
 	// match grc.Frameworks. No secret → stored plain.
 	TargetFrameworks []string `json:"target_frameworks,omitempty"`
+	// Stage is the customer's declared funding stage (seed | series_a | series_b | series_c), which
+	// decides WHICH security practices they are measured against. Deliberately separate from Plan:
+	// Plan is what they pay us, Stage is what their company needs, and conflating the two would
+	// measure a well-funded seed team against an enterprise bar because they bought the big tier.
+	Stage string `json:"stage,omitempty"`
+	// ReadinessAttestations answer the practices no scan can observe — whether production access is
+	// gated behind just-in-time elevation, whether every change is reviewed. A named human answers;
+	// it is never inferred from findings. Keyed by practice id.
+	ReadinessAttestations map[string]ReadinessAttestation `json:"readiness_attestations,omitempty"`
 	// ComplianceProfile holds the applicability facts that determine which frameworks/controls are in
 	// scope — handles PHI (HIPAA), processes card data (PCI), sells to government (FedRAMP/800-171),
 	// EU/India data subjects (GDPR/DPDP). Drives framework suggestions + scoping. No secret → plain.
@@ -1116,4 +1125,15 @@ type ReviewRequest struct {
 	Reviewer   string    `json:"reviewer,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	ResolvedAt time.Time `json:"resolved_at,omitempty"`
+}
+
+// ReadinessAttestation is a named human's answer to a security practice that cannot be scanned for.
+//
+// Both answers are recorded, including "not in place" — a record that only keeps the yes is one
+// nobody should trust, and knowing a gap is acknowledged is more useful than not knowing at all.
+type ReadinessAttestation struct {
+	InPlace bool   `json:"in_place"`
+	By      string `json:"by"`
+	At      string `json:"at"`
+	Note    string `json:"note,omitempty"`
 }
