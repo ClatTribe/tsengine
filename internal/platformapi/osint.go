@@ -35,7 +35,27 @@ func (d Deps) handleIngestOSINT(w http.ResponseWriter, r *http.Request, tenantID
 	}
 
 	findings, stored, pivoted := d.ingestOSINTSnapshot(r.Context(), tenantID, snap, "OSINT snapshot ingest")
-	writeJSON(w, http.StatusOK, map[string]any{"org": snap.Org, "findings_detected": stored, "assets_pivoted": pivoted, "findings": findings})
+	// Echo what we actually PARSED, not just what we found. Without this, a caller whose payload used
+	// the wrong field names got 200 with zero findings and no way to tell "your external footprint is
+	// clean" apart from "we did not understand a thing you sent". That ambiguity is the same failure
+	// this engine exists to avoid, on the surface a customer wires an integration into — and the
+	// sibling ingests already avoid it (tprm echoes "vendors", devices echoes "devices"), so OSINT was
+	// the odd one out rather than following a house pattern.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"org": snap.Org, "findings_detected": stored, "assets_pivoted": pivoted, "findings": findings,
+		"received": map[string]int{
+			"domains":           len(snap.Domains),
+			"exposed_hosts":     len(snap.ExposedHosts),
+			"breached_accounts": len(snap.BreachedAccounts),
+			"leaked_secrets":    len(snap.LeakedSecrets),
+			"typosquats":        len(snap.Typosquats),
+			"exposures":         len(snap.Exposures),
+			"advisories":        len(snap.Advisories),
+			"stealer_logs":      len(snap.StealerLogs),
+			"dangling_records":  len(snap.DanglingRecords),
+			"certificates":      len(snap.Certificates),
+		},
+	})
 }
 
 // ingestOSINTSnapshot assesses a snapshot → stores findings + folds them into the compliance posture +
