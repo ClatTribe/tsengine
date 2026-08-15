@@ -80,3 +80,31 @@ plan-limits pattern this would extend.
 4. Re-check the SOC 2 report on a scoped tenant to confirm no control lost its only evidence source.
 
 Step 4 is not optional. The TPRM finding above is exactly the failure it is there to catch.
+
+---
+
+## 6. Found by walking the product: the ingest half never reaches the approval desk
+
+**Evidence.** A workspace seeded through the credential-free ingest paths — Vercel, device posture,
+vendor risk — produced 6 findings and **0 proposed actions**. `GET /v1/approvals` returned `[]`.
+Nothing ever reached the Inbox.
+
+**Cause.** Remediation is proposed only in `runner.RescanTenant` (the engine scan path). None of the
+five ingest handlers (`vercel`, `deviceposture`, `tprm`, `osint`, `saasposture`) call the proposer, and
+`platformapi.Deps` carries no desk or proposer to call.
+
+**Why it matters more than it looks.** These are exactly the paths a Series A customer uses *first* —
+they need no OAuth app and no cloud credentials. So the surfaces most likely to produce a new
+customer's first findings are the ones where the human-in-the-loop approval loop never starts. And the
+dashboard tells them, in those words: *"TensorShield is triaging these and will prepare fixes you can
+approve."* For these findings it never does.
+
+**It is tractable.** `remediate.Propose` already has a `default` case that returns a generic ticket
+action for a finding with no asset, so the proposer handles this shape today. The work is:
+
+1. carry a proposer + desk on `platformapi.Deps` (they exist; the API layer just never got them), and
+2. run ingested findings through it after `enrichFindings`, the same way the engine path does.
+
+**Why it is not done in this pass.** It touches §18.2 invariant 3 — the only write path is
+`connector.Apply`, reached only after a HITL gate. Wiring a new proposer into that machinery deserves
+its own change with its own review, not an addendum at the end of an audit. Flagged for a decision.
