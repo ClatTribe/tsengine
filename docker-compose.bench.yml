@@ -1,0 +1,167 @@
+# docker-compose.bench.yml — the per-asset benchmark targets, on one box.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Every per-asset scorer in `tsbench` is built and every ground truth is committed
+# (fixtures/web/wavsep/expected-cases.csv is the full 1,133-case WAVSEP corpus;
+# fixtures/cloud/baseline/expected-controls.csv is the CIS set). The ONLY thing that
+# ever blocked a live per-asset recall number was that nothing deployed the targets.
+# This file deploys them.
+#
+# THE SAFETY MODEL — READ BEFORE CHANGING A PORT LINE
+# ---------------------------------------------------
+# These are DELIBERATELY VULNERABLE applications. WAVSEP is 1,133 working injection
+# flaws. VAmPI is an intentionally broken API. Juice Shop ships remote-code-execution
+# challenges. Running them is the point; running them carelessly hands an attacker a
+# foothold on the same box as the platform.
+#
+# Three rules keep that safe, and all three are load-bearing:
+#
+#   1. NO PUBLISHED PORTS. Every target uses `expose`, never `ports`. Nothing here is
+#      reachable from the host, the VPC, or the internet — only from containers on the
+#      bench network. If you add `ports:` to one of these, you have published a
+#      known-vulnerable app to whatever the box is reachable from. Don't.
+#   2. THE BENCH NETWORK IS THE SANDBOX NETWORK. Targets join `tsengine-sandbox`, the
+#      same bridge the ephemeral scan sandboxes attach to. That is exactly the
+#      reachability the scanners need and no more: scanner → target works, host →
+#      target does not.
+#   3. PROFILE-GATED. Everything carries `profiles: ["bench"]`, so a plain
+#      `docker compose up` can never start a vulnerable app by accident. They only come
+#      up under `--profile bench`, i.e. only when you meant it.
+#
+# Residual risk, stated honestly: a target and the platform share one Docker bridge, so
+# an attacker who achieves RCE inside a target has L3 reachability to the platform
+# container. That is the same accepted single-box risk documented for the sandboxes
+# themselves in docker-compose.prod.yml. The mitigations are that targets are off by
+# default, unpublished, and torn down after a run (`scripts/bench-box.sh` does this).
+# If you intend to leave targets running continuously, run them on a dedicated bench
+# box instead — that is the correct fix, not a tweak to this file.
+#
+# USAGE
+#   scripts/bench-box.sh all          # up → wait → score every asset → report → down
+#   docker compose -f docker-compose.bench.yml --profile bench up -d wavsep
+#
+# Resource caps are set so one runaway target cannot starve the platform sharing the
+# box. WAVSEP is the heavy one (Tomcat + MySQL); size the box for it (docs/benchmark-box.md).
+
+name: tsengine-bench
+
+services:
+
+  # ---------------------------------------------------------------- web_application
+  # WAVSEP — the ONE neutral, third-party DAST leaderboard with published competitor
+  # numbers (Acunetix 87%, Netsparker 87%, Burp 78%, ZAP 56% — Shay Chen /
+  # sectoolmarket.com). Ground truth for all 1,133 cases is already committed at
+  # fixtures/web/wavsep/expected-cases.csv, so this container is the last missing piece
+  # of the highest-value number we can produce.
+  #
+  # Slow to boot — it brings up Tomcat and seeds MySQL. Readiness is probed from the
+  # network by scripts/bench-box.sh rather than by a HEALTHCHECK, because a healthcheck
+  # runs inside the target and we do not want to assume a vulnerable image ships curl.
+  wavsep:
+    image: ${WAVSEP_IMAGE:-zaproxy/wavsep:latest}
+    container_name: bench-wavsep
+    profiles: ["bench"]
+    restart: "no"
+    expose: ["8080"]
+    networks: [bench]
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 512
+
+  # ------------------------------------------------------------------------- api
+  # VAmPI — the api asset's must-find fixture (fixtures/api/vampi/fixture.json points at
+  # /openapi.json). No neutral API-security leaderboard exists, so this measures
+  # must-find recall against our own pinned set, not a competitor comparison. The
+  # fixture says so; keep it saying so.
+  vampi:
+    image: ${VAMPI_IMAGE:-erev0s/vampi:latest}
+    container_name: bench-vampi
+    profiles: ["bench"]
+    restart: "no"
+    expose: ["5000"]
+    networks: [bench]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+
+  # ------------------------------------------------------- L2 agent (offensive) target
+  # Juice Shop — used by scripts/pentest-agent-e2e.sh for AI-pentester recall. Kept here
+  # so one compose file describes every target the box needs, and so it inherits the
+  # same no-published-ports rule (it has RCE challenges; it must never be exposed).
+  juiceshop:
+    image: ${JUICESHOP_IMAGE:-bkimminich/juice-shop:latest}
+    container_name: bench-juiceshop
+    profiles: ["bench"]
+    restart: "no"
+    expose: ["3000"]
+    networks: [bench]
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+
+  # ---------------------------------------------------------------- FP-control (web)
+  # A deliberately CLEAN target. Recall without specificity is half a measurement: this
+  # is the target where the correct answer is zero high+ findings, which is what
+  # Fixture.MaxSeverity scores against (CLAUDE.md §14.1.1). Static nginx, nothing else.
+  clean-web:
+    image: ${CLEANWEB_IMAGE:-nginx:alpine}
+    container_name: bench-clean-web
+    profiles: ["bench"]
+    restart: "no"
+    expose: ["80"]
+    networks: [bench]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 128
+
+  # ------------------------------------------------------------------ ip_address
+  # An unauthenticated Redis is the canonical open-service case: naabu must discover the
+  # port, nmap must fingerprint the service, and nuclei's per-port routing must fire its
+  # redis tags. This is the ip asset's must_find (naabu::open-port) made concrete and
+  # deterministic — a pinned image beats "point it at some host with services".
+  #
+  # `--protected-mode no` is what makes it answer from another container. That is the
+  # vulnerability being measured, and it is why this must stay unpublished.
+  ip-redis:
+    image: ${REDIS_IMAGE:-redis:6-alpine}
+    container_name: bench-ip-redis
+    profiles: ["bench"]
+    restart: "no"
+    command: ["redis-server", "--protected-mode", "no"]
+    expose: ["6379"]
+    networks: [bench]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+
+  # ---------------------------------------------------------------- cloud_account
+  # LocalStack gives a real AWS API surface with no AWS account and no credentials, so
+  # CIS-recall scoring can run on the box. Be honest about what it proves: prowler
+  # against LocalStack exercises the checks whose APIs LocalStack implements, which is a
+  # SUBSET of the 42 controls in fixtures/cloud/baseline/expected-controls.csv. Report
+  # the covered subset as the covered subset — a partial denominator quietly presented
+  # as the full one is exactly the overclaim this engine exists to prevent.
+  # The full number needs read-only credentials on a real seeded account.
+  localstack:
+    image: ${LOCALSTACK_IMAGE:-localstack/localstack:latest}
+    container_name: bench-localstack
+    profiles: ["bench"]
+    restart: "no"
+    environment:
+      SERVICES: "s3,iam,ec2,cloudtrail,kms,rds,sts,logs"
+      DEBUG: "0"
+    expose: ["4566"]
+    networks: [bench]
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 512
+
+networks:
+  # Attach to the SAME named bridge the scan sandboxes join, so scanners can reach
+  # targets by container name (http://bench-wavsep:8080) with no host exposure at all.
+  # `external: true` because docker-compose.prod.yml owns it; scripts/bench-box.sh
+  # creates it when running the bench stack standalone.
+  bench:
+    external: true
+    name: ${TSENGINE_SANDBOX_NETWORK:-tsengine-sandbox}
