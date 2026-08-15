@@ -18,8 +18,8 @@ Two rules it enforces, because they are the whole reason this motion works:
   1. NEVER INVENT A FINDING. If the scan errors, the row is written with status=error and
      an EMPTY opening line. It is not skipped silently — a missing row is easy to miss and
      easy to backfill with a guess. A row that says "error" cannot be mailed by accident.
-  2. A CLEAN DOMAIN GETS THE CLEAN-SCAN LINE, never a manufactured problem. Roughly a third
-     of well-run Series A domains pass everything; that is a real opening, not a failure.
+  2. A CLEAN DOMAIN GETS THE CLEAN-SCAN LINE, never a manufactured problem. A domain that
+     passes everything is a real opening, not a failure — 1 of the first 8 scanned did.
 
 Stdlib only — no pip install, so it runs on any machine that has Python.
 """
@@ -35,18 +35,28 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# Priority order for choosing the ONE check to open on, from ../signals.md. DMARC leads by a
-# distance: it is true on a large share of Series A domains, the recipient can verify it in
-# ten seconds, the impact needs no security background, and the fix is a single DNS record.
+# Priority order for choosing the ONE check to open on, from ../signals.md.
+#
+# Email auth leads NOT because it is common — the first real run found zero DMARC/SPF/DKIM gaps
+# across eight live B2B SaaS domains — but because when it does fire it is the strongest opener
+# available: verifiable by the reader in ten seconds, no security background needed to feel it,
+# and a one-record fix. It is ordered first so it wins when present, not because it usually is.
+# Re-measure on your own list; the distribution is in ../signals.md.
+#
 # Names must match the API's `checks[].name` exactly.
 HOOKS: list[tuple[str, str]] = [
     ("DMARC enforcement", "Anyone can send email as @{domain} right now — your DMARC isn't set to reject or quarantine, so a forged invoice from your domain lands in your customer's inbox looking legitimate."),
     ("SPF", "{domain} doesn't publish a sender policy, so mail forged from your domain isn't rejected."),
     ("DKIM", "Mail from {domain} isn't cryptographically signed, so a receiving server can't tell a forgery from the real thing."),
+    # The header hooks below fire FAR more often than the email-auth ones in practice (see the
+    # measured distribution in ../signals.md), and they are the weaker openers: a founder feels
+    # "anyone can email your customers as you" and feels nothing about "no content-security-policy".
+    # So each lands on the SECURITY REVIEW — the thing the reader already cares about — instead of
+    # on the vulnerability class, which they don't.
     ("HTTPS enforced", "{domain} still answers on plain HTTP — that's a first-page question on most vendor security reviews."),
-    ("HSTS", "No HSTS on {domain}, so a first visit can be silently downgraded to HTTP."),
-    ("Content-Security-Policy", "No content-security-policy on {domain} — nothing backstops an XSS if one gets through."),
-    ("Clickjacking & MIME protections", "{domain} can be loaded inside an attacker's iframe — the clickjacking headers aren't set."),
+    ("HSTS", "{domain} is missing HSTS, so a first visit can be silently downgraded to HTTP. It's one of the handful of headers an enterprise reviewer checks from the outside, usually before they even send the questionnaire."),
+    ("Content-Security-Policy", "{domain} has no content-security-policy header. It's one of the first things a security reviewer checks from outside, it's a one-line change, and it's an easy thing to have already fixed by the time they ask."),
+    ("Clickjacking & MIME protections", "{domain} can be loaded inside an attacker's iframe — the two headers that prevent that aren't set. Reviewers check them from outside, and it's a one-line fix."),
     ("Security contact (security.txt)", "There's no documented way for a researcher to report a vulnerability to you — reviewers check for this."),
 ]
 
