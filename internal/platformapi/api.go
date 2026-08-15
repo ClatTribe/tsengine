@@ -107,6 +107,8 @@ type Deps struct {
 	// AWSFetcher builds a LIVE read-only fetcher for a connected AWS account. Nil → POST
 	// /v1/cloud/sync reports that live read is unavailable rather than returning an empty account.
 	AWSFetcher AWSFetcherFor
+	// TLSAssess overrides the TLS handshake assessor; nil → the real one. Test seam only.
+	TLSAssess TLSAssessor
 	// CloudHistory is the APPEND-ONLY timeline of the estate's security-relevant state — what makes
 	// "when did this bucket become public?" answerable. CloudSnapshots is latest-wins by design (the
 	// agent reasons over current state); this is the other half. nil → no history is kept and the
