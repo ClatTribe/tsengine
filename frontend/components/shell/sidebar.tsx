@@ -12,6 +12,7 @@ import {
   Crosshair,
   ChevronDown,
   Sparkles,
+  ClipboardCheck,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -67,6 +68,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     // deciding whether they wanted it, and the sidebar grew with every page added. Same pages, same
     // click count, far less to hold in your head.
     items: [
+      { href: "/readiness", label: "Readiness", icon: ClipboardCheck },
       { href: "/compliance", label: "Compliance", icon: ShieldCheck },
       { href: "/assets", label: "Connections", icon: Boxes },
     ],

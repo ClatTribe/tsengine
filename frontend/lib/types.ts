@@ -994,3 +994,44 @@ export interface SystemState {
   degradations: Degradation[];
 }
 
+/** One security practice a company at a given funding stage is expected to have.
+ *
+ *  `evidence` is the load-bearing field: only an `observed` row may read pass/fail, because only
+ *  those are answered by a scanner. `attested` needs a person, `capability` needs switching on, and
+ *  `unbuilt` is one we do not cover — rendering all four the same colour would be a lie. */
+export interface ReadinessItem {
+  id: string;
+  category: string;
+  tier: "seed" | "series_a" | "series_b" | "series_c";
+  text: string;
+  evidence: "observed" | "capability" | "attested" | "unbuilt";
+  status: "pass" | "gap" | "not_checked" | "needs_you" | "not_covered";
+  detail: string;
+  needs?: string[];
+  tools?: string[];
+  instead?: string;
+  why?: string;
+  agent?: "engineer" | "pentester";
+  gap_count?: number;
+  attested_by?: string;
+  attested_at?: string;
+}
+
+export interface ReadinessSummary {
+  stage: string;
+  total: number;
+  pass: number;
+  gap: number;
+  not_checked: number;
+  needs_you: number;
+  not_covered: number;
+}
+
+export interface ReadinessChecklist {
+  stage: string;
+  stage_set: boolean;
+  summary: ReadinessSummary;
+  items: ReadinessItem[];
+  stages: { value: string; label: string; detail: string }[];
+}
+
