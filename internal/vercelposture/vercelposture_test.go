@@ -29,7 +29,7 @@ func has(fs []types.Finding, rule string) *types.Finding {
 // would pass every detection test below and be useless in production.
 func TestWellConfiguredAccount_YieldsNothing(t *testing.T) {
 	got := Assess(Snapshot{Projects: []Project{{
-		Name: "acme-web", PreviewProtected: b(true), ProductionProtected: b(false), PublicSource: b(true),
+		Name: "acme-web", PreviewProtected: b(true), ProductionProtected: b(false), PublicSource: b(false),
 		EnvVars: []EnvVar{
 			{Key: "DATABASE_URL", Targets: []string{"production"}, Sensitive: true},
 			{Key: "NEXT_PUBLIC_FEATURE_X", Targets: []string{"production", "preview"}},
@@ -166,7 +166,7 @@ func TestLooksLikeCredential_CoversRealNamesWithoutOverreaching(t *testing.T) {
 // is exactly the finding that teaches someone to stop reading.
 func TestUnprotectedProductionAlone_IsNotAFinding(t *testing.T) {
 	got := Assess(Snapshot{Projects: []Project{{
-		Name: "acme-web", ProductionProtected: b(false), PreviewProtected: b(true), PublicSource: b(true),
+		Name: "acme-web", ProductionProtected: b(false), PreviewProtected: b(true), PublicSource: b(false),
 	}}}, opts())
 	if len(got) != 0 {
 		t.Errorf("a normal public website produced findings: %+v", got)
@@ -176,7 +176,7 @@ func TestUnprotectedProductionAlone_IsNotAFinding(t *testing.T) {
 // But open production PLUS readable source is a real combination.
 func TestUnprotectedProductionWithPublicSource_IsReported(t *testing.T) {
 	got := Assess(Snapshot{Projects: []Project{{
-		Name: "acme-web", ProductionProtected: b(false), PublicSource: b(false),
+		Name: "acme-web", ProductionProtected: b(false), PublicSource: b(true),
 		ProductionDomains: []string{"acme.com"},
 	}}}, opts())
 	f := has(got, "production-unprotected-with-public-source")
@@ -192,7 +192,7 @@ func TestUnprotectedProductionWithPublicSource_IsReported(t *testing.T) {
 
 func TestFindings_AreActionableAndOrdered(t *testing.T) {
 	got := Assess(Snapshot{Projects: []Project{
-		{Name: "low", ProductionProtected: b(false), PublicSource: b(false)},
+		{Name: "low", ProductionProtected: b(false), PublicSource: b(true)},
 		{Name: "high", PreviewProtected: b(false)},
 	}}, opts())
 	if len(got) < 2 {
@@ -220,5 +220,48 @@ func TestDegenerateInput_IsSilent(t *testing.T) {
 	}
 	if got := Assess(Snapshot{Projects: []Project{{Name: "  ", PreviewProtected: b(false)}}}, opts()); len(got) != 0 {
 		t.Errorf("an unnamed project produced findings")
+	}
+}
+
+// ── THE POLARITY, PINNED ─────────────────────────────────────────────────────────────────────────
+
+// public_source is a boolean whose name states its meaning: TRUE = the source IS publicly readable.
+// The checks were inverted against that, which is a bug that pays twice — a customer honestly
+// reporting an exposed project was told nothing was wrong, and a correctly protected project was
+// told its source was readable.
+//
+// The old tests did not catch it because they were written against the implementation: one passed
+// PublicSource:true and asserted a CLEAN result, while its neighbour was named
+// "WithPublicSource" and passed false. Read against the field's own contract, the two contradicted
+// each other. This pins the contract directly so the pair can never drift again.
+func TestPublicSourcePolarity_TrueMeansExposed(t *testing.T) {
+	exposed := Assess(Snapshot{Projects: []Project{{
+		Name: "acme-web", PreviewProtected: b(true), ProductionProtected: b(true), PublicSource: b(true),
+	}}}, opts())
+	if has(exposed, "source-publicly-readable") == nil {
+		t.Errorf("public_source:true reported no exposure — a customer telling us their source is "+
+			"public would be told nothing is wrong: %+v", exposed)
+	}
+
+	protected := Assess(Snapshot{Projects: []Project{{
+		Name: "acme-web", PreviewProtected: b(true), ProductionProtected: b(true), PublicSource: b(false),
+	}}}, opts())
+	if has(protected, "source-publicly-readable") != nil {
+		t.Errorf("public_source:false was reported as exposed — crying wolf on a correctly "+
+			"configured project: %+v", protected)
+	}
+}
+
+// Absent is neither. A snapshot that does not carry the setting must not be read as either posture —
+// the reason these are pointers at all.
+func TestPublicSourceAbsent_IsNotJudged(t *testing.T) {
+	got := Assess(Snapshot{Projects: []Project{{
+		Name: "acme-web", PreviewProtected: b(true), ProductionProtected: b(false),
+	}}}, opts())
+	if has(got, "source-publicly-readable") != nil {
+		t.Errorf("an unreported setting was judged as exposed: %+v", got)
+	}
+	if has(got, "production-unprotected-with-public-source") != nil {
+		t.Errorf("the composite rule fired without knowing the source setting: %+v", got)
 	}
 }
