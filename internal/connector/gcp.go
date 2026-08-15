@@ -59,6 +59,11 @@ type GCPWriter interface {
 }
 
 // NewGCP builds the connector.
+// Configured reports whether this deployment can onboard a GCP project. The grant link is useless
+// without the service account the customer is meant to grant Security Reviewer TO — an empty grant_to
+// sends them to the IAM console with nothing to paste (see the AWS note).
+func (g *GCP) Configured() bool { return g.TrustServiceAccount != "" }
+
 func NewGCP(trustServiceAccount string) *GCP {
 	return &GCP{TrustServiceAccount: trustServiceAccount, ConsoleBase: "https://console.cloud.google.com"}
 }
