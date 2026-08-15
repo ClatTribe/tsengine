@@ -182,10 +182,18 @@ func normalizeDomain(in string) string {
 func assessEmailAuth(dc operate.DomainConfig) assessResult {
 	enforced := dc.DMARC == "reject" || dc.DMARC == "quarantine"
 	res := assessResult{Domain: dc.Name, Score: 100}
-	res.Checks = []assessCheck{
-		{Name: "DMARC enforcement", OK: enforced, Detail: dmarcDetail(dc.DMARC), Fix: ifFail(!enforced, dmarcFix(dc.Name))},
-		{Name: "SPF", OK: dc.SPF, Detail: ternary(dc.SPF, "Sender Policy Framework record present.", "No SPF record — senders can't be validated."), Fix: ifFail(!dc.SPF, spfFix(dc.Name))},
-		{Name: "DKIM", OK: dc.DKIM, Detail: ternary(dc.DKIM, "DKIM signing key published.", "No DKIM key at the common selectors we check. DKIM uses domain-specific selectors DNS can't enumerate, so your provider may publish one we couldn't see — confirm in your mail settings."), Fix: ifFail(!dc.DKIM, dkimFix())},
+	// A lookup that could not be answered is DROPPED, not reported as failing — exactly how the web
+	// checks already behave when probeWeb cannot reach the host. Telling a visitor "No DMARC record
+	// — anyone can spoof your domain" because our own resolver timed out would be a fabricated
+	// finding on the most public surface this product has.
+	if !dc.Unknown("dmarc") {
+		res.Checks = append(res.Checks, assessCheck{Name: "DMARC enforcement", OK: enforced, Detail: dmarcDetail(dc.DMARC), Fix: ifFail(!enforced, dmarcFix(dc.Name))})
+	}
+	if !dc.Unknown("spf") {
+		res.Checks = append(res.Checks, assessCheck{Name: "SPF", OK: dc.SPF, Detail: ternary(dc.SPF, "Sender Policy Framework record present.", "No SPF record — senders can't be validated."), Fix: ifFail(!dc.SPF, spfFix(dc.Name))})
+	}
+	if !dc.Unknown("dkim") {
+		res.Checks = append(res.Checks, assessCheck{Name: "DKIM", OK: dc.DKIM, Detail: ternary(dc.DKIM, "DKIM signing key published.", "No DKIM key at the common selectors we check. DKIM uses domain-specific selectors DNS can't enumerate, so your provider may publish one we couldn't see — confirm in your mail settings."), Fix: ifFail(!dc.DKIM, dkimFix())})
 	}
 	// Penalise from the grounded operate findings so the score reflects the same engine logic.
 	for _, f := range operate.Assess(operate.Workspace{Org: dc.Name, Domains: []operate.DomainConfig{dc}}, operate.Options{}) {

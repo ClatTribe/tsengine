@@ -2,6 +2,7 @@ package operate
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sort"
 	"strconv"
@@ -83,6 +84,8 @@ func (e *EmailAuth) FetchDomain(ctx context.Context, domain string) DomainConfig
 			dc.DMARCPct = dmarcPct(recs)
 			dc.DMARCSub = dmarcSubPolicy(recs)
 		}
+	} else if !isNoSuchRecord(err) {
+		dc.Unresolved = append(dc.Unresolved, "dmarc")
 	}
 	// SPF: a TXT on the apex starting v=spf1; the `all` qualifier tells us if it's enforcing.
 	if recs, err := r.LookupTXT(ctx, domain); err == nil {
@@ -90,16 +93,48 @@ func (e *EmailAuth) FetchDomain(ctx context.Context, domain string) DomainConfig
 		if dc.SPF {
 			dc.SPFAll = spfAllQualifier(recs)
 		}
+	} else if !isNoSuchRecord(err) {
+		dc.Unresolved = append(dc.Unresolved, "spf")
 	}
-	// DKIM: any known selector publishing a v=DKIM1 / p= record.
+	// DKIM: any known selector publishing a v=DKIM1 / p= record. DNS cannot enumerate selectors, so
+	// a negative here is best-effort by nature.
+	//
+	// It becomes UNKNOWN only when NOTHING was learned — no key found and not one probe came back
+	// with a definitive answer. Marking it unknown because a single selector among twenty timed out
+	// would be the opposite failure: suppressing a legitimate "no DKIM at the common selectors" on
+	// almost every domain, since one flaky lookup in a long list is close to certain. A definitive
+	// negative on even one selector is real evidence, and the check's own wording already tells the
+	// reader the probe cannot see provider-specific selectors.
+	dkimAnswered := false
 	for _, sel := range e.selectors() {
 		recs, err := r.LookupTXT(ctx, sel+"._domainkey."+domain)
-		if err == nil && hasDKIM(recs) {
-			dc.DKIM = true
-			break
+		if err == nil {
+			dkimAnswered = true
+			if hasDKIM(recs) {
+				dc.DKIM = true
+				break
+			}
+			continue
+		}
+		if isNoSuchRecord(err) {
+			dkimAnswered = true
 		}
 	}
+	if !dc.DKIM && !dkimAnswered {
+		dc.Unresolved = append(dc.Unresolved, "dkim")
+	}
 	return dc
+}
+
+// isNoSuchRecord reports whether a resolver error is a definitive negative answer — NXDOMAIN or
+// NODATA — rather than a failure to get an answer at all (timeout, SERVFAIL, network down).
+//
+// Only the first is a finding. Go surfaces both as *net.DNSError, and IsNotFound is the flag that
+// separates "DNS told us there is no such record" from "DNS told us nothing". Conflating them is
+// what allowed a timeout to be reported to a customer as "No DMARC record".
+func isNoSuchRecord(err error) bool {
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr) && dnsErr.IsNotFound
 }
 
 // parseDMARC returns the policy ("reject" | "quarantine" | "none") from a DMARC record

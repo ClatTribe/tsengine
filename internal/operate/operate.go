@@ -47,6 +47,29 @@ type DomainConfig struct {
 	SPFAll   string `json:"spf_all,omitempty"`   // qualifier on the SPF `all` mechanism: - ~ ? + ("" = none/absent); + or ? is permissive
 	DMARCPct int    `json:"dmarc_pct,omitempty"` // DMARC pct= (live: 100 when enforcing without an explicit pct); 0 = unknown
 	DMARCSub string `json:"dmarc_sp,omitempty"`  // DMARC sp= subdomain policy ("" = inherits p)
+	// Unresolved names the lookups that could NOT be answered — a DNS timeout, SERVFAIL or a dead
+	// network — as distinct from a definitive "no such record".
+	//
+	// The zero values cannot tell those apart on their own: a domain that genuinely publishes no
+	// DMARC and a domain whose lookup timed out both arrive here as DMARC="". Reporting the second
+	// as "DMARC not enforced" asserts a security failing that was never observed, which is the one
+	// thing this engine is not allowed to do (§10). A field named here is UNKNOWN, and every check
+	// reading it must skip rather than fire.
+	//
+	// Empty for posted snapshots, which assert their values directly — so snapshot behaviour is
+	// unchanged and this is purely additive.
+	Unresolved []string `json:"unresolved,omitempty"` // any of: "dmarc", "spf", "dkim"
+}
+
+// Unknown reports whether a given email-auth lookup could not be answered, letting callers tell
+// "we looked and it is absent" (a finding) from "we could not look" (not a finding).
+func (d DomainConfig) Unknown(field string) bool {
+	for _, f := range d.Unresolved {
+		if f == field {
+			return true
+		}
+	}
+	return false
 }
 
 // OAuthGrant is a third-party app granted access to the workspace.
@@ -204,14 +227,19 @@ func checkIncompleteOffboarding(ws Workspace, now time.Time, id func() string) [
 func checkEmailAuth(ws Workspace, now time.Time, id func() string) []types.Finding {
 	var out []types.Finding
 	for _, d := range ws.Domains {
-		if d.DMARC != "reject" && d.DMARC != "quarantine" {
+		// A lookup that could not be answered is UNKNOWN, not absent. Firing here would tell a
+		// customer their domain is spoofable because our resolver timed out — a finding we never
+		// observed, on the posture page they act from.
+		if !d.Unknown("dmarc") && d.DMARC != "reject" && d.DMARC != "quarantine" {
 			out = append(out, finding(id(), "operate::dmarc-not-enforced", types.SeverityHigh,
 				"DMARC not enforced: "+d.Name, d.Name,
 				"Domain "+d.Name+" has DMARC=\""+nz(d.DMARC, "absent")+"\". Without p=quarantine/reject, attackers can spoof your domain for BEC/phishing.",
 				now, comp(types.Compliance{PCI: []string{"5.4.1"}, CISv8: []string{"9.5"},
 					GDPR: []string{"Art. 32"}, NIST80053: []string{"SI-8"}, FedRAMP: []string{"SI-8"}, DPDP: []string{"Sec. 8(5)"}})))
 		}
-		if !d.SPF || !d.DKIM {
+		// Same rule: only assert a gap in a record we actually resolved. If either lookup went
+		// unanswered the pair is inconclusive, because the finding names both.
+		if !d.Unknown("spf") && !d.Unknown("dkim") && (!d.SPF || !d.DKIM) {
 			out = append(out, finding(id(), "operate::spf-dkim-missing", types.SeverityMedium,
 				"SPF/DKIM incomplete: "+d.Name, d.Name,
 				fmt.Sprintf("Domain %s: SPF=%t DKIM=%t. Both are prerequisites for DMARC enforcement.", d.Name, d.SPF, d.DKIM),
