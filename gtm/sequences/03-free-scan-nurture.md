@@ -1,26 +1,25 @@
 # Sequence 03 — Free-scan nurture
 
-> ⚠️ **BLOCKED — prerequisite not built.** `/scan` does not capture an email address
-> today. It runs the check, shows the grade and the fixes, and the visitor leaves
-> without us learning who they were. **This sequence has no input until that changes**,
-> so treat everything below as a design that is ready to run, not a sequence you can
-> switch on. Sequences 01 and 02 are unaffected.
+> **Prerequisite now shipped.** `/scan` captures a name + email *under* the result
+> (never gating it), posting to `/v1/lead` with `source: scan:<domain>:<grade>` and
+> the failing-check count in the message. So a lead arrives already carrying the
+> person's actual result — personalise from it rather than asking what they scanned.
 >
-> Closing it is a product decision, because it turns on **what the visitor gets for
-> the email**, and the honest options differ in what they'd require:
+> **The offer shipped is deliberately narrow: "we'll get in touch and help you fix
+> these."** Not "email me these fixes" — nothing sends a fixes email, and promising
+> one on the page whose whole pitch is that we prove things would be the exact
+> failure this folder is written against. **So email 1 below must not claim to be
+> delivering fixes they were promised** — they were promised a conversation. The copy
+> below is written that way; keep it that way unless a real fixes-email ships.
 >
-> | Offer | Honest? | Needs building |
-> |---|---|---|
-> | "Leave your email and we'll help you fix these" | Yes — it's a sales lead | Nothing. Posts to the existing `/v1/lead` |
-> | "Email me these fixes" | Only if we actually send them | A fixes email (the assess result already has per-check fixes) |
-> | "Watch this domain, tell me if it changes" | Only if we actually monitor it | Scheduled re-scan + change alert for a non-account visitor |
+> Two further honest upgrades remain open, each needing real capability first:
 >
-> Whatever is chosen, it must come **after** the result is displayed. The page's
-> "free, no signup" promise is a real asset — gating the grade behind an email would
-> trade the top of the funnel for the middle of it.
+> | Offer | Needs building |
+> |---|---|
+> | "Email me these fixes" | A fixes email (the assess result already carries per-check fixes) |
+> | "Watch this domain, tell me if it changes" | Scheduled re-scan + change alert for a visitor with no account |
 >
-> One thing that *does* already work: the embeddable grade badge (`/api/assess/badge`),
-> referenced in email 4 below.
+> The embeddable grade badge (`/api/assess/badge`) referenced in email 4 also works.
 
 **Use when:** someone ran the public scan at `/scan` and left an email address.
 **They are the warmest lead we get** — they self-identified a security concern and
@@ -38,12 +37,13 @@ Four touches over 14 days. Stop on signup.
 
 ## Email 1 — sent within 5 minutes of the scan
 
-**Subject:** `your {{domain}} results, and the fixes`
+**Subject:** `your {{domain}} results`
 
 ```
-Hi{{#first_name}} {{first_name}}{{/first_name}},
+Hi {{first_name}},
 
-Here's your result again so it's in your inbox: {{scan_link}}
+You asked for a hand with what the check found on {{domain}} — here's your
+result again so it's in your inbox: {{scan_link}}
 
 {{#failed_checks}}
 You didn't pass {{failed_count}} of 8. The fixes, in order of what a reviewer
