@@ -63,6 +63,11 @@ type AzureWriter interface {
 // application id there is nothing for the customer to grant Reader to (see the AWS note).
 func (a *Azure) Configured() bool { return a.TrustAppID != "" }
 
+// ConfigHint: Azure onboards by consenting our app registration, not an OAuth client secret.
+func (a *Azure) ConfigHint() string {
+	return "AZURE_TRUST_APP_ID (Azure onboards by consenting the platform app registration, not OAuth)"
+}
+
 func NewAzure(trustAppID string) *Azure {
 	return &Azure{TrustAppID: trustAppID, PortalBase: "https://portal.azure.com"}
 }

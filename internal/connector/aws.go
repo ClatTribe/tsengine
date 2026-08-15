@@ -78,6 +78,11 @@ type AWSWriter interface {
 // and the trusted account is the platform's own. Missing either means onboarding cannot complete.
 func (a *AWS) Configured() bool { return a.TemplateURL != "" && a.TrustAccountID != "" }
 
+// ConfigHint: AWS onboards by CloudFormation role-assumption, not OAuth — there is no client secret.
+func (a *AWS) ConfigHint() string {
+	return "AWS_CFN_TEMPLATE_URL and AWS_TRUST_ACCOUNT_ID (AWS onboards via a CloudFormation role, not OAuth)"
+}
+
 func NewAWS(templateURL, trustAccountID, region string) *AWS {
 	return &AWS{TemplateURL: templateURL, TrustAccountID: trustAccountID, Region: nz(region, "us-east-1")}
 }
