@@ -10,6 +10,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -84,6 +85,21 @@ type Service struct {
 	// domains (the same crt.sh path as POST /v1/osint/scan), so a newly-exposed host appears as a
 	// finding and the Detector opens an incident for it. nil → no continuous OSINT (manual-scan only).
 	OSINTFetcher osint.Fetcher
+
+	// CloudSyncer, when set, makes the connected cloud account a CONTINUOUSLY-monitored surface:
+	// each pass re-reads the account through its read-only role and diffs it against the previous
+	// snapshot, so a bucket that became public or a principal that gained admin appears as a drift
+	// finding and the Detector opens an incident for it.
+	//
+	// Without this, cloud was the one connected surface whose change detection was MANUAL — the
+	// fetcher, the diff and the incident opener all existed, but only a human pressing Sync ever
+	// ran them, so a change at 2am waited for someone to notice. SaaS posture and OSINT already
+	// re-synced every pass; this makes cloud behave the same way.
+	//
+	// It returns the drift findings so they can join this pass's present state; a scheduled sync
+	// that stored them without returning them would have the reconciler resolve, in the same pass,
+	// the incidents the sync just opened. nil → no continuous cloud sync (manual /v1/cloud/sync only).
+	CloudSyncer CloudSyncer
 
 	// optional autonomous-loop collaborators
 	GRC          *grc.GRC         // fold each finding into the compliance system-of-record
@@ -241,6 +257,11 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// turns into an incident ("new exposed host → alert" — the EASM continuous-monitoring promise).
 	// Best-effort + grounded: nil fetcher / no domains → nil; a clean footprint adds nothing.
 	current = append(current, s.syncOSINT(ctx, tenantID)...)
+	// Autonomous cloud drift: re-read the connected account through its read-only role and diff it
+	// against the previous snapshot, so a resource that became public or a principal that gained
+	// admin opens an incident on its own rather than waiting for a human to press Sync.
+	// Best-effort + grounded: no syncer / no connected account → nil; an unchanged account adds nothing.
+	current = append(current, s.syncCloud(ctx, tenantID)...)
 	// continuous-monitoring: reconcile this pass's findings into incidents (what's NEW,
 	// what's RESOLVED since last pass). Runs over the whole tenant — a full pass is the
 	// authoritative present state. Only when every asset scanned cleanly, so a partial
@@ -430,6 +451,50 @@ func (s *Service) syncOSINT(ctx context.Context, tenantID string) []types.Findin
 		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
 	}
 	return findings
+}
+
+// ErrCloudSyncUnavailable means a live cloud read was never possible — no fetcher wired on this
+// deployment, or no connected cloud account on this tenant. It is deliberately distinct from a read
+// that FAILED: syncCloud stays quiet about this one and logs the other, because most tenants have no
+// cloud connected and logging that every pass would bury the failures that matter.
+var ErrCloudSyncUnavailable = errors.New("live cloud read is not available")
+
+// CloudSyncer re-reads a tenant's connected cloud account and returns the drift findings it stored
+// (empty when nothing changed). Satisfied by platformapi.Deps.SyncCloudInventory; an interface here
+// so the runner does not depend on the API package.
+//
+// The error is returned so the caller can distinguish a read that FAILED from one that was never
+// possible — see syncCloud, which stays quiet about the latter.
+type CloudSyncer func(ctx context.Context, tenantID string) ([]types.Finding, error)
+
+// syncCloud re-reads the tenant's cloud account each monitoring pass and returns the drift findings.
+//
+// Best-effort by design. A cloud read can fail for reasons that are none of the tenant's business
+// this minute — an expired role, a throttled API — and none of them should abort a pass that still
+// has scan output, SaaS posture and OSINT to reconcile. A failure is logged and the pass continues
+// with what it has.
+//
+// Grounded (§10): findings come only from a real diff against the stored previous snapshot. A first
+// sync has no baseline and an unchanged account has no changes, and both correctly yield nothing —
+// silence here means "no change was observed", never "we did not look".
+func (s *Service) syncCloud(ctx context.Context, tenantID string) []types.Finding {
+	if s.CloudSyncer == nil {
+		return nil
+	}
+	drift, err := s.CloudSyncer(ctx, tenantID)
+	if err != nil {
+		// "Not configured" is the common case — most tenants have no AWS account connected — and
+		// logging it every pass would bury the failures that matter. A real read failure is the
+		// signal, so only that is logged.
+		if !errors.Is(err, ErrCloudSyncUnavailable) {
+			slog.Warn("[scan] cloud sync failed", "tenant", tenantID, "err", err)
+		}
+		return nil
+	}
+	if len(drift) > 0 {
+		slog.Info("[scan] cloud drift detected", "tenant", tenantID, "findings", len(drift))
+	}
+	return drift
 }
 
 // OnTrigger handles a single provider event (a push) — find the matching asset and

@@ -10,8 +10,10 @@
 //
 // # A PARTIAL INVENTORY IS THE DANGEROUS CASE
 //
-// This fetches OBJECT STORAGE today. IAM, EC2 and security groups are the next increment and need
-// SDK modules that are not vendored yet.
+// This fetches object storage (s3), the identity layer (iam) and compute with its security groups
+// (ec2). Each is read independently, because a role granted one permission and not another is the
+// normal case rather than the exception — so a surface can be missing from a fetch that otherwise
+// succeeded.
 //
 // That matters more than it sounds. cloudgraph builds attack paths out of principals, trust edges and
 // network reach; an inventory with buckets and no principals cannot form a path, so an agent reasoning

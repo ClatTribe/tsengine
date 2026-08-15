@@ -513,6 +513,17 @@ func main() {
 	// operator must have enabled live probing (TSENGINE_ACTIVE_EXPLOIT), and the tenant must have
 	// proven ownership of the target. Both fail closed and report "unverified" rather than "clean".
 	svc.Reattacker = apiDeps.ReattackVerdicts
+	// Make the connected cloud account continuously monitored, like SaaS posture and OSINT already
+	// are. Each pass re-reads the account through its read-only role and diffs it against the previous
+	// snapshot, so a bucket that turned public or a principal that gained admin opens an incident on
+	// its own. Everything below this line already existed — the fetcher, the drift diff, the incident
+	// opener — but only a human pressing Sync ever ran it, which made cloud the one connected surface
+	// whose change detection was manual. Self-gating: a tenant with no AWS connection, or a deployment
+	// with no fetcher wired, reports "unavailable" and the pass carries on.
+	svc.CloudSyncer = func(ctx context.Context, tenantID string) ([]types.Finding, error) {
+		drift, _, err := apiDeps.SyncCloudInventory(ctx, tenantID)
+		return drift, err
+	}
 
 	// The RESPOND half for EVENT-DRIVEN incidents: when an ingest path (identity/cloud-drift/OSINT/…)
 	// opens a new incident via detector.OpenFor, put the AI engineer on it immediately instead of

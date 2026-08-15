@@ -17,6 +17,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/azinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/k8sinventory"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // handleIngestAWSInventory (POST /v1/cloud/inventory) is the live-collector ingest for the wedge's CLOUD
@@ -87,7 +88,7 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
-	summary, aerr := d.applyCloudInventory(r.Context(), tenantID, inv, invJSON, "live AWS inventory collected → stored for the AI cloud engineer")
+	_, summary, aerr := d.applyCloudInventory(r.Context(), tenantID, inv, invJSON, "live AWS inventory collected → stored for the AI cloud engineer")
 	if aerr != nil {
 		respond(w, nil, aerr)
 		return
@@ -102,7 +103,13 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 // "ingest an inventory" would drift — one would get drift-detection and the other would not, and the
 // customer could not tell which they were looking at. Pure refactor: the posted path's behaviour is
 // unchanged, which the existing handler tests hold us to.
-func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string) (map[string]any, error) {
+//
+// It returns the drift findings as well as the summary. They are already stored by the time this
+// returns; the caller gets them so a SCHEDULED sync can fold them into the monitoring pass's view of
+// present state. That matters: the reconciler RESOLVES any open incident whose finding is absent from
+// that view, so drift findings which were stored but not handed back would be opened by
+// persistDriftFindings and then immediately resolved by the same pass.
+func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string) ([]types.Finding, map[string]any, error) {
 	// Diff-on-ingest (continuous Detect): if a prior snapshot exists, diff it against this fresh one BEFORE
 	// overwriting → automatic cloud config-drift findings (a resource became public, a new privileged
 	// principal, a new internet/privesc/lateral path). This makes cloud change-control CONTINUOUS on every
@@ -110,17 +117,18 @@ func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv clou
 	// account yields zero findings; the first ingest (no baseline) yields zero. Best-effort — a drift-diff
 	// failure never blocks storing the new snapshot.
 	driftStored := 0
+	var drift []types.Finding
 	if prevSnap, ok, gerr := d.CloudSnapshots.Get(ctx, tenantID); d.Store != nil && gerr == nil && ok && len(prevSnap.Inventory) > 0 {
 		var prevInv cloudgraph.Inventory
 		if json.Unmarshal(prevSnap.Inventory, &prevInv) == nil {
 			findings := clouddrift.Diff(cloudgraph.Ingest(prevInv), cloudgraph.Ingest(inv), clouddrift.Options{})
-			_, driftStored = d.persistDriftFindings(ctx, tenantID, findings)
+			drift, driftStored = d.persistDriftFindings(ctx, tenantID, findings)
 		}
 	}
 	if err := d.CloudSnapshots.Put(ctx, cloudsnap.Snapshot{
 		TenantID: tenantID, Inventory: invJSON, CapturedAt: time.Now().UTC(),
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// CAPTURE THE TIMELINE. Append-only, with change detection inside the store: an estate that has not
 	// moved records nothing, so the history stays a record of CHANGE rather than one row per scan. This
@@ -142,7 +150,7 @@ func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv clou
 			map[string]any{"tenant_id": tenantID, "account_id": inv.AccountID, "resources": len(inv.Resources)},
 			ledgerNote)
 	}
-	return map[string]any{
+	return drift, map[string]any{
 		"account_id":     inv.AccountID,
 		"resources":      len(inv.Resources),
 		"trust_edges":    len(inv.Trusts),
