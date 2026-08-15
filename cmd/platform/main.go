@@ -486,6 +486,7 @@ func main() {
 				AccountID:  c.Account,
 				Buckets:    awsfetch.NewS3Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Principals: awsfetch.NewIAMLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				Compute:    awsfetch.NewEC2Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 			}
 		},
 		CloudSnapshots: cloudSnaps,
