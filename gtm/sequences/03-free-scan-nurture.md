@@ -1,5 +1,27 @@
 # Sequence 03 — Free-scan nurture
 
+> ⚠️ **BLOCKED — prerequisite not built.** `/scan` does not capture an email address
+> today. It runs the check, shows the grade and the fixes, and the visitor leaves
+> without us learning who they were. **This sequence has no input until that changes**,
+> so treat everything below as a design that is ready to run, not a sequence you can
+> switch on. Sequences 01 and 02 are unaffected.
+>
+> Closing it is a product decision, because it turns on **what the visitor gets for
+> the email**, and the honest options differ in what they'd require:
+>
+> | Offer | Honest? | Needs building |
+> |---|---|---|
+> | "Leave your email and we'll help you fix these" | Yes — it's a sales lead | Nothing. Posts to the existing `/v1/lead` |
+> | "Email me these fixes" | Only if we actually send them | A fixes email (the assess result already has per-check fixes) |
+> | "Watch this domain, tell me if it changes" | Only if we actually monitor it | Scheduled re-scan + change alert for a non-account visitor |
+>
+> Whatever is chosen, it must come **after** the result is displayed. The page's
+> "free, no signup" promise is a real asset — gating the grade behind an email would
+> trade the top of the funnel for the middle of it.
+>
+> One thing that *does* already work: the embeddable grade badge (`/api/assess/badge`),
+> referenced in email 4 below.
+
 **Use when:** someone ran the public scan at `/scan` and left an email address.
 **They are the warmest lead we get** — they self-identified a security concern and
 already saw their own result. The job is not to convince them there's a problem;

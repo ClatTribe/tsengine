@@ -44,7 +44,7 @@ reply. Cost per lead: approximately zero.
 | `signals.md` | Mapping from an assess finding → the hook, the fix, and the follow-on question |
 | `sequences/01-questionnaire-blocked.md` | The primary motion: a deal is blocked right now |
 | `sequences/02-evidence-led-cold.md` | Cold outbound led by a real finding on their domain |
-| `sequences/03-free-scan-nurture.md` | Someone ran the free scan — convert to connected account |
+| `sequences/03-free-scan-nurture.md` | Someone ran the free scan — convert to connected account. **Blocked: `/scan` captures no email yet — see the note at the top of that file** |
 | `metrics.md` | What to measure, target rates, and when to kill a sequence |
 
 ## How to run it
