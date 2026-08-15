@@ -10,6 +10,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -205,12 +207,16 @@ func (d *Desk) apply(ctx context.Context, a platform.Action, approver string) (p
 		if err := d.Apply.Apply(ctx, a); err != nil {
 			// keep it visible: the action stays pending/approved-but-failed, not silently lost
 			a.Status = platform.ActApproved
+			a.DeliveryError = deliveryError(err)
 			_ = d.Store.PutAction(ctx, a)
 			d.record("apply_failed", a, approver)
 			return a, fmt.Errorf("hitl: apply %s: %w", a.ID, err)
 		}
 	}
 	a.Status = platform.ActApplied
+	// A retry that worked must not leave the previous failure's explanation behind, or the action
+	// reads as applied-but-broken forever.
+	a.DeliveryError = ""
 	if a.DecidedAt.IsZero() {
 		a.DecidedAt = d.now()
 	}
@@ -244,3 +250,34 @@ func (d *Desk) record(event string, a platform.Action, approver string) {
 		fmt.Sprintf("action %s → %s (tier %d, approver %q)", a.ID, a.Status, a.Tier, approver),
 	)
 }
+
+// deliveryError renders an apply failure for storage on the action.
+//
+// It REDACTS URLs. A delivery error routinely quotes the endpoint it failed to reach, and for Slack
+// that endpoint is the webhook URL — which is itself the bearer credential (§18.2 inv. 6: secrets are
+// sealed and never stored in the clear). Writing the raw error onto the action would take a secret
+// that internal/secret sealed and copy it, in plaintext, into a record the API returns to the browser.
+//
+// The scheme and host are kept because "could not reach hooks.slack.com" is the diagnostic; the path,
+// which is where the token lives, is not.
+func deliveryError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := urlRe.ReplaceAllStringFunc(err.Error(), func(raw string) string {
+		u, perr := url.Parse(raw)
+		if perr != nil || u.Host == "" {
+			return "[redacted-url]"
+		}
+		return u.Scheme + "://" + u.Host + "/[redacted]"
+	})
+	// Bound it: an error carrying a whole response body would bloat every list response.
+	const max = 300
+	if len(msg) > max {
+		msg = msg[:max] + "…"
+	}
+	return msg
+}
+
+// urlRe matches an absolute URL anywhere in an error string.
+var urlRe = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"'` + "`" + `]+`)
