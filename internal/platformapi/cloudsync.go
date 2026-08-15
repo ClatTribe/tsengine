@@ -9,7 +9,9 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/connector/awsfetch"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
+	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/pkg/platform"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // cloudsync.go: read the customer's live AWS state instead of waiting for someone to post it.
@@ -22,11 +24,12 @@ import (
 //
 // # It reports coverage, and that is not decoration
 //
-// The fetcher reads object storage today; IAM and EC2 are the next increment. cloudgraph builds attack
-// paths out of principals and network reach, so an inventory without them cannot form a path — an
-// agent reasoning over it finds none and could call an account clean when its identity layer was never
-// examined. The response therefore leads with awsfetch.Result.Coverage(), which names what was read,
-// what was not, and what that costs.
+// The fetcher reads object storage, IAM and EC2 — but any surface can fail independently (a role
+// missing one permission reads the others fine). cloudgraph builds attack paths out of principals and
+// network reach, so an inventory missing them cannot form a path — an agent reasoning over it finds
+// none and could call an account clean when its identity layer was never examined. The response
+// therefore leads with awsfetch.Result.Coverage(), which names what was read, what was not, and what
+// that costs.
 //
 // A sync that cannot say what it covered would be a worse product than no sync at all, because the
 // result LOOKS live.
@@ -36,7 +39,52 @@ import (
 // deployment rather than returning an empty account.
 type AWSFetcherFor func(conn platform.Connection) awsfetch.Fetcher
 
-// handleCloudSync fetches live AWS state for the tenant's connected account.
+// ErrCloudSyncUnavailable is re-exported from runner, which owns the scheduled-sync contract. It
+// means this deployment or tenant cannot do a live read right now — no snapshot store, no fetcher
+// wired, or no connected AWS account — as distinct from a read that FAILED. The scheduled caller
+// stays silent for the former and logs the latter, because "not configured" every fifteen minutes is
+// noise while "the role stopped working" is the signal.
+var ErrCloudSyncUnavailable = runner.ErrCloudSyncUnavailable
+
+// SyncCloudInventory reads the tenant's live AWS account and applies it, returning the drift findings
+// and a summary.
+//
+// Exported because the scheduled monitoring pass needs it. Everything below the HTTP layer was already
+// here — the fetcher, the drift diff, the timeline — but the only thing that ever called it was a
+// human clicking Sync. That made cloud the one connected surface whose change detection was manual:
+// SaaS posture and OSINT both re-sync every pass, so a newly-public GitHub repo or a newly-exposed
+// host opens an incident on its own, while a bucket that went public at 2am waited for someone to
+// press a button.
+//
+// Returns the stored drift findings so the caller can fold them into the pass's present state — see
+// applyCloudInventory on why handing them back is load-bearing rather than convenience.
+func (d Deps) SyncCloudInventory(ctx context.Context, tenantID string) ([]types.Finding, awsfetch.Result, error) {
+	if d.CloudSnapshots == nil || d.AWSFetcher == nil {
+		return nil, awsfetch.Result{}, ErrCloudSyncUnavailable
+	}
+	conn, err := d.awsConnection(ctx, tenantID)
+	if err != nil {
+		// No connected account is not a failure — most tenants have not connected AWS.
+		return nil, awsfetch.Result{}, fmt.Errorf("%w: %s", ErrCloudSyncUnavailable, err)
+	}
+	res, ferr := d.AWSFetcher(conn).Fetch(ctx)
+	if ferr != nil {
+		return nil, res, ferr
+	}
+	inv := awsinventory.Build(res.Raw)
+	invJSON, merr := json.Marshal(inv)
+	if merr != nil {
+		return nil, res, merr
+	}
+	drift, _, aerr := d.applyCloudInventory(ctx, tenantID, inv, invJSON,
+		"live AWS read via the connected read-only role → stored for the AI cloud engineer")
+	if aerr != nil {
+		return nil, res, aerr
+	}
+	return drift, res, nil
+}
+
+// handleCloudSync fetches live AWS state for the tenant's connected account on demand.
 func (d Deps) handleCloudSync(w http.ResponseWriter, r *http.Request, tenantID string) {
 	if d.CloudSnapshots == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errBody("cloud snapshot store not configured"))
@@ -78,7 +126,7 @@ func (d Deps) handleCloudSync(w http.ResponseWriter, r *http.Request, tenantID s
 		respond(w, nil, merr)
 		return
 	}
-	summary, aerr := d.applyCloudInventory(r.Context(), tenantID, inv, invJSON,
+	_, summary, aerr := d.applyCloudInventory(r.Context(), tenantID, inv, invJSON,
 		"live AWS read via the connected read-only role → stored for the AI cloud engineer")
 	if aerr != nil {
 		respond(w, nil, aerr)
