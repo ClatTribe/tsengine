@@ -59,6 +59,10 @@ type AzureWriter interface {
 }
 
 // NewAzure builds the connector.
+// Configured reports whether this deployment can onboard an Azure subscription. Without the Entra
+// application id there is nothing for the customer to grant Reader to (see the AWS note).
+func (a *Azure) Configured() bool { return a.TrustAppID != "" }
+
 func NewAzure(trustAppID string) *Azure {
 	return &Azure{TrustAppID: trustAppID, PortalBase: "https://portal.azure.com"}
 }

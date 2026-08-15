@@ -66,6 +66,18 @@ type AWSWriter interface {
 }
 
 // NewAWS builds the connector. Region defaults to us-east-1.
+// Configured reports whether this deployment can actually onboard an AWS account.
+//
+// WITHOUT THIS THE CONNECTOR LOOKED READY AND WAS NOT. The three cloud connectors did not implement
+// Configured(), so connector.IsConfigured defaulted them to true and /v1/connect/aws returned 200 with
+// a CloudFormation quick-create link whose templateURL and TrustedAccountId were EMPTY. The customer
+// clicked "Connect AWS", landed on the AWS console, and the stack could not be created — a dead end
+// that looks like a working button, which is worse than the honest 503 every other connector gives.
+//
+// Both fields are operator config with no sensible default: the template has to be hosted somewhere,
+// and the trusted account is the platform's own. Missing either means onboarding cannot complete.
+func (a *AWS) Configured() bool { return a.TemplateURL != "" && a.TrustAccountID != "" }
+
 func NewAWS(templateURL, trustAccountID, region string) *AWS {
 	return &AWS{TemplateURL: templateURL, TrustAccountID: trustAccountID, Region: nz(region, "us-east-1")}
 }
