@@ -127,7 +127,46 @@ func (d Deps) handleConnectURL(w http.ResponseWriter, r *http.Request, tenantID 
 		return
 	}
 	redirect := d.PublicURL + "/v1/connect/" + kind + "/callback"
-	writeJSON(w, http.StatusOK, map[string]string{"authorize_url": conn.OAuthURL(d.signOAuthState(tenantID), redirect)})
+	authorizeURL := conn.OAuthURL(d.signOAuthState(tenantID), redirect)
+	// The guard above catches missing provider credentials; this catches the OTHER thing an authorize
+	// URL needs, and its absence produced exactly the failure that guard's comment describes.
+	//
+	// With TSENGINE_PLATFORM_PUBLIC unset the redirect became the RELATIVE "/v1/connect/<kind>/callback".
+	// Every OAuth provider requires an absolute redirect_uri, so the customer was sent to the provider
+	// and bounced onto its error page, with nothing logged here to say why.
+	//
+	// Checked on the built URL rather than on a per-connector flag: the cloud connectors are console
+	// and CloudFormation links that carry no redirect_uri and are unaffected, and a connector added
+	// later is covered without anyone remembering to mark it.
+	if err := redirectIsAbsolute(authorizeURL); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "this deployment has no public URL, so the " + kind + " sign-in link would send " +
+				"customers to a redirect the provider will reject — set TSENGINE_PLATFORM_PUBLIC to " +
+				"the address customers reach (e.g. https://app.yourdomain.com) and restart",
+			"reason": "public_url_not_configured",
+			"kind":   kind,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"authorize_url": authorizeURL})
+}
+
+// redirectIsAbsolute reports whether an authorize URL's redirect_uri (when it has one) is absolute.
+// A connector whose flow carries no redirect_uri is fine by construction.
+func redirectIsAbsolute(authorizeURL string) error {
+	u, err := url.Parse(authorizeURL)
+	if err != nil {
+		return fmt.Errorf("authorize url is unparseable: %w", err)
+	}
+	r := u.Query().Get("redirect_uri")
+	if r == "" {
+		return nil
+	}
+	ru, err := url.Parse(r)
+	if err != nil || ru.Scheme == "" || ru.Host == "" {
+		return fmt.Errorf("redirect_uri %q is not absolute", r)
+	}
+	return nil
 }
 
 // handleConnectCallback completes OAuth: exchange the code, store the connection
