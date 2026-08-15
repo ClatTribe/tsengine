@@ -962,3 +962,17 @@ export interface DatabaseScanResult {
   discovered_sensitive?: string[];
   deeper_scan_available?: string;
 }
+
+/** A background job (a scan run). Surfaced so a scan that FAILED is visible — a failed scan that
+ *  shows nothing reads as "no vulnerabilities found", which is the worst possible misreading. */
+export interface Job {
+  id: string;
+  tenant_id: string;
+  kind: string;
+  status: string; // queued | running | done | failed
+  error?: string;
+  created_at: string;
+  started_at?: string;
+  finished_at?: string;
+}
+
