@@ -41,11 +41,22 @@ reply. Cost per lead: approximately zero.
 | File | What it's for |
 |---|---|
 | `icp.md` | Who to target, the trigger events, hard disqualifiers, where to source lists |
+| `outbound-sourcing.md` | **Where the outbound list comes from** — ranked sources, the pipeline, sending infrastructure, and the legal shape |
 | `signals.md` | Mapping from an assess finding → the hook, the fix, and the follow-on question |
 | `sequences/01-questionnaire-blocked.md` | The primary motion: a deal is blocked right now |
 | `sequences/02-evidence-led-cold.md` | Cold outbound led by a real finding on their domain |
 | `sequences/03-free-scan-nurture.md` | Someone ran the free scan and asked for help — convert to connected account |
 | `metrics.md` | What to measure, target rates, and when to kill a sequence |
+
+## The two motions
+
+**Inbound** — the free tools capture the lead, then `sequences/03` works it. Every free
+surface now asks for an email *after* it has delivered its value: `/scan` (grade + fixes),
+`/soc2-readiness` (score + prioritised gaps), `/resources` (gated download), `/demo`. None
+of them gate the value behind the form.
+
+**Outbound** — source a list per `outbound-sourcing.md`, scan each domain, and open with a
+real finding per `signals.md`. Sequences 01 and 02.
 
 ## How to run it
 
