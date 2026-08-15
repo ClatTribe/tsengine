@@ -22,14 +22,16 @@ func (d Deps) handleGetPRBotSettings(w http.ResponseWriter, r *http.Request, ten
 		writeJSON(w, http.StatusNotFound, errBody("tenant not found"))
 		return
 	}
-	resp := map[string]any{"enabled": false, "block_severity": "off"}
-	if t.PRBot != nil {
-		resp["enabled"] = t.PRBot.Enabled
-		bs := t.PRBot.BlockSeverity
-		if bs == "" {
-			bs = "off"
-		}
-		resp["block_severity"] = bs
+	// Read through the SAME resolver the CI gate uses, so what a customer sees here is what their
+	// pipeline actually does. These two used to decide independently what an unconfigured tenant
+	// meant and disagreed: this view said "off" while the gate blocked merges.
+	pol := d.resolvePRBotPolicy(r.Context(), tenantID)
+	resp := map[string]any{"enabled": pol.Enabled, "block_severity": "off"}
+	if pol.Enabled {
+		resp["block_severity"] = string(pol.BlockAt)
+	} else if t.PRBot != nil && t.PRBot.BlockSeverity != "" {
+		// Keep showing a saved floor even while the gate is off, so toggling back on is predictable.
+		resp["block_severity"] = t.PRBot.BlockSeverity
 	}
 	// Whether the live GitHub post is reachable is gated on a connected GitHub App with the PR
 	// scope; surface that honestly so the UX can say "policy saved, posting needs GitHub".
