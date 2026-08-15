@@ -40,8 +40,14 @@ func Items() []Item {
 			ID: "appsec.agent_redteam", Category: "Application Security", Tier: TierSeriesB,
 			Text:     "Red-team agent workflows for jailbreaks and data exfiltration before launch",
 			Evidence: EvidenceUnbuilt,
-			Instead: "Testing your own LLM features is real whitespace we have not shipped — garak is the " +
-				"OSS to run today, and it is the anchor tool in our design for it.",
+			// Half-shipped, and said so exactly. The scanner is wrapped, registered on both the host
+			// and sandbox sides, and installed in the image — but there is no ai_application asset
+			// type yet, so a customer cannot point it at anything. Claiming this row on the strength
+			// of a tool nobody can reach would be the same overclaim as a green tick for a scan that
+			// never ran; it flips when the asset type lands (ADR 0012).
+			Instead: "garak (NVIDIA's LLM scanner) is wrapped and ships in our sandbox image, but you " +
+				"cannot yet point it at an app here — that needs the ai_application asset type. Run " +
+				"garak against your assistant yourself in the meantime.",
 		},
 		{
 			ID: "appsec.remediation_sla", Category: "Application Security", Tier: TierSeriesB,
