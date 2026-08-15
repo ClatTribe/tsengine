@@ -54,10 +54,21 @@ func (g *GRC) Coverage(ctx context.Context, tenantID, framework string) (Coverag
 
 func computeCoverage(framework string, assessable, met, gaps int) Coverage {
 	assessed := met + gaps
-	notAssessed := assessable - assessed
-	if notAssessed < 0 {
-		notAssessed = 0 // a tenant may legitimately have more touched controls than the static universe
+	// A tenant can legitimately touch MORE controls than the static universe lists: the CWE crosswalk
+	// maps a finding to every control it genuinely affects, which can include controls outside the set
+	// our scanners are catalogued as covering. That is real signal, not an error — but it used to be
+	// reported as "12 of 9 technical controls assessed (133%)", twice, in the report handed to an
+	// auditor. An impossible ratio does not read as nuance; it reads as arithmetic nobody checked, and
+	// it puts every other number in the document in doubt.
+	//
+	// If we assessed 12 controls then at least 12 were assessable, so the static count was an
+	// UNDERESTIMATE and the denominator widens to match. Coverage then stays a coherent fraction
+	// (assessed <= assessable, pct <= 100) without discarding the extra controls or pretending the
+	// static universe was right.
+	if assessed > assessable {
+		assessable = assessed
 	}
+	notAssessed := assessable - assessed
 	pct := 0.0
 	if assessable > 0 {
 		pct = float64(assessed) / float64(assessable) * 100
