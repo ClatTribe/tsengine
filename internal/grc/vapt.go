@@ -239,7 +239,7 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	fmt.Fprintf(&b, "- **Overall risk rating: %s**\n", s.RiskRating)
 	fmt.Fprintf(&b, "- **%d findings** — Critical %d · High %d · Medium %d · Low %d · Info %d\n",
 		s.Total, s.BySeverity["critical"], s.BySeverity["high"], s.BySeverity["medium"], s.BySeverity["low"], s.BySeverity["info"])
-	fmt.Fprintf(&b, "- **%d exploitation-proven** (a benign proof-of-concept was captured — the strongest evidence tier) · **%d tool-confirmed** (verified/corroborated) · **%d unconfirmed** (pattern-match — validate before action) · **%d actively exploited** (CISA KEV) · **%d with a fix already prepared**\n",
+	fmt.Fprintf(&b, "- **%d exploitation-proven** (strongest evidence tier — a benign proof-of-concept is captured for each) · **%d tool-confirmed** (verified/corroborated) · **%d unconfirmed** (pattern-match — validate before action) · **%d actively exploited** (CISA KEV) · **%d with a fix already prepared**\n",
 		s.ExploitProven, s.Verified, s.Unconfirmed, s.KEV, s.FixesReady)
 	if sca := s.PatchAvailable + s.PatchUnavailable; sca > 0 {
 		fmt.Fprintf(&b, "- **Dependency patchability:** %d of %d dependency findings have an upstream fix you can upgrade to now; %d have no fix available yet (mitigate)\n",
@@ -373,7 +373,7 @@ func RenderVAPTExecMarkdown(r *VAPTReport) string {
 	fmt.Fprintf(&b, "\n## Overall risk rating: %s\n\n", s.RiskRating)
 	fmt.Fprintf(&b, "- **%d findings** — Critical %d · High %d · Medium %d · Low %d · Info %d\n",
 		s.Total, s.BySeverity["critical"], s.BySeverity["high"], s.BySeverity["medium"], s.BySeverity["low"], s.BySeverity["info"])
-	fmt.Fprintf(&b, "- **%d exploitation-proven** (a benign proof-of-concept was captured) · **%d actively exploited in the wild** (CISA KEV) · **%d with a fix already prepared**\n",
+	fmt.Fprintf(&b, "- **%d exploitation-proven** (strongest evidence tier — a benign proof-of-concept is captured for each) · **%d actively exploited in the wild** (CISA KEV) · **%d with a fix already prepared**\n",
 		s.ExploitProven, s.KEV, s.FixesReady)
 	if sca := s.PatchAvailable + s.PatchUnavailable; sca > 0 {
 		fmt.Fprintf(&b, "- **%d of %d dependency findings have an upstream fix available now**\n", s.PatchAvailable, sca)
