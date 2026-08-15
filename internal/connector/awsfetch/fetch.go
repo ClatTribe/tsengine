@@ -90,6 +90,10 @@ type Bucket struct {
 type Fetcher struct {
 	AccountID string
 	Buckets   BucketLister
+	// Principals reads the identity layer. Without it an inventory has no principals and no trust
+	// edges, so cloudgraph cannot form an attack path — see the package comment on why that is the
+	// dangerous kind of partial.
+	Principals IAMReader
 }
 
 // Fetch reads what it can and reports exactly that.
@@ -123,9 +127,27 @@ func (f Fetcher) Fetch(ctx context.Context) (Result, error) {
 		res.Sources = append(res.Sources, "s3")
 	}
 
-	// Surfaces this fetcher does not implement yet. Named explicitly so a caller can never mistake
-	// their absence for an account that has none of them.
-	res.Skipped["iam"] = "not implemented yet — principals, roles and trust policies are unread"
+	if f.Principals == nil {
+		res.Skipped["iam"] = "no identity reader configured — principals and trust policies are unread"
+	} else if ps, ierr := f.Principals.ListPrincipals(ctx); ierr != nil {
+		res.Skipped["iam"] = ierr.Error()
+	} else {
+		for _, p := range ps {
+			if p.Role {
+				res.Raw.Roles = append(res.Raw.Roles, awsinventory.RawIAMRole{
+					ARN: p.ARN, Name: p.Name, Admin: p.Admin, TrustPolicyJSON: p.Trust,
+				})
+				continue
+			}
+			res.Raw.Users = append(res.Raw.Users, awsinventory.RawIAMUser{
+				ARN: p.ARN, Name: p.Name, Admin: p.Admin,
+			})
+		}
+		res.Sources = append(res.Sources, "iam")
+	}
+
+	// Still unimplemented. Named explicitly so a caller can never mistake its absence for an account
+	// that has no compute.
 	res.Skipped["ec2"] = "not implemented yet — instances and security groups are unread"
 
 	if len(res.Sources) == 0 {

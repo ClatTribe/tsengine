@@ -483,8 +483,9 @@ func main() {
 		// on the connect link (confused-deputy protection).
 		AWSFetcher: func(c platform.Connection) awsfetch.Fetcher {
 			return awsfetch.Fetcher{
-				AccountID: c.Account,
-				Buckets:   awsfetch.NewS3Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				AccountID:  c.Account,
+				Buckets:    awsfetch.NewS3Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				Principals: awsfetch.NewIAMLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 			}
 		},
 		CloudSnapshots: cloudSnaps,
