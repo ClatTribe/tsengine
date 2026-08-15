@@ -2,20 +2,26 @@ package operate
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 )
 
-// fakeResolver answers from a fixed map; absent names return an NXDOMAIN-like error.
+// fakeResolver answers from a fixed map; absent names return a real NXDOMAIN.
+//
+// This returned a bare errors.New("no such host") until FetchDomain began distinguishing "DNS says
+// there is no such record" from "DNS could not answer at all". A generic error is indistinguishable
+// from a timeout, so under that rule this fake made every lookup UNKNOWN and suppressed the very
+// findings these tests assert. A *net.DNSError with IsNotFound is what the resolver actually
+// returns for a missing record, so the fake now models reality rather than approximating it.
 type fakeResolver map[string][]string
 
 func (f fakeResolver) LookupTXT(_ context.Context, name string) ([]string, error) {
 	if recs, ok := f[name]; ok {
 		return recs, nil
 	}
-	return nil, errors.New("no such host")
+	return nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
 }
 
 func TestFetchDomain_EnforcedIsClean(t *testing.T) {
