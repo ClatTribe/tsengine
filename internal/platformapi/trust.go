@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -72,10 +73,27 @@ func (d Deps) handleTrust(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errBody("not found"))
 		return
 	}
-	// Frameworks starts as a non-nil empty slice so it serializes as [] not null when the tenant
-	// has no posture data yet (the common fresh-tenant case) — a null would crash the PUBLIC
-	// Trust Center page's .map (the Go nil-slice → JSON-null footgun, on a customer-shared URL).
-	view := trustView{Org: t.Name, Monitored: true, Signed: true, Frameworks: []trustFramework{}, GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	// MONITORED AND SIGNED ARE FACTS, NOT DECORATION.
+	//
+	// These were hardcoded `true`, three lines above a comment about never rendering a false "100%
+	// compliant" on this very page. So a workspace that had never run a single scan published
+	// "Continuously monitored · Re-scanned on every change" to its own customers — the most
+	// expensive place in the product to overstate anything, because the reader is doing vendor due
+	// diligence on someone who trusted us to describe them accurately.
+	//
+	// Monitored means a scan has actually completed. Signed means there is a signed decision trail
+	// for this tenant — every Action is recorded into the ledger, so an action existing is the
+	// evidence. Both understate on a read error: a page that cannot prove a claim must not make it.
+	view := trustView{
+		Org:       t.Name,
+		Monitored: d.tenantHasCompletedScan(r.Context(), tenant),
+		Signed:    d.tenantHasSignedDecisions(r.Context(), tenant),
+		// Non-nil empty slice so it serializes as [] not null on a tenant with no posture yet — a
+		// null would crash the PUBLIC page's .map (the Go nil-slice → JSON-null footgun, on a URL
+		// the customer shares with their own customers).
+		Frameworks:  []trustFramework{},
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+	}
 	if d.GRC != nil {
 		for _, fw := range trustFrameworks {
 			// Use the honest assessment-coverage layer (assessed / assessable), NOT met/total — so a thin
@@ -92,4 +110,36 @@ func (d Deps) handleTrust(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+// tenantHasCompletedScan reports whether any scan has actually finished for this tenant — the
+// evidence behind the public "continuously monitored" claim.
+//
+// A completed engagement is the same signal coverage.Compute and the readiness checklist read, so
+// the public page cannot disagree with what the customer sees in-app. Adding an asset is not being
+// monitored; a scan finishing is.
+func (d Deps) tenantHasCompletedScan(ctx context.Context, tenantID string) bool {
+	engs, err := d.Store.ListEngagements(ctx, tenantID)
+	if err != nil {
+		return false // cannot prove it, so do not claim it
+	}
+	for _, e := range engs {
+		if !e.CompletedAt.IsZero() {
+			return true
+		}
+	}
+	return false
+}
+
+// tenantHasSignedDecisions reports whether there is a signed decision trail for this tenant.
+//
+// Every Action is recorded into the ledger when it is proposed or decided, so the existence of one
+// is the evidence that this workspace has signed history — as opposed to the platform merely being
+// CAPABLE of signing, which is what the badge would otherwise be asserting on an empty workspace.
+func (d Deps) tenantHasSignedDecisions(ctx context.Context, tenantID string) bool {
+	acts, err := d.Store.ListActions(ctx, tenantID)
+	if err != nil {
+		return false
+	}
+	return len(acts) > 0
 }

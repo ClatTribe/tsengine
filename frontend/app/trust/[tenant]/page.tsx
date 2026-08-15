@@ -3,6 +3,7 @@ import { ShieldCheck, CheckCircle2, Lock, Activity, UserCheck } from "lucide-rea
 import { apiBase } from "@/lib/auth";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import type { TrustView } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,12 @@ export default async function TrustCenter({
 
   const generated = new Date(data.generated_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
+  const pills = [
+    ...(data.monitored ? [{ icon: Activity, t: "Continuously monitored", d: "Re-scanned on every change" }] : []),
+    ...(data.signed ? [{ icon: Lock, t: "Evidence signed", d: "ed25519, tamper-evident" }] : []),
+    { icon: UserCheck, t: "Human in the loop", d: "Gated, auditable actions" },
+  ];
+
   return (
     <main className="min-h-screen">
       {/* top bar */}
@@ -77,20 +84,29 @@ export default async function TrustCenter({
         <div className="relative mx-auto max-w-4xl px-5 py-16">
           {/* hero */}
           <div className="text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-pulse-soft px-3 py-1 text-xs font-medium text-pulse">
-              <span className="pulse-dot" /> Continuously monitored
-            </span>
+            {/* The pill is a CLAIM about this workspace, so it appears only when the workspace has
+                actually been scanned. It used to be unconditional, which meant a company that had
+                never run a scan advertised "continuously monitored" to its own prospects. */}
+            {data.monitored && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-pulse-soft px-3 py-1 text-xs font-medium text-pulse">
+                <span className="pulse-dot" /> Continuously monitored
+              </span>
+            )}
             <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">{data.org}</h1>
             <p className="mt-3 text-lg text-muted">Security &amp; compliance posture — live, and independently verifiable.</p>
           </div>
 
-          {/* trust pills */}
-          <div className="mx-auto mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
-            {[
-              { icon: Activity, t: "Continuously monitored", d: "Re-scanned on every change" },
-              { icon: Lock, t: "Evidence signed", d: "ed25519, tamper-evident" },
-              { icon: UserCheck, t: "Human in the loop", d: "Gated, auditable actions" },
-            ].map(({ icon: Icon, t, d }) => (
+          {/* trust pills — each one is a claim, so each appears only when the server can back it.
+              `monitored` and `signed` are computed from real state (a completed scan; a signed
+              decision trail). They were hardcoded true, so a workspace that had never run anything
+              advertised both to its own prospects.
+
+              Human-in-the-loop stays unconditional: it is a property of the PLATFORM, not of this
+              workspace's activity — every consequential action is gated by the approval desk
+              whether or not a scan has run. The grid sizes itself to the surviving pills so a
+              withheld claim does not leave a hole. */}
+          <div className={cn("mx-auto mt-10 grid max-w-2xl gap-3", pills.length === 3 ? "sm:grid-cols-3" : pills.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-1")}>
+            {pills.map(({ icon: Icon, t, d }) => (
               <div key={t} className="card p-4 text-center">
                 <span className="mx-auto grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
                   <Icon className="h-4 w-4" />
