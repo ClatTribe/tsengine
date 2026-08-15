@@ -143,6 +143,34 @@ func RenderXBOWLedgerMarkdown(entries []XBOWLedgerEntry) string {
 	fmt.Fprintf(&b, "**%d distinct benchmarks captured** across %d run record(s) over %d distinct benchmark(s) attempted.\n\n",
 		len(s.Captured), s.Runs, s.DistinctRun)
 
+	// READ THIS BEFORE QUOTING THE NUMBER.
+	//
+	// This file is the most quotable artifact in the repo and had no methodology section at all — a
+	// capture count, per-class tables and evidence hashes, with nothing stating what produced them.
+	// Every honest caveat lived in docs/ instead (product-restructure.md: agent quality "still gated
+	// on a frontier LLM"; v0.1-efficacy-run.md: "an 8B local model is a smoke test, not a credible"
+	// measurement) — everywhere except the page a number would actually be lifted from.
+	//
+	// A capture count without the model that produced it is not a product capability; it is a
+	// capability of that model plus this harness. Shipping it bare is the same unbacked-claim failure
+	// this engine exists to prevent, so the disclosure is emitted WITH the number instead of relying
+	// on a reader to go and find it.
+	b.WriteString("## How to read this number\n\n")
+	b.WriteString("- **It is model-dependent, and the model is not the shipped default.** These captures were driven ")
+	b.WriteString("by a frontier model. The same harness on a small local model performs dramatically worse — this ")
+	b.WriteString("repo's own docs call an 8B local model \"a smoke test, not a credible\" measurement, and describe ")
+	b.WriteString("agent quality as \"gated on a frontier LLM\". A customer's result depends on the model they ")
+	b.WriteString("configure. Quote the number with the model, or do not quote it.\n")
+	b.WriteString("- **XBOW is third-party but not neutral.** It is a public suite published by a company selling a ")
+	b.WriteString("competing product. It is a useful same-suite yardstick against their published solve-rate; it is ")
+	b.WriteString("not an independent standard and not a leaderboard we placed on.\n")
+	b.WriteString("- **Solving CTF-style benchmarks is not autonomous pentesting.** These challenges hand the agent a ")
+	b.WriteString("target and a known-vulnerable app. They omit the hardest part of the real job — choosing what to ")
+	b.WriteString("attack, and reasoning about attacker-controllable state. Google Project Zero make exactly this ")
+	b.WriteString("disclaimer about their own benchmark results.\n")
+	b.WriteString("- **Denominator.** Captures are counted against distinct benchmarks *attempted* (shown above). The ")
+	b.WriteString("suite has 104; a benchmark never attempted is not a failure, and is also not a success.\n\n")
+
 	// per-class
 	b.WriteString("## Captured by vuln class\n\n| Class | Captured |\n|---|---|\n")
 	classes := make([]string, 0, len(s.ByTag))

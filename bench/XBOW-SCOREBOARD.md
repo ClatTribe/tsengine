@@ -4,6 +4,13 @@ _Generated from `bench/xbow-ledger.jsonl` — one appended line per run of `tsbe
 
 **89 distinct benchmarks captured** across 111 run record(s) over 97 distinct benchmark(s) attempted.
 
+## How to read this number
+
+- **It is model-dependent, and the model is not the shipped default.** These captures were driven by a frontier model. The same harness on a small local model performs dramatically worse — this repo's own docs call an 8B local model "a smoke test, not a credible" measurement, and describe agent quality as "gated on a frontier LLM". A customer's result depends on the model they configure. Quote the number with the model, or do not quote it.
+- **XBOW is third-party but not neutral.** It is a public suite published by a company selling a competing product. It is a useful same-suite yardstick against their published solve-rate; it is not an independent standard and not a leaderboard we placed on.
+- **Solving CTF-style benchmarks is not autonomous pentesting.** These challenges hand the agent a target and a known-vulnerable app. They omit the hardest part of the real job — choosing what to attack, and reasoning about attacker-controllable state. Google Project Zero make exactly this disclaimer about their own benchmark results.
+- **Denominator.** Captures are counted against distinct benchmarks *attempted* (shown above). The suite has 104; a benchmark never attempted is not a failure, and is also not a success.
+
 ## Captured by vuln class
 
 | Class | Captured |
