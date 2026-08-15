@@ -12,9 +12,9 @@ import { Prioritize } from "@/components/marketing/prioritize";
 import { ArchStack } from "@/components/marketing/arch-stack";
 import { SCENARIOS, SURFACES, ALTERNATIVES } from "@/lib/solutions";
 
-const HOME_TITLE = "TensorShield — an AI security engineer and an AI pentester for Series A teams";
+const HOME_TITLE = "TensorShield — an AI security engineer and an AI pentester for Series A and B teams";
 const HOME_DESCRIPTION =
-  "Two AI teammates for a 20–100 person team with no security hire: an AI security engineer that finds what is genuinely exploitable across code, cloud and SaaS and writes the fix, and an AI pentester that proves it by exploiting it. You approve anything that touches your systems. SOC 2 evidence built in.";
+  "Two AI teammates for a team whose security surface has outgrown its security team: an AI security engineer that finds what is genuinely exploitable across code, cloud and SaaS and writes the fix, and an AI pentester that proves it by exploiting it. Someone on your team approves anything that touches your systems. SOC 2 evidence built in.";
 
 // The homepage leads with the cross-surface-attack-path wedge, so its social card must match that —
 // otherwise a shared homepage link shows the site-wide "fractional security team" default (the other
@@ -26,13 +26,13 @@ export const metadata = {
   openGraph: {
     title: "Your AI security engineer. And your AI pentester.",
     description:
-      "For Series A teams with no security hire: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. You approve anything that touches your systems.",
+      "For Series A and B teams whose security surface has outgrown their security team: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. Someone on your team approves anything that touches your systems.",
     url: "/",
   },
   twitter: {
     title: "Your AI security engineer. And your AI pentester.",
     description:
-      "For Series A teams with no security hire: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. You approve anything that touches your systems.",
+      "For Series A and B teams whose security surface has outgrown their security team: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. Someone on your team approves anything that touches your systems.",
   },
 };
 
@@ -55,7 +55,7 @@ export default function Landing() {
                 href="/product"
                 className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur transition hover:border-accent/40"
               >
-                <Sparkles className="h-3.5 w-3.5 text-accent" /> For Series A teams with no security hire
+                <Sparkles className="h-3.5 w-3.5 text-accent" /> For Series A and B teams
               </Link>
 
               {/* THE HEADLINE NAMES THE PRODUCT, NOT A THREAT.
@@ -72,10 +72,14 @@ export default function Landing() {
                 the fix. The other proves it by actually exploiting it, and re-tests once you have shipped the
                 patch. You approve anything that touches your systems.
               </p>
-              {/* The qualifier. A visitor should be able to rule themselves in or out in one line. */}
+              {/* The qualifier. A visitor should be able to rule themselves in or out in one line.
+                  It names the shared condition of Series A and B rather than a headcount band: at A that
+                  is nobody on security, at B it is one or two people covering code, cloud, SaaS and the
+                  questionnaires. Both are "more surface than security people", which is what we fix. */}
               <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-faint lg:mx-0">
-                Built for 20–100 person teams with an enterprise deal waiting on SOC 2 — and nobody whose job
-                is security.
+                Built for Series A and B teams with more security surface than security people — an
+                enterprise deal waiting on SOC 2, a cloud nobody has fully mapped, and one or two engineers
+                holding it together.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">

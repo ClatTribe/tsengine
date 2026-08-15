@@ -21,9 +21,9 @@ import {
 // findings, a named human signing the report, retest after the fix, the free tier running on your
 // own LLM key. Nothing is asserted here that isn't true on /ai-pentest, /vapt or /pricing.
 export const metadata = pageMeta({
-  title: "Security for Series A startups — pass the review, keep the deal | TensorShield",
+  title: "Security for Series A and B startups — pass the review, keep the deal | TensorShield",
   description:
-    "An enterprise customer's security review is blocking your deal and you have no security team. Get an exploitation-proven pentest report, the compliance evidence the questionnaire asks for, and proof the fixes landed — signed by a named human. Start free.",
+    "An enterprise customer's security review is blocking your deal and security is nobody's full-time job yet. Get an exploitation-proven pentest report, the compliance evidence the questionnaire asks for, and proof the fixes landed — signed by a named human. Start free.",
   path: "/startups",
 });
 
@@ -78,7 +78,7 @@ export default function Page() {
         <AuroraBackdrop />
         <div className="relative mx-auto max-w-3xl animate-fade-rise px-5 pb-12 pt-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
-            <Rocket className="h-3.5 w-3.5 text-accent" /> For Series A teams with no security hire
+            <Rocket className="h-3.5 w-3.5 text-accent" /> For Series A and B teams stretched thin on security
           </span>
           <h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl">
             The security review is blocking the deal. <span className="text-accent">Unblock it.</span>
