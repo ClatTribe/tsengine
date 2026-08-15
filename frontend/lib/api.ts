@@ -327,7 +327,7 @@ export const api = {
     safe<PentestStats>("/v1/pentest/stats", {
       engagements: 0, active_engagements: 0, completed_runs: 0, total_findings: 0,
       high_plus: 0, exploitation_proven: 0, high_plus_proven: 0, verified_rate: 0, high_plus_found: false,
-      needs_review: 0,
+      needs_review: 0, assessed_runs: 0,
     }),
   approvals: () => safe<Action[]>("/v1/approvals", []),
   // All remediations + the fix-verification roll-up (did the applied fix actually close the finding? KF#4).
