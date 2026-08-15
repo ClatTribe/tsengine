@@ -54,8 +54,13 @@ type Project struct {
 	// carry the setting must not be read as "unprotected".
 	ProductionProtected *bool `json:"production_protected,omitempty"`
 	PreviewProtected    *bool `json:"preview_protected,omitempty"`
-	// PublicSource reports Vercel's "source protection" being off — the /_src route exposing the
-	// project's source and env to anyone.
+	// PublicSource reports whether the project's source IS publicly readable — Vercel's "source
+	// protection" being OFF, so the /_src route exposes the project's source and env to anyone.
+	//
+	// TRUE MEANS EXPOSED. The polarity is stated twice on purpose: it was inverted in the checks
+	// below, so a snapshot honestly reporting public_source:true was told nothing was wrong, while a
+	// correctly protected project was told its source was readable. A boolean whose name and meaning
+	// disagree produces a false negative and a false positive from the same line.
 	PublicSource *bool    `json:"public_source,omitempty"`
 	EnvVars      []EnvVar `json:"env_vars,omitempty"`
 	// ProductionDomains are the live hostnames, so a finding can name what is actually exposed.
@@ -128,7 +133,7 @@ func Assess(s Snapshot, opts Options) []types.Finding {
 		}
 
 		// Source protection off — /_src exposes the project's source and configuration.
-		if isFalse(p.PublicSource) {
+		if isTrue(p.PublicSource) {
 			out = append(out, finding(id(), "vercel::source-publicly-readable", types.SeverityHigh,
 				"Deployment source is publicly readable: "+name, name,
 				fmt.Sprintf("%s serves its source and build configuration publicly. Anyone can read the code, and "+
@@ -143,7 +148,7 @@ func Assess(s Snapshot, opts Options) []types.Finding {
 		// to be public. It is reported only as context alongside a real exposure, never on its own —
 		// flagging "your website is reachable" would be exactly the noise that trains people to ignore
 		// us.
-		if isFalse(p.ProductionProtected) && isFalse(p.PublicSource) {
+		if isFalse(p.ProductionProtected) && isTrue(p.PublicSource) {
 			out = append(out, finding(id(), "vercel::production-unprotected-with-public-source",
 				types.SeverityMedium,
 				"Production is open and its source is readable: "+name, name,
@@ -216,6 +221,10 @@ func hasTarget(targets []string, want string) bool {
 // isFalse reports an EXPLICIT false. A nil pointer means the snapshot did not carry the setting, and
 // absent config is not insecure config — we were not told, which is a different fact from "it is off".
 func isFalse(b *bool) bool { return b != nil && !*b }
+
+// isTrue is the deliberate counterpart to isFalse: both require the pointer to be SET, because an
+// absent setting is unknown and must not be read as either posture.
+func isTrue(b *bool) bool { return b != nil && *b }
 
 func domainNote(domains []string) string {
 	if len(domains) == 0 {

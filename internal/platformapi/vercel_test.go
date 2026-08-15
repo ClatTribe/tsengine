@@ -41,7 +41,7 @@ func postVercel(t *testing.T, h http.Handler, body string) vercelResp {
 func TestVercelIngest_EndToEnd(t *testing.T) {
 	h, st := vercelHandler(t)
 	got := postVercel(t, h, `{"projects":[
-	  {"name":"acme-web","preview_protected":false,"production_protected":false,"public_source":true}
+	  {"name":"acme-web","preview_protected":false,"production_protected":false,"public_source":false}
 	]}`)
 	if got.Projects != 1 || got.IssuesDetected != 1 {
 		t.Fatalf("projects=%d issues=%d, want 1/1", got.Projects, got.IssuesDetected)
@@ -62,7 +62,7 @@ func TestVercelIngest_EndToEnd(t *testing.T) {
 func TestVercelIngest_CleanAccountStoresNothing(t *testing.T) {
 	h, st := vercelHandler(t)
 	got := postVercel(t, h, `{"projects":[
-	  {"name":"acme-web","preview_protected":true,"production_protected":false,"public_source":true}
+	  {"name":"acme-web","preview_protected":true,"production_protected":false,"public_source":false}
 	]}`)
 	if got.IssuesDetected != 0 {
 		t.Errorf("a well-configured account reported %d issues", got.IssuesDetected)
