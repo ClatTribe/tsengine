@@ -50,13 +50,16 @@ func FetchGitHubOrg(ctx context.Context, apiBase, org, token string, hc *http.Cl
 
 	snap := GitHubOrg{
 		Login:                       raw.Login,
-		TwoFactorRequired:           raw.TwoFactorRequirementEnabled,
+		TwoFactorRequired:           &raw.TwoFactorRequirementEnabled,
 		DefaultRepoPermission:       raw.DefaultRepositoryPermission,
 		MembersCanCreatePublicRepos: raw.MembersCanCreatePublicRepositories,
 		// secret scanning is "enabled" by default only when BOTH detection + push-protection are on.
-		SecretScanningEnabled: strings.EqualFold(raw.SecurityAndAnalysis.SecretScanning.Status, "enabled") &&
-			strings.EqualFold(raw.SecurityAndAnalysis.SecretScanningPushProtection.Status, "enabled"),
 	}
+	// The live read always resolves these, so they are recorded as known facts rather than left
+	// absent — absent now means "the snapshot never said", which is a different claim.
+	scanning := strings.EqualFold(raw.SecurityAndAnalysis.SecretScanning.Status, "enabled") &&
+		strings.EqualFold(raw.SecurityAndAnalysis.SecretScanningPushProtection.Status, "enabled")
+	snap.SecretScanningEnabled = &scanning
 	if snap.Login == "" {
 		snap.Login = org
 	}

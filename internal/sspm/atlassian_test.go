@@ -7,13 +7,16 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
+// sb is the pointer helper: these settings distinguish "reported off" from "not reported".
+func sb(v bool) *bool { return &v }
+
 func hardenedAtlassian() AtlassianOrg {
 	return AtlassianOrg{
 		Name:              "acme",
-		TwoFactorRequired: true,
-		SSOEnforced:       true,
+		TwoFactorRequired: sb(true),
+		SSOEnforced:       sb(true),
 		PublicSignup:      false,
-		ApprovedAppsOnly:  true,
+		ApprovedAppsOnly:  sb(true),
 		Members: []AtlassianMember{
 			{Email: "admin@acme.com", Role: "admin", TwoFactor: true, APIToken: false},
 			{Email: "dev@acme.com", Role: "member", TwoFactor: true, APIToken: false},
@@ -32,10 +35,10 @@ func TestAssessAtlassian_HardenedYieldsZero(t *testing.T) {
 func TestAssessAtlassian_FlagsMisconfig(t *testing.T) {
 	org := AtlassianOrg{
 		Name:              "acme",
-		TwoFactorRequired: false,
-		SSOEnforced:       false,
+		TwoFactorRequired: sb(false),
+		SSOEnforced:       sb(false),
 		PublicSignup:      true,
-		ApprovedAppsOnly:  false,
+		ApprovedAppsOnly:  sb(false),
 		Members: []AtlassianMember{
 			{Email: "admin@acme.com", Role: "admin", TwoFactor: false, APIToken: true},
 			{Email: "dev@acme.com", Role: "member", TwoFactor: true, APIToken: false},

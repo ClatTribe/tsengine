@@ -29,10 +29,10 @@ import (
 // the GitHub org/admin API (or an exported snapshot); the engine never guesses.
 type GitHubOrg struct {
 	Login                       string       `json:"login"`
-	TwoFactorRequired           bool         `json:"two_factor_required"`     // org-wide 2FA enforcement
-	DefaultRepoPermission       string       `json:"default_repo_permission"` // none|read|write|admin
+	TwoFactorRequired           *bool        `json:"two_factor_required,omitempty"` // org-wide 2FA enforcement
+	DefaultRepoPermission       string       `json:"default_repo_permission"`       // none|read|write|admin
 	MembersCanCreatePublicRepos bool         `json:"members_can_create_public_repos"`
-	SecretScanningEnabled       bool         `json:"secret_scanning_enabled"` // org default: secret scanning + push protection
+	SecretScanningEnabled       *bool        `json:"secret_scanning_enabled,omitempty"` // org default: secret scanning + push protection
 	Members                     []OrgMember  `json:"members"`
 	OutsideCollaborators        []OrgMember  `json:"outside_collaborators"`
 	Apps                        []OrgApp     `json:"apps"`     // installed OAuth / GitHub Apps
@@ -100,7 +100,8 @@ func AssessGitHubOrg(org GitHubOrg, opts Options) []types.Finding {
 // checkOrg2FA: org-wide 2FA enforcement is the single highest-leverage GitHub
 // org control — without it a phished member password is account takeover.
 func checkOrg2FA(org GitHubOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.TwoFactorRequired {
+	// The finding asserts the setting is OFF, so it needs the setting to actually say so.
+	if !isFalse(org.TwoFactorRequired) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::github::2fa-not-enforced", types.SeverityHigh,
@@ -112,7 +113,9 @@ func checkOrg2FA(org GitHubOrg, target string, now time.Time, id func() string) 
 // checkMember2FA: when enforcement is off, each member without 2FA is a concrete
 // gap (cited by login). Skipped when enforcement is on (the org control covers it).
 func checkMember2FA(org GitHubOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.TwoFactorRequired {
+	// Here the org setting only SUPPRESSES — each member's own flag is the evidence — so suppress
+	// on proof of enforcement, never on an unreported setting.
+	if isTrue(org.TwoFactorRequired) {
 		return nil
 	}
 	var out []types.Finding
@@ -159,7 +162,7 @@ func checkPublicRepoCreation(org GitHubOrg, target string, now time.Time, id fun
 // checkSecretScanning: secret scanning + push protection off → leaked credentials
 // land in history (the #1 real GitHub incident).
 func checkSecretScanning(org GitHubOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.SecretScanningEnabled {
+	if !isFalse(org.SecretScanningEnabled) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::github::secret-scanning-disabled", types.SeverityHigh,
@@ -301,3 +304,25 @@ func joinNames(names []string) string {
 	}
 	return out
 }
+
+// isFalse reports a posture setting the snapshot EXPLICITLY recorded as off.
+//
+// The protective settings are pointers because absent and false are different facts. As plain bools
+// they were the same value, so a workspace snapshot that simply did not mention 2FA was assessed as
+// having 2FA disabled — a Slack export carrying only a workspace name produced four findings about
+// settings it never reported. Those findings open incidents and carry SOC 2 / PCI / CIS mappings into
+// an auditor's evidence pack, so the invention does not stop at the screen.
+//
+// A check therefore fires only on a setting really recorded as off. Where a finding's text asserts
+// TWO facts ("2FA enforcement is OFF and no SSO is required"), it needs both to be recorded — an
+// unreported SSO setting could be the thing carrying MFA, so a half-known pair is unknown, not a
+// violation.
+//
+// This mirrors internal/deviceposture and internal/vercelposture, which document the same hazard.
+func isFalse(b *bool) bool { return b != nil && !*b }
+
+// isTrue reports a setting EXPLICITLY recorded as on. Used where an org-wide setting SUPPRESSES a
+// per-member finding rather than grounding it: org-wide 2FA enforcement makes an individual member's
+// own flag moot, but an UNREPORTED org setting must not silently drop findings the members
+// themselves reported. Suppression needs proof, the same way a finding does.
+func isTrue(b *bool) bool { return b != nil && *b }

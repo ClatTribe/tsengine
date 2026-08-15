@@ -15,10 +15,10 @@ import (
 // exposure) and user API tokens that bypass SSO/MFA.
 type AtlassianOrg struct {
 	Name              string            `json:"name"`
-	TwoFactorRequired bool              `json:"two_factor_required"` // org 2FA enforcement (Atlassian Access)
-	SSOEnforced       bool              `json:"sso_enforced"`        // SAML/SSO via Atlassian Access
-	PublicSignup      bool              `json:"public_signup"`       // anyone with a verified-domain email can self-join
-	ApprovedAppsOnly  bool              `json:"approved_apps_only"`  // Marketplace app install requires admin approval
+	TwoFactorRequired *bool             `json:"two_factor_required,omitempty"` // org 2FA enforcement (Atlassian Access)
+	SSOEnforced       *bool             `json:"sso_enforced,omitempty"`        // SAML/SSO via Atlassian Access
+	PublicSignup      bool              `json:"public_signup"`                 // anyone with a verified-domain email can self-join
+	ApprovedAppsOnly  *bool             `json:"approved_apps_only,omitempty"`  // Marketplace app install requires admin approval
 	Members           []AtlassianMember `json:"members"`
 	Apps              []AtlassianApp    `json:"apps"`
 	Spaces            []ConfluenceSpace `json:"spaces"`
@@ -75,7 +75,7 @@ func AssessAtlassian(org AtlassianOrg, opts Options) []types.Finding {
 }
 
 func atlCheck2FA(org AtlassianOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.TwoFactorRequired || org.SSOEnforced {
+	if !(isFalse(org.TwoFactorRequired) && isFalse(org.SSOEnforced)) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::atlassian::2fa-not-enforced", types.SeverityHigh,
@@ -85,7 +85,8 @@ func atlCheck2FA(org AtlassianOrg, target string, now time.Time, id func() strin
 }
 
 func atlCheckMember2FA(org AtlassianOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.TwoFactorRequired || org.SSOEnforced {
+	if isTrue(org.TwoFactorRequired) || isTrue(org.SSOEnforced) { // org-wide enforcement makes each member's own flag moot
+
 		return nil
 	}
 	var out []types.Finding
@@ -106,7 +107,7 @@ func atlCheckMember2FA(org AtlassianOrg, target string, now time.Time, id func()
 }
 
 func atlCheckSSO(org AtlassianOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.SSOEnforced {
+	if !isFalse(org.SSOEnforced) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::atlassian::sso-not-enforced", types.SeverityMedium,
@@ -154,7 +155,7 @@ func atlCheckAPITokens(org AtlassianOrg, target string, now time.Time, id func()
 }
 
 func atlCheckApprovedApps(org AtlassianOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.ApprovedAppsOnly {
+	if !isFalse(org.ApprovedAppsOnly) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::atlassian::app-approval-disabled", types.SeverityMedium,

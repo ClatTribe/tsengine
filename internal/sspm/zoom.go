@@ -14,13 +14,13 @@ import (
 // account yields ZERO findings (the testability invariant).
 type ZoomAccount struct {
 	Name                    string       `json:"name"`
-	TwoFactorRequired       bool         `json:"two_factor_required"`       // account 2FA enforcement
-	SSOEnforced             bool         `json:"sso_enforced"`              // SAML/SSO required for sign-in
-	MeetingPasscodeRequired bool         `json:"meeting_passcode_required"` // every meeting needs a passcode
-	WaitingRoomEnabled      bool         `json:"waiting_room_enabled"`      // waiting room on by default
-	CloudRecordingEncrypted bool         `json:"cloud_recording_encrypted"` // cloud recordings require passcode / are encrypted
-	RecordingAutoDelete     bool         `json:"recording_auto_delete"`     // a recording retention / auto-delete policy is set
-	ApprovedAppsOnly        bool         `json:"approved_apps_only"`        // Marketplace app pre-approval required
+	TwoFactorRequired       *bool        `json:"two_factor_required,omitempty"`       // account 2FA enforcement
+	SSOEnforced             *bool        `json:"sso_enforced,omitempty"`              // SAML/SSO required for sign-in
+	MeetingPasscodeRequired *bool        `json:"meeting_passcode_required,omitempty"` // every meeting needs a passcode
+	WaitingRoomEnabled      *bool        `json:"waiting_room_enabled,omitempty"`      // waiting room on by default
+	CloudRecordingEncrypted *bool        `json:"cloud_recording_encrypted,omitempty"` // cloud recordings require passcode / are encrypted
+	RecordingAutoDelete     *bool        `json:"recording_auto_delete,omitempty"`     // a recording retention / auto-delete policy is set
+	ApprovedAppsOnly        *bool        `json:"approved_apps_only,omitempty"`        // Marketplace app pre-approval required
 	Members                 []ZoomMember `json:"members"`
 	Apps                    []ZoomApp    `json:"apps"`
 }
@@ -70,7 +70,7 @@ func AssessZoom(acc ZoomAccount, opts Options) []types.Finding {
 }
 
 func zoomCheck2FA(acc ZoomAccount, target string, now time.Time, id func() string) []types.Finding {
-	if acc.TwoFactorRequired || acc.SSOEnforced { // SSO providers carry MFA upstream
+	if !(isFalse(acc.TwoFactorRequired) && isFalse(acc.SSOEnforced)) { // SSO providers carry MFA upstream
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::zoom::2fa-not-enforced", types.SeverityHigh,
@@ -80,7 +80,8 @@ func zoomCheck2FA(acc ZoomAccount, target string, now time.Time, id func() strin
 }
 
 func zoomCheckMember2FA(acc ZoomAccount, target string, now time.Time, id func() string) []types.Finding {
-	if acc.TwoFactorRequired || acc.SSOEnforced {
+	if isTrue(acc.TwoFactorRequired) || isTrue(acc.SSOEnforced) { // org-wide enforcement makes each member's own flag moot
+
 		return nil
 	}
 	var out []types.Finding
@@ -101,7 +102,7 @@ func zoomCheckMember2FA(acc ZoomAccount, target string, now time.Time, id func()
 }
 
 func zoomCheckSSO(acc ZoomAccount, target string, now time.Time, id func() string) []types.Finding {
-	if acc.SSOEnforced {
+	if !isFalse(acc.SSOEnforced) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::zoom::sso-not-enforced", types.SeverityMedium,
@@ -111,7 +112,7 @@ func zoomCheckSSO(acc ZoomAccount, target string, now time.Time, id func() strin
 }
 
 func zoomCheckMeetingPasscode(acc ZoomAccount, target string, now time.Time, id func() string) []types.Finding {
-	if acc.MeetingPasscodeRequired {
+	if !isFalse(acc.MeetingPasscodeRequired) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::zoom::meeting-passcode-not-required", types.SeverityMedium,
@@ -121,7 +122,7 @@ func zoomCheckMeetingPasscode(acc ZoomAccount, target string, now time.Time, id 
 }
 
 func zoomCheckWaitingRoom(acc ZoomAccount, target string, now time.Time, id func() string) []types.Finding {
-	if acc.WaitingRoomEnabled {
+	if !isFalse(acc.WaitingRoomEnabled) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::zoom::waiting-room-disabled", types.SeverityMedium,
@@ -131,7 +132,7 @@ func zoomCheckWaitingRoom(acc ZoomAccount, target string, now time.Time, id func
 }
 
 func zoomCheckRecordingEncryption(acc ZoomAccount, target string, now time.Time, id func() string) []types.Finding {
-	if acc.CloudRecordingEncrypted {
+	if !isFalse(acc.CloudRecordingEncrypted) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::zoom::cloud-recording-not-protected", types.SeverityMedium,
@@ -141,7 +142,7 @@ func zoomCheckRecordingEncryption(acc ZoomAccount, target string, now time.Time,
 }
 
 func zoomCheckRecordingRetention(acc ZoomAccount, target string, now time.Time, id func() string) []types.Finding {
-	if acc.RecordingAutoDelete {
+	if !isFalse(acc.RecordingAutoDelete) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::zoom::no-recording-retention", types.SeverityLow,
@@ -151,7 +152,7 @@ func zoomCheckRecordingRetention(acc ZoomAccount, target string, now time.Time, 
 }
 
 func zoomCheckApprovedApps(acc ZoomAccount, target string, now time.Time, id func() string) []types.Finding {
-	if acc.ApprovedAppsOnly {
+	if !isFalse(acc.ApprovedAppsOnly) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::zoom::app-approval-disabled", types.SeverityMedium,

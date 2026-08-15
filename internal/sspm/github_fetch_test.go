@@ -45,8 +45,13 @@ func TestFetchGitHubOrg_MapsConfigAndFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if snap.Login != "acme" || snap.TwoFactorRequired || snap.DefaultRepoPermission != "write" ||
-		!snap.MembersCanCreatePublicRepos || snap.SecretScanningEnabled {
+	// The live read RESOLVES these, so they must come back recorded-as-off rather than absent —
+	// absent now means "never reported", and the assessor deliberately does not judge that.
+	if snap.TwoFactorRequired == nil || snap.SecretScanningEnabled == nil {
+		t.Fatalf("the live fetch left a setting unreported, so it will never be assessed: %+v", snap)
+	}
+	if snap.Login != "acme" || *snap.TwoFactorRequired || snap.DefaultRepoPermission != "write" ||
+		!snap.MembersCanCreatePublicRepos || *snap.SecretScanningEnabled {
 		t.Fatalf("snapshot not mapped from the API: %+v", snap)
 	}
 	// the grounded assessor must turn that misconfig into findings
@@ -64,7 +69,10 @@ func TestFetchGitHubOrg_HardenedYieldsZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if !snap.TwoFactorRequired || !snap.SecretScanningEnabled {
+	if snap.TwoFactorRequired == nil || snap.SecretScanningEnabled == nil {
+		t.Fatalf("the live fetch left a setting unreported: %+v", snap)
+	}
+	if !*snap.TwoFactorRequired || !*snap.SecretScanningEnabled {
 		t.Fatalf("hardened org should map secure fields: %+v", snap)
 	}
 	if f := AssessGitHubOrg(snap, Options{}); len(f) != 0 {
