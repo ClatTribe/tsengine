@@ -18,6 +18,7 @@ const (
 	FormatSARIF      Format = "sarif"
 	FormatSnyk       Format = "snyk"
 	FormatDependabot Format = "dependabot" // GitHub Dependabot alerts JSON (GHAS)
+	FormatWiz        Format = "wiz"        // Wiz issues export (cloud posture) — the dominant CSPM at this size
 )
 
 // Detect sniffs the format from the payload shape.
@@ -34,6 +35,9 @@ func Detect(data []byte) Format {
 		}
 		if _, ok := probe["vulnerabilities"]; ok {
 			return FormatSnyk
+		}
+		if _, ok := probe["issues"]; ok {
+			return FormatWiz
 		}
 	}
 	return FormatAuto
@@ -52,8 +56,10 @@ func Import(data []byte, format Format, target string, now time.Time) (types.Sca
 		return FromSnyk(data, target, now)
 	case FormatDependabot:
 		return FromDependabot(data, target, now)
+	case FormatWiz:
+		return FromWiz(data, target, now)
 	default:
-		return types.Scan{}, fmt.Errorf("import: unrecognized format (not SARIF, Snyk, or Dependabot)")
+		return types.Scan{}, fmt.Errorf("import: unrecognized format (not SARIF, Snyk, Dependabot, or Wiz)")
 	}
 }
 
