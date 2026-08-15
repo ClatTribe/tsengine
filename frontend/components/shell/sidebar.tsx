@@ -78,7 +78,19 @@ const COLLAPSE_KEY = "ts.nav.collapsed";
 // selfOwned (service-model): when the logged-in tenant OWNS the HITL acts (self_serve) the pending badge
 // is an accent to-do; for managed/msp the expert owns them, so the badge is informational (muted) — not
 // a nag. Defaults true so nothing changes when the flag isn't passed.
-export function Sidebar({ pending, selfOwned = true }: { pending: number; selfOwned?: boolean }) {
+export function Sidebar({
+  pending,
+  selfOwned = true,
+  halted = false,
+  aiEnabled = true,
+}: {
+  pending: number;
+  selfOwned?: boolean;
+  /** Kill-switch engaged — no scans or fixes are running (§18.2 inv. 7). */
+  halted?: boolean;
+  /** An LLM is configured, so the AI engineer/pentester can actually reason. */
+  aiEnabled?: boolean;
+}) {
   const path = usePathname();
   // which group headers are collapsed — persisted so a founder's tidied-up nav sticks across sessions.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -163,9 +175,43 @@ export function Sidebar({ pending, selfOwned = true }: { pending: number; selfOw
         })}
       </nav>
 
-      <div className="mt-4 px-2 pt-2 text-[11px] text-faint">
-        <span className="pulse-dot mr-1.5 align-middle" /> agent online
-      </div>
+      <AgentStatus halted={halted} aiEnabled={aiEnabled} />
     </aside>
+  );
+}
+
+// AgentStatus reports what is ACTUALLY running.
+//
+// This used to be the literal string "agent online" beside a pulsing dot, wired to nothing. Engaging
+// the kill-switch — the one control whose entire purpose is to stop every agent — left it reading
+// "agent online" directly beneath a banner saying automation was halted. The page contradicted itself
+// about a safety control, and the reassuring half was the one that was always on.
+//
+// The layout already resolves both facts to render its banners, so this needs no new fetch; it only
+// needed to be told.
+function AgentStatus({ halted, aiEnabled }: { halted: boolean; aiEnabled: boolean }) {
+  // Halted wins: it is the state a human deliberately chose, and the one they most need reflected.
+  if (halted) {
+    return (
+      <div className="mt-4 px-2 pt-2 text-[11px] text-high">
+        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-high align-middle" />
+        automation halted
+      </div>
+    );
+  }
+  // Without a model the deterministic scanners still run — this is a real, useful state, not an
+  // outage. Saying "agent online" here would promise reasoning that cannot happen.
+  if (!aiEnabled) {
+    return (
+      <div className="mt-4 px-2 pt-2 text-[11px] text-faint">
+        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-faint align-middle" />
+        deterministic scans only
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 px-2 pt-2 text-[11px] text-faint">
+      <span className="pulse-dot mr-1.5 align-middle" /> agent online
+    </div>
   );
 }

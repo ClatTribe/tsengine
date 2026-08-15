@@ -41,7 +41,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar pending={approvals.length} selfOwned={selfOwned} />
+      <Sidebar
+        pending={approvals.length}
+        selfOwned={selfOwned}
+        halted={!!tenant?.agents_halted}
+        aiEnabled={!!llm.ai_enabled}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           workspace={tenant?.name || session.tenant}
