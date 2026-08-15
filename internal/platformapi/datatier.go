@@ -14,11 +14,27 @@ type assetView struct {
 	platform.Asset
 	DataTier      int    `json:"data_tier"`
 	DataTierLabel string `json:"data_tier_label"`
+	// Environment decides whether the pentester may test this asset without a separate production
+	// authorization. Empty means nobody has said, which is GATED AS PRODUCTION — the label spells
+	// that out so a blank does not read as "fine".
+	Environment          string `json:"environment"`
+	EnvironmentLabel     string `json:"environment_label"`
+	EnvironmentSuggested string `json:"environment_suggested,omitempty"`
+	GatedAsProduction    bool   `json:"gated_as_production"`
 }
 
 func viewAsset(a platform.Asset) assetView {
 	t := a.DataTier()
-	return assetView{Asset: a, DataTier: t, DataTierLabel: platform.DataTierLabel(t)}
+	env := AssetEnvironment(a)
+	v := assetView{
+		Asset: a, DataTier: t, DataTierLabel: platform.DataTierLabel(t),
+		Environment: string(env), EnvironmentLabel: env.Label(),
+		GatedAsProduction: env.IsProduction(),
+	}
+	if env == "" {
+		v.EnvironmentSuggested = environmentSuggestion(a)
+	}
+	return v
 }
 
 // handleSetAssetDataTier sets an asset's customer-data-sensitivity tier (1 = customer data,
