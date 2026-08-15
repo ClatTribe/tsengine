@@ -615,8 +615,19 @@ type Action struct {
 	// across scans (finding IDs are regenerated per scan; keys are not). Drives FixVerification.
 	FindingKeys  []string         `json:"finding_keys,omitempty"`
 	Verification *FixVerification `json:"verification,omitempty"` // set once the applied fix is re-tested
-	CreatedAt    time.Time        `json:"created_at"`
-	DecidedAt    time.Time        `json:"decided_at,omitempty"`
+	// DeliveryError is why the last apply attempt failed, redacted and bounded.
+	//
+	// Without it a delivery failure was INVISIBLE: hitl.Desk deliberately leaves a failed action at
+	// ActApproved ("approved but not applied"), which from the actions list is indistinguishable from
+	// one merely waiting to be applied. So a customer configured Jira, a ticket was filed, it never
+	// arrived, and nothing said why — they would look in Jira, see nothing, and have no way to learn
+	// the delivery failed. The ledger recorded apply_failed, so it was auditable; it just was not
+	// surfaced anywhere the customer looks.
+	//
+	// Cleared on a successful apply, so a retry that works leaves no stale explanation behind.
+	DeliveryError string    `json:"delivery_error,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	DecidedAt     time.Time `json:"decided_at,omitempty"`
 }
 
 // FixVerification records whether an APPLIED remediation actually closed the findings it claimed

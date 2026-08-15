@@ -581,6 +581,10 @@ type actionsView struct {
 	Verified     int               `json:"verified"`      // re-tested at least once
 	ConfirmedFix int               `json:"confirmed_fix"` // re-test proved the fix closed the finding(s)
 	StillPresent int               `json:"still_present"` // re-test showed the fix did NOT close it (reopen)
+	// FailedDelivery counts approved actions whose apply attempt failed. A failed action deliberately
+	// stays at ActApproved so it is not lost — which also makes it indistinguishable, in the list,
+	// from one merely waiting. This count is what makes the difference visible.
+	FailedDelivery int `json:"failed_delivery"`
 }
 
 // handleActions returns ALL the tenant's remediation actions with their fix-verification state —
@@ -593,6 +597,9 @@ func (d Deps) handleActions(w http.ResponseWriter, r *http.Request, tenantID str
 	}
 	v := actionsView{Actions: acts}
 	for _, a := range acts {
+		if a.DeliveryError != "" {
+			v.FailedDelivery++
+		}
 		if a.Status != platform.ActApplied || len(a.FindingKeys) == 0 {
 			continue
 		}
