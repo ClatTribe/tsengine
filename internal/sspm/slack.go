@@ -13,11 +13,11 @@ import (
 // app (ADR 0004); reuses the package's finding/comp helpers.
 type SlackWorkspace struct {
 	Name                  string        `json:"name"`
-	TwoFactorRequired     bool          `json:"two_factor_required"`     // workspace 2FA enforcement
-	SSOEnforced           bool          `json:"sso_enforced"`            // SAML/SSO required for sign-in
-	ApprovedAppsOnly      bool          `json:"approved_apps_only"`      // app-approval policy (only admins approve apps)
-	PublicLinkSharing     bool          `json:"public_link_sharing"`     // external/public file-link sharing enabled
-	InviteDomainAllowlist bool          `json:"invite_domain_allowlist"` // invites restricted to allowlisted domains
+	TwoFactorRequired     *bool         `json:"two_factor_required,omitempty"`     // workspace 2FA enforcement
+	SSOEnforced           *bool         `json:"sso_enforced,omitempty"`            // SAML/SSO required for sign-in
+	ApprovedAppsOnly      *bool         `json:"approved_apps_only,omitempty"`      // app-approval policy (only admins approve apps)
+	PublicLinkSharing     bool          `json:"public_link_sharing"`               // external/public file-link sharing enabled
+	InviteDomainAllowlist *bool         `json:"invite_domain_allowlist,omitempty"` // invites restricted to allowlisted domains
 	Members               []SlackMember `json:"members"`
 	Apps                  []SlackApp    `json:"apps"`
 }
@@ -66,7 +66,7 @@ func AssessSlack(ws SlackWorkspace, opts Options) []types.Finding {
 }
 
 func slackCheck2FA(ws SlackWorkspace, target string, now time.Time, id func() string) []types.Finding {
-	if ws.TwoFactorRequired || ws.SSOEnforced { // SSO providers carry MFA upstream
+	if !(isFalse(ws.TwoFactorRequired) && isFalse(ws.SSOEnforced)) { // SSO providers carry MFA upstream
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::slack::2fa-not-enforced", types.SeverityHigh,
@@ -76,7 +76,8 @@ func slackCheck2FA(ws SlackWorkspace, target string, now time.Time, id func() st
 }
 
 func slackCheckMember2FA(ws SlackWorkspace, target string, now time.Time, id func() string) []types.Finding {
-	if ws.TwoFactorRequired || ws.SSOEnforced {
+	if isTrue(ws.TwoFactorRequired) || isTrue(ws.SSOEnforced) { // org-wide enforcement makes each member's own flag moot
+
 		return nil
 	}
 	var out []types.Finding
@@ -97,7 +98,7 @@ func slackCheckMember2FA(ws SlackWorkspace, target string, now time.Time, id fun
 }
 
 func slackCheckSSO(ws SlackWorkspace, target string, now time.Time, id func() string) []types.Finding {
-	if ws.SSOEnforced {
+	if !isFalse(ws.SSOEnforced) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::slack::sso-not-enforced", types.SeverityMedium,
@@ -107,7 +108,7 @@ func slackCheckSSO(ws SlackWorkspace, target string, now time.Time, id func() st
 }
 
 func slackCheckApprovedApps(ws SlackWorkspace, target string, now time.Time, id func() string) []types.Finding {
-	if ws.ApprovedAppsOnly {
+	if !isFalse(ws.ApprovedAppsOnly) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::slack::app-approval-disabled", types.SeverityMedium,
@@ -178,7 +179,7 @@ func slackCheckAdminSprawl(ws SlackWorkspace, max int, target string, now time.T
 }
 
 func slackCheckInviteAllowlist(ws SlackWorkspace, target string, now time.Time, id func() string) []types.Finding {
-	if ws.InviteDomainAllowlist {
+	if !isFalse(ws.InviteDomainAllowlist) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::slack::no-invite-domain-allowlist", types.SeverityLow,

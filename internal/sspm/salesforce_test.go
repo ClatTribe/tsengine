@@ -10,10 +10,10 @@ import (
 func hardenedSalesforce() SalesforceOrg {
 	return SalesforceOrg{
 		Name:             "acme",
-		MFARequired:      true,
-		SSOEnforced:      true,
-		IPRestrictions:   true,
-		ApprovedAppsOnly: true,
+		MFARequired:      sb(true),
+		SSOEnforced:      sb(true),
+		IPRestrictions:   sb(true),
+		ApprovedAppsOnly: sb(true),
 		Users: []SalesforceUser{
 			{Username: "admin@acme.com", Profile: "System Administrator", MFA: true, ModifyAllData: true},
 			{Username: "rep@acme.com", Profile: "Sales User", MFA: true, ModifyAllData: false},
@@ -32,10 +32,10 @@ func TestAssessSalesforce_HardenedYieldsZero(t *testing.T) {
 func TestAssessSalesforce_FlagsMisconfig(t *testing.T) {
 	org := SalesforceOrg{
 		Name:             "acme",
-		MFARequired:      false,
-		SSOEnforced:      false,
-		IPRestrictions:   false,
-		ApprovedAppsOnly: false,
+		MFARequired:      sb(false),
+		SSOEnforced:      sb(false),
+		IPRestrictions:   sb(false),
+		ApprovedAppsOnly: sb(false),
 		Users: []SalesforceUser{
 			{Username: "admin@acme.com", Profile: "System Administrator", MFA: false, ModifyAllData: true},
 			{Username: "rep@acme.com", Profile: "Sales User", MFA: false, ModifyAllData: true}, // non-admin w/ MAD

@@ -11,13 +11,13 @@ import (
 func hardenedZoom() ZoomAccount {
 	return ZoomAccount{
 		Name:                    "acme",
-		TwoFactorRequired:       true,
-		SSOEnforced:             true,
-		MeetingPasscodeRequired: true,
-		WaitingRoomEnabled:      true,
-		CloudRecordingEncrypted: true,
-		RecordingAutoDelete:     true,
-		ApprovedAppsOnly:        true,
+		TwoFactorRequired:       sb(true),
+		SSOEnforced:             sb(true),
+		MeetingPasscodeRequired: sb(true),
+		WaitingRoomEnabled:      sb(true),
+		CloudRecordingEncrypted: sb(true),
+		RecordingAutoDelete:     sb(true),
+		ApprovedAppsOnly:        sb(true),
 		Members: []ZoomMember{
 			{Email: "ceo@acme.com", Role: "owner", TwoFactor: true},
 			{Email: "dev@acme.com", Role: "member", TwoFactor: true},
@@ -35,13 +35,13 @@ func TestAssessZoom_HardenedYieldsZero(t *testing.T) {
 func TestAssessZoom_FlagsMisconfig(t *testing.T) {
 	acc := ZoomAccount{
 		Name:                    "acme",
-		TwoFactorRequired:       false,
-		SSOEnforced:             false,
-		MeetingPasscodeRequired: false,
-		WaitingRoomEnabled:      false,
-		CloudRecordingEncrypted: false,
-		RecordingAutoDelete:     false,
-		ApprovedAppsOnly:        false,
+		TwoFactorRequired:       sb(false),
+		SSOEnforced:             sb(false),
+		MeetingPasscodeRequired: sb(false),
+		WaitingRoomEnabled:      sb(false),
+		CloudRecordingEncrypted: sb(false),
+		RecordingAutoDelete:     sb(false),
+		ApprovedAppsOnly:        sb(false),
 		Members: []ZoomMember{
 			{Email: "ceo@acme.com", Role: "owner", TwoFactor: false},
 			{Email: "dev@acme.com", Role: "member", TwoFactor: false},

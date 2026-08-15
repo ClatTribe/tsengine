@@ -12,11 +12,11 @@ import (
 func TestAssessSlack_HardenedIsClean(t *testing.T) {
 	ws := SlackWorkspace{
 		Name:                  "acme",
-		TwoFactorRequired:     true,
-		SSOEnforced:           true,
-		ApprovedAppsOnly:      true,
+		TwoFactorRequired:     sb(true),
+		SSOEnforced:           sb(true),
+		ApprovedAppsOnly:      sb(true),
 		PublicLinkSharing:     false,
-		InviteDomainAllowlist: true,
+		InviteDomainAllowlist: sb(true),
 		Members: []SlackMember{
 			{Name: "founder", Role: "owner", TwoFactor: true},
 			{Name: "dev1", Role: "member", TwoFactor: true},
@@ -32,11 +32,11 @@ func TestAssessSlack_HardenedIsClean(t *testing.T) {
 func TestAssessSlack_WeakWorkspace(t *testing.T) {
 	ws := SlackWorkspace{
 		Name:                  "acme",
-		TwoFactorRequired:     false,
-		SSOEnforced:           false,
-		ApprovedAppsOnly:      false,
+		TwoFactorRequired:     sb(false),
+		SSOEnforced:           sb(false),
+		ApprovedAppsOnly:      sb(false),
 		PublicLinkSharing:     true,
-		InviteDomainAllowlist: false,
+		InviteDomainAllowlist: sb(false),
 		Members: []SlackMember{
 			{Name: "founder", Role: "owner", TwoFactor: false},
 			{Name: "a2", Role: "admin", TwoFactor: true},
@@ -86,12 +86,64 @@ func TestAssessSlack_WeakWorkspace(t *testing.T) {
 // SSO enforcement is treated as carrying MFA upstream → no 2FA findings.
 func TestAssessSlack_SSOSuppresses2FA(t *testing.T) {
 	ws := SlackWorkspace{
-		Name: "x", SSOEnforced: true, ApprovedAppsOnly: true, InviteDomainAllowlist: true,
+		Name: "x", SSOEnforced: sb(true), ApprovedAppsOnly: sb(true), InviteDomainAllowlist: sb(true),
 		Members: []SlackMember{{Name: "u", Role: "member", TwoFactor: false}},
 	}
 	for _, f := range AssessSlack(ws, Options{Now: time.Unix(0, 0)}) {
 		if strings.Contains(f.RuleID, "2fa") {
 			t.Errorf("SSO-enforced workspace should not raise a 2FA finding: %s", f.RuleID)
 		}
+	}
+}
+
+// ── ABSENT IS NOT MISCONFIGURED ──────────────────────────────────────────────────────────────────
+
+// A snapshot that carries only a workspace name used to produce four findings — 2FA not enforced,
+// SSO not enforced, app approval disabled, no invite allowlist — about settings it never mentioned.
+// The package promises a hardened app yields zero findings; the converse, an app we know nothing
+// about yielding four, is the same claim made backwards.
+//
+// It reaches further than the screen: these carry SOC 2 / PCI / CIS mappings into an auditor's
+// evidence pack, so an incomplete export manufactured evidence of control failures nobody observed.
+func TestUnreportedSlackSettings_AreNotFindings(t *testing.T) {
+	got := AssessSlack(SlackWorkspace{Name: "acme"}, Options{Now: time.Unix(0, 0)})
+	if len(got) != 0 {
+		t.Fatalf("a workspace that reported only its name produced %d finding(s) about settings it "+
+			"never mentioned: %+v", len(got), got)
+	}
+}
+
+// The other half: a setting really recorded as off is still a finding. The fix must not buy silence
+// by going blind.
+func TestExplicitlyOffSlackSettings_AreStillFindings(t *testing.T) {
+	got := AssessSlack(SlackWorkspace{
+		Name: "acme", TwoFactorRequired: sb(false), SSOEnforced: sb(false),
+	}, Options{Now: time.Unix(0, 0)})
+	var found bool
+	for _, f := range got {
+		if f.RuleID == "sspm::slack::2fa-not-enforced" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("2FA and SSO both recorded as off produced no finding: %+v", got)
+	}
+}
+
+// A member's own reported lack of 2FA is grounded in the MEMBER's record. An unreported ORG setting
+// must not silently drop it — the org setting suppresses that finding only when it proves enforcement.
+func TestMemberWithout2FA_SurvivesAnUnreportedOrgSetting(t *testing.T) {
+	got := AssessSlack(SlackWorkspace{
+		Name: "acme", Members: []SlackMember{{Name: "dev", Role: "member", TwoFactor: false}},
+	}, Options{Now: time.Unix(0, 0)})
+	var found bool
+	for _, f := range got {
+		if f.RuleID == "sspm::slack::member-without-2fa" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a member who reported no 2FA was dropped because the workspace setting was "+
+			"unreported: %+v", got)
 	}
 }

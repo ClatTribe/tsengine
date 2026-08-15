@@ -17,10 +17,10 @@ import (
 // Modify-All-Data permission sprawl.
 type SalesforceOrg struct {
 	Name             string                `json:"name"`
-	MFARequired      bool                  `json:"mfa_required"`       // org-wide MFA enforcement
-	SSOEnforced      bool                  `json:"sso_enforced"`       // SAML/SSO required for sign-in
-	IPRestrictions   bool                  `json:"ip_restrictions"`    // login IP ranges configured
-	ApprovedAppsOnly bool                  `json:"approved_apps_only"` // admin-approved connected apps only
+	MFARequired      *bool                 `json:"mfa_required,omitempty"`       // org-wide MFA enforcement
+	SSOEnforced      *bool                 `json:"sso_enforced,omitempty"`       // SAML/SSO required for sign-in
+	IPRestrictions   *bool                 `json:"ip_restrictions,omitempty"`    // login IP ranges configured
+	ApprovedAppsOnly *bool                 `json:"approved_apps_only,omitempty"` // admin-approved connected apps only
 	Users            []SalesforceUser      `json:"users"`
 	ConnectedApps    []SalesforceApp       `json:"connected_apps"`
 	Communities      []SalesforceCommunity `json:"communities"`
@@ -77,7 +77,7 @@ func AssessSalesforce(org SalesforceOrg, opts Options) []types.Finding {
 }
 
 func sfCheckMFA(org SalesforceOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.MFARequired || org.SSOEnforced {
+	if !(isFalse(org.MFARequired) && isFalse(org.SSOEnforced)) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::salesforce::mfa-not-enforced", types.SeverityHigh,
@@ -87,7 +87,8 @@ func sfCheckMFA(org SalesforceOrg, target string, now time.Time, id func() strin
 }
 
 func sfCheckUserMFA(org SalesforceOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.MFARequired || org.SSOEnforced {
+	if isTrue(org.MFARequired) || isTrue(org.SSOEnforced) { // org-wide enforcement makes each member's own flag moot
+
 		return nil
 	}
 	var out []types.Finding
@@ -108,7 +109,7 @@ func sfCheckUserMFA(org SalesforceOrg, target string, now time.Time, id func() s
 }
 
 func sfCheckSSO(org SalesforceOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.SSOEnforced {
+	if !isFalse(org.SSOEnforced) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::salesforce::sso-not-enforced", types.SeverityMedium,
@@ -118,7 +119,7 @@ func sfCheckSSO(org SalesforceOrg, target string, now time.Time, id func() strin
 }
 
 func sfCheckIPRestrictions(org SalesforceOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.IPRestrictions {
+	if !isFalse(org.IPRestrictions) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::salesforce::no-ip-restrictions", types.SeverityMedium,
@@ -156,7 +157,7 @@ func sfCheckModifyAllData(org SalesforceOrg, target string, now time.Time, id fu
 }
 
 func sfCheckApprovedApps(org SalesforceOrg, target string, now time.Time, id func() string) []types.Finding {
-	if org.ApprovedAppsOnly {
+	if !isFalse(org.ApprovedAppsOnly) {
 		return nil
 	}
 	return []types.Finding{finding(id(), "sspm::salesforce::app-approval-disabled", types.SeverityMedium,

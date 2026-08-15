@@ -21,10 +21,10 @@ func ruleSet(fs []types.Finding) map[string]types.Finding {
 func TestAssessGitHubOrg_HardenedIsClean(t *testing.T) {
 	org := GitHubOrg{
 		Login:                       "acme",
-		TwoFactorRequired:           true,
+		TwoFactorRequired:           sb(true),
 		DefaultRepoPermission:       "read",
 		MembersCanCreatePublicRepos: false,
-		SecretScanningEnabled:       true,
+		SecretScanningEnabled:       sb(true),
 		Members: []OrgMember{
 			{Login: "founder", Role: "admin", TwoFactor: true},
 			{Login: "dev1", Role: "member", TwoFactor: true},
@@ -41,10 +41,10 @@ func TestAssessGitHubOrg_HardenedIsClean(t *testing.T) {
 func TestAssessGitHubOrg_WeakOrgFindings(t *testing.T) {
 	org := GitHubOrg{
 		Login:                       "acme",
-		TwoFactorRequired:           false,
+		TwoFactorRequired:           sb(false),
 		DefaultRepoPermission:       "write",
 		MembersCanCreatePublicRepos: true,
-		SecretScanningEnabled:       false,
+		SecretScanningEnabled:       sb(false),
 		Members: []OrgMember{
 			{Login: "founder", Role: "admin", TwoFactor: false},
 			{Login: "o2", Role: "admin", TwoFactor: true},
