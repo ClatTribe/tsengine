@@ -94,6 +94,9 @@ type Fetcher struct {
 	// edges, so cloudgraph cannot form an attack path — see the package comment on why that is the
 	// dangerous kind of partial.
 	Principals IAMReader
+	// Compute reads instances + security groups. Without it cloudgraph cannot evaluate whether an
+	// exposed-looking resource is ACTUALLY reachable from the internet — see the ec2.go comment.
+	Compute ComputeReader
 }
 
 // Fetch reads what it can and reports exactly that.
@@ -146,9 +149,23 @@ func (f Fetcher) Fetch(ctx context.Context) (Result, error) {
 		res.Sources = append(res.Sources, "iam")
 	}
 
-	// Still unimplemented. Named explicitly so a caller can never mistake its absence for an account
-	// that has no compute.
-	res.Skipped["ec2"] = "not implemented yet — instances and security groups are unread"
+	if f.Compute == nil {
+		res.Skipped["ec2"] = "no compute reader configured — instances and security groups are unread"
+	} else if ins, sgs, cerr := f.Compute.ListCompute(ctx); cerr != nil {
+		res.Skipped["ec2"] = cerr.Error()
+	} else {
+		for _, sg := range sgs {
+			res.Raw.SGs = append(res.Raw.SGs, awsinventory.RawSecurityGroup{
+				ID: sg.ID, IngressJSON: marshalRules(sg.Rules),
+			})
+		}
+		for _, in := range ins {
+			res.Raw.Instances = append(res.Raw.Instances, awsinventory.RawInstance{
+				ID: in.ID, Region: in.Region, PublicIP: in.PublicIP, SGIDs: in.SGIDs,
+			})
+		}
+		res.Sources = append(res.Sources, "ec2")
+	}
 
 	if len(res.Sources) == 0 {
 		return res, fmt.Errorf("awsfetch: every surface failed: %v", res.Skipped)
