@@ -179,7 +179,10 @@ RUN chmod +x /usr/local/bin/ts_want.sh
 # there degrades garak alone rather than taking the image down with it.
 RUN . /usr/local/bin/ts_want.sh \
     && PKGS="" \
-    && { ts_want repository && PKGS="$PKGS semgrep==1.96.0 mobsfscan apkid bandit"; } || true \
+    && { ts_want repository && PKGS="$PKGS semgrep==1.96.0 mobsfscan bandit"; } || true \
+    # apkid analyses a BUILT APK, which is the mobile_application capability §3 deprecated. mobsfscan
+    # stays: it is the mobile-SOURCE escalation inside a connected repository, which is supported.
+    && { ts_want mobile && PKGS="$PKGS apkid"; } || true \
     && { ts_want web && PKGS="$PKGS sqlmap"; } || true \
     && { ts_want domain && PKGS="$PKGS checkdmarc dnstwist"; } || true \
     && { ts_want api && PKGS="$PKGS schemathesis inql"; } || true \

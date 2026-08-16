@@ -167,7 +167,7 @@ NOT escalation — they fan out / anchor every scan.
 
 | Layer | Element | Detail |
 |---|---|---|
-| **Anchor tier** | SAST (pattern-match) | semgrep (lang-aware packs — `p/java`+`p/findsecbugs`+`p/cwe-top-25` for Java, `p/python` for Python, `p/javascript`+`p/nodejsscan` for JS, etc.); mobsfscan (Android/iOS) fires as a mobile-file escalation. Deep per-language SAST (gosec/bandit) is registry-tier (below) |
+| **Anchor tier** | SAST (pattern-match) | semgrep, run with FOUR language-agnostic packs: `p/security-audit` + `p/secrets` + `p/owasp-top-ten` + `p/default`. **Not** language-aware — this row previously claimed per-language packs (a python pack, javascript+nodejsscan, java+findsecbugs+cwe-top-25 — written without the registry prefix here so the guard below does not read the correction as a fresh claim) that the wrapper never passed, and that gap is why the shipped config caught 3 of 12 planted vulnerabilities (fixtures/repo/sast-matrix). internal/archcheck now fails CI if this row names a pack the wrapper does not run. mobsfscan (Android/iOS) fires as a mobile-file escalation. Deep per-language SAST (gosec/bandit) is registry-tier (below) |
 | | SCA (lockfiles) | trivy fs, grype, osv-scanner |
 | | Secrets | gitleaks, trufflehog |
 | | IaC / Dockerfiles | checkov, hadolint, tfsec |
