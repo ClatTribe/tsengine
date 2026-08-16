@@ -77,16 +77,99 @@
       "cwe": "CWE-89",
       "class": "sql injection",
       "lang": "go"
+    },
+    {
+      "file": "testdata/go/path.go",
+      "cwe": "CWE-22",
+      "class": "path traversal",
+      "lang": "go"
+    },
+    {
+      "file": "testdata/go/ssrf.go",
+      "cwe": "CWE-918",
+      "class": "ssrf",
+      "lang": "go"
+    },
+    {
+      "file": "testdata/go/tls.go",
+      "cwe": "CWE-295",
+      "class": "tls verification disabled",
+      "lang": "go"
+    },
+    {
+      "file": "testdata/go/crypto.go",
+      "cwe": "CWE-327",
+      "class": "weak hash",
+      "lang": "go"
+    },
+    {
+      "file": "testdata/py/xss.py",
+      "cwe": "CWE-79",
+      "class": "reflected xss",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/py/ssti.py",
+      "cwe": "CWE-1336",
+      "class": "template injection",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/py/xxe.py",
+      "cwe": "CWE-611",
+      "class": "xxe",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/py/redirect.py",
+      "cwe": "CWE-601",
+      "class": "open redirect",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/js/xss.js",
+      "cwe": "CWE-79",
+      "class": "reflected xss",
+      "lang": "javascript"
+    },
+    {
+      "file": "testdata/js/nosqli.js",
+      "cwe": "CWE-943",
+      "class": "nosql injection",
+      "lang": "javascript"
+    },
+    {
+      "file": "testdata/js/redirect.js",
+      "cwe": "CWE-601",
+      "class": "open redirect",
+      "lang": "javascript"
+    },
+    {
+      "file": "testdata/js/tls.js",
+      "cwe": "CWE-295",
+      "class": "tls verification disabled",
+      "lang": "javascript"
     }
   ],
   "measured": {
     "date": "2026-08-16",
-    "p/security-audit + p/secrets (shipped before this)": "3/12",
-    "+ p/owasp-top-ten": "10/12",
-    "+ p/default (shipped now)": "11/12",
-    "false_positives_on_fixtures/repo/clean": 0
+    "cases": 24,
+    "p/security-audit + p/secrets (shipped before this work)": "3/12 on the original 12",
+    "+ p/owasp-top-ten + p/default (shipped now)": "19/24",
+    "false_positives_on_fixtures/repo/clean": 0,
+    "note_on_size": "Started at 12 \u2014 the minimum to show the gap existed, not a target. Extended to 24 once the harness proved worth having: Go sat at 2 cases against Python's 6, and whole classes (XSS, SSTI, XXE, open redirect, NoSQL injection, TLS-verification-disabled) had no case in any language. Widening found 4 NEW misses beyond the one already known, which is the argument for widening it further. Each case is one small file plus a row here; the expensive part was building the runner, and that is done."
   },
-  "known_miss": "js/sqli.js \u2014 a generic db.query() with string concatenation. Not caught by p/default, p/javascript or p/typescript: semgrep cannot tell that `db` is a SQL connection without cross-file context. This is the interprocedural-taint case the CodeQL escalation tier exists for, not a ruleset gap. Recorded rather than quietly dropped.",
+  "known_miss": {
+    "cases": [
+      "testdata/js/sqli.js",
+      "testdata/go/path.go",
+      "testdata/py/xxe.py",
+      "testdata/py/redirect.py",
+      "testdata/js/nosqli.js"
+    ],
+    "why": "NOT a ruleset-config gap \u2014 unlike the first round, where p/owasp-top-ten recovered 7 of 9 misses. p/python, p/javascript and p/golang catch NONE of these five. They need dataflow/taint analysis: whether `db` is a SQL connection, whether a path is attacker-controlled, whether entity resolution is enabled.",
+    "architectural_blind_spot": "CodeQL is the taint tier that WOULD catch them, and it cannot fire. internal/asset/repository/escalate.go gates it on `isInjectionFinding(f)` \u2014 CodeQL only runs when semgrep ALREADY produced an injection finding. When semgrep misses the class entirely there is no finding to escalate from, so the deep tool is gated on the shallow tool having succeeded. For these five classes nothing catches them at any tier. Fixing it means triggering CodeQL on language presence rather than on a prior finding, and paying its runtime \u2014 a real trade, and a decision rather than an oversight."
+  },
   "runnable": false,
   "note_on_layout": "Cases live under testdata/ because the Go toolchain ignores any directory of that name. Without it `go vet ./...` compiles the planted Go samples \u2014 which are deliberately broken code \u2014 and fails the build. That is exactly what happened on the first push of this fixture."
 }
