@@ -2,7 +2,7 @@
 // most teams lack ("52% of organizations don't have full visibility into what was tested",
 // State-of-AI-in-Pentesting). A pentest you can't see into is one you have to take on trust; this turns
 // each asset into an explicit, grounded statement of what the engine runs on it, when it last ran, and
-// which tools surfaced something (the rest ran clean).
+// which tools surfaced something. Coverage knows the DECLARED toolset, not which tools executed.
 //
 // Grounded (§10): the per-type toolset is the DECLARED anchor tier — the tools that fire deterministically
 // on every scan of that type (§4.1), curated to mirror the asset modules. An asset that's never been
@@ -37,14 +37,27 @@ var Toolset = map[string][]string{
 
 // AssetCoverage is the per-asset "what was tested" statement.
 type AssetCoverage struct {
-	AssetID           string    `json:"asset_id"`
-	Target            string    `json:"target"`
-	Type              string    `json:"type"`
-	Scanned           bool      `json:"scanned"` // has this asset ever completed a scan?
-	LastScannedAt     time.Time `json:"last_scanned_at,omitempty"`
-	RunsTools         []string  `json:"runs_tools"`          // the anchor tools every scan of this type runs
-	ToolsWithFindings []string  `json:"tools_with_findings"` // which of them surfaced a finding (rest ran clean)
-	FindingsCount     int       `json:"findings_count"`
+	AssetID       string    `json:"asset_id"`
+	Target        string    `json:"target"`
+	Type          string    `json:"type"`
+	Scanned       bool      `json:"scanned"` // has this asset ever completed a scan?
+	LastScannedAt time.Time `json:"last_scanned_at,omitempty"`
+	// RunsTools is the anchor toolset DECLARED for this asset type — what a scan of this type is
+	// configured to run. It is not evidence that each tool executed on this asset.
+	RunsTools []string `json:"runs_tools"`
+	// ToolsWithFindings is which of them surfaced a finding. The remainder either ran and found
+	// nothing OR never ran — coverage cannot tell the two apart, so it must not claim either.
+	ToolsWithFindings []string `json:"tools_with_findings"`
+	// ExecutionConfirmed reports whether per-tool execution was verified for this asset. It is
+	// currently always false: the platform path (internal/runner → orchestrator.Run) does not carry
+	// Scan.ToolsFailed, so nothing downstream knows which dispatches actually completed.
+	//
+	// This field exists so the UI states what is known rather than the reassuring version. A scan
+	// that loses every tool to per-tool timeouts, or runs against an image where the tool is a stub
+	// (a TOOLSET-limited build answers "prowler: not found"), produces zero findings and, before
+	// this, was reported to the customer as "All tools ran and found nothing".
+	ExecutionConfirmed bool `json:"execution_confirmed"`
+	FindingsCount      int  `json:"findings_count"`
 }
 
 // Summary rolls up coverage across the portfolio for a headline ("N of M assets scanned").
