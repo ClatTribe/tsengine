@@ -62,6 +62,15 @@ func (*OpenAPI) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	if su, _ := args["spec_url"].(string); strings.TrimSpace(su) != "" {
 		candidates = append(candidates, su)
 	} else {
+		// THE TARGET MAY ALREADY BE THE SPEC. Only common paths were appended, so pointing the api
+		// asset at an OpenAPI URL — which is exactly what fixtures/api/vampi/fixture.json documents
+		// as the target — produced ".../openapi.json/openapi.json" and friends, all 404.
+		//
+		// That failed SILENTLY: no spec means no surface, so PlanFanout saw specURL == "" and never
+		// dispatched schemathesis, and the whole api asset degraded to a bare nuclei scan reporting
+		// zero findings with partial=false. Measured live against VAmPI, a deliberately vulnerable
+		// API: 0 findings, scan "successful".
+		candidates = append(candidates, target)
 		for _, p := range commonSpecPaths {
 			candidates = append(candidates, target+p)
 		}
@@ -70,7 +79,11 @@ func (*OpenAPI) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	var spec []byte
 	var specURL string
 	for _, c := range candidates {
-		if b, ok := fetch(ctx, client, c); ok {
+		// A 200 is not a spec. A base URL usually serves HTML, and a 404 handler can answer 200 —
+		// accepting either would parse to zero operations and reproduce the same silent degradation
+		// in a new costume, so the body has to actually look like a schema (§10: no claim a tool
+		// cannot support).
+		if b, ok := fetch(ctx, client, c); ok && looksLikeSpec(b) {
 			spec, specURL = b, c
 			break
 		}
@@ -99,6 +112,28 @@ func (*OpenAPI) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 }
 
 // SpecMarker tags the resolved-spec-URL entry in the recon surface.
+// looksLikeSpec reports whether a fetched body is plausibly an OpenAPI/Swagger document. Deliberately
+// structural rather than a full parse: the parser below is the authority on operations, this only
+// rejects obvious non-schemas (HTML pages, error bodies) before they are mistaken for a spec.
+// looksLikeSpec reports whether a fetched body is plausibly an OpenAPI/Swagger document.
+//
+// fetch() already rejects anything that is not valid JSON, so this exists for the case that slips
+// past it: a body that IS valid JSON but is not a schema — a JSON error payload served with 200, an
+// API index, a health document. Without it, such a body is accepted as the spec, parses to zero
+// operations, and reproduces the same silent degradation the target-as-spec fix addresses.
+//
+// Deliberately structural rather than a full parse: parseSpec is the authority on operations.
+func looksLikeSpec(b []byte) bool {
+	var doc map[string]any
+	if json.Unmarshal(b, &doc) != nil {
+		return false // fetch already enforces valid JSON; a non-object body is not a spec
+	}
+	_, hasPaths := doc["paths"]
+	_, hasOpenAPI := doc["openapi"]
+	_, hasSwagger := doc["swagger"]
+	return hasPaths || hasOpenAPI || hasSwagger
+}
+
 const SpecMarker = "SPEC"
 
 func fetch(ctx context.Context, c *http.Client, url string) ([]byte, bool) {
