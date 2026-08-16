@@ -122,3 +122,60 @@ func TestRenderWavsep_CitesCompetitors(t *testing.T) {
 		t.Errorf("report missing overall Youden:\n%s", out)
 	}
 }
+
+// TestScoreWavsep_UnreachedCasesAreNotMisses pins the distinction between "we tested this and found
+// nothing" and "we never went there".
+//
+// The corpus is 1,133 cases and TSENGINE_FANOUT_MAX_URLS defaults to 200, so a default run visits a
+// fraction of it. Grading the rest as misses measured the cost guard and reported it as scanner
+// recall — a number that would then sit next to Acunetix's 87% over the full corpus.
+func TestScoreWavsep_UnreachedCasesAreNotMisses(t *testing.T) {
+	cases := []WavsepCase{
+		{URL: "/wavsep/a.jsp", Category: "sqli", Vulnerable: true}, // crawled + found
+		{URL: "/wavsep/b.jsp", Category: "sqli", Vulnerable: true}, // crawled, missed → a real FN
+		{URL: "/wavsep/z.jsp", Category: "sqli", Vulnerable: true}, // never crawled → excluded
+	}
+	scan := &types.Scan{
+		DiscoveredSurface: []string{
+			"http://host.docker.internal:8080/wavsep/a.jsp?p=1", // absolute + query, as recon emits
+			"http://host.docker.internal:8080/wavsep/b.jsp",
+		},
+		FindingsRaw: []types.Finding{
+			{Tool: "nuclei", CWE: []string{"CWE-89"}, Endpoint: "http://x/wavsep/a.jsp?p=1"},
+		},
+	}
+	rep := ScoreWavsep(cases, scan)
+
+	if rep.Coverage.ReachedCases != 2 || rep.Coverage.TotalCases != 3 {
+		t.Errorf("coverage = %d/%d, want 2/3", rep.Coverage.ReachedCases, rep.Coverage.TotalCases)
+	}
+	if !rep.Coverage.Partial() {
+		t.Error("a run that skipped a case must report Partial()")
+	}
+	if got := rep.Overall.TP + rep.Overall.FP + rep.Overall.TN + rep.Overall.FN; got != 2 {
+		t.Errorf("graded %d cases, want 2 — the unvisited case must be excluded, not scored", got)
+	}
+	if rep.Overall.FN != 1 {
+		t.Errorf("FN = %d, want exactly 1 (the crawled-but-missed case). If this is 2, the "+
+			"never-visited case is being counted as a miss again.", rep.Overall.FN)
+	}
+}
+
+// An empty surface is missing data, not proof of zero coverage (§10). Grading nothing would report a
+// meaningless 0%; the honest fallback is to grade everything and say coverage is unknown.
+func TestScoreWavsep_NoSurfaceGradesEverything(t *testing.T) {
+	cases := []WavsepCase{
+		{URL: "/wavsep/a.jsp", Category: "sqli", Vulnerable: true},
+		{URL: "/wavsep/b.jsp", Category: "sqli", Vulnerable: true},
+	}
+	rep := ScoreWavsep(cases, &types.Scan{})
+	if rep.Coverage.SurfaceKnown {
+		t.Error("no discovered surface must read SurfaceKnown=false")
+	}
+	if got := rep.Overall.TP + rep.Overall.FP + rep.Overall.TN + rep.Overall.FN; got != 2 {
+		t.Errorf("graded %d cases, want both — absent surface data must not silently drop cases", got)
+	}
+	if rep.Coverage.Partial() {
+		t.Error("unknown coverage must not claim Partial(); it is unknown, not measured")
+	}
+}

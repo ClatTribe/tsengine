@@ -93,6 +93,38 @@ func LoadWavsepCases(path string) ([]WavsepCase, error) {
 	return cases, nil
 }
 
+// reachedSet normalizes the recon surface into path-only keys. The surface carries absolute URLs
+// ("http://host:8080/wavsep/active/...") while ground-truth cases are paths ("/wavsep/active/..."),
+// and the host differs anyway once the sandbox rewrites loopback to host.docker.internal (§5.2 C2) —
+// so matching on the full URL would mark every case unreached and silently grade nothing.
+func reachedSet(surface []string) map[string]bool {
+	out := make(map[string]bool, len(surface))
+	for _, u := range surface {
+		p := u
+		if i := strings.Index(p, "://"); i >= 0 {
+			if j := strings.Index(p[i+3:], "/"); j >= 0 {
+				p = p[i+3+j:]
+			}
+		}
+		if q := strings.IndexAny(p, "?#"); q >= 0 {
+			p = p[:q] // a case is reached whatever query string the crawler appended
+		}
+		if p != "" {
+			out[p] = true
+		}
+	}
+	return out
+}
+
+// caseReached reports whether the recon surface contains this case's page.
+func caseReached(c WavsepCase, reached map[string]bool) bool {
+	path := c.URL
+	if q := strings.IndexAny(path, "?#"); q >= 0 {
+		path = path[:q]
+	}
+	return reached[path]
+}
+
 func isTruthy(s string) bool {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "true", "1", "yes", "y":
@@ -130,8 +162,34 @@ func (c WavsepCatScore) Youden() float64 { return c.tpr() - c.fpr() }
 type WavsepReport struct {
 	PerCategory map[string]*WavsepCatScore `json:"per_category"`
 	Overall     WavsepCatScore             `json:"overall"`
+	Coverage    WavsepCoverage             `json:"coverage"`
 	Competitors Competitors                `json:"competitors"`
 }
+
+// WavsepCoverage records how much of the corpus the scan actually visited.
+//
+// # Why the scorer needs this
+//
+// The corpus is 1,133 cases. TSENGINE_FANOUT_MAX_URLS defaults to 200 — a production cost guard
+// (§5.1, the trap that makes a naive WAVSEP run take hours), not a detection limit. Grading every
+// case regardless meant ~930 never-visited cases counted as MISSES, and the resulting recall would
+// be published beside Acunetix 87%, a number measured over the whole corpus.
+//
+// That is "not tested" reported as "missed" — the same conflation internal/coverage already fixed
+// for assets, where a never-scanned asset reads scanned:false and never "covered". A benchmark that
+// cannot tell the two apart produces its most confident-looking output exactly when it did the least
+// work.
+type WavsepCoverage struct {
+	TotalCases   int `json:"total_cases"`
+	ReachedCases int `json:"reached_cases"`
+	// SurfaceKnown is false when the scan recorded no discovered surface. Absent data is NOT
+	// evidence of non-coverage (§10), so every case is then graded exactly as before and the report
+	// says coverage is unavailable rather than implying the corpus was covered.
+	SurfaceKnown bool `json:"surface_known"`
+}
+
+// Partial reports whether the run graded less than the full corpus.
+func (c WavsepCoverage) Partial() bool { return c.SurfaceKnown && c.ReachedCases < c.TotalCases }
 
 // ScoreWavsep scores a scan against the WAVSEP ground truth. A test case
 // is "flagged" iff some raw finding's endpoint contains the case URL AND
@@ -149,7 +207,17 @@ func ScoreWavsep(cases []WavsepCase, scan *types.Scan) *WavsepReport {
 	}
 
 	rep := &WavsepReport{PerCategory: map[string]*WavsepCatScore{}, Competitors: wavsepCompetitors}
+	reached := reachedSet(scan.DiscoveredSurface)
+	rep.Coverage = WavsepCoverage{TotalCases: len(cases), SurfaceKnown: len(reached) > 0}
+
 	for _, c := range cases {
+		// A case the crawl never visited was not tested. Grading it as a miss would measure the
+		// fan-out cap and report it as scanner recall.
+		if rep.Coverage.SurfaceKnown && !caseReached(c, reached) {
+			continue
+		}
+		rep.Coverage.ReachedCases++
+
 		cs := rep.PerCategory[c.Category]
 		if cs == nil {
 			cs = &WavsepCatScore{Category: c.Category}
@@ -203,6 +271,25 @@ func RenderWavsep(r *WavsepReport) string {
 	fmt.Fprintf(&b, "=== WAVSEP scorecard (web_application DAST) ===\n")
 	fmt.Fprintf(&b, "overall Youden:   %.2f%%  (TP=%d FP=%d TN=%d FN=%d)\n",
 		r.Overall.Youden()*100, r.Overall.TP, r.Overall.FP, r.Overall.TN, r.Overall.FN)
+
+	switch {
+	case !r.Coverage.SurfaceKnown:
+		fmt.Fprintf(&b, "coverage:         UNKNOWN — the scan recorded no discovered surface, so every "+
+			"case was graded.\n                  Treat the score as a floor: unreachable cases are "+
+			"indistinguishable from missed ones here.\n")
+	case r.Coverage.Partial():
+		pct := float64(r.Coverage.ReachedCases) / float64(r.Coverage.TotalCases) * 100
+		fmt.Fprintf(&b, "coverage:         PARTIAL — scored %d of %d cases (%.1f%%); %d were never "+
+			"visited by recon\n                  and are EXCLUDED, not counted as misses. Raise "+
+			"TSENGINE_FANOUT_MAX_URLS for full-corpus coverage.\n",
+			r.Coverage.ReachedCases, r.Coverage.TotalCases, pct,
+			r.Coverage.TotalCases-r.Coverage.ReachedCases)
+		fmt.Fprintf(&b, "                  NOT directly comparable to the leaderboard below: those "+
+			"tools scanned the whole corpus.\n")
+	default:
+		fmt.Fprintf(&b, "coverage:         FULL — all %d cases visited by recon and scored.\n",
+			r.Coverage.TotalCases)
+	}
 
 	cats := make([]string, 0, len(r.PerCategory))
 	for c := range r.PerCategory {
