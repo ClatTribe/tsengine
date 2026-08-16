@@ -1,7 +1,146 @@
 [
-  {"id":"p1","rule_id":"prowler::iam_root_mfa","tool":"prowler","severity":"high","title":"Root account MFA not enabled","endpoint":"111122223333:root"},
-  {"id":"p2","rule_id":"prowler::s3_encryption","tool":"prowler","severity":"high","title":"S3 bucket not encrypted at rest","endpoint":"arn:aws:s3:::cust-data"},
-  {"id":"p3","rule_id":"prowler::ec2_sg_ssh_open","tool":"prowler","severity":"high","title":"Security group allows 0.0.0.0/0 on port 22","endpoint":"sg-public-ssh"},
-  {"id":"p4","rule_id":"prowler::cloudtrail_enabled","tool":"prowler","severity":"high","title":"CloudTrail not enabled in all regions","endpoint":"111122223333:cloudtrail"},
-  {"id":"p5","rule_id":"prowler::iam_key_rotation","tool":"prowler","severity":"medium","title":"IAM access key not rotated in 90 days","endpoint":"iam-user-ci"}
+  {
+    "id": "p1",
+    "rule_id": "prowler::iam_root_mfa",
+    "tool": "prowler",
+    "severity": "high",
+    "title": "Root account MFA not enabled",
+    "endpoint": "111122223333:root"
+  },
+  {
+    "id": "p2",
+    "rule_id": "prowler::s3_encryption",
+    "tool": "prowler",
+    "severity": "high",
+    "title": "S3 bucket not encrypted at rest",
+    "endpoint": "arn:aws:s3:::cust-data"
+  },
+  {
+    "id": "p3",
+    "rule_id": "prowler::ec2_sg_ssh_open",
+    "tool": "prowler",
+    "severity": "high",
+    "title": "Security group allows 0.0.0.0/0 on port 22",
+    "endpoint": "sg-public-ssh"
+  },
+  {
+    "id": "p4",
+    "rule_id": "prowler::cloudtrail_enabled",
+    "tool": "prowler",
+    "severity": "high",
+    "title": "CloudTrail not enabled in all regions",
+    "endpoint": "111122223333:cloudtrail"
+  },
+  {
+    "id": "p5",
+    "rule_id": "prowler::iam_key_rotation",
+    "tool": "prowler",
+    "severity": "medium",
+    "title": "IAM access key not rotated in 90 days",
+    "endpoint": "iam-user-ci"
+  },
+  {
+    "id": "p6",
+    "rule_id": "prowler::cis_1_5",
+    "tool": "prowler",
+    "severity": "high",
+    "title": "Root account MFA not enabled",
+    "endpoint": "111122223333:root"
+  },
+  {
+    "id": "p7",
+    "rule_id": "prowler::cis_1_8",
+    "tool": "prowler",
+    "severity": "medium",
+    "title": "Password policy minimum length below 14",
+    "endpoint": "111122223333:password-policy"
+  },
+  {
+    "id": "p8",
+    "rule_id": "prowler::cis_1_9",
+    "tool": "prowler",
+    "severity": "low",
+    "title": "Password reuse prevention below 24",
+    "endpoint": "111122223333:password-policy"
+  },
+  {
+    "id": "p9",
+    "rule_id": "prowler::cis_1_10",
+    "tool": "prowler",
+    "severity": "high",
+    "title": "Console user without MFA",
+    "endpoint": "iam-user-ci"
+  },
+  {
+    "id": "p10",
+    "rule_id": "prowler::cis_2_1_2",
+    "tool": "prowler",
+    "severity": "medium",
+    "title": "Bucket policy does not enforce secure transport",
+    "endpoint": "arn:aws:s3:::cust-data"
+  },
+  {
+    "id": "p11",
+    "rule_id": "prowler::cis_2_1_5",
+    "tool": "prowler",
+    "severity": "high",
+    "title": "Account-level S3 public access block not enabled",
+    "endpoint": "111122223333:s3-account"
+  },
+  {
+    "id": "p12",
+    "rule_id": "prowler::cis_2_2_1",
+    "tool": "prowler",
+    "severity": "medium",
+    "title": "EBS default encryption disabled",
+    "endpoint": "111122223333:ebs"
+  },
+  {
+    "id": "p13",
+    "rule_id": "prowler::cis_3_2",
+    "tool": "prowler",
+    "severity": "medium",
+    "title": "CloudTrail log file validation disabled",
+    "endpoint": "111122223333:cloudtrail"
+  },
+  {
+    "id": "p14",
+    "rule_id": "prowler::cis_3_7",
+    "tool": "prowler",
+    "severity": "medium",
+    "title": "CloudTrail logs not encrypted with KMS",
+    "endpoint": "111122223333:cloudtrail"
+  },
+  {
+    "id": "p15",
+    "rule_id": "prowler::cis_3_9",
+    "tool": "prowler",
+    "severity": "medium",
+    "title": "VPC flow logs not enabled",
+    "endpoint": "vpc-0a1b2c3d"
+  },
+  {
+    "id": "p16",
+    "rule_id": "prowler::cis_4_1",
+    "tool": "prowler",
+    "severity": "low",
+    "title": "No metric filter for unauthorized API calls",
+    "endpoint": "111122223333:cloudwatch"
+  },
+  {
+    "id": "p17",
+    "rule_id": "prowler::cis_4_3",
+    "tool": "prowler",
+    "severity": "low",
+    "title": "No metric filter for root account usage",
+    "endpoint": "111122223333:cloudwatch"
+  },
+  {
+    "id": "p18",
+    "rule_id": "prowler::cis_5_3",
+    "tool": "prowler",
+    "severity": "high",
+    "title": "Security group allows 0.0.0.0/0 to TCP 3389",
+    "endpoint": "sg-public-rdp"
+  }
 ]
