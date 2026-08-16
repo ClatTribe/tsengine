@@ -46,6 +46,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench ablation: %v\n", err)
 			os.Exit(1)
 		}
+	case "stability":
+		if err := stabilityCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench stability: %v\n", err)
+			os.Exit(1)
+		}
 	case "wavsep":
 		if err := wavsepCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench wavsep: %v\n", err)
@@ -180,6 +185,7 @@ Usage:
   tsbench run      --fixture <path> [--trials N] [--binary <path>] [--image <ref>]
   tsbench ablation --fixture <path> [--trials N]
   tsbench wavsep   --target <url> --ground-truth <expected-cases.csv> [--image <ref>]
+  tsbench stability --asset <type> --target <t> [--runs 3]  same scan N times; share of findings in EVERY run
   tsbench sast     --target <src-dir> --ground-truth <expectedresults.csv> [--image <ref>]
   tsbench cloud    --target <provider> --ground-truth <expected-controls.csv> [--image <ref>]
   tsbench parity   --asset <type> --target <t> --tool <name> [--image <ref>]
@@ -925,5 +931,38 @@ func runCmd(argv []string, ablation bool) error {
 	if !res.AllPass {
 		os.Exit(3)
 	}
+	return nil
+}
+
+// stabilityCmd measures finding stability: the same scan of the same unchanged target, N times.
+//
+// Recall is computed from a SINGLE run, so it silently reports whichever outcome that run drew.
+// Measured here: four identical api scans returned 1, 1, 11 and 11 findings with partial=false
+// throughout, because tools lost their per-tool timeout race under load. A CI gate on a finding
+// present in 3 of 5 runs passes it 40% of the time.
+func stabilityCmd(argv []string) error {
+	fs := flag.NewFlagSet("stability", flag.ContinueOnError)
+	assetType := fs.String("asset", "", "asset type (web_application, api, repository, container_image, ...)")
+	target := fs.String("target", "", "scan target — must be UNCHANGED between runs")
+	runs := fs.Int("runs", 3, "number of identical runs (>=2)")
+	binary := fs.String("binary", "./bin/tsengine", "tsengine binary path")
+	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox image")
+	timeout := fs.String("timeout", "30m", "per-scan timeout")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *assetType == "" || *target == "" {
+		return fmt.Errorf("--asset and --target are required")
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	rep, err := bench.RunStability(ctx, *assetType, *target, *runs,
+		bench.RunOptions{Binary: *binary, Image: *image, Timeout: *timeout})
+	if err != nil {
+		return err
+	}
+	fmt.Print(bench.RenderStability(rep))
 	return nil
 }
