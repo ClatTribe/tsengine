@@ -129,7 +129,12 @@ Reasoning over data already in context, reformatting, and decisions encoded inli
 
 ---
 
-## 3. Asset types (8)
+## 3. Asset types (7 — the focus set)
+
+**The product focuses on these seven assets** — the ICP-relevant surfaces (code, cloud, and the
+network/web/api perimeter) where our OSS coverage + L1.5 enrichment + L2 agents are deep enough that
+a named human-in-the-loop can stand behind the output. New asset-facing work targets this set; do not
+add or revive an eighth asset without an ADR.
 
 Every scan target maps to exactly one asset type. The asset type determines which anchor tools fire, which filter rules apply, and which competitor leaderboard the bench compares against.
 
@@ -142,9 +147,19 @@ Every scan target maps to exactly one asset type. The asset type determines whic
 | `ip_address` | IP / CIDR / range | security |
 | `domain` | Domain + subdomains | security + compliance |
 | `cloud_account` | AWS / GCP / Azure account | compliance |
-| `mobile_application` | Android (APK / source) or iOS (IPA / source) app bundle | security |
 
-The `cloud_account` asset is what makes tsengine usable for SOC2/PCI compliance teams. Without it, the engine only covers infrastructure surfaces. The `mobile_application` asset (single-stage, like `repository`: the bundle *is* the surface) covers the mobile-app-team audience competitors carve out as a separate offering â anchored on mobsfscan (mobile SAST) + gitleaks (hardcoded secrets) + trivy fs (bundled-dep SCA), plus a registry tier of semgrep (mobile packs) + trufflehog + **apkid** (packer/obfuscator/anti-analysis fingerprint â a tampering/repackaging signal mobsfscan's SAST misses; `internal/tool/apkid`). Count invariant: `pkg/types.AllAssetTypes()` + its test pin the count (now 8).
+The `cloud_account` asset is what makes tsengine usable for SOC2/PCI compliance teams. Without it, the engine only covers infrastructure surfaces. Count invariant: `pkg/types.AllAssetTypes()` + its test pin the focus-set count (7). `mobsfscan` still fires as a *repository* escalation on mobile source files in a connected repo (§5.3) — that capability is orthogonal to the deprecated standalone asset noted below.
+
+> **Deprecated — `mobile_application` (descoped, pending code removal).** The standalone mobile-bundle
+> asset is **descoped from the focus set** and receives no asset-facing work. Reason: it cannot scan a
+> *built* APK/IPA today (no apktool/jadx decompile prepass), has no dynamic pass, and the
+> mobile-app-team audience is outside the current ICP. `internal/asset/mobile`, the apkid wrapper,
+> `pkg/types.AssetMobileApplication`, and the mobile bench targets remain in the tree; removing them
+> (and dropping the code-level count 8→7) is a follow-on cleanup, so until then `AllAssetTypes()` may
+> still enumerate it. Do not build on it. The marketing page is already honest about the live
+> capability — `frontend/lib/asset-marketing.ts` states "Source only; we do not decompile a built
+> APK or IPA" — and `TOOLSET=mobile` (docker/sandbox/Dockerfile) now gates apkid out of every default
+> sandbox build.
 
 For the per-asset anchor + registry tool lists, filter rules, and bench targets, see [arch.md](arch.md).
 
