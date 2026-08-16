@@ -54,6 +54,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/soc2-readiness", label: "SOC 2 self-assessment" },
       { href: "/resources", label: "Free resources" },
       { href: "/sample-report", label: "Sample report" },
+      { href: "/docs", label: "Docs" },
     ],
   },
   {
