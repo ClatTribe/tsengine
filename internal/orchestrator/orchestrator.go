@@ -51,7 +51,7 @@ type Dispatcher interface {
 // the discovered surface, so existing callers are untouched. A caller that wants to SEED the L2
 // offensive agent from L1 recon uses RunWithSurface instead.
 func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher) ([]types.Finding, []string, error) {
-	findings, fired, _, err := RunWithSurface(ctx, target, handler, dispatcher)
+	findings, fired, _, _, err := RunWithSurface(ctx, target, handler, dispatcher)
 	return findings, fired, err
 }
 
@@ -59,12 +59,15 @@ func Run(ctx context.Context, target types.Asset, handler asset.Handler, dispatc
 // endpoints detection fanned out over (katana crawl, spec ingest). Single-stage assets (repo /
 // container) return [target] as the surface. This surface was previously computed and thrown away;
 // exposing it lets a caller seed web-investigate so the agent doesn't start blind.
-func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher) ([]types.Finding, []string, []string, error) {
+func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher) ([]types.Finding, []string, []string, []types.ToolFailure, error) {
+	// Collect tool failures for the caller's artifact. Attached here rather than passed down: the
+	sink := &failureSink{}
+	ctx = withFailureSink(ctx, sink)
 	if handler == nil {
-		return nil, nil, nil, errors.New("orchestrator: nil handler")
+		return nil, nil, nil, nil, errors.New("orchestrator: nil handler")
 	}
 	if dispatcher == nil {
-		return nil, nil, nil, errors.New("orchestrator: nil dispatcher")
+		return nil, nil, nil, nil, errors.New("orchestrator: nil dispatcher")
 	}
 
 	// Recon-capable assets (web crawl, api spec ingest) run a two-stage
@@ -74,7 +77,8 @@ func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handl
 	// so tsengine never hits strix's "model ignored the recon directive"
 	// class of bug (CLAUDE.md §10).
 	if rh, ok := handler.(asset.ReconHandler); ok && len(rh.Recon()) > 0 {
-		return runWithRecon(ctx, target, handler, rh, dispatcher)
+		rf, rFired, rSurface, rErr := runWithRecon(ctx, target, handler, rh, dispatcher)
+		return rf, rFired, rSurface, sink.snapshot(), rErr
 	}
 
 	dispatches := handler.PlanAnchors(target)
@@ -86,7 +90,7 @@ func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handl
 	// Single-stage assets have no recon surface; the target itself is it.
 	single := []string{target.Target}
 	findings, allFired := finalizeWithEscalation(ctx, target, handler, dispatcher, results, fired, single)
-	return findings, allFired, single, err
+	return findings, allFired, single, sink.snapshot(), err
 }
 
 // runWithRecon implements the two-stage recon → fan-out flow:
@@ -339,10 +343,16 @@ func executeAll(ctx context.Context, dispatches []asset.Dispatch, dispatcher Dis
 	// that found nothing, which masks detection bugs (e.g. is sqlmap timing
 	// out, or is it running clean and finding nothing?).
 	nFail := 0
+	sink := failureSinkFrom(ctx)
 	failed.Range(func(k, v any) bool {
 		nFail++
+		name := dispatches[k.(int)].Tool.Name()
+		// Record EVERY failure, not just the first 8 the operator sees: the stderr cap is a
+		// readability limit, and truncating the artifact would recreate the ambiguity this exists
+		// to remove.
+		sink.add(name, fmt.Sprint(v))
 		if nFail <= 8 {
-			fmt.Fprintf(os.Stderr, "[dispatch] %s failed: %v\n", dispatches[k.(int)].Tool.Name(), v)
+			fmt.Fprintf(os.Stderr, "[dispatch] %s failed: %v\n", name, v)
 		}
 		return true
 	})

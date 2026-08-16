@@ -46,8 +46,11 @@ type Scan struct {
 	// completed before the cutoff — never silently discarded. StopReason
 	// records why. The security-engineer audience MUST be able to tell a
 	// 0-finding timeout from a clean bill of health.
-	Partial    bool   `json:"partial,omitempty"`
-	StopReason string `json:"stop_reason,omitempty"`
+	Partial bool `json:"partial,omitempty"`
+	// ToolsFailed lists tools that were dispatched but produced no result. Empty means every
+	// dispatched tool completed — NOT that no tools were dispatched.
+	ToolsFailed []ToolFailure `json:"tools_failed,omitempty"`
+	StopReason  string        `json:"stop_reason,omitempty"`
 }
 
 // ChildAsset is an asset discovered DURING a scan that warrants its own
@@ -107,4 +110,18 @@ type SandboxEmittedFinding struct {
 	RawOutput       []byte            `json:"raw_output,omitempty"`
 	MITRETechniques []string          `json:"mitre_techniques,omitempty"`
 	ToolArgs        map[string]string `json:"tool_args,omitempty"`
+}
+
+// ToolFailure records a tool that was dispatched but did not produce a result — a per-tool timeout,
+// a sandbox error, a crash.
+//
+// Without this, findings_raw is ambiguous in the one way that matters: a tool that ran and found
+// nothing is indistinguishable from a tool that never ran. That ambiguity hid a measured 91% recall
+// collapse (1 vs 11 findings across identical scans of one unchanged target) behind partial=false.
+//
+// Distinct from Scan.Partial, which means the SCAN as a whole stopped early. A scan can complete
+// normally, report partial=false, and still have lost half its toolset to timeouts.
+type ToolFailure struct {
+	Tool   string `json:"tool"`
+	Reason string `json:"reason"`
 }
