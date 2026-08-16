@@ -61,6 +61,10 @@ const TOOLS: Item[] = [
   { href: "/soc2-readiness", label: "SOC 2 readiness check", desc: "Where you'd fail the questionnaire — free", icon: ClipboardCheck },
   { href: "/sample-report", label: "Sample VAPT report", desc: "See exactly what you'd hand a buyer", icon: FileText },
   { href: "/resources", label: "Free resources", desc: "SOC 2 checklist + questionnaire template", icon: BookOpen },
+  // Docs sits with the free tools rather than under Company: someone evaluating wants to know how
+  // the thing works before they sign up, and burying it in a company menu is how that question goes
+  // unanswered.
+  { href: "/docs", label: "Docs", desc: "How to connect, scan, approve and evidence it", icon: BookOpen },
 ];
 
 // Direct top-bar link: just Pricing. Everything else is either a solution (Solutions menu) or a
