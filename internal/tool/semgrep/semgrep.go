@@ -46,6 +46,17 @@ func (*Semgrep) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "semgrep", "scan",
 		"--config", config,
 		"--config", "p/secrets",
+		// p/owasp-top-ten is NOT redundant with p/security-audit, which is the assumption that cost
+		// us a whole vulnerability class. Measured on the repository demo fixture, which plants a
+		// command injection on purpose: security-audit + secrets found the two hardcoded AWS keys and
+		// MISSED os.system("ping " + request.args.get(...)) — CWE-78, an OWASP Top 10 entry. The rule
+		// that catches it (os-system-injection) ships in p/owasp-top-ten, p/python and p/default, and
+		// in none of what we were running.
+		//
+		// Chosen over p/python (language-specific; this wrapper is language-agnostic) and p/default
+		// (broader, more noise). It costs nothing measurable: re-run on fixtures/repo/clean with all
+		// three packs still yields zero findings, so the FP-control floor holds.
+		"--config", "p/owasp-top-ten",
 		"--json",
 		"--quiet",
 		"--disable-version-check",
