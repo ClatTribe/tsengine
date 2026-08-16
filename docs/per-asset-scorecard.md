@@ -112,10 +112,22 @@ require their runner.
 
 ## 4. What would raise confidence, in order
 
-1. **Broaden the thin fixtures** — container is still 3 CVEs. Cloud went 6 → 19 controls, and the
-   correction is instructive: the engine lift fell from **+0.17 to +0.05**. Nothing changed in the
-   engine; one extra detection out of 6 reads as 17 %, the same detection out of 19 reads as 5 %. A
-   near-perfect score on a small denominator flatters whatever it measures.
+1. **Broaden the thin fixtures — but not container.** Cloud went 6 → 19 controls and the correction
+   is instructive: the engine lift fell from **+0.17 to +0.05**. Nothing changed in the engine; one
+   extra detection out of 6 reads as 17 %, the same detection out of 19 reads as 5 %. A near-perfect
+   score on a small denominator flatters whatever it measures.
+
+   **Container is the exception, and an earlier version of this list got it wrong.** Its 3-CVE
+   must-find looks like the same problem and is not. For container CVE scanning the ground truth and
+   the tool's knowledge come from the *same upstream databases* — trivy and grype ARE the CVE
+   database — so "recall against this image's known CVEs" mostly asks whether our plumbing surfaces
+   what the DB already says. Going 3 → 30 CVEs yields a bigger number meaning the same thing.
+
+   That is structurally unlike the others: SAST's ground truth is hand-labelled source with planted
+   safe twins, WAVSEP is a purpose-built vulnerable app, CIS is an external standard. Those
+   denominators are independent of the tool; container's is not. The informative container metric is
+   the **FP-control half** (specificity on a clean image), which already exists and passes — it
+   measures something no CVE database can hand us.
 2. **A completing web scan.** 1.3 % coverage is not a measurement, and the slice is crawl-ordered
    rather than sampled — at cap 15 every XSS case reached was DOM-XSS, 4 of the corpus's 98.
 3. **api breadth** — SQLi now passes (recall 1.000). The other 4 detectable-in-principle classes need L2 wiring or operator config; 4 more (data exposure, enumeration, RegexDOS, rate limiting) need capabilities we do not have. The fixture records all 9 as the honest denominator.
