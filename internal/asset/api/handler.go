@@ -231,6 +231,19 @@ func hasInjectableParams(rawURL string) bool {
 	return false
 }
 
+// hasOperations reports whether recon produced any callable endpoint beyond the bare target.
+func hasOperations(surface []string) bool {
+	for _, e := range surface {
+		if strings.HasPrefix(e, openapiSpecMarker+" ") {
+			continue // the spec marker is metadata, not an endpoint
+		}
+		if _, _, ok := splitOp(e); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // PlanEscalation is the api conditional-depth stage (asset.EscalationPlanner):
 //
 //   - a successfully-ingested spec → kiterunner to brute-force the
@@ -240,6 +253,33 @@ func hasInjectableParams(rawURL string) bool {
 //
 // Depth tools fire only on the signal, never blanket.
 func (h *Handler) PlanEscalation(target types.Asset, surface []string, findings []types.Finding) []asset.Dispatch {
+	// AN EMPTY SURFACE IS ITSELF A SIGNAL — the one that calls for route discovery.
+	//
+	// The spec→kiterunner trigger below fires when a spec WAS ingested, to find the routes the spec
+	// omits. When recon found NO operations at all, there is nothing to scan and discovery is the
+	// only way to obtain a surface, so the tool whose job is finding routes was gated on already
+	// having them.
+	//
+	// Measured against OWASP crAPI, which publishes no spec at any common path (/openapi.json,
+	// /swagger.json, /api-docs, /v3/api-docs all 404): the whole api asset produced ONE finding.
+	// Against VAmPI, which does publish /openapi.json, the same asset produced 11-12 and detected
+	// SQLi. Most real APIs look like crAPI, so the gap was invisible until the target stopped
+	// flattering us.
+	//
+	// Gated on an EMPTY surface rather than merely "no spec", which keeps §5.3's escalation
+	// invariant intact: this is a specific state, not blanket firing. An API whose operations were
+	// discovered some other way already has a surface and needs no brute-forcing.
+	var out []asset.Dispatch
+	if !hasOperations(surface) {
+		if kr, ok := tool.Get("kiterunner"); ok {
+			out = append(out, asset.Dispatch{
+				Tool:          kr,
+				Args:          tool.Args{"target": target.Target},
+				EscalatedFrom: "empty-surface→kiterunner",
+			})
+		}
+	}
+
 	triggers := []asset.Trigger{
 		{
 			Name: "spec→kiterunner",
@@ -266,7 +306,7 @@ func (h *Handler) PlanEscalation(target types.Asset, surface []string, findings 
 			},
 		},
 	}
-	return asset.EvalTriggers(triggers, surface, findings, tool.Get)
+	return append(out, asset.EvalTriggers(triggers, surface, findings, tool.Get)...)
 }
 
 // Filter drops health/spec endpoints from any per-op dispatch (arch.md
