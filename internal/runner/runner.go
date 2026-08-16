@@ -255,13 +255,26 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	scanned := 0
 	var firstErr error
 	var current []types.Finding
+	// degraded: at least one asset's scan lost a tool to a timeout/error this pass.
+	//
+	// Measured cause: TSENGINE_TOOL_TIMEOUT is a WALL-CLOCK cap and tools dispatch concurrently, so
+	// under CPU contention a tool that normally completes is killed and contributes nothing. The TOOL
+	// is deterministic; the deadline is not. Four identical api scans returned 1, 1, 11 and 11
+	// findings that way, and a 3-run stability check showed 100% agreement on the findings that DID
+	// appear while the toolset itself varied — the variance is entirely in which tools survived.
+	//
+	// This flag exists because two consumers reason from ABSENCE and would both lie on such a pass:
+	// Detector.Reconcile RESOLVES an incident whose issue is gone, and retest.Verify marks a
+	// remediation "fixed" when its keys are gone. Either one tells the customer a live vulnerability
+	// was fixed because a scanner timed out.
+	degraded := false
 	for _, a := range assets {
 		if connInactive(statuses, a) {
 			// OM-5 fail-closed: an asset whose connection is unavailable/quarantined is not scanned.
 			slog.Info("[scan] skipped: connection inactive", "asset", a.ID, "type", a.Type, "target", a.Target)
 			continue
 		}
-		_, fs, err := s.scanAsset(ctx, a, platform.TriggerSchedule)
+		eng, fs, err := s.scanAsset(ctx, a, platform.TriggerSchedule)
 		if err != nil {
 			// Per-asset outcome is logged so a failed/empty scan is VISIBLE — RescanTenant only surfaces the
 			// first error to the caller, which used to hide why a given asset produced nothing.
@@ -272,6 +285,17 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 			continue
 		}
 		slog.Info("[scan] asset scanned", "asset", a.ID, "type", a.Type, "target", a.Target, "findings", len(fs))
+		if eng != nil && len(eng.ToolsFailed) > 0 {
+			// A tool that never ran produced no findings, and this pass cannot tell that apart from a
+			// tool that ran and found nothing. Everything downstream reasoning from ABSENCE is unsafe.
+			degraded = true
+			names := make([]string, 0, len(eng.ToolsFailed))
+			for _, tf := range eng.ToolsFailed {
+				names = append(names, tf.Tool)
+			}
+			slog.Warn("[scan] pass is DEGRADED — tools failed, absence is not evidence of a fix",
+				"asset", a.ID, "target", a.Target, "tools_failed", names)
+		}
 		current = append(current, fs...)
 		scanned++
 	}
@@ -308,7 +332,14 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		if evs, err := s.Store.ListRuntimeEvents(ctx, tenantID); err == nil {
 			attacked = crossdetect.AttackedKeys(current, evs)
 		}
-		res, err := s.Detector.Reconcile(ctx, tenantID, current, attacked)
+		// A degraded pass is not authoritative about absence, so route to the OPEN-ONLY path — the
+		// same distinction the detector already draws for event-driven ingests, which use OpenFor so
+		// they never falsely resolve. New findings are still real and still open incidents.
+		reconcile := s.Detector.Reconcile
+		if degraded {
+			reconcile = s.Detector.OpenFor
+		}
+		res, err := reconcile(ctx, tenantID, current, attacked)
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -318,7 +349,11 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		// remediation against this pass's authoritative findings. A fix is confirmed "fixed" only
 		// when its finding keys are absent (grounded §10); still-present means the fix didn't close
 		// it. Best-effort — a store error never aborts the pass; the verdict rides on the action.
-		if acts, lerr := s.Store.ListActions(ctx, tenantID); lerr == nil {
+		// Skipped on a degraded pass for the same reason resolution is: retest confirms a fix from the
+		// ABSENCE of the finding keys, so a tool that timed out would be recorded as a verified fix.
+		// That is the worst of the absence-derived lies — it closes the loop on a live vulnerability
+		// and tells a named human it is done.
+		if acts, lerr := s.Store.ListActions(ctx, tenantID); lerr == nil && !degraded {
 			// Rescan verification: absence of the finding key from this pass's authoritative findings.
 			byID := map[string]platform.Action{}
 			for _, a := range acts {
