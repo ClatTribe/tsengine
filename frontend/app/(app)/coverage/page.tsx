@@ -100,10 +100,10 @@ export default async function CoveragePage() {
                       <>
                         <span className="font-medium text-ink">{a.findings_count}</span> finding{a.findings_count === 1 ? "" : "s"} from{" "}
                         <span className="font-medium text-ink">{a.tools_with_findings.length}</span> tool
-                        {a.tools_with_findings.length === 1 ? "" : "s"}; the rest ran clean.
+                        {a.tools_with_findings.length === 1 ? "" : "s"}; no findings recorded from the rest.
                       </>
                     ) : (
-                      <>All tools ran and found nothing — a clean result, not a skipped scan.</>
+                      <>No findings recorded. This lists the tools declared for this asset type; it does not confirm each one executed.</>
                     )}
                   </div>
                 )}

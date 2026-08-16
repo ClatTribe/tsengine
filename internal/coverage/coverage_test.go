@@ -92,3 +92,28 @@ func TestCompute_LatestScanWins(t *testing.T) {
 		t.Fatalf("want latest scan %v, got %v", later, s.Assets[0].LastScannedAt)
 	}
 }
+
+// TestCompute_DoesNotClaimToolsExecuted pins what coverage is allowed to assert.
+//
+// RunsTools is a static declared map, not observed dispatch. The struct documented the remainder as
+// "rest ran clean" and the UI rendered "All tools ran and found nothing — a clean result, not a
+// skipped scan" — a confident claim in exactly the case most likely to be false.
+//
+// Two live mechanisms produce it: a per-tool timeout drops a tool silently (measured — four identical
+// api scans returned 1, 1, 11, 11 findings), and a TOOLSET-limited image answers "prowler: not found"
+// for tools it did not install. Either way the customer was told every tool ran.
+func TestCompute_DoesNotClaimToolsExecuted(t *testing.T) {
+	for _, c := range Compute(
+		[]platform.Asset{{ID: "a1", Target: "acct-1", Type: "cloud_account"}},
+		nil,
+		[]platform.Engagement{{ID: "e1", AssetID: "a1", CompletedAt: time.Now().UTC()}},
+	).Assets {
+		if c.ExecutionConfirmed {
+			t.Error("coverage has no per-tool dispatch data — it must not report execution as confirmed")
+		}
+		if len(c.RunsTools) > 0 && len(c.ToolsWithFindings) != 0 {
+			t.Errorf("no findings supplied, so nothing may be listed as having surfaced one: %v",
+				c.ToolsWithFindings)
+		}
+	}
+}
