@@ -11,7 +11,7 @@
 set -euo pipefail
 IMG="${1:-tsengine/sandbox:0.1.0-container-repository}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-FIX="$ROOT/fixtures/repo/sast-matrix"
+FIX="$ROOT/fixtures/repo/sast-matrix"  # cases live in $FIX/testdata (Go toolchain ignores testdata/)
 CLEAN="$ROOT/fixtures/repo/clean"
 
 # Keep in step with internal/tool/semgrep/semgrep.go. If they drift, this measures a config we do

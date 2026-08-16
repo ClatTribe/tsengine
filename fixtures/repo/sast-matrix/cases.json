@@ -1,23 +1,83 @@
 {
   "name": "repo-sast-matrix",
   "asset": "repository",
-  "description": "Per-CLASS, per-LANGUAGE SAST recall for the languages our customers actually write. The neutral SAST benchmark we cite (OWASP Benchmark v1.2) is a JAVA corpus; our ICP writes Go, JavaScript and Python, so the one measurement we could quote said nothing about the code we actually scan. A command injection missed in Python surfaced only because a demo fixture happened to plant one — this exists so the next gap is data instead of luck.",
+  "description": "Per-CLASS, per-LANGUAGE SAST recall for the languages our customers actually write. The neutral SAST benchmark we cite (OWASP Benchmark v1.2) is a JAVA corpus; our ICP writes Go, JavaScript and Python, so the one measurement we could quote said nothing about the code we actually scan. A command injection missed in Python surfaced only because a demo fixture happened to plant one \u2014 this exists so the next gap is data instead of luck.",
   "not_a_neutral_benchmark": "We wrote these cases, so this is a REGRESSION TEST, not evidence of capability relative to anyone. Quote OWASP Benchmark for a comparative number; quote this only as 'we check these classes and here is the result'.",
-  "metric": "planted-case recall (per class × language), with FP-control on fixtures/repo/clean",
+  "metric": "planted-case recall (per class \u00d7 language), with FP-control on fixtures/repo/clean",
   "how_to_run": "scripts/sast-matrix.sh [sandbox-image]",
   "cases": [
-    { "file": "py/cmdi.py",   "cwe": "CWE-78",  "class": "command injection",       "lang": "python" },
-    { "file": "py/sqli.py",   "cwe": "CWE-89",  "class": "sql injection",           "lang": "python" },
-    { "file": "py/path.py",   "cwe": "CWE-22",  "class": "path traversal",          "lang": "python" },
-    { "file": "py/ssrf.py",   "cwe": "CWE-918", "class": "ssrf",                    "lang": "python" },
-    { "file": "py/deser.py",  "cwe": "CWE-502", "class": "insecure deserialization","lang": "python" },
-    { "file": "py/crypto.py", "cwe": "CWE-327", "class": "weak hash",               "lang": "python" },
-    { "file": "js/cmdi.js",   "cwe": "CWE-78",  "class": "command injection",       "lang": "javascript" },
-    { "file": "js/sqli.js",   "cwe": "CWE-89",  "class": "sql injection",           "lang": "javascript" },
-    { "file": "js/path.js",   "cwe": "CWE-22",  "class": "path traversal",          "lang": "javascript" },
-    { "file": "js/ssrf.js",   "cwe": "CWE-918", "class": "ssrf",                    "lang": "javascript" },
-    { "file": "go/cmdi.go",   "cwe": "CWE-78",  "class": "command injection",       "lang": "go" },
-    { "file": "go/sqli.go",   "cwe": "CWE-89",  "class": "sql injection",           "lang": "go" }
+    {
+      "file": "testdata/py/cmdi.py",
+      "cwe": "CWE-78",
+      "class": "command injection",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/py/sqli.py",
+      "cwe": "CWE-89",
+      "class": "sql injection",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/py/path.py",
+      "cwe": "CWE-22",
+      "class": "path traversal",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/py/ssrf.py",
+      "cwe": "CWE-918",
+      "class": "ssrf",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/py/deser.py",
+      "cwe": "CWE-502",
+      "class": "insecure deserialization",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/py/crypto.py",
+      "cwe": "CWE-327",
+      "class": "weak hash",
+      "lang": "python"
+    },
+    {
+      "file": "testdata/js/cmdi.js",
+      "cwe": "CWE-78",
+      "class": "command injection",
+      "lang": "javascript"
+    },
+    {
+      "file": "testdata/js/sqli.js",
+      "cwe": "CWE-89",
+      "class": "sql injection",
+      "lang": "javascript"
+    },
+    {
+      "file": "testdata/js/path.js",
+      "cwe": "CWE-22",
+      "class": "path traversal",
+      "lang": "javascript"
+    },
+    {
+      "file": "testdata/js/ssrf.js",
+      "cwe": "CWE-918",
+      "class": "ssrf",
+      "lang": "javascript"
+    },
+    {
+      "file": "testdata/go/cmdi.go",
+      "cwe": "CWE-78",
+      "class": "command injection",
+      "lang": "go"
+    },
+    {
+      "file": "testdata/go/sqli.go",
+      "cwe": "CWE-89",
+      "class": "sql injection",
+      "lang": "go"
+    }
   ],
   "measured": {
     "date": "2026-08-16",
@@ -26,6 +86,7 @@
     "+ p/default (shipped now)": "11/12",
     "false_positives_on_fixtures/repo/clean": 0
   },
-  "known_miss": "js/sqli.js — a generic db.query() with string concatenation. Not caught by p/default, p/javascript or p/typescript: semgrep cannot tell that `db` is a SQL connection without cross-file context. This is the interprocedural-taint case the CodeQL escalation tier exists for, not a ruleset gap. Recorded rather than quietly dropped.",
-  "runnable": false
+  "known_miss": "js/sqli.js \u2014 a generic db.query() with string concatenation. Not caught by p/default, p/javascript or p/typescript: semgrep cannot tell that `db` is a SQL connection without cross-file context. This is the interprocedural-taint case the CodeQL escalation tier exists for, not a ruleset gap. Recorded rather than quietly dropped.",
+  "runnable": false,
+  "note_on_layout": "Cases live under testdata/ because the Go toolchain ignores any directory of that name. Without it `go vet ./...` compiles the planted Go samples \u2014 which are deliberately broken code \u2014 and fails the build. That is exactly what happened on the first push of this fixture."
 }
