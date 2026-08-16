@@ -68,6 +68,16 @@ Zero script-context cases were detected **in either of two runs**. Escaping a JS
 handler needs payloads dalfox is not generating here. That is a specific capability gap someone can
 act on; "reflected XSS is 25 %" is not.
 
+**Measured: web findings are unstable, not just the toolset.** `tsbench stability --runs 3` over the
+reflected-XSS set reports **54 flaky findings**, many present in only **1 of 3 runs**. That is
+qualitatively worse than api, where the stability rate was 100 % and only the TOOLSET varied — there,
+whatever ran was reliable. Here the same tool, on the same unchanged target, reaches different
+conclusions between runs, so a CI gate on any of those 54 passes only some of the time.
+
+Consequence: the per-class percentages above are point estimates with real, unquantified spread. The
+durable finding is the CLASS-level one (script-context undetected in every run); the percentages are
+indicative.
+
 **Caveat — this benchmark is itself non-deterministic.** Two identical scans returned **9 vs 7
 distinct cases and 751 vs 667 findings**; one case was found in one run and missed in the other. Same
 wall-clock timeout mechanism as everywhere else. So per-case membership is NOT stable and must not be
