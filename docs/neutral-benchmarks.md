@@ -176,3 +176,35 @@ What a real number needs, in order: (1) a scenario the substrate provably under-
 already prints the headroom, so this is buildable and checkable; (2) enough of them to be a sample
 rather than an anecdote; (3) only then a key, to run them at volume. Building (1) is the work; the
 key is the cheap part.
+
+### 6.1 The first measurement that actually measured the agent
+
+The run above scored 100% and the harness refused to credit it, because the substrate had already
+found everything. Here is the same harness on a scenario that discriminates.
+
+**Finding one:** `--cloudquery` unseeded (14 resources) has **zero** agent headroom.
+`--cloudquery-large --seed N` (908 resources, 185 prowler findings) does — `--discrimination-sweep 12`
+reports **12/12 discriminating, headroom 6**. Use the sweep to pick a scenario before spending a run.
+
+**Result** (driven manually through the file proxy, 15 tool calls):
+
+| | recall | invented | lift |
+|---|---|---|---|
+| deterministic substrate @ budget 5 | 5/11 (45%) | 0 | — |
+| LLM agent | **6/11 (55%)** | **0** | **+1 path (9%)** |
+
+Verdict: **L2 WEAK**, remediation **0% (0/6 fixed)**.
+
+**Two of those numbers are the driver's fault, not the agent's**, and the harness was right to punish
+both. The run recorded only the six paths the prepass MISSED and never re-recorded the five it found —
+scoring counts the agent's own issues, so that is 6/11 instead of 11/11. And it never called
+`propose_fix`, hence "detection without remediation".
+
+That is the honest reading of a manually-driven n=1: **it measures the strategy as much as the model.**
+It is a demonstration that the harness now discriminates and scores without flattery. It is not a model
+benchmark, and should not be quoted as one.
+
+**One metric caveat worth knowing before quoting lift:** `ComputeAgentLift` compares COUNTS, not sets.
+The six recovered paths were entirely disjoint from the substrate's five, yet lift reads +1 (6−5)
+rather than +6. Defensible as "did the agent find more than the substrate", but it understates a
+disjoint recovery.
