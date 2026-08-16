@@ -313,6 +313,10 @@ func RenderWavsep(r *WavsepReport) string {
 			r.Coverage.TotalCases-r.Coverage.ReachedCases)
 		fmt.Fprintf(&b, "                  NOT directly comparable to the leaderboard below: those "+
 			"tools scanned the whole corpus.\n")
+		fmt.Fprintf(&b, "                  NOT A RANDOM SAMPLE either — the cap takes whatever recon "+
+			"reached FIRST, in crawl\n                  order, so a thin slice can sit entirely "+
+			"inside one directory. Per-category rates on\n                  low coverage say more "+
+			"about where the crawler started than about detection.\n")
 	default:
 		fmt.Fprintf(&b, "coverage:         FULL — all %d cases visited by recon and scored.\n",
 			r.Coverage.TotalCases)

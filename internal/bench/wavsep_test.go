@@ -200,3 +200,19 @@ func TestScoreWavsep_ReportsTruncatedScan(t *testing.T) {
 		t.Errorf("scorecard must disclose truncation and its reason, got:\n%s", out)
 	}
 }
+
+// A partial run is crawl-ordered, not sampled. Measured live: at cap 15 every XSS case reached was
+// DOM-XSS — 4 of the corpus's 98 XSS cases, and precisely the subset that needs JS execution to
+// detect. Reading "xss 0%" off that slice would generalise the hardest 4% to the whole class, so the
+// scorecard has to say the slice is not representative, not merely that it is small.
+func TestRenderWavsep_PartialWarnsSampleIsNotRandom(t *testing.T) {
+	cases := []WavsepCase{
+		{URL: "/wavsep/a.jsp", Category: "xss", Vulnerable: true},
+		{URL: "/wavsep/z.jsp", Category: "xss", Vulnerable: true},
+	}
+	rep := ScoreWavsep(cases, &types.Scan{DiscoveredSurface: []string{"http://h/wavsep/a.jsp"}})
+	out := RenderWavsep(rep)
+	if !strings.Contains(out, "NOT A RANDOM SAMPLE") {
+		t.Errorf("a partial scorecard must warn the slice is crawl-ordered, not sampled; got:\n%s", out)
+	}
+}
