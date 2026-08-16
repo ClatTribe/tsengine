@@ -3,6 +3,10 @@
 # dependencies — Go tooling handles its own caching.
 
 SANDBOX_IMAGE ?= tsengine/sandbox:0.1.0
+# TOOLSET picks which assets' tooling the DEV image installs (see docker/sandbox/Dockerfile).
+# `full` is production parity; a comma list builds only those assets and is much smaller/faster.
+TOOLSET ?= container,repository
+comma := ,
 HOST_IMAGE    ?= tsengine/host:dev
 NUCLEI_VERSION ?= 3.3.7
 
@@ -54,6 +58,15 @@ sandbox-image: ## build the sandbox docker image
 	docker build \
 		--build-arg NUCLEI_VERSION=$(NUCLEI_VERSION) \
 		-t $(SANDBOX_IMAGE) \
+		-f docker/sandbox/Dockerfile .
+
+.PHONY: sandbox-image-dev
+sandbox-image-dev: ## build a SLIM sandbox for the assets you name (TOOLSET=container,repository)
+	@echo "building sandbox with TOOLSET=$(TOOLSET) — partial coverage, dev only"
+	docker build \
+		--build-arg NUCLEI_VERSION=$(NUCLEI_VERSION) \
+		--build-arg TOOLSET=$(TOOLSET) \
+		-t $(SANDBOX_IMAGE)-$(subst $(comma),-,$(TOOLSET)) \
 		-f docker/sandbox/Dockerfile .
 
 .PHONY: sandbox-shell
