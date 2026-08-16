@@ -1,17 +1,73 @@
 {
   "name": "api-vampi",
   "asset": "api",
-  "target": "http://host.docker.internal:5002/openapi.json",
-  "description": "Internal must-find fixture for the api asset. Deploy VAmPI (erev0s/vampi) and point target at its OpenAPI spec. openapi_spec_ingest ingests the spec; schemathesis spec-fuzzes it; nuclei runs api signatures. NOTE: BOLA/BFLA/mass-assignment recall awaits the authz specialists (Akto wrapper or ADR — not built), so must_find is limited to what the current toolset reliably surfaces (schemathesis contract violations).",
+  "target": "http://host.docker.internal:5002/",
+  "description": "VAmPI (erev0s/vampi), a deliberately vulnerable API. Ground truth is VAmPI's OWN documented vulnerability list (9 classes, from its README) \u2014 NOT derived from what our tools happen to emit, which would be circular. Target is the BASE URL, not the spec: openapi_spec_ingest discovers /openapi.json from commonSpecPaths and emits the SPEC marker that PlanFanout needs to dispatch schemathesis. Deploy: docker run -d -p 5002:5000 -e vulnerable=1 erev0s/vampi",
   "metric": "must_find_recall",
   "must_find": [
-    "openapi_spec_ingest::spec-found",
-    "schemathesis::contract-violation"
+    "sqli"
   ],
   "pass_recall": 1.0,
   "competitors": {
     "leaderboard": "",
-    "note": "No neutral API-security leaderboard exists (unlike WAVSEP/OWASP-Benchmark). Reference points: VAmPI + crAPI working-group writeups; Salt Security / Wallarm / Akto self-published. Per CLAUDE.md §14.2 this fixture pairs with the anti-overfit source-grep guard so api recall isn't tuned to VAmPI/crAPI path heuristics (the strix iter-17.5 overfit trap)."
+    "note": "No neutral API-security leaderboard exists (unlike WAVSEP/OWASP-Benchmark). VAmPI + crAPI are the community reference targets; recall here is against the SUT's own documented vulnerability list."
   },
-  "runnable": false
+  "ground_truth_note": "VAmPI documents 9 deliberate vulnerabilities. must_find carries ONE token per detectable class (was two spellings of SQLi, which capped recall at 0.5 for a single class \u2014 a ground-truth bug, not an engine miss). It carries only the classes an L1 api scan can currently surface, because a fixture that can never pass is a permanently-red gate rather than a measurement. The full denominator is recorded here so the gap stays visible instead of being quietly defined away \u2014 the same failure the WAVSEP scorer had when unreached cases were graded as misses.",
+  "documented_vulnerabilities": [
+    {
+      "class": "SQL injection",
+      "endpoint": "multiple",
+      "cwe": "CWE-89",
+      "covered_by": "nuclei + sqlmap"
+    },
+    {
+      "class": "Broken object level authorization (BOLA)",
+      "endpoint": "GET/POST /books/v1/{book}",
+      "cwe": "CWE-639",
+      "covered_by": "bola_probe / apiauthz \u2014 L2 agent + operator-declared TestConfig, NOT the L1 anchor pass"
+    },
+    {
+      "class": "Unauthorized password change",
+      "endpoint": "PUT /users/v1/{username}/password",
+      "cwe": "CWE-863",
+      "covered_by": "apiauthz TestConfig \u2014 needs two declared identities"
+    },
+    {
+      "class": "Mass assignment",
+      "endpoint": "register/update",
+      "cwe": "CWE-915",
+      "covered_by": "privesc_probe \u2014 L2 agent tool"
+    },
+    {
+      "class": "Excessive data exposure",
+      "endpoint": "GET /users/v1/_debug",
+      "cwe": "CWE-200",
+      "covered_by": "NOT COVERED \u2014 no L1 detector for over-broad response bodies"
+    },
+    {
+      "class": "User/password enumeration",
+      "endpoint": "GET /users/v1",
+      "cwe": "CWE-204",
+      "covered_by": "NOT COVERED \u2014 requires differential response analysis"
+    },
+    {
+      "class": "JWT authentication bypass (weak signing key)",
+      "endpoint": "token issuance",
+      "cwe": "CWE-347",
+      "covered_by": "nuclei jwt tags \u2014 the api tag set includes jwt"
+    },
+    {
+      "class": "RegexDOS",
+      "endpoint": "multiple",
+      "cwe": "CWE-1333",
+      "covered_by": "NOT COVERED \u2014 needs fuzzing/load, not pattern matching"
+    },
+    {
+      "class": "Lack of resources & rate limiting",
+      "endpoint": "all",
+      "cwe": "CWE-770",
+      "covered_by": "NOT COVERED \u2014 needs load generation"
+    }
+  ],
+  "runnable": true
 }

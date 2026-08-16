@@ -1,7 +1,10 @@
 package api
 
 import (
+	// Blank imports register the wrappers in THIS test binary. Without them tool.Get returns
+	// nothing and the fan-out test skips — which is how a vacuous test passes as a real one.
 	"context"
+	_ "github.com/ClatTribe/tsengine/internal/tool/sqlmap"
 	"strings"
 	"testing"
 
@@ -220,4 +223,107 @@ func names(ts []tool.Tool) []string {
 		out = append(out, t.Name())
 	}
 	return out
+}
+
+// TestAPINucleiTags_IncludeInjection pins the class the tag set silently excluded.
+//
+// The set described how an API authenticates (api, graphql, jwt, oauth) and what it accidentally
+// serves (exposure, config, files, misconfig) — and nothing about what it does with INPUT. Measured
+// against VAmPI, whose headline documented vulnerability is SQL injection: recall 0.000, MISSED sqli.
+//
+// An API takes attacker-controlled input in path params, query strings and JSON bodies exactly like
+// a web app, and injection is OWASP API Top 10. This is the second time this tag set was found to be
+// missing a whole class — the exposure tags were added after a live target leaked DB_PASSWORD via
+// /.env while the scan reported one informational finding.
+func TestAPINucleiTags_IncludeInjection(t *testing.T) {
+	for _, tag := range []string{"sqli", "injection", "xss", "ssrf", "lfi", "rce", "traversal"} {
+		if !strings.Contains(apiNucleiTags, tag) {
+			t.Errorf("apiNucleiTags is missing %q.\nAn API is injectable like any web app; omitting "+
+				"the injection classes means nuclei never runs a single injection template against "+
+				"an API surface.", tag)
+		}
+	}
+	// The protocol and exposure classes must survive — both were added for measured reasons.
+	for _, tag := range []string{"api", "graphql", "jwt", "oauth", "exposure", "config"} {
+		if !strings.Contains(apiNucleiTags, tag) {
+			t.Errorf("apiNucleiTags lost %q — that class was added after a live miss and must stay", tag)
+		}
+	}
+}
+
+// TestHasInjectableParams_CoversRESTShapes pins what counts as injectable on an API surface.
+//
+// A query-string-only test (what the web asset uses) finds almost nothing on REST, which expresses
+// inputs as /users/v1/{username} rather than ?username=. Both the spec's brace form and a concrete
+// numeric id are injectable; a static collection path is not, and fanning sqlmap across those is the
+// per-URL trap that makes a scan miss its deadline.
+func TestHasInjectableParams_CoversRESTShapes(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want bool
+	}{
+		{"https://api.x/search?q=1", true},          // query param
+		{"https://api.x/users/v1/{username}", true}, // spec-declared path param
+		{"https://api.x/books/v1/42", true},         // concrete object id
+		{"https://api.x/users/v1", false},           // static collection
+		{"https://api.x/", false},                   // root
+		{"https://api.x/health", false},             // static endpoint
+	} {
+		if got := hasInjectableParams(tc.url); got != tc.want {
+			t.Errorf("hasInjectableParams(%q) = %v, want %v", tc.url, got, tc.want)
+		}
+	}
+}
+
+// The spec's operations must actually reach an injection tool. Before this, api dispatched only
+// schemathesis + nuclei, so no injection payload was ever sent to an API endpoint — nuclei's
+// injection templates are signature-based and find known product CVEs, not first-party SQLi.
+func TestPlanFanout_DispatchesInjectionOnParamEndpoints(t *testing.T) {
+	h := NewHandler()
+	if _, ok := toolGet("sqlmap"); !ok {
+		t.Fatal("sqlmap is blank-imported by this test file, so a miss here means the wrapper no " +
+			"longer registers under that name — the fan-out would silently dispatch nothing")
+	}
+	out := h.PlanFanout(types.Asset{Type: types.AssetAPI, Target: "https://api.x/"}, []string{
+		"SPEC https://api.x/openapi.json",
+		"GET https://api.x/users/v1/{username}",
+		"GET https://api.x/users/v1",
+	})
+	var sqlmapTargets []string
+	for _, d := range out {
+		if d.Tool.Name() == "sqlmap" {
+			sqlmapTargets = append(sqlmapTargets, d.Args["target"].(string))
+		}
+	}
+	if len(sqlmapTargets) == 0 {
+		t.Fatal("no injection dispatch: a param-bearing endpoint must reach sqlmap, else the asset " +
+			"never sends an injection payload at all")
+	}
+	for _, tgt := range sqlmapTargets {
+		if strings.HasSuffix(tgt, "/users/v1") {
+			t.Errorf("sqlmap fanned to a static collection path %q — that is the per-URL cost trap", tgt)
+		}
+	}
+}
+
+func toolGet(name string) (tool.Tool, bool) { return tool.Get(name) }
+
+// TestInjectionTarget_MarksTheParameter pins the rewrite sqlmap needs.
+//
+// Verified in the sandbox: sqlmap detects VAmPI's SQLi on /users/v1/name1* (boolean-blind) but NOT
+// on the raw spec form /users/v1/{username} — it reports the brace token "does not appear to be
+// dynamic" and skips it. So dispatching the brace form (what the first version did) sent sqlmap a
+// target it could not act on, and recall stayed 0.000 with sqlmap running.
+func TestInjectionTarget_MarksTheParameter(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"https://api.x/users/v1/{username}", "https://api.x/users/v1/name1*"},
+		{"https://api.x/books/v1/42", "https://api.x/books/v1/42*"},
+		{"https://api.x/search?q=1", "https://api.x/search?q=1"}, // query: sqlmap finds it itself
+		{"https://api.x/users/v1", "https://api.x/users/v1"},     // no param: unchanged
+	} {
+		if got := injectionTarget(tc.in); got != tc.want {
+			t.Errorf("injectionTarget(%q) = %q, want %q — sqlmap needs the * marker on the path "+
+				"parameter, or it never injects it", tc.in, got, tc.want)
+		}
+	}
 }
