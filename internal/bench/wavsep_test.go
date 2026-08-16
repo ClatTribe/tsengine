@@ -179,3 +179,24 @@ func TestScoreWavsep_NoSurfaceGradesEverything(t *testing.T) {
 		t.Error("unknown coverage must not claim Partial(); it is unknown, not measured")
 	}
 }
+
+// A truncated scan's misses are unfinished work, not detection failures. The engine records this
+// (types.Scan.Partial); no bench scorer read it, so a timed-out run's recall was published as though
+// every tool had run to completion — which is exactly how a throughput problem gets misread as a
+// recall problem.
+func TestScoreWavsep_ReportsTruncatedScan(t *testing.T) {
+	cases := []WavsepCase{{URL: "/wavsep/a.jsp", Category: "sqli", Vulnerable: true}}
+	scan := &types.Scan{
+		DiscoveredSurface: []string{"http://h/wavsep/a.jsp"},
+		Partial:           true,
+		StopReason:        "deadline exceeded",
+	}
+	rep := ScoreWavsep(cases, scan)
+	if !rep.Coverage.Truncated {
+		t.Error("a partial scan must be reported as truncated, else its misses read as real misses")
+	}
+	out := RenderWavsep(rep)
+	if !strings.Contains(out, "TRUNCATED") || !strings.Contains(out, "deadline exceeded") {
+		t.Errorf("scorecard must disclose truncation and its reason, got:\n%s", out)
+	}
+}

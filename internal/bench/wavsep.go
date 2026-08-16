@@ -186,6 +186,17 @@ type WavsepCoverage struct {
 	// evidence of non-coverage (§10), so every case is then graded exactly as before and the report
 	// says coverage is unavailable rather than implying the corpus was covered.
 	SurfaceKnown bool `json:"surface_known"`
+
+	// Truncated mirrors types.Scan.Partial: the scan stopped early (deadline, kill-switch) and its
+	// findings are what completed before the cutoff.
+	//
+	// This is a SECOND, independent kind of partial, and conflating it with the URL-coverage one
+	// above is how a throughput problem gets published as a detection result. A truncated run's
+	// misses are unfinished work, not things the scanner looked at and failed to find. The engine
+	// records this honestly; no bench scorer read it, so every benchmark in this package could
+	// report a timed-out scan's recall as though the tools had run to completion.
+	Truncated  bool   `json:"truncated"`
+	StopReason string `json:"stop_reason,omitempty"`
 }
 
 // Partial reports whether the run graded less than the full corpus.
@@ -208,7 +219,12 @@ func ScoreWavsep(cases []WavsepCase, scan *types.Scan) *WavsepReport {
 
 	rep := &WavsepReport{PerCategory: map[string]*WavsepCatScore{}, Competitors: wavsepCompetitors}
 	reached := reachedSet(scan.DiscoveredSurface)
-	rep.Coverage = WavsepCoverage{TotalCases: len(cases), SurfaceKnown: len(reached) > 0}
+	rep.Coverage = WavsepCoverage{
+		TotalCases:   len(cases),
+		SurfaceKnown: len(reached) > 0,
+		Truncated:    scan.Partial,
+		StopReason:   scan.StopReason,
+	}
 
 	for _, c := range cases {
 		// A case the crawl never visited was not tested. Grading it as a miss would measure the
@@ -271,6 +287,17 @@ func RenderWavsep(r *WavsepReport) string {
 	fmt.Fprintf(&b, "=== WAVSEP scorecard (web_application DAST) ===\n")
 	fmt.Fprintf(&b, "overall Youden:   %.2f%%  (TP=%d FP=%d TN=%d FN=%d)\n",
 		r.Overall.Youden()*100, r.Overall.TP, r.Overall.FP, r.Overall.TN, r.Overall.FN)
+
+	if r.Coverage.Truncated {
+		reason := r.Coverage.StopReason
+		if reason == "" {
+			reason = "unspecified"
+		}
+		fmt.Fprintf(&b, "scan:             TRUNCATED (%s) — the scan stopped before finishing, so its\n"+
+			"                  misses are UNFINISHED WORK, not things the tools examined and failed to\n"+
+			"                  find. Read the score as a floor on detection, not a measurement of it.\n",
+			reason)
+	}
 
 	switch {
 	case !r.Coverage.SurfaceKnown:
