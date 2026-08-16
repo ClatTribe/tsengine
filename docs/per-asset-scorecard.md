@@ -17,7 +17,7 @@ worth less than a middling one over 2,740, and reporting them alike is how a ben
 | **repository** (SAST) | **46.5 % Youden** — 3rd on the published cohort (Veracode 51, Checkmarx 47, **us**, Fortify 35, SonarQube 6) | 2 740 OWASP BenchmarkJava cases, neutral | **High** |
 | **container_image** | **1.000 recall** (3/3 must-find CVEs, 416 raw findings) · **FP-control PASS** (0 high/critical on a clean image) | 3 CVEs + 1 clean image | **Low** — paired, but thin |
 | **cloud_account** | **6/6 CIS recall**, +0.17 lift over prowler-only, **1 unexpected finding** | 6 seeded violations (CIS has ~60) | **Low** |
-| **api** | 11 findings on VAmPI | none — no must-find list | **None** |
+| **api** | **1.000 recall** (SQLi detected on VAmPI), **verdict PASS** | VAmPI's own documented vuln list; SQLi is the only class an L1 scan surfaces today (BOLA/mass-assign need L2/operator config, 4 classes uncovered) | **Low** — real ground truth, one class |
 | **web_application** | 26.7 % Youden on the cases a completing scan reached | 15 of 1 133 WAVSEP cases (1.3 %) | **Very low** |
 | **domain**, **ip_address** | — | — | **Untested** |
 
@@ -25,6 +25,7 @@ worth less than a middling one over 2,740, and reporting them alike is how a ben
 tsbench sast --target <BenchmarkJava> --ground-truth expectedresults-1.2.csv
 tsbench run  --fixture fixtures/container/nginx-vuln/fixture.json
 tsbench run  --fixture fixtures/container/alpine-clean/fixture.json
+tsbench run  --fixture fixtures/api/vampi/fixture.json
 tsbench cloud-baseline
 tsbench wavsep --target <wavsep-root> --ground-truth fixtures/web/wavsep/expected-cases.csv
 ```
@@ -115,7 +116,7 @@ require their runner.
    near-perfect scores on ground truth too small to carry them.
 2. **A completing web scan.** 1.3 % coverage is not a measurement, and the slice is crawl-ordered
    rather than sampled — at cap 15 every XSS case reached was DOM-XSS, 4 of the corpus's 98.
-3. **api ground truth** — a must-find list for VAmPI, which has published BOLA/SQLi/JWT flaws.
+3. **api breadth** — SQLi now passes (recall 1.000). The other 4 detectable-in-principle classes need L2 wiring or operator config; 4 more (data exposure, enumeration, RegexDOS, rate limiting) need capabilities we do not have. The fixture records all 9 as the honest denominator.
 4. **Agent scores via BountyBench's runner**, not ours.
 5. **domain and ip** — untested, and last in the asset priority order.
 
