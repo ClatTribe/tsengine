@@ -126,26 +126,43 @@ func (c SastCatScore) Youden() float64 { return c.tpr() - c.fpr() }
 // Two overall scores are reported, because the engine has two audiences (§2.3) and they read
 // different finding sets:
 //
-//   - Overall grades FindingsRaw — the pre-L1.5 set the security engineer reads, and the only set
-//     comparable to the leaderboard, since no competing SAST tool has an equivalent of our hook chain.
-//   - Delivered grades FindingsEnriched — what the customer is actually shown after the L1.5 chain
-//     (§11) has demoted and merged.
+//   - Overall grades FindingsRaw at every severity — the pre-L1.5 set the security engineer reads,
+//     and the only set comparable to the leaderboard, since competing SAST tools have no equivalent
+//     of our hook chain and report everything they find.
+//   - RawActionable and Delivered grade the same two sets at the severity floor the PRODUCT uses to
+//     decide something is worth acting on: types.SeverityHigh, detect.Detector's default incident
+//     threshold. Below that line nothing is escalated and nobody is paged.
 //
-// The gap between them is the L1.5 lift. §14.1 documents that lift as measurable by re-running any
-// L1 bench with TSENGINE_L15_DISABLED=1, but for THIS bench that flag could never move the number:
-// the scorer only ever read FindingsRaw, which §11 captures before hook 1 fires. The ablation was
-// inert here and nothing said so. Scoring both sets in one pass measures it directly, and needs no
-// second scan of 2,740 cases.
+// The lift is Delivered − RawActionable, not Delivered − Overall. Both terms carry the same floor, so
+// the only difference left between them is the hook chain itself. Comparing an all-severity number
+// against a high-only one would fold the floor into the "lift" and report the chain as doing work the
+// threshold did.
+//
+// # Why the floor is load-bearing
+//
+// The first version of this scoring ignored severity, and measured the L1.5 lift on 2,740 cases as
+// exactly +0.00 — identical confusion matrices. That was largely an artifact: of the FP filter's five
+// actions, four are `demote` (severity down, finding kept) and only one is `dismiss` (removed). A
+// severity-blind scorer can see precisely one of the five, so it graded a demoted finding as though
+// the chain had never run. §14.1 calls this ablation the way to measure L1.5's contribution; measuring
+// it needs the scorer to model what "shown to the customer" actually means.
 type SastReport struct {
-	PerCategory map[string]*SastCatScore `json:"per_category"`
-	Overall     SastCatScore             `json:"overall"`
-	Delivered   SastCatScore             `json:"delivered"`
-	Competitors Competitors              `json:"competitors"`
+	PerCategory   map[string]*SastCatScore `json:"per_category"`
+	Overall       SastCatScore             `json:"overall"`
+	RawActionable SastCatScore             `json:"raw_actionable"`
+	Delivered     SastCatScore             `json:"delivered"`
+	Competitors   Competitors              `json:"competitors"`
 }
 
-// L15Lift is the change in Youden the L1.5 hook chain produces, in points. Positive means the chain
-// improved what the customer sees relative to raw L1.
-func (r *SastReport) L15Lift() float64 { return (r.Delivered.Youden() - r.Overall.Youden()) * 100 }
+// actionableFloor is the severity at or above which the product escalates a finding. Kept identical
+// to detect.Detector's default threshold: if that line moves, this measurement should move with it.
+const actionableFloor = types.SeverityHigh
+
+// L15Lift is the change in Youden the L1.5 hook chain produces, in points, holding the severity floor
+// fixed on both sides. Positive means the chain improved what reaches the customer.
+func (r *SastReport) L15Lift() float64 {
+	return (r.Delivered.Youden() - r.RawActionable.Youden()) * 100
+}
 
 // ScoreSast scores a repository scan against the OWASP-Benchmark ground
 // truth. A case is "flagged" iff some finding's location (Endpoint =
@@ -155,31 +172,34 @@ func (r *SastReport) L15Lift() float64 { return (r.Delivered.Youden() - r.Overal
 func ScoreSast(cases []SastCase, scan *types.Scan) *SastReport {
 	rep := &SastReport{PerCategory: map[string]*SastCatScore{}, Competitors: sastCompetitors}
 
-	// Per-category detail tracks the raw set: it is the diagnostic view, and grading a category
-	// twice would double the output without telling anyone anything new.
-	rep.PerCategory = scoreSastSet(cases, scan.FindingsRaw)
-	for _, cs := range rep.PerCategory {
-		rep.Overall.TP += cs.TP
-		rep.Overall.FP += cs.FP
-		rep.Overall.TN += cs.TN
-		rep.Overall.FN += cs.FN
-	}
-	rep.Overall.Category = "OVERALL(raw)"
-
-	for _, cs := range scoreSastSet(cases, scan.FindingsEnriched) {
-		rep.Delivered.TP += cs.TP
-		rep.Delivered.FP += cs.FP
-		rep.Delivered.TN += cs.TN
-		rep.Delivered.FN += cs.FN
-	}
-	rep.Delivered.Category = "OVERALL(delivered)"
+	// Per-category detail tracks the raw set at every severity: it is the diagnostic view, and
+	// grading a category three times would triple the output without telling anyone anything new.
+	rep.PerCategory = scoreSastSet(cases, scan.FindingsRaw, "")
+	rep.Overall = rollUp(rep.PerCategory, "OVERALL(raw)")
+	rep.RawActionable = rollUp(scoreSastSet(cases, scan.FindingsRaw, actionableFloor), "OVERALL(raw≥high)")
+	rep.Delivered = rollUp(scoreSastSet(cases, scan.FindingsEnriched, actionableFloor), "OVERALL(delivered)")
 	return rep
 }
 
-// scoreSastSet grades one finding set against the ground truth.
-func scoreSastSet(cases []SastCase, findings []types.Finding) map[string]*SastCatScore {
+// rollUp sums per-category scores into a single overall score.
+func rollUp(per map[string]*SastCatScore, label string) SastCatScore {
+	out := SastCatScore{Category: label}
+	for _, cs := range per {
+		out.TP += cs.TP
+		out.FP += cs.FP
+		out.TN += cs.TN
+		out.FN += cs.FN
+	}
+	return out
+}
+
+// scoreSastSet grades one finding set against the ground truth. A zero floor grades every severity.
+func scoreSastSet(cases []SastCase, findings []types.Finding, floor types.Severity) map[string]*SastCatScore {
 	flagged := map[string][]string{} // category → finding locations
 	for _, f := range findings {
+		if floor != "" && f.Severity.Rank() < floor.Rank() {
+			continue // below the line at which the product escalates anything
+		}
 		cat := sastFindingCategory(f)
 		if cat == "" {
 			continue
@@ -235,11 +255,14 @@ func sastCaseFlagged(c SastCase, locations []string) bool {
 func RenderSast(r *SastReport) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "=== OWASP Benchmark scorecard (repository SAST) ===\n")
-	fmt.Fprintf(&b, "raw L1 Youden:       %.2f%%  (TP=%d FP=%d TN=%d FN=%d)   <- comparable to the leaderboard\n",
+	fmt.Fprintf(&b, "raw L1 Youden:       %.2f%%  (TP=%d FP=%d TN=%d FN=%d)   <- all severities; comparable to the leaderboard\n",
 		r.Overall.Youden()*100, r.Overall.TP, r.Overall.FP, r.Overall.TN, r.Overall.FN)
-	fmt.Fprintf(&b, "delivered Youden:    %.2f%%  (TP=%d FP=%d TN=%d FN=%d)   <- what the customer is shown\n",
-		r.Delivered.Youden()*100, r.Delivered.TP, r.Delivered.FP, r.Delivered.TN, r.Delivered.FN)
-	fmt.Fprintf(&b, "L1.5 lift:           %+.2f points\n", r.L15Lift())
+	fmt.Fprintf(&b, "raw, actionable:     %.2f%%  (TP=%d FP=%d TN=%d FN=%d)   <- raw at >=%s, the ablation baseline\n",
+		r.RawActionable.Youden()*100, r.RawActionable.TP, r.RawActionable.FP, r.RawActionable.TN,
+		r.RawActionable.FN, actionableFloor)
+	fmt.Fprintf(&b, "delivered:           %.2f%%  (TP=%d FP=%d TN=%d FN=%d)   <- post-L1.5 at >=%s, what gets escalated\n",
+		r.Delivered.Youden()*100, r.Delivered.TP, r.Delivered.FP, r.Delivered.TN, r.Delivered.FN, actionableFloor)
+	fmt.Fprintf(&b, "L1.5 lift:           %+.2f points  (delivered - raw actionable; same floor both sides)\n", r.L15Lift())
 
 	cats := make([]string, 0, len(r.PerCategory))
 	for c := range r.PerCategory {

@@ -69,36 +69,48 @@ func TestScoreSast_ConfusionMatrix(t *testing.T) {
 // TSENGINE_L15_DISABLED could not move a number computed from the set captured before hook 1 runs.
 // So the FP filter could demote 577 findings on a real run and the scorecard would look identical.
 //
-// The fixture is deliberately asymmetric — the enriched set drops the false positive and keeps the
-// true one, i.e. L1.5 doing its job. A regression that scored Delivered from FindingsRaw would give
-// both sets FP=1 and fail on the lift assertion.
-func TestScoreSast_GradesRawAndDeliveredIndependently(t *testing.T) {
+// The fixture exercises a DEMOTE, not a drop, because demote is the action the first version of this
+// scoring could not see: four of the FP filter's five actions lower severity and keep the finding, so
+// a severity-blind scorer graded them as though the chain had never run and reported +0.00 lift on
+// 2,740 real cases. Here the false positive survives into the enriched set at `low` — the shape a
+// vendored-path or fingerprint-rule demotion produces.
+func TestScoreSast_LiftMeasuresDemotionsNotJustDrops(t *testing.T) {
 	cases := []SastCase{
 		{Name: "BenchmarkTest00001", Category: "sqli", Vulnerable: true},
 		{Name: "BenchmarkTest00004", Category: "sqli", Vulnerable: false},
 	}
+	hit := func(file string, sev types.Severity) types.Finding {
+		return types.Finding{Tool: "semgrep", CWE: []string{"CWE-89"}, Severity: sev,
+			Endpoint: "src/" + file + ".java:42"}
+	}
 	scan := &types.Scan{
 		FindingsRaw: []types.Finding{
-			{Tool: "semgrep", CWE: []string{"CWE-89"}, Endpoint: "src/BenchmarkTest00001.java:42"},
-			{Tool: "semgrep", CWE: []string{"CWE-89"}, Endpoint: "src/BenchmarkTest00004.java:7"},
+			hit("BenchmarkTest00001", types.SeverityHigh),
+			hit("BenchmarkTest00004", types.SeverityHigh),
 		},
-		// The L1.5 chain dropped the finding on the non-vulnerable case.
+		// L1.5 demoted the false positive below the escalation floor. It is still PRESENT.
 		FindingsEnriched: []types.Finding{
-			{Tool: "semgrep", CWE: []string{"CWE-89"}, Endpoint: "src/BenchmarkTest00001.java:42"},
+			hit("BenchmarkTest00001", types.SeverityHigh),
+			hit("BenchmarkTest00004", types.SeverityLow),
 		},
 	}
 	rep := ScoreSast(cases, scan)
 
-	if rep.Overall.TP != 1 || rep.Overall.FP != 1 {
-		t.Errorf("raw should keep the false positive: %+v", rep.Overall)
+	if rep.RawActionable.TP != 1 || rep.RawActionable.FP != 1 {
+		t.Errorf("raw at the floor should still carry the false positive: %+v", rep.RawActionable)
 	}
 	if rep.Delivered.TP != 1 || rep.Delivered.FP != 0 || rep.Delivered.TN != 1 {
-		t.Errorf("delivered should reflect the L1.5 drop: %+v", rep.Delivered)
+		t.Errorf("delivered should reflect the demotion below the floor: %+v", rep.Delivered)
 	}
 	if lift := rep.L15Lift(); lift <= 0 {
-		t.Errorf("L15Lift = %+.2f, want positive when the chain removes a false positive.\n"+
-			"If this is 0, Delivered is being scored from the same set as Overall and the "+
-			"ablation is inert again.", lift)
+		t.Errorf("L15Lift = %+.2f, want positive when the chain demotes a false positive below the\n"+
+			"escalation floor. A 0 here means the scorer is severity-blind again and can only see\n"+
+			"`dismiss` — one of the FP filter's five actions.", lift)
+	}
+	// Both terms of the lift must carry the same floor, or the threshold masquerades as chain work.
+	if rep.Overall.FP <= rep.RawActionable.FP && rep.Overall.TP != rep.RawActionable.TP {
+		t.Errorf("Overall must be the unfiltered leaderboard number, distinct from the floored "+
+			"baseline: overall=%+v actionable=%+v", rep.Overall, rep.RawActionable)
 	}
 }
 
