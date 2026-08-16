@@ -2,7 +2,7 @@
   "name": "web-wavsep",
   "asset": "web_application",
   "target": "http://wavsep.local:8080",
-  "description": "WAVSEP (Web Application Vulnerability Scanner Evaluation Project) — the neutral DAST leaderboard. Full 1,133-case ground truth bundled in expected-cases.csv. Deploy the WAVSEP webapp (zaproxy/wavsep, port 8080) and run via `tsbench wavsep --target <url> --ground-truth fixtures/web/wavsep/expected-cases.csv`. Score per-class Youden against WAVSEP's vulnerable + false-positive test cases.",
+  "description": "WAVSEP (Web Application Vulnerability Scanner Evaluation Project) \u2014 the neutral DAST leaderboard. Full 1,133-case ground truth bundled in expected-cases.csv. Deploy the WAVSEP webapp (zaproxy/wavsep, port 8080) and run via `tsbench wavsep --target <url> --ground-truth fixtures/web/wavsep/expected-cases.csv`. Score per-class Youden against WAVSEP's vulnerable + false-positive test cases.",
   "metric": "youden",
   "competitors": {
     "leaderboard": "Shay Chen WAVSEP comparison, sectoolmarket.com",
@@ -16,5 +16,14 @@
     },
     "note": "Per-class Youden index (sensitivity + specificity - 1) across WAVSEP test cases. Requires the WAVSEP webapp deployed and reachable from the sandbox; this stub records the competitor numbers so the comparison is ready when the corpus is wired."
   },
-  "runnable": false
+  "runnable": true,
+  "category_distribution": {
+    "/wavsep/active/LFI": 824,
+    "/wavsep/active/SQL-Injection": 142,
+    "/wavsep/active/Reflected-XSS": 94,
+    "/wavsep/active/Unvalidated-Redirect": 69,
+    "/wavsep/active/DOM-XSS": 4
+  },
+  "sampling_note": "A CAPPED RUN MUST TARGET AN EVALUATION-SET DIRECTORY, NOT THE CORPUS ROOT AND NOT A CATEGORY ROOT. Verified against the live target: the category roots (/wavsep/active/SQL-Injection/) return 404 \u2014 WAVSEP serves no directory index at that level, so a scan started there crawls nothing and scores 0 of 1133 while reporting 0.00% Youden. The crawlable unit is one level deeper, e.g. /wavsep/active/SQL-Injection/SInjection-Detection-Evaluation-GET-200Error/ (200, as are the case files under it). Why it matters: TSENGINE_FANOUT_MAX_URLS caps the crawl in CRAWL ORDER, and from the corpus root the crawler enters DOM-XSS first \u2014 a cap-15 run scored 15 of 1133 cases and every XSS case it reached was DOM-XSS, 4 of 1133 (0.35%) and the one XSS subset needing JS execution. Measured both ways: corpus-root cap-15 gave 26.7% overall with xss 0.00%; a single SQLi evaluation set gave 78.95% (TP=15 FP=0 FN=4). Same engine, different slice. Note LFI alone is 824 of 1133 cases (73%), so any overall Youden is dominated by it and the per-category breakdown is the only honest read.",
+  "verified_entry_point": "/wavsep/active/SQL-Injection/SInjection-Detection-Evaluation-GET-200Error/"
 }
