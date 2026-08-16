@@ -16,10 +16,10 @@ worth less than a middling one over 2,740, and reporting them alike is how a ben
 |---|---|---|---|
 | **repository** (SAST) | **46.5 % Youden** — 3rd on the published cohort (Veracode 51, Checkmarx 47, **us**, Fortify 35, SonarQube 6) | 2 740 OWASP BenchmarkJava cases, neutral | **High** |
 | **container_image** | **1.000 recall** (3/3 must-find CVEs, 416 raw findings) · **FP-control PASS** (0 high/critical on a clean image) | 3 CVEs + 1 clean image | **Low** — paired, but thin |
-| **cloud_account** | **6/6 CIS recall**, +0.17 lift over prowler-only, **1 unexpected finding** | 6 seeded violations (CIS has ~60) | **Low** |
+| **cloud_account** | **19/19 CIS recall** (prowler 18/19), **+0.05 lift**, **1 unexpected finding** | 19 seeded violations (CIS has ~60) | **Low** |
 | **api** | **1.000 recall** (SQLi detected on VAmPI), **verdict PASS** | VAmPI's own documented vuln list; SQLi is the only class an L1 scan surfaces today (BOLA/mass-assign need L2/operator config, 4 classes uncovered) | **Low** — real ground truth, one class |
 | **web_application** | 26.7 % Youden on the cases a completing scan reached | 15 of 1 133 WAVSEP cases (1.3 %) | **Very low** |
-| **domain**, **ip_address** | — | — | **Untested** |
+| **domain**, **ip_address** | — | fixtures are STUBS awaiting a deployed corpus (vulhub-style host), not fixtures nobody ran | **Not buildable yet** |
 
 ```bash
 tsbench sast --target <BenchmarkJava> --ground-truth expectedresults-1.2.csv
@@ -112,8 +112,10 @@ require their runner.
 
 ## 4. What would raise confidence, in order
 
-1. **Broaden the thin fixtures** — container (3 CVEs) and cloud (6 of ~60 CIS controls). Both report
-   near-perfect scores on ground truth too small to carry them.
+1. **Broaden the thin fixtures** — container is still 3 CVEs. Cloud went 6 → 19 controls, and the
+   correction is instructive: the engine lift fell from **+0.17 to +0.05**. Nothing changed in the
+   engine; one extra detection out of 6 reads as 17 %, the same detection out of 19 reads as 5 %. A
+   near-perfect score on a small denominator flatters whatever it measures.
 2. **A completing web scan.** 1.3 % coverage is not a measurement, and the slice is crawl-ordered
    rather than sampled — at cap 15 every XSS case reached was DOM-XSS, 4 of the corpus's 98.
 3. **api breadth** — SQLi now passes (recall 1.000). The other 4 detectable-in-principle classes need L2 wiring or operator config; 4 more (data exposure, enumeration, RegexDOS, rate limiting) need capabilities we do not have. The fixture records all 9 as the honest denominator.
