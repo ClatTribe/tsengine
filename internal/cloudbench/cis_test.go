@@ -76,3 +76,37 @@ func TestRenderCIS_HasCompetitorCitation(t *testing.T) {
 		t.Error("the scorecard must cite Prowler / Scout Suite (mandatory competitor citation)")
 	}
 }
+
+// TestScoreCIS_CountsUnexpectedFindings pins the specificity counterpart.
+//
+// The cloud lane reported recall only — "of the violations the baseline says exist, how many did we
+// find". That is gameable: flag every resource and it reads 1.00. SAST and WAVSEP report Youden for
+// exactly this reason, and §14.1.1 mandates an FP half per asset; cloud was the one measured asset
+// without one, which made its 1.00 incomparable to SAST's 46.5%.
+func TestScoreCIS_CountsUnexpectedFindings(t *testing.T) {
+	expected := []CISExpectation{
+		{ControlID: "2.1.1", Resource: "arn:aws:s3:::cust-data"},
+		{ControlID: "5.2", Resource: "sg-public-ssh"},
+	}
+	// Both real violations found, plus two resources nothing expected.
+	s := ScoreCIS([]string{
+		"arn:aws:s3:::cust-data", "sg-public-ssh",
+		"arn:aws:s3:::unrelated-bucket", "sg-internal-only",
+	}, expected)
+
+	if s.Recall != 1 {
+		t.Errorf("recall = %.2f, want 1.00 (both expected violations matched)", s.Recall)
+	}
+	if s.Unexpected != 2 {
+		t.Errorf("Unexpected = %d, want 2.\nWithout this a scanner that flags everything scores a "+
+			"perfect recall and looks flawless.", s.Unexpected)
+	}
+}
+
+// A precise scan surfaces nothing beyond the baseline — the counter must not manufacture noise.
+func TestScoreCIS_NoUnexpectedWhenExact(t *testing.T) {
+	expected := []CISExpectation{{ControlID: "3.1", Resource: "111122223333:cloudtrail"}}
+	if s := ScoreCIS([]string{"111122223333:cloudtrail"}, expected); s.Unexpected != 0 {
+		t.Errorf("Unexpected = %d, want 0 for an exactly-matching scan", s.Unexpected)
+	}
+}
