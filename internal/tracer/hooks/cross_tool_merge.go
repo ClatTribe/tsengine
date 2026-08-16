@@ -71,6 +71,22 @@ func (h *CrossToolMerge) Finalize(findings []types.Finding) ([]types.Finding, []
 			})
 			continue
 		}
+		// The SURVIVOR carries the normalized endpoint, not the payload that happened to arrive
+		// first.
+		//
+		// detect.Key is rule_id|endpoint, and it is the identity used by the incident detector, the
+		// retest verifier and the defense bench. An injection tool emits its payloads in a
+		// non-deterministic order — measured: dalfox on ONE unchanged URL returned 631 then 129 POC
+		// lines, and 588/544/539 across three more runs — so keeping the first payload's endpoint
+		// made the surviving finding's IDENTITY change every scan.
+		//
+		// Downstream that is incident churn: the same live vulnerability opens as a NEW incident and
+		// the previous one resolves as fixed, every pass, forever. retest.Verify can never match its
+		// stamped keys either. Normalizing the survivor makes one vulnerability keep one identity.
+		//
+		// The payload is not lost — findings_raw is captured before hook 1 (§11) and keeps every
+		// variant, and each collapse is recorded in the audit log.
+		f.Endpoint = dedupEndpoint(f.Endpoint)
 		seen[k] = len(out)
 		out = append(out, f)
 	}
