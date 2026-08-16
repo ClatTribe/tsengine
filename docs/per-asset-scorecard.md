@@ -18,7 +18,7 @@ worth less than a middling one over 2,740, and reporting them alike is how a ben
 | **container_image** | **1.000 recall** (3/3 must-find CVEs, 416 raw findings) · **FP-control PASS** (0 high/critical on a clean image) | 3 CVEs + 1 clean image | **Low** — paired, but thin |
 | **cloud_account** | **19/19 CIS recall** (prowler 18/19), **+0.05 lift**, **1 unexpected finding** | 19 seeded violations (CIS has ~60) | **Low** |
 | **api** | **1.000 recall** (SQLi detected on VAmPI), **verdict PASS** | VAmPI's own documented vuln list; SQLi is the only class an L1 scan surfaces today (BOLA/mass-assign need L2/operator config, 4 classes uncovered) | **Low** — real ground truth, one class |
-| **web_application** | 26.7 % Youden on the cases a completing scan reached | 15 of 1 133 WAVSEP cases (1.3 %) | **Very low** |
+| **web_application** | per-category, measured at the evaluation-set level: **sqli 78.95 %** (TP=15 FP=0 FN=4) · **reflected-xss 25.00 %** (TP=8 FP=0 FN=24) | 19 + 32 of 1 133 WAVSEP cases | **Low** — representative slices, small |
 | **domain**, **ip_address** | — | fixtures are STUBS awaiting a deployed corpus (vulhub-style host), not fixtures nobody ran | **Not buildable yet** |
 
 ```bash
@@ -37,6 +37,28 @@ specificity is **12–27 %** (cmdi 93/13, sqli 93/27, ldapi 96/12). **We are not
 vulnerabilities; we are failing to rule out the safe twins** OWASP Benchmark ships to punish pattern
 matching. That is a dataflow problem a rule cannot solve in principle — an argument for the CodeQL
 escalation (§5.3), not for more semgrep rules. `trustbound` (52/58) is the one genuine recall gap.
+
+### What the web numbers say
+
+Two evaluation sets, scanned at the level WAVSEP actually serves (the category roots 404):
+
+| class | Youden | TP | FP | FN |
+|---|---|---|---|---|
+| sqli | **78.95 %** | 15 | **0** | 4 |
+| reflected-xss | **25.00 %** | 8 | **0** | 24 |
+
+**FP=0 in both.** That is the opposite profile to the repository asset, where recall is 90–96 % and
+specificity 12–27 %. The DAST path is precise and under-sensitive; the SAST path is sensitive and
+imprecise. They fail in opposite directions, so "improve web detection" and "improve SAST detection"
+are different jobs.
+
+The 25 % on reflected XSS is a **real gap, not a sampling artifact** — it is the full 32-case GET set,
+the mainstream reflected-XSS corpus, and dalfox found 8 of 32 with no false alarms. An earlier
+`xss 0.00 %` was measured on 4 DOM-XSS cases and a later one on a single cookie case; neither was
+informative, and both are superseded by this.
+
+For scale: Acunetix/Netsparker publish 87 % overall, Burp 78 %, ZAP 56 % — over the whole corpus, so
+these per-set figures are not leaderboard-comparable yet.
 
 ### The L1.5 chain, at the escalation floor
 
