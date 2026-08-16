@@ -71,8 +71,17 @@ func (d Deps) handleSyncSaaSGitHub(w http.ResponseWriter, r *http.Request, tenan
 	if findings == nil {
 		findings = []types.Finding{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"provider": "github_org", "source": "live", "org": snap.Login,
 		"findings_detected": stored, "findings": findings,
-	})
+	}
+	// THE LIVE PATH NEEDS THIS MOST. The onboarded token carries `read:org`, which cannot see
+	// per-member 2FA, installed apps or outside collaborators — those fields come back empty BY
+	// DESIGN, every sync, and the assessor is correctly silent about them. Without saying so, a
+	// successful sync reporting zero findings reads as "your org is clean" when several checks were
+	// never possible with the scope we hold.
+	if note := sspm.UnassessedNote("github_org", snap); note != "" {
+		resp["checks_not_run"] = []string{note}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

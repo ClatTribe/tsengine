@@ -30,7 +30,7 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 
-	findings, perr := assessSaaSSnapshot(provider, raw)
+	findings, snapshot, perr := assessSaaSSnapshot(provider, raw)
 	if perr != nil {
 		writeJSON(w, http.StatusBadRequest, errBody(perr.Error()))
 		return
@@ -69,62 +69,70 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 	if findings == nil {
 		findings = []types.Finding{} // never serialize a nil slice as null
 	}
-	// NOT YET COVERED: a snapshot that parses but carries no assessable settings — POST {"org":"x"}
-	// assesses nothing and still answers findings_detected:0, which reads as a hardened org. Unlike
-	// the list-shaped ingests there is nothing to count here, so the honest signal has to come from
-	// the provider assessors themselves (which settings did this snapshot actually carry?). That is
-	// sspm-side work, deliberately left rather than approximated with a body-length check that would
-	// make the gap look closed while leaving it open.
-	writeJSON(w, http.StatusOK, map[string]any{"provider": provider, "findings_detected": stored, "findings": findings})
+	resp := map[string]any{"provider": provider, "findings_detected": stored, "findings": findings}
+	// SAY WHICH SETTINGS THE SNAPSHOT DID NOT CARRY. Each assessor stays silent about a setting it
+	// was not told about, so a near-empty snapshot produces zero findings and reads exactly like a
+	// hardened tenant. That matters most here of all the ingests: GitHub's own live sync can only
+	// read what `read:org` covers, so per-member 2FA and installed apps are routinely absent BY
+	// DESIGN, and their absence must not be reported as a pass.
+	if note := sspm.UnassessedNote(provider, snapshot); note != "" {
+		resp["checks_not_run"] = []string{note}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // assessSaaSSnapshot decodes the provider's snapshot and runs its grounded SSPM checks. Returns a
 // clear error for an unknown provider or an undecodable snapshot — never a silent empty result.
-func assessSaaSSnapshot(provider string, raw []byte) ([]types.Finding, error) {
+//
+// It returns the DECODED snapshot as well, so the caller can say which settings it did not carry.
+// Every assessor is deliberately silent about a setting the snapshot omitted (§10 — absent config is
+// not insecure config), which means a near-empty snapshot yields zero findings and reads exactly
+// like a hardened tenant. Handing the snapshot back is what lets the response tell those apart.
+func assessSaaSSnapshot(provider string, raw []byte) ([]types.Finding, any, error) {
 	switch provider {
 	case "github_org", "github":
 		var s sspm.GitHubOrg
 		if err := json.Unmarshal(raw, &s); err != nil {
-			return nil, fmt.Errorf("invalid github_org snapshot: %v", err)
+			return nil, nil, fmt.Errorf("invalid github_org snapshot: %v", err)
 		}
-		return sspm.AssessGitHubOrg(s, sspm.Options{}), nil
+		return sspm.AssessGitHubOrg(s, sspm.Options{}), s, nil
 	case "slack":
 		var s sspm.SlackWorkspace
 		if err := json.Unmarshal(raw, &s); err != nil {
-			return nil, fmt.Errorf("invalid slack snapshot: %v", err)
+			return nil, nil, fmt.Errorf("invalid slack snapshot: %v", err)
 		}
-		return sspm.AssessSlack(s, sspm.Options{}), nil
+		return sspm.AssessSlack(s, sspm.Options{}), s, nil
 	case "zoom":
 		var s sspm.ZoomAccount
 		if err := json.Unmarshal(raw, &s); err != nil {
-			return nil, fmt.Errorf("invalid zoom snapshot: %v", err)
+			return nil, nil, fmt.Errorf("invalid zoom snapshot: %v", err)
 		}
-		return sspm.AssessZoom(s, sspm.Options{}), nil
+		return sspm.AssessZoom(s, sspm.Options{}), s, nil
 	case "atlassian":
 		var s sspm.AtlassianOrg
 		if err := json.Unmarshal(raw, &s); err != nil {
-			return nil, fmt.Errorf("invalid atlassian snapshot: %v", err)
+			return nil, nil, fmt.Errorf("invalid atlassian snapshot: %v", err)
 		}
-		return sspm.AssessAtlassian(s, sspm.Options{}), nil
+		return sspm.AssessAtlassian(s, sspm.Options{}), s, nil
 	case "salesforce":
 		var s sspm.SalesforceOrg
 		if err := json.Unmarshal(raw, &s); err != nil {
-			return nil, fmt.Errorf("invalid salesforce snapshot: %v", err)
+			return nil, nil, fmt.Errorf("invalid salesforce snapshot: %v", err)
 		}
-		return sspm.AssessSalesforce(s, sspm.Options{}), nil
+		return sspm.AssessSalesforce(s, sspm.Options{}), s, nil
 	case "m365", "microsoft365":
 		var s sspm.M365Tenant
 		if err := json.Unmarshal(raw, &s); err != nil {
-			return nil, fmt.Errorf("invalid m365 snapshot: %v", err)
+			return nil, nil, fmt.Errorf("invalid m365 snapshot: %v", err)
 		}
-		return sspm.AssessM365(s, sspm.Options{}), nil
+		return sspm.AssessM365(s, sspm.Options{}), s, nil
 	case "google_workspace", "gworkspace", "google":
 		var s sspm.GWorkspaceTenant
 		if err := json.Unmarshal(raw, &s); err != nil {
-			return nil, fmt.Errorf("invalid google_workspace snapshot: %v", err)
+			return nil, nil, fmt.Errorf("invalid google_workspace snapshot: %v", err)
 		}
-		return sspm.AssessGoogleWorkspace(s, sspm.Options{}), nil
+		return sspm.AssessGoogleWorkspace(s, sspm.Options{}), s, nil
 	default:
-		return nil, fmt.Errorf("unknown SaaS provider %q (want: github_org | slack | zoom | atlassian | salesforce | m365 | google_workspace)", provider)
+		return nil, nil, fmt.Errorf("unknown SaaS provider %q (want: github_org | slack | zoom | atlassian | salesforce | m365 | google_workspace)", provider)
 	}
 }
