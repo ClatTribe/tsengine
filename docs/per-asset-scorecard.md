@@ -52,10 +52,28 @@ specificity 12–27 %. The DAST path is precise and under-sensitive; the SAST pa
 imprecise. They fail in opposite directions, so "improve web detection" and "improve SAST detection"
 are different jobs.
 
-The 25 % on reflected XSS is a **real gap, not a sampling artifact** — it is the full 32-case GET set,
-the mainstream reflected-XSS corpus, and dalfox found 8 of 32 with no false alarms. An earlier
-`xss 0.00 %` was measured on 4 DOM-XSS cases and a later one on a single cookie case; neither was
-informative, and both are superseded by this.
+The 25 % on reflected XSS is a **real gap, not a sampling artifact** — the full 32-case GET set, the
+mainstream reflected-XSS corpus. An earlier `xss 0.00 %` was measured on 4 DOM-XSS cases and a later
+one on a single cookie case; neither was informative, and both are superseded.
+
+**The gap is script-context XSS, not XSS.** Breaking the misses down by injection context:
+
+| context | example cases | detected |
+|---|---|---|
+| HTML body / attribute | `Tag2TagScope`, `Tag2HtmlComment`, `Event2*PropertyScope` | yes |
+| **JavaScript** | `Js2JsEventScope`, `Js2PropertyJsScope`, `Js2ScriptSupportingProperty` | **0 of ~10** |
+| **VBScript** | `Vbs2VbsEventScope`, `Vbs2*QuoteVbsEventScope` | **0 of 3** |
+
+Zero script-context cases were detected **in either of two runs**. Escaping a JS string or event
+handler needs payloads dalfox is not generating here. That is a specific capability gap someone can
+act on; "reflected XSS is 25 %" is not.
+
+**Caveat — this benchmark is itself non-deterministic.** Two identical scans returned **9 vs 7
+distinct cases and 751 vs 667 findings**; one case was found in one run and missed in the other. Same
+wall-clock timeout mechanism as everywhere else. So per-case membership is NOT stable and must not be
+quoted; the context-family boundary is, because it held across both runs. Any single web Youden here
+carries unquantified run-to-run variance — `tsbench stability` is the tool for putting a number on
+it, and has not been run against web yet.
 
 For scale: Acunetix/Netsparker publish 87 % overall, Burp 78 %, ZAP 56 % — over the whole corpus, so
 these per-set figures are not leaderboard-comparable yet.
