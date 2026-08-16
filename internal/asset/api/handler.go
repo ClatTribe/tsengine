@@ -139,12 +139,64 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 	// exactly what sqlmap needs. Restricted to param-bearing endpoints for the same reason web
 	// restricts it: fanning a per-URL injection tool across a whole surface is the trap that makes a
 	// scan miss its deadline, and a timed-out tool contributes nothing (Scan.ToolsFailed).
+	// sqlmap needs to be TOLD which part of the URL to inject. Verified against VAmPI in the sandbox:
+	// `sqlmap -u .../users/v1/name1*` detects the boolean-blind SQLi, while the raw spec form
+	// `.../users/v1/{username}` does not — sqlmap reports the brace token "does not appear to be
+	// dynamic" and never injects it. A query string sqlmap discovers on its own; a REST path
+	// parameter it does not, so the marker is mandatory for the shape APIs actually use.
 	if sq, ok := tool.Get("sqlmap"); ok {
 		for _, u := range dedup(endpoints) {
 			if hasInjectableParams(u) {
-				out = append(out, asset.Dispatch{Tool: sq, Args: tool.Args{"target": u}})
+				out = append(out, asset.Dispatch{Tool: sq, Args: tool.Args{"target": injectionTarget(u)}})
 			}
 		}
+	}
+	return out
+}
+
+// injectionTarget rewrites a URL into the form sqlmap can act on: a path parameter gets sqlmap's "*"
+// injection marker, so sqlmap tests that exact spot instead of guessing.
+//
+//   - a spec brace param  /users/v1/{username}  → /users/v1/name1*   (placeholder value + marker)
+//   - a concrete id       /books/v1/42          → /books/v1/42*
+//   - a query string      /search?q=1           → unchanged; sqlmap finds query params itself
+//
+// The placeholder for a brace token is a benign literal, not the brace: sqlmap first checks whether
+// the marked spot is dynamic, and "{username}" is a constant string that returns the same 404 every
+// time, so it is judged non-dynamic and skipped. "name1" is a value the endpoint actually resolves.
+func injectionTarget(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	if len(u.Query()) > 0 {
+		return rawURL // query params: sqlmap injects them without a marker
+	}
+	segs := strings.Split(u.Path, "/")
+	for i := len(segs) - 1; i >= 0; i-- { // mark the LAST parameter-like segment
+		s := segs[i]
+		if s == "" {
+			continue
+		}
+		if strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}") {
+			segs[i] = "name1*" // a value the endpoint resolves, plus the marker
+			return rejoin(u, segs)
+		}
+		if _, err := strconv.Atoi(s); err == nil {
+			segs[i] = s + "*"
+			return rejoin(u, segs)
+		}
+	}
+	return rawURL
+}
+
+// rejoin rebuilds scheme://host + path WITHOUT url.String()'s percent-encoding, which turns sqlmap's
+// literal "*" marker into "%2A" and stops sqlmap recognising it as an injection point. The marker
+// must survive verbatim into the argv, so the path is joined by hand.
+func rejoin(u *url.URL, segs []string) string {
+	out := u.Scheme + "://" + u.Host + strings.Join(segs, "/")
+	if u.RawQuery != "" {
+		out += "?" + u.RawQuery
 	}
 	return out
 }

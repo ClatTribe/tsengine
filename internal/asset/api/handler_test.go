@@ -307,3 +307,23 @@ func TestPlanFanout_DispatchesInjectionOnParamEndpoints(t *testing.T) {
 }
 
 func toolGet(name string) (tool.Tool, bool) { return tool.Get(name) }
+
+// TestInjectionTarget_MarksTheParameter pins the rewrite sqlmap needs.
+//
+// Verified in the sandbox: sqlmap detects VAmPI's SQLi on /users/v1/name1* (boolean-blind) but NOT
+// on the raw spec form /users/v1/{username} — it reports the brace token "does not appear to be
+// dynamic" and skips it. So dispatching the brace form (what the first version did) sent sqlmap a
+// target it could not act on, and recall stayed 0.000 with sqlmap running.
+func TestInjectionTarget_MarksTheParameter(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"https://api.x/users/v1/{username}", "https://api.x/users/v1/name1*"},
+		{"https://api.x/books/v1/42", "https://api.x/books/v1/42*"},
+		{"https://api.x/search?q=1", "https://api.x/search?q=1"}, // query: sqlmap finds it itself
+		{"https://api.x/users/v1", "https://api.x/users/v1"},     // no param: unchanged
+	} {
+		if got := injectionTarget(tc.in); got != tc.want {
+			t.Errorf("injectionTarget(%q) = %q, want %q — sqlmap needs the * marker on the path "+
+				"parameter, or it never injects it", tc.in, got, tc.want)
+		}
+	}
+}
