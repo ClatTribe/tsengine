@@ -608,6 +608,18 @@ func scanJobTimeout() time.Duration {
 	return 30 * time.Minute
 }
 
+func repoScratchDir() string {
+	d := strings.TrimSpace(os.Getenv("TSENGINE_REPO_SCRATCH"))
+	if d == "" {
+		return ""
+	}
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		log.Printf("[platform] WARNING: TSENGINE_REPO_SCRATCH=%q unusable (%v) — falling back to default temp dir", d, err)
+		return ""
+	}
+	return d
+}
+
 // sandboxDispatcher returns a factory that spawns a per-asset sandbox and hands back
 // the orchestrator Dispatcher + a teardown. Mirrors cmd/tsengine's scan path.
 func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
@@ -618,7 +630,7 @@ func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ct
 		case types.AssetCloudAccount:
 			opts.Env = cloudCredentialEnv()
 		case types.AssetRepository:
-			dir, err := os.MkdirTemp("", "tsengine-repo-*")
+			dir, err := os.MkdirTemp(repoScratchDir(), "tsengine-repo-*")
 			if err != nil {
 				return nil, nil, fmt.Errorf("sandboxDispatcher: temp dir: %w", err)
 			}
@@ -682,7 +694,7 @@ func repoAuth(ctx context.Context, st store.Store, vault secret.Vault, a platfor
 		if token == "" {
 			return nil, fmt.Errorf("sandboxDispatcher: empty token %s", c.ID)
 		}
-		return &githttp.BasicAuth{Username: "x-access-token", Password: token}, nil
+		return &githttp.BasicAuth{Username: token, Password: ""}, nil
 	}
 	return nil, fmt.Errorf("sandboxDispatcher: connection %s not found", a.ConnectionID)
 }

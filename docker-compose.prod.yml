@@ -94,6 +94,7 @@ services:
     environment:
       TSENGINE_PLATFORM_TOKEN: ${TSENGINE_PLATFORM_TOKEN:?set TSENGINE_PLATFORM_TOKEN in .env}
       TSENGINE_SECRET_KEY: ${TSENGINE_SECRET_KEY:?set TSENGINE_SECRET_KEY in .env (openssl rand -base64 32)}
+      TSENGINE_REPO_SCRATCH: /var/lib/tsengine/repos
       # Local SQLite (ACID) on the named volume by default; set TSENGINE_PLATFORM_DB to a
       # postgres:// DSN in .env (Supabase / RDS / Neon) for managed, multi-node Postgres.
       TSENGINE_PLATFORM_DB: ${TSENGINE_PLATFORM_DB:-/data/platform.db}
@@ -134,6 +135,7 @@ services:
     # No published ports — reachable only via the caddy edge on the internal `edge` network.
     volumes:
       - platform-data:/data
+      - /var/lib/tsengine/repos:/var/lib/tsengine/repos
     networks:
       - edge        # ↔ frontend
       - dockerproxy # ↔ docker-socket-proxy (no raw socket here)
