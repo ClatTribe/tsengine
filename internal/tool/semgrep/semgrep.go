@@ -57,6 +57,11 @@ func (*Semgrep) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		// (broader, more noise). It costs nothing measurable: re-run on fixtures/repo/clean with all
 		// three packs still yields zero findings, so the FP-control floor holds.
 		"--config", "p/owasp-top-ten",
+		// p/default adds the remaining language-specific injection rules (Go command injection is
+		// only in here). Measured on fixtures/repo/sast-matrix: security-audit+secrets caught 3 of 12
+		// planted vulnerabilities, +owasp-top-ten took it to 10, +default to 11 — and BOTH additions
+		// leave fixtures/repo/clean at zero findings, so the specificity floor is untouched.
+		"--config", "p/default",
 		"--json",
 		"--quiet",
 		"--disable-version-check",
