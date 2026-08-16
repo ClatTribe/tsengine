@@ -49,15 +49,20 @@ type AssetCoverage struct {
 	// nothing OR never ran — coverage cannot tell the two apart, so it must not claim either.
 	ToolsWithFindings []string `json:"tools_with_findings"`
 	// ExecutionConfirmed reports whether per-tool execution was verified for this asset. It is
-	// currently always false: the platform path (internal/runner → orchestrator.Run) does not carry
-	// Scan.ToolsFailed, so nothing downstream knows which dispatches actually completed.
+	// true when the scan's engagement recorded its dispatched toolset (runner.ReportingScanRunner).
+	// False means execution was not reported — RunsTools is then the DECLARED list and nothing may
+	// be concluded about whether each tool ran.
 	//
 	// This field exists so the UI states what is known rather than the reassuring version. A scan
 	// that loses every tool to per-tool timeouts, or runs against an image where the tool is a stub
 	// (a TOOLSET-limited build answers "prowler: not found"), produces zero findings and, before
 	// this, was reported to the customer as "All tools ran and found nothing".
 	ExecutionConfirmed bool `json:"execution_confirmed"`
-	FindingsCount      int  `json:"findings_count"`
+	// ToolsFailed lists tools this scan dispatched that produced no result — a per-tool timeout, a
+	// sandbox error, or a tool absent from a TOOLSET-limited image. Populated only when
+	// ExecutionConfirmed is true.
+	ToolsFailed   []types.ToolFailure `json:"tools_failed,omitempty"`
+	FindingsCount int                 `json:"findings_count"`
 }
 
 // Summary rolls up coverage across the portfolio for a headline ("N of M assets scanned").
@@ -71,14 +76,16 @@ type Summary struct {
 // asset's type, the asset's last completed engagement (when it was scanned), and the tools that produced
 // findings attributed to it. Deterministic + LLM-free.
 func Compute(assets []platform.Asset, findings []types.Finding, engagements []platform.Engagement) Summary {
-	// latest completed scan per asset
+	// latest completed scan per asset, and what that scan actually dispatched
 	lastScan := map[string]time.Time{}
+	lastEng := map[string]platform.Engagement{}
 	for _, e := range engagements {
 		if e.CompletedAt.IsZero() {
 			continue
 		}
 		if cur, ok := lastScan[e.AssetID]; !ok || e.CompletedAt.After(cur) {
 			lastScan[e.AssetID] = e.CompletedAt
+			lastEng[e.AssetID] = e
 		}
 	}
 
@@ -92,6 +99,17 @@ func Compute(assets []platform.Asset, findings []types.Finding, engagements []pl
 			cov.Scanned = true
 			cov.LastScannedAt = t
 			out.ScannedAssets++
+
+			// Prefer what the scan REALLY dispatched over the declared toolset. A runner that
+			// reports nothing (the operate path dispatches no sandbox tools) leaves ToolsRan empty,
+			// which stays "unknown" — the declared list, ExecutionConfirmed false — rather than
+			// being read as "nothing ran".
+			if e := lastEng[a.ID]; len(e.ToolsRan) > 0 {
+				cov.RunsTools = append([]string{}, e.ToolsRan...)
+				sort.Strings(cov.RunsTools)
+				cov.ToolsFailed = e.ToolsFailed
+				cov.ExecutionConfirmed = true
+			}
 		}
 		// tools that surfaced a finding attributed to THIS asset (grounded: literal target match)
 		seen := map[string]bool{}

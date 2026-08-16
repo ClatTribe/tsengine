@@ -80,3 +80,21 @@ func (m *MuxRunner) Scan(ctx context.Context, a platform.Asset) ([]types.Finding
 	}
 	return m.Engine.Scan(ctx, a)
 }
+
+// ScanWithReport routes exactly as Scan does, but preserves the backend's execution report.
+//
+// Without this the mux would silently flatten every report to empty: it is the ScanRunner the
+// platform actually holds, so a report produced by EngineRunner would be discarded one call short of
+// the engagement record.
+func (m *MuxRunner) ScanWithReport(ctx context.Context, a platform.Asset) ([]types.Finding, ScanReport, error) {
+	if a.Type == WorkspaceType {
+		if m.Workspace == nil {
+			return nil, ScanReport{}, fmt.Errorf("mux: no workspace runner configured")
+		}
+		return scanWith(ctx, m.Workspace, a)
+	}
+	if m.Engine == nil {
+		return nil, ScanReport{}, fmt.Errorf("mux: no engine runner for asset type %q", a.Type)
+	}
+	return scanWith(ctx, m.Engine, a)
+}
