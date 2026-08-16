@@ -564,7 +564,7 @@ func runScan(argv []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "[%s] orchestrator running anchors against %s\n", scanID, *target)
-	findings, fired, surface, err := orchestrator.RunWithSurface(ctx, assetTarget, handler, client)
+	findings, fired, surface, toolsFailed, err := orchestrator.RunWithSurface(ctx, assetTarget, handler, client)
 	// A deadline (scan --timeout) is NOT fatal: the orchestrator returns the
 	// findings that completed before the cutoff. Persist them, flagged
 	// partial — a 0-finding timeout must be distinguishable from a clean
@@ -578,7 +578,7 @@ func runScan(argv []string) error {
 			return fmt.Errorf("orchestrator: %w", err)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "[%s] anchors_fired=%v raw_findings=%d partial=%v\n", scanID, fired, len(findings), partial)
+	fmt.Fprintf(os.Stderr, "[%s] anchors_fired=%v raw_findings=%d partial=%v tools_failed=%d\n", scanID, fired, len(findings), partial, len(toolsFailed))
 
 	// L1.5 enrichment runs host-side, after L1 emission (CLAUDE.md §11).
 	// The raw findings feed the tracer; it produces the enriched view +
@@ -611,6 +611,7 @@ func runScan(argv []string) error {
 		Engine:            types.Engine{Version: Version, SandboxImageDigest: info.ImageDigest},
 		Corpus:            corpus,
 		AnchorsFired:      fired,
+		ToolsFailed:       toolsFailed,
 		DiscoveredSurface: surface,
 		FindingsRaw:       tr.Raw(),
 		FindingsEnriched:  tr.Enriched(),
