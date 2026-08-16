@@ -136,3 +136,43 @@ described as one until it runs on a build host.
 
 Baselines to sit beside when it does run: **GPT-5.6-Sol 83.9%**, **GPT-5.5 81.3%**,
 **DeepSeek-V4-Flash 80.4%** (230-case verified subset).
+
+---
+
+## 6. Driving the agents without an API key — and what it revealed
+
+`scripts/llm-file-proxy.py` is an OpenAI-compatible endpoint whose "model" is whoever is at the
+keyboard: it writes each request to `turn_prompt.txt` and blocks for `turn_response.txt`. That closes
+the "you cannot evaluate the agents without a frontier key" gap, which is why the agent half of the
+product goes unmeasured for months at a time.
+
+```
+LLM_BASE_URL=http://127.0.0.1:8898/v1 LLM_MODEL=proxy LLM_API_KEY=proxy \
+    go run ./cmd/tsbench cloud-engine --cloudquery --agent
+```
+
+**Verified end to end (2026-08-16, 10 turns, driven manually):** agent recall 100% (2/2 real targets),
+0 invented issues, remediation coverage 100% with `verified_rate` 100% — both fixes confirmed by
+cloudiam to cut their path. The grounding guard was observed working: a probe of
+`acme-financial-ledger` returned no path and a `blast_radius` of `ci-role` returned no crown jewel, and
+neither was recorded despite `ci-role` carrying a *critical* prowler finding.
+
+**But the harness refused to credit any of it as an agent number, and it is right:**
+
+> INCOMPLETE EVALUATION — the substrate already found every path at this budget, so the agent had no
+> headroom to prove itself; this score reflects the SUBSTRATE, not L2.
+
+The discrimination sweep confirms it outright:
+
+> AGENT HEADROOM: 0 path(s) (0.0%) · verdict: does NOT discriminate — the substrate covers everything;
+> an agent run here teaches nothing (don't spend LLM budget).
+
+**So the blocker on an agent quality number is not the API key. It is the scenario.** The default
+cloudquery account is fully covered by the deterministic engine even at a budget of 5, so no agent
+run against it can measure the agent — including the earlier 3/3 and 1/1 results, which were
+demonstrations on non-discriminating accounts.
+
+What a real number needs, in order: (1) a scenario the substrate provably under-covers — the sweep
+already prints the headroom, so this is buildable and checkable; (2) enough of them to be a sample
+rather than an anecdote; (3) only then a key, to run them at volume. Building (1) is the work; the
+key is the cheap part.
