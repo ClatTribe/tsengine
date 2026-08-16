@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
@@ -44,8 +45,15 @@ func TestPlanAnchors_AddsNucleiAPITags(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("got %d dispatches", len(out))
 	}
-	if got := out[0].Args["tags"]; got != "api,graphql,jwt,oauth" {
-		t.Errorf("tags arg lost: %v", got)
+	// Assert the PROPERTY, not the literal: the protocol tags must be there, and so must the
+	// exposure classes. Pinning the exact string made this test fail for the right change — an API
+	// host serving /.env was going undetected because those templates were tagged out.
+	tags, _ := out[0].Args["tags"].(string)
+	for _, want := range []string{"api", "graphql", "jwt", "oauth", "exposure", "config"} {
+		if !strings.Contains(tags, want) {
+			t.Errorf("nuclei tags %q is missing %q — an API host leaks .env/.git like any web host, "+
+				"and those templates only fire under the exposure/config tags", tags, want)
+		}
 	}
 	if got := out[0].Args["target"]; got != "https://api.example.com" {
 		t.Errorf("target arg lost: %v", got)
@@ -112,12 +120,33 @@ func TestPlanFanout_SpecFuzzAndSignatureScan(t *testing.T) {
 	if byTool["schemathesis"] != 1 || specURL != "https://api.x/openapi.json" {
 		t.Errorf("schemathesis should run once on the resolved spec; got %d url=%q", byTool["schemathesis"], specURL)
 	}
-	if byTool["nuclei"] != 1 || nucleiTags != "api,graphql,jwt,oauth" {
-		t.Errorf("nuclei should run once with api tags; got %d tags=%q", byTool["nuclei"], nucleiTags)
+	if byTool["nuclei"] != 1 {
+		t.Errorf("nuclei should run exactly once over the operation URLs; got %d", byTool["nuclei"])
 	}
-	// Endpoints deduped: 2 unique URLs.
-	if got := len(splitLines(nucleiTargets)); got != 2 {
-		t.Errorf("nuclei targets = %q, want 2 unique endpoints", nucleiTargets)
+	for _, want := range []string{"api", "exposure"} {
+		if !strings.Contains(nucleiTags, want) {
+			t.Errorf("fan-out nuclei tags %q is missing %q", nucleiTags, want)
+		}
+	}
+	// Endpoints deduped: the 2 spec operations PLUS the host itself.
+	//
+	// The host is not optional. Operations come only from what the spec DECLARES, so without it
+	// anything served outside the spec — /.env, /.git, a backup, an admin panel — is never probed,
+	// and a target that publishes a spec ends up LESS covered than one that does not. The web asset
+	// has always included the target (§5.1 CollectSurface: target-always-included); this is api
+	// catching up, and it was caught by a live scan missing a /.env full of credentials.
+	got := splitLines(nucleiTargets)
+	if len(got) != 3 {
+		t.Errorf("nuclei targets = %q, want the 2 operations + the base host", nucleiTargets)
+	}
+	var hasHost bool
+	for _, u := range got {
+		if u == "https://api.x" {
+			hasHost = true
+		}
+	}
+	if !hasHost {
+		t.Errorf("the host itself is missing from the fan-out (%q) — non-spec paths would go unscanned", nucleiTargets)
 	}
 }
 

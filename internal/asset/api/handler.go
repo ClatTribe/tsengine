@@ -93,6 +93,20 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 		endpoints = append(endpoints, u)
 	}
 
+	// THE HOST ITSELF IS PART OF THE SURFACE. Endpoints above come only from operations the spec
+	// DECLARES, so anything the host serves outside the spec — /.env, /.git, a backup, an admin panel
+	// — was never probed. That made a spec a LIABILITY: without one, PlanAnchors scans the bare
+	// target and finds those; with one, fan-out took over and the host root went unscanned.
+	//
+	// Caught live. A target serving /.env containing DB_PASSWORD returned a single finding — the
+	// spec-ingest note — while nuclei pointed at the same host flagged it high three times over.
+	//
+	// This restores the rule the web asset already follows (§5.1 CollectSurface: target-always-
+	// included). Filter still drops health/spec URLs, and the cap still bounds the set.
+	if t := strings.TrimSpace(target.Target); t != "" {
+		endpoints = append(endpoints, t)
+	}
+
 	if specURL != "" {
 		if st, ok := tool.Get("schemathesis"); ok {
 			out = append(out, asset.Dispatch{Tool: st, Args: tool.Args{"spec_url": specURL}})
@@ -183,7 +197,23 @@ func dedup(in []string) []string {
 const openapiSpecMarker = "SPEC"
 
 // apiNucleiTags narrows nuclei's corpus to the API-relevant subset.
-const apiNucleiTags = "api,graphql,jwt,oauth"
+// apiNucleiTags selects which nuclei templates fire against an API surface.
+//
+// The four protocol tags (api, graphql, jwt, oauth) describe how an API AUTHENTICATES and speaks.
+// They say nothing about what it accidentally SERVES, and that omission was silent: a live scan of a
+// target serving /.env with DB_PASSWORD in it returned one finding — the spec-ingest note — while
+// nuclei run directly against the same URL flagged it high-severity three times over
+// (laravel-env, codeigniter-env, generic-env, all tagged config,exposure).
+//
+// So the exposure classes are added. An API host is a web host: it leaks .env, .git, backups and
+// admin panels exactly like any other, and those are among the highest-severity things a scanner
+// finds. Measured on a planted target: 1 finding → 3, and zero findings on a clean endpoint at
+// critical/high, so the specificity floor is untouched.
+//
+// This asset is the ONLY one that narrowed its ANCHOR dispatch this way — web runs the full corpus
+// untagged, and ip/domain use tags for deliberate per-port routing and escalation. That made api the
+// odd one out rather than the pattern.
+const apiNucleiTags = "api,graphql,jwt,oauth,exposure,config,files,misconfig"
 
 // anchorNames is the single-target fallback set (no-spec path).
 var anchorNames = []string{
