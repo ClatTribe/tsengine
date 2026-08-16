@@ -34,6 +34,18 @@ type CISScore struct {
 	PerControl map[string]bool      `json:"per_control"` // control_id → covered
 	Missed     []CISExpectation     `json:"missed"`
 	covered    map[string]CISResult // internal, by control
+
+	// Unexpected counts surfaced resources matching no expected violation.
+	//
+	// Recall alone is gameable: a scanner that flagged every resource scores 1.00. That is why the
+	// SAST and WAVSEP lanes report Youden (TPR − FPR) and §14.1.1 mandates an FP half per asset.
+	// Cloud was the one measured asset reporting sensitivity with no specificity counterpart, so its
+	// "recall 1.00" was not comparable to SAST's 46.5% Youden.
+	//
+	// Deliberately NOT called false positives. On a curated fixture an unexpected finding is either
+	// a real FP OR a genuine violation the ground truth never enumerated, and this scorer cannot
+	// tell which (§10). Naming it honestly keeps it a signal to investigate, not a verdict.
+	Unexpected int `json:"unexpected"`
 }
 
 // CISResult records whether a control's violation was covered.
@@ -48,6 +60,18 @@ type CISResult struct {
 // Grounded: a violation is "found" only on a real resource match, never assumed.
 func ScoreCIS(coveredResources []string, expected []CISExpectation) CISScore {
 	s := CISScore{Total: len(expected), PerControl: map[string]bool{}, covered: map[string]CISResult{}}
+	for _, r := range coveredResources {
+		matched := false
+		for _, e := range expected {
+			if resourceMatch(r, e.Resource) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			s.Unexpected++
+		}
+	}
 	for _, e := range expected {
 		hit := false
 		for _, r := range coveredResources {
@@ -97,6 +121,12 @@ func RenderCIS(prowlerOnly, withEngine CISScore) string {
 	fmt.Fprintf(&b, "  tsengine (engine+DSPM/CWPP): %d/%d  recall %.2f", withEngine.Found, withEngine.Total, withEngine.Recall)
 	if lift := withEngine.Recall - prowlerOnly.Recall; lift > 0 {
 		fmt.Fprintf(&b, "   (engine lift +%.2f)", lift)
+
+		fmt.Fprintf(&b, "\n  unexpected findings:  prowler/scout %d, tsengine %d\n"+
+			"                        (NOT scored as false positives: on a curated fixture these are\n"+
+			"                        either FPs or violations the ground truth never listed. Recall\n"+
+			"                        alone is gameable — flag everything and it reads 1.00.)\n",
+			prowlerOnly.Unexpected, withEngine.Unexpected)
 	}
 	b.WriteString("\n\n")
 	if len(withEngine.Missed) > 0 {
