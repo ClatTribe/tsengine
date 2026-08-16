@@ -46,6 +46,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench ablation: %v\n", err)
 			os.Exit(1)
 		}
+	case "bountybench":
+		if err := bountybenchCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench bountybench: %v\n", err)
+			os.Exit(1)
+		}
 	case "stability":
 		if err := stabilityCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench stability: %v\n", err)
@@ -964,5 +969,31 @@ func stabilityCmd(argv []string) error {
 		return err
 	}
 	fmt.Print(bench.RenderStability(rep))
+	return nil
+}
+
+// bountybenchCmd inventories a checkout of the BountyBench task corpus.
+//
+// It does NOT score. Their Python+Docker harness runs the workflows and their verify.sh is the
+// oracle — the whole reason to use someone else's benchmark rather than another of ours. What this
+// answers first is the honest denominator: of their real bounties, how many sit in a vulnerability
+// class we have any capability for at all.
+func bountybenchCmd(argv []string) error {
+	fs := flag.NewFlagSet("bountybench", flag.ContinueOnError)
+	tasks := fs.String("tasks", "", "path to a bountytasks checkout (theirs; not vendored)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if *tasks == "" {
+		return fmt.Errorf("--tasks is required (clone github.com/bountybench/bountytasks)")
+	}
+	xs, err := bench.LoadBountyBench(*tasks)
+	if err != nil {
+		return err
+	}
+	if len(xs) == 0 {
+		return fmt.Errorf("no bounties under %s — expected <project>/bounties/<bounty_N>/bounty_metadata.json", *tasks)
+	}
+	fmt.Print(bench.RenderBountyInventory(bench.InventoryBountyBench(xs), xs))
 	return nil
 }
