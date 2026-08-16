@@ -122,3 +122,97 @@ func TestRenderWavsep_CitesCompetitors(t *testing.T) {
 		t.Errorf("report missing overall Youden:\n%s", out)
 	}
 }
+
+// TestScoreWavsep_UnreachedCasesAreNotMisses pins the distinction between "we tested this and found
+// nothing" and "we never went there".
+//
+// The corpus is 1,133 cases and TSENGINE_FANOUT_MAX_URLS defaults to 200, so a default run visits a
+// fraction of it. Grading the rest as misses measured the cost guard and reported it as scanner
+// recall — a number that would then sit next to Acunetix's 87% over the full corpus.
+func TestScoreWavsep_UnreachedCasesAreNotMisses(t *testing.T) {
+	cases := []WavsepCase{
+		{URL: "/wavsep/a.jsp", Category: "sqli", Vulnerable: true}, // crawled + found
+		{URL: "/wavsep/b.jsp", Category: "sqli", Vulnerable: true}, // crawled, missed → a real FN
+		{URL: "/wavsep/z.jsp", Category: "sqli", Vulnerable: true}, // never crawled → excluded
+	}
+	scan := &types.Scan{
+		DiscoveredSurface: []string{
+			"http://host.docker.internal:8080/wavsep/a.jsp?p=1", // absolute + query, as recon emits
+			"http://host.docker.internal:8080/wavsep/b.jsp",
+		},
+		FindingsRaw: []types.Finding{
+			{Tool: "nuclei", CWE: []string{"CWE-89"}, Endpoint: "http://x/wavsep/a.jsp?p=1"},
+		},
+	}
+	rep := ScoreWavsep(cases, scan)
+
+	if rep.Coverage.ReachedCases != 2 || rep.Coverage.TotalCases != 3 {
+		t.Errorf("coverage = %d/%d, want 2/3", rep.Coverage.ReachedCases, rep.Coverage.TotalCases)
+	}
+	if !rep.Coverage.Partial() {
+		t.Error("a run that skipped a case must report Partial()")
+	}
+	if got := rep.Overall.TP + rep.Overall.FP + rep.Overall.TN + rep.Overall.FN; got != 2 {
+		t.Errorf("graded %d cases, want 2 — the unvisited case must be excluded, not scored", got)
+	}
+	if rep.Overall.FN != 1 {
+		t.Errorf("FN = %d, want exactly 1 (the crawled-but-missed case). If this is 2, the "+
+			"never-visited case is being counted as a miss again.", rep.Overall.FN)
+	}
+}
+
+// An empty surface is missing data, not proof of zero coverage (§10). Grading nothing would report a
+// meaningless 0%; the honest fallback is to grade everything and say coverage is unknown.
+func TestScoreWavsep_NoSurfaceGradesEverything(t *testing.T) {
+	cases := []WavsepCase{
+		{URL: "/wavsep/a.jsp", Category: "sqli", Vulnerable: true},
+		{URL: "/wavsep/b.jsp", Category: "sqli", Vulnerable: true},
+	}
+	rep := ScoreWavsep(cases, &types.Scan{})
+	if rep.Coverage.SurfaceKnown {
+		t.Error("no discovered surface must read SurfaceKnown=false")
+	}
+	if got := rep.Overall.TP + rep.Overall.FP + rep.Overall.TN + rep.Overall.FN; got != 2 {
+		t.Errorf("graded %d cases, want both — absent surface data must not silently drop cases", got)
+	}
+	if rep.Coverage.Partial() {
+		t.Error("unknown coverage must not claim Partial(); it is unknown, not measured")
+	}
+}
+
+// A truncated scan's misses are unfinished work, not detection failures. The engine records this
+// (types.Scan.Partial); no bench scorer read it, so a timed-out run's recall was published as though
+// every tool had run to completion — which is exactly how a throughput problem gets misread as a
+// recall problem.
+func TestScoreWavsep_ReportsTruncatedScan(t *testing.T) {
+	cases := []WavsepCase{{URL: "/wavsep/a.jsp", Category: "sqli", Vulnerable: true}}
+	scan := &types.Scan{
+		DiscoveredSurface: []string{"http://h/wavsep/a.jsp"},
+		Partial:           true,
+		StopReason:        "deadline exceeded",
+	}
+	rep := ScoreWavsep(cases, scan)
+	if !rep.Coverage.Truncated {
+		t.Error("a partial scan must be reported as truncated, else its misses read as real misses")
+	}
+	out := RenderWavsep(rep)
+	if !strings.Contains(out, "TRUNCATED") || !strings.Contains(out, "deadline exceeded") {
+		t.Errorf("scorecard must disclose truncation and its reason, got:\n%s", out)
+	}
+}
+
+// A partial run is crawl-ordered, not sampled. Measured live: at cap 15 every XSS case reached was
+// DOM-XSS — 4 of the corpus's 98 XSS cases, and precisely the subset that needs JS execution to
+// detect. Reading "xss 0%" off that slice would generalise the hardest 4% to the whole class, so the
+// scorecard has to say the slice is not representative, not merely that it is small.
+func TestRenderWavsep_PartialWarnsSampleIsNotRandom(t *testing.T) {
+	cases := []WavsepCase{
+		{URL: "/wavsep/a.jsp", Category: "xss", Vulnerable: true},
+		{URL: "/wavsep/z.jsp", Category: "xss", Vulnerable: true},
+	}
+	rep := ScoreWavsep(cases, &types.Scan{DiscoveredSurface: []string{"http://h/wavsep/a.jsp"}})
+	out := RenderWavsep(rep)
+	if !strings.Contains(out, "NOT A RANDOM SAMPLE") {
+		t.Errorf("a partial scorecard must warn the slice is crawl-ordered, not sampled; got:\n%s", out)
+	}
+}
