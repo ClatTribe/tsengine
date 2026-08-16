@@ -59,10 +59,14 @@ func TestRescanTenant_DrivesIncidentLifecycle(t *testing.T) {
 		t.Fatalf("first monitoring pass should open one incident, got %d", openCount(t, st))
 	}
 
-	// pass 2: the issue is fixed → the incident resolves
+	// pass 2+3: the issue is fixed → the incident resolves once the absence PERSISTS. One absent
+	// pass is held deliberately: a flaky scanner must not be able to report a live vulnerability
+	// as remediated.
 	sc.Open = false
-	if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
-		t.Fatal(err)
+	for i := 0; i < 2; i++ {
+		if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if openCount(t, st) != 0 {
 		t.Errorf("once the issue is fixed, no incident should stay open, got %d", openCount(t, st))
@@ -172,11 +176,13 @@ func TestRescanTenant_CleanPassStillResolves(t *testing.T) {
 		t.Fatal(err)
 	}
 	sc.Open = false
-	if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
-		t.Fatal(err)
+	for i := 0; i < 2; i++ { // sustained absence, not a single quiet run
+		if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if openCount(t, st) != 0 {
-		t.Errorf("a clean pass with no failed tools must still resolve a genuinely fixed issue, open=%d",
+		t.Errorf("clean passes with no failed tools must still resolve a genuinely fixed issue, open=%d",
 			openCount(t, st))
 	}
 }

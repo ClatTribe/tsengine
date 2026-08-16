@@ -144,8 +144,14 @@ func TestAutonomy_TheLoopClosesItselfWhenTheIssueGoesAway(t *testing.T) {
 	}
 
 	sc.Open = false // somebody fixed it out in the world; nobody told us
-	if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
-		t.Fatal(err)
+	// Two passes: resolution now requires the absence to PERSIST, because a scanner that has one
+	// quiet run must not be read as "remediated" (dalfox found 7 vulnerable cases in one run and 9
+	// in the next on an unchanged target). The loop still closes itself with no human — one cycle
+	// later — which is what this test is actually protecting.
+	for i := 0; i < 2; i++ {
+		if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if got := openCount(t, st); got != 0 {
 		t.Errorf("AUTONOMY BROKEN: %d incident(s) still open after the issue disappeared — a human has "+

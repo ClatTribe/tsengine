@@ -750,6 +750,18 @@ type Incident struct {
 	// the opening finding carried no quality signal.
 	Verification string  `json:"verification,omitempty"`
 	Confidence   float64 `json:"confidence,omitempty"`
+	// AbsentPasses counts CONSECUTIVE authoritative scans in which this incident's issue did not
+	// appear. Reset to 0 the moment it reappears.
+	//
+	// Resolving on a single absence assumes a scan that does not report a finding proves it is gone.
+	// Measured against WAVSEP: dalfox on the same unchanged target found 7 distinct vulnerable cases
+	// in one run and 9 in the next — and it SUCCEEDED both times, so nothing was recorded as failed.
+	// Four cases flipped between runs. On a single-absence rule each flip resolves a live
+	// vulnerability as fixed and reopens it next pass, forever.
+	//
+	// Distinct from the degraded-pass guard: that covers tools which DIE (Scan.ToolsFailed). This
+	// covers tools that finish and simply report different things, which no failure signal catches.
+	AbsentPasses int `json:"absent_passes,omitempty"`
 	// Attacked marks an incident opened/escalated because the issue is observed under
 	// attack in production (a runtime-protection signal, ADR-0007 Phase 0b) — escalated
 	// regardless of the severity floor, since a live exploit attempt is itself urgent.
