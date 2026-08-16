@@ -6,7 +6,7 @@ import { SAMPLE_META, SAMPLE_COUNTS, SAMPLE_FINDINGS, SAMPLE_FRAMEWORKS, type Sa
 export const metadata = pageMeta({
   title: "Sample Security Assessment Report | TensorShield",
   description:
-    "See exactly what a TensorShield security assessment report looks like — a real, anonymized example with exploitation-proven findings, evidence, remediation, and SOC 2 / PCI / GDPR control mapping.",
+    "See exactly what a TensorShield security assessment report looks like — a worked example in the exact format we produce, with exploitation-proven findings, evidence, remediation, and SOC 2 / PCI / GDPR control mapping.",
   path: "/sample-report",
 });
 
@@ -28,8 +28,14 @@ export default function SampleReportPage() {
           What you actually get
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-          A real, fully-anonymized example of the security assessment report a customer receives — findings proven, not
-          guessed, each with evidence, a fix, and the compliance controls it affects.
+          {/* NOT "a real, anonymized example". That phrasing claims provenance — that this came out of an
+              actual engagement and we stripped the names — and nothing supports it: the subject is
+              Acme at acme-sample.com. A prospect who asks "whose report is this?" on a sales call
+              should not catch us. What IS true is the part worth saying: this is the exact format and
+              structure the product emits, findings and all. */}
+          A worked example in the exact format the product emits — the same sections, evidence and control
+          mapping a customer receives. Findings proven, not guessed, each with evidence, a fix, and the
+          compliance controls it affects.
         </p>
       </div>
 
