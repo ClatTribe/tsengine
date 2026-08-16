@@ -117,3 +117,47 @@ func TestCompute_DoesNotClaimToolsExecuted(t *testing.T) {
 		}
 	}
 }
+
+// TestCompute_UsesRealExecutionWhenReported is the other half of ExecutionConfirmed: once the
+// engagement records what actually dispatched, coverage reports THAT rather than the declared list,
+// and names the tools that failed instead of implying they ran clean.
+func TestCompute_UsesRealExecutionWhenReported(t *testing.T) {
+	eng := platform.Engagement{
+		ID: "e1", AssetID: "a1", CompletedAt: time.Now().UTC(),
+		ToolsRan:    []string{"nuclei", "openapi_spec_ingest"},
+		ToolsFailed: []types.ToolFailure{{Tool: "schemathesis", Reason: "context deadline exceeded"}},
+	}
+	got := Compute(
+		[]platform.Asset{{ID: "a1", TenantID: "t", Target: "https://api.example.com", Type: "api"}},
+		nil, []platform.Engagement{eng},
+	).Assets[0]
+
+	if !got.ExecutionConfirmed {
+		t.Error("engagement reported its toolset, so execution IS confirmed")
+	}
+	if len(got.ToolsFailed) != 1 || got.ToolsFailed[0].Tool != "schemathesis" {
+		t.Errorf("a failed tool must be named, not folded into 'ran clean': %+v", got.ToolsFailed)
+	}
+	for _, tool := range got.RunsTools {
+		if tool == "schemathesis" {
+			t.Error("a tool that failed must not be listed as having run")
+		}
+	}
+}
+
+// A runner that reports no execution (operate dispatches no sandbox tools) must stay "unknown" — the
+// declared toolset, unconfirmed — never "nothing ran".
+func TestCompute_NoReportStaysUnknownNotEmpty(t *testing.T) {
+	got := Compute(
+		[]platform.Asset{{ID: "a1", TenantID: "t", Target: "acme/app", Type: "repository"}},
+		nil,
+		[]platform.Engagement{{ID: "e1", AssetID: "a1", CompletedAt: time.Now().UTC()}},
+	).Assets[0]
+
+	if got.ExecutionConfirmed {
+		t.Error("no reported toolset means execution is unknown, not confirmed")
+	}
+	if len(got.RunsTools) == 0 {
+		t.Error("with no report, coverage must still show the DECLARED toolset rather than nothing")
+	}
+}

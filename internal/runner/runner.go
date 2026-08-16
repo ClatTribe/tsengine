@@ -42,6 +42,34 @@ type ScanRunner interface {
 	Scan(ctx context.Context, a platform.Asset) ([]types.Finding, error)
 }
 
+// ScanReport is what a scan did, as opposed to what it found.
+type ScanReport struct {
+	ToolsRan    []string
+	ToolsFailed []types.ToolFailure
+}
+
+// ReportingScanRunner is optionally implemented by a ScanRunner that can say which tools actually
+// dispatched. Optional rather than folded into ScanRunner because not every runner has tools to
+// report — the operate path assesses an identity snapshot host-side and dispatches nothing — and
+// widening the core interface would force all three implementors and their tests to answer a
+// question two of them cannot.
+//
+// Callers type-assert and fall back to Scan, so a runner that does not implement this behaves
+// exactly as before and its engagements record no execution data, which reads as "unknown" rather
+// than "nothing ran".
+type ReportingScanRunner interface {
+	ScanWithReport(ctx context.Context, a platform.Asset) ([]types.Finding, ScanReport, error)
+}
+
+// scanWith runs a scan and returns its execution report when the runner can provide one.
+func scanWith(ctx context.Context, r ScanRunner, a platform.Asset) ([]types.Finding, ScanReport, error) {
+	if rr, ok := r.(ReportingScanRunner); ok {
+		return rr.ScanWithReport(ctx, a)
+	}
+	f, err := r.Scan(ctx, a)
+	return f, ScanReport{}, err
+}
+
 // Tokens resolves a connection's vaulted OAuth token (the secret store). Kept as an
 // interface so the MVP KMS-envelope impl and a test stub are interchangeable.
 type Tokens interface {
@@ -564,10 +592,11 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 		ID: s.newID("eng"), TenantID: a.TenantID, AssetID: a.ID,
 		Trigger: trigger, StartedAt: s.now(),
 	}
-	findings, err := s.Scanner.Scan(ctx, a)
+	findings, report, err := scanWith(ctx, s.Scanner, a)
 	if err != nil {
 		return nil, nil, fmt.Errorf("runner: scan %s: %w", a.Target, err)
 	}
+	eng.ToolsRan, eng.ToolsFailed = report.ToolsRan, report.ToolsFailed
 	for _, f := range findings {
 		if err := s.Store.PutFinding(ctx, a.TenantID, f); err != nil {
 			return nil, nil, err

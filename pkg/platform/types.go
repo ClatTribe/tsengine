@@ -11,6 +11,7 @@
 package platform
 
 import (
+	"github.com/ClatTribe/tsengine/pkg/types"
 	"strings"
 	"time"
 )
@@ -546,6 +547,19 @@ type Engagement struct {
 	LedgerRef   string    `json:"ledger_ref,omitempty"`
 	StartedAt   time.Time `json:"started_at"`
 	CompletedAt time.Time `json:"completed_at,omitempty"`
+
+	// ToolsRan and ToolsFailed record what the scan ACTUALLY dispatched, as opposed to what the
+	// asset type is configured to run.
+	//
+	// Without them the platform could not distinguish a tool that ran and found nothing from one
+	// that timed out or was absent from the image — so /coverage told the customer "All tools ran
+	// and found nothing" on scans where tools had silently been dropped. Measured: four identical
+	// api scans returned 1, 1, 11 and 11 findings with three different toolsets.
+	//
+	// Empty ToolsRan means the runner did not report execution (e.g. the operate path, which uses no
+	// sandbox tools), NOT that nothing ran — absence of data is not evidence of absence (§10).
+	ToolsRan    []string            `json:"tools_ran,omitempty"`
+	ToolsFailed []types.ToolFailure `json:"tools_failed,omitempty"`
 }
 
 // Action kinds — how a remediation is delivered.

@@ -29,28 +29,36 @@ type EngineRunner struct {
 }
 
 // Scan runs the engine over one asset and returns its grounded findings.
+// Scan satisfies ScanRunner. It drops the execution report; callers that want it use ScanWithReport.
 func (e *EngineRunner) Scan(ctx context.Context, a platform.Asset) ([]types.Finding, error) {
+	f, _, err := e.ScanWithReport(ctx, a)
+	return f, err
+}
+
+// ScanWithReport is Scan plus which tools actually dispatched and which failed, so the engagement
+// record can distinguish a tool that ran clean from one that timed out or was missing from the image.
+func (e *EngineRunner) ScanWithReport(ctx context.Context, a platform.Asset) ([]types.Finding, ScanReport, error) {
 	at := types.AssetType(a.Type)
 	handler, err := e.Resolve(at)
 	if err != nil {
-		return nil, fmt.Errorf("engine: resolve handler for %q: %w", a.Type, err)
+		return nil, ScanReport{}, fmt.Errorf("engine: resolve handler for %q: %w", a.Type, err)
 	}
 	disp, cleanup, err := e.NewDispatcher(ctx, a)
 	if err != nil {
-		return nil, fmt.Errorf("engine: dispatcher: %w", err)
+		return nil, ScanReport{}, fmt.Errorf("engine: dispatcher: %w", err)
 	}
 	if cleanup != nil {
 		defer cleanup()
 	}
 	target := types.Asset{Type: at, Target: a.Target}
-	findings, fired, err := orchestrator.Run(ctx, target, handler, disp)
+	findings, fired, _, toolsFailed, err := orchestrator.RunWithSurface(ctx, target, handler, disp)
 	if err != nil {
 		// fired = the tools the orchestrator dispatched. Logging it makes a 0-finding engine scan
 		// diagnosable: no tools fired = a planning/dispatch gap; tools fired but 0 findings = a
 		// sandbox tool-execution / propagation gap (vs the tools genuinely finding nothing).
 		slog.Warn("[engine] scan errored", "type", a.Type, "target", a.Target, "fired", fired, "err", err.Error())
-		return nil, fmt.Errorf("engine: scan %s: %w", a.Target, err)
+		return nil, ScanReport{}, fmt.Errorf("engine: scan %s: %w", a.Target, err)
 	}
 	slog.Info("[engine] scan complete", "type", a.Type, "target", a.Target, "tools_fired", fired, "findings", len(findings))
-	return findings, nil
+	return findings, ScanReport{ToolsRan: fired, ToolsFailed: toolsFailed}, nil
 }
