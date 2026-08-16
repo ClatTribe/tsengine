@@ -974,7 +974,8 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 > (Â§18) is built on top. What remains is **live/scale verification gated on infra,
 > credentials, or product decisions** â tracked in [docs/competitive-roadmap.md](docs/competitive-roadmap.md)
 > (Tracks 1â3) and Â§18.3, not here. Concretely open: per-asset **live** benchmark numbers
-> (need the sandbox image + deployed targets; SAST 0.387 Youden is the one measured so far),
+> (need the sandbox image + deployed targets; SAST now measures **46.5% Youden** over all 2,740 OWASP
+> BenchmarkJava cases — third on the published cohort, between Checkmarx 47% and Fortify 35%),
 > the L2 agent **live `verified_rate`** (needs a target + `LLM_API_KEY`), scale-grade infra
 > (Postgres store, cloud-KMS vault, HA/sandbox-pool â all behind today's interfaces), and
 > self-serve **billing**. (The per-tenant **LLM-config** is now live end-to-end â the UX seals the

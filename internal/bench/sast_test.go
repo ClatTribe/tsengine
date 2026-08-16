@@ -63,6 +63,45 @@ func TestScoreSast_ConfusionMatrix(t *testing.T) {
 	}
 }
 
+// TestScoreSast_GradesRawAndDeliveredIndependently pins the two-audience scoring.
+//
+// The bench used to grade FindingsRaw only, which made §14.1's documented L1.5 ablation inert here:
+// TSENGINE_L15_DISABLED could not move a number computed from the set captured before hook 1 runs.
+// So the FP filter could demote 577 findings on a real run and the scorecard would look identical.
+//
+// The fixture is deliberately asymmetric — the enriched set drops the false positive and keeps the
+// true one, i.e. L1.5 doing its job. A regression that scored Delivered from FindingsRaw would give
+// both sets FP=1 and fail on the lift assertion.
+func TestScoreSast_GradesRawAndDeliveredIndependently(t *testing.T) {
+	cases := []SastCase{
+		{Name: "BenchmarkTest00001", Category: "sqli", Vulnerable: true},
+		{Name: "BenchmarkTest00004", Category: "sqli", Vulnerable: false},
+	}
+	scan := &types.Scan{
+		FindingsRaw: []types.Finding{
+			{Tool: "semgrep", CWE: []string{"CWE-89"}, Endpoint: "src/BenchmarkTest00001.java:42"},
+			{Tool: "semgrep", CWE: []string{"CWE-89"}, Endpoint: "src/BenchmarkTest00004.java:7"},
+		},
+		// The L1.5 chain dropped the finding on the non-vulnerable case.
+		FindingsEnriched: []types.Finding{
+			{Tool: "semgrep", CWE: []string{"CWE-89"}, Endpoint: "src/BenchmarkTest00001.java:42"},
+		},
+	}
+	rep := ScoreSast(cases, scan)
+
+	if rep.Overall.TP != 1 || rep.Overall.FP != 1 {
+		t.Errorf("raw should keep the false positive: %+v", rep.Overall)
+	}
+	if rep.Delivered.TP != 1 || rep.Delivered.FP != 0 || rep.Delivered.TN != 1 {
+		t.Errorf("delivered should reflect the L1.5 drop: %+v", rep.Delivered)
+	}
+	if lift := rep.L15Lift(); lift <= 0 {
+		t.Errorf("L15Lift = %+.2f, want positive when the chain removes a false positive.\n"+
+			"If this is 0, Delivered is being scored from the same set as Overall and the "+
+			"ablation is inert again.", lift)
+	}
+}
+
 // CWE-326 (inadequate encryption strength, e.g. DES) is a sibling of CWE-327 and is what
 // semgrep emits for the OWASP-Benchmark crypto cases — it must score under "crypto", else
 // real crypto detections are silently discarded by the scorer (the crypto-0% bug).

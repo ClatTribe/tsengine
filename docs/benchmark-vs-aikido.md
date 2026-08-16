@@ -204,11 +204,31 @@ live `bench/agent` run, the latter is a real-data/market dependency, not an engi
 
 | Lane | Status |
 |---|---|
-| Repository · SAST (OWASP Benchmark) | **Measured: 0.387 Youden** (above Fortify 35 %) |
+| Repository · SAST (OWASP Benchmark) | **Measured: 46.5 % Youden** over all 2 740 BenchmarkJava cases — third on the published cohort: Veracode 51 %, Checkmarx 47 %, **us 46.5 %**, Fortify 35 %, SonarQube 6 %. Up from 0.387 after the semgrep ruleset fix. The remaining loss is **specificity, not recall** — see below |
 | Cloud · attack-path engine — CloudGoat replay | **Measured: 2/2** scenarios reached the documented real-lab compromise (`tsbench cloud-engine --cloudgoat`) |
 | Cloud · attack-path engine — prowler-grounded account | **Measured: 100 % attack-path recall** (2/2 reachable targets); engine surfaced 2 reachable paths from 10 prowler findings and **downgraded 6** as not-on-a-reachable-path — an auditable noise cut (`tsbench cloud-engine --cloudquery`) |
 | Web / SCA / container / api / ip / domain L1 lanes | Harness + scorer + competitor bar **ready**; live recall **pending** the sandbox image build + a reachable target (heavy; out of scope for an analysis pass) |
 | Agent · `verified_rate` vs the Doyensec/XBOW yardstick | **Pending a live `bench/agent` run** (Track 1 A1) — the single highest-value number to close this comparison |
+
+### What the SAST number actually says
+
+The headline hides the useful part. Splitting each category into sensitivity and specificity:
+
+| Category | Recall | Specificity | Reading |
+|---|---|---|---|
+| crypto · weakrand · securecookie | 100 % | 100 % | perfect — pattern-matchable classes |
+| hash | 69 % | 100 % | no false alarms, misses some |
+| cmdi · sqli · pathtraver · ldapi | **90–96 %** | **12–27 %** | we find nearly every real bug and flag safe look-alikes with it |
+| trustbound | 52 % | 58 % | the one genuine recall gap |
+
+**We are not missing vulnerabilities; we are failing to rule out the safe ones.** 552 of our 1 800
+positives are false, and OWASP Benchmark is built precisely to punish this: every vulnerable case
+ships with a near-identical safe twin that differs only in whether tainted data reaches the sink.
+
+That is a dataflow problem, and a pattern matcher cannot solve it in principle — which makes it a
+concrete argument for the CodeQL escalation (§5.3) rather than more semgrep rules. It also means the
+L1.5 FP filter is doing load-bearing work for the customer-facing number, so the scorecard now grades
+the delivered set alongside the raw one.
 
 These cloud numbers were **measured in this pass** — the cloud attack-path engine is
 deterministic + snapshot-driven (LLM-free, CLAUDE.md §10), so it scores without the sandbox or
