@@ -10,7 +10,9 @@ package api
 
 import (
 	"context"
+	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
@@ -120,7 +122,61 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 			}})
 		}
 	}
+
+	// INJECTION IS A FUZZING JOB, NOT A SIGNATURE ONE.
+	//
+	// Adding the sqli/injection tags above was necessary and not sufficient: nuclei's injection
+	// templates are SIGNATURE-based — they match known product CVEs — so they find a vulnerable
+	// version of a known application, never arbitrary SQLi in first-party code. Measured against
+	// VAmPI, whose headline documented vulnerability is SQL injection: the tags took raw findings
+	// from 1 to 12 and recall stayed at 0.000, still MISSING sqli.
+	//
+	// Generic injection discovery needs a tool that actually mutates parameters. The web asset has
+	// done this since the fan-out landed (§5.1: injection tools run PER-URL on param-bearing URLs
+	// only); api never did, so no injection payload was ever sent to an API endpoint.
+	//
+	// The spec is the ideal driver for it — it declares every operation and its parameters, which is
+	// exactly what sqlmap needs. Restricted to param-bearing endpoints for the same reason web
+	// restricts it: fanning a per-URL injection tool across a whole surface is the trap that makes a
+	// scan miss its deadline, and a timed-out tool contributes nothing (Scan.ToolsFailed).
+	if sq, ok := tool.Get("sqlmap"); ok {
+		for _, u := range dedup(endpoints) {
+			if hasInjectableParams(u) {
+				out = append(out, asset.Dispatch{Tool: sq, Args: tool.Args{"target": u}})
+			}
+		}
+	}
 	return out
+}
+
+// hasInjectableParams reports whether a URL carries something an injection tool can mutate: a query
+// string, or a REST path parameter.
+//
+// Path params matter here in a way they do not for web: an API expresses its inputs as
+// /users/v1/{username} far more often than as ?username=, so a query-string-only test (what the web
+// asset uses) would find almost nothing on a REST surface. Both the spec's own {brace} form and a
+// concrete path segment that looks like an id are treated as injectable.
+func hasInjectableParams(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	if len(u.Query()) > 0 {
+		return true
+	}
+	if strings.Contains(u.Path, "{") && strings.Contains(u.Path, "}") {
+		return true // spec-declared path parameter, e.g. /users/v1/{username}
+	}
+	for _, seg := range strings.Split(u.Path, "/") {
+		if seg == "" {
+			continue
+		}
+		// A numeric segment is a concrete object id — the canonical injectable REST parameter.
+		if _, err := strconv.Atoi(seg); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // PlanEscalation is the api conditional-depth stage (asset.EscalationPlanner):
@@ -213,7 +269,23 @@ const openapiSpecMarker = "SPEC"
 // This asset is the ONLY one that narrowed its ANCHOR dispatch this way — web runs the full corpus
 // untagged, and ip/domain use tags for deliberate per-port routing and escalation. That made api the
 // odd one out rather than the pattern.
-const apiNucleiTags = "api,graphql,jwt,oauth,exposure,config,files,misconfig"
+//
+// The INJECTION classes are added for the same reason, found the same way. The tag set above still
+// described only how an API authenticates and what it accidentally serves — it had nothing that
+// tests what the API DOES WITH INPUT. Measured against VAmPI, whose headline documented
+// vulnerability is SQL injection: recall 0.000, MISSED sqli. An asset that cannot find SQLi on a
+// deliberately SQL-injectable API is not scanning for injection at all.
+//
+// An API takes attacker-controlled input in path params, query strings and JSON bodies exactly like
+// a web app, and injection is OWASP API Top 10. Narrowing to protocol + exposure tags silently
+// excluded the single most-expected API vulnerability class.
+//
+// Kept as an explicit list rather than dropping the tag filter entirely: running nuclei's full
+// corpus per API surface is what makes a scan miss its wall-clock deadline, and a timed-out tool
+// contributes nothing at all (see Scan.ToolsFailed). Adding the classes is the measured fix; going
+// untagged trades a known gap for a worse one.
+const apiNucleiTags = "api,graphql,jwt,oauth,exposure,config,files,misconfig," +
+	"sqli,injection,xss,ssrf,lfi,rce,traversal"
 
 // anchorNames is the single-target fallback set (no-spec path).
 var anchorNames = []string{
