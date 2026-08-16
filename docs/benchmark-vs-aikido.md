@@ -226,9 +226,40 @@ positives are false, and OWASP Benchmark is built precisely to punish this: ever
 ships with a near-identical safe twin that differs only in whether tainted data reaches the sink.
 
 That is a dataflow problem, and a pattern matcher cannot solve it in principle — which makes it a
-concrete argument for the CodeQL escalation (§5.3) rather than more semgrep rules. It also means the
-L1.5 FP filter is doing load-bearing work for the customer-facing number, so the scorecard now grades
-the delivered set alongside the raw one.
+concrete argument for the CodeQL escalation (§5.3) rather than more semgrep rules.
+
+### The L1.5 chain, measured for the first time
+
+Grading the same corpus at the floor where the product actually escalates — `types.SeverityHigh`,
+`detect.Detector`'s default incident threshold — separates what we *find* from what we *act on*:
+
+| | Youden | TP | FP | FN |
+|---|---|---|---|---|
+| raw, all severities (leaderboard) | 46.54 % | 1248 | 552 | 167 |
+| raw, ≥ high (ablation baseline) | 0.52 % | 237 | 215 | 1178 |
+| delivered, ≥ high (post-L1.5) | 5.57 % | 490 | 385 | 925 |
+
+**L1.5 lift: +5.05 points.** The chain earns it by *promoting* — true positives at the escalation
+floor go 237 → 490 as the exploitability hook raises real vulnerabilities to high. That is genuine
+work that had been running unmeasured, because the scorer previously ignored severity entirely.
+
+### The escalation gap
+
+The same table says something uncomfortable about the alerting path:
+
+* **1 415** real vulnerabilities in the corpus
+* **1 248 detected** (88 % recall) — the engine finds them
+* **490 escalated** (35 %) — an incident opens
+* **758 correctly detected, never escalated**
+
+And **nothing in `platformapi` or `detect` discloses that remainder.** A security engineer reading
+`findings_raw` sees all 1 248 (§2.3, working as designed). But a Series A/B customer without a
+security team lives on the incidents view, and that view reports what it escalated while staying
+silent about what it withheld.
+
+Whether `high` is the right default is a product decision, not a bug — but it has never been a
+*measured* one, and the withholding is currently invisible. That combination is the same
+summary-versus-detail asymmetry this campaign keeps finding, inverted: here the summary underclaims.
 
 These cloud numbers were **measured in this pass** — the cloud attack-path engine is
 deterministic + snapshot-driven (LLM-free, CLAUDE.md §10), so it scores without the sandbox or
