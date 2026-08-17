@@ -634,6 +634,10 @@ func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ct
 			if err != nil {
 				return nil, nil, fmt.Errorf("sandboxDispatcher: temp dir: %w", err)
 			}
+			if cerr := os.Chmod(dir, 0o755); cerr != nil {
+				_ = os.RemoveAll(dir)
+				return nil, nil, fmt.Errorf("sandboxDispatcher: chmod temp dir: %w", cerr)
+			}
 			auth, aerr := repoAuth(ctx, st, vault, a)
 			if aerr != nil {
 				_ = os.RemoveAll(dir)
@@ -694,7 +698,7 @@ func repoAuth(ctx context.Context, st store.Store, vault secret.Vault, a platfor
 		if token == "" {
 			return nil, fmt.Errorf("sandboxDispatcher: empty token %s", c.ID)
 		}
-		return &githttp.BasicAuth{Username: token, Password: ""}, nil
+		return &githttp.BasicAuth{Username: "x-access-token", Password: token}, nil
 	}
 	return nil, fmt.Errorf("sandboxDispatcher: connection %s not found", a.ConnectionID)
 }
