@@ -1,12 +1,30 @@
 package platformapi
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// markPostureAssessed stamps that a snapshot-driven posture source ran for this tenant. Called by each
+// ingest handler AFTER a successful assess, regardless of how many findings came back — recording a
+// CLEAN result is the whole point, since zero findings is otherwise indistinguishable from never
+// having run. Best-effort: a store error must never fail an ingest that already succeeded.
+func (d Deps) markPostureAssessed(ctx context.Context, tenantID, source string, at time.Time) {
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		return
+	}
+	if t.PostureAssessed == nil {
+		t.PostureAssessed = map[string]time.Time{}
+	}
+	t.PostureAssessed[source] = at
+	_ = d.Store.PutTenant(ctx, t)
+}
 
 // postureSources are the newer "asset-class posture" finding sources surfaced as first-class groups on the
 // /posture view — the vendor portfolio, the employee device fleet, and cloud config-drift. Each is produced
@@ -34,12 +52,25 @@ func (d Deps) handlePostureView(w http.ResponseWriter, r *http.Request, tenantID
 		byTool[f.Tool] = append(byTool[f.Tool], f)
 	}
 
+	// When each source last actually ran. Read from the tenant record because a grounded assessor
+	// that finds nothing writes no findings — so the store alone cannot distinguish "assessed, clean"
+	// from "never ingested", and the UI must not show the reassuring one for both.
+	assessed := map[string]time.Time{}
+	if t, err := d.Store.GetTenant(r.Context(), tenantID); err == nil {
+		assessed = t.PostureAssessed
+	}
+
 	type sourceView struct {
-		Key      string          `json:"key"`
-		Label    string          `json:"label"`
-		About    string          `json:"about"`
-		Count    int             `json:"count"`
-		Severity map[string]int  `json:"severity"`
+		Key   string `json:"key"`
+		Label string `json:"label"`
+		About string `json:"about"`
+		Count int    `json:"count"`
+		// Assessed reports whether this source has EVER been ingested for this tenant. False with
+		// Count 0 means not tested — not clean.
+		Assessed   bool           `json:"assessed"`
+		AssessedAt *time.Time     `json:"assessed_at,omitempty"`
+		Severity   map[string]int `json:"severity"`
+
 		Findings []types.Finding `json:"findings"`
 	}
 	sources := make([]sourceView, 0, len(postureSources))
@@ -56,7 +87,16 @@ func (d Deps) handlePostureView(w http.ResponseWriter, r *http.Request, tenantID
 		if fs == nil {
 			fs = []types.Finding{}
 		}
-		sources = append(sources, sourceView{Key: s.Tool, Label: s.Label, About: s.About, Count: len(fs), Severity: sev, Findings: fs})
+		view := sourceView{Key: s.Tool, Label: s.Label, About: s.About, Count: len(fs), Severity: sev, Findings: fs}
+		if at, ok := assessed[s.Tool]; ok && !at.IsZero() {
+			view.Assessed = true
+			view.AssessedAt = &at
+		} else if len(fs) > 0 {
+			// Findings exist but predate the stamp (ingested before this field shipped). Their
+			// existence IS proof the source ran, so report assessed without inventing a time.
+			view.Assessed = true
+		}
+		sources = append(sources, view)
 		total += len(fs)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"total": total, "sources": sources})

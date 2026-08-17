@@ -59,6 +59,13 @@ type Tenant struct {
 	// PRBot is the per-tenant policy for the repository PR-review bot (ADR 0010). nil = the
 	// default (disabled). The live GitHub post is separately gated on the GitHub App PR scope.
 	PRBot *PRBotPolicy `json:"pr_bot,omitempty"`
+	// PostureAssessed records when each snapshot-driven posture source (tprm, deviceposture,
+	// clouddrift) last ran, keyed by its tool tag. It exists because those assessors are grounded —
+	// a well-managed estate yields ZERO findings — which makes "assessed and clean" and "never
+	// ingested" byte-identical in the findings store. Without this stamp the UI cannot tell them
+	// apart, and it showed the reassuring reading ("this posture source is clean") for both. An
+	// entry appears only after a real ingest, so ABSENCE means not-assessed, never clean (§10).
+	PostureAssessed map[string]time.Time `json:"posture_assessed,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,

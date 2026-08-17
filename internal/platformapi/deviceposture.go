@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/deviceposture"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -35,6 +36,9 @@ func (d Deps) handleDevicePostureIngest(w http.ResponseWriter, r *http.Request, 
 	}
 	findings := deviceposture.Assess(req.Devices, deviceposture.Options{})
 	findings = enrichFindings(findings) // L1.5 parity (§11)
+	// Record that the fleet was assessed — a compliant fleet yields zero findings, which must not
+	// read the same as never having checked.
+	d.markPostureAssessed(r.Context(), tenantID, "deviceposture", time.Now().UTC())
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {

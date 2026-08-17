@@ -143,7 +143,18 @@ export const api = {
   postureSources: () =>
     safe<{
       total: number;
-      sources: { key: string; label: string; about: string; count: number; severity: Record<string, number>; findings: Finding[] }[];
+      // assessed separates "ran and found nothing" from "never ingested" — identical in the findings
+      // store, since these assessors are grounded and a well-managed estate yields zero findings.
+      sources: {
+        key: string;
+        label: string;
+        about: string;
+        count: number;
+        assessed: boolean;
+        assessed_at?: string;
+        severity: Record<string, number>;
+        findings: Finding[];
+      }[];
     }>("/v1/posture/sources", { total: 0, sources: [] }),
 
   // Run a LIVE keyless OSINT scan (Certificate Transparency / crt.sh) over the tenant's domains.

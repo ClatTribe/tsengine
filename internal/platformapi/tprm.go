@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/tprm"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -39,6 +40,9 @@ func (d Deps) handleTPRMIngest(w http.ResponseWriter, r *http.Request, tenantID 
 
 	findings := tprm.Assess(req.Vendors, tprm.Options{})
 	findings = enrichFindings(findings) // L1.5 parity (§11)
+	// Record that vendor risk was assessed — even (especially) when it came back clean, which is
+	// otherwise indistinguishable from never having run.
+	d.markPostureAssessed(r.Context(), tenantID, "tprm", time.Now().UTC())
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {
