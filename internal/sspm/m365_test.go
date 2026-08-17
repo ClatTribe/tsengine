@@ -11,8 +11,10 @@ func TestAssessM365_FlagsMisconfig(t *testing.T) {
 		SharePointSharing: "anonymous",
 		OneDriveSharing:   "anonymous",
 		LegacyAuthEnabled: true,
-		// MailboxAuditingEnabled: false → flagged
-		TeamsGuestAccess: true, TeamsGuestUnrestricted: true,
+		// auditing explicitly reported as OFF by the snapshot → flagged. (Omitting the
+		// field now means "not supplied" and is asserted separately below.)
+		MailboxAuditingEnabled: BoolPtr(false),
+		TeamsGuestAccess:       true, TeamsGuestUnrestricted: true,
 		TeamsOpenFederation:    true,
 		AnonymousCalendarShare: true,
 	}
@@ -42,10 +44,32 @@ func TestAssessM365_FlagsMisconfig(t *testing.T) {
 func TestAssessM365_HardenedTenantClean(t *testing.T) {
 	good := M365Tenant{
 		Name: "acme", SharePointSharing: "domains", OneDriveSharing: "internal",
-		ExternalDomainAllowlist: true, MailboxAuditingEnabled: true,
+		ExternalDomainAllowlist: true, MailboxAuditingEnabled: BoolPtr(true),
 		// legacy auth off, no open federation, no anon calendar, no unrestricted guests
 	}
 	if f := AssessM365(good, Options{Now: time.Now()}); len(f) != 0 {
 		t.Errorf("a hardened M365 tenant must yield zero findings, got %d: %+v", len(f), f)
+	}
+}
+
+// The tri-state guard: a snapshot that never carried Exchange posture must NOT be
+// reported as having mailbox auditing disabled. Every live Graph sync is in this
+// position, because mailbox auditing is only readable via Exchange PowerShell — so a
+// plain bool here made the live path emit a guaranteed false positive.
+func TestAssessM365_UnsuppliedMailboxAuditingIsNotAFinding(t *testing.T) {
+	for _, f := range AssessM365(M365Tenant{Name: "unknown-exchange"}, Options{Now: time.Now()}) {
+		if f.RuleID == "sspm::m365::mailbox-auditing-disabled" {
+			t.Error("an unsupplied mailbox-auditing setting must not be reported as disabled")
+		}
+	}
+	// ...while an explicit false still is.
+	var flagged bool
+	for _, f := range AssessM365(M365Tenant{Name: "off", MailboxAuditingEnabled: BoolPtr(false)}, Options{Now: time.Now()}) {
+		if f.RuleID == "sspm::m365::mailbox-auditing-disabled" {
+			flagged = true
+		}
+	}
+	if !flagged {
+		t.Error("an explicitly-disabled mailbox audit must still be flagged")
 	}
 }

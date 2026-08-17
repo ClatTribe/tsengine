@@ -104,3 +104,66 @@ func TestMember2FA_OwnerIsHigher(t *testing.T) {
 		t.Errorf("owner should be high, member medium: %+v", sevByLogin)
 	}
 }
+
+// The SCuBA-gap fields added to M365Tenant / GWorkspaceTenant are all optional, and
+// their zero value means "the snapshot did not supply this". A snapshot written before
+// they existed must therefore produce EXACTLY its old finding set — absence of data is
+// never evidence of insecurity (§10). This is the property most likely to regress the
+// next time a field is added, so it is asserted by name, not by count.
+func TestSCuBAGapFieldsAreFPSafeOnLegacySnapshots(t *testing.T) {
+	newM365 := map[string]bool{
+		"sspm::m365::external-autoforward-allowed": true, "sspm::m365::weak-mfa-methods-enabled": true,
+		"sspm::m365::risky-users-not-blocked": true, "sspm::m365::risky-signins-not-blocked": true,
+		"sspm::m365::user-app-registration-allowed": true, "sspm::m365::permanent-privileged-roles": true,
+		"sspm::m365::external-sender-warnings-disabled": true, "sspm::m365::anyone-link-expiry-too-long": true,
+		"sspm::m365::default-sharing-scope-anyone": true, "sspm::m365::default-link-permission-edit": true,
+		"sspm::m365::teams-anonymous-start-meeting": true,
+	}
+	newGWS := map[string]bool{
+		"sspm::google_workspace::weak-mfa-methods-enabled":                  true,
+		"sspm::google_workspace::super-admin-self-recovery-enabled":         true,
+		"sspm::google_workspace::user-self-recovery-enabled":                true,
+		"sspm::google_workspace::password-min-length-too-short":             true,
+		"sspm::google_workspace::password-strength-not-enforced":            true,
+		"sspm::google_workspace::spam-filter-bypass-list":                   true,
+		"sspm::google_workspace::drive-access-checking-loose":               true,
+		"sspm::google_workspace::external-reply-warnings-disabled":          true,
+		"sspm::google_workspace::inbound-spoof-protection-disabled":         true,
+		"sspm::google_workspace::unauthenticated-email-protection-disabled": true,
+	}
+
+	// A legacy M365 snapshot: only the pre-SCuBA fields, set to their WORST values.
+	for _, f := range AssessM365(M365Tenant{
+		Name: "legacy", SharePointSharing: "anonymous", OneDriveSharing: "anonymous",
+		TeamsGuestAccess: true, TeamsGuestUnrestricted: true, TeamsOpenFederation: true,
+		LegacyAuthEnabled: true, MailboxAuditingEnabled: BoolPtr(false), AnonymousCalendarShare: true,
+	}, Options{}) {
+		if newM365[f.RuleID] {
+			t.Errorf("legacy M365 snapshot triggered new rule %s from an unsupplied field", f.RuleID)
+		}
+	}
+
+	// Likewise for Google Workspace.
+	for _, f := range AssessGoogleWorkspace(GWorkspaceTenant{
+		Name: "legacy", DriveSharing: "public", DriveLinkSharingDefault: true,
+		LessSecureAppsEnabled: true, ThirdPartyAPIAccess: true,
+		GmailExternalAutoForward: true, ExternalCalendarSharing: true,
+	}, Options{}) {
+		if newGWS[f.RuleID] {
+			t.Errorf("legacy Google Workspace snapshot triggered new rule %s from an unsupplied field", f.RuleID)
+		}
+	}
+
+	// And the boundary cases on the two NUMERIC fields, where 0 must mean "unknown"
+	// rather than "zero-length password" / "links expire immediately".
+	for _, f := range AssessM365(M365Tenant{Name: "n", AnyoneLinkExpiryDays: 30}, Options{}) {
+		if f.RuleID == "sspm::m365::anyone-link-expiry-too-long" {
+			t.Error("a compliant 30-day Anyone-link expiry must not be flagged")
+		}
+	}
+	for _, f := range AssessGoogleWorkspace(GWorkspaceTenant{Name: "n", PasswordMinLength: 12}, Options{}) {
+		if f.RuleID == "sspm::google_workspace::password-min-length-too-short" {
+			t.Error("a compliant 12-character minimum must not be flagged")
+		}
+	}
+}

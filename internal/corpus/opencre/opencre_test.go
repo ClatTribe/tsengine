@@ -58,3 +58,45 @@ func TestParseStandard_MalformedErrors(t *testing.T) {
 		t.Error("malformed JSON should error")
 	}
 }
+
+// Regression: OpenCRE began serializing `page` as a STRING while `total_pages` stayed a
+// number. The struct required both to be ints, so page 1 failed to decode — and because a
+// page-1 failure is a hard error, `tsengine corpus compliance-provenance` reported nothing
+// at all while still exiting 0. This pins the live shape (string page + numeric total_pages)
+// and the reverse, so the lane cannot be silently killed by that drift again.
+func TestParseStandard_TolerateStringOrNumericPaging(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"string page, numeric total (the live shape)",
+			`{"page":"1","total_pages":48,"standards":[{"sectionID":"16","links":[{"ltype":"Linked To","document":{"doctype":"CRE","id":"462-245","name":"Remove unnecessary elements"}}]}]}`},
+		{"numeric page, string total (the reverse flip)",
+			`{"page":1,"total_pages":"48","standards":[{"sectionID":"16","links":[{"ltype":"Linked To","document":{"doctype":"CRE","id":"462-245","name":"Remove unnecessary elements"}}]}]}`},
+		{"both numeric (the original shape)",
+			`{"page":1,"total_pages":48,"standards":[{"sectionID":"16","links":[{"ltype":"Linked To","document":{"doctype":"CRE","id":"462-245","name":"Remove unnecessary elements"}}]}]}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := ParseStandard(strings.NewReader(tc.body))
+			if err != nil {
+				t.Fatalf("decode failed (the lane would report nothing): %v", err)
+			}
+			if len(m["CWE-16"]) != 1 || m["CWE-16"][0].ID != "462-245" {
+				t.Fatalf("CWE-16 not linked as expected: %+v", m)
+			}
+		})
+	}
+}
+
+// Paging must still be driven by total_pages after the type change — otherwise Fetch would
+// read one page of 48 and quietly under-report the corroboration number.
+func TestDecodedTotalPagesDrivesTheWalk(t *testing.T) {
+	p, err := decodePage(strings.NewReader(`{"page":"3","total_pages":"48","standards":[]}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if int(p.TotalPages) != 48 || int(p.Page) != 3 {
+		t.Fatalf("want page 3 of 48, got page %d of %d", int(p.Page), int(p.TotalPages))
+	}
+}

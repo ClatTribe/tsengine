@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -36,10 +37,31 @@ type CRELink struct {
 	Name string `json:"name"`
 }
 
+// flexInt decodes an integer that the OpenCRE API may serialize as EITHER a JSON number or a
+// JSON string. Observed live: `page` began arriving as "1" (string) while `total_pages` stayed a
+// number, which made the whole page fail to decode — and since page 1 failing is a hard error,
+// the entire cross-reference silently reported nothing. Both fields are tolerant now so a
+// future flip on either one cannot kill the lane again.
+type flexInt int
+
+func (f *flexInt) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(strings.TrimSpace(string(b)), `"`)
+	if s == "" || s == "null" {
+		*f = 0
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fmt.Errorf("opencre: %q is not an integer: %w", s, err)
+	}
+	*f = flexInt(n)
+	return nil
+}
+
 // standardsPage mirrors the verified OpenCRE /rest/v1/standard/CWE response shape.
 type standardsPage struct {
-	Page       int `json:"page"`
-	TotalPages int `json:"total_pages"`
+	Page       flexInt `json:"page"`
+	TotalPages flexInt `json:"total_pages"`
 	Standards  []struct {
 		SectionID string `json:"sectionID"` // the bare CWE number, e.g. "319"
 		Links     []struct {
@@ -107,8 +129,8 @@ func Fetch(ctx context.Context, c *http.Client) (map[string][]CRELink, error) {
 			}
 			continue // later page hiccup: skip, keep what we have
 		}
-		if p.TotalPages > total {
-			total = p.TotalPages
+		if int(p.TotalPages) > total {
+			total = int(p.TotalPages)
 		}
 		for cwe, links := range p.toMap() {
 			for _, l := range links {

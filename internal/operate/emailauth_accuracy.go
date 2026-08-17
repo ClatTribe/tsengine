@@ -82,11 +82,17 @@ func EmailAuthCorpus() []LabeledDomain {
 		{"spf_dkim_missing", DomainConfig{Name: "b.com", DMARC: "reject", SPF: false, DKIM: true}, []string{"operate::spf-dkim-missing"}},
 		{"permissive_spf", DomainConfig{Name: "c.com", DMARC: "reject", SPF: true, DKIM: true, SPFAll: "+"}, []string{"operate::spf-permissive-all"}},
 		{"partial_dmarc", DomainConfig{Name: "d.com", DMARC: "reject", SPF: true, DKIM: true, SPFAll: "-", DMARCPct: 25}, []string{"operate::dmarc-partial-enforcement"}},
-		{"subdomain_gap", DomainConfig{Name: "e.com", DMARC: "quarantine", SPF: true, DKIM: true, SPFAll: "-", DMARCSub: "none"}, []string{"operate::dmarc-subdomain-unprotected"}},
+		{"subdomain_gap", DomainConfig{Name: "e.com", DMARC: "quarantine", SPF: true, DKIM: true, SPFAll: "-", DMARCSub: "none"}, []string{"operate::dmarc-subdomain-unprotected", "operate::dmarc-not-rejecting"}},
+		// p=quarantine is enforcing but not REJECTING: spoofed mail still lands (in junk), so BEC
+		// can succeed. CISA SCuBA makes p=reject mandatory (MS.EXO.4.2v1 / GWS.GMAIL.4.2v1), which
+		// is why a quarantine domain moved out of the hardened set below — same rationale as the
+		// pre-existing partial-enforcement check, which also flags a legitimate rollout stage at
+		// medium. Surfaced by the SCuBA neutral benchmark (internal/bench/scuba.go).
+		{"quarantine_not_rejecting", DomainConfig{Name: "f.com", DMARC: "quarantine", SPF: true, DKIM: true, SPFAll: "-"}, []string{"operate::dmarc-not-rejecting"}},
 
 		// --- hardened FP-control (must emit nothing) ---
 		{"hardened_reject", DomainConfig{Name: "ok1.com", DMARC: "reject", SPF: true, DKIM: true, SPFAll: "-", DMARCPct: 100}, nil},
-		{"hardened_quarantine_softfail", DomainConfig{Name: "ok2.com", DMARC: "quarantine", SPF: true, DKIM: true, SPFAll: "~"}, nil},
+		{"hardened_reject_softfail", DomainConfig{Name: "ok2.com", DMARC: "reject", SPF: true, DKIM: true, SPFAll: "~"}, nil},
 		{"hardened_legacy_snapshot", DomainConfig{Name: "ok3.com", DMARC: "reject", SPF: true, DKIM: true}, nil}, // no depth fields → must not trip them
 	}
 }

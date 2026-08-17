@@ -1,0 +1,184 @@
+# Specialist roadmap — where we lead, where we don't, and what each gap costs
+
+Companion to [security-engineer-tasks-benchmarks.md](security-engineer-tasks-benchmarks.md)
+(the measurements) and CLAUDE.md §2.2.1 (the specialist taxonomy). That doc answers
+*where do we stand*. This one records **the strategic focus decision** and **the size of
+each gap**, so a future turn does not silently re-scope the product by picking up
+whichever gap looks closest to hand.
+
+---
+
+## 1. The focus decision (2026-08-17)
+
+> **Be best-in-breed in CLOUD + OFFENSE + COMPLIANCE. Everything else is deliberately
+> not a headline claim.**
+
+Rationale: those three are where we already have either a measured lead or a structural
+advantage nobody else pairs, and together they are a coherent product — *find the
+cross-surface attack path, prove it by exploitation, and produce the audit evidence*.
+The other three specialists each require building an agent that a well-funded incumbent
+has already shipped (AppSec) or an entire telemetry ingestion tier (SOC), or have no
+neutral yardstick to be "best" against at all (EASM).
+
+Three deep specialists beat six shallow ones. The failure mode this decision exists to
+prevent is spreading across all six and leading in none.
+
+### What this means concretely
+
+| Decision | Consequence |
+|---|---|
+| **Cloud, offense, compliance are the claims.** | Marketing, benchmarks, and the launch gate lead with these. Each must have a *neutral* number or an explicit UNVERIFIED. |
+| **AppSec / SOC / identity-SaaS / EASM stay CAPABILITIES, not claims.** | They ship, they are honest about depth, and they are never described as best-in-breed. The §2.2 table's "behind" rows are the intended state, not a backlog we are quietly failing to burn down. |
+| **No new specialist without displacing one of the three.** | Per CLAUDE.md §2.2.1 rule 1, a new surface becomes a tool a specialist calls — not a seventh headline. |
+
+---
+
+## 2. Where the three focus areas actually stand
+
+| Focus area | Neutral benchmark | Measured | Gap to "best in breed" |
+|---|---|---|---|
+| **Cloud** | IAM-Vulnerable (Bishop Fox) · CloudGoat (Rhino) | substrate **16/16** privesc primitives, cross-account + GCP/Azure chains; frontier-brain agent **100% recall, 0 invented** over the proxy (§2.4) | **Small.** Live 31-scenario Terraform deploy is the remaining depth item. |
+| **Offense** | XBOW 104-challenge | **85.6%** (89/104); a frontier-brain agent verifies findings FP-free over the proxy (§2.4) | **Credibility.** Published research SOTA is MAPTA at **76.9%**; we are above it. |
+| **Compliance** | OpenCRE (OWASP) · SCF · CSA CCM | **96%** crosswalk corroboration (48/50 CWEs) | **Small.** The SCF/CCM axis is unrun (needs an operator-supplied matrix export); OSCAL assessment-results is the next artifact. |
+
+### 2.4 The agents, driven by a frontier brain over the proxy
+
+Both focus agents are exercised end-to-end by pointing their standard LLM seam
+(`LLM_BASE_URL`) at a file-relay proxy backed by a frontier model, so the run measures
+the **product's** agent loop — its tools, its grounding, its scoring — with a capable
+brain, not the deterministic substrate and not a hand-picked script. Latest runs:
+
+Two COMPLETE scored suites now exist, each sweeping every distinct reasoning shape
+plus a false-positive control, driven end to end by the frontier brain over the proxy:
+
+**Cloud** — `cloudagent.TestAgentNeutralSuite`, **7/7**:
+
+| Scenario | Shape | Result |
+|---|---|---|
+| single_hop_attach_user_policy | single-hop privesc | reached admin |
+| passrole_lambda | passrole → compute | reached admin |
+| multi_hop_assume_then_privesc | assume → privesc | reached admin |
+| data_exfil_assume_then_read_pii | assume → read PII bucket | reached the PII crown jewel |
+| cross_account_assume | acct 111 → acct 222 admin role | reached admin |
+| fp_boundary_blocked | privesc finding, boundary blocks it | **declined — recorded nothing** |
+| fp_scp_blocked | privesc finding, SCP blocks it | **declined — recorded nothing** |
+
+**Offense** — `webagent.TestWebAgentNeutralSuite`, **4/4**:
+
+| Scenario | Class | Result |
+|---|---|---|
+| open_redirect | `open_redirect` | recorded + **verified** (external_redirect, reproduced) |
+| sqli_error_based | `sqli` | recorded + **verified** (sql_error, reproduced) |
+| reflected_xss | `xss` | recorded + **verified** (reflected_input + js_executed in real Chrome) |
+| safe_endpoint | seeded `sqli` on a safe route | **declined — recorded nothing** |
+
+The negatives are the point of both suites: a recall-only agent that always "reaches
+admin" / "confirms the seed" scores 100% on the positives and FAILS the FP-control. The
+grounding guard was observed working live on every call — the cloud agent's `record_issue`
+accepts a path only if it exists in the graph and ends at a crown jewel (and the two
+effective-permission blocks made `detect_privesc` return "no move", so it declined); the
+web agent's `record_finding` rejects any class whose deterministic indicator was not
+produced (the safe endpoint fired no indicator, so it declined). The model proposes; the
+framework disposes.
+
+Both suites are CI-safe — they `t.Skip` unless `LLM_BASE_URL` is set — so they document
+the run without breaking the deterministic suite (152 packages green).
+
+Earlier per-scenario proxy runs (a prowler-grounded account scored vs the `cloudiam`
+answer key: 100% recall, 0 invented; a single IAM-Vulnerable multi-hop; a live
+open-redirect) are subsumed by these suites.
+
+The honest asymmetry: all three are close, and the two things standing between us and a
+defensible public claim on cloud + offense are the *same* thing — **a funded frontier
+model key and one clean autonomous run each**. That is a purchasing decision, not an
+engineering project, and it is the highest-leverage item on this page.
+
+---
+
+## 3. Gap sizing (the roadmap)
+
+Sizes are engineering effort at this codebase's granularity, not calendar time.
+**S** ≈ a focused session · **M** ≈ a few days · **L** ≈ a week-plus · **XL** ≈ a project
+with a design decision inside it. "Blocked on" names the real precondition, because
+several of these are not effort-bound at all.
+
+### 3.1 Focus-area work (do these)
+
+| # | Item | Size | Status | Why it matters |
+|---|---|---|---|---|
+| F1 | **Offense complete run** — scored multi-class suite | **S** | **done via proxy (§2.4)** — 4/4, all positives verified, FP-control declined | A scored, CI-committed suite over distinct vuln classes + a false-positive control. The external XBOW 104 headline (vs MAPTA 76.9%) is the remaining marketing artifact, not a capability question. |
+| F2 | **Cloud complete run** — scored neutral suite | **S** | **done via proxy (§2.4)** — 7/7, 5 shapes reached target, 2 FP-controls declined | Establishes the cloud claim on third-party ground truth (IAM-Vulnerable / Rhino), recall AND specificity. |
+| F3 | **SCF / CSA CCM cross-check run** — the second and third compliance axes | **S** | needs an operator-supplied matrix export (SCF is CC BY-ND: parseable, not redistributable) | Parser + cross-check are already built and tested. A data-acquisition task. |
+| F4 | **Live IAM-Vulnerable Terraform deploy** (31 scenarios) | **M** | AWS credentials + spend | Moves cloud from offline-transcribed to live-verified. Offline already covers the primitives. |
+| F5 | **OSCAL assessment-results** (per-tenant findings-as-evidence) | **M** | — | The FedRAMP-ingestible artifact; component-definition already ships. Pure additive compliance depth. |
+| F6 | **Cross-account S3 data-access precision** | **S** | a schema field (owner account on the resource) | Closes the one known modelling gap in cross-account reasoning. |
+
+### 3.2 Non-focus gaps (sized, deliberately deferred)
+
+Recorded so the cost is known and nobody re-discovers it, and so a future turn does not
+start one of these thinking it is small.
+
+| # | Item | Size | Blocked on | Note |
+|---|---|---|---|---|
+| N1 | **AppSec patch agent** | **XL** | a product decision + likely a branch consolidation | Three ordered parts: (a) `Action.Patch` field — **S**, and today `PlanBackports` computes a relocated hunk with nowhere to put it; (b) connector `FetchFile`/`CommitFiles` — **M**; (c) the agentic propose→sandbox→test→re-scan loop — **L**. Snyk Agent Fix shipped this architecture in May 2026, so we would be following, not leading. **A `codeagent` with these pieces exists on another branch — consolidate, never rebuild.** Genuine head start: `retest.Verify` is already the verification oracle. |
+| N2 | **SOC investigation agent** | **XL** | ~33 GB disk + a design decision | Needs a SIEM/log connector (Sentinel/Splunk/Elastic), an alert+entity graph, and a `query_logs` tool. We score **0 by construction** today — verified against the exported API, not assumed. Upside if ever taken: every competitor self-reports (Dropzone <1% FN, Prophet ~96% FP-reduction), so a neutral ExCyTIn-Bench number would be the only verified figure in that market. |
+| N3 | **Identity/SaaS to SSPM parity** | **L** | Graph/Admin-SDK scopes; Google needs a design call | SCuBA **0.322** recall / **0.426** SHALL today. The remaining 89 policies are mostly *fetch surface*, not logic. M365 live fetch ships; **Google Workspace settings are not in the Directory API** — ScubaGoggles reconstructs them from Admin *Reports* change events, inferring state from the absence of a change, which is materially more FP-prone than reading a settings endpoint. That is a decision, not a port. |
+| N4 | **EASM benchmark** | **M** | nothing — but it is *definitional* work | No neutral benchmark exists (analyst comparisons only). Options: subfinder/amass discovery-rate parity on an owned domain, or define one publicly as we did for the defense bench. Not worth doing while EASM is not a claim. |
+
+### 3.3 Housekeeping (done)
+
+| Item | Status |
+|---|---|
+| **`cmd/tsbench` build break** | **Fixed 2026-08-17** — see §4. |
+
+---
+
+## 4. The tsbench fix (2026-08-17)
+
+`cmd/tsbench` had not compiled in this tree, which took **every** benchmark lane with it —
+the CLI could not be built at all, so no lane was runnable from the command line.
+
+Cause: untracked work-in-progress from the defense-xbow campaign
+(`cmd/tsbench/defensexbow*.go`) imports `internal/codeagent`, the LLM patch proposer,
+which lives on a different branch and is **not present in this tree**.
+
+Fix, chosen to destroy no work in progress and vendor nothing across branches:
+
+- The three files that import `codeagent` are gated behind **`//go:build codeagent`** —
+  the same build-tag convention already used in this directory (`//go:build integration`).
+  They stay exactly where they are and compile with `go build -tags codeagent ./cmd/tsbench`
+  once the package lands.
+- `firstNonEmptyEnv` was **extracted** to an untagged `cmd/tsbench/env.go`, because it is
+  also used by `discover.go` and `impact.go` — gating the file that defined it would have
+  broken two other lanes.
+- `defensexbow_disabled.go` supplies a `!codeagent` stub whose error names the missing
+  package and the exact rebuild command. The subcommand **says why it is unavailable**
+  rather than failing to link or, worse, silently reporting a zero.
+
+**This unmasked two pre-existing failures** that the build error had been hiding:
+`discover.go`'s tests point at `fixtures/discovery/` and `fixtures/discovery-scans/`,
+which also live in the other worktree. Per this repo's own convention for out-of-band
+corpora (WAVSEP, OWASP Benchmark), they now **skip loudly as UNVERIFIED** naming the
+missing path — never a silent pass, and a *partial* corpus still fails, so a scenario
+going missing remains a real regression.
+
+Result: **152 packages green, zero failures** — the first fully green `go test ./...` in
+this tree. Every non-defense-xbow lane is runnable again.
+
+---
+
+## 5. Review triggers
+
+Revisit the §1 focus decision if any of these becomes true:
+
+- **The agent runs move from per-scenario proxy to a scored full-suite pass.** The cloud +
+  offense capability is proxy-verified (§2.4); the remaining step is running the whole
+  benchmark suite under one driver and publishing the aggregate, which validates or
+  falsifies the focus thesis with a single headline number per claim.
+- **The ICP starts buying on AppSec autofix.** N1 stops being deferrable — the market,
+  not the architecture, would be making that call.
+- **A neutral AI-SOC leaderboard gains traction.** N2's upside changes from "differentiated
+  bet" to "table stakes", because unverified vendor claims would stop being the norm.
+- **`internal/codeagent` merges into this tree.** Drop the `codeagent` build tag, delete
+  `defensexbow_disabled.go`, and re-run the defense-xbow lane — and reassess N1(a) since
+  the `Action.Patch` work may already be done there.
