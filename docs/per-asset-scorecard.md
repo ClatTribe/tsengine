@@ -184,10 +184,21 @@ pentester's, where the proxy got a grounded finding but the flag stalled on rela
 
 **Honest limit — same as every self-authored fixture: the seed is first-party** (`cve: n/a — first-party
 seed`). 3/3 on 3 seeds is a smoke test of the pipeline, not a benchmark of the engineer. A credible
-number needs an EXTERNAL CVE set: BountyBench's 44 patch tasks (loader wired, needs their Docker
-harness + a frontier LLM) or a SEC-bench-style real-CVE dataset in our web/api/library domain
-(SEC-bench itself is C++/200GB — wrong domain, per the campaign notes). Like the pentester, the
-pipeline is proven and the NUMBER is LLM+dataset-gated.
+number needs an EXTERNAL CVE set, and here is the concrete blocker — confirmed by inspecting the
+actual tasks, not assumed:
+
+- **BountyBench** (44 patch tasks) is APP-LEVEL. lunary/bounty_0 patches a multi-file TypeScript
+  backend (`codebase/packages/backend/src/api/v1/projects/index.ts` + `authorization.ts`), ships a
+  `docker-compose.yml`, and its `verify.sh` runs against the live app. cvepatch's oracle is
+  single-file / single-runtime (one node or python file + a driver), so it CANNOT consume BountyBench
+  directly — scoring it means running BountyBench's own Docker+Python harness with our codeagent as
+  the patch_workflow, plus a frontier LLM.
+- **CyberGym** is the same shape (its own harness); **SEC-bench** is C++/200GB — wrong domain.
+
+So: the pipeline is execution-verified and proven on seeds; a NUMBER on an external CVE set is gated
+on running that benchmark's own app-level harness + a frontier LLM — the same resource gate as the
+pentester and cloud, not missing code. cvepatch's disk-light single-file format is deliberate
+(laptop/CI) and is exactly why it does not drop-in against app-level corpora.
 
 ## 4. What would raise confidence, in order
 
