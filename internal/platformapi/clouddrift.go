@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/clouddrift"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
@@ -57,6 +58,10 @@ func (d Deps) handleCloudDrift(w http.ResponseWriter, r *http.Request, tenantID 
 // assigned ids) + the count. Grounded + LLM-free: an unchanged account produces an empty batch → no-op.
 func (d Deps) persistDriftFindings(ctx context.Context, tenantID string, findings []types.Finding) ([]types.Finding, int) {
 	findings = enrichFindings(findings) // L1.5 parity (§11)
+	// Stamped here rather than in the handler so BOTH drift paths (the explicit /v1/cloud/drift
+	// ingest and the automatic diff-on-inventory-ingest) record it. An unchanged account produces
+	// an empty batch — the case most at risk of reading as "never checked".
+	d.markPostureAssessed(ctx, tenantID, "clouddrift", time.Now().UTC())
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {
 		f.ID = d.newID("drift") + "-" + strconv.Itoa(i)

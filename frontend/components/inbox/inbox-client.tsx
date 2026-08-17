@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine, MessageSquare } from "lucide-react";
+import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine, MessageSquare, AlertTriangle } from "lucide-react";
 import type { Action, Finding } from "@/lib/types";
 import { decideAction, requestChangesAction } from "@/app/(app)/inbox/actions";
 import { SeverityBadge } from "@/components/ui/primitives";
@@ -65,6 +65,9 @@ export function InboxClient({ actions, findings }: { actions: Action[]; findings
   const [items, removeOptimistic] = useOptimistic(actions, (state, id: string) => state.filter((a) => a.id !== id));
   const [sel, setSel] = useState(0);
   const [pending, startTransition] = useTransition();
+  // Why the last decision did not do what it looked like it did. Held at list level, not on the
+  // row, because a failed apply removes the row from the queue — the explanation has to outlive it.
+  const [notice, setNotice] = useState<string | null>(null);
 
   const router = useRouter();
   const inFlight = useRef<Set<string>>(new Set());
@@ -78,12 +81,21 @@ export function InboxClient({ actions, findings }: { actions: Action[]; findings
       startTransition(async () => {
         removeOptimistic(id);
         try {
-          await decideAction(id, approve);
+          const res = await decideAction(id, approve);
+          // A failed APPLY is not a benign blip: the desk leaves the action approved-but-
+          // un-applied and it drops out of the pending queue, so staying silent here shows the
+          // customer exactly what success looks like while nothing was fixed. Say what happened.
+          if (res?.error) {
+            setNotice(res.error);
+            router.refresh();
+          } else {
+            setNotice(null);
+          }
         } catch {
-          // The decision can still fail benignly — the action was already decided (another
-          // operator/Slack got there first) or the API blipped. Reconcile the optimistic
-          // removal by refetching instead of throwing to the error boundary, which would nuke
-          // the whole inbox to "Something went sideways".
+          // A thrown error (rather than a returned one) is the transport failing. Reconcile the
+          // optimistic removal by refetching instead of throwing to the error boundary, which
+          // would nuke the whole inbox to "Something went sideways".
+          setNotice("That decision did not go through — the list has been refreshed.");
           router.refresh();
         } finally {
           inFlight.current.delete(id);
@@ -136,7 +148,28 @@ export function InboxClient({ actions, findings }: { actions: Action[]; findings
   const selected = items[Math.min(sel, items.length - 1)];
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] gap-4">
+    <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
+      {notice ? (
+        // A decision that did not land. Kept visible until dismissed: the row it refers to is
+        // already gone, so this is the only place the customer can learn the fix did not apply.
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <div className="font-medium text-ink">That approval did not complete</div>
+            <p className="mt-0.5 break-words text-muted">{notice}</p>
+            <p className="mt-1 text-xs text-muted">
+              Nothing was applied. The action is recorded with this reason — see Activity for the full trail.
+            </p>
+          </div>
+          <button
+            onClick={() => setNotice(null)}
+            className="shrink-0 rounded px-2 py-0.5 text-xs text-muted transition hover:text-ink"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+      <div className="flex min-h-0 flex-1 gap-4">
       {/* List */}
       <div className="w-80 shrink-0 overflow-y-auto pr-1">
         <ul className="space-y-1.5">
@@ -178,6 +211,7 @@ export function InboxClient({ actions, findings }: { actions: Action[]; findings
       {/* Detail */}
       <div className="card flex min-w-0 flex-1 flex-col p-0 animate-fade-rise">
         {selected && <DetailPane action={selected} finding={findings[selected.finding_id]} pending={pending} onDecide={decide} />}
+      </div>
       </div>
     </div>
   );
@@ -223,6 +257,21 @@ function DetailPane({
         <div className="border-b border-critical/20 bg-critical/5 px-5 py-2.5 text-xs text-critical">
           Irreversible / legal action. The agent prepared this draft — it cannot send it. Review and edit it,
           then sign to file it; reject to discard. Nothing is sent until a person signs.
+        </div>
+      )}
+
+      {/* A known blocker, surfaced BEFORE the decision. Approving this would record the verdict but
+          change nothing, so say it while the choice is still open rather than after the click. */}
+      {action.apply_blocked && (
+        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/5 px-5 py-2.5 text-xs">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <div className="min-w-0">
+            <span className="font-medium text-ink">Approving this will not apply it yet.</span>{" "}
+            <span className="text-muted">{action.apply_blocked}</span>
+            <div className="mt-0.5 text-muted">
+              Your approval is still recorded — but connect the write path first if you want the fix to land.
+            </div>
+          </div>
         </div>
       )}
 

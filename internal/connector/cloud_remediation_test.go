@@ -124,3 +124,100 @@ func TestAzure_Apply_UsesPerTenantWriterWhenEnabled(t *testing.T) {
 		t.Errorf("per-tenant Azure writer not used correctly: called=%d %+v", called, perTenant)
 	}
 }
+
+// The load-bearing property: Preflight and Apply must never disagree. A preflight the customer
+// trusts, followed by an apply that fails anyway, would be worse than no preflight at all — so
+// whenever Preflight reports a blocker, Apply must also refuse; and when Preflight is clear, Apply
+// must not fail for a reason Preflight could have known.
+func TestAWSPreflightAndApplyAgree(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name    string
+		conn    platform.Connection
+		act     platform.Action
+		blocked bool
+	}{
+		{
+			name:    "no write path configured",
+			conn:    platform.Connection{ID: "c1", Kind: platform.ConnAWS},
+			act:     platform.Action{ID: "a1", Kind: platform.ActApplyConfig, Payload: map[string]any{"remediation_type": "s3_block_public_access", "target": "arn:aws:s3:::bucket-x"}},
+			blocked: true,
+		},
+		{
+			name:    "no remediation_type",
+			conn:    platform.Connection{ID: "c1", Kind: platform.ConnAWS},
+			act:     platform.Action{ID: "a2", Kind: platform.ActApplyConfig, Payload: map[string]any{}},
+			blocked: true,
+		},
+		{
+			name:    "remediation type with no live path",
+			conn:    platform.Connection{ID: "c1", Kind: platform.ConnAWS},
+			act:     platform.Action{ID: "a3", Kind: platform.ActApplyConfig, Payload: map[string]any{"remediation_type": "iam_restrict", "target": "role/x"}},
+			blocked: true,
+		},
+		{
+			name:    "missing target bucket",
+			conn:    platform.Connection{ID: "c1", Kind: platform.ConnAWS},
+			act:     platform.Action{ID: "a4", Kind: platform.ActApplyConfig, Payload: map[string]any{"remediation_type": "s3_block_public_access"}},
+			blocked: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &AWS{} // no Writer, no WriterForConfig → no live write path
+			pre := a.Preflight(tc.conn, tc.act)
+			app := a.Apply(ctx, tc.conn, "", tc.act)
+			if tc.blocked {
+				if pre == nil {
+					t.Error("Preflight reported NO blocker — the console would invite an approval that cannot land")
+				}
+				if app == nil {
+					t.Error("Apply succeeded despite a known blocker")
+				}
+			}
+			// The agreement property itself: a clear preflight must not be followed by a failure
+			// Preflight could have predicted, and vice versa.
+			if (pre == nil) != (app == nil) {
+				t.Errorf("Preflight and Apply disagree: preflight=%v apply=%v", pre, app)
+			}
+		})
+	}
+}
+
+// A configured write path must NOT be reported as blocked — otherwise the warning becomes noise
+// that customers learn to ignore.
+func TestAWSPreflightClearWhenWriterConfigured(t *testing.T) {
+	a := &AWS{Writer: &fakeS3Writer{}}
+	conn := platform.Connection{ID: "c1", Kind: platform.ConnAWS}
+	act := platform.Action{ID: "a1", Kind: platform.ActApplyConfig,
+		Payload: map[string]any{"remediation_type": "s3_block_public_access", "target": "arn:aws:s3:::bucket-x"}}
+	if err := a.Preflight(conn, act); err != nil {
+		t.Fatalf("a configured write path reported a blocker: %v", err)
+	}
+	if err := a.Apply(context.Background(), conn, "", act); err != nil {
+		t.Fatalf("apply failed though preflight was clear: %v", err)
+	}
+}
+
+// The per-tenant writer factory must be invoked ONCE per apply. Preflight and Apply each need the
+// writer, and the naive "Apply calls Preflight" split built it twice — for a real SDK factory that
+// means constructing two clients (and two credential chains) on every remediation.
+func TestPreflightDoesNotDoubleBuildTheWriter(t *testing.T) {
+	ctx := context.Background()
+	conn := platform.Connection{ID: "c1", Config: map[string]string{
+		platform.CfgRemediationEnabled: "true",
+		platform.CfgRemediationRole:    "arn:aws:iam::111122223333:role/w",
+		platform.CfgRemediationRegion:  "us-east-1",
+	}}
+	built := 0
+	a := &AWS{WriterForConfig: func(string, string) AWSWriter { built++; return &fakeS3Writer{} }}
+	act := platform.Action{ID: "a1", Kind: platform.ActApplyConfig,
+		Payload: map[string]any{"remediation_type": "s3_block_public_access", "target": "arn:aws:s3:::b"}}
+
+	if err := a.Apply(ctx, conn, "", act); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if built != 1 {
+		t.Errorf("writer factory invoked %d times during one apply, want 1", built)
+	}
+}

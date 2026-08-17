@@ -5,10 +5,22 @@ import { api } from "@/lib/api";
 
 // The approval decision goes through the SAME gated desk the Go API/Slack use — tier rules
 // + the signed ledger still apply. This Server Action is just a typed client of that gate.
-export async function decideAction(id: string, approve: boolean) {
-  await api.decide(id, approve, "console-operator");
-  revalidatePath("/inbox");
-  revalidatePath("/dashboard"); // refresh the Overview "needs you" + the sidebar badge
+//
+// It RETURNS the failure reason rather than throwing it away. Approving is the moment the customer
+// believes the fix happened, and an apply can fail for a reason they need — most often "no live
+// write path configured for this connector". The desk records that honestly (status stays approved,
+// delivery_error set), but the action also LEAVES the pending queue, so a swallowed error looks
+// exactly like success: the row disappears and nothing was fixed.
+export async function decideAction(id: string, approve: boolean): Promise<{ error?: string }> {
+  try {
+    await api.decide(id, approve, "console-operator");
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "The decision could not be completed." };
+  } finally {
+    revalidatePath("/inbox");
+    revalidatePath("/dashboard"); // refresh the Overview "needs you" + the sidebar badge
+  }
+  return {};
 }
 
 // requestChangesAction is the third verdict — send it back rather than kill it.

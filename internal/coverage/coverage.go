@@ -35,6 +35,45 @@ var Toolset = map[string][]string{
 	"workspace":          {"identity posture (MFA · OAuth grants · email-auth · stale accounts)"},
 }
 
+// ConfigGatedClass is a vulnerability class the anchor pass CANNOT test on its own — it needs an
+// operator-declared configuration (two identities to compare, a login flow to get behind). Until that
+// config exists, the class is not tested, and a scan that reports nothing has not cleared it.
+type ConfigGatedClass struct {
+	Class       string `json:"class"`
+	Reference   string `json:"reference,omitempty"`    // e.g. "OWASP API1"
+	NeedsConfig string `json:"needs_config"`           // the Asset.Meta key that unlocks it
+	ConfigureAt string `json:"configure_at,omitempty"` // the API that sets it
+}
+
+// configGated is the per-type table of classes that require operator configuration. Deliberately
+// conservative: it lists ONLY classes whose gate is a config key readable from Asset.Meta, so the
+// answer is grounded in stored state rather than inferred. Classes gated on something else (an L2
+// agent having run, load generation) are NOT claimed here — an honest short list beats a speculative
+// long one.
+var configGated = map[string][]ConfigGatedClass{
+	"api": {
+		{Class: "Broken object level authorization (BOLA/IDOR)", Reference: "OWASP API1", NeedsConfig: "authz_test", ConfigureAt: "POST /v1/assets/{id}/authz-test"},
+		{Class: "Broken function level authorization (BFLA)", Reference: "OWASP API5", NeedsConfig: "authz_test", ConfigureAt: "POST /v1/assets/{id}/authz-test"},
+		{Class: "Cross-user broken authentication", Reference: "OWASP API2", NeedsConfig: "authz_test", ConfigureAt: "POST /v1/assets/{id}/authz-test"},
+	},
+	"web_application": {
+		{Class: "Everything behind the login (authenticated surface)", NeedsConfig: "login_flow", ConfigureAt: "POST /v1/assets/{id}/login-flow"},
+	},
+}
+
+// untestedClasses returns the config-gated classes this asset has NOT unlocked. Grounded (§10): a class
+// is listed only when its config key is genuinely absent from the asset's stored Meta — a configured
+// asset reports nothing here, so the list shrinks as the customer configures, never as a default.
+func untestedClasses(a platform.Asset) []ConfigGatedClass {
+	var out []ConfigGatedClass
+	for _, c := range configGated[a.Type] {
+		if strings.TrimSpace(a.Meta[c.NeedsConfig]) == "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // AssetCoverage is the per-asset "what was tested" statement.
 type AssetCoverage struct {
 	AssetID       string    `json:"asset_id"`
@@ -63,6 +102,15 @@ type AssetCoverage struct {
 	// ExecutionConfirmed is true.
 	ToolsFailed   []types.ToolFailure `json:"tools_failed,omitempty"`
 	FindingsCount int                 `json:"findings_count"`
+	// UntestedClasses names the vulnerability classes this asset's scan CANNOT reach without an
+	// operator-declared config that is currently absent. It exists because "we ran the tools and
+	// found nothing" reads as "you are clean", and for an API that is the wrong conclusion: BOLA,
+	// BFLA and cross-user auth (the top OWASP API risks) are business-logic classes no anchor tool
+	// can test without two declared identities to compare. Reporting zero findings while silently
+	// skipping them is the asset-level form of the "Clear on unscanned scope" overclaim — the engine
+	// is honest about it (the fixtures record these as NOT COVERED), so the customer-facing surface
+	// must be too.
+	UntestedClasses []ConfigGatedClass `json:"untested_classes,omitempty"`
 }
 
 // Summary rolls up coverage across the portfolio for a headline ("N of M assets scanned").
@@ -91,7 +139,7 @@ func Compute(assets []platform.Asset, findings []types.Finding, engagements []pl
 
 	out := Summary{TotalAssets: len(assets)}
 	for _, a := range assets {
-		cov := AssetCoverage{AssetID: a.ID, Target: a.Target, Type: a.Type, RunsTools: Toolset[a.Type]}
+		cov := AssetCoverage{AssetID: a.ID, Target: a.Target, Type: a.Type, RunsTools: Toolset[a.Type], UntestedClasses: untestedClasses(a)}
 		if cov.RunsTools == nil {
 			cov.RunsTools = []string{} // honest empty, not null (an asset type with no declared anchors)
 		}

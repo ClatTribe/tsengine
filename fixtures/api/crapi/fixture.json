@@ -1,0 +1,32 @@
+{
+  "name": "api-crapi",
+  "asset": "api",
+  "target": "http://host.docker.internal:8888/",
+  "description": "OWASP crAPI — the OWASP-governed vulnerable API. Ground truth is OWASP's OWN published vulnerability list (13 flaws across 6 OWASP API Top 10 categories), not a list we wrote. crAPI's flaws are modelled on real bugs disclosed at Facebook, Uber and Shopify, which makes it a stronger external target than a fixture we author. Deploy: curl the compose from OWASP/crAPI and `docker compose up -d`; web on :8888.",
+  "metric": "must_find_recall",
+  "must_find": [
+    "ssrf"
+  ],
+  "pass_recall": 1.0,
+  "competitors": {
+    "leaderboard": "",
+    "note": "No neutral API-security leaderboard exists (unlike WAVSEP/OWASP-Benchmark). crAPI and VAmPI are the OWASP-recognised reference targets; the OWASP API Security Testing Framework validates against crAPI, VAmPI and DVGA, so they are the de-facto community bar."
+  },
+  "ground_truth_note": "must_find carries only what an L1 anchor scan can surface unaided, because a fixture that can never pass is a permanently-red gate rather than a measurement. The full 13 are recorded below as the honest denominator — the gap between must_find and documented_vulnerabilities is the backlog, not something defined away.",
+  "documented_vulnerabilities": [
+    { "owasp": "API1 BOLA", "flaw": "Unauthorized access to another user's vehicle details", "covered_by": "bola_probe / apiauthz — needs two declared identities (operator TestConfig)" },
+    { "owasp": "API1 BOLA", "flaw": "Unauthorized access to mechanic reports", "covered_by": "bola_probe / apiauthz — operator TestConfig" },
+    { "owasp": "API2 Broken authentication", "flaw": "Password reset of another user", "covered_by": "apiauthz — operator TestConfig" },
+    { "owasp": "API3 Excessive data exposure", "flaw": "Sensitive user information leaked in a response", "covered_by": "NOT COVERED — no L1 detector for over-broad response bodies" },
+    { "owasp": "API3 Excessive data exposure", "flaw": "Internal video properties leaked", "covered_by": "NOT COVERED — same class" },
+    { "owasp": "API4 Rate limiting", "flaw": "Denial of service via contact-mechanic", "covered_by": "NOT COVERED — needs load generation, not pattern matching" },
+    { "owasp": "API5 BFLA", "flaw": "Deleting another user's video via the admin endpoint", "covered_by": "apiauthz BFLA — operator-declared privileged operations" },
+    { "owasp": "API6 Mass assignment", "flaw": "Unauthorized order refund", "covered_by": "privesc_probe — L2 agent tool" },
+    { "owasp": "API6 Mass assignment", "flaw": "Unauthorized balance increase", "covered_by": "privesc_probe — L2 agent tool" },
+    { "owasp": "API6 Mass assignment", "flaw": "Unauthorized modification of video properties", "covered_by": "privesc_probe — L2 agent tool" },
+    { "owasp": "API7 SSRF", "flaw": "HTTP call forwarding in the mechanic service", "covered_by": "nuclei ssrf tag + DAST/OAST escalation — L1 anchor" },
+    { "owasp": "API8 Injection", "flaw": "Coupon code bypass via NoSQL injection", "covered_by": "PARTIAL — the api nuclei tag set carries sqli/injection, but NoSQL injection is a distinct payload family" },
+    { "owasp": "undisclosed", "flaw": "Two vulnerabilities OWASP deliberately does not document", "covered_by": "unknown by construction — excluded from any recall denominator" }
+  ],
+  "runnable": true
+}

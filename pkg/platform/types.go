@@ -59,6 +59,13 @@ type Tenant struct {
 	// PRBot is the per-tenant policy for the repository PR-review bot (ADR 0010). nil = the
 	// default (disabled). The live GitHub post is separately gated on the GitHub App PR scope.
 	PRBot *PRBotPolicy `json:"pr_bot,omitempty"`
+	// PostureAssessed records when each snapshot-driven posture source (tprm, deviceposture,
+	// clouddrift) last ran, keyed by its tool tag. It exists because those assessors are grounded —
+	// a well-managed estate yields ZERO findings — which makes "assessed and clean" and "never
+	// ingested" byte-identical in the findings store. Without this stamp the UI cannot tell them
+	// apart, and it showed the reassuring reading ("this posture source is clean") for both. An
+	// entry appears only after a real ingest, so ABSENCE means not-assessed, never clean (§10).
+	PostureAssessed map[string]time.Time `json:"posture_assessed,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
@@ -651,6 +658,15 @@ type Action struct {
 	DeliveryError string    `json:"delivery_error,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 	DecidedAt     time.Time `json:"decided_at,omitempty"`
+	// ApplyBlocked is a KNOWN reason this action could not be applied if approved right now —
+	// computed at READ time from the connector's Preflight (never persisted, like Incident's
+	// SLABreach). It exists so the console can warn the human BEFORE they approve, rather than
+	// letting them approve a remediation that is structurally incapable of running and only
+	// learning after the click.
+	//
+	// Empty means "no known blocker", NOT "guaranteed to work": a connector may not implement
+	// Preflight at all, and the provider can still deny the call (§10).
+	ApplyBlocked string `json:"apply_blocked,omitempty"`
 }
 
 // FixVerification records whether an APPLIED remediation actually closed the findings it claimed
@@ -750,6 +766,18 @@ type Incident struct {
 	// the opening finding carried no quality signal.
 	Verification string  `json:"verification,omitempty"`
 	Confidence   float64 `json:"confidence,omitempty"`
+	// AbsentPasses counts CONSECUTIVE authoritative scans in which this incident's issue did not
+	// appear. Reset to 0 the moment it reappears.
+	//
+	// Resolving on a single absence assumes a scan that does not report a finding proves it is gone.
+	// Measured against WAVSEP: dalfox on the same unchanged target found 7 distinct vulnerable cases
+	// in one run and 9 in the next — and it SUCCEEDED both times, so nothing was recorded as failed.
+	// Four cases flipped between runs. On a single-absence rule each flip resolves a live
+	// vulnerability as fixed and reopens it next pass, forever.
+	//
+	// Distinct from the degraded-pass guard: that covers tools which DIE (Scan.ToolsFailed). This
+	// covers tools that finish and simply report different things, which no failure signal catches.
+	AbsentPasses int `json:"absent_passes,omitempty"`
 	// Attacked marks an incident opened/escalated because the issue is observed under
 	// attack in production (a runtime-protection signal, ADR-0007 Phase 0b) — escalated
 	// regardless of the severity floor, since a live exploit attempt is itself urgent.

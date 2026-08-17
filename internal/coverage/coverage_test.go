@@ -1,6 +1,7 @@
 package coverage
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -159,5 +160,61 @@ func TestCompute_NoReportStaysUnknownNotEmpty(t *testing.T) {
 	}
 	if len(got.RunsTools) == 0 {
 		t.Error("with no report, coverage must still show the DECLARED toolset rather than nothing")
+	}
+}
+
+// A scanned API that surfaced zero findings must NOT read as "clean": BOLA/BFLA/cross-user auth are
+// business-logic classes the anchor pass cannot test without two declared identities. This is the
+// asset-level form of the "Clear on unscanned scope" overclaim — the fixtures already record these as
+// NOT COVERED, so the customer-facing coverage must say so too.
+func TestUntestedClasses_ZeroFindingApiDoesNotReadAsClean(t *testing.T) {
+	now := time.Now()
+	assets := []platform.Asset{{ID: "a1", Type: "api", Target: "https://api.example.com"}}
+	engs := []platform.Engagement{{AssetID: "a1", CompletedAt: now, ToolsRan: []string{"nuclei"}}}
+
+	got := Compute(assets, nil, engs) // zero findings — the "you're clean" case
+	if len(got.Assets) != 1 {
+		t.Fatalf("want 1 asset, got %d", len(got.Assets))
+	}
+	cov := got.Assets[0]
+	if !cov.Scanned || cov.FindingsCount != 0 {
+		t.Fatalf("precondition: want a scanned asset with 0 findings, got scanned=%v n=%d", cov.Scanned, cov.FindingsCount)
+	}
+	if len(cov.UntestedClasses) == 0 {
+		t.Fatal("a zero-finding API with no authz_test config reported NO untested classes — it reads as 'clean' while BOLA/BFLA were never tested")
+	}
+	var haveBOLA bool
+	for _, c := range cov.UntestedClasses {
+		if c.NeedsConfig == "" {
+			t.Errorf("untested class %q names no config key, so the customer cannot act on it", c.Class)
+		}
+		if strings.Contains(c.Class, "BOLA") {
+			haveBOLA = true
+		}
+	}
+	if !haveBOLA {
+		t.Errorf("BOLA (OWASP API1, the top API risk) missing from untested classes: %+v", cov.UntestedClasses)
+	}
+}
+
+// The list must shrink as the customer configures — it is grounded in stored state, not a constant
+// disclaimer. A configured asset claims no gap.
+func TestUntestedClasses_ConfiguredAssetReportsNoGap(t *testing.T) {
+	assets := []platform.Asset{{
+		ID: "a1", Type: "api", Target: "https://api.example.com",
+		Meta: map[string]string{"authz_test": "sealed:ref-123"},
+	}}
+	got := Compute(assets, nil, nil)
+	if n := len(got.Assets[0].UntestedClasses); n != 0 {
+		t.Fatalf("configured asset still reports %d untested classes: %+v", n, got.Assets[0].UntestedClasses)
+	}
+}
+
+// A web app with no login flow is only tested unauthenticated — the FN guard webauth exists for.
+func TestUntestedClasses_WebWithoutLoginFlow(t *testing.T) {
+	assets := []platform.Asset{{ID: "w1", Type: "web_application", Target: "https://app.example.com"}}
+	got := Compute(assets, nil, nil)
+	if len(got.Assets[0].UntestedClasses) == 0 {
+		t.Fatal("web asset with no login_flow reported no untested classes — the authenticated surface was never scanned")
 	}
 }

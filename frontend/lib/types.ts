@@ -100,6 +100,11 @@ export interface AttackPath {
 export interface AttackPaths {
   attack_paths: AttackPath[];
   count: number;
+  // The basis the correlation ran over. Zero paths is only good news if there was something to
+  // correlate — a chain is built FROM findings, so an unscanned estate yields zero just like a
+  // secure one. Optional so an older API response still parses.
+  correlated_findings?: number;
+  assets_considered?: number;
 }
 
 // Unified issue (GET /v1/issues) — the same weakness reported by one or more
@@ -291,6 +296,10 @@ export interface Action {
   // "approved" so it is not lost, which also makes it look identical to one merely waiting — this is
   // what tells the two apart.
   delivery_error?: string;
+  // A KNOWN reason this action could not be applied if approved right now (read-time preflight,
+  // never persisted). Shown BEFORE the decision so nobody approves a fix that cannot land. Absent
+  // means "no known blocker", not "guaranteed to work".
+  apply_blocked?: string;
   created_at?: string;
   decided_at?: string; // when the approve/reject verdict landed
   // diff is the unified diff this action would apply, rendered for a human to READ. Without it a
@@ -336,6 +345,15 @@ export interface AssetCoverage {
   runs_tools: string[]; // the tools every scan of this type runs
   tools_with_findings: string[]; // which surfaced a finding (the rest ran clean)
   findings_count: number;
+  // Classes this asset's scan cannot reach without an operator-declared config that is absent.
+  // Present so "no findings" is never read as "nothing to find" — BOLA/BFLA need two identities.
+  untested_classes?: ConfigGatedClass[];
+}
+export interface ConfigGatedClass {
+  class: string;
+  reference?: string;
+  needs_config: string;
+  configure_at?: string;
 }
 export interface CoverageSummary {
   assets: AssetCoverage[];

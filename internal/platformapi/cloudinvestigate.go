@@ -2,6 +2,8 @@ package platformapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -127,11 +129,37 @@ func (d Deps) handleCloudInvestigationView(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+// cloudPathRuleID makes each distinct ROUTE its own finding identity.
+//
+// detect.Key is RuleID|Endpoint, and the endpoint here is the crown jewel the path ends at. With a
+// constant rule id, two DIFFERENT proven routes to the SAME crown jewel — say an exposed EC2 role and
+// a separate leaked key, both reaching the same bucket — collapsed to one key, so the second silently
+// masked the first in incidents and unified issues. That is the exact failure the CODE path already
+// guards against by folding the assessed finding id into its rule id ("otherwise the second would mask
+// the first ... silently dropping a confirmed-exploitable vuln"); the cloud path needed the same.
+//
+// The route itself is the stable discriminator: every node is a real graph id validated by
+// validatePath, so the same route digests identically on every run (no churn), while a genuinely
+// different route gets its own key and its own incident. The agent's own issue counter (ai-001) would
+// NOT do — it is per-run sequential, so it would change identity on every scan.
+func cloudPathRuleID(path []string) string {
+	if len(path) == 0 {
+		return "cloudagent::attack-path"
+	}
+	sum := sha256.Sum256([]byte(strings.Join(path, ">")))
+	return "cloudagent::attack-path::" + hex.EncodeToString(sum[:])[:12]
+}
+
 // cloudIssueToFinding maps an agent-proven attack path to a stored finding (verified — the agent only
 // records paths it confirmed via the graph tools, §10).
 func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
+	// The agent's PATH is grounded (validatePath proves every edge and a crown-jewel endpoint), but
+	// its severity is free text the model chose. An unrecognised value ("P1", "moderate") ranks 0 —
+	// BELOW info — so it would sort under every informational note AND fall under detect's threshold,
+	// silently opening no incident. A proven path to a crown jewel must never be silenced by a
+	// spelling. Not Valid() gets the same conservative default as empty.
 	sev := types.Severity(strings.ToLower(strings.TrimSpace(is.Severity)))
-	if sev == "" {
+	if !sev.Valid() {
 		sev = types.SeverityHigh
 	}
 	desc := is.Rationale
@@ -146,7 +174,7 @@ func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
 		title = is.Target
 	}
 	return types.Finding{
-		ID: id, RuleID: "cloudagent::attack-path", Tool: "cloudagent", Severity: sev,
+		ID: id, RuleID: cloudPathRuleID(is.Path), Tool: "cloudagent", Severity: sev,
 		Endpoint: is.Target, Title: title + " — reachable attack path", Description: desc,
 		VerificationStatus: types.VerificationVerified, RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
 	}

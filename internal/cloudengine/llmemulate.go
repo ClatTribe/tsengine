@@ -85,8 +85,10 @@ func GenerateEmulated(ctx context.Context, llm LLM, nReal, nDecoy int) (*Emulate
 		acc.Inventory.Provider = "aws"
 	}
 	for _, p := range la.Prowler {
+		// An unrecognised model-supplied severity ranks 0 (below info) and would fall under the
+		// incident threshold — same conservative default as empty.
 		sev := types.Severity(strings.ToLower(p.Severity))
-		if sev == "" {
+		if !sev.Valid() {
 			sev = types.SeverityHigh
 		}
 		acc.Prowler = append(acc.Prowler, types.Finding{

@@ -43,6 +43,21 @@ type Connector interface {
 	Apply(ctx context.Context, c platform.Connection, token string, a platform.Action) error
 }
 
+// Preflighter is an OPTIONAL capability: a connector that can report, without performing the action
+// or making any network call, whether an approved remediation could actually be applied.
+//
+// It exists for the human at the gate. Several remediation types are honest stubs pending a write
+// path, and a live path can also be unconfigured for a given tenant — so a queued action may be
+// structurally incapable of running. Asking someone to approve that, and revealing it only after
+// they click, spends the trust the whole HITL gate depends on.
+//
+// Contract (§10): a non-nil error is a KNOWN blocker, safe to show a customer. nil means "no known
+// blocker" — never a guarantee, since the provider can still deny the call. A connector that does
+// not implement this is simply UNKNOWN, and callers must say nothing rather than imply it will work.
+type Preflighter interface {
+	Preflight(c platform.Connection, a platform.Action) error
+}
+
 // WebhookVerifier authenticates an inbound provider webhook against the shared webhook
 // secret, before any re-scan is triggered (defends the endpoint against spoofed events).
 // Optional capability — a connector that doesn't implement it skips verification.

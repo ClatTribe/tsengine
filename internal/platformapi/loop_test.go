@@ -3,6 +3,7 @@ package platformapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -139,5 +140,142 @@ func TestComplianceReport_UnknownFrameworkIs404(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "\"Framework\":\"bogus\"") {
 		t.Error("must not render a report body for an unknown framework (grounding §10)")
+	}
+}
+
+// failingApplier is the real-world case the UI has to survive: the connector has no live write
+// path, so applying an APPROVED action fails.
+type failingApplier struct{}
+
+func (failingApplier) Apply(context.Context, platform.Action) error {
+	return errNoWritePath
+}
+
+var errNoWritePath = errors.New("aws apply: no live AWS write path configured; action left un-applied")
+
+// Approving a fix that cannot be applied must SAY SO. The desk records it honestly (status stays
+// approved, delivery_error set) but the action also leaves the pending queue — so if the API
+// swallowed the reason, the customer would see exactly what success looks like while nothing was
+// fixed. The console relies on this contract to warn them, so pin it here.
+func TestApprovalDecide_FailedApplyIsReportedNotSwallowed(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutAction(ctx, platform.Action{ID: "act1", TenantID: "t1", Tier: 2, Kind: platform.ActApplyConfig, Status: platform.ActPendingApproval})
+	desk := &hitl.Desk{Store: st, Apply: failingApplier{}}
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Desk: desk, Token: "platform-tok"})
+
+	rec := do(h, "POST", "/v1/approvals/act1", "t1", `{"approver":"analyst","approve":true}`)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("a failed apply returned 200 — the console cannot tell the fix did not happen: %s", rec.Body.String())
+	}
+	var body struct {
+		Error string `json:"error"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if strings.TrimSpace(body.Error) == "" {
+		t.Fatal("failed apply returned no reason — the customer gets a silent non-fix")
+	}
+	if !strings.Contains(body.Error, "write path") {
+		t.Errorf("the reason should reach the caller, got %q", body.Error)
+	}
+
+	// And the record must not claim it was applied.
+	got, err := st.GetAction(ctx, "t1", "act1")
+	if err != nil {
+		t.Fatalf("get action: %v", err)
+	}
+	if got.Status == platform.ActApplied {
+		t.Error("action is marked APPLIED though the apply failed")
+	}
+	if got.DeliveryError == "" {
+		t.Error("action carries no delivery_error, so /activity cannot explain the failure either")
+	}
+}
+
+// awsLike is a connector that implements the optional Preflighter — the shape a real cloud
+// connector has when it can tell, without any network call, that a fix cannot land.
+type awsLike struct{ fakeConn }
+
+func (awsLike) Kind() string { return string(platform.ConnAWS) }
+func (awsLike) Preflight(_ platform.Connection, a platform.Action) error {
+	if a.Payload["remediation_type"] == "s3_block_public_access" {
+		return errNoWritePath
+	}
+	return nil
+}
+
+// The human must learn a fix cannot land BEFORE approving it, not after. The pending-approvals list
+// annotates each queued config-apply with its connector's known blocker.
+func TestApprovals_WarnBeforeApprovingAnUnappliableFix(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: platform.ConnAWS, Status: platform.ConnActive})
+	_ = st.PutAction(ctx, platform.Action{ID: "blocked", TenantID: "t1", ConnectionID: "c1", Tier: 2,
+		Kind: platform.ActApplyConfig, Status: platform.ActPendingApproval,
+		Payload: map[string]any{"remediation_type": "s3_block_public_access", "target": "arn:aws:s3:::b"}})
+	_ = st.PutAction(ctx, platform.Action{ID: "fine", TenantID: "t1", ConnectionID: "c1", Tier: 2,
+		Kind: platform.ActApplyConfig, Status: platform.ActPendingApproval,
+		Payload: map[string]any{"remediation_type": "something_supported"}})
+
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(awsLike{}), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/approvals", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var acts []platform.Action
+	if err := json.Unmarshal(rec.Body.Bytes(), &acts); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	got := map[string]string{}
+	for _, a := range acts {
+		got[a.ID] = a.ApplyBlocked
+	}
+	if got["blocked"] == "" {
+		t.Error("a fix with no live write path shows no warning — the customer approves something that cannot land")
+	}
+	if got["fine"] != "" {
+		t.Errorf("an appliable fix was flagged as blocked (%q) — noise trains people to ignore the warning", got["fine"])
+	}
+	// Nothing is persisted: the annotation is read-time only.
+	stored, _ := st.GetAction(ctx, "t1", "blocked")
+	if stored.ApplyBlocked != "" {
+		t.Error("apply_blocked was persisted; it must be computed at read time so it follows configuration changes")
+	}
+}
+
+// The integration, with the REAL Google Workspace connector rather than a fake: a connection
+// onboarded read-only (the default — every IdP onboards read-only by design) must carry a warning
+// on the queued suspend BEFORE anyone approves it, naming the scope an admin has to grant.
+func TestApprovals_ReadonlyWorkspaceSuspendWarnsWithRealConnector(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutConnection(ctx, platform.Connection{
+		ID: "c1", TenantID: "t1", Kind: platform.ConnGWorkspace, Status: platform.ConnActive,
+		Scopes: []string{"https://www.googleapis.com/auth/admin.directory.user.readonly"},
+	})
+	_ = st.PutAction(ctx, platform.Action{
+		ID: "suspend1", TenantID: "t1", ConnectionID: "c1", Tier: 2,
+		Kind: platform.ActApplyConfig, Status: platform.ActPendingApproval,
+		Payload: map[string]any{"remediation_type": "account_suspend", "target": "leaver@acme.com"},
+	})
+
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(&connector.GWorkspace{}), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/approvals", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var acts []platform.Action
+	if err := json.Unmarshal(rec.Body.Bytes(), &acts); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("want 1 pending action, got %d", len(acts))
+	}
+	blocked := acts[0].ApplyBlocked
+	if blocked == "" {
+		t.Fatal("a read-only Workspace connection produced NO warning — the customer approves a suspend that will 403")
+	}
+	if !strings.Contains(blocked, "admin.directory.user") {
+		t.Errorf("the warning must name the scope to grant so it is actionable, got %q", blocked)
 	}
 }

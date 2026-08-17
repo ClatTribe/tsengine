@@ -5,6 +5,7 @@ import { PageIntro } from "@/components/ui/page-intro";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { CONNECTION_TABS } from "@/lib/tabs";
 import { DatabaseScanPanel } from "@/components/posture/database-scan";
+import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,18 @@ export default async function PosturePage() {
                   </div>
                 </header>
                 {s.count === 0 ? (
-                  <p className="px-5 py-4 text-sm text-muted">No risks found — this posture source is clean.</p>
+                  s.assessed ? (
+                    <p className="px-5 py-4 text-sm text-muted">
+                      Assessed{s.assessed_at ? ` ${timeAgo(s.assessed_at)}` : ""} — no risks found.
+                    </p>
+                  ) : (
+                    // Zero findings here is NOT a clean bill of health: these assessors are grounded, so a
+                    // source that never ran looks exactly like one that ran and found nothing.
+                    <p className="px-5 py-4 text-sm text-muted">
+                      <span className="text-ink">Not assessed yet.</span> Nothing has been ingested for this
+                      source, so there is no result — clean or otherwise.
+                    </p>
+                  )
                 ) : (
                   <ul className="divide-y divide-border">
                     {findings.map((f) => (

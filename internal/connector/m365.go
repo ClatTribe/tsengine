@@ -134,17 +134,36 @@ func (m *M365) Watch(context.Context, platform.Connection, []byte) ([]Trigger, e
 // reversible fix for a stale/over-privileged account. It needs the User.ReadWrite.All WRITE scope —
 // the onboarding scope is read-only by design, so a real disable requires an admin to grant the write
 // scope; until then Graph returns 403 and Apply surfaces it honestly (never falsely "done").
-func (m *M365) Apply(ctx context.Context, _ platform.Connection, token string, a platform.Action) error {
+func (m *M365) Apply(ctx context.Context, c platform.Connection, token string, a platform.Action) error {
+	// ONE source of truth with Preflight (see AWS.Apply).
+	if err := m.Preflight(c, a); err != nil {
+		return fmt.Errorf("m365 apply: %w", err)
+	}
+	rt, _ := a.Payload["remediation_type"].(string)
+	target := strFrom(a.Payload, "target")
+	switch rt {
+	case "account_suspend":
+		return m.disableUser(ctx, token, target)
+	default:
+		// Unreachable — Preflight rejects every remediation_type with no live path.
+		return fmt.Errorf("m365 apply: remediation_type %q has no live write path yet (target %s)", rt, target)
+	}
+}
+
+// Preflight reports whether this action could actually be applied, with no network call, so the
+// console can warn a human BEFORE they approve. M365 onboards read-only, so disabling an account
+// fails until an admin grants User.ReadWrite.All. Grounded (§10): nil = "no known blocker".
+func (m *M365) Preflight(c platform.Connection, a platform.Action) error {
 	rt, _ := a.Payload["remediation_type"].(string)
 	target := strFrom(a.Payload, "target")
 	switch rt {
 	case "account_suspend":
 		if strings.TrimSpace(target) == "" {
-			return fmt.Errorf("m365 apply: action %s has no target user", a.ID)
+			return fmt.Errorf("action %s has no target user", a.ID)
 		}
-		return m.disableUser(ctx, token, target)
+		return missingWriteScope(c, m365WriteScope, "disabling "+target)
 	default:
-		return fmt.Errorf("m365 apply: remediation_type %q has no live write path yet (target %s)", rt, target)
+		return fmt.Errorf("remediation_type %q has no live write path yet (target %s)", rt, target)
 	}
 }
 

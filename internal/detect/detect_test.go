@@ -95,10 +95,16 @@ func TestReconcile_ResolvesWhenIssueGone(t *testing.T) {
 	fs := []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}
 
 	_, _ = d.Reconcile(ctx, "t1", fs, nil)
-	// next pass: the issue is fixed → no findings
+	// The issue is fixed. Resolution now requires the absence to PERSIST — a scanner that has a
+	// quiet run must not be read as "remediated" (see the hysteresis note in Reconcile), so one
+	// absent pass holds and the second resolves.
+	held, _ := d.Reconcile(ctx, "t1", nil, nil)
+	if len(held.Resolved) != 0 {
+		t.Fatalf("a single absent pass must NOT resolve — that is the flaky-scanner case, got %+v", held)
+	}
 	res, _ := d.Reconcile(ctx, "t1", nil, nil)
 	if len(res.Resolved) != 1 {
-		t.Fatalf("a disappeared issue should resolve its incident, got %+v", res)
+		t.Fatalf("a SUSTAINED absence should resolve its incident, got %+v", res)
 	}
 	if len(openIncidents(t, st, "t1")) != 0 {
 		t.Error("no incident should remain open after the issue is fixed")
@@ -112,7 +118,8 @@ func TestReconcile_ReopensAfterRegression(t *testing.T) {
 	fs := []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}
 
 	_, _ = d.Reconcile(ctx, "t1", fs, nil)    // open
-	_, _ = d.Reconcile(ctx, "t1", nil, nil)   // resolve
+	_, _ = d.Reconcile(ctx, "t1", nil, nil)   // absent once — held, not resolved
+	_, _ = d.Reconcile(ctx, "t1", nil, nil)   // absent twice — resolved
 	res, _ := d.Reconcile(ctx, "t1", fs, nil) // regression → a NEW incident
 	if len(res.Opened) != 1 {
 		t.Fatalf("a regression should open a fresh incident, got %+v", res)
@@ -306,7 +313,12 @@ func TestReconcile_MaintenanceSuppressesOpensNotResolves(t *testing.T) {
 
 	// But an EXISTING open incident must still resolve when its issue disappears, even in maintenance.
 	_ = st.PutIncident(ctx, platform.Incident{ID: "inc-1", TenantID: "t1", Key: "rule::y|b.com", Status: platform.IncidentOpen})
-	res2, err := d.Reconcile(ctx, "t1", []types.Finding{}, nil) // issue gone
+	// Absence must persist across two passes before it resolves (hysteresis) — the point being
+	// tested here is that MAINTENANCE does not block resolution, not how many passes it takes.
+	if _, err := d.Reconcile(ctx, "t1", []types.Finding{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	res2, err := d.Reconcile(ctx, "t1", []types.Finding{}, nil) // issue gone, sustained
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,5 +406,66 @@ func TestAlertCap_BoundsPagingButOpensAll(t *testing.T) {
 	}
 	if ca.n != 5 {
 		t.Fatalf("paging must be capped at AlertCap=5, got %d pages", ca.n)
+	}
+}
+
+// TestReconcile_FlappingScannerNeverResolvesALiveVuln is the case this hysteresis exists for.
+//
+// Measured against WAVSEP: dalfox on the same unchanged target found 7 distinct vulnerable cases in
+// one run and 9 in the next, SUCCEEDING both times — so nothing landed in Scan.ToolsFailed and the
+// degraded-pass guard never fired. Four cases flipped between runs.
+//
+// A scanner that alternates found/missed on a live vulnerability must never produce "resolved".
+func TestReconcile_FlappingScannerNeverResolvesALiveVuln(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := newDetector(st)
+	fs := []types.Finding{crit("dalfox::xss", "https://app/p.jsp?q")}
+
+	_, _ = d.Reconcile(ctx, "t1", fs, nil) // found
+	for i := 0; i < 4; i++ {
+		miss, _ := d.Reconcile(ctx, "t1", nil, nil) // flaky miss
+		if len(miss.Resolved) != 0 {
+			t.Fatalf("pass %d: a single flaky miss resolved a live vulnerability", i)
+		}
+		hit, _ := d.Reconcile(ctx, "t1", fs, nil) // found again
+		if len(hit.Opened) != 0 {
+			t.Fatalf("pass %d: the incident was still open, so nothing new should open", i)
+		}
+	}
+	if n := len(openIncidents(t, st, "t1")); n != 1 {
+		t.Errorf("the vulnerability was live throughout: want exactly 1 open incident, got %d", n)
+	}
+}
+
+// A reappearance must RESET the streak, or a vulnerability seen on alternating passes eventually
+// accumulates enough absences to resolve while still being live.
+func TestReconcile_ReappearanceResetsTheAbsenceStreak(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := &Detector{Store: st, NewID: newDetector(st).NewID, ResolveAfterAbsent: 3}
+	fs := []types.Finding{crit("dalfox::xss", "https://app/p.jsp?q")}
+
+	_, _ = d.Reconcile(ctx, "t1", fs, nil)
+	_, _ = d.Reconcile(ctx, "t1", nil, nil) // absent 1
+	_, _ = d.Reconcile(ctx, "t1", nil, nil) // absent 2
+	_, _ = d.Reconcile(ctx, "t1", fs, nil)  // REAPPEARS → streak must reset
+	_, _ = d.Reconcile(ctx, "t1", nil, nil) // absent 1 again
+	res, _ := d.Reconcile(ctx, "t1", nil, nil)
+	if len(res.Resolved) != 0 {
+		t.Error("the streak did not reset on reappearance: 2 absences resolved under a threshold of 3")
+	}
+}
+
+// The threshold stays configurable, and 1 restores the historical resolve-on-first-absence.
+func TestReconcile_ResolveAfterAbsentIsConfigurable(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	d := &Detector{Store: st, NewID: newDetector(st).NewID, ResolveAfterAbsent: 1}
+	fs := []types.Finding{crit("operate::admin-without-mfa", "ceo@acme.com")}
+
+	_, _ = d.Reconcile(ctx, "t1", fs, nil)
+	if res, _ := d.Reconcile(ctx, "t1", nil, nil); len(res.Resolved) != 1 {
+		t.Error("ResolveAfterAbsent:1 must resolve on the first absence")
 	}
 }

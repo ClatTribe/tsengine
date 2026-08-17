@@ -43,3 +43,44 @@ func TestPlanEscalation_NoSpecNoKiterunner(t *testing.T) {
 		t.Errorf("no signals → no escalation, got %d", len(out))
 	}
 }
+
+// TestPlanEscalation_EmptySurfaceTriggersRouteDiscovery pins the gap OWASP crAPI exposed.
+//
+// kiterunner's job is finding routes, and it fired only when a spec had ALREADY been ingested — so
+// an API with no discoverable spec got no route discovery, and therefore no surface, and therefore
+// almost no scan. Measured: crAPI (no spec at /openapi.json, /swagger.json, /api-docs, /v3/api-docs)
+// produced ONE finding, where VAmPI (publishes /openapi.json) produced 11-12 and detected SQLi.
+//
+// Most real APIs look like crAPI. The self-authored VAmPI fixture hid this because it happened to
+// pick a spec-publishing target.
+func TestPlanEscalation_EmptySurfaceTriggersRouteDiscovery(t *testing.T) {
+	h := NewHandler()
+	target := types.Asset{Type: types.AssetAPI, Target: "https://api.x"}
+	// Recon found nothing callable — only the bare target itself.
+	out := h.PlanEscalation(target, []string{"https://api.x"}, nil)
+
+	var kite int
+	for _, d := range out {
+		if d.Tool.Name() == "kiterunner" {
+			kite++
+		}
+	}
+	if kite != 1 {
+		t.Fatalf("an empty surface must trigger route discovery, got %d kiterunner dispatches.\n"+
+			"Without it an API with no published spec is never scanned at all.", kite)
+	}
+}
+
+// The escalation invariant (§5.3) still holds: this is gated on a SPECIFIC state, not fired blanket.
+// An API whose operations were discovered some other way already has a surface and must not pay for
+// brute-forcing.
+func TestPlanEscalation_KnownOperationsSkipRouteDiscovery(t *testing.T) {
+	h := NewHandler()
+	target := types.Asset{Type: types.AssetAPI, Target: "https://api.x"}
+	out := h.PlanEscalation(target, []string{"GET https://api.x/users", "POST https://api.x/orders"}, nil)
+	for _, d := range out {
+		if d.Tool.Name() == "kiterunner" {
+			t.Error("routes are already known — brute-forcing them is the blanket firing §5.3 forbids")
+		}
+	}
+}

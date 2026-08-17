@@ -130,17 +130,36 @@ func (o *Okta) Watch(context.Context, platform.Connection, []byte) ([]Trigger, e
 // that surfaces as an error (the action stays un-applied, never falsely "done").
 // The HTTP client is injectable (o.HTTP), so the write path is tested against a
 // fake org without live admin creds.
-func (o *Okta) Apply(ctx context.Context, _ platform.Connection, token string, a platform.Action) error {
+func (o *Okta) Apply(ctx context.Context, c platform.Connection, token string, a platform.Action) error {
+	// ONE source of truth with Preflight (see AWS.Apply).
+	if err := o.Preflight(c, a); err != nil {
+		return fmt.Errorf("okta apply: %w", err)
+	}
 	rt, _ := a.Payload["remediation_type"].(string)
 	target, _ := a.Payload["target"].(string)
-	if strings.TrimSpace(target) == "" {
-		return fmt.Errorf("okta apply: action %s has no target", a.ID)
-	}
 	switch rt {
 	case "account_suspend":
 		return o.lifecycle(ctx, token, target, "suspend")
 	default:
+		// Unreachable — Preflight rejects every remediation_type with no live path.
 		return fmt.Errorf("okta apply: remediation_type %q has no live write path yet (target %s)", rt, target)
+	}
+}
+
+// Preflight reports whether this action could actually be applied, with no network call, so the
+// console can warn a human BEFORE they approve. Okta onboards with read-only scopes, so a suspend
+// fails until an admin grants okta.users.manage. Grounded (§10): nil = "no known blocker".
+func (o *Okta) Preflight(c platform.Connection, a platform.Action) error {
+	rt, _ := a.Payload["remediation_type"].(string)
+	target, _ := a.Payload["target"].(string)
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf("action %s has no target", a.ID)
+	}
+	switch rt {
+	case "account_suspend":
+		return missingWriteScope(c, oktaWriteScope, "suspending "+target)
+	default:
+		return fmt.Errorf("remediation_type %q has no live write path yet (target %s)", rt, target)
 	}
 }
 

@@ -85,8 +85,13 @@ type Detector struct {
 	// triage — but pages the human at most AlertCap times so a mid-size org isn't hit by an alert
 	// storm. 0 = unlimited (back-compat / tests). The incidents beyond the cap open silently.
 	AlertCap int
-	Now      func() time.Time
-	NewID    func() string
+	// ResolveAfterAbsent is how many CONSECUTIVE authoritative passes must miss an issue before its
+	// incident resolves. Default 2 — one absence is not evidence of a fix when the scanner itself is
+	// non-deterministic (see the hysteresis note in Reconcile). Set 1 to restore resolve-on-first-
+	// absence; 0 uses the default.
+	ResolveAfterAbsent int
+	Now                func() time.Time
+	NewID              func() string
 	// Suppressed reports whether alerting is suppressed for a tenant at a moment (a maintenance
 	// window is active). When true, Reconcile opens NO new incidents and EscalateOverdue pages no
 	// one — but resolves still flow. Optional: nil → never suppressed (today's behaviour).
@@ -128,8 +133,36 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 	// falsely resolve a scan incident whose key they don't carry.
 	for key, inc := range openByKey {
 		if _, still := present[key]; still {
+			// Reappeared: any absence streak is over. Persist the reset so a later gap starts
+			// counting from zero rather than inheriting a stale count.
+			if inc.AbsentPasses != 0 {
+				inc.AbsentPasses = 0
+				if err := d.Store.PutIncident(ctx, inc); err != nil {
+					return res, err
+				}
+			}
 			continue
 		}
+
+		// HYSTERESIS. One absent scan is not proof a vulnerability is gone.
+		//
+		// Measured against WAVSEP: dalfox on the same unchanged target found 7 distinct vulnerable
+		// cases in one run and 9 in the next, SUCCEEDING both times — so nothing appeared in
+		// Scan.ToolsFailed and the degraded-pass guard (which covers tools that die) never fired.
+		// Four cases flipped between runs. Resolving on a single absence turns each flip into "your
+		// vulnerability is fixed", followed by a fresh incident next pass, forever.
+		//
+		// So absence has to persist across consecutive authoritative passes before it counts as a
+		// fix. The cost is a real fix staying open one extra cycle; the alternative is telling a
+		// customer a live vulnerability was remediated because a scanner had a quiet run.
+		inc.AbsentPasses++
+		if inc.AbsentPasses < d.resolveAfterAbsent() {
+			if err := d.Store.PutIncident(ctx, inc); err != nil {
+				return res, err
+			}
+			continue
+		}
+
 		inc.Status = platform.IncidentResolved
 		inc.ResolvedAt = d.now()
 		d.record("incident_resolved", inc)
@@ -293,6 +326,14 @@ func (d *Detector) EscalateOverdue(ctx context.Context, tenantID string, ackWind
 // IDs regenerate per scan, so they can't be used; rule+endpoint is the natural dedup key
 // (and matches the GRC/runbook grounding — the same entity, the same issue).
 func Key(f types.Finding) string { return f.RuleID + "|" + f.Endpoint }
+
+// resolveAfterAbsent is the consecutive-absence threshold, defaulting to 2.
+func (d *Detector) resolveAfterAbsent() int {
+	if d.ResolveAfterAbsent > 0 {
+		return d.ResolveAfterAbsent
+	}
+	return 2
+}
 
 func (d *Detector) atOrAbove(s types.Severity) bool {
 	threshold := d.Threshold

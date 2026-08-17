@@ -160,6 +160,66 @@ require their runner.
 
 ---
 
+## 3b. AI security engineer — patch pipeline (execution-verified)
+
+The defensive agent's core job is PATCH: given a vulnerable app + a finding, produce a fix that
+CLOSES the exploit without breaking the app. `tsbench cvepatch` grades that with an EXECUTION oracle —
+it applies the patch, re-runs the exploit (must now fail) and the app's own driver (must still pass).
+
+```bash
+tsbench cvepatch --dataset <cve-set> [--responses <fixes>]   # execution-verified, not LLM-judged
+```
+
+Measured on the 3-instance seed (rce / lfi / xss), fixes supplied via the proxy-replay path:
+
+| instance | class | produced | localized to gold file | execution-verified FIXED |
+|---|---|---|---|---|
+| command-injection-py | rce | ✓ | ✓ | ✓ |
+| path-traversal-node | lfi | ✓ | ✓ | ✓ |
+| xss-render-node | xss | ✓ | ✓ | ✓ |
+
+**3/3, and the oracle is real** — the docker exploit no longer fires and the functional driver still
+passes. That proves the pipeline (parse → apply → verify) works, and it is a stronger result than the
+pentester's, where the proxy got a grounded finding but the flag stalled on relay state-threading.
+
+**Honest limit — same as every self-authored fixture: the seed is first-party** (`cve: n/a — first-party
+seed`). 3/3 on 3 seeds is a smoke test of the pipeline, not a benchmark of the engineer. A credible
+number needs an EXTERNAL CVE set, and here is the concrete blocker — confirmed by inspecting the
+actual tasks, not assumed:
+
+- **BountyBench** (44 patch tasks) is APP-LEVEL. lunary/bounty_0 patches a multi-file TypeScript
+  backend (`codebase/packages/backend/src/api/v1/projects/index.ts` + `authorization.ts`), ships a
+  `docker-compose.yml`, and its `verify.sh` runs against the live app. cvepatch's oracle is
+  single-file / single-runtime (one node or python file + a driver), so it CANNOT consume BountyBench
+  directly — scoring it means running BountyBench's own Docker+Python harness with our codeagent as
+  the patch_workflow, plus a frontier LLM.
+- **CyberGym** is the same shape (its own harness); **SEC-bench** is C++/200GB — wrong domain.
+
+So: the pipeline is execution-verified and proven on seeds; a NUMBER on an external CVE set is gated
+on running that benchmark's own app-level harness + a frontier LLM — the same resource gate as the
+pentester and cloud, not missing code. cvepatch's disk-light single-file format is deliberate
+(laptop/CI) and is exactly why it does not drop-in against app-level corpora.
+
+## 3c. What the customer is TOLD (dimension 3) — live-verified
+
+Three surfaces claimed more than the engine proved. All three now report their own basis, and all
+three were verified against a running platform (SQLite-backed, real HTTP), not just unit tests:
+
+| Surface | The overclaim | Now | Live proof |
+|---|---|---|---|
+| `/coverage` | "No findings recorded" over an API whose top risks were never testable | names the untested classes + how to enable them | unscanned api asset → BOLA/BFLA/cross-user-auth listed w/ OWASP refs; **3 → 0 after posting an authz-test config** |
+| `/posture` | "No risks found — this posture source is clean" | "Assessed <when>" vs "Not assessed yet" | a CLEAN device ingest (0 findings) → `assessed=true` + timestamp, while tprm/clouddrift stay `assessed=false` |
+| `/attack-paths` | "No attack paths — that's good" over an unscanned estate | reports `correlated_findings` | unscanned tenant → `count=0, correlated_findings=0`; basis rises to 1 when a finding is added |
+
+The shared root cause: these assessors are GROUNDED, so a clean estate legitimately yields zero
+findings — which makes "assessed, clean" and "never ran" byte-identical in the store. Every fix
+records the BASIS (was it assessed / what was it correlated over) rather than softening the wording,
+so the reassurance shrinks as the customer configures instead of being a permanent disclaimer.
+
+**Not verified: the rendered pages in a browser.** The preview launcher fails with an environment-level
+`EPERM: uv_cwd` from npm and cannot target a worktree, so the React render is checked by `tsc` +
+the live JSON the components consume, not by pixels.
+
 ## 4. What would raise confidence, in order
 
 1. **Broaden the thin fixtures — but not container.** Cloud went 6 → 19 controls and the correction

@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -59,5 +60,40 @@ func TestCrossToolMerge_LeavesNonQueryEndpointsAlone(t *testing.T) {
 	}
 	if out, _ := (&CrossToolMerge{}).Finalize(in); len(out) != 2 {
 		t.Errorf("different lines in a file are different findings, got %d", len(out))
+	}
+}
+
+// TestCrossToolMerge_SurvivorHasStableIdentity pins the downstream consequence.
+//
+// detect.Key is rule_id|endpoint — the identity the incident detector, retest verifier and defense
+// bench all use. An injection tool emits payloads in non-deterministic order (measured: dalfox on one
+// unchanged URL gave 631 then 129 POC lines), so a survivor carrying the first payload's endpoint
+// changes identity every scan. Downstream that is incident churn: the same live vulnerability opens
+// as new and resolves as fixed on every pass, and retest can never match its stamped keys.
+func TestCrossToolMerge_SurvivorHasStableIdentity(t *testing.T) {
+	mk := func(payloads ...string) []types.Finding {
+		var out []types.Finding
+		for i, p := range payloads {
+			out = append(out, types.Finding{
+				ID: string(rune('a' + i)), Tool: "dalfox", RuleID: "dalfox::xss",
+				Endpoint: "http://h/p.jsp?userinput=" + p,
+			})
+		}
+		return out
+	}
+	// Two scans of the same target, payloads in DIFFERENT order — what actually happens.
+	a, _ := (&CrossToolMerge{}).Finalize(mk("%3Cscript%3E", "%22onload%3D"))
+	b, _ := (&CrossToolMerge{}).Finalize(mk("%22onload%3D", "%3Cscript%3E"))
+
+	if len(a) != 1 || len(b) != 1 {
+		t.Fatalf("payload variants must collapse to one finding, got %d and %d", len(a), len(b))
+	}
+	if a[0].Endpoint != b[0].Endpoint {
+		t.Errorf("the same vulnerability got two identities across scans:\n  %s\n  %s\n"+
+			"detect.Key is rule_id|endpoint, so this churns incidents forever.",
+			a[0].Endpoint, b[0].Endpoint)
+	}
+	if strings.Contains(a[0].Endpoint, "script") || strings.Contains(a[0].Endpoint, "onload") {
+		t.Errorf("survivor endpoint still carries a payload: %s", a[0].Endpoint)
 	}
 }

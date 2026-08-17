@@ -94,8 +94,12 @@ func TestSyncCloud_DriftIncidentResolvesWhenTheChangeIsReverted(t *testing.T) {
 		t.Fatalf("setup: expected the drift incident to open")
 	}
 	drifting = false
-	if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
-		t.Fatal(err)
+	// Two passes: resolution requires the absence to persist, so a single quiet scan cannot report
+	// a live drift as reverted.
+	for i := 0; i < 2; i++ {
+		if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if got := openCount(t, st); got != 0 {
 		t.Errorf("the change was reverted but %d incident(s) stayed open", got)

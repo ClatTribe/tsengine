@@ -128,23 +128,51 @@ func (a *Azure) Watch(context.Context, platform.Connection, []byte) ([]Trigger, 
 // readable remediation_type. Reached only after the desk approves (§18.2 inv. 3). An unknown type
 // or an unconfigured Writer surfaces as an error — the action stays un-applied, never falsely "done".
 func (a *Azure) Apply(ctx context.Context, c platform.Connection, _ string, act platform.Action) error {
+	// ONE source of truth with Preflight (see AWS.Apply): every check needing no network call lives
+	// there, so the warning shown before approval and the behaviour after it cannot diverge.
+	// writerFor invokes the per-tenant factory, so resolve the writer ONCE and share it with the
+	// check — building it twice would construct two SDK clients per apply.
+	w := a.writerFor(c)
+	if err := a.preflightWith(act, w); err != nil {
+		return fmt.Errorf("azure apply: %w", err)
+	}
+	rt, _ := act.Payload["remediation_type"].(string)
+	switch rt {
+	case "azure_storage_disable_public_access":
+		rg, account := azureStorageTarget(strFrom(act.Payload, "target"))
+		return w.DisableStoragePublicAccess(ctx, c.Account, rg, account)
+	default:
+		// Unreachable — Preflight rejects every remediation_type with no live path.
+		return fmt.Errorf("azure apply: remediation_type %q has no live Azure write path yet (target %s)", rt, strFrom(act.Payload, "target"))
+	}
+}
+
+// Preflight reports whether this action could actually be applied, without performing it or making
+// any network call — so the console can warn a human BEFORE they approve a fix that cannot land.
+// Grounded (§10): nil means "no known blocker", never a guarantee (Azure can still deny the call).
+func (a *Azure) Preflight(c platform.Connection, act platform.Action) error {
+	return a.preflightWith(act, a.writerFor(c))
+}
+
+// preflightWith is the single validator both paths run. Apply passes the writer it already built so
+// the per-tenant factory is invoked exactly once per apply; Preflight resolves its own.
+func (a *Azure) preflightWith(act platform.Action, w AzureWriter) error {
 	rt, _ := act.Payload["remediation_type"].(string)
 	switch rt {
 	case "azure_storage_disable_public_access":
 		rg, account := azureStorageTarget(strFrom(act.Payload, "target"))
 		if rg == "" || account == "" {
-			return fmt.Errorf("azure apply: %s action %s target must resolve a resource group + storage account", rt, act.ID)
+			return fmt.Errorf("%s action %s target must resolve a resource group + storage account", rt, act.ID)
 		}
-		writer := a.writerFor(c)
-		if writer == nil {
-			return fmt.Errorf("azure apply: no live Azure write path configured (enable this connection's "+
-				"remediation, or the operator default); action %s (disable public access on %s/%s) left un-applied", act.ID, rg, account)
+		if w == nil {
+			return fmt.Errorf("no live Azure write path is configured (enable this connection's "+
+				"remediation, or the operator default), so disabling public access on %s/%s cannot be applied", rg, account)
 		}
-		return writer.DisableStoragePublicAccess(ctx, c.Account, rg, account)
+		return nil
 	case "":
-		return fmt.Errorf("azure apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
+		return fmt.Errorf("action %s carries no remediation_type, so there is no write path to apply it with", act.ID)
 	default:
-		return fmt.Errorf("azure apply: remediation_type %q has no live Azure write path yet (target %s)", rt, strFrom(act.Payload, "target"))
+		return fmt.Errorf("remediation_type %q has no live Azure write path yet (target %s)", rt, strFrom(act.Payload, "target"))
 	}
 }
 
