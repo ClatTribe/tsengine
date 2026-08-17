@@ -254,6 +254,9 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 			// Carry the FP-control signal so the alert shows confirmed-vs-unconfirmed, never presenting a
 			// low-confidence pattern_match as a verified incident (the "no high false positive" rule).
 			Verification: string(f.VerificationStatus), Confidence: f.Confidence,
+			// Carry the KEV (exploited-in-the-wild) flag the L1.5 threat_intel hook stamped, so the SLA
+			// layer can apply the BOD 22-01 accelerated resolve clock (SLAPolicy.KEVResolveHours).
+			KEV: f.ThreatIntel != nil && f.ThreatIntel.KEV != nil && f.ThreatIntel.KEV.Listed,
 		}
 		// Detection Skill triage (ADR 0017): attach the detection engineer's reasoning to the alert so
 		// whoever is on shift inherits it instead of rediscovering it.
