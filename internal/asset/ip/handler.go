@@ -127,7 +127,17 @@ func (h *Handler) PlanEscalation(_ types.Asset, surface []string, findings []typ
 			return tool.Args{"target": host, "service": svc, "port": port}, true
 		},
 	}
-	return asset.EvalTriggers([]asset.Trigger{trigger}, surface, findings, tool.Get)
+	out := asset.EvalTriggers([]asset.Trigger{trigger}, surface, findings, tool.Get)
+
+	// THREAT-INFORMED DEPTH: nmap has just told us which products+versions are
+	// actually running here. Ask the pinned threat-intel corpus which CVEs are
+	// being exploited in the wild (KEV) / are likely exploitable (EPSS) against
+	// exactly those products, and probe those templates. This is the loop that
+	// makes intel drive DISCOVERY instead of only annotating findings after the
+	// fact (CLAUDE.md §7). Deterministic, bounded, LLM-free; a graceful no-op
+	// when no corpus is configured or nothing matches.
+	out = append(out, common.ThreatInformedEscalation(findings)...)
+	return out
 }
 
 func (h *Handler) Filter(_ context.Context, _ types.Asset, in []asset.Dispatch) []asset.Dispatch {

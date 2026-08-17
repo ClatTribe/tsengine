@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
+	"github.com/ClatTribe/tsengine/internal/asset/common"
 	"github.com/ClatTribe/tsengine/internal/tool"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -243,7 +244,7 @@ func isLoginURL(rawURL string) bool {
 //   - login URLs → nuclei `default-logins` templates ONCE over them.
 //   - a thin crawl surface → ffuf content discovery on the target root
 //     (find hidden paths katana's link-following missed).
-func (h *Handler) PlanEscalation(target types.Asset, surface []string, _ []types.Finding) []asset.Dispatch {
+func (h *Handler) PlanEscalation(target types.Asset, surface []string, findings []types.Finding) []asset.Dispatch {
 	var out []asset.Dispatch
 	var paramURLs, loginURLs []string
 	for _, u := range surface {
@@ -282,6 +283,14 @@ func (h *Handler) PlanEscalation(target types.Asset, surface []string, _ []types
 				EscalatedFrom: "wordpress→wpscan"})
 		}
 	}
+
+	// THREAT-INFORMED DEPTH: httpx has fingerprinted the stack (webserver +
+	// -tech-detect). Ask the pinned threat-intel corpus which CVEs are being
+	// exploited in the wild (KEV) / are likely exploitable (EPSS) against
+	// exactly that technology and probe those templates, instead of relying on
+	// a static tag list (CLAUDE.md §7.1). Deterministic, bounded, LLM-free;
+	// a graceful no-op when no corpus is configured or nothing matches.
+	out = append(out, common.ThreatInformedEscalation(findings)...)
 	return out
 }
 
