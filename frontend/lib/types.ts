@@ -336,6 +336,15 @@ export interface AssetCoverage {
   runs_tools: string[]; // the tools every scan of this type runs
   tools_with_findings: string[]; // which surfaced a finding (the rest ran clean)
   findings_count: number;
+  // Classes this asset's scan cannot reach without an operator-declared config that is absent.
+  // Present so "no findings" is never read as "nothing to find" — BOLA/BFLA need two identities.
+  untested_classes?: ConfigGatedClass[];
+}
+export interface ConfigGatedClass {
+  class: string;
+  reference?: string;
+  needs_config: string;
+  configure_at?: string;
 }
 export interface CoverageSummary {
   assets: AssetCoverage[];

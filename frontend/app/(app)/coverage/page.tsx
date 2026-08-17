@@ -26,7 +26,7 @@ export default async function CoveragePage() {
       <PageIntro
         icon={ScanSearch}
         title="What we test"
-        description="Exactly what was tested on each asset — the tools every scan runs, when it last ran, and which of them surfaced something. No black box: a clean tool ran, it just found nothing."
+        description="Exactly what was tested on each asset — the tools every scan runs, when it last ran, and which of them surfaced something. It also names what we could NOT test: classes like BOLA that need you to declare two identities first. No findings is not the same as nothing to find."
       />
 
 
@@ -105,6 +105,26 @@ export default async function CoveragePage() {
                     ) : (
                       <>No findings recorded. This lists the tools declared for this asset type; it does not confirm each one executed.</>
                     )}
+                  </div>
+                )}
+
+                {a.untested_classes && a.untested_classes.length > 0 && (
+                  <div className="mt-3 rounded-md border border-amber-500/25 bg-amber-500/5 p-3">
+                    <div className="text-xs font-medium text-ink">Not tested on this asset</div>
+                    <p className="mt-1 text-xs text-muted">
+                      These classes need a configuration you haven&apos;t provided, so no scan result can clear them.
+                    </p>
+                    <ul className="mt-2 space-y-1">
+                      {a.untested_classes.map((c) => (
+                        <li key={c.class} className="text-xs text-muted">
+                          <span className="text-ink">{c.class}</span>
+                          {c.reference ? <span className="text-muted"> · {c.reference}</span> : null}
+                          {c.configure_at ? (
+                            <span className="block font-mono text-[11px] text-muted/80">{c.configure_at}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>
