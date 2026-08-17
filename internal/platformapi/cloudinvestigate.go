@@ -130,8 +130,13 @@ func (d Deps) handleCloudInvestigationView(w http.ResponseWriter, r *http.Reques
 // cloudIssueToFinding maps an agent-proven attack path to a stored finding (verified — the agent only
 // records paths it confirmed via the graph tools, §10).
 func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
+	// The agent's PATH is grounded (validatePath proves every edge and a crown-jewel endpoint), but
+	// its severity is free text the model chose. An unrecognised value ("P1", "moderate") ranks 0 —
+	// BELOW info — so it would sort under every informational note AND fall under detect's threshold,
+	// silently opening no incident. A proven path to a crown jewel must never be silenced by a
+	// spelling. Not Valid() gets the same conservative default as empty.
 	sev := types.Severity(strings.ToLower(strings.TrimSpace(is.Severity)))
-	if sev == "" {
+	if !sev.Valid() {
 		sev = types.SeverityHigh
 	}
 	desc := is.Rationale

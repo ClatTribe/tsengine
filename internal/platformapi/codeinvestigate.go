@@ -212,9 +212,12 @@ func severityOfFinding(fs []types.Finding, id string) types.Severity {
 // AI Code Engineer's own output, distinct from the raw scanner hit it assessed (it carries the confirmed
 // blast radius + the right-layer fix location the scanner couldn't give).
 func codeIssueToFinding(id, repo string, is codeagent.CodeIssue) types.Finding {
+	// Free-text severity from the model: an unrecognised value ranks 0 (below info), so it would sort
+	// beneath every note and fall under detect's incident threshold. Same neutral default as empty —
+	// never silently escalate an un-graded confirmation to High, but never let it vanish either.
 	sev := types.Severity(strings.ToLower(strings.TrimSpace(is.Severity)))
-	if sev == "" {
-		sev = types.SeverityMedium // neutral default — never silently escalate an un-graded confirmation to High
+	if !sev.Valid() {
+		sev = types.SeverityMedium
 	}
 	desc := is.Rationale
 	if is.BlastRadius != "" {
