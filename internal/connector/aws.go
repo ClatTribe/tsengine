@@ -143,14 +143,17 @@ func (a *AWS) Apply(ctx context.Context, conn platform.Connection, _ string, act
 	// there, so a preflight that says "this can be applied" and an apply that then fails cannot
 	// drift apart. A preflight the customer trusts and an apply that disagrees with it would be
 	// worse than no preflight at all.
-	if err := a.Preflight(conn, act); err != nil {
+	// writerFor invokes the per-tenant factory, so resolve the writer ONCE and share it with the
+	// check — building it twice would construct two SDK clients per apply.
+	w := a.writerFor(conn)
+	if err := a.preflightWith(act, w); err != nil {
 		return fmt.Errorf("aws apply: %w", err)
 	}
 	rt, _ := act.Payload["remediation_type"].(string)
 	target, _ := act.Payload["target"].(string)
 	switch rt {
 	case "s3_block_public_access":
-		return a.writerFor(conn).BlockS3PublicAccess(ctx, bucketFromTarget(target))
+		return w.BlockS3PublicAccess(ctx, bucketFromTarget(target))
 	default:
 		// Unreachable — Preflight rejects every remediation_type with no live path.
 		return fmt.Errorf("aws apply: remediation_type %q has no live AWS write path yet (target %s)", rt, target)
@@ -166,6 +169,12 @@ func (a *AWS) Apply(ctx context.Context, conn platform.Connection, _ string, act
 // remediation_type, a missing target, or no configured write path. It CANNOT promise success (AWS
 // may still deny the call), so nil means "no known blocker", never "guaranteed to work".
 func (a *AWS) Preflight(conn platform.Connection, act platform.Action) error {
+	return a.preflightWith(act, a.writerFor(conn))
+}
+
+// preflightWith is the single validator both paths run. Apply passes the writer it already built so
+// the per-tenant factory is invoked exactly once per apply; Preflight resolves its own.
+func (a *AWS) preflightWith(act platform.Action, w AWSWriter) error {
 	rt, _ := act.Payload["remediation_type"].(string)
 	target, _ := act.Payload["target"].(string)
 	switch rt {
@@ -174,7 +183,7 @@ func (a *AWS) Preflight(conn platform.Connection, act platform.Action) error {
 		if bucket == "" {
 			return fmt.Errorf("s3_block_public_access action %s has no target bucket", act.ID)
 		}
-		if a.writerFor(conn) == nil {
+		if w == nil {
 			return fmt.Errorf("no live AWS write path is configured (set this connection's remediation "+
 				"role, or the operator default), so blocking public access on %s cannot be applied", bucket)
 		}

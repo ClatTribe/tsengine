@@ -129,23 +129,50 @@ func (g *GCP) Watch(context.Context, platform.Connection, []byte) ([]Trigger, er
 // on its own. An unknown type or an unconfigured Writer surfaces as an error — the action stays
 // un-applied, never falsely "done".
 func (g *GCP) Apply(ctx context.Context, c platform.Connection, _ string, act platform.Action) error {
+	// ONE source of truth with Preflight (see AWS.Apply): every check needing no network call lives
+	// there, so the warning shown before approval and the behaviour after it cannot diverge.
+	// writerFor invokes the per-tenant factory, so resolve the writer ONCE and share it with the
+	// check — building it twice would construct two SDK clients per apply.
+	w := g.writerFor(c)
+	if err := g.preflightWith(act, w); err != nil {
+		return fmt.Errorf("gcp apply: %w", err)
+	}
+	rt, _ := act.Payload["remediation_type"].(string)
+	switch rt {
+	case "gcs_public_access_prevention":
+		return w.EnforceBucketPublicAccessPrevention(ctx, c.Account, gcsBucketFromTarget(strFrom(act.Payload, "target")))
+	default:
+		// Unreachable — Preflight rejects every remediation_type with no live path.
+		return fmt.Errorf("gcp apply: remediation_type %q has no live GCP write path yet (target %s)", rt, strFrom(act.Payload, "target"))
+	}
+}
+
+// Preflight reports whether this action could actually be applied, without performing it or making
+// any network call — so the console can warn a human BEFORE they approve a fix that cannot land.
+// Grounded (§10): nil means "no known blocker", never a guarantee (GCP can still deny the call).
+func (g *GCP) Preflight(c platform.Connection, act platform.Action) error {
+	return g.preflightWith(act, g.writerFor(c))
+}
+
+// preflightWith is the single validator both paths run. Apply passes the writer it already built so
+// the per-tenant factory is invoked exactly once per apply; Preflight resolves its own.
+func (g *GCP) preflightWith(act platform.Action, w GCPWriter) error {
 	rt, _ := act.Payload["remediation_type"].(string)
 	switch rt {
 	case "gcs_public_access_prevention":
 		bucket := gcsBucketFromTarget(strFrom(act.Payload, "target"))
 		if bucket == "" {
-			return fmt.Errorf("gcp apply: %s action %s has no target bucket", rt, act.ID)
+			return fmt.Errorf("%s action %s has no target bucket", rt, act.ID)
 		}
-		writer := g.writerFor(c)
-		if writer == nil {
-			return fmt.Errorf("gcp apply: no live GCP write path configured (set this connection's remediation "+
-				"SA, or the operator default); action %s (enforce public-access-prevention on %s) left un-applied", act.ID, bucket)
+		if w == nil {
+			return fmt.Errorf("no live GCP write path is configured (set this connection's remediation "+
+				"service account, or the operator default), so enforcing public-access-prevention on %s cannot be applied", bucket)
 		}
-		return writer.EnforceBucketPublicAccessPrevention(ctx, c.Account, bucket)
+		return nil
 	case "":
-		return fmt.Errorf("gcp apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
+		return fmt.Errorf("action %s carries no remediation_type, so there is no write path to apply it with", act.ID)
 	default:
-		return fmt.Errorf("gcp apply: remediation_type %q has no live GCP write path yet (target %s)", rt, strFrom(act.Payload, "target"))
+		return fmt.Errorf("remediation_type %q has no live GCP write path yet (target %s)", rt, strFrom(act.Payload, "target"))
 	}
 }
 

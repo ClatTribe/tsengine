@@ -198,3 +198,26 @@ func TestAWSPreflightClearWhenWriterConfigured(t *testing.T) {
 		t.Fatalf("apply failed though preflight was clear: %v", err)
 	}
 }
+
+// The per-tenant writer factory must be invoked ONCE per apply. Preflight and Apply each need the
+// writer, and the naive "Apply calls Preflight" split built it twice — for a real SDK factory that
+// means constructing two clients (and two credential chains) on every remediation.
+func TestPreflightDoesNotDoubleBuildTheWriter(t *testing.T) {
+	ctx := context.Background()
+	conn := platform.Connection{ID: "c1", Config: map[string]string{
+		platform.CfgRemediationEnabled: "true",
+		platform.CfgRemediationRole:    "arn:aws:iam::111122223333:role/w",
+		platform.CfgRemediationRegion:  "us-east-1",
+	}}
+	built := 0
+	a := &AWS{WriterForConfig: func(string, string) AWSWriter { built++; return &fakeS3Writer{} }}
+	act := platform.Action{ID: "a1", Kind: platform.ActApplyConfig,
+		Payload: map[string]any{"remediation_type": "s3_block_public_access", "target": "arn:aws:s3:::b"}}
+
+	if err := a.Apply(ctx, conn, "", act); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if built != 1 {
+		t.Errorf("writer factory invoked %d times during one apply, want 1", built)
+	}
+}
