@@ -39,7 +39,7 @@ func TestAgentSeverity_InvalidCannotSilenceAProvenAttackPath(t *testing.T) {
 // confirmation to High) — so assert it stays valid and mid-ranked rather than becoming High.
 func TestAgentSeverity_CodePathKeepsItsNeutralDefault(t *testing.T) {
 	for _, modelWrote := range []string{"", "P2", "kinda bad"} {
-		f := codeIssueToFinding("f1", "repo/x", codeagent.CodeIssue{Severity: modelWrote, Title: "x"})
+		f := codeIssueToFinding("f1", "repo/x", "app/db.go:42", codeagent.CodeIssue{Severity: modelWrote, Title: "x"})
 		if !f.Severity.Valid() {
 			t.Fatalf("code finding severity %q is not recognised (ranks 0, below info)", f.Severity)
 		}
@@ -70,7 +70,7 @@ func TestAgentFindings_VerificationTierMatchesWhatWasProven(t *testing.T) {
 			cloud.VerificationStatus)
 	}
 
-	code := codeIssueToFinding("f2", "repo/x", codeagent.CodeIssue{
+	code := codeIssueToFinding("f2", "repo/x", "app/db.go:42", codeagent.CodeIssue{
 		Severity: "high", Title: "sqli", Exploitable: true,
 		Evidence: []string{"app/db.go:42"},
 	})
@@ -81,5 +81,35 @@ func TestAgentFindings_VerificationTierMatchesWhatWasProven(t *testing.T) {
 	if code.VerificationStatus != types.VerificationCorroborated {
 		t.Errorf("code assessment = %q, want corroborated (the L1 hit + an independent read of the "+
 			"real source agreeing, with nothing re-fired)", code.VerificationStatus)
+	}
+}
+
+// A finding's ENDPOINT is its identity (detect.Key = RuleID|Endpoint), so it must be deterministic.
+// If it came from the agent's free-text FixLocation, the same vulnerability re-assessed later — with
+// the location phrased differently — would get a DIFFERENT key, and two things break silently:
+//
+//   - the incident churns: the old one resolves and a new one opens, re-paging the on-call;
+//   - retest.Verify sees the old key ABSENT and reports the fix CONFIRMED, while the vulnerability
+//     is still sitting there.
+//
+// So identity comes from the scanner's endpoint; the model's phrasing stays descriptive.
+func TestCodeFindingIdentity_IsStableAcrossModelPhrasing(t *testing.T) {
+	l1 := "app/db.go:42" // what the scanner produced — the same on every run
+	var keys []string
+	for _, modelSaid := range []string{"app/db.go:42", "app/db.go:41", "internal/app/db.go:42", ""} {
+		f := codeIssueToFinding("f1", "repo/x", l1, codeagent.CodeIssue{
+			FindingID: "sem-1", Severity: "high", Title: "sqli", Exploitable: true,
+			FixLocation: modelSaid, Evidence: []string{"app/db.go:42"},
+		})
+		keys = append(keys, string(f.RuleID)+"|"+f.Endpoint)
+	}
+	for i := 1; i < len(keys); i++ {
+		if keys[i] != keys[0] {
+			t.Fatalf("identity moved with the model's wording: %q vs %q — the incident would churn and "+
+				"retest would report a phantom fix", keys[i], keys[0])
+		}
+	}
+	if keys[0] != "codeagent::confirmed-exploitable::sem-1|app/db.go:42" {
+		t.Errorf("unexpected key %q — identity should be the scanner's endpoint", keys[0])
 	}
 }

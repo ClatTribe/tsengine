@@ -146,7 +146,8 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 		if strings.TrimSpace(is.Severity) == "" {
 			is.Severity = string(severityOfFinding(body.Findings, is.FindingID))
 		}
-		built = append(built, codeIssueToFinding(d.newID("codeagent")+"-"+strconv.Itoa(i), body.Repo, is))
+		built = append(built, codeIssueToFinding(d.newID("codeagent")+"-"+strconv.Itoa(i), body.Repo,
+			endpointOfFinding(body.Findings, is.FindingID), is))
 	}
 	stored := 0
 	saved := make([]types.Finding, 0, len(built))
@@ -208,10 +209,25 @@ func severityOfFinding(fs []types.Finding, id string) types.Severity {
 	return types.SeverityMedium
 }
 
+// endpointOfFinding returns the ASSESSED L1 finding's own endpoint — the deterministic, scanner-
+// produced location. It is the finding's IDENTITY (detect.Key = RuleID|Endpoint), so it must not come
+// from model prose: if the agent phrases the location differently between runs ("app/db.go:42" vs
+// "app/db.go:41" vs "internal/app/db.go:42"), the key changes and two things break silently — the
+// incident churns (resolve + reopen, re-paging the on-call for the same vuln), and retest.Verify sees
+// the old key ABSENT and reports the fix CONFIRMED while the vulnerability is still there.
+func endpointOfFinding(fs []types.Finding, id string) string {
+	for _, f := range fs {
+		if f.ID == id {
+			return f.Endpoint
+		}
+	}
+	return ""
+}
+
 // codeIssueToFinding maps a grounded, EXPLOITABLE code assessment into a first-class verified finding — the
 // AI Code Engineer's own output, distinct from the raw scanner hit it assessed (it carries the confirmed
 // blast radius + the right-layer fix location the scanner couldn't give).
-func codeIssueToFinding(id, repo string, is codeagent.CodeIssue) types.Finding {
+func codeIssueToFinding(id, repo, l1Endpoint string, is codeagent.CodeIssue) types.Finding {
 	// Free-text severity from the model: an unrecognised value ranks 0 (below info), so it would sort
 	// beneath every note and fall under detect's incident threshold. Same neutral default as empty —
 	// never silently escalate an un-graded confirmation to High, but never let it vanish either.
@@ -226,7 +242,14 @@ func codeIssueToFinding(id, repo string, is codeagent.CodeIssue) types.Finding {
 	if is.Fix != "" {
 		desc += "\n\nFix (" + firstNonEmpty(is.FixLocation, "see below") + "): " + is.Fix
 	}
-	endpoint := is.FixLocation
+	// Identity comes from the SCANNER's endpoint, not the model's FixLocation. The model's location
+	// is kept as descriptive metadata (it is already in the description and rawOut) — useful to a
+	// human, but never load-bearing for dedup or fix-verification. Falls back to the model's text only
+	// when the L1 finding carried no endpoint, which is better than an empty key.
+	endpoint := l1Endpoint
+	if endpoint == "" {
+		endpoint = is.FixLocation
+	}
 	if endpoint == "" && len(is.Evidence) > 0 {
 		endpoint = is.Evidence[0]
 	}

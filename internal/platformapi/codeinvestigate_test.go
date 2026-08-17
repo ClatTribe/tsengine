@@ -62,8 +62,8 @@ func TestCodeInvestigator_GatedOffWithoutConnectedRepo(t *testing.T) {
 // DISTINCT findings (RuleID carries the assessed finding id) so detect.Key can't collapse/mask one; and an
 // un-graded confirmation defaults to medium, never a silent High escalation.
 func TestCodeIssueToFinding_DistinctRuleIDsAndSeverity(t *testing.T) {
-	a := codeIssueToFinding("id-a", "acme/api", codeagent.CodeIssue{FindingID: "f1", FixLocation: "db.go:40", Severity: ""})
-	b := codeIssueToFinding("id-b", "acme/api", codeagent.CodeIssue{FindingID: "f2", FixLocation: "db.go:40", Severity: ""})
+	a := codeIssueToFinding("id-a", "acme/api", "db.go:40", codeagent.CodeIssue{FindingID: "f1", FixLocation: "db.go:40", Severity: ""})
+	b := codeIssueToFinding("id-b", "acme/api", "db.go:40", codeagent.CodeIssue{FindingID: "f2", FixLocation: "db.go:40", Severity: ""})
 	if a.RuleID == b.RuleID {
 		t.Errorf("two confirmations must have distinct RuleIDs (else detect.Key collides): %q", a.RuleID)
 	}
