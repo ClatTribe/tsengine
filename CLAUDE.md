@@ -536,6 +536,17 @@ missed would need affected-VERSION-RANGE data the corpus does not carry;
 guessing from a product-name match alone would be FP-prone, so it is NOT done
 -- Sec 10.)
 
+**4th touchpoint — KEV drives the remediation CLOCK.** `SLAPolicy.KEVResolveHours`
+applies the CISA BOD 22-01 deadline to any incident whose opening finding carries
+a real KEV listing, REGARDLESS of severity tier (exploited-in-the-wild is itself
+the deadline). The flag rides on `Incident.KEV`, stamped in `detect.Reconcile`
+from `ThreatIntel.KEV.Listed` (same pattern as Verification/Confidence/Attacked).
+It can only TIGHTEN (stricter of severity-target vs KEV window wins), applies even
+with no severity target, and sets `SLABreach.KEVAccelerated` so the UI can say WHY
+the clock is short. Grounded (§10): disabled policy / no real KEV flag → no
+override; a resolved incident never breaches.
+
+
 Per-task benchmark map:
 [docs/security-engineer-tasks-benchmarks.md](docs/security-engineer-tasks-benchmarks.md).
 

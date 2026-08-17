@@ -251,6 +251,14 @@ type EscalationTier struct {
 type SLAPolicy struct {
 	Enabled bool        `json:"enabled"`
 	Targets []SLATarget `json:"targets"`
+	// KEVResolveHours is the CISA BOD 22-01 style override: a vulnerability the
+	// KEV catalog lists as EXPLOITED IN THE WILD gets a hard remediation deadline
+	// regardless of its CVSS severity tier (being exploited in the wild is itself
+	// the deadline). It applies only to an incident really flagged KEV by the
+	// pinned corpus (§10), can only TIGHTEN (the stricter of severity-target vs
+	// KEV window wins), and applies even when the severity has no target at all.
+	// 0 disables it.
+	KEVResolveHours int `json:"kev_resolve_hours,omitempty"`
 }
 
 // SLATarget is the per-severity window. Hours (not minutes) — SLAs are coarse. 0 = no target for
@@ -268,6 +276,10 @@ type SLABreach struct {
 	ResolveDueAt    time.Time `json:"resolve_due_at,omitempty"`
 	AckBreached     bool      `json:"ack_breached"`     // not acknowledged in time
 	ResolveBreached bool      `json:"resolve_breached"` // not resolved in time
+	// KEVAccelerated records that the resolve deadline came from the KEV override
+	// (BOD 22-01) rather than the severity target, so the UI can say WHY the clock
+	// is short ("exploited in the wild") instead of showing an unexplained deadline.
+	KEVAccelerated bool `json:"kev_accelerated,omitempty"`
 }
 
 // BlastRadius is the impact-sizing signal for a finding/incident — does it sit on a cross-surface attack
@@ -306,16 +318,31 @@ func (p *SLAPolicy) TargetFor(severity string) (SLATarget, bool) {
 // resolve breach). A 0-hour target disables that clock. now is injected so it is testable.
 func (p *SLAPolicy) Evaluate(inc Incident, now time.Time) (SLABreach, bool) {
 	tgt, ok := p.TargetFor(inc.Severity)
-	if !ok {
+	// KEV override (BOD 22-01): an incident flagged KEV gets a hard resolve
+	// deadline even when its severity has no target at all.
+	kevHours := 0
+	if p != nil && p.Enabled && inc.KEV {
+		kevHours = p.KEVResolveHours
+	}
+	if !ok && kevHours <= 0 {
 		return SLABreach{}, false
 	}
 	b := SLABreach{Severity: inc.Severity}
-	if tgt.AckHours > 0 {
+	if ok && tgt.AckHours > 0 {
 		b.AckDueAt = inc.OpenedAt.Add(time.Duration(tgt.AckHours) * time.Hour)
 		b.AckBreached = !inc.Acknowledged() && now.After(b.AckDueAt)
 	}
-	if tgt.ResolveHours > 0 {
-		b.ResolveDueAt = inc.OpenedAt.Add(time.Duration(tgt.ResolveHours) * time.Hour)
+	resolveHours := 0
+	if ok {
+		resolveHours = tgt.ResolveHours
+	}
+	// KEV can only TIGHTEN: it wins only when it is stricter than (or the sole)
+	// resolve clock, and records why on the breach.
+	if kevHours > 0 && (resolveHours <= 0 || kevHours < resolveHours) {
+		resolveHours, b.KEVAccelerated = kevHours, true
+	}
+	if resolveHours > 0 {
+		b.ResolveDueAt = inc.OpenedAt.Add(time.Duration(resolveHours) * time.Hour)
 		b.ResolveBreached = inc.Status != IncidentResolved && now.After(b.ResolveDueAt)
 	}
 	return b, true
@@ -818,6 +845,10 @@ type Incident struct {
 	// triaged next week, the second gets someone's attention now — and a responder currently has to go
 	// and find out which one they are holding. nil = the timeline has nothing to say about it.
 	Onset *Onset `json:"onset,omitempty"`
+	// KEV marks an incident whose opening finding carries a CISA KEV listing
+	// (exploited in the wild). Stamped in detect.Reconcile from the finding's
+	// ThreatIntel.KEV.Listed; drives the SLAPolicy.KEVResolveHours override.
+	KEV bool `json:"kev,omitempty"`
 }
 
 // Onset is when the state behind an incident actually changed.
