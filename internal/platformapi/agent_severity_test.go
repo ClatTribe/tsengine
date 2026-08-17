@@ -113,3 +113,38 @@ func TestCodeFindingIdentity_IsStableAcrossModelPhrasing(t *testing.T) {
 		t.Errorf("unexpected key %q — identity should be the scanner's endpoint", keys[0])
 	}
 }
+
+// Two DIFFERENT proven routes to the SAME crown jewel must not collapse into one finding. detect.Key
+// is RuleID|Endpoint and the endpoint is the crown jewel, so with a constant rule id the second route
+// silently masked the first in incidents and unified issues — the customer would see one attack path
+// and fix it, while a second proven route to the same asset stayed open and invisible.
+//
+// The route must also stay STABLE across runs: same route, same key, or every scan churns the
+// incident (the agent's own ai-NNN counter is per-run sequential and would do exactly that).
+func TestCloudFindingIdentity_DistinctRoutesStayDistinctAndStable(t *testing.T) {
+	crown := "arn:aws:s3:::crown"
+	viaEC2 := cloudagent.Issue{Target: crown, Severity: "high",
+		Path: []string{"internet", "i-web", "role/app", crown}}
+	viaKey := cloudagent.Issue{Target: crown, Severity: "high",
+		Path: []string{"internet", "repo/leaked-key", "role/ci", crown}}
+
+	key := func(is cloudagent.Issue) string {
+		f := cloudIssueToFinding("x", is)
+		return string(f.RuleID) + "|" + f.Endpoint
+	}
+
+	if key(viaEC2) == key(viaKey) {
+		t.Fatalf("two distinct routes to %s share one key %q — the second masks the first and a proven "+
+			"attack path disappears from incidents", crown, key(viaEC2))
+	}
+	// Stability: the same route re-recorded (a later scan, a new ai-NNN id) keeps its identity.
+	if key(viaEC2) != key(viaEC2) {
+		t.Error("identity is not deterministic for the same route")
+	}
+	again := cloudagent.Issue{Target: crown, Severity: "critical", // severity may change; route did not
+		Path: []string{"internet", "i-web", "role/app", crown}}
+	if key(again) != key(viaEC2) {
+		t.Errorf("the same route changed identity across runs (%q vs %q) — every scan would resolve and "+
+			"reopen the incident", key(again), key(viaEC2))
+	}
+}

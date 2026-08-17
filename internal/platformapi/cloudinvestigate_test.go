@@ -3,6 +3,7 @@ package platformapi
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/cloudagent"
@@ -87,7 +88,13 @@ func TestCloudInvestigate_RunsAndViewReturnsPaths(t *testing.T) {
 
 func TestCloudIssueToFinding_Maps(t *testing.T) {
 	f := cloudIssueToFinding("ca-9", cloudagentIssueFixture())
-	if f.RuleID != "cloudagent::attack-path" || f.Tool != "cloudagent" || f.Endpoint != "arn:aws:s3:::secrets" {
+	// The rule id is now ROUTE-scoped ("cloudagent::attack-path::<digest of the path>") rather than a
+	// constant. detect.Key is RuleID|Endpoint and the endpoint is the crown jewel, so a constant meant
+	// two DIFFERENT proven routes to the same asset collapsed into one key and the second silently
+	// masked the first — the same failure the code path already guards against. Consumers match on the
+	// "cloudagent::" prefix or Tool, so the suffix is safe.
+	if !strings.HasPrefix(string(f.RuleID), "cloudagent::attack-path") || f.Tool != "cloudagent" ||
+		f.Endpoint != "arn:aws:s3:::secrets" {
 		t.Errorf("mapping wrong: %+v", f)
 	}
 	if f.Severity != types.SeverityCritical {
