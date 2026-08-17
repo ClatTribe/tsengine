@@ -658,6 +658,15 @@ type Action struct {
 	DeliveryError string    `json:"delivery_error,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 	DecidedAt     time.Time `json:"decided_at,omitempty"`
+	// ApplyBlocked is a KNOWN reason this action could not be applied if approved right now —
+	// computed at READ time from the connector's Preflight (never persisted, like Incident's
+	// SLABreach). It exists so the console can warn the human BEFORE they approve, rather than
+	// letting them approve a remediation that is structurally incapable of running and only
+	// learning after the click.
+	//
+	// Empty means "no known blocker", NOT "guaranteed to work": a connector may not implement
+	// Preflight at all, and the provider can still deny the call (§10).
+	ApplyBlocked string `json:"apply_blocked,omitempty"`
 }
 
 // FixVerification records whether an APPLIED remediation actually closed the findings it claimed

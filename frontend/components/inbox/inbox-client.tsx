@@ -260,6 +260,21 @@ function DetailPane({
         </div>
       )}
 
+      {/* A known blocker, surfaced BEFORE the decision. Approving this would record the verdict but
+          change nothing, so say it while the choice is still open rather than after the click. */}
+      {action.apply_blocked && (
+        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/5 px-5 py-2.5 text-xs">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <div className="min-w-0">
+            <span className="font-medium text-ink">Approving this will not apply it yet.</span>{" "}
+            <span className="text-muted">{action.apply_blocked}</span>
+            <div className="mt-0.5 text-muted">
+              Your approval is still recorded — but connect the write path first if you want the fix to land.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Plain-English "what this means for you" — so a non-security owner understands WHY it's in their
           queue and whether it can be undone, instead of decoding "tier N". Tier-3 has its own banner above. */}
       {!sign && (() => {

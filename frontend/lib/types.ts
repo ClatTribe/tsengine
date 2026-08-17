@@ -296,6 +296,10 @@ export interface Action {
   // "approved" so it is not lost, which also makes it look identical to one merely waiting — this is
   // what tells the two apart.
   delivery_error?: string;
+  // A KNOWN reason this action could not be applied if approved right now (read-time preflight,
+  // never persisted). Shown BEFORE the decision so nobody approves a fix that cannot land. Absent
+  // means "no known blocker", not "guaranteed to work".
+  apply_blocked?: string;
   created_at?: string;
   decided_at?: string; // when the approve/reject verdict landed
   // diff is the unified diff this action would apply, rendered for a human to READ. Without it a

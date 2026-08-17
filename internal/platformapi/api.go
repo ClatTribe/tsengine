@@ -592,7 +592,54 @@ func (d Deps) handleAssets(w http.ResponseWriter, r *http.Request, tenantID stri
 
 func (d Deps) handleApprovals(w http.ResponseWriter, r *http.Request, tenantID string) {
 	a, err := d.Store.PendingApprovals(r.Context(), tenantID)
+	if err == nil {
+		a = d.annotateApplyBlocked(r.Context(), tenantID, a)
+	}
 	respond(w, a, err)
+}
+
+// annotateApplyBlocked marks each queued config-apply with a KNOWN reason it could not be applied,
+// so the human sees it BEFORE approving rather than after the click. Read-time only — nothing is
+// persisted (mirrors annotateSLA).
+//
+// Grounded (§10): it asks the action's OWN connector via the optional connector.Preflighter and
+// reports only what that returns. A connector without Preflight, an unreadable connection, or a
+// non-apply action is left UNANNOTATED — silence means "not known", never "this will work".
+func (d Deps) annotateApplyBlocked(ctx context.Context, tenantID string, acts []platform.Action) []platform.Action {
+	if d.Connectors == nil {
+		return acts
+	}
+	list, err := d.Store.ListConnections(ctx, tenantID)
+	if err != nil {
+		return acts // cannot check → say nothing
+	}
+	conns := make(map[string]platform.Connection, len(list))
+	for _, c := range list {
+		conns[c.ID] = c
+	}
+	for i, a := range acts {
+		// Only the connector-Apply path needs a write path. A ticket/notification action is
+		// delivered by a Filer, so preflighting it against a cloud connector would invent a blocker.
+		if a.Kind != platform.ActApplyConfig || a.ConnectionID == "" {
+			continue
+		}
+		conn, ok := conns[a.ConnectionID]
+		if !ok {
+			continue
+		}
+		c, err := d.Connectors.Get(string(conn.Kind))
+		if err != nil {
+			continue
+		}
+		pf, ok := c.(connector.Preflighter)
+		if !ok {
+			continue // connector cannot answer → unknown, not "fine"
+		}
+		if err := pf.Preflight(conn, a); err != nil {
+			acts[i].ApplyBlocked = err.Error()
+		}
+	}
+	return acts
 }
 
 // actionsView wraps the action list with a fix-verification roll-up — the KF#4 answer surfaced as a

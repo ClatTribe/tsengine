@@ -139,24 +139,50 @@ func (a *AWS) Watch(context.Context, platform.Connection, []byte) ([]Trigger, er
 // remediation_type or an unconfigured Writer surfaces as an error — the action stays
 // un-applied, never falsely "done".
 func (a *AWS) Apply(ctx context.Context, conn platform.Connection, _ string, act platform.Action) error {
+	// ONE source of truth with Preflight: everything knowable WITHOUT touching AWS is checked
+	// there, so a preflight that says "this can be applied" and an apply that then fails cannot
+	// drift apart. A preflight the customer trusts and an apply that disagrees with it would be
+	// worse than no preflight at all.
+	if err := a.Preflight(conn, act); err != nil {
+		return fmt.Errorf("aws apply: %w", err)
+	}
+	rt, _ := act.Payload["remediation_type"].(string)
+	target, _ := act.Payload["target"].(string)
+	switch rt {
+	case "s3_block_public_access":
+		return a.writerFor(conn).BlockS3PublicAccess(ctx, bucketFromTarget(target))
+	default:
+		// Unreachable — Preflight rejects every remediation_type with no live path.
+		return fmt.Errorf("aws apply: remediation_type %q has no live AWS write path yet (target %s)", rt, target)
+	}
+}
+
+// Preflight reports whether this action could actually be applied, WITHOUT performing it or making
+// any network call. It exists so the console can tell a human BEFORE they approve that a fix cannot
+// land: asking someone to approve a remediation that is structurally incapable of running, and only
+// revealing that after they click, spends the trust the whole HITL gate depends on.
+//
+// Grounded (§10): it reports only what is knowable from the action + connection — an unrecognised
+// remediation_type, a missing target, or no configured write path. It CANNOT promise success (AWS
+// may still deny the call), so nil means "no known blocker", never "guaranteed to work".
+func (a *AWS) Preflight(conn platform.Connection, act platform.Action) error {
 	rt, _ := act.Payload["remediation_type"].(string)
 	target, _ := act.Payload["target"].(string)
 	switch rt {
 	case "s3_block_public_access":
 		bucket := bucketFromTarget(target)
 		if bucket == "" {
-			return fmt.Errorf("aws apply: s3_block_public_access action %s has no target bucket", act.ID)
+			return fmt.Errorf("s3_block_public_access action %s has no target bucket", act.ID)
 		}
-		writer := a.writerFor(conn)
-		if writer == nil {
-			return fmt.Errorf("aws apply: no live AWS write path configured (set this connection's remediation "+
-				"role, or the operator default); action %s (block public access on %s) left un-applied", act.ID, bucket)
+		if a.writerFor(conn) == nil {
+			return fmt.Errorf("no live AWS write path is configured (set this connection's remediation "+
+				"role, or the operator default), so blocking public access on %s cannot be applied", bucket)
 		}
-		return writer.BlockS3PublicAccess(ctx, bucket)
+		return nil
 	case "":
-		return fmt.Errorf("aws apply: action %s carries no remediation_type — no live write path, left un-applied", act.ID)
+		return fmt.Errorf("action %s carries no remediation_type, so there is no write path to apply it with", act.ID)
 	default:
-		return fmt.Errorf("aws apply: remediation_type %q has no live AWS write path yet (target %s)", rt, target)
+		return fmt.Errorf("remediation_type %q has no live AWS write path yet (target %s)", rt, target)
 	}
 }
 

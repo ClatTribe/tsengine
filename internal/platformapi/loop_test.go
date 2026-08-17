@@ -191,3 +191,54 @@ func TestApprovalDecide_FailedApplyIsReportedNotSwallowed(t *testing.T) {
 		t.Error("action carries no delivery_error, so /activity cannot explain the failure either")
 	}
 }
+
+// awsLike is a connector that implements the optional Preflighter — the shape a real cloud
+// connector has when it can tell, without any network call, that a fix cannot land.
+type awsLike struct{ fakeConn }
+
+func (awsLike) Kind() string { return string(platform.ConnAWS) }
+func (awsLike) Preflight(_ platform.Connection, a platform.Action) error {
+	if a.Payload["remediation_type"] == "s3_block_public_access" {
+		return errNoWritePath
+	}
+	return nil
+}
+
+// The human must learn a fix cannot land BEFORE approving it, not after. The pending-approvals list
+// annotates each queued config-apply with its connector's known blocker.
+func TestApprovals_WarnBeforeApprovingAnUnappliableFix(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t1", Kind: platform.ConnAWS, Status: platform.ConnActive})
+	_ = st.PutAction(ctx, platform.Action{ID: "blocked", TenantID: "t1", ConnectionID: "c1", Tier: 2,
+		Kind: platform.ActApplyConfig, Status: platform.ActPendingApproval,
+		Payload: map[string]any{"remediation_type": "s3_block_public_access", "target": "arn:aws:s3:::b"}})
+	_ = st.PutAction(ctx, platform.Action{ID: "fine", TenantID: "t1", ConnectionID: "c1", Tier: 2,
+		Kind: platform.ActApplyConfig, Status: platform.ActPendingApproval,
+		Payload: map[string]any{"remediation_type": "something_supported"}})
+
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(awsLike{}), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/approvals", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var acts []platform.Action
+	if err := json.Unmarshal(rec.Body.Bytes(), &acts); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	got := map[string]string{}
+	for _, a := range acts {
+		got[a.ID] = a.ApplyBlocked
+	}
+	if got["blocked"] == "" {
+		t.Error("a fix with no live write path shows no warning — the customer approves something that cannot land")
+	}
+	if got["fine"] != "" {
+		t.Errorf("an appliable fix was flagged as blocked (%q) — noise trains people to ignore the warning", got["fine"])
+	}
+	// Nothing is persisted: the annotation is read-time only.
+	stored, _ := st.GetAction(ctx, "t1", "blocked")
+	if stored.ApplyBlocked != "" {
+		t.Error("apply_blocked was persisted; it must be computed at read time so it follows configuration changes")
+	}
+}
