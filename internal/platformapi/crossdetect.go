@@ -45,9 +45,16 @@ func (d Deps) handleAttackPaths(w http.ResponseWriter, r *http.Request, tenantID
 	if choke == nil {
 		choke = []crossdetect.ChokePoint{} // never null — the frontend maps over this
 	}
+	// The BASIS the correlation ran over. Zero paths is only reassuring if there was something to
+	// correlate: Correlate chains findings that bridge between surfaces, so an estate with no findings
+	// yields zero paths for the same reason a secure one does. Reporting the input lets the UI say
+	// "we correlated N findings and found no chain" instead of "no attack paths — that's good" over
+	// an estate that was never scanned (§10).
 	respond(w, map[string]any{
 		"attack_paths": chains, "count": len(chains),
-		"choke_points": choke,
+		"choke_points":        choke,
+		"correlated_findings": len(findings),
+		"assets_considered":   len(assets),
 	}, nil)
 }
 

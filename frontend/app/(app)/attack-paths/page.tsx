@@ -8,8 +8,14 @@ import { PageIntro } from "@/components/ui/page-intro";
 export const dynamic = "force-dynamic";
 
 export default async function AttackPathsPage() {
-  const [{ attack_paths: paths }, conns] = await Promise.all([api.attackPaths(), api.connections()]);
+  const [{ attack_paths: paths, correlated_findings }, conns] = await Promise.all([
+    api.attackPaths(),
+    api.connections(),
+  ]);
   const sorted = [...paths].sort((a, b) => sevRank(a.severity) - sevRank(b.severity));
+  // How many findings the correlation actually ran over. Zero paths over zero findings says nothing
+  // about security — it says nothing has been scanned.
+  const correlated = correlated_findings ?? 0;
   // Grounded: every attack path terminates at a cloud crown jewel (cloud_account is the only crown in the
   // correlation graph). So with NO cloud connected, there can be no paths at all — nudge connecting one
   // rather than implying a clean posture.
@@ -58,9 +64,22 @@ export default async function AttackPathsPage() {
       ) : sorted.length === 0 ? (
         <div className="space-y-3">
           <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-muted">
-            <span className="font-medium text-ink">No attack paths right now — that&apos;s good.</span> It means no
-            single weakness currently chains all the way to your cloud root. We&apos;ll spot a chain the moment one
-            appears. Here&apos;s what one looks like:
+            {correlated > 0 ? (
+              <>
+                <span className="font-medium text-ink">No attack paths right now — that&apos;s good.</span> We
+                correlated <span className="font-medium text-ink">{correlated}</span> finding
+                {correlated === 1 ? "" : "s"} across your surfaces and none of them chain all the way to your cloud
+                root. We&apos;ll spot a chain the moment one appears. Here&apos;s what one looks like:
+              </>
+            ) : (
+              // Zero paths over zero findings is not a clean bill of health — a chain is built FROM
+              // findings, so an estate that was never scanned looks exactly like a secure one.
+              <>
+                <span className="font-medium text-ink">Nothing to correlate yet.</span> Attack paths are built from
+                findings that bridge between your surfaces, and no findings have been recorded, so this is not yet a
+                statement about your security. Scan an asset and any chain will appear here:
+              </>
+            )}
           </div>
           <PathCard path={EXAMPLE_PATH} example />
         </div>

@@ -275,3 +275,48 @@ func TestRuntimeEvents_IngestAndCorrelate(t *testing.T) {
 		t.Errorf("a body-supplied tenant must not cross tenants: %s", e1)
 	}
 }
+
+// "No attack paths" is only good news if there was something to correlate. Correlate chains findings
+// that bridge between surfaces, so an estate that was never scanned yields zero paths for exactly the
+// same reason a secure one does. The response must carry the basis so the UI can tell them apart.
+func TestAttackPaths_ReportsCorrelationBasis(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "t1", Type: "cloud_account", Target: "111122223333"})
+
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/attack-paths", "t1", "")
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+	var resp struct {
+		Count              int `json:"count"`
+		CorrelatedFindings int `json:"correlated_findings"`
+		AssetsConsidered   int `json:"assets_considered"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Count != 0 {
+		t.Fatalf("precondition: expected no paths, got %d", resp.Count)
+	}
+	if resp.CorrelatedFindings != 0 {
+		t.Errorf("nothing was scanned, so the correlation basis should be 0, got %d", resp.CorrelatedFindings)
+	}
+	if resp.AssetsConsidered != 1 {
+		t.Errorf("assets_considered = %d, want 1 — the UI cannot distinguish 'nothing to correlate' without it", resp.AssetsConsidered)
+	}
+
+	// Now with a real finding: the basis must reflect it, proving the field tracks the actual input
+	// rather than being a constant.
+	_ = st.PutFinding(ctx, "t1", types.Finding{ID: "f1", Tool: "gitleaks", RuleID: "gitleaks::aws-key",
+		Severity: types.SeverityHigh, Endpoint: "repo/app.go:12"})
+	rec2 := do(h, "GET", "/v1/attack-paths", "t1", "")
+	var resp2 struct {
+		CorrelatedFindings int `json:"correlated_findings"`
+	}
+	_ = json.Unmarshal(rec2.Body.Bytes(), &resp2)
+	if resp2.CorrelatedFindings != 1 {
+		t.Errorf("correlated_findings = %d after adding a finding, want 1", resp2.CorrelatedFindings)
+	}
+}

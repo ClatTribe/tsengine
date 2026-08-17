@@ -100,6 +100,11 @@ export interface AttackPath {
 export interface AttackPaths {
   attack_paths: AttackPath[];
   count: number;
+  // The basis the correlation ran over. Zero paths is only good news if there was something to
+  // correlate — a chain is built FROM findings, so an unscanned estate yields zero just like a
+  // secure one. Optional so an older API response still parses.
+  correlated_findings?: number;
+  assets_considered?: number;
 }
 
 // Unified issue (GET /v1/issues) — the same weakness reported by one or more
