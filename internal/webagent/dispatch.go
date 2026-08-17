@@ -56,6 +56,18 @@ func dispatchOSSHelp() string {
 	return b.String()
 }
 
+// OSSSpecialistNames is the exported set of tools dispatch_oss can reach — the curated agent registry.
+// Exposed so a cross-package test can assert every one of them is actually registered in the sandbox
+// tool-server (§12.7): a specialist listed here but absent from the tool-server 404s at dispatch time,
+// a silent capability gap the agent only discovers mid-engagement.
+func OSSSpecialistNames() []string {
+	out := make([]string, 0, len(ossSpecialists))
+	for n := range ossSpecialists {
+		out = append(out, n)
+	}
+	return out
+}
+
 func ossToolList() string {
 	names := make([]string, 0, len(ossSpecialists))
 	for n := range ossSpecialists {
