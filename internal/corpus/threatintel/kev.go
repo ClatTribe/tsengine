@@ -14,8 +14,16 @@ type kevFeed struct {
 	CatalogVersion  string `json:"catalogVersion"`
 	DateReleased    string `json:"dateReleased"`
 	Vulnerabilities []struct {
-		CveID     string `json:"cveID"`
-		DateAdded string `json:"dateAdded"` // "2006-01-02"
+		CveID string `json:"cveID"`
+		// vendorProject + product name the AFFECTED TECHNOLOGY. Retained (they
+		// were previously dropped) because they are what makes threat-informed
+		// TARGETING possible: a recon-detected product can be matched against
+		// the KEV catalog to probe the CVEs actually exploited in the wild for
+		// that technology, instead of a static template list. See
+		// internal/threatinformed.
+		VendorProject string `json:"vendorProject"`
+		Product       string `json:"product"`
+		DateAdded     string `json:"dateAdded"` // "2006-01-02"
 	} `json:"vulnerabilities"`
 }
 
@@ -32,7 +40,7 @@ func ParseKEV(r io.Reader) (map[string]types.KEVStatus, time.Time, string, error
 		if v.CveID == "" {
 			continue
 		}
-		st := types.KEVStatus{Listed: true}
+		st := types.KEVStatus{Listed: true, Vendor: v.VendorProject, Product: v.Product}
 		if v.DateAdded != "" {
 			if d, err := time.Parse("2006-01-02", v.DateAdded); err == nil {
 				st.DateAdded = d.UTC()

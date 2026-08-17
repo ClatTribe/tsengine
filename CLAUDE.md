@@ -493,6 +493,59 @@ L2 retains a separate `query_threat_intel` tool for the LLM to look up CVEs that
 
 ---
 
+### 7.1 Threat-informed DISCOVERY (intel decides what to look for)
+
+The corpus above was long used at only ONE point: annotation (plus opt-in KEV
+severity escalation). Nothing in the DISCOVERY path consulted it — probe
+selection was static/hardcoded (`"api,graphql,jwt,oauth"`, a port→tags map), so
+the engine could know a CVE was exploited in the wild against Apache httpd,
+detect Apache httpd, and still never probe for it.
+
+**`internal/threatinformed`** closes that loop: `Plan(corpus, observed, opts)`
+takes the technology recon ACTUALLY observed (nmap/httpx `ToolArgs["product"]`/
+`["version"]` — the same grounded signal `service_eol` consumes) and returns
+ranked, bounded CVE probes. Ranking is by real exploitation evidence: KEV
+listing (in-the-wild) dominates, then EPSS probability, then a public exploit,
+and a product match outranks the same evidence without one. Wired as a
+deterministic ESCALATION trigger (§5.3) via
+`common.ThreatInformedEscalation`, which batches the selected templates into ONE
+nuclei run (`-id` takes a comma-separated list). Enabling data fix: the KEV
+ingest was DISCARDING `vendorProject`/`product`; they are now retained on
+`types.KEVStatus` (optional/`omitempty` — dashboard contract + embedded corpus
+snapshot stay byte-compatible), because they are what makes tech→CVE targeting
+possible.
+
+Invariants: **grounded** (§10) — a probe is emitted only for a CVE really in the
+pinned corpus with a real exploitation signal, matched via the corpus's OWN KEV
+vendor/product strings; no signal → no probe (absence of evidence is not a
+reason to spend budget); no CVE id is ever synthesized. **Bounded** —
+`TSENGINE_THREAT_PROBE_MAX` (default 25; `Plan`'s own default 50), with a
+separate sub-cap for speculative intel-only breadth that is OFF by default.
+**Deterministic + LLM-free** — identical inputs yield an identical ordered plan,
+so it works today at zero token cost. **Graceful** — no corpus / unreadable
+corpus / no observed product → no-op, never a scan failure. Same env var as the
+hook (`TSENGINE_THREAT_INTEL_CORPUS`) so annotation and targeting always agree
+on the world-state. Wired for **ip** (nmap product+version) and **web** (httpx webserver +
+-tech-detect; httpx now emits these STRUCTURED in ToolArgs, not only inside the
+title). **container_image is deliberately NOT wired**: grype/trivy already emit
+CVE-keyed findings (`grype::CVE-...`) and the `threat_intel.enrich` hook extracts
+the CVE from rule_id, so KEV/EPSS already lands on every container finding --
+the intel loop is closed there by construction, and a nuclei probe has no live
+target inside an image. (An SBOM-x-KEV cross-check for packages grype's DB
+missed would need affected-VERSION-RANGE data the corpus does not carry;
+guessing from a product-name match alone would be FP-prone, so it is NOT done
+-- Sec 10.)
+
+Per-task benchmark map:
+[docs/security-engineer-tasks-benchmarks.md](docs/security-engineer-tasks-benchmarks.md).
+
+L2 retains a separate `query_threat_intel` tool for the LLM to look up CVEs that aren't in current findings (chain reasoning across related CVEs). The two are complementary: L1.5 hook annotates emitted findings; L2 tool serves on-demand lookups during reasoning.
+
+---
+
+---
+
+
 ## 8. Compliance control mapping at L1
 
 Every finding emitted at L1 carries a compliance annotation. Mapping is **annotation, not gate** â L1 emits the technical finding regardless of whether it maps to a control; the mapping just records which controls it affects.

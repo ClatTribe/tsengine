@@ -19,6 +19,14 @@ type ThreatIntel struct {
 type KEVStatus struct {
 	Listed    bool      `json:"listed"`
 	DateAdded time.Time `json:"date_added,omitempty"`
+	// Vendor + Product name the affected technology as CISA catalogs it
+	// ("Apache", "HTTP Server"). Optional (omitempty) so the dashboard
+	// contract and the embedded corpus snapshot stay byte-compatible. They
+	// carry the "exploited in the wild in WHICH product" fact, which both
+	// informs the reader and drives threat-informed targeting
+	// (internal/threatinformed).
+	Vendor  string `json:"vendor,omitempty"`
+	Product string `json:"product,omitempty"`
 }
 
 // EPSSScore is the FIRST.org Exploit Prediction Scoring System reading.
