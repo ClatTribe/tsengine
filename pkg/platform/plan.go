@@ -41,6 +41,14 @@ type PlanLimits struct {
 	AllFrameworks        bool   `json:"all_frameworks"`        // all 22 vs core (SOC 2 + 1)
 	ContinuousMonitoring bool   `json:"continuous_monitoring"` // scheduled re-scan + incidents, vs on-demand
 	HumanInLoopApply     bool   `json:"human_in_loop_apply"`   // gated remediation apply loop
+	// APIRatePerMin is the fair-use ceiling on authenticated /v1 requests per minute
+	// for a tenant on this plan — a SERVICE-PROTECTION limit (one tenant's runaway
+	// automation can't degrade the shared platform), NOT a billing meter. Paid tiers
+	// get more headroom; 0 = unmetered (Enterprise). It is deliberately generous:
+	// interactive + normal automation stays well under it, and only sustained excess
+	// is throttled (429 + Retry-After). AI *spend* is bounded separately by
+	// MonthlyAIBudgetUSD.
+	APIRatePerMin int `json:"api_rate_per_min"`
 }
 
 // NormalizePlan maps a raw plan string (case/space-insensitive, with legacy aliases) to a
@@ -137,6 +145,7 @@ func baseEntitlements(plan string) PlanLimits {
 			Plan: PlanEnterprise, Label: "Enterprise", MaxAssets: -1,
 			AIEnabled: true, AutonomousPentest: true, AllFrameworks: true,
 			ContinuousMonitoring: true, HumanInLoopApply: true,
+			APIRatePerMin: 0, // unmetered
 		}
 	case PlanGrowth:
 		// The "Core" tier: the full deterministic engine PLUS the AI Security Engineer.
@@ -155,6 +164,7 @@ func baseEntitlements(plan string) PlanLimits {
 			Plan: PlanGrowth, Label: "Core", MaxAssets: 25,
 			AIEnabled: true, AutonomousPentest: false, AllFrameworks: true,
 			ContinuousMonitoring: true, HumanInLoopApply: true,
+			APIRatePerMin: 600, // 10 req/s sustained — ample for CI + dashboards
 		}
 	default:
 		// Free: everything the deterministic engine does, on demand, capped by asset count.
@@ -175,6 +185,7 @@ func baseEntitlements(plan string) PlanLimits {
 			Plan: PlanFree, Label: "Free", MaxAssets: 2,
 			AIEnabled: false, AutonomousPentest: false, AllFrameworks: true,
 			ContinuousMonitoring: false, HumanInLoopApply: true,
+			APIRatePerMin: 120, // 2 req/s sustained — plenty to evaluate, blocks scripted abuse
 		}
 	}
 }

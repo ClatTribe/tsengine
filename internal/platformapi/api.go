@@ -30,6 +30,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
+	"github.com/ClatTribe/tsengine/internal/ratelimit"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
@@ -49,8 +50,12 @@ type Deps struct {
 	IncidentOpener IncidentOpener   // optional: opens incidents for event-driven ingest (identity/SaaS)
 	Vault          Sealer           // optional: seals OAuth tokens before persistence
 	Recorder       *ledger.Recorder // optional: signs review request/resolve into the ledger
-	Token          string           // static platform bearer token (required)
-	PublicURL      string           // base URL for OAuth redirect_uri (e.g. https://app.example)
+	// RateLimiter enforces the per-tenant fair-use ceiling (plan.APIRatePerMin) on
+	// authenticated /v1 requests. Optional: nil disables limiting (fail-open), which
+	// is the default in tests. Wired in cmd/platform for production.
+	RateLimiter *ratelimit.Limiter
+	Token       string // static platform bearer token (required)
+	PublicURL   string // base URL for OAuth redirect_uri (e.g. https://app.example)
 	// AppURL is the browser-facing app base the OAuth callback lands the user back on after a
 	// successful connect. When set, the callback 303-redirects to AppURL/assets?connected=<kind>
 	// instead of writing a raw JSON blob into the browser (the post-connect "aha" moment). Empty
@@ -374,6 +379,9 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 				writeJSON(w, http.StatusBadRequest, errBody("missing X-Tenant-ID"))
 				return
 			}
+			if !d.rateOK(r, w, tenantID) {
+				return
+			}
 			h(w, r, tenantID)
 			return
 		}
@@ -386,11 +394,53 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 				writeJSON(w, http.StatusForbidden, errCode("set a new password to continue", "password_change_required"))
 				return
 			}
+			if !d.rateOK(r, w, s.TenantID) {
+				return
+			}
 			h(w, r, s.TenantID)
 			return
 		}
 		writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
 	}
+}
+
+// rateOK enforces the per-tenant fair-use ceiling (plan.APIRatePerMin). Limiting is
+// off entirely (allow) when no limiter is wired or the plan is unmetered (Enterprise),
+// so the default and the top tier are never throttled. A tenant-read error tightens
+// to Free's ceiling rather than opening — an induced error must not become a bypass —
+// but Free's limit is so far above interactive + normal-automation use that this only
+// ever bites an abuser, never a real user. On a real breach it writes 429 +
+// Retry-After and returns false. The live SSE feed (/v1/events) is exempt: it is one
+// long-lived connection, not request volume, so counting it would throttle a
+// dashboard that is merely open.
+func (d Deps) rateOK(r *http.Request, w http.ResponseWriter, tenantID string) bool {
+	if d.RateLimiter == nil {
+		return true
+	}
+	if r.URL.Path == "/v1/events" { // long-lived SSE stream, not per-request volume
+		return true
+	}
+	perMin := platform.Entitlements(d.planFor(r.Context(), tenantID)).APIRatePerMin
+	if perMin <= 0 { // unmetered plan (Enterprise) or unset
+		return true
+	}
+	if d.RateLimiter.Allow(tenantID, perMin) {
+		return true
+	}
+	w.Header().Set("Retry-After", "1")
+	writeJSON(w, http.StatusTooManyRequests, errCode(
+		"rate limit exceeded — slow down and retry. Paid plans have higher limits.", "rate_limited"))
+	return false
+}
+
+// planFor reads the tenant's plan, defaulting to Free on any error (the strictest
+// limit), so a read failure can only ever tighten — never grant — headroom.
+func (d Deps) planFor(ctx context.Context, tenantID string) string {
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		return platform.PlanFree
+	}
+	return t.Plan
 }
 
 // platformAuth enforces only the platform bearer token (no tenant scope) — for

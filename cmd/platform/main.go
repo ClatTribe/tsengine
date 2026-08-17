@@ -83,6 +83,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/platformapi"
+	"github.com/ClatTribe/tsengine/internal/ratelimit"
 	"github.com/ClatTribe/tsengine/internal/remediate"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
@@ -476,6 +477,10 @@ func main() {
 	}
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
+		// Per-tenant fair-use rate limiting on the authenticated API (plan.APIRatePerMin):
+		// one tenant's runaway automation can't degrade the shared platform, and paid
+		// tiers get more headroom. Fail-open (generous defaults; Enterprise unmetered).
+		RateLimiter: ratelimit.New(),
 		// Ingested findings reach the approval desk with the SAME proposer the runner uses.
 		ProposeFix: func(f types.Finding, a platform.Asset) (platform.Action, bool) { return remediate.Propose(f, a, newID) },
 		// LIVE cloud read: assume the customer's read-only role recorded at connect time. The role ARN
