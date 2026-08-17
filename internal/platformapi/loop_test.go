@@ -242,3 +242,40 @@ func TestApprovals_WarnBeforeApprovingAnUnappliableFix(t *testing.T) {
 		t.Error("apply_blocked was persisted; it must be computed at read time so it follows configuration changes")
 	}
 }
+
+// The integration, with the REAL Google Workspace connector rather than a fake: a connection
+// onboarded read-only (the default — every IdP onboards read-only by design) must carry a warning
+// on the queued suspend BEFORE anyone approves it, naming the scope an admin has to grant.
+func TestApprovals_ReadonlyWorkspaceSuspendWarnsWithRealConnector(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutConnection(ctx, platform.Connection{
+		ID: "c1", TenantID: "t1", Kind: platform.ConnGWorkspace, Status: platform.ConnActive,
+		Scopes: []string{"https://www.googleapis.com/auth/admin.directory.user.readonly"},
+	})
+	_ = st.PutAction(ctx, platform.Action{
+		ID: "suspend1", TenantID: "t1", ConnectionID: "c1", Tier: 2,
+		Kind: platform.ActApplyConfig, Status: platform.ActPendingApproval,
+		Payload: map[string]any{"remediation_type": "account_suspend", "target": "leaver@acme.com"},
+	})
+
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(&connector.GWorkspace{}), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/approvals", "t1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var acts []platform.Action
+	if err := json.Unmarshal(rec.Body.Bytes(), &acts); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("want 1 pending action, got %d", len(acts))
+	}
+	blocked := acts[0].ApplyBlocked
+	if blocked == "" {
+		t.Fatal("a read-only Workspace connection produced NO warning — the customer approves a suspend that will 403")
+	}
+	if !strings.Contains(blocked, "admin.directory.user") {
+		t.Errorf("the warning must name the scope to grant so it is actionable, got %q", blocked)
+	}
+}
