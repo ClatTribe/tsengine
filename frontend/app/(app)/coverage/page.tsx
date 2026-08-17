@@ -2,6 +2,8 @@ import { ScanSearch, CheckCircle2, CircleDashed } from "lucide-react";
 import { api } from "@/lib/api";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
+import { PageTabs } from "@/components/ui/page-tabs";
+import { SECURITY_TABS } from "@/lib/tabs";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +30,8 @@ export default async function CoveragePage() {
         title="What we test"
         description="Exactly what was tested on each asset — the tools every scan runs, when it last ran, and which of them surfaced something. It also names what we could NOT test: classes like BOLA that need you to declare two identities first. No findings is not the same as nothing to find."
       />
+
+      <PageTabs tabs={SECURITY_TABS} />
 
 
       {cov.total_assets > 0 && (

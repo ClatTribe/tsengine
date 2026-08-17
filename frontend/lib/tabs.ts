@@ -33,7 +33,14 @@ export const CONNECTION_TABS: Tab[] = [
 // SECURITY — the Engineer's output. Issues is the deduplicated one-per-problem list; findings is the
 // raw per-tool detail behind it, kept as a tab rather than a destination so nobody has to learn the
 // difference between an issue and a finding to use the product.
+// The security-analysis surface, grouped as tabs on one destination so a security
+// engineer reaches the depth they work in — the prioritized issues, the raw findings,
+// how those issues CHAIN into a breach, and what was actually tested — one click from
+// each other, without hunting the command palette. (Tabs on a destination, not new
+// flat nav rows — same principle as COMPLIANCE_TABS / CONNECTION_TABS.)
 export const SECURITY_TABS: Tab[] = [
   { href: "/issues", label: "Issues" },
   { href: "/findings", label: "All findings" },
+  { href: "/attack-paths", label: "Attack paths" },
+  { href: "/coverage", label: "Coverage" },
 ];
