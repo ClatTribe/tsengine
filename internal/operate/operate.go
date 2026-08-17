@@ -246,6 +246,18 @@ func checkEmailAuth(ws Workspace, now time.Time, id func() string) []types.Findi
 				now, comp(types.Compliance{CISv8: []string{"9.5"},
 					GDPR: []string{"Art. 32"}, NIST80053: []string{"SI-8"}, FedRAMP: []string{"SI-8"}, DPDP: []string{"Sec. 8(5)"}})))
 		}
+		// Depth: DMARC is published and enforcing, but at p=quarantine rather than p=reject —
+		// spoofed mail still reaches the recipient's junk folder instead of being rejected, and
+		// quarantine is the usual "we started a DMARC rollout and stopped" resting state. CISA's
+		// SCuBA baselines (MS.EXO.4.2v1 / GWS.GMAIL.4.2v1) make p=reject mandatory. Fires only on
+		// an explicitly-parsed quarantine, so an absent DMARC still gets the high-severity
+		// not-enforced finding above and a p=reject domain stays clean (no double-report).
+		if d.DMARC == "quarantine" {
+			out = append(out, finding(id(), "operate::dmarc-not-rejecting", types.SeverityMedium,
+				"DMARC quarantines but does not reject: "+d.Name, d.Name,
+				fmt.Sprintf("Domain %s publishes p=quarantine. Spoofed mail is still delivered (to junk) rather than rejected, so BEC/phishing can land. Move to p=reject once the aggregate reports are clean.", d.Name),
+				now, comp(types.Compliance{PCI: []string{"5.4.1"}, CISv8: []string{"9.5"}, GDPR: []string{"Art. 32"}, NIST80053: []string{"SI-8"}, FedRAMP: []string{"SI-8"}, DPDP: []string{"Sec. 8(5)"}})))
+		}
 		// Depth: a permissive SPF `all` qualifier (+all / ?all) lets anyone pass SPF — present
 		// but ineffective. Fires only on an explicitly-parsed permissive qualifier (FP-safe for
 		// snapshot domains that don't supply SPFAll).

@@ -79,6 +79,59 @@ tsengine has **two layers serving three audiences**:
 - **What runs here**: LLM Lead agent over a â¤12-tool catalog tied to OODA (Â§2.6)
 - L2 **cannot translate findings L1 didn't surface.** L2 is the translator, not the detector.
 
+### 2.2.1 Product identity & the specialist taxonomy (naming invariant)
+
+The L2 product is the **AI Security Engineer** — keep this umbrella name. It is
+deliberately BROADER than any single domain, because the engine already spans
+SIX security surfaces, not one. Naming the product after one surface ("AI Cloud
+Security Engineer", "AI SOC", "AI AppSec") is a POSITIONING BUG: it caps the
+perceived scope below what is built and misleads future design toward a
+single-domain shape. Do not do it.
+
+The architecture is **one Lead orchestrating domain SPECIALISTS** (the ≤12-tool
+cap, §2.6, is why: no single agent can hold every surface's tools — split by
+DOMAIN, never by task, since the tasks within a domain share one context: the
+cloud graph, the repo tree). The specialists, each named as a security-team role
+and each mapping to a benchmark family (docs/security-engineer-tasks-benchmarks.md):
+
+| Specialist (sub-agent) | Code | Surface | Neutral benchmark family |
+|---|---|---|---|
+| **AI Cloud Security Engineer** | `internal/cloudagent` | cloud IAM attack-paths | CloudGoat / IAM-Vulnerable |
+| **AI AppSec Engineer** | repository/container/api assets + `remediate`/`backport` | code/deps/images/APIs | OWASP-Bench / SEC-bench / BackportBench |
+| **AI Identity/SaaS Engineer** | `internal/operate` + `internal/sspm` | IdP posture + SaaS config | CISA SCuBA (ScubaGear/ScubaGoggles) |
+| **AI SOC Analyst** | `internal/detect` + A-RSP | detect → triage → respond | ExCyTIn-Bench / SecRespond / SIR-Bench |
+| **AI Compliance Engineer** | `internal/grc` | 22-framework evidence | OpenCRE / SCF / CSA CCM (crosswalk corroboration) |
+| **AI EASM/OSINT Engineer** | `internal/osint` | external attacker's-eye exposure | SpiderFoot/taranis parity |
+
+**FOCUS DECISION (2026-08-17) — be best-in-breed in CLOUD + OFFENSE + COMPLIANCE.**
+Those three have a measured lead or a structural advantage nobody else pairs, and together
+they form one coherent product: find the cross-surface attack path, prove it by
+exploitation, produce the audit evidence. The other three specialists ship as
+**capabilities, not claims** — honest about depth, never described as best-in-breed. Three
+deep specialists beat six shallow ones; the failure mode this prevents is spreading across
+all six and leading in none. Gap sizing, the deferred items (AppSec patch agent, SOC
+investigation agent, identity/SaaS parity, EASM benchmark) and the review triggers live in
+[docs/specialist-roadmap.md](docs/specialist-roadmap.md) — read it before starting work on
+a non-focus specialist, because several of those gaps are XL and blocked on a product
+decision, not on effort.
+
+**Design rules to keep in mind for future work:**
+1. **New security capability → a SPECIALIST under the umbrella, or a tool a
+   specialist calls — never a rename of the whole product to that domain.**
+2. **Split agents by DOMAIN (shared substrate), not by TASK** (discover/triage/
+   remediate within a domain are phases of ONE investigation loop — §5.3 / the
+   cloudagent enumerate→verify→record→fix loop; task-split re-loads context and
+   breaks continuity).
+3. **Integrations are SHARED across specialists** — the GitHub connection serves
+   AppSec + SSPM + OSINT-leak-search; an IdP serves Identity + SOC; the cloud
+   role serves Cloud + Compliance evidence. So "go comprehensive" costs almost
+   no new integration surface (§18.1 connector set). When adding a specialist,
+   REUSE an existing connection before adding a new connector.
+4. Market-legible single label, if one is forced: **"AI Security Engineer"** >
+   any single-domain name — it is what a mid-market ICP without a security team
+   is actually hiring for, and it does not undersell the six surfaces.
+
+
 ### 2.3 The 2Ã2
 
 | Layer | Audience | Artifact | Quality bar |

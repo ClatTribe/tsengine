@@ -65,6 +65,9 @@ type Deps struct {
 	// GitHubAPIBase overrides the GitHub REST base for the live SaaS-posture sync (default
 	// https://api.github.com). Set only in tests (a fake API server).
 	GitHubAPIBase string
+	// GraphAPIBase overrides the Microsoft Graph base for the live M365 SaaS-posture
+	// sync (default https://graph.microsoft.com). Test/staging override only.
+	GraphAPIBase string
 	// Prober drives live active-exploitation probes (the Phase-1 ActiveDriver). Nil →
 	// active engagements fall back to the passive driver (no live exploitation). Set
 	// only when the operator has enabled live active exploitation; per-engagement
@@ -280,6 +283,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                                                                 // OSINT "External exposure" view + summary
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
+	mux.HandleFunc("POST /v1/saas/m365/sync", d.auth(d.handleSyncSaaSM365))                                                    // LIVE M365 SSPM via the onboarded Graph token (SCuBA fetch half)
 	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                                                         // continuous config-snapshot drift: prev+cur inventory → change-control findings
 	mux.HandleFunc("GET /v1/ask", d.auth(d.handleAsk))                                                                         // T6 "ask your estate" — the SAME search the agent uses, exposed to a human
 	mux.HandleFunc("GET /v1/cloud/history", d.auth(d.handleCloudHistory))                                                      // "when did this become public?" — the estate timeline (append-only, change-detected)
