@@ -131,8 +131,16 @@ func TestCodeInvestigate_RunsAndGroundsAssessment(t *testing.T) {
 	for _, f := range fs {
 		if f.Tool == "codeagent" {
 			codeF++
-			if f.VerificationStatus != types.VerificationVerified {
-				t.Errorf("codeagent finding should be verified, got %s", f.VerificationStatus)
+			// CORROBORATED, deliberately not verified (changed from verified). types.VerificationVerified
+			// is documented as "independent method(s) ACTIVELY confirmed it (re-fire via tool-replay)",
+			// and the L1.5 confidence hook acts on exactly that reading — it floors confidence at 0.95
+			// with the comment "actively re-fired (L2.5)". The code agent re-fires nothing: its grounding
+			// proves it READ real source at real path:line, but exploitability is the model's judgement.
+			// Corroborated is what actually happened — the L1 scanner's hit plus an independent read of
+			// the code agreeing, nothing re-fired. The CLOUD agent still earns verified, because
+			// validatePath deterministically re-checks every edge against the inventory.
+			if f.VerificationStatus != types.VerificationCorroborated {
+				t.Errorf("codeagent finding should be corroborated, got %s", f.VerificationStatus)
 			}
 		}
 	}

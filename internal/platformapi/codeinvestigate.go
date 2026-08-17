@@ -248,6 +248,18 @@ func codeIssueToFinding(id, repo string, is codeagent.CodeIssue) types.Finding {
 	return types.Finding{
 		ID: id, RuleID: rule, Tool: "codeagent", Severity: sev,
 		Endpoint: endpoint, Title: title + " — confirmed at source", Description: desc,
-		VerificationStatus: types.VerificationVerified, RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
+		// CORROBORATED, not verified. types.VerificationVerified is defined as "independent method(s)
+		// ACTIVELY confirmed it (re-fire via tool-replay)", and the L1.5 confidence hook treats it that
+		// way — it floors confidence at 0.95 with the comment "actively re-fired (L2.5)".
+		//
+		// The code agent earns less than that, and saying so costs nothing real. Its grounding
+		// (evidenceGrounded) proves it READ the actual source and cited real path:line locations — but
+		// EXPLOITABILITY is the model's judgment (argBool), re-confirmed by nothing. Corroborated is
+		// exactly what happened and what the tier means: two INDEPENDENT assessments agreeing (the L1
+		// scanner's hit + an agent that read the code) with nothing re-fired.
+		//
+		// The CLOUD agent keeps verified, and the difference is the point: validatePath deterministically
+		// re-checks every edge against the inventory, so an evaluator confirms it, not the model.
+		VerificationStatus: types.VerificationCorroborated, RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
 	}
 }

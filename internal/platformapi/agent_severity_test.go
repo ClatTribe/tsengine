@@ -48,3 +48,38 @@ func TestAgentSeverity_CodePathKeepsItsNeutralDefault(t *testing.T) {
 		}
 	}
 }
+
+// "verified" is defined as independent method(s) ACTIVELY confirming a finding (re-fire via
+// tool-replay), and the L1.5 confidence hook acts on that definition by flooring confidence at 0.95
+// ("actively re-fired"). The two agents earn different tiers, and the distinction is the product's
+// no-FP bar, so pin it:
+//
+//   - CLOUD: validatePath deterministically re-checks every edge against the inventory and requires a
+//     crown-jewel endpoint. An evaluator confirms it, not the model → verified.
+//   - CODE:  evidenceGrounded proves the agent READ real source at real path:line, but exploitability
+//     is the model's judgment, re-confirmed by nothing → corroborated.
+//
+// Claiming "verified" for the code path would inflate a model judgement to 0.95+ confidence on a
+// label it did not earn.
+func TestAgentFindings_VerificationTierMatchesWhatWasProven(t *testing.T) {
+	cloud := cloudIssueToFinding("f1", cloudagent.Issue{
+		Target: "s3://crown", Severity: "high", Path: []string{"internet", "s3://crown"},
+	})
+	if cloud.VerificationStatus != types.VerificationVerified {
+		t.Errorf("cloud attack path = %q, want verified — every edge is deterministically re-checked",
+			cloud.VerificationStatus)
+	}
+
+	code := codeIssueToFinding("f2", "repo/x", codeagent.CodeIssue{
+		Severity: "high", Title: "sqli", Exploitable: true,
+		Evidence: []string{"app/db.go:42"},
+	})
+	if code.VerificationStatus == types.VerificationVerified {
+		t.Error("code assessment claims VERIFIED, but nothing actively re-confirmed exploitability — " +
+			"that inflates a model judgement to the 0.95 confidence floor reserved for re-fired findings")
+	}
+	if code.VerificationStatus != types.VerificationCorroborated {
+		t.Errorf("code assessment = %q, want corroborated (the L1 hit + an independent read of the "+
+			"real source agreeing, with nothing re-fired)", code.VerificationStatus)
+	}
+}
