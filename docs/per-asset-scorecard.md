@@ -200,6 +200,26 @@ on running that benchmark's own app-level harness + a frontier LLM — the same 
 pentester and cloud, not missing code. cvepatch's disk-light single-file format is deliberate
 (laptop/CI) and is exactly why it does not drop-in against app-level corpora.
 
+## 3c. What the customer is TOLD (dimension 3) — live-verified
+
+Three surfaces claimed more than the engine proved. All three now report their own basis, and all
+three were verified against a running platform (SQLite-backed, real HTTP), not just unit tests:
+
+| Surface | The overclaim | Now | Live proof |
+|---|---|---|---|
+| `/coverage` | "No findings recorded" over an API whose top risks were never testable | names the untested classes + how to enable them | unscanned api asset → BOLA/BFLA/cross-user-auth listed w/ OWASP refs; **3 → 0 after posting an authz-test config** |
+| `/posture` | "No risks found — this posture source is clean" | "Assessed <when>" vs "Not assessed yet" | a CLEAN device ingest (0 findings) → `assessed=true` + timestamp, while tprm/clouddrift stay `assessed=false` |
+| `/attack-paths` | "No attack paths — that's good" over an unscanned estate | reports `correlated_findings` | unscanned tenant → `count=0, correlated_findings=0`; basis rises to 1 when a finding is added |
+
+The shared root cause: these assessors are GROUNDED, so a clean estate legitimately yields zero
+findings — which makes "assessed, clean" and "never ran" byte-identical in the store. Every fix
+records the BASIS (was it assessed / what was it correlated over) rather than softening the wording,
+so the reassurance shrinks as the customer configures instead of being a permanent disclaimer.
+
+**Not verified: the rendered pages in a browser.** The preview launcher fails with an environment-level
+`EPERM: uv_cwd` from npm and cannot target a worktree, so the React render is checked by `tsc` +
+the live JSON the components consume, not by pixels.
+
 ## 4. What would raise confidence, in order
 
 1. **Broaden the thin fixtures — but not container.** Cloud went 6 → 19 controls and the correction
