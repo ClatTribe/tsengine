@@ -160,6 +160,35 @@ require their runner.
 
 ---
 
+## 3b. AI security engineer — patch pipeline (execution-verified)
+
+The defensive agent's core job is PATCH: given a vulnerable app + a finding, produce a fix that
+CLOSES the exploit without breaking the app. `tsbench cvepatch` grades that with an EXECUTION oracle —
+it applies the patch, re-runs the exploit (must now fail) and the app's own driver (must still pass).
+
+```bash
+tsbench cvepatch --dataset <cve-set> [--responses <fixes>]   # execution-verified, not LLM-judged
+```
+
+Measured on the 3-instance seed (rce / lfi / xss), fixes supplied via the proxy-replay path:
+
+| instance | class | produced | localized to gold file | execution-verified FIXED |
+|---|---|---|---|---|
+| command-injection-py | rce | ✓ | ✓ | ✓ |
+| path-traversal-node | lfi | ✓ | ✓ | ✓ |
+| xss-render-node | xss | ✓ | ✓ | ✓ |
+
+**3/3, and the oracle is real** — the docker exploit no longer fires and the functional driver still
+passes. That proves the pipeline (parse → apply → verify) works, and it is a stronger result than the
+pentester's, where the proxy got a grounded finding but the flag stalled on relay state-threading.
+
+**Honest limit — same as every self-authored fixture: the seed is first-party** (`cve: n/a — first-party
+seed`). 3/3 on 3 seeds is a smoke test of the pipeline, not a benchmark of the engineer. A credible
+number needs an EXTERNAL CVE set: BountyBench's 44 patch tasks (loader wired, needs their Docker
+harness + a frontier LLM) or a SEC-bench-style real-CVE dataset in our web/api/library domain
+(SEC-bench itself is C++/200GB — wrong domain, per the campaign notes). Like the pentester, the
+pipeline is proven and the NUMBER is LLM+dataset-gated.
+
 ## 4. What would raise confidence, in order
 
 1. **Broaden the thin fixtures — but not container.** Cloud went 6 → 19 controls and the correction
