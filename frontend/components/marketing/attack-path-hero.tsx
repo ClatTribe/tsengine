@@ -38,9 +38,15 @@ export function AttackPathHero() {
         <path d="M156 185 C190 185 188 136 214 124" fill="none" strokeWidth={2} className="draw-path draw-path-2 stroke-accent" style={{ "--len": "230" } as CSSProperties} markerEnd="url(#aph-arrow)" />
         <path d="M334 120 L414 120" fill="none" strokeWidth={2} className="draw-path draw-path-3 stroke-accent" style={{ "--len": "80" } as CSSProperties} markerEnd="url(#aph-arrow)" />
 
-        {/* edge labels — hidden < 420px */}
-        <text x="186" y="80" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">same cloud account</text>
-        <text x="186" y="160" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">same employee</text>
+        {/* edge labels — hidden < 420px.
+            KEEP THESE SHORT (≈9 chars at 10.5px). They sit in the ~58px gap between the entry boxes
+            (ending x=156) and the bridge node (starting x=214); a longer label silently overlaps BOTH
+            neighbours instead of wrapping, which is how "same cloud account" shipped on top of the
+            nodes. Plain English still wins — it just has to fit. SVG <text> does NOT wrap or clip, so a
+            too-long label silently draws over its neighbour; the node sublabels have the same constraint
+            (the bridge node is 120px wide, the destination 92px). Measure, do not eyeball. */}
+        <text x="186" y="80" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">same key</text>
+        <text x="186" y="160" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">same user</text>
         <text x="374" y="110" className="ap-edge-label fill-muted" fontSize="10.5" textAnchor="middle">unlocks</text>
 
         {/* entry: code */}
@@ -59,14 +65,14 @@ export function AttackPathHero() {
         <g className="node-pop node-pop-3">
           <rect x="214" y="95" width="120" height="50" rx="12" className="fill-accent-soft stroke-accent" strokeOpacity={0.4} strokeWidth={1} />
           <text x="230" y="120" className="fill-accent" fontSize="13.5" fontWeight="500">a cloud login</text>
-          <text x="230" y="135" className="fill-accent" fontSize="11" opacity={0.8}>with too much access</text>
+          <text x="230" y="135" className="fill-accent" fontSize="11" opacity={0.8}>too much access</text>
         </g>
         {/* crown jewel: cloud root — soft halo + filled accent (the destination, strongest) */}
         <g className="node-pop node-pop-4">
           <rect x="414" y="89" width="108" height="62" rx="15" className="fill-accent" opacity={0.12} />
           <rect x="422" y="95" width="92" height="50" rx="12" className="fill-accent" />
           <text x="434" y="120" fill="#fff" fontSize="13.5" fontWeight="600">everything</text>
-          <text x="434" y="135" fill="#fff" fontSize="11" opacity={0.85}>full cloud access</text>
+          <text x="434" y="135" fill="#fff" fontSize="11" opacity={0.85}>full access</text>
         </g>
       </svg>
 
