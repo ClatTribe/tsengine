@@ -60,3 +60,48 @@ func TestCrossSurface_NoLiftWhenCloudAlreadySeesIt(t *testing.T) {
 		t.Errorf("the scorecard claims a lift the score does not support")
 	}
 }
+
+// The second join, asking a different question: what does the pentest target reach? The cloud graph
+// cannot answer it at all — a hostname is not an identifier a cloud account holds — so the lift here
+// is not a longer path but a question becoming answerable.
+func TestCrossSurface_WebHostJoinAnswersWhatTheTargetReaches(t *testing.T) {
+	sc := ScoreCrossSurface(WebHostToCloudCrown())
+
+	if sc.CloudOnlyFoundPath {
+		t.Fatalf("the cloud graph reported a path from a hostname it does not hold as a node — " +
+			"the fixture no longer isolates the surfaces")
+	}
+	if !sc.EstateFoundPath {
+		t.Fatalf("the joined estate could not trace the pentest target to the crown it reaches; " +
+			"the AI pentester would prioritise this route no differently from a marketing page")
+	}
+	if !sc.Lift {
+		t.Fatalf("no lift measured: cloud=%v estate=%v", sc.CloudOnlyFoundPath, sc.EstateFoundPath)
+	}
+	t.Logf("\n%s", RenderCrossSurface(sc))
+}
+
+// The refusal that makes the web join trustworthy. Given the SAME account with the DNS name removed,
+// nothing may join the hostname to the resource on the strength of a similar-looking name — a wrong
+// join fabricates an attack path, which is worse than two disconnected subgraphs.
+func TestCrossSurface_WebHostNotJoinedWithoutTheInventorySayingSo(t *testing.T) {
+	fx := WebHostToCloudCrown()
+	inv := cloudgraph.Inventory{
+		Provider: "aws", AccountID: "000000000000",
+		Resources: []cloudgraph.InvResource{
+			// Same box, same app, named after the host — but no DNS name asserted.
+			{ID: "i-web", Kind: "resource", Type: "ec2_instance", Name: "app.example.com", Public: true},
+			{ID: "arn:aws:s3:::acme-customer-pii", Kind: "data", Sensitive: cloudgraph.SensHigh},
+		},
+		Grants: []cloudgraph.InvGrant{{Principal: "i-web", Resource: "arn:aws:s3:::acme-customer-pii"}},
+	}
+	fx.Cloud = cloudgraph.Ingest(inv)
+
+	sc := ScoreCrossSurface(fx)
+	if sc.EstateFoundPath {
+		t.Errorf("[FABRICATED] joined a hostname to a resource the inventory never said it was")
+	}
+	if sc.Lift {
+		t.Errorf("[OVERCLAIM] reported a lift built on an unasserted identity")
+	}
+}

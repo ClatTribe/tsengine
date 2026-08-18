@@ -34,6 +34,8 @@ import (
 // CrossSurfaceScore is the head-to-head result.
 type CrossSurfaceScore struct {
 	Scenario string `json:"scenario"`
+	// Question is what this scenario asks — the two fixtures do not ask the same thing.
+	Question string `json:"question,omitempty"`
 	// CloudOnlyFoundPath is whether the cloud graph alone can reach the crown from the internet.
 	CloudOnlyFoundPath bool `json:"cloud_only_found_path"`
 	// EstateFoundPath is whether the joined estate graph can.
@@ -53,6 +55,13 @@ type CrossSurfaceFixture struct {
 	CodeFindings []types.Finding
 	// Crown is the node an attacker is trying to reach.
 	Crown string
+	// CloudEntry / EstateEntry are where the attacker starts on each substrate. They differ for the
+	// web join, where the starting point is a HOSTNAME — an identifier the cloud graph does not hold
+	// at all, which is precisely why it cannot answer the question. Empty → the internet pseudo-node.
+	CloudEntry  string
+	EstateEntry string
+	// Question is what the scenario asks, since the two fixtures ask different things.
+	Question string
 }
 
 // LeakedKeyToCloudCrown is the canonical join, and the one an Indian SaaS actually ships: a
@@ -71,8 +80,9 @@ func LeakedKeyToCloudCrown() CrossSurfaceFixture {
 		},
 	}
 	return CrossSurfaceFixture{
-		Name:  "leaked_key_to_cloud_crown",
-		Cloud: cloudgraph.Ingest(inv),
+		Name:     "leaked_key_to_cloud_crown",
+		Question: "can an attacker on the internet reach the customer-PII bucket?",
+		Cloud:    cloudgraph.Ingest(inv),
 		CodeFindings: []types.Finding{{
 			ID: "f-leak", RuleID: "gitleaks::aws-access-key", Tool: "gitleaks",
 			Severity: types.SeverityHigh, Endpoint: "github.com/acme/web/config/deploy.py",
@@ -85,12 +95,16 @@ func LeakedKeyToCloudCrown() CrossSurfaceFixture {
 
 // ScoreCrossSurface runs both substrates over the fixture and reports the delta.
 func ScoreCrossSurface(fx CrossSurfaceFixture) CrossSurfaceScore {
-	sc := CrossSurfaceScore{Scenario: fx.Name}
+	sc := CrossSurfaceScore{Scenario: fx.Name, Question: fx.Question}
 	now := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
 
 	// --- substrate A: the cloud graph alone (what a cloud scanner can establish) ---
+	cloudEntry := fx.CloudEntry
+	if cloudEntry == "" {
+		cloudEntry = cloudgraph.InternetID
+	}
 	if fx.Cloud != nil {
-		paths := fx.Cloud.FindPaths(cloudgraph.InternetID,
+		paths := fx.Cloud.FindPaths(cloudEntry,
 			func(n *cloudgraph.Node) bool { return n.ID == fx.Crown },
 			map[cloudgraph.EdgeKind]bool{
 				cloudgraph.EdgeNetworkReach: true, cloudgraph.EdgeAssumeRole: true,
@@ -120,8 +134,12 @@ func ScoreCrossSurface(fx CrossSurfaceFixture) CrossSurfaceScore {
 		est.AddNode(estategraph.Node{ID: estategraph.InternetID, Kind: estategraph.KindNetwork, Name: "internet"})
 	}
 	crownID := estategraph.Canonical("cloud", fx.Crown)
+	estateEntry := fx.EstateEntry
+	if estateEntry == "" {
+		estateEntry = estategraph.InternetID
+	}
 	if _, ok := est.Nodes[crownID]; ok {
-		paths, _ := est.PathsFrom(estategraph.InternetID,
+		paths, _ := est.PathsFrom(estateEntry,
 			func(n *estategraph.Node) bool { return n.ID == crownID }, 8, 8)
 		sc.EstateFoundPath = len(paths) > 0
 	}
@@ -149,13 +167,17 @@ func RenderCrossSurface(s CrossSurfaceScore) string {
 	b.WriteString("# Cross-surface benchmark\n\n")
 	b.WriteString("Measures whether joining two surfaces establishes an attack path that neither can\n" +
 		"establish alone. Deterministic — it compares SUBSTRATES, not model wording.\n\n")
-	fmt.Fprintf(&b, "scenario: **%s**\n\n", s.Scenario)
-	fmt.Fprintf(&b, "| substrate | internet → crown |\n|---|---|\n")
+	fmt.Fprintf(&b, "scenario: **%s**\n", s.Scenario)
+	if s.Question != "" {
+		fmt.Fprintf(&b, "question: *%s*\n", s.Question)
+	}
+	b.WriteString("\n| substrate | answers it |\n|---|---|\n")
 	fmt.Fprintf(&b, "| cloud graph alone | %s |\n", found(s.CloudOnlyFoundPath))
 	fmt.Fprintf(&b, "| joined estate graph | %s |\n\n", found(s.EstateFoundPath))
 	if s.Lift {
-		fmt.Fprintf(&b, "**LIFT: yes** — the estate establishes a path the cloud account cannot, and the\n"+
-			"cloud scanner is not wrong: from cloud data alone there is no way in.\n")
+		fmt.Fprintf(&b, "**LIFT: yes** — the estate answers what the cloud account alone cannot, and the\n"+
+			"cloud scanner is not wrong: the fact that makes the answer possible lives on the other\n"+
+			"surface, so from cloud data alone there is nothing to find.\n")
 	} else {
 		fmt.Fprintf(&b, "**LIFT: no** — the join added nothing here.\n")
 	}
@@ -170,4 +192,39 @@ func found(b bool) string {
 		return "found"
 	}
 	return "**not found**"
+}
+
+// WebHostToCloudCrown is the second join, and it asks a DIFFERENT question: not "can the internet
+// reach the crown" but "what does this pentest target reach?" — the question that decides whether
+// the AI pentester spends its request budget on a login form fronting a PII warehouse or one
+// fronting a marketing page.
+//
+// The cloud graph cannot answer it at all, and not because it is missing a path: a HOSTNAME is not
+// an identifier a cloud account holds. Only the inventory asserting "this DNS name is that resource"
+// makes the question answerable, which is why the join is grounded on that assertion and never on a
+// resource whose name merely resembles the host.
+func WebHostToCloudCrown() CrossSurfaceFixture {
+	inv := cloudgraph.Inventory{
+		Provider: "aws", AccountID: "000000000000",
+		Resources: []cloudgraph.InvResource{
+			{ID: "i-web", Kind: "resource", Type: "ec2_instance", Public: true,
+				DNSNames: []string{"app.example.com"}},
+			{ID: "arn:aws:iam::000000000000:role/app", Kind: "principal", Name: "app-role"},
+			{ID: "arn:aws:s3:::acme-customer-pii", Kind: "data", Name: "acme-customer-pii",
+				Sensitive: cloudgraph.SensHigh},
+		},
+		RunsAs: []cloudgraph.InvRunsAs{{Compute: "i-web", Principal: "arn:aws:iam::000000000000:role/app"}},
+		Grants: []cloudgraph.InvGrant{{Principal: "arn:aws:iam::000000000000:role/app",
+			Resource: "arn:aws:s3:::acme-customer-pii"}},
+	}
+	return CrossSurfaceFixture{
+		Name:     "web_host_to_cloud_crown",
+		Question: "what does the pentest target app.example.com reach?",
+		Cloud:    cloudgraph.Ingest(inv),
+		Crown:    "arn:aws:s3:::acme-customer-pii",
+		// The attacker starts at the hostname on both substrates. The cloud graph holds no such
+		// node, so it finds nothing — the honest reason, not a missing edge.
+		CloudEntry:  "app.example.com",
+		EstateEntry: estategraph.Canonical("web", "https://app.example.com"),
+	}
 }

@@ -86,6 +86,15 @@ type RawInstance struct {
 	SGIDs        []string `json:"security_group_ids,omitempty"`
 	ServicePort  int      `json:"service_port,omitempty"`  // primary listening port; 0 = unknown → no internet edge
 	ServiceProto string   `json:"service_proto,omitempty"` // "tcp" (default) | "udp"
+	// DNSNames are the hostnames resolving to this instance (public DNS, an ELB/CloudFront alias in
+	// front of it). Optional, and the honest gate on the web->cloud join: without them a pentest
+	// target hostname cannot be matched to the resource it runs on, so the two surfaces stay
+	// disconnected rather than being joined on a name that merely looks similar.
+	DNSNames []string `json:"dns_names,omitempty"`
+	// RoleARN is the instance profile's role — the identity the workload executes with. Without it
+	// a compute resource is a dead end in the graph: an attacker who lands on the box inherits its
+	// role, and that inheritance is the step every host-to-data path runs through.
+	RoleARN string `json:"role_arn,omitempty"`
 }
 
 // RawBucket is an object store; Public + Sensitive are fetcher-resolved (public-access-block / tags).
@@ -123,7 +132,11 @@ func Build(raw RawAWS) cloudgraph.Inventory {
 	for _, in := range raw.Instances {
 		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
 			ID: in.ID, Kind: cloudgraph.KindResource, Type: "ec2_instance", Region: in.Region, Public: in.PublicIP,
+			DNSNames: in.DNSNames,
 		})
+		if r := strings.TrimSpace(in.RoleARN); r != "" {
+			inv.RunsAs = append(inv.RunsAs, cloudgraph.InvRunsAs{Compute: in.ID, Principal: r})
+		}
 		if !in.PublicIP || in.ServicePort == 0 {
 			continue // grounded: no public IP / unknown port → never assert internet reachability
 		}
