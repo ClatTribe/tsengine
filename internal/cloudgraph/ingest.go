@@ -72,6 +72,11 @@ type InvResource struct {
 	// Set on ECS/EKS/Lambda-image/etc. resources; drives the agentless workload scan
 	// (ADR 0009 Phase 2 — cloudengine.WorkloadScanPlan). Carried into Node.Attrs["image"].
 	Image string `json:"image,omitempty"`
+	// AccessKeyIDs are the long-lived access keys that authenticate AS this principal. They are
+	// the join point between the cloud account and the code surface: a key found in a repository
+	// is only a foothold once you know which principal it becomes. Carried into
+	// Node.Attrs["access_key_ids"].
+	AccessKeyIDs []string `json:"access_key_ids,omitempty"`
 }
 
 type InvTrust struct {
@@ -172,7 +177,8 @@ func (s *Snapshot) ToInventory() Inventory {
 		inv.Resources = append(inv.Resources, InvResource{
 			ID: n.ID, Kind: n.Kind, Type: n.Type, Name: n.Name, Region: n.Region,
 			Public: n.Public, Sensitive: n.Sensitive, Privileged: n.Privileged, Tags: n.Tags,
-			Image: n.Attrs["image"], // round-trip the workload image (Phase 2)
+			Image:        n.Attrs["image"], // round-trip the workload image (Phase 2)
+			AccessKeyIDs: splitAttrList(n.Attrs["access_key_ids"]),
 		})
 	}
 	for _, e := range s.Edges {
@@ -209,6 +215,12 @@ func Ingest(inv Inventory) *Snapshot {
 		}
 		if r.Image != "" { // the container image a workload runs (agentless scan, Phase 2)
 			n.Attrs = map[string]string{"image": r.Image}
+		}
+		if len(r.AccessKeyIDs) > 0 {
+			if n.Attrs == nil {
+				n.Attrs = map[string]string{}
+			}
+			n.Attrs["access_key_ids"] = strings.Join(r.AccessKeyIDs, ",")
 		}
 		s.AddNode(n)
 	}
@@ -297,4 +309,19 @@ func sensRank(s Sensitivity) int {
 		return 1
 	}
 	return 0
+}
+
+// splitAttrList reads back a comma-joined Attrs list, dropping blanks so a trailing separator or an
+// empty attr never becomes a phantom entry.
+func splitAttrList(v string) []string {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(v, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -65,4 +66,66 @@ func TestEstate_IsTenantIsolated(t *testing.T) {
 	if !strings.Contains(body, `"node_count":0`) {
 		t.Errorf("a tenant with nothing of its own must compose an empty graph, got %s", body)
 	}
+}
+
+// THE INGEST PATH: connecting a cloud account must AUTOMATICALLY surface the cross-surface path,
+// with no separate /v1/estate/detect call. That is the wedge's actual promise — "connect code and
+// cloud and the path appears" — and it is a different code path from the explicit detect endpoint,
+// so it needs its own proof. Wiring that merely does not crash is not wiring that works.
+func TestEstate_CloudInventoryIngestSurfacesTheCrossSurfacePath(t *testing.T) {
+	st := store.NewMemory()
+	snaps := cloudsnap.NewMemStore()
+	h := NewHandler(Deps{Store: st, CloudSnapshots: snaps, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	ctx := t.Context()
+
+	// The CODE surface, already known: a key committed to the repo.
+	_ = st.PutFinding(ctx, "t1", types.Finding{
+		ID: "f-leak", RuleID: "gitleaks::aws-access-key", Tool: "gitleaks",
+		Severity: types.SeverityHigh, Endpoint: "repo/deploy.py",
+		Title: "AWS access key committed", Description: "AKIAIOSFODNN7EXAMPLE found in deploy.py",
+	})
+
+	// Now the CLOUD surface arrives. Note what the account itself does NOT contain: nothing
+	// exposes deploy-role. A cloud scanner alone finds no way in — correctly.
+	// The account names the user that key belongs to, and what that user can read. Note what it
+	// does NOT contain: nothing exposes this user to the internet. A cloud scanner alone finds no
+	// way in, correctly — the way in is the key sitting in the repo.
+	body := `{
+		"account_id": "111122223333",
+		"users": [{"arn":"arn:aws:iam::111122223333:user/deploy","name":"deploy",
+			"access_key_ids":["AKIAIOSFODNN7EXAMPLE"]}],
+		"buckets": [{"name":"customer-pii","sensitive":true}],
+		"grants": [{"principal":"arn:aws:iam::111122223333:user/deploy",
+			"resource":"arn:aws:s3:::customer-pii"}]
+	}`
+	rec := do(h, "POST", "/v1/cloud/inventory", "t1", body)
+	if rec.Code != 200 {
+		t.Fatalf("POST /v1/cloud/inventory: %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "cross_surface_detected") {
+		t.Errorf("the ingest response does not report cross-surface detection at all: %s", rec.Body.String())
+	}
+
+	// Both surfaces are present now, so the graph must say it is joinable — the precondition for
+	// any cross-surface claim, asserted separately so a failure here is legible.
+	g := do(h, "GET", "/v1/estate", "t1", "")
+	if !strings.Contains(g.Body.String(), `"joinable":true`) {
+		t.Fatalf("code + cloud are both stored but the estate is not joinable: %s", g.Body.String())
+	}
+
+	// The assertion that actually matters. A response field naming detection, and a graph that
+	// COULD be joined, are both satisfied by wiring that runs and finds nothing. The customer's
+	// outcome is a stored finding.
+	stored, _ := st.ListFindings(ctx, "t1", store.FindingFilter{})
+	var cross []string
+	for _, f := range stored {
+		if strings.HasPrefix(f.RuleID, "estate::") {
+			cross = append(cross, f.RuleID)
+		}
+	}
+	if len(cross) == 0 {
+		t.Fatalf("connecting the cloud account produced NO cross-surface finding — the wedge's promise "+
+			"did not happen on the ingest path (%d finding(s) stored)", len(stored))
+	}
+	t.Logf("ingest produced cross-surface finding(s): %v", cross)
 }

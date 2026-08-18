@@ -282,3 +282,41 @@ func TestCompose_NothingConnectedYieldsEmpty(t *testing.T) {
 		t.Errorf("nothing connected should compose to an empty graph, got %d nodes / %d edges", len(g.Nodes), len(g.Edges))
 	}
 }
+
+// A user may hold two active access keys and there is no way to know in advance which one leaks,
+// so every key the inventory names must anchor a secret node. Reading only one would make the
+// code->cloud join depend on which key the fetcher happened to list first.
+func TestPrincipalKeys_ReadsEveryKeyFromEitherAttribute(t *testing.T) {
+	got := principalKeys(map[string]string{
+		AccessKeyIDAttr:  "AKIAONE",
+		AccessKeyIDsAttr: "AKIATWO, AKIATHREE",
+	})
+	if len(got) != 3 {
+		t.Fatalf("want all 3 keys anchored, got %v", got)
+	}
+}
+
+// Blank and duplicate entries must not become phantom secret nodes: a trailing separator would
+// otherwise anchor a node with an empty id, which reads downstream as a real credential.
+func TestPrincipalKeys_DropsBlanksAndDuplicates(t *testing.T) {
+	got := principalKeys(map[string]string{
+		AccessKeyIDAttr:  "AKIAONE",
+		AccessKeyIDsAttr: "AKIAONE,,  ,akiaone,AKIATWO,",
+	})
+	if len(got) != 2 {
+		t.Fatalf("want the duplicate and blanks dropped, got %v", got)
+	}
+	for _, k := range got {
+		if strings.TrimSpace(k) == "" {
+			t.Errorf("a blank key was anchored: %v", got)
+		}
+	}
+}
+
+// No attributes must mean no secret nodes — an inventory that does not list access keys has not
+// told us anything about them, which is different from telling us there are none to worry about.
+func TestPrincipalKeys_NoAttrsAnchorsNothing(t *testing.T) {
+	if got := principalKeys(nil); len(got) != 0 {
+		t.Errorf("anchored %v from an inventory that named no keys", got)
+	}
+}
