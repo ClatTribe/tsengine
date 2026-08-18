@@ -54,6 +54,34 @@ const (
 // it, the code→cloud bridge stays honestly open.
 const AccessKeyIDAttr = "access_key_id"
 
+// AccessKeyIDsAttr is the plural form: a comma-joined list, which is what an inventory carrying a
+// principal's full key set populates. Both are read — the singular predates the list and dropping
+// it would silently disconnect any inventory still using it.
+const AccessKeyIDsAttr = "access_key_ids"
+
+// principalKeys returns every access key id a cloud node claims, from either attribute, deduped and
+// blank-free so a trailing separator never becomes a phantom secret node.
+func principalKeys(attrs map[string]string) []string {
+	if len(attrs) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[strings.ToLower(v)] {
+			return
+		}
+		seen[strings.ToLower(v)] = true
+		out = append(out, v)
+	}
+	add(attrs[AccessKeyIDAttr])
+	for _, k := range strings.Split(attrs[AccessKeyIDsAttr], ",") {
+		add(k)
+	}
+	return out
+}
+
 // akiaRe matches an AWS access key id. Same shape as remediate's extractor (which is unexported);
 // duplicated rather than exported across packages because it is three tokens and a shared regexp would
 // couple remediation to ingest for no gain.
@@ -85,9 +113,13 @@ func FromCloud(snap *cloudgraph.Snapshot) *estategraph.Graph {
 			Attrs:      n.Attrs,
 		})
 
-		// A principal whose access key the inventory records gets a secret node of its own. This is the
+		// A principal whose access keys the inventory records gets a secret node per key. This is the
 		// anchor a leaked key in code joins onto — and it only exists because the inventory said so.
-		if key := strings.TrimSpace(n.Attrs[AccessKeyIDAttr]); key != "" {
+		//
+		// EVERY key, not just one: AWS allows a user two active access keys, and there is no way to
+		// know in advance which one leaks. Reading a single key would make the join silently depend
+		// on which of the two the fetcher happened to list first.
+		for _, key := range principalKeys(n.Attrs) {
 			sid := secretID(key)
 			g.AddNode(estategraph.Node{
 				ID: sid, Kind: estategraph.KindSecret, Name: key,

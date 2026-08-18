@@ -36,6 +36,21 @@ type RawAWS struct {
 	SGs       []RawSecurityGroup `json:"security_groups,omitempty"`
 	Instances []RawInstance      `json:"instances,omitempty"`
 	Buckets   []RawBucket        `json:"buckets,omitempty"`
+	// Grants are principal -> resource access facts. Without them an inventory has identities and
+	// data but nothing connecting the two, so no path can ever run from a foothold to a crown
+	// jewel. They are asserted by the fetcher (policy evaluation), never inferred here: guessing
+	// which principals can read which buckets is exactly the fabricated-path failure mode.
+	Grants []RawGrant `json:"grants,omitempty"`
+}
+
+// RawGrant records that a principal holds access to a resource.
+type RawGrant struct {
+	Principal string `json:"principal"`
+	Resource  string `json:"resource"`
+	// Condition carries an IAM condition the grant depends on (MFA, a source IP, a tag). It is
+	// passed through rather than dropped, because a conditional grant is not the same claim as an
+	// unconditional one and the graph gates on exactly this (ADR 0002).
+	Condition string `json:"condition,omitempty"`
 }
 
 // RawIAMUser / RawIAMRole carry the identity + a fetcher-resolved Admin flag (an attached/inline policy
@@ -44,6 +59,11 @@ type RawIAMUser struct {
 	ARN   string `json:"arn"`
 	Name  string `json:"name,omitempty"`
 	Admin bool   `json:"admin,omitempty"`
+	// AccessKeyIDs are the user's long-lived access keys (iam:ListAccessKeys). Optional, and the
+	// honest gate on the code->cloud join: without them a key leaked in a repository cannot be
+	// matched to the principal it becomes, so the two surfaces stay disconnected rather than
+	// being joined on a guess.
+	AccessKeyIDs []string `json:"access_key_ids,omitempty"`
 }
 type RawIAMRole struct {
 	ARN             string `json:"arn"`
@@ -84,6 +104,7 @@ func Build(raw RawAWS) cloudgraph.Inventory {
 	for _, u := range raw.Users {
 		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
 			ID: u.ARN, Kind: cloudgraph.KindPrincipal, Type: "iam_user", Name: u.Name, Privileged: u.Admin,
+			AccessKeyIDs: u.AccessKeyIDs,
 		})
 	}
 	for _, r := range raw.Roles {
@@ -140,6 +161,17 @@ func Build(raw RawAWS) cloudgraph.Inventory {
 		if b.Public {
 			inv.Reaches = append(inv.Reaches, cloudgraph.InvReach{From: cloudgraph.InternetID, To: id})
 		}
+	}
+
+	for _, gr := range raw.Grants {
+		// Both ends must be named. A half-specified grant would otherwise create an edge to an
+		// empty node id, which reads downstream as a real relationship to nothing.
+		if strings.TrimSpace(gr.Principal) == "" || strings.TrimSpace(gr.Resource) == "" {
+			continue
+		}
+		inv.Grants = append(inv.Grants, cloudgraph.InvGrant{
+			Principal: gr.Principal, Resource: gr.Resource, Condition: gr.Condition,
+		})
 	}
 	return inv
 }
