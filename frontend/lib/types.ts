@@ -710,6 +710,7 @@ export interface QAnswer {
   answer: string; // "Yes" | "In Progress"
   gap_controls?: string[];
   evidence_ids?: string[];
+  missing_sources?: string[]; // what to connect to make an unanswered question answerable
 }
 export interface Questionnaire {
   tenant_id: string;
@@ -717,6 +718,7 @@ export interface Questionnaire {
   answers: QAnswer[] | null; // Go nil slice → null
   yes: number;
   in_progress: number;
+  not_assessed: number; // questions with no connected evidence source — refused, not assumed compliant
 }
 
 export interface Asset {

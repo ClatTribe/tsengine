@@ -2,15 +2,19 @@ package grc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 func TestQuestionnaire_HardenedTenantAllYes(t *testing.T) {
-	g := &GRC{Store: store.NewMemory()}
+	st := store.NewMemory()
+	fullyOnboarded(t, st, "t1") // assessed everywhere, and clean — that is what "hardened" means
+	g := &GRC{Store: st}
 	q, err := g.Questionnaire(context.Background(), "t1")
 	if err != nil {
 		t.Fatal(err)
@@ -21,8 +25,10 @@ func TestQuestionnaire_HardenedTenantAllYes(t *testing.T) {
 }
 
 func TestQuestionnaire_GapFlipsMappedQuestion(t *testing.T) {
-	g := &GRC{Store: store.NewMemory()}
+	st := store.NewMemory()
+	g := &GRC{Store: st}
 	ctx := context.Background()
+	fullyOnboarded(t, st, "t1") // so an UNRELATED question can legitimately read Yes
 	// a finding citing SOC2 CC6.1 → AC-1 maps it → flips to In Progress.
 	f := types.Finding{ID: "f-77", Severity: types.SeverityHigh, Compliance: &types.Compliance{SOC2: []string{"CC6.1"}}}
 	if err := g.Apply(ctx, "t1", f); err != nil {
@@ -79,4 +85,25 @@ func containsStr(ss []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// fullyOnboarded seeds a tenant with an evidence source for every question domain — an
+// identity provider, a cloud account, code, containers, web/API and a domain. THIS is what
+// a "hardened tenant" means: assessed everywhere and clean. An EMPTY store is not hardened,
+// it is unexamined, and the questionnaire must not answer "Yes" for it (see
+// questionnaire_grounding_test.go).
+func fullyOnboarded(t *testing.T, st *store.Memory, tenantID string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := st.PutConnection(ctx, platform.Connection{ID: "c-idp", TenantID: tenantID, Kind: platform.ConnOkta, Status: platform.ConnActive}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutConnection(ctx, platform.Connection{ID: "c-slack", TenantID: tenantID, Kind: platform.ConnSlack, Status: platform.ConnActive}); err != nil {
+		t.Fatal(err)
+	}
+	for i, typ := range []string{"cloud_account", "repository", "container_image", "web_application", "api", "domain"} {
+		if err := st.PutAsset(ctx, platform.Asset{ID: fmt.Sprintf("a-%d", i), TenantID: tenantID, Type: typ, Target: "t"}); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
