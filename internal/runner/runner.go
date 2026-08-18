@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ClatTribe/tsengine/internal/l15"
+	"github.com/ClatTribe/tsengine/internal/tool"
 	"log/slog"
 	"sort"
 	"strings"
@@ -69,6 +70,15 @@ func scanWith(ctx context.Context, r ScanRunner, a platform.Asset) ([]types.Find
 	}
 	f, err := r.Scan(ctx, a)
 	return f, ScanReport{}, err
+}
+
+// ToolReplayer is optionally implemented by a ScanRunner that can re-run ONE tool with a human's own
+// arguments — the §9 "dig deeper" capability. Optional for the same reason ReportingScanRunner is:
+// the operate path assesses a snapshot host-side and has no tools to re-run, so widening the core
+// interface would force implementors to answer a question two of them cannot. A runner that does not
+// implement it makes replay unavailable, and the API says so rather than pretending it ran.
+type ToolReplayer interface {
+	ReplayTool(ctx context.Context, a platform.Asset, toolName string, args tool.Args, replayID string) ([]types.Finding, error)
 }
 
 // Tokens resolves a connection's vaulted OAuth token (the secret store). Kept as an
