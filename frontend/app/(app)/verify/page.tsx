@@ -96,11 +96,16 @@ export default async function VerifyPage() {
         </>
       )}
 
+      {/* The icon and the copy must be the flex items — NOT the text nodes. Without the wrapping
+          span, the inline <em> splits the sentence into three separate flex children and the
+          paragraph lays out in columns. Caught by rendering it; tsc cannot see this. */}
       <p className="flex items-start gap-2 text-xs text-muted">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-        An empty page here means nothing was <em>recorded</em> as suppressed — scans that ran before this
-        trail existed, or with enrichment disabled, leave none. That is not the same as nothing having
-        been suppressed.
+        <span>
+          An empty page here means nothing was <em>recorded</em> as suppressed — scans that ran before
+          this trail existed, or with enrichment disabled, leave none. That is not the same as nothing
+          having been suppressed.
+        </span>
       </p>
     </div>
   );
