@@ -6,7 +6,7 @@ go 1.26
 // (crypto/x509, via internal/tlsscan cert verification), the net/textproto advisory
 // (via runner/email), and GO-2026-5856 (crypto/tls), which every outbound HTTPS call and
 // the TLS scanner reach. govulncheck flags anything older; this pins the patched toolchain.
-toolchain go1.26.5
+toolchain go1.26.6
 
 require (
 	cloud.google.com/go/storage v1.62.3

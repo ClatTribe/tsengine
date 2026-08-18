@@ -7,7 +7,7 @@
 #   docker build -t tsengine/sandbox:0.1.0 -f docker/sandbox/Dockerfile .
 
 # ---- Stage 1: tool-server build ----
-FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH=arm64
