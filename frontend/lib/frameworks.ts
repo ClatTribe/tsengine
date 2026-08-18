@@ -24,6 +24,9 @@ export const FRAMEWORKS = [
   "pipeda",
   "glba",
   "eu_ai_act",
+  "certin",
+  "rbi",
+  "sebi",
 ] as const;
 
 export const FRAMEWORK_LABEL: Record<string, string> = {
@@ -49,6 +52,9 @@ export const FRAMEWORK_LABEL: Record<string, string> = {
   pipeda: "PIPEDA",
   glba: "GLBA",
   eu_ai_act: "EU AI Act",
+  certin: "CERT-In",
+  rbi: "RBI CSF",
+  sebi: "SEBI CSCRF",
 };
 
 // FRAMEWORK_DESC — one-line plain-English descriptions, shown on the per-framework drill so
@@ -76,6 +82,9 @@ export const FRAMEWORK_DESC: Record<string, string> = {
   pipeda: "Canada's PIPEDA — fair-information principles for handling personal data.",
   glba: "US GLBA Safeguards Rule — protecting customer financial information (16 CFR 314).",
   eu_ai_act: "The EU AI Act — risk-based obligations for high-risk AI systems.",
+  certin: "CERT-In Directions 2022 — India's mandatory six-hour cyber-incident reporting and log-retention duties.",
+  rbi: "RBI Cyber Security Framework — the Reserve Bank of India's Annex I baseline controls for regulated entities.",
+  sebi: "SEBI CSCRF — the Cybersecurity and Cyber Resilience Framework for SEBI-regulated entities.",
 };
 
 // FRAMEWORK_CATEGORY groups frameworks for the compliance grid's section headers, so a
@@ -100,6 +109,9 @@ export const FRAMEWORK_CATEGORY: Record<string, string> = {
   pipeda: "Privacy",
   glba: "Sector & payments",
   eu_ai_act: "AI governance",
+  certin: "India regulatory",
+  rbi: "India regulatory",
+  sebi: "India regulatory",
   nist_800_53: "Government",
   nist_800_171: "Government",
   fedramp: "Government",

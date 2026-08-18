@@ -561,15 +561,23 @@ L2 retains a separate `query_threat_intel` tool for the LLM to look up CVEs that
 
 Every finding emitted at L1 carries a compliance annotation. Mapping is **annotation, not gate** â L1 emits the technical finding regardless of whether it maps to a control; the mapping just records which controls it affects.
 
-Frameworks supported (22 â keys defined once in `grc.Frameworks`, mirrored by `pkg/types.Compliance`, the `compliance.json` crosswalk, `internal/tracer/hooks/compliance.go`'s `controlSet`, and `frontend/lib/frameworks.ts`; the `grc.frameworks_e2e_test.go` mirror-consistency + all-frameworks-end-to-end tests gate any drift):
+Frameworks supported (25 â keys defined once in `grc.Frameworks`, mirrored by `pkg/types.Compliance`, the `compliance.json` crosswalk, `internal/tracer/hooks/compliance.go`'s `controlSet`, and `frontend/lib/frameworks.ts`; the `grc.frameworks_e2e_test.go` mirror-consistency + all-frameworks-end-to-end tests gate any drift):
 
 * **Security & trust**: SOC 2 (Trust Services Criteria), CIS Controls v8, NIST CSF 2.0, ISO 27001:2022, ISO 22301:2019 (BCMS)
 * **Sector & payments**: PCI-DSS v4.0, HIPAA Security Rule, SOX (IT general controls), GLBA Safeguards Rule
 * **Privacy**: EU GDPR, ISO 27701:2019, CCPA/CPRA, India DPDP Act 2023, ISO 27018:2019 (cloud PII), PIPEDA (Canada)
 * **Government**: NIST SP 800-53 r5, NIST SP 800-171 r2, FedRAMP Moderate, CMMC 2.0 (Level 2, 800-171-derived)
+* **India regulatory**: CERT-In Directions 2022 (Annexure I reportable-incident categories — the
+  six-hour reporting duty itself is `internal/certin`, an INCIDENT-level obligation, not a CWE
+  crosswalk), RBI Cyber Security Framework (Annex I baseline controls), SEBI CSCRF 2024
+  (CSF-structured categories). Mapped by DERIVATION from each CWE's already-curated NIST 800-53
+  family, so every India control ref traces to an existing nexus rather than a fresh guess;
+  CERT-In is deliberately narrow (only the breach/unauthorised-access categories), because its
+  other Directions (NTP sync, KYC records, log retention) are procedural duties with no
+  per-finding nexus and mapping them would be exactly the false-compliance §8/§10 forbid.
 * **AI governance**: ISO 42001:2023, NIST AI RMF 1.0, EU AI Act (mapped only to the security-relevant AI controls â access, data governance, AI-system lifecycle security; most AI-governance + BCMS controls are procedural â attestation, surfaced honestly by the coverage layer)
 
-Competitor parity (Sprinto/Vanta/Drata): the 22 named frameworks close the bulk of the gap; the remaining tail (CSA STAR, TISAX, C5, FFIEC, FERPA, regional regs) is best served by a custom/"bring-your-own-framework" capability (how Sprinto reaches 200+) â the documented next step, not more hard-coded entries.
+Competitor parity (Sprinto/Vanta/Drata): the 25 named frameworks close the bulk of the gap; the remaining tail (CSA STAR, TISAX, C5, FFIEC, FERPA, regional regs) is best served by a custom/"bring-your-own-framework" capability (how Sprinto reaches 200+) â the documented next step, not more hard-coded entries.
 
 A finding maps to a framework **only where the crosswalk has a real control nexus** (grounding Â§10) â e.g. an injection CWE cites NIST SI-10 and GDPR Art. 32; a data-exposure CWE additionally cites CCPA Â§1798.150 and SOX access-controls; a memory-safety CWE does not. Adding a framework is one entry in each of the four mirrors above; adding a control mapping is one key in `compliance.json`.
 

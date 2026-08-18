@@ -36,6 +36,9 @@ var frameworkTitle = map[string]string{
 	FrameworkPIPEDA:     "PIPEDA (Canada)",
 	FrameworkGLBA:       "GLBA Safeguards",
 	FrameworkEUAIAct:    "EU AI Act",
+	FrameworkCERTIn:     "CERT-In Directions 2022",
+	FrameworkRBI:        "RBI Cyber Security Framework",
+	FrameworkSEBI:       "SEBI CSCRF",
 }
 
 // FrameworkTitle returns the display name for a framework key (the key itself if unknown).
