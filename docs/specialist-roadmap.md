@@ -145,6 +145,23 @@ and **nothing in production populated them** — zero non-test assignments, the 
 shape as the access-key join. `runWebDiscovery` now derives leads from the tenant's estate, and
 the test asserts they *arrived at the agent*, not that the code compiles.
 
+**The third join (2026-08-18): identity × OSINT.** Three detectors already name the same person
+and cannot hear each other — OSINT finds a credential in a stealer log, the identity posture finds
+an admin with no MFA, SaaS posture finds who owns the org. `estategraph.Canonical` already maps an
+email to one shared `principal:` id, so **two detectors naming alice@acme.com converge on one node
+with no matching logic at all**; what was missing is that nothing turned those findings into nodes.
+`estate::exposed-identity-no-mfa` reports the result: critical on an admin, high otherwise.
+
+Each half alone is routine — a breached credential is one of thousands in a dump, a missing second
+factor is a hygiene item. Together they are a working way in with no remaining step.
+
+**This join deliberately gets NO benchmark fixture.** Its baseline would be "does any single
+finding already say this?", which is trivially zero — a benchmark that can only report success,
+which is precisely what the other two fixtures' controls exist to prevent. The honest measurement
+here is the **refusal set**, all tested: half the evidence is not the claim (each half is already
+its own detector's finding); one surface asserting both is not cross-surface; and a leaked API
+token is a *machine* credential, never a person's password.
+
 **The boundary this surfaced.** The cloud agent can *see* a cross-surface path via
 `estate_context` but cannot *record* one: `record_issue` grounds against the cloud graph.
 That is the correct split — cross-surface paths are the deterministic estate detector's

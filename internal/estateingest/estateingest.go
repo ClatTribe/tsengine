@@ -400,7 +400,7 @@ func nameOr(s, dflt string) string {
 //
 // Every argument is optional. A tenant with only cloud connected produces a cloud-only graph — which
 // is the honest result, and which estatedetect will correctly find no cross-surface joins in.
-func Compose(cloud *cloudgraph.Snapshot, warehouse *dataplatform.Estate, warehouseRef string, leaked []types.Finding, now time.Time) *estategraph.Graph {
+func Compose(cloud *cloudgraph.Snapshot, warehouse *dataplatform.Estate, warehouseRef string, findings []types.Finding, now time.Time) *estategraph.Graph {
 	g := estategraph.New()
 	if cloud != nil {
 		g.Merge(FromCloud(cloud))
@@ -408,8 +408,13 @@ func Compose(cloud *cloudgraph.Snapshot, warehouse *dataplatform.Estate, warehou
 	if warehouse != nil {
 		g.Merge(FromWarehouse(*warehouse, warehouseRef, now))
 	}
-	if len(leaked) > 0 {
-		g.Merge(FromLeakedSecrets(leaked, now))
+	if len(findings) > 0 {
+		g.Merge(FromLeakedSecrets(findings, now))
+		// The same finding list also carries the person-scoped surfaces (OSINT, identity, SaaS
+		// posture). They are read from the same slice because they ARE the same slice — the platform
+		// stores every detector's output together, and the estate's job is to notice that two of
+		// them are talking about one person.
+		g.Merge(FromIdentityFindings(findings, now))
 	}
 	return g
 }
