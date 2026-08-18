@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/dataplatform"
 	"github.com/ClatTribe/tsengine/internal/estatedetect"
 	"github.com/ClatTribe/tsengine/internal/estategraph"
 	"github.com/ClatTribe/tsengine/internal/estateingest"
@@ -29,6 +30,18 @@ import (
 // Grounded (§10): every input is real stored state. A tenant with only one surface composes a
 // one-surface graph, which detects no cross-surface joins — the honest result, not a hedge.
 func (d Deps) composeEstate(ctx context.Context, tenantID string) (*estategraph.Graph, error) {
+	return d.composeEstateWith(ctx, tenantID, nil, "")
+}
+
+// composeEstateWith is the general form, taking a warehouse estate the caller already holds.
+//
+// The warehouse is passed in rather than read back because nothing persists it: a grant snapshot
+// arrives at its ingest, is assessed, and is gone. So the warehouse can only join the estate at the
+// moment it is posted. That is a REAL limit, not a hedge — an agent composing the estate later will
+// not see it — and it is stated here rather than papered over, because the alternative is a caller
+// assuming warehouse context is always present. Persisting the snapshot is the follow-on that
+// removes the caveat.
+func (d Deps) composeEstateWith(ctx context.Context, tenantID string, wh *dataplatform.Estate, whRef string) (*estategraph.Graph, error) {
 	var cloud *cloudgraph.Snapshot
 	if d.CloudSnapshots != nil {
 		if snap, ok, err := d.CloudSnapshots.Get(ctx, tenantID); err == nil && ok && len(snap.Inventory) > 0 {
@@ -52,7 +65,7 @@ func (d Deps) composeEstate(ctx context.Context, tenantID string) (*estategraph.
 		}
 		findings = fs
 	}
-	return estateingest.Compose(cloud, nil, "", findings, time.Now().UTC()), nil
+	return estateingest.Compose(cloud, wh, whRef, findings, time.Now().UTC()), nil
 }
 
 // handleEstateGraph (GET /v1/estate) returns the composed graph — the substrate itself, so an
@@ -155,7 +168,12 @@ func (d Deps) estateOrNil(ctx context.Context, tenantID string) *estategraph.Gra
 // produces the same findings, and the incident reconciler keys on rule+endpoint rather than
 // finding id — a re-ingest refreshes an existing incident instead of opening a duplicate.
 func (d Deps) detectEstateOnIngest(ctx context.Context, tenantID string) []types.Finding {
-	g, err := d.composeEstate(ctx, tenantID)
+	return d.detectEstateOnIngestWith(ctx, tenantID, nil, "")
+}
+
+// detectEstateOnIngestWith runs cross-surface detection with a warehouse estate the caller holds.
+func (d Deps) detectEstateOnIngestWith(ctx context.Context, tenantID string, wh *dataplatform.Estate, whRef string) []types.Finding {
+	g, err := d.composeEstateWith(ctx, tenantID, wh, whRef)
 	if err != nil || g == nil || len(g.Nodes) == 0 {
 		return nil
 	}
