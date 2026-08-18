@@ -29,6 +29,9 @@ export default async function QuestionnairePage() {
   }
   const total = answers.length;
   const pct = Math.round((q.yes / total) * 100);
+  // "Not assessed" is shown as prominently as the score. A questionnaire that is mostly
+  // unanswered must LOOK mostly unanswered — the percentage alone would read as a grade.
+  const notAssessed = q.not_assessed ?? 0;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -63,11 +66,25 @@ export default async function QuestionnairePage() {
             <span className="text-pulse">{q.yes} Yes</span>
             <span className="text-faint"> · </span>
             <span className="text-medium">{q.in_progress} In Progress</span>
+            {notAssessed > 0 && (
+              <>
+                <span className="text-faint"> · </span>
+                <span className="text-faint">{notAssessed} Not assessed</span>
+              </>
+            )}
           </div>
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2">
           <div className="h-full rounded-full bg-pulse transition-all" style={{ width: `${pct}%` }} />
         </div>
+        {notAssessed > 0 && (
+          <p className="mt-3 text-xs leading-relaxed text-muted">
+            <span className="font-medium text-ink">{notAssessed} of {total} questions are not answered yet.</span>{" "}
+            Nothing that can evidence them has been connected, so they are reported as{" "}
+            <span className="text-faint">Not assessed</span> rather than assumed compliant — each row names what
+            to connect.
+          </p>
+        )}
       </div>
 
       {groups.map((g) => (
