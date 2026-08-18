@@ -82,3 +82,77 @@ func TestL15Audit_EmptyIsGroundedNotReassuring(t *testing.T) {
 		t.Errorf("the note must say absence is not evidence, got %q", got.Note)
 	}
 }
+
+// The override loop must CLOSE: a finding the filter dropped can be seen, judged on its own
+// evidence, and put back. Visibility alone leaves the AI's judgement final, which is the posture
+// practitioners reject — and §2.5 says the audit log exists "for override", not just for reading.
+func TestL15Reinstate_ClosesTheOverrideLoop(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	dropped := types.Finding{
+		ID: "f-9", RuleID: "nuclei::tech-detect", Tool: "nuclei", Severity: types.SeverityInfo,
+		Endpoint: "https://acme.test/", Title: "Technology detected", Description: "server header",
+	}
+	_ = st.PutEngagement(ctx, platform.Engagement{
+		ID: "e1", TenantID: "t1", AssetID: "a1",
+		L15Audit:     []types.AuditEntry{{FindingID: "f-9", Action: "dismiss", Rule: "fp_filter::nuclei::tech-detect"}},
+		L15Dismissed: []types.Finding{dropped},
+	})
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	// 1. It is visible WITH its evidence, not just a rule name.
+	rec := do(h, "GET", "/v1/l15-audit", "t1", "")
+	var view l15AuditView
+	_ = json.Unmarshal(rec.Body.Bytes(), &view)
+	if len(view.Suppressed) != 1 || view.Suppressed[0].ID != "f-9" {
+		t.Fatalf("the dropped finding itself must be surfaced so the call can be judged, got %+v", view.Suppressed)
+	}
+
+	// 2. It is NOT in the findings list — that is what makes it unrecoverable without this surface.
+	before, _ := st.ListFindings(ctx, "t1", store.FindingFilter{})
+	if len(before) != 0 {
+		t.Fatalf("precondition: a dismissed finding should not be in the findings list, got %d", len(before))
+	}
+
+	// 3. A human can put it back.
+	rec2 := do(h, "POST", "/v1/l15-audit/reinstate", "t1",
+		`{"finding_id":"f-9","by":"alex","reason":"this header disclosure is in scope for us"}`)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("reinstate failed: %d %s", rec2.Code, rec2.Body.String())
+	}
+	after, _ := st.ListFindings(ctx, "t1", store.FindingFilter{})
+	if len(after) != 1 || after[0].ID != "f-9" {
+		t.Fatalf("the reinstated finding is not in the findings list: %+v", after)
+	}
+
+	// 4. Provenance is marked — a human vouched for this over the filter, and a reader must be able
+	// to tell that from an ordinary AI-approved finding (§10).
+	if after[0].DiscoveryMethod == nil || after[0].DiscoveryMethod.Primary != "human_reinstated" {
+		t.Errorf("reinstated finding is not marked as a human override: %+v", after[0].DiscoveryMethod)
+	}
+	if !strings.Contains(after[0].Description, "alex") {
+		t.Errorf("the description should record who overrode and why, got %q", after[0].Description)
+	}
+}
+
+// Reinstate is tenant-scoped: it searches only the caller's engagements, so one tenant cannot
+// resurrect a finding from another's estate (§18.2 inv. 2).
+func TestL15Reinstate_IsTenantScoped(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutEngagement(ctx, platform.Engagement{
+		ID: "e1", TenantID: "victim", AssetID: "a1",
+		L15Audit:     []types.AuditEntry{{FindingID: "secret-1", Action: "dismiss", Rule: "fp_filter::x"}},
+		L15Dismissed: []types.Finding{{ID: "secret-1", RuleID: "x", Endpoint: "https://victim.test/"}},
+	})
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	rec := do(h, "POST", "/v1/l15-audit/reinstate", "t1", `{"finding_id":"secret-1"}`)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-tenant reinstate must 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	got, _ := st.ListFindings(ctx, "t1", store.FindingFilter{})
+	if len(got) != 0 {
+		t.Errorf("another tenant's finding leaked into t1: %+v", got)
+	}
+}

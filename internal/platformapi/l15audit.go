@@ -1,8 +1,10 @@
 package platformapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -29,7 +31,10 @@ type l15AuditRule struct {
 
 type l15AuditView struct {
 	Entries []types.AuditEntry `json:"entries"`
-	Total   int                `json:"total"`
+	// Suppressed are the dropped findings themselves, so the engineer can judge the AI's call on the
+	// evidence rather than on a rule name — and reinstate one it got wrong.
+	Suppressed []types.Finding `json:"suppressed"`
+	Total      int             `json:"total"`
 	// Dropped is the count of findings the chain DISMISSED — the ones that appear nowhere else in
 	// the product, and so the only ones a reader cannot otherwise discover.
 	Dropped int `json:"dropped"`
@@ -52,13 +57,14 @@ func (d Deps) handleL15Audit(w http.ResponseWriter, r *http.Request, tenantID st
 		respond(w, nil, err)
 		return
 	}
-	view := l15AuditView{Entries: []types.AuditEntry{}, ByRule: []l15AuditRule{}, ScansTotal: len(engs)}
+	view := l15AuditView{Entries: []types.AuditEntry{}, Suppressed: []types.Finding{}, ByRule: []l15AuditRule{}, ScansTotal: len(engs)}
 	byRule := map[l15AuditRule]int{}
 	for _, e := range engs {
 		if len(e.L15Audit) == 0 {
 			continue
 		}
 		view.ScansWithAudit++
+		view.Suppressed = append(view.Suppressed, e.L15Dismissed...)
 		for _, a := range e.L15Audit {
 			view.Entries = append(view.Entries, a)
 			switch a.Action {
@@ -92,4 +98,81 @@ func (d Deps) handleL15Audit(w http.ResponseWriter, r *http.Request, tenantID st
 		}
 	}
 	respond(w, view, nil)
+}
+
+// reinstateRequest names the suppressed finding a human wants back.
+type reinstateRequest struct {
+	FindingID string `json:"finding_id"`
+	Reason    string `json:"reason,omitempty"`
+	By        string `json:"by,omitempty"`
+}
+
+// handleL15Reinstate puts a finding the chain dismissed BACK into the tenant's findings — the
+// override half of §2.5 ("the audit log ... exposed to the security engineer for override").
+//
+// Visibility without override is half an affordance: telling an engineer "we dropped 40 findings by
+// rule X" while giving them no way to disagree leaves the AI's judgement final, which is exactly the
+// posture practitioners reject. The reinstated finding is marked as a HUMAN decision rather than
+// silently rejoining the queue as though the AI had approved it — the provenance of a finding is
+// part of its evidence (§10).
+func (d Deps) handleL15Reinstate(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var req reinstateRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	if strings.TrimSpace(req.FindingID) == "" {
+		writeJSON(w, http.StatusBadRequest, errBody("finding_id is required"))
+		return
+	}
+	engs, err := d.Store.ListEngagements(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	// Tenant-scoped by construction: only this tenant's engagements are searched (§18.2 inv. 2).
+	var found *types.Finding
+	for _, e := range engs {
+		for i := range e.L15Dismissed {
+			if e.L15Dismissed[i].ID == req.FindingID {
+				f := e.L15Dismissed[i]
+				found = &f
+				break
+			}
+		}
+		if found != nil {
+			break
+		}
+	}
+	if found == nil {
+		writeJSON(w, http.StatusNotFound, errBody("no suppressed finding with that id for this tenant"))
+		return
+	}
+
+	// Mark the provenance. A reinstated finding is one a human vouched for over the filter's
+	// objection, and a reader deserves to know that rather than seeing an ordinary finding.
+	if found.DiscoveryMethod == nil {
+		found.DiscoveryMethod = &types.DiscoveryMethod{}
+	}
+	found.DiscoveryMethod.Primary = "human_reinstated"
+	who := strings.TrimSpace(req.By)
+	if who == "" {
+		who = "security engineer"
+	}
+	note := "Reinstated by " + who + " over the L1.5 filter's dismissal."
+	if rs := strings.TrimSpace(req.Reason); rs != "" {
+		note += " Reason: " + rs
+	}
+	found.Description = strings.TrimSpace(found.Description + "\n\n" + note)
+
+	if err := d.Store.PutFinding(r.Context(), tenantID, *found); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("l1.5 dismissal overridden", "l15_reinstate",
+			map[string]any{"tenant_id": tenantID, "finding_id": req.FindingID, "by": who, "reason": req.Reason},
+			"a security engineer reinstated a finding the FP filter dropped (§2.5 override)")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"reinstated": found.ID, "rule_id": found.RuleID, "by": who})
 }

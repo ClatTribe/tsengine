@@ -54,6 +54,16 @@ type Result struct {
 	// the engineer cannot see what the AI decided not to show them, which is precisely the thing
 	// practitioners say they must be able to check before they will trust the output.
 	Audit []types.AuditEntry
+	// Dismissed are the findings the chain DROPPED outright — the FP filter judged them noise, so
+	// they appear in no findings list, no issue and no incident.
+	//
+	// Only the dismissed ones are kept, not every raw finding. A SURVIVING finding already carries
+	// its own RawOutput and ToolArgs, so mirroring the whole raw set would duplicate storage to
+	// recover something already present; and a MERGED finding is still represented by the survivor
+	// it folded into. A dismissed finding is the one case with nothing left behind, which makes it
+	// the only case where the engineer cannot check the AI's judgement — or reverse it. §2.5 requires
+	// exactly that: the audit log is exposed to the security engineer "for override".
+	Dismissed []types.Finding
 }
 
 // EnrichDetailed runs the chain and returns the audit trail alongside the enriched findings.
@@ -66,5 +76,23 @@ func EnrichDetailed(findings []types.Finding) Result {
 		tr.Add(f)
 	}
 	tr.Finalize()
-	return Result{Enriched: tr.Enriched(), Audit: tr.AuditLog()}
+	audit := tr.AuditLog()
+
+	// Recover the dropped findings from the tracer's raw record (kept before the hooks run) by
+	// matching the ids the chain recorded a dismissal for.
+	dismissedIDs := map[string]bool{}
+	for _, a := range audit {
+		if a.Action == "dismiss" {
+			dismissedIDs[a.FindingID] = true
+		}
+	}
+	var dismissed []types.Finding
+	if len(dismissedIDs) > 0 {
+		for _, f := range tr.Raw() {
+			if dismissedIDs[f.ID] {
+				dismissed = append(dismissed, f)
+			}
+		}
+	}
+	return Result{Enriched: tr.Enriched(), Audit: audit, Dismissed: dismissed}
 }

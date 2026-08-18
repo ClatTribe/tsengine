@@ -592,6 +592,11 @@ type Engagement struct {
 	// one shows only its new severity. Recording the trail is what lets a security engineer see
 	// what the AI decided not to show them, and disagree with it.
 	L15Audit []types.AuditEntry `json:"l15_audit,omitempty"`
+	// L15Dismissed are the findings the chain DROPPED on this scan, kept so a security engineer can
+	// review the AI's judgement and REINSTATE one it got wrong (§2.5: the audit log exists "for
+	// override"). Without the finding itself, the trail can only say what was suppressed, never put
+	// it back — half an affordance.
+	L15Dismissed []types.Finding `json:"l15_dismissed,omitempty"`
 
 	// ToolsRan and ToolsFailed record what the scan ACTUALLY dispatched, as opposed to what the
 	// asset type is configured to run.
