@@ -162,6 +162,19 @@ here is the **refusal set**, all tested: half the evidence is not the claim (eac
 its own detector's finding); one surface asserting both is not cross-surface; and a leaked API
 token is a *machine* credential, never a person's password.
 
+**The fourth join (2026-08-18): warehouse × cloud.** `FromWarehouse` was the last built-but-never-called
+ingest — `composeEstate` passed `nil`, so `dataplatform` estates never reached the graph. A warehouse
+grantee that is a GCP service account canonicalises into the shared `principal:` namespace and lands on
+the very node the cloud inventory created, so *"this Snowflake table is read by an identity an attacker
+can reach through cloud IAM"* becomes derivable. Neither side can say it alone: the warehouse assessment
+has no view of cloud IAM, and a warehouse table is not a cloud resource at all.
+
+**Honest limit, pinned as a test.** Nothing persists a grant snapshot, so the warehouse joins only at
+the moment it is posted; an estate composed later has no warehouse in it. Detection therefore runs at
+ingest, while the snapshot is in hand. `TestEstate_WarehouseIsNotInALaterComposedEstate` asserts the
+gap and says to update the caveat and the roadmap together when persistence lands — so closing it is a
+deliberate act rather than something a future reader assumes already happened.
+
 **The boundary this surfaced.** The cloud agent can *see* a cross-surface path via
 `estate_context` but cannot *record* one: `record_issue` grounds against the cloud graph.
 That is the correct split — cross-surface paths are the deterministic estate detector's

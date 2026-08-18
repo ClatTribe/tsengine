@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -128,4 +129,82 @@ func TestEstate_CloudInventoryIngestSurfacesTheCrossSurfacePath(t *testing.T) {
 			"did not happen on the ingest path (%d finding(s) stored)", len(stored))
 	}
 	t.Logf("ingest produced cross-surface finding(s): %v", cross)
+}
+
+// THE WAREHOUSE JOIN: a table inside Snowflake is readable by a GCP service account the cloud
+// account also runs a public box as. The warehouse assessment cannot say the grantee is reachable —
+// it has no view of cloud IAM — and the cloud graph cannot say what that identity reads inside a
+// warehouse, which is not a cloud resource at all. Only the join says both.
+//
+// The two converge with no matching logic: estategraph.Canonical maps a *.iam.gserviceaccount.com
+// address into the shared principal namespace, so the warehouse grantee IS the cloud node.
+func TestEstate_WarehouseGranteeJoinsTheCloudIdentity(t *testing.T) {
+	st := store.NewMemory()
+	h := NewHandler(Deps{Store: st, CloudSnapshots: cloudsnap.NewMemStore(),
+		Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	ctx := t.Context()
+
+	// The cloud surface: an internet-reachable box running as that service account.
+	inv := `{"account_id":"111122223333",
+		"instances":[{"id":"i-web","public_ip":true,"service_port":443,
+			"security_group_ids":["sg-open"],"role_arn":"etl@proj.iam.gserviceaccount.com"}],
+		"security_groups":[{"id":"sg-open","ingress":"[{\"cidr\":\"0.0.0.0/0\",\"from_port\":443,\"to_port\":443,\"proto\":\"tcp\"}]"}]}`
+	if rec := do(h, "POST", "/v1/cloud/inventory", "t1", inv); rec.Code != 200 {
+		t.Fatalf("cloud inventory: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// The warehouse surface: that same identity can read a table holding customer data.
+	wh := `{"objects":[{"platform":"snowflake","name":"analytics.customers","type":"table",
+		"sensitive":true,
+		"grants":[{"grantee":"etl@proj.iam.gserviceaccount.com","privilege":"SELECT"}]}]}`
+	rec := do(h, "POST", "/v1/dataplatform/ingest", "t1", wh)
+	if rec.Code != 200 {
+		t.Fatalf("dataplatform ingest: %d %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Cross int `json:"cross_surface_detected"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Cross == 0 {
+		t.Fatalf("a public box runs as the identity that reads the customer table, and no cross-surface "+
+			"finding was produced: %s", rec.Body.String())
+	}
+
+	// The customer outcome, asserted on the STORED finding rather than a response count — a count is
+	// satisfied by anything, and this must be the warehouse join specifically, not a cloud-only path
+	// that happened to be found at the same moment.
+	stored, _ := st.ListFindings(ctx, "t1", store.FindingFilter{})
+	var reachedWarehouse bool
+	for _, f := range stored {
+		if strings.HasPrefix(f.RuleID, "estate::") &&
+			(strings.Contains(f.Endpoint, "analytics.customers") || strings.Contains(f.Description, "analytics.customers")) {
+			reachedWarehouse = true
+		}
+	}
+	if !reachedWarehouse {
+		t.Fatalf("a cross-surface finding was produced but none of them reaches the warehouse table — " +
+			"the join being tested is not the one that fired")
+	}
+}
+
+// THE LIMITATION, pinned deliberately. Nothing persists a grant snapshot, so the warehouse joins the
+// estate only at the moment it is posted; an estate composed later has no warehouse in it. That is a
+// real gap, and this test exists so that persisting the snapshot is a deliberate change rather than
+// something a future reader assumes already happened.
+func TestEstate_WarehouseIsNotInALaterComposedEstate(t *testing.T) {
+	st := store.NewMemory()
+	h := NewHandler(Deps{Store: st, CloudSnapshots: cloudsnap.NewMemStore(),
+		Connectors: connector.NewRegistry(), Token: "platform-tok"})
+
+	wh := `{"objects":[{"platform":"snowflake","name":"analytics.customers","type":"table","sensitive":true,
+		"grants":[{"grantee":"etl@proj.iam.gserviceaccount.com","privilege":"SELECT"}]}]}`
+	if rec := do(h, "POST", "/v1/dataplatform/ingest", "t1", wh); rec.Code != 200 {
+		t.Fatalf("dataplatform ingest: %d %s", rec.Code, rec.Body.String())
+	}
+
+	g := do(h, "GET", "/v1/estate", "t1", "")
+	if strings.Contains(g.Body.String(), "analytics.customers") {
+		t.Errorf("the warehouse now survives into a later-composed estate — good, but the caveat in " +
+			"composeEstateWith and the roadmap both still say it does not; update them together")
+	}
 }

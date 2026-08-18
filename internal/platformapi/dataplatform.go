@@ -1,6 +1,8 @@
 package platformapi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -55,6 +57,17 @@ func (d Deps) handleDataPlatformIngest(w http.ResponseWriter, r *http.Request, t
 		saved = append(saved, f)
 		stored++
 	}
+	// CROSS-SURFACE, while we still hold the snapshot. A warehouse grantee that is a cloud service
+	// account canonicalises onto the very node the cloud inventory created, so "this table can be read
+	// by an identity an attacker can reach through cloud IAM" becomes derivable — a sentence neither
+	// the warehouse assessment nor the cloud graph can produce alone.
+	//
+	// It happens here because nothing persists the snapshot: this is the only moment the warehouse is
+	// in hand. Best-effort — a compose failure must not fail the ingest that already succeeded.
+	crossFindings := d.detectEstateOnIngestWith(r.Context(), tenantID, &est, warehouseRef(raw))
+	saved = append(saved, crossFindings...)
+	stored += len(crossFindings)
+
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
@@ -73,6 +86,8 @@ func (d Deps) handleDataPlatformIngest(w http.ResponseWriter, r *http.Request, t
 	}
 	resp := map[string]any{
 		"objects": len(est.Objects), "grants": grants, "issues_detected": stored, "findings": findings,
+		// Reported separately so a reader can tell a warehouse finding from a cross-surface one.
+		"cross_surface_detected": len(crossFindings),
 	}
 	// Surface what was DISCOVERED, not just declared — a crown jewel the owner didn't know they had is
 	// exactly the thing worth telling them, and it carries the evidence so it's auditable.
@@ -120,4 +135,13 @@ func anySensitive(est dataplatform.Estate) bool {
 		}
 	}
 	return false
+}
+
+// warehouseRef is the citable observation id for a posted grant snapshot: a content hash, so two
+// ingests of the same warehouse state cite the same reference and a changed one cites a different
+// reference. estategraph refuses an edge that cites nothing, and inventing a reference so the edges
+// "work" would defeat that invariant — the hash is a real identifier of what was actually posted.
+func warehouseRef(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return "dataplatform:" + hex.EncodeToString(sum[:8])
 }
