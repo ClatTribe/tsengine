@@ -691,9 +691,14 @@ When the host tracer's `Add(finding)` is called, hooks fire in this order. Each 
 
 `findings_raw` is captured **before** hook 1 â that's what the security engineer reads. `findings_enriched` is the post-hook view. Both ship.
 
-**The chain runs on BOTH doors, not just the engine.** Engine-scanned findings (repo/container/web/
-cloud/etc.) reach the host tracer via the sandbox sidecar (Sec 12.4), so the hooks fire on them by
-construction. Findings that enter through the platform's OWN ingest paths -- identity events, OSINT
+**The chain runs on BOTH doors — but the engine door had to be WIRED, it was never automatic.** The
+claim that engine-scanned findings "reach the host tracer via the sandbox sidecar, so the hooks fire
+by construction" was FALSE for the platform: only `cmd/tsengine` (the CLI) ever built a tracer, and
+no tracer exists in `internal/orchestrator` or `internal/sandbox`. `runner.scanAsset` stored whatever
+the scanner returned, so every repo/container/web/api/ip scan through the PRODUCT landed with no
+KEV/EPSS, no exploitability, no FP filtering, no compliance mapping and no confidence — while the
+secondary ingest paths were fully enriched. The chain now runs on the engine path via `l15.Enrich`
+(`internal/l15`, shared because platformapi imports runner so runner cannot import it back). Findings that enter through the platform's OWN ingest paths -- identity events, OSINT
 snapshots, SaaS posture, TPRM, device posture, cloud drift (config + CDR), TLS scan -- used to call
 `Store.PutFinding` directly and land UN-enriched (no threat-intel, no exploitability, no confidence;
 any CVE they carried never got KEV/EPSS). `platformapi.enrichFindings` (`internal/platformapi/enrich.go`)
