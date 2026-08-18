@@ -175,6 +175,26 @@ ingest, while the snapshot is in hand. `TestEstate_WarehouseIsNotInALaterCompose
 gap and says to update the caveat and the roadmap together when persistence lands — so closing it is a
 deliberate act rather than something a future reader assumes already happened.
 
+**Making the joins reachable (2026-08-18).** Auditing my own work found the identity join was
+effectively unreachable: cross-surface detection fired from only **two** ingest doors (cloud
+inventory, warehouse), and the identity join's halves arrive through neither — so it only fired for
+a tenant who happened to re-post a cloud inventory afterwards.
+
+Two fixes, in order, because the first is a prerequisite for the second:
+
+1. **Content-derived finding ids.** Detection was minting a fresh id per run, so re-running over an
+   unchanged estate filed a *second copy* of the same fact — proved with a test that went 1 → 2
+   before the fix. One cross-surface fact is one finding; otherwise "how many issues do I have"
+   becomes a function of how often we looked. The id now derives from rule + endpoint, which is also
+   what `detect.Reconcile` keys an incident on, so a finding and its incident stay in step.
+2. **A pass-level hook** (`DetectEstateEachPass`, wired to `runner.Service.AfterPass`). It belongs
+   there rather than at each ingest handler because a cross-surface fact needs *two* surfaces and the
+   second can arrive through any of a dozen doors — or through a scan, which is not a door at all.
+   Wiring doors one by one means the next door added silently does not join. The two inline ingests
+   stay for immediate feedback; the hook is what guarantees the join is eventually found. Affordable
+   unconditionally because the detections are deterministic and LLM-free — unlike the auto-review,
+   there is no budget to gate.
+
 **The boundary this surfaced.** The cloud agent can *see* a cross-surface path via
 `estate_context` but cannot *record* one: `record_issue` grounds against the cloud graph.
 That is the correct split — cross-surface paths are the deterministic estate detector's

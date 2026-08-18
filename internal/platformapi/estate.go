@@ -2,8 +2,9 @@ package platformapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
@@ -125,8 +126,13 @@ func (d Deps) persistEstateFindings(ctx context.Context, tenantID string, findin
 	}
 	findings = enrichFindings(findings)
 	saved := make([]types.Finding, 0, len(findings))
-	for i, f := range findings {
-		f.ID = d.newID("estate") + "-" + strconv.Itoa(i)
+	for _, f := range findings {
+		// A STABLE, content-derived id, because this runs on every pass that changes a surface. One
+		// cross-surface fact must be ONE finding: a freshly-minted id per pass files a new copy of a
+		// problem the customer already has, and makes "how many issues do I have" a function of how
+		// often we looked rather than of the estate. PutFinding upserts by id, so re-detecting the
+		// same fact updates the row instead of adding one.
+		f.ID = estateFindingID(f)
 		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
 			continue
 		}
@@ -182,4 +188,31 @@ func (d Deps) detectEstateOnIngestWith(ctx context.Context, tenantID string, wh 
 		return nil // only one surface, or nothing joins — the honest result
 	}
 	return d.persistEstateFindings(ctx, tenantID, found)
+}
+
+// estateFindingID derives a finding's id from what it asserts — its rule and the node it is about.
+// Those two are exactly what makes a cross-surface fact the same fact across passes, and they are
+// also what detect.Reconcile keys an incident on, so a finding and its incident stay in step.
+func estateFindingID(f types.Finding) string {
+	sum := sha256.Sum256([]byte(f.RuleID + "|" + f.Endpoint))
+	return "estate::" + hex.EncodeToString(sum[:8])
+}
+
+// DetectEstateEachPass is the runner.Service.AfterPass hook for cross-surface detection.
+//
+// WHY A PASS-LEVEL HOOK AND NOT PER-INGEST. A cross-surface finding needs two surfaces, and the
+// second one can arrive through any of a dozen ingest handlers — or through a scan, which is not an
+// ingest at all. Wiring each door means the next door added silently does not join, which is how the
+// identity join shipped reachable only by tenants who happened to re-post a cloud inventory
+// afterwards. The cloud and warehouse ingests still detect inline for immediate feedback; this hook
+// is what makes the join eventually found regardless of how its halves arrived.
+//
+// Affordable to run unconditionally: the detections are deterministic and LLM-free, so unlike the
+// auto-review there is no budget to gate. Best-effort — a compose failure must never disturb a
+// monitoring pass.
+func (d Deps) DetectEstateEachPass(ctx context.Context, tenantID string) {
+	if d.Store == nil {
+		return
+	}
+	_ = d.detectEstateOnIngest(ctx, tenantID)
 }
