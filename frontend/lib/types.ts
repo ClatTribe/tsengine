@@ -222,6 +222,21 @@ export interface PentestEngagement {
   completed_at?: string;
   signoff?: Signoff | null; // named human sign-off on the report (the HITL accountability)
   schedule?: { cadence: string; next_run_at?: string } | null; // recurring re-test cadence (safe passive re-verify)
+  // What the agent TRIED, including what the Rules of Engagement refused to let it run. Without
+  // this a reader cannot tell "tested and held" from "never tested" — and a blocked probe means
+  // that test did not happen, however clean the report looks.
+  attempts?: PentestAttempt[] | null;
+  attempts_truncated?: number;
+}
+
+export interface PentestAttempt {
+  target: string;
+  method?: string;
+  active?: boolean;   // an exploitation attempt rather than a benign probe
+  allowed: boolean;   // the Rules-of-Engagement verdict
+  reason?: string;    // why it was refused, or that it was within the rules
+  proven?: boolean;   // allowed && !proven = tried and could not be demonstrated
+  at: string;
 }
 
 export interface PentestStats {
