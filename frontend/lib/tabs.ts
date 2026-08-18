@@ -46,4 +46,7 @@ export const SECURITY_TABS: Tab[] = [
   // Verify sits beside Coverage as the other half of "what actually happened": Coverage says what
   // was tested, Verify says what the filter then suppressed — and lets a human overrule it.
   { href: "/verify", label: "Verify" },
+  // Your evals completes the trio: Coverage says what was tested, Verify says what was suppressed,
+  // and this says whether the setup still agrees with your own experts about your own findings.
+  { href: "/eval", label: "Your evals" },
 ];

@@ -1132,3 +1132,26 @@ export interface L15Audit {
   // Present when nothing was recorded — an empty trail is not evidence nothing was suppressed.
   note?: string;
 }
+
+// The tenant's OWN eval suite — graded from decisions they already made, not a vendor benchmark.
+export interface TenantEvalCase {
+  finding_id: string;
+  rule_id: string;
+  source: "reinstated" | "ignored" | "confirmed_fix";
+  expect: "keep" | "suppress";
+  by?: string;
+  reason?: string;
+}
+export interface TenantEvalFailure extends TenantEvalCase {
+  got: "keep" | "suppress";
+}
+export interface TenantEval {
+  cases: number;
+  passed: number;
+  failures: TenantEvalFailure[];
+  by_source: Partial<Record<"reinstated" | "ignored" | "confirmed_fix", number>>;
+  // Absent when there are no cases — an empty suite has NO score, because a vacuous 100% would
+  // rise as a customer does less.
+  agreement?: number;
+  note?: string;
+}
