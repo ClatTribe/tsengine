@@ -26,7 +26,9 @@ type replayScanner struct {
 	err      error
 }
 
-func (r *replayScanner) Scan(context.Context, platform.Asset) ([]types.Finding, error) { return nil, nil }
+func (r *replayScanner) Scan(context.Context, platform.Asset) ([]types.Finding, error) {
+	return nil, nil
+}
 func (r *replayScanner) ReplayTool(_ context.Context, a platform.Asset, name string, args tool.Args, _ string) ([]types.Finding, error) {
 	r.gotAsset, r.gotTool, r.gotArgs = a, name, args
 	return r.findings, r.err
