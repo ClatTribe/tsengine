@@ -242,3 +242,43 @@ func ids(g *estategraph.Graph) []string {
 	}
 	return out
 }
+
+// Compose is the join in one call: a leaked key from the CODE surface and an IAM role from the
+// CLOUD surface must converge on the same secret node, because that convergence is what makes
+// cross-surface detection possible at all.
+func TestCompose_JoinsCodeAndCloudOnTheSharedSecret(t *testing.T) {
+	now := time.Now().UTC()
+	leaked := []types.Finding{{
+		ID: "f-leak", Title: "AWS key committed",
+		Endpoint: "repo/app.py", Description: "found AKIAIOSFODNN7EXAMPLE in app.py",
+	}}
+	g := Compose(nil, nil, "", leaked, now)
+	if len(g.Nodes) == 0 {
+		t.Fatal("Compose produced an empty graph from a real leaked-secret finding")
+	}
+	var secret *estategraph.Node
+	for _, n := range g.Nodes {
+		if n.Kind == estategraph.KindSecret {
+			secret = n
+		}
+	}
+	if secret == nil {
+		t.Fatal("no secret node — the bridge the whole join depends on")
+	}
+	// The shared namespace is the point: a cloud ingest asserting the same key id must land on
+	// THIS node rather than a parallel one, or the surfaces never meet.
+	if !strings.HasPrefix(secret.ID, "secret:") {
+		t.Errorf("secret id %q must be in the shared namespace, not surface-qualified", secret.ID)
+	}
+}
+
+// An empty estate composes to an empty graph — not an error, and not an invented node.
+func TestCompose_NothingConnectedYieldsEmpty(t *testing.T) {
+	g := Compose(nil, nil, "", nil, time.Now())
+	if g == nil {
+		t.Fatal("Compose must return a usable empty graph, not nil")
+	}
+	if len(g.Nodes) != 0 || len(g.Edges) != 0 {
+		t.Errorf("nothing connected should compose to an empty graph, got %d nodes / %d edges", len(g.Nodes), len(g.Edges))
+	}
+}

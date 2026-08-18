@@ -304,3 +304,28 @@ func nameOr(s, dflt string) string {
 	}
 	return s
 }
+
+// Compose merges every surface we can currently ingest into ONE tenant estate graph — the entry
+// point that turns three separate builders into the substrate the agents and internal/estatedetect
+// reason over.
+//
+// This exists because the per-surface builders were correct but unreachable: each returned its own
+// graph and nothing joined them, so the cross-surface facts they make possible could not be derived.
+// Merge is additive and sensitivity only ever rises (estategraph.MergeSensitivity), so ingesting a
+// surface can add knowledge but never quietly downgrade a crown jewel another surface classified.
+//
+// Every argument is optional. A tenant with only cloud connected produces a cloud-only graph — which
+// is the honest result, and which estatedetect will correctly find no cross-surface joins in.
+func Compose(cloud *cloudgraph.Snapshot, warehouse *dataplatform.Estate, warehouseRef string, leaked []types.Finding, now time.Time) *estategraph.Graph {
+	g := estategraph.New()
+	if cloud != nil {
+		g.Merge(FromCloud(cloud))
+	}
+	if warehouse != nil {
+		g.Merge(FromWarehouse(*warehouse, warehouseRef, now))
+	}
+	if len(leaked) > 0 {
+		g.Merge(FromLeakedSecrets(leaked, now))
+	}
+	return g
+}
