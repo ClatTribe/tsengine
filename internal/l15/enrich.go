@@ -39,14 +39,32 @@ import (
 //
 // Honors TSENGINE_L15_DISABLED (the §14.1 ablation flag) — then Enrich is the identity function,
 // which is what makes the L1-vs-L1.5 delta measurable.
-func Enrich(findings []types.Finding) []types.Finding {
+func Enrich(findings []types.Finding) []types.Finding { return EnrichDetailed(findings).Enriched }
+
+// Result is the enrichment outcome plus the trail of what the chain CHANGED.
+type Result struct {
+	// Enriched is the post-chain finding set — what the customer sees.
+	Enriched []types.Finding
+	// Audit is every demotion, dismissal and merge the chain performed, with the rule and reason
+	// (§2.5: L1.5 decisions must be "logged + recoverable" so the security engineer can audit them).
+	//
+	// This is the half that cannot be reconstructed from Enriched. A surviving finding still carries
+	// its own RawOutput and ToolArgs, so what the tool said is recoverable — but a finding the FP
+	// filter DROPPED is invisible, and one it demoted shows only its new severity. Without the trail
+	// the engineer cannot see what the AI decided not to show them, which is precisely the thing
+	// practitioners say they must be able to check before they will trust the output.
+	Audit []types.AuditEntry
+}
+
+// EnrichDetailed runs the chain and returns the audit trail alongside the enriched findings.
+func EnrichDetailed(findings []types.Finding) Result {
 	if len(findings) == 0 {
-		return findings
+		return Result{Enriched: findings}
 	}
 	tr := tracer.New(os.Getenv("TSENGINE_L15_DISABLED") == "1", hooks.DefaultPerFinding(), hooks.DefaultFinalize())
 	for _, f := range findings {
 		tr.Add(f)
 	}
 	tr.Finalize()
-	return tr.Enriched()
+	return Result{Enriched: tr.Enriched(), Audit: tr.AuditLog()}
 }

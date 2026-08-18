@@ -171,6 +171,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/findings/export/ndjson", d.auth(d.handleFindingsSIEMExport)) // one event per line — what Splunk/Datadog/Panther actually ingest
 	mux.HandleFunc("POST /v1/safechain/check", d.auth(d.handleSafeChain))                // install-time supply-chain gate (Safe Chain parity)
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
+	mux.HandleFunc("GET /v1/l15-audit", d.auth(d.handleL15Audit)) // what L1.5 suppressed/changed — the security engineer's audit + override surface (§2.5)
 	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))
 	mux.HandleFunc("POST /v1/assets", d.auth(d.handleCreateAsset))                                 // add a standalone scan target (web/api/domain/ip/image)
 	mux.HandleFunc("POST /v1/assets/{id}/data-tier", d.auth(d.handleSetAssetDataTier))             // tier a repo by customer-data exposure

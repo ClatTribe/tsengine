@@ -648,7 +648,8 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 	//
 	// Note the chain may legitimately return FEWER findings than it was given (fp_filter drops decoy
 	// shapes, cross_tool_merge dedups) — the same behaviour the CLI has always had.
-	findings = l15.Enrich(findings)
+	enr := l15.EnrichDetailed(findings)
+	findings, eng.L15Audit = enr.Enriched, enr.Audit
 	for _, f := range findings {
 		if err := s.Store.PutFinding(ctx, a.TenantID, f); err != nil {
 			return nil, nil, err

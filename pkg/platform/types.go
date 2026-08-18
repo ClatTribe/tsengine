@@ -582,6 +582,17 @@ type Engagement struct {
 	StartedAt   time.Time `json:"started_at"`
 	CompletedAt time.Time `json:"completed_at,omitempty"`
 
+	// L15Audit is every change the L1.5 chain made to this scan's findings — each demotion,
+	// dismissal and merge with the rule that caused it and why (§2.5: those decisions must be
+	// "logged + recoverable" so the security engineer can audit and override them).
+	//
+	// It is the one part of the scan that cannot be reconstructed afterwards. A stored finding
+	// still carries its own RawOutput and ToolArgs, so what a tool said about a SURVIVING finding
+	// is recoverable — but a finding the FP filter dropped leaves no trace at all, and a demoted
+	// one shows only its new severity. Recording the trail is what lets a security engineer see
+	// what the AI decided not to show them, and disagree with it.
+	L15Audit []types.AuditEntry `json:"l15_audit,omitempty"`
+
 	// ToolsRan and ToolsFailed record what the scan ACTUALLY dispatched, as opposed to what the
 	// asset type is configured to run.
 	//
