@@ -125,6 +125,26 @@ Two guards keep the number honest:
   itself, must report **no lift**. A benchmark that can only ever report success is not
   measuring anything.
 
+**The second join (2026-08-18): web → cloud.** A second fixture asks a *different* question —
+not "can the internet reach the crown" but **"what does this pentest target reach?"**, which is
+what decides whether the AI pentester spends its budget on a login form fronting a PII warehouse
+or one fronting a marketing page.
+
+| substrate | answers "what does app.example.com reach?" |
+|---|---|
+| cloud graph alone | **not found** |
+| joined estate (web + cloud) | **found** — regulated data, via instance → role → bucket |
+
+The cloud graph cannot answer it *at all*, and not for want of an edge: **a hostname is not an
+identifier a cloud account holds.** Only the inventory asserting "this DNS name is that resource"
+makes the question answerable — so the join is grounded on that assertion, and a paired refusal
+test proves a resource merely *named* after the host is never joined to it.
+
+This was wired end to end: `LeadsForRoutes` and `Context.Leads` both already existed with tests,
+and **nothing in production populated them** — zero non-test assignments, the same inert-wiring
+shape as the access-key join. `runWebDiscovery` now derives leads from the tenant's estate, and
+the test asserts they *arrived at the agent*, not that the code compiles.
+
 **The boundary this surfaced.** The cloud agent can *see* a cross-surface path via
 `estate_context` but cannot *record* one: `record_issue` grounds against the cloud graph.
 That is the correct split — cross-surface paths are the deterministic estate detector's

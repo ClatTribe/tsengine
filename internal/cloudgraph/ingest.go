@@ -77,6 +77,11 @@ type InvResource struct {
 	// is only a foothold once you know which principal it becomes. Carried into
 	// Node.Attrs["access_key_ids"].
 	AccessKeyIDs []string `json:"access_key_ids,omitempty"`
+	// DNSNames are the hostnames that resolve to this resource (an instance's public DNS, a load
+	// balancer's name, a CDN alias). They are the join point between the cloud account and the WEB
+	// surface: the customer's pentest target is a hostname, and only the inventory can say which
+	// resource that hostname actually is. Carried into Node.Attrs["dns_names"].
+	DNSNames []string `json:"dns_names,omitempty"`
 }
 
 type InvTrust struct {
@@ -179,6 +184,7 @@ func (s *Snapshot) ToInventory() Inventory {
 			Public: n.Public, Sensitive: n.Sensitive, Privileged: n.Privileged, Tags: n.Tags,
 			Image:        n.Attrs["image"], // round-trip the workload image (Phase 2)
 			AccessKeyIDs: splitAttrList(n.Attrs["access_key_ids"]),
+			DNSNames:     splitAttrList(n.Attrs["dns_names"]),
 		})
 	}
 	for _, e := range s.Edges {
@@ -221,6 +227,12 @@ func Ingest(inv Inventory) *Snapshot {
 				n.Attrs = map[string]string{}
 			}
 			n.Attrs["access_key_ids"] = strings.Join(r.AccessKeyIDs, ",")
+		}
+		if len(r.DNSNames) > 0 {
+			if n.Attrs == nil {
+				n.Attrs = map[string]string{}
+			}
+			n.Attrs["dns_names"] = strings.Join(r.DNSNames, ",")
 		}
 		s.AddNode(n)
 	}

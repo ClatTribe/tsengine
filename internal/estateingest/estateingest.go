@@ -46,6 +46,11 @@ const (
 	SurfaceCloud     = "cloud"
 	SurfaceWarehouse = "warehouse"
 	SurfaceCode      = "code"
+	// SurfaceWeb is the externally-reachable web surface: the hostnames a pentester is pointed at.
+	// A URL canonicalises to a shared "host:" id regardless of surface, so this names WHO asserted
+	// the node rather than changing its identity — which is what lets the cloud inventory and a web
+	// asset converge on one node instead of two.
+	SurfaceWeb = "web"
 )
 
 // AccessKeyIDAttr is the cloud-node attribute naming a principal's long-lived access key. It is the
@@ -58,6 +63,10 @@ const AccessKeyIDAttr = "access_key_id"
 // principal's full key set populates. Both are read — the singular predates the list and dropping
 // it would silently disconnect any inventory still using it.
 const AccessKeyIDsAttr = "access_key_ids"
+
+// DNSNamesAttr is the cloud-node attribute listing the hostnames that resolve to a resource. It is
+// the web<->cloud join point, the exact counterpart of the access-key attribute for code<->cloud.
+const DNSNamesAttr = "dns_names"
 
 // principalKeys returns every access key id a cloud node claims, from either attribute, deduped and
 // blank-free so a trailing separator never becomes a phantom secret node.
@@ -78,6 +87,25 @@ func principalKeys(attrs map[string]string) []string {
 	add(attrs[AccessKeyIDAttr])
 	for _, k := range strings.Split(attrs[AccessKeyIDsAttr], ",") {
 		add(k)
+	}
+	return out
+}
+
+// attrList reads one comma-joined attribute, deduped and blank-free, so a trailing separator never
+// becomes a phantom node.
+func attrList(attrs map[string]string, key string) []string {
+	if len(attrs) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, v := range strings.Split(attrs[key], ",") {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[strings.ToLower(v)] {
+			continue
+		}
+		seen[strings.ToLower(v)] = true
+		out = append(out, v)
 	}
 	return out
 }
@@ -112,6 +140,30 @@ func FromCloud(snap *cloudgraph.Snapshot) *estategraph.Graph {
 			ObservedAt: at,
 			Attrs:      n.Attrs,
 		})
+
+		// A resource the inventory gives a hostname to ALSO exists as a web-surface node, joined to
+		// it. This is what lets the pentester's target — which is only ever a hostname — line up
+		// with the cloud resource it actually runs on, and inherit that resource's outbound reach.
+		//
+		// GROUNDED (§10): the hostname comes from the inventory asserting it, never from a name that
+		// merely resembles the resource. estategraph refuses fuzzy identity for exactly this reason —
+		// a wrong join fabricates an attack path — so the inventory saying so is the only admissible
+		// evidence, and an account that lists no DNS names produces no web nodes at all.
+		for _, dns := range attrList(n.Attrs, DNSNamesAttr) {
+			hostID := estategraph.Canonical(SurfaceWeb, "https://"+dns)
+			if hostID == "" || hostID == id {
+				continue
+			}
+			g.AddNode(estategraph.Node{
+				ID: hostID, Kind: estategraph.KindResource, Name: dns,
+				Surfaces: []string{SurfaceWeb}, Public: n.Public, ObservedAt: at,
+			})
+			_ = g.AddEdge(estategraph.Edge{
+				From: hostID, To: id, Kind: estategraph.EdgeReaches,
+				Evidence: []string{ref}, Surface: SurfaceCloud, ObservedAt: at,
+				Why: "The inventory records " + dns + " as a hostname of " + nameOr(n.Name, id) + ".",
+			})
+		}
 
 		// A principal whose access keys the inventory records gets a secret node per key. This is the
 		// anchor a leaked key in code joins onto — and it only exists because the inventory said so.
