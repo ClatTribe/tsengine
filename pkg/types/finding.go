@@ -31,8 +31,18 @@ type Finding struct {
 	SurfacePriority *SurfacePriority `json:"surface_priority,omitempty"`
 	Exploitability  *Exploitability  `json:"exploitability,omitempty"`
 	CorroboratedBy  []string         `json:"corroborated_by,omitempty"`
-	ThreatIntel     *ThreatIntel     `json:"threat_intel,omitempty"`
-	Compliance      *Compliance      `json:"compliance,omitempty"`
+	// DerivedFrom are the finding ids a DERIVED finding rests on — one produced by joining other
+	// findings rather than by a tool observing something directly (internal/estatedetect's
+	// cross-surface detections are the first). §10 requires every recorded issue to cite its
+	// evidence, and for a derived finding the evidence IS the findings it was derived from; without
+	// this it would be an assertion with nothing behind it.
+	//
+	// Deliberately NOT CorroboratedBy: that field means "≥2 independent tools saw THIS SAME thing"
+	// and feeds the L1.5 confidence score. These are different findings on different surfaces that
+	// CHAIN — reusing that field would silently inflate confidence on a claim nobody corroborated.
+	DerivedFrom []string     `json:"derived_from,omitempty"`
+	ThreatIntel *ThreatIntel `json:"threat_intel,omitempty"`
+	Compliance  *Compliance  `json:"compliance,omitempty"`
 
 	// VerificationStatus + Confidence are the L1.5 quality signal (strix
 	// parity — its #1 triage signal). They tell the security engineer + L2
