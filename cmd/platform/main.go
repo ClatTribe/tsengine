@@ -543,6 +543,14 @@ func main() {
 		// Doubt→prove: record which unproven findings are worth an exploit attempt. Proposes only —
 		// active exploitation stays consent-gated, so this never launches an engagement by itself.
 		apiDeps.RecordProofQueue(ctx, tenantID)
+		// Cross-surface detection, every pass. It belongs HERE rather than at each ingest handler
+		// because a cross-surface fact needs two surfaces, and the second one can arrive through any
+		// of a dozen doors — or through a scan, which is not a door at all. Two ingests trigger it
+		// directly for immediate feedback; this is what guarantees the join is eventually found no
+		// matter how its halves arrived. Deterministic and LLM-free, so unlike the auto-review it
+		// needs no change-gate to be affordable, and its findings carry content-derived ids so
+		// re-running over an unchanged estate updates rather than duplicates.
+		apiDeps.DetectEstateEachPass(ctx, tenantID)
 	}
 	api := platformapi.NewHandler(apiDeps)
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a
