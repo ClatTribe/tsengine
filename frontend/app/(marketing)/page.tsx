@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
 import { AttackPathHero } from "@/components/marketing/attack-path-hero";
+import { VerificationPromise } from "@/components/marketing/verification-promise";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
 import { Prioritize } from "@/components/marketing/prioritize";
@@ -118,6 +119,11 @@ export default function Landing() {
           should not have to scroll that far to find out what the two things they are buying actually
           do. Each card says what the agent does, and the one thing it will never do without them. */}
       <TwoAgents />
+
+      {/* THE TRUST OBJECTION, answered immediately after the visitor learns the product is two AI agents —
+          which is exactly when "but agents make things up" occurs to them. Answered with the architecture
+          (propose/dispose, verification outside the model), not with reassurance. */}
+      <VerificationPromise />
 
       {/* Trust signals — who built it, what it runs on, how it's built, who it's for */}
       <TrustBar />
