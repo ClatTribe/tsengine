@@ -232,6 +232,8 @@ func NewHandler(d Deps) http.Handler {
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
 	// the control set always reflects the current CWE crosswalk; unattested until a named human signs.
 	mux.HandleFunc("GET /v1/incidents/{id}/certification", d.auth(d.handleIncidentCertification))
+	mux.HandleFunc("GET /v1/incidents/{id}/certin-report", d.auth(d.handleCERTInReport))    // CERT-In filing DRAFT (India, 6h duty)
+	mux.HandleFunc("POST /v1/incidents/{id}/certin-report", d.auth(d.handleCERTInReport))   // record a named human filed it
 	mux.HandleFunc("GET /v1/risks", d.auth(d.handleListRisks))                              // risk register (vCISO artifact) + board summary
 	mux.HandleFunc("POST /v1/risks", d.auth(d.handleCreateRisk))                            // add a manual risk
 	mux.HandleFunc("POST /v1/risks/seed", d.auth(d.handleSeedRisks))                        // propose candidates from findings (grounded)
@@ -873,6 +875,7 @@ func (d Deps) handleIncidents(w http.ResponseWriter, r *http.Request, tenantID s
 	d.annotateSLA(r.Context(), tenantID, all)         // transient sla_breach per incident (read-time)
 	d.annotateBlastRadius(r.Context(), tenantID, all) // transient blast_radius per incident (read-time impact)
 	d.annotateOnset(r.Context(), tenantID, all)       // transient onset per incident (read-time: WHEN the state changed)
+	d.annotateCERTIn(r.Context(), tenantID, all)      // transient CERT-In six-hour reporting position (read-time, India)
 	if r.URL.Query().Get("status") == "all" {
 		respond(w, all, nil)
 		return

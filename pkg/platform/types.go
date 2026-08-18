@@ -777,6 +777,20 @@ const (
 // say "this critical issue is NEW since the last pass" and "this one is now fixed",
 // timestamped. Key is the stable issue identity (rule + cited entity) so the same issue
 // re-detected across scans maps to the same incident.
+// CERTInStatus is an incident's reporting position against the CERT-In six-hour window
+// (Directions of 28 April 2022, Direction (ii)). Computed at read time by internal/certin
+// from the incident's timestamps + its opening finding's CERT-In annotation; the type lives
+// here (not in internal/certin) so platform.Incident can carry it without an import cycle,
+// exactly as SLABreach does.
+type CERTInStatus struct {
+	DueAt       time.Time `json:"due_at"`   // NoticedAt + 6h
+	Reported    bool      `json:"reported"` // a human has filed it
+	ReportedAt  time.Time `json:"reported_at,omitempty"`
+	Breached    bool      `json:"breached"`     // past due and still not reported
+	MinutesLeft int       `json:"minutes_left"` // negative once the window closed
+	Categories  []string  `json:"categories"`   // the Annexure I types this falls under (the evidence)
+}
+
 type Incident struct {
 	ID        string `json:"id"`
 	TenantID  string `json:"tenant_id"`
@@ -833,6 +847,15 @@ type Incident struct {
 	// SLABreach is a TRANSIENT, read-time annotation (the incident's state vs. the tenant's SLA
 	// policy) — populated by the API when returning incidents, NEVER persisted. nil = not tracked.
 	SLABreach *SLABreach `json:"sla_breach,omitempty"`
+	// CertIn is the transient CERT-In six-hour reporting position (read-time only, never
+	// persisted — like SLABreach). nil unless the opening finding is a CERT-In Annexure I
+	// reportable category (§10: no annotation, no reporting duty).
+	CertIn *CERTInStatus `json:"certin,omitempty"`
+	// CertInReportedAt / By are PERSISTED: when a named human filed the CERT-In report and
+	// who. A filing discharges the six-hour duty (even if late), so this is what stops the
+	// breach clock — the CERT-In analogue of AcknowledgedAt.
+	CertInReportedAt time.Time `json:"certin_reported_at,omitempty"`
+	CertInReportedBy string    `json:"certin_reported_by,omitempty"`
 	// BlastRadius is a TRANSIENT, read-time impact annotation: whether this incident's finding sits on a
 	// cross-surface chain reaching a crown jewel (how big it can get). Computed by the API from the
 	// correlate chains when returning incidents, NEVER persisted. nil = not on a crown-jewel chain.

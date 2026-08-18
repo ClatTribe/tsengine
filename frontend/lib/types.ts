@@ -499,6 +499,18 @@ export interface PractitionersResponse {
   practitioners: Practitioner[];
 }
 
+// The CERT-In six-hour reporting position for an incident (India). Present only when the
+// incident's opening finding is a CERT-In Annexure I reportable category — absent means no
+// reporting duty, never a false "you are late to a regulator" state.
+export interface CERTInStatus {
+  due_at: string;
+  reported: boolean;
+  reported_at?: string;
+  breached: boolean;
+  minutes_left: number; // negative once the six-hour window has closed
+  categories: string[];
+}
+
 export interface Incident {
   id: string;
   key: string;
@@ -524,6 +536,7 @@ export interface Incident {
   acknowledged_at?: string; // a human took ownership → stops timed auto-escalation
   acknowledged_by?: string;
   sla_breach?: SLABreach; // read-time SLA state vs the tenant's policy (absent = not tracked)
+  certin?: CERTInStatus; // read-time CERT-In six-hour reporting position (India); absent = not a reportable category
 }
 
 export interface SLATarget {
