@@ -41,23 +41,6 @@ const ReportWindow = 6 * time.Hour
 // Annexure I reportable categories.
 const Framework = "certin"
 
-// Status is the reporting position of one incident against the six-hour window.
-type Status struct {
-	IncidentID string    `json:"incident_id"`
-	Title      string    `json:"title"`
-	NoticedAt  time.Time `json:"noticed_at"` // when the incident was opened = when we noticed it
-	DueAt      time.Time `json:"due_at"`     // NoticedAt + 6h
-	Reported   bool      `json:"reported"`   // a human has filed it
-	ReportedAt time.Time `json:"reported_at,omitempty"`
-	Breached   bool      `json:"breached"` // past due and still not reported
-	// Categories are the Annexure I types this incident falls under, taken from the
-	// finding's own CERT-In annotation — the evidence for WHY it is reportable.
-	Categories []string `json:"categories"`
-	// MinutesLeft is negative once the window has closed. Rendered by the UI as the
-	// countdown; the six-hour window makes minutes the meaningful unit, not hours.
-	MinutesLeft int `json:"minutes_left"`
-}
-
 // Reportable reports whether an incident falls under Annexure I, grounded ONLY in the
 // CERT-In annotation the compliance crosswalk put on its opening finding. An incident
 // with no such annotation carries no reporting duty — absence of evidence is never
@@ -71,14 +54,13 @@ func Reportable(categories []string) bool { return len(categories) > 0 }
 // A RESOLVED incident is still reportable: fixing the issue does not retire the duty to
 // have told the regulator, and pretending otherwise would let a fast fix hide a missed
 // filing. Only an actual filing (reportedAt) stops the clock.
-func Evaluate(inc platform.Incident, categories []string, reportedAt time.Time, now time.Time) (Status, bool) {
+func Evaluate(inc platform.Incident, categories []string, reportedAt time.Time, now time.Time) (platform.CERTInStatus, bool) {
 	if !Reportable(categories) || inc.OpenedAt.IsZero() {
-		return Status{}, false
+		return platform.CERTInStatus{}, false
 	}
 	due := inc.OpenedAt.Add(ReportWindow)
-	st := Status{
-		IncidentID: inc.ID, Title: inc.Title,
-		NoticedAt: inc.OpenedAt.UTC(), DueAt: due.UTC(),
+	st := platform.CERTInStatus{
+		DueAt:      due.UTC(),
 		Categories: append([]string(nil), categories...),
 	}
 	if !reportedAt.IsZero() {
