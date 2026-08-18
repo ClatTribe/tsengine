@@ -8,6 +8,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/agentloop"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/estategraph"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -25,6 +26,17 @@ type Context struct {
 	// correlation chain (§10); the agent still must confirm every recorded issue in the graph, so a
 	// bridge only widens where it LOOKS, it can never fabricate a path.
 	Bridges []string
+
+	// Estate is the CROSS-SURFACE graph (internal/estategraph) this cloud account sits inside —
+	// code, SaaS, identity, warehouse and cloud in one typed structure. It is what turns the
+	// Bridges hints above from prose into something the agent can actually WALK: a bridge said
+	// "a leaked key correlates into this account", but the agent could not then ask what else
+	// touches that key, or where it came from. estate_context does exactly that.
+	//
+	// Optional. Nil means the estate graph was not composed for this run, and the tool says so
+	// rather than pretending the estate is empty — "we did not look" and "there is nothing" are
+	// different answers (§10).
+	Estate *estategraph.Graph
 
 	Issues  []Issue
 	Summary string

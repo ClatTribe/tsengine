@@ -10,6 +10,7 @@ package cloudagent
 
 import (
 	"fmt"
+	"github.com/ClatTribe/tsengine/internal/estategraph"
 	"sort"
 	"strings"
 
@@ -35,6 +36,7 @@ func tools() []toolDef {
 		{"blast_radius", "blast_radius(principal) — every crown jewel (sensitive data / privileged identity) reachable if this principal is compromised", tBlast},
 		{"enumerate_attack_paths", "enumerate_attack_paths() — the deterministic engine's candidate attack paths (a fast prepass to seed your investigation; verify/extend them)", tEnumerate},
 		{"detect_privesc", "detect_privesc(principal) — known IAM privilege-escalation moves available to the principal", tPrivesc},
+		{"estate_context", "estate_context(id) — what the WHOLE estate knows about this node: which surfaces asserted it (code/cloud/saas/identity/warehouse), and every neighbour in or out with the evidence for that hop. Use it to PIVOT off a cross-surface foothold — e.g. a leaked key's origin in code, or what else can reach a principal. Cloud-only questions stay with get_resource/find_paths.", tEstate},
 		{"get_findings", "get_findings(resource?) — prowler config-bad findings (the 'tools say' lens; most are NOT exploitable — your job is to tell which are)", tFindings},
 		{"record_issue", "record_issue(target, path[], severity, rationale, evidence[]) — commit a REAL attack path you've determined. REJECTED unless the path actually exists in the graph and ends at a crown jewel.", tRecord},
 		{"propose_fix", "propose_fix(issue_id) — generate an applyable, cloudiam-verified remediation that cuts the recorded issue's cheapest edge", tFix},
@@ -447,4 +449,73 @@ func argStrList(args map[string]any, k string) []string {
 		return []string{t}
 	}
 	return nil
+}
+
+// tEstate is the cross-surface PIVOT. get_resource answers "what can I do from here" inside the
+// cloud account; this answers "what does the rest of the estate know about this thing" — which
+// surfaces asserted it, and every hop in or out WITH the evidence that proves it.
+//
+// It exists because the agent previously received cross-surface knowledge as Bridges []string: a
+// rendered hint it could read but not follow. A hint tells you where to look once; a graph lets you
+// keep asking. Grounded (§10): every edge printed carries the evidence that proved it, and
+// estategraph refuses to hold an edge with none — so the agent cannot walk a hop nobody proved.
+func tEstate(cc *Context, args map[string]any) string {
+	if cc.Estate == nil || len(cc.Estate.Nodes) == 0 {
+		return "the cross-surface estate graph is not available for this run — only this cloud " +
+			"account is in view. Use get_resource / find_paths for cloud-only questions."
+	}
+	id := argStr(args, "id")
+	n, ok := cc.Estate.Nodes[id]
+	if !ok {
+		// Do not guess at a near-match: a fabricated node id is a fabricated pivot.
+		return "ERROR: " + id + " is not a node in the estate graph. Ids are surface-qualified " +
+			"(e.g. cloud:role/deploy, secret:akia..., code:repo/app.py)."
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s [%s]", n.ID, n.Kind)
+	if n.Name != "" {
+		fmt.Fprintf(&b, " %q", n.Name)
+	}
+	if len(n.Surfaces) > 1 {
+		// The headline fact: two surfaces asserting one node IS the cross-surface join.
+		fmt.Fprintf(&b, "\n  asserted by %d surfaces: %s  ← this node is a cross-surface bridge",
+			len(n.Surfaces), strings.Join(n.Surfaces, " + "))
+	} else if len(n.Surfaces) == 1 {
+		fmt.Fprintf(&b, "\n  surface: %s", n.Surfaces[0])
+	}
+	if estategraph.Crown(n) {
+		b.WriteString("\n  CROWN JEWEL (sensitive data or a privileged identity)")
+	}
+	if n.Public {
+		b.WriteString("\n  publicly reachable")
+	}
+	writeEdges(&b, cc.Estate, "moves FROM here", cc.Estate.Out(id), true)
+	writeEdges(&b, cc.Estate, "reaches this", cc.Estate.In(id), false)
+	return b.String()
+}
+
+func writeEdges(b *strings.Builder, g *estategraph.Graph, heading string, edges []estategraph.Edge, outward bool) {
+	if len(edges) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n%s:\n", heading)
+	for _, e := range edges {
+		other := e.To
+		if !outward {
+			other = e.From
+		}
+		crown := ""
+		if nn, ok := g.Nodes[other]; ok && estategraph.Crown(nn) {
+			crown = " [CROWN]"
+		}
+		fmt.Fprintf(b, "  -%s-> %s%s", e.Kind, other, crown)
+		if e.Why != "" {
+			fmt.Fprintf(b, " — %s", e.Why)
+		}
+		// Evidence is printed, not summarised: the agent must be able to cite it in record_issue.
+		if len(e.Evidence) > 0 {
+			fmt.Fprintf(b, " (evidence: %s)", strings.Join(e.Evidence, ", "))
+		}
+		b.WriteString("\n")
+	}
 }

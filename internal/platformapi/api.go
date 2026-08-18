@@ -295,6 +295,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
 	mux.HandleFunc("POST /v1/saas/m365/sync", d.auth(d.handleSyncSaaSM365))                                                    // LIVE M365 SSPM via the onboarded Graph token (SCuBA fetch half)
 	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                                                         // continuous config-snapshot drift: prev+cur inventory → change-control findings
+	mux.HandleFunc("GET /v1/estate", d.auth(d.handleEstateGraph))                                                              // the composed cross-surface estate graph (the agents' substrate)
+	mux.HandleFunc("POST /v1/estate/detect", d.auth(d.handleEstateDetect))                                                     // cross-surface detections no single scanner can make
 	mux.HandleFunc("GET /v1/ask", d.auth(d.handleAsk))                                                                         // T6 "ask your estate" — the SAME search the agent uses, exposed to a human
 	mux.HandleFunc("GET /v1/cloud/history", d.auth(d.handleCloudHistory))                                                      // "when did this become public?" — the estate timeline (append-only, change-detected)
 	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                                                       // "search your cloud like a database" — query the inventory + relationships
