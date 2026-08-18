@@ -39,9 +39,18 @@ func (d Deps) composeEstate(ctx context.Context, tenantID string) (*estategraph.
 	}
 	// The code half of the bridge: findings whose own text carries a leaked key. FromLeakedSecrets
 	// extracts it from the finding's evidence, never from the rule name.
-	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
-	if err != nil {
-		return nil, err
+	//
+	// A caller may legitimately have no findings store — the cloud-inventory ingest is reachable
+	// with only a snapshot store wired. Compose the cloud-only graph in that case: one surface
+	// joins with nothing, which is the honest answer, and is emphatically better than panicking
+	// inside an ingest handler.
+	var findings []types.Finding
+	if d.Store != nil {
+		fs, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+		if err != nil {
+			return nil, err
+		}
+		findings = fs
 	}
 	return estateingest.Compose(cloud, nil, "", findings, time.Now().UTC()), nil
 }
@@ -122,4 +131,37 @@ func (d Deps) persistEstateFindings(ctx context.Context, tenantID string, findin
 			"joins across surfaces no single scanner can see")
 	}
 	return saved
+}
+
+// estateOrNil composes the tenant's estate graph for an agent run, or returns nil.
+//
+// Best-effort ON PURPOSE: the cloud investigation is valuable with or without the cross-surface
+// view, so a compose failure must degrade the agent's reach rather than fail its run. nil is a
+// state estate_context handles honestly — it reports the graph as unavailable rather than as
+// empty, so the agent never concludes "nothing else touches this" from a compose error.
+func (d Deps) estateOrNil(ctx context.Context, tenantID string) *estategraph.Graph {
+	g, err := d.composeEstate(ctx, tenantID)
+	if err != nil || g == nil || len(g.Nodes) == 0 {
+		return nil
+	}
+	return g
+}
+
+// detectEstateOnIngest re-runs the cross-surface detections after a surface changed, and persists
+// what it finds. Best-effort: it returns nil on any failure rather than propagating, because the
+// ingest that triggered it must succeed regardless of whether the join produced anything.
+//
+// Idempotent in effect: the detections are derived from current state, so an unchanged estate
+// produces the same findings, and the incident reconciler keys on rule+endpoint rather than
+// finding id — a re-ingest refreshes an existing incident instead of opening a duplicate.
+func (d Deps) detectEstateOnIngest(ctx context.Context, tenantID string) []types.Finding {
+	g, err := d.composeEstate(ctx, tenantID)
+	if err != nil || g == nil || len(g.Nodes) == 0 {
+		return nil
+	}
+	found := estatedetect.Detect(g, estatedetect.Options{Now: time.Now().UTC()})
+	if len(found) == 0 {
+		return nil // only one surface, or nothing joins — the honest result
+	}
+	return d.persistEstateFindings(ctx, tenantID, found)
 }

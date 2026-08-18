@@ -93,6 +93,47 @@ defensible public claim on cloud + offense are the *same* thing — **a funded f
 model key and one clean autonomous run each**. That is a purchasing decision, not an
 engineering project, and it is the highest-leverage item on this page.
 
+### 2.5 The cross-surface benchmark (the wedge, measured)
+
+The product's wedge claim — *connect code + cloud, and one engineer finds the path across
+them* — had no measurement. The per-specialist suites cannot supply one by construction:
+the cloud suite seeds a cloud-only account, so re-running it would report the same 7/7
+whether or not cross-surface traversal existed. **A cross-surface capability needs a
+fixture with two surfaces in it.**
+
+`internal/bench/crosssurface.go` (`TestCrossSurface_*`) is that fixture, and it measures
+**substrates, not model wording** — so it is deterministic, needs no LLM, and runs in CI.
+
+| substrate | internet → customer-PII bucket |
+|---|---|
+| cloud graph alone | **not found** |
+| joined estate graph (cloud + code) | **found** |
+
+**Lift: yes.** The scenario is built so the cloud-alone miss is *genuine*: `deploy-role`
+can read the crown, and nothing in the account exposes it — no public compute runs as it,
+no trust policy admits an outsider. **A cloud scanner is correct to report no path**; from
+cloud data alone there isn't one. The path exists only because a long-lived key for that
+role sits in a public repository, which is a fact on the *code* surface. Neither tool is
+wrong — the estate is what makes the sentence sayable.
+
+Two guards keep the number honest:
+
+- **The isolation assertion.** If a change ever lets the cloud graph find this path alone,
+  the test *fails* — because the fixture would have stopped being a two-surface test and
+  the reported "lift" would be an artefact.
+- **A no-lift control.** The same scorer, given an account that already exposes the crown
+  itself, must report **no lift**. A benchmark that can only ever report success is not
+  measuring anything.
+
+**The boundary this surfaced.** The cloud agent can *see* a cross-surface path via
+`estate_context` but cannot *record* one: `record_issue` grounds against the cloud graph.
+That is the correct split — cross-surface paths are the deterministic estate detector's
+output — but the generic refusal described it **wrongly**, telling the model to find a
+public entry point that does not exist, which is an invitation to invent one. The refusal
+now names the real boundary and says what to do instead
+(`TestRecordIssue_EstateNodeRefusalNamesTheRealBoundary`), while an invented *cloud* id
+still gets the ordinary grounding refusal.
+
 ---
 
 ## 3. Gap sizing (the roadmap)
