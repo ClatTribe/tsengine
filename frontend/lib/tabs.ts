@@ -43,4 +43,7 @@ export const SECURITY_TABS: Tab[] = [
   { href: "/findings", label: "All findings" },
   { href: "/attack-paths", label: "Attack paths" },
   { href: "/coverage", label: "Coverage" },
+  // Verify sits beside Coverage as the other half of "what actually happened": Coverage says what
+  // was tested, Verify says what the filter then suppressed — and lets a human overrule it.
+  { href: "/verify", label: "Verify" },
 ];

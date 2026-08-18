@@ -53,6 +53,14 @@ export interface Finding {
   mitre_techniques?: string[];
   verification_status?: string;
   confidence?: number;
+  // What the TOOL itself said, and how it was invoked. Stored since Phase 0 and never shown until
+  // now — a security engineer verifies a finding by reading the scanner's own output, not our
+  // summary of it, and they cannot reproduce a result whose arguments they cannot see.
+  raw_output?: unknown;
+  tool_args?: Record<string, string>;
+  // Provenance. "human_reinstated" means a person put this back over the L1.5 filter's dismissal,
+  // which a reader must be able to tell apart from a finding the AI approved.
+  discovery_method?: { primary?: string; replay_of?: string };
   // blast_radius: read-time impact sizing — does this finding chain to a crown jewel? (mirrors incidents)
   blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
   threat_intel?: {
@@ -1083,3 +1091,29 @@ export interface FindingsSummary {
   truncated: boolean;
 }
 
+// The L1.5 audit surface — what the AI suppressed or changed, and the evidence to judge it by.
+export interface L15AuditRule {
+  rule: string;
+  action: string;
+  count: number;
+}
+export interface L15Audit {
+  entries: {
+    finding_id: string;
+    action: string;
+    from_severity?: string;
+    to_severity?: string;
+    rule: string;
+    reason?: string;
+  }[];
+  // The dropped findings themselves — the only ones with no row anywhere else in the product.
+  suppressed: Finding[];
+  total: number;
+  dropped: number;
+  demoted: number;
+  by_rule: L15AuditRule[];
+  scans_with_audit: number;
+  scans_total: number;
+  // Present when nothing was recorded — an empty trail is not evidence nothing was suppressed.
+  note?: string;
+}

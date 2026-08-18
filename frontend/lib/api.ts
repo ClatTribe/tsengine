@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
-import type { Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+import type {
+  L15Audit, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -138,6 +139,21 @@ export const api = {
       "/v1/osint",
       { total: 0, summary: [], findings: [] },
     ),
+
+  // What L1.5 suppressed or changed, with the dropped findings themselves so the call can be
+  // judged on its evidence (§2.5 — logged, recoverable, and overridable).
+  // Override: put a suppressed finding back. A human vouching for it over the filter's dismissal.
+  reinstateFinding: (findingId: string, reason: string) =>
+    call<{ reinstated: string }>("/v1/l15-audit/reinstate", {
+      method: "POST",
+      body: JSON.stringify({ finding_id: findingId, reason }),
+    }),
+
+  l15Audit: () =>
+    safe<L15Audit>("/v1/l15-audit", {
+      entries: [], suppressed: [], total: 0, dropped: 0, demoted: 0,
+      by_rule: [], scans_with_audit: 0, scans_total: 0,
+    }),
 
   // Unified vendor/device/cloud-drift posture sources — the asset-class posture findings as first-class groups.
   postureSources: () =>
