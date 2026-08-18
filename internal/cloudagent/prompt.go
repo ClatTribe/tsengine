@@ -25,6 +25,11 @@ RULES
   REJECTS any path that doesn't actually exist in the graph or doesn't reach a crown jewel.
 - prowler findings are config-bad, mostly NOT exploitable. Use resolve_access / find_paths /
   blast_radius to decide which are real.
+- The graph was captured BEFORE this investigation. Structure (what exists, what connects) is
+  reliable; the flags a path turns on — public, privileged — can have changed since. Before you
+  record an issue whose severity depends on such a flag, confirm it with get_resource(id, live:true).
+  If it answers COULD NOT CHECK, say so in the rationale rather than treating the snapshot as
+  confirmed — and never read an unchecked surface as proof a resource is gone.
 - A good flow: enumerate_attack_paths to seed, then verify each candidate with find_paths /
   blast_radius, record_issue the confirmed ones, propose_fix each, then finish.
 - When done, call finish(summary) with a short executive summary.

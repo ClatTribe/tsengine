@@ -38,6 +38,15 @@ type Context struct {
 	// different answers (§10).
 	Estate *estategraph.Graph
 
+	// Live re-reads the account's CURRENT state, so the agent can confirm a config flag its path
+	// depends on rather than trusting a snapshot taken before the investigation began. Read-only by
+	// construction (see live.go); the credential cap is cloudsafety.SessionPolicy().
+	//
+	// Optional. Nil means no live path is configured and check_live says exactly that — the same
+	// discipline as Estate above, because "the snapshot is unconfirmed" and "the snapshot is
+	// current" are different claims (§10).
+	Live LiveReader
+
 	Issues  []Issue
 	Summary string
 	Done    bool

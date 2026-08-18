@@ -59,6 +59,10 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 		// lets the agent walk from it — back to the key's origin in code, or on to what else touches
 		// the principal. Best-effort: a compose failure leaves it nil and estate_context says so.
 		Estate: d.estateOrNil(r.Context(), tenantID),
+		// Stage 1 live discovery: let the agent confirm a config flag against the account NOW rather
+		// than trusting a snapshot captured before it started. Nil when no live path is configured,
+		// and check_live says so.
+		Live: d.liveReaderOrNil(r.Context(), tenantID),
 	}
 	// llm (pentest.SpecLLM) satisfies cloudengine.LLM structurally — same Generate method.
 	rep, ierr := cloudagent.Investigate(r.Context(), llm, cc, cloudagent.Options{MaxIters: 24, MaxHyp: 20})
@@ -211,6 +215,7 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 			Snap: cloudgraph.Ingest(inv), Prowler: snap.Prowler,
 			Bridges: d.tenantCloudBridges(ctx, tenantID), // G2: cross-surface footholds (code→cloud wedge)
 			Estate:  d.estateOrNil(ctx, tenantID),        // the walkable graph behind those hints
+			Live:    d.liveReaderOrNil(ctx, tenantID),    // confirm config flags against the live account
 		}
 		// Bounded specialist run (it's a nested agent — keep it tight). pentest.SpecLLM satisfies
 		// cloudengine.LLM structurally (same Generate), as the on-demand handler above relies on.
