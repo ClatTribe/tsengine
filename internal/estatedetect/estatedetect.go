@@ -64,6 +64,7 @@ func Detect(g *estategraph.Graph, opts Options) []types.Finding {
 	var out []types.Finding
 	out = append(out, detectSecretBridges(g, o, id)...)
 	out = append(out, detectInternetToCrown(g, o, id)...)
+	out = append(out, detectExposedIdentity(g, o, id)...)
 	return out
 }
 
