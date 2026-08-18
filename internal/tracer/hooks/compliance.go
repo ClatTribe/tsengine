@@ -76,6 +76,9 @@ type controlSet struct {
 	PIPEDA     []string `json:"pipeda"`
 	GLBA       []string `json:"glba"`
 	EUAIAct    []string `json:"eu_ai_act"`
+	CERTIn     []string `json:"certin"`
+	RBI        []string `json:"rbi"`
+	SEBI       []string `json:"sebi"`
 }
 
 // NewCompliance loads the embedded corpus. Panics on malformed data.
@@ -172,6 +175,12 @@ func (cs controlSet) forFramework(framework string) []string {
 		return cs.GLBA
 	case "eu_ai_act":
 		return cs.EUAIAct
+	case "certin":
+		return cs.CERTIn
+	case "rbi":
+		return cs.RBI
+	case "sebi":
+		return cs.SEBI
 	}
 	return nil
 }
@@ -211,6 +220,9 @@ func (h *Compliance) Lookup(cwes []string) (*types.Compliance, bool) {
 		agg.PIPEDA = mergeUnique(agg.PIPEDA, cs.PIPEDA)
 		agg.GLBA = mergeUnique(agg.GLBA, cs.GLBA)
 		agg.EUAIAct = mergeUnique(agg.EUAIAct, cs.EUAIAct)
+		agg.CERTIn = mergeUnique(agg.CERTIn, cs.CERTIn)
+		agg.RBI = mergeUnique(agg.RBI, cs.RBI)
+		agg.SEBI = mergeUnique(agg.SEBI, cs.SEBI)
 	}
 	if !matched {
 		return nil, false
@@ -276,6 +288,9 @@ func mergeCompliance(dst, src *types.Compliance) *types.Compliance {
 	dst.PIPEDA = mergeUnique(dst.PIPEDA, src.PIPEDA)
 	dst.GLBA = mergeUnique(dst.GLBA, src.GLBA)
 	dst.EUAIAct = mergeUnique(dst.EUAIAct, src.EUAIAct)
+	dst.CERTIn = mergeUnique(dst.CERTIn, src.CERTIn)
+	dst.RBI = mergeUnique(dst.RBI, src.RBI)
+	dst.SEBI = mergeUnique(dst.SEBI, src.SEBI)
 	return dst
 }
 

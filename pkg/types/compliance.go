@@ -32,4 +32,9 @@ type Compliance struct {
 	PIPEDA   []string `json:"pipeda,omitempty"`    // Canada PIPEDA (Schedule 1 fair-information principles)
 	GLBA     []string `json:"glba,omitempty"`      // US GLBA Safeguards Rule (16 CFR 314.4)
 	EUAIAct  []string `json:"eu_ai_act,omitempty"` // EU AI Act (high-risk AI articles)
+	// India regulatory pack — the obligations an Indian SaaS/fintech selling upmarket is held to,
+	// alongside DPDP above. Annotation-only, same as every other framework.
+	CERTIn []string `json:"certin,omitempty"` // CERT-In Directions 2022 (Annexure I reportable incident categories)
+	RBI    []string `json:"rbi,omitempty"`    // RBI Cyber Security Framework — Annex I baseline controls
+	SEBI   []string `json:"sebi,omitempty"`   // SEBI CSCRF 2024 — CSF-structured categories
 }

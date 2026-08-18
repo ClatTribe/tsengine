@@ -48,6 +48,9 @@ const (
 	FrameworkPIPEDA     = "pipeda"
 	FrameworkGLBA       = "glba"
 	FrameworkEUAIAct    = "eu_ai_act"
+	FrameworkCERTIn     = "certin"
+	FrameworkRBI        = "rbi"
+	FrameworkSEBI       = "sebi"
 )
 
 // Frameworks is the ordered set of frameworks the GRC layer tracks — the single source
@@ -58,6 +61,7 @@ var Frameworks = []string{
 	FrameworkNIST800171, FrameworkCCPA, FrameworkSOX, FrameworkFedRAMP, FrameworkDPDP,
 	FrameworkCMMC, FrameworkISO42001, FrameworkNISTAIRMF,
 	FrameworkISO27018, FrameworkISO22301, FrameworkPIPEDA, FrameworkGLBA, FrameworkEUAIAct,
+	FrameworkCERTIn, FrameworkRBI, FrameworkSEBI,
 }
 
 // IsFramework reports whether key is one of the tracked frameworks. Callers (the report API)
@@ -242,5 +246,8 @@ func frameworkControls(c *types.Compliance) map[string][]string {
 	add(FrameworkPIPEDA, c.PIPEDA)
 	add(FrameworkGLBA, c.GLBA)
 	add(FrameworkEUAIAct, c.EUAIAct)
+	add(FrameworkCERTIn, c.CERTIn)
+	add(FrameworkRBI, c.RBI)
+	add(FrameworkSEBI, c.SEBI)
 	return out
 }
