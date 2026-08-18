@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   ShieldCheck, Sparkles, ArrowRight, Plug, ScanLine, CheckCircle2, FileCheck2,
   Lock, Cloud, KeyRound, Star, Wrench, Mail, ClipboardCheck,
-  Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet,
+  Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet, Crosshair,
 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
 import { AttackPathHero } from "@/components/marketing/attack-path-hero";
@@ -50,7 +50,16 @@ export default function Landing() {
         </div>
         <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-16 lg:pt-24">
           <div className="grid items-center gap-12 lg:grid-cols-2">
-            {/* copy */}
+            {/* copy — DELIBERATELY SHORT.
+                This column used to carry seven things and ~130 words: a badge, the headline, two
+                paragraphs, two buttons, a fine-print framework list and a second link. A hero has one
+                job — say what this is and give one way in — and every extra element competes with the
+                picture that explains it faster than prose can. What was cut and where it went:
+                  · the qualifier paragraph  → already said by the badge, so it was said twice
+                  · "See how the attack path works" → the attack path is rendered right beside it
+                  · the framework fine print → StackPipeline and the trust bar below both carry it
+                What replaced 80 words of prose is two scannable lines, because the headline promises
+                two agents and a reader should SEE the two rather than parse a sentence about them. */}
             <div className="text-center lg:text-left">
               <Link
                 href="/product"
@@ -59,48 +68,41 @@ export default function Landing() {
                 <Sparkles className="h-3.5 w-3.5 text-accent" /> For Series A and B teams
               </Link>
 
-              {/* THE HEADLINE NAMES THE PRODUCT, NOT A THREAT.
-                  It used to open "One leaked secret is all it takes to reach your cloud root" — a strong
-                  line, but it sells the fear and leaves the visitor to work out what we actually are. The
-                  two agents sat four sections down under "How it works", so a founder had to scroll past
-                  frameworks and trust badges to learn what they would be buying. Lead with the product. */}
               <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
                 Your AI security engineer.{" "}
                 <span className="text-accent">And your AI pentester.</span>
               </h1>
-              <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-                One reasons across your code, cloud and SaaS to find what is genuinely exploitable — then writes
-                the fix. The other proves it by actually exploiting it, and re-tests once you have shipped the
-                patch. You approve anything that touches your systems.
-              </p>
-              {/* The qualifier. A visitor should be able to rule themselves in or out in one line.
-                  It names the shared condition of Series A and B rather than a headcount band: at A that
-                  is nobody on security, at B it is one or two people covering code, cloud, SaaS and the
-                  questionnaires. Both are "more surface than security people", which is what we fix. */}
-              <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-faint lg:mx-0">
-                Built for Series A and B teams with more security surface than security people — an
-                enterprise deal waiting on SOC 2, a cloud nobody has fully mapped, and one or two engineers
-                holding it together.
+              <p className="mx-auto mt-5 max-w-md text-lg leading-relaxed text-muted lg:mx-0">
+                For teams with more security surface than security people.
               </p>
 
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+              {/* The headline's promise, made visible. Two rows, one job each — scannable in about a
+                  second, where the paragraph they replace took a paragraph's worth of attention. */}
+              <div className="mx-auto mt-6 max-w-md space-y-2.5 lg:mx-0">
+                <AgentLine
+                  Icon={ShieldCheck}
+                  name="AI security engineer"
+                  job="finds what is genuinely exploitable — and writes the fix"
+                />
+                <AgentLine
+                  Icon={Crosshair}
+                  name="AI pentester"
+                  job="proves it by exploiting it, then re-tests your fix"
+                />
+              </div>
+
+              <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
                 <Link
                   href="/signup"
                   className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px"
                 >
                   Start free <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link
-                  href="/product"
-                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-border-strong"
-                >
-                  See how the attack path works
+                <Link href="/scan" className="text-sm font-medium text-accent hover:underline">
+                  or check your domain — free, no signup
                 </Link>
               </div>
-              <p className="mt-4 text-xs text-faint">Connect code, cloud, and SaaS · SOC 2 · ISO 27001 · +20 more · No credit card to start</p>
-              <Link href="/scan" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
-                Founder, not security? Check if your domain is spoofable — free, no signup <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+              <p className="mt-4 text-xs text-faint">No credit card · You approve every change</p>
             </div>
 
             {/* the cross-surface attack path — code + SaaS bridge to cloud root (the wedge, visualized) */}
@@ -109,8 +111,14 @@ export default function Landing() {
             </div>
           </div>
 
-          <StackPipeline />
         </div>
+      </section>
+
+      {/* The stack → product → outcomes diagram. It used to sit INSIDE the hero, where its ten labelled
+          nodes competed with the headline and the attack path for the same glance. It explains a lot, so
+          it earns its own band directly below rather than being the third thing in a hero. */}
+      <section className="mx-auto max-w-6xl px-5 pb-4">
+        <StackPipeline />
       </section>
 
       {/* THE TWO AGENTS — the product itself, immediately after the hero.
@@ -735,6 +743,22 @@ function ConnectorsVisual() {
           <span className="text-[11px] font-medium text-muted">{label}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// One agent, one line: mark, name, job. The hero's job is to be understood at a glance, and two of
+// these are read faster than the sentence they replaced — the reader sees that there are exactly two
+// things and what each does, without parsing prose.
+function AgentLine({ Icon, name, job }: { Icon: typeof ShieldCheck; name: string; job: string }) {
+  return (
+    <div className="flex items-start gap-2.5 text-left">
+      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <p className="text-sm leading-relaxed text-muted">
+        <span className="font-medium text-ink">{name}</span> — {job}
+      </p>
     </div>
   );
 }
