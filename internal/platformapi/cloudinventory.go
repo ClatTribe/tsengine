@@ -163,6 +163,19 @@ func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv clou
 		_, _ = d.CloudHistory.Append(ctx, dg) // best-effort: history must never block the ingest
 	}
 
+	// CROSS-SURFACE DETECTION ON INGEST. The cloud half of the estate has just changed, so re-run the
+	// joins against everything else we hold for this tenant — a key leaked in code becomes an incident
+	// the moment the cloud account it unlocks is ingested, without waiting for anyone to ask.
+	//
+	// Placed AFTER the snapshot Put on purpose: composeEstate reads the STORED inventory, so running it
+	// earlier would join against the previous cloud state and miss exactly the change that triggered it.
+	// Best-effort — a detection failure must never block storing the inventory.
+	estateFindings := d.detectEstateOnIngest(ctx, tenantID)
+	// Returned alongside drift for the same reason drift is: the monitoring pass RESOLVES any open
+	// incident whose finding is absent from the present-state view it is handed, so findings stored here
+	// but not handed back would be opened and immediately resolved by the same pass.
+	drift = append(drift, estateFindings...)
+
 	internetEdges := 0
 	for _, e := range inv.Reaches {
 		if e.From == cloudgraph.InternetID {
@@ -175,11 +188,12 @@ func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv clou
 			ledgerNote)
 	}
 	return drift, map[string]any{
-		"account_id":     inv.AccountID,
-		"resources":      len(inv.Resources),
-		"trust_edges":    len(inv.Trusts),
-		"internet_edges": internetEdges,
-		"drift_detected": driftStored, // config changes vs the prior snapshot (0 on first ingest / no change)
-		"stored":         true,
+		"account_id":             inv.AccountID,
+		"resources":              len(inv.Resources),
+		"trust_edges":            len(inv.Trusts),
+		"internet_edges":         internetEdges,
+		"drift_detected":         driftStored,         // config changes vs the prior snapshot (0 on first ingest / no change)
+		"cross_surface_detected": len(estateFindings), // joins with other surfaces (0 when only cloud is connected)
+		"stored":                 true,
 	}, nil
 }

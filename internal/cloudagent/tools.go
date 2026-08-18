@@ -36,7 +36,7 @@ func tools() []toolDef {
 		{"blast_radius", "blast_radius(principal) — every crown jewel (sensitive data / privileged identity) reachable if this principal is compromised", tBlast},
 		{"enumerate_attack_paths", "enumerate_attack_paths() — the deterministic engine's candidate attack paths (a fast prepass to seed your investigation; verify/extend them)", tEnumerate},
 		{"detect_privesc", "detect_privesc(principal) — known IAM privilege-escalation moves available to the principal", tPrivesc},
-		{"estate_context", "estate_context(id) — what the WHOLE estate knows about this node: which surfaces asserted it (code/cloud/saas/identity/warehouse), and every neighbour in or out with the evidence for that hop. Use it to PIVOT off a cross-surface foothold — e.g. a leaked key's origin in code, or what else can reach a principal. Cloud-only questions stay with get_resource/find_paths.", tEstate},
+		{"estate_context", "estate_context(id) — what the WHOLE estate knows about this node: which surfaces asserted it (code/cloud/saas/identity/warehouse), and every neighbour in or out with the evidence for that hop. Use it to PIVOT off a cross-surface foothold — e.g. a leaked key's origin in code, or what else can reach a principal. Cloud-only questions stay with get_resource/find_paths. Context only: record_issue grounds against the CLOUD graph, so do not build a path out of estate ids — cross-surface paths are reported by the estate detector.", tEstate},
 		{"get_findings", "get_findings(resource?) — prowler config-bad findings (the 'tools say' lens; most are NOT exploitable — your job is to tell which are)", tFindings},
 		{"record_issue", "record_issue(target, path[], severity, rationale, evidence[]) — commit a REAL attack path you've determined. REJECTED unless the path actually exists in the graph and ends at a crown jewel.", tRecord},
 		{"propose_fix", "propose_fix(issue_id) — generate an applyable, cloudiam-verified remediation that cuts the recorded issue's cheapest edge", tFix},
@@ -215,6 +215,19 @@ func tRecord(cc *Context, args map[string]any) string {
 	// GROUNDING: the claimed path must actually exist in the graph and end at a
 	// crown jewel. This is what stops the LLM inventing an attack path.
 	if err := validatePath(cc.Snap, path, target); err != nil {
+		// A path built out of estate_context nodes fails this check for a reason the generic
+		// message describes WRONGLY: it says "start at the internet or a public resource", which
+		// invites the model to go hunting for a cloud entry point that does not exist — or to
+		// invent one. Name the actual boundary instead. This is a scope limit, not a judgement
+		// that the path is false: the cross-surface path is real and IS reported, by the
+		// deterministic estate detector, which owns findings that span surfaces.
+		if id := estateOnlyNode(cc, path); id != "" {
+			return "REJECTED (out of scope for this tool): " + id + " is an estate node, not a resource in " +
+				"this cloud account, so record_issue cannot ground a path through it. record_issue commits " +
+				"CLOUD-grounded paths only. The cross-surface path is already reported separately by the " +
+				"estate detector — use estate_context to UNDERSTAND and prioritise what you find in the " +
+				"cloud (e.g. that this principal is reachable at all), and record the cloud-grounded issues."
+		}
 		return "REJECTED (not grounded): " + err.Error() + " — use find_paths / resolve_access to ground your claim before recording."
 	}
 	cc.issueN++
@@ -317,6 +330,27 @@ func edgeBetween(snap *cloudgraph.Snapshot, a, b string) (cloudgraph.Edge, bool)
 		}
 	}
 	return cloudgraph.Edge{}, false
+}
+
+// estateOnlyNode returns the first path node that the cloud account does not contain but the
+// estate graph does — i.e. the model pivoted through a cross-surface node. Empty when the path
+// fails for an ordinary cloud reason, so the normal grounding message still does its job.
+func estateOnlyNode(cc *Context, path []string) string {
+	if cc.Estate == nil {
+		return ""
+	}
+	for _, id := range path {
+		if cc.Snap != nil && cc.Snap.Node(id) != nil {
+			continue
+		}
+		if id == cloudgraph.InternetID {
+			continue
+		}
+		if _, ok := cc.Estate.Nodes[id]; ok {
+			return id
+		}
+	}
+	return ""
 }
 
 // validatePath is the grounding check for record_issue.
