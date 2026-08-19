@@ -105,8 +105,8 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 
 		// has_access role→bucket (identity OR bucket policy, gated by SCP/boundary).
 		for _, b := range t.S3Buckets {
-			if ok, cond := canReadBucket(r.ARN, b.ARN, identity, boundary, scps, bucketPolicy[b.ARN]); ok {
-				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: r.ARN, Resource: b.ARN, Condition: condStr(cond)})
+			if ok, cond := canReadBucket(r.ARN, b.ARN, b.OwnerAccount, identity, boundary, scps, bucketPolicy[b.ARN]); ok {
+				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: r.ARN, Resource: b.ARN, Condition: cond})
 			}
 		}
 		// assume_role A→B: A may call AssumeRole on B (SCP/boundary-aware) AND B's
@@ -141,8 +141,8 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 		identity := parseDocs(u.InlinePolicies)
 		boundary := parseDoc(u.PermissionsBoundary)
 		for _, b := range t.S3Buckets {
-			if ok, cond := canReadBucket(u.ARN, b.ARN, identity, boundary, scps, bucketPolicy[b.ARN]); ok {
-				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: u.ARN, Resource: b.ARN, Condition: condStr(cond)})
+			if ok, cond := canReadBucket(u.ARN, b.ARN, b.OwnerAccount, identity, boundary, scps, bucketPolicy[b.ARN]); ok {
+				inv.Grants = append(inv.Grants, cloudgraph.InvGrant{Principal: u.ARN, Resource: b.ARN, Condition: cond})
 			}
 		}
 		if names, ok := detectPrivesc(u.ARN, identity, boundary, scps); ok {
@@ -159,18 +159,60 @@ func ToInventory(t *Tables) cloudgraph.Inventory {
 	return inv
 }
 
-// canReadBucket resolves has_access via the full AWS decision: s3:GetObject is
-// granted if the identity policy OR the bucket's RESOURCE policy allows it (same
-// account), subject to the SCP and permission-boundary ceilings. The second
-// return is true when the grant is gated by an unresolved condition.
-func canReadBucket(principal, bucketARN string, identity []*cloudiam.Document, boundary *cloudiam.Document, scps []*cloudiam.Document, resourcePolicy *cloudiam.Document) (allowed, conditional bool) {
-	ps := cloudiam.PolicySet{Identity: identity, Boundary: boundary, SCPs: scps, ResourcePolicy: resourcePolicy, SameAccount: true}
-	for _, res := range []string{bucketARN, bucketARN + "/*"} {
-		if ok, cond := cloudiam.Permits(cloudiam.Request{Principal: principal, Action: "s3:GetObject", Resource: res}, ps); ok {
-			return true, cond
+// canReadBucket resolves has_access via the full AWS decision: s3:GetObject is granted if the
+// identity policy OR the bucket's RESOURCE policy allows it SAME-ACCOUNT, subject to the SCP and
+// permission-boundary ceilings. CROSS-account requires BOTH sides to allow.
+//
+// This used to pass SameAccount:true unconditionally, which applies the union rule to every bucket
+// in the estate. For a bucket in ANOTHER account that is an over-approximation with teeth: a
+// principal whose identity policy allows s3:GetObject was reported as having access even when the
+// other account's bucket policy grants it nothing — a path AWS would deny. On a product whose claim
+// is that no finding reaches a customer unverified, a fabricated cross-account path to someone
+// else's data is the worst shape of wrong.
+//
+// The three cases, and why the unknown one is handled the way it is:
+//
+//   - owner known, same account   → union rule, as before.
+//   - owner known, cross account  → both sides must allow. Stricter, and correct.
+//   - owner UNKNOWN               → we cannot tell which rule applies. Dropping the grant would
+//     lose real same-account access on every estate that does not report bucket ownership, which is
+//     most of them; asserting it would fabricate. So the edge is KEPT — matching PruneUnauthorized
+//     and PruneUnreachable, where missing data never prunes — and marked CONDITIONAL, which makes
+//     Path.Conditional() true so nothing downstream presents it as proven impact (ADR 0002).
+//
+// The condition is only stamped when the missing ownership ACTUALLY changes the answer. If both
+// rules agree — the identity policy and the bucket policy both allow, or neither does — then who
+// owns the bucket is irrelevant to this decision and calling it conditional would be noise.
+func canReadBucket(principal, bucketARN, ownerAccount string, identity []*cloudiam.Document, boundary *cloudiam.Document, scps []*cloudiam.Document, resourcePolicy *cloudiam.Document) (allowed bool, condition string) {
+	eval := func(sameAccount bool) (bool, bool) {
+		ps := cloudiam.PolicySet{
+			Identity: identity, Boundary: boundary, SCPs: scps,
+			ResourcePolicy: resourcePolicy, SameAccount: sameAccount,
 		}
+		for _, res := range []string{bucketARN, bucketARN + "/*"} {
+			if ok, cond := cloudiam.Permits(cloudiam.Request{
+				Principal: principal, Action: "s3:GetObject", Resource: res}, ps); ok {
+				return true, cond
+			}
+		}
+		return false, false
 	}
-	return false, false
+
+	principalAccount := cloudiam.AccountOf(principal)
+	owner := strings.TrimSpace(ownerAccount)
+	if owner != "" && principalAccount != "" {
+		ok, cond := eval(owner == principalAccount)
+		return ok, condStr(cond)
+	}
+
+	// Ownership unknown: decide whether it even matters here.
+	sameOK, sameCond := eval(true)
+	crossOK, crossCond := eval(false)
+	if sameOK == crossOK {
+		return sameOK, condStr(sameCond || crossCond)
+	}
+	return true, "bucket owner account not reported: access holds only if the bucket is in the " +
+		"same account as the principal (needs live validation)"
 }
 
 // detectPrivesc evaluates the privesc techniques a principal can perform under

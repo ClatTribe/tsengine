@@ -34,6 +34,10 @@ func TestCloudQuery_ResourcePolicyAndSCP(t *testing.T) {
 		SecurityGroups: []SecurityGroup{{ID: "sg-open", Name: "open", OpenIngressFromInternet: true}},
 		S3Buckets: []S3Bucket{{
 			ARN: bucket, Name: "cq-cardholder", Region: "us-east-1",
+			// Same account as reader-role. Stated explicitly because an S3 ARN cannot carry it, and
+			// without it a resource-policy-only grant is ownership-ambiguous — correctly conditional,
+			// which is not what this test is about.
+			OwnerAccount:    fixtureAccount,
 			BlockPublicACLs: true, BlockPublicPolicy: true, MFADelete: true,
 			Policy: bucketPolicy, // resource policy is the ONLY grant to reader-role
 			Tags:   map[string]string{"classification": "pii"},
@@ -60,10 +64,10 @@ func TestCloudQuery_ResourcePolicyAndSCP(t *testing.T) {
 	// --- independent (cloudiam) ground truth: the two dimensions are load-bearing ---
 	scps := parseDocs(tables.SCPs)
 	bpDoc := parseDoc(bucketPolicy)
-	if ok, _ := canReadBucket(reader, bucket, nil, nil, nil, nil); ok {
+	if ok, _ := canReadBucket(reader, bucket, fixtureAccount, nil, nil, nil, nil); ok {
 		t.Fatal("setup: reader must NOT read the bucket without the resource policy")
 	}
-	if ok, _ := canReadBucket(reader, bucket, nil, nil, scps, bpDoc); !ok {
+	if ok, _ := canReadBucket(reader, bucket, fixtureAccount, nil, nil, scps, bpDoc); !ok {
 		t.Fatal("setup: reader MUST read the bucket via the resource policy")
 	}
 	if _, ok := detectPrivesc(esc, parseDocs(raws(allowDoc("iam:CreatePolicyVersion", "*"))), nil, nil); !ok {

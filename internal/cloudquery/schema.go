@@ -66,6 +66,12 @@ type S3Bucket struct {
 	// evaluated to resolve has_access correctly.
 	Policy json.RawMessage   `json:"policy,omitempty"`
 	Tags   map[string]string `json:"tags,omitempty"`
+	// OwnerAccount is the AWS account that owns the bucket. It has to be carried explicitly because
+	// an S3 ARN (arn:aws:s3:::name) does not contain an account id — unlike an IAM ARN — so there is
+	// no way to derive it. Without it, cross-account access cannot be evaluated correctly: AWS grants
+	// same-account access if the identity policy OR the bucket policy allows, but cross-account
+	// requires BOTH.
+	OwnerAccount string `json:"owner_account,omitempty"`
 }
 
 // IAMRole mirrors aws_iam_roles (subset). The policy columns are JSON documents,
