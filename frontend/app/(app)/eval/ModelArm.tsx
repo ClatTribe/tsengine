@@ -17,12 +17,23 @@ type Ablation = {
   verdict: string;
 };
 
+type Trend = {
+  comparable?: boolean;
+  direction?: string;
+  delta_points?: number;
+  note?: string;
+  model_changed?: boolean;
+  previous_model?: string;
+};
+
 type RunResult = {
   ran: boolean;
   reason?: string;
   cases: number;
-  model?: { passed: number; unanswered: number; note?: string };
+  model_name?: string;
+  model?: { passed: number; unanswered: number; note?: string; unanswered_reason?: string };
   ablation?: Ablation;
+  trend?: Trend;
   model_agreement?: number;
   substrate_agreement?: number;
 };
@@ -103,10 +114,18 @@ export function ModelArm({ hasCases }: { hasCases: boolean }) {
                 {result.ablation.model_passed}
                 <span className="text-sm font-normal text-muted">/{result.ablation.cases}</span>
               </div>
-              <div className="text-sm font-medium">Your model</div>
+              <div className="text-sm font-medium">
+                {result.model_name && result.model_name !== "platform default"
+                  ? result.model_name
+                  : "Your model"}
+              </div>
               {result.model && result.model.unanswered > 0 ? (
                 <div className="mt-0.5 text-xs text-muted">
                   {result.model.unanswered} unanswered, counted as missed
+                  {/* Naming the cause matters: a wrong key, a rate limit and a chatty model all
+                      look identical as a bare count, and only one of them is the customer's to
+                      fix. */}
+                  {result.model.unanswered_reason ? ` — ${result.model.unanswered_reason}` : null}
                 </div>
               ) : null}
             </div>
@@ -115,6 +134,21 @@ export function ModelArm({ hasCases }: { hasCases: boolean }) {
             {result.ablation.verdict}
           </p>
           {result.model?.note ? <p className="text-xs text-muted">{result.model.note}</p> : null}
+
+          {/* Model runs get their own history, so switching models is visible rather than
+              something the customer has to remember. A drop after a swap is styled as
+              information, not as an alarm — it is a decision they made, not a fault. */}
+          {result.trend?.note ? (
+            <p
+              className={
+                result.trend.direction === "regressed" && !result.trend.model_changed
+                  ? "rounded-lg border border-critical/30 bg-critical/5 px-3 py-2 text-xs text-ink"
+                  : "text-xs text-muted"
+              }
+            >
+              {result.trend.note}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>

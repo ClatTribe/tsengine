@@ -81,3 +81,75 @@ func TestSuiteHash_ChangesWhenAnExpectationFlips(t *testing.T) {
 		t.Error("hash must change when the suite grows")
 	}
 }
+
+// The two graders keep separate histories. Interleaved, a trend would compare a model's score
+// against the filter's and present the difference as a change over time — two different subjects
+// measured once each, reported as one thing moving.
+func TestRunsForArm_KeepsTheGradersApart(t *testing.T) {
+	runs := []Run{
+		{RanAt: "1", Cases: 4, Passed: 4, SuiteHash: "h", Arm: ArmSubstrate},
+		{RanAt: "2", Cases: 4, Passed: 1, SuiteHash: "h", Arm: ArmModel, Model: "m"},
+		{RanAt: "3", Cases: 4, Passed: 4, SuiteHash: "h", Arm: ArmSubstrate},
+	}
+	if got := RunsForArm(runs, ArmSubstrate); len(got) != 2 {
+		t.Fatalf("substrate history has %d run(s), want 2", len(got))
+	}
+	if tr := TrendOf(RunsForArm(runs, ArmSubstrate)); tr.Direction != "unchanged" {
+		t.Errorf("the filter did not change, but its trend says %q — a model run leaked in", tr.Direction)
+	}
+	if got := RunsForArm(runs, ArmModel); len(got) != 1 {
+		t.Fatalf("model history has %d run(s), want 1", len(got))
+	}
+}
+
+// Runs recorded before the arm field existed were all substrate runs. Defaulting the other way
+// would silently reclassify a customer's entire history as model scores.
+func TestNormalizeArm_UnsetIsSubstrate(t *testing.T) {
+	if NormalizeArm("") != ArmSubstrate {
+		t.Fatal("an unset arm was not treated as substrate")
+	}
+	runs := []Run{{RanAt: "1", Cases: 2, Passed: 2, SuiteHash: "h"}}
+	if len(RunsForArm(runs, ArmSubstrate)) != 1 {
+		t.Error("a pre-existing run vanished from the substrate history")
+	}
+}
+
+// A lower score after switching models is a reason to reconsider the switch, not a fault. Calling
+// it a regression without naming the swap sends someone hunting a problem that is a decision they
+// made.
+func TestTrendOf_ModelSwapIsNotReportedAsAFault(t *testing.T) {
+	tr := TrendOf([]Run{
+		{RanAt: "1", Cases: 10, Passed: 9, SuiteHash: "h", Arm: ArmModel, Model: "anthropic/claude"},
+		{RanAt: "2", Cases: 10, Passed: 5, SuiteHash: "h", Arm: ArmModel, Model: "gemini/flash"},
+	})
+	if !tr.ModelChanged {
+		t.Fatal("the model changed between runs and the trend did not notice")
+	}
+	if tr.PreviousModel != "anthropic/claude" {
+		t.Errorf("previous model not carried: %q", tr.PreviousModel)
+	}
+	if !strings.Contains(tr.Note, "different model") {
+		t.Errorf("note does not say the model changed: %q", tr.Note)
+	}
+	if strings.Contains(tr.Note, "FELL") {
+		t.Errorf("a model swap was reported in the same words as a genuine regression: %q", tr.Note)
+	}
+	// The delta is still real and still shown — hiding it would be its own dishonesty.
+	if tr.DeltaPoints >= 0 {
+		t.Errorf("the drop was not reported at all: %+v", tr)
+	}
+}
+
+// The same model scoring lower IS a genuine regression, and must still say so plainly.
+func TestTrendOf_SameModelScoringLowerIsStillARegression(t *testing.T) {
+	tr := TrendOf([]Run{
+		{RanAt: "1", Cases: 10, Passed: 9, SuiteHash: "h", Arm: ArmModel, Model: "gemini/flash"},
+		{RanAt: "2", Cases: 10, Passed: 5, SuiteHash: "h", Arm: ArmModel, Model: "gemini/flash"},
+	})
+	if tr.ModelChanged {
+		t.Fatal("reported a model change where the model is identical")
+	}
+	if tr.Direction != "regressed" || !strings.Contains(tr.Note, "FELL") {
+		t.Errorf("a real regression was softened: %+v", tr)
+	}
+}

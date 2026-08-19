@@ -27,7 +27,9 @@ func (d Deps) handleTenantEval(w http.ResponseWriter, r *http.Request, tenantID 
 
 	// Read the history BEFORE recording this run, so the trend compares this run against the
 	// previous one rather than against itself.
-	prior := d.evalRuns(ctx, tenantID)
+	// Only this arm's history. Interleaving the two would compare the filter's score against a
+	// model's and call the difference a change over time.
+	prior := tenanteval.RunsForArm(d.evalRuns(ctx, tenantID), tenanteval.ArmSubstrate)
 	trend := tenanteval.TrendOf(append(prior, tenanteval.Run{
 		RanAt: now().Format(time.RFC3339Nano), Cases: res.Cases, Passed: res.Passed,
 		SuiteHash: hash, BySource: res.BySource,
@@ -44,6 +46,7 @@ func (d Deps) handleTenantEval(w http.ResponseWriter, r *http.Request, tenantID 
 		_ = d.Store.PutEvalRun(ctx, platform.EvalRun{
 			ID: ts.Format(time.RFC3339Nano), TenantID: tenantID, RanAt: ts,
 			Cases: res.Cases, Passed: res.Passed, SuiteHash: hash, BySource: bySource,
+			Arm: tenanteval.ArmSubstrate,
 		})
 	}
 
@@ -72,7 +75,7 @@ func (d Deps) evalRuns(ctx context.Context, tenantID string) []tenanteval.Run {
 		}
 		out = append(out, tenanteval.Run{
 			RanAt: r.RanAt.Format(time.RFC3339Nano), Cases: r.Cases, Passed: r.Passed,
-			SuiteHash: r.SuiteHash, BySource: by,
+			SuiteHash: r.SuiteHash, BySource: by, Arm: r.Arm, Model: r.Model,
 		})
 	}
 	return out
