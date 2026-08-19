@@ -100,8 +100,34 @@ func (d Deps) handleTenantEvalModel(w http.ResponseWriter, r *http.Request, tena
 		})
 	}
 
+	// The starter check runs alongside, and is reported in its own block. It is OUR cases, so it
+	// can answer "is this model sane?" on day one — but it says nothing about this customer's
+	// estate, and the response keeps the two apart so nothing downstream can add them up.
+	starter, serr := tenanteval.ScoreModel(ctx, tenanteval.StarterCases(), llmJudge{llm})
+	starterOut := map[string]any{"ran": serr == nil}
+	if serr == nil {
+		keep, suppress := tenanteval.StarterBalance()
+		starterOut = map[string]any{
+			"ran": true, "cases": starter.Cases, "passed": starter.Passed,
+			"unanswered": starter.Unanswered, "unanswered_reason": starter.UnansweredReason,
+			"failures": starter.Failures,
+			"balance":  map[string]int{"keep": keep, "suppress": suppress},
+			"what_it_is": "A fixed set of cases with publicly checkable answers — not your estate, and " +
+				"not counted in your agreement score. It is balanced, so a model that answers the same " +
+				"word every time scores half.",
+		}
+		if starter.Cases > 0 {
+			ts := now()
+			_ = d.Store.PutEvalRun(ctx, platform.EvalRun{
+				ID: ts.Format(time.RFC3339Nano) + "-starter", TenantID: tenantID, RanAt: ts,
+				Cases: starter.Cases, Passed: starter.Passed,
+				SuiteHash: "starter", Arm: tenanteval.ArmStarter, Model: modelName,
+			})
+		}
+	}
+
 	out := map[string]any{
-		"trend": trend, "model_name": modelName,
+		"trend": trend, "model_name": modelName, "starter": starterOut,
 		"ran": true, "cases": mod.Cases, "suite_hash": hash,
 		"substrate": map[string]any{"passed": sub.Passed, "cases": sub.Cases},
 		"model": map[string]any{
