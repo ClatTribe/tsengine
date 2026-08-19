@@ -31,6 +31,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/l15"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -118,8 +119,13 @@ func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRu
 		})
 	}
 
-	// 2. Suppressions: an issue a human marked a false positive. The issue key is rule|endpoint, so
-	// match the dismissed and current findings that produced it.
+	// 2. Suppressions: an issue a human marked a false positive.
+	//
+	// The key MUST be computed by the same function that assigned it when the issue was suppressed
+	// (crossdetect.DedupKey). This branch previously rebuilt it by hand as rule_id+"|"+endpoint,
+	// which is not the format: real keys are "rule|<lower rule>|<lower endpoint>", or "cve|CVE-…"
+	// for anything carrying a CVE. So it matched nothing, for every tenant, and this entire source
+	// of cases silently produced none — the suite looked empty rather than broken.
 	ignored := map[string]platform.IgnoreRule{}
 	for _, ig := range ignores {
 		if strings.EqualFold(strings.TrimSpace(ig.Reason), "false_positive") {
@@ -127,8 +133,7 @@ func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRu
 		}
 	}
 	for _, f := range append(append([]types.Finding{}, findings...), dismissed...) {
-		key := f.RuleID + "|" + f.Endpoint
-		ig, ok := ignored[key]
+		ig, ok := ignored[crossdetect.DedupKey(f)]
 		if !ok || seen[f.ID] {
 			continue
 		}

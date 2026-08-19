@@ -17,22 +17,11 @@ import (
 // number about a vendor corpus.
 func (d Deps) handleTenantEval(w http.ResponseWriter, r *http.Request, tenantID string) {
 	ctx := r.Context()
-	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	cases, err := d.evalCases(ctx, tenantID)
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
-	// The dismissed set lives on the engagements, because a dropped finding exists nowhere else.
-	var dismissed []types.Finding
-	if engs, eerr := d.Store.ListEngagements(ctx, tenantID); eerr == nil {
-		for _, e := range engs {
-			dismissed = append(dismissed, e.L15Dismissed...)
-		}
-	}
-	ignores, _ := d.Store.ListIgnoreRules(ctx, tenantID)
-	actions, _ := d.Store.ListActions(ctx, tenantID)
-
-	cases := tenanteval.BuildSuite(findings, dismissed, ignores, actions)
 	res := tenanteval.Score(cases)
 	hash := tenanteval.SuiteHash(cases)
 
@@ -91,3 +80,23 @@ func (d Deps) evalRuns(ctx context.Context, tenantID string) []tenanteval.Run {
 
 // now is the run clock; a var so a test can freeze it.
 var now = func() time.Time { return time.Now().UTC() }
+
+// evalCases builds the tenant's graded suite. Shared by the deterministic and the model endpoints
+// so the two arms are scored over exactly the same cases — two callers assembling the suite
+// separately would drift, and a comparison between arms graded on different sets means nothing.
+func (d Deps) evalCases(ctx context.Context, tenantID string) ([]tenanteval.Case, error) {
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	if err != nil {
+		return nil, err
+	}
+	// The dismissed set lives on the engagements, because a dropped finding exists nowhere else.
+	var dismissed []types.Finding
+	if engs, eerr := d.Store.ListEngagements(ctx, tenantID); eerr == nil {
+		for _, e := range engs {
+			dismissed = append(dismissed, e.L15Dismissed...)
+		}
+	}
+	ignores, _ := d.Store.ListIgnoreRules(ctx, tenantID)
+	actions, _ := d.Store.ListActions(ctx, tenantID)
+	return tenanteval.BuildSuite(findings, dismissed, ignores, actions), nil
+}

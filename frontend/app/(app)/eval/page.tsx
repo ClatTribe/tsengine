@@ -1,4 +1,5 @@
 import { Target, AlertTriangle } from "lucide-react";
+import { ModelArm } from "./ModelArm";
 import { api } from "@/lib/api";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -33,6 +34,9 @@ export default async function EvalPage() {
         description="How often the current setup agrees with your own experts, graded on findings from your estate — every case is a decision you already made. Not our benchmark: yours, re-derivable from your data."
       />
 
+      {/* Rendered in BOTH states on purpose. A workspace with no graded cases is exactly the one
+          that has never heard of this, and hiding the capability until it is usable means nobody
+          discovers it exists — the component says for itself why it cannot run yet. */}
       {ev.cases === 0 ? (
         <Empty>{ev.note ?? "No graded cases yet."}</Empty>
       ) : (
@@ -138,6 +142,8 @@ export default async function EvalPage() {
           </section>
         </>
       )}
+
+      <ModelArm hasCases={ev.cases > 0} />
 
       <p className="flex items-start gap-2 text-xs text-muted">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />

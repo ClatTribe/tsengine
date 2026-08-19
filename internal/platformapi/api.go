@@ -172,7 +172,10 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/safechain/check", d.auth(d.handleSafeChain))                // install-time supply-chain gate (Safe Chain parity)
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
 	mux.HandleFunc("GET /v1/l15-audit", d.auth(d.handleL15Audit))
-	mux.HandleFunc("GET /v1/eval", d.auth(d.handleTenantEval))                   // the tenant's OWN eval suite: does today's config still agree with their experts?
+	mux.HandleFunc("GET /v1/eval", d.auth(d.handleTenantEval))
+	// POST, and separate from the GET above, because this one spends a model call per case on the
+	// customer's own key — it must be asked for, never run because a page rendered.
+	mux.HandleFunc("POST /v1/eval/model", d.auth(d.handleTenantEvalModel))       // the tenant's OWN eval suite: does today's config still agree with their experts?
 	mux.HandleFunc("POST /v1/l15-audit/reinstate", d.auth(d.handleL15Reinstate)) // override: put back a finding the FP filter dropped (§2.5)
 	mux.HandleFunc("POST /v1/replay", d.auth(d.handleReplay))                    // §9 dig-deeper: re-run one tool with the engineer's own args // what L1.5 suppressed/changed — the security engineer's audit + override surface (§2.5)
 	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))

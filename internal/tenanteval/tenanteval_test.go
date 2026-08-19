@@ -1,6 +1,7 @@
 package tenanteval
 
 import (
+	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -35,7 +36,11 @@ func TestBuildSuite_DerivesCasesFromTheTenantsOwnJudgements(t *testing.T) {
 	cases := BuildSuite(
 		[]types.Finding{reinstated, fixedF},
 		[]types.Finding{noisy}, // dismissed by the chain
-		[]platform.IgnoreRule{{IssueKey: "nuclei::banner|https://acme.test/b", Reason: "false_positive", By: "alex"}},
+		// The key comes from the function that ASSIGNS it, not from a literal. This test previously
+		// hard-coded "rule_id|endpoint" — the same wrong format the code used — so it passed while
+		// the suppression branch matched nothing in production. A fixture that reimplements the bug
+		// cannot catch the bug.
+		[]platform.IgnoreRule{{IssueKey: crossdetect.DedupKey(noisy), Reason: "false_positive", By: "alex"}},
 		[]platform.Action{{FindingID: "f-fixed", Verification: &platform.FixVerification{Status: "fixed"}}},
 	)
 	if len(cases) != 3 {
@@ -89,5 +94,45 @@ func TestScore_CatchesTheConfigurationDisagreeingWithAnExpert(t *testing.T) {
 	}
 	if agree, ok := res.Agreement(); !ok || agree < 0 || agree > 1 {
 		t.Errorf("agreement should be a real ratio, got %v ok=%v", agree, ok)
+	}
+}
+
+// REGRESSION: the suppression branch must use the SAME key function that assigned the issue key.
+//
+// It previously rebuilt the key by hand as rule_id+"|"+endpoint. Real keys are
+// "rule|<lower rule>|<lower endpoint>", so it matched nothing for every tenant — an entire source
+// of cases produced none, and the suite read as empty rather than broken. A hand-rolled copy of a
+// key format is the bug; this asserts the shared function is used by driving a REAL key.
+func TestBuildSuite_IgnoredCaseUsesTheRealIssueKey(t *testing.T) {
+	f := types.Finding{
+		ID: "f1", RuleID: "deviceposture::disk-unencrypted",
+		Endpoint: "device:UX Check Laptop", Severity: types.SeverityHigh,
+	}
+	// The key exactly as the product records it when a human suppresses the issue.
+	key := crossdetect.DedupKey(f)
+
+	cases := BuildSuite([]types.Finding{f}, nil,
+		[]platform.IgnoreRule{{IssueKey: key, Reason: "false_positive", By: "sec@acme.com"}}, nil)
+
+	if len(cases) != 1 {
+		t.Fatalf("a human's false-positive call produced %d case(s); the suite is silently dropping "+
+			"real decisions", len(cases))
+	}
+	if cases[0].Source != SourceIgnored || cases[0].Expect != Suppress {
+		t.Errorf("wrong case: %+v", cases[0])
+	}
+}
+
+// A CVE-bearing finding keys on the CVE, not on rule|endpoint. Hand-rolling the key would miss
+// these entirely even after fixing the prefix, so it is asserted separately.
+func TestBuildSuite_IgnoredCaseMatchesACVEKeyedIssue(t *testing.T) {
+	f := types.Finding{
+		ID: "f2", RuleID: "grype::vuln", Title: "CVE-2026-1234 in libfoo",
+		Endpoint: "image:acme/api", Severity: types.SeverityHigh,
+	}
+	cases := BuildSuite([]types.Finding{f}, nil,
+		[]platform.IgnoreRule{{IssueKey: crossdetect.DedupKey(f), Reason: "false_positive", By: "sec@acme.com"}}, nil)
+	if len(cases) != 1 {
+		t.Fatalf("a suppressed CVE issue produced %d case(s)", len(cases))
 	}
 }
