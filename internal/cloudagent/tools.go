@@ -30,7 +30,7 @@ type toolDef struct {
 func tools() []toolDef {
 	return []toolDef{
 		{"list_resources", "list_resources(kind?, only_sensitive?) — inventory: ids/names/kind/flags. kind ∈ resource|principal|data|network", tList},
-		{"get_resource", "get_resource(id) — one resource's metadata + its outgoing edges (moves an attacker could make from it)", tGet},
+		{"get_resource", "get_resource(id, live?) — one resource's metadata + its outgoing edges (moves an attacker could make from it). Pass live:true to ALSO re-read it from the account right now: everything else you see was captured before this investigation began, so a flag a path turns on (public, privileged) may already have changed. Do that before recording an issue whose severity depends on such a flag. Read-only; it answers AGREES / DIFFERS / COULD NOT CHECK and never reads an unread surface as an absent resource.", tGet},
 		{"resolve_access", "resolve_access(principal, resource) — does the principal have an effective path of access to the resource? (graph reachability over resolved IAM)", tResolve},
 		{"find_paths", "find_paths(target) — concrete attack paths from the internet/public surface to the target node, if any", tFindPaths},
 		{"blast_radius", "blast_radius(principal) — every crown jewel (sensitive data / privileged identity) reachable if this principal is compromised", tBlast},
@@ -92,6 +92,13 @@ func tGet(cc *Context, args map[string]any) string {
 			}
 			fmt.Fprintf(&b, "  -%s-> %s%s\n", e.Kind, e.To, cond)
 		}
+	}
+	// Live re-read rides on get_resource rather than taking a catalog slot of its own — the same
+	// reason estate_context is one tool and not three (§2.6: past ~12 hands, tool-use accuracy
+	// degrades). Appending it also puts the graph view and the live view in ONE observation, so the
+	// agent compares them directly instead of holding two answers in its head.
+	if argBool(args, "live") {
+		b.WriteString("\n" + tCheckLive(cc, args))
 	}
 	return b.String()
 }

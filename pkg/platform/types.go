@@ -582,6 +582,22 @@ type Engagement struct {
 	StartedAt   time.Time `json:"started_at"`
 	CompletedAt time.Time `json:"completed_at,omitempty"`
 
+	// L15Audit is every change the L1.5 chain made to this scan's findings — each demotion,
+	// dismissal and merge with the rule that caused it and why (§2.5: those decisions must be
+	// "logged + recoverable" so the security engineer can audit and override them).
+	//
+	// It is the one part of the scan that cannot be reconstructed afterwards. A stored finding
+	// still carries its own RawOutput and ToolArgs, so what a tool said about a SURVIVING finding
+	// is recoverable — but a finding the FP filter dropped leaves no trace at all, and a demoted
+	// one shows only its new severity. Recording the trail is what lets a security engineer see
+	// what the AI decided not to show them, and disagree with it.
+	L15Audit []types.AuditEntry `json:"l15_audit,omitempty"`
+	// L15Dismissed are the findings the chain DROPPED on this scan, kept so a security engineer can
+	// review the AI's judgement and REINSTATE one it got wrong (§2.5: the audit log exists "for
+	// override"). Without the finding itself, the trail can only say what was suppressed, never put
+	// it back — half an affordance.
+	L15Dismissed []types.Finding `json:"l15_dismissed,omitempty"`
+
 	// ToolsRan and ToolsFailed record what the scan ACTUALLY dispatched, as opposed to what the
 	// asset type is configured to run.
 	//
@@ -1008,6 +1024,19 @@ func AIAnalysisID(kind, scope string) string { return kind + ":" + scope }
 // the history an auditor reads as continuity proof. StateHash captures the per-control states so a
 // capture is skipped when nothing changed (see grc.CaptureEvidenceSnapshot) — the history stays
 // meaningful without per-monitoring-pass bloat. Grounded (§10): the counts come from real ControlState.
+// EvalRun is one recorded evaluation of the tenant's own eval suite — append-only, so a trend can
+// exist at all. SuiteHash is what makes the trend honest rather than merely available: two runs are
+// comparable ONLY if they graded the same case set the same way (internal/tenanteval.TrendOf).
+type EvalRun struct {
+	ID        string         `json:"id"` // append-only: RFC3339Nano of the run
+	TenantID  string         `json:"tenant_id"`
+	RanAt     time.Time      `json:"ran_at"`
+	Cases     int            `json:"cases"`
+	Passed    int            `json:"passed"`
+	SuiteHash string         `json:"suite_hash"`
+	BySource  map[string]int `json:"by_source,omitempty"`
+}
+
 type ComplianceSnapshot struct {
 	ID            string    `json:"id"` // append-only: Framework ":" RFC3339Nano capture time
 	TenantID      string    `json:"tenant_id"`

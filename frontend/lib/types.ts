@@ -53,6 +53,14 @@ export interface Finding {
   mitre_techniques?: string[];
   verification_status?: string;
   confidence?: number;
+  // What the TOOL itself said, and how it was invoked. Stored since Phase 0 and never shown until
+  // now — a security engineer verifies a finding by reading the scanner's own output, not our
+  // summary of it, and they cannot reproduce a result whose arguments they cannot see.
+  raw_output?: unknown;
+  tool_args?: Record<string, string>;
+  // Provenance. "human_reinstated" means a person put this back over the L1.5 filter's dismissal,
+  // which a reader must be able to tell apart from a finding the AI approved.
+  discovery_method?: { primary?: string; replay_of?: string };
   // blast_radius: read-time impact sizing — does this finding chain to a crown jewel? (mirrors incidents)
   blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
   threat_intel?: {
@@ -214,6 +222,21 @@ export interface PentestEngagement {
   completed_at?: string;
   signoff?: Signoff | null; // named human sign-off on the report (the HITL accountability)
   schedule?: { cadence: string; next_run_at?: string } | null; // recurring re-test cadence (safe passive re-verify)
+  // What the agent TRIED, including what the Rules of Engagement refused to let it run. Without
+  // this a reader cannot tell "tested and held" from "never tested" — and a blocked probe means
+  // that test did not happen, however clean the report looks.
+  attempts?: PentestAttempt[] | null;
+  attempts_truncated?: number;
+}
+
+export interface PentestAttempt {
+  target: string;
+  method?: string;
+  active?: boolean;   // an exploitation attempt rather than a benign probe
+  allowed: boolean;   // the Rules-of-Engagement verdict
+  reason?: string;    // why it was refused, or that it was within the rules
+  proven?: boolean;   // allowed && !proven = tried and could not be demonstrated
+  at: string;
 }
 
 export interface PentestStats {
@@ -1083,3 +1106,64 @@ export interface FindingsSummary {
   truncated: boolean;
 }
 
+// The L1.5 audit surface — what the AI suppressed or changed, and the evidence to judge it by.
+export interface L15AuditRule {
+  rule: string;
+  action: string;
+  count: number;
+}
+export interface L15Audit {
+  entries: {
+    finding_id: string;
+    action: string;
+    from_severity?: string;
+    to_severity?: string;
+    rule: string;
+    reason?: string;
+  }[];
+  // The dropped findings themselves — the only ones with no row anywhere else in the product.
+  suppressed: Finding[];
+  total: number;
+  dropped: number;
+  demoted: number;
+  by_rule: L15AuditRule[];
+  scans_with_audit: number;
+  scans_total: number;
+  // Present when nothing was recorded — an empty trail is not evidence nothing was suppressed.
+  note?: string;
+}
+
+// The tenant's OWN eval suite — graded from decisions they already made, not a vendor benchmark.
+export interface TenantEvalCase {
+  finding_id: string;
+  rule_id: string;
+  source: "reinstated" | "ignored" | "confirmed_fix";
+  expect: "keep" | "suppress";
+  by?: string;
+  reason?: string;
+}
+export interface TenantEvalFailure extends TenantEvalCase {
+  got: "keep" | "suppress";
+}
+export interface TenantEvalTrend {
+  // False whenever a comparison would mislead — one sample, or a graded set that changed between
+  // runs. Show `note` instead of a delta.
+  comparable: boolean;
+  delta_points?: number;
+  direction?: "improved" | "regressed" | "unchanged";
+  note: string;
+  runs: number;
+}
+
+export interface TenantEval {
+  cases: number;
+  suite_hash?: string;
+  trend?: TenantEvalTrend;
+  passed: number;
+  failures: TenantEvalFailure[];
+  by_source: Partial<Record<"reinstated" | "ignored" | "confirmed_fix", number>>;
+  // Absent when there are no cases — an empty suite has NO score, because a vacuous 100% would
+  // rise as a customer does less.
+  agreement?: number;
+  note?: string;
+}

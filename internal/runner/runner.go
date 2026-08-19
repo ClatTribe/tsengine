@@ -12,6 +12,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ClatTribe/tsengine/internal/l15"
+	"github.com/ClatTribe/tsengine/internal/tool"
 	"log/slog"
 	"sort"
 	"strings"
@@ -68,6 +70,15 @@ func scanWith(ctx context.Context, r ScanRunner, a platform.Asset) ([]types.Find
 	}
 	f, err := r.Scan(ctx, a)
 	return f, ScanReport{}, err
+}
+
+// ToolReplayer is optionally implemented by a ScanRunner that can re-run ONE tool with a human's own
+// arguments — the §9 "dig deeper" capability. Optional for the same reason ReportingScanRunner is:
+// the operate path assesses a snapshot host-side and has no tools to re-run, so widening the core
+// interface would force implementors to answer a question two of them cannot. A runner that does not
+// implement it makes replay unavailable, and the API says so rather than pretending it ran.
+type ToolReplayer interface {
+	ReplayTool(ctx context.Context, a platform.Asset, toolName string, args tool.Args, replayID string) ([]types.Finding, error)
 }
 
 // Tokens resolves a connection's vaulted OAuth token (the secret store). Kept as an
@@ -472,6 +483,9 @@ func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) []types.
 		return nil // honestly skipped (logged by the caller's monitoring); never a false finding
 	}
 	findings := sspm.AssessGitHubOrg(snap, sspm.Options{})
+	// Same L1.5 chain the POSTed-snapshot twin runs (§11) — the scheduled door must not produce
+	// weaker findings than the HTTP door for the identical assessor.
+	findings = l15.Enrich(findings)
 	for i := range findings {
 		findings[i].ID = s.NewID()
 		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
@@ -510,6 +524,7 @@ func (s *Service) syncOSINT(ctx context.Context, tenantID string) []types.Findin
 	}
 	snap := osint.CollectCT(ctx, tenantID, domains, known, s.OSINTFetcher)
 	findings := osint.Assess(snap, osint.Options{NewID: s.NewID})
+	findings = l15.Enrich(findings) // §11, as the /v1/osint/ingest twin does
 	for i := range findings {
 		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
 	}
@@ -632,6 +647,19 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 		return nil, nil, fmt.Errorf("runner: scan %s: %w", a.Target, err)
 	}
 	eng.ToolsRan, eng.ToolsFailed = report.ToolsRan, report.ToolsFailed
+	// L1.5 (§11) on the ENGINE path. Until now this ran only in the CLI: the platform took whatever
+	// the scanner returned and stored it directly, so every repo/container/web/api/ip scan — the
+	// product's primary path — landed with no KEV/EPSS, no exploitability, no FP filtering, no
+	// compliance mapping and no confidence, while the secondary ingest paths were fully enriched.
+	//
+	// It matters most for the audience that reads these findings: a security engineer prioritises by
+	// exploited-in-the-wild and patch-priority, and triages by confidence. Without those, the list is
+	// the raw scanner noise practitioners say costs more than it saves.
+	//
+	// Note the chain may legitimately return FEWER findings than it was given (fp_filter drops decoy
+	// shapes, cross_tool_merge dedups) — the same behaviour the CLI has always had.
+	enr := l15.EnrichDetailed(findings)
+	findings, eng.L15Audit, eng.L15Dismissed = enr.Enriched, enr.Audit, enr.Dismissed
 	for _, f := range findings {
 		if err := s.Store.PutFinding(ctx, a.TenantID, f); err != nil {
 			return nil, nil, err

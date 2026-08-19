@@ -108,6 +108,53 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
           scanner's file:line is often approximate or absent — so this sits immediately above AI fix. */}
       <LocalizeFinding findingID={id} />
 
+      {/* What the TOOL said — the scanner's own output and the exact arguments that produced it.
+          Stored since Phase 0 and never shown until now. A security engineer verifies a finding by
+          reading the tool's output rather than our summary of it, and cannot reproduce a result whose
+          arguments they cannot see. It is collapsed by default: most readers want the summary, and
+          the ones who want this really want it. */}
+      {(f.raw_output != null || (f.tool_args && Object.keys(f.tool_args).length > 0) || f.discovery_method?.primary) && (
+        <section>
+          <div className="mb-2 text-xs uppercase tracking-wider text-muted">Tool evidence</div>
+          <details className="card p-0">
+            <summary className="cursor-pointer px-5 py-3 text-sm text-muted transition hover:text-ink">
+              What {f.tool || "the tool"} actually reported
+            </summary>
+            <div className="space-y-4 border-t border-border px-5 py-4">
+              {f.discovery_method?.primary && (
+                <div>
+                  <div className="mb-1 text-xs font-medium text-ink">How this was found</div>
+                  <p className="text-xs text-muted">
+                    {f.discovery_method.primary === "human_reinstated"
+                      ? "Reinstated by a person after the automated filter dismissed it — a human vouched for this over the filter's objection."
+                      : f.discovery_method.primary === "tool_replay"
+                        ? "Produced by a tool re-run with custom arguments, not a scheduled scan."
+                        : f.discovery_method.primary}
+                  </p>
+                </div>
+              )}
+              {f.tool_args && Object.keys(f.tool_args).length > 0 && (
+                <div>
+                  <div className="mb-1 text-xs font-medium text-ink">Arguments used</div>
+                  <pre className="mono overflow-x-auto rounded border border-border bg-bg p-3 text-xs text-muted">
+{Object.entries(f.tool_args).map(([k, v]) => `${k} ${v}`).join("\n")}
+                  </pre>
+                  <p className="mt-1 text-xs text-faint">Re-run the tool with these (or your own) arguments to reproduce it.</p>
+                </div>
+              )}
+              {f.raw_output != null && (
+                <div>
+                  <div className="mb-1 text-xs font-medium text-ink">Raw output</div>
+                  <pre className="mono max-h-96 overflow-auto rounded border border-border bg-bg p-3 text-xs text-muted">
+{typeof f.raw_output === "string" ? f.raw_output : JSON.stringify(f.raw_output, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </details>
+        </section>
+      )}
+
       <section>
         <div className="mb-2 text-xs uppercase tracking-wider text-muted">AI fix</div>
         <div className="card p-5">

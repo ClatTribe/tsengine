@@ -130,6 +130,15 @@ func UnifiedIssues(findings []types.Finding) []Issue {
 	return out
 }
 
+// DedupKey is the exported form of dedupKey, so another package can ask "which issue is this
+// finding part of?" without reimplementing the rule. A second copy of this logic would drift from
+// this one the first time either changed, and the whole value of the key is that everything agrees
+// on it — an ignore rule recorded against one spelling must still match the finding under another.
+func DedupKey(f types.Finding) string {
+	k, _ := dedupKey(f)
+	return k
+}
+
 // dedupKey returns the grouping key for a finding and the CVE if it has one. A
 // CVE bridges across scanners + surfaces (the whole point of dedup); otherwise
 // we fall back to the rule + location, which is conservative (won't merge

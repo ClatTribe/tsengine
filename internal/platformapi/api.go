@@ -171,6 +171,13 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/findings/export/ndjson", d.auth(d.handleFindingsSIEMExport)) // one event per line — what Splunk/Datadog/Panther actually ingest
 	mux.HandleFunc("POST /v1/safechain/check", d.auth(d.handleSafeChain))                // install-time supply-chain gate (Safe Chain parity)
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
+	mux.HandleFunc("GET /v1/l15-audit", d.auth(d.handleL15Audit))
+	mux.HandleFunc("GET /v1/eval", d.auth(d.handleTenantEval))
+	// POST, and separate from the GET above, because this one spends a model call per case on the
+	// customer's own key — it must be asked for, never run because a page rendered.
+	mux.HandleFunc("POST /v1/eval/model", d.auth(d.handleTenantEvalModel))       // the tenant's OWN eval suite: does today's config still agree with their experts?
+	mux.HandleFunc("POST /v1/l15-audit/reinstate", d.auth(d.handleL15Reinstate)) // override: put back a finding the FP filter dropped (§2.5)
+	mux.HandleFunc("POST /v1/replay", d.auth(d.handleReplay))                    // §9 dig-deeper: re-run one tool with the engineer's own args // what L1.5 suppressed/changed — the security engineer's audit + override surface (§2.5)
 	mux.HandleFunc("GET /v1/assets", d.auth(d.handleAssets))
 	mux.HandleFunc("POST /v1/assets", d.auth(d.handleCreateAsset))                                 // add a standalone scan target (web/api/domain/ip/image)
 	mux.HandleFunc("POST /v1/assets/{id}/data-tier", d.auth(d.handleSetAssetDataTier))             // tier a repo by customer-data exposure
@@ -321,6 +328,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/pentest/{id}/readiness", d.auth(d.handlePentestReadiness))         // pre-flight: per-target ownership + consent + LLM-key status
 	mux.HandleFunc("GET /v1/pentest/{id}/progress", d.auth(d.handlePentestProgress))           // live run progress (requests sent / findings so far) for the watch-it-work view
 	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                    // run/retest the engagement (passive, RoE-gated)
+	mux.HandleFunc("POST /v1/pentest/{id}/probe", d.auth(d.handlePentestProbe))                // §9 dig-deeper for the pentester: a human proposes one probe, gated + judged exactly as the agent is
 	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))               // the engagement's VAPT report (md/json)
 	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))            // HITL: named human signs the report → signed ledger
 	mux.HandleFunc("POST /v1/pentest/{id}/schedule", d.auth(d.handleSetPentestSchedule))       // set a recurring re-test cadence (safe passive re-verify)

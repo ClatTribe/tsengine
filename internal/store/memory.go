@@ -27,6 +27,7 @@ type Memory struct {
 	incidents       map[string]map[string]platform.Incident           // tenantID → incidentID → incident
 	risks           map[string]map[string]platform.Risk               // tenantID → riskID → risk
 	aiAnalyses      map[string]map[string]platform.AIAnalysis         // tenantID → analysisID → AI analysis
+	evalRuns        map[string]map[string]platform.EvalRun            // tenantID → runID → eval run (append-only)
 	complianceSnaps map[string]map[string]platform.ComplianceSnapshot // tenantID → snapshotID → evidence snapshot
 	audits          map[string]map[string]platform.AuditEngagement    // tenantID → engagementID → audit
 	policies        map[string]map[string]platform.Policy             // tenantID → policyID → policy
@@ -56,6 +57,7 @@ func NewMemory() *Memory {
 		incidents:       map[string]map[string]platform.Incident{},
 		risks:           map[string]map[string]platform.Risk{},
 		aiAnalyses:      map[string]map[string]platform.AIAnalysis{},
+		evalRuns:        map[string]map[string]platform.EvalRun{},
 		complianceSnaps: map[string]map[string]platform.ComplianceSnapshot{},
 		audits:          map[string]map[string]platform.AuditEngagement{},
 		policies:        map[string]map[string]platform.Policy{},
@@ -434,6 +436,33 @@ func (m *Memory) ListAIAnalyses(_ context.Context, tenantID string) ([]platform.
 	for _, a := range m.aiAnalyses[tenantID] {
 		out = append(out, a)
 	}
+	return out, nil
+}
+
+func (m *Memory) PutEvalRun(_ context.Context, r platform.EvalRun) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.evalRuns[r.TenantID] == nil {
+		m.evalRuns[r.TenantID] = map[string]platform.EvalRun{}
+	}
+	m.evalRuns[r.TenantID][r.ID] = r
+	return nil
+}
+
+func (m *Memory) ListEvalRuns(_ context.Context, tenantID string) ([]platform.EvalRun, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.EvalRun, 0, len(m.evalRuns[tenantID]))
+	for _, r := range m.evalRuns[tenantID] {
+		out = append(out, r)
+	}
+	// Oldest-first: TrendOf compares the LAST two, so the order is load-bearing, not cosmetic.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].RanAt.Equal(out[j].RanAt) {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].RanAt.Before(out[j].RanAt)
+	})
 	return out, nil
 }
 
