@@ -67,8 +67,14 @@ func newBuilder(seed int64) *builder {
 
 func (b *builder) uid(p string) string { b.n++; return fmt.Sprintf("%s-%d", p, b.n) }
 
+// fixtureAccount is the single account this synthetic estate lives in. Buckets record it
+// explicitly because an S3 ARN cannot express ownership, and a bucket that does not say who owns it
+// makes every access decision about it ownership-ambiguous — which the evaluator now correctly
+// reports as conditional rather than assuming same-account.
+const fixtureAccount = "123456789012"
+
 func bucketARN(name string) string { return "arn:aws:s3:::" + name }
-func roleARN(name string) string   { return "arn:aws:iam::123456789012:role/" + name }
+func roleARN(name string) string   { return "arn:aws:iam::" + fixtureAccount + ":role/" + name }
 func ec2ARN(name string) string    { return "arn:aws:ec2:us-east-1:123456789012:instance/" + name }
 
 var ec2Trust = json.RawMessage(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Resource":"ec2.amazonaws.com"}]}`)
@@ -79,7 +85,8 @@ func (b *builder) addSG(id string, open bool) {
 
 func (b *builder) addBucket(name string, sensitive, public, mfaDelete bool, policy json.RawMessage) string {
 	arn := bucketARN(name)
-	bk := S3Bucket{ARN: arn, Name: name, Region: "us-east-1", MFADelete: mfaDelete, Policy: policy}
+	bk := S3Bucket{ARN: arn, Name: name, Region: "us-east-1", MFADelete: mfaDelete, Policy: policy,
+		OwnerAccount: fixtureAccount}
 	if sensitive {
 		bk.Tags = map[string]string{"classification": "pii"}
 	}
@@ -135,7 +142,7 @@ func (b *builder) plantNetworkData(i int) error {
 	id := raws(allowDoc("s3:GetObject", bkt))
 	role := b.addRole(b.uid("data-svc"), id, nil)
 	b.addPublicCompute(role)
-	if ok, cond := canReadBucket(role, bkt, parseDocs(id), nil, parseDocs(b.scps), nil); !ok || cond {
+	if ok, cond := canReadBucket(role, bkt, fixtureAccount, parseDocs(id), nil, parseDocs(b.scps), nil); !ok || cond != "" {
 		return fmt.Errorf("networkData %d: role must unconditionally read %s", i, bkt)
 	}
 	b.real[bkt] = true
@@ -149,7 +156,7 @@ func (b *builder) plantResourcePolicy(i int) error {
 	pol := json.RawMessage(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"` + role + `"},"Action":"s3:GetObject","Resource":"` + bkt + `/*"}]}`)
 	b.addBucket(name, true, false, false, pol)
 	b.addPublicCompute(role)
-	if ok, _ := canReadBucket(role, bkt, nil, nil, parseDocs(b.scps), parseDoc(pol)); !ok {
+	if ok, _ := canReadBucket(role, bkt, fixtureAccount, nil, nil, parseDocs(b.scps), parseDoc(pol)); !ok {
 		return fmt.Errorf("resourcePolicy %d: role must read %s via the bucket policy", i, bkt)
 	}
 	b.real[bkt] = true
@@ -205,10 +212,10 @@ func (b *builder) plantScpDenied(i int) error {
 	role := b.addRole(b.uid("scp-blocked"), id, nil)
 	b.addPublicCompute(role)
 	b.scps = append(b.scps, json.RawMessage(`{"Statement":[{"Effect":"Deny","Action":"s3:GetObject","Resource":["`+bkt+`","`+bkt+`/*"]}]}`))
-	if ok, _ := canReadBucket(role, bkt, parseDocs(id), nil, nil, nil); !ok {
+	if ok, _ := canReadBucket(role, bkt, fixtureAccount, parseDocs(id), nil, nil, nil); !ok {
 		return fmt.Errorf("scpDenied %d: role must read %s without the SCP", i, bkt)
 	}
-	if ok, _ := canReadBucket(role, bkt, parseDocs(id), nil, parseDocs(b.scps), nil); ok {
+	if ok, _ := canReadBucket(role, bkt, fixtureAccount, parseDocs(id), nil, parseDocs(b.scps), nil); ok {
 		return fmt.Errorf("scpDenied %d: the SCP must block reading %s", i, bkt)
 	}
 	b.inert[FindingID("s3_bucket_no_mfa_delete", bkt)] = true
@@ -222,7 +229,7 @@ func (b *builder) plantConditionGated(i int) error {
 	b.addBucket(name, true, false, false, nil)
 	role := b.addRole(b.uid("mfa-gated"), id, nil)
 	b.addPublicCompute(role)
-	if ok, cond := canReadBucket(role, bkt, parseDocs(id), nil, parseDocs(b.scps), nil); !ok || !cond {
+	if ok, cond := canReadBucket(role, bkt, fixtureAccount, parseDocs(id), nil, parseDocs(b.scps), nil); !ok || cond == "" {
 		return fmt.Errorf("conditionGated %d: read of %s must be allowed-but-conditional", i, bkt)
 	}
 	b.inert[FindingID("s3_bucket_no_mfa_delete", bkt)] = true

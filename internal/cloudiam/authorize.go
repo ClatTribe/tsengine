@@ -315,6 +315,17 @@ func rootCovers(grant, principal string) bool {
 	return acct != "" && accountOf(principal) == acct
 }
 
+// AccountOf returns the account id an ARN belongs to, or "" when the ARN does not carry one.
+//
+// Exported because the CALLER of Authorize is the one that has to decide PolicySet.SameAccount, and
+// it needs the same parse we use internally. A second copy would drift from this one the first time
+// either changed, and the whole point is that both sides agree on what "same account" means.
+//
+// Note the asymmetry this exists to surface: an IAM ARN carries its account, but an S3 bucket ARN
+// (arn:aws:s3:::name) does NOT — so ownership of a bucket cannot be derived from its ARN and has to
+// come from the inventory.
+func AccountOf(arn string) string { return accountOf(arn) }
+
 func accountOf(arn string) string {
 	parts := strings.Split(arn, ":")
 	if len(parts) >= 5 {

@@ -36,9 +36,9 @@ func GenerateAdvanced() (*Dataset, error) {
 	t := &Tables{
 		SecurityGroups: []SecurityGroup{{ID: "sg-open", Name: "open-to-world", OpenIngressFromInternet: true}},
 		S3Buckets: []S3Bucket{
-			{ARN: piiB, Name: "acme-customer-pii", Region: "us-east-1", BlockPublicACLs: true, BlockPublicPolicy: true, Tags: map[string]string{"classification": "pii"}},
-			{ARN: cardB, Name: "acme-cardholder-data", Region: "us-east-1", BlockPublicACLs: true, BlockPublicPolicy: true, Policy: cardPolicy, Tags: map[string]string{"classification": "pii"}},
-			{ARN: logsB, Name: "acme-public-logs", Region: "us-east-1", PolicyAllowsPublic: true, MFADelete: true},
+			{ARN: piiB, Name: "acme-customer-pii", Region: "us-east-1", OwnerAccount: fixtureAccount, BlockPublicACLs: true, BlockPublicPolicy: true, Tags: map[string]string{"classification": "pii"}},
+			{ARN: cardB, Name: "acme-cardholder-data", Region: "us-east-1", OwnerAccount: fixtureAccount, BlockPublicACLs: true, BlockPublicPolicy: true, Policy: cardPolicy, Tags: map[string]string{"classification": "pii"}},
+			{ARN: logsB, Name: "acme-public-logs", Region: "us-east-1", OwnerAccount: fixtureAccount, PolicyAllowsPublic: true, MFADelete: true},
 		},
 		IAMRoles: []IAMRole{
 			{ARN: webR, Name: "web-role", AssumeRolePolicyDocument: ec2Trust, InlinePolicies: raws(allowDoc("s3:GetObject", piiB))},
@@ -75,15 +75,16 @@ func GenerateAdvanced() (*Dataset, error) {
 func (ds *Dataset) validateAdvanced(readerARN, cardARN, escARN string) error {
 	scps := parseDocs(ds.Tables.SCPs)
 	var cardPolicy json.RawMessage
+	var cardOwner string
 	for _, b := range ds.Tables.S3Buckets {
 		if b.ARN == cardARN {
-			cardPolicy = b.Policy
+			cardPolicy, cardOwner = b.Policy, b.OwnerAccount
 		}
 	}
-	if ok, _ := canReadBucket(readerARN, cardARN, nil, nil, nil, nil); ok {
+	if ok, _ := canReadBucket(readerARN, cardARN, cardOwner, nil, nil, nil, nil); ok {
 		return fmt.Errorf("advanced: reader must not read cardholder without the bucket policy")
 	}
-	if ok, _ := canReadBucket(readerARN, cardARN, nil, nil, scps, parseDoc(cardPolicy)); !ok {
+	if ok, _ := canReadBucket(readerARN, cardARN, cardOwner, nil, nil, scps, parseDoc(cardPolicy)); !ok {
 		return fmt.Errorf("advanced: reader must read cardholder via the bucket policy")
 	}
 	escPol := parseDocs(raws(allowDoc("iam:CreatePolicyVersion", "*")))

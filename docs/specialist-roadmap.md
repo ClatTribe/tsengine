@@ -221,8 +221,8 @@ several of these are not effort-bound at all.
 | F2 | **Cloud complete run** — scored neutral suite | **S** | **done via proxy (§2.4)** — 7/7, 5 shapes reached target, 2 FP-controls declined | Establishes the cloud claim on third-party ground truth (IAM-Vulnerable / Rhino), recall AND specificity. |
 | F3 | **SCF / CSA CCM cross-check run** — the second and third compliance axes | **S** | needs an operator-supplied matrix export (SCF is CC BY-ND: parseable, not redistributable) | Parser + cross-check are already built and tested. A data-acquisition task. |
 | F4 | **Live IAM-Vulnerable Terraform deploy** (31 scenarios) | **M** | AWS credentials + spend | Moves cloud from offline-transcribed to live-verified. Offline already covers the primitives. |
-| F5 | **OSCAL assessment-results** (per-tenant findings-as-evidence) | **M** | — | The FedRAMP-ingestible artifact; component-definition already ships. Pure additive compliance depth. |
-| F6 | **Cross-account S3 data-access precision** | **S** | a schema field (owner account on the resource) | Closes the one known modelling gap in cross-account reasoning. |
+| F5 | **OSCAL assessment-results** (per-tenant findings-as-evidence) | **M** | **done** — `internal/grc/oscal_ar.go` + `GET /v1/compliance/oscal/assessment-results` | The FedRAMP-ingestible artifact; component-definition ships alongside it. |
+| F6 | **Cross-account S3 data-access precision** | **S** | **done 2026-08-19** — see §3.3 | Closed the one known modelling gap in cross-account reasoning. It was over-approximating, not merely imprecise. |
 
 ### 3.2 Non-focus gaps (sized, deliberately deferred)
 
@@ -236,7 +236,40 @@ start one of these thinking it is small.
 | N3 | **Identity/SaaS to SSPM parity** | **L** | Graph/Admin-SDK scopes; Google needs a design call | SCuBA **0.322** recall / **0.426** SHALL today. The remaining 89 policies are mostly *fetch surface*, not logic. M365 live fetch ships; **Google Workspace settings are not in the Directory API** — ScubaGoggles reconstructs them from Admin *Reports* change events, inferring state from the absence of a change, which is materially more FP-prone than reading a settings endpoint. That is a decision, not a port. |
 | N4 | **EASM benchmark** | **M** | nothing — but it is *definitional* work | No neutral benchmark exists (analyst comparisons only). Options: subfinder/amass discovery-rate parity on an owned domain, or define one publicly as we did for the defense bench. Not worth doing while EASM is not a claim. |
 
-### 3.3 Housekeeping (done)
+### 3.3 The cross-account fix (2026-08-19)
+
+`canReadBucket` passed `cloudiam.PolicySet{SameAccount: true}` **unconditionally**, so the
+same-account union rule (identity policy OR bucket policy suffices) was applied to every bucket in
+the estate. For a bucket in another account that is an over-approximation with teeth: a principal
+whose identity policy allowed `s3:GetObject` was reported as having access even when the other
+account's bucket policy granted it nothing — **a path AWS would deny**. On a product whose claim is
+that no finding reaches a customer unverified, a fabricated cross-account route to someone else's
+data is the worst shape of wrong.
+
+`cloudiam.Authorize` already implemented both rules correctly; nothing could tell it which applied.
+The reason is a genuine AWS asymmetry: an IAM ARN carries its account, but an S3 ARN
+(`arn:aws:s3:::name`) **does not**, so bucket ownership cannot be derived and has to be reported.
+`S3Bucket.OwnerAccount` now carries it, and `cloudiam.AccountOf` is exported so both sides parse
+identity ARNs the same way.
+
+Three cases, and the third is the interesting one:
+
+| ownership | rule | why |
+|---|---|---|
+| known, same account | union | unchanged |
+| known, cross account | both sides must allow | correct, and stricter |
+| **unknown** | union, but marked **conditional** | dropping it loses real access on every estate that does not report ownership; asserting it fabricates |
+
+The unknown case follows `PruneUnauthorized` and `PruneUnreachable`, where missing data never
+prunes — the edge is kept for recall and carries a condition, which makes `Path.Conditional()` true
+so nothing downstream presents it as proven impact (ADR 0002). The condition is stamped **only when
+the missing ownership actually changes the answer**: if both policies allow, or neither does, who
+owns the bucket is irrelevant and a condition would be noise.
+
+Every fixture now declares bucket ownership. Three did not, and the evaluator correctly reported
+their resource-policy-only grants as ambiguous — which is how the omission surfaced.
+
+### 3.4 Housekeeping (done)
 
 | Item | Status |
 |---|---|

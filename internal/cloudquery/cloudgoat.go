@@ -77,6 +77,9 @@ func cloudBreachS3() Tier1Scenario {
 		SecurityGroups: []SecurityGroup{{ID: "sg-cg-waf", Name: "cg-waf-sg", OpenIngressFromInternet: true}},
 		S3Buckets: []S3Bucket{{
 			ARN: bucket, Name: "cg-secret-s3-bucket-cardholder-data", Region: "us-east-1",
+			// The CloudGoat scenario is a single account; saying so is what makes the grant
+			// unconditional, since an S3 ARN cannot express ownership on its own.
+			OwnerAccount:    "000000000000",
 			BlockPublicACLs: true, BlockPublicPolicy: true, MFADelete: false,
 			Tags: map[string]string{"classification": "pii"}, // cardholder data
 		}},

@@ -50,11 +50,11 @@ func Generate() (*Dataset, error) {
 		SecurityGroups: []SecurityGroup{{ID: "sg-open", Name: "open-to-world", OpenIngressFromInternet: true}},
 		S3Buckets: []S3Bucket{
 			// reached via web-role; flagged no_mfa_delete; corroborates the real path.
-			{ARN: piiARN, Name: "acme-customer-pii", Region: "us-east-1", BlockPublicACLs: true, BlockPublicPolicy: true, MFADelete: false, Tags: map[string]string{"classification": "pii"}},
+			{ARN: piiARN, Name: "acme-customer-pii", Region: "us-east-1", OwnerAccount: fixtureAccount, BlockPublicACLs: true, BlockPublicPolicy: true, MFADelete: false, Tags: map[string]string{"classification": "pii"}},
 			// sensitive but reachable ONLY via a trust-denied assume ⇒ inert.
-			{ARN: finARN, Name: "acme-financial-ledger", Region: "us-east-1", BlockPublicACLs: true, BlockPublicPolicy: true, MFADelete: false, Tags: map[string]string{"classification": "pii"}},
+			{ARN: finARN, Name: "acme-financial-ledger", Region: "us-east-1", OwnerAccount: fixtureAccount, BlockPublicACLs: true, BlockPublicPolicy: true, MFADelete: false, Tags: map[string]string{"classification": "pii"}},
 			// public but non-sensitive ⇒ config-bad, inert.
-			{ARN: logsARN, Name: "acme-public-logs", Region: "us-east-1", PolicyAllowsPublic: true, MFADelete: true},
+			{ARN: logsARN, Name: "acme-public-logs", Region: "us-east-1", OwnerAccount: fixtureAccount, PolicyAllowsPublic: true, MFADelete: true},
 		},
 		IAMRoles: []IAMRole{
 			{ARN: roleP + "web-role", Name: "web-role", AssumeRolePolicyDocument: ec2Trust,
