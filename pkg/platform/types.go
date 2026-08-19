@@ -1024,6 +1024,19 @@ func AIAnalysisID(kind, scope string) string { return kind + ":" + scope }
 // the history an auditor reads as continuity proof. StateHash captures the per-control states so a
 // capture is skipped when nothing changed (see grc.CaptureEvidenceSnapshot) — the history stays
 // meaningful without per-monitoring-pass bloat. Grounded (§10): the counts come from real ControlState.
+// EvalRun is one recorded evaluation of the tenant's own eval suite — append-only, so a trend can
+// exist at all. SuiteHash is what makes the trend honest rather than merely available: two runs are
+// comparable ONLY if they graded the same case set the same way (internal/tenanteval.TrendOf).
+type EvalRun struct {
+	ID        string         `json:"id"` // append-only: RFC3339Nano of the run
+	TenantID  string         `json:"tenant_id"`
+	RanAt     time.Time      `json:"ran_at"`
+	Cases     int            `json:"cases"`
+	Passed    int            `json:"passed"`
+	SuiteHash string         `json:"suite_hash"`
+	BySource  map[string]int `json:"by_source,omitempty"`
+}
+
 type ComplianceSnapshot struct {
 	ID            string    `json:"id"` // append-only: Framework ":" RFC3339Nano capture time
 	TenantID      string    `json:"tenant_id"`

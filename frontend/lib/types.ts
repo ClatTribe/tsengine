@@ -1145,8 +1145,20 @@ export interface TenantEvalCase {
 export interface TenantEvalFailure extends TenantEvalCase {
   got: "keep" | "suppress";
 }
+export interface TenantEvalTrend {
+  // False whenever a comparison would mislead — one sample, or a graded set that changed between
+  // runs. Show `note` instead of a delta.
+  comparable: boolean;
+  delta_points?: number;
+  direction?: "improved" | "regressed" | "unchanged";
+  note: string;
+  runs: number;
+}
+
 export interface TenantEval {
   cases: number;
+  suite_hash?: string;
+  trend?: TenantEvalTrend;
   passed: number;
   failures: TenantEvalFailure[];
   by_source: Partial<Record<"reinstated" | "ignored" | "confirmed_fix", number>>;

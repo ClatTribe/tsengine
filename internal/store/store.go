@@ -132,6 +132,8 @@ type Store interface {
 	// --- continuous-compliance evidence timeline (APPEND-ONLY per-framework posture snapshots, so an
 	// auditor sees a control held across the audit window, not just now). List returns all of a tenant's
 	// snapshots (any framework) oldest-first; callers filter by framework. ---
+	PutEvalRun(ctx context.Context, r platform.EvalRun) error
+	ListEvalRuns(ctx context.Context, tenantID string) ([]platform.EvalRun, error)
 	PutComplianceSnapshot(ctx context.Context, s platform.ComplianceSnapshot) error
 	ListComplianceSnapshots(ctx context.Context, tenantID string) ([]platform.ComplianceSnapshot, error)
 

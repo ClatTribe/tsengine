@@ -67,6 +67,37 @@ export default async function EvalPage() {
 
           {ev.note ? <p className="text-xs text-muted">{ev.note}</p> : null}
 
+          {/* Regression over time — the claim no public benchmark can make. It refuses to draw a
+              line more often than it draws one, because the graded set grows whenever someone
+              grades something, and two scores over different sets are not the same measurement. */}
+          {ev.trend ? (
+            <section
+              className={
+                ev.trend.direction === "regressed"
+                  ? "rounded-2xl border border-critical/30 bg-critical/5 px-5 py-4"
+                  : "rounded-2xl border border-border bg-surface px-5 py-4"
+              }
+            >
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">Since last time</h2>
+                {ev.trend.comparable && ev.trend.delta_points != null && ev.trend.delta_points !== 0 ? (
+                  <span
+                    className={
+                      ev.trend.direction === "regressed"
+                        ? "rounded px-1.5 py-0.5 text-[11px] font-medium text-critical ring-1 ring-critical/30"
+                        : "rounded px-1.5 py-0.5 text-[11px] font-medium text-pulse ring-1 ring-pulse/30"
+                    }
+                  >
+                    {ev.trend.delta_points > 0 ? "+" : ""}
+                    {ev.trend.delta_points} points
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-sm text-muted">{ev.trend.note}</p>
+              <p className="mt-1 text-xs text-faint">{ev.trend.runs} evaluation(s) recorded.</p>
+            </section>
+          ) : null}
+
           <section className="rounded-2xl border border-border bg-surface">
             <header className="border-b border-border px-5 py-4">
               <h2 className="font-semibold">Where it disagrees with you</h2>
@@ -111,9 +142,10 @@ export default async function EvalPage() {
       <p className="flex items-start gap-2 text-xs text-muted">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
         <span>
-          This score reports; it does not yet change anything. Nothing here feeds back into how findings
-          are filtered — a disagreement is information for you, not an automatic correction. It is also a
-          single point in time: a trend needs several runs before it means anything.
+          This score reports; it does not change anything. Nothing here feeds back into how findings are
+          filtered — a disagreement is information for you, not an automatic correction. And the
+          comparison above only appears when two runs graded the same set: the suite grows every time
+          you grade something, and two scores over different sets are not the same measurement.
         </span>
       </p>
     </div>
