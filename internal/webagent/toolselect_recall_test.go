@@ -51,6 +51,13 @@ func TestSelectedTools_GroundingRecall(t *testing.T) {
 		"race_condition":        {"race_probe"},
 		"toctou":                {"race_probe"},
 		"nosqli":                {"nosqli_probe"},
+		// broken-session-management: logout_probe is the ONLY producer of session_invalidation_failed,
+		// so if selection ever stops surfacing it, these classes silently lose the only tool that can
+		// ground them. The tool works today partly because its help text repeats the class name — this
+		// makes the coverage a guarantee rather than a coincidence.
+		"broken_session_management": {"logout_probe"},
+		"session_fixation":          {"logout_probe"},
+		"logout_invalidation":       {"logout_probe"},
 	}
 
 	for class, groundTools := range grounds {
