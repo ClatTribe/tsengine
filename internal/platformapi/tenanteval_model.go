@@ -3,6 +3,9 @@ package platformapi
 import (
 	"context"
 	"net/http"
+	"strings"
+
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/tenanteval"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -75,9 +78,31 @@ func (d Deps) handleTenantEvalModel(w http.ResponseWriter, r *http.Request, tena
 		return
 	}
 	ab := tenanteval.Compare(sub, mod)
+	hash := tenanteval.SuiteHash(cases)
+
+	// The model arm gets its own recorded history, so switching models is VISIBLE rather than
+	// something a customer has to remember. Read before writing, so the trend compares this run
+	// against the previous one rather than against itself.
+	modelName := d.agentModelName(ctx, tenantID)
+	prior := tenanteval.RunsForArm(d.evalRuns(ctx, tenantID), tenanteval.ArmModel)
+	trend := tenanteval.TrendOf(append(prior, tenanteval.Run{
+		RanAt: now().Format(time.RFC3339Nano), Cases: mod.Cases, Passed: mod.Passed,
+		SuiteHash: hash, Arm: tenanteval.ArmModel, Model: modelName,
+	}))
+	// Only with graded cases: an empty suite has no score, so recording it would put meaningless
+	// points on a timeline.
+	if mod.Cases > 0 {
+		ts := now()
+		_ = d.Store.PutEvalRun(ctx, platform.EvalRun{
+			ID: ts.Format(time.RFC3339Nano), TenantID: tenantID, RanAt: ts,
+			Cases: mod.Cases, Passed: mod.Passed, SuiteHash: hash,
+			Arm: tenanteval.ArmModel, Model: modelName,
+		})
+	}
 
 	out := map[string]any{
-		"ran": true, "cases": mod.Cases, "suite_hash": tenanteval.SuiteHash(cases),
+		"trend": trend, "model_name": modelName,
+		"ran": true, "cases": mod.Cases, "suite_hash": hash,
 		"substrate": map[string]any{"passed": sub.Passed, "cases": sub.Cases},
 		"model": map[string]any{
 			"passed": mod.Passed, "unanswered": mod.Unanswered,
@@ -93,4 +118,23 @@ func (d Deps) handleTenantEvalModel(w http.ResponseWriter, r *http.Request, tena
 		out["substrate_agreement"] = agree
 	}
 	respond(w, out, nil)
+}
+
+// agentModelName names the model that graded a run, so a score that moved because the customer
+// switched models is distinguishable from one that moved on its own.
+//
+// A tenant's OWN configured model is named exactly. When the operator-global model did the grading
+// there is no per-tenant name to report, and inventing one — or reporting the operator's model as
+// if the customer had chosen it — would put a name in their history they never set. So it says what
+// it is instead.
+func (d Deps) agentModelName(ctx context.Context, tenantID string) string {
+	if cfg, _, ok := d.resolveTenantLLMConfigForRole(ctx, tenantID, platform.RoleAnalysis); ok {
+		if m := strings.TrimSpace(cfg.Model); m != "" {
+			if p := strings.TrimSpace(cfg.Provider); p != "" {
+				return p + "/" + m
+			}
+			return m
+		}
+	}
+	return "platform default"
 }

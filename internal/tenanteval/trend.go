@@ -51,11 +51,48 @@ type Run struct {
 	Passed    int            `json:"passed"`
 	SuiteHash string         `json:"suite_hash"`
 	BySource  map[Source]int `json:"by_source,omitempty"`
+	Arm       string         `json:"arm,omitempty"`
+	Model     string         `json:"model,omitempty"`
+}
+
+// The two graders, kept in separate histories. A trend that mixed them would compare a model's
+// score against the filter's and call the difference a change over time.
+const (
+	ArmSubstrate = "substrate"
+	ArmModel     = "model"
+)
+
+// NormalizeArm treats an unset arm as substrate: every run recorded before the field existed was a
+// substrate run, so defaulting the other way would silently reclassify a customer's history.
+func NormalizeArm(a string) string {
+	if a == "" {
+		return ArmSubstrate
+	}
+	return a
+}
+
+// RunsForArm filters a history to one grader.
+func RunsForArm(runs []Run, arm string) []Run {
+	out := make([]Run, 0, len(runs))
+	for _, r := range runs {
+		if NormalizeArm(r.Arm) == NormalizeArm(arm) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // Trend is the comparison between the two most recent runs, or an explicit refusal to compare.
 type Trend struct {
 	// Comparable is false whenever the delta below would mislead. A reader should show Note instead.
+	// ModelChanged is set when the two compared runs used DIFFERENT models. The delta is still
+	// real and is still shown — switching models to see if it helps is a thing customers do on
+	// purpose — but it answers "is this model better than that one", not "did my setup drift".
+	// Reporting a model swap as a regression would send someone hunting a fault that is a choice
+	// they made.
+	ModelChanged  bool   `json:"model_changed,omitempty"`
+	PreviousModel string `json:"previous_model,omitempty"`
+
 	Comparable bool `json:"comparable"`
 	// DeltaPoints is the change in agreement in PERCENTAGE POINTS (not a ratio of a ratio, which is
 	// the classic way to make a small move look dramatic). Valid only when Comparable.
@@ -101,15 +138,33 @@ func TrendOf(runs []Run) Trend {
 	before := float64(prev.Passed) / float64(prev.Cases) * 100
 	after := float64(cur.Passed) / float64(cur.Cases) * 100
 	t.Comparable = true
+	if prev.Model != cur.Model {
+		t.ModelChanged, t.PreviousModel = true, prev.Model
+	}
 	// Rounded to one decimal: this is a percentage-POINT delta, and emitting raw float noise
 	// (-20.000000000000004) through the API would show up verbatim in somebody's UI.
 	t.DeltaPoints = math.Round((after-before)*10) / 10
 	switch {
 	case t.DeltaPoints > 0:
 		t.Direction = "improved"
+		if t.ModelChanged {
+			t.Note = fmt.Sprintf("Agreement rose %.0f points on the same %d graded %s, against a "+
+				"previous run on a different model (%s).", t.DeltaPoints, cur.Cases, noun,
+				nameOr(prev.Model, "another model"))
+			break
+		}
 		t.Note = fmt.Sprintf("Agreement rose %.0f points on the same %d graded %s.", t.DeltaPoints, cur.Cases, noun)
 	case t.DeltaPoints < 0:
 		t.Direction = "regressed"
+		if t.ModelChanged {
+			// Not a fault: they changed the subject. Saying "regressed" here without naming the
+			// swap would send someone looking for a problem that is a decision they made.
+			t.Note = fmt.Sprintf("Agreement is %.0f points LOWER than the previous run, but that run "+
+				"used a different model (%s). This compares two models on the same %d graded %s — it "+
+				"is a reason to reconsider the switch, not a fault in your setup.",
+				-t.DeltaPoints, nameOr(prev.Model, "another model"), cur.Cases, noun)
+			break
+		}
 		t.Note = fmt.Sprintf("Agreement FELL %.0f points on the same %d graded %s — the setup now "+
 			"disagrees with your experts more often than it did.", -t.DeltaPoints, cur.Cases, noun)
 	default:
@@ -117,4 +172,11 @@ func TrendOf(runs []Run) Trend {
 		t.Note = fmt.Sprintf("Agreement is unchanged on the same %d graded %s.", cur.Cases, noun)
 	}
 	return t
+}
+
+func nameOr(s, fallback string) string {
+	if strings.TrimSpace(s) == "" {
+		return fallback
+	}
+	return s
 }

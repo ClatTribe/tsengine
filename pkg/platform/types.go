@@ -1035,6 +1035,15 @@ type EvalRun struct {
 	Passed    int            `json:"passed"`
 	SuiteHash string         `json:"suite_hash"`
 	BySource  map[string]int `json:"by_source,omitempty"`
+	// Arm records WHICH grader produced this score: the deterministic filter, or a model. Without
+	// it the two interleave in one history and a trend compares a model's score against the
+	// filter's, which is not a comparison at all. Empty means substrate — runs recorded before this
+	// field existed were all substrate runs.
+	Arm string `json:"arm,omitempty"`
+	// Model names the model that produced a model-arm score. A score that moved because the
+	// customer switched models is a different fact from one that moved on its own, and without the
+	// name the two are indistinguishable.
+	Model string `json:"model,omitempty"`
 }
 
 type ComplianceSnapshot struct {
