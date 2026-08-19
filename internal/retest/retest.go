@@ -74,7 +74,7 @@ func Verify(actions []platform.Action, current []types.Finding, now time.Time) [
 		if a.Status != platform.ActApplied || len(a.FindingKeys) == 0 {
 			continue // never guess: no applied fix / no keys → leave un-verified (§10)
 		}
-		if a.Verification != nil && a.Verification.Status == "fixed" {
+		if a.Verification != nil && a.Verification.Status == platform.FixStatusFixed {
 			continue // terminal
 		}
 		var fixed, still []string
@@ -85,9 +85,9 @@ func Verify(actions []platform.Action, current []types.Finding, now time.Time) [
 				fixed = append(fixed, k)
 			}
 		}
-		status := "fixed"
+		status := platform.FixStatusFixed
 		if len(still) > 0 {
-			status = "still_present"
+			status = platform.FixStatusStillPresent
 		}
 		// Skip if the verdict is unchanged from what's already recorded (idempotent re-runs).
 		if a.Verification != nil && a.Verification.Status == status &&
@@ -108,7 +108,7 @@ func Verify(actions []platform.Action, current []types.Finding, now time.Time) [
 }
 
 func evidence(status string, fixed, total int) string {
-	if status == "fixed" {
+	if status == platform.FixStatusFixed {
 		return fmt.Sprintf("%d of %d confirmed fixed in re-scan", fixed, total)
 	}
 	return fmt.Sprintf("%d of %d still present in re-scan — fix did not close them", total-fixed, total)
