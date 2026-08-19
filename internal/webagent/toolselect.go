@@ -8,7 +8,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/toolselect"
 )
 
-// Dynamic tool selection (ADR 0016). The offensive agent has 23 tools; presenting all of them every
+// Dynamic tool selection (ADR 0016). The offensive agent has 24 tools; presenting all of them every
 // turn is ~2x the L2-CAP (<=12), where tool-use accuracy degrades. selectedTools shrinks the prompt's
 // TOOLS: section to the always-on CORE + the specialists most relevant to the CURRENT subgoal (derived
 // from the recent transcript + L1 seeds), capped at maxActiveTools.
@@ -18,7 +18,7 @@ import (
 // wasn't surfaced this turn, it still runs (and the "unknown tool" path lists every name for discovery).
 // So selection can only focus attention, never remove a capability. ON BY DEFAULT (the best-practice:
 // keep the visible catalog within the L2-CAP); set TSENGINE_TOOL_SELECT=0 to disable and render the
-// full 23-tool catalog (an operator kill-switch for debugging / A-B).
+// full 24-tool catalog (an operator kill-switch for debugging / A-B).
 
 const maxActiveTools = 12
 
@@ -51,6 +51,7 @@ var toolTags = map[string][]string{
 	"oob_url":            {"oob", "blind", "ssrf", "callback", "interactsh"},
 	"oob_check":          {"oob", "blind", "ssrf", "callback"},
 	"ssh_exec":           {"ssh", "creds", "lateral", "movement", "exec"},
+	"logout_probe":       {"logout", "session", "invalidation", "signout", "token", "account", "takeover"},
 	"note_defense":       {"waf", "filter", "defense"},
 }
 
