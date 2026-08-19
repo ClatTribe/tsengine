@@ -26,8 +26,19 @@ type Trend = {
   previous_model?: string;
 };
 
+type Starter = {
+  ran: boolean;
+  cases?: number;
+  passed?: number;
+  unanswered?: number;
+  unanswered_reason?: string;
+  balance?: { keep: number; suppress: number };
+  what_it_is?: string;
+};
+
 type RunResult = {
   ran: boolean;
+  starter?: Starter;
   reason?: string;
   cases: number;
   model_name?: string;
@@ -74,7 +85,7 @@ export function ModelArm({ hasCases }: { hasCases: boolean }) {
         </div>
         <button
           onClick={run}
-          disabled={state === "running" || !hasCases}
+          disabled={state === "running"}
           className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-surface-2 disabled:opacity-50"
         >
           {state === "running" ? (
@@ -89,7 +100,8 @@ export function ModelArm({ hasCases }: { hasCases: boolean }) {
 
       {!hasCases ? (
         <p className="mt-3 text-xs text-muted">
-          There are no graded cases yet, so there is nothing to ask a model about.
+          You have no graded cases yet, so there is nothing from your estate to ask about — but the
+          starter check below works today, and is the point of running this on day one.
         </p>
       ) : null}
 
@@ -98,6 +110,14 @@ export function ModelArm({ hasCases }: { hasCases: boolean }) {
       {/* Not configured is reported as itself, never as a zero: a customer reading 0% would
           conclude their model is useless when the truth is we never asked it anything. */}
       {result && !result.ran ? <p className="mt-3 text-xs text-muted">{result.reason}</p> : null}
+
+      {/* A workspace with no graded cases still gets the starter check — that case is exactly who
+          it exists for, and the ablation block below has nothing to show them. */}
+      {result?.ran && !result.ablation?.cases && result.starter?.ran ? (
+        <div className="mt-4">
+          <StarterBlock s={result.starter} />
+        </div>
+      ) : null}
 
       {result?.ran && result.ablation ? (
         <div className="mt-4 space-y-3">
@@ -135,6 +155,8 @@ export function ModelArm({ hasCases }: { hasCases: boolean }) {
           </p>
           {result.model?.note ? <p className="text-xs text-muted">{result.model.note}</p> : null}
 
+          {result.starter?.ran ? <StarterBlock s={result.starter} /> : null}
+
           {/* Model runs get their own history, so switching models is visible rather than
               something the customer has to remember. A drop after a swap is styled as
               information, not as an alarm — it is a decision they made, not a fault. */}
@@ -152,5 +174,35 @@ export function ModelArm({ hasCases }: { hasCases: boolean }) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+// The starter check, always its own block. These are OUR cases, so the label leads with what it is
+// not: a customer must never read this as a score about their estate.
+function StarterBlock({ s }: { s: Starter }) {
+  const total = s.cases ?? 0;
+  const passed = s.passed ?? 0;
+  return (
+    <div className="rounded-xl border border-border bg-surface-2/40 px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Starter check</h3>
+        <div className="text-sm font-semibold text-ink">
+          {passed}
+          <span className="font-normal text-muted">/{total}</span>
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-muted">{s.what_it_is}</p>
+      {s.balance ? (
+        <p className="mt-1 text-xs text-muted">
+          {s.balance.keep} to keep, {s.balance.suppress} to suppress.
+        </p>
+      ) : null}
+      {s.unanswered ? (
+        <p className="mt-1 text-xs text-muted">
+          {s.unanswered} unanswered, counted as missed
+          {s.unanswered_reason ? ` — ${s.unanswered_reason}` : null}
+        </p>
+      ) : null}
+    </div>
   );
 }
