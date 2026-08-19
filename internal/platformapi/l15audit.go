@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -154,7 +155,7 @@ func (d Deps) handleL15Reinstate(w http.ResponseWriter, r *http.Request, tenantI
 	if found.DiscoveryMethod == nil {
 		found.DiscoveryMethod = &types.DiscoveryMethod{}
 	}
-	found.DiscoveryMethod.Primary = "human_reinstated"
+	found.DiscoveryMethod.Primary = platform.DiscoveryHumanReinstated
 	who := strings.TrimSpace(req.By)
 	if who == "" {
 		who = "security engineer"

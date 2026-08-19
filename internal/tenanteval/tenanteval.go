@@ -109,7 +109,7 @@ func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRu
 	// 1. Reinstatements: the strongest signal we have. A human looked at something the filter threw
 	// away and put it back, which is a direct, attributed correction of the pipeline.
 	for _, f := range findings {
-		if f.DiscoveryMethod == nil || f.DiscoveryMethod.Primary != "human_reinstated" || seen[f.ID] {
+		if f.DiscoveryMethod == nil || f.DiscoveryMethod.Primary != platform.DiscoveryHumanReinstated || seen[f.ID] {
 			continue
 		}
 		seen[f.ID] = true
@@ -149,7 +149,7 @@ func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRu
 	// disputed it — but it is the tenant's own record that this class matters to them.
 	fixed := map[string]bool{}
 	for _, a := range actions {
-		if a.Verification != nil && a.Verification.Status == "fixed" && a.FindingID != "" {
+		if a.Verification != nil && a.Verification.Status == platform.FixStatusFixed && a.FindingID != "" {
 			fixed[a.FindingID] = true
 		}
 	}

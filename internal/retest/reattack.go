@@ -131,5 +131,5 @@ func ApplyReattack(actions []platform.Action, verdicts map[string]ReattackVerdic
 
 // alreadyFixedByRescan reports whether the rescan had concluded the finding was gone.
 func alreadyFixedByRescan(a platform.Action) bool {
-	return a.Verification != nil && a.Verification.Status == "fixed"
+	return a.Verification != nil && a.Verification.Status == platform.FixStatusFixed
 }

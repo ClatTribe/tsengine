@@ -718,8 +718,22 @@ type Action struct {
 // authoritative scan. Grounded (§10): a fix is "fixed" ONLY when every key it claimed to resolve
 // is provably absent from the current scan; "still_present" when any remain (the fix didn't work
 // — reopen). Never assumed — an action with no finding keys is simply left un-verified.
+// Fix-verification statuses, and the discovery method a human reinstatement stamps. These are
+// CONSTANTS because they are read in one package and written in another, and a bare literal on each
+// side drifts silently the moment either changes. That is not hypothetical here: the eval suite's
+// suppression source matched nothing for every tenant because it rebuilt an issue key by hand
+// instead of calling the function that assigns it, and its test passed because the fixture encoded
+// the same mistake. Same coupling, same failure mode — so it gets a name.
+const (
+	FixStatusFixed        = "fixed"
+	FixStatusStillPresent = "still_present"
+	// DiscoveryHumanReinstated marks a finding a person put back after the filter dropped it — the
+	// strongest correction signal the product records.
+	DiscoveryHumanReinstated = "human_reinstated"
+)
+
 type FixVerification struct {
-	Status       string    `json:"status"` // "fixed" | "still_present"
+	Status       string    `json:"status"` // FixStatusFixed | FixStatusStillPresent
 	Method       string    `json:"method"` // "rescan" — re-ran detection and compared keys
 	VerifiedAt   time.Time `json:"verified_at"`
 	Fixed        []string  `json:"fixed,omitempty"`         // finding keys confirmed gone from the fresh scan
