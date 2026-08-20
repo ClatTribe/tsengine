@@ -40,10 +40,19 @@ cd tsengine
 cat <<EOF > .env
 TSENGINE_SECRET_KEY=$(openssl rand -base64 32)
 TSENGINE_PLATFORM_TOKEN=$(openssl rand -hex 32)
-TSENGINE_PLATFORM_DB=postgresql://postgres.ppxwwbtfcceofbbtacao:tsengine890@#security@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require
+TSENGINE_PLATFORM_DB=postgresql://postgres.ppxwwbtfcceofbbtacao:TensorShield2026Secure@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require
 TSENGINE_SITE_ADDRESS=13-232-90-121.sslip.io
 TSENGINE_ACME_EMAIL=admin@13-232-90-121.sslip.io
 TSENGINE_PLATFORM_PUBLIC=https://13-232-90-121.sslip.io
+
+# Connectors - GitHub
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+
+# Connectors - AWS
+AWS_CFN_TEMPLATE_URL=
+AWS_TRUST_ACCOUNT_ID=
+AWS_REGION=us-east-1
 EOF
 
 # Drop 'tls internal' from Caddyfile so it uses public ACME Let's Encrypt
