@@ -561,6 +561,23 @@ missed would need affected-VERSION-RANGE data the corpus does not carry;
 guessing from a product-name match alone would be FP-prone, so it is NOT done
 -- Sec 10.)
 
+**5th touchpoint — the OFFENSIVE face (ADR 0019, built + wired).** The six feeds above index the
+DEFENDER's face of a CVE (how bad / exploited / does a weapon exist — by reference). The offensive
+agent needs the ATTACKER's face: the request that triggers the bug. `internal/corpus/threatintel`'s
+`exploit_intel.json` sidecar carries, per CVE, a request SKELETON + a conservative candidate predicate,
+built by going one level deeper on a feed we already fetch — nuclei template BODIES
+(`BuildExploitIntel` streams the nuclei-templates `.tar.gz`; a dependency-free YAML-subset decoder,
+`nuclei_yaml.go`, resolves the ADR's one open decision toward hand-parsing per repo convention). It is
+a SEPARATE file (never `Entry` fields — the dashboard `corpus` block stays byte-stable), OPT-IN +
+best-effort (`RefreshOptions.ExploitIntelURL`, `tsengine corpus refresh --exploit-intel`; a failure
+never blocks the KEV+EPSS refresh), and GLOBAL world-state like the rest of the corpus. It is WIRED to
+the L2 ModeDeep D-agent: `pentest.ExploitIntelForFinding` (installed by `platformapi`) feeds
+`RenderExploitContext` into `specPrompt` as reference material to ADAPT. Grounded §10 — the record is
+INPUT TO THE PROPOSE STEP ONLY: the skeleton is a payload the model adapts and the matcher is framed as
+a fingerprint (NOT the proof), while `specEmbedsCanary` + `DemoFromSpec` still dispose, so a wrong/stale
+record widens what the agent TRIES, never what it marks true (zero new FP surface). Phases 2/3
+(Metasploit/Exploit-DB bodies) are the documented enrichment.
+
 **4th touchpoint — KEV drives the remediation CLOCK.** Two tiers now: `SLAPolicy.RansomwareResolveHours`
 sits *below* `KEVResolveHours` for a CVE CISA marks as ransomware-used, and **CISA's own published
 `dueDate` is used VERBATIM as an ABSOLUTE deadline** (`Incident.KEVDueAt`, `SLABreach.CISADeadline`) —
