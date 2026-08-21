@@ -79,7 +79,7 @@ func TestParseEPSSGzip(t *testing.T) {
 func TestBuild_UnionsKEVAndEPSS(t *testing.T) {
 	kev, kevAsOf, kevVer, _ := ParseKEV(strings.NewReader(kevFixture))
 	epss, epssAsOf, _ := ParseEPSS(strings.NewReader(epssFixture))
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil)
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil, nil)
 
 	// Union: 44228 (both), 5638 (kev only), 0160 (epss only) = 3.
 	if len(entries) != 3 {
@@ -106,7 +106,7 @@ func TestBuild_UnionsKEVAndEPSS(t *testing.T) {
 func TestWriteAndLoadManifest(t *testing.T) {
 	kev, kevAsOf, kevVer, _ := ParseKEV(strings.NewReader(kevFixture))
 	epss, epssAsOf, _ := ParseEPSS(strings.NewReader(epssFixture))
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil)
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil, nil)
 
 	dir := t.TempDir()
 	path, err := Write(dir, entries, m)
@@ -137,15 +137,25 @@ func TestRefresh_OverHTTP(t *testing.T) {
 	mux.HandleFunc("/exploitdb", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("file,id,description,codes,verified\nx.txt,12345,Log4Shell,CVE-2021-44228,1\n"))
 	})
+	// Metasploit fixture: an EXPLOIT module for the same CVE, so the entry count stays 3 while
+	// Log4Shell gains the weaponized ref alongside the PoC one. An `auxiliary` module for a second
+	// CVE is included and must NOT count — a scanner is not a weapon.
+	mux.HandleFunc("/metasploit", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+		  "a": {"fullname":"exploit/multi/http/log4shell_header_injection","type":"exploit","references":["CVE-2021-44228"]},
+		  "b": {"fullname":"auxiliary/scanner/http/log4shell_scanner","type":"auxiliary","references":["CVE-2021-45046"]}
+		}`))
+	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	dir := t.TempDir()
 	m, path, err := Refresh(context.Background(), RefreshOptions{
-		OutDir:       dir,
-		KEVURL:       srv.URL + "/kev",
-		EPSSURL:      srv.URL + "/epss",
-		ExploitDBURL: srv.URL + "/exploitdb",
+		OutDir:        dir,
+		KEVURL:        srv.URL + "/kev",
+		EPSSURL:       srv.URL + "/epss",
+		ExploitDBURL:  srv.URL + "/exploitdb",
+		MetasploitURL: srv.URL + "/metasploit",
 	})
 	if err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -155,6 +165,9 @@ func TestRefresh_OverHTTP(t *testing.T) {
 	}
 	if m.ExploitCount != 1 {
 		t.Errorf("refreshed corpus exploit_count = %d, want 1", m.ExploitCount)
+	}
+	if m.WeaponizedCount != 1 {
+		t.Errorf("refreshed corpus weaponized_count = %d, want 1 (the auxiliary module must not count)", m.WeaponizedCount)
 	}
 	if !strings.HasSuffix(path, DataFileName) {
 		t.Errorf("unexpected data path %q", path)
