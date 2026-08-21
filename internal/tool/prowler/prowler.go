@@ -40,12 +40,23 @@ func (*Prowler) MITRETechniques() []string { return []string{"T1078.004", "T1530
 // prowler writes OCSF JSON to an output directory; we read it back and
 // parse the findings. Credentials arrive via the sandbox's environment
 // (forwarded by the cloud Handler).
+// SupportedProviders is the set of provider strings prowler accepts as its scan target. Exported so
+// the code that DISPATCHES prowler (the connectors that set a cloud asset's Target) can be checked
+// against the real list rather than a hand-copied one — an account id where a provider belongs is
+// exactly the mismatch that made every cloud scan fail with "unsupported provider".
+var SupportedProviders = map[string]bool{"aws": true, "gcp": true, "azure": true, "kubernetes": true}
+
+// Accepts reports whether target is a provider prowler can scan (case/space-insensitive).
+func Accepts(target string) bool {
+	return SupportedProviders[strings.ToLower(strings.TrimSpace(target))]
+}
+
 func (*Prowler) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	provider, _ := args["target"].(string)
 	provider = strings.ToLower(strings.TrimSpace(provider))
-	switch provider {
-	case "aws", "gcp", "azure", "kubernetes":
-	case "":
+	switch {
+	case SupportedProviders[provider]:
+	case provider == "":
 		return tool.Result{}, errors.New("prowler: missing required arg 'target' (aws|gcp|azure)")
 	default:
 		return tool.Result{}, fmt.Errorf("prowler: unsupported provider %q", provider)
