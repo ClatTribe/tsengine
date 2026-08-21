@@ -42,6 +42,11 @@ type Entry struct {
 	EPSS       *types.EPSSScore `json:"epss,omitempty"`
 	Advisories []string         `json:"advisories,omitempty"`
 	Exploits   []string         `json:"exploits,omitempty"`
+	// NucleiTemplate is the template file that checks for this CVE, when one exists.
+	// Unlike every other field here it is a fact about OUR tooling rather than the world:
+	// it answers "can we test for this", which is what stops the probe planner from
+	// spending a capped slot on a template nuclei does not have.
+	NucleiTemplate string `json:"nuclei_template,omitempty"`
 }
 
 // Manifest is the cheap-to-read provenance sidecar (no entries). resolveCorpus
@@ -57,9 +62,13 @@ type Manifest struct {
 	ExploitCount int       `json:"exploit_count,omitempty"`
 	// WeaponizedCount is the CVEs with a Metasploit EXPLOIT module — a strict subset of the
 	// exploit-bearing set, reported separately because it is a stronger claim than "a PoC exists".
-	WeaponizedCount int       `json:"weaponized_count,omitempty"`
-	CVSSCount       int       `json:"cvss_count,omitempty"`
-	BuiltAt         time.Time `json:"built_at"`
+	WeaponizedCount int `json:"weaponized_count,omitempty"`
+	// TemplateCount is the CVEs we can actually probe for. Reported because the ratio to
+	// EntryCount is the honest size of what a threat-informed probe plan can reach: the
+	// rest of the corpus is CVEs we can rank but not test.
+	TemplateCount int       `json:"template_count,omitempty"`
+	CVSSCount     int       `json:"cvss_count,omitempty"`
+	BuiltAt       time.Time `json:"built_at"`
 }
 
 // Build merges the parsed KEV + EPSS + ExploitDB sets into the corpus + manifest. The union is keyed
@@ -69,7 +78,8 @@ type Manifest struct {
 // exploits map is fine — it's a best-effort feed (Refresh keeps going if it can't fetch ExploitDB).
 func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 	epss map[string]types.EPSSScore, epssAsOf time.Time, exploits map[string][]string,
-	weaponized map[string][]string, cvss map[string]NVDEntry) (map[string]Entry, Manifest) {
+	weaponized map[string][]string, templates map[string]string,
+	cvss map[string]NVDEntry) (map[string]Entry, Manifest) {
 
 	entries := make(map[string]Entry, len(epss)+len(kev))
 	for cve, e := range epss {
@@ -108,6 +118,20 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 		entries[cve] = ent
 		weaponizedCVEs++
 	}
+	// Nuclei template availability. Only recorded for CVEs the corpus already knows about
+	// OR that a template exists for — an entry carrying nothing but a template path is
+	// still worth pinning, because "we can check this" is a useful fact even about a CVE
+	// with no EPSS score.
+	templateCVEs := 0
+	for cve, path := range templates {
+		if path == "" {
+			continue
+		}
+		ent := entries[cve]
+		ent.NucleiTemplate = path
+		entries[cve] = ent
+		templateCVEs++
+	}
 	// NVD CVSS base vectors: enrich coverage with attack-vector detail. A CVE with only CVSS (no KEV/EPSS/
 	// exploit) is still worth pinning — the vector drives surface_priority/exploitability reasoning. We only
 	// overwrite the base score from NVD when the entry had none (KEV/EPSS don't carry one today, so this is
@@ -132,6 +156,9 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 	if weaponizedCVEs > 0 {
 		sources = append(sources, MetasploitURL)
 	}
+	if templateCVEs > 0 {
+		sources = append(sources, NucleiTemplatesURL)
+	}
 	if cvssCVEs > 0 {
 		sources = append(sources, NVDURL)
 	}
@@ -145,6 +172,7 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 		EPSSCount:       len(epss),
 		ExploitCount:    exploitCVEs,
 		WeaponizedCount: weaponizedCVEs,
+		TemplateCount:   templateCVEs,
 		CVSSCount:       cvssCVEs,
 		BuiltAt:         time.Now().UTC(),
 	}

@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -38,9 +39,23 @@ func ThreatInformedEscalation(findings []types.Finding) []asset.Dispatch {
 	if len(observed) == 0 {
 		return nil
 	}
-	probes := threatinformed.Plan(corpus, observed, threatinformed.Options{
+	probes, untestable := threatinformed.PlanWithGaps(corpus, observed, threatinformed.Options{
 		MaxProbes: threatInformedMax(),
 	})
+	// The untestable set is CVEs that matched a product this scan really observed and that
+	// nuclei has no template for. They are logged rather than silently dropped: a KEV CVE
+	// against software we can see, which we cannot check, is exactly the thing an operator
+	// must not learn about by inferring it from a probe report that looks clean. Logging is
+	// the honest minimum here — this function returns dispatches, so it has no finding to
+	// carry the gap on; surfacing it as a coverage gap on the scan is the follow-on.
+	if len(untestable) > 0 {
+		ids := make([]string, 0, len(untestable))
+		for _, p := range untestable {
+			ids = append(ids, p.CVE)
+		}
+		log.Printf("[threat-informed] %d exploited CVE(s) match observed software but have no nuclei template — NOT tested: %s",
+			len(untestable), strings.Join(ids, ","))
+	}
 	if len(probes) == 0 {
 		return nil
 	}

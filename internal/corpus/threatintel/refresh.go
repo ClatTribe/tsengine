@@ -16,6 +16,7 @@ type RefreshOptions struct {
 	EPSSURL       string       // override for tests
 	ExploitDBURL  string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
 	MetasploitURL string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
+	NucleiURL     string       // override for tests; best-effort — the "can we test for this CVE" index
 	NVDURL        string       // OPT-IN CVSS-vector source: only fetched when set. NVD is large + paginated, so
 	//             it's wired to a bulk mirror / paging fetcher (a single GET to the live API returns one page),
 	//             never defaulted on. Best-effort like ExploitDB (a fetch failure doesn't fail the refresh).
@@ -39,6 +40,9 @@ func (o RefreshOptions) withDefaults() RefreshOptions {
 	}
 	if o.MetasploitURL == "" {
 		o.MetasploitURL = MetasploitURL
+	}
+	if o.NucleiURL == "" {
+		o.NucleiURL = NucleiTemplatesURL
 	}
 	return o
 }
@@ -86,6 +90,15 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 		_ = body.Close()
 	}
 
+	// Nuclei template availability, best-effort for the same reason as the others. Losing it
+	// degrades the probe plan to today's assume-every-CVE-is-testable behaviour rather than
+	// failing the refresh — and the plan reports the degradation rather than hiding it.
+	var templates map[string]string
+	if body, ferr := httpGet(ctx, opts.HTTPClient, opts.NucleiURL); ferr == nil {
+		templates, _ = ParseNucleiTemplates(body)
+		_ = body.Close()
+	}
+
 	// NVD CVSS vectors are OPT-IN + best-effort: only fetched when a URL is configured (a bulk mirror / pager),
 	// and a failure never blocks the KEV+EPSS refresh.
 	var cvss map[string]NVDEntry
@@ -96,7 +109,7 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 		}
 	}
 
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, exploits, weaponized, cvss)
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, exploits, weaponized, templates, cvss)
 	dataPath, err := Write(opts.OutDir, entries, m)
 	if err != nil {
 		return Manifest{}, "", err
