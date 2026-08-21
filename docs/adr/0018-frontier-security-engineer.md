@@ -1,6 +1,6 @@
 # ADR 0018 — The Frontier Loop: simulation-driven self-improvement under bounded cost
 
-**Status:** Proposed
+**Status:** Proposed — items 3 and 5 implemented (see "What has shipped")
 **Date:** 2026-08-21
 **Supersedes:** nothing. **Depends on:** ADR 0002 (config-possible ≠ exploitable), ADR 0006 (active
 exploitation + RoE), ADR 0008 (long-horizon agent), ADR 0014 (defense benchmark).
@@ -396,6 +396,25 @@ reported not swallowed) · §13 no in-house detectors · §18.2 inv. 2 tenant is
 weights · inv. 3 HITL before any write · inv. 4 every decision signed · §21 offence stays inside RoE
 and scope, and **the learning system never optimises for successful offensive action outside the
 authorised boundary**.
+
+## What has shipped
+
+Against the build list above, as of 2026-08-21 on `feat/frontier-ghoidc`:
+
+| Item | State |
+|---|---|
+| 1. Populate the scorecard (dual-axis) | **not started** — still 1 at/above par · 0 below · 7 pending a live run. Remains the gate on every improvement claim |
+| 2. Simulation improvement loop | **not started** — blocked on item 1, which supplies the weakness to target |
+| 3. GitHub Actions → AWS OIDC validator | **done, and widened.** `internal/ghoidc` (AWS) + `internal/gcpwif` (GCP, the two-object join) + `cloudiam` Federated principal + `estateingest/ghoidc.go` (the repo→role estate edge) + `estateingest/ghidentity.go` (the human→code hop, or an honest report of why it cannot close) |
+| 4. `Episode` record | **not started** — the state snapshot bracketing an episode remains the one missing primitive |
+| 5. State-delta + verification-policy signal | **verification-policy signal done**, state-delta not started. `retest` disagreements are machine-readable; `tenanteval` gained `SourceEvidenceInsufficient`, `SourceAcceptedRisk` and `SourceHumanVerdict`; `platform.Feedback` + `POST/GET /v1/issues/feedback` + the `IssueFeedback` control ship the human channel |
+| Free threat intelligence | **done** — KEV `knownRansomwareCampaignUse` and `dueDate` were being parsed and discarded; both now drive the SLA clock, with CISA's date used as an ABSOLUTE deadline rather than a window restarted by our discovery |
+
+**The pattern worth recording.** Four of the six shipped changes were not new capability at all — they
+were signal the product was already producing and throwing away: two KEV fields, the re-attack
+disagreement, and the accepted-risk verdict. None needed new customer friction or a new integration.
+Before building a new source of truth, it is worth checking what the existing ones already say and are
+not being asked.
 
 ## Open questions
 
