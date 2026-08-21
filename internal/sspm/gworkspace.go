@@ -26,6 +26,41 @@ type GWorkspaceTenant struct {
 	ThirdPartyAPIAccess      bool   `json:"third_party_api_access"`     // any third-party OAuth app can access data (no app allowlist / API controls)
 	GmailExternalAutoForward bool   `json:"gmail_external_autoforward"` // users may auto-forward mail to external addresses (exfil)
 	ExternalCalendarSharing  bool   `json:"external_calendar_sharing"`  // calendar details shared with external/public
+	// SESSION AND DEVICE TRUST. Two settings that decide how long a stolen credential
+	// keeps working, which is usually a bigger question than how it was stolen.
+	//
+	// DeviceTrustAllowed: users may mark a device trusted and skip 2-step verification on
+	// it. That is an MFA bypass the user grants themselves, and it survives the password
+	// reset performed after a compromise. GWS.COMMONCONTROLS.1.5v1.
+	DeviceTrustAllowed bool `json:"device_trust_allowed,omitempty"`
+	// SessionNeverExpires: no forced re-authentication, so a session cookie lifted from a
+	// browser works indefinitely. Session length is the difference between an incident and
+	// a persistent foothold. GWS.COMMONCONTROLS.4.1v1.
+	SessionNeverExpires bool `json:"session_never_expires,omitempty"`
+	// TwoSVEnrollmentPeriodDays: the grace window in which a new user may sign in WITHOUT
+	// enrolling in 2SV. Every day of it is a window in which a freshly-provisioned account
+	// — the ones whose credentials are most often mishandled during onboarding — has one
+	// factor. 0 = not supplied. GWS.COMMONCONTROLS.1.4v1.
+	TwoSVEnrollmentPeriodDays int `json:"twosv_enrollment_period_days,omitempty"`
+	// APP CONSENT. UserConsentLowRiskScopes: users may grant third-party apps access to
+	// "low-risk" scopes without review — but low-risk is Google's judgement about the
+	// SCOPE, not about the app holding it, and the grant is standing.
+	// GWS.COMMONCONTROLS.10.2v1.
+	UserConsentLowRiskScopes bool `json:"user_consent_low_risk_scopes,omitempty"`
+	// UnconfiguredInternalAppsTrusted: apps from inside the domain are trusted by default
+	// without being configured. "Internal" is a property of who registered it, not of who
+	// controls it now. GWS.COMMONCONTROLS.10.3v1.
+	UnconfiguredInternalAppsTrusted bool `json:"unconfigured_internal_apps_trusted,omitempty"`
+	// TakeoutEnabled: any user can export their entire Workspace data — mail, Drive,
+	// calendar — as a downloadable archive. It is a one-click bulk-exfiltration channel
+	// that produces no alert and looks like a legitimate user action, which is exactly why
+	// a compromised account reaches for it. GWS.COMMONCONTROLS.12.1v1.
+	TakeoutEnabled bool `json:"takeout_enabled,omitempty"`
+	// AdminAccountsNotCloudOnly: administrative accounts are federated from an on-premises
+	// or third-party identity source, so a compromise of THAT directory is a compromise of
+	// Workspace admin — the cloud tenant inherits the weakest link of a system it does not
+	// control. GWS.COMMONCONTROLS.6.1v1.
+	AdminAccountsNotCloudOnly bool `json:"admin_accounts_not_cloud_only,omitempty"`
 	// DRIVE SHARING WARNINGS. Two settings, one control: does a user get told before a
 	// file leaves the organisation. 1.3 warns at share time when the recipient's domain is
 	// not allowlisted; 1.9 warns at the file level for out-of-domain access. Both are the
@@ -178,6 +213,70 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.DeviceTrustAllowed {
+		f = append(f, finding(id(), "sspm::google_workspace::device-trust-allowed", types.SeverityHigh,
+			"Users may mark devices trusted and skip 2-step verification", target,
+			"A user can mark a device trusted, after which sign-ins from it skip 2SV. That is an MFA bypass "+
+				"the user grants themselves, it applies to whoever is holding the device, and it survives the "+
+				"password reset performed after a compromise — the second factor is gone precisely when it is "+
+				"most needed. Disable device trust (SCuBA GWS.COMMONCONTROLS.1.5v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.4.2"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.SessionNeverExpires {
+		f = append(f, finding(id(), "sspm::google_workspace::session-never-expires", types.SeverityMedium,
+			"Sessions never require re-authentication", target,
+			"There is no forced re-authentication, so a session cookie lifted from a browser — by malware, a "+
+				"shared machine, or an infostealer — works indefinitely and needs no password and no second "+
+				"factor. Session length is what separates an incident from a persistent foothold. Set a "+
+				"re-authentication period (SCuBA GWS.COMMONCONTROLS.4.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"AC-12"}})))
+	}
+	if t.TwoSVEnrollmentPeriodDays > 7 {
+		f = append(f, finding(id(), "sspm::google_workspace::twosv-enrollment-grace-too-long", types.SeverityMedium,
+			fmt.Sprintf("New users have %d days before 2-step verification is required", t.TwoSVEnrollmentPeriodDays), target,
+			fmt.Sprintf("A new account may sign in for %d days with a single factor. Freshly-provisioned "+
+				"accounts are the ones whose credentials are most often mishandled — mailed, messaged, read "+
+				"aloud — so the grace window lands exactly where the risk is highest. Set the enrolment period "+
+				"to at most one week (SCuBA GWS.COMMONCONTROLS.1.4v1).", t.TwoSVEnrollmentPeriodDays),
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.TakeoutEnabled {
+		f = append(f, finding(id(), "sspm::google_workspace::takeout-enabled", types.SeverityHigh,
+			"Google Takeout is enabled for users", target,
+			"Any user can export their entire Workspace footprint — mail, Drive, calendar — as a downloadable "+
+				"archive. It is a one-click bulk-exfiltration channel that raises no alert and is "+
+				"indistinguishable from a legitimate action, which is exactly why a compromised account and a "+
+				"departing employee both reach for it. Disable Takeout (SCuBA GWS.COMMONCONTROLS.12.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"AC-3"}})))
+	}
+	if t.UserConsentLowRiskScopes {
+		f = append(f, finding(id(), "sspm::google_workspace::user-consent-low-risk-scopes", types.SeverityMedium,
+			"Users may grant third-party apps access without review", target,
+			"Users can consent to apps requesting low-risk scopes with no administrator review. Low-risk is "+
+				"Google's judgement about the SCOPE, not about the application holding it or who controls that "+
+				"application next month, and the grant is standing. Require admin review for third-party app "+
+				"access (SCuBA GWS.COMMONCONTROLS.10.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-6"}})))
+	}
+	if t.UnconfiguredInternalAppsTrusted {
+		f = append(f, finding(id(), "sspm::google_workspace::unconfigured-internal-apps-trusted", types.SeverityMedium,
+			"Unconfigured internal applications are trusted by default", target,
+			"Applications registered inside the domain are trusted without being configured. \"Internal\" "+
+				"describes who registered the app, not who controls it now — an abandoned project, a departed "+
+				"developer's OAuth client, or a compromised internal service inherits that trust. Require "+
+				"internal apps to be configured before they are trusted (SCuBA GWS.COMMONCONTROLS.10.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-6"}})))
+	}
+	if t.AdminAccountsNotCloudOnly {
+		f = append(f, finding(id(), "sspm::google_workspace::admin-accounts-not-cloud-only", types.SeverityMedium,
+			"Administrative accounts are federated rather than cloud-only", target,
+			"Admin accounts authenticate through an external identity source, so a compromise of THAT "+
+				"directory is a compromise of Workspace administration. The tenant inherits the weakest link of "+
+				"a system its own controls do not reach, and the usual break-glass assumption — that cloud "+
+				"admin survives an on-premises incident — does not hold. Provision admin accounts cloud-only "+
+				"(SCuBA GWS.COMMONCONTROLS.6.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"5.4"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
 	}
 	if n := driveWarningGapsOf(t); len(n) > 0 {
 		f = append(f, finding(id(), "sspm::google_workspace::drive-external-share-warnings-disabled", types.SeverityMedium,
