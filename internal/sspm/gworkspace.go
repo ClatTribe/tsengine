@@ -77,7 +77,29 @@ type GWorkspaceTenant struct {
 	// InboundSpoofProtectionDisabled / UnauthenticatedEmailProtectionDisabled: Gmail
 	// is not rejecting mail that spoofs the org's own domain, nor mail that fails
 	// authentication outright. GWS.GMAIL.7.3v1 / 7.4v1.
-	InboundSpoofProtectionDisabled         bool `json:"inbound_spoof_protection_disabled,omitempty"`
+	InboundSpoofProtectionDisabled bool `json:"inbound_spoof_protection_disabled,omitempty"`
+	// AttachmentProtectionDisabled: Gmail's advanced attachment scanning is off —
+	// encrypted attachments, attachments carrying scripts, and anomalous types from
+	// untrusted senders all pass to the inbox unexamined. These are three settings in the
+	// admin console and ONE control in practice, because an attacker only needs whichever
+	// one is off; the snapshot carries them separately so the finding can say which.
+	// GWS.GMAIL.5.1v1 / 5.2v1 / 5.3v1.
+	EncryptedAttachmentProtectionDisabled bool `json:"encrypted_attachment_protection_disabled,omitempty"`
+	ScriptAttachmentProtectionDisabled    bool `json:"script_attachment_protection_disabled,omitempty"`
+	AnomalousAttachmentProtectionDisabled bool `json:"anomalous_attachment_protection_disabled,omitempty"`
+	// LinkProtectionDisabled: the link half of the same defence — shortened URLs are not
+	// expanded, linked images are not scanned, and no warning is shown on a click through
+	// to an untrusted domain. A shortener is the cheapest way to put a known-bad
+	// destination past a filter that only reads the visible text.
+	// GWS.GMAIL.6.1v1 / 6.2v1 / 6.3v1.
+	ShortenedURLScanDisabled bool `json:"shortened_url_scan_disabled,omitempty"`
+	LinkedImageScanDisabled  bool `json:"linked_image_scan_disabled,omitempty"`
+	UntrustedLinkWarningsOff bool `json:"untrusted_link_warnings_off,omitempty"`
+	// SuspiciousMailKeptInInbox: mail the above protections FLAG is still delivered to the
+	// inbox rather than quarantined. This is the setting that decides whether the other
+	// six do anything: a detection that lands in front of the user is a warning label on a
+	// weapon they are already holding. GWS.GMAIL.5.4v1 / 7.6v1.
+	SuspiciousMailKeptInInbox              bool `json:"suspicious_mail_kept_in_inbox,omitempty"`
 	UnauthenticatedEmailProtectionDisabled bool `json:"unauthenticated_email_protection_disabled,omitempty"`
 }
 
@@ -129,6 +151,36 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if n := attachmentGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::google_workspace::attachment-protection-disabled", types.SeverityHigh,
+			"Gmail advanced attachment protection is off ("+strings.Join(n, ", ")+")", target+"/gmail",
+			"Attachments from untrusted senders are not being inspected for "+strings.Join(n, ", ")+
+				". These arrive as ordinary mail with no added scrutiny, and each is a standard malware "+
+				"delivery route — an encrypted archive defeats content scanning by design, a script-bearing "+
+				"attachment executes on open, and an anomalous type is how a payload is disguised as a "+
+				"document. Enable Gmail's advanced attachment protections (SCuBA GWS.GMAIL.5.1v1–5.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.8"}, CISv8: []string{"9.6", "10.1"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3", "SI-8"}})))
+	}
+	if n := linkGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::google_workspace::link-protection-disabled", types.SeverityHigh,
+			"Gmail advanced link protection is off ("+strings.Join(n, ", ")+")", target+"/gmail",
+			"Links in inbound mail are not being inspected: "+strings.Join(n, ", ")+
+				". A URL shortener is the cheapest way to put a known-bad destination past a filter that only "+
+				"reads the visible text, and without a click-time warning the first thing that tells the user "+
+				"anything is the credential-harvesting page itself. Enable Gmail's advanced link and image "+
+				"protections (SCuBA GWS.GMAIL.6.1v1–6.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.8"}, CISv8: []string{"9.6"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3", "SI-8"}})))
+	}
+	if t.SuspiciousMailKeptInInbox {
+		f = append(f, finding(id(), "sspm::google_workspace::suspicious-mail-kept-in-inbox", types.SeverityHigh,
+			"Mail flagged as malicious is delivered to the inbox", target+"/gmail",
+			"Messages Gmail's own protections identify as spoofing, phishing or carrying a dangerous "+
+				"attachment are still delivered rather than quarantined. This setting decides whether the "+
+				"others do anything: a detection that lands in front of the user is a warning label on a weapon "+
+				"they are already holding. Route flagged mail to quarantine "+
+				"(SCuBA GWS.GMAIL.5.4v1 / 7.6v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.8"}, CISv8: []string{"9.6"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3", "SI-8"}})))
 	}
 	if t.ExternalInviteWarningsDisabled {
 		f = append(f, finding(id(), "sspm::google_workspace::external-invite-warnings-disabled", types.SeverityLow,
@@ -236,4 +288,36 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, PCI: []string{"5.4.1"}, CISv8: []string{"9.5"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-8"}})))
 	}
 	return f
+}
+
+// attachmentGapsOf names which attachment protections are off, so the finding says WHICH
+// rather than only that something is. Three settings, one control: an attacker needs
+// whichever one is disabled, so any of them is the finding.
+func attachmentGapsOf(t GWorkspaceTenant) []string {
+	var n []string
+	if t.EncryptedAttachmentProtectionDisabled {
+		n = append(n, "encrypted attachments")
+	}
+	if t.ScriptAttachmentProtectionDisabled {
+		n = append(n, "attachments with scripts")
+	}
+	if t.AnomalousAttachmentProtectionDisabled {
+		n = append(n, "anomalous attachment types")
+	}
+	return n
+}
+
+// linkGapsOf is the link-side twin.
+func linkGapsOf(t GWorkspaceTenant) []string {
+	var n []string
+	if t.ShortenedURLScanDisabled {
+		n = append(n, "shortened URLs are not expanded")
+	}
+	if t.LinkedImageScanDisabled {
+		n = append(n, "linked images are not scanned")
+	}
+	if t.UntrustedLinkWarningsOff {
+		n = append(n, "no warning on links to untrusted domains")
+	}
+	return n
 }
