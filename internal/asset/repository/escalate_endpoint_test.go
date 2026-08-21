@@ -46,3 +46,26 @@ func TestPlanEscalation_CodeQLFiresOnARealSemgrepFinding(t *testing.T) {
 		t.Error("a semgrep injection finding with a real path:line endpoint did not escalate to CodeQL")
 	}
 }
+
+// The same suffix bug, one function over. It was PARTIAL here — the go.mod/go.sum Contains
+// checks still matched an SCA finding on a manifest — which makes it harder to notice than
+// the total failure in codeqlLangForPath: govulncheck fires on most Go repositories, and
+// silently does not on one whose findings all sit in source files.
+func TestIsGoProjectFinding_RealEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		endpoint string
+		want     bool
+	}{
+		{"cmd/main.go", true},
+		{"cmd/main.go:12", true},       // what semgrep/gosec actually emit
+		{"internal/x/y.go:88:4", true}, // path:line:col
+		{"go.mod", true},
+		{"go.mod:3", true},       // already worked, via Contains
+		{"src/app.py:12", false}, // still not a Go project
+		{"README.md:1", false},
+	} {
+		if got := isGoProjectFinding(types.Finding{Endpoint: tc.endpoint}); got != tc.want {
+			t.Errorf("isGoProjectFinding(%q) = %v, want %v", tc.endpoint, got, tc.want)
+		}
+	}
+}
