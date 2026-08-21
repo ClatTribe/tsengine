@@ -376,6 +376,12 @@ export interface AssetCoverage {
   // scan; a declared gap is a fact about a specific run. Rendered separately so a standing
   // caveat cannot absorb a live one.
   declared_gaps?: DeclaredGap[];
+  // Whether ANY finding could be tied to this asset's target. Attribution matches the target
+  // inside the endpoint, which cannot work for a repository — its findings are file-relative.
+  attributed: boolean;
+  // Findings from tools this asset type runs that tied to no asset at all. Evidence that a
+  // zero finding count is an attribution failure rather than a clean scan.
+  unattributable_from_our_tools?: number;
 }
 // DeclaredGap carries its detail VERBATIM. The wording is where the "this is a coverage
 // gap, not a vulnerability" caveat lives, and summarising it is exactly where that would

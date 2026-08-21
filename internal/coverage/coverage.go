@@ -120,6 +120,25 @@ type AssetCoverage struct {
 	// could not test. One is a standing limitation, the other is a fact about a specific
 	// scan, and collapsing them would let a standing caveat absorb a live one.
 	DeclaredGaps []DeclaredGap `json:"declared_gaps,omitempty"`
+	// Attributed reports whether ANY finding could be tied to this asset's target.
+	//
+	// THIS EXISTS BECAUSE FALSE AND ZERO ARE NOT THE SAME AND WERE RENDERED THE SAME.
+	// Attribution matches the asset's Target inside the finding's Endpoint, which works for
+	// a URL or a host and CANNOT work for a repository: its findings are file-relative
+	// ("src/app.py:12"), and the target is a workspace path that never appears in them. So a
+	// scanned repository holding a SQLi and a leaked AWS key reported findings_count 0 with
+	// an empty tool list, and the page said "No findings recorded" — telling a customer
+	// nothing was found on the one screen whose whole job is honest coverage, while the
+	// findings list showed a critical.
+	//
+	// grc.AssetCompliance already draws this line ("an unattributable finding is reported as
+	// not attributed, never as compliant"); coverage did not.
+	Attributed bool `json:"attributed"`
+	// UnattributableFromOurTools counts findings produced by tools THIS asset type runs that
+	// tied to no asset at all. It does not claim they belong here — it is the evidence that
+	// the zero above is an attribution failure rather than a clean result, which is the
+	// distinction the customer needs and could not previously make.
+	UnattributableFromOurTools int `json:"unattributable_from_our_tools,omitempty"`
 }
 
 // DeclaredGap is one thing a scan reported it could not check.
@@ -187,10 +206,23 @@ func Compute(assets []platform.Asset, findings []types.Finding, engagements []pl
 		}
 		// tools that surfaced a finding attributed to THIS asset (grounded: literal target match)
 		seen := map[string]bool{}
+		ourTools := map[string]bool{}
+		for _, t := range Toolset[a.Type] {
+			ourTools[t] = true
+		}
 		for _, f := range findings {
-			if attribute(f, assets) != a.ID || f.Tool == "" {
+			if f.Tool == "" {
 				continue
 			}
+			if attribute(f, assets) != a.ID {
+				// A finding from a tool this asset type runs that tied to NO asset is the
+				// evidence that a zero here is an attribution failure, not a clean scan.
+				if attribute(f, assets) == "" && ourTools[f.Tool] && !asset.IsCoverageGap(f) {
+					cov.UnattributableFromOurTools++
+				}
+				continue
+			}
+			cov.Attributed = true
 			// A coverage disclosure is the scan saying what it could NOT check. Counting it
 			// as a finding would make admitting a gap improve the numbers that describe how
 			// well the asset was covered — the count would rise and a "coverage" tool would

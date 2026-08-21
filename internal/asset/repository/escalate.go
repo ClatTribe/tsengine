@@ -59,7 +59,12 @@ func (h *Handler) PlanEscalation(_ types.Asset, _ []string, findings []types.Fin
 // source file, or an SCA finding located in a Go module manifest. The signal
 // that warrants the (Go-toolchain-heavy) reachability pass.
 func isGoProjectFinding(f types.Finding) bool {
-	p := strings.ToLower(f.Endpoint)
+	// stripLineSuffix for the same reason codeqlLangForPath needs it: a semgrep or gosec hit
+	// on a Go source file arrives as "cmd/main.go:12", and HasSuffix(".go") misses it. Here
+	// the bug was PARTIAL rather than total — the go.mod/go.sum Contains checks still matched
+	// an SCA finding on a manifest — which is worse to spot, because govulncheck fires on
+	// most Go repositories and silently does not on one whose findings are all in source.
+	p := strings.ToLower(stripLineSuffix(f.Endpoint))
 	return strings.HasSuffix(p, ".go") || strings.Contains(p, "go.mod") || strings.Contains(p, "go.sum")
 }
 

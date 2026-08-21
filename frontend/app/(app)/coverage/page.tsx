@@ -106,6 +106,16 @@ export default async function CoveragePage() {
                         <span className="font-medium text-ink">{a.tools_with_findings.length}</span> tool
                         {a.tools_with_findings.length === 1 ? "" : "s"}; no findings recorded from the rest.
                       </>
+                    ) : a.unattributable_from_our_tools ? (
+                      // NOT "no findings recorded". The tools this asset runs produced findings
+                      // that could not be tied back to it — saying nothing was found here would
+                      // be a clean bill of health over results we are holding.
+                      <>
+                        <span className="font-medium text-ink">{a.unattributable_from_our_tools}</span> finding
+                        {a.unattributable_from_our_tools === 1 ? "" : "s"} from this asset&apos;s tools could not be
+                        linked back to it, so they are not counted here. This is an attribution gap, not a clean
+                        result — see them on the findings list.
+                      </>
                     ) : (
                       <>No findings recorded. This lists the tools declared for this asset type; it does not confirm each one executed.</>
                     )}
