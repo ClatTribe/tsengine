@@ -219,12 +219,8 @@ func canReadBucket(principal, bucketARN, ownerAccount string, identity []*cloudi
 // its effective permissions, honouring the SCP + boundary ceilings (an SCP that
 // denies the escalation action blocks the privesc edge).
 func detectPrivesc(principal string, identity []*cloudiam.Document, boundary *cloudiam.Document, scps []*cloudiam.Document) (string, bool) {
-	can := func(a string) bool {
-		ok, _ := cloudiam.Permits(cloudiam.Request{Principal: principal, Action: a, Resource: "*"},
-			cloudiam.PolicySet{Identity: identity, Boundary: boundary, SCPs: scps, SameAccount: true})
-		return ok
-	}
-	techs := cloudiam.DetectPrivesc(can)
+	techs, _ := cloudiam.PrivescOf(principal,
+		cloudiam.PolicySet{Identity: identity, Boundary: boundary, SCPs: scps, SameAccount: true})
 	if len(techs) == 0 {
 		return "", false
 	}

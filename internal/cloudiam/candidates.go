@@ -124,3 +124,39 @@ func ConcreteResource(pattern, account string) (string, bool) {
 	}
 	return strings.Join(p, ":"), true
 }
+
+// PrivescOf is the ONE place the "can this principal escalate?" question is asked, so
+// the four call sites that used to build the predicate themselves cannot drift apart —
+// they already had: the ingest, the graph bridge, the CloudQuery path and the
+// remediation check each open-coded the same closure, and each carried the same "*"
+// resource bug independently.
+//
+// Returns every technique the principal's effective permissions enable, and whether ANY
+// of them is reachable through grants we could resolve outright. firm=false means the
+// escalation exists but rides a gate we could not decide (MFA, a source IP, a tag), so
+// the caller should mark the path config-possible rather than confirmed (ADR 0002).
+//
+// The boundary and any SCPs in ps apply as AWS applies them: a ceiling that blocks the
+// escalation yields no technique at all, which is absence rather than uncertainty.
+func PrivescOf(principal string, ps PolicySet) (techs []Technique, firm bool) {
+	targets := CandidateResources(ps.Identity, AccountOf(principal))
+	if len(targets) == 0 {
+		return nil, false
+	}
+	allowOn := func(requireFirm bool) func(string) bool {
+		return func(a string) bool {
+			for _, res := range targets {
+				dec, cond := Authorize(Request{Principal: principal, Action: a, Resource: res}, ps)
+				if dec == Allow && (!requireFirm || !cond) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	techs = DetectPrivesc(allowOn(false))
+	if len(techs) == 0 {
+		return nil, false
+	}
+	return techs, len(DetectPrivesc(allowOn(true))) > 0
+}
