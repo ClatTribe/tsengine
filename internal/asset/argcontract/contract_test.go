@@ -34,6 +34,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"
 	_ "github.com/ClatTribe/tsengine/internal/tool/cloudfox"
+	_ "github.com/ClatTribe/tsengine/internal/tool/codeql"
 	_ "github.com/ClatTribe/tsengine/internal/tool/cosign"
 	_ "github.com/ClatTribe/tsengine/internal/tool/crtsh"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dalfox"
@@ -41,6 +42,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/ffuf"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"
+	_ "github.com/ClatTribe/tsengine/internal/tool/govulncheck"
 	_ "github.com/ClatTribe/tsengine/internal/tool/grype"
 	_ "github.com/ClatTribe/tsengine/internal/tool/hadolint"
 	_ "github.com/ClatTribe/tsengine/internal/tool/httpx"
@@ -72,33 +74,63 @@ type assetCase struct {
 	handler asset.Handler
 	target  types.Asset
 	surface []string // for ReconHandler.PlanFanout
+	// findings feed EscalationPlanner. THIS FIELD IS THE POINT: escalation triggers are
+	// signal-GATED (§5.3), so passing nil findings meant the depth tools were never
+	// dispatched and their arg contracts were never checked. Only web produced any
+	// escalation at all — from its surface-matched triggers — so hydra, kiterunner, inql,
+	// codeql, mobsfscan and govulncheck had gone unvalidated since the guard was written,
+	// which is precisely the silent mis-wired-arg class it exists to catch.
+	findings []types.Finding
+	// wantsEscalation asserts this asset MUST produce at least one escalation dispatch from
+	// the fixture above. Without it the fixture can drift out of matching the triggers and
+	// the guard goes quietly back to checking nothing — which is how it got here.
+	wantsEscalation bool
 }
 
 func cases() []assetCase {
 	return []assetCase{
-		{"web", webasset.NewHandler(),
-			types.Asset{Type: types.AssetWebApplication, Target: "http://localhost:8080/",
+		{name: "web", handler: webasset.NewHandler(),
+			target: types.Asset{Type: types.AssetWebApplication, Target: "http://localhost:8080/",
 				// Set Auth so PlanFanout also emits the seed_auth dispatch.
 				Auth: &types.AuthConfig{LoginURL: "http://localhost:8080/login", Username: "u", Password: "p"}},
 			// wp-login.php in the surface exercises the wordpress→wpscan escalation.
-			[]string{"http://localhost:8080/", "http://localhost:8080/x?id=1", "http://localhost:8080/wp-login.php"}},
-		{"api", apiasset.NewHandler(),
-			types.Asset{Type: types.AssetAPI, Target: "http://localhost:8080/"},
-			[]string{"SPEC http://localhost:8080/openapi.json", "GET http://localhost:8080/users/{id}", "POST http://localhost:8080/users"}},
-		{"domain", domainasset.NewHandler(),
-			types.Asset{Type: types.AssetDomain, Target: "example.com"},
-			[]string{"example.com", "a.example.com", "b.example.com"}},
-		{"cloud", cloudasset.NewHandler(),
-			types.Asset{Type: types.AssetCloudAccount, Target: "aws"}, nil},
-		{"ip", ipasset.NewHandler(),
-			types.Asset{Type: types.AssetIPAddress, Target: "127.0.0.1"},
-			[]string{"127.0.0.1:80", "127.0.0.1:443"}},
-		{"repository", repoasset.NewHandler(),
-			types.Asset{Type: types.AssetRepository, Target: "/workspace"}, nil},
-		{"container", containerasset.NewHandler(),
-			types.Asset{Type: types.AssetContainerImage, Target: "nginx:latest"}, nil},
-		{"mobile", mobileasset.NewHandler(),
-			types.Asset{Type: types.AssetMobileApplication, Target: "/workspace"}, nil},
+			surface:         []string{"http://localhost:8080/", "http://localhost:8080/x?id=1", "http://localhost:8080/wp-login.php"},
+			wantsEscalation: true},
+		{name: "api", handler: apiasset.NewHandler(),
+			target: types.Asset{Type: types.AssetAPI, Target: "http://localhost:8080/"},
+			// /graphql in the surface trips the graphql→inql escalation.
+			surface: []string{"SPEC http://localhost:8080/openapi.json", "GET http://localhost:8080/users/{id}",
+				"POST http://localhost:8080/users", "POST http://localhost:8080/graphql"},
+			// a spec-found finding trips spec→kiterunner
+			findings: []types.Finding{{RuleID: "openapi_spec_ingest::spec-found", Tool: "openapi_spec_ingest",
+				Endpoint: "http://localhost:8080/openapi.json"}},
+			wantsEscalation: true},
+		{name: "domain", handler: domainasset.NewHandler(),
+			target:  types.Asset{Type: types.AssetDomain, Target: "example.com"},
+			surface: []string{"example.com", "a.example.com", "b.example.com"}},
+		{name: "cloud", handler: cloudasset.NewHandler(),
+			target: types.Asset{Type: types.AssetCloudAccount, Target: "aws"}},
+		{name: "ip", handler: ipasset.NewHandler(),
+			target: types.Asset{Type: types.AssetIPAddress, Target: "127.0.0.1"},
+			// :22 is an auth service, which is what trips auth-service→hydra. Without it the
+			// surface holds only web ports and the escalation never fires.
+			surface:         []string{"127.0.0.1:80", "127.0.0.1:443", "127.0.0.1:22"},
+			wantsEscalation: true},
+		{name: "repository", handler: repoasset.NewHandler(),
+			target: types.Asset{Type: types.AssetRepository, Target: "/workspace"},
+			// One finding per escalation trigger: a semgrep injection hit (→codeql, which also
+			// needs a path whose extension maps to a language), a mobile-project file
+			// (→mobsfscan) and a Go manifest (→govulncheck).
+			findings: []types.Finding{
+				{RuleID: "semgrep::sqli", Tool: "semgrep", CWE: []string{"CWE-89"}, Endpoint: "src/app.py:12"},
+				{RuleID: "semgrep::mobile", Tool: "semgrep", Endpoint: "app/AndroidManifest.xml"},
+				{RuleID: "osv::CVE-2024-1", Tool: "osv-scanner", Endpoint: "go.mod"},
+			},
+			wantsEscalation: true},
+		{name: "container", handler: containerasset.NewHandler(),
+			target: types.Asset{Type: types.AssetContainerImage, Target: "nginx:latest"}},
+		{name: "mobile", handler: mobileasset.NewHandler(),
+			target: types.Asset{Type: types.AssetMobileApplication, Target: "/workspace"}},
 	}
 }
 
@@ -139,7 +171,12 @@ func TestArgContracts_AllHandlers(t *testing.T) {
 		}
 		// EscalationPlanner: depth dispatches off the surface/findings.
 		if ep, ok := c.handler.(asset.EscalationPlanner); ok {
-			for _, d := range ep.PlanEscalation(c.target, c.surface, nil) {
+			esc := ep.PlanEscalation(c.target, c.surface, c.findings)
+			if len(esc) == 0 && c.wantsEscalation {
+				t.Errorf("[%s] PlanEscalation produced NO dispatches, so no escalation arg was checked — "+
+					"the fixture no longer trips this asset's triggers and the guard has gone silent", c.name)
+			}
+			for _, d := range esc {
 				validate(t, c.name, d)
 			}
 		}

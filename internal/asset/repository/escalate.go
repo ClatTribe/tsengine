@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
@@ -84,7 +85,7 @@ func isInjectionFinding(f types.Finding) bool {
 // codeqlLangForPath maps a finding's file path to a CodeQL language, or ""
 // for a language CodeQL doesn't analyze here.
 func codeqlLangForPath(endpoint string) string {
-	p := strings.ToLower(endpoint)
+	p := strings.ToLower(stripLineSuffix(endpoint))
 	switch {
 	case strings.HasSuffix(p, ".java"), strings.HasSuffix(p, ".kt"):
 		return "java" // CodeQL analyzes Kotlin under the java extractor
@@ -120,4 +121,30 @@ func isMobileFinding(f types.Finding) bool {
 		}
 	}
 	return false
+}
+
+// stripLineSuffix removes a trailing ":line" or ":line:col" from a finding endpoint.
+//
+// THIS IS WHY THE CODEQL ESCALATION NEVER FIRED. Every extension match below uses
+// HasSuffix, and semgrep — the only tool that trips this trigger — emits its endpoint as
+// "path:line" whenever the result carries a line number, which is essentially always
+// (internal/tool/semgrep/parse.go). So "src/app.py:12" matched no language, the trigger
+// returned "" and the dispatch was skipped, silently, on every repository scan since the
+// trigger was written. Nothing failed: escalation is optional by design, so producing no
+// dispatch looks exactly like a scan with no injection findings.
+//
+// Stripping here rather than at the call site fixes it for every producer, including any
+// future tool that adopts the same endpoint convention.
+func stripLineSuffix(endpoint string) string {
+	for i := 0; i < 2; i++ { // ":line" then ":col"
+		j := strings.LastIndex(endpoint, ":")
+		if j <= 0 || j == len(endpoint)-1 {
+			return endpoint
+		}
+		if _, err := strconv.Atoi(endpoint[j+1:]); err != nil {
+			return endpoint
+		}
+		endpoint = endpoint[:j]
+	}
+	return endpoint
 }
