@@ -41,6 +41,7 @@ _Run 2026-08-21 on `feat/frontier-ghoidc`._
 | Vulnerability localization | `tsbench localize` | recall@1 **1.00** · MRR **1.00** (8/8 scenarios, heuristic tier) | seeded CWE scenarios |
 | **IAM privesc — recall** | `go test ./internal/bench/ -run IAMVulnerable_Live` (needs `IAM_VULNERABLE_DIR`) | **31/31 paths** | **BishopFox IAM-Vulnerable — EXTERNAL answer key** |
 | **IAM privesc — FP/FN control** | `go test ./internal/bench/ -run PolicyCases_Live` (needs `IAM_VULNERABLE_TOOLTEST_DIR`) | **0 false positives / 5** · 2 false negatives / 4 · **Youden 0.50** on the control set | **BishopFox tool-testing — EXTERNAL, two-sided** |
+| **GCP privesc — recall** | `go test ./internal/bench/ -run GCPPrivesc_Live` (needs `RHINO_GCP_CATALOGUE`) | **23/23 methods** (was 15/23 = 65.2%) | **RhinoSecurityLabs catalogue — EXTERNAL answer key. RECALL ONLY — see below** |
 
 **The two IAM rows are the only ones whose answer key we did not write.** They come from
 BishopFox's IAM-Vulnerable, the corpus CLAUDE.md §2.2.1 already names for the cloud
@@ -57,6 +58,16 @@ specialist. Read them together and read the caveats:
   SAME reason fp4 and fp5 pass: we evaluate at resource `*` and treat any condition as
   non-firm. **That is one design decision bought in both directions, not two bugs**, and
   moving it would trade the zero-FP result away.
+
+**The GCP row is weaker evidence than the AWS pair, and the asymmetry is the point.** It
+went 65.2% → 100% the same way AWS did — the catalogue named what was missing and we added
+exactly that, so it too is no longer held out. But AWS has a neutral FP control set
+(BishopFox's tool-testing) and **GCP has no published equivalent**, so nothing external
+measures what those eight new techniques cost in false positives. There is an in-house FP
+guard (`gcpiam/privesc_fp_test.go`: benign permission sets must fire nothing; a deploy
+permission without `actAs` must fire nothing) — that is a regression guard, not evidence of
+specificity, and it is exactly the kind of self-graded number this section exists to warn
+about. Read the GCP row as one-sided until a neutral control set exists.
 
 **Of the internal rows, the one that means something on its own is generalization.** The rest score ~100%
 because their ground truth and the code under test share an oracle — `holdout.go` says so
