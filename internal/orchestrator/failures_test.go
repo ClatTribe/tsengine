@@ -75,3 +75,38 @@ func (stubTool) Run(context.Context, tool.Args) (tool.Result, error) {
 }
 
 var _ types.ToolFailure // keep the artifact type in view for readers of this test
+
+// The last hop of the chain, at the public boundary the CLI actually calls.
+//
+// executeAll records a failure into the sink (above) and cmd/tsengine copies the returned
+// slice into Scan.ToolsFailed. Between them sits RunWithSurface, which owns the sink and
+// must hand it back. If it did not, every layer would be individually correct and the
+// artifact would still report tools_failed=0 — which is precisely the state an ip-asset
+// scan was in while naabu was stubbed out and never ran.
+//
+// The chain this completes: a wrapper classifies a non-run via tool.DidNotRun and returns an
+// error → executeAll records it and keeps it out of anchors_fired → RunWithSurface returns it
+// here → the scorer withholds the verdict it could have faked (bench.withholdIfIncomplete).
+// Every hop is now covered by an executing test.
+func TestRunWithSurface_ReturnsToolFailuresForTheScanArtifact(t *testing.T) {
+	h := &mockHandler{anchors: []tool.Tool{stubTool{name: "naabu"}, stubTool{name: "nmap"}}}
+	target := types.Asset{Type: types.AssetWebApplication, Target: "http://example.test"}
+
+	_, fired, _, failures, err := RunWithSurface(context.Background(), target, h, failingDispatcher{failTool: "naabu"})
+	if err != nil {
+		t.Fatalf("a single tool failing must not fail the whole scan: %v", err)
+	}
+	if len(failures) != 1 || failures[0].Tool != "naabu" {
+		t.Fatalf("RunWithSurface must return the failure so it reaches Scan.ToolsFailed, got %+v.\n"+
+			"Without it the artifact reports tools_failed=0 for a tool that never ran, and a "+
+			"benchmark scores that silence as a clean result.", failures)
+	}
+	if failures[0].Reason == "" {
+		t.Error("a failure with no reason cannot be acted on")
+	}
+	for _, f := range fired {
+		if f == "naabu" {
+			t.Error("a tool that failed must not be listed as fired")
+		}
+	}
+}

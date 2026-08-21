@@ -27,6 +27,22 @@ available; every figure below was produced on this machine, not carried forward.
 | Cloud · CSPM | not run | needs LocalStack or real credentials |
 | Domain | not runnable in a box | subdomain enumeration queries public sources about a real registered domain — there is nothing to host |
 
+**The IP row is why the scoreboard now has a `tools_failed` guard.** That run reported
+`raw_findings=0 partial=false tools_failed=0` over a wide-open port that nmap, in the same
+image, could see — naabu never ran, and nothing said so. All 36 tool wrappers swallowed every
+non-zero exit, which is necessary (semgrep and trivy exit 1 when they *find* something) but
+collapses "the tool looked and found nothing" into "the tool never looked". `tool.DidNotRun`
+now separates them, and `bench.withholdIfIncomplete` withholds the verdict a missing tool
+could fake.
+
+Every hop of that chain is covered by an executing test — the wrapper against a real 127-exit
+stub on PATH, the orchestrator against a failing dispatcher, `RunWithSurface` returning the
+failure for the artifact, and the scorer withholding on it — each mutation-verified. **What is
+still unproven is the single integrated run**: re-running the ip row through a rebuilt sandbox
+image to watch it report `tools_failed=1`. That needs a ~3GB image build, and the machine was
+at 901MB free. Stated as unproven rather than assumed, since assuming it is the same move this
+whole section is about.
+
 **The API row was first recorded here as `0.000 — FAIL, MISSED sqli`. That was wrong, and
 how it was wrong is worth more than the number.**
 
