@@ -216,8 +216,8 @@ func ThreatInformedGaps(findings []types.Finding) []types.Finding {
 		}
 		f := types.Finding{
 			ID:     fmt.Sprintf("ti-gap-%03d", i+1),
-			RuleID: "threat-informed::untested-exploited-cve",
-			Tool:   "threat-informed",
+			RuleID: asset.CoverageRulePrefix + "threat-informed-untested-cve",
+			Tool:   "coverage",
 			// Informational: a check that did not run has no evidence for a severity.
 			Severity:     types.SeverityInfo,
 			Endpoint:     u,

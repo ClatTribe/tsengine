@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -111,6 +112,31 @@ type AssetCoverage struct {
 	// is honest about it (the fixtures record these as NOT COVERED), so the customer-facing surface
 	// must be too.
 	UntestedClasses []ConfigGatedClass `json:"untested_classes,omitempty"`
+	// DeclaredGaps are the things this asset's LAST SCAN said it could not check
+	// (asset.CoverageReporter). Distinct from UntestedClasses, and the distinction is not
+	// pedantry: UntestedClasses is what this asset TYPE cannot reach without config the
+	// operator has not supplied — knowable before a scan runs and true of every asset of
+	// the type. A DeclaredGap is what THIS run, against THIS target, actually hit and
+	// could not test. One is a standing limitation, the other is a fact about a specific
+	// scan, and collapsing them would let a standing caveat absorb a live one.
+	DeclaredGaps []DeclaredGap `json:"declared_gaps,omitempty"`
+}
+
+// DeclaredGap is one thing a scan reported it could not check.
+type DeclaredGap struct {
+	Title string `json:"title"`
+	// Detail is the disclosure verbatim from the finding, including whatever it says about
+	// what the gap does and does not mean. Not summarised here: the wording is where the
+	// "this is a coverage gap, not a vulnerability" caveat lives, and a summary is exactly
+	// where that caveat would be lost.
+	Detail   string `json:"detail,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+	// Rule is the disclosure's own id, so a reader can tell two kinds of gap apart.
+	Rule string `json:"rule,omitempty"`
+}
+
+func declaredGapOf(f types.Finding) DeclaredGap {
+	return DeclaredGap{Title: f.Title, Detail: f.Description, Endpoint: f.Endpoint, Rule: f.RuleID}
 }
 
 // Summary rolls up coverage across the portfolio for a headline ("N of M assets scanned").
@@ -165,6 +191,15 @@ func Compute(assets []platform.Asset, findings []types.Finding, engagements []pl
 			if attribute(f, assets) != a.ID || f.Tool == "" {
 				continue
 			}
+			// A coverage disclosure is the scan saying what it could NOT check. Counting it
+			// as a finding would make admitting a gap improve the numbers that describe how
+			// well the asset was covered — the count would rise and a "coverage" tool would
+			// join tools-with-findings, so the asset would read as MORE tested for having
+			// been honest. It belongs in DeclaredGaps and nowhere else on this struct.
+			if asset.IsCoverageGap(f) {
+				cov.DeclaredGaps = append(cov.DeclaredGaps, declaredGapOf(f))
+				continue
+			}
 			cov.FindingsCount++
 			if !seen[f.Tool] {
 				seen[f.Tool] = true
@@ -172,6 +207,7 @@ func Compute(assets []platform.Asset, findings []types.Finding, engagements []pl
 			}
 		}
 		sort.Strings(cov.ToolsWithFindings)
+		sort.Slice(cov.DeclaredGaps, func(i, j int) bool { return cov.DeclaredGaps[i].Title < cov.DeclaredGaps[j].Title })
 		out.Assets = append(out.Assets, cov)
 	}
 	return out

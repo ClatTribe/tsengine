@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -67,6 +68,14 @@ func UnifiedIssues(findings []types.Finding) []Issue {
 	var order []string
 
 	for _, f := range findings {
+		// A coverage disclosure is the scan saying what it could NOT check. It is not an
+		// issue with the estate, and in a list titled "issues" it would read as one —
+		// alongside real vulnerabilities, with CVE ids in its title, inviting exactly the
+		// conclusion its own text spends a paragraph refusing to make. Its home is the
+		// coverage view, next to the other things that were not tested.
+		if asset.IsCoverageGap(f) {
+			continue
+		}
 		key, cve := dedupKey(f)
 		g := groups[key]
 		if g == nil {

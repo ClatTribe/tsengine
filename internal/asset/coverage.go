@@ -1,6 +1,23 @@
 package asset
 
-import "github.com/ClatTribe/tsengine/pkg/types"
+import (
+	"strings"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
+
+// CoverageRulePrefix namespaces every coverage-disclosure finding.
+//
+// The prefix IS the contract, and it is what makes disclosure work as a category rather
+// than as one hard-coded special case. Downstream, internal/coverage surfaces anything
+// carrying it as a declared gap and — the part that matters — EXCLUDES it from the
+// asset's finding count and its tools-with-findings list. Without that exclusion a
+// declared gap would inflate the numbers that describe how well an asset was covered,
+// so admitting we could not check something would make the asset look MORE scanned.
+//
+// A new CoverageReporter gets both behaviours by using the prefix; nothing downstream
+// needs to learn its name.
+const CoverageRulePrefix = "coverage::"
 
 // CoverageReporter is an OPTIONAL handler interface for declaring what a scan could
 // NOT check.
@@ -27,4 +44,10 @@ type CoverageReporter interface {
 	// actually observed. Returning nil is correct and common — it means the scan ran
 	// what it set out to run.
 	CoverageGaps(target types.Asset, findings []types.Finding) []types.Finding
+}
+
+// IsCoverageGap reports whether a finding is a coverage disclosure rather than a security
+// finding. See CoverageRulePrefix.
+func IsCoverageGap(f types.Finding) bool {
+	return strings.HasPrefix(f.RuleID, CoverageRulePrefix)
 }

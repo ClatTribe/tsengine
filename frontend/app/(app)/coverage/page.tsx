@@ -112,6 +112,32 @@ export default async function CoveragePage() {
                   </div>
                 )}
 
+                {a.declared_gaps && a.declared_gaps.length > 0 && (
+                  <div className="mt-3 rounded-md border border-amber-500/25 bg-amber-500/5 p-3">
+                    <div className="text-xs font-medium text-ink">
+                      This scan could not check {a.declared_gaps.length === 1 ? "one thing" : `${a.declared_gaps.length} things`}
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      Reported by the scan itself. These are gaps in what was tested, not vulnerabilities —
+                      verify them another way rather than reading their absence from the results as clear.
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      {a.declared_gaps.map((g, i) => (
+                        <li key={`${g.rule ?? "gap"}-${i}`} className="text-xs">
+                          <div className="text-ink">{g.title}</div>
+                          {g.endpoint ? (
+                            <div className="font-mono text-[11px] text-muted/80">{g.endpoint}</div>
+                          ) : null}
+                          {/* Verbatim: the caveat lives in this wording. */}
+                          {g.detail ? (
+                            <p className="mt-1 whitespace-pre-line text-muted">{g.detail}</p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {a.untested_classes && a.untested_classes.length > 0 && (
                   <div className="mt-3 rounded-md border border-amber-500/25 bg-amber-500/5 p-3">
                     <div className="text-xs font-medium text-ink">Not tested on this asset</div>

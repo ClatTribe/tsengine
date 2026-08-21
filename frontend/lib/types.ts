@@ -371,6 +371,20 @@ export interface AssetCoverage {
   // Classes this asset's scan cannot reach without an operator-declared config that is absent.
   // Present so "no findings" is never read as "nothing to find" — BOLA/BFLA need two identities.
   untested_classes?: ConfigGatedClass[];
+  // What THIS scan, against THIS target, hit and could not test. Distinct from
+  // untested_classes: that is a standing limitation of the asset TYPE, knowable before any
+  // scan; a declared gap is a fact about a specific run. Rendered separately so a standing
+  // caveat cannot absorb a live one.
+  declared_gaps?: DeclaredGap[];
+}
+// DeclaredGap carries its detail VERBATIM. The wording is where the "this is a coverage
+// gap, not a vulnerability" caveat lives, and summarising it is exactly where that would
+// be lost — so the UI prints it rather than paraphrasing.
+export interface DeclaredGap {
+  title: string;
+  detail?: string;
+  endpoint?: string;
+  rule?: string;
 }
 export interface ConfigGatedClass {
   class: string;
