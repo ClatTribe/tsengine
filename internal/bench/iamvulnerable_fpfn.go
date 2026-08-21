@@ -91,6 +91,10 @@ var (
 // data.aws_iam_policy_document source instead, and guessing at one would be worse than
 // declaring it unscored.
 func ExtractDocument(tf string) (*cloudiam.Document, bool) {
+	// The corpus writes a policy two ways. Both are the fixture; only one is JSON.
+	if doc, ok := extractPolicyDocumentData(tf); ok {
+		return doc, true
+	}
 	blocks := policyBlock.FindAllStringSubmatch(tf, -1)
 	if len(blocks) == 0 {
 		return nil, false
@@ -141,10 +145,13 @@ func parseStatement(body string) tfStatement {
 	if m := resRe.FindStringSubmatch(body); m != nil {
 		st.Resource = quotedAll(m[1])
 	}
-	if condRe.MatchString(body) {
-		// The exact condition is not modelled: its PRESENCE is what matters, because
-		// cloudiam treats an unevaluated condition as making the grant conditional rather
-		// than firm — which is the behaviour fp5/fn3 are probing.
+	if c := parseCondition(body); c != nil {
+		st.Condition = c
+	} else if condRe.MatchString(body) {
+		// A condition we could not parse keeps its PRESENCE, which cloudiam reads as
+		// making the grant conditional rather than firm. That is the right default for
+		// an unknown gate, and it is why an unparsed condition can only cost recall,
+		// never manufacture a false positive.
 		st.Condition = map[string]any{"Unmodelled": map[string]any{"x": "y"}}
 	}
 	return st
@@ -205,9 +212,17 @@ func ScorePolicyCases(dir string) (PolicyCaseResult, error) {
 			continue
 		}
 		c.Scored = true
+		// The same target derivation the ingest uses (cloudiam.CandidateResources), so
+		// this measures the product's answer rather than a benchmark-only predicate.
+		targets := cloudiam.CandidateResources([]*cloudiam.Document{doc}, "123456789012")
 		firm := func(a string) bool {
-			allowed, conditional := cloudiam.Allows(a, "*", doc)
-			return allowed && !conditional
+			for _, res := range targets {
+				allowed, conditional := cloudiam.Allows(a, res, doc)
+				if allowed && !conditional {
+					return true
+				}
+			}
+			return false
 		}
 		for _, t := range cloudiam.DetectPrivesc(firm) {
 			c.Techniques = append(c.Techniques, t.Name)
@@ -254,4 +269,142 @@ func RenderPolicyCases(r PolicyCaseResult) string {
 	fmt.Fprintf(&b, "own header asks whether a tool evaluates denies first, as AWS does. A recall-only\n")
 	fmt.Fprintf(&b, "harness cannot answer that, which is why this set exists alongside it.\n")
 	return b.String()
+}
+
+// condBlock captures a Terraform `condition { ... }` block, which is how the corpus
+// writes a condition in a policy-DOCUMENT data source.
+var (
+	condBlock  = regexp.MustCompile(`(?s)condition\s*\{(.*?)\}`)
+	condTestRe = regexp.MustCompile(`test\s*=\s*"([^"]+)"`)
+	condVarRe  = regexp.MustCompile(`variable\s*=\s*"([^"]+)"`)
+	condValsRe = regexp.MustCompile(`(?s)values\s*=\s*\[(.*?)\]`)
+	// The jsonencode form: "Condition" = { "Op" = { "key" = [...] } }.
+	condJSONRe = regexp.MustCompile(`(?s)"?Condition"?\s*[:=]\s*\{(.*)`)
+)
+
+// parseCondition reads a real condition out of a corpus file, in either of the two
+// forms it appears in. Returns nil when nothing parseable is present.
+//
+// This exists because stubbing the condition made fn3 and fp5 INDISTINGUISHABLE — both
+// came back conditional, so fp5 passed for the wrong reason and fn3 failed. A control
+// set is only worth the fidelity of what feeds it: a harness that discards the exact
+// field the case is probing measures the harness.
+func parseCondition(body string) map[string]any {
+	if m := condBlock.FindStringSubmatch(body); m != nil {
+		inner := m[1]
+		t := condTestRe.FindStringSubmatch(inner)
+		v := condVarRe.FindStringSubmatch(inner)
+		vals := condValsRe.FindStringSubmatch(inner)
+		if t == nil || v == nil || vals == nil {
+			return nil
+		}
+		got := quotedAll(vals[1])
+		if len(got) == 0 {
+			return nil
+		}
+		return map[string]any{t[1]: map[string]any{v[1]: got}}
+	}
+	if m := condJSONRe.FindStringSubmatch(body); m != nil {
+		op := regexp.MustCompile(`"([A-Za-z]+)"?\s*[:=]\s*\{`).FindStringSubmatch(m[1])
+		key := regexp.MustCompile(`"([a-zA-Z0-9:_-]+)"?\s*[:=]\s*(\[[^\]]*\]|"[^"]*")`).FindStringSubmatch(m[1])
+		if op == nil || key == nil {
+			return nil
+		}
+		got := quotedAll(key[2])
+		if len(got) == 0 {
+			return nil
+		}
+		return map[string]any{op[1]: map[string]any{key[1]: got}}
+	}
+	return nil
+}
+
+// extractPolicyDocumentData reads a `data "aws_iam_policy_document"` block — HCL, not
+// JSON, with `statement { actions = [...] effect resources condition {...} }`.
+//
+// Both of the control set's CONDITION cases are written this way, and nothing read them.
+// They were not reported as unparsed either: the jsonencode regex wandered into the next
+// resource and returned the role's trust policy, so fn3 and fp5 were both scored against
+// sts:AssumeRole. fp5 "passed". A control set is worth exactly the fidelity of what feeds
+// it, and a case graded on the wrong document is not evidence in either direction.
+func extractPolicyDocumentData(tf string) (*cloudiam.Document, bool) {
+	i := strings.Index(tf, `data "aws_iam_policy_document"`)
+	if i < 0 {
+		return nil, false
+	}
+	body, ok := braceBody(tf[i:])
+	if !ok {
+		return nil, false
+	}
+	var doc cloudiam.Document
+	for rest := body; ; {
+		j := strings.Index(rest, "statement")
+		if j < 0 {
+			break
+		}
+		sb, ok := braceBody(rest[j:])
+		if !ok {
+			break
+		}
+		rest = rest[j+len("statement")+len(sb):]
+
+		st := tfStatement{Effect: "Allow"}
+		if m := regexp.MustCompile(`effect\s*=\s*"([^"]+)"`).FindStringSubmatch(sb); m != nil {
+			st.Effect = m[1]
+		}
+		if m := regexp.MustCompile(`(?s)actions\s*=\s*\[(.*?)\]`).FindStringSubmatch(sb); m != nil {
+			st.Action = quotedAll(m[1])
+		}
+		if m := regexp.MustCompile(`(?s)not_actions\s*=\s*\[(.*?)\]`).FindStringSubmatch(sb); m != nil {
+			st.NotAction = quotedAll(m[1])
+		}
+		if m := regexp.MustCompile(`(?s)resources\s*=\s*\[(.*?)\]`).FindStringSubmatch(sb); m != nil {
+			st.Resource = quotedAll(m[1])
+		}
+		if c := parseCondition(sb); c != nil {
+			st.Condition = c
+		} else if strings.Contains(sb, "condition") {
+			st.Condition = map[string]any{"Unmodelled": map[string]any{"x": "y"}}
+		}
+		if len(st.Action) == 0 && len(st.NotAction) == 0 {
+			continue
+		}
+		raw, err := json.Marshal(st)
+		if err != nil {
+			continue
+		}
+		var cs cloudiam.Statement
+		if json.Unmarshal(raw, &cs) != nil {
+			continue
+		}
+		doc.Statement = append(doc.Statement, cs)
+	}
+	if len(doc.Statement) == 0 {
+		return nil, false
+	}
+	return &doc, true
+}
+
+// braceBody returns the contents of the first balanced {...} in s. Brace counting rather
+// than a regex because condition blocks nest inside statement blocks, and a non-greedy
+// regex stops at the wrong brace — the same mistake that made policyBlock read the next
+// resource entirely.
+func braceBody(s string) (string, bool) {
+	start := strings.Index(s, "{")
+	if start < 0 {
+		return "", false
+	}
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return s[start+1 : i], true
+			}
+		}
+	}
+	return "", false
 }

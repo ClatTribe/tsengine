@@ -354,18 +354,28 @@ func addPrivesc(inv *cloudgraph.Inventory, principal string, policiesJSON []stri
 	}
 
 	ps := cloudiam.PolicySet{Identity: docs, Boundary: boundary, SameAccount: true}
-	can := func(a string) bool {
-		dec, _ := cloudiam.Authorize(cloudiam.Request{Principal: principal, Action: a, Resource: "*"}, ps)
-		return dec == cloudiam.Allow
+	// Ask about resources these grants actually REACH, not the literal "*". A policy
+	// scoped to arn:aws:iam::<acct>:policy/team-* — the shape a partly-least-privilege
+	// account has — matched nothing when the question was asked about "*", so its
+	// escalation was silently invisible. cloudiam.CandidateResources also refuses the
+	// AWS-owned `aws` account namespace, which is the difference between a grant that
+	// can rewrite a customer policy and one that can rewrite nothing.
+	targets := cloudiam.CandidateResources(docs, cloudiam.AccountOf(principal))
+	allowOnAny := func(a string, requireFirm bool) bool {
+		for _, res := range targets {
+			dec, cond := cloudiam.Authorize(cloudiam.Request{Principal: principal, Action: a, Resource: res}, ps)
+			if dec == cloudiam.Allow && (!requireFirm || !cond) {
+				return true
+			}
+		}
+		return false
 	}
+	can := func(a string) bool { return allowOnAny(a, false) }
 	techs := cloudiam.DetectPrivesc(can)
 	if len(techs) == 0 {
 		return
 	}
-	canFirm := func(a string) bool {
-		dec, cond := cloudiam.Authorize(cloudiam.Request{Principal: principal, Action: a, Resource: "*"}, ps)
-		return dec == cloudiam.Allow && !cond
-	}
+	canFirm := func(a string) bool { return allowOnAny(a, true) }
 	condition := ""
 	if len(cloudiam.DetectPrivesc(canFirm)) == 0 {
 		condition = "iam-condition-gated escalation (config-possible; validate live)"
