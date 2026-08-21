@@ -26,6 +26,24 @@ type M365Tenant struct {
 	TeamsGuestUnrestricted  bool   `json:"teams_guest_unrestricted"`  // no guest-access policy (guests get broad access)
 	TeamsOpenFederation     bool   `json:"teams_open_federation"`     // external federation open to ALL domains
 	LegacyAuthEnabled       bool   `json:"legacy_auth_enabled"`       // basic/legacy auth allowed (password-spray + MFA-bypass)
+	// PhishingResistantMFANotEnforced: MFA is required, but ANY method satisfies it — so a
+	// push notification or a code counts. Phishing-resistant methods (FIDO2, certificate,
+	// Windows Hello) are the ones an adversary-in-the-middle proxy cannot replay, and the
+	// distinction is the whole reason CISA writes a separate policy for it. Detecting
+	// "MFA is on" is a WEAKER claim than "MFA cannot be phished".
+	// MS.AAD.3.1v1 (all users) / 3.6v1 (privileged).
+	PhishingResistantMFANotEnforced           bool `json:"phishing_resistant_mfa_not_enforced,omitempty"`
+	PhishingResistantMFANotEnforcedPrivileged bool `json:"phishing_resistant_mfa_not_enforced_privileged,omitempty"`
+	// SMTPAuthEnabled: SMTP AUTH specifically, as distinct from legacy auth generally. It
+	// is the one legacy protocol that survives most "block legacy auth" projects because a
+	// multifunction printer or a monitoring script still uses it — and it accepts a
+	// password with no second factor. MS.EXO.5.1v1.
+	SMTPAuthEnabled bool `json:"smtp_auth_enabled,omitempty"`
+	// UnmanagedUsersCanInitiateContact is the INBOUND direction, distinct from
+	// UnmanagedUserContactAllowed: this is a consumer Teams account starting a chat with
+	// YOUR staff. That is the direction phishing arrives from, and it needs no invitation
+	// and no guest account. MS.TEAMS.2.2v2.
+	UnmanagedUsersCanInitiateContact bool `json:"unmanaged_users_can_initiate_contact,omitempty"`
 	// InternalUsersNotAutoAdmitted INVERTS the obvious reading, and CISA's reasoning is
 	// worth stating: if authenticated internal users wait in the lobby too, organisers get
 	// lobby fatigue and start admitting everyone without looking. Auto-admitting known
@@ -217,6 +235,41 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Teams guest access has no guest-access policy", target+"/teams",
 			"Guests can join Teams with no guest-access policy restricting what they can see/do. Apply a guest-access policy (restrict channels, file access, and screen sharing).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}})))
+	}
+	if t.PhishingResistantMFANotEnforced || t.PhishingResistantMFANotEnforcedPrivileged {
+		who := "all users"
+		sev := types.SeverityHigh
+		if !t.PhishingResistantMFANotEnforced {
+			who = "privileged users"
+		}
+		f = append(f, finding(id(), "sspm::m365::phishing-resistant-mfa-not-enforced", sev,
+			"Phishing-resistant MFA is not enforced for "+who, target+"/entra",
+			"MFA is required but any method satisfies it, so a push prompt or a typed code counts. Those are "+
+				"exactly what an adversary-in-the-middle proxy replays: the user completes a real challenge on a "+
+				"real-looking page and the attacker keeps the session. FIDO2, certificate-based and Windows "+
+				"Hello are bound to the origin and cannot be relayed. Require an authentication strength of "+
+				"phishing-resistant for "+who+" (SCuBA MS.AAD.3.1v1 / 3.6v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.4.2"}, CISv8: []string{"6.3", "6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.SMTPAuthEnabled {
+		f = append(f, finding(id(), "sspm::m365::smtp-auth-enabled", types.SeverityHigh,
+			"SMTP AUTH is enabled", target+"/exchange",
+			"SMTP AUTH accepts a username and password with no second factor. It is the legacy protocol most "+
+				"likely to survive a \"block legacy auth\" project, because a multifunction printer or a "+
+				"monitoring script still uses it and switching those off breaks something visible — so the "+
+				"exception outlives the memory of why it was made. Disable SMTP AUTH tenant-wide and enable it "+
+				"per-mailbox only where genuinely required (SCuBA MS.EXO.5.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.4.2"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.UnmanagedUsersCanInitiateContact {
+		f = append(f, finding(id(), "sspm::m365::unmanaged-users-can-initiate-contact", types.SeverityHigh,
+			"Unmanaged accounts may initiate contact with internal users", target+"/teams",
+			"A consumer Teams account can start a chat with your staff unprompted. This is the INBOUND "+
+				"direction — no invitation, no guest account, no administrator involved — and it is the "+
+				"direction phishing arrives from, carrying the in-product trust of a Teams message rather than "+
+				"the suspicion an email gets. Block unmanaged users from initiating contact "+
+				"(SCuBA MS.TEAMS.2.2v2).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.8"}, CISv8: []string{"9.6"}, NISTCSF: []string{"PR.AC-3"}, NIST80053: []string{"AC-3"}})))
 	}
 	if t.InternalUsersNotAutoAdmitted {
 		f = append(f, finding(id(), "sspm::m365::internal-users-not-auto-admitted", types.SeverityLow,

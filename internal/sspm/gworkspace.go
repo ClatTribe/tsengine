@@ -26,6 +26,30 @@ type GWorkspaceTenant struct {
 	ThirdPartyAPIAccess      bool   `json:"third_party_api_access"`     // any third-party OAuth app can access data (no app allowlist / API controls)
 	GmailExternalAutoForward bool   `json:"gmail_external_autoforward"` // users may auto-forward mail to external addresses (exfil)
 	ExternalCalendarSharing  bool   `json:"external_calendar_sharing"`  // calendar details shared with external/public
+	// PhishingResistant2SVNotEnforced: 2SV is required but any method counts, including a
+	// code. Only a security key is bound to the origin and survives an
+	// adversary-in-the-middle proxy — "2SV is on" is a weaker claim than "2SV cannot be
+	// phished", which is why CISA writes them as separate policies.
+	// GWS.COMMONCONTROLS.1.1v1.
+	PhishingResistant2SVNotEnforced bool `json:"phishing_resistant_2sv_not_enforced,omitempty"`
+	// UnconfiguredThirdPartyAppsAllowed is the THIRD-PARTY twin of
+	// UnconfiguredInternalAppsTrusted: apps nobody has reviewed, from outside the domain
+	// entirely. GWS.COMMONCONTROLS.10.4v1.
+	UnconfiguredThirdPartyAppsAllowed bool `json:"unconfigured_third_party_apps_allowed,omitempty"`
+	// DriveSDKEnabled: the Drive SDK lets a third-party application read and write Drive
+	// through the API. Distinct from general app access because it reaches the FILES
+	// rather than the account. GWS.DRIVEDOCS.4.1v1.
+	DriveSDKEnabled bool `json:"drive_sdk_enabled,omitempty"`
+	// POPIMAPEnabled: POP and IMAP authenticate with a password alone and stream an entire
+	// mailbox. After an account compromise this is how the mail actually leaves — it is
+	// the exfiltration step, not the entry. Distinct from less-secure-apps, which is a
+	// broader toggle. GWS.GMAIL.9.1v1.
+	POPIMAPEnabled bool `json:"pop_imap_enabled,omitempty"`
+	// SecondaryCalendarExternalSharing: secondary calendars share separately from the
+	// primary one, and are where project and interview schedules usually live — so the
+	// calendar most worth reading is the one the primary setting does not cover.
+	// GWS.CALENDAR.1.2v1.
+	SecondaryCalendarExternalSharing bool `json:"secondary_calendar_external_sharing,omitempty"`
 	// CalendarInteropEnabled / CalendarInteropBasicAuth: Calendar Interop shares free/busy
 	// with an external Exchange organisation. The SHALL is not about interop itself but
 	// about HOW it authenticates: basic auth means a standing credential, replayable and
@@ -256,6 +280,53 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.PhishingResistant2SVNotEnforced {
+		f = append(f, finding(id(), "sspm::google_workspace::phishing-resistant-2sv-not-enforced", types.SeverityHigh,
+			"Phishing-resistant 2-step verification is not enforced", target,
+			"2SV is required but any method satisfies it, including a code the user types. That is exactly "+
+				"what an adversary-in-the-middle proxy relays: the user completes a genuine challenge on a "+
+				"convincing page and the attacker keeps the session. Only a security key is bound to the origin "+
+				"and cannot be replayed. Enforce security keys (SCuBA GWS.COMMONCONTROLS.1.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.4.2"}, CISv8: []string{"6.3", "6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.UnconfiguredThirdPartyAppsAllowed {
+		f = append(f, finding(id(), "sspm::google_workspace::unconfigured-third-party-apps-allowed", types.SeverityMedium,
+			"Users may access unconfigured third-party applications", target,
+			"Applications nobody has reviewed — from outside the domain entirely — can be granted access by "+
+				"users. Unlike an internal app there is no colleague to ask about it and no registration to "+
+				"look up; the only thing standing between the app and the data is a consent screen read in a "+
+				"hurry. Require configuration before third-party app access "+
+				"(SCuBA GWS.COMMONCONTROLS.10.4v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-6"}})))
+	}
+	if t.DriveSDKEnabled {
+		f = append(f, finding(id(), "sspm::google_workspace::drive-sdk-enabled", types.SeverityMedium,
+			"Drive SDK access is enabled", target+"/drive",
+			"Third-party applications can read and write Drive through the API. This reaches the FILES "+
+				"directly rather than the account, so an app with a stale or over-broad grant is a standing "+
+				"channel to every document a user can see — and API access leaves no trace a user would "+
+				"recognise as unusual. Disable Drive SDK access if it is not required "+
+				"(SCuBA GWS.DRIVEDOCS.4.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.3", "CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.POPIMAPEnabled {
+		f = append(f, finding(id(), "sspm::google_workspace::pop-imap-enabled", types.SeverityHigh,
+			"POP and IMAP access is enabled", target+"/gmail",
+			"POP and IMAP authenticate with a password alone and will stream an entire mailbox. After an "+
+				"account compromise this is how the mail actually leaves — it is the exfiltration step rather "+
+				"than the entry, and it looks like a mail client rather than an attack. Disable POP and IMAP "+
+				"(SCuBA GWS.GMAIL.9.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.6"}, GDPR: []string{"Art. 32"}, PCI: []string{"8.4.2"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2", "AC-3"}})))
+	}
+	if t.SecondaryCalendarExternalSharing {
+		f = append(f, finding(id(), "sspm::google_workspace::secondary-calendar-external-sharing", types.SeverityMedium,
+			"Secondary calendars are shared externally", target+"/calendar",
+			"Secondary calendars share separately from the primary one, and they are where project, "+
+				"on-call and interview schedules usually live — so the calendar most worth reading is precisely "+
+				"the one the primary setting does not cover. Restrict external sharing for secondary calendars "+
+				"(SCuBA GWS.CALENDAR.1.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
 	}
 	if t.CalendarInteropBasicAuth {
 		f = append(f, finding(id(), "sspm::google_workspace::calendar-interop-basic-auth", types.SeverityMedium,
