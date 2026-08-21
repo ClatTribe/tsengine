@@ -2,8 +2,11 @@ package platformapi
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -187,14 +190,16 @@ func (d Deps) recordEpisode(ctx context.Context, tenantID, scope string, e *ledg
 		}
 	}
 	rec := platform.NewEpisodeRecord(tenantID, scope, e, verified)
-	if rec.ID == "" {
-		// An episode with no clock is still a real episode; an empty ID would overwrite
-		// the previous one on every run, which turns a corpus into a single row.
-		rec.ID = time.Now().UTC().Format(time.RFC3339Nano)
-	}
 	if rec.RanAt.IsZero() {
 		rec.RanAt = time.Now().UTC()
 	}
+	// The id is a timestamp PLUS a random suffix, and the suffix is not decoration.
+	// A pure RFC3339Nano id collides whenever two episodes land in the same clock tick —
+	// which is not hypothetical: macOS timer granularity is coarse enough that two runs
+	// recorded back to back can read the same nanosecond, and the store keys by id, so the
+	// second silently overwrites the first. A corpus that loses rows under load loses
+	// exactly the rows that came from a busy period.
+	rec.ID = rec.RanAt.UTC().Format(time.RFC3339Nano) + "-" + randSuffix()
 	_ = d.Store.PutEpisode(ctx, rec)
 }
 
@@ -224,4 +229,14 @@ func (d Deps) handleEpisodes(w http.ResponseWriter, r *http.Request, tenantID st
 		"episodes": eps,
 		"stats":    platform.SummarizeEpisodes(eps),
 	})
+}
+
+// randSuffix returns 8 hex characters of entropy, falling back to a nanosecond stamp if
+// the system source fails. The fallback is weaker but never worse than what it replaced.
+func randSuffix() string {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano()%0xffffffff, 16)
+	}
+	return hex.EncodeToString(b[:])
 }

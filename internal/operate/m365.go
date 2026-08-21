@@ -111,6 +111,10 @@ func (m *M365) Fetch(ctx context.Context, token string, now time.Time) (Workspac
 	// degrade to no grants rather than failing the whole posture fetch.
 	if grants, err := m.fetchGrants(ctx, token); err == nil {
 		ws.OAuthGrants = grants
+	} else {
+		// The Graph permission for reading grants + service principals was not consented.
+		// Degrading to no grants is right; reporting that as a clean OAuth posture is not.
+		ws.Unavailable = append(ws.Unavailable, "oauth_grants")
 	}
 	return ws, nil
 }

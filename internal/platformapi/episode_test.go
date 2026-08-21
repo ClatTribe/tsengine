@@ -111,7 +111,10 @@ func TestCloudFinding_SurfaceBoundary(t *testing.T) {
 }
 
 // A corpus with no clock would collapse to one row: every record overwriting the last
-// under an empty ID.
+// under an empty ID. The loop count matters — a timestamp-only id collides whenever two
+// episodes land in the same clock tick, and macOS timer granularity is coarse enough that
+// this really happens. A corpus that loses rows under load loses exactly the rows from the
+// busiest period.
 func TestRecordEpisode_NeverWritesAnEmptyID(t *testing.T) {
 	st := store.NewMemory()
 	d := Deps{Store: st}
@@ -120,12 +123,16 @@ func TestRecordEpisode_NeverWritesAnEmptyID(t *testing.T) {
 	e2 := ledger.NewEpisode(&ledger.Ledger{AgentKind: "cloudagent"}, nil)
 	d.recordEpisode(ctx, "t1", "cloud:t1", e1, nil)
 	d.recordEpisode(ctx, "t1", "cloud:t1", e2, nil)
+	// Back-to-back in a tight loop, so a same-tick collision is likely rather than lucky.
+	for i := 0; i < 50; i++ {
+		d.recordEpisode(ctx, "t1", "cloud:t1", ledger.NewEpisode(&ledger.Ledger{AgentKind: "cloudagent"}, nil), nil)
+	}
 	got, err := st.ListEpisodes(ctx, "t1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("two runs must be two rows, got %d", len(got))
+	if len(got) != 52 {
+		t.Fatalf("52 runs must be 52 rows, got %d — ids collided and rows overwrote each other", len(got))
 	}
 	for _, e := range got {
 		if e.ID == "" || e.RanAt.IsZero() {

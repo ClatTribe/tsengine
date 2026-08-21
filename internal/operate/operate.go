@@ -24,6 +24,26 @@ type Workspace struct {
 	Users       []User         `json:"users"`
 	Domains     []DomainConfig `json:"domains"`
 	OAuthGrants []OAuthGrant   `json:"oauth_grants"`
+	// Unavailable names the parts of this workspace's posture that could NOT be read —
+	// a scope the customer has not consented to, an API that failed, a capability the
+	// provider does not expose. It is the workspace twin of DomainConfig.Unresolved, and
+	// it exists for the same reason.
+	//
+	// THE ZERO VALUES CANNOT TELL THE TWO CASES APART. A tenant with no risky OAuth apps
+	// and a tenant whose grant read was never consented to both arrive here with
+	// OAuthGrants empty — and the second one then reads, on the customer's screen, as a
+	// clean OAuth posture. That is the most valuable finding this engine produces (a
+	// shadow-admin third-party app is critical) reported as its own opposite.
+	//
+	// Values: "oauth_grants", "mfa", "users". Empty for posted snapshots, which assert
+	// their values directly — so snapshot behaviour is unchanged and this is additive.
+	Unavailable []string `json:"unavailable,omitempty"`
+	// ProviderLimits names checks this PROVIDER cannot support at all, as opposed to ones
+	// that failed. Distinct from Unavailable because the remedy differs: an unavailable
+	// read is fixed by granting a scope, a provider limit is not fixable and needs another
+	// route entirely. Telling a customer to grant a permission that would not help is
+	// worse than saying nothing.
+	ProviderLimits []string `json:"provider_limits,omitempty"`
 }
 
 // User is one workforce identity.
@@ -113,6 +133,10 @@ func Assess(ws Workspace, opts Options) []types.Finding {
 	f = append(f, checkIncompleteOffboarding(ws, now, id)...)
 	f = append(f, checkEmailAuth(ws, now, id)...)
 	f = append(f, checkOAuthGrants(ws, now, id)...)
+	// Coverage disclosure LAST. What this scan could not check is part of its result: a
+	// grant read that never ran and a workspace with no risky apps produce the same empty
+	// list, and only one of them means the customer is safe.
+	f = append(f, CoverageGaps(ws, now)...)
 	return f
 }
 
