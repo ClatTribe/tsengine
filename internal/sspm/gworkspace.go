@@ -26,6 +26,38 @@ type GWorkspaceTenant struct {
 	ThirdPartyAPIAccess      bool   `json:"third_party_api_access"`     // any third-party OAuth app can access data (no app allowlist / API controls)
 	GmailExternalAutoForward bool   `json:"gmail_external_autoforward"` // users may auto-forward mail to external addresses (exfil)
 	ExternalCalendarSharing  bool   `json:"external_calendar_sharing"`  // calendar details shared with external/public
+	// SPOOFING PROTECTION. Three settings, one control, and the one that matters most for
+	// business-email compromise: 7.1 catches look-alike DOMAINS, 7.2 catches a display
+	// name impersonating an employee (the CEO-fraud shape, which needs no domain trick at
+	// all), 7.5 stops inbound mail spoofing your own domain into your Groups.
+	// GWS.GMAIL.7.1v1 / 7.2v1 / 7.5v1.
+	SimilarDomainSpoofProtectionOff bool `json:"similar_domain_spoof_protection_off,omitempty"`
+	EmployeeNameSpoofProtectionOff  bool `json:"employee_name_spoof_protection_off,omitempty"`
+	GroupsSpoofProtectionOff        bool `json:"groups_spoof_protection_off,omitempty"`
+	// AUTO-APPLY. Google ships new mail protections continuously; with auto-apply off a
+	// tenant's defences are frozen at whatever was configured on the day someone last
+	// looked. This is the setting that decides whether posture DECAYS.
+	// GWS.GMAIL.6.4v1 / 7.7v1.
+	LinkAutoApplyOff  bool `json:"link_auto_apply_off,omitempty"`
+	SpoofAutoApplyOff bool `json:"spoof_auto_apply_off,omitempty"`
+	// PreDeliveryScanningOff: enhanced pre-delivery scanning is disabled, so suspicious
+	// mail is assessed only after it is already sitting in the mailbox.
+	// GWS.GMAIL.15.1v1.
+	PreDeliveryScanningOff bool `json:"pre_delivery_scanning_off,omitempty"`
+	// UserEmailUploadsEnabled: users may upload mail from outside into Workspace,
+	// introducing files that never passed the inbound filters at all. GWS.GMAIL.8.1v1.
+	UserEmailUploadsEnabled bool `json:"user_email_uploads_enabled,omitempty"`
+	// ExternalOutboundGateway: outbound mail may be routed through a non-Google server.
+	// Whoever runs that server reads everything the organisation sends, and can alter it,
+	// with nothing in Workspace's own logs to show for it. GWS.GMAIL.12.1v1.
+	ExternalOutboundGateway bool `json:"external_outbound_gateway,omitempty"`
+	// SpamBypassAllSenders: the org-wide toggle that bypasses spam filtering and hides
+	// warnings for ALL senders — distinct from a per-domain bypass list, and far worse,
+	// because it removes the warnings a user would otherwise still see. GWS.GMAIL.18.3v1.
+	SpamBypassAllSenders bool `json:"spam_bypass_all_senders,omitempty"`
+	// MailDelegationEnabled: users may grant others full mailbox access. Delegation
+	// survives the delegate changing role and is rarely reviewed. GWS.GMAIL.1.1v1.
+	MailDelegationEnabled bool `json:"mail_delegation_enabled,omitempty"`
 	// SESSION AND DEVICE TRUST. Two settings that decide how long a stolen credential
 	// keeps working, which is usually a bigger question than how it was stolen.
 	//
@@ -213,6 +245,71 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if n := spoofGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::google_workspace::spoofing-protection-disabled", types.SeverityHigh,
+			"Gmail spoofing protection is off ("+strings.Join(n, ", ")+")", target+"/gmail",
+			"Inbound mail is not being checked for impersonation: "+strings.Join(n, ", ")+
+				". Employee-name spoofing is the one to look at first — business-email compromise usually needs "+
+				"no domain trick at all, just a display name your staff recognise on a message asking for a "+
+				"payment or a password. Enable Gmail's spoofing and authentication protections "+
+				"(SCuBA GWS.GMAIL.7.1v1 / 7.2v1 / 7.5v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.8"}, CISv8: []string{"9.6"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3", "SI-8"}})))
+	}
+	if n := autoApplyGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::google_workspace::security-auto-apply-off", types.SeverityMedium,
+			"Gmail does not auto-apply future recommended protections ("+strings.Join(n, ", ")+")", target+"/gmail",
+			"New protections Google ships will not be applied: "+strings.Join(n, ", ")+
+				". This is the setting that decides whether posture DECAYS — with it off, the tenant's defences "+
+				"stay frozen at whatever was configured the day someone last looked, while the attacks they "+
+				"were built against keep moving. Allow automatic application of recommended settings "+
+				"(SCuBA GWS.GMAIL.6.4v1 / 7.7v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.1"}, CISv8: []string{"9.6"}, NISTCSF: []string{"PR.IP-1"}, NIST80053: []string{"SI-2"}})))
+	}
+	if t.PreDeliveryScanningOff {
+		f = append(f, finding(id(), "sspm::google_workspace::pre-delivery-scanning-off", types.SeverityHigh,
+			"Enhanced pre-delivery message scanning is disabled", target+"/gmail",
+			"Suspicious mail is assessed only after it is already in the mailbox. Pre-delivery scanning is "+
+				"the difference between a message the user never sees and one they have to decide about — and "+
+				"the decision is made in the two seconds before a morning meeting. Enable enhanced "+
+				"pre-delivery scanning (SCuBA GWS.GMAIL.15.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.8"}, CISv8: []string{"9.6"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3"}})))
+	}
+	if t.ExternalOutboundGateway {
+		f = append(f, finding(id(), "sspm::google_workspace::external-outbound-gateway", types.SeverityHigh,
+			"Outbound mail may be routed through a non-Google server", target+"/gmail",
+			"A per-user outbound gateway sends mail through a server Google does not operate. Whoever runs "+
+				"that server reads everything the organisation sends and can alter it in transit, and none of "+
+				"it appears in Workspace's own logs — the interception is indistinguishable from normal "+
+				"delivery from inside the tenant. Disable per-user outbound gateways "+
+				"(SCuBA GWS.GMAIL.12.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6", "CC6.7"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.10"}, NISTCSF: []string{"PR.DS-2"}, NIST80053: []string{"SC-8"}})))
+	}
+	if t.UserEmailUploadsEnabled {
+		f = append(f, finding(id(), "sspm::google_workspace::user-email-uploads-enabled", types.SeverityMedium,
+			"Users may upload external mail into Workspace", target+"/gmail",
+			"Mail can be imported from outside the tenant, bringing attachments and links that never passed "+
+				"the inbound filters — the protections are applied at the front door and this is a side "+
+				"entrance. Disable user email uploads (SCuBA GWS.GMAIL.8.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.8"}, CISv8: []string{"9.6"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3"}})))
+	}
+	if t.SpamBypassAllSenders {
+		f = append(f, finding(id(), "sspm::google_workspace::spam-bypass-all-senders", types.SeverityHigh,
+			"Spam filtering is bypassed and warnings hidden for all senders", target+"/gmail",
+			"The org-wide bypass is on: spam filtering is skipped and warning banners suppressed for every "+
+				"sender, internal and external. This is worse than a per-domain allowlist because it removes "+
+				"the warning a user would otherwise still see — the filter and the last line of defence go "+
+				"together. Disable the bypass (SCuBA GWS.GMAIL.18.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.8"}, CISv8: []string{"9.6"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3", "SI-8"}})))
+	}
+	if t.MailDelegationEnabled {
+		f = append(f, finding(id(), "sspm::google_workspace::mail-delegation-enabled", types.SeverityMedium,
+			"Mail delegation is enabled", target+"/gmail",
+			"Users may grant others full access to their mailbox. Delegation is granted for a reason that "+
+				"expires — cover during leave, an assistant who changed role — and is almost never reviewed "+
+				"afterwards, so it accumulates as standing access to the most sensitive store in the company. "+
+				"Disable mail delegation, or review existing grants (SCuBA GWS.GMAIL.1.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-6"}})))
 	}
 	if t.DeviceTrustAllowed {
 		f = append(f, finding(id(), "sspm::google_workspace::device-trust-allowed", types.SeverityHigh,
@@ -502,6 +599,33 @@ func driveWarningGapsOf(t GWorkspaceTenant) []string {
 	}
 	if t.DriveOutOfDomainWarningsDisabled {
 		n = append(n, "no out-of-domain file-level warning")
+	}
+	return n
+}
+
+// spoofGapsOf names which spoofing protections are off.
+func spoofGapsOf(t GWorkspaceTenant) []string {
+	var n []string
+	if t.SimilarDomainSpoofProtectionOff {
+		n = append(n, "look-alike domains not detected")
+	}
+	if t.EmployeeNameSpoofProtectionOff {
+		n = append(n, "employee-name impersonation not detected")
+	}
+	if t.GroupsSpoofProtectionOff {
+		n = append(n, "Groups not protected from mail spoofing your own domain")
+	}
+	return n
+}
+
+// autoApplyGapsOf names which auto-apply settings are off — the posture-decay control.
+func autoApplyGapsOf(t GWorkspaceTenant) []string {
+	var n []string
+	if t.LinkAutoApplyOff {
+		n = append(n, "links and external images")
+	}
+	if t.SpoofAutoApplyOff {
+		n = append(n, "spoofing and authentication")
 	}
 	return n
 }
