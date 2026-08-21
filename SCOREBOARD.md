@@ -46,9 +46,34 @@ it would equally overstate us on a differently-weighted corpus. Against a partia
 that mix, a leaderboard comparison is meaningless in both directions.
 
 **What this is worth: item 1 doing its job for item 2.** The weakest measured web capability
-is now named with evidence — path traversal, 4 of 816, with nuclei's `dast/` and
-`http/fuzzing/` sets confirmed present in the image, so it is a detection gap and not a
-missing corpus. That is exactly what `improveloop.Weakest` exists to consume.
+is path traversal — 4 of 816 — and the cause is now narrowed past "we score badly" to a
+specific, actionable statement.
+
+Measured, in order, each ruling out a cheaper explanation:
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| the corpus is absent from the image | `find` in the sandbox | 13,510 templates, incl. `dast/` + `http/fuzzing/` |
+| the crawl never reaches LFI cases | count discovered URLs | 972 LFI URLs, **416 with the `?target=` param** |
+| DAST mode is not loading templates | `nuclei -dast -stats` | **248 templates loaded and executed** |
+| a targeted tag set would find it | `-tags lfi`, `-tags lfi,traversal -dast`, `-t http/fuzzing/` | **0 findings on all three** |
+
+**So nuclei cannot detect this class, and no template selection fixes it.** That is a
+capability statement about the tool, not a wiring bug and not a scoring artefact — which
+matters, because every cheaper explanation was checked first and each one held up until it
+didn't.
+
+The §13-compliant fix is a param-level traversal fuzzer rather than an in-house detector:
+send traversal payloads into the discovered `?target=`-style parameters and confirm on a
+concrete marker (a `root:x:` line, an `[extension]` INI header) rather than a length
+differential. **ffuf is already wrapped and already in the image** — it is dispatched today
+for content discovery, and param-position fuzzing with a traversal wordlist is a new
+dispatch of an existing tool, not a new engine.
+
+NOT attempted here on purpose. Traversal fuzzing is FP-prone, this corpus is 73% of the
+WAVSEP cases, and a half-built detector that guesses would trade the one genuinely good
+number on this row (sqli 57.58%, zero false positives) for a worse one. It is specified,
+measured and left as the next unit rather than rushed.
 
 **Provenance note on the SAST row.** It read **39%** for roughly 1,100 PRs — a figure predating the
 neutral OWASP measurement, which was published in #1223 and recorded in CLAUDE.md §16 while this table
