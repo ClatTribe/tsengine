@@ -48,3 +48,22 @@ func TestScorePolicyCases_Live(t *testing.T) {
 		t.Fatal("no cases scored — the corpus shape changed and the extractor stopped matching")
 	}
 }
+
+// TestScoreGCPPrivesc_Live scores the GCP catalogue against Rhino's published one.
+//
+//	RHINO_GCP_CATALOGUE=/path/to/GCP-IAM-Privilege-Escalation/PrivEscScanner/check_for_privesc.py \
+//	  go test ./internal/bench/ -run GCPPrivesc_Live -v
+func TestScoreGCPPrivesc_Live(t *testing.T) {
+	path := os.Getenv("RHINO_GCP_CATALOGUE")
+	if path == "" {
+		t.Skip("set RHINO_GCP_CATALOGUE to PrivEscScanner/check_for_privesc.py")
+	}
+	res, err := ScoreGCPPrivesc(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("\n" + RenderGCPPrivesc(res))
+	if res.Total == 0 {
+		t.Fatal("no methods parsed — the catalogue's shape changed and the extractor stopped matching")
+	}
+}
