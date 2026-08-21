@@ -26,6 +26,17 @@ type GWorkspaceTenant struct {
 	ThirdPartyAPIAccess      bool   `json:"third_party_api_access"`     // any third-party OAuth app can access data (no app allowlist / API controls)
 	GmailExternalAutoForward bool   `json:"gmail_external_autoforward"` // users may auto-forward mail to external addresses (exfil)
 	ExternalCalendarSharing  bool   `json:"external_calendar_sharing"`  // calendar details shared with external/public
+	// CalendarInteropEnabled / CalendarInteropBasicAuth: Calendar Interop shares free/busy
+	// with an external Exchange organisation. The SHALL is not about interop itself but
+	// about HOW it authenticates: basic auth means a standing credential, replayable and
+	// unprotected by MFA, held by another organisation's mail system.
+	// GWS.CALENDAR.3.1v1 / 3.2v1.
+	CalendarInteropEnabled   bool `json:"calendar_interop_enabled,omitempty"`
+	CalendarInteropBasicAuth bool `json:"calendar_interop_basic_auth,omitempty"`
+	// AppointmentPaymentsEnabled: appointment scheduling can take payments, which puts a
+	// payment flow — and the compliance scope that follows it — inside a calendar feature
+	// nobody assessed as a payment system. GWS.CALENDAR.4.1v1.
+	AppointmentPaymentsEnabled bool `json:"appointment_payments_enabled,omitempty"`
 	// SPOOFING PROTECTION. Three settings, one control, and the one that matters most for
 	// business-email compromise: 7.1 catches look-alike DOMAINS, 7.2 catches a display
 	// name impersonating an employee (the CEO-fraud shape, which needs no domain trick at
@@ -245,6 +256,38 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.CalendarInteropBasicAuth {
+		f = append(f, finding(id(), "sspm::google_workspace::calendar-interop-basic-auth", types.SeverityMedium,
+			"Calendar Interop authenticates with basic auth rather than the Graph API", target+"/calendar",
+			"Free/busy sharing with an external Exchange organisation is authenticated by a standing "+
+				"credential rather than the Graph API. Basic auth is replayable, unprotected by MFA, and the "+
+				"credential lives in another organisation's mail system where your controls do not reach. Use "+
+				"the Graph API for Calendar Interop (SCuBA GWS.CALENDAR.3.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2", "IA-5"}})))
+	}
+	// NOT an else-branch. 3.1 and 3.2 are different requirements with different fixes:
+	// "disable Interop" and "if you use Interop, do not authenticate it with basic auth".
+	// A tenant using Interop over the Graph API violates the first and satisfies the
+	// second, so collapsing them would silently drop a finding for exactly the tenant that
+	// did the harder half of the work.
+	if t.CalendarInteropEnabled {
+		f = append(f, finding(id(), "sspm::google_workspace::calendar-interop-enabled", types.SeverityLow,
+			"Calendar Interop is enabled", target+"/calendar",
+			"Free/busy data is shared with an external Exchange organisation. Availability patterns reveal "+
+				"more than they appear to — who meets whom, how often, and when something unusual is "+
+				"happening — which is useful reconnaissance for social engineering. Disable Interop if it is "+
+				"not needed (SCuBA GWS.CALENDAR.3.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.AppointmentPaymentsEnabled {
+		f = append(f, finding(id(), "sspm::google_workspace::appointment-payments-enabled", types.SeverityLow,
+			"Appointment scheduling with payments is enabled", target+"/calendar",
+			"Calendar can take payments, which places a payment flow — and the PCI scope that follows it — "+
+				"inside a feature nobody assessed as a payment system. The exposure is less the flow itself "+
+				"than that it sits outside whatever review payment handling normally gets. Disable "+
+				"appointment payments unless deliberately in scope (SCuBA GWS.CALENDAR.4.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, PCI: []string{"12.5.1"}, CISv8: []string{"3.3"}})))
 	}
 	if n := spoofGapsOf(t); len(n) > 0 {
 		f = append(f, finding(id(), "sspm::google_workspace::spoofing-protection-disabled", types.SeverityHigh,

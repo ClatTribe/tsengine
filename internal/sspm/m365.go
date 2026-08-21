@@ -26,6 +26,24 @@ type M365Tenant struct {
 	TeamsGuestUnrestricted  bool   `json:"teams_guest_unrestricted"`  // no guest-access policy (guests get broad access)
 	TeamsOpenFederation     bool   `json:"teams_open_federation"`     // external federation open to ALL domains
 	LegacyAuthEnabled       bool   `json:"legacy_auth_enabled"`       // basic/legacy auth allowed (password-spray + MFA-bypass)
+	// InternalUsersNotAutoAdmitted INVERTS the obvious reading, and CISA's reasoning is
+	// worth stating: if authenticated internal users wait in the lobby too, organisers get
+	// lobby fatigue and start admitting everyone without looking. Auto-admitting known
+	// internal users is what keeps the lobby MEANINGFUL for the participants it exists to
+	// stop. So the finding fires when internal users are NOT auto-admitted.
+	// MS.TEAMS.1.4v1.
+	InternalUsersNotAutoAdmitted bool `json:"internal_users_not_auto_admitted,omitempty"`
+	// MeetingRecordingUnrestricted / AlwaysRecordEvents: recordings are a durable copy of
+	// whatever was said and shown, stored and shared with the same controls as any other
+	// file — and "always record" removes the moment anyone decides whether this particular
+	// conversation should have one. MS.TEAMS.1.6v1 / 1.7v2.
+	MeetingRecordingUnrestricted bool `json:"meeting_recording_unrestricted,omitempty"`
+	AlwaysRecordEvents           bool `json:"always_record_events,omitempty"`
+	// UnmanagedUserContactAllowed: internal users may start chats with accounts in no
+	// managed tenant — consumer Teams accounts. The other side has no organisation behind
+	// it, so there is nobody to ask about it and no directory to check it against.
+	// MS.TEAMS.2.3v2.
+	UnmanagedUserContactAllowed bool `json:"unmanaged_user_contact_allowed,omitempty"`
 	// APPLICATION CREDENTIALS. A service-principal secret or certificate is a credential
 	// with no human attached: no MFA, no password reset, no offboarding. Lifetime is the
 	// only control on it, which is why "how long" matters more here than anywhere else —
@@ -199,6 +217,35 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Teams guest access has no guest-access policy", target+"/teams",
 			"Guests can join Teams with no guest-access policy restricting what they can see/do. Apply a guest-access policy (restrict channels, file access, and screen sharing).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}})))
+	}
+	if t.InternalUsersNotAutoAdmitted {
+		f = append(f, finding(id(), "sspm::m365::internal-users-not-auto-admitted", types.SeverityLow,
+			"Internal users are not admitted to meetings automatically", target+"/teams",
+			"Authenticated internal users wait in the lobby alongside everyone else. That sounds stricter "+
+				"and is not: organisers facing a queue of colleagues every meeting learn to admit the whole "+
+				"lobby without reading it, which is exactly the habit the lobby exists to prevent. Auto-admit "+
+				"internal users so the lobby stays meaningful for the participants it is there to stop "+
+				"(SCuBA MS.TEAMS.1.4v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}})))
+	}
+	if n := recordingGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::m365::meeting-recording-unrestricted", types.SeverityMedium,
+			"Meeting recording is unrestricted ("+strings.Join(n, ", ")+")", target+"/teams",
+			"Recordings are a durable copy of everything said and shown, stored and shared with the same "+
+				"controls as any other file — and reviewed with far less care, because nobody thinks of a "+
+				"meeting as a document. \"Always record\" is worse still: it removes the moment anyone decides "+
+				"whether this particular conversation should leave a copy. Restrict recording "+
+				"(SCuBA MS.TEAMS.1.6v1 / 1.7v2).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.UnmanagedUserContactAllowed {
+		f = append(f, finding(id(), "sspm::m365::unmanaged-user-contact-allowed", types.SeverityMedium,
+			"Internal users may initiate contact with unmanaged accounts", target+"/teams",
+			"Staff can start Teams chats with accounts that belong to no managed tenant — consumer "+
+				"accounts. There is no organisation behind the other side to ask about it, no directory to "+
+				"check it against, and the chat carries the same in-product trust as a colleague's. Restrict "+
+				"contact with unmanaged users (SCuBA MS.TEAMS.2.3v2).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.6"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}})))
 	}
 	if n := appCredentialGapsOf(t); len(n) > 0 {
 		f = append(f, finding(id(), "sspm::m365::app-credential-lifetime", types.SeverityMedium,
@@ -483,6 +530,18 @@ func guestGapsOf(t M365Tenant) []string {
 	}
 	if t.GuestInvitesAnyDomain {
 		n = append(n, "guests may be invited from any domain")
+	}
+	return n
+}
+
+// recordingGapsOf names which recording controls are loose.
+func recordingGapsOf(t M365Tenant) []string {
+	var n []string
+	if t.MeetingRecordingUnrestricted {
+		n = append(n, "recording is not restricted")
+	}
+	if t.AlwaysRecordEvents {
+		n = append(n, "events are set to always record")
 	}
 	return n
 }
