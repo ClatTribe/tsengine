@@ -78,6 +78,22 @@ type M365Tenant struct {
 	// TeamsAnonymousStartMeeting: anonymous (unauthenticated) users may START a
 	// meeting, not merely join one. MS.TEAMS.1.2v2.
 	TeamsAnonymousStartMeeting bool `json:"teams_anonymous_start_meeting,omitempty"`
+	// TeamsAutoAdmitAnonymous: anonymous participants and dial-in callers skip the lobby
+	// entirely. The lobby is the ONLY point at which an uninvited attendee can be stopped,
+	// so bypassing it means whoever holds a forwarded link is in the room.
+	// MS.TEAMS.1.3v1.
+	TeamsAutoAdmitAnonymous bool `json:"teams_auto_admit_anonymous,omitempty"`
+	// TeamsDialInBypassLobby: dial-in callers specifically bypass the lobby. Separate from
+	// the above because it is a separate setting with a separate owner, and a tenant can
+	// have one without the other. MS.TEAMS.1.5v1.
+	TeamsDialInBypassLobby bool `json:"teams_dial_in_bypass_lobby,omitempty"`
+	// TeamsExternalControlRequest: external participants may request control of a shared
+	// screen — handing an outsider the presenter's desktop. MS.TEAMS.1.1v1.
+	TeamsExternalControlRequest bool `json:"teams_external_control_request,omitempty"`
+	// TeamsEmailIntegrationEnabled: anyone who learns a channel's email address can post
+	// into it, which is an unauthenticated content-injection and phishing path into a
+	// trusted internal surface. The one SHALL in this group. MS.TEAMS.4.1v1.
+	TeamsEmailIntegrationEnabled bool `json:"teams_email_integration_enabled,omitempty"`
 }
 
 // AssessM365 runs every grounded collaboration/data-sharing posture check over an M365 snapshot. A securely
@@ -116,6 +132,39 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Teams guest access has no guest-access policy", target+"/teams",
 			"Guests can join Teams with no guest-access policy restricting what they can see/do. Apply a guest-access policy (restrict channels, file access, and screen sharing).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}})))
+	}
+	if t.TeamsEmailIntegrationEnabled {
+		f = append(f, finding(id(), "sspm::m365::teams-email-integration-enabled", types.SeverityMedium,
+			"Teams channel email integration is enabled", target+"/teams",
+			"Channels accept mail at a generated address, so anyone who learns or guesses it can post into a "+
+				"channel your staff read as internal — an unauthenticated route for phishing and malware into a "+
+				"trusted surface, with none of the sender checks inbound mail gets. Disable Teams email "+
+				"integration (SCuBA MS.TEAMS.4.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, CISv8: []string{"9.6"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"SC-7"}})))
+	}
+	if t.TeamsAutoAdmitAnonymous {
+		f = append(f, finding(id(), "sspm::m365::teams-auto-admit-anonymous", types.SeverityMedium,
+			"Anonymous and dial-in participants skip the Teams lobby", target+"/teams",
+			"The lobby is the only point at which an uninvited attendee can be stopped. With auto-admit on, "+
+				"whoever holds a forwarded invite is in the room — and in a recorded meeting, in the recording. "+
+				"Require anonymous and dial-in participants to wait in the lobby (SCuBA MS.TEAMS.1.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}, NIST80053: []string{"AC-3"}})))
+	}
+	if t.TeamsDialInBypassLobby {
+		f = append(f, finding(id(), "sspm::m365::teams-dial-in-bypass-lobby", types.SeverityLow,
+			"Dial-in callers bypass the Teams lobby", target+"/teams",
+			"A caller on the phone bridge joins without being admitted. Dial-in identity is a phone number at "+
+				"best, so this is the least-verified way into a meeting and the one least likely to be noticed. "+
+				"Disable dial-in lobby bypass (SCuBA MS.TEAMS.1.5v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}})))
+	}
+	if t.TeamsExternalControlRequest {
+		f = append(f, finding(id(), "sspm::m365::teams-external-control-request", types.SeverityMedium,
+			"External participants can request control of a shared screen", target+"/teams",
+			"An outside participant can ask for control of a presenter's desktop, and a presenter mid-demo "+
+				"clicks accept. That is remote interactive access to a corporate endpoint obtained by asking "+
+				"politely. Block external control requests (SCuBA MS.TEAMS.1.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}, NIST80053: []string{"AC-3"}})))
 	}
 	if t.TeamsOpenFederation {
 		f = append(f, finding(id(), "sspm::m365::teams-open-federation", types.SeverityMedium,

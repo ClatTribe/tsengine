@@ -50,6 +50,10 @@ func worstCaseRules(t *testing.T) map[string]bool {
 		AnyoneLinksNeverExpire:         true,
 		DefaultSharingScope:            "anyone",
 		DefaultLinkPermission:          "edit",
+		TeamsAutoAdmitAnonymous:        true,
+		TeamsDialInBypassLobby:         true,
+		TeamsExternalControlRequest:    true,
+		TeamsEmailIntegrationEnabled:   true,
 		TeamsAnonymousStartMeeting:     true,
 	}, sspm.Options{}))
 	// The expiry rule must also fire on a supplied-but-too-long window, not only on
@@ -67,6 +71,7 @@ func worstCaseRules(t *testing.T) map[string]bool {
 		Name: "acme", DriveSharing: "public", DriveLinkSharingDefault: true,
 		LessSecureAppsEnabled: true, ThirdPartyAPIAccess: true,
 		GmailExternalAutoForward: true, ExternalCalendarSharing: true,
+		ExternalInviteWarningsDisabled: true,
 		// the mandatory-gap fields (mirrors the M365 set)
 		WeakMFAMethodsEnabled:                  true,
 		SuperAdminSelfRecoveryEnabled:          true,

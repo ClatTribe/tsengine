@@ -26,6 +26,11 @@ type GWorkspaceTenant struct {
 	ThirdPartyAPIAccess      bool   `json:"third_party_api_access"`     // any third-party OAuth app can access data (no app allowlist / API controls)
 	GmailExternalAutoForward bool   `json:"gmail_external_autoforward"` // users may auto-forward mail to external addresses (exfil)
 	ExternalCalendarSharing  bool   `json:"external_calendar_sharing"`  // calendar details shared with external/public
+	// ExternalInviteWarningsDisabled: no prompt before sending an invitation outside the
+	// org. The warning is what catches a mistyped domain or a look-alike one BEFORE the
+	// invite carries a meeting link and an attendee list out of the company.
+	// GWS.CALENDAR.2.1v1.
+	ExternalInviteWarningsDisabled bool `json:"external_invite_warnings_disabled,omitempty"`
 
 	// --- Fields below close mandatory (SHALL) gaps found by the CISA SCuBA neutral
 	// benchmark (internal/bench/scuba.go), mirroring the M365 set in m365.go. Every
@@ -124,6 +129,14 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.ExternalInviteWarningsDisabled {
+		f = append(f, finding(id(), "sspm::google_workspace::external-invite-warnings-disabled", types.SeverityLow,
+			"No warning before inviting external guests to a calendar event", target+"/calendar",
+			"Users are not prompted when an invitee is outside the organisation, so a mistyped or look-alike "+
+				"domain receives the meeting link, the subject and the full attendee list with nothing asking "+
+				"the sender to look twice. Enable external-invitation warnings (SCuBA GWS.CALENDAR.2.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
 	}
 	if t.ExternalCalendarSharing {
 		f = append(f, finding(id(), "sspm::google_workspace::external-calendar-sharing", types.SeverityLow,
