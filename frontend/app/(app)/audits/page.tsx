@@ -8,12 +8,13 @@ import { COMPLIANCE_TABS } from "@/lib/tabs";
 import { CreateAudit } from "@/components/audits/create-audit";
 import { AttestControl } from "@/components/audits/attest-control";
 import { issueAudit } from "./actions";
+// The SHARED map, never a local one. This page used to declare its own with six frameworks
+// while the product supports twenty-five, so an audit against any of the other nineteen —
+// CCPA, FedRAMP, DPDP, EU AI Act, CERT-In — rendered its raw key to the auditor.
+import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 
 export const dynamic = "force-dynamic";
 
-const FRAMEWORK_LABEL: Record<string, string> = {
-  soc2: "SOC 2", iso27001: "ISO 27001", pci: "PCI-DSS", hipaa: "HIPAA", nist_csf: "NIST CSF", gdpr: "GDPR",
-};
 const STATUS_TONE: Record<string, string> = { planning: "text-muted", fieldwork: "text-accent", issued: "text-pulse" };
 
 export default async function AuditsPage() {

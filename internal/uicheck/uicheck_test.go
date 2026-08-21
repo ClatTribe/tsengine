@@ -28,7 +28,9 @@ package uicheck
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/internal/tenanteval"
@@ -143,5 +145,61 @@ func TestEveryEvalCaseSourceHasACustomerFacingLabel(t *testing.T) {
 				"the customer.\n\nEvery entry in this map is a sentence about a decision THEY made; "+
 				"an enum name in its place reads as a defect in the thing they just corrected.", s)
 		}
+	}
+}
+
+
+// A shared closed set must not be shadowed by a local copy.
+//
+// frontend/lib/frameworks.ts carries all 25 frameworks and its consistency with grc.Frameworks
+// is already gated (grc.frameworks_e2e_test.go). That gate protects the shared map — it cannot
+// see a PAGE that declares its own. The audits page did exactly that with six frameworks, so an
+// engagement against any of the other nineteen rendered its raw key to the auditor reading it,
+// while the framework mirror-consistency test passed.
+//
+// A local copy of a guarded set is worse than an unguarded set, because the guard's existence is
+// what makes everyone stop looking.
+func TestNoPageShadowsASharedClosedSet(t *testing.T) {
+	shared := []struct{ name, owner string }{
+		{"FRAMEWORK_LABEL", "@/lib/frameworks"},
+		{"FRAMEWORK_DESC", "@/lib/frameworks"},
+		{"FRAMEWORK_CATEGORY", "@/lib/frameworks"},
+	}
+	const root = "../../frontend"
+	var offenders []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			if err == nil && info.IsDir() && (info.Name() == "node_modules" || info.Name() == ".next") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".tsx") && !strings.HasSuffix(path, ".ts") {
+			return nil
+		}
+		if strings.Contains(filepath.ToSlash(path), "/lib/frameworks.ts") {
+			return nil // the owner
+		}
+		b, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return nil
+		}
+		src := string(b)
+		for _, sh := range shared {
+			if regexp.MustCompile(`const\s+` + sh.name + `\b`).MatchString(src) {
+				offenders = append(offenders, path+" declares "+sh.name+" (owned by "+sh.owner+")")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(offenders) > 0 {
+		t.Errorf("%d local copy/copies of a shared closed set:\n  %s\n\n"+
+			"Import from the owning module. A local copy silently covers fewer members than the "+
+			"shared one, and the guard on the shared map cannot see it — which is how six of "+
+			"twenty-five frameworks reached an auditor-facing page while the mirror-consistency "+
+			"test stayed green.", len(offenders), strings.Join(offenders, "\n  "))
 	}
 }
