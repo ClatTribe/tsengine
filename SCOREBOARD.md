@@ -5,7 +5,7 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Category | Metric | Ours | At-par bar | Status |
 |---|---|---|---|---|
 | Web app · DAST | per-class Youden (TPR−FPR) | — not run | 56% — OWASP-ZAP 56% (best OSS DAST); commercial ceiling Acunetix/Netsparker 87% | — pending run |
-| Repository · SAST | overall Youden | 39% | 35% — Fortify 35%; ceiling Veracode 51% | ✅ at/above par |
+| Repository · SAST | overall Youden | **46.5%** | 35% — Fortify 35%; Checkmarx 47%; ceiling Veracode 51% | ✅ at/above par — third on the published cohort |
 | L2 agent · autonomy | detection_rate (must-find) + verified_rate | — not run | 100% — must-find parity (detection_rate = 1.0), zero FP; verified_rate the differentiator | — pending run |
 | Cloud account · CSPM | CIS-section recall | — not run | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
 | API · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
@@ -14,6 +14,17 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Container · SCA recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
 
 **Summary:** 1 at/above par · 0 below · 7 pending a live run.
+
+**Provenance note on the SAST row.** It read **39%** until now, a figure that predates the
+neutral OWASP measurement by roughly 1,100 PRs — the real number (46.5% Youden over all 2,740
+BenchmarkJava cases) was published in #1223 and recorded in CLAUDE.md §16, and this table was
+never updated. So the two documents in this repo disagreed about the same measurement, in the
+direction that understated us, which is how nobody noticed.
+
+Stated plainly because it bears on how much this row is worth: **I could not re-run it here.**
+The BenchmarkJava corpus is not in the tree, so 46.5% is carried over from the commit that
+published it rather than reproduced. The three capability rows below WERE re-run and are
+reported at their measured values.
 
 ## Capability axis — internal instrument, NOT a market claim
 
@@ -40,7 +51,7 @@ _Run 2026-08-21 on `feat/frontier-ghoidc`._
 | Offensive recall + grounding | `go test ./internal/webrange/` | agent sweep PASS · decoys present · no SUT leak in scorer | procedurally-generated range w/ decoys |
 | Vulnerability localization | `tsbench localize` | recall@1 **1.00** · MRR **1.00** (8/8 scenarios, heuristic tier) | seeded CWE scenarios |
 | **IAM privesc — recall** | `go test ./internal/bench/ -run IAMVulnerable_Live` (needs `IAM_VULNERABLE_DIR`) | **31/31 paths** | **BishopFox IAM-Vulnerable — EXTERNAL answer key** |
-| **IAM privesc — FP/FN control** | `go test ./internal/bench/ -run PolicyCases_Live` (needs `IAM_VULNERABLE_TOOLTEST_DIR`) | **0 false positives / 5** · 2 false negatives / 4 · **Youden 0.50** on the control set | **BishopFox tool-testing — EXTERNAL, two-sided** |
+| **IAM privesc — FP/FN control** | `go test ./internal/bench/ -run PolicyCases_Live` (needs `IAM_VULNERABLE_TOOLTEST_DIR`) | **0 false positives / 5** · **0 false negatives / 4** · **Youden 1.00** on the control set (was 0.50) | **BishopFox tool-testing — EXTERNAL, two-sided** |
 | **Identity/SaaS posture (EXTERNAL)** | `go test ./internal/bench/ -run SCuBA` (corpus transcribed, no env needed) | **0.993** detection recall · **0.990** on mandatory SHALL policies (was 0.322 / 0.426 on first run) | **CISA SCuBA baselines — EXTERNAL, and the STRONGEST of the three.** Its mappings are EXECUTION-PROVEN: for every mapped policy the test builds a violating snapshot, runs the real assessor and asserts the rule fires. The two cloud rows below only DECLARE their mappings |
 | **GCP privesc — recall** | `go test ./internal/bench/ -run GCPPrivesc_Live` (needs `RHINO_GCP_CATALOGUE`) | **23/23 methods** (was 15/23 = 65.2%) | **RhinoSecurityLabs catalogue — EXTERNAL answer key. RECALL ONLY — see below** |
 
@@ -54,11 +65,23 @@ specialist. Read them together and read the caveats:
   SageMaker jobs, `cloudformation:UpdateStack`), and it is no longer a clean measurement.
 - The FP/FN control set is the half that can go DOWN when you add detections, which is why
   it matters more. **0 false positives across all five**, including the three DENY-precedence
-  cases the corpus was built to catch tools failing. The 2 false negatives are fn2
-  (exploitable resource constraint) and fn3 (exploitable condition) — and they fail for the
-  SAME reason fp4 and fp5 pass: we evaluate at resource `*` and treat any condition as
-  non-firm. **That is one design decision bought in both directions, not two bugs**, and
-  moving it would trade the zero-FP result away.
+  cases the corpus was built to catch tools failing — and now **0 false negatives**, so the
+  control set is clean on both sides.
+
+  **This paragraph used to argue the opposite, and it was wrong in an instructive way.** It
+  read: *"they fail for the SAME reason fp4 and fp5 pass: we evaluate at resource `*` and
+  treat any condition as non-firm. That is one design decision bought in both directions,
+  not two bugs, and moving it would trade the zero-FP result away."* That reasoning is what a
+  plausible trade-off argument looks like when it is actually two defects wearing one coat.
+  They were separable. Evaluating at the literal resource `*` was simply wrong — `*` in a
+  REQUEST is the resource named `*`, which no real ARN is, so every resource-scoped grant
+  answered "not allowed" and its escalation disappeared, in production as well as here.
+  Treating every condition as unresolvable was the second, independent one: a date bound on
+  a request-time key is decidable from the clock, and a grant whose window closed in 2020
+  read exactly like one gated on MFA. Both were fixed, and the false positives stayed at
+  zero — the trade the paragraph asserted did not exist. The lesson worth keeping is that
+  "we bought this deliberately" is the most comfortable thing to believe about a failing
+  case, and the cheapest way to check it is to try fixing one and see what actually moves.
 
 **The three external rows are not equally trustworthy, and the ranking is worth knowing.**
 SCuBA is the strongest: nothing can be claimed there without the assessor being run against a
