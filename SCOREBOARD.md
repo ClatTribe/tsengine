@@ -15,29 +15,40 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 
 **Summary:** 1 at/above par (measured) · 0 below · 7 pending a live run.
 
-**Why the web row is still empty after a live attempt.** WAVSEP was deployed and scanned on
-2026-08-21 and produced no score. Three reasons, found in order, two now fixed in
-`scripts/bench-box.sh`:
+**The web row, run live on 2026-08-21 — reported per-class, not as one number.**
+WAVSEP was deployed and scanned. Getting there took three fixes, the third a production bug
+rather than a harness one:
 
-1. **The harness pointed at an entry point with no links.** It scanned the Tomcat root,
-   which is the default welcome page; `/wavsep/` is a prose page with ZERO `<a>` tags. A
-   crawler starting at either gets exactly the seed URL back. The real catalogue is
-   `index-active.jsp`, from which katana finds ~1,750 URLs at the same depth. **Fixed.**
-2. **The scan sandbox joined the wrong network.** `internal/sandbox` spawns on the docker
-   default bridge unless `TSENGINE_SANDBOX_NETWORK` is set, so `bench-wavsep` did not
-   resolve and every tool failed SILENTLY — no error, run "successful", score 0. A
-   benchmark reporting zero because it could not reach the target is indistinguishable from
-   one that scanned a clean app. **Fixed** (the script now exports it).
-3. **UNRESOLVED, and the reason there is still no number.** With recon working, katana
-   inside the sandbox returned **67 URLs where the identical command standalone returns
-   1,759** — same flags, same depth, same target. Not a timeout (no per-tool cap is set by
-   default) and not obviously the 4g/2-CPU sandbox limits. Until that gap is understood,
-   any WAVSEP figure would be measuring the harness, not the scanner, so none is published
-   here.
+1. **The harness pointed at an entry point with no links.** It scanned the Tomcat root; the
+   real catalogue is `index-active.jsp`. From the root katana returns exactly the seed URL.
+2. **The scan sandbox joined the wrong network**, so the target did not resolve and every
+   tool failed SILENTLY — no error, run "successful", score 0.
+3. **`tool.Args` int values did not survive the sandbox boundary.** A dispatch crosses as
+   JSON, `int` becomes `float64`, and `args["depth"].(int)` failed in the sandbox while
+   passing every unit test. katana fell back to depth 2: **68 URLs instead of 1,604.** Six
+   wrappers had it — a 96% crawl-surface loss on every sandboxed web scan, found only
+   because a benchmark scored zero.
 
-Recorded rather than dropped because #3 is a real lead: if the sandboxed crawl is losing
-94% of the surface on a target we control, it is worth knowing whether it does so on a
-customer's.
+Coverage then went 0% → **87.6%** (993 of 1,133 cases):
+
+| Category | TP | FP | TN | FN | Youden |
+|---|---|---|---|---|---|
+| sqli | 38 | 0 | 10 | 28 | **57.58%** |
+| xss | 13 | 3 | 4 | 34 | −15.20% |
+| redirect | 0 | 0 | 9 | 30 | 0.00% |
+| pathtraver | 4 | 0 | 8 | 812 | 0.49% |
+| **overall** | 55 | 3 | 31 | 904 | **−3.09%** |
+
+**No single aggregate is published, and that is not flattery.** Path traversal is **824 of
+1,133 cases (73%)** of this corpus and we detect 4 of 816 scored, so the overall number is
+mostly a measurement of one class. It understates SQLi, where 57.58% is a real result, and
+it would equally overstate us on a differently-weighted corpus. Against a partial run with
+that mix, a leaderboard comparison is meaningless in both directions.
+
+**What this is worth: item 1 doing its job for item 2.** The weakest measured web capability
+is now named with evidence — path traversal, 4 of 816, with nuclei's `dast/` and
+`http/fuzzing/` sets confirmed present in the image, so it is a detection gap and not a
+missing corpus. That is exactly what `improveloop.Weakest` exists to consume.
 
 **Provenance note on the SAST row.** It read **39%** for roughly 1,100 PRs — a figure predating the
 neutral OWASP measurement, which was published in #1223 and recorded in CLAUDE.md §16 while this table
