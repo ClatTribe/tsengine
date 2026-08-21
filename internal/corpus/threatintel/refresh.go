@@ -85,8 +85,9 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 	// Metasploit is best-effort for the same reason as ExploitDB: it is a large optional overlay, and
 	// losing the WEAPONIZED rung must never cost the KEV+EPSS refresh that everything else depends on.
 	var weaponized map[string][]string
+	var weaponRank map[string]int
 	if body, ferr := httpGet(ctx, opts.HTTPClient, opts.MetasploitURL); ferr == nil {
-		weaponized, _ = ParseMetasploit(body)
+		weaponized, weaponRank, _ = ParseMetasploitRanked(body)
 		_ = body.Close()
 	}
 
@@ -109,7 +110,12 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 		}
 	}
 
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, exploits, weaponized, templates, cvss)
+	entries, m := Build(Sources{
+		KEV: kev, KEVAsOf: kevAsOf, KEVVer: kevVer,
+		EPSS: epss, EPSSAsOf: epssAsOf,
+		Exploits: exploits, Weaponized: weaponized, WeaponRank: weaponRank,
+		Templates: templates, CVSS: cvss,
+	})
 	dataPath, err := Write(opts.OutDir, entries, m)
 	if err != nil {
 		return Manifest{}, "", err

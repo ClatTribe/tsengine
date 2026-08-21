@@ -40,6 +40,7 @@ type corpusEntry struct {
 	EPSS       *types.EPSSScore `json:"epss"`
 	Advisories []string         `json:"advisories"`
 	Exploits   []string         `json:"exploits"`
+	WeaponRank string           `json:"weapon_rank,omitempty"`
 }
 
 // cvePattern extracts a CVE id from a rule_id like "trivy::CVE-2021-42374".
@@ -155,6 +156,7 @@ func (h *ThreatIntel) Lookup(cve string) (*types.ThreatIntel, bool) {
 		EPSS:       entry.EPSS,
 		Advisories: entry.Advisories,
 		Exploits:   entry.Exploits,
+		WeaponRank: entry.WeaponRank,
 	}, true
 }
 

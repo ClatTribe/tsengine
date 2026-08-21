@@ -45,3 +45,26 @@ func TestL15Summary_WeaponizedTaggedOnce(t *testing.T) {
 		t.Errorf("weaponized appears %d times, want 1", n)
 	}
 }
+
+// The rank refines the rung rather than replacing it: "weaponized:excellent" and
+// "weaponized:manual" are materially different facts, and a defender choosing what to patch
+// first should not have to treat them alike.
+func TestL15Summary_WeaponRankRefinesTheRung(t *testing.T) {
+	excellent := Finding{ThreatIntel: &ThreatIntel{
+		Exploits: []string{"metasploit:exploit/multi/http/log4shell"}, WeaponRank: "excellent"}}
+	if got := excellent.L15Summary(); !strings.Contains(got, "weaponized:excellent") {
+		t.Errorf("%q is missing the rank", got)
+	}
+	manual := Finding{ThreatIntel: &ThreatIntel{
+		Exploits: []string{"metasploit:exploit/android/local/janus"}, WeaponRank: "manual"}}
+	if got := manual.L15Summary(); !strings.Contains(got, "weaponized:manual") {
+		t.Errorf("%q is missing the rank", got)
+	}
+	// A corpus with no rank data still reports the rung — degrading to silence would lose
+	// the weaponized signal entirely for an older corpus.
+	unranked := Finding{ThreatIntel: &ThreatIntel{Exploits: []string{"metasploit:exploit/x"}}}
+	got := unranked.L15Summary()
+	if !strings.Contains(got, "weaponized") || strings.Contains(got, "weaponized:") {
+		t.Errorf("%q should carry a bare weaponized when no rank is known", got)
+	}
+}

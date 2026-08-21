@@ -39,7 +39,25 @@ type msfModule struct {
 	Name       string   `json:"name"`
 	Type       string   `json:"type"`
 	References []string `json:"references"`
+	// Rank is Metasploit's own reliability rating for the module, on its published scale
+	// (0 Manual … 600 Excellent). It discriminates in practice rather than sitting at the
+	// top: EternalBlue is Average because it can crash the target, DoublePulsar RCE is
+	// Great, and the Log4Shell modules are Excellent.
+	Rank int `json:"rank"`
 }
+
+// msfRanks is Metasploit's published ranking scale. The names are theirs, not ours — a
+// scale we invented on top of their numbers would be one more thing to be wrong about, and
+// an operator who knows msfconsole already knows what "excellent" means there.
+var msfRanks = map[int]string{
+	600: "excellent", 500: "great", 400: "good",
+	300: "normal", 200: "average", 100: "low", 0: "manual",
+}
+
+// RankName returns Metasploit's name for a numeric rank, or "" for one we do not recognise.
+// Unknown stays empty rather than being rounded to the nearest known rung: reporting a rank
+// we cannot name would be inventing the very judgement the field exists to carry.
+func RankName(rank int) string { return msfRanks[rank] }
 
 // msfCVERef matches the two forms the references list uses for a CVE: the bare
 // "CVE-2021-44228", and Metasploit's own "CVE-2021-44228" prefixed style. URL references
@@ -58,12 +76,19 @@ var msfCVERef = regexp.MustCompile(`^(?:CVE-)?(\d{4}-\d{4,7})$`)
 //     Neither weaponizes the CVE, and counting them would put a version-detection scanner
 //     on the same rung as a remote-code-execution module. Only `exploit` counts.
 //   - A REFERENCE MUST BE A CVE ID, not a URL containing one. See msfCVERef.
-func ParseMetasploit(r io.Reader) (map[string][]string, error) {
-	var raw map[string]msfModule
-	if err := json.NewDecoder(r).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("threatintel: decode Metasploit module metadata: %w", err)
+//
+// ParseMetasploitRanked is ParseMetasploit plus the best rank available per CVE.
+//
+// BEST, not average or first: an attacker uses the most reliable module they have, so the
+// question a defender needs answered is what the strongest available weapon is. Averaging
+// would let three shaky modules dilute one excellent one, which describes the arsenal
+// rather than the threat.
+func ParseMetasploitRanked(r io.Reader) (refs map[string][]string, rank map[string]int, err error) {
+	raw, err := decodeMSF(r)
+	if err != nil {
+		return nil, nil, err
 	}
-	out := make(map[string][]string)
+	refs, rank = map[string][]string{}, map[string]int{}
 	for _, m := range raw {
 		if !strings.EqualFold(strings.TrimSpace(m.Type), "exploit") {
 			continue
@@ -81,16 +106,32 @@ func ParseMetasploit(r io.Reader) (map[string][]string, error) {
 				continue
 			}
 			cve := "CVE-" + mm[1]
-			out[cve] = append(out[cve], "metasploit:"+path)
+			refs[cve] = append(refs[cve], "metasploit:"+path)
+			if r, ok := msfRanks[m.Rank]; ok && r != "" {
+				if m.Rank > rank[cve] {
+					rank[cve] = m.Rank
+				}
+			}
 		}
 	}
-	// Deterministic order: the corpus is diffed between refreshes, and map iteration would
-	// make every rebuild look like a change to every CVE a module touches.
-	for cve, refs := range out {
-		sort.Strings(refs)
-		out[cve] = dedupeStrings(refs)
+	for cve, rs := range refs {
+		sort.Strings(rs)
+		refs[cve] = dedupeStrings(rs)
 	}
-	return out, nil
+	return refs, rank, nil
+}
+
+func decodeMSF(r io.Reader) (map[string]msfModule, error) {
+	var raw map[string]msfModule
+	if err := json.NewDecoder(r).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("threatintel: decode Metasploit module metadata: %w", err)
+	}
+	return raw, nil
+}
+
+func ParseMetasploit(r io.Reader) (map[string][]string, error) {
+	refs, _, err := ParseMetasploitRanked(r)
+	return refs, err
 }
 
 // dedupeStrings removes repeats from a sorted slice. A module can list the same CVE twice

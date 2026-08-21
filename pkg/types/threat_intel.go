@@ -9,8 +9,17 @@ type ThreatIntel struct {
 	CVSSVector string     `json:"cvss_vector,omitempty"` // CVSS base vector (AV/AC/PR/UI/S/C/I/A) — attack-vector detail beyond the score
 	KEV        *KEVStatus `json:"kev,omitempty"`
 	EPSS       *EPSSScore `json:"epss,omitempty"`
-	Advisories []string   `json:"advisories,omitempty"`
-	Exploits   []string   `json:"exploits,omitempty"`
+	// WeaponRank is Metasploit's own reliability name for the best module targeting this
+	// CVE ("excellent" … "manual"). Metasploit's scale, not ours — an operator who knows
+	// msfconsole already knows what it means, and a scale we invented on top of their
+	// numbers would be one more thing to be wrong about.
+	//
+	// It rates the MODULE, not your exposure. An excellent-ranked module says the exploit
+	// runs reliably where the vulnerability is present; it says nothing about whether this
+	// instance is affected.
+	WeaponRank string   `json:"weapon_rank,omitempty"`
+	Advisories []string `json:"advisories,omitempty"`
+	Exploits   []string `json:"exploits,omitempty"`
 }
 
 // KEVStatus is the CISA Known Exploited Vulnerabilities catalog state for
