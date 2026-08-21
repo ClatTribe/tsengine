@@ -64,8 +64,7 @@ func (*Sqlmap) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "sqlmap", cli...)
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("sqlmap: exec: %w", err)
 		}
 		// sqlmap exits non-zero in some no-vuln paths; parse stdout anyway.

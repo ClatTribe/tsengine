@@ -94,3 +94,46 @@ func TestCompleteScan_IsNeverWithheld(t *testing.T) {
 		t.Error("want fail")
 	}
 }
+
+// The second cause of an incomplete run, and the one that already bit a different row.
+//
+// A sandbox image built without an asset's toolset stubs the missing binary to exit 127.
+// An ip-asset scan in a container/repository/web/api image therefore fails naabu and scores
+// 0.000 — while the port is wide open and nmap, present in the same image, can see it. That
+// zero measures the image, not the product.
+//
+// It was caught the first time by a human reading the log and noticing the stub message.
+// This is the structural version.
+func TestFailedTool_WithholdsTheVerdictAMissingToolCouldFake(t *testing.T) {
+	fx := &Fixture{Name: "ip-services", Metric: "must_find_recall", MustFind: []string{"naabu::open-port"}, PassRecall: 1.0}
+	scan := &types.Scan{
+		Partial:     false, // the scan RAN TO COMPLETION — only the tool was missing
+		ToolsFailed: []types.ToolFailure{{Tool: "naabu"}},
+		FindingsRaw: []types.Finding{{RuleID: "nmap::service"}},
+	}
+
+	s := ScoreScan(fx, scan)
+	if !s.Unmeasured {
+		t.Fatal("a recall FAIL was reported as a detection result on a scan whose tool never ran. " +
+			"The scan completed, so the deadline guard does not catch this one — and a zero " +
+			"produced by a tool that is absent from the image measures the image.")
+	}
+	if s.Pass {
+		t.Error("an unmeasured run must never read as a pass")
+	}
+	if !strings.Contains(s.UnmeasuredReason, "naabu") {
+		t.Errorf("the reason must NAME the tool that did not run, got %q", s.UnmeasuredReason)
+	}
+}
+
+// Same direction rule: a tool failed, but the required finding turned up anyway. Sound.
+func TestFailedTool_KeepsAPassItCouldNotHaveFaked(t *testing.T) {
+	fx := &Fixture{Name: "ip-services", Metric: "must_find_recall", MustFind: []string{"open-port"}, PassRecall: 1.0}
+	scan := &types.Scan{
+		ToolsFailed: []types.ToolFailure{{Tool: "naabu"}},
+		FindingsRaw: []types.Finding{{RuleID: "nmap::open-port"}},
+	}
+	if s := ScoreScan(fx, scan); s.Unmeasured || !s.Pass {
+		t.Errorf("another tool found it — that is a sound pass: unmeasured=%v pass=%v", s.Unmeasured, s.Pass)
+	}
+}

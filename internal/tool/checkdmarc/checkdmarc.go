@@ -63,8 +63,7 @@ func (*CheckDMARC) Run(ctx context.Context, args tool.Args) (tool.Result, error)
 	cmd := exec.CommandContext(ctx, "checkdmarc", "--format", "json", target)
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("checkdmarc: exec: %w", err)
 		}
 	}

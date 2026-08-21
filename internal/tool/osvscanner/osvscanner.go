@@ -41,8 +41,7 @@ func (*OSVScanner) Run(ctx context.Context, args tool.Args) (tool.Result, error)
 	cmd := exec.CommandContext(ctx, "osv-scanner", "scan", "--format", "json", "-r", target)
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("osv-scanner: exec: %w", err)
 		}
 		// osv-scanner exits 1 when vulns are found — parse anyway.

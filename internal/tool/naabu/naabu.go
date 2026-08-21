@@ -48,8 +48,7 @@ func (*Naabu) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "naabu", cli...)
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("naabu: exec: %w", err)
 		}
 	}

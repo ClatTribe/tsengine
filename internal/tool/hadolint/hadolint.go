@@ -43,8 +43,7 @@ func (*Hadolint) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "hadolint", "--format", "json", "--no-fail", target)
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			// Binary missing or Dockerfile absent → no findings, no crash.
 			return tool.Result{Output: "hadolint: " + err.Error()}, nil
 		}

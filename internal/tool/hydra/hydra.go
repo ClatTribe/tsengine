@@ -88,8 +88,7 @@ func (*Hydra) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "hydra", cli...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{Output: "hydra: " + err.Error()}, nil
 		}
 	}

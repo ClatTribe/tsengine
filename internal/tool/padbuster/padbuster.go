@@ -53,8 +53,7 @@ func (*Padbuster) Run(ctx context.Context, args tool.Args) (tool.Result, error) 
 	cmd.Stdin = strings.NewReader(strings.Repeat("a\n", 64))
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("padbuster: exec: %w", err)
 		}
 		// padbuster exits non-zero on a failed/partial run; return stdout anyway for the caller.

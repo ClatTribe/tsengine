@@ -74,8 +74,7 @@ func (*WPScan) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	// successful scan, not an error. Only a non-ExitError (binary missing,
 	// context cancelled) is a real failure; otherwise parse stdout regardless.
 	if err := cmd.Run(); err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{Output: "wpscan: " + err.Error()}, nil
 		}
 	}

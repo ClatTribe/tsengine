@@ -57,8 +57,7 @@ func (*Modelscan) Run(ctx context.Context, args tool.Args) (tool.Result, error) 
 	cmd := exec.CommandContext(ctx, "modelscan", "-p", target, "-r", "json", "-o", "/dev/stdout")
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("modelscan: exec: %w", err)
 		}
 		// non-zero exit with JSON on stdout = issues found; fall through to parse.

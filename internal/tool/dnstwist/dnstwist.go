@@ -45,8 +45,7 @@ func (*DNSTwist) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "dnstwist", "--format", "json", "--registered", target)
 	out, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("dnstwist: exec: %w", err)
 		}
 	}

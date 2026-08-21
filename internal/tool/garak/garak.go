@@ -89,8 +89,7 @@ func (*Garak) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			// A missing binary or a spawn failure is a REAL failure and must not be reported as a
 			// clean run. An LLM app that was never probed is not an LLM app that passed.
 			return tool.Result{}, fmt.Errorf("garak: exec: %w (%s)", err, truncate(stderr.String(), 300))
