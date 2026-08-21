@@ -13,7 +13,7 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Domain · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | Container · SCA recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
 
-**Summary:** 1 at/above par (measured) · 0 below · 7 pending a live run.
+**Summary:** 2 measured (SAST 46.54% at par · web reported per-class, see note) · 6 pending a live run.
 
 **The web row, run live on 2026-08-21 — reported per-class, not as one number.**
 WAVSEP was deployed and scanned. Getting there took three fixes, the third a production bug
