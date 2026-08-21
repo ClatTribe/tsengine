@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
@@ -171,30 +172,54 @@ func (h *ThreatIntel) Apply(f types.Finding) (types.Finding, []types.AuditEntry,
 	}
 	f.ThreatIntel = ti
 
+	// Backfill the CWE when the scanner did not report one.
+	//
+	// THIS IS WHY THE HOOK ORDER IS DOCUMENTED (§11): threat_intel is hook 6 and compliance
+	// is hook 7, so a CWE added here reaches the crosswalk in the same pass. compliance.Apply
+	// returns early on a finding with no CWE — and grype and osv-scanner never set one. So a
+	// KEV-listed, ransomware-linked CVE found in a container image was getting NO control
+	// mapping at all, while CISA published its CWE in a feed we already fetch.
+	//
+	// Grounded (§10), and narrowly: it fills ONLY an empty field, never overwrites. The
+	// scanner looked at the actual package in the actual image; CISA's list describes the CVE
+	// in general. Where the scanner has an opinion it is the better-situated one, and
+	// replacing it would trade specific evidence for generic.
+	var cweAudit []types.AuditEntry
+	if len(f.CWE) == 0 && ti.KEV != nil && len(ti.KEV.CWEs) > 0 {
+		f.CWE = append([]string{}, ti.KEV.CWEs...)
+		cweAudit = []types.AuditEntry{{
+			FindingID: f.ID,
+			Action:    "annotate",
+			Rule:      "threat_intel::kev-cwe-backfill",
+			Reason: cve + " carried no CWE from the scanner; CISA publishes " +
+				strings.Join(ti.KEV.CWEs, ",") + " for it, which is what the compliance crosswalk needs",
+		}}
+	}
+
 	if ti.KEV != nil && ti.KEV.Listed {
 		// Opt-in escalation: a CVE actively exploited in the wild but rated below high is materially
 		// under-prioritized — bump it to high (CISA BOD 22-01's must-patch bar). Records a `promote`.
 		if h.escalateKEV && f.Severity.Rank() < types.SeverityHigh.Rank() {
 			from := f.Severity
 			f.Severity = types.SeverityHigh
-			return f, []types.AuditEntry{{
+			return f, append(cweAudit, types.AuditEntry{
 				FindingID:    f.ID,
 				Action:       "promote",
 				FromSeverity: from,
 				ToSeverity:   types.SeverityHigh,
 				Rule:         "threat_intel::kev-escalate",
 				Reason:       cve + " is on the CISA KEV catalog (added " + kevDate(ti.KEV) + ") — actively exploited, bumped to high per BOD 22-01",
-			}}, true
+			}), true
 		}
 		// Default: annotate only — log the KEV listing so the compliance audience sees the SLA-clock trigger.
-		return f, []types.AuditEntry{{
+		return f, append(cweAudit, types.AuditEntry{
 			FindingID: f.ID,
 			Action:    "annotate",
 			Rule:      "threat_intel::kev-listed",
 			Reason:    cve + " is on the CISA KEV catalog (added " + kevDate(ti.KEV) + ")",
-		}}, true
+		}), true
 	}
-	return f, nil, true
+	return f, cweAudit, true
 }
 
 func kevDate(k *types.KEVStatus) string {
