@@ -41,6 +41,7 @@ _Run 2026-08-21 on `feat/frontier-ghoidc`._
 | Vulnerability localization | `tsbench localize` | recall@1 **1.00** · MRR **1.00** (8/8 scenarios, heuristic tier) | seeded CWE scenarios |
 | **IAM privesc — recall** | `go test ./internal/bench/ -run IAMVulnerable_Live` (needs `IAM_VULNERABLE_DIR`) | **31/31 paths** | **BishopFox IAM-Vulnerable — EXTERNAL answer key** |
 | **IAM privesc — FP/FN control** | `go test ./internal/bench/ -run PolicyCases_Live` (needs `IAM_VULNERABLE_TOOLTEST_DIR`) | **0 false positives / 5** · 2 false negatives / 4 · **Youden 0.50** on the control set | **BishopFox tool-testing — EXTERNAL, two-sided** |
+| **Identity/SaaS posture (EXTERNAL)** | `go test ./internal/bench/ -run SCuBA` (corpus transcribed, no env needed) | **0.753** detection recall · **0.842** on mandatory SHALL policies (was 0.322 / 0.426) | **CISA SCuBA baselines — EXTERNAL, and the STRONGEST of the three.** Its mappings are EXECUTION-PROVEN: for every mapped policy the test builds a violating snapshot, runs the real assessor and asserts the rule fires. The two cloud rows below only DECLARE their mappings |
 | **GCP privesc — recall** | `go test ./internal/bench/ -run GCPPrivesc_Live` (needs `RHINO_GCP_CATALOGUE`) | **23/23 methods** (was 15/23 = 65.2%) | **RhinoSecurityLabs catalogue — EXTERNAL answer key. RECALL ONLY — see below** |
 
 **The two IAM rows are the only ones whose answer key we did not write.** They come from
@@ -58,6 +59,15 @@ specialist. Read them together and read the caveats:
   SAME reason fp4 and fp5 pass: we evaluate at resource `*` and treat any condition as
   non-firm. **That is one design decision bought in both directions, not two bugs**, and
   moving it would trade the zero-FP result away.
+
+**The three external rows are not equally trustworthy, and the ranking is worth knowing.**
+SCuBA is the strongest: nothing can be claimed there without the assessor being run against a
+violating snapshot and observed to fire. Over nine iterations it refused four separate
+mistakes — two unproven mappings, one attempt to claim policies CISA scopes as *procedural*
+(credit outside the stated denominator), and one genuine product design error where two
+findings were written as mutually exclusive and would have under-reported the tenant that had
+done the harder half of the work. The two cloud rows have no equivalent guard: their mappings
+are declared, and a wrong one would score.
 
 **The GCP row is weaker evidence than the AWS pair, and the asymmetry is the point.** It
 went 65.2% → 100% the same way AWS did — the catalogue named what was missing and we added
