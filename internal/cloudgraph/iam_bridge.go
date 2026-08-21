@@ -109,10 +109,56 @@ func (s *Snapshot) AddPrivescEdgesWithBoundaries(policies map[string]PrincipalPo
 		}
 		condition := ""
 		if len(cloudiam.DetectPrivesc(canFirm)) == 0 {
-			condition = "iam-condition-gated escalation (config-possible; validate live)"
+			condition = condGated
 		}
 		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: techNames(techs), Condition: condition})
 	}
+}
+
+// PermitFunc answers "may this principal perform X" AND whether that answer rests on a condition
+// we could not resolve. Both bits, because a caller wrapping gcpiam/azureiam.Authorize already has
+// both — those return (Decision, bool) — and a plain func(string) bool discards the second at the
+// boundary.
+//
+// Discarding it is not neutral. It forces a choice between two wrong answers, and BOTH have shipped
+// here. Detect with allow-including-conditional and a condition-gated escalation is reported as
+// DEFINITE. Detect with unconditional-only and it VANISHES — which is what the GCP ingest did: a
+// member holding roles/resourcemanager.projectIamAdmin under an IAM condition produced no privesc at
+// all, so the attack-path page said there was no way to become admin. The condition in the test that
+// caught it is satisfied today.
+//
+// With both bits the edge is emitted AND marked config-possible, which is what the AWS path has
+// always done and what InvPrivesc.Condition already exists for.
+type PermitFunc func(permission string) (allowed, conditional bool)
+
+// condGated is the shared wording, so all four clouds make the same claim about the same evidence
+// rather than four slightly different ones.
+const condGated = "iam-condition-gated escalation (config-possible; validate live)"
+
+// Unconditional adapts a plain predicate for a source whose grants genuinely carry no conditions —
+// Entra app-role assignments and directory-role memberships, for instance, unlike ARM RBAC.
+//
+// It exists so that claim has to be MADE. Accepting func(string) bool directly would let any caller
+// assert "definitely allowed" by omission, which is how the conditional bit got dropped in the first
+// place; spelling it Unconditional puts the assertion in the call site where a reviewer can see it.
+func Unconditional(f func(string) bool) PermitFunc {
+	return func(a string) (bool, bool) { return f(a), false }
+}
+
+// split turns one PermitFunc into the permissive and firm predicates DetectPrivesc takes. A nil
+// entry yields predicates that permit nothing — a principal the caller could not evaluate gets no
+// edge, rather than an edge built on a nil deref.
+func split(p PermitFunc) (permits, firm func(string) bool) {
+	if p == nil {
+		return func(string) bool { return false }, func(string) bool { return false }
+	}
+	return func(a string) bool {
+			allowed, _ := p(a)
+			return allowed
+		}, func(a string) bool {
+			allowed, cond := p(a)
+			return allowed && !cond
+		}
 }
 
 // AddGCPPrivescEdges is the GCP twin of AddPrivescEdges: a per-principal effective-permission predicate
@@ -120,7 +166,7 @@ func (s *Snapshot) AddPrivescEdgesWithBoundaries(policies map[string]PrincipalPo
 // gcpiam.DetectPrivesc, adding a privesc → admin edge for every escalation-capable GCP principal. So
 // "internet → … → gcp-principal → privesc → admin" chains are discovered symmetrically with AWS (§10).
 // The caller (ingest) builds the `can` predicates from the GCP snapshot's IAM bindings.
-func (s *Snapshot) AddGCPPrivescEdges(can map[string]func(permission string) bool) {
+func (s *Snapshot) AddGCPPrivescEdges(can map[string]PermitFunc) {
 	ids := make([]string, 0, len(can))
 	for id := range can {
 		ids = append(ids, id)
@@ -129,7 +175,12 @@ func (s *Snapshot) AddGCPPrivescEdges(can map[string]func(permission string) boo
 
 	var added bool
 	for _, pid := range ids {
-		techs := gcpiam.DetectPrivesc(can[pid])
+		permits, firm := split(can[pid])
+		techs := gcpiam.DetectPrivesc(permits)
+		condition := ""
+		if len(gcpiam.DetectPrivesc(firm)) == 0 {
+			condition = condGated
+		}
 		if len(techs) == 0 {
 			continue
 		}
@@ -139,7 +190,7 @@ func (s *Snapshot) AddGCPPrivescEdges(can map[string]func(permission string) boo
 			}
 			added = true
 		}
-		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: gcpTechNames(techs)})
+		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: gcpTechNames(techs), Condition: condition})
 	}
 }
 
@@ -156,7 +207,7 @@ func gcpTechNames(ts []gcpiam.Technique) string {
 // hierarchy-inherited role assignments) feeds azureiam.DetectPrivesc, adding a privesc → admin edge for
 // every escalation-capable Azure principal — so privesc chains are discovered symmetrically across
 // AWS+GCP+Azure (§10). The caller (ingest) builds the `can` predicates from the Azure snapshot's RBAC.
-func (s *Snapshot) AddAzurePrivescEdges(can map[string]func(action string) bool) {
+func (s *Snapshot) AddAzurePrivescEdges(can map[string]PermitFunc) {
 	ids := make([]string, 0, len(can))
 	for id := range can {
 		ids = append(ids, id)
@@ -165,7 +216,12 @@ func (s *Snapshot) AddAzurePrivescEdges(can map[string]func(action string) bool)
 
 	var added bool
 	for _, pid := range ids {
-		techs := azureiam.DetectPrivesc(can[pid])
+		permits, firm := split(can[pid])
+		techs := azureiam.DetectPrivesc(permits)
+		condition := ""
+		if len(azureiam.DetectPrivesc(firm)) == 0 {
+			condition = condGated
+		}
 		if len(techs) == 0 {
 			continue
 		}
@@ -175,7 +231,7 @@ func (s *Snapshot) AddAzurePrivescEdges(can map[string]func(action string) bool)
 			}
 			added = true
 		}
-		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: azureTechNames(techs)})
+		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: azureTechNames(techs), Condition: condition})
 	}
 }
 
@@ -196,7 +252,7 @@ func azureTechNames(ts []azureiam.Technique) string {
 // The caller (ingest) builds the `can` predicates from the Entra snapshot's app-role assignments +
 // directory-role memberships (the honest gate — same as the ARM side). Edge Detail is prefixed so an Entra
 // escalation is distinguishable from an ARM one in the graph.
-func (s *Snapshot) AddAzureEntraPrivescEdges(can map[string]func(perm string) bool) {
+func (s *Snapshot) AddAzureEntraPrivescEdges(can map[string]PermitFunc) {
 	ids := make([]string, 0, len(can))
 	for id := range can {
 		ids = append(ids, id)
@@ -205,7 +261,12 @@ func (s *Snapshot) AddAzureEntraPrivescEdges(can map[string]func(perm string) bo
 
 	var added bool
 	for _, pid := range ids {
-		techs := azureiam.DetectEntraPrivesc(can[pid])
+		permits, firm := split(can[pid])
+		techs := azureiam.DetectEntraPrivesc(permits)
+		condition := ""
+		if len(azureiam.DetectEntraPrivesc(firm)) == 0 {
+			condition = condGated
+		}
 		if len(techs) == 0 {
 			continue
 		}
@@ -215,7 +276,7 @@ func (s *Snapshot) AddAzureEntraPrivescEdges(can map[string]func(perm string) bo
 			}
 			added = true
 		}
-		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: azureTechNames(techs)})
+		s.AddEdge(Edge{From: pid, To: AdminID, Kind: EdgePrivesc, Detail: azureTechNames(techs), Condition: condition})
 	}
 }
 

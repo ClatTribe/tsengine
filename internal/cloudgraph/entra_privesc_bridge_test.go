@@ -16,9 +16,9 @@ func TestAddAzureEntraPrivescEdges(t *testing.T) {
 	s.AddNode(&Node{ID: "az-user-1", Kind: KindPrincipal, Name: "app-admin"})
 	s.AddNode(&Node{ID: "az-user-2", Kind: KindPrincipal, Name: "reader"})
 
-	can := map[string]func(string) bool{
-		"az-user-1": azureiam.EntraCanFromGrants([]string{"Application.ReadWrite.All"}, nil),
-		"az-user-2": azureiam.EntraCanFromGrants([]string{"Directory.Read.All"}, nil),
+	can := map[string]PermitFunc{
+		"az-user-1": Unconditional(azureiam.EntraCanFromGrants([]string{"Application.ReadWrite.All"}, nil)),
+		"az-user-2": Unconditional(azureiam.EntraCanFromGrants([]string{"Directory.Read.All"}, nil)),
 	}
 	s.AddAzureEntraPrivescEdges(can)
 
@@ -58,11 +58,11 @@ func TestEntraAndARMPrivesc_BothPlanesOnOneSnapshot(t *testing.T) {
 	s.AddNode(&Node{ID: "arm-p", Kind: KindPrincipal, Name: "arm-escalator"})
 	s.AddNode(&Node{ID: "entra-p", Kind: KindPrincipal, Name: "entra-escalator"})
 
-	s.AddAzurePrivescEdges(map[string]func(string) bool{
-		"arm-p": func(a string) bool { return a == "Microsoft.Authorization/roleAssignments/write" },
+	s.AddAzurePrivescEdges(map[string]PermitFunc{
+		"arm-p": func(a string) (bool, bool) { return a == "Microsoft.Authorization/roleAssignments/write", false },
 	})
-	s.AddAzureEntraPrivescEdges(map[string]func(string) bool{
-		"entra-p": azureiam.EntraCanFromGrants([]string{"RoleManagement.ReadWrite.Directory"}, nil),
+	s.AddAzureEntraPrivescEdges(map[string]PermitFunc{
+		"entra-p": Unconditional(azureiam.EntraCanFromGrants([]string{"RoleManagement.ReadWrite.Directory"}, nil)),
 	})
 
 	arm, entra := "", ""

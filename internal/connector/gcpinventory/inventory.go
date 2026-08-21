@@ -195,20 +195,57 @@ func derivePrivesc(inv *cloudgraph.Inventory, raw RawGCP) {
 
 	var any bool
 	for _, member := range principals {
+		// TWO predicates, as AWS does (cloudgraph.AddPrivescEdges). Detecting only with the
+		// firm one — which is what this did — makes a CONDITION-GATED escalation vanish
+		// entirely, and vanishing is the one outcome §10 does not allow.
+		//
+		// Measured before this changed: a member holding roles/resourcemanager.projectIamAdmin
+		// produced one privesc; the SAME binding carrying an IAM condition produced zero. The
+		// condition in that test was request.time < 2030, which is satisfied right now — so the
+		// principal could escalate to project admin today and the attack-path page said there
+		// was no way to become admin. AWS reports the identical case as an edge marked
+		// "config-possible; validate live", which is why InvPrivesc.Condition already exists and
+		// already says "a config-possible escalation is never reported as confirmed".
+		//
+		// A condition we cannot evaluate is not a reason to report nothing. It is a reason to
+		// report the path and say what is unresolved about it.
+		// NOT "allowed, ignoring conditional" — that would readmit the firm-allow rule's whole
+		// point. gcpiam reports conditional for three different reasons and only one of them
+		// names a real permission: an unknown custom role and an unresolvable group leave us not
+		// knowing WHAT the principal can do, and an escalation inferred from a role definition we
+		// do not have is not evidence, it is the absence of it. A condition-gated grant is the
+		// opposite — we know exactly which permission, and only when is open.
+		permits := func(perm string) bool {
+			req := gcpiam.Request{Member: member, Permission: perm}
+			allowed, conditional := gcpiam.Permits(req, ps)
+			if allowed && !conditional {
+				return true
+			}
+			return gcpiam.PermitsGrantedButGated(req, ps)
+		}
 		firm := func(perm string) bool {
 			allowed, conditional := gcpiam.Permits(gcpiam.Request{Member: member, Permission: perm}, ps)
 			return allowed && !conditional
 		}
-		techs := gcpiam.DetectPrivesc(firm)
+		techs := gcpiam.DetectPrivesc(permits)
 		if len(techs) == 0 {
 			continue
+		}
+		// Definite only when a technique is reachable UNCONDITIONALLY. If every detected
+		// escalation leans on a condition-gated permission, the edge is config-possible and
+		// carries the reason — the same wording and the same threshold as the AWS path, so the
+		// two clouds make the same claim about the same evidence.
+		condition := ""
+		if len(gcpiam.DetectPrivesc(firm)) == 0 {
+			condition = "iam-condition-gated escalation (config-possible; validate live)"
 		}
 		names := make([]string, 0, len(techs))
 		for _, t := range techs {
 			names = append(names, t.Name)
 		}
 		inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{
-			Principal: member, Target: cloudgraph.AdminID, Detail: strings.Join(names, ", "),
+			Principal: member, Target: cloudgraph.AdminID,
+			Detail: strings.Join(names, ", "), Condition: condition,
 		})
 		any = true
 	}

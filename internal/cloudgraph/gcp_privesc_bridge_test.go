@@ -7,9 +7,9 @@ func TestAddGCPPrivescEdges(t *testing.T) {
 	s.AddNode(&Node{ID: "gcp-sa-1", Kind: KindPrincipal, Name: "deployer@proj.iam"})
 	s.AddNode(&Node{ID: "gcp-sa-2", Kind: KindPrincipal, Name: "readonly@proj.iam"})
 
-	can := map[string]func(string) bool{
-		"gcp-sa-1": func(p string) bool { return p == "resourcemanager.projects.setIamPolicy" }, // can escalate
-		"gcp-sa-2": func(string) bool { return false },                                          // cannot
+	can := map[string]PermitFunc{
+		"gcp-sa-1": func(p string) (bool, bool) { return p == "resourcemanager.projects.setIamPolicy", false }, // can escalate
+		"gcp-sa-2": func(string) (bool, bool) { return false, false },                                          // cannot
 	}
 	s.AddGCPPrivescEdges(can)
 

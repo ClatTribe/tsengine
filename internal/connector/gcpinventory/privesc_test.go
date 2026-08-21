@@ -81,9 +81,19 @@ func TestBuild_HarmlessKnownRoleYieldsNothing(t *testing.T) {
 	}
 }
 
-// A CONDITIONED binding is not a firm allow: the condition may not hold at runtime, and
-// an edge asserted from it would claim more than the policy proves.
-func TestBuild_ConditionedBindingDoesNotAssertAnEscalation(t *testing.T) {
+// A CONDITIONED binding is not a firm allow: the condition may not hold at runtime, so an edge
+// asserted from it would claim more than the policy proves.
+//
+// This test used to require ZERO privescs, and that assertion was stronger than its own reasoning.
+// Not asserting an escalation and not MENTIONING one are different things: dropping it silently is
+// itself a claim, and a worse one, because the attack-path page then reports no route to admin for a
+// principal who has a documented route the moment the condition holds. Conditions are what an
+// attacker waits out or arranges.
+//
+// The edge is now emitted and MARKED — exactly what InvPrivesc.Condition was added for ("a
+// config-possible escalation is never reported as confirmed") and what the AWS path has always
+// done. The original intent is intact: nothing here is asserted as proven.
+func TestBuild_ConditionedBindingIsReportedButNotAsserted(t *testing.T) {
 	inv := Build(RawGCP{
 		ProjectID: "p1",
 		Bindings: []RawGCPBinding{{
@@ -92,8 +102,13 @@ func TestBuild_ConditionedBindingDoesNotAssertAnEscalation(t *testing.T) {
 		}},
 		RoleDefs: map[string][]string{"roles/custom.deployer": {"resourcemanager.projects.setIamPolicy"}},
 	})
-	if len(inv.Privescs) != 0 {
-		t.Fatalf("a condition-gated grant is config-possible, not proven: %+v", inv.Privescs)
+	if len(inv.Privescs) != 1 {
+		t.Fatalf("a condition-gated grant of setIamPolicy must be reported, got %d: %+v",
+			len(inv.Privescs), inv.Privescs)
+	}
+	if inv.Privescs[0].Condition == "" {
+		t.Fatal("...and must be marked config-possible rather than asserted as proven — an unmarked " +
+			"edge here is the over-claim this test was originally written to prevent")
 	}
 }
 
