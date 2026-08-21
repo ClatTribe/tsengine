@@ -26,6 +26,33 @@ type M365Tenant struct {
 	TeamsGuestUnrestricted  bool   `json:"teams_guest_unrestricted"`  // no guest-access policy (guests get broad access)
 	TeamsOpenFederation     bool   `json:"teams_open_federation"`     // external federation open to ALL domains
 	LegacyAuthEnabled       bool   `json:"legacy_auth_enabled"`       // basic/legacy auth allowed (password-spray + MFA-bypass)
+	// PRIVILEGED-ROLE GOVERNANCE (PIM). Standing Global Administrator is the single most
+	// exploited weakness in a compromised M365 tenant: it needs no escalation, survives a
+	// password reset it performs itself, and is indistinguishable from legitimate admin
+	// work in the audit log. The four fields below are the controls that turn permanent
+	// admin into borrowed admin. MS.AAD.7.2v1 / 7.5v1 / 7.6v1 / 7.8v1.
+	//
+	// StandingGlobalAdmins counts accounts holding Global Administrator PERMANENTLY
+	// (as opposed to PIM-eligible). 0 = none or not supplied.
+	StandingGlobalAdmins int `json:"standing_global_admins,omitempty"`
+	// PrivilegedRolesOutsidePIM: highly privileged roles are assigned directly rather
+	// than through PIM, so there is no activation record, no expiry and no approval.
+	PrivilegedRolesOutsidePIM bool `json:"privileged_roles_outside_pim,omitempty"`
+	// GlobalAdminActivationNoApproval / NoAlert: activating Global Administrator needs
+	// nobody's approval, and raises no alert. Together these mean an attacker who can
+	// activate an eligible role does so silently — the PIM control without the two
+	// settings that make it observable.
+	GlobalAdminActivationNoApproval bool `json:"global_admin_activation_no_approval,omitempty"`
+	GlobalAdminActivationNoAlert    bool `json:"global_admin_activation_no_alert,omitempty"`
+	// PasswordExpiryEnabled: forced rotation is advised AGAINST by CISA and NIST
+	// SP 800-63B, so ENABLED is the finding — the same inversion as the Google
+	// Workspace check. MS.AAD.6.1v1.
+	PasswordExpiryEnabled bool `json:"password_expiry_enabled,omitempty"`
+	// AdminConsentWorkflowDisabled: users who hit an app needing admin consent have no
+	// route to request it, so the pressure is to grant consent broadly instead — the
+	// workflow exists to make "ask an admin" cheaper than "let everyone consent".
+	// MS.AAD.5.3v1.
+	AdminConsentWorkflowDisabled bool `json:"admin_consent_workflow_disabled,omitempty"`
 	// MailboxAuditingEnabled is a POINTER because it is the one "true = good" field here:
 	// a plain bool made its zero value (false) assert a violation, so any snapshot that
 	// simply did not carry Exchange posture — every live Graph sync, since mailbox
@@ -132,6 +159,61 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Teams guest access has no guest-access policy", target+"/teams",
 			"Guests can join Teams with no guest-access policy restricting what they can see/do. Apply a guest-access policy (restrict channels, file access, and screen sharing).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}})))
+	}
+	if t.StandingGlobalAdmins > 0 {
+		f = append(f, finding(id(), "sspm::m365::standing-global-admin", types.SeverityHigh,
+			fmt.Sprintf("%d account(s) hold Global Administrator permanently", t.StandingGlobalAdmins), target+"/entra",
+			fmt.Sprintf("%d account(s) hold Global Administrator as a STANDING assignment rather than "+
+				"activating it through PIM when needed. Standing global admin is the most valuable thing in "+
+				"the tenant: it needs no escalation, it survives a password reset it performs itself, and its "+
+				"use is indistinguishable from legitimate admin work in the log. Move these to PIM-eligible "+
+				"and assign finer-grained roles for day-to-day work (SCuBA MS.AAD.7.2v1).", t.StandingGlobalAdmins),
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"5.4", "6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
+	}
+	if t.PrivilegedRolesOutsidePIM {
+		f = append(f, finding(id(), "sspm::m365::privileged-roles-outside-pim", types.SeverityHigh,
+			"Highly privileged roles are assigned outside PIM", target+"/entra",
+			"Privileged roles are granted directly rather than through Privileged Identity Management, so "+
+				"there is no activation record, no expiry and no approval step. The grant is permanent and the "+
+				"only evidence it was used is whatever the role itself logs. Provision highly privileged roles "+
+				"through PIM (SCuBA MS.AAD.7.5v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"5.4", "6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
+	}
+	if t.GlobalAdminActivationNoApproval {
+		f = append(f, finding(id(), "sspm::m365::global-admin-activation-no-approval", types.SeverityMedium,
+			"Global Administrator activation requires no approval", target+"/entra",
+			"An account eligible for Global Administrator can activate it unilaterally. PIM's value is that "+
+				"someone else has to agree — without approval it is a delay, not a control, and an attacker "+
+				"holding an eligible account simply waits it out. Require approval for Global Administrator "+
+				"activation (SCuBA MS.AAD.7.6v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"5.4"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2"}})))
+	}
+	if t.GlobalAdminActivationNoAlert {
+		f = append(f, finding(id(), "sspm::m365::global-admin-activation-no-alert", types.SeverityMedium,
+			"Global Administrator activation raises no alert", target+"/entra",
+			"Nobody is notified when Global Administrator is activated. This is the one event in the tenant "+
+				"most worth watching, and an activation an attacker performs looks exactly like one an "+
+				"administrator performs — the difference is only that somebody noticed. Enable alerting on "+
+				"Global Administrator activation (SCuBA MS.AAD.7.8v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"8.11"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-6", "SI-4"}})))
+	}
+	if t.PasswordExpiryEnabled {
+		f = append(f, finding(id(), "sspm::m365::password-expiry-enabled", types.SeverityLow,
+			"Passwords are configured to expire", target+"/entra",
+			"Forced password rotation is now advised AGAINST by both CISA and NIST SP 800-63B: it drives "+
+				"users to predictable increments and to writing passwords down, which costs more than the "+
+				"compromise window it shortens. Set passwords never to expire and rely on strength, "+
+				"reuse-blocking and MFA (SCuBA MS.AAD.6.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"5.2"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
+	}
+	if t.AdminConsentWorkflowDisabled {
+		f = append(f, finding(id(), "sspm::m365::admin-consent-workflow-disabled", types.SeverityMedium,
+			"No admin consent workflow is configured", target+"/entra",
+			"Users who hit an application needing administrator consent have no way to request it, so the "+
+				"pressure is on the tenant to allow broad user consent instead. The workflow exists to make "+
+				"asking an admin cheaper than letting everyone decide. Configure an admin consent workflow "+
+				"(SCuBA MS.AAD.5.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-6"}})))
 	}
 	if t.TeamsEmailIntegrationEnabled {
 		f = append(f, finding(id(), "sspm::m365::teams-email-integration-enabled", types.SeverityMedium,
