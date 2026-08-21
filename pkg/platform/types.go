@@ -1278,6 +1278,75 @@ type IgnoreRule struct {
 	At       time.Time `json:"at"`
 }
 
+// Feedback is a person's JUDGEMENT about an issue, and it is deliberately not an
+// IgnoreRule.
+//
+// An IgnoreRule is an ACTION — hide this from my list. Feedback is an OPINION — here is
+// what I think of it. Conflating them costs both directions: a customer who thinks a
+// finding is real but poorly evidenced has no way to say so without hiding it, and a
+// customer who hides something for their own reasons is read as disputing it.
+//
+// The field that does not exist anywhere else is Evidence. Every other signal the
+// product collects answers "did we RANK this right"; this one answers "was our PROOF
+// good enough", which is the question a security team stakes its reputation on and the
+// only one whose answer can improve the verifier rather than the filter. The machine
+// half of that signal comes free from re-attack disagreements (retest.ApplyReattack);
+// this is the human half, for the far larger set of findings nobody re-attacks.
+type Feedback struct {
+	TenantID string `json:"tenant_id"`
+	// IssueKey is the crossdetect.DedupKey of the issue. Keyed the same way as an
+	// IgnoreRule so the two can be read together, and computed by the same function that
+	// assigned it — never rebuilt by hand.
+	IssueKey string `json:"issue_key"`
+	// Verdict is what the person thinks of the finding itself.
+	Verdict string `json:"verdict"` // FeedbackReal | FeedbackFalsePositive | FeedbackUnclear
+	// Evidence is what they think of our PROOF, and it is independent of Verdict: "yes
+	// this is real, and no you did not show me why" is the most useful thing a customer
+	// can say, and it is unsayable if the two collapse into one field.
+	Evidence string    `json:"evidence,omitempty"` // "" | EvidenceSufficient | EvidenceInsufficient
+	Note     string    `json:"note,omitempty"`
+	By       string    `json:"by,omitempty"`
+	At       time.Time `json:"at"`
+}
+
+// Feedback verdicts about the finding.
+const (
+	FeedbackReal          = "real"           // the finding is correct
+	FeedbackFalsePositive = "false_positive" // the finding is wrong
+	// FeedbackUnclear means the reader could not tell. It is recorded rather than
+	// discarded because "I could not understand this finding" is a defect in the
+	// finding, not an absence of opinion — and it is invisible if the only options
+	// are agree and disagree.
+	FeedbackUnclear = "unclear"
+)
+
+// Feedback verdicts about our evidence.
+const (
+	EvidenceSufficient   = "sufficient"
+	EvidenceInsufficient = "insufficient"
+)
+
+// ValidFeedbackVerdict reports whether v is a verdict we accept. An unrecognised verdict
+// is REFUSED rather than stored as free text: a corpus whose labels are open-ended cannot
+// be counted, and a label nobody defined cannot be learned from.
+func ValidFeedbackVerdict(v string) bool {
+	switch v {
+	case FeedbackReal, FeedbackFalsePositive, FeedbackUnclear:
+		return true
+	}
+	return false
+}
+
+// ValidFeedbackEvidence reports whether e is an accepted evidence verdict. Empty is
+// valid and means "no opinion offered" — distinct from either judgement.
+func ValidFeedbackEvidence(e string) bool {
+	switch e {
+	case "", EvidenceSufficient, EvidenceInsufficient:
+		return true
+	}
+	return false
+}
+
 // ExclusionRule is a PATTERN-based noise filter (Aikido "custom rules": exclude
 // specific paths, packages, conditions). Unlike IgnoreRule (which suppresses one
 // exact issue by its dedup key), an ExclusionRule drops every finding whose chosen

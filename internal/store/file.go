@@ -181,6 +181,13 @@ func (f *File) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) error 
 	return f.persist()
 }
 
+func (f *File) PutFeedback(ctx context.Context, fb platform.Feedback) error {
+	if err := f.Memory.PutFeedback(ctx, fb); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error {
 	if err := f.Memory.DeleteIgnoreRule(ctx, tenantID, issueKey); err != nil {
 		return err
