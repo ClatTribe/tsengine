@@ -76,6 +76,10 @@ const (
 	// worth our time" or "not a real problem for us" — and a case source has to know
 	// which answer it is recording.
 	SourceAcceptedRisk Source = "accepted_risk"
+	// SourceHumanVerdict is an explicit typed judgement (platform.Feedback) rather than
+	// an inference from a click. It is the only source where the customer answered the
+	// question we actually wanted answered.
+	SourceHumanVerdict Source = "human_verdict"
 )
 
 // Case is one graded example drawn from the tenant's own history.
@@ -122,7 +126,35 @@ func (r Result) Agreement() (float64, bool) {
 //
 // findings is the tenant's current finding set, dismissed the findings the L1.5 chain dropped
 // (Engagement.L15Dismissed), ignores their suppression rules, and actions their remediation record.
+// Inputs is everything a suite can be built from. A struct rather than five slice
+// parameters: two adjacent []types.Finding arguments are trivially swappable at a call
+// site and the compiler cannot tell, which is the kind of mistake that produces a suite
+// that scores fine and means nothing.
+type Inputs struct {
+	Findings  []types.Finding
+	Dismissed []types.Finding
+	Ignores   []platform.IgnoreRule
+	Actions   []platform.Action
+	// Feedback are explicit human judgements. Unlike everything else here they are not
+	// inferred from an action taken for another reason — someone typed an answer to the
+	// question we asked — so they outrank the inferred sources when both cover one
+	// finding.
+	Feedback []platform.Feedback
+}
+
+// BuildSuite assembles the tenant's eval cases from their own recorded judgements.
+//
+// Ordering matters, because the first source to claim a finding owns it. EXPLICIT
+// statements come before INFERRED ones: a person who typed "this is a false positive"
+// has said something a suppression can only be read to imply, and where the two
+// disagree the typed answer is the one they meant.
 func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRule, actions []platform.Action) []Case {
+	return BuildSuiteFrom(Inputs{Findings: findings, Dismissed: dismissed, Ignores: ignores, Actions: actions})
+}
+
+// BuildSuiteFrom is BuildSuite over the full input set.
+func BuildSuiteFrom(in Inputs) []Case {
+	findings, dismissed, ignores, actions := in.Findings, in.Dismissed, in.Ignores, in.Actions
 	var cases []Case
 	seen := map[string]bool{}
 
@@ -137,6 +169,48 @@ func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRu
 			FindingID: f.ID, RuleID: f.RuleID, Source: SourceReinstated, Expect: Keep,
 			Reason: "a person reinstated this after the filter dropped it", finding: f,
 		})
+	}
+
+	// 1b. Explicit judgements. These sit directly below reinstatements and ABOVE every
+	// inferred source, because the customer answered the question rather than leaving us
+	// to read intent into a click.
+	//
+	// Only the verdict about the FINDING becomes a case: Score replays the L1.5 chain and
+	// asks keep-or-suppress, and an opinion about our EVIDENCE does not map onto that
+	// question. It is recorded on the feedback itself and read by the verification-policy
+	// corpus instead. "unclear" produces no case at all — it says the finding was
+	// unreadable, which is a defect in the write-up rather than a claim about whether the
+	// finding is correct, and filing it as either verdict would put words in someone's
+	// mouth.
+	judged := map[string]platform.Feedback{}
+	for _, fb := range in.Feedback {
+		judged[fb.IssueKey] = fb
+	}
+	if len(judged) > 0 {
+		for _, f := range append(append([]types.Finding{}, findings...), dismissed...) {
+			fb, ok := judged[crossdetect.DedupKey(f)]
+			if !ok || seen[f.ID] {
+				continue
+			}
+			var expect Verdict
+			switch fb.Verdict {
+			case platform.FeedbackReal:
+				expect = Keep
+			case platform.FeedbackFalsePositive:
+				expect = Suppress
+			default:
+				continue // unclear, or a verdict we do not recognise: no case
+			}
+			seen[f.ID] = true
+			reason := "a person judged this " + fb.Verdict
+			if fb.Evidence == platform.EvidenceInsufficient {
+				reason += ", and said our evidence did not show them why"
+			}
+			cases = append(cases, Case{
+				FindingID: f.ID, RuleID: f.RuleID, Source: SourceHumanVerdict, Expect: expect,
+				By: fb.By, Reason: reason, finding: f,
+			})
+		}
 	}
 
 	// 2. Suppressions: an issue a human marked a false positive.

@@ -101,5 +101,11 @@ func (d Deps) evalCases(ctx context.Context, tenantID string) ([]tenanteval.Case
 	}
 	ignores, _ := d.Store.ListIgnoreRules(ctx, tenantID)
 	actions, _ := d.Store.ListActions(ctx, tenantID)
-	return tenanteval.BuildSuite(findings, dismissed, ignores, actions), nil
+	// Explicit judgements are best-effort: a store that cannot serve them must not sink
+	// the whole suite, since every other source still works.
+	feedback, _ := d.Store.ListFeedback(ctx, tenantID)
+	return tenanteval.BuildSuiteFrom(tenanteval.Inputs{
+		Findings: findings, Dismissed: dismissed, Ignores: ignores,
+		Actions: actions, Feedback: feedback,
+	}), nil
 }
