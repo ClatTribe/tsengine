@@ -13,6 +13,14 @@ linters:
     - gosec
 
 linters-settings:
+  misspell:
+    # "signins" is not a misspelling of "signings" here. Entra sign-in risk policies are
+    # what Microsoft and CISA both call them (MS.AAD.2.3v1: "Sign-ins detected as high risk
+    # SHALL be blocked"), and the rule ids that carry the term are matched literally by the
+    # SCuBA benchmark. Taking the linter's suggestion would rename a concept to something
+    # that means a different thing, and break the mapping while doing it.
+    ignore-words:
+      - signins
   gosec:
     excludes:
       - G104 # we use errcheck for unhandled errors

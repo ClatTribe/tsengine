@@ -58,12 +58,12 @@ func TestAnalyze_SubjectScopeSeverityLadder(t *testing.T) {
 		kind     string
 		severity string
 	}{
-		{"*", SubjectSpansRepositories, "critical"},                          // anything at all
-		{"repo:*", SubjectSpansRepositories, "critical"},                     // any owner
+		{"*", SubjectSpansRepositories, "critical"},                              // anything at all
+		{"repo:*", SubjectSpansRepositories, "critical"},                         // any owner
 		{"repo:*/api:ref:refs/heads/main", SubjectSpansRepositories, "critical"}, // any owner, fixed repo name
-		{"repo:acme/*", SubjectSpansRepositories, "high"},                    // any repo in org
-		{"repo:acme/api:*", SubjectSpansRefs, "medium"},                      // any ref of one repo
-		{"repo:acme/api:ref:refs/heads/*", SubjectSpansRefs, "medium"},       // any branch
+		{"repo:acme/*", SubjectSpansRepositories, "high"},                        // any repo in org
+		{"repo:acme/api:*", SubjectSpansRefs, "medium"},                          // any ref of one repo
+		{"repo:acme/api:ref:refs/heads/*", SubjectSpansRefs, "medium"},           // any branch
 	} {
 		a := Analyze(trust(`,"Condition":{
            "StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com"},

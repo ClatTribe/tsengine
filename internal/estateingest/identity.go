@@ -32,6 +32,10 @@ const (
 // behind them, not derived state — which is why each records the rule that made it.
 const (
 	// CredentialExposedAttr: this person's credential is known outside the organisation.
+	//
+	// #nosec G101 -- this is the NAME of a graph attribute, not a credential. gosec pattern-
+	// matches the identifier rather than the value; renaming it to satisfy the scanner would
+	// make the attribute worse to read in exchange for nothing.
 	CredentialExposedAttr = "credential_exposed"
 	// MFAMissingAttr: this person's account has no second factor.
 	MFAMissingAttr = "mfa_missing"

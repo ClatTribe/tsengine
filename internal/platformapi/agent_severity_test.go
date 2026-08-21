@@ -138,9 +138,12 @@ func TestCloudFindingIdentity_DistinctRoutesStayDistinctAndStable(t *testing.T) 
 			"attack path disappears from incidents", crown, key(viaEC2))
 	}
 	// Stability: the same route re-recorded (a later scan, a new ai-NNN id) keeps its identity.
-	if key(viaEC2) != key(viaEC2) {
-		t.Error("identity is not deterministic for the same route")
-	}
+	//
+	// This used to compare key(viaEC2) against key(viaEC2) — a pure function against itself,
+	// which cannot fail whatever the code does. It read as a determinism check and asserted
+	// nothing; staticcheck flags it (SA4000) and was right. The `again` case below is the
+	// real test: a DIFFERENT Issue value describing the same route, with the severity changed
+	// to prove severity is not part of the identity.
 	again := cloudagent.Issue{Target: crown, Severity: "critical", // severity may change; route did not
 		Path: []string{"internet", "i-web", "role/app", crown}}
 	if key(again) != key(viaEC2) {

@@ -100,9 +100,7 @@ func Assess(est Estate, now time.Time) Assessment {
 			a.Findings = append(a.Findings, weaknessFinding(id(), role, w, now))
 		}
 		if est.ReposComplete {
-			for _, f := range unownedRepoFindings(id, role, an, owned, now) {
-				a.Findings = append(a.Findings, f)
-			}
+			a.Findings = append(a.Findings, unownedRepoFindings(id, role, an, owned, now)...)
 		}
 	}
 	return a

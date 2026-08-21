@@ -62,12 +62,33 @@ jobs:
       - uses: actions/checkout@v4
       # Build golangci-lint FROM SOURCE with the job's Go (install-mode: goinstall) so its
       # build-Go always matches the module — a prebuilt "latest" binary is built with an
-      # older Go and refuses a module whose go directive (now 1.25, pulled by the pure-Go
-      # sqlite driver) is newer than its build-Go. Pin the v1 line (the .golangci.yml is v1
-      # format). Mirrors the local toolchain.
+      # older Go and refuses a module whose go directive is newer than its build-Go. Pin the
+      # v1 line (the .golangci.yml is v1 format).
+      #
+      # THE GO VERSION IS PINNED TO THE MODULE'S OWN, NOT 'stable', AND THAT IS THE FIX.
+      # Building golangci-lint with a Go NEWER than it understands breaks it from the other
+      # direction: v1.64.8's vendored x/tools decodes export data up to version 2 (Go 1.26),
+      # and Go 1.27 emits version 4. Every import then fails to load and the run collapses
+      # into a wall of typecheck errors on valid code —
+      #
+      #   could not import sync/atomic (cannot decode "sync/atomic", export data version 4
+      #   is greater than maximum supported version 2)
+      #
+      # which reads like the code is broken rather than the linter. This gate had been red on
+      # main since Go 1.27 became 'stable', and while it was red it hid nine real issues,
+      # including a test assertion that compared a pure function's output to itself and could
+      # never fail. A permanently-red gate is not a strict gate; it is no gate, and the cost
+      # is exactly the failures nobody sees.
+      #
+      # Pinning to the module's declared version is also the more correct thing on its own
+      # terms: the linter should typecheck against the Go the module targets, not whatever is
+      # newest. WHEN go.mod MOVES PAST 1.26 THIS BREAKS AGAIN — the real fix then is
+      # golangci-lint v2 (the v1 line ends at 1.64.x), which needs .golangci.yml migrated to
+      # the v2 format. Do that migration deliberately; do not bump this pin past what the
+      # linter can decode.
       - uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          go-version: '1.26'
       - uses: golangci/golangci-lint-action@v6
         with:
           version: v1.64.8
