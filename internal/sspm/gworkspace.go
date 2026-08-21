@@ -47,6 +47,19 @@ type GWorkspaceTenant struct {
 	// PasswordStrengthNotEnforced: the strength requirement is off entirely.
 	// GWS.COMMONCONTROLS.5.1v1.
 	PasswordStrengthNotEnforced bool `json:"password_strength_not_enforced,omitempty"`
+	// PasswordPolicyNotEnforcedAtSignIn: a changed policy applies only to NEW passwords,
+	// so every account that does not voluntarily rotate keeps the weak one indefinitely —
+	// the setting turns a policy into a suggestion. GWS.COMMONCONTROLS.5.4v1.
+	PasswordPolicyNotEnforcedAtSignIn bool `json:"password_policy_not_enforced_at_signin,omitempty"`
+	// PasswordReuseAllowed: users may set a password they have used before, which
+	// re-arms every credential already sitting in a breach dump.
+	// GWS.COMMONCONTROLS.5.5v1.
+	PasswordReuseAllowed bool `json:"password_reuse_allowed,omitempty"`
+	// PasswordExpiryDays: forced rotation, in days. 0 = none, which is what CISA and
+	// NIST both now REQUIRE — expiry drives users to predictable increments and is a
+	// net loss. Non-zero is the finding here, which is the opposite of the intuition
+	// most password checks encode. GWS.COMMONCONTROLS.5.6v1.
+	PasswordExpiryDays int `json:"password_expiry_days,omitempty"`
 	// SpamBypassDomains: how many domains sit on a spam-filter bypass list. Any is a
 	// hole straight to the inbox. GWS.GMAIL.18.1v1.
 	SpamBypassDomains int `json:"spam_bypass_domains,omitempty"`
@@ -152,6 +165,32 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Password strength enforcement is disabled", target,
 			"The password-strength requirement is off, so users may set trivially guessable passwords. Enable strength enforcement (SCuBA GWS.COMMONCONTROLS.5.1v1).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.3.6"}, CISv8: []string{"5.2"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
+	}
+	if t.PasswordPolicyNotEnforcedAtSignIn {
+		f = append(f, finding(id(), "sspm::google_workspace::password-policy-not-enforced-at-signin", types.SeverityMedium,
+			"Password policy is not enforced at next sign-in", target,
+			"A strengthened password policy applies only to passwords set AFTER the change, so every account "+
+				"that does not voluntarily rotate keeps its old one indefinitely — raising the minimum length "+
+				"changes nothing for the accounts most likely to have a weak password. Enforce the policy at "+
+				"next sign-in (SCuBA GWS.COMMONCONTROLS.5.4v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.3.6"}, CISv8: []string{"5.2"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
+	}
+	if t.PasswordReuseAllowed {
+		f = append(f, finding(id(), "sspm::google_workspace::password-reuse-allowed", types.SeverityMedium,
+			"Password reuse is permitted", target,
+			"Users may set a password they have used before. Any credential of theirs already sitting in a "+
+				"breach dump becomes valid again the moment they rotate back to it, which is the one outcome a "+
+				"rotation is supposed to prevent. Block reuse (SCuBA GWS.COMMONCONTROLS.5.5v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.3.7"}, CISv8: []string{"5.2"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
+	}
+	if t.PasswordExpiryDays > 0 {
+		f = append(f, finding(id(), "sspm::google_workspace::password-expiry-enabled", types.SeverityLow,
+			fmt.Sprintf("Passwords are forced to expire every %d days", t.PasswordExpiryDays), target,
+			fmt.Sprintf("Passwords expire every %d days. Forced rotation is now advised AGAINST by both CISA and "+
+				"NIST SP 800-63B: it drives users to predictable increments and to writing passwords down, which "+
+				"costs more than the compromise window it shortens. Set expiry to never and rely on strength, "+
+				"reuse-blocking and MFA (SCuBA GWS.COMMONCONTROLS.5.6v1).", t.PasswordExpiryDays),
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"5.2"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
 	}
 	if t.SpamBypassDomains > 0 {
 		f = append(f, finding(id(), "sspm::google_workspace::spam-filter-bypass-list", types.SeverityMedium,
