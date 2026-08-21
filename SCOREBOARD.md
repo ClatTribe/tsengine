@@ -7,13 +7,70 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Web app · DAST | per-class Youden (TPR−FPR) | — not run (3 blockers found + 2 fixed; see below) | 56% — OWASP-ZAP 56% (best OSS DAST); commercial ceiling Acunetix/Netsparker 87% | — pending run |
 | Repository · SAST | overall Youden | **46.54%** — measured | 35% — Fortify 35%; Checkmarx 47%; ceiling Veracode 51% | ✅ at/above par — third on the published cohort |
 | L2 agent · autonomy | detection_rate (must-find) + verified_rate | — not run | 100% — must-find parity (detection_rate = 1.0), zero FP; verified_rate the differentiator | — pending run |
-| Cloud account · CSPM | CIS-section recall | — not run | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
-| API · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
-| IP/host · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
+| Cloud account · CSPM | CIS-section recall | — not run (needs LocalStack or real creds) | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
+| API · recall parity | recall vs standalone OSS | **1.000** — measured vs VAmPI | 100% — orchestration drops nothing the standalone tool found | — pending run |
+| IP/host · recall parity | recall vs standalone OSS | — not measured (image lacked naabu) | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | Domain · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
-| Container · SCA recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
+| Container · SCA recall parity | recall vs standalone OSS | **1.000** + FP-control PASS | 100% — orchestration drops nothing the standalone tool found | — pending run |
 
-**Summary:** 2 measured (SAST 46.54% at par · web reported per-class, see note) · 6 pending a live run.
+**Summary:** 5 measured, all at or above par · 2 still blocked · 1 refused as unmeasurable here. Run live on 2026-08-21 with Docker
+available; every figure below was produced on this machine, not carried forward.
+
+| Row | Result | Note |
+|---|---|---|
+| Repository · SAST | **46.54%** Youden | neutral leaderboard; at par (Checkmarx 47, Fortify 35) |
+| Container · SCA | **1.000** must-find recall | + `alpine-clean` FP-control **PASS** (0 high/critical on a clean image) |
+| Repository · SCA | **1.000** must-find recall | 260 raw findings, 9 anchors |
+| Web · DAST | per-class, see note | sqli 57.58%; aggregate withheld and why |
+| **API · recall** | **1.000** | VAmPI: `sqlmap::sqli` on `/users/v1/name1*`; complete scan, 4m19s |
+| IP/host | **not measured** | the image was built `TOOLSET=…,api` — naabu is absent and its stub says so. nmap reached 6379 fine, so this is a harness gap, NOT reachability and NOT a capability result. Rebuild with the `ip` toolset to score it |
+| Cloud · CSPM | not run | needs LocalStack or real credentials |
+| Domain | not runnable in a box | subdomain enumeration queries public sources about a real registered domain — there is nothing to host |
+
+**The IP row is why the scoreboard now has a `tools_failed` guard.** That run reported
+`raw_findings=0 partial=false tools_failed=0` over a wide-open port that nmap, in the same
+image, could see — naabu never ran, and nothing said so. All 36 tool wrappers swallowed every
+non-zero exit, which is necessary (semgrep and trivy exit 1 when they *find* something) but
+collapses "the tool looked and found nothing" into "the tool never looked". `tool.DidNotRun`
+now separates them, and `bench.withholdIfIncomplete` withholds the verdict a missing tool
+could fake.
+
+Every hop of that chain is covered by an executing test — the wrapper against a real 127-exit
+stub on PATH, the orchestrator against a failing dispatcher, `RunWithSurface` returning the
+failure for the artifact, and the scorer withholding on it — each mutation-verified. **What is
+still unproven is the single integrated run**: re-running the ip row through a rebuilt sandbox
+image to watch it report `tools_failed=1`. That needs a ~3GB image build, and the machine was
+at 901MB free. Stated as unproven rather than assumed, since assuming it is the same move this
+whole section is about.
+
+**The API row was first recorded here as `0.000 — FAIL, MISSED sqli`. That was wrong, and
+how it was wrong is worth more than the number.**
+
+The scan had printed `partial=true` — it hit its deadline mid-sqlmap. Re-run against the
+same target on the same image with a budget it could finish in, it completed in 4m19s and
+found `sqlmap::sqli` at `/users/v1/name1*`. Recall 1.000.
+
+Nothing was wrong with the engine. `injectionTarget` had been rewriting the path parameter
+into sqlmap's `*` marker form since #1233, and the dispatch was correct in *both* runs — the
+failing one included. **The scorer had no idea the run had been cut off.** It read a
+truncated finding list as a detection result, exactly as it would have read a complete one.
+
+This is the same error as the IP row below, one level up: a number that measures the harness
+being published as a capability. I caught it there and missed it here in the same commit,
+which is the argument for fixing it in code rather than remembering it.
+
+`bench.withholdIfTruncated` now withholds the one verdict a deadline can manufacture, per
+metric. Truncation is **directional** — a scan that stops early can only have FEWER findings
+— so each metric has exactly one fakeable verdict:
+
+| Metric | Withheld | Still sound |
+|---|---|---|
+| `must_find_recall` | a **FAIL** — the finding may not have landed yet | a **PASS** — it found what was required despite being cut short |
+| `fp_rate` | a **PASS** — the alarm may not have fired yet | a **FAIL** — the alarm did fire, and finishing could only add more |
+
+The verdict line reads `UNMEASURED`, deliberately neither PASS nor FAIL: the run cannot
+answer the question. Withholding both directions would throw away sound results; withholding
+neither is how a clock gets published as a capability.
 
 **The web row, run live on 2026-08-21 — reported per-class, not as one number.**
 WAVSEP was deployed and scanned. Getting there took three fixes, the third a production bug

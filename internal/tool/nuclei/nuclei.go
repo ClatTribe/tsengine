@@ -71,8 +71,7 @@ func (*Nuclei) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		// nuclei exits non-zero when it finds nothing in some configs.
 		// Treat exit-with-stdout as success; only true exec errors are
 		// failures.
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("nuclei: exec: %w", err)
 		}
 		// Still try to parse stdout — partial output is valid.

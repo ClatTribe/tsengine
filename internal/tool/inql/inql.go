@@ -21,10 +21,10 @@ func execInql(ctx context.Context, target string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "inql", "-t", target)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
+		if !tool.DidNotRun(err) {
 			// inql may exit non-zero but still print introspection — return
-			// the output for the heuristic to judge.
+			// the output for the heuristic to judge. A non-zero exit that means
+			// the tool never started is NOT that case (tool.DidNotRun).
 			return out, nil
 		}
 		return nil, err

@@ -56,8 +56,7 @@ func (*GoVulnCheck) Run(ctx context.Context, args tool.Args) (tool.Result, error
 	// toolchain absent / context cancelled) is a real failure; parse stdout
 	// regardless. Degrades gracefully (no findings) when unavailable.
 	if err := cmd.Run(); err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{Output: "govulncheck: " + err.Error()}, nil
 		}
 	}

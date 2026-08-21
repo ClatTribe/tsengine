@@ -72,8 +72,7 @@ func (*Trivy) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "trivy", cliArgs...)
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("trivy: exec: %w", err)
 		}
 		// trivy may exit non-zero on findings-found / network issues;

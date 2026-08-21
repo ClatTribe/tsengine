@@ -59,8 +59,7 @@ func (*CloudFox) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "cloudfox", provider, command)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			// Binary missing or auth failure — surface, don't crash.
 			return tool.Result{Output: "cloudfox: " + err.Error()}, nil
 		}

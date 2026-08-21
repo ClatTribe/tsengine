@@ -366,7 +366,17 @@ export interface AssetCoverage {
   scanned: boolean;
   last_scanned_at?: string;
   runs_tools: string[]; // the tools every scan of this type runs
-  tools_with_findings: string[]; // which surfaced a finding (the rest ran clean)
+  tools_with_findings: string[]; // which surfaced a finding
+  // Whether per-tool execution was VERIFIED for this asset. False means runs_tools is the
+  // DECLARED toolset and nothing may be concluded about whether each tool actually ran — so the
+  // heading must not say "tools run on every scan". Its Go doc says this field exists "so the UI
+  // states what is known rather than the reassuring version"; it was ignored here until #1285.
+  execution_confirmed?: boolean;
+  // Tools this scan dispatched that produced NO RESULT — a per-tool timeout, a crash, or a
+  // binary missing from the sandbox image. Critically NOT the same as "ran and found nothing":
+  // a tool that never ran has no opinion about the target, and rendering it as clean is the
+  // one thing this page exists to prevent.
+  tools_failed?: { tool: string; reason?: string }[];
   findings_count: number;
   // Classes this asset's scan cannot reach without an operator-declared config that is absent.
   // Present so "no findings" is never read as "nothing to find" — BOLA/BFLA need two identities.

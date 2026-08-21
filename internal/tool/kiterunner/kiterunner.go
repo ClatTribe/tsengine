@@ -51,8 +51,7 @@ func (*Kiterunner) Run(ctx context.Context, args tool.Args) (tool.Result, error)
 	cmd := exec.CommandContext(ctx, "kr", "scan", target, "-w", wl, "-q", "--fail-status-codes", "400,404,403,500,501,502,503")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{Output: "kiterunner: " + err.Error()}, nil
 		}
 	}

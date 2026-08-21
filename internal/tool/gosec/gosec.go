@@ -43,8 +43,7 @@ func (*Gosec) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "gosec", "-fmt=json", "-quiet", "-no-fail", strings.TrimRight(target, "/")+"/...")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{Output: "gosec: " + err.Error()}, nil
 		}
 	}

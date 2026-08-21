@@ -44,6 +44,10 @@ type RunResult struct {
 	RecallStats TrialStats `json:"recall_stats"`
 	EnrichStats TrialStats `json:"enrichment_stats"`
 	AllPass     bool       `json:"all_pass"`
+	// Unmeasured is set when any trial's verdict was withheld because the scan
+	// was truncated (see withholdIfTruncated). Distinct from AllPass=false.
+	Unmeasured       bool   `json:"unmeasured,omitempty"`
+	UnmeasuredReason string `json:"unmeasured_reason,omitempty"`
 }
 
 // Run executes a fixture N times via the real tsengine binary and scores
@@ -66,6 +70,9 @@ func Run(ctx context.Context, f *Fixture, opts RunOptions) (*RunResult, error) {
 		enrich = append(enrich, sc.EnrichmentCov)
 		if !sc.Pass {
 			res.AllPass = false
+		}
+		if sc.Unmeasured {
+			res.Unmeasured, res.UnmeasuredReason = true, sc.UnmeasuredReason
 		}
 	}
 	res.RecallStats = stats(recalls)

@@ -82,6 +82,22 @@ const (
 	SourceHumanVerdict Source = "human_verdict"
 )
 
+// AllSources is the closed set, for the guard test and for the frontend's exhaustiveness —
+// the same contract platformapi.AllDegradationKinds provides for degradations.
+//
+// SourceStarter is deliberately absent: starter cases are scored under their own arm and are
+// never mixed into "agreement with your experts", so they do not appear in that list.
+func AllSources() []Source {
+	return []Source{
+		SourceReinstated,
+		SourceIgnored,
+		SourceConfirmedFix,
+		SourceEvidenceInsufficient,
+		SourceAcceptedRisk,
+		SourceHumanVerdict,
+	}
+}
+
 // Case is one graded example drawn from the tenant's own history.
 type Case struct {
 	FindingID string        `json:"finding_id"`

@@ -61,8 +61,7 @@ func (*CodeQL) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	create := exec.CommandContext(ctx, "codeql", "database", "create", db,
 		"--language="+lang, "--source-root="+src, "--overwrite")
 	if out, err := create.CombinedOutput(); err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{Output: "codeql create: " + err.Error()}, nil
 		}
 		// DB build can fail on no-build languages / missing deps — degrade.

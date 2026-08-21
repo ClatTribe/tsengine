@@ -45,8 +45,7 @@ func (*Nikto) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "nikto", "-h", target, "-Format", "json", "-output", "/dev/stdout", "-nointeractive", "-ask", "no")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{Output: "nikto: " + err.Error()}, nil
 		}
 	}

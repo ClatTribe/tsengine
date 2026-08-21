@@ -62,8 +62,7 @@ func (*Dalfox) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "dalfox", cliArgs...)
 	stdout, err := cmd.Output()
 	if err != nil {
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) {
+		if tool.DidNotRun(err) {
 			return tool.Result{}, fmt.Errorf("dalfox: exec: %w", err)
 		}
 		// dalfox can exit non-zero on findings/parse issues; still try

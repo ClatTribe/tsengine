@@ -9,10 +9,24 @@ import { SECURITY_TABS } from "@/lib/tabs";
 
 export const dynamic = "force-dynamic";
 
+// Every tenanteval.Source, in the customer's words. A source with no label here falls through
+// to its raw enum slug — so "human_verdict" would appear on screen to the very person whose
+// typed judgement it is, which reads like a bug in the product they just took the trouble to
+// correct. internal/uicheck asserts this map covers the Go constants; three of these six were
+// missing when that guard was written.
 const SOURCE_LABEL: Record<string, string> = {
   reinstated: "You reinstated it",
   ignored: "You called it noise",
   confirmed_fix: "A re-scan proved the fix",
+  // The explicit channel: someone answered the question directly rather than us inferring
+  // their opinion from a click meant for something else.
+  human_verdict: "You told us directly",
+  // Accepting a risk CONFIRMS the finding — it is the one suppression reason that agrees
+  // with us, which is why it is a Keep and not noise.
+  accepted_risk: "You accepted the risk — so it is real",
+  // The re-scan said fixed while the recorded exploit still ran. The dangerous direction:
+  // a customer one step from being told they were safe.
+  evidence_insufficient: "A re-scan said fixed, the exploit still worked",
 };
 
 // Proof you generate yourself.

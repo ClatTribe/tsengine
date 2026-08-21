@@ -1,4 +1,4 @@
-import { ScanSearch, CheckCircle2, CircleDashed } from "lucide-react";
+import { ScanSearch, CheckCircle2, CircleDashed, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -50,6 +50,11 @@ export default async function CoveragePage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {cov.assets.map((a) => {
             const found = new Set(a.tools_with_findings);
+            // A tool that never ran is NOT a tool that ran clean. Without this the chip below
+            // renders it identically to a silent pass and the tooltip says "ran, found nothing"
+            // — the page whose whole promise is that you never have to take coverage on trust
+            // would be asserting the one thing that is not true.
+            const failed = new Map((a.tools_failed ?? []).map((f) => [f.tool, f.reason]));
             return (
               <div key={a.asset_id} className="card p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -69,7 +74,15 @@ export default async function CoveragePage() {
                 </div>
 
                 <div className="mt-3.5 text-[11px] font-medium uppercase tracking-wider text-faint">
-                  {a.scanned ? "Tools run on every scan" : "Tools this scan will run"}
+                  {/* "Tools run on every scan" is a claim about EXECUTION, and it is only ours to
+                      make when the scan reported what it dispatched. Unconfirmed, this list is the
+                      DECLARED toolset — what a scan of this type is configured to run — and saying
+                      it ran is the reassuring version of an unknown. */}
+                  {!a.scanned
+                    ? "Tools this scan will run"
+                    : a.execution_confirmed === false
+                      ? "Tools configured for this asset type — execution not reported"
+                      : "Tools run on every scan"}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {a.runs_tools.length === 0 ? (
@@ -82,21 +95,53 @@ export default async function CoveragePage() {
                           key={t}
                           className={
                             "mono inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] " +
-                            (hit
-                              ? "border-high/30 bg-high/10 text-high"
-                              : a.scanned
-                                ? "border-border bg-surface text-muted"
-                                : "border-border bg-surface text-faint")
+                            (failed.has(t)
+                              ? "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                              : hit
+                                ? "border-high/30 bg-high/10 text-high"
+                                : a.scanned
+                                  ? "border-border bg-surface text-muted"
+                                  : "border-border bg-surface text-faint")
                           }
-                          title={hit ? "surfaced a finding" : a.scanned ? "ran, found nothing" : "will run on next scan"}
+                          title={
+                            failed.has(t)
+                              ? `DID NOT RUN — ${failed.get(t) || "no result"}. This tool has no opinion about this target; its silence is not a clean result.`
+                              : hit
+                                ? "surfaced a finding"
+                                : !a.scanned
+                                  ? "will run on next scan"
+                                  : a.execution_confirmed === false
+                                    ? "configured to run — this scan did not report whether it did"
+                                    : "ran, found nothing"
+                          }
                         >
-                          {hit && <span className="h-1.5 w-1.5 rounded-full bg-high" />}
+                          {failed.has(t) ? (
+                            <AlertTriangle className="h-3 w-3" />
+                          ) : (
+                            hit && <span className="h-1.5 w-1.5 rounded-full bg-high" />
+                          )}
                           {t}
                         </span>
                       );
                     })
                   )}
                 </div>
+
+                {a.scanned && failed.size > 0 && (
+                  // Stated ABOVE the findings summary, because that summary's phrasing — "no
+                  // findings recorded from the rest" — reads as a clean result for tools that
+                  // never ran. The count has to reach the reader before the sentence does.
+                  <div className="mt-3 flex items-start gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      <span className="font-medium">
+                        {failed.size} tool{failed.size === 1 ? "" : "s"} did not run
+                      </span>{" "}
+                      on this scan. Whatever {failed.size === 1 ? "it" : "they"} would have found is
+                      not in these results, so this asset is less covered than the list below suggests.
+                    </span>
+                  </div>
+                )}
 
                 {a.scanned && (
                   <div className="mt-3 text-xs text-muted">
