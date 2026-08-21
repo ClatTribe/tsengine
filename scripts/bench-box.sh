@@ -26,6 +26,24 @@ ROOT="$(pwd)"
 
 COMPOSE_FILE="docker-compose.bench.yml"
 NETWORK="${TSENGINE_SANDBOX_NETWORK:-tsengine-sandbox}"
+
+# THE SCAN SANDBOX MUST JOIN $NETWORK OR EVERY TOOL FAILS SILENTLY.
+#
+# internal/sandbox spawns on the docker DEFAULT bridge unless TSENGINE_SANDBOX_NETWORK is
+# set, and the bench targets live on $NETWORK. Unset, the sandbox cannot resolve
+# bench-wavsep / bench-vampi at all — and nothing errors: katana returns the seed URL,
+# nuclei finds nothing, the run completes "successfully" and scores 0. A benchmark that
+# reports zero because it could not reach the target looks exactly like one that scanned a
+# clean app, which is the failure mode this whole file exists to avoid.
+export TSENGINE_SANDBOX_NETWORK="$NETWORK"
+
+# ON macOS THIS IS NOT ENOUGH, and the reason is worth knowing before you debug it twice.
+# With a non-empty network the runtime does NOT publish a host port — it resolves the
+# container IP and connects there (internal/sandbox/runtime.go). Docker Desktop runs
+# containers inside a VM with no host route to container IPs, so the tool-server health
+# check times out ("tool-server not ready after 30s"). That path is for Linux, where the
+# platform itself is containerized. On a Mac, attach the target to the default bridge
+# (`docker network connect bridge bench-wavsep`) and scan its bridge IP instead.
 SANDBOX_IMAGE="${TSENGINE_SANDBOX_IMAGE:-tsengine/sandbox:0.1.0}"
 TSBENCH="${TSBENCH:-./bin/tsbench}"
 TSENGINE="${TSENGINE_BIN:-./bin/tsengine}"
@@ -183,11 +201,21 @@ run_web() {
   if ! wait_http bench-wavsep 8080 /wavsep/ 420; then
     record web SKIPPED "WAVSEP never became ready — logs: docker logs bench-wavsep"; return
   fi
-  # Scan from the ROOT, not /wavsep. The ground-truth url_path column already carries the
-  # full "/wavsep/active/..." prefix and scoring is substring containment, so the crawler
-  # must start above that path to reach the cases at all.
+  # Scan from index-active.jsp, NOT the root and NOT /wavsep/.
+  #
+  # This used to target the root, on the reasoning that the ground-truth url_path column
+  # carries the full "/wavsep/active/..." prefix and scoring is substring containment, so
+  # the crawler must start above it. The containment half is right; the entry point was
+  # wrong, and it meant this row could never score.
+  #
+  # Measured against the live zaproxy/wavsep image: the Tomcat root is the DEFAULT WELCOME
+  # PAGE with no link to the app, and /wavsep/ is a prose welcome page with ZERO <a> tags.
+  # A crawler starting at either has nothing to follow — katana returns exactly the seed
+  # URL. index-active.jsp is the real catalogue, and from there katana finds ~1,750 URLs at
+  # the same depth. Starting deeper does not break scoring: the discovered URLs still
+  # contain "/wavsep/active/...", which is all containment needs.
   local log="$OUTDIR/web.log"
-  if "$TSBENCH" wavsep --target http://bench-wavsep:8080 \
+  if "$TSBENCH" wavsep --target http://bench-wavsep:8080/wavsep/index-active.jsp \
        --ground-truth fixtures/web/wavsep/expected-cases.csv \
        --image "$SANDBOX_IMAGE" >"$log" 2>&1; then
     record web OK "$(grep -ioE 'youden[^,;]*' "$log" | tail -1)"

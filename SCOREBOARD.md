@@ -4,7 +4,7 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 
 | Category | Metric | Ours | At-par bar | Status |
 |---|---|---|---|---|
-| Web app · DAST | per-class Youden (TPR−FPR) | — not run | 56% — OWASP-ZAP 56% (best OSS DAST); commercial ceiling Acunetix/Netsparker 87% | — pending run |
+| Web app · DAST | per-class Youden (TPR−FPR) | — not run (3 blockers found + 2 fixed; see below) | 56% — OWASP-ZAP 56% (best OSS DAST); commercial ceiling Acunetix/Netsparker 87% | — pending run |
 | Repository · SAST | overall Youden | **46.54%** — measured | 35% — Fortify 35%; Checkmarx 47%; ceiling Veracode 51% | ✅ at/above par — third on the published cohort |
 | L2 agent · autonomy | detection_rate (must-find) + verified_rate | — not run | 100% — must-find parity (detection_rate = 1.0), zero FP; verified_rate the differentiator | — pending run |
 | Cloud account · CSPM | CIS-section recall | — not run | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
@@ -14,6 +14,30 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Container · SCA recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
 
 **Summary:** 1 at/above par (measured) · 0 below · 7 pending a live run.
+
+**Why the web row is still empty after a live attempt.** WAVSEP was deployed and scanned on
+2026-08-21 and produced no score. Three reasons, found in order, two now fixed in
+`scripts/bench-box.sh`:
+
+1. **The harness pointed at an entry point with no links.** It scanned the Tomcat root,
+   which is the default welcome page; `/wavsep/` is a prose page with ZERO `<a>` tags. A
+   crawler starting at either gets exactly the seed URL back. The real catalogue is
+   `index-active.jsp`, from which katana finds ~1,750 URLs at the same depth. **Fixed.**
+2. **The scan sandbox joined the wrong network.** `internal/sandbox` spawns on the docker
+   default bridge unless `TSENGINE_SANDBOX_NETWORK` is set, so `bench-wavsep` did not
+   resolve and every tool failed SILENTLY — no error, run "successful", score 0. A
+   benchmark reporting zero because it could not reach the target is indistinguishable from
+   one that scanned a clean app. **Fixed** (the script now exports it).
+3. **UNRESOLVED, and the reason there is still no number.** With recon working, katana
+   inside the sandbox returned **67 URLs where the identical command standalone returns
+   1,759** — same flags, same depth, same target. Not a timeout (no per-tool cap is set by
+   default) and not obviously the 4g/2-CPU sandbox limits. Until that gap is understood,
+   any WAVSEP figure would be measuring the harness, not the scanner, so none is published
+   here.
+
+Recorded rather than dropped because #3 is a real lead: if the sandboxed crawl is losing
+94% of the surface on a target we control, it is worth knowing whether it does so on a
+customer's.
 
 **Provenance note on the SAST row.** It read **39%** for roughly 1,100 PRs — a figure predating the
 neutral OWASP measurement, which was published in #1223 and recorded in CLAUDE.md §16 while this table
