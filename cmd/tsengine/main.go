@@ -305,7 +305,7 @@ Usage:
   tsengine ledger show   <ledger.json>                          # one-line summary (steps, decisions, signer)
   tsengine pubkey [--key <path>]
   tsengine verify [--pubkey <hex>] <vulnerabilities.json>
-  tsengine corpus refresh [--out <dir>] [--timeout <dur>]
+  tsengine corpus refresh [--out <dir>] [--timeout <dur>] [--exploit-intel]
 
 Authenticated web scans (web_application): supply a ready session via
 --auth-cookie, or form-login credentials via --auth-login-url plus
@@ -427,14 +427,23 @@ func runCorpusRefresh(argv []string) error {
 	fs := flag.NewFlagSet("corpus refresh", flag.ContinueOnError)
 	out := fs.String("out", "./corpus", "output dir for threat_intel.json + manifest")
 	timeout := fs.Duration("timeout", 5*time.Minute, "fetch timeout")
+	// Opt-in offensive-face sidecar (ADR 0019): fetch the nuclei-templates archive and write
+	// exploit_intel.json alongside the corpus. Off by default (the archive is large); pass the flag,
+	// or --exploit-intel-url to pin a tag/commit tarball for a reproducible evidence pack.
+	exploitIntel := fs.Bool("exploit-intel", false, "also build the offensive-face exploit_intel.json sidecar (nuclei template bodies, ADR 0019)")
+	exploitIntelURL := fs.String("exploit-intel-url", threatintel.ExploitIntelURL, "nuclei-templates archive URL for --exploit-intel")
 	if err := fs.Parse(argv); err != nil {
 		return err
+	}
+	opts := threatintel.RefreshOptions{OutDir: *out}
+	if *exploitIntel {
+		opts.ExploitIntelURL = *exploitIntelURL
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
 	fmt.Fprintf(os.Stderr, "[corpus] refreshing threat-intel from CISA KEV + FIRST.org EPSS …\n")
-	m, path, err := threatintel.Refresh(ctx, threatintel.RefreshOptions{OutDir: *out})
+	m, path, err := threatintel.Refresh(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -443,6 +452,13 @@ func runCorpusRefresh(argv []string) error {
 	fmt.Printf("  entries:    %d  (KEV %d, EPSS %d)\n", m.EntryCount, m.KEVCount, m.EPSSCount)
 	fmt.Printf("  KEV as-of:  %s\n", m.KEVAsOf.Format(time.RFC3339))
 	fmt.Printf("  EPSS as-of: %s\n", m.EPSSAsOf.Format(time.RFC3339))
+	if *exploitIntel {
+		if recs, found, lerr := threatintel.LoadExploitIntel(*out); lerr == nil && found {
+			fmt.Printf("  exploit-intel: %d CVE skeletons (offensive-face sidecar, ADR 0019)\n", len(recs))
+		} else {
+			fmt.Printf("  exploit-intel: not written (fetch/parse failed — corpus is unaffected)\n")
+		}
+	}
 	fmt.Printf("\nUse it in scans:\n  export %s=%s\n", hooks.ThreatIntelCorpusEnv, path)
 	return nil
 }

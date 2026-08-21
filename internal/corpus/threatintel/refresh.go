@@ -17,7 +17,11 @@ type RefreshOptions struct {
 	ExploitDBURL  string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
 	MetasploitURL string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
 	NucleiURL     string       // override for tests; best-effort — the "can we test for this CVE" index
-	NVDURL        string       // OPT-IN CVSS-vector source: only fetched when set. NVD is large + paginated, so
+	// ExploitIntelURL is the OPT-IN offensive-face source (ADR 0019): the nuclei-templates archive whose
+	// template BODIES become the exploit_intel.json sidecar. Only fetched when set (the archive is large),
+	// best-effort like ExploitDB — a failure never blocks the KEV+EPSS refresh; the sidecar is just skipped.
+	ExploitIntelURL string
+	NVDURL          string // OPT-IN CVSS-vector source: only fetched when set. NVD is large + paginated, so
 	//             it's wired to a bulk mirror / paging fetcher (a single GET to the live API returns one page),
 	//             never defaulted on. Best-effort like ExploitDB (a fetch failure doesn't fail the refresh).
 }
@@ -120,6 +124,16 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 	if err != nil {
 		return Manifest{}, "", err
 	}
+
+	// Offensive-face exploit-intel sidecar (ADR 0019), OPT-IN + best-effort: only when a source URL is
+	// configured, and a failure never touches the corpus already written above. The sidecar is a SEPARATE
+	// file (exploit_intel.json), so it cannot perturb the byte-stable dashboard corpus block.
+	if opts.ExploitIntelURL != "" {
+		if records := fetchExploitIntel(ctx, opts.HTTPClient, opts.ExploitIntelURL); len(records) > 0 {
+			_, _ = WriteExploitIntel(opts.OutDir, records)
+		}
+	}
+
 	return m, dataPath, nil
 }
 
