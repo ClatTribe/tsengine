@@ -26,6 +26,33 @@ type GWorkspaceTenant struct {
 	ThirdPartyAPIAccess      bool   `json:"third_party_api_access"`     // any third-party OAuth app can access data (no app allowlist / API controls)
 	GmailExternalAutoForward bool   `json:"gmail_external_autoforward"` // users may auto-forward mail to external addresses (exfil)
 	ExternalCalendarSharing  bool   `json:"external_calendar_sharing"`  // calendar details shared with external/public
+	// DRIVE SHARING WARNINGS. Two settings, one control: does a user get told before a
+	// file leaves the organisation. 1.3 warns at share time when the recipient's domain is
+	// not allowlisted; 1.9 warns at the file level for out-of-domain access. Both are the
+	// last moment a mistake is still cheap to undo.
+	// GWS.DRIVEDOCS.1.3v1 / 1.9v1.
+	DriveExternalShareWarningsDisabled bool `json:"drive_external_share_warnings_disabled,omitempty"`
+	DriveOutOfDomainWarningsDisabled   bool `json:"drive_out_of_domain_warnings_disabled,omitempty"`
+	// DriveSecurityUpdateNotApplied: Google's Drive security update adds a resource key to
+	// sharing links. WITHOUT it, links created before the change remain in the old
+	// guessable format — so a link that leaked years ago, or was enumerated, still works.
+	// This is the rare posture setting that is retroactive: applying it invalidates old
+	// exposure rather than only preventing new. GWS.DRIVEDOCS.3.1v1.
+	DriveSecurityUpdateNotApplied bool `json:"drive_security_update_not_applied,omitempty"`
+	// DriveRansomwareMonitoringDisabled: Drive can detect the mass-corruption signature of
+	// ransomware encrypting a synced folder. Without it the first sign is a user noticing,
+	// by which point the sync has already propagated the encryption to everyone sharing
+	// the drive. GWS.DRIVEDOCS.5.2v1.
+	DriveRansomwareMonitoringDisabled bool `json:"drive_ransomware_monitoring_disabled,omitempty"`
+	// DriveNonGoogleAccountSharing: files may be shared with recipients who have no Google
+	// account, via a link plus an emailed PIN. The recipient is unauthenticated in any
+	// sense we can audit. GWS.DRIVEDOCS.1.4v1.
+	DriveNonGoogleAccountSharing bool `json:"drive_non_google_account_sharing,omitempty"`
+	// DriveExternalSharedDriveUpload: users may move content INTO a shared drive owned by
+	// another organisation — an exfiltration path that looks like ordinary collaboration
+	// and leaves the file under someone else's retention and access control.
+	// GWS.DRIVEDOCS.1.7v1.
+	DriveExternalSharedDriveUpload bool `json:"drive_external_shared_drive_upload,omitempty"`
 	// ExternalInviteWarningsDisabled: no prompt before sending an invitation outside the
 	// org. The warning is what catches a mistyped domain or a look-alike one BEFORE the
 	// invite carries a meeting link and an attendee list out of the company.
@@ -151,6 +178,51 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if n := driveWarningGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::google_workspace::drive-external-share-warnings-disabled", types.SeverityMedium,
+			"Drive external-sharing warnings are off ("+strings.Join(n, ", ")+")", target+"/drive",
+			"Users are not warned before a file leaves the organisation: "+strings.Join(n, ", ")+
+				". The warning is the last moment a mis-shared document is still cheap to undo — after it, the "+
+				"file is out and the only remedy is revocation nobody thinks to perform. Enable Drive sharing "+
+				"warnings (SCuBA GWS.DRIVEDOCS.1.3v1 / 1.9v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.DriveSecurityUpdateNotApplied {
+		f = append(f, finding(id(), "sspm::google_workspace::drive-security-update-not-applied", types.SeverityHigh,
+			"The Google Drive link-security update has not been applied", target+"/drive",
+			"Sharing links created before Google's Drive security update lack the resource key that makes a "+
+				"link unguessable, so any such link that leaked or was enumerated STILL WORKS today. This is "+
+				"the rare setting that is retroactive: applying it invalidates existing exposure rather than "+
+				"only preventing new. Apply the security update to Drive files (SCuBA GWS.DRIVEDOCS.3.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"AC-3"}})))
+	}
+	if t.DriveRansomwareMonitoringDisabled {
+		f = append(f, finding(id(), "sspm::google_workspace::drive-ransomware-monitoring-disabled", types.SeverityMedium,
+			"Drive ransomware-corruption monitoring is disabled", target+"/drive",
+			"Drive is not watching for the mass-corruption signature of ransomware encrypting a synced "+
+				"folder. Without it the first sign is a user noticing their files are unreadable — by which "+
+				"point sync has already propagated the encryption to everyone sharing the drive. Enable "+
+				"ransomware-corruption monitoring (SCuBA GWS.DRIVEDOCS.5.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"10.1", "11.1"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3", "SI-4"}})))
+	}
+	if t.DriveNonGoogleAccountSharing {
+		f = append(f, finding(id(), "sspm::google_workspace::drive-non-google-account-sharing", types.SeverityMedium,
+			"Files can be shared with recipients who have no Google account", target+"/drive",
+			"Sharing to non-Google recipients works via a link plus an emailed PIN, so the person opening the "+
+				"file is unauthenticated in any sense the audit log can record — access is proof of holding an "+
+				"email, and forwarding that email transfers it. Restrict external sharing to Google accounts "+
+				"(SCuBA GWS.DRIVEDOCS.1.4v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.DriveExternalSharedDriveUpload {
+		f = append(f, finding(id(), "sspm::google_workspace::drive-external-shared-drive-upload", types.SeverityMedium,
+			"Users may move content into shared drives owned by other organisations", target+"/drive",
+			"Content can be uploaded or moved into a shared drive another organisation owns. That is an "+
+				"exfiltration path shaped exactly like ordinary collaboration, and once moved the file sits "+
+				"under someone else's retention, access control and deletion policy. Block uploads to "+
+				"externally-owned shared drives (SCuBA GWS.DRIVEDOCS.1.7v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
 	}
 	if n := attachmentGapsOf(t); len(n) > 0 {
 		f = append(f, finding(id(), "sspm::google_workspace::attachment-protection-disabled", types.SeverityHigh,
@@ -318,6 +390,19 @@ func linkGapsOf(t GWorkspaceTenant) []string {
 	}
 	if t.UntrustedLinkWarningsOff {
 		n = append(n, "no warning on links to untrusted domains")
+	}
+	return n
+}
+
+// driveWarningGapsOf names which Drive sharing warnings are off. Two settings, one
+// control, and the finding says which — the same shape as the Gmail attachment cluster.
+func driveWarningGapsOf(t GWorkspaceTenant) []string {
+	var n []string
+	if t.DriveExternalShareWarningsDisabled {
+		n = append(n, "no warning when sharing to a non-allowlisted domain")
+	}
+	if t.DriveOutOfDomainWarningsDisabled {
+		n = append(n, "no out-of-domain file-level warning")
 	}
 	return n
 }
