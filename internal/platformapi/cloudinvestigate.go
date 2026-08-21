@@ -15,6 +15,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/types"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -64,6 +65,14 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 		// and check_live says so.
 		Live: d.liveReaderOrNil(r.Context(), tenantID),
 	}
+	// Bracket the run (ADR 0018 §4). The before-state has to be censused HERE, before the
+	// agent acts — after the fact there is no way to tell an issue the agent surfaced from
+	// one that was already on the books, and a corpus that cannot tell those apart credits
+	// the agent with the estate's whole backlog.
+	episode := ledger.NewEpisode(nil, d.censusState(r.Context(), tenantID, "cloud:"+tenantID, cloudFinding))
+	episode.AgentVersion = agentVersion()
+	started := time.Now()
+
 	// llm (pentest.SpecLLM) satisfies cloudengine.LLM structurally — same Generate method.
 	rep, ierr := cloudagent.Investigate(r.Context(), llm, cc, cloudagent.Options{MaxIters: 24, MaxHyp: 20})
 	if ierr != nil {
@@ -109,11 +118,31 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 			risksProposed = len(seeded)
 		}
 	}
+	// Close the bracket. A scope mismatch or an unreadable store leaves Delta nil, and
+	// the episode is still recorded — an unscorable run is a real run, and dropping it
+	// would bias the record toward the ones that went smoothly.
+	episode.Cost = ledger.Cost{Iterations: rep.Calls, WallClock: time.Since(started)}
+	_ = episode.Close(d.censusState(r.Context(), tenantID, "cloud:"+tenantID, cloudFinding))
+
 	if d.Recorder != nil {
-		d.Recorder.Record("cloud investigated", "cloudagent",
-			map[string]any{"tenant_id": tenantID, "paths": stored, "calls": rep.Calls, "risks_proposed": risksProposed}, "AI Cloud Engineer investigation")
+		args := map[string]any{"tenant_id": tenantID, "paths": stored, "calls": rep.Calls, "risks_proposed": risksProposed}
+		if dl := episode.Delta; dl != nil {
+			// The measured effect of THIS run, not a restatement of what it reported.
+			// opened counts issues that were not on the books before it started;
+			// closed only means they stopped appearing, which is not the same as fixed.
+			args["opened"] = len(dl.Opened)
+			args["closed"] = len(dl.Closed)
+			args["persisted"] = dl.Persisted
+		} else {
+			args["delta"] = "unscored — posture could not be censused on both sides of the run"
+		}
+		d.Recorder.Record("cloud investigated", "cloudagent", args, "AI Cloud Engineer investigation")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"summary": rep.Summary, "paths_found": stored, "risks_proposed": risksProposed, "calls": rep.Calls, "issues": rep.Issues})
+	resp := map[string]any{"summary": rep.Summary, "paths_found": stored, "risks_proposed": risksProposed, "calls": rep.Calls, "issues": rep.Issues}
+	if episode.Delta != nil {
+		resp["posture_delta"] = episode.Delta
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleCloudInvestigationView (GET /v1/cloud/investigate) returns the tenant's stored cloud-agent
