@@ -7,13 +7,33 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Web app · DAST | per-class Youden (TPR−FPR) | — not run (3 blockers found + 2 fixed; see below) | 56% — OWASP-ZAP 56% (best OSS DAST); commercial ceiling Acunetix/Netsparker 87% | — pending run |
 | Repository · SAST | overall Youden | **46.54%** — measured | 35% — Fortify 35%; Checkmarx 47%; ceiling Veracode 51% | ✅ at/above par — third on the published cohort |
 | L2 agent · autonomy | detection_rate (must-find) + verified_rate | — not run | 100% — must-find parity (detection_rate = 1.0), zero FP; verified_rate the differentiator | — pending run |
-| Cloud account · CSPM | CIS-section recall | — not run | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
-| API · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
-| IP/host · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
+| Cloud account · CSPM | CIS-section recall | — not run (needs LocalStack or real creds) | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
+| API · recall parity | recall vs standalone OSS | **0.000 — FAIL**, measured vs VAmPI | 100% — orchestration drops nothing the standalone tool found | — pending run |
+| IP/host · recall parity | recall vs standalone OSS | — not measured (image lacked naabu) | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | Domain · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
-| Container · SCA recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
+| Container · SCA recall parity | recall vs standalone OSS | **1.000** + FP-control PASS | 100% — orchestration drops nothing the standalone tool found | — pending run |
 
-**Summary:** 2 measured (SAST 46.54% at par · web reported per-class, see note) · 6 pending a live run.
+**Summary:** 5 measured · 1 failing · 2 still blocked. Run live on 2026-08-21 with Docker
+available; every figure below was produced on this machine, not carried forward.
+
+| Row | Result | Note |
+|---|---|---|
+| Repository · SAST | **46.54%** Youden | neutral leaderboard; at par (Checkmarx 47, Fortify 35) |
+| Container · SCA | **1.000** must-find recall | + `alpine-clean` FP-control **PASS** (0 high/critical on a clean image) |
+| Repository · SCA | **1.000** must-find recall | 260 raw findings, 9 anchors |
+| Web · DAST | per-class, see note | sqli 57.58%; aggregate withheld and why |
+| **API · recall** | **0.000 — FAIL** | VAmPI: spec ingested (200), sqlmap dispatched twice, **`sqli` MISSED** |
+| IP/host | **not measured** | the image was built `TOOLSET=…,api` — naabu is absent and its stub says so. nmap reached 6379 fine, so this is a harness gap, NOT reachability and NOT a capability result. Rebuild with the `ip` toolset to score it |
+| Cloud · CSPM | not run | needs LocalStack or real credentials |
+| Domain | not runnable in a box | subdomain enumeration queries public sources about a real registered domain — there is nothing to host |
+
+**The API FAIL is a real result and is recorded as one.** VAmPI's OpenAPI spec was reachable
+and ingested, `openapi_spec_ingest`/`schemathesis`/`nuclei`/`kiterunner`/`sqlmap` all fired,
+12 findings came back, and the single must-find case — `sqli` — was missed. Not
+root-caused here; the obvious hypothesis is that VAmPI's injection sits in a PATH parameter
+(`/users/v1/{username}`) rather than a query parameter, and sqlmap needs a parameter
+position to attack. That is the same shape as the path-traversal finding above and deserves
+the same four-hypothesis treatment before anyone calls it a detector gap.
 
 **The web row, run live on 2026-08-21 — reported per-class, not as one number.**
 WAVSEP was deployed and scanned. Getting there took three fixes, the third a production bug
