@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -174,5 +175,51 @@ func TestNewEpisodeRecord_NoAttestationMeansNoSHA(t *testing.T) {
 	}
 	if rec.AgentKind != "webagent" {
 		t.Errorf("AgentKind = %q", rec.AgentKind)
+	}
+}
+
+// The filters are DERIVED from coverage.Toolset rather than hand-written, and this pins
+// that: every declared repository anchor must be in the code surface. A hand-written list
+// drifts silently in the direction that matters — a tool missing from it is missing from
+// the BEFORE census, so its findings look like ones the run opened.
+func TestSurfaceFilters_TrackTheDeclaredToolset(t *testing.T) {
+	for _, tool := range coverage.Toolset["repository"] {
+		if !codeFinding(types.Finding{Tool: tool}) {
+			t.Errorf("repository anchor %q is not in the code surface — it would look like the run opened its findings", tool)
+		}
+	}
+	for _, tool := range coverage.Toolset["cloud_account"] {
+		if !cloudFinding(types.Finding{Tool: tool}) {
+			t.Errorf("cloud_account anchor %q is not in the cloud surface", tool)
+		}
+	}
+}
+
+// The two surfaces must not overlap, or a cloud episode is credited with — or blamed
+// for — a change in the tenant's repositories. That is the scope error ledger.Diff exists
+// to catch one level up, and here is where it would be introduced.
+func TestSurfaceFilters_CodeAndCloudDoNotOverlap(t *testing.T) {
+	all := append(append([]string{}, coverage.Toolset["repository"]...), coverage.Toolset["container_image"]...)
+	all = append(all, coverage.Toolset["cloud_account"]...)
+	all = append(all, "codeagent", "cloudagent", "clouddrift")
+	for _, tool := range all {
+		f := types.Finding{Tool: tool}
+		if codeFinding(f) && cloudFinding(f) {
+			t.Errorf("%q counts on BOTH surfaces — one run's delta would include the other's findings", tool)
+		}
+	}
+}
+
+// A finding that carries only a rule id still belongs to its surface. Some ingest paths
+// never set Tool, and dropping them understates the before-state.
+func TestSurfaceFilters_RuleIDAloneIsEnough(t *testing.T) {
+	if !codeFinding(types.Finding{RuleID: "semgrep::sqli"}) {
+		t.Error("a semgrep rule with no Tool must still count as code")
+	}
+	if !cloudFinding(types.Finding{RuleID: "prowler::iam-admin"}) {
+		t.Error("a prowler rule with no Tool must still count as cloud")
+	}
+	if codeFinding(types.Finding{RuleID: "prowler::iam-admin"}) {
+		t.Error("a prowler rule must not count as code")
 	}
 }

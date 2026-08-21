@@ -11,6 +11,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/codeagent"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -126,6 +127,14 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 		Findings: body.Findings,
 		Source:   codeagent.NewMapSource(body.Source), // nil/empty source → the agent honestly reports it can't read code
 	}
+	// Bracket the run (ADR 0018 §4), censused BEFORE the agent acts — afterwards there is
+	// no way to separate an issue the agent surfaced from the repository's existing backlog.
+	scope := "code:" + tenantID
+	episode := ledger.NewEpisode(nil, d.censusState(r.Context(), tenantID, scope, codeFinding))
+	episode.AgentVersion = agentVersion()
+	d.applyTrainingConsent(r.Context(), tenantID, episode)
+	started := time.Now()
+
 	rep, ierr := codeagent.Investigate(r.Context(), llm, cc, codeagent.Options{MaxIters: 24, Ledger: d.Recorder})
 	if ierr != nil {
 		respond(w, nil, ierr)
@@ -164,6 +173,10 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
+	episode.Cost = ledger.Cost{Iterations: rep.Calls, WallClock: time.Since(started)}
+	_ = episode.Close(d.censusState(r.Context(), tenantID, scope, codeFinding))
+	d.recordEpisode(r.Context(), tenantID, scope, episode, saved)
+
 	if d.Recorder != nil {
 		d.Recorder.Record("ai code engineer investigated", "code-agent",
 			map[string]any{"tenant_id": tenantID, "repo": body.Repo, "findings": len(body.Findings), "issues": len(rep.Issues), "confirmed": stored, "calls": rep.Calls},
