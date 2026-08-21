@@ -5,6 +5,8 @@ package tool
 
 import (
 	"context"
+	"encoding/json"
+	"math"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -95,4 +97,51 @@ type Result struct {
 	// never lands on disk. The orchestrator threads it into later-wave
 	// (authed) dispatches' args["cookie"] (CLAUDE.md §11 wave ordering).
 	CapturedSession string `json:"captured_session,omitempty"`
+}
+
+// ArgInt reads an integer argument, tolerating every shape it can arrive in.
+//
+// THIS EXISTS BECAUSE `args["depth"].(int)` IS WRONG EVERYWHERE THAT MATTERS.
+// Args is map[string]any, and a dispatch crosses the host→sandbox boundary as JSON
+// (§12.3). encoding/json decodes every number into float64, so an int written by a
+// handler comes back as float64 and a direct .(int) assertion FAILS — in the sandbox,
+// which is to say in production. It succeeds in unit tests, which never serialize.
+//
+// The failure is silent and expensive. katana's crawl depth is the worst case measured:
+// the web handler sets depth 3 precisely because "depth 2 is too shallow to discover a
+// real app's surface", the assertion failed in the sandbox, katana fell back to 2, and a
+// live WAVSEP crawl returned 68 URLs where depth 3 returns 1,604. A 96% surface loss on
+// every sandboxed web scan, reported as a successful scan.
+//
+// Accepts int, int64, float64 and json.Number. A float with a fractional part is REFUSED
+// rather than truncated: 2.7 is not something a caller meant as a count, and silently
+// making it 2 would repeat this bug's defining feature — a value quietly becoming
+// something other than what was written.
+func ArgInt(args Args, key string) (int, bool) {
+	switch v := args[key].(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		if v != math.Trunc(v) {
+			return 0, false
+		}
+		return int(v), true
+	case json.Number:
+		n, err := v.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return int(n), true
+	}
+	return 0, false
+}
+
+// ArgBool reads a boolean argument. JSON round-trips bool faithfully, so this is a
+// convenience rather than a fix — but it keeps every wrapper reading args the same way,
+// which is what stops the next one reaching for a bare type assertion.
+func ArgBool(args Args, key string) bool {
+	b, _ := args[key].(bool)
+	return b
 }

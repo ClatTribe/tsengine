@@ -71,7 +71,7 @@ func (*Schemathesis) Run(ctx context.Context, args tool.Args) (tool.Result, erro
 	if strings.TrimSpace(base) != "" {
 		cli = append(cli, "-u", base)
 	}
-	if n, ok := args["max_examples"].(int); ok && n > 0 {
+	if n, ok := tool.ArgInt(args, "max_examples"); ok && n > 0 {
 		cli = append(cli, fmt.Sprintf("--hypothesis-max-examples=%d", n))
 	}
 	cmd := exec.CommandContext(ctx, "schemathesis", cli...)
