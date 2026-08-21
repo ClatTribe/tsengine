@@ -108,7 +108,6 @@ func TestCoverageClaimsRenderTheFieldsThatQualifyThem(t *testing.T) {
 	}
 }
 
-
 // A closed set declared in Go and mirrored by hand in TypeScript drifts in one direction: the Go
 // side gains a member and the screen falls through to its raw enum slug.
 //
@@ -147,7 +146,6 @@ func TestEveryEvalCaseSourceHasACustomerFacingLabel(t *testing.T) {
 		}
 	}
 }
-
 
 // A shared closed set must not be shadowed by a local copy.
 //
