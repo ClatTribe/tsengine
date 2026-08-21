@@ -296,6 +296,25 @@ func principalMatches(raw json.RawMessage, principal string) (matched, present b
 				}
 			}
 		}
+		// Federated is the WEB-IDENTITY principal form: an OIDC provider ARN
+		// (arn:aws:iam::123:oidc-provider/token.actions.githubusercontent.com) or a
+		// SAML provider. A role assumed by a GitHub Actions workflow is reached through
+		// this key and NOT through AWS, so a trust policy that grants a CI pipeline
+		// admin was previously invisible to every caller of this evaluator.
+		//
+		// Matching is exact-or-glob on the provider ARN, the same as AWS. It does NOT
+		// imply the assumption is permitted: a federated trust is meaningless without
+		// its `sub`/`aud` Condition, which the caller supplies through Request.Context
+		// and the normal condition machinery evaluates. Treating a Federated principal
+		// match as sufficient is precisely the misconfiguration this exists to FIND, so
+		// it must never be how we conclude one is safe.
+		if fed, ok := obj["Federated"]; ok {
+			for _, p := range toStringsRaw(fed) {
+				if p == "*" || p == principal || globMatch(p, principal) {
+					return true, true
+				}
+			}
+		}
 		return false, true
 	}
 	var one string
