@@ -1,6 +1,6 @@
 # ADR 0018 — The Frontier Loop: simulation-driven self-improvement under bounded cost
 
-**Status:** Proposed — items 3 and 5 implemented (see "What has shipped")
+**Status:** Proposed — items 3, 4 and 5 implemented; item 2's cost discipline implemented, its driver not (see "What has shipped")
 **Date:** 2026-08-21
 **Supersedes:** nothing. **Depends on:** ADR 0002 (config-possible ≠ exploitable), ADR 0006 (active
 exploitation + RoE), ADR 0008 (long-horizon agent), ADR 0014 (defense benchmark).
@@ -404,9 +404,9 @@ Against the build list above, as of 2026-08-21 on `feat/frontier-ghoidc`:
 | Item | State |
 |---|---|
 | 1. Populate the scorecard (dual-axis) | **not started** — still 1 at/above par · 0 below · 7 pending a live run. Remains the gate on every improvement claim |
-| 2. Simulation improvement loop | **not started** — blocked on item 1, which supplies the weakness to target |
+| 2. Simulation improvement loop | **cost discipline done, driver not.** `internal/improveloop` implements the two halves that are arithmetic rather than judgement: the stopping rule (Δ per dollar against a floor, so "it went up a bit" stops arguing for one more round) and the anti-circularity guard — `Compare` REFUSES when a change was scored on seeds it was tuned against, which is trivially easy to do by accident because the generator is right there and looks exactly like progress. `Weakest` names the next target deterministically; `HoldoutSeeds` yields a disjoint set by construction. The substrate-improvement step itself is a person's or an agent's, and the driver that sequences rounds still depends on item 1 for the weakness to target |
 | 3. GitHub Actions → AWS OIDC validator | **done, and widened.** `internal/ghoidc` (AWS) + `internal/gcpwif` (GCP, the two-object join) + `cloudiam` Federated principal + `estateingest/ghoidc.go` (the repo→role estate edge) + `estateingest/ghidentity.go` (the human→code hop, or an honest report of why it cannot close) |
-| 4. `Episode` record | **not started** — the state snapshot bracketing an episode remains the one missing primitive |
+| 4. `Episode` record | **done.** `ledger.SecurityState` / `Diff` / `Episode` bracket a run; `Diff` refuses a scope mismatch and a half-bracket, `GrantConsent` refuses once an episode has closed (so consent cannot be back-filled onto data already collected), failed episodes are retained, and `CostPerVerified` reports no ratio rather than zero. Persisted as `platform.EpisodeRecord` through all five stores, served at `GET /v1/episodes`, rendered on `/eval`. Wired on the cloud and code agents; identity has no agent, so it is deliberately NOT bracketed — that would make the episode a fourth change detector |
 | 5. State-delta + verification-policy signal | **verification-policy signal done**, state-delta not started. `retest` disagreements are machine-readable; `tenanteval` gained `SourceEvidenceInsufficient`, `SourceAcceptedRisk` and `SourceHumanVerdict`; `platform.Feedback` + `POST/GET /v1/issues/feedback` + the `IssueFeedback` control ship the human channel |
 | Free threat intelligence | **done** — KEV `knownRansomwareCampaignUse` and `dueDate` were being parsed and discarded; both now drive the SLA clock, with CISA's date used as an ABSOLUTE deadline rather than a window restarted by our discovery |
 

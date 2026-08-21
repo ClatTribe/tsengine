@@ -5,15 +5,19 @@
 // engagements it runs, the remediations it proposes, the human approvals it gates,
 // and the GRC control state it maintains.
 //
-// The package is deliberately dependency-light (stdlib + pkg/types) so the store,
-// connector, scheduler, hitl, remediate, and grc packages can all share it without a
-// cycle.
+// The package is deliberately dependency-light (stdlib + pkg/types + pkg/ledger — both
+// of which are themselves leaves) so the store, connector, scheduler, hitl, remediate,
+// and grc packages can all share it without a cycle. pkg/ledger is here for the episode
+// record's delta and cost blocks: re-declaring those shapes locally would give the
+// system two definitions of the same thing, and they would drift.
 package platform
 
 import (
-	"github.com/ClatTribe/tsengine/pkg/types"
 	"strings"
 	"time"
+
+	"github.com/ClatTribe/tsengine/pkg/ledger"
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // Tenant is one customer organization. Every other entity is scoped to a TenantID;
@@ -59,6 +63,16 @@ type Tenant struct {
 	// PRBot is the per-tenant policy for the repository PR-review bot (ADR 0010). nil = the
 	// default (disabled). The live GitHub post is separately gated on the GitHub App PR scope.
 	PRBot *PRBotPolicy `json:"pr_bot,omitempty"`
+	// Training is the customer's standing decision about whether their agent runs may be
+	// used to improve the system (ADR 0018 §4). nil = NOT consented, which is the correct
+	// default and the only safe one: silence is not agreement, and a corpus that treats it
+	// as agreement is one nobody can defend afterwards.
+	//
+	// The decision is read when an episode STARTS and stamped onto it there. That is why
+	// it lives on the Tenant rather than being asked per run: consent has to be in hand
+	// before the data exists, and ledger.GrantConsent refuses once an episode has closed
+	// precisely so it cannot be back-filled.
+	Training *TrainingConsent `json:"training,omitempty"`
 	// PostureAssessed records when each snapshot-driven posture source (tprm, deviceposture,
 	// clouddrift) last ran, keyed by its tool tag. It exists because those assessors are grounded —
 	// a well-managed estate yields ZERO findings — which makes "assessed and clean" and "never
@@ -1419,4 +1433,154 @@ type ReadinessAttestation struct {
 	By      string `json:"by"`
 	At      string `json:"at"`
 	Note    string `json:"note,omitempty"`
+}
+
+// EpisodeRecord is one scored agent run, persisted so the corpus can be QUERIED:
+// which runs moved posture, at what cost, under whose consent (ADR 0018 §4).
+//
+// It carries the SCORE, not the trajectory. The step trail already lives in the
+// ledger's own signed, tamper-evident export, and copying it into a JSON-blob row per
+// episode would duplicate the one artifact that is already attested — so LedgerSHA
+// references it rather than restating it. The consequence is worth saying plainly: this
+// row is what makes the corpus searchable, and the trajectory it points at is the
+// training payload. A row alone is not a training example.
+type EpisodeRecord struct {
+	ID       string `json:"id"` // append-only: RFC3339Nano of the run
+	TenantID string `json:"tenant_id"`
+	// AgentKind is the ledger's own vocabulary (webagent | cloudagent | llmredteam).
+	AgentKind string `json:"agent_kind"`
+	// Scope is what was censused, and it is what makes two episodes comparable —
+	// ledger.Diff refuses a mismatch, so a trend over episodes has to filter by it.
+	Scope       string    `json:"scope"`
+	RanAt       time.Time `json:"ran_at"`
+	CompletedAt time.Time `json:"completed_at,omitempty"`
+	// LedgerSHA is the attestation hash of the signed trajectory this scores. Empty
+	// when the run produced no signed ledger, which is honest rather than fatal: the
+	// score still stands, it simply cannot be replayed back to the steps.
+	LedgerSHA string `json:"ledger_sha,omitempty"`
+
+	// Delta is the measured posture change, nil when it could not be computed. Unscored
+	// then says why — a nil delta with no reason is indistinguishable from a run that
+	// changed nothing, and those are opposite facts.
+	Delta    *ledger.SecurityStateDelta `json:"delta,omitempty"`
+	Unscored string                     `json:"unscored,omitempty"`
+
+	Cost         ledger.Cost     `json:"cost"`
+	Training     ledger.Training `json:"training"`
+	Difficulty   string          `json:"difficulty,omitempty"`
+	AgentVersion string          `json:"agent_version,omitempty"`
+	Model        string          `json:"model,omitempty"`
+
+	// The four independent status axes, each the string form of the vocabulary its own
+	// package owns. Kept apart on purpose — see ledger.Episode.
+	StopReason   string `json:"stop_reason,omitempty"`
+	Verification string `json:"verification,omitempty"`
+	FixStatus    string `json:"fix_status,omitempty"`
+	HumanVerdict string `json:"human_verdict,omitempty"`
+
+	// Decisions is how many commitments the run made; Verified how many of those were
+	// verified. Verified is the denominator of cost-per-outcome, so it is stored rather
+	// than recomputed later against findings that will have moved on.
+	Decisions int `json:"decisions"`
+	Verified  int `json:"verified"`
+}
+
+// NewEpisodeRecord flattens a ledger.Episode into its persistable score.
+//
+// It reads what the episode actually holds and asserts nothing beyond it: a nil ledger
+// yields an empty AgentKind rather than a guess, and an unsigned ledger yields an empty
+// LedgerSHA rather than a fabricated one.
+func NewEpisodeRecord(tenantID, scope string, e *ledger.Episode, verified int) EpisodeRecord {
+	if e == nil {
+		return EpisodeRecord{TenantID: tenantID, Scope: scope}
+	}
+	rec := EpisodeRecord{
+		TenantID: tenantID, Scope: scope,
+		Delta: e.Delta, Unscored: e.Unscored,
+		Cost: e.Cost, Training: e.Training,
+		Difficulty: e.Difficulty, AgentVersion: e.AgentVersion, Model: e.Model,
+		StopReason: e.StopReason, Verification: e.Verification,
+		FixStatus: e.FixStatus, HumanVerdict: e.HumanVerdict,
+		Verified: verified,
+	}
+	if l := e.Ledger; l != nil {
+		rec.AgentKind = l.AgentKind
+		rec.RanAt, rec.CompletedAt = l.StartedAt, l.CompletedAt
+		rec.Decisions = len(l.Decisions)
+		if l.Attestation != nil {
+			rec.LedgerSHA = l.Attestation.SHA256
+		}
+	}
+	if rec.RanAt.IsZero() && e.Before != nil {
+		rec.RanAt = e.Before.At
+	}
+	if rec.CompletedAt.IsZero() && e.After != nil {
+		rec.CompletedAt = e.After.At
+	}
+	if rec.ID == "" && !rec.RanAt.IsZero() {
+		rec.ID = rec.RanAt.UTC().Format(time.RFC3339Nano)
+	}
+	return rec
+}
+
+// EpisodeStats rolls a set of episodes into the numbers the ADR makes first-class:
+// spend per verified outcome, and how much of the corpus is actually usable.
+type EpisodeStats struct {
+	Episodes int `json:"episodes"`
+	// Scored is how many carried a computable delta. The gap between Episodes and
+	// Scored is not noise — it is the share of runs whose effect nobody can measure,
+	// and it belongs on the same screen as the numbers derived from the rest.
+	Scored    int     `json:"scored"`
+	Trainable int     `json:"trainable"`
+	CostUSD   float64 `json:"cost_usd"`
+	Verified  int     `json:"verified"`
+	// CostPerVerified is reported only when something was verified — see HasCostPer.
+	// Zero verified outcomes has no ratio, and folding a sentinel into a fleet average
+	// would rank the agent that finds nothing as the most efficient one.
+	CostPerVerified float64 `json:"cost_per_verified,omitempty"`
+	HasCostPer      bool    `json:"has_cost_per_verified"`
+	// Opened and Closed are summed across the corpus's scored episodes. Closed counts
+	// issues that STOPPED APPEARING and is not a fix count — see SecurityStateDelta.
+	Opened int `json:"opened"`
+	Closed int `json:"closed"`
+}
+
+// SummarizeEpisodes computes EpisodeStats over a corpus slice.
+func SummarizeEpisodes(eps []EpisodeRecord) EpisodeStats {
+	var s EpisodeStats
+	for _, e := range eps {
+		s.Episodes++
+		s.CostUSD += e.Cost.USD
+		s.Verified += e.Verified
+		if e.Training.Consented {
+			s.Trainable++
+		}
+		if e.Delta != nil {
+			s.Scored++
+			s.Opened += len(e.Delta.Opened)
+			s.Closed += len(e.Delta.Closed)
+		}
+	}
+	if s.Verified > 0 {
+		s.CostPerVerified, s.HasCostPer = s.CostUSD/float64(s.Verified), true
+	}
+	return s
+}
+
+// TrainingConsent is a tenant's standing answer to "may our runs improve the product".
+//
+// Turning it OFF stops future episodes being stamped as consented. It does NOT rewrite
+// episodes already recorded, and the product must not imply otherwise: those were
+// collected under an agreement that was real at the time, and silently relabelling them
+// would make the record say something that was never true. Withdrawal of consent for
+// data already used is a deletion request, which is a different operation with a
+// different audit trail — not a boolean flip.
+type TrainingConsent struct {
+	Consented bool      `json:"consented"`
+	By        string    `json:"by,omitempty"`
+	At        time.Time `json:"at,omitempty"`
+	// Statement is the text the customer actually agreed to, verbatim. An auditor should
+	// read what was consented to, not our later summary of it — the same discipline
+	// pentest.RoE applies to active-exploitation consent.
+	Statement string `json:"statement,omitempty"`
 }

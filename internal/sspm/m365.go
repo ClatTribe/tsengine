@@ -26,6 +26,144 @@ type M365Tenant struct {
 	TeamsGuestUnrestricted  bool   `json:"teams_guest_unrestricted"`  // no guest-access policy (guests get broad access)
 	TeamsOpenFederation     bool   `json:"teams_open_federation"`     // external federation open to ALL domains
 	LegacyAuthEnabled       bool   `json:"legacy_auth_enabled"`       // basic/legacy auth allowed (password-spray + MFA-bypass)
+	// RiskyUserNotificationOff: nobody is told when Entra flags a user as high-risk. The
+	// detection already happened; this decides whether a human ever learns of it.
+	// MS.AAD.2.2v1.
+	RiskyUserNotificationOff bool `json:"risky_user_notification_off,omitempty"`
+	// AuthenticatorContextDisabled: the Authenticator prompt shows no application name or
+	// location, so a user facing an unexpected push has nothing to judge it by. Context is
+	// what turns MFA fatigue from a coin-flip into a decision. MS.AAD.3.3v2.
+	AuthenticatorContextDisabled bool `json:"authenticator_context_disabled,omitempty"`
+	// AuthMethodsMigrationIncomplete: authentication methods are still governed by the
+	// legacy policy as well as the new one, so a method disabled in one place can remain
+	// enabled by the other — the tenant's real MFA posture is the UNION of two settings
+	// nobody reads together. MS.AAD.3.4v1.
+	AuthMethodsMigrationIncomplete bool `json:"auth_methods_migration_incomplete,omitempty"`
+	// ManagedDeviceNotRequiredAuth / ManagedDeviceNotRequiredMFARegistration: the second is
+	// the sharper of the pair. Registering a NEW second factor from an unmanaged device is
+	// how an attacker holding only a password promotes themselves to holding MFA too —
+	// they enrol their own authenticator and the account is theirs permanently.
+	// MS.AAD.3.7v1 / 3.8v1.
+	ManagedDeviceNotRequiredAuth            bool `json:"managed_device_not_required_auth,omitempty"`
+	ManagedDeviceNotRequiredMFARegistration bool `json:"managed_device_not_required_mfa_registration,omitempty"`
+	// RiskyAIAgentsNotBlocked: agent identities flagged as risky are not blocked. An agent
+	// holds delegated permissions and runs unattended, so a compromised one acts with a
+	// user's authority and none of a user's hesitation. MS.AAD.9.1v1.
+	RiskyAIAgentsNotBlocked bool `json:"risky_ai_agents_not_blocked,omitempty"`
+	// SharePointLinkPermissionsNotViewOnly: the DEFAULT permission on a sharing link is
+	// edit rather than view. Most links are created to let someone read something, so the
+	// default decides the permission on the majority of links nobody thought about — and
+	// an edit link on a document that leaked is a write path into it. MS.SHAREPOINT.3.2v1.
+	SharePointLinkPermissionsNotViewOnly bool `json:"sharepoint_link_permissions_not_view_only,omitempty"`
+	// SharePointVerificationCodeReauthDays: how long an external recipient who
+	// authenticated with an emailed verification code stays authenticated. The code went
+	// to a mailbox, so the session is only ever as good as that mailbox — and a long
+	// window means a compromise of it reaches back into your documents.
+	// MS.SHAREPOINT.3.3v2.
+	SharePointVerificationCodeReauthDays int `json:"sharepoint_verification_code_reauth_days,omitempty"`
+	// PhishingResistantMFANotEnforced: MFA is required, but ANY method satisfies it — so a
+	// push notification or a code counts. Phishing-resistant methods (FIDO2, certificate,
+	// Windows Hello) are the ones an adversary-in-the-middle proxy cannot replay, and the
+	// distinction is the whole reason CISA writes a separate policy for it. Detecting
+	// "MFA is on" is a WEAKER claim than "MFA cannot be phished".
+	// MS.AAD.3.1v1 (all users) / 3.6v1 (privileged).
+	PhishingResistantMFANotEnforced           bool `json:"phishing_resistant_mfa_not_enforced,omitempty"`
+	PhishingResistantMFANotEnforcedPrivileged bool `json:"phishing_resistant_mfa_not_enforced_privileged,omitempty"`
+	// SMTPAuthEnabled: SMTP AUTH specifically, as distinct from legacy auth generally. It
+	// is the one legacy protocol that survives most "block legacy auth" projects because a
+	// multifunction printer or a monitoring script still uses it — and it accepts a
+	// password with no second factor. MS.EXO.5.1v1.
+	SMTPAuthEnabled bool `json:"smtp_auth_enabled,omitempty"`
+	// UnmanagedUsersCanInitiateContact is the INBOUND direction, distinct from
+	// UnmanagedUserContactAllowed: this is a consumer Teams account starting a chat with
+	// YOUR staff. That is the direction phishing arrives from, and it needs no invitation
+	// and no guest account. MS.TEAMS.2.2v2.
+	UnmanagedUsersCanInitiateContact bool `json:"unmanaged_users_can_initiate_contact,omitempty"`
+	// InternalUsersNotAutoAdmitted INVERTS the obvious reading, and CISA's reasoning is
+	// worth stating: if authenticated internal users wait in the lobby too, organisers get
+	// lobby fatigue and start admitting everyone without looking. Auto-admitting known
+	// internal users is what keeps the lobby MEANINGFUL for the participants it exists to
+	// stop. So the finding fires when internal users are NOT auto-admitted.
+	// MS.TEAMS.1.4v1.
+	InternalUsersNotAutoAdmitted bool `json:"internal_users_not_auto_admitted,omitempty"`
+	// MeetingRecordingUnrestricted / AlwaysRecordEvents: recordings are a durable copy of
+	// whatever was said and shown, stored and shared with the same controls as any other
+	// file — and "always record" removes the moment anyone decides whether this particular
+	// conversation should have one. MS.TEAMS.1.6v1 / 1.7v2.
+	MeetingRecordingUnrestricted bool `json:"meeting_recording_unrestricted,omitempty"`
+	AlwaysRecordEvents           bool `json:"always_record_events,omitempty"`
+	// UnmanagedUserContactAllowed: internal users may start chats with accounts in no
+	// managed tenant — consumer Teams accounts. The other side has no organisation behind
+	// it, so there is nobody to ask about it and no directory to check it against.
+	// MS.TEAMS.2.3v2.
+	UnmanagedUserContactAllowed bool `json:"unmanaged_user_contact_allowed,omitempty"`
+	// APPLICATION CREDENTIALS. A service-principal secret or certificate is a credential
+	// with no human attached: no MFA, no password reset, no offboarding. Lifetime is the
+	// only control on it, which is why "how long" matters more here than anywhere else —
+	// a five-year secret leaked in year one is an attacker's most durable asset in the
+	// tenant. MS.AAD.5.5v1 / 5.6v1 / 5.7v1.
+	AppPasswordAdditionAllowed bool `json:"app_password_addition_allowed,omitempty"`
+	AppPasswordLifetimeDays    int  `json:"app_password_lifetime_days,omitempty"`
+	AppCertificateLifetimeDays int  `json:"app_certificate_lifetime_days,omitempty"`
+	// GUEST ACCESS. Guests are full directory principals with a foreign home tenant: the
+	// account's password, MFA and lifecycle are administered by someone else entirely.
+	// MS.AAD.8.1v1 / 8.2v1 / 8.3v1.
+	//
+	// GuestDirectoryAccessUnrestricted: guests can enumerate directory objects — users,
+	// groups, memberships — which is the reconnaissance an attacker would otherwise have
+	// to work for.
+	GuestDirectoryAccessUnrestricted bool `json:"guest_directory_access_unrestricted,omitempty"`
+	// AnyUserCanInviteGuests: invitation is not restricted to the Guest Inviter role, so
+	// every member can add an externally-controlled principal to the tenant.
+	AnyUserCanInviteGuests bool `json:"any_user_can_invite_guests,omitempty"`
+	// GuestInvitesAnyDomain: no allowlist, so a guest may be invited from any domain
+	// including a look-alike of a real partner.
+	GuestInvitesAnyDomain bool `json:"guest_invites_any_domain,omitempty"`
+	// DeviceCodeAuthAllowed: device-code flow is permitted. It is the current phishing
+	// favourite because the victim sees a REAL Microsoft page and types a code they were
+	// given — there is no fake domain to spot, and the attacker receives the tokens.
+	// MS.AAD.3.9v1.
+	DeviceCodeAuthAllowed bool `json:"device_code_auth_allowed,omitempty"`
+	// SecurityLogsNotExported: sign-in and audit logs are not shipped anywhere. Entra
+	// retains them for a limited window, so without export the evidence for an incident
+	// discovered late has already expired. MS.AAD.4.1v1.
+	SecurityLogsNotExported bool `json:"security_logs_not_exported,omitempty"`
+	// PrivilegedAssignmentNoAlert / OtherPrivilegedActivationNoAlert complete the PIM
+	// controls: 7.7 alerts on the ASSIGNMENT of a privileged role (eligible or active),
+	// 7.9 on ACTIVATION of privileged roles other than Global Administrator.
+	PrivilegedAssignmentNoAlert      bool `json:"privileged_assignment_no_alert,omitempty"`
+	OtherPrivilegedActivationNoAlert bool `json:"other_privileged_activation_no_alert,omitempty"`
+	// PrivilegedAccountsNotCloudOnly: privileged accounts are federated, so a compromise
+	// of the on-premises directory is a compromise of tenant administration.
+	// MS.AAD.7.3v1.
+	PrivilegedAccountsNotCloudOnly bool `json:"privileged_accounts_not_cloud_only,omitempty"`
+	// PRIVILEGED-ROLE GOVERNANCE (PIM). Standing Global Administrator is the single most
+	// exploited weakness in a compromised M365 tenant: it needs no escalation, survives a
+	// password reset it performs itself, and is indistinguishable from legitimate admin
+	// work in the audit log. The four fields below are the controls that turn permanent
+	// admin into borrowed admin. MS.AAD.7.2v1 / 7.5v1 / 7.6v1 / 7.8v1.
+	//
+	// StandingGlobalAdmins counts accounts holding Global Administrator PERMANENTLY
+	// (as opposed to PIM-eligible). 0 = none or not supplied.
+	StandingGlobalAdmins int `json:"standing_global_admins,omitempty"`
+	// PrivilegedRolesOutsidePIM: highly privileged roles are assigned directly rather
+	// than through PIM, so there is no activation record, no expiry and no approval.
+	PrivilegedRolesOutsidePIM bool `json:"privileged_roles_outside_pim,omitempty"`
+	// GlobalAdminActivationNoApproval / NoAlert: activating Global Administrator needs
+	// nobody's approval, and raises no alert. Together these mean an attacker who can
+	// activate an eligible role does so silently — the PIM control without the two
+	// settings that make it observable.
+	GlobalAdminActivationNoApproval bool `json:"global_admin_activation_no_approval,omitempty"`
+	GlobalAdminActivationNoAlert    bool `json:"global_admin_activation_no_alert,omitempty"`
+	// PasswordExpiryEnabled: forced rotation is advised AGAINST by CISA and NIST
+	// SP 800-63B, so ENABLED is the finding — the same inversion as the Google
+	// Workspace check. MS.AAD.6.1v1.
+	PasswordExpiryEnabled bool `json:"password_expiry_enabled,omitempty"`
+	// AdminConsentWorkflowDisabled: users who hit an app needing admin consent have no
+	// route to request it, so the pressure is to grant consent broadly instead — the
+	// workflow exists to make "ask an admin" cheaper than "let everyone consent".
+	// MS.AAD.5.3v1.
+	AdminConsentWorkflowDisabled bool `json:"admin_consent_workflow_disabled,omitempty"`
 	// MailboxAuditingEnabled is a POINTER because it is the one "true = good" field here:
 	// a plain bool made its zero value (false) assert a violation, so any snapshot that
 	// simply did not carry Exchange posture — every live Graph sync, since mailbox
@@ -34,6 +172,15 @@ type M365Tenant struct {
 	// `"mailbox_auditing_enabled": false` in a posted snapshot behaves exactly as before.
 	MailboxAuditingEnabled *bool `json:"mailbox_auditing_enabled,omitempty"`
 	AnonymousCalendarShare bool  `json:"anonymous_calendar_share"` // calendar details shared anonymously
+	// ContactFoldersSharedAllDomains: an Exchange sharing policy shares CONTACT folders
+	// with the wildcard domain "*" — every organisation on the internet, not a named
+	// partner. Distinct from calendar sharing, and worse for a reason that is easy to
+	// miss: a calendar leaks what a meeting is about, whereas the contact folder IS the
+	// target list. It hands over the org chart, the executive assistants, the external
+	// counsel and the personal mobile numbers in one object — the exact input a
+	// spear-phishing or vishing campaign is otherwise built by hand from LinkedIn.
+	// MS.EXO.6.1v1 (SHALL).
+	ContactFoldersSharedAllDomains bool `json:"contact_folders_shared_all_domains,omitempty"`
 
 	// --- Fields below close mandatory (SHALL) gaps found by the CISA SCuBA neutral
 	// benchmark (internal/bench/scuba.go). Every one is OPTIONAL and FP-safe: the
@@ -78,6 +225,22 @@ type M365Tenant struct {
 	// TeamsAnonymousStartMeeting: anonymous (unauthenticated) users may START a
 	// meeting, not merely join one. MS.TEAMS.1.2v2.
 	TeamsAnonymousStartMeeting bool `json:"teams_anonymous_start_meeting,omitempty"`
+	// TeamsAutoAdmitAnonymous: anonymous participants and dial-in callers skip the lobby
+	// entirely. The lobby is the ONLY point at which an uninvited attendee can be stopped,
+	// so bypassing it means whoever holds a forwarded link is in the room.
+	// MS.TEAMS.1.3v1.
+	TeamsAutoAdmitAnonymous bool `json:"teams_auto_admit_anonymous,omitempty"`
+	// TeamsDialInBypassLobby: dial-in callers specifically bypass the lobby. Separate from
+	// the above because it is a separate setting with a separate owner, and a tenant can
+	// have one without the other. MS.TEAMS.1.5v1.
+	TeamsDialInBypassLobby bool `json:"teams_dial_in_bypass_lobby,omitempty"`
+	// TeamsExternalControlRequest: external participants may request control of a shared
+	// screen — handing an outsider the presenter's desktop. MS.TEAMS.1.1v1.
+	TeamsExternalControlRequest bool `json:"teams_external_control_request,omitempty"`
+	// TeamsEmailIntegrationEnabled: anyone who learns a channel's email address can post
+	// into it, which is an unauthenticated content-injection and phishing path into a
+	// trusted internal surface. The one SHALL in this group. MS.TEAMS.4.1v1.
+	TeamsEmailIntegrationEnabled bool `json:"teams_email_integration_enabled,omitempty"`
 }
 
 // AssessM365 runs every grounded collaboration/data-sharing posture check over an M365 snapshot. A securely
@@ -117,6 +280,289 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Guests can join Teams with no guest-access policy restricting what they can see/do. Apply a guest-access policy (restrict channels, file access, and screen sharing).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}})))
 	}
+	if t.RiskyUserNotificationOff {
+		f = append(f, finding(id(), "sspm::m365::risky-user-notification-off", types.SeverityMedium,
+			"No administrator is notified when a user is flagged high-risk", target+"/entra",
+			"Entra detects the risk and tells nobody. The expensive half — the detection — has already "+
+				"happened; this setting decides whether a human ever learns of it, and an unread risk signal "+
+				"is worth exactly what no signal is worth. Enable administrator notification for high-risk "+
+				"users (SCuBA MS.AAD.2.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"8.11"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"SI-4"}})))
+	}
+	if t.AuthenticatorContextDisabled {
+		f = append(f, finding(id(), "sspm::m365::authenticator-context-disabled", types.SeverityMedium,
+			"Authenticator prompts show no application or location context", target+"/entra",
+			"A user facing an unexpected push sees only Approve and Deny, with nothing to judge it by. "+
+				"Context — which application, from where — is what turns MFA fatigue from a coin-flip into a "+
+				"decision, and it is the only defence against push-bombing that does not depend on the user "+
+				"being suspicious at 2am. Enable login context in Authenticator (SCuBA MS.AAD.3.3v2).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.AuthMethodsMigrationIncomplete {
+		f = append(f, finding(id(), "sspm::m365::auth-methods-migration-incomplete", types.SeverityMedium,
+			"Authentication methods migration is not complete", target+"/entra",
+			"Authentication methods are still governed by the legacy policy as well as the new one, so the "+
+				"tenant's real MFA posture is the UNION of two settings that are rarely read together — a "+
+				"method disabled in the new policy can remain enabled by the old one, and the console that "+
+				"says it is off is telling the truth about only half the system. Set Manage Migration to "+
+				"Migration Complete (SCuBA MS.AAD.3.4v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if n := managedDeviceGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::m365::managed-device-not-required", types.SeverityMedium,
+			"Managed devices are not required ("+strings.Join(n, ", ")+")", target+"/entra",
+			"Access is permitted from devices the organisation does not manage: "+strings.Join(n, ", ")+
+				". MFA REGISTRATION is the sharper half — registering a new second factor from an unmanaged "+
+				"device is how an attacker holding only a password promotes themselves to holding MFA as well, "+
+				"by enrolling their own authenticator. After that the account is theirs even once the password "+
+				"is reset. Require managed devices (SCuBA MS.AAD.3.7v1 / 3.8v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.7"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2", "AC-19"}})))
+	}
+	if t.RiskyAIAgentsNotBlocked {
+		f = append(f, finding(id(), "sspm::m365::risky-ai-agents-not-blocked", types.SeverityHigh,
+			"Agent identities flagged as risky are not blocked", target+"/entra",
+			"Agent identities detected as risky continue to operate. An agent holds delegated permissions "+
+				"and runs unattended, so a compromised one acts with a user's authority and none of a user's "+
+				"hesitation — there is nobody at the keyboard to notice the request was strange. Block risky "+
+				"agents (SCuBA MS.AAD.9.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-3", "SI-4"}})))
+	}
+	if t.SharePointLinkPermissionsNotViewOnly {
+		f = append(f, finding(id(), "sspm::m365::sharepoint-link-permissions-not-view-only", types.SeverityMedium,
+			"Sharing links default to edit rather than view", target+"/sharepoint",
+			"The default permission on a sharing link grants editing. Most links are created so someone can "+
+				"READ something, which means the default sets the permission on the majority of links nobody "+
+				"consciously chose one for — and an edit link that leaks is a write path into the document, not "+
+				"just a read of it. Set allowable link permissions to view only "+
+				"(SCuBA MS.SHAREPOINT.3.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"AC-3"}})))
+	}
+	if t.SharePointVerificationCodeReauthDays > 30 {
+		f = append(f, finding(id(), "sspm::m365::sharepoint-verification-code-reauth-too-long", types.SeverityMedium,
+			fmt.Sprintf("External verification-code sessions last %d days", t.SharePointVerificationCodeReauthDays), target+"/sharepoint",
+			fmt.Sprintf("An external recipient who authenticated with an emailed code stays authenticated for "+
+				"%d days. That session is only ever as strong as the mailbox the code went to, so the window is "+
+				"how long a compromise of someone else's email reaches back into your documents. Set "+
+				"reauthentication to 30 days or less (SCuBA MS.SHAREPOINT.3.3v2).", t.SharePointVerificationCodeReauthDays),
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"3.3", "6.8"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"AC-12"}})))
+	}
+	if t.PhishingResistantMFANotEnforced || t.PhishingResistantMFANotEnforcedPrivileged {
+		who := "all users"
+		sev := types.SeverityHigh
+		if !t.PhishingResistantMFANotEnforced {
+			who = "privileged users"
+		}
+		f = append(f, finding(id(), "sspm::m365::phishing-resistant-mfa-not-enforced", sev,
+			"Phishing-resistant MFA is not enforced for "+who, target+"/entra",
+			"MFA is required but any method satisfies it, so a push prompt or a typed code counts. Those are "+
+				"exactly what an adversary-in-the-middle proxy replays: the user completes a real challenge on a "+
+				"real-looking page and the attacker keeps the session. FIDO2, certificate-based and Windows "+
+				"Hello are bound to the origin and cannot be relayed. Require an authentication strength of "+
+				"phishing-resistant for "+who+" (SCuBA MS.AAD.3.1v1 / 3.6v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.4.2"}, CISv8: []string{"6.3", "6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.SMTPAuthEnabled {
+		f = append(f, finding(id(), "sspm::m365::smtp-auth-enabled", types.SeverityHigh,
+			"SMTP AUTH is enabled", target+"/exchange",
+			"SMTP AUTH accepts a username and password with no second factor. It is the legacy protocol most "+
+				"likely to survive a \"block legacy auth\" project, because a multifunction printer or a "+
+				"monitoring script still uses it and switching those off breaks something visible — so the "+
+				"exception outlives the memory of why it was made. Disable SMTP AUTH tenant-wide and enable it "+
+				"per-mailbox only where genuinely required (SCuBA MS.EXO.5.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, PCI: []string{"8.4.2"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.UnmanagedUsersCanInitiateContact {
+		f = append(f, finding(id(), "sspm::m365::unmanaged-users-can-initiate-contact", types.SeverityHigh,
+			"Unmanaged accounts may initiate contact with internal users", target+"/teams",
+			"A consumer Teams account can start a chat with your staff unprompted. This is the INBOUND "+
+				"direction — no invitation, no guest account, no administrator involved — and it is the "+
+				"direction phishing arrives from, carrying the in-product trust of a Teams message rather than "+
+				"the suspicion an email gets. Block unmanaged users from initiating contact "+
+				"(SCuBA MS.TEAMS.2.2v2).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.8"}, CISv8: []string{"9.6"}, NISTCSF: []string{"PR.AC-3"}, NIST80053: []string{"AC-3"}})))
+	}
+	if t.InternalUsersNotAutoAdmitted {
+		f = append(f, finding(id(), "sspm::m365::internal-users-not-auto-admitted", types.SeverityLow,
+			"Internal users are not admitted to meetings automatically", target+"/teams",
+			"Authenticated internal users wait in the lobby alongside everyone else. That sounds stricter "+
+				"and is not: organisers facing a queue of colleagues every meeting learn to admit the whole "+
+				"lobby without reading it, which is exactly the habit the lobby exists to prevent. Auto-admit "+
+				"internal users so the lobby stays meaningful for the participants it is there to stop "+
+				"(SCuBA MS.TEAMS.1.4v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}})))
+	}
+	if n := recordingGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::m365::meeting-recording-unrestricted", types.SeverityMedium,
+			"Meeting recording is unrestricted ("+strings.Join(n, ", ")+")", target+"/teams",
+			"Recordings are a durable copy of everything said and shown, stored and shared with the same "+
+				"controls as any other file — and reviewed with far less care, because nobody thinks of a "+
+				"meeting as a document. \"Always record\" is worse still: it removes the moment anyone decides "+
+				"whether this particular conversation should leave a copy. Restrict recording "+
+				"(SCuBA MS.TEAMS.1.6v1 / 1.7v2).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.UnmanagedUserContactAllowed {
+		f = append(f, finding(id(), "sspm::m365::unmanaged-user-contact-allowed", types.SeverityMedium,
+			"Internal users may initiate contact with unmanaged accounts", target+"/teams",
+			"Staff can start Teams chats with accounts that belong to no managed tenant — consumer "+
+				"accounts. There is no organisation behind the other side to ask about it, no directory to "+
+				"check it against, and the chat carries the same in-product trust as a colleague's. Restrict "+
+				"contact with unmanaged users (SCuBA MS.TEAMS.2.3v2).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.6"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}})))
+	}
+	if n := appCredentialGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::m365::app-credential-lifetime", types.SeverityMedium,
+			"Application credentials are long-lived or unrestricted ("+strings.Join(n, ", ")+")", target+"/entra",
+			"Application credentials are the only kind with no human attached: no MFA, no password reset, no "+
+				"offboarding. "+strings.Join(n, ", ")+". Lifetime is the sole control on them, so a multi-year "+
+				"secret leaked early becomes an attacker's most durable asset in the tenant — one that survives "+
+				"every user-side remediation. Restrict application password and certificate lifetimes "+
+				"(SCuBA MS.AAD.5.5v1–5.7v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"5.4", "6.8"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
+	}
+	if n := guestGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::m365::guest-access-unrestricted", types.SeverityMedium,
+			"Guest access is unrestricted ("+strings.Join(n, ", ")+")", target+"/entra",
+			"Guests are full directory principals whose password, MFA and lifecycle are administered by "+
+				"another tenant entirely. "+strings.Join(n, ", ")+". Unrestricted directory read gives a guest "+
+				"the user, group and membership map an attacker would otherwise have to work for. Restrict "+
+				"guest directory access, invitation rights and permitted domains "+
+				"(SCuBA MS.AAD.8.1v1–8.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
+	}
+	if t.DeviceCodeAuthAllowed {
+		f = append(f, finding(id(), "sspm::m365::device-code-auth-allowed", types.SeverityHigh,
+			"Device-code authentication is permitted", target+"/entra",
+			"The device-code flow is the current phishing favourite precisely because it defeats the advice "+
+				"users are given: the victim sees a REAL Microsoft sign-in page at a real Microsoft domain and "+
+				"enters a code someone sent them. There is no look-alike URL to notice, and the attacker "+
+				"receives the resulting tokens. Block device-code authentication except where a device "+
+				"genuinely needs it (SCuBA MS.AAD.3.9v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.SecurityLogsNotExported {
+		f = append(f, finding(id(), "sspm::m365::security-logs-not-exported", types.SeverityHigh,
+			"Sign-in and audit logs are not exported for monitoring", target+"/entra",
+			"Entra retains sign-in and audit logs for a limited window and they are not being shipped "+
+				"anywhere. Incidents are routinely discovered weeks after the fact, so without export the "+
+				"evidence needed to answer what happened has already expired by the time anyone asks. Export "+
+				"security logs to a monitored destination (SCuBA MS.AAD.4.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, PCI: []string{"10.5.1"}, CISv8: []string{"8.2", "8.9"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-6", "AU-9"}})))
+	}
+	if t.PrivilegedAssignmentNoAlert {
+		f = append(f, finding(id(), "sspm::m365::privileged-assignment-no-alert", types.SeverityMedium,
+			"Privileged role assignments raise no alert", target+"/entra",
+			"Granting a highly privileged role — eligible or active — notifies nobody. Assignment is the step "+
+				"an attacker takes to make access durable, and it is the one moment the change is still cheap "+
+				"to reverse. Alert on privileged role assignment (SCuBA MS.AAD.7.7v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"8.11"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-6", "SI-4"}})))
+	}
+	if t.OtherPrivilegedActivationNoAlert {
+		f = append(f, finding(id(), "sspm::m365::other-privileged-activation-no-alert", types.SeverityLow,
+			"Activation of privileged roles other than Global Administrator raises no alert", target+"/entra",
+			"Only Global Administrator activation is watched. Exchange, SharePoint and User Administrator "+
+				"each reach most of what an attacker wants and attract none of the attention, which is why a "+
+				"careful one takes those instead. Alert on activation of all highly privileged roles "+
+				"(SCuBA MS.AAD.7.9v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"8.11"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-6"}})))
+	}
+	if t.PrivilegedAccountsNotCloudOnly {
+		f = append(f, finding(id(), "sspm::m365::privileged-accounts-not-cloud-only", types.SeverityMedium,
+			"Privileged accounts are federated rather than cloud-only", target+"/entra",
+			"Privileged accounts authenticate through an on-premises or third-party identity provider, so a "+
+				"compromise of that directory is a compromise of tenant administration — and the assumption "+
+				"that cloud admin survives an on-premises incident, which every break-glass plan rests on, "+
+				"stops holding. Provision privileged accounts cloud-only (SCuBA MS.AAD.7.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"5.4"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
+	}
+	if t.StandingGlobalAdmins > 0 {
+		f = append(f, finding(id(), "sspm::m365::standing-global-admin", types.SeverityHigh,
+			fmt.Sprintf("%d account(s) hold Global Administrator permanently", t.StandingGlobalAdmins), target+"/entra",
+			fmt.Sprintf("%d account(s) hold Global Administrator as a STANDING assignment rather than "+
+				"activating it through PIM when needed. Standing global admin is the most valuable thing in "+
+				"the tenant: it needs no escalation, it survives a password reset it performs itself, and its "+
+				"use is indistinguishable from legitimate admin work in the log. Move these to PIM-eligible "+
+				"and assign finer-grained roles for day-to-day work (SCuBA MS.AAD.7.2v1).", t.StandingGlobalAdmins),
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"5.4", "6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
+	}
+	if t.PrivilegedRolesOutsidePIM {
+		f = append(f, finding(id(), "sspm::m365::privileged-roles-outside-pim", types.SeverityHigh,
+			"Highly privileged roles are assigned outside PIM", target+"/entra",
+			"Privileged roles are granted directly rather than through Privileged Identity Management, so "+
+				"there is no activation record, no expiry and no approval step. The grant is permanent and the "+
+				"only evidence it was used is whatever the role itself logs. Provision highly privileged roles "+
+				"through PIM (SCuBA MS.AAD.7.5v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"5.4", "6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
+	}
+	if t.GlobalAdminActivationNoApproval {
+		f = append(f, finding(id(), "sspm::m365::global-admin-activation-no-approval", types.SeverityMedium,
+			"Global Administrator activation requires no approval", target+"/entra",
+			"An account eligible for Global Administrator can activate it unilaterally. PIM's value is that "+
+				"someone else has to agree — without approval it is a delay, not a control, and an attacker "+
+				"holding an eligible account simply waits it out. Require approval for Global Administrator "+
+				"activation (SCuBA MS.AAD.7.6v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"5.4"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2"}})))
+	}
+	if t.GlobalAdminActivationNoAlert {
+		f = append(f, finding(id(), "sspm::m365::global-admin-activation-no-alert", types.SeverityMedium,
+			"Global Administrator activation raises no alert", target+"/entra",
+			"Nobody is notified when Global Administrator is activated. This is the one event in the tenant "+
+				"most worth watching, and an activation an attacker performs looks exactly like one an "+
+				"administrator performs — the difference is only that somebody noticed. Enable alerting on "+
+				"Global Administrator activation (SCuBA MS.AAD.7.8v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"8.11"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-6", "SI-4"}})))
+	}
+	if t.PasswordExpiryEnabled {
+		f = append(f, finding(id(), "sspm::m365::password-expiry-enabled", types.SeverityLow,
+			"Passwords are configured to expire", target+"/entra",
+			"Forced password rotation is now advised AGAINST by both CISA and NIST SP 800-63B: it drives "+
+				"users to predictable increments and to writing passwords down, which costs more than the "+
+				"compromise window it shortens. Set passwords never to expire and rely on strength, "+
+				"reuse-blocking and MFA (SCuBA MS.AAD.6.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"5.2"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
+	}
+	if t.AdminConsentWorkflowDisabled {
+		f = append(f, finding(id(), "sspm::m365::admin-consent-workflow-disabled", types.SeverityMedium,
+			"No admin consent workflow is configured", target+"/entra",
+			"Users who hit an application needing administrator consent have no way to request it, so the "+
+				"pressure is on the tenant to allow broad user consent instead. The workflow exists to make "+
+				"asking an admin cheaper than letting everyone decide. Configure an admin consent workflow "+
+				"(SCuBA MS.AAD.5.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-6"}})))
+	}
+	if t.TeamsEmailIntegrationEnabled {
+		f = append(f, finding(id(), "sspm::m365::teams-email-integration-enabled", types.SeverityMedium,
+			"Teams channel email integration is enabled", target+"/teams",
+			"Channels accept mail at a generated address, so anyone who learns or guesses it can post into a "+
+				"channel your staff read as internal — an unauthenticated route for phishing and malware into a "+
+				"trusted surface, with none of the sender checks inbound mail gets. Disable Teams email "+
+				"integration (SCuBA MS.TEAMS.4.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, CISv8: []string{"9.6"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"SC-7"}})))
+	}
+	if t.TeamsAutoAdmitAnonymous {
+		f = append(f, finding(id(), "sspm::m365::teams-auto-admit-anonymous", types.SeverityMedium,
+			"Anonymous and dial-in participants skip the Teams lobby", target+"/teams",
+			"The lobby is the only point at which an uninvited attendee can be stopped. With auto-admit on, "+
+				"whoever holds a forwarded invite is in the room — and in a recorded meeting, in the recording. "+
+				"Require anonymous and dial-in participants to wait in the lobby (SCuBA MS.TEAMS.1.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}, NIST80053: []string{"AC-3"}})))
+	}
+	if t.TeamsDialInBypassLobby {
+		f = append(f, finding(id(), "sspm::m365::teams-dial-in-bypass-lobby", types.SeverityLow,
+			"Dial-in callers bypass the Teams lobby", target+"/teams",
+			"A caller on the phone bridge joins without being admitted. Dial-in identity is a phone number at "+
+				"best, so this is the least-verified way into a meeting and the one least likely to be noticed. "+
+				"Disable dial-in lobby bypass (SCuBA MS.TEAMS.1.5v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}})))
+	}
+	if t.TeamsExternalControlRequest {
+		f = append(f, finding(id(), "sspm::m365::teams-external-control-request", types.SeverityMedium,
+			"External participants can request control of a shared screen", target+"/teams",
+			"An outside participant can ask for control of a presenter's desktop, and a presenter mid-demo "+
+				"clicks accept. That is remote interactive access to a corporate endpoint obtained by asking "+
+				"politely. Block external control requests (SCuBA MS.TEAMS.1.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}, NIST80053: []string{"AC-3"}})))
+	}
 	if t.TeamsOpenFederation {
 		f = append(f, finding(id(), "sspm::m365::teams-open-federation", types.SeverityMedium,
 			"Teams external federation is open to all domains", target+"/teams",
@@ -134,6 +580,18 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Mailbox audit logging is disabled", target+"/exchange",
 			"Mailbox auditing is off, so mailbox access/forwarding/deletion isn't logged — blinding incident response + breach investigation. Enable mailbox auditing tenant-wide.",
 			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, PCI: []string{"10.2.1"}, HIPAA: []string{"164.312(b)"}, CISv8: []string{"8.2"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-2"}})))
+	}
+	if t.ContactFoldersSharedAllDomains {
+		f = append(f, finding(id(), "sspm::m365::contact-folders-shared-all-domains", types.SeverityMedium,
+			"Contact folders are shared with all domains", target+"/exchange",
+			"An Exchange sharing policy shares contact folders with the wildcard domain '*' — every "+
+				"organisation on the internet rather than a named partner. A shared calendar leaks what a "+
+				"meeting is about; a shared contact folder IS the target list: the org chart, the executive "+
+				"assistants, external counsel and personal mobile numbers, which is the input a "+
+				"spear-phishing or vishing campaign is otherwise assembled by hand. Scope the sharing "+
+				"policy to named partner domains, or remove contact sharing from it "+
+				"(SCuBA MS.EXO.6.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"AC-3"}})))
 	}
 	if t.AnonymousCalendarShare {
 		f = append(f, finding(id(), "sspm::m365::anonymous-calendar-sharing", types.SeverityLow,
@@ -217,4 +675,60 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}, NIST80053: []string{"AC-3"}})))
 	}
 	return f
+}
+
+// appCredentialGapsOf names which application-credential controls are loose. CISA's
+// thresholds: passwords 180 days, certificates 365. A zero lifetime means unbounded, not
+// unset — the field is only populated when the tenant reports one.
+func appCredentialGapsOf(t M365Tenant) []string {
+	var n []string
+	if t.AppPasswordAdditionAllowed {
+		n = append(n, "application password addition is allowed")
+	}
+	if t.AppPasswordLifetimeDays > 180 {
+		n = append(n, fmt.Sprintf("password lifetime %d days", t.AppPasswordLifetimeDays))
+	}
+	if t.AppCertificateLifetimeDays > 365 {
+		n = append(n, fmt.Sprintf("certificate lifetime %d days", t.AppCertificateLifetimeDays))
+	}
+	return n
+}
+
+// guestGapsOf names which guest controls are open.
+func guestGapsOf(t M365Tenant) []string {
+	var n []string
+	if t.GuestDirectoryAccessUnrestricted {
+		n = append(n, "guests can read directory objects")
+	}
+	if t.AnyUserCanInviteGuests {
+		n = append(n, "any member can invite guests")
+	}
+	if t.GuestInvitesAnyDomain {
+		n = append(n, "guests may be invited from any domain")
+	}
+	return n
+}
+
+// recordingGapsOf names which recording controls are loose.
+func recordingGapsOf(t M365Tenant) []string {
+	var n []string
+	if t.MeetingRecordingUnrestricted {
+		n = append(n, "recording is not restricted")
+	}
+	if t.AlwaysRecordEvents {
+		n = append(n, "events are set to always record")
+	}
+	return n
+}
+
+// managedDeviceGapsOf names which managed-device requirements are missing.
+func managedDeviceGapsOf(t M365Tenant) []string {
+	var n []string
+	if t.ManagedDeviceNotRequiredAuth {
+		n = append(n, "not required for authentication")
+	}
+	if t.ManagedDeviceNotRequiredMFARegistration {
+		n = append(n, "not required to register MFA")
+	}
+	return n
 }

@@ -110,7 +110,7 @@ func TestBuild_UnparseableBoundaryDoesNotSuppressTheEdge(t *testing.T) {
 // A non-escalating policy yields nothing — the clean case must stay clean.
 func TestBuild_HarmlessPolicyYieldsNoEdge(t *testing.T) {
 	inv := Build(RawAWS{AccountID: "1", Roles: []RawIAMRole{{
-		ARN: "arn:aws:iam::1:role/app",
+		ARN:          "arn:aws:iam::1:role/app",
 		PoliciesJSON: []string{`{"Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":"*"}]}`},
 	}}})
 	if len(inv.Privescs) != 0 {

@@ -45,7 +45,7 @@ func TestBuild_MergesNVDVectors(t *testing.T) {
 	cvss := map[string]NVDEntry{
 		"CVE-2021-44228": {BaseScore: 10.0, Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"},
 	}
-	entries, m := Build(nil, time.Time{}, "test", nil, time.Time{}, nil, cvss)
+	entries, m := Build(nil, time.Time{}, "test", nil, time.Time{}, nil, nil, nil, cvss)
 	e := entries["CVE-2021-44228"]
 	if e.CVSS != 10.0 || !strings.Contains(e.CVSSVector, "AV:N") {
 		t.Errorf("NVD entry not merged: %+v", e)

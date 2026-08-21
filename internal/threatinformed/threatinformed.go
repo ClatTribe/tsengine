@@ -67,6 +67,12 @@ type Probe struct {
 	Priority   float64 // higher runs first; derived from the intel, not invented
 	Product    string  // the observed product this targets ("" = intel-only)
 	URL        string  // the endpoint to probe, when known
+	// Testable reports whether nuclei actually has a template for this CVE. A probe with
+	// Testable=false is NOT dispatched — `-id CVE-…` for a template that does not exist
+	// matches nothing — but it is still returned, in Plan's Untestable list, because a
+	// KEV CVE matching an observed product silently vanishing is how a clean probe report
+	// comes to mean "we checked everything" when it means "we checked what we could".
+	Testable bool
 }
 
 // Reason is the grounded justification for a probe. Every field is a fact read
@@ -107,10 +113,19 @@ func (o Options) withDefaults() Options {
 type Corpus map[string]Entry
 
 // Entry is one CVE's exploitation intel (the targeting-relevant subset).
+// The json tags are load-bearing. The corpus file is unmarshalled straight into this
+// type, and Go's field matching is case-insensitive but NOT underscore-insensitive: the
+// corpus writes `nuclei_template`, which would never reach a bare NucleiTemplate field.
+// The failure is silent and total — every entry stays empty, haveTemplates stays false,
+// and the planner quietly reverts to assuming every CVE is testable, which is the exact
+// bug this field exists to fix. TestEntryDecodesTheCorpusFile pins it.
 type Entry struct {
-	KEV      *types.KEVStatus
-	EPSS     *types.EPSSScore
-	Exploits []string
+	KEV      *types.KEVStatus `json:"kev"`
+	EPSS     *types.EPSSScore `json:"epss"`
+	Exploits []string         `json:"exploits"`
+	// NucleiTemplate is the template that checks for this CVE, when one exists. Empty
+	// means we cannot test it — see PlanWithGaps, which is the whole reason this is here.
+	NucleiTemplate string `json:"nuclei_template"`
 }
 
 // Plan selects the CVE probes worth running against the observed technology,
@@ -130,10 +145,10 @@ type Entry struct {
 //
 // A CVE with no exploitation signal at all is never probed here: that's the
 // job of the always-on anchor templates, not of targeted depth.
-func Plan(c Corpus, observed []Observation, opts Options) []Probe {
+func PlanWithGaps(c Corpus, observed []Observation, opts Options) (probes, untestable []Probe) {
 	opts = opts.withDefaults()
 	if len(c) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Index observations by normalized product for matching.
@@ -145,6 +160,18 @@ func Plan(c Corpus, observed []Observation, opts Options) []Probe {
 	for _, o := range observed {
 		if n := normalize(o.Product); n != "" {
 			obsList = append(obsList, obs{o: o, norm: n})
+		}
+	}
+
+	// Does this corpus carry template availability at all? An older corpus, or a refresh
+	// that could not reach the index, leaves every entry empty — and reading that as
+	// "nothing is testable" would silence the plan completely. So availability filtering
+	// only engages when the corpus actually knows something about it.
+	haveTemplates := false
+	for _, e := range c {
+		if e.NucleiTemplate != "" {
+			haveTemplates = true
+			break
 		}
 	}
 
@@ -191,11 +218,22 @@ func Plan(c Corpus, observed []Observation, opts Options) []Probe {
 			TemplateID: cve, // nuclei names its CVE templates by the CVE id
 			Reason:     r,
 			Priority:   priority(r),
+			// A corpus with NO template data at all (an older corpus, or a refresh that
+			// could not reach the index) leaves every entry's NucleiTemplate empty. Treating
+			// that as "nothing is testable" would silence the whole plan, so absence of the
+			// index means we fall back to the old assumption and say so — see haveTemplates.
+			Testable: !haveTemplates || e.NucleiTemplate != "",
 		}
 		if hit {
 			p.Product, p.URL = hitObs.Product, hitObs.URL
-			matched = append(matched, p)
-		} else if opts.IntelOnly {
+			if p.Testable {
+				matched = append(matched, p)
+			} else {
+				// Matched a product we really observed, and we have no way to check it.
+				// This is the one that must not disappear quietly.
+				untestable = append(untestable, p)
+			}
+		} else if opts.IntelOnly && p.Testable {
 			intelOnly = append(intelOnly, p)
 		}
 	}
@@ -221,7 +259,19 @@ func Plan(c Corpus, observed []Observation, opts Options) []Probe {
 	if len(out) > opts.MaxProbes {
 		out = out[:opts.MaxProbes]
 	}
-	return out
+	sortProbes(untestable)
+	return out, untestable
+}
+
+// Plan selects the probes worth running. See PlanWithGaps for the untestable set — the
+// CVEs that matched an observed product and that nuclei has no template for.
+//
+// Kept as the existing signature so callers that only dispatch are unchanged. A caller
+// that REPORTS coverage should use PlanWithGaps: dropping the untestable set on the floor
+// is what turns "we checked what we could" into an implied "we checked everything".
+func Plan(c Corpus, observed []Observation, opts Options) []Probe {
+	probes, _ := PlanWithGaps(c, observed, opts)
+	return probes
 }
 
 // priority scores a probe by real exploitation evidence. KEV dominates (it is

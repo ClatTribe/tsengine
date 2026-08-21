@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS risks       (seq BIGSERIAL, tenant_id TEXT, id TEXT, 
 CREATE TABLE IF NOT EXISTS ai_analyses (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS compliance_snaps (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS eval_runs       (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS episodes        (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (seq BIGSERIAL, tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
@@ -234,6 +235,14 @@ func (p *Postgres) PutAIAnalysis(ctx context.Context, a platform.AIAnalysis) err
 func (p *Postgres) ListAIAnalyses(ctx context.Context, tenantID string) ([]platform.AIAnalysis, error) {
 	return listJSON[platform.AIAnalysis](ctx, p.db, pgRebind(`SELECT data FROM ai_analyses WHERE tenant_id=? ORDER BY rowid`), tenantID)
 }
+func (p *Postgres) PutEpisode(ctx context.Context, e platform.EpisodeRecord) error {
+	return p.upsertTID(ctx, `INSERT INTO episodes(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, e.TenantID, e.ID, e)
+}
+
+func (p *Postgres) ListEpisodes(ctx context.Context, tenantID string) ([]platform.EpisodeRecord, error) {
+	return listJSON[platform.EpisodeRecord](ctx, p.db, pgRebind(`SELECT data FROM episodes WHERE tenant_id=? ORDER BY seq`), tenantID)
+}
+
 func (p *Postgres) PutEvalRun(ctx context.Context, r platform.EvalRun) error {
 	return p.upsertTID(ctx, `INSERT INTO eval_runs(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, r.TenantID, r.ID, r)
 }

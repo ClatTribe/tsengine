@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -79,7 +80,7 @@ func TestParseEPSSGzip(t *testing.T) {
 func TestBuild_UnionsKEVAndEPSS(t *testing.T) {
 	kev, kevAsOf, kevVer, _ := ParseKEV(strings.NewReader(kevFixture))
 	epss, epssAsOf, _ := ParseEPSS(strings.NewReader(epssFixture))
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil)
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil, nil, nil)
 
 	// Union: 44228 (both), 5638 (kev only), 0160 (epss only) = 3.
 	if len(entries) != 3 {
@@ -106,7 +107,7 @@ func TestBuild_UnionsKEVAndEPSS(t *testing.T) {
 func TestWriteAndLoadManifest(t *testing.T) {
 	kev, kevAsOf, kevVer, _ := ParseKEV(strings.NewReader(kevFixture))
 	epss, epssAsOf, _ := ParseEPSS(strings.NewReader(epssFixture))
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil)
+	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil, nil, nil)
 
 	dir := t.TempDir()
 	path, err := Write(dir, entries, m)
@@ -137,16 +138,37 @@ func TestRefresh_OverHTTP(t *testing.T) {
 	mux.HandleFunc("/exploitdb", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("file,id,description,codes,verified\nx.txt,12345,Log4Shell,CVE-2021-44228,1\n"))
 	})
+	// Metasploit fixture: an EXPLOIT module for the same CVE, so the entry count stays 3 while
+	// Log4Shell gains the weaponized ref alongside the PoC one. An `auxiliary` module for a second
+	// CVE is included and must NOT count — a scanner is not a weapon.
+	mux.HandleFunc("/metasploit", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+		  "a": {"fullname":"exploit/multi/http/log4shell_header_injection","type":"exploit","references":["CVE-2021-44228"]},
+		  "b": {"fullname":"auxiliary/scanner/http/log4shell_scanner","type":"auxiliary","references":["CVE-2021-45046"]}
+		}`))
+	})
+	// Nuclei template index: a template for the SAME CVE, so the entry count stays 3 while
+	// Log4Shell gains a template path. A line with no file_path is included and must be
+	// skipped — recording a CVE as testable with no template to name restores exactly the
+	// bug the index exists to fix.
+	mux.HandleFunc("/nuclei", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"ID":"CVE-2021-44228","file_path":"http/cves/2021/CVE-2021-44228.yaml"}` + "\n" +
+			`{"ID":"CVE-2021-45046","file_path":""}` + "\n"))
+	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	dir := t.TempDir()
-	m, path, err := Refresh(context.Background(), RefreshOptions{
-		OutDir:       dir,
-		KEVURL:       srv.URL + "/kev",
-		EPSSURL:      srv.URL + "/epss",
-		ExploitDBURL: srv.URL + "/exploitdb",
-	})
+	opts := RefreshOptions{
+		OutDir:        dir,
+		KEVURL:        srv.URL + "/kev",
+		EPSSURL:       srv.URL + "/epss",
+		ExploitDBURL:  srv.URL + "/exploitdb",
+		MetasploitURL: srv.URL + "/metasploit",
+		NucleiURL:     srv.URL + "/nuclei",
+	}
+	assertAllFeedsStubbed(t, opts, srv.URL)
+	m, path, err := Refresh(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
@@ -156,7 +178,46 @@ func TestRefresh_OverHTTP(t *testing.T) {
 	if m.ExploitCount != 1 {
 		t.Errorf("refreshed corpus exploit_count = %d, want 1", m.ExploitCount)
 	}
+	if m.WeaponizedCount != 1 {
+		t.Errorf("refreshed corpus weaponized_count = %d, want 1 (the auxiliary module must not count)", m.WeaponizedCount)
+	}
+	if m.TemplateCount != 1 {
+		t.Errorf("refreshed corpus template_count = %d, want 1 (the empty file_path must not count)", m.TemplateCount)
+	}
 	if !strings.HasSuffix(path, DataFileName) {
 		t.Errorf("unexpected data path %q", path)
+	}
+}
+
+// assertAllFeedsStubbed fails when the hermetic refresh test has left any feed URL pointing
+// at the real internet.
+//
+// THIS HAS NOW HAPPENED TWICE, identically. Adding a feed means defaulting its URL in
+// withDefaults, and the moment that default lands, every test that does not override it
+// starts fetching the live source. Both times the symptom was a wrong entry count — 2526
+// and then 4327 against a fixture of 3 — which reads like a merge bug rather than a test
+// making a network call, so the diagnosis costs more than the fix.
+//
+// Reflection rather than one more remembered field: the next feed is guarded for free, and
+// the failure names itself.
+func assertAllFeedsStubbed(t *testing.T, opts RefreshOptions, stubBase string) {
+	t.Helper()
+	full := opts.withDefaults()
+	v := reflect.ValueOf(full)
+	typ := v.Type()
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		if f.Type.Kind() != reflect.String || !strings.HasSuffix(f.Name, "URL") {
+			continue
+		}
+		got := v.Field(i).String()
+		if got == "" {
+			continue // an opt-in feed that is off for this run
+		}
+		if !strings.HasPrefix(got, stubBase) {
+			t.Fatalf("RefreshOptions.%s points at %q, not the test server — this test would fetch "+
+				"the LIVE feed, and the symptom is a wrong entry count that reads like a merge bug. "+
+				"Stub it on the fixture mux.", f.Name, got)
+		}
 	}
 }

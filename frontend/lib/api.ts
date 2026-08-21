@@ -1,7 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
-  L15Audit, TenantEval, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+  L15Audit, TenantEval, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -552,6 +552,21 @@ export const api = {
   // severity floor that fails the check. github_connected reports whether the live post is wired.
   prBotSettings: () =>
     safe<PRBotSettings>("/v1/settings/pr-bot", { enabled: false, block_severity: "off", github_connected: false }),
+  // Training consent — the customer end of the improvement loop. GET shows the standing
+  // decision plus the exact statement a yes agrees to.
+  trainingSettings: () => call<TrainingSettings>("/v1/settings/training"),
+  setTrainingConsent: (consented: boolean, by: string) =>
+    call<{ consented: boolean; by: string; saved: boolean }>("/v1/settings/training", {
+      method: "PUT",
+      body: JSON.stringify({ consented, by }),
+    }),
+
+  // The scored-agent-run corpus and its roll-up.
+  episodes: (scope?: string) =>
+    call<{ episodes: unknown[]; stats: EpisodeStats }>(
+      "/v1/episodes" + (scope ? `?scope=${encodeURIComponent(scope)}` : ""),
+    ),
+
   setPRBotSettings: (enabled: boolean, blockSeverity: string) =>
     call<{ enabled: boolean; block_severity: string; saved: boolean }>("/v1/settings/pr-bot", {
       method: "PUT",

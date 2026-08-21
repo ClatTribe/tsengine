@@ -1,5 +1,6 @@
 import { Target, AlertTriangle } from "lucide-react";
 import { ModelArm } from "./ModelArm";
+import { EpisodeCorpus } from "@/components/eval/episode-corpus";
 import { api } from "@/lib/api";
 import { Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -21,7 +22,7 @@ const SOURCE_LABEL: Record<string, string> = {
 // decisions THIS customer already made on THEIR estate, and it can be re-derived from their own
 // data at any time. That is what makes it worth anything.
 export default async function EvalPage() {
-  const ev = await api.tenantEval();
+  const [ev, eps] = await Promise.all([api.tenantEval(), api.episodes()]);
   const pct = ev.agreement != null ? Math.round(ev.agreement * 100) : null;
   const reinstatedFailures = ev.by_source?.reinstated ?? 0;
 
@@ -33,6 +34,11 @@ export default async function EvalPage() {
         title="Your evals"
         description="How often the current setup agrees with your own experts, graded on findings from your estate — every case is a decision you already made. Not our benchmark: yours, re-derivable from your data."
       />
+
+      {/* What the agent runs DID, above the agreement score. The score says whether the
+          setup matches this customer's judgement; this says whether the runs moved anything.
+          A workspace can score well on the first and nothing on the second. */}
+      <EpisodeCorpus stats={eps.stats} />
 
       {/* Rendered in BOTH states on purpose. A workspace with no graded cases is exactly the one
           that has never heard of this, and hiding the capability until it is usable means nobody

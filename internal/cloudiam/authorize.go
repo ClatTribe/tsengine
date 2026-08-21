@@ -2,8 +2,11 @@ package cloudiam
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Authorize is the full AWS access decision — a faithful-but-pragmatic subset of
@@ -203,6 +206,28 @@ func evalCondition(cond map[string]interface{}, ctx map[string]string) (satisfie
 			vals := toStrings(valAny)
 			ctxVal, present := ctx[key]
 			if !present {
+				// A date bound on a REQUEST-TIME key is decidable without anyone
+				// supplying it, because the value is the clock. AWS populates these
+				// on every request, so their absence here means we were not told,
+				// not that AWS will leave them unset — which is the opposite of a
+				// key like aws:SourceIp, where absence really is ignorance.
+				//
+				// The reading is deliberately attacker-favourable: an attacker picks
+				// WHEN to make the request, so a window that includes now-or-later is
+				// satisfiable. The one place that matters is the inverse — a window
+				// that has entirely passed is a DEAD grant, and saying so is how a
+				// permission whose gate expired stops being reported as live access.
+				//
+				// Caveat kept honest: aws:TokenIssueTime is absent for long-term IAM
+				// user keys, and AWS fails a date condition on an absent key. Treating
+				// it as now is therefore the role/federated reading. Under-reporting a
+				// live escalation is the expensive error here, so that is the default.
+				if sat, known := evalRequestTimeCondition(op, key, vals, time.Now().UTC()); known {
+					if !sat {
+						return false, true // definitively not satisfied — the window has passed
+					}
+					continue
+				}
 				decided = false
 				continue
 			}
@@ -249,6 +274,13 @@ func matchOp(op, ctxVal string, vals []string) (match, known bool) {
 			}
 		}
 		return false, true
+	case "DateEquals", "DateNotEquals", "DateLessThan", "DateLessThanEquals",
+		"DateGreaterThan", "DateGreaterThanEquals":
+		t, err := parseIAMTime(ctxVal)
+		if err != nil {
+			return false, false
+		}
+		return dateMatch(op, t, vals)
 	case "IpAddress":
 		return ipInAny(ctxVal, vals), true
 	case "NotIpAddress":
@@ -256,6 +288,81 @@ func matchOp(op, ctxVal string, vals []string) (match, known bool) {
 	default:
 		return false, false
 	}
+}
+
+var errBadTime = errors.New("cloudiam: unparseable date condition value")
+
+// requestTimeKeys are the condition keys whose value IS the request clock. AWS sets
+// them itself on every request, so a date bound on one can be decided from now.
+var requestTimeKeys = map[string]bool{
+	"aws:currenttime":    true,
+	"aws:epochtime":      true,
+	"aws:tokenissuetime": true,
+}
+
+// evalRequestTimeCondition decides a Date* operator on a request-time key against now.
+// known=false for any other key or operator, so an unrecognised condition stays
+// indeterminate rather than being guessed at (§10).
+func evalRequestTimeCondition(op, key string, vals []string, now time.Time) (satisfied, known bool) {
+	if !requestTimeKeys[strings.ToLower(key)] {
+		return false, false
+	}
+	switch op {
+	case "DateEquals", "DateNotEquals", "DateLessThan", "DateLessThanEquals",
+		"DateGreaterThan", "DateGreaterThanEquals":
+	default:
+		return false, false
+	}
+	return dateMatch(op, now, vals)
+}
+
+// dateMatch applies one Date operator. Values are OR'd, as AWS does.
+func dateMatch(op string, t time.Time, vals []string) (match, known bool) {
+	any := false
+	for _, v := range vals {
+		b, err := parseIAMTime(v)
+		if err != nil {
+			return false, false // an unparseable bound decides nothing
+		}
+		any = true
+		var ok bool
+		switch op {
+		case "DateEquals":
+			ok = t.Equal(b)
+		case "DateNotEquals":
+			ok = !t.Equal(b)
+		case "DateLessThan":
+			ok = t.Before(b)
+		case "DateLessThanEquals":
+			ok = !t.After(b)
+		case "DateGreaterThan":
+			ok = t.After(b)
+		case "DateGreaterThanEquals":
+			ok = !t.Before(b)
+		}
+		if ok {
+			return true, true
+		}
+	}
+	if !any {
+		return false, false
+	}
+	return false, true
+}
+
+// parseIAMTime accepts the two forms AWS documents for a date condition value: an
+// ISO 8601 / RFC 3339 timestamp, or epoch seconds (aws:EpochTime).
+func parseIAMTime(v string) (time.Time, error) {
+	v = strings.TrimSpace(v)
+	if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+		return time.Unix(n, 0).UTC(), nil
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05Z0700", "2006-01-02T15:04:05", "2006-01-02"} {
+		if t, err := time.Parse(layout, v); err == nil {
+			return t.UTC(), nil
+		}
+	}
+	return time.Time{}, errBadTime
 }
 
 func ipInAny(ipStr string, cidrs []string) bool {

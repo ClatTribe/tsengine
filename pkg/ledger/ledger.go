@@ -45,6 +45,17 @@ type Step struct {
 	// trail has no silent gaps — the record reflects every model turn, not only the
 	// ones that resolved to a tool.
 	Note string `json:"note,omitempty"`
+
+	// CostUSD and Tokens are PER STEP, not per run. A run total already exists on
+	// l2.Outcome; what it cannot answer is which steps bought the finding and which
+	// were the model circling. Credit assignment needs the spend attached to the step
+	// that made it, and it cannot be reconstructed afterwards from a total.
+	CostUSD float64 `json:"cost_usd,omitempty"`
+	Tokens  int     `json:"tokens,omitempty"`
+	// VerifiedBy links this step to the Decision its evidence ended up supporting —
+	// the other half of credit assignment. Empty is the common case and means only
+	// that: a step that grounded nothing, not a step that was wasted.
+	VerifiedBy string `json:"verified_by,omitempty"`
 }
 
 // Decision is one grounded commitment the agent made — a recorded finding (web),
@@ -128,6 +139,44 @@ func (r *Recorder) Record(thought, tool string, args map[string]any, observation
 		Seq: r.n, At: r.stamp(), Thought: thought, Tool: tool,
 		Args: cloneArgs(args), Observation: observation,
 	})
+}
+
+// Charge attributes spend to the step just recorded. Separate from Record so the
+// existing call sites — three agent loops — stay unchanged and a caller that has no
+// per-turn usage figure simply does not call it, leaving the fields zero rather than
+// carrying a made-up split of the run total.
+//
+// No-op on a nil receiver or before any step exists.
+func (r *Recorder) Charge(usd float64, tokens int) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.steps) == 0 {
+		return
+	}
+	last := &r.steps[len(r.steps)-1]
+	last.CostUSD += usd
+	last.Tokens += tokens
+}
+
+// Ground links the step at seq to the Decision its evidence supported. Returns false
+// when no such step exists, so a mis-numbered link is visible to the caller instead of
+// silently landing nowhere.
+func (r *Recorder) Ground(seq int, decisionID string) bool {
+	if r == nil || decisionID == "" {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.steps {
+		if r.steps[i].Seq == seq {
+			r.steps[i].VerifiedBy = decisionID
+			return true
+		}
+	}
+	return false
 }
 
 // Note appends a non-dispatch step (malformed action, unknown tool) so the trail is

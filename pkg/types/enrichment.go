@@ -36,7 +36,21 @@ func (f Finding) L15Summary() string {
 			t = append(t, fmt.Sprintf("EPSS:%.2f", ti.EPSS.Score))
 		}
 		if len(ti.Exploits) > 0 {
-			t = append(t, "pub-exploit") // a public exploit/PoC EXISTS (ExploitDB/Metasploit) — patch-priority signal between EPSS and KEV
+			t = append(t, "pub-exploit") // a public exploit/PoC EXISTS (ExploitDB) — patch-priority signal between EPSS and KEV
+			// WEAPONIZED is a rung above, and rides ALONGSIDE pub-exploit rather than
+			// replacing it. A proof-of-concept usually targets one build and needs a
+			// shellcode swap or an offset recalculated before it does anything; a
+			// Metasploit module is use/set/run, usable by an operator who could not write
+			// the exploit and does not need to understand it. That is the difference
+			// between "someone capable could" and "anyone can, tonight", and for deciding
+			// what to patch first it is the whole question. Still not KEV: weaponized is
+			// not evidence of exploitation in the wild.
+			for _, ref := range ti.Exploits {
+				if strings.HasPrefix(ref, "metasploit:") {
+					t = append(t, "weaponized")
+					break
+				}
+			}
 		}
 		if strings.Contains(ti.CVSSVector, "AV:N") {
 			t = append(t, "av:network") // NVD CVSS vector says network-attackable (no local access needed) — the strongest reachability signal

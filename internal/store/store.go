@@ -134,6 +134,12 @@ type Store interface {
 	// snapshots (any framework) oldest-first; callers filter by framework. ---
 	PutEvalRun(ctx context.Context, r platform.EvalRun) error
 	ListEvalRuns(ctx context.Context, tenantID string) ([]platform.EvalRun, error)
+
+	// --- episode corpus (APPEND-ONLY scored agent runs — ADR 0018 §4). List returns a
+	// tenant's episodes oldest-first; callers filter by scope, because two episodes of
+	// different scopes are not comparable and a trend across them means nothing. ---
+	PutEpisode(ctx context.Context, e platform.EpisodeRecord) error
+	ListEpisodes(ctx context.Context, tenantID string) ([]platform.EpisodeRecord, error)
 	PutComplianceSnapshot(ctx context.Context, s platform.ComplianceSnapshot) error
 	ListComplianceSnapshots(ctx context.Context, tenantID string) ([]platform.ComplianceSnapshot, error)
 

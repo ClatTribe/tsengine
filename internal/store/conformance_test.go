@@ -85,6 +85,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.PutRisk(ctx, platform.Risk{ID: tid + "-rk", TenantID: tid, Title: "r", Status: platform.RiskOpen}))
 	must(s.PutAIAnalysis(ctx, platform.AIAnalysis{ID: tid + "-ai", TenantID: tid, Kind: "triage", Summary: "s"}))
 	must(s.PutComplianceSnapshot(ctx, platform.ComplianceSnapshot{ID: tid + "-cs", TenantID: tid, Framework: "soc2", TotalControls: 3, MetControls: 3, FullyMet: true}))
+	must(s.PutEpisode(ctx, platform.EpisodeRecord{ID: tid + "-ep", TenantID: tid, AgentKind: "cloudagent", Scope: "cloud:" + tid}))
 	must(s.PutAuditEngagement(ctx, platform.AuditEngagement{ID: tid + "-au", TenantID: tid, Framework: "soc2", Status: platform.AuditPlanning}))
 	must(s.PutPolicy(ctx, platform.Policy{ID: tid + "-pol", TenantID: tid, Name: "p", Status: platform.PolicyDraft}))
 	must(s.PutReviewRequest(ctx, platform.ReviewRequest{ID: tid + "-r", TenantID: tid, Status: platform.ReviewOpen}))
@@ -160,6 +161,12 @@ func TestStoreConformance(t *testing.T) {
 				ais, err := s.ListAIAnalyses(ctx, tid)
 				orFail(t, err)
 				isolated("ai_analyses", tid, ids(ais, func(a platform.AIAnalysis) string { return a.ID }))
+
+				eps, err := s.ListEpisodes(ctx, tid)
+				if err != nil {
+					t.Fatalf("list episodes: %v", err)
+				}
+				isolated("episodes", tid, ids(eps, func(e platform.EpisodeRecord) string { return e.ID }))
 
 				css, err := s.ListComplianceSnapshots(ctx, tid)
 				orFail(t, err)

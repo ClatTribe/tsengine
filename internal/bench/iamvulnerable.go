@@ -79,7 +79,16 @@ func (r IAMVulnResult) Missed() []IAMVulnPath {
 // this reads ONE known corpus in ONE known shape, and a general HCL parser would be a new
 // dependency and a new thing to be wrong about. If the corpus changes shape this stops
 // matching and the count drops visibly, which is the failure mode we want.
-var policyBlock = regexp.MustCompile(`(?s)resource\s+"aws_iam_policy"\s+"[^"]+"\s*\{.*?policy\s*=\s*jsonencode\((.*?)\n\s*\}\s*\)`)
+//
+// The `[^{}]*?` before `policy =` is load-bearing and was `.*?`. Non-greedy still matches
+// across anything, so on a file whose aws_iam_policy references a data source instead of
+// inlining one, the match ran PAST the closing brace and captured the next resource's
+// assume_role_policy — the role TRUST policy, scored as if it were the identity policy
+// under test. Both condition cases in the control set were graded against a document that
+// was not the fixture, and one of them passed that way. Excluding braces confines the
+// match to the block it started in, so a file with no inline policy now yields nothing,
+// which is the honest answer.
+var policyBlock = regexp.MustCompile(`(?s)resource\s+"aws_iam_policy"\s+"[^"]+"\s*\{[^{}]*?policy\s*=\s*jsonencode\((.*?)\n\s*\}\s*\)`)
 
 // actionLine matches `Action = "x"` / `Action = ["x", "y"]` / `"Action": "x"`.
 var actionLine = regexp.MustCompile(`(?s)"?Action"?\s*[:=]\s*(\[[^\]]*\]|"[^"]*")`)

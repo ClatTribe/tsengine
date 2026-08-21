@@ -24,6 +24,12 @@ import (
 type GWorkspace struct {
 	APIBase string // default https://admin.googleapis.com
 	HTTP    *http.Client
+
+	// grantReadFailures counts per-user token lookups that failed during the current
+	// fetch. fetchGrants swallows them individually on purpose — one user's failure must
+	// not lose everyone else's apps — but that makes a TOTAL failure indistinguishable
+	// from a workspace with no third-party apps. The counter is what tells them apart.
+	grantReadFailures int
 }
 
 // NewGWorkspace builds the connector with production defaults.
@@ -85,7 +91,20 @@ func (g *GWorkspace) Fetch(ctx context.Context, token string, now time.Time) (Wo
 			emails = append(emails, u.Email)
 		}
 	}
-	ws.OAuthGrants = g.fetchGrants(ctx, token, emails)
+	grants, grantsOK := g.fetchGrantsChecked(ctx, token, emails)
+	ws.OAuthGrants = grants
+	if !grantsOK {
+		// The read failed or was never permitted. Without this the scan reports a clean
+		// OAuth posture for a workspace whose apps it never saw.
+		ws.Unavailable = append(ws.Unavailable, "oauth_grants")
+	}
+	// Google's tokens API exposes scopes but NOT publisher verification, so the
+	// unverified-app check cannot run here at all — a provider limit, not a missing scope.
+	// Declared whenever we did read grants, since that is when a customer would otherwise
+	// assume the app review was complete.
+	if grantsOK {
+		ws.ProviderLimits = append(ws.ProviderLimits, "oauth_publisher_verification")
+	}
 	return ws, nil
 }
 
@@ -101,6 +120,21 @@ type gwsToken struct {
 // verification, so grants are marked Verified=true — the unverified-app check stays
 // M365/snapshot-only rather than us guessing. Best-effort: any user's failed call (or a
 // missing scope) is skipped, never fatal.
+// fetchGrantsChecked wraps fetchGrants and reports whether the read actually succeeded.
+//
+// fetchGrants swallows per-user errors by design (one user's failure should not lose the
+// rest), which means a total failure and a genuinely app-free workspace both return an
+// empty slice. ok=false when EVERY user lookup failed — that is the case where the empty
+// result carries no information and must not be read as a clean posture.
+func (g *GWorkspace) fetchGrantsChecked(ctx context.Context, token string, emails []string) ([]OAuthGrant, bool) {
+	if len(emails) == 0 {
+		return nil, true // nobody to ask about; not a failed read
+	}
+	before := g.grantReadFailures
+	out := g.fetchGrants(ctx, token, emails)
+	return out, g.grantReadFailures-before < len(emails)
+}
+
 func (g *GWorkspace) fetchGrants(ctx context.Context, token string, emails []string) []OAuthGrant {
 	type agg struct {
 		name   string
@@ -114,6 +148,7 @@ func (g *GWorkspace) fetchGrants(ctx context.Context, token string, emails []str
 		}
 		u := strings.TrimRight(g.APIBase, "/") + "/admin/directory/v1/users/" + url.PathEscape(email) + "/tokens"
 		if err := g.getJSON(ctx, token, u, &tr); err != nil {
+			g.grantReadFailures++
 			continue
 		}
 		for _, t := range tr.Items {

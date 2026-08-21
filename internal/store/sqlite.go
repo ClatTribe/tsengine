@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS risks       (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS ai_analyses (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS compliance_snaps (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS eval_runs (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS episodes (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
@@ -251,6 +252,14 @@ func (s *SQLite) ListRisks(ctx context.Context, tenantID string) ([]platform.Ris
 func (s *SQLite) PutAIAnalysis(ctx context.Context, a platform.AIAnalysis) error {
 	return s.upsertTID(ctx, `INSERT INTO ai_analyses(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, a.TenantID, a.ID, a)
 }
+func (s *SQLite) PutEpisode(ctx context.Context, e platform.EpisodeRecord) error {
+	return s.upsertTID(ctx, `INSERT INTO episodes(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, e.TenantID, e.ID, e)
+}
+
+func (s *SQLite) ListEpisodes(ctx context.Context, tenantID string) ([]platform.EpisodeRecord, error) {
+	return listJSON[platform.EpisodeRecord](ctx, s.db, `SELECT data FROM episodes WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
 func (s *SQLite) PutEvalRun(ctx context.Context, r platform.EvalRun) error {
 	return s.upsertTID(ctx, `INSERT INTO eval_runs(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, r.TenantID, r.ID, r)
 }

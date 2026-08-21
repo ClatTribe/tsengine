@@ -354,20 +354,15 @@ func addPrivesc(inv *cloudgraph.Inventory, principal string, policiesJSON []stri
 	}
 
 	ps := cloudiam.PolicySet{Identity: docs, Boundary: boundary, SameAccount: true}
-	can := func(a string) bool {
-		dec, _ := cloudiam.Authorize(cloudiam.Request{Principal: principal, Action: a, Resource: "*"}, ps)
-		return dec == cloudiam.Allow
-	}
-	techs := cloudiam.DetectPrivesc(can)
+	// One shared predicate (cloudiam.PrivescOf) with the graph bridge and the CloudQuery
+	// path: all three used to open-code it, and all three carried the same "*"-resource
+	// blindness independently.
+	techs, firm := cloudiam.PrivescOf(principal, ps)
 	if len(techs) == 0 {
 		return
 	}
-	canFirm := func(a string) bool {
-		dec, cond := cloudiam.Authorize(cloudiam.Request{Principal: principal, Action: a, Resource: "*"}, ps)
-		return dec == cloudiam.Allow && !cond
-	}
 	condition := ""
-	if len(cloudiam.DetectPrivesc(canFirm)) == 0 {
+	if !firm {
 		condition = "iam-condition-gated escalation (config-possible; validate live)"
 	}
 	names := make([]string, 0, len(techs))

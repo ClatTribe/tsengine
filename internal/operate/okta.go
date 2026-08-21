@@ -26,6 +26,13 @@ import (
 type Okta struct {
 	OrgURL string
 	HTTP   *http.Client
+
+	// grantReadFailures / grantReadAttempts distinguish a total grant-read failure from an
+	// org with no third-party grants. Per-user failures are skipped by design (one user
+	// must not lose everyone else's apps), which makes the two look identical without a
+	// count. See GWorkspace.grantReadFailures for the same reasoning.
+	grantReadFailures int
+	grantReadAttempts int
 }
 
 // NewOkta builds the fetcher for an org base URL.
@@ -88,6 +95,11 @@ func (o *Okta) Fetch(ctx context.Context, token string, now time.Time) (Workspac
 		next = link
 	}
 	ws.OAuthGrants = o.buildGrants(ctx, token, grants)
+	if o.grantReadAttempts > 0 && o.grantReadFailures == o.grantReadAttempts {
+		// Every lookup failed — almost always the missing extra scope. The empty result
+		// carries no information and must not read as a clean OAuth posture.
+		ws.Unavailable = append(ws.Unavailable, "oauth_grants")
+	}
 	return ws, nil
 }
 
@@ -109,7 +121,9 @@ func (o *Okta) accumulateGrants(ctx context.Context, token, userID, email string
 			} `json:"scope"`
 		} `json:"_embedded"`
 	}
+	o.grantReadAttempts++
 	if _, err := o.getJSON(ctx, token, o.OrgURL+"/api/v1/users/"+userID+"/grants?expand=scope", &gs); err != nil {
+		o.grantReadFailures++
 		return
 	}
 	for _, g := range gs {
