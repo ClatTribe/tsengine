@@ -27,6 +27,15 @@ type KEVStatus struct {
 	// (internal/threatinformed).
 	Vendor  string `json:"vendor,omitempty"`
 	Product string `json:"product,omitempty"`
+	// Advisories are the reference URLs CISA publishes with the entry — the vendor
+	// bulletin, the patch, sometimes the directive that mandates its remediation.
+	//
+	// They were being PARSED AND DISCARDED, which is the third time this exact thing has
+	// happened in this one feed (vendorProject/product, then dueDate and ransomware use,
+	// now these). Every one of the 1,673 entries carries them, ~3,000 URLs in total, and
+	// the architecture doc has claimed "vendor advisory URLs" as a shipped capability the
+	// whole time while ThreatIntel.Advisories was never written by any source.
+	Advisories []string `json:"advisories,omitempty"`
 	// DueDate is CISA's OWN BOD 22-01 remediation deadline for this CVE. Federal
 	// agencies are bound by it; everyone else gets the strongest free statement
 	// anywhere of how long a defender is considered to reasonably have. Preferred

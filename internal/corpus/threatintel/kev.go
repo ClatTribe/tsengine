@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +38,9 @@ type kevFeed struct {
 		// turns a patch window from a quarter into a weekend. It was being dropped,
 		// exactly as vendorProject/product were before them.
 		KnownRansomwareCampaignUse string `json:"knownRansomwareCampaignUse"`
+		// Notes is a " ; "-separated list of reference URLs, occasionally with a label
+		// prefix ("BOD 26-04: https://..."). Non-empty on every entry in the catalog.
+		Notes string `json:"notes"`
 	} `json:"vulnerabilities"`
 }
 
@@ -52,7 +57,8 @@ func ParseKEV(r io.Reader) (map[string]types.KEVStatus, time.Time, string, error
 		if v.CveID == "" {
 			continue
 		}
-		st := types.KEVStatus{Listed: true, Vendor: v.VendorProject, Product: v.Product}
+		st := types.KEVStatus{Listed: true, Vendor: v.VendorProject, Product: v.Product,
+			Advisories: advisoriesFromNotes(v.Notes)}
 		if v.DateAdded != "" {
 			if d, err := time.Parse("2006-01-02", v.DateAdded); err == nil {
 				st.DateAdded = d.UTC()
@@ -83,4 +89,36 @@ func parseKEVDate(s string) time.Time {
 		}
 	}
 	return time.Now().UTC()
+}
+
+// advisoryURL matches the http(s) references inside a KEV entry's notes field.
+//
+// Only real URLs are kept. The notes are free text with label prefixes and " ; " separators,
+// and storing a fragment of prose as an advisory link would put something in front of a
+// responder that does not resolve — worse than the empty list it replaces, because an empty
+// list is honestly empty.
+var advisoryURL = regexp.MustCompile(`https?://[^\s;,)\]]+`)
+
+// advisoriesFromNotes extracts, dedupes and sorts the reference URLs in a KEV note.
+//
+// Sorted because the corpus is diffed between refreshes and map/slice order would make every
+// rebuild look like a change to every entry. Deduped because the same URL listed twice is one
+// advisory.
+func advisoriesFromNotes(notes string) []string {
+	found := advisoryURL.FindAllString(notes, -1)
+	if len(found) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(found))
+	out := make([]string, 0, len(found))
+	for _, u := range found {
+		u = strings.TrimRight(u, ".")
+		if u == "" || seen[u] {
+			continue
+		}
+		seen[u] = true
+		out = append(out, u)
+	}
+	sort.Strings(out)
+	return out
 }
