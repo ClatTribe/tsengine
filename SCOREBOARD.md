@@ -8,12 +8,12 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Repository · SAST | overall Youden | **46.54%** — measured | 35% — Fortify 35%; Checkmarx 47%; ceiling Veracode 51% | ✅ at/above par — third on the published cohort |
 | L2 agent · autonomy | detection_rate (must-find) + verified_rate | — not run | 100% — must-find parity (detection_rate = 1.0), zero FP; verified_rate the differentiator | — pending run |
 | Cloud account · CSPM | CIS-section recall | — not run (needs LocalStack or real creds) | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
-| API · recall parity | recall vs standalone OSS | **0.000 — FAIL**, measured vs VAmPI | 100% — orchestration drops nothing the standalone tool found | — pending run |
+| API · recall parity | recall vs standalone OSS | **1.000** — measured vs VAmPI | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | IP/host · recall parity | recall vs standalone OSS | — not measured (image lacked naabu) | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | Domain · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | Container · SCA recall parity | recall vs standalone OSS | **1.000** + FP-control PASS | 100% — orchestration drops nothing the standalone tool found | — pending run |
 
-**Summary:** 5 measured · 1 failing · 2 still blocked. Run live on 2026-08-21 with Docker
+**Summary:** 5 measured, all at or above par · 2 still blocked · 1 refused as unmeasurable here. Run live on 2026-08-21 with Docker
 available; every figure below was produced on this machine, not carried forward.
 
 | Row | Result | Note |
@@ -22,18 +22,39 @@ available; every figure below was produced on this machine, not carried forward.
 | Container · SCA | **1.000** must-find recall | + `alpine-clean` FP-control **PASS** (0 high/critical on a clean image) |
 | Repository · SCA | **1.000** must-find recall | 260 raw findings, 9 anchors |
 | Web · DAST | per-class, see note | sqli 57.58%; aggregate withheld and why |
-| **API · recall** | **0.000 — FAIL** | VAmPI: spec ingested (200), sqlmap dispatched twice, **`sqli` MISSED** |
+| **API · recall** | **1.000** | VAmPI: `sqlmap::sqli` on `/users/v1/name1*`; complete scan, 4m19s |
 | IP/host | **not measured** | the image was built `TOOLSET=…,api` — naabu is absent and its stub says so. nmap reached 6379 fine, so this is a harness gap, NOT reachability and NOT a capability result. Rebuild with the `ip` toolset to score it |
 | Cloud · CSPM | not run | needs LocalStack or real credentials |
 | Domain | not runnable in a box | subdomain enumeration queries public sources about a real registered domain — there is nothing to host |
 
-**The API FAIL is a real result and is recorded as one.** VAmPI's OpenAPI spec was reachable
-and ingested, `openapi_spec_ingest`/`schemathesis`/`nuclei`/`kiterunner`/`sqlmap` all fired,
-12 findings came back, and the single must-find case — `sqli` — was missed. Not
-root-caused here; the obvious hypothesis is that VAmPI's injection sits in a PATH parameter
-(`/users/v1/{username}`) rather than a query parameter, and sqlmap needs a parameter
-position to attack. That is the same shape as the path-traversal finding above and deserves
-the same four-hypothesis treatment before anyone calls it a detector gap.
+**The API row was first recorded here as `0.000 — FAIL, MISSED sqli`. That was wrong, and
+how it was wrong is worth more than the number.**
+
+The scan had printed `partial=true` — it hit its deadline mid-sqlmap. Re-run against the
+same target on the same image with a budget it could finish in, it completed in 4m19s and
+found `sqlmap::sqli` at `/users/v1/name1*`. Recall 1.000.
+
+Nothing was wrong with the engine. `injectionTarget` had been rewriting the path parameter
+into sqlmap's `*` marker form since #1233, and the dispatch was correct in *both* runs — the
+failing one included. **The scorer had no idea the run had been cut off.** It read a
+truncated finding list as a detection result, exactly as it would have read a complete one.
+
+This is the same error as the IP row below, one level up: a number that measures the harness
+being published as a capability. I caught it there and missed it here in the same commit,
+which is the argument for fixing it in code rather than remembering it.
+
+`bench.withholdIfTruncated` now withholds the one verdict a deadline can manufacture, per
+metric. Truncation is **directional** — a scan that stops early can only have FEWER findings
+— so each metric has exactly one fakeable verdict:
+
+| Metric | Withheld | Still sound |
+|---|---|---|
+| `must_find_recall` | a **FAIL** — the finding may not have landed yet | a **PASS** — it found what was required despite being cut short |
+| `fp_rate` | a **PASS** — the alarm may not have fired yet | a **FAIL** — the alarm did fire, and finishing could only add more |
+
+The verdict line reads `UNMEASURED`, deliberately neither PASS nor FAIL: the run cannot
+answer the question. Withholding both directions would throw away sound results; withholding
+neither is how a clock gets published as a capability.
 
 **The web row, run live on 2026-08-21 — reported per-class, not as one number.**
 WAVSEP was deployed and scanned. Getting there took three fixes, the third a production bug

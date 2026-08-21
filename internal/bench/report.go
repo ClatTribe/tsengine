@@ -39,10 +39,19 @@ func Render(f *Fixture, res *RunResult) string {
 	b.WriteString(renderCompetitors(f.Competitors))
 
 	verdict := "PASS"
-	if !res.AllPass {
+	switch {
+	case res.Unmeasured:
+		// Deliberately its own verdict rather than a FAIL. The run was cut off, so
+		// the number it produced is about the clock, not the product — reporting it
+		// as a failure is how a timeout gets published as a detection gap.
+		verdict = "UNMEASURED"
+	case !res.AllPass:
 		verdict = "FAIL"
 	}
 	fmt.Fprintf(&b, "verdict:          %s\n", verdict)
+	if res.Unmeasured {
+		fmt.Fprintf(&b, "why unmeasured:   %s\n", res.UnmeasuredReason)
+	}
 	return b.String()
 }
 
