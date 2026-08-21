@@ -41,6 +41,9 @@ type kevFeed struct {
 		// Notes is a " ; "-separated list of reference URLs, occasionally with a label
 		// prefix ("BOD 26-04: https://..."). Non-empty on every entry in the catalog.
 		Notes string `json:"notes"`
+		// CWEs are the weakness classes CISA publishes for the CVE. 89% of the catalog
+		// carries them, and they are the input the ENTIRE compliance crosswalk runs on.
+		CWEs []string `json:"cwes"`
 	} `json:"vulnerabilities"`
 }
 
@@ -58,7 +61,7 @@ func ParseKEV(r io.Reader) (map[string]types.KEVStatus, time.Time, string, error
 			continue
 		}
 		st := types.KEVStatus{Listed: true, Vendor: v.VendorProject, Product: v.Product,
-			Advisories: advisoriesFromNotes(v.Notes)}
+			Advisories: advisoriesFromNotes(v.Notes), CWEs: normalizeCWEs(v.CWEs)}
 		if v.DateAdded != "" {
 			if d, err := time.Parse("2006-01-02", v.DateAdded); err == nil {
 				st.DateAdded = d.UTC()
@@ -118,6 +121,29 @@ func advisoriesFromNotes(notes string) []string {
 		}
 		seen[u] = true
 		out = append(out, u)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// normalizeCWEs keeps the canonical "CWE-N" entries, deduped and sorted.
+//
+// The crosswalk is keyed on that exact form, so anything else would map to nothing and sit
+// on the finding looking like data. Sorted for the same reason the advisories are: the
+// corpus is diffed between refreshes.
+func normalizeCWEs(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, c := range in {
+		c = strings.ToUpper(strings.TrimSpace(c))
+		if !strings.HasPrefix(c, "CWE-") || seen[c] {
+			continue
+		}
+		seen[c] = true
+		out = append(out, c)
 	}
 	sort.Strings(out)
 	return out

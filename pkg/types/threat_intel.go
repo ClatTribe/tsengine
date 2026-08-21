@@ -36,6 +36,14 @@ type KEVStatus struct {
 	// the architecture doc has claimed "vendor advisory URLs" as a shipped capability the
 	// whole time while ThreatIntel.Advisories was never written by any source.
 	Advisories []string `json:"advisories,omitempty"`
+	// CWEs are the weakness classes CISA publishes for this CVE.
+	//
+	// They matter far more than a reference list, because CWE is what the compliance
+	// crosswalk (§8) is keyed on — and the hook returns early when a finding has none. grype
+	// and osv-scanner never set one, so a KEV-listed, ransomware-linked CVE found in a
+	// container image was getting NO control mapping at all, while CISA published its CWE in
+	// a feed we already fetch. 89% of the catalog carries them.
+	CWEs []string `json:"cwes,omitempty"`
 	// DueDate is CISA's OWN BOD 22-01 remediation deadline for this CVE. Federal
 	// agencies are bound by it; everyone else gets the strongest free statement
 	// anywhere of how long a defender is considered to reasonably have. Preferred
