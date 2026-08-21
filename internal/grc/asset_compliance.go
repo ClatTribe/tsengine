@@ -46,7 +46,7 @@ func AssetCompliancePosture(assets []platform.Asset, findings []types.Finding) [
 		if f.Endpoint == "" {
 			continue
 		}
-		id := bestAssetForEndpoint(f.Endpoint, assets)
+		id := assetForFinding(f, assets)
 		if id == "" {
 			continue
 		}
@@ -108,6 +108,27 @@ func assetStatus(p AssetPosture) string {
 		return "Has open control gaps — not compliant until they're closed"
 	}
 	return "No automated control gaps — not a certification"
+}
+
+// assetForFinding resolves a finding to its asset, preferring the RECORDED link.
+//
+// types.Finding.AssetID is stamped by the runner, which is the only place that knows the
+// answer without guessing. The endpoint heuristic below remains the fallback for findings
+// stored before the field existed and for ingest paths where no asset is in scope — and it
+// cannot work at all for a repository, whose endpoints are file-relative.
+//
+// The id is validated against this tenant's assets rather than trusted: an id naming an asset
+// they do not have is not attribution, and silently honouring it would cross a boundary the
+// store spends real effort enforcing.
+func assetForFinding(f types.Finding, assets []platform.Asset) string {
+	if f.AssetID != "" {
+		for _, a := range assets {
+			if a.ID == f.AssetID {
+				return a.ID
+			}
+		}
+	}
+	return bestAssetForEndpoint(f.Endpoint, assets)
 }
 
 // bestAssetForEndpoint returns the id of the asset whose non-empty Target is contained in endpoint, longest

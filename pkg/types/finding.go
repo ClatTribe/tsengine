@@ -13,12 +13,27 @@ import (
 // raw_output is preserved verbatim so the security-engineer audience can
 // see the OSS tool's native output unchanged. Do not transform.
 type Finding struct {
-	ID              string            `json:"id"`
-	RuleID          string            `json:"rule_id"`
-	Tool            string            `json:"tool"`
-	Severity        Severity          `json:"severity"`
-	CWE             []string          `json:"cwe,omitempty"`
-	Endpoint        string            `json:"endpoint,omitempty"`
+	ID       string   `json:"id"`
+	RuleID   string   `json:"rule_id"`
+	Tool     string   `json:"tool"`
+	Severity Severity `json:"severity"`
+	CWE      []string `json:"cwe,omitempty"`
+	Endpoint string   `json:"endpoint,omitempty"`
+	// AssetID ties this finding to the platform asset it was found on. Set by the platform
+	// runner, which knows the asset at the moment it stores each finding; the engine and the
+	// CLI never populate it, hence omitempty and a contract that stays byte-compatible.
+	//
+	// IT EXISTS BECAUSE THE ALTERNATIVE IS A HEURISTIC THAT CANNOT WORK. Three consumers
+	// (coverage, per-asset compliance, data-tier prioritisation) each re-derived the link by
+	// matching the asset's Target inside this Endpoint. That works for a URL or a host and
+	// cannot work for a repository, whose findings are file-relative ("src/app.py:12") while
+	// the target is a workspace path that never appears in them — so a scanned repo holding a
+	// leaked key attributed to nothing, and the coverage page reported "No findings recorded".
+	//
+	// Consumers PREFER this and fall back to target matching, because findings stored before
+	// this field existed, and those arriving through the ingest paths where no asset is in
+	// scope, legitimately carry no id. An empty AssetID means "not recorded", never "no asset".
+	AssetID         string            `json:"asset_id,omitempty"`
 	Title           string            `json:"title"`
 	Description     string            `json:"description,omitempty"`
 	RawOutput       json.RawMessage   `json:"raw_output,omitempty"`

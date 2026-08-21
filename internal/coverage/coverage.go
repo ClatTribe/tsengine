@@ -249,6 +249,17 @@ func Compute(assets []platform.Asset, findings []types.Finding, engagements []pl
 // match wins — the same grounded attribution as data-tier / per-asset compliance). "" when none matches
 // (e.g. a repo file:line endpoint with no asset target in it) — never guessed.
 func attribute(f types.Finding, assets []platform.Asset) string {
+	// The recorded link wins. It is the only non-guessing answer available: the runner knows
+	// the asset when it stores the finding, and the target-matching below is a heuristic that
+	// cannot work at all for a repository. Validated against the asset list rather than
+	// trusted blindly — an id naming an asset this tenant does not have is not attribution.
+	if f.AssetID != "" {
+		for _, a := range assets {
+			if a.ID == f.AssetID {
+				return a.ID
+			}
+		}
+	}
 	best, bestLen := "", 0
 	for _, a := range assets {
 		if a.Target != "" && len(a.Target) > bestLen && strings.Contains(f.Endpoint, a.Target) {

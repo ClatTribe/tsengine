@@ -660,7 +660,15 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 	// shapes, cross_tool_merge dedups) — the same behaviour the CLI has always had.
 	enr := l15.EnrichDetailed(findings)
 	findings, eng.L15Audit, eng.L15Dismissed = enr.Enriched, enr.Audit, enr.Dismissed
-	for _, f := range findings {
+	for i, f := range findings {
+		// Stamp the asset BEFORE storing. This is the only place in the system that knows,
+		// without guessing, which asset a finding came from — everything downstream had been
+		// re-deriving it by matching the asset's target inside the endpoint, which cannot work
+		// for a repository (file-relative endpoints) and silently attributed its findings to
+		// nothing. Writing it back into the slice matters too: the caller returns these, and
+		// the incident/GRC paths read them.
+		f.AssetID = a.ID
+		findings[i] = f
 		if err := s.Store.PutFinding(ctx, a.TenantID, f); err != nil {
 			return nil, nil, err
 		}
