@@ -58,7 +58,15 @@ func RiskWeight(sev types.Severity, tier int) int {
 // when that asset's non-empty Target literally appears in the issue's Endpoint (the longest
 // such Target wins). This reliably tiers URL-bearing issues (web/api); issues whose endpoint
 // can't be tied to a tiered asset (e.g. a repo finding's file:line) stay at Standard — honest,
-// never a fabricated attribution. A proper finding→asset link in the data model is the follow-up.
+// never a fabricated attribution.
+//
+// types.Finding.AssetID now records that link at the source, and coverage + per-asset
+// compliance already prefer it. This path does NOT yet, and the reason is a design question
+// rather than an oversight: it operates on merged Issues, and UnifiedIssues deliberately
+// collapses findings that share a CVE ACROSS surfaces — so an issue can legitimately span
+// two assets of different tiers. Picking one silently would fabricate exactly the attribution
+// the rest of this comment refuses to fabricate. Deciding what an issue spanning tiers is
+// worth is the follow-up; until then this stays honestly Standard.
 func PrioritizeByDataTier(issues []Issue, assets []platform.Asset) []Issue {
 	for i := range issues {
 		tier := tierForEndpoint(issues[i].Endpoint, assets)

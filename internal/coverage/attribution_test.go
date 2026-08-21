@@ -83,3 +83,51 @@ func TestCompute_CoverageGapIsNotAnOrphan(t *testing.T) {
 		t.Errorf("a coverage disclosure must not read as an unattributed finding: %d", c.UnattributableFromOurTools)
 	}
 }
+
+// The recorded link is what makes a repository attributable at all. With it, the same two
+// findings that previously vanished are counted, from the tools that produced them.
+func TestCompute_RecordedAssetIDAttributesARepo(t *testing.T) {
+	findings := []types.Finding{
+		{RuleID: "semgrep::sqli", Tool: "semgrep", Endpoint: "src/app.py:12", Severity: types.SeverityHigh, AssetID: "r1"},
+		{RuleID: "gitleaks::aws-key", Tool: "gitleaks", Endpoint: "config/prod.env:3", Severity: types.SeverityCritical, AssetID: "r1"},
+	}
+	c := Compute(repoAsset(), findings, scannedRepo()).Assets[0]
+	if !c.Attributed || c.FindingsCount != 2 {
+		t.Errorf("attributed=%v count=%d; the recorded link must tie file-relative findings to their repo",
+			c.Attributed, c.FindingsCount)
+	}
+	if len(c.ToolsWithFindings) != 2 {
+		t.Errorf("ToolsWithFindings = %v, want both tools", c.ToolsWithFindings)
+	}
+	if c.UnattributableFromOurTools != 0 {
+		t.Errorf("nothing should remain unattributable: %d", c.UnattributableFromOurTools)
+	}
+}
+
+// An AssetID naming an asset this tenant does not have is NOT attribution. Honouring it
+// would cross a boundary the store spends real effort enforcing, so the id is validated
+// rather than trusted — and the endpoint fallback still gets its chance.
+func TestCompute_ForeignAssetIDIsNotHonoured(t *testing.T) {
+	findings := []types.Finding{
+		{RuleID: "semgrep::sqli", Tool: "semgrep", Endpoint: "src/app.py:12", Severity: types.SeverityHigh,
+			AssetID: "someone-elses-asset"},
+	}
+	c := Compute(repoAsset(), findings, scannedRepo()).Assets[0]
+	if c.Attributed || c.FindingsCount != 0 {
+		t.Errorf("a foreign asset id must not attribute: attributed=%v count=%d", c.Attributed, c.FindingsCount)
+	}
+	if c.UnattributableFromOurTools != 1 {
+		t.Errorf("it should still be reported as an unattributable orphan, got %d", c.UnattributableFromOurTools)
+	}
+}
+
+// Findings stored before the field existed carry no id and must keep working through the
+// endpoint fallback — an empty AssetID means "not recorded", never "no asset".
+func TestCompute_EmptyAssetIDFallsBackToTheEndpoint(t *testing.T) {
+	assets := []platform.Asset{{ID: "w1", Target: "https://t.test", Type: "web_application"}}
+	eng := []platform.Engagement{{AssetID: "w1", CompletedAt: time.Unix(1000, 0).UTC()}}
+	findings := []types.Finding{{RuleID: "nuclei::xss", Tool: "nuclei", Endpoint: "https://t.test/a", Severity: types.SeverityHigh}}
+	if c := Compute(assets, findings, eng).Assets[0]; !c.Attributed || c.FindingsCount != 1 {
+		t.Errorf("legacy findings must still attribute by endpoint: attributed=%v count=%d", c.Attributed, c.FindingsCount)
+	}
+}
