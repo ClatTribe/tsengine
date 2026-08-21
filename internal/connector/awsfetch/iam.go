@@ -42,6 +42,15 @@ type Principal struct {
 	Role  bool   // false = user
 	Admin bool   // resolved from policy, never from the name
 	Trust string // the role's verbatim trust policy JSON; empty for users
+	// Policies are the principal's attached + inline policy DOCUMENTS, verbatim. They are
+	// what makes "can this principal BECOME admin" answerable; Admin only answers "is it
+	// already". A reader that leaves them empty produces an inventory with no escalation
+	// edges, which Coverage must then say out loud.
+	Policies []string
+	// Boundary is the permission-boundary document. Empty means NONE — never "denies
+	// everything", because an unread boundary treated as a deny would erase every
+	// escalation in the account.
+	Boundary string
 }
 
 // iamAPI is the slice of IAM this needs — read verbs only, so the customer grants the minimum and a

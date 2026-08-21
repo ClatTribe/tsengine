@@ -137,18 +137,36 @@ func (f Fetcher) Fetch(ctx context.Context) (Result, error) {
 	} else if ps, ierr := f.Principals.ListPrincipals(ctx); ierr != nil {
 		res.Skipped["iam"] = ierr.Error()
 	} else {
+		// sawPolicies tracks whether ANY principal carried policy documents. Without them
+		// the inventory has no privilege-escalation edges — and "we did not read the
+		// policies" must never render as "there is no way to become admin here", which is
+		// the most reassuring wrong answer this product could give.
+		sawPolicies := false
 		for _, p := range ps {
 			if p.Role {
 				res.Raw.Roles = append(res.Raw.Roles, awsinventory.RawIAMRole{
 					ARN: p.ARN, Name: p.Name, Admin: p.Admin, TrustPolicyJSON: p.Trust,
+					PoliciesJSON: p.Policies, BoundaryJSON: p.Boundary,
 				})
+				if len(p.Policies) > 0 {
+					sawPolicies = true
+				}
 				continue
 			}
 			res.Raw.Users = append(res.Raw.Users, awsinventory.RawIAMUser{
 				ARN: p.ARN, Name: p.Name, Admin: p.Admin,
+				PoliciesJSON: p.Policies, BoundaryJSON: p.Boundary,
 			})
+			if len(p.Policies) > 0 {
+				sawPolicies = true
+			}
 		}
 		res.Sources = append(res.Sources, "iam")
+		if len(ps) > 0 && !sawPolicies {
+			res.Skipped["iam-policies"] = "principals were listed but their policy documents were not " +
+				"read, so no privilege-escalation path can be computed — an empty escalation result here " +
+				"means UNREAD, not safe"
+		}
 	}
 
 	if f.Compute == nil {

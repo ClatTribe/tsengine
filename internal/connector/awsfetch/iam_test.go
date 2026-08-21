@@ -53,9 +53,13 @@ func TestFetch_PrincipalsAndTrustReachTheInventory(t *testing.T) {
 // the customer is told to worry about a gap that no longer exists.
 func TestCoverage_StopsNamingIAMOnceItIsRead(t *testing.T) {
 	res, _ := Fetcher{
-		AccountID:  "1234",
-		Buckets:    fakeLister{out: []Bucket{{Name: "b"}}},
-		Principals: fakeIAM{out: []Principal{{ARN: "a", Name: "a"}}},
+		AccountID: "1234",
+		Buckets:   fakeLister{out: []Bucket{{Name: "b"}}},
+		// Policies present, so this represents a COMPLETE identity read — otherwise the
+		// fetcher rightly names iam-policies as unread and the assertion below (which
+		// substring-matches "iam") would trip on a surface it was not written about.
+		Principals: fakeIAM{out: []Principal{{ARN: "a", Name: "a",
+			Policies: []string{`{"Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":"*"}]}`}}}},
 	}.Fetch(context.Background())
 
 	cov := res.Coverage()
