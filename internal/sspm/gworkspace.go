@@ -26,6 +26,29 @@ type GWorkspaceTenant struct {
 	ThirdPartyAPIAccess      bool   `json:"third_party_api_access"`     // any third-party OAuth app can access data (no app allowlist / API controls)
 	GmailExternalAutoForward bool   `json:"gmail_external_autoforward"` // users may auto-forward mail to external addresses (exfil)
 	ExternalCalendarSharing  bool   `json:"external_calendar_sharing"`  // calendar details shared with external/public
+	// PostSSOVerificationOff: after an SSO assertion Google performs no additional check,
+	// so anyone who can produce an assertion — including via a compromised IdP — lands
+	// straight in. SSO concentrates trust in one system; post-SSO verification is the only
+	// control that does not. GWS.COMMONCONTROLS.3.1v1 (own profile) / 3.2v1 (others).
+	PostSSOVerificationOff      bool `json:"post_sso_verification_off,omitempty"`
+	PostSSOVerificationOffOther bool `json:"post_sso_verification_off_other,omitempty"`
+	// UnassessedServicesEnabled: Google services with no individual admin control are ON
+	// by default, so every service Google ships is enabled the day it ships without anyone
+	// deciding. The named ones below are the same failure with a name.
+	// GWS.COMMONCONTROLS.16.1v1 / 16.2v1 / 16.3v1 / 16.4v1.
+	UnassessedServicesEnabled bool `json:"unassessed_services_enabled,omitempty"`
+	EarlyAccessAppsEnabled    bool `json:"early_access_apps_enabled,omitempty"`
+	LookerStudioExternalShare bool `json:"looker_studio_external_share,omitempty"`
+	PinpointDriveAccess       bool `json:"pinpoint_drive_access,omitempty"`
+	// RecoveryInfoAllowed: users may add their own recovery phone or address, which is a
+	// self-service password-reset channel whose security is a personal mailbox or a
+	// portable phone number. GWS.COMMONCONTROLS.8.3v1.
+	RecoveryInfoAllowed bool `json:"recovery_info_allowed,omitempty"`
+	// AccountConflictUnmanaged: personal Google accounts created on the corporate domain
+	// are left as conflicting UNMANAGED accounts rather than being absorbed. They hold
+	// company data, answer to nobody's admin console, and survive offboarding entirely.
+	// GWS.COMMONCONTROLS.7.1v1.
+	AccountConflictUnmanaged bool `json:"account_conflict_unmanaged,omitempty"`
 	// PhishingResistant2SVNotEnforced: 2SV is required but any method counts, including a
 	// code. Only a security key is bound to the origin and survives an
 	// adversary-in-the-middle proxy — "2SV is on" is a weaker claim than "2SV cannot be
@@ -280,6 +303,54 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.PostSSOVerificationOff || t.PostSSOVerificationOffOther {
+		f = append(f, finding(id(), "sspm::google_workspace::post-sso-verification-off", types.SeverityMedium,
+			"No additional verification is performed after SSO", target,
+			"Google performs no further check once an SSO assertion is accepted, so anyone who can produce "+
+				"one is in — including an attacker who has compromised the identity provider rather than any "+
+				"individual account. SSO concentrates the tenant's trust in a single external system, and "+
+				"post-SSO verification is the only control that does not depend on that system being intact. "+
+				"Enable post-SSO verification (SCuBA GWS.COMMONCONTROLS.3.1v1 / 3.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if n := unassessedServiceGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::google_workspace::unassessed-services-enabled", types.SeverityMedium,
+			"Services nobody assessed are enabled ("+strings.Join(n, ", ")+")", target,
+			"These are on: "+strings.Join(n, ", ")+
+				". The default for a Google service with no individual admin control is ON, which means every "+
+				"service Google ships is enabled on the day it ships, without anyone deciding — the estate "+
+				"grows a new surface each time the vendor releases something. Set unassessed services to OFF "+
+				"for everyone and enable them deliberately (SCuBA GWS.COMMONCONTROLS.16.1v1–16.4v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, CISv8: []string{"2.3", "3.3"}, NISTCSF: []string{"PR.IP-1"}, NIST80053: []string{"CM-7"}})))
+	}
+	if t.RecoveryInfoAllowed {
+		f = append(f, finding(id(), "sspm::google_workspace::recovery-info-allowed", types.SeverityMedium,
+			"Users may add their own account-recovery information", target,
+			"Users can register a personal phone or email for self-service recovery, which makes those the "+
+				"real credential: whoever controls a ported number or a personal mailbox can reset the account "+
+				"without the password or the second factor. Disable user-added recovery information and route "+
+				"resets through an administrator (SCuBA GWS.COMMONCONTROLS.8.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.3"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
+	}
+	if t.AccountConflictUnmanaged {
+		f = append(f, finding(id(), "sspm::google_workspace::account-conflict-unmanaged", types.SeverityMedium,
+			"Conflicting unmanaged accounts are not being absorbed", target,
+			"Personal Google accounts created on the corporate domain remain UNMANAGED rather than being "+
+				"replaced with managed ones. They hold company data, appear in no admin console, cannot be "+
+				"suspended, and survive offboarding completely — an ex-employee keeps them along with whatever "+
+				"is in them. Configure account conflict management to replace them "+
+				"(SCuBA GWS.COMMONCONTROLS.7.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"5.1", "6.2"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"AC-2"}})))
+	}
+	if t.PasswordMinLength >= 12 && t.PasswordMinLength < 16 {
+		f = append(f, finding(id(), "sspm::google_workspace::password-min-length-below-recommended", types.SeverityLow,
+			fmt.Sprintf("Minimum password length is %d, below the recommended 16", t.PasswordMinLength), target,
+			"The minimum meets the 12-character floor but not the 16-character recommendation. "+
+				"The gap matters most for the accounts that never get a second factor — service and shared "+
+				"accounts — where length is the only thing standing between a credential dump and a working "+
+				"password. Raise the minimum to 16 (SCuBA GWS.COMMONCONTROLS.5.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"5.2"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
 	}
 	if t.PhishingResistant2SVNotEnforced {
 		f = append(f, finding(id(), "sspm::google_workspace::phishing-resistant-2sv-not-enforced", types.SeverityHigh,
@@ -740,6 +811,24 @@ func autoApplyGapsOf(t GWorkspaceTenant) []string {
 	}
 	if t.SpoofAutoApplyOff {
 		n = append(n, "spoofing and authentication")
+	}
+	return n
+}
+
+// unassessedServiceGapsOf names which unassessed-by-default services are enabled.
+func unassessedServiceGapsOf(t GWorkspaceTenant) []string {
+	var n []string
+	if t.UnassessedServicesEnabled {
+		n = append(n, "services with no individual control")
+	}
+	if t.EarlyAccessAppsEnabled {
+		n = append(n, "Early Access applications")
+	}
+	if t.LookerStudioExternalShare {
+		n = append(n, "Looker Studio sharing outside the org")
+	}
+	if t.PinpointDriveAccess {
+		n = append(n, "Pinpoint access to Drive")
 	}
 	return n
 }

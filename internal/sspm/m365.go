@@ -26,6 +26,17 @@ type M365Tenant struct {
 	TeamsGuestUnrestricted  bool   `json:"teams_guest_unrestricted"`  // no guest-access policy (guests get broad access)
 	TeamsOpenFederation     bool   `json:"teams_open_federation"`     // external federation open to ALL domains
 	LegacyAuthEnabled       bool   `json:"legacy_auth_enabled"`       // basic/legacy auth allowed (password-spray + MFA-bypass)
+	// SharePointLinkPermissionsNotViewOnly: the DEFAULT permission on a sharing link is
+	// edit rather than view. Most links are created to let someone read something, so the
+	// default decides the permission on the majority of links nobody thought about — and
+	// an edit link on a document that leaked is a write path into it. MS.SHAREPOINT.3.2v1.
+	SharePointLinkPermissionsNotViewOnly bool `json:"sharepoint_link_permissions_not_view_only,omitempty"`
+	// SharePointVerificationCodeReauthDays: how long an external recipient who
+	// authenticated with an emailed verification code stays authenticated. The code went
+	// to a mailbox, so the session is only ever as good as that mailbox — and a long
+	// window means a compromise of it reaches back into your documents.
+	// MS.SHAREPOINT.3.3v2.
+	SharePointVerificationCodeReauthDays int `json:"sharepoint_verification_code_reauth_days,omitempty"`
 	// PhishingResistantMFANotEnforced: MFA is required, but ANY method satisfies it — so a
 	// push notification or a code counts. Phishing-resistant methods (FIDO2, certificate,
 	// Windows Hello) are the ones an adversary-in-the-middle proxy cannot replay, and the
@@ -235,6 +246,25 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Teams guest access has no guest-access policy", target+"/teams",
 			"Guests can join Teams with no guest-access policy restricting what they can see/do. Apply a guest-access policy (restrict channels, file access, and screen sharing).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}})))
+	}
+	if t.SharePointLinkPermissionsNotViewOnly {
+		f = append(f, finding(id(), "sspm::m365::sharepoint-link-permissions-not-view-only", types.SeverityMedium,
+			"Sharing links default to edit rather than view", target+"/sharepoint",
+			"The default permission on a sharing link grants editing. Most links are created so someone can "+
+				"READ something, which means the default sets the permission on the majority of links nobody "+
+				"consciously chose one for — and an edit link that leaks is a write path into the document, not "+
+				"just a read of it. Set allowable link permissions to view only "+
+				"(SCuBA MS.SHAREPOINT.3.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"AC-3"}})))
+	}
+	if t.SharePointVerificationCodeReauthDays > 30 {
+		f = append(f, finding(id(), "sspm::m365::sharepoint-verification-code-reauth-too-long", types.SeverityMedium,
+			fmt.Sprintf("External verification-code sessions last %d days", t.SharePointVerificationCodeReauthDays), target+"/sharepoint",
+			fmt.Sprintf("An external recipient who authenticated with an emailed code stays authenticated for "+
+				"%d days. That session is only ever as strong as the mailbox the code went to, so the window is "+
+				"how long a compromise of someone else's email reaches back into your documents. Set "+
+				"reauthentication to 30 days or less (SCuBA MS.SHAREPOINT.3.3v2).", t.SharePointVerificationCodeReauthDays),
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"3.3", "6.8"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"AC-12"}})))
 	}
 	if t.PhishingResistantMFANotEnforced || t.PhishingResistantMFANotEnforcedPrivileged {
 		who := "all users"
