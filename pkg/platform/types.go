@@ -774,7 +774,30 @@ type FixVerification struct {
 	Fixed        []string  `json:"fixed,omitempty"`         // finding keys confirmed gone from the fresh scan
 	StillPresent []string  `json:"still_present,omitempty"` // finding keys STILL found (the fix did not close them)
 	Evidence     string    `json:"evidence,omitempty"`      // human-readable, e.g. "3 of 3 confirmed fixed in re-scan"
+	// RescanSaidFixed records what the ABSENCE check concluded, independently of what the
+	// re-attack then proved. Kept because the two disagreeing is the single most valuable
+	// thing this system can learn: it is a labelled example that absence-evidence was not
+	// enough, and it is the only way to answer "what evidence is sufficient" from real data
+	// rather than from opinion.
+	RescanSaidFixed bool `json:"rescan_said_fixed,omitempty"`
+	// Disagreement names HOW the two kinds of evidence conflicted, machine-readably. The
+	// prose in Evidence already explained it to a human; this exists so the conflict can be
+	// counted and learned from without regexing English.
+	Disagreement string `json:"disagreement,omitempty"`
 }
+
+// Evidence-conflict kinds. Both mean a verification method was insufficient, and they are
+// separate because they indict DIFFERENT methods and have different fixes.
+const (
+	// DisagreeRescanMissedLiveExploit: the re-scan reported the finding gone and the exploit
+	// still works. The dangerous direction — a customer was one step from being told they
+	// were safe. Indicts absence-as-evidence.
+	DisagreeRescanMissedLiveExploit = "rescan_missed_live_exploit"
+	// DisagreeScannerSeesVariant: the exploit no longer works but the scanner still reports
+	// the finding. Indicts the re-test playbook, which may not cover the variant the scanner
+	// sees. Not dangerous, but not closure either.
+	DisagreeScannerSeesVariant = "scanner_sees_variant"
+)
 
 // GateTier is the autonomy tier at/above which an Action must be human-approved
 // before it is applied. Tier 0/1 auto-apply; 2/3 queue to the HITL desk.

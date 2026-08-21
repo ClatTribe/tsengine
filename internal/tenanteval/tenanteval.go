@@ -32,6 +32,7 @@ import (
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
+	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/l15"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -56,6 +57,15 @@ const (
 	SourceReinstated   Source = "reinstated"    // a human overrode a dismissal
 	SourceIgnored      Source = "ignored"       // a human suppressed it as a false positive
 	SourceConfirmedFix Source = "confirmed_fix" // a re-scan proved the fix closed it
+	// SourceEvidenceInsufficient is the strongest case source there is, and it costs
+	// nothing to collect: the re-scan said a finding was GONE and the exploit still
+	// worked. Two independent verification methods disagreed, the stronger one won, and
+	// the record of that disagreement is a labelled example that absence-as-evidence was
+	// not enough here.
+	//
+	// It is a Keep case, and for a sharper reason than the others: the pipeline did not
+	// merely rank this wrong, it was one step from telling a customer they were safe.
+	SourceEvidenceInsufficient Source = "evidence_insufficient"
 )
 
 // Case is one graded example drawn from the tenant's own history.
@@ -162,6 +172,36 @@ func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRu
 			FindingID: f.ID, RuleID: f.RuleID, Source: SourceConfirmedFix, Expect: Keep,
 			Reason: "a re-scan confirmed the fix closed this", finding: f,
 		})
+	}
+
+	// 4. Evidence-insufficiency: an applied fix whose re-scan said "gone" while the
+	// re-attack proved the exploit still ran. Free to collect — the product already does
+	// both checks — and it is the only source that measures the VERIFIER rather than the
+	// filter. Everything else here asks "did we rank this right"; this asks "was our
+	// proof good enough", which is the question a security team is actually staking its
+	// reputation on.
+	insufficient := map[string]bool{}
+	for _, a := range actions {
+		v := a.Verification
+		if v == nil || v.Disagreement != platform.DisagreeRescanMissedLiveExploit {
+			continue
+		}
+		for _, k := range v.StillPresent {
+			insufficient[k] = true
+		}
+	}
+	if len(insufficient) > 0 {
+		for _, f := range append(append([]types.Finding{}, findings...), dismissed...) {
+			if seen[f.ID] || !insufficient[detect.Key(f)] {
+				continue
+			}
+			seen[f.ID] = true
+			cases = append(cases, Case{
+				FindingID: f.ID, RuleID: f.RuleID, Source: SourceEvidenceInsufficient, Expect: Keep,
+				Reason:  "a re-scan reported this gone and the exploit still worked — absence was not proof",
+				finding: f,
+			})
+		}
 	}
 
 	sort.Slice(cases, func(i, j int) bool { return cases[i].FindingID < cases[j].FindingID })
