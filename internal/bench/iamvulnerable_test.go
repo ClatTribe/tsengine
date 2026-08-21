@@ -130,3 +130,80 @@ func TestRenderIAMVulnerable_NamesTheMissesAndTheirActions(t *testing.T) {
 		t.Fatal("the report must say whose answer key this is — that is the entire claim")
 	}
 }
+
+// The document extractor must keep what the recall harness throws away — Effect, Deny,
+// Resource, Condition — because those are exactly what the fp cases probe.
+func TestExtractDocument_KeepsEffectAndResource(t *testing.T) {
+	tf := `resource "aws_iam_policy" "x" {
+  policy = jsonencode({
+    Statement = [
+      {
+        Effect   = "Deny"
+        Action = "iam:*"
+        Resource = "*"
+      },
+    ]
+  })
+}`
+	doc, ok := ExtractDocument(tf)
+	if !ok || len(doc.Statement) != 1 {
+		t.Fatalf("want one statement, got ok=%v %+v", ok, doc)
+	}
+	if doc.Statement[0].Effect != "Deny" {
+		t.Fatalf("a Deny read as an Allow inverts every fp case: %+v", doc.Statement[0])
+	}
+}
+
+// A role's assume_role_policy contains a Principal block and no permission grant. It must
+// not become a statement, or every file would appear to grant sts:AssumeRole.
+func TestExtractDocument_IgnoresTheTrustPolicyBlock(t *testing.T) {
+	doc, ok := ExtractDocument(tfPolicy)
+	if !ok {
+		t.Fatal("the aws_iam_policy block should extract")
+	}
+	for _, st := range doc.Statement {
+		for _, a := range st.Action {
+			if a == "sts:AssumeRole" {
+				t.Fatal("the trust policy is not a permission grant and must not be read as one")
+			}
+		}
+	}
+}
+
+// NotAction must survive: fn4 is exactly a NotAction grant, and dropping it would turn an
+// allow-everything-except into an allow-nothing.
+func TestExtractDocument_KeepsNotAction(t *testing.T) {
+	tf := `resource "aws_iam_policy" "x" {
+  policy = jsonencode({
+    Statement = [
+      {
+        NotAction = ["iam:Update*"]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+    ]
+  })
+}`
+	doc, ok := ExtractDocument(tf)
+	if !ok || len(doc.Statement) != 1 {
+		t.Fatalf("want one statement, got %+v", doc)
+	}
+	st := doc.Statement[0]
+	if len(st.NotAction) != 1 || st.NotAction[0] != "iam:Update*" {
+		t.Fatalf("NotAction must survive extraction: %+v", st)
+	}
+	if len(st.Action) != 0 {
+		t.Fatalf("NotAction must not also be read as Action: %+v", st)
+	}
+}
+
+// A policy defined through a Terraform data source cannot be reconstructed, and must be
+// declared unscored rather than silently counted as a pass.
+func TestExtractDocument_DataSourcePolicyIsNotGuessedAt(t *testing.T) {
+	tf := `resource "aws_iam_policy" "x" {
+  policy = data.aws_iam_policy_document.x.json
+}`
+	if _, ok := ExtractDocument(tf); ok {
+		t.Fatal("there is no document here to read — claiming one would be a fabricated pass")
+	}
+}

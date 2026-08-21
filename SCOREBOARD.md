@@ -39,8 +39,26 @@ _Run 2026-08-21 on `feat/frontier-ghoidc`._
 | Remediation capture | `tsbench defense --mode substrate` | 100% remediation · 100% path recall, all 4 scenarios | seeded code+cloud estates |
 | Offensive recall + grounding | `go test ./internal/webrange/` | agent sweep PASS · decoys present · no SUT leak in scorer | procedurally-generated range w/ decoys |
 | Vulnerability localization | `tsbench localize` | recall@1 **1.00** · MRR **1.00** (8/8 scenarios, heuristic tier) | seeded CWE scenarios |
+| **IAM privesc — recall** | `go test ./internal/bench/ -run IAMVulnerable_Live` (needs `IAM_VULNERABLE_DIR`) | **31/31 paths** | **BishopFox IAM-Vulnerable — EXTERNAL answer key** |
+| **IAM privesc — FP/FN control** | `go test ./internal/bench/ -run PolicyCases_Live` (needs `IAM_VULNERABLE_TOOLTEST_DIR`) | **0 false positives / 5** · 2 false negatives / 4 · **Youden 0.50** on the control set | **BishopFox tool-testing — EXTERNAL, two-sided** |
 
-**The one row that means something on its own is generalization.** The rest score ~100%
+**The two IAM rows are the only ones whose answer key we did not write.** They come from
+BishopFox's IAM-Vulnerable, the corpus CLAUDE.md §2.2.1 already names for the cloud
+specialist. Read them together and read the caveats:
+
+- Recall was **64.5%** on first run and is now 31/31. The corpus is therefore **no longer
+  held out** — it told us which techniques were missing and we added exactly those. That
+  is real coverage (each is a published primitive: SSM, CodeBuild, EC2 Instance Connect,
+  SageMaker jobs, `cloudformation:UpdateStack`), and it is no longer a clean measurement.
+- The FP/FN control set is the half that can go DOWN when you add detections, which is why
+  it matters more. **0 false positives across all five**, including the three DENY-precedence
+  cases the corpus was built to catch tools failing. The 2 false negatives are fn2
+  (exploitable resource constraint) and fn3 (exploitable condition) — and they fail for the
+  SAME reason fp4 and fp5 pass: we evaluate at resource `*` and treat any condition as
+  non-firm. **That is one design decision bought in both directions, not two bugs**, and
+  moving it would trade the zero-FP result away.
+
+**Of the internal rows, the one that means something on its own is generalization.** The rest score ~100%
 because their ground truth and the code under test share an oracle — `holdout.go` says so
 in its own header. The held-out row deliberately does not: it labels truth with
 `cloudiam` including permission boundaries and trust policies, machinery the scored path
