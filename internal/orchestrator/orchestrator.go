@@ -186,6 +186,17 @@ func finalizeWithEscalation(ctx context.Context, target types.Asset, handler ass
 	}
 
 	findings := handler.Normalize(allResults)
+	// Coverage disclosure LAST, over the final findings, so a handler sees everything the
+	// scan observed rather than the interim detection view. What a scan could not check is
+	// part of its result: rendered as nothing, a skipped check is indistinguishable from a
+	// clean one, and the customer reads "we looked and it was fine" for something nobody
+	// looked at (§10).
+	if cr, ok := handler.(asset.CoverageReporter); ok {
+		if gaps := cr.CoverageGaps(target, findings); len(gaps) > 0 {
+			fmt.Fprintf(os.Stderr, "[coverage] %d gap(s) declared by the %s handler\n", len(gaps), target.Type)
+			findings = append(findings, gaps...)
+		}
+	}
 	return findings, allFired
 }
 

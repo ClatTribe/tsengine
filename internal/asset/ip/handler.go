@@ -144,6 +144,16 @@ func (h *Handler) Filter(_ context.Context, _ types.Asset, in []asset.Dispatch) 
 	return in
 }
 
+// CoverageGaps declares what this scan could not check (asset.CoverageReporter).
+//
+// Today that is the threat-informed probe plan's untestable set: exploited CVEs
+// catalogued against software the scan actually observed, for which nuclei ships no
+// template. They were ranked and dropped from a capped plan, and without this they
+// would vanish — leaving a clean probe report to read as "we checked everything".
+func (h *Handler) CoverageGaps(_ types.Asset, findings []types.Finding) []types.Finding {
+	return common.ThreatInformedGaps(findings)
+}
+
 func (h *Handler) Normalize(results []tool.Result) []types.Finding {
 	return common.Normalize(results)
 }

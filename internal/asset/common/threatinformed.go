@@ -2,10 +2,11 @@ package common
 
 import (
 	"fmt"
-	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/internal/threatinformed"
@@ -42,20 +43,10 @@ func ThreatInformedEscalation(findings []types.Finding) []asset.Dispatch {
 	probes, untestable := threatinformed.PlanWithGaps(corpus, observed, threatinformed.Options{
 		MaxProbes: threatInformedMax(),
 	})
-	// The untestable set is CVEs that matched a product this scan really observed and that
-	// nuclei has no template for. They are logged rather than silently dropped: a KEV CVE
-	// against software we can see, which we cannot check, is exactly the thing an operator
-	// must not learn about by inferring it from a probe report that looks clean. Logging is
-	// the honest minimum here — this function returns dispatches, so it has no finding to
-	// carry the gap on; surfacing it as a coverage gap on the scan is the follow-on.
-	if len(untestable) > 0 {
-		ids := make([]string, 0, len(untestable))
-		for _, p := range untestable {
-			ids = append(ids, p.CVE)
-		}
-		log.Printf("[threat-informed] %d exploited CVE(s) match observed software but have no nuclei template — NOT tested: %s",
-			len(untestable), strings.Join(ids, ","))
-	}
+	// The untestable set is reported by ThreatInformedGaps through the CoverageReporter
+	// seam, not here: this function returns dispatches and has no finding to carry it on,
+	// and reporting the same gap from two places lets them disagree.
+	_ = untestable
 	if len(probes) == 0 {
 		return nil
 	}
@@ -148,4 +139,94 @@ func threatInformedMax() int {
 		}
 	}
 	return 25
+}
+
+// ThreatInformedGaps declares the exploited CVEs that match software this scan actually
+// observed and that we have NO WAY TO TEST — nuclei ships no template for them.
+//
+// This is the honest half of threat-informed discovery. The probe plan is capped, and a
+// CVE with no template was previously dropped from it silently, so a clean probe report
+// read as "we checked everything that matters" when it meant "we checked what we could".
+// A KEV CVE against software we can see, which we cannot check, is precisely the thing an
+// operator must not have to infer from an absence.
+//
+// TWO CLAIMS THIS DELIBERATELY DOES NOT MAKE:
+//
+//   - It does not say the target is vulnerable. Matching is on PRODUCT, not version —
+//     threatinformed matches "Apache HTTP Server" against observed "Apache httpd", and
+//     says nothing about whether 2.4.62 is affected by a 2.4.49 bug. Wording it as a
+//     vulnerability would manufacture a finding out of a coverage gap.
+//   - It does not assign a severity above informational. A check that did not run has no
+//     evidence for one, and a high on an untested CVE is the same overclaim as a green
+//     tick on an unscanned scope, pointed the other way.
+//
+// Returns nil when no corpus is configured, nothing was observed, or everything that
+// matched was testable — the common case, and the one worth reaching.
+func ThreatInformedGaps(findings []types.Finding) []types.Finding {
+	corpus, ok := threatinformed.CorpusFromEnv()
+	if !ok {
+		return nil
+	}
+	observed := ObservationsFromFindings(findings)
+	if len(observed) == 0 {
+		return nil
+	}
+	_, untestable := threatinformed.PlanWithGaps(corpus, observed, threatinformed.Options{
+		MaxProbes: threatInformedMax(),
+	})
+	if len(untestable) == 0 {
+		return nil
+	}
+	// Group by the endpoint the product was seen on, so the gap sits where the software is
+	// rather than as one lump against the target.
+	byURL := map[string][]threatinformed.Probe{}
+	for _, p := range untestable {
+		byURL[p.URL] = append(byURL[p.URL], p)
+	}
+	urls := make([]string, 0, len(byURL))
+	for u := range byURL {
+		urls = append(urls, u)
+	}
+	sort.Strings(urls)
+
+	out := make([]types.Finding, 0, len(urls))
+	for i, u := range urls {
+		ps := byURL[u]
+		ids := make([]string, 0, len(ps))
+		kev := 0
+		for _, p := range ps {
+			ids = append(ids, p.CVE)
+			if p.Reason.KEV {
+				kev++
+			}
+		}
+		sort.Strings(ids)
+		product := ps[0].Product
+		desc := fmt.Sprintf(
+			"%d exploited CVE(s) are catalogued against %q, which this scan observed here, and nuclei "+
+				"ships no template for any of them — so they were RANKED but NOT TESTED: %s.\n\n"+
+				"This is a coverage gap, not a vulnerability. The match is on PRODUCT, not version, so "+
+				"this does not say the target is affected; it says we could not check. Verify these by "+
+				"another route (vendor advisory against the running version, an authenticated check, or "+
+				"a purpose-built exploit test) rather than reading their absence from the probe results "+
+				"as a clean bill of health.",
+			len(ids), product, strings.Join(ids, ", "))
+		if kev > 0 {
+			desc += fmt.Sprintf("\n\n%d of them are on the CISA KEV catalogue (exploited in the wild).", kev)
+		}
+		f := types.Finding{
+			ID:     fmt.Sprintf("ti-gap-%03d", i+1),
+			RuleID: "threat-informed::untested-exploited-cve",
+			Tool:   "threat-informed",
+			// Informational: a check that did not run has no evidence for a severity.
+			Severity:     types.SeverityInfo,
+			Endpoint:     u,
+			Title:        fmt.Sprintf("%d exploited CVE(s) against observed %s could not be tested", len(ids), product),
+			Description:  desc,
+			ToolArgs:     map[string]string{"product": product, "cves": strings.Join(ids, ","), "kev": strconv.Itoa(kev)},
+			DiscoveredAt: time.Now().UTC(),
+		}
+		out = append(out, f)
+	}
+	return out
 }

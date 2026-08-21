@@ -328,11 +328,24 @@ These hold for **every** asset, recon or single-stage:
    (`classifyOp`), ip per-port nuclei tags (~50Ã speedup), container
    base-layer skip, domain child-triage. Add the routing dimension when you
    add an asset's fan-out.
-5. **Child-asset pivot is a first-class artifact (C5).** A handler may
+5. **Coverage disclosure is a first-class artifact.** A handler may implement
+   `asset.CoverageReporter.CoverageGaps(target, findings)` â the orchestrator
+   calls it AFTER normalization (so it sees the scan's final findings, not the
+   interim detection view) and appends whatever it returns. What a scan could
+   NOT check is part of its result: rendered as nothing, a skipped check is
+   indistinguishable from a clean one, and the customer reads "we looked and it
+   was fine" for something nobody looked at. A coverage finding asserts an
+   ABSENCE OF TESTING, never a vulnerability, and is INFORMATIONAL by
+   construction â a check that did not run has no evidence for a severity, and
+   inventing one is the same overclaim as a green tick on unscanned scope,
+   pointed the other way. First implementation: `common.ThreatInformedGaps` on
+   the web + ip handlers (exploited CVEs matching observed software that nuclei
+   ships no template for â Â§7.1).
+6. **Child-asset pivot is a first-class artifact (C5).** A handler may
    implement `ChildAssetExtractor.ChildAssets(findings)` â `Scan.ChildAssets`
    (domain subdomains â web/ip child targets) so webappsec spawns child
    scans instead of re-enumerating (strix's re-enumeration trap).
-6. **Wrap OSS; never build in-house detectors (Â§13).** strix rebuilt IaC,
+7. **Wrap OSS; never build in-house detectors (Â§13).** strix rebuilt IaC,
    CSPM, SCA, and taint analysis in-house and reverted each to OSS. Every
    asset wave here wraps an OSS tool. Where no OSS exists (API BOLA/BFLA
    authz logic), it's a **documented ADR/backlog item**, never a silent
