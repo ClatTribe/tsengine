@@ -60,6 +60,9 @@ type iamAPI interface {
 	ListRoles(ctx context.Context, in *iam.ListRolesInput, opts ...func(*iam.Options)) (*iam.ListRolesOutput, error)
 	ListAttachedUserPolicies(ctx context.Context, in *iam.ListAttachedUserPoliciesInput, opts ...func(*iam.Options)) (*iam.ListAttachedUserPoliciesOutput, error)
 	ListAttachedRolePolicies(ctx context.Context, in *iam.ListAttachedRolePoliciesInput, opts ...func(*iam.Options)) (*iam.ListAttachedRolePoliciesOutput, error)
+	// policyDocAPI reads the DOCUMENTS behind those ARNs — the half that answers "can
+	// this principal become admin" rather than "is it one already". See iampolicy.go.
+	policyDocAPI
 }
 
 // IAMLister reads principals through the assumed read-only role.
@@ -87,6 +90,10 @@ func (l *IAMLister) ListPrincipals(ctx context.Context) ([]Principal, error) {
 		return nil, err
 	}
 	var out []Principal
+	// One cache per pass: managed policies are shared by design, so this is what makes
+	// document reading viable rather than a nicety (see iampolicy.go). Not shared across
+	// passes — a policy edited between scans must be re-read.
+	cache := docCache{}
 
 	var userMarker *string
 	for {
@@ -96,7 +103,9 @@ func (l *IAMLister) ListPrincipals(ctx context.Context) ([]Principal, error) {
 		}
 		for _, u := range res.Users {
 			p := Principal{ARN: aws.ToString(u.Arn), Name: aws.ToString(u.UserName)}
-			p.Admin = l.userIsAdmin(ctx, api, p.Name)
+			attached := l.attachedUserARNs(ctx, api, p.Name)
+			p.Admin = anyAdminARN(attached)
+			p.Policies = l.userPolicies(ctx, api, attached, p.Name, cache)
 			out = append(out, p)
 		}
 		if !res.IsTruncated {
@@ -116,7 +125,14 @@ func (l *IAMLister) ListPrincipals(ctx context.Context) ([]Principal, error) {
 				ARN: aws.ToString(r.Arn), Name: aws.ToString(r.RoleName), Role: true,
 				Trust: decodeTrustPolicy(aws.ToString(r.AssumeRolePolicyDocument)),
 			}
-			p.Admin = l.roleIsAdmin(ctx, api, p.Name)
+			attached := l.attachedRoleARNs(ctx, api, p.Name)
+			p.Admin = anyAdminARN(attached)
+			p.Policies = l.rolePolicies(ctx, api, attached, p.Name, cache)
+			// The boundary ARN rides on the role listing itself — no extra call to
+			// discover it, only to resolve its document.
+			if r.PermissionsBoundary != nil {
+				p.Boundary = boundaryDoc(ctx, api, cache, aws.ToString(r.PermissionsBoundary.PermissionsBoundaryArn))
+			}
 			out = append(out, p)
 		}
 		if !res.IsTruncated {
@@ -139,26 +155,29 @@ func decodeTrustPolicy(doc string) string {
 	return doc // already decoded, or undecodable — hand it on rather than drop it
 }
 
-func (l *IAMLister) userIsAdmin(ctx context.Context, api iamAPI, name string) bool {
+// attachedUserARNs lists a user's attached managed-policy ARNs. Returns nil on error —
+// unreadable is not the same as none, and Coverage reports the gap.
+func (l *IAMLister) attachedUserARNs(ctx context.Context, api iamAPI, name string) []string {
 	if name == "" {
-		return false
+		return nil
 	}
 	res, err := api.ListAttachedUserPolicies(ctx, &iam.ListAttachedUserPoliciesInput{UserName: aws.String(name)})
 	if err != nil {
-		return false // unreadable ≠ admin; see the file comment
+		return nil // unreadable ≠ admin; see the file comment
 	}
-	return anyAdminPolicy(res.AttachedPolicies)
+	return attachedARNs(res.AttachedPolicies)
 }
 
-func (l *IAMLister) roleIsAdmin(ctx context.Context, api iamAPI, name string) bool {
+// attachedRoleARNs is the role-side twin of attachedUserARNs.
+func (l *IAMLister) attachedRoleARNs(ctx context.Context, api iamAPI, name string) []string {
 	if name == "" {
-		return false
+		return nil
 	}
 	res, err := api.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{RoleName: aws.String(name)})
 	if err != nil {
-		return false
+		return nil
 	}
-	return anyAdminPolicy(res.AttachedPolicies)
+	return attachedARNs(res.AttachedPolicies)
 }
 
 // anyAdminPolicy recognises admin-equivalent managed policies by ARN.
@@ -169,8 +188,15 @@ func (l *IAMLister) roleIsAdmin(ctx context.Context, api iamAPI, name string) bo
 // evaluating documents is the next increment; until then this matches what it can prove and leaves
 // the rest unmarked rather than guessing from a name.
 func anyAdminPolicy(ps []iamtypes.AttachedPolicy) bool {
-	for _, p := range ps {
-		arn := aws.ToString(p.PolicyArn)
+	return anyAdminARN(attachedARNs(ps))
+}
+
+// anyAdminARN recognises admin-equivalent managed policies by ARN. Kept as a NAME match
+// deliberately: it answers "is this principal ALREADY an admin", a cheap label that needs
+// no document. The harder question — can it BECOME one — is answered from the policy
+// documents by awsinventory, and the two must not be conflated.
+func anyAdminARN(arns []string) bool {
+	for _, arn := range arns {
 		if strings.HasSuffix(arn, ":policy/AdministratorAccess") ||
 			strings.HasSuffix(arn, ":policy/IAMFullAccess") {
 			return true
