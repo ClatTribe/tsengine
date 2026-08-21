@@ -26,6 +26,46 @@ type M365Tenant struct {
 	TeamsGuestUnrestricted  bool   `json:"teams_guest_unrestricted"`  // no guest-access policy (guests get broad access)
 	TeamsOpenFederation     bool   `json:"teams_open_federation"`     // external federation open to ALL domains
 	LegacyAuthEnabled       bool   `json:"legacy_auth_enabled"`       // basic/legacy auth allowed (password-spray + MFA-bypass)
+	// APPLICATION CREDENTIALS. A service-principal secret or certificate is a credential
+	// with no human attached: no MFA, no password reset, no offboarding. Lifetime is the
+	// only control on it, which is why "how long" matters more here than anywhere else —
+	// a five-year secret leaked in year one is an attacker's most durable asset in the
+	// tenant. MS.AAD.5.5v1 / 5.6v1 / 5.7v1.
+	AppPasswordAdditionAllowed bool `json:"app_password_addition_allowed,omitempty"`
+	AppPasswordLifetimeDays    int  `json:"app_password_lifetime_days,omitempty"`
+	AppCertificateLifetimeDays int  `json:"app_certificate_lifetime_days,omitempty"`
+	// GUEST ACCESS. Guests are full directory principals with a foreign home tenant: the
+	// account's password, MFA and lifecycle are administered by someone else entirely.
+	// MS.AAD.8.1v1 / 8.2v1 / 8.3v1.
+	//
+	// GuestDirectoryAccessUnrestricted: guests can enumerate directory objects — users,
+	// groups, memberships — which is the reconnaissance an attacker would otherwise have
+	// to work for.
+	GuestDirectoryAccessUnrestricted bool `json:"guest_directory_access_unrestricted,omitempty"`
+	// AnyUserCanInviteGuests: invitation is not restricted to the Guest Inviter role, so
+	// every member can add an externally-controlled principal to the tenant.
+	AnyUserCanInviteGuests bool `json:"any_user_can_invite_guests,omitempty"`
+	// GuestInvitesAnyDomain: no allowlist, so a guest may be invited from any domain
+	// including a look-alike of a real partner.
+	GuestInvitesAnyDomain bool `json:"guest_invites_any_domain,omitempty"`
+	// DeviceCodeAuthAllowed: device-code flow is permitted. It is the current phishing
+	// favourite because the victim sees a REAL Microsoft page and types a code they were
+	// given — there is no fake domain to spot, and the attacker receives the tokens.
+	// MS.AAD.3.9v1.
+	DeviceCodeAuthAllowed bool `json:"device_code_auth_allowed,omitempty"`
+	// SecurityLogsNotExported: sign-in and audit logs are not shipped anywhere. Entra
+	// retains them for a limited window, so without export the evidence for an incident
+	// discovered late has already expired. MS.AAD.4.1v1.
+	SecurityLogsNotExported bool `json:"security_logs_not_exported,omitempty"`
+	// PrivilegedAssignmentNoAlert / OtherPrivilegedActivationNoAlert complete the PIM
+	// controls: 7.7 alerts on the ASSIGNMENT of a privileged role (eligible or active),
+	// 7.9 on ACTIVATION of privileged roles other than Global Administrator.
+	PrivilegedAssignmentNoAlert      bool `json:"privileged_assignment_no_alert,omitempty"`
+	OtherPrivilegedActivationNoAlert bool `json:"other_privileged_activation_no_alert,omitempty"`
+	// PrivilegedAccountsNotCloudOnly: privileged accounts are federated, so a compromise
+	// of the on-premises directory is a compromise of tenant administration.
+	// MS.AAD.7.3v1.
+	PrivilegedAccountsNotCloudOnly bool `json:"privileged_accounts_not_cloud_only,omitempty"`
 	// PRIVILEGED-ROLE GOVERNANCE (PIM). Standing Global Administrator is the single most
 	// exploited weakness in a compromised M365 tenant: it needs no escalation, survives a
 	// password reset it performs itself, and is indistinguishable from legitimate admin
@@ -159,6 +199,71 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Teams guest access has no guest-access policy", target+"/teams",
 			"Guests can join Teams with no guest-access policy restricting what they can see/do. Apply a guest-access policy (restrict channels, file access, and screen sharing).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}})))
+	}
+	if n := appCredentialGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::m365::app-credential-lifetime", types.SeverityMedium,
+			"Application credentials are long-lived or unrestricted ("+strings.Join(n, ", ")+")", target+"/entra",
+			"Application credentials are the only kind with no human attached: no MFA, no password reset, no "+
+				"offboarding. "+strings.Join(n, ", ")+". Lifetime is the sole control on them, so a multi-year "+
+				"secret leaked early becomes an attacker's most durable asset in the tenant — one that survives "+
+				"every user-side remediation. Restrict application password and certificate lifetimes "+
+				"(SCuBA MS.AAD.5.5v1–5.7v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"5.4", "6.8"}, NISTCSF: []string{"PR.AC-1"}, NIST80053: []string{"IA-5"}})))
+	}
+	if n := guestGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::m365::guest-access-unrestricted", types.SeverityMedium,
+			"Guest access is unrestricted ("+strings.Join(n, ", ")+")", target+"/entra",
+			"Guests are full directory principals whose password, MFA and lifecycle are administered by "+
+				"another tenant entirely. "+strings.Join(n, ", ")+". Unrestricted directory read gives a guest "+
+				"the user, group and membership map an attacker would otherwise have to work for. Restrict "+
+				"guest directory access, invitation rights and permitted domains "+
+				"(SCuBA MS.AAD.8.1v1–8.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
+	}
+	if t.DeviceCodeAuthAllowed {
+		f = append(f, finding(id(), "sspm::m365::device-code-auth-allowed", types.SeverityHigh,
+			"Device-code authentication is permitted", target+"/entra",
+			"The device-code flow is the current phishing favourite precisely because it defeats the advice "+
+				"users are given: the victim sees a REAL Microsoft sign-in page at a real Microsoft domain and "+
+				"enters a code someone sent them. There is no look-alike URL to notice, and the attacker "+
+				"receives the resulting tokens. Block device-code authentication except where a device "+
+				"genuinely needs it (SCuBA MS.AAD.3.9v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.SecurityLogsNotExported {
+		f = append(f, finding(id(), "sspm::m365::security-logs-not-exported", types.SeverityHigh,
+			"Sign-in and audit logs are not exported for monitoring", target+"/entra",
+			"Entra retains sign-in and audit logs for a limited window and they are not being shipped "+
+				"anywhere. Incidents are routinely discovered weeks after the fact, so without export the "+
+				"evidence needed to answer what happened has already expired by the time anyone asks. Export "+
+				"security logs to a monitored destination (SCuBA MS.AAD.4.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, PCI: []string{"10.5.1"}, CISv8: []string{"8.2", "8.9"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-6", "AU-9"}})))
+	}
+	if t.PrivilegedAssignmentNoAlert {
+		f = append(f, finding(id(), "sspm::m365::privileged-assignment-no-alert", types.SeverityMedium,
+			"Privileged role assignments raise no alert", target+"/entra",
+			"Granting a highly privileged role — eligible or active — notifies nobody. Assignment is the step "+
+				"an attacker takes to make access durable, and it is the one moment the change is still cheap "+
+				"to reverse. Alert on privileged role assignment (SCuBA MS.AAD.7.7v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"8.11"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-6", "SI-4"}})))
+	}
+	if t.OtherPrivilegedActivationNoAlert {
+		f = append(f, finding(id(), "sspm::m365::other-privileged-activation-no-alert", types.SeverityLow,
+			"Activation of privileged roles other than Global Administrator raises no alert", target+"/entra",
+			"Only Global Administrator activation is watched. Exchange, SharePoint and User Administrator "+
+				"each reach most of what an attacker wants and attract none of the attention, which is why a "+
+				"careful one takes those instead. Alert on activation of all highly privileged roles "+
+				"(SCuBA MS.AAD.7.9v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"8.11"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-6"}})))
+	}
+	if t.PrivilegedAccountsNotCloudOnly {
+		f = append(f, finding(id(), "sspm::m365::privileged-accounts-not-cloud-only", types.SeverityMedium,
+			"Privileged accounts are federated rather than cloud-only", target+"/entra",
+			"Privileged accounts authenticate through an on-premises or third-party identity provider, so a "+
+				"compromise of that directory is a compromise of tenant administration — and the assumption "+
+				"that cloud admin survives an on-premises incident, which every break-glass plan rests on, "+
+				"stops holding. Provision privileged accounts cloud-only (SCuBA MS.AAD.7.3v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.3"}, CISv8: []string{"5.4"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-2", "AC-6"}})))
 	}
 	if t.StandingGlobalAdmins > 0 {
 		f = append(f, finding(id(), "sspm::m365::standing-global-admin", types.SeverityHigh,
@@ -348,4 +453,36 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-3"}, NIST80053: []string{"AC-3"}})))
 	}
 	return f
+}
+
+// appCredentialGapsOf names which application-credential controls are loose. CISA's
+// thresholds: passwords 180 days, certificates 365. A zero lifetime means unbounded, not
+// unset — the field is only populated when the tenant reports one.
+func appCredentialGapsOf(t M365Tenant) []string {
+	var n []string
+	if t.AppPasswordAdditionAllowed {
+		n = append(n, "application password addition is allowed")
+	}
+	if t.AppPasswordLifetimeDays > 180 {
+		n = append(n, fmt.Sprintf("password lifetime %d days", t.AppPasswordLifetimeDays))
+	}
+	if t.AppCertificateLifetimeDays > 365 {
+		n = append(n, fmt.Sprintf("certificate lifetime %d days", t.AppCertificateLifetimeDays))
+	}
+	return n
+}
+
+// guestGapsOf names which guest controls are open.
+func guestGapsOf(t M365Tenant) []string {
+	var n []string
+	if t.GuestDirectoryAccessUnrestricted {
+		n = append(n, "guests can read directory objects")
+	}
+	if t.AnyUserCanInviteGuests {
+		n = append(n, "any member can invite guests")
+	}
+	if t.GuestInvitesAnyDomain {
+		n = append(n, "guests may be invited from any domain")
+	}
+	return n
 }
