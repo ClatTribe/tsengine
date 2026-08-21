@@ -29,6 +29,15 @@ type Snapshot struct {
 	Inventory  json.RawMessage `json:"inventory"`
 	Prowler    []types.Finding `json:"prowler,omitempty"`
 	CapturedAt time.Time       `json:"captured_at"`
+	// CoverageGaps records what this snapshot could NOT answer, keyed by the concern
+	// (e.g. "privilege-escalation"), with the reason and the field to populate.
+	//
+	// It is stored rather than only returned at ingest because the person who needs it is
+	// not the one who posted the snapshot. A CI job posts the inventory and reads the
+	// response; a human opens the attack-path page days later and sees no escalation
+	// paths. Without this the caveat reached only the caller, and the reader — the one
+	// making a decision — got silence that looks exactly like a clean account.
+	CoverageGaps map[string]string `json:"coverage_gaps,omitempty"`
 }
 
 // Store persists the latest cloud snapshot per tenant (latest-wins). Get returns ok=false when the

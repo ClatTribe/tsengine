@@ -115,7 +115,8 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
-	_, summary, aerr := d.applyCloudInventory(r.Context(), tenantID, inv, invJSON, "live AWS inventory collected → stored for the AI cloud engineer")
+	_, summary, aerr := d.applyCloudInventoryWithCoverage(r.Context(), tenantID, inv, invJSON,
+		"live AWS inventory collected → stored for the AI cloud engineer", coverage)
 	if aerr != nil {
 		respond(w, nil, aerr)
 		return
@@ -149,6 +150,14 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 // that view, so drift findings which were stored but not handed back would be opened by
 // persistDriftFindings and then immediately resolved by the same pass.
 func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string) ([]types.Finding, map[string]any, error) {
+	return d.applyCloudInventoryWithCoverage(ctx, tenantID, inv, invJSON, ledgerNote, connector.InventoryCoverage{})
+}
+
+// applyCloudInventoryWithCoverage is applyCloudInventory carrying what the snapshot could
+// not answer, so the gap is STORED alongside it rather than only returned to whoever
+// posted it. The reader of the attack-path page is rarely the CI job that posted the
+// inventory, and they are the one who needs to know the escalation analysis was partial.
+func (d Deps) applyCloudInventoryWithCoverage(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string, coverage connector.InventoryCoverage) ([]types.Finding, map[string]any, error) {
 	// Diff-on-ingest (continuous Detect): if a prior snapshot exists, diff it against this fresh one BEFORE
 	// overwriting → automatic cloud config-drift findings (a resource became public, a new privileged
 	// principal, a new internet/privesc/lateral path). This makes cloud change-control CONTINUOUS on every
@@ -166,6 +175,7 @@ func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv clou
 	}
 	if err := d.CloudSnapshots.Put(ctx, cloudsnap.Snapshot{
 		TenantID: tenantID, Inventory: invJSON, CapturedAt: time.Now().UTC(),
+		CoverageGaps: coverage.Notes,
 	}); err != nil {
 		return nil, nil, err
 	}
