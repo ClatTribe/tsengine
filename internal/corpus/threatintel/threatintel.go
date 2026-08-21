@@ -90,6 +90,13 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 		kk := k
 		ent := entries[cve] // zero Entry if EPSS absent
 		ent.KEV = &kk
+		// Entry.Advisories is the field that already flows through the L1.5 hook onto every
+		// finding, and no source had ever written it — the reference URLs sat parsed and
+		// discarded in the KEV notes. Filling it here rather than adding a Build parameter
+		// keeps them where they came from: they ARE this KEV entry's references.
+		if len(kk.Advisories) > 0 {
+			ent.Advisories = kk.Advisories
+		}
 		entries[cve] = ent
 	}
 	exploitCVEs := 0
