@@ -44,7 +44,7 @@ func (*Katana) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		return tool.Result{}, errors.New("katana: missing required arg 'target'")
 	}
 	depth := "2"
-	if d, ok := args["depth"].(int); ok && d > 0 {
+	if d, ok := tool.ArgInt(args, "depth"); ok && d > 0 {
 		depth = strconv.Itoa(d)
 	}
 	cmd := exec.CommandContext(ctx, "katana",

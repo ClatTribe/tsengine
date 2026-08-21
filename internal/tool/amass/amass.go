@@ -45,7 +45,7 @@ func (*Amass) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		return tool.Result{}, errors.New("amass: missing required arg 'target'")
 	}
 	cli := []string{"enum", "-passive", "-d", target, "-nocolor", "-silent"}
-	if t, ok := args["timeout"].(int); ok && t > 0 {
+	if t, ok := tool.ArgInt(args, "timeout"); ok && t > 0 {
 		cli = append(cli, "-timeout", fmt.Sprintf("%d", t))
 	}
 	cmd := exec.CommandContext(ctx, "amass", cli...)

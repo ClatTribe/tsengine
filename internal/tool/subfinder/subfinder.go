@@ -42,7 +42,7 @@ func (*Subfinder) Run(ctx context.Context, args tool.Args) (tool.Result, error) 
 	}
 
 	cliArgs := []string{"-d", target, "-oJ", "-silent", "-duc"}
-	if t, ok := args["timeout"].(int); ok && t > 0 {
+	if t, ok := tool.ArgInt(args, "timeout"); ok && t > 0 {
 		cliArgs = append(cliArgs, "-timeout", fmt.Sprintf("%d", t))
 	}
 

@@ -55,7 +55,7 @@ func (*Dalfox) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	if c, ok := args["cookie"].(string); ok && c != "" {
 		cliArgs = append(cliArgs, "--cookie", c)
 	}
-	if to, ok := args["timeout"].(int); ok && to > 0 {
+	if to, ok := tool.ArgInt(args, "timeout"); ok && to > 0 {
 		cliArgs = append(cliArgs, "--timeout", fmt.Sprintf("%d", to))
 	}
 

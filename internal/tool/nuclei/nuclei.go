@@ -116,7 +116,7 @@ func appendOptArgs(cliArgs []string, args tool.Args) []string {
 	if d, ok := args["dast"].(bool); ok && d {
 		cliArgs = append(cliArgs, "-dast")
 	}
-	if rl, ok := args["rate_limit"].(int); ok && rl > 0 {
+	if rl, ok := tool.ArgInt(args, "rate_limit"); ok && rl > 0 {
 		cliArgs = append(cliArgs, "-rl", fmt.Sprintf("%d", rl))
 	}
 	return cliArgs
