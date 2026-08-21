@@ -5,7 +5,7 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Category | Metric | Ours | At-par bar | Status |
 |---|---|---|---|---|
 | Web app · DAST | per-class Youden (TPR−FPR) | — not run | 56% — OWASP-ZAP 56% (best OSS DAST); commercial ceiling Acunetix/Netsparker 87% | — pending run |
-| Repository · SAST | overall Youden | **46.5%** | 35% — Fortify 35%; Checkmarx 47%; ceiling Veracode 51% | ✅ at/above par — third on the published cohort |
+| Repository · SAST | overall Youden | **46.54%** — measured | 35% — Fortify 35%; Checkmarx 47%; ceiling Veracode 51% | ✅ at/above par — third on the published cohort |
 | L2 agent · autonomy | detection_rate (must-find) + verified_rate | — not run | 100% — must-find parity (detection_rate = 1.0), zero FP; verified_rate the differentiator | — pending run |
 | Cloud account · CSPM | CIS-section recall | — not run | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
 | API · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
@@ -13,18 +13,34 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Domain · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | Container · SCA recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
 
-**Summary:** 1 at/above par · 0 below · 7 pending a live run.
+**Summary:** 1 at/above par (measured) · 0 below · 7 pending a live run.
 
-**Provenance note on the SAST row.** It read **39%** until now, a figure that predates the
-neutral OWASP measurement by roughly 1,100 PRs — the real number (46.5% Youden over all 2,740
-BenchmarkJava cases) was published in #1223 and recorded in CLAUDE.md §16, and this table was
-never updated. So the two documents in this repo disagreed about the same measurement, in the
-direction that understated us, which is how nobody noticed.
+**Provenance note on the SAST row.** It read **39%** for roughly 1,100 PRs — a figure predating the
+neutral OWASP measurement, which was published in #1223 and recorded in CLAUDE.md §16 while this table
+was never updated. Two documents in one repo disagreeing about one measurement, in the direction that
+understated us, which is how nobody noticed.
 
-Stated plainly because it bears on how much this row is worth: **I could not re-run it here.**
-The BenchmarkJava corpus is not in the tree, so 46.5% is carried over from the commit that
-published it rather than reproduced. The three capability rows below WERE re-run and are
-reported at their measured values.
+**It is now REPRODUCED, not carried forward.** Run against the full OWASP BenchmarkJava checkout
+(2,740 cases, `expectedresults-1.2.csv`) through the real sandbox: **46.54% Youden**, TP=1248 FP=552
+TN=773 FN=167, from 3,451 raw findings across 9 anchor tools. That is within 0.04 points of the
+carried number, so the claim was sound — but it was unverified until now, and a scoreboard that cannot
+tell "measured today" from "inherited" is the failure it exists to prevent.
+
+The per-category split is the more useful output, because it is what an improvement loop would target
+next (§2 picks the weakest measured capability):
+
+| Category | Youden | Category | Youden |
+|---|---|---|---|
+| crypto | 100.00% | xss | 30.44% |
+| securecookie | 100.00% | sqli | 19.74% |
+| weakrand | 100.00% | pathtraver | 11.71% |
+| hash | 68.99% | trustbound | 9.95% |
+| xpathi | 28.33% | ldapi | 8.80% |
+| | | cmdi | 5.66% |
+
+Three categories are perfect and three are near-zero, which is a far more actionable statement than one
+46.54% average. `cmdi` at 5.66% (TP=117 FP=109) is the weakest, and the FP count is why: the detector
+fires nearly as often on safe cases as unsafe ones.
 
 ## Capability axis — internal instrument, NOT a market claim
 
