@@ -112,8 +112,11 @@ func (a *Azure) Exchange(_ context.Context, code, _ string) (platform.Connection
 func (a *Azure) Discover(_ context.Context, c platform.Connection, _ string) ([]platform.Asset, error) {
 	return []platform.Asset{{
 		TenantID: c.TenantID, ConnectionID: c.ID,
-		Type:         "cloud_account",
-		Target:       nz(c.Account, "azure"),
+		Type: "cloud_account",
+		// Target is the PROVIDER, not the account: the cloud Handler feeds Asset.Target straight to
+		// prowler/scoutsuite, which reject anything but {aws|gcp|azure|kubernetes} as an
+		// "unsupported provider". The account id is kept in Meta below.
+		Target:       "azure",
 		Meta:         map[string]string{"provider": "azure", "subscription_id": c.Account},
 		DiscoveredAt: time.Now().UTC(),
 	}}, nil

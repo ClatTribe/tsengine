@@ -62,7 +62,7 @@ func TestAzure_DiscoverYieldsCloudAccount(t *testing.T) {
 		t.Fatalf("want 1 asset, got %d", len(assets))
 	}
 	got := assets[0]
-	if got.Type != "cloud_account" || got.Target != goodSub || got.ConnectionID != "c1" {
+	if got.Type != "cloud_account" || got.Target != "azure" || got.ConnectionID != "c1" {
 		t.Errorf("asset wrong: %+v", got)
 	}
 	if got.Meta["provider"] != "azure" || got.Meta["subscription_id"] != goodSub {

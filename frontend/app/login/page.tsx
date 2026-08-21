@@ -3,15 +3,28 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, Lock, BadgeCheck, Sparkles, ArrowRight } from "lucide-react";
+import { Loader2, Lock, BadgeCheck, Sparkles, ArrowRight, Eye, EyeOff, Copy, Check } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  async function copyPassword() {
+    if (!password) return;
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,14 +80,37 @@ export default function LoginPage() {
                   Forgot password?
                 </Link>
               </div>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
-                placeholder="••••••••••••"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 pr-20 text-sm shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
+                  placeholder="••••••••••••"
+                />
+                <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={copyPassword}
+                    disabled={!password}
+                    aria-label={copied ? "Copied" : "Copy password"}
+                    title={copied ? "Copied" : "Copy password"}
+                    className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink disabled:opacity-40"
+                  >
+                    {copied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    title={showPassword ? "Hide password" : "Show password"}
+                    className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
             </div>
             <button
               type="submit"

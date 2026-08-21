@@ -55,7 +55,7 @@ func TestGCP_DiscoverYieldsCloudAccount(t *testing.T) {
 		t.Fatalf("want 1 asset, got %d", len(assets))
 	}
 	a := assets[0]
-	if a.Type != "cloud_account" || a.Target != "acme-prod-123" || a.ConnectionID != "c1" {
+	if a.Type != "cloud_account" || a.Target != "gcp" || a.ConnectionID != "c1" {
 		t.Errorf("asset wrong: %+v", a)
 	}
 	if a.Meta["provider"] != "gcp" || a.Meta["project_id"] != "acme-prod-123" {
