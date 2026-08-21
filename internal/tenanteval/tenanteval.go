@@ -66,6 +66,16 @@ const (
 	// It is a Keep case, and for a sharper reason than the others: the pipeline did not
 	// merely rank this wrong, it was one step from telling a customer they were safe.
 	SourceEvidenceInsufficient Source = "evidence_insufficient"
+	// SourceAcceptedRisk is a suppression that CONFIRMS the finding. "We accept this
+	// risk" presupposes there IS a risk, so it is a Keep case — a human agreeing the
+	// finding is real and choosing not to act. It was being discarded because the
+	// suppression branch only looks for false_positive, which meant the one reason a
+	// customer gives that AGREES with us produced no signal at all.
+	//
+	// "wont_fix" is deliberately NOT here. It is ambiguous — it can mean "real but not
+	// worth our time" or "not a real problem for us" — and a case source has to know
+	// which answer it is recording.
+	SourceAcceptedRisk Source = "accepted_risk"
 )
 
 // Case is one graded example drawn from the tenant's own history.
@@ -137,9 +147,15 @@ func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRu
 	// for anything carrying a CVE. So it matched nothing, for every tenant, and this entire source
 	// of cases silently produced none — the suite looked empty rather than broken.
 	ignored := map[string]platform.IgnoreRule{}
+	// accepted holds the OPPOSITE verdict from the same control: a suppression whose
+	// stated reason agrees the finding is real.
+	accepted := map[string]platform.IgnoreRule{}
 	for _, ig := range ignores {
-		if strings.EqualFold(strings.TrimSpace(ig.Reason), "false_positive") {
+		switch strings.ToLower(strings.TrimSpace(ig.Reason)) {
+		case "false_positive":
 			ignored[ig.IssueKey] = ig
+		case "accepted_risk":
+			accepted[ig.IssueKey] = ig
 		}
 	}
 	for _, f := range append(append([]types.Finding{}, findings...), dismissed...) {
@@ -171,6 +187,23 @@ func BuildSuite(findings, dismissed []types.Finding, ignores []platform.IgnoreRu
 		cases = append(cases, Case{
 			FindingID: f.ID, RuleID: f.RuleID, Source: SourceConfirmedFix, Expect: Keep,
 			Reason: "a re-scan confirmed the fix closed this", finding: f,
+		})
+	}
+
+	// 3b. Accepted risk: the customer looked at this, agreed it was real, and decided
+	// not to fix it. Same control as the false-positive suppression, opposite verdict —
+	// and unlike a confirmed fix, it is an EXPLICIT statement rather than an inference
+	// from someone having bothered.
+	for _, f := range append(append([]types.Finding{}, findings...), dismissed...) {
+		ig, ok := accepted[crossdetect.DedupKey(f)]
+		if !ok || seen[f.ID] {
+			continue
+		}
+		seen[f.ID] = true
+		cases = append(cases, Case{
+			FindingID: f.ID, RuleID: f.RuleID, Source: SourceAcceptedRisk, Expect: Keep,
+			By: ig.By, Reason: "a person accepted this as a real risk they chose not to fix",
+			finding: f,
 		})
 	}
 
