@@ -56,8 +56,8 @@ func TestAddEntraOwnershipEdges_InheritsPermissionEscalation(t *testing.T) {
 	s.AddNode(&Node{ID: "sp-escalator", Kind: KindPrincipal, Name: "app-with-approle-write"})
 
 	// the SP itself can escalate via a graph permission (not marked Privileged, but permission-capable).
-	s.AddAzureEntraPrivescEdges(map[string]func(string) bool{
-		"sp-escalator": azureiam.EntraCanFromGrants([]string{"AppRoleAssignment.ReadWrite.All"}, nil),
+	s.AddAzureEntraPrivescEdges(map[string]PermitFunc{
+		"sp-escalator": Unconditional(azureiam.EntraCanFromGrants([]string{"AppRoleAssignment.ReadWrite.All"}, nil)),
 	})
 	// eve owns that SP → she inherits its escalation.
 	s.AddEntraOwnershipEdges(map[string][]string{"user-eve": {"sp-escalator"}})

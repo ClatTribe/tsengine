@@ -125,7 +125,34 @@ func Authorize(req Request, ps PolicySet) (Decision, bool) {
 	//    the member matches. A FIRM allow needs all of: role known to grant, member certain, no condition.
 	//    Anything short of that but still possibly-granting (unresolved condition, unresolvable group, or a
 	//    custom role whose perms we don't have) is CONDITIONAL — a possible allow that keeps the edge.
-	var allow, cond bool
+	allow, condOnly, condOther := scanBindings(req, ps)
+	cond := condOnly || condOther
+	switch {
+	case allow:
+		return Allow, cond || denyPossible // a firm allow shadowed by a possible deny is conditional
+	case cond:
+		return Allow, true
+	default:
+		return ImplicitDeny, false
+	}
+}
+
+// scanBindings walks the hierarchy once and reports three DIFFERENT states, because "conditional"
+// covers reasons that are not equivalent and callers need to tell them apart:
+//
+//	allow      a FIRM grant: role known to grant, member certain, no condition.
+//	condOnly   everything certain EXCEPT an unresolved IAM condition — we know the role grants
+//	           the permission and we know the member matches; we only cannot evaluate WHEN.
+//	condOther  the grant itself is uncertain: a custom role whose permissions we do not have, or
+//	           a group whose membership we cannot resolve. We do not know WHAT or WHO.
+//
+// Collapsing these was a real defect in both directions. Treating them all as allow makes every
+// principal in a project with one unknown custom role appear able to escalate twenty ways —
+// "an escalation inferred from a role definition we do not have is not evidence, it is the absence
+// of it". Treating them all as no-allow makes a condition-gated grant of setIamPolicy VANISH, so
+// the attack-path page reports no route to admin for a principal who has one. Only condOnly
+// supports a config-possible claim; condOther supports nothing.
+func scanBindings(req Request, ps PolicySet) (allow, condOnly, condOther bool) {
 	for r := ps.Resource; r != nil; r = r.Parent {
 		for _, b := range r.Bindings {
 			memberHit, memberSure := memberMatch(b.Members, req.Member)
@@ -136,21 +163,33 @@ func Authorize(req Request, ps PolicySet) (Decision, bool) {
 			if roleKnown && !grants {
 				continue // this role definitively does not grant the permission
 			}
-			if grants && roleKnown && memberSure && b.Condition == "" {
+			switch {
+			case grants && roleKnown && memberSure && b.Condition == "":
 				allow = true
-			} else {
-				cond = true // possible allow gated by a condition / unknown role / unresolved group
+			case grants && roleKnown && memberSure:
+				condOnly = true // the ONLY unresolved factor is the condition
+			default:
+				condOther = true // unknown role or unresolvable group: the grant itself is in doubt
 			}
 		}
 	}
-	switch {
-	case allow:
-		return Allow, cond || denyPossible // a firm allow shadowed by a possible deny is conditional
-	case cond:
-		return Allow, true
-	default:
-		return ImplicitDeny, false
+	return allow, condOnly, condOther
+}
+
+// PermitsGrantedButGated reports a grant we are certain about EXCEPT for an IAM condition we cannot
+// evaluate — the one flavour of "conditional" that still names a real, specific permission.
+//
+// It exists for privesc derivation, which must refuse an escalation built on an unknown custom role
+// (the firm-allow rule) while still REPORTING one that is merely condition-gated. A single
+// conditional bool cannot express that difference, and the difference is the whole question:
+// unknown-role uncertainty means we do not know what the principal can do, whereas a gated grant
+// means we know exactly what they can do and only when is open.
+func PermitsGrantedButGated(req Request, ps PolicySet) bool {
+	if d, _ := Authorize(req, ps); d == ExplicitDeny {
+		return false
 	}
+	_, condOnly, _ := scanBindings(req, ps)
+	return condOnly
 }
 
 // Permits is the convenience boolean.

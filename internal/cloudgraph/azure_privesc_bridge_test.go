@@ -7,9 +7,9 @@ func TestAddAzurePrivescEdges(t *testing.T) {
 	s.AddNode(&Node{ID: "az-sp-1", Kind: KindPrincipal, Name: "deployer-sp"})
 	s.AddNode(&Node{ID: "az-sp-2", Kind: KindPrincipal, Name: "reader-sp"})
 
-	can := map[string]func(string) bool{
-		"az-sp-1": func(a string) bool { return a == "Microsoft.Authorization/roleAssignments/write" },
-		"az-sp-2": func(string) bool { return false },
+	can := map[string]PermitFunc{
+		"az-sp-1": func(a string) (bool, bool) { return a == "Microsoft.Authorization/roleAssignments/write", false },
+		"az-sp-2": func(string) (bool, bool) { return false, false },
 	}
 	s.AddAzurePrivescEdges(can)
 
