@@ -30,6 +30,8 @@ import (
 	"os"
 	"regexp"
 	"testing"
+
+	"github.com/ClatTribe/tsengine/internal/tenanteval"
 )
 
 // Each entry: a page, a field of the API contract that QUALIFIES what that page asserts, and the
@@ -100,6 +102,46 @@ func TestCoverageClaimsRenderTheFieldsThatQualifyThem(t *testing.T) {
 				"it must not be folded into 'ran clean'. That test passes while the screen says the "+
 				"opposite, which is why this guard is here and not there.",
 				r.page, r.field, r.wouldOtherwiseClaim)
+		}
+	}
+}
+
+
+// A closed set declared in Go and mirrored by hand in TypeScript drifts in one direction: the Go
+// side gains a member and the screen falls through to its raw enum slug.
+//
+// It had already drifted when this was written. tenanteval grew three sources —
+// evidence_insufficient, accepted_risk and human_verdict — and the eval page still labelled the
+// original three. The worst of them is human_verdict: that case exists BECAUSE someone typed an
+// answer, so the page thanking them for it rendered "human_verdict" at them. A customer who takes
+// the trouble to correct the product and is shown a database enum learns something true about how
+// much their answer mattered.
+//
+// The repo already treats this as a real category — platformapi.AllDegradationKinds calls itself
+// "the closed set, for the guard test and for the frontend's exhaustiveness". This is the same
+// guarantee for the one other closed set a customer reads.
+func TestEveryEvalCaseSourceHasACustomerFacingLabel(t *testing.T) {
+	const page = "../../frontend/app/(app)/eval/page.tsx"
+	b, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatalf("cannot read %s: %v", page, err)
+	}
+	src := string(b)
+
+	// The label map only, not the whole file: `f.source === "reinstated"` elsewhere would
+	// otherwise satisfy the check while the label itself is missing.
+	m := regexp.MustCompile(`(?s)const SOURCE_LABEL: Record<string, string> = \{(.*?)\n\};`).FindStringSubmatch(src)
+	if m == nil {
+		t.Fatal("SOURCE_LABEL not found in the eval page — if it was renamed, update this guard " +
+			"rather than leaving it matching nothing")
+	}
+	labels := m[1]
+
+	for _, s := range tenanteval.AllSources() {
+		if !regexp.MustCompile(`\b` + regexp.QuoteMeta(string(s)) + `\s*:`).MatchString(labels) {
+			t.Errorf("SOURCE_LABEL has no entry for %q, so the eval page renders that raw slug to "+
+				"the customer.\n\nEvery entry in this map is a sentence about a decision THEY made; "+
+				"an enum name in its place reads as a defect in the thing they just corrected.", s)
 		}
 	}
 }
