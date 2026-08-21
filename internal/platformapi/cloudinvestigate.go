@@ -71,6 +71,11 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	// the agent with the estate's whole backlog.
 	episode := ledger.NewEpisode(nil, d.censusState(r.Context(), tenantID, "cloud:"+tenantID, cloudFinding))
 	episode.AgentVersion = agentVersion()
+	// Stamp the standing decision HERE, before the run produces anything. Consent has to
+	// be in hand before the data exists — ledger.GrantConsent refuses after Close for
+	// exactly that reason, so asking afterwards would be asking a question the system is
+	// built to refuse.
+	d.applyTrainingConsent(r.Context(), tenantID, episode)
 	started := time.Now()
 
 	// llm (pentest.SpecLLM) satisfies cloudengine.LLM structurally — same Generate method.

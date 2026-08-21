@@ -24,6 +24,7 @@ import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
 import { AIModeControl } from "@/components/settings/ai-mode";
 import { PRBotSettingsPanel } from "@/components/settings/pr-bot-settings";
+import { TrainingConsentPanel } from "@/components/settings/training-consent";
 import { PageIntro } from "@/components/ui/page-intro";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ export default async function SettingsPage() {
   const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation, aiMode] = await Promise.all([
     api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(), api.aiMode(),
   ]);
-  const [sla, maintenance, contacts, practitioners] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners()]);
+  const [sla, maintenance, contacts, practitioners, training] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -100,6 +101,16 @@ export default async function SettingsPage() {
           <div className="mt-5 border-t border-border pt-5">
             <LLMSettings initial={llm} />
           </div>
+        </Card>
+      </div>
+
+      {/* Improving the product — the customer end of the feedback loop (ADR 0018 §4). Sits
+          directly under the AI engine because it is about the same runs, and a customer
+          deciding how much AI to run is exactly who should see this next. */}
+      <div>
+        <SectionTitle>Improving tsengine</SectionTitle>
+        <Card className="p-5">
+          <TrainingConsentPanel initial={training} who={me?.email ?? ""} />
         </Card>
       </div>
 

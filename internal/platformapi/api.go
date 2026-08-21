@@ -190,13 +190,15 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/challenge", d.auth(d.handleOwnershipChallenge)) // issue DNS/file ownership token (p35 control)
 	mux.HandleFunc("POST /v1/assets/{id}/ownership/verify", d.auth(d.handleOwnershipVerify))       // verify the token is published (grounded)
 	mux.HandleFunc("GET /v1/connections", d.auth(d.handleConnections))
-	mux.HandleFunc("DELETE /v1/connections/{id}", d.auth(d.handleDeleteConnection))                       // disconnect a connection (founder self-serve)
-	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))          // per-connection kill-switch (WRD-4)
-	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation))    // per-tenant cloud write role (Bucket B)
-	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                           // the current tenant (org name/plan) for Settings
-	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                                // per-tenant LLM config (provider/model + has_key)
-	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                                // set provider/model + seal the API key
-	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                     // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
+	mux.HandleFunc("DELETE /v1/connections/{id}", d.auth(d.handleDeleteConnection))                    // disconnect a connection (founder self-serve)
+	mux.HandleFunc("POST /v1/connections/{id}/quarantine", d.auth(d.handleQuarantineConnection))       // per-connection kill-switch (WRD-4)
+	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation)) // per-tenant cloud write role (Bucket B)
+	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                        // the current tenant (org name/plan) for Settings
+	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                             // per-tenant LLM config (provider/model + has_key)
+	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                             // set provider/model + seal the API key
+	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                  // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
+	mux.HandleFunc("GET /v1/settings/training", d.auth(d.handleGetTrainingSettings))                   // may our agent runs improve the product (ADR 0018 §4)
+	mux.HandleFunc("PUT /v1/settings/training", d.auth(d.handlePutTrainingSettings))
 	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                           // repository PR-review-bot policy (ADR 0010)
 	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                           // set enable + merge-gating block severity
 	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // per-tenant Slack incident webhook (has_slack_webhook)

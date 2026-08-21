@@ -123,6 +123,14 @@ export async function setAIMode(mode: string, monthlyBudgetUSD?: number) {
 // Set the repository PR-review-bot policy: enable inline review + a merge-gating check-run, and
 // the severity floor that fails the check ("off" = comment-only). The live GitHub post stays
 // gated on a connected GitHub App with the PR scope.
+// Training consent — the customer end of the improvement loop. `by` names the human making
+// the decision; the backend refuses a consent with no name, because an unattributed consent
+// is not one anybody can stand behind later.
+export async function setTrainingConsent(consented: boolean, by: string): Promise<void> {
+  await api.setTrainingConsent(consented, by);
+  revalidatePath("/settings");
+}
+
 export async function setPRBotPolicy(
   enabled: boolean,
   blockSeverity: string,

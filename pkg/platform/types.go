@@ -63,6 +63,16 @@ type Tenant struct {
 	// PRBot is the per-tenant policy for the repository PR-review bot (ADR 0010). nil = the
 	// default (disabled). The live GitHub post is separately gated on the GitHub App PR scope.
 	PRBot *PRBotPolicy `json:"pr_bot,omitempty"`
+	// Training is the customer's standing decision about whether their agent runs may be
+	// used to improve the system (ADR 0018 §4). nil = NOT consented, which is the correct
+	// default and the only safe one: silence is not agreement, and a corpus that treats it
+	// as agreement is one nobody can defend afterwards.
+	//
+	// The decision is read when an episode STARTS and stamped onto it there. That is why
+	// it lives on the Tenant rather than being asked per run: consent has to be in hand
+	// before the data exists, and ledger.GrantConsent refuses once an episode has closed
+	// precisely so it cannot be back-filled.
+	Training *TrainingConsent `json:"training,omitempty"`
 	// PostureAssessed records when each snapshot-driven posture source (tprm, deviceposture,
 	// clouddrift) last ran, keyed by its tool tag. It exists because those assessors are grounded —
 	// a well-managed estate yields ZERO findings — which makes "assessed and clean" and "never
@@ -1555,4 +1565,22 @@ func SummarizeEpisodes(eps []EpisodeRecord) EpisodeStats {
 		s.CostPerVerified, s.HasCostPer = s.CostUSD/float64(s.Verified), true
 	}
 	return s
+}
+
+// TrainingConsent is a tenant's standing answer to "may our runs improve the product".
+//
+// Turning it OFF stops future episodes being stamped as consented. It does NOT rewrite
+// episodes already recorded, and the product must not imply otherwise: those were
+// collected under an agreement that was real at the time, and silently relabelling them
+// would make the record say something that was never true. Withdrawal of consent for
+// data already used is a deletion request, which is a different operation with a
+// different audit trail — not a boolean flip.
+type TrainingConsent struct {
+	Consented bool      `json:"consented"`
+	By        string    `json:"by,omitempty"`
+	At        time.Time `json:"at,omitempty"`
+	// Statement is the text the customer actually agreed to, verbatim. An auditor should
+	// read what was consented to, not our later summary of it — the same discipline
+	// pentest.RoE applies to active-exploitation consent.
+	Statement string `json:"statement,omitempty"`
 }

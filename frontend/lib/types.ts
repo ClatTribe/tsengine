@@ -933,6 +933,34 @@ export interface SaaSApp {
   shadow_it: boolean;
 }
 
+// TrainingSettings is the workspace's standing decision on whether its agent runs may be
+// used to improve the product (ADR 0018 §4). `statement` is what was actually agreed to,
+// stored verbatim; `current_statement` is what a yes would agree to today, so the UI shows
+// the customer the real words rather than a label we maintain separately and can drift from.
+export interface TrainingSettings {
+  consented: boolean;
+  by?: string;
+  at?: string;
+  statement?: string;
+  current_statement: string;
+  note: string;
+}
+
+// EpisodeStats rolls up the scored-agent-run corpus (GET /v1/episodes). `scored` is
+// deliberately reported next to `episodes`: the gap is the share of runs whose effect could
+// not be measured, and every number derived from the rest has to be read against it.
+export interface EpisodeStats {
+  episodes: number;
+  scored: number;
+  trainable: number;
+  cost_usd: number;
+  verified: number;
+  cost_per_verified?: number;
+  has_cost_per_verified: boolean;
+  opened: number;
+  closed: number;
+}
+
 // PRBotSettings is the repository PR-review-bot policy. block_severity is the merge-gating floor
 // ("off" = comment-only); github_connected reports whether the live post is wired to a GitHub App.
 export interface PRBotSettings {
