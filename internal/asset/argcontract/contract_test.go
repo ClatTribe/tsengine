@@ -107,7 +107,15 @@ func cases() []assetCase {
 			wantsEscalation: true},
 		{name: "domain", handler: domainasset.NewHandler(),
 			target:  types.Asset{Type: types.AssetDomain, Target: "example.com"},
-			surface: []string{"example.com", "a.example.com", "b.example.com"}},
+			surface: []string{"example.com", "a.example.com", "b.example.com"},
+			// An httpx fingerprint on a discovered subdomain — what PlanFanout really
+			// produces, and what the threat-informed escalation reads. No wantsEscalation:
+			// that stage is corpus-driven, and this test runs without one configured, so it
+			// legitimately dispatches nothing here. The domain package's own tests cover the
+			// with-corpus path.
+			findings: []types.Finding{{RuleID: "httpx::probe", Tool: "httpx",
+				Endpoint: "https://a.example.com",
+				ToolArgs: map[string]string{"webserver": "Apache/2.4.49"}}}},
 		{name: "cloud", handler: cloudasset.NewHandler(),
 			target: types.Asset{Type: types.AssetCloudAccount, Target: "aws"}},
 		{name: "ip", handler: ipasset.NewHandler(),

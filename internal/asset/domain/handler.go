@@ -170,6 +170,35 @@ func bareHost(s string) string {
 	return s
 }
 
+// PlanEscalation is the domain conditional-depth stage (asset.EscalationPlanner).
+//
+// Domain is the RICHEST observation surface in the product and was the only one not using
+// it. PlanFanout runs httpx across every discovered subdomain at once, so a single domain
+// scan fingerprints the webserver and tech stack of the whole estate — dozens of hosts,
+// often several distinct products — while web and ip see one target each. The pinned
+// threat-intel corpus could say which of those products are being exploited in the wild,
+// and nothing asked it.
+//
+// There is no trigger table here, unlike web and ip: domain's own depth signals are
+// subdomain takeover and certificate posture, which the anchors already cover. This stage
+// exists purely to close the intel→discovery loop (§7.1).
+//
+// Not duplicative of the child-asset pivot. ChildAssets turns discovered hosts into web/ip
+// assets that will each get their own threat-informed pass — LATER, and only once the
+// platform actually spawns them. This is what the scan can say NOW, about products no
+// single child scan would have seen together.
+func (h *Handler) PlanEscalation(_ types.Asset, _ []string, findings []types.Finding) []asset.Dispatch {
+	return common.ThreatInformedEscalation(findings)
+}
+
+// CoverageGaps declares what this scan could not check (asset.CoverageReporter): exploited
+// CVEs catalogued against software the scan really observed, for which nuclei ships no
+// template. Without it they vanish from a capped plan and a clean probe report reads as
+// "we checked everything" when it means "we checked what we could".
+func (h *Handler) CoverageGaps(_ types.Asset, findings []types.Finding) []types.Finding {
+	return common.ThreatInformedGaps(findings)
+}
+
 func (h *Handler) Filter(_ context.Context, _ types.Asset, in []asset.Dispatch) []asset.Dispatch {
 	return in
 }
