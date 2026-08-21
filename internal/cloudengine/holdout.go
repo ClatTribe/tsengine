@@ -212,9 +212,24 @@ func plantHeldOutTrust(scn *HoldoutScenario, i int) error {
 // plantHeldOutBoundary: internet → public ALB → EC2 → role, where role's ATTACHED
 // policy enables a privesc technique — but a PERMISSION BOUNDARY denies it. AWS
 // effective permission = attached ∧ boundary, so the escalation is blocked. The
-// production bridge (AddPrivescEdges) evaluates attached policies only, so it adds
-// a spurious privesc→admin edge and the engine reports a false path to admin. The
-// independent oracle (attached ∧ boundary) proves it is inert.
+// bridge (AddPrivescEdges) evaluated attached policies only, so it added a spurious
+// privesc→admin edge and the engine reported a false path to admin. The independent
+// oracle (attached ∧ boundary) proves it is inert. FIXED by
+// AddPrivescEdgesWithBoundaries, which asks cloudiam for the effective permission.
+//
+// TWO HONEST CAVEATS, because this benchmark now passes and a passing benchmark is
+// exactly where an overclaim hides:
+//
+//  1. "production bridge" was WRONG and is corrected here. AddPrivescEdges is called
+//     only from this file and synthgen.go — both benchmarks. No production ingest path
+//     generates policy-derived privesc edges at all; awsinventory.Build marks a
+//     principal Privileged from an `Admin` BOOLEAN and stops there.
+//  2. awsfetch does not read permission boundaries (RawIAMRole carries none), so even
+//     once the bridge is wired, the boundary data has to be fetched before this fix
+//     reaches a customer.
+//
+// So the gap this measures is closed IN THE EVALUATOR. Whether it is closed for a real
+// account depends on both of the above, and neither is done.
 // prowler check: iam_policy_no_full_access_to_cloudtrail (privesc-capable policy).
 func plantHeldOutBoundary(scn *HoldoutScenario, i int) error {
 	s := scn.Snapshot
@@ -243,8 +258,13 @@ func plantHeldOutBoundary(scn *HoldoutScenario, i int) error {
 	s.AddEdge(cloudgraph.Edge{From: cloudgraph.InternetID, To: alb, Kind: cloudgraph.EdgeNetworkReach})
 	s.AddEdge(cloudgraph.Edge{From: alb, To: ec2, Kind: cloudgraph.EdgeNetworkReach})
 	s.AddEdge(cloudgraph.Edge{From: ec2, To: role, Kind: cloudgraph.EdgeRunsAs})
-	// over-approximating ingest: privesc edge from ATTACHED policy only (the bug).
-	s.AddPrivescEdges(map[string][]*cloudiam.Document{role: {attached}})
+	// Ingest now supplies the permission BOUNDARY alongside the attached policy, so the
+	// bridge evaluates the permission AWS would actually grant (attached ∧ boundary)
+	// rather than the attached half alone. This is the shape that produced the 50-point
+	// held-out gap; the boundary being passed here is the fix under test.
+	s.AddPrivescEdgesWithBoundaries(map[string]cloudgraph.PrincipalPolicies{
+		role: {Identity: []*cloudiam.Document{attached}, Boundary: boundary},
+	})
 
 	fid := id("h-bound", i)
 	scn.Prowler = append(scn.Prowler, prowlerCheck(fid, "iam_inline_policy_allows_privilege_escalation", "AWS::IAM::Role", role))
