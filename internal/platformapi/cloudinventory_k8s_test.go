@@ -17,7 +17,7 @@ func TestBuildCloudInventory_KubernetesIsRoutable(t *testing.T) {
 	  "services":[{"namespace":"app","name":"web","type":"LoadBalancer","external":true}]
 	}`)
 	for _, provider := range []string{"kubernetes", "k8s"} {
-		inv, err := buildCloudInventory(provider, body)
+		inv, _, err := buildCloudInventory(provider, body)
 		if err != nil {
 			t.Fatalf("provider %q: %v", provider, err)
 		}
@@ -35,7 +35,7 @@ func TestBuildCloudInventory_KubernetesIsRoutable(t *testing.T) {
 
 // The error must name what IS supported, or a caller cannot correct the request.
 func TestBuildCloudInventory_UnknownProviderListsKubernetes(t *testing.T) {
-	_, err := buildCloudInventory("openstack", []byte(`{}`))
+	_, _, err := buildCloudInventory("openstack", []byte(`{}`))
 	if err == nil {
 		t.Fatal("expected an error for an unknown provider")
 	}
