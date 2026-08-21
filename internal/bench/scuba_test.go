@@ -29,16 +29,17 @@ func worstCaseRules(t *testing.T) map[string]bool {
 
 	// --- M365 collaboration/data-sharing posture (sspm) ---
 	add(sspm.AssessM365(sspm.M365Tenant{
-		Name:                    "contoso",
-		SharePointSharing:       "anonymous",
-		OneDriveSharing:         "anonymous",
-		ExternalDomainAllowlist: false,
-		TeamsGuestAccess:        true,
-		TeamsGuestUnrestricted:  true,
-		TeamsOpenFederation:     true,
-		LegacyAuthEnabled:       true,
-		MailboxAuditingEnabled:  sspm.BoolPtr(false),
-		AnonymousCalendarShare:  true,
+		Name:                           "contoso",
+		SharePointSharing:              "anonymous",
+		OneDriveSharing:                "anonymous",
+		ExternalDomainAllowlist:        false,
+		TeamsGuestAccess:               true,
+		TeamsGuestUnrestricted:         true,
+		TeamsOpenFederation:            true,
+		LegacyAuthEnabled:              true,
+		MailboxAuditingEnabled:         sspm.BoolPtr(false),
+		AnonymousCalendarShare:         true,
+		ContactFoldersSharedAllDomains: true,
 		// the mandatory-gap fields (bypassable auth, standing privilege, exfil paths)
 		ExternalAutoForwardEnabled:                true,
 		WeakMFAMethodsEnabled:                     true,
@@ -169,9 +170,21 @@ func worstCaseRules(t *testing.T) map[string]bool {
 		ExternalReplyWarningsDisabled:          true,
 		InboundSpoofProtectionDisabled:         true,
 		UnauthenticatedEmailProtectionDisabled: true,
+		WorkspaceSyncEnabled:                   true,
+		EmailAllowlistImplemented:              true,
+		SecuritySandboxDisabled:                true,
+		ComprehensiveMailStorageDisabled:       true,
 	}, sspm.Options{}))
 	add(sspm.AssessGoogleWorkspace(sspm.GWorkspaceTenant{
 		Name: "acme-ext", DriveSharing: "external", DriveExternalAllowlist: false,
+	}, sspm.Options{}))
+	// A third estate, because the two password-length policies are mutually exclusive by
+	// construction: GWS.COMMONCONTROLS.5.2v1 is the 12-character floor and 5.3v1 the
+	// 16-character recommendation, and a tenant has one minimum. Reporting both against a
+	// single length would double-count one setting, so 12..15 needs its own snapshot to
+	// prove the weaker rule really fires.
+	add(sspm.AssessGoogleWorkspace(sspm.GWorkspaceTenant{
+		Name: "acme-pw14", PasswordMinLength: 14,
 	}, sspm.Options{}))
 
 	// --- Identity + email-auth posture (operate), both providers ---

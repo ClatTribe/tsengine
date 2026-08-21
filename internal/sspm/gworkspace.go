@@ -271,6 +271,30 @@ type GWorkspaceTenant struct {
 	// weapon they are already holding. GWS.GMAIL.5.4v1 / 7.6v1.
 	SuspiciousMailKeptInInbox              bool `json:"suspicious_mail_kept_in_inbox,omitempty"`
 	UnauthenticatedEmailProtectionDisabled bool `json:"unauthenticated_email_protection_disabled,omitempty"`
+	// WorkspaceSyncEnabled: Google Workspace Sync for Microsoft Outlook (GWSMO) is on,
+	// which keeps a full local replica of mail, calendar and contacts in an Outlook
+	// profile. The copy sits outside every Workspace-side control — DLP does not see it,
+	// revoking the account does not reach it, and the offboarding checklist does not know
+	// it exists. GWS.GMAIL.10.1v1.
+	WorkspaceSyncEnabled bool `json:"workspace_sync_enabled,omitempty"`
+	// EmailAllowlistImplemented INVERTS the usual intuition, and is the fourth inversion
+	// in this catalogue. An allowlist reads as a hardening control, but Gmail's email
+	// allowlist does not grant access — it EXEMPTS the listed senders from spam and
+	// phishing filtering entirely. Every address on it is a sender whose mail arrives
+	// unexamined, and the addresses that end up there are the trusted partners and
+	// vendors an attacker most wants to impersonate. Distinct from the spam-bypass
+	// domain list (18.1v1), which is a separate admin setting. GWS.GMAIL.14.1v1.
+	EmailAllowlistImplemented bool `json:"email_allowlist_implemented,omitempty"`
+	// SecuritySandboxDisabled: attachments are not detonated in a sandbox before
+	// delivery, so an attachment is judged on signatures and reputation alone. This is
+	// the check that catches the payload nobody has seen before, which is the only kind
+	// a targeted attack sends. GWS.GMAIL.16.1v1.
+	SecuritySandboxDisabled bool `json:"security_sandbox_disabled,omitempty"`
+	// ComprehensiveMailStorageDisabled: mail from non-Gmail Workspace applications is not
+	// stored in the associated user's mailbox, so it never reaches Vault, eDiscovery,
+	// retention or a mailbox export. The loss is invisible until an investigation or a
+	// legal hold needs the message and finds it was never kept. GWS.GMAIL.17.1v1.
+	ComprehensiveMailStorageDisabled bool `json:"comprehensive_mail_storage_disabled,omitempty"`
 }
 
 // AssessGoogleWorkspace runs every grounded collaboration/data-sharing posture check over a Google Workspace
@@ -786,6 +810,46 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Protection against unauthenticated email is disabled", target+"/gmail",
 			"Mail that fails SPF/DKIM/DMARC authentication outright is still delivered normally, undermining the domain-authentication posture the org publishes. Enable protection against any unauthenticated emails (SCuBA GWS.GMAIL.7.4v1).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, PCI: []string{"5.4.1"}, CISv8: []string{"9.5"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-8"}})))
+	}
+	if t.WorkspaceSyncEnabled {
+		f = append(f, finding(id(), "sspm::google_workspace::workspace-sync-enabled", types.SeverityMedium,
+			"Google Workspace Sync for Microsoft Outlook is enabled", target+"/gmail",
+			"GWSMO keeps a full local replica of mail, calendar and contacts inside an Outlook profile on "+
+				"the endpoint. That copy sits outside every Workspace-side control: DLP does not inspect it, "+
+				"suspending the account does not reach it, and an offboarding checklist that revokes access "+
+				"leaves the mailbox on the laptop. Disable Google Workspace Sync "+
+				"(SCuBA GWS.GMAIL.10.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.7"}, HIPAA: []string{"164.312(a)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"AC-19"}})))
+	}
+	if t.EmailAllowlistImplemented {
+		f = append(f, finding(id(), "sspm::google_workspace::email-allowlist-implemented", types.SeverityMedium,
+			"An email allowlist is configured", target+"/gmail",
+			"Gmail's email allowlist does not grant access — it EXEMPTS the listed senders from spam and "+
+				"phishing filtering, so their mail arrives unexamined. The addresses that end up on it are "+
+				"the trusted partners and vendors an attacker most wants to impersonate, which makes the "+
+				"list a description of exactly whom to spoof. Remove the allowlist and fix the false "+
+				"positives it was papering over (SCuBA GWS.GMAIL.14.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, PCI: []string{"5.4.1"}, CISv8: []string{"9.7"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-8"}})))
+	}
+	if t.SecuritySandboxDisabled {
+		f = append(f, finding(id(), "sspm::google_workspace::security-sandbox-disabled", types.SeverityMedium,
+			"Gmail security sandbox is disabled", target+"/gmail",
+			"Attachments are not detonated in a sandbox before delivery, so each one is judged on "+
+				"signatures and sender reputation alone. That catches payloads someone has already seen and "+
+				"reported; it does not catch the one built for this target, which is the only kind a "+
+				"targeted campaign sends. Enable the security sandbox "+
+				"(SCuBA GWS.GMAIL.16.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6", "CC7.1"}, PCI: []string{"5.2.1"}, CISv8: []string{"9.6", "10.1"}, NISTCSF: []string{"DE.CM-4"}, NIST80053: []string{"SI-3"}})))
+	}
+	if t.ComprehensiveMailStorageDisabled {
+		f = append(f, finding(id(), "sspm::google_workspace::comprehensive-mail-storage-disabled", types.SeverityLow,
+			"Comprehensive mail storage is disabled", target+"/gmail",
+			"Mail generated by non-Gmail Workspace applications is not stored in the associated user's "+
+				"mailbox, so it never reaches Vault, eDiscovery, retention or a mailbox export. Nothing "+
+				"reports the gap: it becomes visible only when an investigation or a legal hold asks for a "+
+				"message and finds it was never kept. Enable comprehensive mail storage "+
+				"(SCuBA GWS.GMAIL.17.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, HIPAA: []string{"164.312(b)"}, CISv8: []string{"8.2"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-11"}, SOX: []string{"ITGC-Logging"}})))
 	}
 	return f
 }

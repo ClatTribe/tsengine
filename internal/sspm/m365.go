@@ -172,6 +172,15 @@ type M365Tenant struct {
 	// `"mailbox_auditing_enabled": false` in a posted snapshot behaves exactly as before.
 	MailboxAuditingEnabled *bool `json:"mailbox_auditing_enabled,omitempty"`
 	AnonymousCalendarShare bool  `json:"anonymous_calendar_share"` // calendar details shared anonymously
+	// ContactFoldersSharedAllDomains: an Exchange sharing policy shares CONTACT folders
+	// with the wildcard domain "*" — every organisation on the internet, not a named
+	// partner. Distinct from calendar sharing, and worse for a reason that is easy to
+	// miss: a calendar leaks what a meeting is about, whereas the contact folder IS the
+	// target list. It hands over the org chart, the executive assistants, the external
+	// counsel and the personal mobile numbers in one object — the exact input a
+	// spear-phishing or vishing campaign is otherwise built by hand from LinkedIn.
+	// MS.EXO.6.1v1 (SHALL).
+	ContactFoldersSharedAllDomains bool `json:"contact_folders_shared_all_domains,omitempty"`
 
 	// --- Fields below close mandatory (SHALL) gaps found by the CISA SCuBA neutral
 	// benchmark (internal/bench/scuba.go). Every one is OPTIONAL and FP-safe: the
@@ -571,6 +580,18 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Mailbox audit logging is disabled", target+"/exchange",
 			"Mailbox auditing is off, so mailbox access/forwarding/deletion isn't logged — blinding incident response + breach investigation. Enable mailbox auditing tenant-wide.",
 			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, PCI: []string{"10.2.1"}, HIPAA: []string{"164.312(b)"}, CISv8: []string{"8.2"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"AU-2"}})))
+	}
+	if t.ContactFoldersSharedAllDomains {
+		f = append(f, finding(id(), "sspm::m365::contact-folders-shared-all-domains", types.SeverityMedium,
+			"Contact folders are shared with all domains", target+"/exchange",
+			"An Exchange sharing policy shares contact folders with the wildcard domain '*' — every "+
+				"organisation on the internet rather than a named partner. A shared calendar leaks what a "+
+				"meeting is about; a shared contact folder IS the target list: the org chart, the executive "+
+				"assistants, external counsel and personal mobile numbers, which is the input a "+
+				"spear-phishing or vishing campaign is otherwise assembled by hand. Scope the sharing "+
+				"policy to named partner domains, or remove contact sharing from it "+
+				"(SCuBA MS.EXO.6.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}, NIST80053: []string{"AC-3"}})))
 	}
 	if t.AnonymousCalendarShare {
 		f = append(f, finding(id(), "sspm::m365::anonymous-calendar-sharing", types.SeverityLow,
