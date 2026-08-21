@@ -12,7 +12,7 @@ func kevPolicy() *SLAPolicy {
 		Enabled:                true,
 		KEVResolveHours:        14 * 24,
 		RansomwareResolveHours: 48,
-		Targets: []SLATarget{{Severity: "high", AckHours: 24, ResolveHours: 30 * 24}},
+		Targets:                []SLATarget{{Severity: "high", AckHours: 24, ResolveHours: 30 * 24}},
 	}
 }
 

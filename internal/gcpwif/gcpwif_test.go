@@ -14,8 +14,8 @@ const poolPrefix = "principalSet://iam.googleapis.com/projects/123/locations/glo
 func prov(cond string) Provider {
 	return Provider{
 		ProjectNumber: "123", PoolID: "gh", ID: "github",
-		IssuerURI:        GitHubIssuerURI,
-		AllowedAudiences: []string{"//iam.googleapis.com/projects/123"},
+		IssuerURI:          GitHubIssuerURI,
+		AllowedAudiences:   []string{"//iam.googleapis.com/projects/123"},
 		AttributeCondition: cond,
 	}
 }
