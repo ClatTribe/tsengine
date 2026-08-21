@@ -259,6 +259,13 @@ type SLAPolicy struct {
 	// KEV window wins), and applies even when the severity has no target at all.
 	// 0 disables it.
 	KEVResolveHours int `json:"kev_resolve_hours,omitempty"`
+	// RansomwareResolveHours is the tighter clock for a CVE CISA marks as used in
+	// RANSOMWARE campaigns. It is a strictly stronger fact than KEV listing —
+	// "exploited in the wild" versus "exploited by crews who encrypt you by
+	// Monday" — and most of the KEV catalog is the former only, so giving the two
+	// one clock would either understate the urgent few or panic the rest. 0
+	// disables it and the KEV clock applies as before.
+	RansomwareResolveHours int `json:"ransomware_resolve_hours,omitempty"`
 }
 
 // SLATarget is the per-severity window. Hours (not minutes) — SLAs are coarse. 0 = no target for
@@ -280,6 +287,14 @@ type SLABreach struct {
 	// (BOD 22-01) rather than the severity target, so the UI can say WHY the clock
 	// is short ("exploited in the wild") instead of showing an unexplained deadline.
 	KEVAccelerated bool `json:"kev_accelerated,omitempty"`
+	// RansomwareAccelerated records that the deadline came from the ransomware
+	// clock, so the UI can say WHY it is this short rather than leaving a reader to
+	// assume we are being dramatic.
+	RansomwareAccelerated bool `json:"ransomware_accelerated,omitempty"`
+	// CISADeadline records that the deadline is CISA's OWN published due date for
+	// this CVE, used verbatim rather than computed. Distinct from the others
+	// because it is an absolute date set by an authority, not a window we derived.
+	CISADeadline bool `json:"cisa_deadline,omitempty"`
 }
 
 // BlastRadius is the impact-sizing signal for a finding/incident — does it sit on a cross-surface attack
@@ -318,13 +333,17 @@ func (p *SLAPolicy) TargetFor(severity string) (SLATarget, bool) {
 // resolve breach). A 0-hour target disables that clock. now is injected so it is testable.
 func (p *SLAPolicy) Evaluate(inc Incident, now time.Time) (SLABreach, bool) {
 	tgt, ok := p.TargetFor(inc.Severity)
-	// KEV override (BOD 22-01): an incident flagged KEV gets a hard resolve
-	// deadline even when its severity has no target at all.
-	kevHours := 0
+	// Exploitation overrides (BOD 22-01 and its ransomware tier): an incident flagged
+	// KEV gets a hard resolve deadline even when its severity has no target at all.
+	kevHours, ransomHours := 0, 0
 	if p != nil && p.Enabled && inc.KEV {
 		kevHours = p.KEVResolveHours
+		if inc.Ransomware {
+			ransomHours = p.RansomwareResolveHours
+		}
 	}
-	if !ok && kevHours <= 0 {
+	hasCISADue := p != nil && p.Enabled && inc.KEV && !inc.KEVDueAt.IsZero()
+	if !ok && kevHours <= 0 && ransomHours <= 0 && !hasCISADue {
 		return SLABreach{}, false
 	}
 	b := SLABreach{Severity: inc.Severity}
@@ -336,13 +355,29 @@ func (p *SLAPolicy) Evaluate(inc Incident, now time.Time) (SLABreach, bool) {
 	if ok {
 		resolveHours = tgt.ResolveHours
 	}
-	// KEV can only TIGHTEN: it wins only when it is stricter than (or the sole)
-	// resolve clock, and records why on the breach.
+	// The exploitation clocks can only TIGHTEN, strongest signal last: KEV listing,
+	// then ransomware use, which is the stricter claim.
 	if kevHours > 0 && (resolveHours <= 0 || kevHours < resolveHours) {
 		resolveHours, b.KEVAccelerated = kevHours, true
 	}
+	if ransomHours > 0 && (resolveHours <= 0 || ransomHours < resolveHours) {
+		resolveHours = ransomHours
+		b.KEVAccelerated, b.RansomwareAccelerated = false, true
+	}
 	if resolveHours > 0 {
 		b.ResolveDueAt = inc.OpenedAt.Add(time.Duration(resolveHours) * time.Hour)
+	}
+	// CISA's OWN due date is ABSOLUTE, not a window from when we happened to notice.
+	// This matters: a KEV CVE catalogued six months ago is already past its deadline,
+	// and computing a fresh window from OpenedAt would silently restart a clock the
+	// authority already ran out — telling a customer they have two weeks when the
+	// government's answer is that they are months late.
+	if hasCISADue && (b.ResolveDueAt.IsZero() || inc.KEVDueAt.Before(b.ResolveDueAt)) {
+		b.ResolveDueAt = inc.KEVDueAt
+		b.CISADeadline = true
+		b.KEVAccelerated, b.RansomwareAccelerated = false, false
+	}
+	if !b.ResolveDueAt.IsZero() {
 		b.ResolveBreached = inc.Status != IncidentResolved && now.After(b.ResolveDueAt)
 	}
 	return b, true
@@ -902,6 +937,14 @@ type Incident struct {
 	// (exploited in the wild). Stamped in detect.Reconcile from the finding's
 	// ThreatIntel.KEV.Listed; drives the SLAPolicy.KEVResolveHours override.
 	KEV bool `json:"kev,omitempty"`
+	// Ransomware marks an incident whose CVE CISA records as used in RANSOMWARE
+	// campaigns (knownRansomwareCampaignUse). Strictly stronger than KEV and kept
+	// separate from it for that reason; drives SLAPolicy.RansomwareResolveHours.
+	Ransomware bool `json:"ransomware,omitempty"`
+	// KEVDueAt is CISA's OWN published remediation deadline for the CVE — an
+	// absolute date, deliberately not a duration, so rediscovering an old KEV CVE
+	// cannot restart a clock the authority already ran out.
+	KEVDueAt time.Time `json:"kev_due_at,omitempty"`
 }
 
 // Onset is when the state behind an incident actually changed.
