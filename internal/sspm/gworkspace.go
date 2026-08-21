@@ -26,6 +26,24 @@ type GWorkspaceTenant struct {
 	ThirdPartyAPIAccess      bool   `json:"third_party_api_access"`     // any third-party OAuth app can access data (no app allowlist / API controls)
 	GmailExternalAutoForward bool   `json:"gmail_external_autoforward"` // users may auto-forward mail to external addresses (exfil)
 	ExternalCalendarSharing  bool   `json:"external_calendar_sharing"`  // calendar details shared with external/public
+	// FormsAcceptExternalResponses / FormsSubmitExternally: Forms carries data in and out
+	// of the organisation while looking like a document rather than a channel, so it
+	// routinely sits outside whatever sharing policy the estate actually has.
+	// GWS.DRIVEDOCS.1.10v1 / 1.11v1.
+	FormsAcceptExternalResponses bool `json:"forms_accept_external_responses,omitempty"`
+	FormsSubmitExternally        bool `json:"forms_submit_externally,omitempty"`
+	// SharedDriveCreationOverridable: members with manager access can override the
+	// organisation's shared-drive creation settings, which makes the org-level policy a
+	// default rather than a control — anyone with manager on any drive can opt out of it.
+	// GWS.DRIVEDOCS.2.1v1.
+	SharedDriveCreationOverridable bool `json:"shared_drive_creation_overridable,omitempty"`
+	// NonMembersCannotBeAddedToFiles INVERTS, and is the third inversion in this
+	// catalogue after password expiry and the Teams lobby. CISA requires that agencies
+	// SHALL ALLOW non-members to be added to individual files, because BLOCKING it does
+	// not stop the sharing — it makes people copy the file OUT of the shared drive to
+	// share it, which loses the shared drive's access controls, audit trail and retention
+	// in one move. The permissive setting is the safer one. GWS.DRIVEDOCS.2.2v1.
+	NonMembersCannotBeAddedToFiles bool `json:"non_members_cannot_be_added_to_files,omitempty"`
 	// PostSSOVerificationOff: after an SSO assertion Google performs no additional check,
 	// so anyone who can produce an assertion — including via a compromised IdP — lands
 	// straight in. SSO concentrates trust in one system; post-SSO verification is the only
@@ -303,6 +321,35 @@ func AssessGoogleWorkspace(t GWorkspaceTenant, opts Options) []types.Finding {
 			"Users may auto-forward mail to external addresses", target+"/gmail",
 			"Automatic forwarding to external addresses is allowed — a common data-exfiltration + BEC-persistence technique. Disable external auto-forwarding (allow only admin-approved exceptions).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, HIPAA: []string{"164.312(e)(1)"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if n := formsGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::google_workspace::forms-external-exchange", types.SeverityMedium,
+			"Forms exchange data externally ("+strings.Join(n, ", ")+")", target+"/drive",
+			"Forms move data across the organisation boundary: "+strings.Join(n, ", ")+
+				". A form looks like a document rather than a channel, so it routinely sits outside whatever "+
+				"sharing policy the estate has — responses arrive from outside and submissions leave, without "+
+				"either passing the controls applied to files. Restrict external form responses and "+
+				"submissions (SCuBA GWS.DRIVEDOCS.1.10v1 / 1.11v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, GDPR: []string{"Art. 32"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
+	}
+	if t.SharedDriveCreationOverridable {
+		f = append(f, finding(id(), "sspm::google_workspace::shared-drive-creation-overridable", types.SeverityLow,
+			"Managers may override shared-drive creation settings", target+"/drive",
+			"Members with manager access on any shared drive can override the organisation's creation "+
+				"settings, which makes the org-level policy a default rather than a control — it applies "+
+				"exactly until someone with manager rights decides otherwise, and nothing records that they "+
+				"did. Prevent managers from overriding creation settings (SCuBA GWS.DRIVEDOCS.2.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.AC-4"}})))
+	}
+	if t.NonMembersCannotBeAddedToFiles {
+		f = append(f, finding(id(), "sspm::google_workspace::non-members-cannot-be-added-to-files", types.SeverityLow,
+			"Non-members cannot be added to files in shared drives", target+"/drive",
+			"Adding a non-member to an individual file is blocked. That sounds stricter and is not: the "+
+				"sharing still has to happen, so people copy the file OUT of the shared drive to send it — and "+
+				"the copy leaves behind the drive's access controls, its audit trail and its retention in a "+
+				"single step. Allow non-members to be added to files so sharing stays inside the drive where "+
+				"it can be governed (SCuBA GWS.DRIVEDOCS.2.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.6"}, CISv8: []string{"3.3"}, NISTCSF: []string{"PR.DS-5"}})))
 	}
 	if t.PostSSOVerificationOff || t.PostSSOVerificationOffOther {
 		f = append(f, finding(id(), "sspm::google_workspace::post-sso-verification-off", types.SeverityMedium,
@@ -829,6 +876,18 @@ func unassessedServiceGapsOf(t GWorkspaceTenant) []string {
 	}
 	if t.PinpointDriveAccess {
 		n = append(n, "Pinpoint access to Drive")
+	}
+	return n
+}
+
+// formsGapsOf names which Forms external-exchange paths are open.
+func formsGapsOf(t GWorkspaceTenant) []string {
+	var n []string
+	if t.FormsAcceptExternalResponses {
+		n = append(n, "forms accept responses from outside the organisation")
+	}
+	if t.FormsSubmitExternally {
+		n = append(n, "users may submit to forms owned outside the organisation")
 	}
 	return n
 }

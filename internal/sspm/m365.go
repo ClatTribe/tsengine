@@ -26,6 +26,30 @@ type M365Tenant struct {
 	TeamsGuestUnrestricted  bool   `json:"teams_guest_unrestricted"`  // no guest-access policy (guests get broad access)
 	TeamsOpenFederation     bool   `json:"teams_open_federation"`     // external federation open to ALL domains
 	LegacyAuthEnabled       bool   `json:"legacy_auth_enabled"`       // basic/legacy auth allowed (password-spray + MFA-bypass)
+	// RiskyUserNotificationOff: nobody is told when Entra flags a user as high-risk. The
+	// detection already happened; this decides whether a human ever learns of it.
+	// MS.AAD.2.2v1.
+	RiskyUserNotificationOff bool `json:"risky_user_notification_off,omitempty"`
+	// AuthenticatorContextDisabled: the Authenticator prompt shows no application name or
+	// location, so a user facing an unexpected push has nothing to judge it by. Context is
+	// what turns MFA fatigue from a coin-flip into a decision. MS.AAD.3.3v2.
+	AuthenticatorContextDisabled bool `json:"authenticator_context_disabled,omitempty"`
+	// AuthMethodsMigrationIncomplete: authentication methods are still governed by the
+	// legacy policy as well as the new one, so a method disabled in one place can remain
+	// enabled by the other — the tenant's real MFA posture is the UNION of two settings
+	// nobody reads together. MS.AAD.3.4v1.
+	AuthMethodsMigrationIncomplete bool `json:"auth_methods_migration_incomplete,omitempty"`
+	// ManagedDeviceNotRequiredAuth / ManagedDeviceNotRequiredMFARegistration: the second is
+	// the sharper of the pair. Registering a NEW second factor from an unmanaged device is
+	// how an attacker holding only a password promotes themselves to holding MFA too —
+	// they enrol their own authenticator and the account is theirs permanently.
+	// MS.AAD.3.7v1 / 3.8v1.
+	ManagedDeviceNotRequiredAuth            bool `json:"managed_device_not_required_auth,omitempty"`
+	ManagedDeviceNotRequiredMFARegistration bool `json:"managed_device_not_required_mfa_registration,omitempty"`
+	// RiskyAIAgentsNotBlocked: agent identities flagged as risky are not blocked. An agent
+	// holds delegated permissions and runs unattended, so a compromised one acts with a
+	// user's authority and none of a user's hesitation. MS.AAD.9.1v1.
+	RiskyAIAgentsNotBlocked bool `json:"risky_ai_agents_not_blocked,omitempty"`
 	// SharePointLinkPermissionsNotViewOnly: the DEFAULT permission on a sharing link is
 	// edit rather than view. Most links are created to let someone read something, so the
 	// default decides the permission on the majority of links nobody thought about — and
@@ -246,6 +270,53 @@ func AssessM365(t M365Tenant, opts Options) []types.Finding {
 			"Teams guest access has no guest-access policy", target+"/teams",
 			"Guests can join Teams with no guest-access policy restricting what they can see/do. Apply a guest-access policy (restrict channels, file access, and screen sharing).",
 			now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}})))
+	}
+	if t.RiskyUserNotificationOff {
+		f = append(f, finding(id(), "sspm::m365::risky-user-notification-off", types.SeverityMedium,
+			"No administrator is notified when a user is flagged high-risk", target+"/entra",
+			"Entra detects the risk and tells nobody. The expensive half — the detection — has already "+
+				"happened; this setting decides whether a human ever learns of it, and an unread risk signal "+
+				"is worth exactly what no signal is worth. Enable administrator notification for high-risk "+
+				"users (SCuBA MS.AAD.2.2v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC7.2"}, CISv8: []string{"8.11"}, NISTCSF: []string{"DE.CM-1"}, NIST80053: []string{"SI-4"}})))
+	}
+	if t.AuthenticatorContextDisabled {
+		f = append(f, finding(id(), "sspm::m365::authenticator-context-disabled", types.SeverityMedium,
+			"Authenticator prompts show no application or location context", target+"/entra",
+			"A user facing an unexpected push sees only Approve and Deny, with nothing to judge it by. "+
+				"Context — which application, from where — is what turns MFA fatigue from a coin-flip into a "+
+				"decision, and it is the only defence against push-bombing that does not depend on the user "+
+				"being suspicious at 2am. Enable login context in Authenticator (SCuBA MS.AAD.3.3v2).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if t.AuthMethodsMigrationIncomplete {
+		f = append(f, finding(id(), "sspm::m365::auth-methods-migration-incomplete", types.SeverityMedium,
+			"Authentication methods migration is not complete", target+"/entra",
+			"Authentication methods are still governed by the legacy policy as well as the new one, so the "+
+				"tenant's real MFA posture is the UNION of two settings that are rarely read together — a "+
+				"method disabled in the new policy can remain enabled by the old one, and the console that "+
+				"says it is off is telling the truth about only half the system. Set Manage Migration to "+
+				"Migration Complete (SCuBA MS.AAD.3.4v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2"}})))
+	}
+	if n := managedDeviceGapsOf(t); len(n) > 0 {
+		f = append(f, finding(id(), "sspm::m365::managed-device-not-required", types.SeverityMedium,
+			"Managed devices are not required ("+strings.Join(n, ", ")+")", target+"/entra",
+			"Access is permitted from devices the organisation does not manage: "+strings.Join(n, ", ")+
+				". MFA REGISTRATION is the sharper half — registering a new second factor from an unmanaged "+
+				"device is how an attacker holding only a password promotes themselves to holding MFA as well, "+
+				"by enrolling their own authenticator. After that the account is theirs even once the password "+
+				"is reset. Require managed devices (SCuBA MS.AAD.3.7v1 / 3.8v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1", "CC6.7"}, CISv8: []string{"6.5"}, NISTCSF: []string{"PR.AA-01"}, NIST80053: []string{"IA-2", "AC-19"}})))
+	}
+	if t.RiskyAIAgentsNotBlocked {
+		f = append(f, finding(id(), "sspm::m365::risky-ai-agents-not-blocked", types.SeverityHigh,
+			"Agent identities flagged as risky are not blocked", target+"/entra",
+			"Agent identities detected as risky continue to operate. An agent holds delegated permissions "+
+				"and runs unattended, so a compromised one acts with a user's authority and none of a user's "+
+				"hesitation — there is nobody at the keyboard to notice the request was strange. Block risky "+
+				"agents (SCuBA MS.AAD.9.1v1).",
+			now, comp(types.Compliance{SOC2: []string{"CC6.1"}, CISv8: []string{"6.8"}, NISTCSF: []string{"PR.AC-4"}, NIST80053: []string{"AC-3", "SI-4"}})))
 	}
 	if t.SharePointLinkPermissionsNotViewOnly {
 		f = append(f, finding(id(), "sspm::m365::sharepoint-link-permissions-not-view-only", types.SeverityMedium,
@@ -625,6 +696,18 @@ func recordingGapsOf(t M365Tenant) []string {
 	}
 	if t.AlwaysRecordEvents {
 		n = append(n, "events are set to always record")
+	}
+	return n
+}
+
+// managedDeviceGapsOf names which managed-device requirements are missing.
+func managedDeviceGapsOf(t M365Tenant) []string {
+	var n []string
+	if t.ManagedDeviceNotRequiredAuth {
+		n = append(n, "not required for authentication")
+	}
+	if t.ManagedDeviceNotRequiredMFARegistration {
+		n = append(n, "not required to register MFA")
 	}
 	return n
 }
