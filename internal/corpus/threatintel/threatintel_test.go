@@ -80,7 +80,7 @@ func TestParseEPSSGzip(t *testing.T) {
 func TestBuild_UnionsKEVAndEPSS(t *testing.T) {
 	kev, kevAsOf, kevVer, _ := ParseKEV(strings.NewReader(kevFixture))
 	epss, epssAsOf, _ := ParseEPSS(strings.NewReader(epssFixture))
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil, nil, nil)
+	entries, m := Build(Sources{KEV: kev, KEVAsOf: kevAsOf, KEVVer: kevVer, EPSS: epss, EPSSAsOf: epssAsOf})
 
 	// Union: 44228 (both), 5638 (kev only), 0160 (epss only) = 3.
 	if len(entries) != 3 {
@@ -107,7 +107,7 @@ func TestBuild_UnionsKEVAndEPSS(t *testing.T) {
 func TestWriteAndLoadManifest(t *testing.T) {
 	kev, kevAsOf, kevVer, _ := ParseKEV(strings.NewReader(kevFixture))
 	epss, epssAsOf, _ := ParseEPSS(strings.NewReader(epssFixture))
-	entries, m := Build(kev, kevAsOf, kevVer, epss, epssAsOf, nil, nil, nil, nil)
+	entries, m := Build(Sources{KEV: kev, KEVAsOf: kevAsOf, KEVVer: kevVer, EPSS: epss, EPSSAsOf: epssAsOf})
 
 	dir := t.TempDir()
 	path, err := Write(dir, entries, m)

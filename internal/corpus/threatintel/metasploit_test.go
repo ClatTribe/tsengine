@@ -80,3 +80,46 @@ func TestParseMetasploit_ModuleWithNoPathIsSkipped(t *testing.T) {
 		t.Errorf("a module with neither fullname nor name must be skipped, got %v", got)
 	}
 }
+
+// Rank discriminates in practice rather than sitting at the top, which is what makes it
+// worth carrying: EternalBlue is AVERAGE because it can crash the target, DoublePulsar RCE
+// is GREAT, and the Log4Shell modules are EXCELLENT.
+func TestParseMetasploitRanked_KeepsTheBestModule(t *testing.T) {
+	in := `{
+	  "a": {"fullname":"exploit/windows/smb/ms17_010_eternalblue","type":"exploit","rank":200,"references":["CVE-2017-0144"]},
+	  "b": {"fullname":"exploit/windows/smb/smb_doublepulsar_rce","type":"exploit","rank":500,"references":["CVE-2017-0144"]}
+	}`
+	_, rank, err := ParseMetasploitRanked(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// BEST, not first or average: an attacker uses the most reliable module they have, so
+	// the question a defender needs answered is what the strongest weapon is. Averaging
+	// would let a shaky module dilute a great one and describe the arsenal, not the threat.
+	if got := RankName(rank["CVE-2017-0144"]); got != "great" {
+		t.Errorf("rank = %q, want great (the better of average and great)", got)
+	}
+}
+
+// An unrecognised rank stays unnamed rather than rounding to the nearest known rung —
+// reporting a rank we cannot name invents the very judgement the field exists to carry.
+func TestRankName_UnknownStaysEmpty(t *testing.T) {
+	if got := RankName(451); got != "" {
+		t.Errorf("RankName(451) = %q, want empty", got)
+	}
+	if got := RankName(600); got != "excellent" {
+		t.Errorf("RankName(600) = %q, want excellent", got)
+	}
+}
+
+// An auxiliary module contributes no rank, for the same reason it contributes no ref.
+func TestParseMetasploitRanked_AuxiliaryContributesNoRank(t *testing.T) {
+	in := `{"a": {"fullname":"auxiliary/scanner/x","type":"auxiliary","rank":600,"references":["CVE-2000-0001"]}}`
+	refs, rank, err := ParseMetasploitRanked(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 0 || rank["CVE-2000-0001"] != 0 {
+		t.Errorf("a scanner must contribute neither a ref nor a rank: refs=%v rank=%v", refs, rank)
+	}
+}

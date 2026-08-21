@@ -47,6 +47,11 @@ type Entry struct {
 	// it answers "can we test for this", which is what stops the probe planner from
 	// spending a capped slot on a template nuclei does not have.
 	NucleiTemplate string `json:"nuclei_template,omitempty"`
+	// WeaponRank is Metasploit's own reliability name for the BEST module targeting this
+	// CVE ("excellent" … "manual"). It refines the weaponized rung: a module that never
+	// crashes the service and one that needs hand-holding are both "a module exists", and
+	// a defender choosing what to patch first should not have to treat them alike.
+	WeaponRank string `json:"weapon_rank,omitempty"`
 }
 
 // Manifest is the cheap-to-read provenance sidecar (no entries). resolveCorpus
@@ -76,10 +81,39 @@ type Manifest struct {
 // (~250k CVEs); KEV is the high-signal in-the-wild overlay (~1.3k); ExploitDB is the public-exploit-
 // exists overlay (the patch-priority signal between EPSS probability and KEV exploitation). A nil
 // exploits map is fine — it's a best-effort feed (Refresh keeps going if it can't fetch ExploitDB).
-func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
-	epss map[string]types.EPSSScore, epssAsOf time.Time, exploits map[string][]string,
-	weaponized map[string][]string, templates map[string]string,
-	cvss map[string]NVDEntry) (map[string]Entry, Manifest) {
+// Sources is everything Build merges, one named field per feed.
+//
+// IT IS A STRUCT BECAUSE THE POSITIONAL FORM HAD BECOME DANGEROUS. It reached ten
+// parameters including THREE adjacent maps — exploits and weaponized are both
+// map[string][]string, and templates is map[string]string next to them. Swapping two of
+// those compiles, passes every type check, and produces a corpus that is quietly wrong:
+// public-exploit refs filed as weaponized ones would promote a proof-of-concept to a
+// Metasploit module on every finding that carried it. Named fields make that mistake
+// impossible to write rather than merely unlikely.
+type Sources struct {
+	KEV      map[string]types.KEVStatus
+	KEVAsOf  time.Time
+	KEVVer   string
+	EPSS     map[string]types.EPSSScore
+	EPSSAsOf time.Time
+	// Exploits is the public-exploit-EXISTS overlay (Exploit-DB); Weaponized is the
+	// stronger, separate claim that a Metasploit module exists, with WeaponRank carrying
+	// Metasploit's own reliability name for the best one.
+	Exploits   map[string][]string
+	Weaponized map[string][]string
+	WeaponRank map[string]int
+	// Templates answers "can WE test for this", which is a fact about us rather than the
+	// world — see nuclei.go.
+	Templates map[string]string
+	CVSS      map[string]NVDEntry
+}
+
+// Build merges the parsed feeds into the corpus + manifest.
+func Build(src Sources) (map[string]Entry, Manifest) {
+	kev, kevAsOf, kevVer := src.KEV, src.KEVAsOf, src.KEVVer
+	epss, epssAsOf := src.EPSS, src.EPSSAsOf
+	exploits, weaponized, weaponRank := src.Exploits, src.Weaponized, src.WeaponRank
+	templates, cvss := src.Templates, src.CVSS
 
 	entries := make(map[string]Entry, len(epss)+len(kev))
 	for cve, e := range epss {
@@ -122,6 +156,7 @@ func Build(kev map[string]types.KEVStatus, kevAsOf time.Time, kevVer string,
 		}
 		ent := entries[cve] // zero Entry if KEV/EPSS/ExploitDB absent — a module alone is worth pinning
 		ent.Exploits = mergeRefs(ent.Exploits, refs)
+		ent.WeaponRank = RankName(weaponRank[cve])
 		entries[cve] = ent
 		weaponizedCVEs++
 	}

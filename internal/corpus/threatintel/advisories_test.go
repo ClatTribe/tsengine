@@ -80,7 +80,7 @@ func TestBuild_AdvisoriesReachTheCorpusEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entries, _ := Build(kev, asOf, ver, nil, asOf, nil, nil, nil, nil)
+	entries, _ := Build(Sources{KEV: kev, KEVAsOf: asOf, KEVVer: ver, EPSSAsOf: asOf})
 	e := entries["CVE-2021-44228"]
 	if len(e.Advisories) != 1 {
 		t.Fatalf("Entry.Advisories = %v — the field the hook reads is still empty", e.Advisories)

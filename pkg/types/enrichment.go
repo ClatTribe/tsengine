@@ -47,7 +47,19 @@ func (f Finding) L15Summary() string {
 			// not evidence of exploitation in the wild.
 			for _, ref := range ti.Exploits {
 				if strings.HasPrefix(ref, "metasploit:") {
-					t = append(t, "weaponized")
+					// Metasploit's own reliability name for the best module, when we have
+					// it: "weaponized:excellent" is a materially different fact from
+					// "weaponized:manual", and it discriminates in practice rather than
+					// sitting at the top — EternalBlue is AVERAGE because it can crash the
+					// target, while the Log4Shell modules are excellent. A defender
+					// choosing what to patch first should not have to treat those alike.
+					//
+					// It rates the MODULE, not this instance's exposure.
+					if ti.WeaponRank != "" {
+						t = append(t, "weaponized:"+ti.WeaponRank)
+					} else {
+						t = append(t, "weaponized")
+					}
 					break
 				}
 			}
