@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS eval_runs (tenant_id TEXT, id TEXT, data TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS audits      (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
+CREATE TABLE IF NOT EXISTS feedback    (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
 CREATE TABLE IF NOT EXISTS exclusions  (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS runtimeevts (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS pentests    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -283,6 +284,12 @@ func (s *SQLite) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) erro
 }
 func (s *SQLite) ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error) {
 	return listJSON[platform.IgnoreRule](ctx, s.db, `SELECT data FROM ignores WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) PutFeedback(ctx context.Context, fb platform.Feedback) error {
+	return s.upsertTID(ctx, `INSERT INTO feedback(tenant_id,issue_key,data) VALUES(?,?,?) ON CONFLICT(tenant_id,issue_key) DO UPDATE SET data=excluded.data`, fb.TenantID, fb.IssueKey, fb)
+}
+func (s *SQLite) ListFeedback(ctx context.Context, tenantID string) ([]platform.Feedback, error) {
+	return listJSON[platform.Feedback](ctx, s.db, `SELECT data FROM feedback WHERE tenant_id=? ORDER BY issue_key`, tenantID)
 }
 func (s *SQLite) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM ignores WHERE tenant_id=? AND issue_key=?`, tenantID, issueKey)

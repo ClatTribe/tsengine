@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -24,6 +25,17 @@ type kevFeed struct {
 		VendorProject string `json:"vendorProject"`
 		Product       string `json:"product"`
 		DateAdded     string `json:"dateAdded"` // "2006-01-02"
+		// DueDate is CISA's own BOD 22-01 remediation deadline FOR THIS CVE. We
+		// previously computed a uniform window from DateAdded; CISA publishes the
+		// real per-CVE date, and a deadline the authority actually set beats one we
+		// derived.
+		DueDate string `json:"dueDate"` // "2006-01-02"
+		// KnownRansomwareCampaignUse is "Known" or "Unknown". It is the strongest
+		// free prioritisation signal published anywhere: KEV says "exploited in the
+		// wild", this says "exploited BY RANSOMWARE CREWS", and the second is what
+		// turns a patch window from a quarter into a weekend. It was being dropped,
+		// exactly as vendorProject/product were before them.
+		KnownRansomwareCampaignUse string `json:"knownRansomwareCampaignUse"`
 	} `json:"vulnerabilities"`
 }
 
@@ -46,6 +58,16 @@ func ParseKEV(r io.Reader) (map[string]types.KEVStatus, time.Time, string, error
 				st.DateAdded = d.UTC()
 			}
 		}
+		if v.DueDate != "" {
+			if d, err := time.Parse("2006-01-02", v.DueDate); err == nil {
+				st.DueDate = d.UTC()
+			}
+		}
+		// ONLY the literal "Known" means known. CISA writes "Unknown" for the
+		// majority, and treating any non-empty value as a yes would mark most of the
+		// catalog as ransomware-linked — the alarm that teaches a team to ignore
+		// alarms.
+		st.Ransomware = strings.EqualFold(strings.TrimSpace(v.KnownRansomwareCampaignUse), "Known")
 		out[v.CveID] = st
 	}
 	asOf := parseKEVDate(feed.DateReleased)

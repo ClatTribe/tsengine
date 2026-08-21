@@ -150,6 +150,12 @@ type Store interface {
 	ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error)
 	DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error
 
+	// Feedback is a human judgement about an issue — latest-wins per issue key, because
+	// a person changing their mind should replace their earlier opinion rather than
+	// leave the corpus holding both.
+	PutFeedback(ctx context.Context, fb platform.Feedback) error
+	ListFeedback(ctx context.Context, tenantID string) ([]platform.Feedback, error)
+
 	// --- custom exclusion rules (pattern-based noise filter), keyed by rule id ---
 	PutExclusionRule(ctx context.Context, er platform.ExclusionRule) error
 	ListExclusionRules(ctx context.Context, tenantID string) ([]platform.ExclusionRule, error)

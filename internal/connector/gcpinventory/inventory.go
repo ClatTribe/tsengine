@@ -10,7 +10,11 @@ import (
 	"context"
 	"fmt"
 
+	"sort"
+	"strings"
+
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/gcpiam"
 )
 
 // RawGCP mirrors the SUBSET of GCP API output the mapper reads. Pure data (JSON-tagged so it's a wire
@@ -21,6 +25,23 @@ type RawGCP struct {
 	Members         []RawGCPMember   `json:"members,omitempty"` // users/groups with project-level roles
 	Instances       []RawGCPInstance `json:"instances,omitempty"`
 	Buckets         []RawGCPBucket   `json:"buckets,omitempty"`
+	// Bindings are the project's IAM policy bindings. They are what makes "can this
+	// principal BECOME admin" answerable; the per-principal Admin flag only answers "is
+	// it already", and the second is the attack path.
+	Bindings []RawGCPBinding `json:"bindings,omitempty"`
+	// RoleDefs maps a role name to the permissions it grants ("*" = all). REQUIRED for
+	// any custom role: gcpiam treats a role it has no definition for as POSSIBLY granting
+	// anything, so without definitions every principal would appear able to escalate.
+	// See derivePrivesc for why that possibility is not enough to draw an edge.
+	RoleDefs map[string][]string `json:"role_defs,omitempty"`
+}
+
+// RawGCPBinding is one IAM policy binding: a role granted to members, optionally
+// condition-gated.
+type RawGCPBinding struct {
+	Role      string   `json:"role"`
+	Members   []string `json:"members"`
+	Condition string   `json:"condition,omitempty"`
 }
 
 // RawGCPSA is a service account; Impersonators are the principals a fetcher resolved as holding
@@ -73,6 +94,7 @@ func Build(raw RawGCP) cloudgraph.Inventory {
 			ID: m.Member, Kind: cloudgraph.KindPrincipal, Type: "gcp_member", Name: m.Member, Privileged: m.Admin,
 		})
 	}
+	derivePrivesc(&inv, raw)
 	for _, in := range raw.Instances {
 		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
 			ID: in.Name, Kind: cloudgraph.KindResource, Type: "gce_instance", Region: in.Region, Public: in.ExternalIP,
@@ -125,4 +147,95 @@ func Collect(ctx context.Context, f Fetcher) (cloudgraph.Inventory, error) {
 		return cloudgraph.Inventory{}, fmt.Errorf("gcpinventory: fetch: %w", err)
 	}
 	return Build(raw), nil
+}
+
+// derivePrivesc turns the project's real IAM bindings into privilege-escalation edges,
+// the GCP twin of awsinventory's addPrivesc and for the same reason: no production ingest
+// path produced one, so a principal that could MINT ITSELF an admin token was invisible
+// while `Admin` only recorded principals that already were one.
+//
+// THE FIRM-ALLOW RULE, and why it is not over-caution. gcpiam deliberately treats a role
+// whose definition it does not have as POSSIBLY granting the permission — the right
+// default for path-pruning, because dropping an edge you cannot disprove hides a real
+// route. It is the wrong default for CREATING one. Under it, every principal holding any
+// custom role would satisfy every escalation technique, and the graph would fill with
+// escalations inferred from nothing but a missing role definition. So an edge requires a
+// FIRM allow: a role we actually have the permissions for, a member we resolved, and no
+// unevaluated condition.
+//
+// The cost is stated rather than hidden: an escalation through a custom role we lack the
+// definition for is NOT reported, and UnknownRoles names those roles so a caller can say
+// which part of the project it could not answer for. Absence of evidence is not evidence
+// of absence, and it is not evidence of presence either.
+func derivePrivesc(inv *cloudgraph.Inventory, raw RawGCP) {
+	if len(raw.Bindings) == 0 {
+		return // no IAM policy read: nothing to evaluate, and nothing claimed
+	}
+	res := &gcpiam.Resource{Name: raw.ProjectID}
+	for _, b := range raw.Bindings {
+		res.Bindings = append(res.Bindings, gcpiam.Binding{
+			Role: b.Role, Members: b.Members, Condition: b.Condition,
+		})
+	}
+	ps := gcpiam.PolicySet{Resource: res, Roles: raw.RoleDefs}
+
+	// Every principal named anywhere in the bindings, in deterministic order.
+	seen := map[string]bool{}
+	var principals []string
+	for _, b := range raw.Bindings {
+		for _, m := range b.Members {
+			if m == "" || seen[m] {
+				continue
+			}
+			seen[m] = true
+			principals = append(principals, m)
+		}
+	}
+	sort.Strings(principals)
+
+	var any bool
+	for _, member := range principals {
+		firm := func(perm string) bool {
+			allowed, conditional := gcpiam.Permits(gcpiam.Request{Member: member, Permission: perm}, ps)
+			return allowed && !conditional
+		}
+		techs := gcpiam.DetectPrivesc(firm)
+		if len(techs) == 0 {
+			continue
+		}
+		names := make([]string, 0, len(techs))
+		for _, t := range techs {
+			names = append(names, t.Name)
+		}
+		inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{
+			Principal: member, Target: cloudgraph.AdminID, Detail: strings.Join(names, ", "),
+		})
+		any = true
+	}
+	if any {
+		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
+			ID: cloudgraph.AdminID, Kind: cloudgraph.KindPrincipal, Type: "effective_admin",
+			Name: "effective-admin", Privileged: true,
+		})
+	}
+}
+
+// UnknownRoles returns the roles appearing in the bindings whose permissions were not
+// supplied, so a caller can state which part of the project it could not answer for.
+// Empty means every role was resolvable — not that the project is safe.
+func UnknownRoles(raw RawGCP) []string {
+	seen, out := map[string]bool{}, []string{}
+	for _, b := range raw.Bindings {
+		switch b.Role {
+		case "roles/owner", "roles/editor", "roles/viewer":
+			continue // gcpiam understands the basic roles inline
+		}
+		if _, ok := raw.RoleDefs[b.Role]; ok || seen[b.Role] {
+			continue
+		}
+		seen[b.Role] = true
+		out = append(out, b.Role)
+	}
+	sort.Strings(out)
+	return out
 }

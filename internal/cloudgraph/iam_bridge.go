@@ -20,7 +20,51 @@ const AdminID = "admin"
 // node. This is how raw IAM policy documents become traversable attack edges —
 // the resolve_access → graph bridge (ADR 0002 / design §2). policies maps a
 // principal id → its combined policy docs.
+// PrincipalPolicies is one principal's policy set as AWS actually evaluates it.
+//
+// It exists because a principal's ATTACHED policies are not its effective permissions.
+// AWS computes effective = attached ∧ permission-boundary, and a bridge that reads only
+// the attached half reports escalations the account genuinely blocks.
+type PrincipalPolicies struct {
+	// Identity are the attached/inline policy documents.
+	Identity []*cloudiam.Document
+	// Boundary is the permission boundary — a CEILING, not a grant. Nil means the
+	// principal has none, which is different from having an empty one.
+	Boundary *cloudiam.Document
+}
+
+// AddPrivescEdges uses the IAM effective-permissions evaluator (cloudiam) to add
+// a privesc edge from every escalation-capable principal to the synthetic admin
+// node. This is how raw IAM policy documents become traversable attack edges —
+// the resolve_access → graph bridge (ADR 0002 / design §2). policies maps a
+// principal id → its combined policy docs.
+//
+// Boundary-unaware: prefer AddPrivescEdgesWithBoundaries wherever the boundary is
+// known. Kept because a caller that genuinely has no boundary data should not be
+// forced to pass an empty one — nil boundary and no-boundary must stay distinguishable.
 func (s *Snapshot) AddPrivescEdges(policies map[string][]*cloudiam.Document) {
+	withBoundaries := make(map[string]PrincipalPolicies, len(policies))
+	for pid, docs := range policies {
+		withBoundaries[pid] = PrincipalPolicies{Identity: docs}
+	}
+	s.AddPrivescEdgesWithBoundaries(withBoundaries)
+}
+
+// AddPrivescEdgesWithBoundaries is AddPrivescEdges evaluating the PERMISSION BOUNDARY
+// alongside the attached policies — i.e. the permission AWS would actually grant.
+//
+// WHY THIS EXISTS. The held-out generalization benchmark (cloudengine/holdout.go)
+// measured a 50-point gap between inert shapes the engine encodes and inert shapes it
+// does not, and named this one: a role whose attached policy allows
+// iam:CreatePolicyVersion while its boundary permits only s3:Get* cannot escalate, and
+// the engine reported a path to admin anyway. The interpretation in that file was
+// exact — "tsengine HAS the evaluator to close this; the fix is wiring it into ingest"
+// — so this is wiring, not new detection logic.
+//
+// A false attack path is worse than a missed one here: it sends someone to sever a route
+// that was never open while the real one stays open, and it does it with the confidence
+// of a rendered graph.
+func (s *Snapshot) AddPrivescEdgesWithBoundaries(policies map[string]PrincipalPolicies) {
 	// deterministic order
 	ids := make([]string, 0, len(policies))
 	for id := range policies {
@@ -30,8 +74,19 @@ func (s *Snapshot) AddPrivescEdges(policies map[string][]*cloudiam.Document) {
 
 	var added bool
 	for _, pid := range ids {
-		docs := policies[pid]
-		can := func(a string) bool { return cloudiam.CanDo(a, docs...) }
+		pp := policies[pid]
+		docs := pp.Identity
+		if len(docs) == 0 {
+			continue
+		}
+		ps := cloudiam.PolicySet{Identity: docs, Boundary: pp.Boundary, SameAccount: true}
+		// The effective-permission question, answered by the evaluator rather than by
+		// reading the attached policy alone. With no boundary this is exactly the old
+		// behaviour; with one, the ceiling applies as AWS applies it.
+		can := func(a string) bool {
+			dec, _ := cloudiam.Authorize(cloudiam.Request{Principal: pid, Action: a, Resource: "*"}, ps)
+			return dec == cloudiam.Allow
+		}
 		techs := cloudiam.DetectPrivesc(can)
 		if len(techs) == 0 {
 			continue
@@ -45,10 +100,12 @@ func (s *Snapshot) AddPrivescEdges(policies map[string][]*cloudiam.Document) {
 		// If EVERY detected escalation depends on a condition-gated permission (no technique is reachable
 		// UNCONDITIONALLY), the privesc is config-possible only, not definite: mark the edge conditional so
 		// Path.Conditional() flags a path through it for live validation (ADR-0002 / §10), rather than
-		// over-claiming a definite escalation. canFirm keeps only unconditional grants (Allows cond=false).
+		// over-claiming a definite escalation. canFirm keeps only unconditional grants — and it applies the
+		// SAME boundary, or a boundary-blocked escalation would be reported as merely conditional instead
+		// of absent.
 		canFirm := func(a string) bool {
-			ok, cond := cloudiam.Allows(a, "*", docs...)
-			return ok && !cond
+			dec, cond := cloudiam.Authorize(cloudiam.Request{Principal: pid, Action: a, Resource: "*"}, ps)
+			return dec == cloudiam.Allow && !cond
 		}
 		condition := ""
 		if len(cloudiam.DetectPrivesc(canFirm)) == 0 {

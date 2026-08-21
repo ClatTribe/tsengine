@@ -61,8 +61,14 @@ func TestAWS_Discover_YieldsCloudAccountAsset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(assets) != 1 || assets[0].Type != "cloud_account" || assets[0].Target != "123456789012" {
-		t.Fatalf("want one cloud_account asset for the account, got %+v", assets)
+	// Target is the PROVIDER (what prowler scans), NOT the account id — the account lives in Meta.
+	// This test used to assert Target=="123456789012", which encoded the very bug that made every
+	// cloud scan fail with "unsupported provider".
+	if len(assets) != 1 || assets[0].Type != "cloud_account" || assets[0].Target != "aws" {
+		t.Fatalf("want one cloud_account asset targeting provider \"aws\", got %+v", assets)
+	}
+	if assets[0].Meta["account_id"] != "123456789012" {
+		t.Fatalf("account id must be preserved in Meta, got %+v", assets[0].Meta)
 	}
 	if assets[0].Meta["provider"] != "aws" {
 		t.Errorf("asset meta should mark provider=aws, got %v", assets[0].Meta)

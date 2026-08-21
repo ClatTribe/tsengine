@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -59,6 +60,21 @@ func TestEveryDeclaredKindIsActuallyProduced(t *testing.T) {
 	}
 	waitJob(t, pool, job.ID)
 	for _, g := range d3.computeDegradations(ctx, "t") {
+		produced[g.Kind] = true
+	}
+
+	// cloud_coverage_incomplete — a stored snapshot that recorded what it could not answer
+	d4, st4 := stateDeps(t)
+	_ = st4.PutTenant(ctx, platform.Tenant{ID: "t", Name: "A"})
+	snaps := cloudsnap.NewMemStore()
+	_ = snaps.Put(ctx, cloudsnap.Snapshot{
+		TenantID: "t", Inventory: []byte(`{"account_id":"1"}`),
+		CoverageGaps: map[string]string{
+			"privilege-escalation": "no policy documents in the snapshot — populate `policies`.",
+		},
+	})
+	d4.CloudSnapshots = snaps
+	for _, g := range d4.computeDegradations(ctx, "t") {
 		produced[g.Kind] = true
 	}
 

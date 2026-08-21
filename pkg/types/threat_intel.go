@@ -27,6 +27,18 @@ type KEVStatus struct {
 	// (internal/threatinformed).
 	Vendor  string `json:"vendor,omitempty"`
 	Product string `json:"product,omitempty"`
+	// DueDate is CISA's OWN BOD 22-01 remediation deadline for this CVE. Federal
+	// agencies are bound by it; everyone else gets the strongest free statement
+	// anywhere of how long a defender is considered to reasonably have. Preferred
+	// over a window computed from DateAdded, because a deadline the authority set
+	// beats one we derived.
+	DueDate time.Time `json:"due_date,omitempty"`
+	// Ransomware reports CISA's knownRansomwareCampaignUse == "Known". It is a
+	// STRICTLY STRONGER claim than Listed: KEV means exploited in the wild,
+	// this means exploited by ransomware operators. The two must never be
+	// conflated — most of the catalog is Listed and not Ransomware, so treating
+	// them alike would either understate the urgent few or overstate the rest.
+	Ransomware bool `json:"ransomware,omitempty"`
 }
 
 // EPSSScore is the FIRST.org Exploit Prediction Scoring System reading.

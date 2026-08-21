@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS eval_runs       (seq BIGSERIAL, tenant_id TEXT, id TE
 CREATE TABLE IF NOT EXISTS audits      (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (seq BIGSERIAL, tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
+CREATE TABLE IF NOT EXISTS feedback    (seq BIGSERIAL, tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
 CREATE TABLE IF NOT EXISTS exclusions  (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS runtimeevts (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS pentests    (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -265,6 +266,12 @@ func (p *Postgres) PutIgnoreRule(ctx context.Context, ir platform.IgnoreRule) er
 }
 func (p *Postgres) ListIgnoreRules(ctx context.Context, tenantID string) ([]platform.IgnoreRule, error) {
 	return listJSON[platform.IgnoreRule](ctx, p.db, pgRebind(`SELECT data FROM ignores WHERE tenant_id=? ORDER BY rowid`), tenantID)
+}
+func (p *Postgres) PutFeedback(ctx context.Context, fb platform.Feedback) error {
+	return p.upsertTID(ctx, `INSERT INTO feedback(tenant_id,issue_key,data) VALUES(?,?,?) ON CONFLICT(tenant_id,issue_key) DO UPDATE SET data=excluded.data`, fb.TenantID, fb.IssueKey, fb)
+}
+func (p *Postgres) ListFeedback(ctx context.Context, tenantID string) ([]platform.Feedback, error) {
+	return listJSON[platform.Feedback](ctx, p.db, pgRebind(`SELECT data FROM feedback WHERE tenant_id=? ORDER BY issue_key`), tenantID)
 }
 func (p *Postgres) DeleteIgnoreRule(ctx context.Context, tenantID, issueKey string) error {
 	return p.exec(ctx, `DELETE FROM ignores WHERE tenant_id=? AND issue_key=?`, tenantID, issueKey)

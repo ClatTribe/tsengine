@@ -272,6 +272,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/attack-paths", d.auth(d.handleAttackPaths))                                                        // cross-surface correlation (unified cross-detection)
 	mux.HandleFunc("GET /v1/issues", d.auth(d.handleIssues))                                                                   // findings de-duplicated into unified issues (one issue, many signals)
 	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))                                                      // auto-triage funnel: % of raw findings the engine handled automatically
+	mux.HandleFunc("POST /v1/issues/feedback", d.auth(d.handleFeedback))                                                       // record a human judgement (changes nothing — opinion only)
+	mux.HandleFunc("GET /v1/issues/feedback", d.auth(d.handleListFeedback))                                                    // this tenant's judgements
 	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))                                                      // suppress an issue (false-positive / accepted-risk)
 	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))                                                  // restore a suppressed issue
 	mux.HandleFunc("GET /v1/exclusions", d.auth(d.handleListExclusions))                                                       // custom noise-filter rules (path/package/rule globs)

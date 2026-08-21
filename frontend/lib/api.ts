@@ -644,6 +644,15 @@ export const api = {
   unignoreIssue: (key: string) =>
     call<unknown>("/v1/issues/unignore", { method: "POST", body: JSON.stringify({ key }) }),
 
+  // Feedback is an OPINION, not an action: it records what a person thinks and changes
+  // nothing they see. Deliberately a separate call from ignoreIssue so the UI cannot
+  // accidentally couple "tell us you disagree" to "hide this".
+  sendIssueFeedback: (key: string, verdict: string, evidence: string, note?: string) =>
+    call<unknown>("/v1/issues/feedback", {
+      method: "POST",
+      body: JSON.stringify({ key, verdict, evidence, note: note ?? "" }),
+    }),
+
   // Custom exclusion rules (path/package/rule-id/cve glob noise filters).
   exclusions: () => safe<{ exclusions: ExclusionRule[]; count: number }>("/v1/exclusions", { exclusions: [], count: 0 }),
   addExclusion: (field: string, pattern: string, reason?: string) =>

@@ -120,9 +120,14 @@ func (a *AWS) Exchange(_ context.Context, code, _ string) (platform.Connection, 
 func (a *AWS) Discover(_ context.Context, c platform.Connection, _ string) ([]platform.Asset, error) {
 	return []platform.Asset{{
 		TenantID: c.TenantID, ConnectionID: c.ID,
-		Type:         "cloud_account",
-		Target:       nz(c.Account, "aws"),
-		Meta:         map[string]string{"provider": "aws", "role_arn": c.SecretRef},
+		Type: "cloud_account",
+		// Target is the PROVIDER, not the account. The cloud Handler passes Asset.Target straight
+		// through to prowler/scoutsuite, which switch on {aws|gcp|azure|kubernetes} — so an account
+		// id here is rejected as "unsupported provider" and no cloud account can be scanned. The
+		// account id is preserved in Meta (nothing at scan time reads it off Target; credentials
+		// reach the tool via the assumed-role env in the sandbox).
+		Target:       "aws",
+		Meta:         map[string]string{"provider": "aws", "role_arn": c.SecretRef, "account_id": c.Account},
 		DiscoveredAt: time.Now().UTC(),
 	}}, nil
 }

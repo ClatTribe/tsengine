@@ -32,6 +32,24 @@ export async function unignoreIssue(key: string) {
   revalidatePath("/dashboard");
 }
 
+// Record a human judgement about an issue. Note what is NOT here: no revalidatePath.
+// Feedback deliberately changes nothing on screen — the issue stays exactly where it
+// was — because feedback a person suspects will hide their finding is feedback they
+// will not give honestly.
+export async function sendIssueFeedback(
+  key: string,
+  verdict: string,
+  evidence: string,
+  note: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await api.sendIssueFeedback(key, verdict, evidence, note);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not record that" };
+  }
+}
+
 // Add a custom exclusion rule (path/package/rule-id/cve glob). Matching findings
 // drop out before they're unified, so the noise never becomes an issue.
 export async function addExclusion(field: string, pattern: string, reason: string) {

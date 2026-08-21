@@ -32,17 +32,24 @@ func TestHoldout_GroundTruthIsIndependent(t *testing.T) {
 // in-distribution bench (~100%) but that is circular. This held-out set labels
 // truth INDEPENDENTLY, and the engine must:
 //   - find the genuinely-reachable paths (recall 1.0), and
-//   - downgrade the inert shapes it ENCODES (known FP-reduction 1.0),
+//   - downgrade the inert shapes it ENCODES (known FP-reduction 1.0), AND
+//   - downgrade the inert shapes it does NOT encode (held-out FP-reduction 1.0).
 //
-// while it currently FAILS to downgrade inert shapes it does NOT encode
-// (held-out FP-reduction < 1.0, false paths > 0). That gap is the honest overfit
-// measure.
+// THIS TEST WAS A TRIPWIRE ON A KNOWN GAP AND IS NOW A GUARD ON THE FIX. It used to
+// assert held-out FP-reduction < 1.0 and false paths > 0, documenting a 50-point overfit
+// gap whose named cause was iam_inline_policy_allows_privilege_escalation: ingest built
+// privesc edges from ATTACHED policies alone, so a role whose permission boundary
+// blocked the escalation still got a path to admin. cloudgraph.AddPrivescEdgesWithBoundaries
+// now asks cloudiam for the effective permission (attached ∧ boundary), and the gap is 0.
 //
-// WHEN THE ENGINE IS FIXED (trust-policy + permission-boundary aware ingest), the
-// held-out FP-reduction rises to 1.0 and false paths drop to 0 — at which point
-// flip the two `< 1.0` / `> 0` assertions below to `== 1.0` / `== 0`. This test
-// is intentionally a tripwire on a known, documented gap.
-func TestHoldout_ExposesOverfitGap(t *testing.T) {
+// Flipped rather than deleted, because the assertions that matter are the ones that
+// would catch the fix REGRESSING — and because a benchmark whose failing case is removed
+// stops being able to fail.
+//
+// Read the caveats in holdout.go's plantHeldOutBoundary before quoting this as a product
+// claim: the evaluator is fixed, but no production ingest path generates policy-derived
+// privesc edges yet, and awsfetch does not read boundaries.
+func TestHoldout_NoOverfitGap(t *testing.T) {
 	agg, n, err := RunHoldout(1, 10, 2, 0)
 	if err != nil {
 		t.Fatalf("RunHoldout: %v", err)
@@ -51,24 +58,28 @@ func TestHoldout_ExposesOverfitGap(t *testing.T) {
 		t.Fatalf("expected 10 accounts, got %d", n)
 	}
 	// Controls: the engine must handle in-distribution shapes perfectly, else the
-	// held-out gap below would be ambiguous (could be a general regression).
+	// held-out result below would be ambiguous (could be a general regression).
 	if agg.PathRecall != 1.0 {
 		t.Errorf("recall on genuinely-reachable paths = %.4f, want 1.0", agg.PathRecall)
 	}
 	if agg.KnownFPRed != 1.0 {
 		t.Errorf("known-shape FP-reduction = %.4f, want 1.0 (control)", agg.KnownFPRed)
 	}
-	// The probe: documents the current gap. Flip these when ingest learns trust
-	// policies + permission boundaries.
-	if agg.HeldOutFPRed >= 1.0 {
-		t.Errorf("held-out FP-reduction = %.4f — if this is now 1.0 the gap is CLOSED; "+
-			"update this test to assert == 1.0 and celebrate", agg.HeldOutFPRed)
+	// The probe, now a guard. A regression here means ingest has gone back to
+	// over-approximating, and an over-approximated path is a false one: it sends someone
+	// to sever a route that was never open while the real one stays open.
+	if agg.HeldOutFPRed != 1.0 {
+		t.Errorf("held-out FP-reduction = %.4f, want 1.0 — the boundary/trust fix has regressed; "+
+			"falsely-reported checks: %v", agg.HeldOutFPRed, agg.HeldOutMissed)
 	}
-	if agg.FalsePaths == 0 {
-		t.Errorf("expected held-out false paths > 0 (the documented gap); got 0 — " +
-			"if the engine now handles trust/boundary, update this test")
+	if agg.FalsePaths != 0 {
+		t.Errorf("held-out false attack paths = %d, want 0 — a false path is worse than a missed one",
+			agg.FalsePaths)
 	}
-	if len(agg.HeldOutMissed) == 0 {
-		t.Errorf("expected the report to name the false-positived prowler checks")
+	// Recall is asserted above, but state the reason here too: a "fix" that closed the
+	// gap by dropping genuinely-reachable paths would score perfectly on FP-reduction and
+	// be strictly worse than the bug.
+	if agg.PathRecall < 1.0 {
+		t.Errorf("recall fell to %.4f — the gap must not be closed by dropping real paths", agg.PathRecall)
 	}
 }

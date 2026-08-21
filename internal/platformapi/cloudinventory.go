@@ -13,6 +13,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
+	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/azinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
@@ -32,26 +33,28 @@ import (
 // matching grounded collector into the same cloudgraph.Inventory the engine reasons over.
 //
 // buildCloudInventory dispatches the posted raw cloud state to the right grounded collector by provider.
-func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, error) {
+func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, connector.InventoryCoverage, error) {
 	switch provider {
 	case "", "aws":
 		var raw awsinventory.RawAWS
 		if err := json.Unmarshal(body, &raw); err != nil {
-			return cloudgraph.Inventory{}, fmt.Errorf("invalid AWS inventory body")
+			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid AWS inventory body")
 		}
-		return awsinventory.Build(raw), nil
+		return awsinventory.Build(raw), connector.CoverAWS(raw), nil
 	case "gcp":
 		var raw gcpinventory.RawGCP
 		if err := json.Unmarshal(body, &raw); err != nil {
-			return cloudgraph.Inventory{}, fmt.Errorf("invalid GCP inventory body")
+			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid GCP inventory body")
 		}
-		return gcpinventory.Build(raw), nil
+		return gcpinventory.Build(raw), connector.CoverGCP(raw), nil
 	case "azure":
 		var raw azinventory.RawAzure
 		if err := json.Unmarshal(body, &raw); err != nil {
-			return cloudgraph.Inventory{}, fmt.Errorf("invalid Azure inventory body")
+			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid Azure inventory body")
 		}
-		return azinventory.Build(raw), nil
+		// No coverage analyser yet: Azure reports nothing rather than claiming completeness
+		// it has not checked.
+		return azinventory.Build(raw), connector.InventoryCoverage{}, nil
 	case "kubernetes", "k8s":
 		// The orchestrator is a cloud in its own right, and its security model is the SAME graph: a
 		// ServiceAccount is a principal, a RoleBinding a grant, a pod runs-as its SA, an exposed Service
@@ -60,11 +63,11 @@ func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, er
 		// not a fourth engine — reachability, chaining, pruning and remediation all come for free.
 		var raw k8sinventory.RawK8s
 		if err := json.Unmarshal(body, &raw); err != nil {
-			return cloudgraph.Inventory{}, fmt.Errorf("invalid Kubernetes inventory body")
+			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid Kubernetes inventory body")
 		}
-		return k8sinventory.Build(raw), nil
+		return k8sinventory.Build(raw), connector.InventoryCoverage{}, nil
 	default:
-		return cloudgraph.Inventory{}, fmt.Errorf("unknown provider %q (expected aws|gcp|azure|kubernetes)", provider)
+		return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("unknown provider %q (expected aws|gcp|azure|kubernetes)", provider)
 	}
 }
 
@@ -78,7 +81,7 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
-	inv, perr := buildCloudInventory(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body)
+	inv, coverage, perr := buildCloudInventory(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body)
 	if perr != nil {
 		writeJSON(w, http.StatusBadRequest, errBody(perr.Error()))
 		return
@@ -112,10 +115,23 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
-	_, summary, aerr := d.applyCloudInventory(r.Context(), tenantID, inv, invJSON, "live AWS inventory collected → stored for the AI cloud engineer")
+	_, summary, aerr := d.applyCloudInventoryWithCoverage(r.Context(), tenantID, inv, invJSON,
+		"live AWS inventory collected → stored for the AI cloud engineer", coverage)
 	if aerr != nil {
 		respond(w, nil, aerr)
 		return
+	}
+	// WHAT THIS SNAPSHOT COULD NOT ANSWER rides back with the result.
+	//
+	// The live fetch path has said this since it was written — "silence about coverage is how a
+	// partial picture passes for a whole one" — but the POSTED path bypasses it, and posting is how
+	// GCP arrives at all. The specific danger is escalation: it is computed from policy documents
+	// (AWS) and IAM bindings (GCP), and a snapshot omitting them yields exactly zero escalation
+	// edges. "Nobody can become admin in your account" is the most reassuring thing this product can
+	// say and the most damaging thing to say wrongly.
+	summary["coverage"] = coverage.Summary()
+	if !coverage.Complete() {
+		summary["coverage_gaps"] = coverage.Notes
 	}
 	writeJSON(w, http.StatusOK, summary)
 }
@@ -134,6 +150,14 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 // that view, so drift findings which were stored but not handed back would be opened by
 // persistDriftFindings and then immediately resolved by the same pass.
 func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string) ([]types.Finding, map[string]any, error) {
+	return d.applyCloudInventoryWithCoverage(ctx, tenantID, inv, invJSON, ledgerNote, connector.InventoryCoverage{})
+}
+
+// applyCloudInventoryWithCoverage is applyCloudInventory carrying what the snapshot could
+// not answer, so the gap is STORED alongside it rather than only returned to whoever
+// posted it. The reader of the attack-path page is rarely the CI job that posted the
+// inventory, and they are the one who needs to know the escalation analysis was partial.
+func (d Deps) applyCloudInventoryWithCoverage(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string, coverage connector.InventoryCoverage) ([]types.Finding, map[string]any, error) {
 	// Diff-on-ingest (continuous Detect): if a prior snapshot exists, diff it against this fresh one BEFORE
 	// overwriting → automatic cloud config-drift findings (a resource became public, a new privileged
 	// principal, a new internet/privesc/lateral path). This makes cloud change-control CONTINUOUS on every
@@ -151,6 +175,7 @@ func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv clou
 	}
 	if err := d.CloudSnapshots.Put(ctx, cloudsnap.Snapshot{
 		TenantID: tenantID, Inventory: invJSON, CapturedAt: time.Now().UTC(),
+		CoverageGaps: coverage.Notes,
 	}); err != nil {
 		return nil, nil, err
 	}

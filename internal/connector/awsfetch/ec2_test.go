@@ -29,7 +29,11 @@ func TestFetch_AllThreeSurfacesProduceAUsableGraph(t *testing.T) {
 		Buckets:   fakeLister{out: []Bucket{{Name: "customer-data", Public: true}}},
 		Principals: fakeIAM{out: []Principal{
 			{ARN: "arn:aws:iam::123456789012:role/app", Name: "app", Role: true,
-				Trust: `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam::123456789012:root"},"Action":"sts:AssumeRole"}]}`},
+				Trust: `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam::123456789012:root"},"Action":"sts:AssumeRole"}]}`,
+				// A COMPLETE read includes the policy documents. Without them the fetcher
+				// correctly reports iam-policies as unread, because no escalation path can
+				// be computed — and this test claims every surface was read.
+				Policies: []string{`{"Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":"*"}]}`}},
 		}},
 		Compute: fakeCompute{
 			ins: []Instance{{ID: "i-1", PublicIP: true, SGIDs: []string{"sg-1"}}},

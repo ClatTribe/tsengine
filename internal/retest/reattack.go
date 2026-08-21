@@ -93,8 +93,9 @@ func ApplyReattack(actions []platform.Action, verdicts map[string]ReattackVerdic
 			continue // nothing was re-tested for this action; leave the rescan verdict alone
 		}
 
+		rescanSaidFixed := alreadyFixedByRescan(a)
 		fv := platform.FixVerification{
-			Method: MethodReattack, VerifiedAt: now,
+			Method: MethodReattack, VerifiedAt: now, RescanSaidFixed: rescanSaidFixed,
 		}
 		switch {
 		case len(exploitable) > 0:
@@ -103,9 +104,15 @@ func ApplyReattack(actions []platform.Action, verdicts map[string]ReattackVerdic
 			fv.Status = StatusStillExploitable
 			fv.StillPresent = exploitable
 			fv.Fixed = closed
+			// The rescan having said "fixed" while the exploit still runs is the case this
+			// whole path exists for. Recording it machine-readably is what turns one near-miss
+			// into a labelled example of absence-evidence being insufficient.
+			if rescanSaidFixed {
+				fv.Disagreement = platform.DisagreeRescanMissedLiveExploit
+			}
 			fv.Evidence = fmt.Sprintf("Re-ran the exploit after the fix: %d of %d still succeed. %s",
 				len(exploitable), len(exploitable)+len(closed), evidence)
-		case alreadyFixedByRescan(a):
+		case rescanSaidFixed:
 			// RULE 2. Both kinds of evidence agree — the scanner cannot see it AND the exploit no
 			// longer works.
 			fv.Status = StatusClosedWithProof
@@ -119,6 +126,7 @@ func ApplyReattack(actions []platform.Action, verdicts map[string]ReattackVerdic
 			// not cover. Report the disagreement rather than picking the flattering side.
 			fv.Status = StatusClosedWithProof
 			fv.Fixed = closed
+			fv.Disagreement = platform.DisagreeScannerSeesVariant
 			fv.Evidence = fmt.Sprintf("Re-ran the exploit after the fix: %d no longer succeed. NOTE: the "+
 				"re-scan still reports this finding, so the scanner may be seeing a variant the re-test "+
 				"does not cover — treat this as partial.", len(closed))

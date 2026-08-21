@@ -33,6 +33,7 @@ type Memory struct {
 	policies        map[string]map[string]platform.Policy             // tenantID → policyID → policy
 
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
+	feedback    map[string]map[string]platform.Feedback      // tenantID → issueKey → latest human judgement
 	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
 	runtimeEvts map[string][]platform.RuntimeEvent           // tenantID → runtime-protection events (append-only)
 	pentests    map[string]map[string]pentest.Engagement     // tenantID → engagementID → pentest
@@ -62,6 +63,7 @@ func NewMemory() *Memory {
 		audits:          map[string]map[string]platform.AuditEngagement{},
 		policies:        map[string]map[string]platform.Policy{},
 		ignores:         map[string]map[string]platform.IgnoreRule{},
+		feedback:        map[string]map[string]platform.Feedback{},
 		exclusions:      map[string]map[string]platform.ExclusionRule{},
 		runtimeEvts:     map[string][]platform.RuntimeEvent{},
 		pentests:        map[string]map[string]pentest.Engagement{},
@@ -543,6 +545,29 @@ func (m *Memory) PutIgnoreRule(_ context.Context, ir platform.IgnoreRule) error 
 	return nil
 }
 
+// PutFeedback stores one person's judgement, latest-wins per issue.
+func (m *Memory) PutFeedback(_ context.Context, fb platform.Feedback) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.feedback[fb.TenantID] == nil {
+		m.feedback[fb.TenantID] = map[string]platform.Feedback{}
+	}
+	m.feedback[fb.TenantID][fb.IssueKey] = fb
+	return nil
+}
+
+// ListFeedback returns one tenant's judgements. Never another tenant's (§18.2 inv. 2).
+func (m *Memory) ListFeedback(_ context.Context, tenantID string) ([]platform.Feedback, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Feedback, 0, len(m.feedback[tenantID]))
+	for _, fb := range m.feedback[tenantID] {
+		out = append(out, fb)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].IssueKey < out[j].IssueKey })
+	return out, nil
+}
+
 func (m *Memory) ListIgnoreRules(_ context.Context, tenantID string) ([]platform.IgnoreRule, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -688,6 +713,7 @@ type Snapshot struct {
 	Audits          map[string]map[string]platform.AuditEngagement    `json:"audits,omitempty"`
 	Policies        map[string]map[string]platform.Policy             `json:"policies,omitempty"`
 	Ignores         map[string]map[string]platform.IgnoreRule         `json:"ignores,omitempty"`
+	Feedback        map[string]map[string]platform.Feedback           `json:"feedback,omitempty"`
 	Exclusions      map[string]map[string]platform.ExclusionRule      `json:"exclusions,omitempty"`
 	RuntimeEvts     map[string][]platform.RuntimeEvent                `json:"runtime_events,omitempty"`
 	Pentests        map[string]map[string]pentest.Engagement          `json:"pentests,omitempty"`
@@ -719,6 +745,7 @@ func (m *Memory) Export() Snapshot {
 		Audits:          m.audits,
 		Policies:        m.policies,
 		Ignores:         m.ignores,
+		Feedback:        m.feedback,
 		Exclusions:      m.exclusions,
 		RuntimeEvts:     m.runtimeEvts,
 		Pentests:        m.pentests,
@@ -749,6 +776,7 @@ func (m *Memory) load(s Snapshot) {
 	m.audits = orEmptyAudits(s.Audits)
 	m.policies = orEmptyPolicies(s.Policies)
 	m.ignores = orEmptyIgnores(s.Ignores)
+	m.feedback = orEmptyFeedback(s.Feedback)
 	m.exclusions = orEmptyExclusions(s.Exclusions)
 	m.runtimeEvts = orEmpty(s.RuntimeEvts)
 	m.pentests = orEmptyPentests(s.Pentests)
@@ -805,6 +833,12 @@ func orEmptyIncidents(m map[string]map[string]platform.Incident) map[string]map[
 func orEmptyExclusions(m map[string]map[string]platform.ExclusionRule) map[string]map[string]platform.ExclusionRule {
 	if m == nil {
 		return map[string]map[string]platform.ExclusionRule{}
+	}
+	return m
+}
+func orEmptyFeedback(m map[string]map[string]platform.Feedback) map[string]map[string]platform.Feedback {
+	if m == nil {
+		return map[string]map[string]platform.Feedback{}
 	}
 	return m
 }

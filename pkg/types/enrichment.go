@@ -19,6 +19,18 @@ func (f Finding) L15Summary() string {
 	if ti := f.ThreatIntel; ti != nil {
 		if ti.KEV != nil && ti.KEV.Listed {
 			t = append(t, "KEV") // CISA actively-exploited list (seen in the wild)
+			// RANSOMWARE is a strictly stronger claim than KEV and rides ALONGSIDE it
+			// rather than replacing it: the agent should see both that this is exploited
+			// in the wild and that the crews exploiting it encrypt estates. Most of the
+			// KEV catalog is the former only.
+			if ti.KEV.Ransomware {
+				t = append(t, "RANSOMWARE")
+			}
+			if !ti.KEV.DueDate.IsZero() {
+				// CISA's own remediation deadline, absolute. An agent prioritising work
+				// should know the authority already set a date rather than infer one.
+				t = append(t, "cisa-due:"+ti.KEV.DueDate.Format("2006-01-02"))
+			}
 		}
 		if ti.EPSS != nil {
 			t = append(t, fmt.Sprintf("EPSS:%.2f", ti.EPSS.Score))

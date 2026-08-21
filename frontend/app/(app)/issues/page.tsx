@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import type { Issue, Explanation } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { IssueActions } from "@/components/issues/issue-actions";
+import { IssueFeedback } from "@/components/issues/issue-feedback";
 import { IssueAutofix } from "@/components/issues/issue-autofix";
 import { IssueInvestigate } from "@/components/issues/issue-investigate";
 import { EngineerStrip } from "@/components/issues/engineer-strip";
@@ -319,7 +320,8 @@ function IssueRow({ issue, ignored, prior, explain }: { issue: Issue; ignored: b
         </div>
       </td>
       <td className="py-3 pr-5 align-top text-right">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center justify-end gap-2">
           {!ignored && <IssueInvestigate issueKey={issue.key} title={issue.title} prior={prior} />}
           {!ignored && issue.finding_ids[0] && <IssueAutofix findingId={issue.finding_ids[0]} title={issue.title} />}
           <IssueActions issueKey={issue.key} ignored={ignored} />
@@ -328,6 +330,11 @@ function IssueRow({ issue, ignored, prior, explain }: { issue: Issue; ignored: b
               <ArrowRight className="h-4 w-4" />
             </Link>
           )}
+          </div>
+          {/* Feedback sits BELOW the actions, on its own line, because it is a question
+              rather than another button to click past — and because it must never read
+              as one of the controls that makes the row move. */}
+          {!ignored && <IssueFeedback issueKey={issue.key} />}
         </div>
       </td>
     </tr>

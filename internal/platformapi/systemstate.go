@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -65,6 +66,16 @@ const (
 	DegradationLastScanFailed   = "last_scan_failed"
 	DegradationAIOff            = "ai_off"
 	DegradationConnectionBroken = "connection_broken"
+	// DegradationCloudCoverage: the stored cloud snapshot could not answer something we
+	// know how to ask — most often privilege escalation, which needs policy documents
+	// (AWS) or IAM bindings (GCP) the snapshot omitted.
+	//
+	// This is the same shape as the failed-scan case and just as dangerous: with no
+	// policies to read the engine reports zero escalation paths, and on an attack-path
+	// page zero reads as "nobody can become admin here". The gap was already returned to
+	// whoever POSTED the inventory; the person who needs it is the one reading the page
+	// days later, and they were getting silence.
+	DegradationCloudCoverage = "cloud_coverage_incomplete"
 )
 
 // AllDegradationKinds is the closed set, for the guard test and for the frontend's exhaustiveness.
@@ -74,6 +85,7 @@ func AllDegradationKinds() []string {
 		DegradationLastScanFailed,
 		DegradationAIOff,
 		DegradationConnectionBroken,
+		DegradationCloudCoverage,
 	}
 }
 
@@ -155,6 +167,28 @@ func (d Deps) computeDegradations(ctx context.Context, tenantID string) []Degrad
 				Title:       plural(broken, "connection is", "connections are") + " not usable",
 				Detail:      "Assets behind " + plural(broken, "it", "them") + " are not being scanned. Reconnect to restore coverage.",
 				ActionLabel: "Review connections", ActionHref: "/assets",
+			})
+		}
+	}
+
+	// 5. The cloud snapshot could not answer something. Grounded (§10): read from the
+	// STORED snapshot's own recorded gaps, never inferred from an empty result — "we found
+	// no escalation" and "we could not look for escalation" are different claims and only
+	// the snapshot itself knows which one this is.
+	if d.CloudSnapshots != nil {
+		if snap, ok, err := d.CloudSnapshots.Get(ctx, tenantID); err == nil && ok && len(snap.CoverageGaps) > 0 {
+			reasons := make([]string, 0, len(snap.CoverageGaps))
+			for k := range snap.CoverageGaps {
+				reasons = append(reasons, k)
+			}
+			sort.Strings(reasons)
+			out = append(out, Degradation{
+				Kind: DegradationCloudCoverage, Severity: "warning",
+				Title: "Part of your cloud was not analysed",
+				Detail: "The stored cloud snapshot is missing data needed for: " + strings.Join(reasons, ", ") +
+					". An empty result for those means we could not look, not that there is nothing there. " +
+					snap.CoverageGaps[reasons[0]],
+				ActionLabel: "See cloud", ActionHref: "/cloud",
 			})
 		}
 	}

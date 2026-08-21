@@ -257,6 +257,11 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 			// Carry the KEV (exploited-in-the-wild) flag the L1.5 threat_intel hook stamped, so the SLA
 			// layer can apply the BOD 22-01 accelerated resolve clock (SLAPolicy.KEVResolveHours).
 			KEV: f.ThreatIntel != nil && f.ThreatIntel.KEV != nil && f.ThreatIntel.KEV.Listed,
+			// Ransomware use and CISA's own due date ride alongside, because "exploited in
+			// the wild" and "exploited by ransomware operators, remediate by this date" are
+			// different urgencies and the SLA layer must be able to tell them apart.
+			Ransomware: f.ThreatIntel != nil && f.ThreatIntel.KEV != nil && f.ThreatIntel.KEV.Ransomware,
+			KEVDueAt:   kevDueAt(f),
 		}
 		// Detection Skill triage (ADR 0017): attach the detection engineer's reasoning to the alert so
 		// whoever is on shift inherits it instead of rediscovering it.
@@ -382,4 +387,15 @@ func presentFindings(present map[string]types.Finding) []types.Finding {
 	// Deterministic order so a prompt (and therefore a verdict) does not vary with map iteration.
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// kevDueAt returns CISA's published remediation deadline for a finding's CVE, or the
+// zero time when there is none. Nil-safe at every hop: a finding with no threat intel,
+// no KEV entry, or no due date simply has no authority-set deadline — which is not the
+// same as having a generous one.
+func kevDueAt(f types.Finding) time.Time {
+	if f.ThreatIntel == nil || f.ThreatIntel.KEV == nil {
+		return time.Time{}
+	}
+	return f.ThreatIntel.KEV.DueDate
 }
