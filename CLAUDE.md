@@ -340,7 +340,19 @@ These hold for **every** asset, recon or single-stage:
    inventing one is the same overclaim as a green tick on unscanned scope,
    pointed the other way. First implementation: `common.ThreatInformedGaps` on
    the web + ip handlers (exploited CVEs matching observed software that nuclei
-   ships no template for â Â§7.1).
+   ships no template for â Â§7.1). **The `asset.CoverageRulePrefix` (`coverage::`)
+   namespace IS the contract**: `internal/coverage` surfaces anything carrying it as
+   `AssetCoverage.DeclaredGaps` and EXCLUDES it from `FindingsCount` /
+   `ToolsWithFindings` â without that exclusion, admitting a gap would RAISE the
+   numbers describing how well an asset was covered, so being honest would make the
+   asset look MORE scanned. `crossdetect.UnifiedIssues` drops it too: in a list titled
+   "issues" a disclosure reads as one, with CVE ids in its title, inviting exactly the
+   conclusion its own text refuses to make. A new CoverageReporter gets all of this by
+   using the prefix. `DeclaredGaps` is DISTINCT from `UntestedClasses` â the latter
+   is a standing limitation of the asset TYPE (knowable before any scan), the former a
+   fact about one run against one target; merged, a standing caveat absorbs a live one.
+   Rendered on `/coverage` with the disclosure text VERBATIM, since the "not a
+   vulnerability" caveat lives in the wording and a summary is where it would be lost.
 6. **Child-asset pivot is a first-class artifact (C5).** A handler may
    implement `ChildAssetExtractor.ChildAssets(findings)` â `Scan.ChildAssets`
    (domain subdomains â web/ip child targets) so webappsec spawns child
