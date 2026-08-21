@@ -2,12 +2,14 @@ package platformapi
 
 import (
 	"context"
+	"net/http"
 	"runtime/debug"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -110,4 +112,60 @@ func agentVersion() string {
 		rev = rev[:12]
 	}
 	return rev + dirty
+}
+
+// recordEpisode persists a scored run into the tenant's corpus.
+//
+// Best-effort: a store failure loses the score, never the run's actual output, which
+// has already been stored and enriched by the time this is called. That ordering is
+// deliberate — the corpus is an observation about the product's work and must never be
+// able to block it.
+func (d Deps) recordEpisode(ctx context.Context, tenantID, scope string, e *ledger.Episode, saved []types.Finding) {
+	if d.Store == nil || e == nil {
+		return
+	}
+	verified := 0
+	for _, f := range saved {
+		if f.VerificationStatus == types.VerificationVerified {
+			verified++
+		}
+	}
+	rec := platform.NewEpisodeRecord(tenantID, scope, e, verified)
+	if rec.ID == "" {
+		// An episode with no clock is still a real episode; an empty ID would overwrite
+		// the previous one on every run, which turns a corpus into a single row.
+		rec.ID = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	if rec.RanAt.IsZero() {
+		rec.RanAt = time.Now().UTC()
+	}
+	_ = d.Store.PutEpisode(ctx, rec)
+}
+
+// handleEpisodes (GET /v1/episodes) returns the tenant's episode corpus and its
+// roll-up.
+//
+// The response reports scored alongside episodes on purpose. The gap between them is
+// the share of runs whose effect nobody could measure, and it belongs next to the
+// numbers derived from the rest — a cost-per-verified computed over half the corpus,
+// presented without saying so, is a more confident number than the data supports.
+func (d Deps) handleEpisodes(w http.ResponseWriter, r *http.Request, tenantID string) {
+	eps, err := d.Store.ListEpisodes(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if scope := r.URL.Query().Get("scope"); scope != "" {
+		kept := make([]platform.EpisodeRecord, 0, len(eps))
+		for _, e := range eps {
+			if e.Scope == scope {
+				kept = append(kept, e)
+			}
+		}
+		eps = kept
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"episodes": eps,
+		"stats":    platform.SummarizeEpisodes(eps),
+	})
 }

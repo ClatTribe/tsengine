@@ -123,6 +123,7 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	// would bias the record toward the ones that went smoothly.
 	episode.Cost = ledger.Cost{Iterations: rep.Calls, WallClock: time.Since(started)}
 	_ = episode.Close(d.censusState(r.Context(), tenantID, "cloud:"+tenantID, cloudFinding))
+	d.recordEpisode(r.Context(), tenantID, "cloud:"+tenantID, episode, saved)
 
 	if d.Recorder != nil {
 		args := map[string]any{"tenant_id": tenantID, "paths": stored, "calls": rep.Calls, "risks_proposed": risksProposed}

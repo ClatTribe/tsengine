@@ -197,6 +197,12 @@ type Episode struct {
 	// The four independent status axes — see the type comment. Each is the string form
 	// of the vocabulary its own package owns; this package deliberately declares no
 	// enum, so a new value there needs no change here.
+	// Unscored says WHY there is no delta, when there is none. A nil delta with no
+	// reason is indistinguishable from a run that changed nothing, and those are
+	// opposite facts: one is "we could not measure", the other is "we measured, and
+	// nothing moved".
+	Unscored string `json:"unscored,omitempty"`
+
 	StopReason   string `json:"stop_reason,omitempty"`   // l2.StopReason
 	Verification string `json:"verification,omitempty"`  // types.VerificationState
 	FixStatus    string `json:"fix_status,omitempty"`    // platform.FixStatus / retest.Status
@@ -223,9 +229,10 @@ func (e *Episode) Close(after *SecurityState) error {
 	d, err := Diff(e.Before, after)
 	if err != nil {
 		e.Delta = nil
+		e.Unscored = err.Error()
 		return err
 	}
-	e.Delta = d
+	e.Delta, e.Unscored = d, ""
 	return nil
 }
 

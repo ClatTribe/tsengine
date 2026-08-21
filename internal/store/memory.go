@@ -28,6 +28,7 @@ type Memory struct {
 	risks           map[string]map[string]platform.Risk               // tenantID → riskID → risk
 	aiAnalyses      map[string]map[string]platform.AIAnalysis         // tenantID → analysisID → AI analysis
 	evalRuns        map[string]map[string]platform.EvalRun            // tenantID → runID → eval run (append-only)
+	episodes        map[string]map[string]platform.EpisodeRecord      // tenantID → episodeID → scored agent run (append-only)
 	complianceSnaps map[string]map[string]platform.ComplianceSnapshot // tenantID → snapshotID → evidence snapshot
 	audits          map[string]map[string]platform.AuditEngagement    // tenantID → engagementID → audit
 	policies        map[string]map[string]platform.Policy             // tenantID → policyID → policy
@@ -59,6 +60,7 @@ func NewMemory() *Memory {
 		risks:           map[string]map[string]platform.Risk{},
 		aiAnalyses:      map[string]map[string]platform.AIAnalysis{},
 		evalRuns:        map[string]map[string]platform.EvalRun{},
+		episodes:        map[string]map[string]platform.EpisodeRecord{},
 		complianceSnaps: map[string]map[string]platform.ComplianceSnapshot{},
 		audits:          map[string]map[string]platform.AuditEngagement{},
 		policies:        map[string]map[string]platform.Policy{},
@@ -441,6 +443,33 @@ func (m *Memory) ListAIAnalyses(_ context.Context, tenantID string) ([]platform.
 	return out, nil
 }
 
+func (m *Memory) PutEpisode(_ context.Context, e platform.EpisodeRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.episodes[e.TenantID] == nil {
+		m.episodes[e.TenantID] = map[string]platform.EpisodeRecord{}
+	}
+	m.episodes[e.TenantID][e.ID] = e
+	return nil
+}
+
+func (m *Memory) ListEpisodes(_ context.Context, tenantID string) ([]platform.EpisodeRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.EpisodeRecord, 0, len(m.episodes[tenantID]))
+	for _, e := range m.episodes[tenantID] {
+		out = append(out, e)
+	}
+	// Oldest-first: a corpus is read as a trend, so the order carries meaning.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].RanAt.Equal(out[j].RanAt) {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].RanAt.Before(out[j].RanAt)
+	})
+	return out, nil
+}
+
 func (m *Memory) PutEvalRun(_ context.Context, r platform.EvalRun) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -710,6 +739,8 @@ type Snapshot struct {
 	Risks           map[string]map[string]platform.Risk               `json:"risks,omitempty"`
 	AIAnalyses      map[string]map[string]platform.AIAnalysis         `json:"ai_analyses,omitempty"`
 	ComplianceSnaps map[string]map[string]platform.ComplianceSnapshot `json:"compliance_snaps,omitempty"`
+	EvalRuns        map[string]map[string]platform.EvalRun            `json:"eval_runs,omitempty"`
+	Episodes        map[string]map[string]platform.EpisodeRecord      `json:"episodes,omitempty"`
 	Audits          map[string]map[string]platform.AuditEngagement    `json:"audits,omitempty"`
 	Policies        map[string]map[string]platform.Policy             `json:"policies,omitempty"`
 	Ignores         map[string]map[string]platform.IgnoreRule         `json:"ignores,omitempty"`
@@ -742,6 +773,8 @@ func (m *Memory) Export() Snapshot {
 		Risks:           m.risks,
 		AIAnalyses:      m.aiAnalyses,
 		ComplianceSnaps: m.complianceSnaps,
+		EvalRuns:        m.evalRuns,
+		Episodes:        m.episodes,
 		Audits:          m.audits,
 		Policies:        m.policies,
 		Ignores:         m.ignores,
@@ -773,6 +806,8 @@ func (m *Memory) load(s Snapshot) {
 	m.risks = orEmptyRisks(s.Risks)
 	m.aiAnalyses = orEmptyAIAnalyses(s.AIAnalyses)
 	m.complianceSnaps = orEmptyComplianceSnaps(s.ComplianceSnaps)
+	m.evalRuns = orEmptyEvalRuns(s.EvalRuns)
+	m.episodes = orEmptyEpisodes(s.Episodes)
 	m.audits = orEmptyAudits(s.Audits)
 	m.policies = orEmptyPolicies(s.Policies)
 	m.ignores = orEmptyIgnores(s.Ignores)
@@ -909,4 +944,18 @@ func clone[T any](xs []T) []T {
 	out := make([]T, len(xs))
 	copy(out, xs)
 	return out
+}
+
+func orEmptyEvalRuns(m map[string]map[string]platform.EvalRun) map[string]map[string]platform.EvalRun {
+	if m == nil {
+		return map[string]map[string]platform.EvalRun{}
+	}
+	return m
+}
+
+func orEmptyEpisodes(m map[string]map[string]platform.EpisodeRecord) map[string]map[string]platform.EpisodeRecord {
+	if m == nil {
+		return map[string]map[string]platform.EpisodeRecord{}
+	}
+	return m
 }

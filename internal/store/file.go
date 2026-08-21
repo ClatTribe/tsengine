@@ -146,6 +146,13 @@ func (f *File) PutAIAnalysis(ctx context.Context, a platform.AIAnalysis) error {
 	return f.persist()
 }
 
+func (f *File) PutEpisode(ctx context.Context, e platform.EpisodeRecord) error {
+	if err := f.Memory.PutEpisode(ctx, e); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutEvalRun(ctx context.Context, r platform.EvalRun) error {
 	if err := f.Memory.PutEvalRun(ctx, r); err != nil {
 		return err

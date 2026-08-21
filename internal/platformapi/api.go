@@ -172,6 +172,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/safechain/check", d.auth(d.handleSafeChain))                // install-time supply-chain gate (Safe Chain parity)
 	mux.HandleFunc("GET /v1/engagements", d.auth(d.handleEngagements))
 	mux.HandleFunc("GET /v1/l15-audit", d.auth(d.handleL15Audit))
+	mux.HandleFunc("GET /v1/episodes", d.auth(d.handleEpisodes)) // the scored-agent-run corpus (ADR 0018 §4)
 	mux.HandleFunc("GET /v1/eval", d.auth(d.handleTenantEval))
 	// POST, and separate from the GET above, because this one spends a model call per case on the
 	// customer's own key — it must be asked for, never run because a page rendered.
