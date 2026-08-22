@@ -142,9 +142,10 @@ func narrativeSummary(r *VAPTReport) string {
 	var lead string
 	switch {
 	case crit > 0:
-		lead = fmt.Sprintf("**%d critical** and %d high-severity issue(s) require immediate attention", crit, high)
+		lead = fmt.Sprintf("**%d critical** and %s require immediate attention", crit,
+			numClause(high, "high-severity issue", "high-severity issues"))
 	case high > 0:
-		lead = fmt.Sprintf("%d high-severity issue(s) should be prioritised", high)
+		lead = numClause(high, "high-severity issue should be prioritised", "high-severity issues should be prioritised")
 	default:
 		lead = "no critical or high-severity issues were found; the remaining items are lower-risk hardening opportunities"
 	}
@@ -153,8 +154,8 @@ func narrativeSummary(r *VAPTReport) string {
 	// "1 are unconfirmed single-tool pattern matches" for a singleton, and spliced the KEV clause
 	// mid-sentence producing a two-"and" run-on — both on the executive summary a customer forwards.
 	var b strings.Builder
-	fmt.Fprintf(&b, "This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**.%s %s.",
-		r.TenantName, s.Total, s.RiskRating, untestedClause(r), capitalize(lead))
+	fmt.Fprintf(&b, "This assessment of %s identified **%s** across the monitored assets, giving an overall risk rating of **%s**.%s %s.",
+		r.TenantName, numClause(s.Total, "finding", "findings"), s.RiskRating, untestedClause(r), capitalize(lead))
 
 	fmt.Fprintf(&b, " Of these, %s", numClause(s.Verified,
 		"is tool-confirmed (corroborated or re-verified)",
