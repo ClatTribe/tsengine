@@ -71,6 +71,16 @@ var required = []struct {
 			"(BOLA/BFLA needs two identities) was never reachable",
 	},
 	{
+		page:  "frontend/app/(app)/issues/page.tsx",
+		field: "evidence_insufficient",
+		wouldOtherwiseClaim: "nothing back at all. The row control asks two questions — is this real, " +
+			"and did the evidence show you why — and neither answer was ever shown to the person who " +
+			"gave it: the verdict reached the eval suite and the evidence axis became prose inside a " +
+			"case's reason string. Asking someone a question and never showing them the answer is not " +
+			"a feedback loop, and evidence_insufficient is the actionable half because it is a fault " +
+			"in OUR write-up rather than in the finding",
+	},
+	{
 		page:  "frontend/app/(app)/incidents/page.tsx",
 		field: "onset",
 		wouldOtherwiseClaim: "that \"this bucket is public\" and \"this bucket became public forty " +

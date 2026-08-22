@@ -156,6 +156,22 @@ export interface AttackPaths {
 
 // Unified issue (GET /v1/issues) — the same weakness reported by one or more
 // scanners across surfaces, collapsed into one row ("one issue, many signals").
+// What this tenant's own judgements add up to. Both axes were collected and neither was ever shown
+// back: the verdict reached the eval suite, the evidence axis became prose inside a case's reason
+// string, and no page read any of it — so someone who answered "no, you did not show me why" had no
+// sign it landed anywhere. evidence_insufficient is a defect in OUR write-up rather than in the
+// finding, which is what makes weakest_explanations the list to act on.
+export interface FeedbackSummary {
+  total: number;
+  real: number;
+  false_positive: number;
+  unclear: number; // first-class: "I could not understand this" is an answer, not an absence of one
+  evidence_sufficient: number;
+  evidence_insufficient: number;
+  evidence_unanswered: number; // counted, so a low insufficient count is not mistaken for approval
+  weakest_explanations?: { issue_key: string; count: number }[];
+}
+
 export interface Issue {
   key: string;
   title: string;
