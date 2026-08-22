@@ -88,15 +88,50 @@ const meta = (html, re) => {
   return m ? unescape(m[1]) : null;
 };
 
-const pages = renderedPages().map((p) => ({
-  route: p.route,
-  title: meta(p.html, /<title>([^<]*)<\/title>/),
-  description: meta(p.html, /<meta name="description" content="([^"]*)"/),
-  robots: meta(p.html, /<meta name="robots" content="([^"]*)"/) ?? "",
-  ogImage: /<meta property="og:image"/.test(p.html),
-  canonical: /<link rel="canonical"/.test(p.html),
-  html: p.html,
-}));
+/**
+ * The document head, with any inline <svg> stripped.
+ *
+ * EVERY document-level tag is read from HERE, never from the whole file, because `<title>` is
+ * not unique to the head. An accessible inline SVG carries its own `<title>` as its accessible
+ * name, and the brand mark renders twice per page (nav and footer) — so a built page holds
+ * three `<title>` elements, of which only the first is the document's.
+ *
+ * The previous version matched the first `<title>` anywhere in the file. That returned the
+ * right answer, but only because the head happens to be serialised before the body: it was
+ * relying on document order, not on meaning. The failure that hides behind that is specific and
+ * bad — a page missing its document title would have the "no <title>" check silently satisfied
+ * by an SVG title reading "TensorShield", which is 12 characters and therefore also passes the
+ * length check. A guard that cannot see a missing title is worse than no guard, because it
+ * reports the absence as a pass.
+ *
+ * Found by probing the running dev server, where Next streams the document title into the BODY
+ * and the SVG titles come first — so the same regex there returned "TensorShield". The built
+ * output this script reads is ordered the other way, which is exactly why the bug was invisible
+ * in CI.
+ */
+function documentHead(html, route) {
+  const end = html.indexOf("</head>");
+  if (end === -1) {
+    // Anomalous for a built page. Report it rather than falling back to scanning the whole
+    // document, which is how the original defect was introduced.
+    fail(`${route}: no </head> in the rendered output — cannot read its metadata`);
+    return "";
+  }
+  return html.slice(0, end).replace(/<svg[\s\S]*?<\/svg>/gi, "");
+}
+
+const pages = renderedPages().map((p) => {
+  const head = documentHead(p.html, p.route);
+  return {
+    route: p.route,
+    title: meta(head, /<title>([^<]*)<\/title>/),
+    description: meta(head, /<meta name="description" content="([^"]*)"/),
+    robots: meta(head, /<meta name="robots" content="([^"]*)"/) ?? "",
+    ogImage: /<meta property="og:image"/.test(head),
+    canonical: /<link rel="canonical"/.test(head),
+    html: p.html, // the FULL document — check 5 counts links, which live in the body
+  };
+});
 
 if (pages.length === 0) {
   console.error(`check-seo: found no prerendered pages in ${APP_DIR}. Refusing to report success.`);
