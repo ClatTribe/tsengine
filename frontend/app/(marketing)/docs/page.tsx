@@ -5,7 +5,7 @@ import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { DOC_SECTIONS } from "@/lib/docs";
 
 export const metadata = pageMeta({
-  title: "Docs — how to use TensorShield | TensorShield",
+  title: "Docs — how to use TensorShield",
   description:
     "How to use TensorShield: connect your stack, read the findings, approve the fixes, and produce the compliance evidence. Including what each agent needs, and what we deliberately do not do.",
   path: "/docs",

@@ -62,7 +62,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
       ["Does TensorShield do automated evidence collection like Vanta?", "Yes — findings across your code, cloud, identity, and apps map to controls automatically and roll up into a signed evidence pack. The difference is the findings are ours (we scan), not just imported from other tools."],
       ["Can you get me SOC 2 like Vanta?", "We get you audit-ready and quarterback the independent auditor. As with Vanta, the attestation itself must come from a licensed CPA firm — neither vendor can issue the report."],
     ],
-    seoTitle: "TensorShield vs. Vanta — Security + Compliance in One | TensorShield",
+    seoTitle: "vs. Vanta — Security + Compliance in One",
     seoDesc: "An honest TensorShield vs. Vanta comparison. Vanta automates compliance evidence; TensorShield is the security engine + compliance + a built-in pentest + an optional managed expert. See the differences.",
   },
   drata: {
@@ -96,7 +96,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
       ["Is TensorShield a Drata alternative?", "For founders who want security + pentest + compliance in one (optionally with a managed expert), yes. Drata is a great fit if you already have your own scanners, pentest vendor, and security leadership and primarily need control monitoring + evidence."],
       ["Does TensorShield monitor controls continuously like Drata?", "Yes — every tenant is re-scanned on a cadence and changes open incidents automatically. We add the detection itself (real scanning + a built-in pentest) on top of the monitoring."],
     ],
-    seoTitle: "TensorShield vs. Drata — Honest Comparison | TensorShield",
+    seoTitle: "TensorShield vs. Drata — Honest Comparison",
     seoDesc: "TensorShield vs. Drata, honestly. Drata excels at continuous control monitoring + evidence; TensorShield adds the security scanning, a built-in exploitation-proven pentest, and an optional managed expert.",
   },
   sprinto: {
@@ -130,7 +130,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
       ["Is TensorShield a Sprinto alternative?", "For founders who want security depth alongside compliance, yes. If you only need broad, low-cost compliance automation and have security handled, Sprinto is a strong choice."],
       ["Does TensorShield support custom frameworks like Sprinto?", "We cover 22 named frameworks today with grounded control mapping; a bring-your-own-framework capability is the documented next step. Sprinto's custom-framework breadth is currently wider."],
     ],
-    seoTitle: "TensorShield vs. Sprinto — Comparison for Startups | TensorShield",
+    seoTitle: "vs. Sprinto — Comparison for Startups",
     seoDesc: "TensorShield vs. Sprinto, honestly. Sprinto is broad, SMB-friendly compliance automation; TensorShield adds real security scanning, a built-in pentest, and an optional managed expert.",
   },
   secureframe: {
@@ -163,7 +163,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
       ["Is TensorShield a Secureframe alternative?", "For founders who want security + pentest + a hands-on expert in addition to compliance, yes. Secureframe is a good fit if you mainly need compliance automation with advisory support."],
       ["Does TensorShield provide compliance experts like Secureframe?", "Yes — and on the managed plan they run the program for you rather than advising from the side. Self-serve and MSP-channel options exist too."],
     ],
-    seoTitle: "TensorShield vs. Secureframe — Honest Comparison | TensorShield",
+    seoTitle: "vs. Secureframe — an Honest Comparison",
     seoDesc: "TensorShield vs. Secureframe, honestly. Secureframe is compliance automation with advisory experts; TensorShield adds real scanning, a built-in pentest, and a managed expert who runs the program.",
   },
   aikido: {
@@ -198,7 +198,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
       ["Is TensorShield an Aikido alternative?", "Yes — we share the OSS-wrapped, low-noise scanning philosophy, then add compliance frameworks, an exploitation-proven pentest, identity/SaaS/OSINT posture, and an optional managed expert. Aikido is excellent if you only need developer-focused app + cloud security."],
       ["Do you share Aikido's transparency?", "Yes — our detection wraps best-in-class open-source tools (nuclei, semgrep, trivy, prowler…), so you can see and reproduce exactly what ran. We consider that a strength we have in common."],
     ],
-    seoTitle: "TensorShield vs. Aikido — Dev Security + Compliance + Pentest | TensorShield",
+    seoTitle: "vs. Aikido — Dev Security + Compliance",
     seoDesc: `TensorShield vs. Aikido, honestly. Aikido is great developer-first app+cloud security; TensorShield shares that and adds ${FRAMEWORK_COUNT} compliance frameworks, a built-in exploitation-proven pentest, and a managed expert.`,
   },
 };

@@ -9,7 +9,7 @@ import {
 import { ProviderIcon } from "@/components/brand/provider-icon";
 
 export const metadata = pageMeta({
-  title: "SaaS & identity posture (SSPM) — Google, M365, Okta, GitHub, Slack, Zoom, Atlassian, Salesforce | TensorShield",
+  title: "SSPM — SaaS & Identity Posture Management",
   description:
     "Most breaches start with a misconfigured SaaS app or a missing MFA. TensorShield continuously checks your identity providers and SaaS apps for risky settings — grounded, compliance-mapped, and fixed with you in the loop.",
   path: "/saas-posture",

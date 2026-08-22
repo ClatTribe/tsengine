@@ -3,7 +3,7 @@ import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 
 export const metadata = pageMeta({
-  title: "Free Security Check — Will You Pass an Enterprise Security Questionnaire? | TensorShield",
+  title: "Free Security Check — Will You Pass an Enterprise Security Questionnaire?",
   description:
     "Instantly check your domain against the basics every enterprise security questionnaire and SOC 2 review asks about — email-auth (DMARC/SPF/DKIM), HTTPS/TLS, and security headers. Free, no signup, graded in seconds.",
   path: "/scan",

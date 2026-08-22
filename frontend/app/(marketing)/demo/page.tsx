@@ -6,7 +6,7 @@ import { DemoForm } from "@/components/marketing/demo-form";
 import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
-  title: "Book a Demo — TensorShield",
+  title: "Book a Demo",
   description: "See TensorShield run on your stack. Talk to our team about VAPT, compliance (SOC 2, ISO 27001, and 12 more), and autonomous remediation for your SMB.",
   path: "/demo",
 });

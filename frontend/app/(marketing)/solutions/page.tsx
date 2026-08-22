@@ -6,7 +6,7 @@ import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { LANES } from "@/lib/solutions";
 
 export const metadata = pageMeta({
-  title: "Solutions — by scenario, by surface, or vs what you're using | TensorShield",
+  title: "Solutions — by Scenario, Surface or Tool",
   description:
     "Three ways in: the situation that made you look (a blocked deal, an auditor, an untriaged backlog), the surface you need covered (cloud, code, SaaS, web, API, containers, network, domains, mobile, CI/CD), or how we compare to Vanta, Drata, Sprinto, Secureframe, Aikido and consultants.",
   path: "/solutions",

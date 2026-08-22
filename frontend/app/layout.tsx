@@ -15,7 +15,12 @@ const DESCRIPTION =
 // and robots defaults below are correct to inherit everywhere.
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: TITLE,
+  // The brand suffix lives HERE and only here. Every page supplies its bare title and Next
+  // appends " | TensorShield"; `default` covers a route that sets no title of its own.
+  // Before this, all 47 pages hand-typed the suffix in two different styles and each spent
+  // ~15 of the ~60 characters a search result shows on it — ADR 0023 decision 1. A page that
+  // genuinely needs no suffix passes `title: { absolute: "…" }`.
+  title: { default: TITLE, template: "%s | TensorShield" },
   description: DESCRIPTION,
   applicationName: "TensorShield",
   keywords: [

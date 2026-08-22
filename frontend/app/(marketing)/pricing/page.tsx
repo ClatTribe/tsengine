@@ -6,7 +6,7 @@ import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
 import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
-  title: "Pricing — TensorShield",
+  title: "Pricing",
   description:
     "Simple, transparent pricing in ₹ for Indian teams. Free to see your real posture with the scanning engine — and bring your own LLM key to run both AI agents at your model cost. Core adds your AI Security Engineer; Core + Pentest adds your AI Pentester, for when a security review is blocking a deal. Enterprise is for scale and delivery: unlimited targets, SSO, managed/MSP.",
   path: "/pricing",

@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "One platform, every surface — cross-detection that connects the dots | TensorShield",
+  title: "Cross-Surface Detection — One Attack Path",
   description:
     "Most tools hand you a pile of findings per scanner. TensorShield unifies them: the same issue from many scanners becomes one, weaknesses chain across surfaces into attack paths, runtime attacks observed in production flag what's under active attack, and you triage real risk — not duplicate noise.",
   path: "/cross-detection",

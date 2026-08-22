@@ -65,7 +65,7 @@ export async function generateMetadata({ params }: { params: Promise<{ framework
   const { framework } = await params;
   const i = info(framework);
   if (!i) return {};
-  const title = `${i.label} Compliance Automation for SMBs — TensorShield`;
+  const title = `${i.label} Compliance Automation for SMBs`;
   const description = `Get ${i.label}-ready without a compliance consultant. TensorShield continuously maps your findings to ${i.label} controls, prepares fixes, and produces signed, auditor-ready evidence. ${i.desc}`;
   return pageMeta({ title, description, path: `/frameworks/${framework}` });
 }

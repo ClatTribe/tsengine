@@ -3,7 +3,7 @@ import { LegalDoc, type LegalSection } from "@/components/marketing/legal-doc";
 import { governingLawSentence, legalPartyName } from "@/lib/site";
 
 export const metadata = pageMeta({
-  title: "Terms of Service — TensorShield",
+  title: "Terms of Service",
   description: "The terms governing your use of TensorShield, including authorized-scanning rules.",
   path: "/terms",
 });

@@ -60,7 +60,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "How is this different from Prowler or Scout Suite?", a: "We wrap those best-in-class OSS scanners, then add what they don't: cross-resource attack-path correlation (CIEM), data-tier prioritization (DSPM), and a human-gated remediation loop." },
       { q: "Is a clean scan a compliance certification?", a: "No. We map findings to controls but never mark a control compliant from a scan — an independent auditor attests. We make you audit-ready, honestly." },
     ],
-    seoTitle: "Cloud Security (CSPM + CIEM) for AWS, GCP & Azure | TensorShield",
+    seoTitle: "Cloud Security — CSPM + CIEM, AWS/GCP/Azure",
     seoDesc: "Agentless cloud security: CIS posture, IAM attack paths, and data exposure across AWS/GCP/Azure — with human-gated remediation. Grounded in your live account, never a generic checklist.",
   },
   api: {
@@ -93,7 +93,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Can you find BOLA/BFLA (broken object/function-level authorization)?", a: "Yes — that's the differential authz test: it replays one identity's request as another and flags a bypass only on proven access to the victim's data, so the finding is verified." },
       { q: "Is active testing safe?", a: "The active prober is consent-gated and benign-by-construction (canary probes, true/false differentials that extract no data). You authorize it per engagement." },
     ],
-    seoTitle: "API Security Testing — REST, GraphQL & BOLA/BFLA | TensorShield",
+    seoTitle: "API Security Testing — REST, GraphQL, BOLA",
     seoDesc: "Spec-driven API security: OpenAPI ingest, per-operation fuzzing, shadow-route discovery, and a differential BOLA/BFLA authz test that proves the bypass. Grounded, low-noise.",
   },
   container: {
@@ -126,7 +126,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Can you scan on every push?", a: "Yes — a registry connector digest-diffs against last-seen and scans only new or changed images, so you're not re-scanning the unchanged set." },
       { q: "Do you reduce false positives?", a: "Corroboration is the FP control: a CVE both scanners report is high-confidence; a single-tool hit is shown as needing confirmation, never as proven." },
     ],
-    seoTitle: "Container & Image Security — CVEs, Misconfig & SBOM | TensorShield",
+    seoTitle: "Container Security — CVEs, Misconfig, SBOM",
     seoDesc: "Container image scanning with corroborated CVEs (trivy + grype), Dockerfile misconfiguration checks, full SBOM, and scan-on-push. Low false positives by design.",
   },
   // MOBILE SOURCE, not a built bundle.
@@ -170,7 +170,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Android and iOS both?", a: "Yes — Kotlin/Java and Swift/Objective-C source alike. The same mobile-SAST + secrets + dependency-CVE pass runs across both." },
       { q: "Is this dynamic (running-app) testing?", a: "No. It is static analysis of your source — the highest-ROI mobile coverage without a device farm. Runtime testing is not built." },
     ],
-    seoTitle: "Mobile App Security — Android & iOS Source SAST + Secrets | TensorShield",
+    seoTitle: "Mobile App Security — Android & iOS SAST",
     seoDesc: "Mobile app security for Android and iOS SOURCE: insecure storage, weak crypto, hardcoded secrets, and dependency CVEs, scanned from your connected repository.",
   },
   web: {
@@ -203,7 +203,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Will it break my site?", a: "No — destructive paths are filtered before testing, list-mode tools are scoped, and the scan respects your timeout. It's a safe, bounded DAST." },
       { q: "Does it handle WordPress?", a: "Yes — a WordPress/CMS surface triggers wpscan for vulnerable plugins/themes, user enumeration, and exposed wp-config." },
     ],
-    seoTitle: "Web Application Security Testing (DAST) | TensorShield",
+    seoTitle: "Web Application Security Testing (DAST)",
     seoDesc: "Web app DAST: crawl-then-fuzz for SQLi, XSS, SSRF, auth flaws, and WordPress/CMS issues — with reliable authenticated scanning. Grounded, corroborated, low false positives.",
   },
   code: {
@@ -236,7 +236,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Does it block bad PRs?", a: "Optionally — the PR-review bot comments inline on changed lines and posts a check-run that fails at the severity floor you set, so risky changes don't merge silently." },
       { q: "What is reachability?", a: "A dependency CVE only matters if your code calls the vulnerable function. govulncheck filters out the CVEs in code paths you never reach, cutting the noise." },
     ],
-    seoTitle: "Code Security — SAST, SCA with Reachability & Secrets | TensorShield",
+    seoTitle: "Code Security — SAST, SCA & Secret Scanning",
     seoDesc: "Code security for GitHub/GitLab: SAST taint analysis, dependency CVEs with reachability, secret scanning, and merge-gating PR reviews. Real risk, less noise.",
   },
   network: {
@@ -269,7 +269,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Is it slow?", a: "No — instead of running every template against every port, each port's fingerprinted service triggers only the matching templates, which is roughly 50× faster than a blanket scan." },
       { q: "Will it find outdated services?", a: "Yes — a service below its minimum-safe version (e.g. an old OpenSSH or web server) is bumped above info and flagged with upgrade guidance, grounded in the real version nmap detected." },
     ],
-    seoTitle: "Network & IP Security Scanning — Ports, Services & CVEs | TensorShield",
+    seoTitle: "Network & IP Scanning — Ports, Services, CVEs",
     seoDesc: "Network security scanning for IPs/CIDRs: port + service discovery, per-port vulnerability templates, outdated-service flagging, and default-credential checks. Fast and low-noise.",
   },
   dns: {
@@ -302,7 +302,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Does it scan the subdomains it finds?", a: "Yes — a live discovered host becomes a child asset and gets the right scan (web, IP) instead of being re-enumerated, so coverage compounds." },
       { q: "Can it fix email spoofing?", a: "It checks DMARC/SPF/DKIM from public DNS and hands you the exact TXT record to publish — the highest-leverage anti-phishing fix." },
     ],
-    seoTitle: "Domain & DNS Security — Subdomains, Takeover & DMARC | TensorShield",
+    seoTitle: "Domain & DNS Security — Takeover, DMARC",
     seoDesc: "Domain & DNS security: subdomain enumeration, subdomain-takeover detection, email-spoofing posture (DMARC/SPF/DKIM), and typosquat monitoring. Your attacker's-eye footprint.",
   },
 };

@@ -2,7 +2,7 @@ import { pageMeta } from "@/lib/seo";
 import { SMTP_SUBPROCESSOR } from "@/lib/site";
 
 export const metadata = pageMeta({
-  title: "Subprocessors — TensorShield",
+  title: "Subprocessors",
   description: "The third-party subprocessors TensorShield uses to deliver the service.",
   path: "/subprocessors",
 });

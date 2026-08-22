@@ -6,7 +6,7 @@ import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
 import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
-  title: "Managed Security & Compliance — Fractional CISO for Startups | TensorShield",
+  title: "Fractional CISO & Managed Security",
   description:
     "We run your security and compliance for you — a named vCISO, pentester, and auditor liaison backed by the product. Done-for-you SOC 2, continuous security, and named accountability, for a fraction of one hire.",
   path: "/managed",

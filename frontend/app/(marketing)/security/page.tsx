@@ -6,7 +6,7 @@ import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { ShieldCheck, Lock, FileCheck2, KeyRound, EyeOff, Fingerprint, ArrowRight, CheckCircle2 } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "Security & Trust — TensorShield",
+  title: "Security & Trust",
   description: "Signed, reproducible, grounded evidence. Least-privilege by default, human-gated writes, encrypted at rest. The trust layer SMBs and their auditors need.",
   path: "/security",
 });

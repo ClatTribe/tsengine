@@ -11,8 +11,8 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const post = postBySlug((await params).slug);
-  if (!post) return pageMeta({ title: "Not found | TensorShield", description: "", path: "/blog" });
-  return pageMeta({ title: `${post.title} | TensorShield`, description: post.description, path: `/blog/${post.slug}` });
+  if (!post) return pageMeta({ title: "Not found", description: "", path: "/blog" });
+  return pageMeta({ title: `${post.title}`, description: post.description, path: `/blog/${post.slug}` });
 }
 
 function fmtDate(iso: string) {

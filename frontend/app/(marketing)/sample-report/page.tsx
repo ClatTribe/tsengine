@@ -4,7 +4,7 @@ import { pageMeta } from "@/lib/seo";
 import { SAMPLE_META, SAMPLE_COUNTS, SAMPLE_FINDINGS, SAMPLE_FRAMEWORKS, type SampleFinding } from "@/lib/sample-report";
 
 export const metadata = pageMeta({
-  title: "Sample Security Assessment Report | TensorShield",
+  title: "Sample Security Assessment Report",
   description:
     "See exactly what a TensorShield security assessment report looks like — a worked example in the exact format we produce, with exploitation-proven findings, evidence, remediation, and SOC 2 / PCI / GDPR control mapping.",
   path: "/sample-report",
