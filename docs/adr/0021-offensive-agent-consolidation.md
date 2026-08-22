@@ -157,18 +157,19 @@ Implemented over 8 PRs (#1340 ADR, #1341, #1345, #1347, #1351, #1355, #1358, #13
   hunt FIRST for consent-mode engagements, then the verify drivers prove what it found — exactly the
   opt-in discovery→exploit phase the step describes, gated by `Mode.RequiresConsent()`.
 
-- **Step 5 — loop last: the seam LANDED (#1362 `pentest.HuntDriver`), production wiring deferred as
-  low-value/high-risk.** HuntDriver resolves the real blocker (webagent's multi-finding loop vs pentest's
-  one-Attempt Driver) via buffering, is reachable through `runner.Run`, and gates the hunt behind Active
-  consent. It is NOT yet swapped into `runWebDiscovery` because that path already achieves the outcome
-  (hunt findings → store → scorecard/VAPT, consent-gated) and replacing a benchmark-load-bearing path for
-  uniform RoE-gating is a refactor with regression risk out of proportion to the gain. `web-investigate`
-  → thin adapter and the browser/OOB dedupe are the same shape: cleanup with no capability upside, left
-  for a dedicated pass.
+- **Step 5 — loop last: the seam LANDED (#1362) AND the production swap is DONE (#1373).** HuntDriver
+  resolves the real blocker (webagent's multi-finding loop vs pentest's one-Attempt Driver) via
+  buffering, gating the hunt behind Active consent. #1373 swapped `runWebDiscovery` onto it: the L3 hunt
+  now runs THROUGH `pentest.Run`, RoE-gated (scope/budget/active-consent) and RECORDED as an engagement
+  Attempt — so a refused hunt is logged (the false-negative-dressed-as-all-clear the audit exists to
+  prevent), not a silent pre-step. Behavior-preserving (findings still flow via store→reload; progress,
+  on-host filter, best-effort, Recorder all kept). The ONLY residue is pure cleanup with no capability
+  upside: `web-investigate` → a thin `cmd` over pentest, and deduping webagent's browser/OOB into
+  pentest's `browser.go`/`interactor.go`. Left as optional housekeeping, not a capability gap.
 
 **Net:** the two things that MOTIVATED the ADR — the wire-twice tax and the ADR-0019 measurement gap —
-are retired (steps 1–2). The remainder is either already-achieved-differently (3, 4), a landed seam whose
-production swap is a deliberate deferral (5), or bounded-out by a real architectural constraint (the
+are retired (steps 1–2). The remainder is either already-achieved-differently (3, 4), a landed seam now wired into
+production (5, #1373), or bounded-out by a real architectural constraint (the
 stateless-predicate boundary). Per the done-criterion ("step 5 lands OR steps 1–4 in place with 5
 deferred"), the ADR is effectively COMPLETE with the loop-merge cleanup explicitly deferred.
 
