@@ -181,7 +181,23 @@ func RenderDefenseLedgerMarkdown(entries []DefenseLedgerEntry) string {
 		fmt.Fprintf(&b, "- **agent** (AI Security Engineer): %d scenario(s) fully remediated, %d run(s).\n", agt.Passed, agt.Runs)
 	}
 	if hasSub && hasAgt {
-		b.WriteString("\n## Agent lift (substrate → agent), per scenario\n\n| Scenario | Substrate rate | Agent rate | Lift |\n|---|---|---|---|\n")
+		b.WriteString("\n## Agent lift (substrate → agent), per scenario\n")
+		// A lift table over a saturated substrate cannot measure a lift. Every scenario at the ceiling
+		// means the deterministic proposer already closes everything there is to close, so the agent
+		// has nowhere to be better and the column reads +0% — which a reader takes as "the agent adds
+		// nothing" when the true statement is "this bench cannot tell". Opposite conclusions from the
+		// same number.
+		//
+		// The cloud-engine lane already has this idea (clouddiscrimination.go: with no headroom "the
+		// run can't tell a great engineer from a mediocre one"). This lane is the one whose HERO
+		// metric IS the ablation, and it had no such check.
+		if ceiling, n := substrateAtCeiling(sub); ceiling {
+			fmt.Fprintf(&b, "\n> **No headroom: the substrate already scores 100%% on all %d scenario(s).**\n"+
+				"> A lift of +0%% here does NOT mean the agent adds nothing — it means this benchmark\n"+
+				"> cannot tell. Measuring the AI engineer's contribution needs a scenario the\n"+
+				"> deterministic proposer cannot already close.\n", n)
+		}
+		b.WriteString("\n| Scenario | Substrate rate | Agent rate | Lift |\n|---|---|---|---|\n")
 		ids := sortedScenarioIDs(sub.BestRate, agt.BestRate)
 		for _, id := range ids {
 			s, a := sub.BestRate[id], agt.BestRate[id]
@@ -246,4 +262,18 @@ func pathRecallCell(m DefenseModeSummary, id string) string {
 		return "— (no paths to find)"
 	}
 	return fmt.Sprintf("%.0f%%", m.BestPath[id]*100)
+}
+
+// substrateAtCeiling reports whether the deterministic arm scores a perfect remediation rate on every
+// scenario it has run — the state in which the ablation this bench exists for measures nothing.
+func substrateAtCeiling(sub DefenseModeSummary) (bool, int) {
+	if len(sub.BestRate) == 0 {
+		return false, 0
+	}
+	for _, r := range sub.BestRate {
+		if r < 1.0 {
+			return false, len(sub.BestRate)
+		}
+	}
+	return true, len(sub.BestRate)
 }
