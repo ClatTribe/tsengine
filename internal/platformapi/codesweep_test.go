@@ -1,12 +1,15 @@
 package platformapi
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/internal/codesweep"
+	"github.com/ClatTribe/tsengine/internal/consensus"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -85,3 +88,56 @@ func TestSweepFindings_CarriesTheVerifiedLocation(t *testing.T) {
 		t.Errorf("the confirmed location was dropped: %+v", fs[0].ToolArgs)
 	}
 }
+
+// stubJurorLLM answers every juror prompt the same way, which is enough to drive the majority.
+type stubJurorLLM struct {
+	fp    bool
+	calls int
+}
+
+func (s *stubJurorLLM) Generate(_ context.Context, _ string) (string, error) {
+	s.calls++
+	if s.fp {
+		return `{"false_positive": true, "rationale": "the pattern does not apply here"}`, nil
+	}
+	return `{"false_positive": false, "rationale": "the sink is reachable from the handler"}`, nil
+}
+
+// The panel may drop a candidate, and this is the ONE place a consensus vote legitimately removes
+// something: a sweep candidate is one model's proposal, not a tool-grounded finding, so a panel
+// disagreeing is a second opinion on an opinion rather than an LLM overruling a scanner.
+func TestPanelReview_DropsWhatTheMajorityRejects(t *testing.T) {
+	llm := &stubJurorLLM{fp: true}
+	kept, dropped := panelReview(context.Background(), llm, []codesweep.Candidate{cand(true, "high")})
+	if dropped != 1 || len(kept) != 0 {
+		t.Errorf("a unanimously-rejected candidate survived: kept=%d dropped=%d", len(kept), dropped)
+	}
+	if llm.calls != len(consensus.Personas) {
+		t.Errorf("expected one call per persona, got %d", llm.calls)
+	}
+}
+
+// A panel that agrees the finding is real keeps it.
+func TestPanelReview_KeepsWhatTheMajorityConfirms(t *testing.T) {
+	kept, dropped := panelReview(context.Background(), &stubJurorLLM{fp: false}, []codesweep.Candidate{cand(true, "high")})
+	if dropped != 0 || len(kept) != 1 {
+		t.Errorf("a confirmed candidate was dropped: kept=%d dropped=%d", len(kept), dropped)
+	}
+}
+
+// FAIL OPEN. Every juror erroring is not evidence the finding is false — a deadlocked or broken
+// panel must never be the reason a real weakness disappears.
+func TestPanelReview_JurorFailureKeepsTheCandidate(t *testing.T) {
+	kept, dropped := panelReview(context.Background(), brokenLLM{}, []codesweep.Candidate{cand(true, "high")})
+	if dropped != 0 || len(kept) != 1 {
+		t.Errorf("a broken panel dropped a candidate: kept=%d dropped=%d", len(kept), dropped)
+	}
+}
+
+type brokenLLM struct{}
+
+func (brokenLLM) Generate(context.Context, string) (string, error) {
+	return "", errBroken
+}
+
+var errBroken = fmt.Errorf("juror unavailable")
