@@ -14,7 +14,7 @@ export function ArchStack() {
         <span className="text-xs font-semibold uppercase tracking-wider text-accent">How it works</span>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Free scanning. Two AI agents. A human who signs.</h2>
         <p className="mt-3 text-base leading-relaxed text-muted">
-          Not a black box. A deterministic + ML-based security &amp; compliance scanning engine you can see — then an
+          Not a black box. A security &amp; compliance scanning engine you can see the workings of — then an
           AI security engineer and an AI pentester that reason over it, with a named human accountable for the calls that matter.
         </p>
       </Reveal>
@@ -46,7 +46,7 @@ export function ArchStack() {
             tone="ai"
             kicker="AI Pentester · attack"
             title="Proves it — exploitation, not theory"
-            desc="A long-horizon agent that actually exploits the finding (benign, rules-of-engagement-gated) and upgrades it to verified with a captured PoC — the no-false-positive bar."
+            desc="Actually breaks in to prove the issue is real — safely, and only against the systems you authorise. You get the exact request that worked, so nothing is taken on trust."
           />
         </div>
 
@@ -57,7 +57,7 @@ export function ArchStack() {
           tone="substrate"
           kicker="Deterministic + ML scanning · free"
           title="30+ OSS scanners, correlated"
-          desc="Best-in-class open-source detection across code · cloud · attack surface · identity, plus cross-surface correlation, threat-intel (KEV/EPSS), and compliance mapping. The security-engineer + auditor deliverable — free."
+          desc="The same 30+ open-source scanners the pros use, across code · cloud · attack surface · identity — plus it connects a problem in one place to what it unlocks in another, ranks by what attackers are exploiting now, and maps everything to your compliance controls. Free."
         />
       </Reveal>
     </section>

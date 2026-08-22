@@ -14,27 +14,28 @@ import { ArchStack } from "@/components/marketing/arch-stack";
 import { SCENARIOS, SURFACES, ALTERNATIVES } from "@/lib/solutions";
 import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
-const HOME_TITLE = "TensorShield — an AI security engineer and an AI pentester for Series A and B teams";
+const HOME_TITLE = "Clear the security review holding up your deal — TensorShield";
 const HOME_DESCRIPTION =
-  "Two AI teammates for a team whose security surface has outgrown its security team: an AI security engineer that finds what is genuinely exploitable across code, cloud and SaaS and writes the fix, and an AI pentester that proves it by exploiting it. Someone on your team approves anything that touches your systems. SOC 2 evidence built in.";
+  "For Series A and B teams: an AI security engineer finds what an attacker could actually reach across your code, cloud and SaaS and writes the fix, and an AI pentester proves it by breaking in. Someone on your team approves anything that touches your systems. SOC 2 evidence and a signed report built in.";
 
-// The homepage leads with the cross-surface-attack-path wedge, so its social card must match that —
-// otherwise a shared homepage link shows the site-wide "fractional security team" default (the other
-// door), a positioning mismatch with the H1. Override OG + Twitter to the wedge here.
+// The social card must say what the H1 says. Both now lead with the visitor's SITUATION — a deal
+// stuck behind a customer's security review — rather than with the two agents, which are the how.
+// A shared link that promises a different thing from the page it opens is a positioning leak.
+const HOME_SOCIAL =
+  "A customer's security review is holding up the deal. An AI security engineer finds what an attacker could actually reach and writes the fix; an AI pentester proves it by breaking in. You approve every change, and you get the signed report their security team is asking for.";
+
 export const metadata = {
   title: HOME_TITLE,
   description: HOME_DESCRIPTION,
   alternates: { canonical: "/" },
   openGraph: {
-    title: "Your AI security engineer. And your AI pentester.",
-    description:
-      "For Series A and B teams whose security surface has outgrown their security team: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. Someone on your team approves anything that touches your systems.",
+    title: "Clear the security review that's holding up your deal.",
+    description: HOME_SOCIAL,
     url: "/",
   },
   twitter: {
-    title: "Your AI security engineer. And your AI pentester.",
-    description:
-      "For Series A and B teams whose security surface has outgrown their security team: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. Someone on your team approves anything that touches your systems.",
+    title: "Clear the security review that's holding up your deal.",
+    description: HOME_SOCIAL,
   },
 };
 
@@ -69,12 +70,21 @@ export default function Landing() {
                 <Sparkles className="h-3.5 w-3.5 text-accent" /> For Series A and B teams
               </Link>
 
-              <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
-                Your AI security engineer.{" "}
-                <span className="text-accent">And your AI pentester.</span>
+              {/* The headline names the visitor's SITUATION, not our machinery.
+                  It used to read "Your AI security engineer. And your AI pentester." — accurate,
+                  differentiated, and a description of what we built rather than of what the reader
+                  came here with. The buying trigger is all over this site (the /startups page, all
+                  three blog posts, both lead magnets, and the first option in our own "what brought
+                  you here?" router): a deal is stuck behind a customer's security review. That was
+                  arriving at 73% scroll depth. It leads now; the two agents follow one line down as
+                  the HOW, which is what they are. */}
+              <h1 className="mx-auto mt-6 max-w-xl text-balance text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-[3.4rem]">
+                Clear the security review{" "}
+                <span className="text-accent">that&apos;s holding up your deal.</span>
               </h1>
               <p className="mx-auto mt-5 max-w-md text-lg leading-relaxed text-muted lg:mx-0">
-                For teams with more security surface than security people.
+                Two AI teammates do the work a security hire would — and hand you the signed report
+                your customer is asking for.
               </p>
 
               {/* The headline's promise, made visible. Two rows, one job each — scannable in about a
@@ -83,12 +93,12 @@ export default function Landing() {
                 <AgentLine
                   Icon={ShieldCheck}
                   name="AI security engineer"
-                  job="finds what is genuinely exploitable — and writes the fix"
+                  job="finds what an attacker could actually reach — and writes the fix"
                 />
                 <AgentLine
                   Icon={Crosshair}
                   name="AI pentester"
-                  job="proves it by exploiting it, then re-tests your fix"
+                  job="proves it by breaking in, then re-tests your fix"
                 />
               </div>
 
@@ -205,7 +215,7 @@ export default function Landing() {
               {[
                 { icon: ScanLine, t: "Detected", d: "ranked, deduped" },
                 { icon: Wrench, t: "Fix prepared", d: "PR · config · runbook" },
-                { icon: CheckCircle2, t: "You approve", d: "1 tap, tier-gated" },
+                { icon: CheckCircle2, t: "You approve", d: "1 tap; routine fixes skip you" },
                 { icon: GitBranch, t: "Applied", d: "via your connector" },
                 { icon: ShieldCheck, t: "Re-verified", d: "confirmed gone" },
               ].map(({ icon: Icon, t, d }, i, arr) => (
@@ -295,8 +305,8 @@ export default function Landing() {
             </p>
             <ul className="mt-6 space-y-3">
               {[
-                "ed25519-signed, tamper-evident evidence packs",
-                "Grounded findings — the agent never asserts what a tool didn't prove",
+                "Evidence your auditor can verify wasn’t edited after the fact",
+                "Every issue links to the tool that proved it — the AI never asserts what nothing proved",
                 "A signed decision ledger for every automated and human action",
               ].map((x) => (
                 <li key={x} className="flex items-start gap-2.5 text-sm text-ink">
@@ -316,7 +326,10 @@ export default function Landing() {
       <section className="relative overflow-hidden bg-gradient-to-br from-accent via-[#4338CA] to-[#3730A3]">
         <div className="absolute -right-20 -top-24 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
         <div className="relative mx-auto max-w-3xl px-5 py-20 text-center text-white">
-          <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Give your startup a security team today.</h2>
+          {/* Was "Give your startup a security team today." The hero badge says Series A and B; a
+              closing line that calls the same reader a startup tells them we haven't decided who
+              this is for. Same offer, consistent audience. */}
+          <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Get your security team running this week.</h2>
           <p className="mx-auto mt-3 max-w-lg text-white/75">
             Connect your first system in minutes. See your posture, your compliance gaps, and your first fixes — for free.
           </p>
@@ -356,10 +369,10 @@ function TwoAgents() {
       Icon: ShieldCheck,
       kicker: "Defends",
       title: "AI Security Engineer",
-      lede: "Finds what is genuinely exploitable, and writes the fix.",
+      lede: "Finds what an attacker could actually reach, and writes the fix.",
       does: [
         "Cuts a thousand scanner alerts down to the handful that matter",
-        "Chains code → cloud → SaaS into one attack path, not three tickets",
+        "Connects a problem in your code to what it unlocks in your cloud — one issue, not three tickets",
         "Explains each issue in plain English, then opens the PR or config change",
       ],
       boundary: "Never applies anything on its own — you approve every change.",
@@ -370,10 +383,10 @@ function TwoAgents() {
       Icon: Wrench,
       kicker: "Attacks",
       title: "AI Pentester",
-      lede: "Proves it by exploiting it — not a scanner's opinion.",
+      lede: "Proves it by breaking in — not a scanner's guess.",
       does: [
-        "Actually exploits the finding, benignly, inside limits you set",
-        "Upgrades it to verified with a captured proof-of-concept",
+        "Actually breaks in to prove it is real — safely, inside limits you set",
+        "Shows you the exact request that worked, so nothing is taken on trust",
         "Re-tests after your fix to show the hole is really closed",
       ],
       boundary: "Only runs against targets you scope and sign off on.",
@@ -390,7 +403,7 @@ function TwoAgents() {
           <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Two AI teammates, one human in charge</h2>
           <p className="mt-3 text-base leading-relaxed text-muted">
             Not a dashboard you have to staff. Two agents that do the work a security hire would, on the
-            deterministic scanning engine underneath — with you signing anything consequential.
+            scanning engine underneath — with you signing off on anything that matters.
           </p>
         </Reveal>
 
@@ -674,7 +687,7 @@ function StackPipeline() {
         </Column>
       </div>
       <p className="mt-4 text-center text-xs text-faint">
-        Read-only by default · write-back only on your approval · per-tenant isolation · ed25519-signed evidence
+        Read-only by default · nothing changes without your approval · your data is never mixed with another customer’s · signed evidence
       </p>
     </div>
   );

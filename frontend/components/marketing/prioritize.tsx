@@ -12,7 +12,7 @@ const STAGES = [
   { icon: Layers, label: "Raw signals", count: "1,200+", note: "30+ scanners, every surface", tone: "in" as const },
   { icon: GitMerge, label: "Collapse duplicates", count: "310", note: "many alerts → one issue", tone: "mid" as const },
   { icon: Filter, label: "Drop false positives", count: "180", note: "fingerprint + confidence", tone: "mid" as const },
-  { icon: Flame, label: "Rank by exploitability", count: "40", note: "KEV · EPSS · reachability", tone: "mid" as const },
+  { icon: Flame, label: "Rank by exploitability", count: "40", note: "what attackers are exploiting now", tone: "mid" as const },
   { icon: Crosshair, label: "Weight by blast radius", count: "12", note: "data-tier · exposed · attacked", tone: "mid" as const },
   { icon: ListChecks, label: "What matters", count: "6", note: "in priority order", tone: "out" as const },
 ];
@@ -101,7 +101,7 @@ export function Prioritize() {
 
         <p className="mt-5 text-center text-xs text-faint">
           Illustrative funnel — your numbers vary. The mechanisms are real: dedup into one confirmed issue ·
-          fingerprint + confidence FP filter · KEV/EPSS/reachability ranking · data-tier &amp; under-attack weighting.
+          duplicate alerts collapse into one issue · known false alarms are dropped · what attackers are actively exploiting ranks first · anything near customer data, or already being probed, jumps the queue.
         </p>
       </div>
     </section>
