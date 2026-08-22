@@ -55,7 +55,15 @@ func TestLivingDocsOnlyNameRealRoutes(t *testing.T) {
 	for _, doc := range living {
 		src, err := os.ReadFile(filepath.Join(repo, doc))
 		if err != nil {
-			continue
+			// NOT a continue. These four documents are named explicitly, so a read failure means one
+			// was renamed or removed — and then it silently stops being checked while the test stays
+			// green, because the other three clear the count floor on their own. Verified: deleting
+			// docs/platform-operations.md, the operator guide, left this passing.
+			//
+			// §14.2 rule 6, in the guard written to enforce it. If a document moves, update this
+			// list; do not let the check quietly narrow.
+			t.Fatalf("cannot read the living document %s (%v) — it was renamed or removed, and a "+
+				"guard that quietly stops checking one of its subjects is worse than no guard", doc, err)
 		}
 		seen := map[string]bool{}
 		for _, m := range claim.FindAllStringSubmatch(string(src), -1) {
