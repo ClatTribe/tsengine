@@ -112,7 +112,7 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
             { icon: Radar, t: "Continuous monitoring", d: `We watch your code, cloud, and identity 24/7 and surface what affects ${i.label} the moment it changes.` },
             { icon: FileCheck2, t: "Findings → controls", d: `Every finding maps to the ${i.label} control it touches — automatically, no spreadsheet.` },
             { icon: CheckCircle2, t: "Fixes prepared", d: "The agent prepares the remediation; you approve anything consequential in one tap." },
-            { icon: Lock, t: "Signed evidence", d: `Get an ${i.label}-ready, ed25519-signed evidence pack an auditor can verify — not screenshots.` },
+            { icon: Lock, t: "Signed evidence", d: `Get an ${i.label}-ready, cryptographically signed evidence pack an auditor can verify — not screenshots.` },
           ].map(({ icon: Icon, t, d }) => (
             <div key={t} className="card p-5">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent"><FeatureIcon name={Icon.displayName} className="h-4 w-4" /></span>

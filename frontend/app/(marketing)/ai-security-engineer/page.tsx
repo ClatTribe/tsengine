@@ -19,7 +19,7 @@ export const metadata = pageMeta({
 
 // What the agent actually does, end to end.
 const LOOP = [
-  { icon: ScanLine, t: "Detects", d: "On a deterministic floor of 30+ OSS scanners across code, cloud, web, APIs, containers, identity & SaaS — recall no model can undercut." },
+  { icon: ScanLine, t: "Detects", d: "On a floor of 30+ open-source scanners across code, cloud, web, APIs, containers, identity & SaaS — recall no model can undercut." },
   { icon: Filter, t: "Triages", d: "Separates real, exploitable risk from scanner noise — verifying, corroborating, and chaining findings into the attack paths that actually matter." },
   { icon: Wrench, t: "Fixes", d: "Prepares the real remediation — a pull request, a config change, an identity action, a ticket — ready to ship the moment you say go." },
   { icon: FileCheck2, t: "Proves", d: `Maps every finding to the controls it touches across ${FRAMEWORK_COUNT} frameworks and signs it into a tamper-evident evidence pack — for your auditor and your customers.` },
@@ -30,7 +30,7 @@ const GUARDRAILS = [
   { icon: Fingerprint, t: "Grounded — it can't hallucinate", d: "The agent can't record a finding no tool supports, or assert a permission the evaluator didn't return. Every claim cites the evidence that proves it. No invented vulnerabilities." },
   { icon: UserCheck, t: "Human in the loop, by tier", d: "Low-risk fixes auto-apply; anything consequential waits for one tap of your approval. The autonomy is earned, never assumed — and tuned per action class." },
   { icon: GitPullRequest, t: "It ships the fix, read-only until you say so", d: "Connections are least-privilege and read-only by default. The agent opens the PR / drafts the change and applies it only after the gate — never a surprise write." },
-  { icon: ScrollText, t: "Every decision is signed", d: "Auto-applied and human-approved actions alike record into a replayable, ed25519-signed ledger. You can audit exactly what the agent did, and why." },
+  { icon: ScrollText, t: "Every decision is signed", d: "Auto-applied and human-approved actions alike record into a replayable, cryptographically signed ledger. You can audit exactly what the agent did, and why." },
   { icon: Power, t: "One kill-switch, fail-closed", d: "Freeze all autonomous action for the whole tenant instantly. The switch beats any verdict; queued actions wait. The one human on the loop stays in control." },
   { icon: ShieldCheck, t: "On best-in-class OSS", d: "The detection floor is the leading open-source tools the industry already trusts. The agent reasons on top — it doesn't replace proven scanners with a black box." },
 ];
@@ -71,7 +71,7 @@ export default function AISecurityEngineer() {
               See the platform
             </Link>
           </div>
-          <p className="mt-4 text-xs text-faint">OSS-grade detection · AI triage &amp; fixes · human-in-the-loop · signed</p>
+          <p className="mt-4 text-xs text-faint">Open-source-grade detection · AI triage &amp; fixes · human-in-the-loop · signed</p>
         </div>
 
         {/* The cross-surface attack path, rehoused.

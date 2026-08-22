@@ -18,7 +18,7 @@ export const metadata = pageMeta({
 const LOOP = [
   { name: "connect", t: "Connect", d: "OAuth into GitHub, AWS, Google Workspace, M365, or Okta. The agent discovers your assets — repos, accounts, identities — and starts immediately." },
   { name: "detect", t: "Detect", d: "It runs the leading open-source scanners across every surface continuously, so coverage matches what a standalone security tool would find." },
-  { name: "triage", t: "Triage & prove", d: "An AI security engineer separates real, exploitable risk from scanner noise — and, where you authorize active testing, proves the exploit with a captured proof-of-concept. A finding is confirmed, not just flagged." },
+  { name: "triage", t: "Triage & prove", d: "An AI security engineer separates real, exploitable risk from scanner noise — and, where you authorize active testing, proves the exploit with a captured proof you can replay. A finding is confirmed, not just flagged." },
   { name: "fix", t: "Fix", d: "It prepares the actual remediation — a pull request, a config change, an identity action, or a ticket — ready to ship." },
   { name: "approve", t: "Approve", d: "Low-risk fixes apply automatically; anything consequential waits for one tap of your approval. Autonomy where it's earned." },
   { name: "prove", t: "Prove", d: `Every finding maps to controls across ${FRAMEWORK_COUNT} frameworks and lands in a signed, auditor-ready evidence pack — automatically.` },
@@ -91,7 +91,7 @@ export default function Product() {
           <div className="card space-y-3 p-6">
             {[
               ["Deterministic detection", "katana · nuclei · semgrep · trivy · prowler · gitleaks …", "text-ink"],
-              ["ML-based enrichment", "false-positive filter · threat intel (KEV/EPSS) · compliance mapping", "text-muted"],
+              ["ML-based enrichment", "false-positive filter · threat intel (what attackers are exploiting now) · compliance mapping", "text-muted"],
               ["AI agents", "triage · chain · verify · remediate · explain", "text-accent"],
               ["Human in the loop", "you approve · signed ledger", "text-pulse"],
             ].map(([h, d, c]) => (
@@ -113,7 +113,7 @@ export default function Product() {
       {/* Compliance coverage */}
       <ComplianceBand />
 
-      {/* The whole product in one view: the five surfaces + the HITL spine. Lives HERE rather than on
+      {/* The whole product in one view: the five surfaces + the human-approval spine. Lives HERE rather than on
           the homepage — this is the page someone opens when they've decided they want the detail. */}
       <PlatformOverview />
 
