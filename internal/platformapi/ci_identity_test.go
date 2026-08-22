@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -71,5 +72,109 @@ func TestCIIdentityFindings_NoTrustPolicyIsNotAssumedOpen(t *testing.T) {
 func TestCIIdentityFindings_GCPNotClaimed(t *testing.T) {
 	if got := ciIdentityFindings("gcp", []byte(`{"project_id":"p"}`)); got != nil {
 		t.Errorf("GCP must not be assessed until its ingest carries WIF data: %+v", got)
+	}
+}
+
+// THE JOIN, end to end: an unconditioned pool provider AND a pool-wide impersonation binding.
+//
+// Neither half looks wrong alone — an unconditioned provider reads as "fine, the bindings are
+// narrow", a pool-wide binding as "fine, the provider is conditioned". Together, every GitHub
+// repository on the internet can impersonate the service account. A scanner reading one object at a
+// time cannot see it, which is why gcpwif exists and why RawGCP had to be able to express it.
+func TestGCPCIIdentityFindings_OpenImpersonationIsFound(t *testing.T) {
+	body := []byte(`{"project_id":"p","wif_providers":[{
+      "project_number":"1234567890","pool_id":"ci-pool","id":"github",
+      "issuer_uri":"https://token.actions.githubusercontent.com"}],
+      "service_accounts":[{"email":"deploy@p.iam.gserviceaccount.com","admin":true,"bindings":[{
+        "role":"roles/iam.serviceAccountTokenCreator",
+        "members":["principalSet://iam.googleapis.com/projects/1234567890/locations/global/workloadIdentityPools/ci-pool/*"]}]}]}`)
+
+	got := gcpCIIdentityFindings(body)
+	if len(got) == 0 {
+		t.Fatal("an unconditioned pool with a pool-wide impersonation binding produced no finding")
+	}
+	var joined string
+	for _, f := range got {
+		joined += f.RuleID + " " + f.Title + " " + f.Description + " "
+	}
+	if !strings.Contains(joined, "deploy@p.iam.gserviceaccount.com") {
+		t.Errorf("the finding must name the service account at risk: %q", joined)
+	}
+}
+
+// An inventory with no WIF providers yields nothing — the collector reporting none and the estate
+// having none are the same fact here, and inventing a finding from absence is the opposite error.
+func TestGCPCIIdentityFindings_NoProvidersIsSilent(t *testing.T) {
+	if got := gcpCIIdentityFindings([]byte(`{"project_id":"p"}`)); len(got) != 0 {
+		t.Errorf("an estate with no federation produced findings: %+v", got)
+	}
+}
+
+// Privileged must come from the collector's admin flag rather than being assumed.
+//
+// For the JOIN finding it changes the DESCRIPTION rather than the severity, and that is correct:
+// "any repository on the internet can impersonate this account" is already critical, so escalating
+// past it would say nothing. What the flag adds is that the path ends in a project takeover — which
+// is what a responder needs to know and what a wrong guess would fabricate.
+//
+// My first version of this test compared got[0].Severity, which is a different finding altogether
+// (the unconditioned-provider one, which does not depend on the flag). It failed against correct
+// code.
+func TestGCPCIIdentityFindings_PrivilegedComesFromTheCollector(t *testing.T) {
+	tmpl := `{"project_id":"p","wif_providers":[{"project_number":"1","pool_id":"pool","id":"gh",
+      "issuer_uri":"https://token.actions.githubusercontent.com"}],
+      "service_accounts":[{"email":"sa@p.iam.gserviceaccount.com","admin":%s,"bindings":[{
+        "role":"roles/iam.serviceAccountTokenCreator",
+        "members":["principalSet://iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/pool/*"]}]}]}`
+
+	joinDesc := func(raw string) string {
+		for _, f := range gcpCIIdentityFindings([]byte(raw)) {
+			if strings.Contains(f.RuleID, "open_impersonation") {
+				return f.Description
+			}
+		}
+		t.Fatalf("the join finding did not fire: %s", raw)
+		return ""
+	}
+	admin := joinDesc(fmt.Sprintf(tmpl, "true"))
+	plain := joinDesc(fmt.Sprintf(tmpl, "false"))
+
+	if !strings.Contains(admin, "administrative permissions") {
+		t.Errorf("an admin service account should be described as a project takeover: %q", admin)
+	}
+	if strings.Contains(plain, "administrative permissions") {
+		t.Errorf("a non-admin account was described as holding admin — the flag is being assumed, "+
+			"not read from the collector: %q", plain)
+	}
+}
+
+// The DISPATCH must route gcp to the GCP assessor.
+//
+// The tests above call gcpCIIdentityFindings directly, so they pass even if ciIdentityFindings never
+// routes to it — which is the "built but not wired" gap in miniature, inside the test suite meant to
+// prove wiring. Found by mutation: unwiring the switch arm failed nothing.
+func TestCIIdentityFindings_RoutesGCPToTheGCPAssessor(t *testing.T) {
+	body := []byte(`{"project_id":"p","wif_providers":[{
+      "project_number":"1","pool_id":"pool","id":"gh",
+      "issuer_uri":"https://token.actions.githubusercontent.com"}],
+      "service_accounts":[{"email":"sa@p.iam.gserviceaccount.com","bindings":[{
+        "role":"roles/iam.serviceAccountTokenCreator",
+        "members":["principalSet://iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/pool/*"]}]}]}`)
+
+	got := ciIdentityFindings("gcp", body)
+	if len(got) == 0 {
+		t.Fatal("provider=gcp produced no findings — the dispatch does not reach the GCP assessor")
+	}
+	for _, f := range got {
+		if !strings.HasPrefix(f.RuleID, "gcpwif::") {
+			t.Errorf("unexpected rule from the gcp arm: %q", f.RuleID)
+		}
+	}
+}
+
+// And an unmodelled provider still yields nothing rather than being run through the wrong assessor.
+func TestCIIdentityFindings_UnmodelledProviderIsSilent(t *testing.T) {
+	if got := ciIdentityFindings("azure", []byte(`{"subscription_id":"s"}`)); got != nil {
+		t.Errorf("azure has no analyser and must not be assessed by another cloud's: %+v", got)
 	}
 }
