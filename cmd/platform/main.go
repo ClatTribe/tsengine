@@ -516,6 +516,10 @@ func main() {
 	// surfaces something NEW, the engineer reviews the estate automatically instead of waiting for a
 	// human to click /v1/l2/translate. The hook self-gates (AIEnabled + an available LLM), so it's a
 	// no-op when AI isn't entitled/configured — a Free tenant never auto-spends the operator's budget.
+	// Fill a missing CWE on a scanner finding before the L1.5 chain runs, so compliance.map can map
+	// it to controls (§8). No tenant model → a no-op, which is also how the Free plan's AI gate
+	// reaches it.
+	svc.AttributeCWEs = apiDeps.CWEAttributor()
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to

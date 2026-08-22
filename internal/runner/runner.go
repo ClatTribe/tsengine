@@ -140,6 +140,21 @@ type Service struct {
 	// the incidents the sync just opened. nil → no continuous cloud sync (manual /v1/cloud/sync only).
 	CloudSyncer CloudSyncer
 
+	// AttributeCWEs, when set, fills in a MISSING CWE on a scanner finding before the L1.5 chain
+	// runs, so compliance.map (hook 7) can map it to controls.
+	//
+	// Why this seam exists rather than a hook: §8's crosswalk keys on CWE and compliance.Apply
+	// returns early without one, so a finding whose scanner never set one gets NO control mapping at
+	// all — and an empty annotation is indistinguishable from a CWE with no control nexus. The KEV
+	// backfill closed that for CVE-bearing findings; this is the rest of them. Attribution needs a
+	// model, which the deterministic hook chain deliberately does not have, and platformapi imports
+	// runner so the tenant-LLM resolver cannot be reached from here — hence an injected func, the
+	// same shape as AfterScan and CloudSyncer.
+	//
+	// nil disables it entirely: no model configured, no attribution, and the findings are left in
+	// exactly the state they are in today.
+	AttributeCWEs func(ctx context.Context, tenantID string, fs []types.Finding) []types.Finding
+
 	// optional autonomous-loop collaborators
 	GRC          *grc.GRC         // fold each finding into the compliance system-of-record
 	Propose      Proposer         // generate a remediation Action per finding
@@ -716,6 +731,13 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 	//
 	// Note the chain may legitimately return FEWER findings than it was given (fp_filter drops decoy
 	// shapes, cross_tool_merge dedups) — the same behaviour the CLI has always had.
+	// Attribution runs BEFORE the chain for the same reason the KEV CWE backfill runs in hook 6
+	// rather than hook 8: hook 7 is what turns a CWE into control mappings, so a CWE arriving after
+	// it is a CWE nobody maps. Best-effort by construction — the seam returns the findings unchanged
+	// when it cannot attribute.
+	if s.AttributeCWEs != nil {
+		findings = s.AttributeCWEs(ctx, a.TenantID, findings)
+	}
 	enr := l15.EnrichDetailed(findings)
 	findings, eng.L15Audit, eng.L15Dismissed = enr.Enriched, enr.Audit, enr.Dismissed
 	for i, f := range findings {
