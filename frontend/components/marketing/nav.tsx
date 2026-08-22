@@ -184,13 +184,18 @@ export function MarketingNav() {
           </Link>
         </div>
 
-        {/* Mobile: primary CTA + menu toggle */}
+        {/* Mobile: primary CTA + menu toggle.
+            SAME destination and SAME label as desktop. This used to read "Free scan" and point at
+            /scan while desktop read "Start free" and pointed at /signup — two different funnels
+            wearing the header's primary-action slot depending on screen width, so the conversion a
+            visitor was steered toward depended on their device. The ungated domain check is still
+            offered, in the hero and in the Free tools menu, as the secondary path it is. */}
         <div className="ml-auto flex items-center gap-2 md:hidden">
           <Link
-            href="/scan"
-            className="rounded-xl border border-accent/40 bg-accent-soft px-3 py-1.5 text-sm font-semibold text-accent transition active:translate-y-px"
+            href="/signup"
+            className="rounded-xl bg-accent px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition active:translate-y-px"
           >
-            Free scan
+            Start free
           </Link>
           <button
             onClick={() => setOpen((v) => !v)}
