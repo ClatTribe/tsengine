@@ -139,6 +139,27 @@ export function ComparisonPage({ data }: { data: CompetitorPage }) {
               Have us run it
             </Link>
           </div>
+
+          {/* SOMEONE ON A COMPARISON PAGE IS PRICING A DECISION, and this template had no route to
+              the price — four CTAs across the page went to signup, demo, signup and managed. Our
+              pricing is published, in rupees, with a free tier.
+
+              Deliberately a LINK, not a row in the comparison table above. CLAUDE.md §0: score
+              against our own verified capability, never against a claim — our column is checkable
+              in this tree, theirs is their website. Asserting what a competitor charges (or that
+              they hide it) is exactly the kind of unverifiable claim the rest of this page avoids,
+              and it would age badly. Stating our own fact needs no such claim. */}
+          <p className="mt-5 border-t border-border pt-5 text-sm text-muted">
+            Our pricing is public —{" "}
+            <Link href="/pricing" className="font-semibold text-accent hover:underline">
+              see the tiers and what each one includes
+            </Link>
+            . Not ready to talk to anyone?{" "}
+            <Link href="/soc2-readiness" className="font-semibold text-accent hover:underline">
+              check your readiness free
+            </Link>
+            .
+          </p>
         </div>
       </section>
     </>
