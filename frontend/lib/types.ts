@@ -81,6 +81,12 @@ export interface Finding {
     // finding saw the same sentence either way.
     weapon_rank?: string;
   } | null;
+  // DerivedFrom are the finding ids a DERIVED finding rests on — one produced by JOINING other
+  // findings rather than by a tool observing something directly (a cross-surface chain: this leaked
+  // key reaches that cloud role). §10 requires every recorded issue to cite its evidence, and for a
+  // derived finding the evidence IS these ids. Its Go doc says that without them it would be "an
+  // assertion with nothing behind it" — which is exactly what the page showed before this.
+  derived_from?: string[];
   compliance?: Record<string, string[]> | null;
   // Cloud-to-Code: a runtime cloud finding traced back to the IaC resource +
   // file:line that provisioned it. Present only on cloud findings the
