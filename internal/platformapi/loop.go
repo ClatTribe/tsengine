@@ -332,8 +332,14 @@ func (d Deps) handleVAPTReport(w http.ResponseWriter, r *http.Request, tenantID 
 	// monitored asset is currently clean".
 	rep.PartiallyAssessed = d.partiallyAssessedScope(r.Context(), tenantID, rep.Scope)
 	grc.Reassess(rep)
-	if r.URL.Query().Get("format") == "json" {
+	switch r.URL.Query().Get("format") {
+	case "json":
 		writeJSON(w, http.StatusOK, rep)
+		return
+	case "html":
+		// The print-ready deliverable — what the customer saves as PDF and forwards.
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, grc.RenderVAPTHTML(rep))
 		return
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
