@@ -27,7 +27,6 @@ export const SAMPLE_META = {
   scope: ["Web application", "REST API", "Source repository", "AWS cloud account", "Identity (Google Workspace)"],
 };
 
-export const SAMPLE_COUNTS = { critical: 1, high: 2, medium: 2, low: 1, exploitProven: 1, verified: 6 };
 
 export const SAMPLE_FINDINGS: SampleFinding[] = [
   {
@@ -113,6 +112,37 @@ export const SAMPLE_FINDINGS: SampleFinding[] = [
     controls: ["SOC 2 CC6.1"],
   },
 ];
+
+// DERIVED from SAMPLE_FINDINGS, never hand-maintained.
+//
+// The hand-written version declared `verified: 6` and the page rendered a stat reading "Verified 6"
+// directly above a table in which only FOUR rows say Verified — the other two say
+// Exploitation-proven and Confirmed. On the one page whose entire job is to show that every number
+// is backed by evidence a reader can check, the headline number did not survive counting the rows.
+// A security reviewer is exactly the person who counts the rows.
+//
+// The severity counts happened to be right, which is how it survived: four of six numbers matched,
+// so nothing looked wrong. Deriving them removes the class of defect rather than this instance.
+const tally = <T extends string>(vals: T[]) =>
+  vals.reduce<Record<string, number>>((acc, v) => ({ ...acc, [v]: (acc[v] ?? 0) + 1 }), {});
+
+const bySeverity = tally(SAMPLE_FINDINGS.map((f) => f.severity));
+const byStatus = tally(SAMPLE_FINDINGS.map((f) => f.status));
+
+export const SAMPLE_COUNTS = {
+  critical: bySeverity.critical ?? 0,
+  high: bySeverity.high ?? 0,
+  medium: bySeverity.medium ?? 0,
+  low: bySeverity.low ?? 0,
+  // The three evidence tiers, reported separately. Collapsing them into one "verified" number is
+  // what produced the mismatch, and it also undersold the work: exploitation-proven is a STRONGER
+  // claim than verified, so folding it into the same bucket loses the distinction the product
+  // exists to make.
+  exploitProven: byStatus["Exploitation-proven"] ?? 0,
+  verified: byStatus["Verified"] ?? 0,
+  confirmed: byStatus["Confirmed"] ?? 0,
+  total: SAMPLE_FINDINGS.length,
+};
 
 export const SAMPLE_FRAMEWORKS = [
   { name: "SOC 2", met: 41, total: 48 },
