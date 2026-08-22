@@ -3,6 +3,7 @@ import { pageMeta } from "@/lib/seo";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
 import { Reveal } from "@/components/marketing/reveal";
 import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
   title: "Pricing — TensorShield",
@@ -49,7 +50,7 @@ const TIERS = [
       "2 scan targets",
       "All 5 categories — code · cloud · attack surface · identity · compliance",
       "30+ OSS scanners (deterministic, on-demand)",
-      "Findings dashboard + all 22 frameworks mapped",
+      `Findings dashboard + all ${FRAMEWORK_COUNT} frameworks mapped`,
       "Human-in-the-loop approvals — you approve every fix",
       "Signed decision ledger",
       "Community support",
@@ -76,7 +77,7 @@ const TIERS = [
       "Up to 25 scan targets",
       "Full deterministic + ML detection — correlation, threat-intel, attack paths",
       "Continuous monitoring + incidents",
-      "All 22 frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …",
+      `All ${FRAMEWORK_COUNT} frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …`,
       "Signed evidence packs + Trust Center",
       "Human-in-the-loop approvals + remediation",
       "Self-serve, managed, or MSP delivery — your service model",
@@ -127,7 +128,7 @@ const TIERS = [
 
 const FAQ = [
   ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the deterministic open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
-  ["What do I get on Core that Free doesn't have?", "Your AI Security Engineer — it triages what actually matters, explains each issue in plain English, and proposes the fix for you to approve. Plus the full scanning engine: every scanner with cross-surface correlation, continuous monitoring with incidents, all 22 frameworks with signed evidence packs, and the human-in-the-loop apply loop that actually closes findings. ₹24,999/mo (or ₹2,49,990/yr), up to 25 targets."],
+  ["What do I get on Core that Free doesn't have?", `Your AI Security Engineer — it triages what actually matters, explains each issue in plain English, and proposes the fix for you to approve. Plus the full scanning engine: every scanner with cross-surface correlation, continuous monitoring with incidents, all ${FRAMEWORK_COUNT} frameworks with signed evidence packs, and the human-in-the-loop apply loop that actually closes findings. ₹24,999/mo (or ₹2,49,990/yr), up to 25 targets.`],
   ["How are the tiers structured?", "Free to see your real posture with the deterministic engine — and if you paste in your own LLM key, both AI agents run on Free at your model cost, no upgrade and no sales call. Core adds your AI Security Engineer (defense) on our side. Core + Pentest adds your AI Pentester (attack) — the one that proves which findings are actually exploitable, re-tests after each fix, and produces the VAPT report a customer's security review asks for. Enterprise is for when the constraint is scale or delivery rather than capability: unlimited targets, SSO, managed/MSP."],
   ["Can I run the AI on my own LLM key?", "Yes, on any plan including Free. Connect your own key in Settings → AI engine — any OpenAI-compatible provider, or a local Ollama — and the agents run at your model cost instead of ours. Useful if you already have credits, or if your policy is that your code only goes to a model you control."],
   ["Are there API rate limits?", "Yes — generous per-plan fair-use limits on the API, so one customer's automation can never slow the platform down for everyone else. Normal interactive use and CI never come close; paid plans get more headroom, and Enterprise is unmetered. If you hit a limit you get a clear 429 with a retry hint, never a hard lockout. AI spend is capped separately by the monthly budget you set."],
@@ -159,7 +160,7 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
   {
     section: "Compliance & evidence",
     rows: [
-      { label: "Frameworks mapped", cells: ["All 22", "All 22", "All 22", "All 22 + custom"] },
+      { label: "Frameworks mapped", cells: [`All ${FRAMEWORK_COUNT}`, `All ${FRAMEWORK_COUNT}`, `All ${FRAMEWORK_COUNT}`, `All ${FRAMEWORK_COUNT} + custom`] },
       { label: "Signed evidence packs + Trust Center", cells: ["no", "yes", "yes", "yes"] },
       { label: "Questionnaire automation", cells: ["no", "yes", "yes", "yes"] },
       { label: "Human-in-the-loop approvals + apply", cells: ["yes", "yes", "yes", "yes"] },

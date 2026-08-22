@@ -6,6 +6,7 @@
 // deps. Honors prefers-reduced-motion via the CSS keyframes' global guard.
 
 import { useEffect, useState } from "react";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 type Kind = "scan" | "found" | "verify" | "fix" | "approve" | "sign";
 
@@ -29,7 +30,7 @@ const SCRIPT: Ev[] = [
   { kind: "scan", tool: "trivy", msg: "dependency + image CVE sweep" },
   { kind: "found", tool: "govulncheck", msg: "reachable RCE in a bundled dependency" },
   { kind: "verify", tool: "agent", msg: "call path traced to the vulnerable sink" },
-  { kind: "sign", tool: "evidence", msg: "ed25519 evidence pack · 22 frameworks mapped" },
+  { kind: "sign", tool: "evidence", msg: `ed25519 evidence pack · ${FRAMEWORK_COUNT} frameworks mapped` },
 ];
 
 const META: Record<Kind, { label: string; dot: string; chip: string }> = {

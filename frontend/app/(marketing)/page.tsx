@@ -12,6 +12,7 @@ import { TrustBar } from "@/components/marketing/trust-bar";
 import { Prioritize } from "@/components/marketing/prioritize";
 import { ArchStack } from "@/components/marketing/arch-stack";
 import { SCENARIOS, SURFACES, ALTERNATIVES } from "@/lib/solutions";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 const HOME_TITLE = "TensorShield — an AI security engineer and an AI pentester for Series A and B teams";
 const HOME_DESCRIPTION =
@@ -520,7 +521,7 @@ function Compare() {
   const rows: { label: string; cells: (string)[] }[] = [
     { label: "Deep detection — code, cloud, web, identity", cells: ["yes", "part", "part", "yes"] },
     { label: "Ships the actual fix (PR / config change)", cells: ["yes", "no", "no", "yes"] },
-    { label: "Compliance evidence — 22 frameworks, signed", cells: ["yes", "yes", "no", "part"] },
+    { label: `Compliance evidence — ${FRAMEWORK_COUNT} frameworks, signed`, cells: ["yes", "yes", "no", "part"] },
     { label: "Identity & email-spoofing posture", cells: ["yes", "part", "no", "yes"] },
     { label: "Runs 24/7, autonomous, human-gated", cells: ["yes", "no", "no", "no"] },
     { label: "Cost for an SMB", cells: ["$/mo", "$$/mo", "$/mo", "$$$$/yr"] },
@@ -633,7 +634,7 @@ function StackPipeline() {
   ];
   const outcomes = [
     { icon: Wrench, label: "Fixes shipped", sub: "PRs & configs, gated", strong: true },
-    { icon: FileCheck2, label: "22 frameworks mapped", sub: "SOC 2 · ISO · GDPR · +19" },
+    { icon: FileCheck2, label: `${FRAMEWORK_COUNT} frameworks mapped`, sub: `SOC 2 · ISO · GDPR · +${FRAMEWORK_COUNT - 3}` },
     { icon: Lock, label: "Signed evidence pack", sub: "reproducible, not screenshots" },
     { icon: ClipboardCheck, label: "Auditor-ready report", sub: "PDF · Markdown · CSV" },
     { icon: Activity, label: "Live posture dashboard", sub: "continuous, 24/7" },

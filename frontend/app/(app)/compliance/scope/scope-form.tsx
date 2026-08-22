@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Loader2, Check, Sparkles } from "lucide-react";
-import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
+import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_COUNT } from "@/lib/frameworks";
 import type { ComplianceProfile, ComplianceScope } from "@/lib/types";
 import { saveComplianceScope } from "./actions";
 
@@ -77,7 +77,7 @@ export function ScopeForm({ initial }: { initial: ComplianceScope }) {
 
       <section className="card space-y-3 p-5">
         <div className="text-sm font-medium">2. Which frameworks are you pursuing?</div>
-        <p className="text-xs text-muted">Your posture, coverage, and the connect-this-first checklist focus on these. Leave empty to track all 22.</p>
+        <p className="text-xs text-muted">Your posture, coverage, and the connect-this-first checklist focus on these. Leave empty to track all {FRAMEWORK_COUNT}.</p>
         <div className="grid gap-1.5 sm:grid-cols-3">
           {FRAMEWORKS.map((f) => (
             <label key={f} className="flex cursor-pointer items-center gap-2 text-xs">

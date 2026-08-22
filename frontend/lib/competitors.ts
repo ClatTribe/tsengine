@@ -1,3 +1,4 @@
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 // Content for the competitor-comparison SEO pages (/vs-<competitor>). HONEST by policy (§10): each entry
 // names what the competitor is genuinely strong at before positioning our real differences. We never
 // fabricate a competitor weakness. Our consistent, true edge: we're the security ENGINE + compliance in one
@@ -42,7 +43,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
       "Strong brand recognition that carries weight with enterprise buyers",
     ],
     rows: [
-      { dim: "Compliance frameworks", us: "22 frameworks, control-mapped from real findings", them: "Broad framework coverage (category leader)" },
+      { dim: "Compliance frameworks", us: `${FRAMEWORK_COUNT} frameworks, control-mapped from real findings`, them: "Broad framework coverage (category leader)" },
       { dim: "Security scanning", us: "Built-in: code, cloud, web, API, container, identity", them: "Integrates your other scanners; not a scanner itself" },
       { dim: "Penetration testing", us: "Exploitation-proven, built in, named sign-off", them: "Not included — you buy a pentest separately" },
       { dim: "The expert (vCISO/auditor)", us: "Optional managed expert, or your team, or an MSP", them: "You bring your own; marketplace referral" },
@@ -186,7 +187,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
       { dim: "Exploitation-proven findings", us: "Yes — verified with a PoC", them: "Scanner findings" },
     ],
     edges: [
-      { t: "Compliance + an auditor flow", d: "Aikido is dev-security-first. We carry that and add 22 frameworks, signed evidence, and an audit/attestation workflow — so the same findings get you SOC 2, not just a clean dev dashboard." },
+      { t: "Compliance + an auditor flow", d: `Aikido is dev-security-first. We carry that and add ${FRAMEWORK_COUNT} frameworks, signed evidence, and an audit/attestation workflow — so the same findings get you SOC 2, not just a clean dev dashboard.` },
       PENTEST_EDGE,
       { t: "A product, or a security team", d: "Aikido is a product a human operates — there's no accountable, signed human-in-the-loop layer, so it can't be delivered as a managed service. Ours can: run it yourself, or have a named expert (ours, or your MSP's) operate it for you and sign off on the calls that matter." },
       TWO_GTM_EDGE,
@@ -198,7 +199,7 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
       ["Do you share Aikido's transparency?", "Yes — our detection wraps best-in-class open-source tools (nuclei, semgrep, trivy, prowler…), so you can see and reproduce exactly what ran. We consider that a strength we have in common."],
     ],
     seoTitle: "TensorShield vs. Aikido — Dev Security + Compliance + Pentest | TensorShield",
-    seoDesc: "TensorShield vs. Aikido, honestly. Aikido is great developer-first app+cloud security; TensorShield shares that and adds 22 compliance frameworks, a built-in exploitation-proven pentest, and a managed expert.",
+    seoDesc: `TensorShield vs. Aikido, honestly. Aikido is great developer-first app+cloud security; TensorShield shares that and adds ${FRAMEWORK_COUNT} compliance frameworks, a built-in exploitation-proven pentest, and a managed expert.`,
   },
 };
 

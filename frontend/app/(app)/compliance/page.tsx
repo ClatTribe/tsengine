@@ -5,12 +5,13 @@ import { ASSET_TYPE_LABEL } from "@/lib/connectors";
 import { PageIntro } from "@/components/ui/page-intro";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { COMPLIANCE_TABS } from "@/lib/tabs";
+import { FRAMEWORK_CATEGORY_ORDER } from "@/lib/frameworks";
 
 export const dynamic = "force-dynamic";
 
 // Section order — most security buyers start at the trust frameworks and work outward to
 // privacy / government. Anything without an explicit category falls into "Other".
-const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government", "AI governance", "Other"];
+const CATEGORY_ORDER = [...FRAMEWORK_CATEGORY_ORDER, "Other"];
 
 type Posture = { total: number; met: number; gap: number; assessable: number; notAssessed: number; coveragePct: number; readiness: string } | null;
 

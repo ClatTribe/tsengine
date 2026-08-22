@@ -7,6 +7,7 @@ import {
   Bot, ArrowRight, ScanLine, Filter, Wrench, FileCheck2, Fingerprint,
   UserCheck, ShieldCheck, GitPullRequest, Power, ScrollText, CheckCircle2, XCircle, Minus,
 } from "lucide-react";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
   title: "Your AI security engineer — detects, triages, fixes, with you in the loop | TensorShield",
@@ -20,7 +21,7 @@ const LOOP = [
   { icon: ScanLine, t: "Detects", d: "On a deterministic floor of 30+ OSS scanners across code, cloud, web, APIs, containers, identity & SaaS — recall no model can undercut." },
   { icon: Filter, t: "Triages", d: "Separates real, exploitable risk from scanner noise — verifying, corroborating, and chaining findings into the attack paths that actually matter." },
   { icon: Wrench, t: "Fixes", d: "Prepares the real remediation — a pull request, a config change, an identity action, a ticket — ready to ship the moment you say go." },
-  { icon: FileCheck2, t: "Proves", d: "Maps every finding to the controls it touches across 22 frameworks and signs it into a tamper-evident evidence pack — for your auditor and your customers." },
+  { icon: FileCheck2, t: "Proves", d: `Maps every finding to the controls it touches across ${FRAMEWORK_COUNT} frameworks and signs it into a tamper-evident evidence pack — for your auditor and your customers.` },
 ];
 
 // Why it's trustworthy — the guardrails that make an autonomous agent safe.

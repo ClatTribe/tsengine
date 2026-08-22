@@ -1,9 +1,10 @@
 import { Bot, Crosshair, Boxes, AppWindow, GitBranch, Server, ArrowDown, Layers, Spline, FileCheck2 } from "lucide-react";
 import { Reveal } from "@/components/marketing/reveal";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 // UnifiedPlatform — the "it's one brain, not point tools" section. Shows every product + asset feeding
 // ONE finding graph (crossdetect + grc), which corroborates, correlates across surfaces, and rolls up
-// into one signed compliance posture. Grounded: the only number shown is "22 frameworks" (real); no
+// into one signed compliance posture. Grounded: the framework count is derived from FRAMEWORKS; no
 // per-tenant demo counts.
 const SOURCES = [
   { icon: Bot, label: "AI security engineer" },
@@ -28,7 +29,7 @@ const OUTCOMES = [
   {
     icon: FileCheck2,
     title: "One compliance posture",
-    body: "Every product's findings map to controls and roll into a single signed posture across all 22 frameworks — so detection and audit-readiness move together.",
+    body: `Every product's findings map to controls and roll into a single signed posture across all ${FRAMEWORK_COUNT} frameworks — so detection and audit-readiness move together.`,
   },
 ];
 

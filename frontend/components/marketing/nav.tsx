@@ -10,18 +10,14 @@ import {
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
+import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY, frameworkGroups } from "@/lib/frameworks";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; desc: string; icon: typeof Bot };
 
 // Frameworks grouped by category for the mega-menu (Sprinto-style). Sourced from the single framework
-// registry, so it stays in lock-step with the 22 supported frameworks.
-const FW_CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government", "AI governance"];
-const FRAMEWORK_GROUPS = FW_CATEGORY_ORDER.map((cat) => ({
-  cat,
-  items: FRAMEWORKS.filter((f) => (FRAMEWORK_CATEGORY[f] ?? "Security & trust") === cat),
-})).filter((g) => g.items.length > 0);
+// registry, so it stays in lock-step with every supported framework.
+const FRAMEWORK_GROUPS = frameworkGroups();
 
 // The Solutions mega-menu, structured to the positioning so it doesn't read as a flat pile of links: the
 // two AI personas are the HEADLINE (the premium), then the deterministic-substrate COVERAGE + the
