@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/accuracybench"
 )
@@ -27,12 +28,27 @@ func accuracyCmd(argv []string) error {
 	}
 	scores := accuracybench.Run()
 	fmt.Print(accuracybench.Render(scores))
+	return regressionError(scores)
+}
+
+// EVERY regressed core is named, not the first.
+//
+// Returning on the first one made the second invisible until the first was fixed — a silent
+// truncation of the very report the command exists to give, and the same "no silent caps" rule
+// §14.2 applies to benchmarks. An operator should learn the whole extent of a regression in one
+// run, not discover it a core at a time.
+// regressionError names every core that fell below the bar, or nil when none did. Extracted so the
+// "name them all" property is testable without running the whole scorecard.
+func regressionError(scores []accuracybench.CoreScore) error {
+	var regressed []string
 	for _, s := range scores {
 		if !s.Perfect() {
-			// A regression is a non-zero exit so CI can gate on it, and it names the core rather
-			// than only failing: "accuracy dropped" without a name is a message nobody can act on.
-			return fmt.Errorf("core %q regressed (recall %.2f, precision %.2f)", s.Core, s.Recall, s.Precision)
+			regressed = append(regressed,
+				fmt.Sprintf("%s (recall %.2f, precision %.2f over %d cases)", s.Core, s.Recall, s.Precision, s.Cases))
 		}
+	}
+	if len(regressed) > 0 {
+		return fmt.Errorf("%d core(s) regressed:\n  %s", len(regressed), strings.Join(regressed, "\n  "))
 	}
 	return nil
 }

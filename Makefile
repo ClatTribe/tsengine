@@ -51,9 +51,14 @@ gate: ## everything CI checks, failing loudly — run this before pushing
 	@if [ -d frontend/node_modules ]; then \
 		echo "==> tsc --noEmit"; \
 		cd frontend && npx --no-install tsc --noEmit; \
+	elif [ -n "$$(git status --porcelain -- 'frontend/**/*.ts' 'frontend/**/*.tsx' 2>/dev/null)" ]; then \
+		echo "FAILED: frontend TypeScript changed and frontend/node_modules is absent, so tsc"; \
+		echo "        could NOT run. A gate that skips the check for the files you touched is a"; \
+		echo "        gate that reports success on an unchecked tree. Run 'npm ci' in frontend/."; \
+		git status --porcelain -- 'frontend/**/*.ts' 'frontend/**/*.tsx'; \
+		exit 1; \
 	else \
-		echo "!! SKIPPED tsc: frontend/node_modules is absent, so TypeScript was NOT checked."; \
-		echo "!! Run 'npm ci' in frontend/ if you touched any .ts/.tsx file."; \
+		echo "-- tsc not run: frontend/node_modules is absent and no TypeScript changed."; \
 	fi
 	@echo "==> gate passed"
 
