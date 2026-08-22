@@ -521,11 +521,26 @@ func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) []types.
 	// Same L1.5 chain the POSTed-snapshot twin runs (§11) — the scheduled door must not produce
 	// weaker findings than the HTTP door for the identical assessor.
 	findings = l15.Enrich(findings)
+	// Only findings that were actually STORED are returned. The caller appends these to `current`,
+	// which drives incident reconciliation — so a finding that failed to persist and was returned
+	// anyway opens an incident with nothing behind it: /incidents shows it, /issues does not, and the
+	// two views of the same estate disagree with no explanation.
+	//
+	// PutFinding is checked at the scan door (it aborts) and at the OSINT ingest door (it skips and
+	// returns only what it saved). These two autonomous sync paths discarded it — and they are the
+	// ones that run every monitoring pass with nobody watching, which is where silence costs most.
+	// Dropping the finding is not a loss: the next pass re-derives it and tries again.
+	saved := make([]types.Finding, 0, len(findings))
 	for i := range findings {
 		findings[i].ID = s.NewID()
-		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
+		if err := s.Store.PutFinding(ctx, tenantID, findings[i]); err != nil {
+			slog.Warn("[scan] SaaS posture finding could not be stored — it will not appear in issues",
+				"tenant", tenantID, "rule", findings[i].RuleID, "err", err.Error())
+			continue
+		}
+		saved = append(saved, findings[i])
 	}
-	return findings
+	return saved
 }
 
 // syncOSINT runs the keyless Certificate-Transparency collector (crt.sh) over the tenant's domain
@@ -560,10 +575,18 @@ func (s *Service) syncOSINT(ctx context.Context, tenantID string) []types.Findin
 	snap := osint.CollectCT(ctx, tenantID, domains, known, s.OSINTFetcher)
 	findings := osint.Assess(snap, osint.Options{NewID: s.NewID})
 	findings = l15.Enrich(findings) // §11, as the /v1/osint/ingest twin does
+	// Same rule as the SaaS-posture twin above: return only what was stored, so `current` never
+	// carries a finding the issues list cannot show.
+	saved := make([]types.Finding, 0, len(findings))
 	for i := range findings {
-		_ = s.Store.PutFinding(ctx, tenantID, findings[i])
+		if err := s.Store.PutFinding(ctx, tenantID, findings[i]); err != nil {
+			slog.Warn("[scan] OSINT finding could not be stored — it will not appear in issues",
+				"tenant", tenantID, "rule", findings[i].RuleID, "err", err.Error())
+			continue
+		}
+		saved = append(saved, findings[i])
 	}
-	return findings
+	return saved
 }
 
 // ErrCloudSyncUnavailable means a live cloud read was never possible — no fetcher wired on this
