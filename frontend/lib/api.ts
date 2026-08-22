@@ -478,7 +478,11 @@ export const api = {
   // Change the signed-in user's password (also clears the forced-rotation flag for an
   // invited member). The session stays valid afterward.
   changePassword: (current: string, next: string) =>
-    call<{ ok: boolean }>("/v1/auth/password", {
+    // sessions_revoked is the SECURITY-RELEVANT half: someone changing a password usually believes
+    // the old one is compromised, so "we could not sign out your other sessions" is the one thing
+    // they must not be left guessing about. signed_out means the wipe landed and took this session
+    // with it — safe, but they need to know why the next request bounces them to the login page.
+    call<{ ok: boolean; sessions_revoked?: boolean; signed_out?: boolean; detail?: string }>("/v1/auth/password", {
       method: "POST",
       body: JSON.stringify({ current_password: current, new_password: next }),
     }),
