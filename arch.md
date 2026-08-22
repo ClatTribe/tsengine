@@ -141,6 +141,7 @@ NOT escalation — they fan out / anchor every scan.
 | Layer | Element | Detail |
 |---|---|---|
 | **Anchor tier** | Recon | openapi_spec_ingest, fingerprint_tech_stack, discover_graphql_endpoints, sbom_extract, kiterunner |
+| | Single-target fallback (`anchorNames`, no-spec path) | nuclei, **httpx** — httpx is the FINGERPRINTER, and it is what makes threat-informed discovery (§7.1) possible here: without an observation of what the server runs, no CVE probe can be grounded, so this asset was deliberately unwired for intel-driven probing until the anchor existed |
 | | Spec-driven fuzz | schemathesis, map_graphql_inql |
 | | API specialists | scan_api_bola (OWASP API1), scan_api_bfla (API5), scan_api_mass_assignment (API3), scan_idor, scan_api_rate_limit, jwt_audit |
 | | Broad signature | nuclei, scan_sqli, scan_xxe, scan_ssrf, scan_ssti, scan_path_traversal, scan_nosql_injection, scan_cmd_injection |
