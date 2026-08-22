@@ -108,6 +108,17 @@ type DefenseModeSummary struct {
 	Passed   int                // distinct scenarios ever PASS-ed in this mode
 	BestRate map[string]float64 // best remediation rate per scenario
 	BestPath map[string]float64 // best path recall per scenario (found/expected)
+	// Passes and RunsPer are per-scenario, so a rate can be read next to whether the run it came
+	// from actually PASSED. Without them the tables showed high-severity-noise — the DECOY scenario,
+	// which exists to catch acting on things that should be left alone — at 100% remediation and
+	// 100% path recall, in every mode, having never once passed in either. It closed both decoys
+	// (decoy_actions=2), which is the failure it is there to detect, and the headline read green.
+	Passes  map[string]int
+	RunsPer map[string]int
+	// HasPaths records whether ANY run of a scenario had paths to find. Path recall defaulted to 1.0
+	// when ExpectedPaths was 0, so a scenario with nothing to find scored a perfect 0-of-0 — the same
+	// vacuity as a recall of 1.00 over an empty must-find list.
+	HasPaths map[string]bool
 }
 
 // SummarizeDefenseLedger rolls the log into per-mode best-ever summaries — the honest "where we stand"
@@ -119,19 +130,26 @@ func SummarizeDefenseLedger(entries []DefenseLedgerEntry) map[string]DefenseMode
 	for _, e := range entries {
 		m, ok := out[e.Mode]
 		if !ok {
-			m = DefenseModeSummary{Mode: e.Mode, BestRate: map[string]float64{}, BestPath: map[string]float64{}}
+			m = DefenseModeSummary{Mode: e.Mode, BestRate: map[string]float64{}, BestPath: map[string]float64{},
+				Passes: map[string]int{}, RunsPer: map[string]int{}, HasPaths: map[string]bool{}}
 			passedSeen[e.Mode] = map[string]bool{}
 		}
 		m.Runs++
 		if e.RemediationRate > m.BestRate[e.ScenarioID] {
 			m.BestRate[e.ScenarioID] = e.RemediationRate
 		}
-		var pr float64 = 1.0
-		if e.ExpectedPaths > 0 {
-			pr = float64(e.FoundPaths) / float64(e.ExpectedPaths)
+		m.RunsPer[e.ScenarioID]++
+		if e.Pass {
+			m.Passes[e.ScenarioID]++
 		}
-		if pr > m.BestPath[e.ScenarioID] {
-			m.BestPath[e.ScenarioID] = pr
+		// A scenario with nothing to find has no path recall. It used to default to 1.0, which put a
+		// perfect score against a run that looked for nothing.
+		if e.ExpectedPaths > 0 {
+			m.HasPaths[e.ScenarioID] = true
+			pr := float64(e.FoundPaths) / float64(e.ExpectedPaths)
+			if pr > m.BestPath[e.ScenarioID] {
+				m.BestPath[e.ScenarioID] = pr
+			}
 		}
 		if e.Pass && !passedSeen[e.Mode][e.ScenarioID] {
 			passedSeen[e.Mode][e.ScenarioID] = true
@@ -167,7 +185,13 @@ func RenderDefenseLedgerMarkdown(entries []DefenseLedgerEntry) string {
 		ids := sortedScenarioIDs(sub.BestRate, agt.BestRate)
 		for _, id := range ids {
 			s, a := sub.BestRate[id], agt.BestRate[id]
-			fmt.Fprintf(&b, "| %s | %.0f%% | %.0f%% | %+.0f%% |\n", id, s*100, a*100, (a-s)*100)
+			note := ""
+			// A lift computed between two arms that both FAIL this scenario every time is a delta
+			// between two failures. Saying so beats a tidy +0%.
+			if sub.Passes[id] == 0 && agt.Passes[id] == 0 {
+				note = " ⚠︎ never passed in either arm"
+			}
+			fmt.Fprintf(&b, "| %s | %.0f%% | %.0f%% | %+.0f%%%s |\n", id, s*100, a*100, (a-s)*100, note)
 		}
 	}
 
@@ -177,14 +201,20 @@ func RenderDefenseLedgerMarkdown(entries []DefenseLedgerEntry) string {
 		if !ok {
 			continue
 		}
-		fmt.Fprintf(&b, "\n## %s — best remediation rate per scenario\n\n| Scenario | Best remediation | Best path recall |\n|---|---|---|\n", mode)
+		fmt.Fprintf(&b, "\n## %s — best remediation rate per scenario\n\n"+
+			"| Scenario | Best remediation | Best path recall | Runs passed |\n|---|---|---|---|\n", mode)
 		ids := make([]string, 0, len(m.BestRate))
 		for id := range m.BestRate {
 			ids = append(ids, id)
 		}
 		sort.Strings(ids)
 		for _, id := range ids {
-			fmt.Fprintf(&b, "| %s | %.0f%% | %.0f%% |\n", id, m.BestRate[id]*100, m.BestPath[id]*100)
+			// "Runs passed" sits beside the rate because the two answered different questions and only
+			// one of them was shown. A scenario can close every closeable finding — rate 100% — and
+			// still fail every run, which is exactly what the decoy scenario does when it acts on the
+			// decoys. Reading the rate alone, it was indistinguishable from a clean sweep.
+			fmt.Fprintf(&b, "| %s | %.0f%% | %s | %d/%d |\n",
+				id, m.BestRate[id]*100, pathRecallCell(m, id), m.Passes[id], m.RunsPer[id])
 		}
 	}
 	return b.String()
@@ -207,4 +237,13 @@ func sortedScenarioIDs(a, b map[string]float64) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// pathRecallCell renders path recall, or "—" for a scenario that never had paths to find. Rendering
+// 0-of-0 as 100% put a perfect score against a run that looked for nothing.
+func pathRecallCell(m DefenseModeSummary, id string) string {
+	if !m.HasPaths[id] {
+		return "— (no paths to find)"
+	}
+	return fmt.Sprintf("%.0f%%", m.BestPath[id]*100)
 }
