@@ -423,25 +423,41 @@ L2 reaches the same API via `dispatch_l2_probe(tool=..., args=...)` — no separ
 
 ## Threat intel enrichment at L1
 
-CLAUDE.md §7. Hook fires at step 6 of the L1.5 chain.
+CLAUDE.md §7. Hook fires at step 6 of the per-finding chain. Regenerated from the source constants in
+`internal/corpus/threatintel`, having claimed two feeds that do not exist.
+
+SEVEN feeds, all free and keyless. The first two are fetched by default; the rest are best-effort or
+opt-in, so a corpus may legitimately carry only some of them — and the hook says nothing rather than
+guessing when a field is absent.
 
 ```
-finding with cve_id="CVE-2024-1234"
-   ↓ threat_intel.enrich
-   ↓ lookups (24h cache, on-disk corpus):
-      • CVSS v3.1 base score → from NVD JSON feed
-      • KEV listing → from CISA KEV catalog
-      • EPSS score → from FIRST.org daily CSV
-      • vendor advisories → from per-vendor URL corpus
-      • exploit availability → ExploitDB + Metasploit module DB + GitHub PoC search
+finding whose rule_id carries a CVE
+   ↓ threat_intel.enrich   (on-disk corpus, pinned per scan; embedded snapshot as fallback)
+   ↓
+   DEFAULT
+      • KEV        cisa.gov known_exploited_vulnerabilities.json
+                   → listed + date_added, ransomware use, CISA's own dueDate,
+                     vendor/product (feeds threat-informed probe selection),
+                     the advisory URLs from its `notes` field, and the CWEs
+                     (which backfill an empty CWE so compliance.map can key on it)
+      • EPSS       epss.cyentia.com daily CSV — score + percentile
+   BEST-EFFORT (a failure never blocks the refresh)
+      • ExploitDB  gitlab.com exploit-database CSV        → "a public exploit exists"
+      • Metasploit rapid7 modules_metadata_base.json      → "an operator can run it tonight" + rank
+      • nuclei     nuclei-templates cves.json             → can WE test for it (a fact about us)
+   OPT-IN (large; off unless configured)
+      • NVD        services.nvd.nist.gov CVE API 2.0      → CVSS base score + vector.
+                   TSENGINE_NVD_URL. Nothing else populates CVSS: unset, every entry scores 0.
+      • SSVC       CISA Vulnrichment (ADP) archive        → Exploitation / Automatable /
+                   TSENGINE_SSVC. Technical Impact, verbatim; no decision is computed from them.
    ↓ annotates finding.threat_intel {
-        cvss, kev:{listed, date_added},
-        epss:{score, percentile, as_of},
-        advisories[], exploits[]
+        cvss, cvss_vector, kev:{listed, date_added, ransomware, due_date},
+        epss:{score, percentile, as_of}, ssvc:{...}, weapon_rank, advisories[], exploits[]
      }
 ```
 
-The corpus version is pinned per scan (§8).
+There is NO GitHub-PoC collector and no per-vendor advisory corpus; this section claimed both. The
+advisory links are CISA's, published with each KEV entry.
 
 L2's `query_threat_intel` tool serves a different purpose — arbitrary CVE lookup during LLM reasoning. Both coexist.
 
