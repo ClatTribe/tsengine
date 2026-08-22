@@ -135,6 +135,14 @@ var required = []struct {
 			"is the accountability record. It was stored and signed while no screen declared it",
 	},
 	{
+		page:  "frontend/app/(app)/findings/[id]/page.tsx",
+		field: "exploitability",
+		wouldOtherwiseClaim: "a severity as the scanner's when it may be OURS. The L1.5 hook promotes " +
+			"a critical-class CWE rated below high up to high on this basis, so the reader sees \"high\" " +
+			"with no sign that we raised it or why — and §2.5 requires the L1 audience be able to audit " +
+			"and override what the AI decided, which they cannot do with reasoning that is not shown",
+	},
+	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "unattributable_from_our_tools",
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +
