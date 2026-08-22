@@ -101,7 +101,7 @@ func (d Deps) handleCodeSweep(w http.ResponseWriter, r *http.Request, tenantID s
 	findings := sweepFindings(res, repo, time.Now().UTC())
 	stored := 0
 	if d.Store != nil && len(findings) > 0 {
-		_, stored = d.persistDriftFindings(r.Context(), tenantID, findings)
+		_, stored = d.persistFindings(r.Context(), tenantID, findings, codeSweepProvenance)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"repo":     repo,
@@ -217,4 +217,12 @@ type panelDrop struct {
 	Agreement float64 `json:"agreement"`
 	// Why each juror said what it said.
 	Rationales []string `json:"rationales,omitempty"`
+}
+
+// codeSweepProvenance: a weakness the sweep PROPOSED from reading the code. Not drift — nothing
+// changed, and the ledger must not say an event occurred that did not.
+var codeSweepProvenance = findingProvenance{
+	IDPrefix: "sweep", PostureKind: "code_sweep",
+	LedgerWhat: "proactive code sweep", LedgerTool: "code_sweep",
+	LedgerWhy: "decomposed search over the repository, model-proposed and disposer-checked",
 }

@@ -56,15 +56,49 @@ func (d Deps) handleCloudDrift(w http.ResponseWriter, r *http.Request, tenantID 
 // batch of cloud-drift findings. Shared by the explicit /v1/cloud/drift ingest AND the automatic
 // diff-on-ingest path (cloudinventory.go) so the two never diverge. Returns the stored findings (with
 // assigned ids) + the count. Grounded + LLM-free: an unchanged account produces an empty batch → no-op.
+// findingProvenance is what the RECORD says produced a batch of findings.
+//
+// It is a parameter because the persist path was copied and its labels were not. Reusing the drift
+// persister for a different producer stamped ids "drift-…", marked the clouddrift posture assessed,
+// and wrote a ledger entry reading "cloud drift detected" — for a SAML trust weakness, and then
+// again for a source-code finding. Neither is drift: drift asserts that something CHANGED, and in
+// both cases nothing had. The ledger is where a claim is meant to be checkable, so a wrong label
+// there is worse than a vague one.
+//
+// Making it an argument means the next producer to reuse this path must say what it is, rather than
+// inheriting a claim about an event that did not happen.
+type findingProvenance struct {
+	IDPrefix    string // finding id prefix, so an audit trail says what produced the finding
+	PostureKind string // markPostureAssessed kind — "did THIS run?" is its own question
+	LedgerWhat  string // the ledger entry's thought
+	LedgerTool  string // the ledger entry's tool/kind
+	LedgerWhy   string // the observation
+}
+
+var driftProvenance = findingProvenance{
+	IDPrefix: "drift", PostureKind: "clouddrift",
+	LedgerWhat: "cloud drift detected", LedgerTool: "cloud_drift",
+	LedgerWhy: "config-snapshot drift",
+}
+
+// persistDriftFindings stores CONFIG-DRIFT findings. Both drift paths (the explicit /v1/cloud/drift
+// ingest and the automatic diff-on-inventory-ingest) go through it, so an unchanged account — the
+// case most at risk of reading as "never checked" — still records that the check ran.
 func (d Deps) persistDriftFindings(ctx context.Context, tenantID string, findings []types.Finding) ([]types.Finding, int) {
+	return d.persistFindings(ctx, tenantID, findings, driftProvenance)
+}
+
+// persistFindings enriches, stores, folds into posture, opens incidents and records the run — the
+// one path every non-scan producer shares, with its own provenance.
+func (d Deps) persistFindings(ctx context.Context, tenantID string, findings []types.Finding, prov findingProvenance) ([]types.Finding, int) {
+	if len(findings) == 0 || d.Store == nil {
+		return nil, 0
+	}
 	findings = enrichFindings(findings) // L1.5 parity (§11)
-	// Stamped here rather than in the handler so BOTH drift paths (the explicit /v1/cloud/drift
-	// ingest and the automatic diff-on-inventory-ingest) record it. An unchanged account produces
-	// an empty batch — the case most at risk of reading as "never checked".
-	d.markPostureAssessed(ctx, tenantID, "clouddrift", time.Now().UTC())
+	d.markPostureAssessed(ctx, tenantID, prov.PostureKind, time.Now().UTC())
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {
-		f.ID = d.newID("drift") + "-" + strconv.Itoa(i)
+		f.ID = d.newID(prov.IDPrefix) + "-" + strconv.Itoa(i)
 		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
 			continue
 		}
@@ -75,8 +109,8 @@ func (d Deps) persistDriftFindings(ctx context.Context, tenantID string, finding
 		_, _ = d.IncidentOpener.OpenFor(ctx, tenantID, saved, nil)
 	}
 	if d.Recorder != nil && len(saved) > 0 {
-		d.Recorder.Record("cloud drift detected", "cloud_drift",
-			map[string]any{"tenant_id": tenantID, "drift_findings": len(saved)}, "config-snapshot drift")
+		d.Recorder.Record(prov.LedgerWhat, prov.LedgerTool,
+			map[string]any{"tenant_id": tenantID, "findings": len(saved)}, prov.LedgerWhy)
 	}
 	return saved, len(saved)
 }
