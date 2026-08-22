@@ -61,6 +61,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/importers"
 	"github.com/ClatTribe/tsengine/internal/llmredteam"
 	"github.com/ClatTribe/tsengine/internal/loadbench"
+	"github.com/ClatTribe/tsengine/internal/offensivecontext"
 	"github.com/ClatTribe/tsengine/internal/operate"
 	"github.com/ClatTribe/tsengine/internal/orchestrator"
 	"github.com/ClatTribe/tsengine/internal/osint"
@@ -1002,6 +1003,66 @@ func seedRoutesFromScan(path, targetBase string) ([]string, error) {
 	return dedupeStrings(routes), nil
 }
 
+// seedFindingsFromScan reads a prior L1 scan and returns SeedFindings (class + severity + L1.5
+// enrichment) for every enriched finding whose endpoint can be normalized onto targetBase's host.
+// SeedFromFinding fires webagent.ExploitContextForFinding, so a CVE-bearing finding also carries its
+// offensive-face skeleton when --exploit-intel is set. Unmapped CWE → empty class (the agent falls
+// back to the full tool catalog); the finding is still seeded so its exploit context is not lost.
+func seedFindingsFromScan(path, targetBase string) ([]webagent.SeedFinding, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // operator-provided path
+	if err != nil {
+		return nil, err
+	}
+	var scan types.Scan
+	if err := json.Unmarshal(data, &scan); err != nil {
+		return nil, fmt.Errorf("parse scan report: %w", err)
+	}
+	out := make([]webagent.SeedFinding, 0, len(scan.FindingsEnriched))
+	for _, f := range scan.FindingsEnriched {
+		route := normalizeSeedRoute(f.Endpoint, targetBase)
+		if route == "" {
+			continue // an endpoint we can't turn into a same-host URL is not a probe target
+		}
+		sf := webagent.SeedFromFinding(f, cweToWebClass(f.CWE))
+		sf.Route = route // re-host onto the agent's allowlisted target
+		out = append(out, sf)
+	}
+	return out, nil
+}
+
+// cweToWebClass maps a finding's CWE(s) to the webagent probe-playbook class, or "" when none is
+// known. Grounded: only the CWEs whose exploitation the agent can actually GROUND (its
+// required-indicator set) are mapped; the first match wins.
+func cweToWebClass(cwes []string) string {
+	m := map[string]string{
+		"CWE-89":   "sqli",
+		"CWE-943":  "nosqli",
+		"CWE-79":   "xss",
+		"CWE-601":  "open_redirect",
+		"CWE-22":   "path_traversal",
+		"CWE-98":   "path_traversal",
+		"CWE-77":   "command_injection",
+		"CWE-78":   "command_injection",
+		"CWE-918":  "ssrf",
+		"CWE-94":   "rce",
+		"CWE-1336": "ssti",
+		"CWE-917":  "ssti",
+		"CWE-639":  "idor",
+		"CWE-566":  "idor",
+		"CWE-284":  "bola",
+		"CWE-285":  "bola",
+		"CWE-862":  "bola",
+		"CWE-863":  "bola",
+		"CWE-269":  "privesc",
+	}
+	for _, c := range cwes {
+		if cls, ok := m[strings.ToUpper(strings.TrimSpace(c))]; ok {
+			return cls
+		}
+	}
+	return ""
+}
+
 // normalizeSeedRoute maps one scan-report surface/endpoint entry to a concrete URL on targetBase's
 // host — the only host the host-side agent is allowed to reach. Strips a leading method / "SPEC "
 // marker, takes the path+query of a full URL (re-hosting off the sandbox's host.docker.internal),
@@ -1061,11 +1122,24 @@ func runWebInvestigate(argv []string) error {
 	signKey := fs.String("sign-key", attest.DefaultKeyPath(), "ed25519 key to sign the evidence bundle / ledger")
 	signer := fs.String("signer", "", "human-readable signer id recorded in the bundle (default: derived from key)")
 	ossSandbox := fs.String("oss-sandbox", "", "spawn this sandbox image so the agent can dispatch OSS specialists (sqlmap/wpscan/nuclei/…) via dispatch_oss (§13). Omit → dispatch_oss reports the tools unavailable and the agent uses its in-process tools only")
+	exploitIntelDir := fs.String("exploit-intel", "", "corpus dir holding the ADR-0019 exploit-intel sidecar; when set, a CVE-bearing seed carries the request skeleton known to trigger it (adapted by the agent, still grounded by the indicator). Omit → no offensive-face context")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
 	if *target == "" {
 		return fmt.Errorf("--target is required")
+	}
+
+	// --exploit-intel installs the SHARED offensivecontext resolver (the same one platformapi uses)
+	// so a CVE-bearing seed carries its request skeleton. Must run BEFORE seed building, since the
+	// hook fires inside webagent.SeedFromFinding. Absent sidecar → hook stays nil → prompt unchanged.
+	if *exploitIntelDir != "" {
+		if r, ok := offensivecontext.Load(*exploitIntelDir); ok {
+			webagent.ExploitContextForFinding = r
+			fmt.Fprintf(os.Stderr, "[web-investigate] exploit-intel loaded from %s\n", *exploitIntelDir)
+		} else {
+			fmt.Fprintf(os.Stderr, "[web-investigate] exploit-intel: no sidecar in %s — continuing without offensive-face context\n", *exploitIntelDir)
+		}
 	}
 
 	var seed []string
@@ -1077,13 +1151,23 @@ func runWebInvestigate(argv []string) error {
 	// Seed from a prior L1 scan (the recon→agent handoff): the discovered surface (katana crawl /
 	// spec ingest) + the endpoints L1 already found something on. This is what keeps the agent from
 	// starting blind — it begins with the real request surface instead of guessing routes.
+	var seedFindings []webagent.SeedFinding
 	if *scanReport != "" {
 		routes, serr := seedRoutesFromScan(*scanReport, *target)
 		if serr != nil {
 			return fmt.Errorf("--scan: %w", serr)
 		}
 		seed = append(seed, routes...)
-		fmt.Fprintf(os.Stderr, "[web-investigate] seeded %d route(s) from %s\n", len(routes), *scanReport)
+		// Also seed the actual FINDINGS (class + severity + L1.5 enrichment + — via the installed
+		// hook — a CVE's exploit skeleton), not just their routes. This is what fires the exploit
+		// -intel feed: SeedFromFinding calls webagent.ExploitContextForFinding. Endpoint normalized
+		// to the target host (same constraint as routes).
+		sf, ferr := seedFindingsFromScan(*scanReport, *target)
+		if ferr != nil {
+			return fmt.Errorf("--scan findings: %w", ferr)
+		}
+		seedFindings = sf
+		fmt.Fprintf(os.Stderr, "[web-investigate] seeded %d route(s) + %d finding(s) from %s\n", len(routes), len(seedFindings), *scanReport)
 	}
 	seed = dedupeStrings(seed)
 
@@ -1120,7 +1204,7 @@ func runWebInvestigate(argv []string) error {
 	}
 
 	opts := webagent.Options{
-		MaxIters: *maxIters, MaxRequests: *maxReq, MinInterval: *minInterval, Seed: seed, Ledger: rec,
+		MaxIters: *maxIters, MaxRequests: *maxReq, MinInterval: *minInterval, Seed: seed, SeedFindings: seedFindings, Ledger: rec,
 	}
 	if *transcriptOut != "" {
 		// Flush after every turn so a hard timeout / SIGKILL (e.g. a bench per-target deadline)
