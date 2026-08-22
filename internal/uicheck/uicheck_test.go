@@ -71,6 +71,16 @@ var required = []struct {
 			"(BOLA/BFLA needs two identities) was never reachable",
 	},
 	{
+		page:  "frontend/components/posture/database-scan.tsx",
+		field: "discovered_sensitive",
+		wouldOtherwiseClaim: "nothing, while holding the strongest evidence this product has about a " +
+			"crown jewel. Everywhere else a data store's sensitivity is COPIED from an upstream flag " +
+			"or declared by the customer, so an attack path ends at a checkbox; this is the one place " +
+			"the classifier read the actual values and proved it — and the result was returned to " +
+			"whoever posted the scan and rendered nowhere. The TS type also had it as string[] while " +
+			"the server sends objects, a mismatch nothing caught because nothing read it",
+	},
+	{
 		page:  "frontend/app/(app)/issues/page.tsx",
 		field: "evidence_insufficient",
 		wouldOtherwiseClaim: "nothing back at all. The row control asks two questions — is this real, " +

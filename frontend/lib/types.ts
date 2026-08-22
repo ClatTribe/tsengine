@@ -1192,7 +1192,14 @@ export interface DatabaseScanResult {
   note?: string;
   credential_retained: boolean;
   credential_note?: string;
-  discovered_sensitive?: string[];
+  // What the classifier PROVED about the data, per object — not a checkbox someone ticked.
+  //
+  // Declared as string[] while the server sends objects, which nothing caught because nothing read
+  // it. Anyone wiring it up would have got [object Object] in the UI.
+  //
+  // evidence names the column and the signal and never echoes a raw value, so this is auditable
+  // without leaking the data it is about.
+  discovered_sensitive?: { object: string; classes: string[]; evidence: string[] }[];
   deeper_scan_available?: string;
 }
 

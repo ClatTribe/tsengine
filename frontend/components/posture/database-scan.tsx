@@ -136,6 +136,28 @@ export function DatabaseScanPanel() {
             {res.deeper_scan_available && (
               <p className="mt-2 text-xs leading-relaxed text-muted">{res.deeper_scan_available}</p>
             )}
+            {(res.discovered_sensitive?.length ?? 0) > 0 && (
+              <div className="mt-2 rounded-lg border border-high/30 bg-high/5 px-3 py-2.5">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-faint">
+                  Sensitive data found by looking at the values
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  Not a label anyone applied — the classifier read the columns and the data itself. This is
+                  what makes a table a crown jewel as a fact rather than an assumption.
+                </p>
+                <ul className="mt-1.5 space-y-1">
+                  {res.discovered_sensitive!.map((d) => (
+                    <li key={d.object} className="text-xs">
+                      <span className="mono text-ink">{d.object}</span>{" "}
+                      <span className="text-high">{d.classes.join(", ")}</span>
+                      {d.evidence.length > 0 && (
+                        <div className="mono mt-0.5 text-[11px] text-faint">{d.evidence.join(" · ")}</div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {res.note && <p className="mt-2 text-xs leading-relaxed text-muted">{res.note}</p>}
 
             {res.findings.length > 0 && (
