@@ -29,6 +29,10 @@
 //	                           than falling back to a library the operator did not choose.
 //	TSENGINE_THREAT_INTEL_CORPUS  path to the GLOBAL KEV/EPSS corpus file (else embedded snapshot)
 //	TSENGINE_CORPUS_REFRESH_INTERVAL  global threat-intel refresh cadence (default 24h; 0 disables)
+//	TSENGINE_EXPLOIT_INTEL     1 → also build the offensive-face exploit-intel sidecar (ADR 0019)
+//	                           from the nuclei-templates archive on each corpus refresh (opt-in; the
+//	                           L2 pentester's bounded exploitation-checker reads it). Off by default.
+//	TSENGINE_EXPLOIT_INTEL_URL pin a tag/commit nuclei-templates tarball for the sidecar (reproducible)
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
 //	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
 //	TSENGINE_ACTIVE_EXPLOIT    1 → wire the live active-exploitation Prober (still
