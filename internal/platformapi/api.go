@@ -293,6 +293,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/cloud/sync", d.auth(d.handleCloudSync))                                                           // LIVE read of the connected AWS account (read-only role); reports coverage
 	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))                                             // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
 	mux.HandleFunc("POST /v1/code/investigate", d.auth(d.handleCodeInvestigate))                                               // AI Code Engineer (codeagent) — depth over code findings + source (LLM-gated)
+	mux.HandleFunc("POST /v1/code/sweep", d.auth(d.handleCodeSweep))                                                           // PROACTIVE code vuln discovery (codesweep) — finds what no scanner reported (LLM-gated)
 	mux.HandleFunc("GET /v1/code/investigate", d.auth(d.handleCodeInvestigationView))                                          // stored code-agent confirmed-exploitable assessments
 	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))                                        // stored cloud-agent attack paths
 	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                                                       // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
