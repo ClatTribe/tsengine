@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { pageMeta } from "@/lib/seo";
+import { ArticleJsonLd } from "@/components/marketing/article-jsonld";
 import { POSTS, postBySlug, type Block } from "@/lib/blog";
 
 export function generateStaticParams() {
@@ -56,6 +57,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
   return (
     <article className="mx-auto max-w-2xl px-5 pb-24 pt-16">
+      <ArticleJsonLd post={post} />
       <Link href="/blog" className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-accent">
         <ArrowLeft className="h-4 w-4" /> All posts
       </Link>

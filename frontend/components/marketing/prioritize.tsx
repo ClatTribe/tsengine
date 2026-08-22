@@ -12,7 +12,7 @@ const STAGES = [
   { icon: Layers, label: "Raw signals", count: "1,200+", note: "30+ scanners, every surface", tone: "in" as const },
   { icon: GitMerge, label: "Collapse duplicates", count: "310", note: "many alerts → one issue", tone: "mid" as const },
   { icon: Filter, label: "Drop false positives", count: "180", note: "fingerprint + confidence", tone: "mid" as const },
-  { icon: Flame, label: "Rank by exploitability", count: "40", note: "KEV · EPSS · reachability", tone: "mid" as const },
+  { icon: Flame, label: "Rank by exploitability", count: "40", note: "what attackers are exploiting now", tone: "mid" as const },
   { icon: Crosshair, label: "Weight by blast radius", count: "12", note: "data-tier · exposed · attacked", tone: "mid" as const },
   { icon: ListChecks, label: "What matters", count: "6", note: "in priority order", tone: "out" as const },
 ];
@@ -25,7 +25,7 @@ export function Prioritize() {
   }, []);
 
   return (
-    <section className="border-y border-border bg-surface">
+    <div>
       <div className="mx-auto max-w-6xl px-5 py-16">
         <Reveal className="mx-auto mb-9 max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Less noise</span>
@@ -36,6 +36,13 @@ export function Prioritize() {
             Every raw alert runs through the same funnel a senior engineer would — live, on every scan. What&apos;s
             left is the short list that actually matters, in order.
           </p>
+          {/* The caveat used to sit UNDER the funnel in 12px faint text, after a reader had already
+              taken six large numerals as measured data. The honesty was there; the visual weight
+              contradicted it. Labelling the figures before they are read matches how the hero
+              already marks its attack path ("EXAMPLE · …"). */}
+          <div className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-faint">
+            Example figures · your estate will differ
+          </div>
         </Reveal>
 
         <Reveal delay={80} className="overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -100,10 +107,12 @@ export function Prioritize() {
         </Reveal>
 
         <p className="mt-5 text-center text-xs text-faint">
-          Illustrative funnel — your numbers vary. The mechanisms are real: dedup into one confirmed issue ·
-          fingerprint + confidence FP filter · KEV/EPSS/reachability ranking · data-tier &amp; under-attack weighting.
+          The numbers above are an example; the mechanisms are real and run on every scan — duplicate
+          alerts collapse into one confirmed issue · known false alarms are dropped · what attackers
+          are actively exploiting ranks first · anything near customer data, or already being probed,
+          jumps the queue.
         </p>
       </div>
-    </section>
+    </div>
   );
 }

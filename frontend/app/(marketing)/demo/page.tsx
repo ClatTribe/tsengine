@@ -3,6 +3,7 @@ import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 
 import { DemoForm } from "@/components/marketing/demo-form";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
   title: "Book a Demo — TensorShield",
@@ -12,7 +13,7 @@ export const metadata = pageMeta({
 
 const POINTS = [
   "A walkthrough on your real stack — code, cloud, and identity.",
-  "How we map findings to 22 compliance frameworks with signed evidence.",
+  `How we map findings to ${FRAMEWORK_COUNT} compliance frameworks with signed evidence.`,
   "The VAPT / pentest report your enterprise customers ask for.",
   "How human-in-the-loop autonomy keeps you in control of every change.",
 ];

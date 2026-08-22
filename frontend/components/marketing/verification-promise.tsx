@@ -14,7 +14,7 @@ import { ShieldCheck, XCircle, CheckCircle2 } from "lucide-react";
 // product would fail its own tests otherwise, not because marketing says so.
 export function VerificationPromise() {
   return (
-    <section className="border-y border-border bg-surface">
+    <div>
       <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
         <div className="grid items-start gap-10 lg:grid-cols-[1.05fr_.95fr]">
           <div>
@@ -22,18 +22,18 @@ export function VerificationPromise() {
               <ShieldCheck className="h-3.5 w-3.5 text-accent" /> The rule we do not break
             </div>
             <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
-              No finding reaches you without{" "}
-              <span className="text-accent">deterministic verification.</span>
+              If we can&apos;t reproduce it,{" "}
+              <span className="text-accent">we don&apos;t show it to you.</span>
             </h2>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted">
-              Exploit confirmation runs <span className="font-medium text-ink">outside the model</span>. The AI
-              proposes what to try; a deterministic check decides whether it actually worked. If it cannot be
-              reproduced with proof, you never see it.
+              The AI suggests what to try. Something separate — a plain, ordinary test that the AI has no say
+              over — actually tries it and checks whether it worked. Nothing reaches you unless that test came
+              back with proof.
             </p>
             <p className="mt-4 max-w-xl text-sm leading-relaxed text-faint">
-              Agentic systems hallucinate and fabricate exploits. One invented critical finding, delivered to a
-              regulated customer, ends the company. We designed for that failure first — which is why the
-              verification step is a separate thing the model cannot talk its way past.
+              AI makes things up. One invented critical finding, sent to a customer in a regulated industry,
+              ends a company. We built for that failure first, which is why the checking step is a separate
+              thing the AI cannot argue its way past.
             </p>
           </div>
 
@@ -44,14 +44,14 @@ export function VerificationPromise() {
             <div className="mt-4 space-y-3">
               <Row
                 tone="muted"
-                title="The AI proposes"
+                title="The AI has an idea"
                 body="“This login endpoint looks injectable — try this payload.”"
               />
-              <div className="pl-4 text-xs text-faint">↓ the model's job ends here</div>
+              <div className="pl-4 text-xs text-faint">↓ the AI’s job ends here</div>
               <Row
                 tone="accent"
-                title="A deterministic check disposes"
-                body="Fires the request, and looks for a specific machine-checkable signal — a database error, a redirect to an attacker domain, a script that actually executed in a real browser."
+                title="A separate test decides"
+                body="Actually sends the request and looks for one specific thing that can only happen if the attack worked — a database error, a redirect to an attacker’s site, code that really ran in a browser."
               />
             </div>
 
@@ -59,26 +59,26 @@ export function VerificationPromise() {
               <div className="flex items-start gap-2">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-pulse" />
                 <span className="text-muted">
-                  Signal fired → <span className="font-medium text-ink">recorded, with the proof attached</span>
+                  It worked → <span className="font-medium text-ink">you see it, with the proof attached</span>
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-faint" />
                 <span className="text-muted">
-                  No signal → <span className="font-medium text-ink">refused</span>, however confident the model
+                  Nothing happened → <span className="font-medium text-ink">thrown away</span>, however sure the AI
                   was
                 </span>
               </div>
             </div>
 
             <p className="mt-4 text-xs leading-relaxed text-faint">
-              The same rule governs the defensive side: an attack path is only recorded if it genuinely exists in
-              your cloud graph and genuinely ends somewhere that matters.
+              The same rule applies on the defensive side: we only report a route into your systems if it really
+              exists in your setup, and really ends somewhere that matters.
             </p>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

@@ -5,35 +5,36 @@ import {
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet, Crosshair,
 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
-import { AttackPathHero } from "@/components/marketing/attack-path-hero";
+import { SecurityReviewHero } from "@/components/marketing/security-review-hero";
 import { VerificationPromise } from "@/components/marketing/verification-promise";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
 import { Prioritize } from "@/components/marketing/prioritize";
-import { ArchStack } from "@/components/marketing/arch-stack";
 import { SCENARIOS, SURFACES, ALTERNATIVES } from "@/lib/solutions";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
-const HOME_TITLE = "TensorShield — an AI security engineer and an AI pentester for Series A and B teams";
+const HOME_TITLE = "Clear the security review holding up your deal — TensorShield";
 const HOME_DESCRIPTION =
-  "Two AI teammates for a team whose security surface has outgrown its security team: an AI security engineer that finds what is genuinely exploitable across code, cloud and SaaS and writes the fix, and an AI pentester that proves it by exploiting it. Someone on your team approves anything that touches your systems. SOC 2 evidence built in.";
+  "For Series A and B teams: an AI security engineer finds what an attacker could actually reach across your code, cloud and SaaS and writes the fix, and an AI pentester proves it by breaking in. Someone on your team approves anything that touches your systems. SOC 2 evidence and a signed report built in.";
 
-// The homepage leads with the cross-surface-attack-path wedge, so its social card must match that —
-// otherwise a shared homepage link shows the site-wide "fractional security team" default (the other
-// door), a positioning mismatch with the H1. Override OG + Twitter to the wedge here.
+// The social card must say what the H1 says. Both now lead with the visitor's SITUATION — a deal
+// stuck behind a customer's security review — rather than with the two agents, which are the how.
+// A shared link that promises a different thing from the page it opens is a positioning leak.
+const HOME_SOCIAL =
+  "A customer's security review is holding up the deal. An AI security engineer finds what an attacker could actually reach and writes the fix; an AI pentester proves it by breaking in. You approve every change, and you get the signed report their security team is asking for.";
+
 export const metadata = {
   title: HOME_TITLE,
   description: HOME_DESCRIPTION,
   alternates: { canonical: "/" },
   openGraph: {
-    title: "Your AI security engineer. And your AI pentester.",
-    description:
-      "For Series A and B teams whose security surface has outgrown their security team: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. Someone on your team approves anything that touches your systems.",
+    title: "Clear the security review that's holding up your deal.",
+    description: HOME_SOCIAL,
     url: "/",
   },
   twitter: {
-    title: "Your AI security engineer. And your AI pentester.",
-    description:
-      "For Series A and B teams whose security surface has outgrown their security team: one agent finds what is genuinely exploitable across code, cloud and SaaS and writes the fix; the other proves it by exploiting it. Someone on your team approves anything that touches your systems.",
+    title: "Clear the security review that's holding up your deal.",
+    description: HOME_SOCIAL,
   },
 };
 
@@ -68,12 +69,21 @@ export default function Landing() {
                 <Sparkles className="h-3.5 w-3.5 text-accent" /> For Series A and B teams
               </Link>
 
-              <h1 className="mx-auto mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-6xl">
-                Your AI security engineer.{" "}
-                <span className="text-accent">And your AI pentester.</span>
+              {/* The headline names the visitor's SITUATION, not our machinery.
+                  It used to read "Your AI security engineer. And your AI pentester." — accurate,
+                  differentiated, and a description of what we built rather than of what the reader
+                  came here with. The buying trigger is all over this site (the /startups page, all
+                  three blog posts, both lead magnets, and the first option in our own "what brought
+                  you here?" router): a deal is stuck behind a customer's security review. That was
+                  arriving at 73% scroll depth. It leads now; the two agents follow one line down as
+                  the HOW, which is what they are. */}
+              <h1 className="mx-auto mt-6 max-w-xl text-balance text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:mx-0 lg:text-[3.4rem]">
+                Clear the security review{" "}
+                <span className="text-accent">that&apos;s holding up your deal.</span>
               </h1>
               <p className="mx-auto mt-5 max-w-md text-lg leading-relaxed text-muted lg:mx-0">
-                For teams with more security surface than security people.
+                Two AI teammates do the work a security hire would — and hand you the signed report
+                your customer is asking for.
               </p>
 
               {/* The headline's promise, made visible. Two rows, one job each — scannable in about a
@@ -82,12 +92,12 @@ export default function Landing() {
                 <AgentLine
                   Icon={ShieldCheck}
                   name="AI security engineer"
-                  job="finds what is genuinely exploitable — and writes the fix"
+                  job="finds what an attacker could actually reach — and writes the fix"
                 />
                 <AgentLine
                   Icon={Crosshair}
                   name="AI pentester"
-                  job="proves it by exploiting it, then re-tests your fix"
+                  job="proves it by breaking in, then re-tests your fix"
                 />
               </div>
 
@@ -105,53 +115,97 @@ export default function Landing() {
               <p className="mt-4 text-xs text-faint">No credit card · You approve every change</p>
             </div>
 
-            {/* the cross-surface attack path — code + SaaS bridge to cloud root (the wedge, visualized) */}
+            {/* The outcome, not the mechanism. The cloud-IAM attack-path graph that used to sit here
+                is the engineer's picture — it asks a founder to parse a node graph before they feel
+                anything. It now lives on /ai-security-engineer, where the reader has opted into the
+                mechanics; the hero shows the review clearing and the report they can send back. */}
             <div>
-              <AttackPathHero />
+              <SecurityReviewHero />
             </div>
           </div>
 
         </div>
       </section>
 
-      {/* The stack → product → outcomes diagram. It used to sit INSIDE the hero, where its ten labelled
-          nodes competed with the headline and the attack path for the same glance. It explains a lot, so
-          it earns its own band directly below rather than being the third thing in a hero. */}
-      <section className="mx-auto max-w-6xl px-5 pb-4">
-        <StackPipeline />
+
+      {/* ── 2 · WHERE DO YOU FIT ────────────────────────────────────────────────────────────────
+          Moved up from position 11 (y≈5,746 of 7,900 — 73% scroll depth). Visitors arrive at this
+          product from very different places, and the highest-intent one ("a deal is blocked on a
+          security questionnaire") was the first item in a list almost nobody scrolled to. Asking
+          early costs one screen and routes each reader to a page written for their actual question,
+          instead of making all of them read the same twelve bands hoping to recognise themselves. */}
+      <SolutionsRouter />
+
+      {/* ── 3 · WHAT YOU GET ────────────────────────────────────────────────────────────────────
+          Was TWO adjacent sections that both carried the eyebrow "WHAT YOU GET": the stack pipeline
+          and the two-agent cards. One band now — the pipeline shows what plugs in and what comes
+          out, the cards say what the agents actually do. */}
+      <section className="border-y border-border bg-surface">
+        <div className="mx-auto max-w-6xl px-5 py-16">
+          <StackPipeline />
+          <div className="mt-14">
+            <TwoAgents />
+          </div>
+        </div>
       </section>
 
-      {/* THE TWO AGENTS — the product itself, immediately after the hero.
-          This used to live under "How it works", four sections down, behind the trust bar, the
-          noise-reduction funnel and the differentiator band. Someone deciding whether this is for them
-          should not have to scroll that far to find out what the two things they are buying actually
-          do. Each card says what the agent does, and the one thing it will never do without them. */}
-      <TwoAgents />
+      {/* ── 4 · WHY YOU CAN TRUST IT ────────────────────────────────────────────────────────────
+          The verification promise and the signed-evidence block were separated by five sections,
+          and they answer the same question — can I believe what this thing tells me. Verification
+          covers how a finding is admitted; evidence covers what an auditor can re-run afterwards.
+          Together they are one argument. */}
+      <section className="border-y border-border bg-bg">
+        <VerificationPromise />
+        <div className="border-t border-border">
 
-      {/* THE TRUST OBJECTION, answered immediately after the visitor learns the product is two AI agents —
-          which is exactly when "but agents make things up" occurs to them. Answered with the architecture
-          (propose/dispose, verification outside the model), not with reassurance. */}
-      <VerificationPromise />
-
-      {/* Trust signals — who built it, what it runs on, how it's built, who it's for */}
-      <TrustBar />
-
-      {/* The architecture, made legible — a free substrate + the two AI teammates + a human who signs.
-          (Was a black box; the AI Pentester was absent above the fold.) */}
-      <ArchStack />
-
-      {/* USP #1 — we prioritize the alerts so you don't have to (noise-reduction funnel) */}
-      <Prioritize />
-
-      {/* USP #2 / Differentiator — we go from alert to fix, not just flag (vs advise-only tools) */}
-      <section className="border-y border-border bg-surface">
-        <div className="mx-auto max-w-5xl px-5 py-16">
-          <Reveal className="mx-auto mb-10 max-w-2xl text-center">
-            <span className="text-xs font-semibold uppercase tracking-wider text-accent">The difference</span>
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-20 lg:grid-cols-2">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent">Built on trust</span>
             <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
-              Most tools stop at the finding. TensorShield ships the fix.
+              Evidence you can prove — not screenshots you hope hold up.
             </h2>
-            <p className="mt-3 text-base leading-relaxed text-muted">
+            <p className="mt-4 text-base leading-relaxed text-muted">
+              Every finding cites the tool that backs it, and every compliance artifact is signed and pinned to the exact
+              state it was assessed against. An auditor can re-run the proof. Your customers can trust the badge.
+            </p>
+            <ul className="mt-6 space-y-3">
+              {[
+                "Evidence your auditor can verify wasn’t edited after the fact",
+                "Every issue links to the tool that proved it — the AI never asserts what nothing proved",
+                "A signed decision ledger for every automated and human action",
+              ].map((x) => (
+                <li key={x} className="flex items-start gap-2.5 text-sm text-ink">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-pulse" /> {x}
+                </li>
+              ))}
+            </ul>
+            <Link href="/security" className="mt-7 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">
+              How we keep you safe <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <ConnectorsVisual />
+        </div>
+              </div>
+      </section>
+
+      {/* ── 5 · FROM NOISE TO FIXED ─────────────────────────────────────────────────────────────
+          The funnel ("we cut 1,200 signals to 6") and the differentiator ("and then we fix them")
+          were two sections making one continuous argument, with a stat strip wedged between them.
+          Read together they are the product's whole value in one band: less noise, then a shipped
+          fix, then proof it is closed. */}
+      <section className="border-y border-border bg-surface">
+        <Prioritize />
+        <div className="border-t border-border">
+
+        <div className="mx-auto max-w-5xl px-5 py-16">
+          <Reveal className="mb-10 grid gap-x-10 gap-y-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:items-end">
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-accent">The difference</span>
+              <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
+                Most tools stop at the finding. TensorShield ships the fix.
+              </h2>
+            </div>
+            <p className="text-base leading-relaxed text-muted md:pb-1">
               A dashboard full of risks is still your problem to solve. TensorShield prepares the actual remediation —
               and applies it the moment you approve.
             </p>
@@ -204,7 +258,7 @@ export default function Landing() {
               {[
                 { icon: ScanLine, t: "Detected", d: "ranked, deduped" },
                 { icon: Wrench, t: "Fix prepared", d: "PR · config · runbook" },
-                { icon: CheckCircle2, t: "You approve", d: "1 tap, tier-gated" },
+                { icon: CheckCircle2, t: "You approve", d: "1 tap; routine fixes skip you" },
                 { icon: GitBranch, t: "Applied", d: "via your connector" },
                 { icon: ShieldCheck, t: "Re-verified", d: "confirmed gone" },
               ].map(({ icon: Icon, t, d }, i, arr) => (
@@ -231,26 +285,42 @@ export default function Landing() {
             </div>
           </Reveal>
         </div>
+              </div>
       </section>
 
-      {/* Social proof / stats */}
-      <section className="border-y border-border bg-surface">
-        <Reveal className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-5 py-10 text-center sm:grid-cols-4">
-          {[
-            ["22", "compliance frameworks"],
-            ["30+", "OSS scanners wrapped"],
-            ["24/7", "autonomous monitoring"],
-            ["1-tap", "approval, fully signed"],
-          ].map(([n, l]) => (
-            <div key={l}>
-              <div className="text-3xl font-semibold tracking-tight text-ink">{n}</div>
-              <div className="mt-1 text-xs text-muted">{l}</div>
-            </div>
-          ))}
-        </Reveal>
+      {/* ── 6 · WHO IS BEHIND IT ────────────────────────────────────────────────────────────────
+          The trust bar and the stat strip both answered "is this real?" — one with provenance, one
+          with numbers — from opposite ends of the page. Merged, with the counts corrected: the
+          strip still read 22 frameworks against an engine that ships 25. */}
+      <section className="border-y border-border bg-bg">
+        <TrustBar />
+        <div className="border-t border-border">
+          <Reveal className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-5 py-10 text-center sm:grid-cols-4">
+            {[
+              [String(FRAMEWORK_COUNT), "compliance frameworks"],
+              ["30+", "open-source scanners"],
+              ["24/7", "continuous monitoring"],
+              ["1-tap", "approval, fully signed"],
+            ].map(([n, l]) => (
+              <div key={l}>
+                <div className="text-3xl font-semibold tracking-tight text-ink">{n}</div>
+                <div className="mt-1 text-xs text-muted">{l}</div>
+              </div>
+            ))}
+          </Reveal>
+        </div>
       </section>
 
-      {/* How it works */}
+      {/* ── 7 · START ───────────────────────────────────────────────────────────────────────────
+          The three setup steps and the closing CTA were separated by two sections. They are one
+          thought — here is how you begin, here is the button — so they close the page together.
+
+          CUT ENTIRELY on the way here: <ArchStack />, which carried a second "HOW IT WORKS" eyebrow
+          (the first is below) and re-explained the two agents plus the free engine plus the human
+          who signs. All three already land: the agents in band 3, the free engine in that band's
+          footer line, the human in each agent's boundary line. Saying it a third time did not make
+          it more persuasive, only further from the CTA. */}
+      <section>
       <Section eyebrow="How it works" title="Set up once. It runs itself." sub="Connect a system and the agent takes it from there — you stay in control of anything risky.">
         <div className="grid gap-5 md:grid-cols-3">
           {[
@@ -272,50 +342,15 @@ export default function Landing() {
         </div>
       </Section>
 
-      {/* Where do you want to start — the router.
-          This replaced three consecutive sections that each re-argued "we are one platform"
-          (platform overview, unified graph, competitor table). Restating the same claim three times
-          doesn't make it more convincing; it just makes the page longer. The visitor's next question
-          isn't "is it one platform?" — it's "which of my problems does this solve?", and that has
-          three different answers depending on who's asking. So we ask, instead of telling. */}
-      <SolutionsRouter />
 
-      {/* Trust / signed evidence */}
-      <section className="bg-surface">
-        <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-20 lg:grid-cols-2">
-          <div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-accent">Built on trust</span>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
-              Evidence you can prove — not screenshots you hope hold up.
-            </h2>
-            <p className="mt-4 text-base leading-relaxed text-muted">
-              Every finding cites the tool that backs it, and every compliance artifact is signed and pinned to the exact
-              state it was assessed against. An auditor can re-run the proof. Your customers can trust the badge.
-            </p>
-            <ul className="mt-6 space-y-3">
-              {[
-                "ed25519-signed, tamper-evident evidence packs",
-                "Grounded findings — the agent never asserts what a tool didn't prove",
-                "A signed decision ledger for every automated and human action",
-              ].map((x) => (
-                <li key={x} className="flex items-start gap-2.5 text-sm text-ink">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-pulse" /> {x}
-                </li>
-              ))}
-            </ul>
-            <Link href="/security" className="mt-7 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">
-              How we keep you safe <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <ConnectorsVisual />
-        </div>
-      </section>
-
-      {/* CTA band */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-accent via-[#4338CA] to-[#3730A3]">
+        {/* the button, in the same band as the steps that lead to it */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-accent via-[#4338CA] to-[#3730A3]">
         <div className="absolute -right-20 -top-24 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
         <div className="relative mx-auto max-w-3xl px-5 py-20 text-center text-white">
-          <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Give your startup a security team today.</h2>
+          {/* Was "Give your startup a security team today." The hero badge says Series A and B; a
+              closing line that calls the same reader a startup tells them we haven't decided who
+              this is for. Same offer, consistent audience. */}
+          <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Get your security team running this week.</h2>
           <p className="mx-auto mt-3 max-w-lg text-white/75">
             Connect your first system in minutes. See your posture, your compliance gaps, and your first fixes — for free.
           </p>
@@ -327,6 +362,7 @@ export default function Landing() {
               See pricing
             </Link>
           </div>
+        </div>
         </div>
       </section>
     </>
@@ -355,10 +391,10 @@ function TwoAgents() {
       Icon: ShieldCheck,
       kicker: "Defends",
       title: "AI Security Engineer",
-      lede: "Finds what is genuinely exploitable, and writes the fix.",
+      lede: "Finds what an attacker could actually reach, and writes the fix.",
       does: [
         "Cuts a thousand scanner alerts down to the handful that matter",
-        "Chains code → cloud → SaaS into one attack path, not three tickets",
+        "Connects a problem in your code to what it unlocks in your cloud — one issue, not three tickets",
         "Explains each issue in plain English, then opens the PR or config change",
       ],
       boundary: "Never applies anything on its own — you approve every change.",
@@ -369,10 +405,10 @@ function TwoAgents() {
       Icon: Wrench,
       kicker: "Attacks",
       title: "AI Pentester",
-      lede: "Proves it by exploiting it — not a scanner's opinion.",
+      lede: "Proves it by breaking in — not a scanner's guess.",
       does: [
-        "Actually exploits the finding, benignly, inside limits you set",
-        "Upgrades it to verified with a captured proof-of-concept",
+        "Actually breaks in to prove it is real — safely, inside limits you set",
+        "Shows you the exact request that worked, so nothing is taken on trust",
         "Re-tests after your fix to show the hole is really closed",
       ],
       boundary: "Only runs against targets you scope and sign off on.",
@@ -382,14 +418,20 @@ function TwoAgents() {
   ];
 
   return (
-    <section className="border-y border-border bg-surface">
-      <div className="mx-auto max-w-6xl px-5 py-16">
-        <Reveal className="mx-auto mb-10 max-w-2xl text-center">
-          <div className="text-xs font-medium uppercase tracking-wider text-faint">What you get</div>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Two AI teammates, one human in charge</h2>
-          <p className="mt-3 text-base leading-relaxed text-muted">
+    <div>
+      <div>
+        <Reveal className="mb-10 grid gap-x-10 gap-y-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:items-end">
+          {/* Was also "What you get" — the same eyebrow the stack pipeline directly above already
+              uses for its outcomes column. Harmless when the two sat in different sections; inside
+              one band it reads as the page repeating itself. The pipeline keeps the outcome
+              framing, these cards name the agents. */}
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wider text-faint">The two agents</div>
+            <h2 className="mt-2 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Two AI teammates, one human in charge</h2>
+          </div>
+          <p className="text-base leading-relaxed text-muted md:pb-1">
             Not a dashboard you have to staff. Two agents that do the work a security hire would, on the
-            deterministic scanning engine underneath — with you signing anything consequential.
+            scanning engine underneath — with you signing off on anything that matters.
           </p>
         </Reveal>
 
@@ -435,7 +477,7 @@ function TwoAgents() {
           — turn either agent on when you are ready.
         </Reveal>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -500,6 +542,38 @@ function SolutionsRouter() {
           </div>
         ))}
       </Reveal>
+
+      {/* FREE TOOLS, surfaced.
+          These three are the best top-of-funnel assets on the site — ungated, instantly useful, and
+          exactly what a visitor with a blocked deal wants before they will consider signing up. They
+          lived behind a nav dropdown and one small hero link. Placed here rather than in a section of
+          their own: someone who just answered "what brought you here?" and did not see themselves in
+          a lane still has a reason to stay. */}
+      <Reveal delay={140} className="mt-8 rounded-2xl border border-border bg-surface p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-ink">Not ready to sign up? Use these anyway.</div>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              Free, no account, no card. They are useful whether or not you ever buy anything.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { href: "/scan", label: "Scan your domain" },
+              { href: "/soc2-readiness", label: "SOC 2 readiness check" },
+              { href: "/sample-report", label: "See a real VAPT report" },
+            ].map((t) => (
+              <Link
+                key={t.href}
+                href={t.href}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent-soft px-3.5 py-2 text-sm font-semibold text-accent transition hover:border-accent/60"
+              >
+                {t.label} <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      </Reveal>
     </section>
   );
 }
@@ -520,7 +594,7 @@ function Compare() {
   const rows: { label: string; cells: (string)[] }[] = [
     { label: "Deep detection — code, cloud, web, identity", cells: ["yes", "part", "part", "yes"] },
     { label: "Ships the actual fix (PR / config change)", cells: ["yes", "no", "no", "yes"] },
-    { label: "Compliance evidence — 22 frameworks, signed", cells: ["yes", "yes", "no", "part"] },
+    { label: `Compliance evidence — ${FRAMEWORK_COUNT} frameworks, signed`, cells: ["yes", "yes", "no", "part"] },
     { label: "Identity & email-spoofing posture", cells: ["yes", "part", "no", "yes"] },
     { label: "Runs 24/7, autonomous, human-gated", cells: ["yes", "no", "no", "no"] },
     { label: "Cost for an SMB", cells: ["$/mo", "$$/mo", "$/mo", "$$$$/yr"] },
@@ -611,14 +685,14 @@ function CompareCell({ v, highlight }: { v: string; highlight: boolean }) {
 
 function Section({ eyebrow, title, sub, children }: { eyebrow: string; title: string; sub: string; children: React.ReactNode }) {
   return (
-    <section className="mx-auto max-w-6xl px-5 py-20">
+    <div className="mx-auto max-w-6xl px-5 py-20">
       <Reveal className="mx-auto mb-12 max-w-2xl text-center">
         <span className="text-xs font-semibold uppercase tracking-wider text-accent">{eyebrow}</span>
         <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">{title}</h2>
         <p className="mt-3 text-base leading-relaxed text-muted">{sub}</p>
       </Reveal>
       <Reveal delay={90}>{children}</Reveal>
-    </section>
+    </div>
   );
 }
 
@@ -633,7 +707,7 @@ function StackPipeline() {
   ];
   const outcomes = [
     { icon: Wrench, label: "Fixes shipped", sub: "PRs & configs, gated", strong: true },
-    { icon: FileCheck2, label: "22 frameworks mapped", sub: "SOC 2 · ISO · GDPR · +19" },
+    { icon: FileCheck2, label: `${FRAMEWORK_COUNT} frameworks mapped`, sub: `SOC 2 · ISO · GDPR · +${FRAMEWORK_COUNT - 3}` },
     { icon: Lock, label: "Signed evidence pack", sub: "reproducible, not screenshots" },
     { icon: ClipboardCheck, label: "Auditor-ready report", sub: "PDF · Markdown · CSV" },
     { icon: Activity, label: "Live posture dashboard", sub: "continuous, 24/7" },
@@ -673,7 +747,7 @@ function StackPipeline() {
         </Column>
       </div>
       <p className="mt-4 text-center text-xs text-faint">
-        Read-only by default · write-back only on your approval · per-tenant isolation · ed25519-signed evidence
+        Read-only by default · nothing changes without your approval · your data is never mixed with another customer’s · signed evidence
       </p>
     </div>
   );

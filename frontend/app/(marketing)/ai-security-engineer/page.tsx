@@ -3,10 +3,12 @@ import { FeatureIcon } from "@/components/brand/feature-icon";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { AgenticActions } from "@/components/marketing/agentic-actions";
+import { AttackPathHero } from "@/components/marketing/attack-path-hero";
 import {
   Bot, ArrowRight, ScanLine, Filter, Wrench, FileCheck2, Fingerprint,
   UserCheck, ShieldCheck, GitPullRequest, Power, ScrollText, CheckCircle2, XCircle, Minus,
 } from "lucide-react";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
   title: "Your AI security engineer — detects, triages, fixes, with you in the loop | TensorShield",
@@ -20,7 +22,7 @@ const LOOP = [
   { icon: ScanLine, t: "Detects", d: "On a deterministic floor of 30+ OSS scanners across code, cloud, web, APIs, containers, identity & SaaS — recall no model can undercut." },
   { icon: Filter, t: "Triages", d: "Separates real, exploitable risk from scanner noise — verifying, corroborating, and chaining findings into the attack paths that actually matter." },
   { icon: Wrench, t: "Fixes", d: "Prepares the real remediation — a pull request, a config change, an identity action, a ticket — ready to ship the moment you say go." },
-  { icon: FileCheck2, t: "Proves", d: "Maps every finding to the controls it touches across 22 frameworks and signs it into a tamper-evident evidence pack — for your auditor and your customers." },
+  { icon: FileCheck2, t: "Proves", d: `Maps every finding to the controls it touches across ${FRAMEWORK_COUNT} frameworks and signs it into a tamper-evident evidence pack — for your auditor and your customers.` },
 ];
 
 // Why it's trustworthy — the guardrails that make an autonomous agent safe.
@@ -70,6 +72,19 @@ export default function AISecurityEngineer() {
             </Link>
           </div>
           <p className="mt-4 text-xs text-faint">OSS-grade detection · AI triage &amp; fixes · human-in-the-loop · signed</p>
+        </div>
+
+        {/* The cross-surface attack path, rehoused.
+            This graph was the homepage hero for a long time, where it asked a founder with a blocked
+            deal to parse a node graph before they felt anything. It belongs HERE — a reader on this
+            page has clicked through to the mechanics and wants exactly this: how a leaked key in code
+            and a stolen SaaS login become one route to cloud root, and where the engineer cuts it. */}
+        <div className="relative mx-auto max-w-3xl px-5 pb-16">
+          <AttackPathHero />
+          <p className="mt-3 text-center text-xs leading-relaxed text-faint">
+            This is the reasoning the engineer does across your estate — one route, not three
+            unrelated tickets.
+          </p>
         </div>
       </section>
 

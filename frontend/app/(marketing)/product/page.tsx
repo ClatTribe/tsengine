@@ -2,7 +2,7 @@ import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import { FeatureIcon } from "@/components/brand/feature-icon";
 import { CheckCircle2, ArrowRight, Bot, Cloud, Network } from "lucide-react";
-import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY } from "@/lib/frameworks";
+import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY, FRAMEWORK_COUNT, frameworkGroups } from "@/lib/frameworks";
 import { ASSET_SURFACES } from "@/lib/assets";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { Reveal } from "@/components/marketing/reveal";
@@ -21,7 +21,7 @@ const LOOP = [
   { name: "triage", t: "Triage & prove", d: "An AI security engineer separates real, exploitable risk from scanner noise — and, where you authorize active testing, proves the exploit with a captured proof-of-concept. A finding is confirmed, not just flagged." },
   { name: "fix", t: "Fix", d: "It prepares the actual remediation — a pull request, a config change, an identity action, or a ticket — ready to ship." },
   { name: "approve", t: "Approve", d: "Low-risk fixes apply automatically; anything consequential waits for one tap of your approval. Autonomy where it's earned." },
-  { name: "prove", t: "Prove", d: "Every finding maps to controls across 22 frameworks and lands in a signed, auditor-ready evidence pack — automatically." },
+  { name: "prove", t: "Prove", d: `Every finding maps to controls across ${FRAMEWORK_COUNT} frameworks and lands in a signed, auditor-ready evidence pack — automatically.` },
 ];
 
 const PERSONAS = [
@@ -202,13 +202,8 @@ function OSSBand() {
 // ComplianceBand — surfaces the 14-framework breadth on the deep product page (it was the
 // one marketing page that omitted it). Grouped by category, sourced from the shared
 // framework list so it never drifts from what the app actually maps.
-const CATEGORY_ORDER = ["Security & trust", "Sector & payments", "Privacy", "Government"];
-
 function ComplianceBand() {
-  const groups = CATEGORY_ORDER.map((cat) => ({
-    cat,
-    items: FRAMEWORKS.filter((f) => FRAMEWORK_CATEGORY[f] === cat),
-  })).filter((g) => g.items.length > 0);
+  const groups = frameworkGroups();
 
   return (
     <section className="bg-surface">

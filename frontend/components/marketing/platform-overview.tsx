@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GitBranch, Cloud, Crosshair, KeyRound, ClipboardCheck, UserCheck, ArrowRight } from "lucide-react";
 import { Reveal } from "@/components/marketing/reveal";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 // PlatformOverview — the "whole platform in one view": the five surfaces TensorShield covers,
 // each with its real capabilities and the outcome it serves, then the human-in-the-loop spine
@@ -45,7 +46,7 @@ const SURFACES = [
     href: "/frameworks",
     icon: ClipboardCheck,
     blurb: "Findings become audit-ready evidence.",
-    caps: ["22 frameworks", "Auto control mapping", "Signed evidence packs", "Questionnaire autofill", "SOC 2 · ISO · GDPR · PCI · HIPAA"],
+    caps: [`${FRAMEWORK_COUNT} frameworks`, "Auto control mapping", "Signed evidence packs", "Questionnaire autofill", "SOC 2 · ISO · GDPR · PCI · HIPAA"],
   },
 ];
 

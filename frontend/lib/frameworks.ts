@@ -29,6 +29,48 @@ export const FRAMEWORKS = [
   "sebi",
 ] as const;
 
+// THE display order for framework category groups — and the ONLY list any page should map over.
+//
+// Four pages each kept their own hardcoded copy of this array, and every one of them had drifted:
+// /frameworks, the nav dropdown and the app compliance page all omitted "India regulatory", and
+// /product omitted "AI governance" as well. A page that groups by a hardcoded category list
+// SILENTLY DROPS any framework whose category isn't on it — so CERT-In, RBI and SEBI shipped in
+// the engine and appeared on no marketing page at all, while pricing was denominated in ₹.
+//
+// `frameworkGroups()` below is the fix: it derives groups from FRAMEWORK_CATEGORY, renders known
+// categories in this order, and APPENDS any unknown category rather than discarding it. Adding a
+// framework in a new category now surfaces everywhere by default; hiding one takes a deliberate act.
+export const FRAMEWORK_CATEGORY_ORDER = [
+  "Security & trust",
+  "Sector & payments",
+  "Privacy",
+  "Government",
+  "India regulatory",
+  "AI governance",
+] as const;
+
+/** Frameworks grouped for display. Never drops a framework whose category is unlisted. */
+export function frameworkGroups(): { cat: string; items: string[] }[] {
+  const byCat = new Map<string, string[]>();
+  for (const f of FRAMEWORKS) {
+    const cat = FRAMEWORK_CATEGORY[f] ?? "Other";
+    byCat.set(cat, [...(byCat.get(cat) ?? []), f]);
+  }
+  const known = FRAMEWORK_CATEGORY_ORDER.filter((c) => byCat.has(c)).map((c) => ({ cat: c as string, items: byCat.get(c)! }));
+  const extra = [...byCat.keys()]
+    .filter((c) => !(FRAMEWORK_CATEGORY_ORDER as readonly string[]).includes(c))
+    .map((c) => ({ cat: c, items: byCat.get(c)! }));
+  return [...known, ...extra];
+}
+
+// THE framework count for all customer-facing copy. Derived, never typed.
+//
+// Twenty marketing and app strings hardcoded "22" while the engine shipped 25 — the count grew
+// when CERT-In, RBI and SEBI landed and the copy never followed. That understated the product to
+// exactly the buyer it was added for (pricing is denominated in ₹), and it contradicted
+// /frameworks, which renders this array and therefore already showed 25.
+export const FRAMEWORK_COUNT = FRAMEWORKS.length;
+
 export const FRAMEWORK_LABEL: Record<string, string> = {
   soc2: "SOC 2",
   iso27001: "ISO 27001",

@@ -3,6 +3,7 @@ import { pageMeta } from "@/lib/seo";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
 import { Reveal } from "@/components/marketing/reveal";
 import { Check, ArrowRight, Sparkles, Minus } from "lucide-react";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
   title: "Pricing — TensorShield",
@@ -49,7 +50,7 @@ const TIERS = [
       "2 scan targets",
       "All 5 categories — code · cloud · attack surface · identity · compliance",
       "30+ OSS scanners (deterministic, on-demand)",
-      "Findings dashboard + all 22 frameworks mapped",
+      `Findings dashboard + all ${FRAMEWORK_COUNT} frameworks mapped`,
       "Human-in-the-loop approvals — you approve every fix",
       "Signed decision ledger",
       "Community support",
@@ -76,7 +77,7 @@ const TIERS = [
       "Up to 25 scan targets",
       "Full deterministic + ML detection — correlation, threat-intel, attack paths",
       "Continuous monitoring + incidents",
-      "All 22 frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …",
+      `All ${FRAMEWORK_COUNT} frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …`,
       "Signed evidence packs + Trust Center",
       "Human-in-the-loop approvals + remediation",
       "Self-serve, managed, or MSP delivery — your service model",
@@ -127,7 +128,7 @@ const TIERS = [
 
 const FAQ = [
   ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the deterministic open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
-  ["What do I get on Core that Free doesn't have?", "Your AI Security Engineer — it triages what actually matters, explains each issue in plain English, and proposes the fix for you to approve. Plus the full scanning engine: every scanner with cross-surface correlation, continuous monitoring with incidents, all 22 frameworks with signed evidence packs, and the human-in-the-loop apply loop that actually closes findings. ₹24,999/mo (or ₹2,49,990/yr), up to 25 targets."],
+  ["What do I get on Core that Free doesn't have?", `Your AI Security Engineer — it triages what actually matters, explains each issue in plain English, and proposes the fix for you to approve. Plus the full scanning engine: every scanner with cross-surface correlation, continuous monitoring with incidents, all ${FRAMEWORK_COUNT} frameworks with signed evidence packs, and the human-in-the-loop apply loop that actually closes findings. ₹24,999/mo (or ₹2,49,990/yr), up to 25 targets.`],
   ["How are the tiers structured?", "Free to see your real posture with the deterministic engine — and if you paste in your own LLM key, both AI agents run on Free at your model cost, no upgrade and no sales call. Core adds your AI Security Engineer (defense) on our side. Core + Pentest adds your AI Pentester (attack) — the one that proves which findings are actually exploitable, re-tests after each fix, and produces the VAPT report a customer's security review asks for. Enterprise is for when the constraint is scale or delivery rather than capability: unlimited targets, SSO, managed/MSP."],
   ["Can I run the AI on my own LLM key?", "Yes, on any plan including Free. Connect your own key in Settings → AI engine — any OpenAI-compatible provider, or a local Ollama — and the agents run at your model cost instead of ours. Useful if you already have credits, or if your policy is that your code only goes to a model you control."],
   ["Are there API rate limits?", "Yes — generous per-plan fair-use limits on the API, so one customer's automation can never slow the platform down for everyone else. Normal interactive use and CI never come close; paid plans get more headroom, and Enterprise is unmetered. If you hit a limit you get a clear 429 with a retry hint, never a hard lockout. AI spend is capped separately by the monthly budget you set."],
@@ -159,7 +160,7 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
   {
     section: "Compliance & evidence",
     rows: [
-      { label: "Frameworks mapped", cells: ["All 22", "All 22", "All 22", "All 22 + custom"] },
+      { label: "Frameworks mapped", cells: [`All ${FRAMEWORK_COUNT}`, `All ${FRAMEWORK_COUNT}`, `All ${FRAMEWORK_COUNT}`, `All ${FRAMEWORK_COUNT} + custom`] },
       { label: "Signed evidence packs + Trust Center", cells: ["no", "yes", "yes", "yes"] },
       { label: "Questionnaire automation", cells: ["no", "yes", "yes", "yes"] },
       { label: "Human-in-the-loop approvals + apply", cells: ["yes", "yes", "yes", "yes"] },
@@ -254,7 +255,7 @@ export default function Pricing() {
           <div className="absolute -top-24 left-1/2 h-[24rem] w-[34rem] -translate-x-1/2 rounded-full bg-accent/15 blur-[110px] animate-aurora" />
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(16,24,40,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(16,24,40,0.025)_1px,transparent_1px)] bg-[size:44px_44px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
         </div>
-        <Reveal as="div" className="relative mx-auto max-w-3xl px-5 pb-6 pt-20 text-center">
+        <Reveal as="div" className="relative mx-auto max-w-3xl px-5 pb-4 pt-14 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-accent" /> Built for Indian teams · priced in ₹
           </span>
@@ -264,24 +265,28 @@ export default function Pricing() {
               and aimode.go resolves availability as `lim.AutonomousPentest || ownKey`, so a customer with
               their own API key runs BOTH agents on Free. The page was therefore telling its highest-intent
               visitor that the thing they came for needs a sales call. */}
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">The AI agents aren&apos;t the premium. They&apos;re the product.</h1>
+          {/* Someone who clicked "Pricing" asked exactly one question, and the answer used to be
+              below the fold: this hero was a positioning line ("The AI agents aren't the premium.
+              They're the product.") followed by 60 words explaining tier architecture, with the
+              first number ~700px further down. The headline now carries a price, the paragraph is
+              one line, and the tier cards start near the fold. */}
+          <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+            Start free. Add the AI engineer for ₹24,999&nbsp;/&nbsp;month.
+          </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            Free to see your real posture — and if you bring your own LLM key, <strong className="font-semibold text-ink">both agents run on it</strong>, at your model cost, with no upgrade.{" "}
-            <strong className="font-semibold text-ink">Core</strong> funds the AI Security Engineer on our side.{" "}
-            <strong className="font-semibold text-ink">Core + Pentest</strong> adds the AI Pentester and the signed VAPT
-            report a customer&apos;s security review asks for. The service model — you run it, we run it, or your MSP
-            does — is yours to pick.
+            The scanning engine is free forever. Bring your own AI key and both agents run on it at
+            your cost, with no upgrade — or let us run them.
           </p>
           {/* The pricing spine in customer terms: deterministic + ML-based scanning on every tier, both AI
               agents reachable from Free via your own key, and a named human accountable. Personas cross-link out. */}
-          <div className="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs">
-            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Deterministic + ML scanning <span className="text-faint">· every tier</span></span>
+          <div className="mx-auto mt-5 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs">
+            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Scanning engine <span className="text-faint">· free, every tier</span></span>
             <span className="text-faint">+</span>
             <Link href="/ai-security-engineer" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Security Engineer <span className="text-faint">· Core, or your key on Free</span></Link>
             <span className="text-faint">+</span>
             <Link href="/ai-pentest" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Pentester <span className="text-faint">· + Pentest, or your key on Free</span></Link>
             <span className="text-faint">+</span>
-            <span className="rounded-md border border-dashed border-border px-2.5 py-1 font-medium text-muted">a named human (HITL)</span>
+            <span className="rounded-md border border-dashed border-border px-2.5 py-1 font-medium text-muted">a named human who signs</span>
           </div>
         </Reveal>
       </section>

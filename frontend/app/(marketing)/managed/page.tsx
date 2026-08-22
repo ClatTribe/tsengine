@@ -3,6 +3,7 @@ import { ArrowRight, UserCheck, ShieldCheck, FileSignature, Crosshair, Clipboard
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
   title: "Managed Security & Compliance — Fractional CISO for Startups | TensorShield",
@@ -21,7 +22,7 @@ const INCLUDED = [
 const STEPS = [
   { t: "Connect your stack", d: "Read-only access to your code, cloud, identity, and apps. The product maps every asset and starts scanning in minutes." },
   { t: "We run it for you", d: "Your named expert triages the findings, approves the fixes, writes the policies, and makes the risk calls — every decision signed into an auditable ledger." },
-  { t: "You stay audit-ready", d: "Live posture across 22 frameworks, a current evidence pack, and a vCISO on call — so a customer questionnaire or an auditor request is a non-event." },
+  { t: "You stay audit-ready", d: `Live posture across ${FRAMEWORK_COUNT} frameworks, a current evidence pack, and a vCISO on call — so a customer questionnaire or an auditor request is a non-event.` },
 ];
 
 const VS = [

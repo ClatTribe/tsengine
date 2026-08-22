@@ -1,3 +1,4 @@
+import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 // The product documentation content.
 //
 // EVERY STATEMENT HERE WAS VERIFIED AGAINST THE RUNNING PRODUCT before it was written — the
@@ -98,7 +99,7 @@ export const DOC_SECTIONS: DocSection[] = [
     id: "compliance",
     title: "Compliance and evidence",
     intro:
-      "Findings map to controls across 22 frameworks as they are emitted. The mapping is annotation, not judgement — we record which controls a technical finding affects, and never tell you that you are compliant.",
+      `Findings map to controls across ${FRAMEWORK_COUNT} frameworks as they are emitted. The mapping is annotation, not judgement — we record which controls a technical finding affects, and never tell you that you are compliant.`,
     rows: [
       { k: "Coverage, not a score", v: "Each framework reports how many of its technically-assessable controls we have actually assessed — for example \"2 of 9 assessed\". Controls no scanner can evaluate need an auditor, and the report says so." },
       { k: "Reports", v: "A Markdown report per framework, listing each gap with the findings that cite it. It opens with an explicit statement that an automated assessment is not a certification." },
