@@ -195,6 +195,14 @@ numbers below are useful for one thing only: telling whether a change moved a ca
 Every row is **credential-free and runnable on a laptop** — that is the point, because a
 capability you cannot measure without infrastructure is one you will not measure.
 
+The **deterministic-core FP/FN** row deserves its caveat stated next to it rather than
+below the fold. Its 1.00/1.00 measures whether the fixtures and the code agree, not
+whether the product works (§14.2.5) — and on this very board the two rows scored against
+answer keys we did NOT write opened at 64.5% and 65.2%. A perfect in-house column is
+worth exactly one thing: it goes down when a core regresses. Its corpus sizes are gated
+too, because a perfect score over 2 cases instead of 34 is a weaker claim wearing the
+same number.
+
 _Run 2026-08-21 on `feat/frontier-ghoidc`._
 
 | Capability | Harness (runnable command) | Result | Reads on |
@@ -204,6 +212,7 @@ _Run 2026-08-21 on `feat/frontier-ghoidc`._
 | Remediation capture | `tsbench defense --mode substrate` | 100% remediation · 100% path recall, all 4 scenarios | seeded code+cloud estates |
 | Offensive recall + grounding | `go test ./internal/webrange/` | agent sweep PASS · decoys present · no SUT leak in scorer | procedurally-generated range w/ decoys |
 | Vulnerability localization | `tsbench localize` | recall@1 **1.00** · MRR **1.00** (8/8 scenarios, heuristic tier) | seeded CWE scenarios |
+| Deterministic-core FP/FN | `tsbench accuracy` | **1.00 / 1.00** across 6 cores, 107 labeled cases | **corpora WE wrote — see the caveat below** |
 | **IAM privesc — recall** | `go test ./internal/bench/ -run IAMVulnerable_Live` (needs `IAM_VULNERABLE_DIR`) | **31/31 paths** | **BishopFox IAM-Vulnerable — EXTERNAL answer key** |
 | **IAM privesc — FP/FN control** | `go test ./internal/bench/ -run PolicyCases_Live` (needs `IAM_VULNERABLE_TOOLTEST_DIR`) | **0 false positives / 5** · **0 false negatives / 4** · **Youden 1.00** on the control set (was 0.50) | **BishopFox tool-testing — EXTERNAL, two-sided** |
 | **Identity/SaaS posture (EXTERNAL)** | `go test ./internal/bench/ -run SCuBA` (corpus transcribed, no env needed) | **0.993** detection recall · **0.990** on mandatory SHALL policies (was 0.322 / 0.426 on first run) | **CISA SCuBA baselines — EXTERNAL, and the STRONGEST of the three.** Its mappings are EXECUTION-PROVEN: for every mapped policy the test builds a violating snapshot, runs the real assessor and asserts the rule fires. The two cloud rows below only DECLARE their mappings |
