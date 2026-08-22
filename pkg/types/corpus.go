@@ -21,10 +21,10 @@ type Corpus struct {
 	TrivyDB *time.Time `json:"trivy_db,omitempty"`
 
 	// KEVSnapshot is the as-of timestamp of the CISA KEV catalog used.
-	KEVSnapshot time.Time `json:"kev_snapshot,omitempty"`
+	KEVSnapshot time.Time `json:"kev_snapshot,omitzero"`
 
 	// EPSSSnapshot is the as-of timestamp of the FIRST.org EPSS CSV used.
-	EPSSSnapshot time.Time `json:"epss_snapshot,omitempty"`
+	EPSSSnapshot time.Time `json:"epss_snapshot,omitzero"`
 
 	// ComplianceCorpus is a versioned identifier of the compliance control
 	// mapping corpus, e.g. "soc2-1.4.0+pci-4.0.0+hipaa-2024+cis-v8".

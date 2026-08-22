@@ -81,7 +81,7 @@ type AssetCoverage struct {
 	Target        string    `json:"target"`
 	Type          string    `json:"type"`
 	Scanned       bool      `json:"scanned"` // has this asset ever completed a scan?
-	LastScannedAt time.Time `json:"last_scanned_at,omitempty"`
+	LastScannedAt time.Time `json:"last_scanned_at,omitzero"`
 	// RunsTools is the anchor toolset DECLARED for this asset type — what a scan of this type is
 	// configured to run. It is not evidence that each tool executed on this asset.
 	RunsTools []string `json:"runs_tools"`

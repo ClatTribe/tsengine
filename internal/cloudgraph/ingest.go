@@ -23,7 +23,7 @@ import (
 type Inventory struct {
 	AccountID  string            `json:"account_id"`
 	Provider   string            `json:"provider"`
-	CapturedAt time.Time         `json:"captured_at,omitempty"`
+	CapturedAt time.Time         `json:"captured_at,omitzero"`
 	Resources  []InvResource     `json:"resources,omitempty"`
 	Trusts     []InvTrust        `json:"trusts,omitempty"`  // principal → role it may assume
 	Passes     []InvPass         `json:"passes,omitempty"`  // principal → role it may pass (iam:PassRole)

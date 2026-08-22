@@ -16,16 +16,9 @@ func kevPolicy() *SLAPolicy {
 	}
 }
 
-// inc keeps taking a time.Time so every call site still reads "no deadline" as time.Time{},
-// and converts here — mirroring the production producer (detect.kevDueAt), which returns nil
-// rather than a zero time so "no deadline" serializes as an absent field.
 func inc(kev, ransom bool, due time.Time) Incident {
-	i := Incident{Severity: "high", OpenedAt: opened, Status: IncidentOpen,
-		KEV: kev, Ransomware: ransom}
-	if !due.IsZero() {
-		i.KEVDueAt = &due
-	}
-	return i
+	return Incident{Severity: "high", OpenedAt: opened, Status: IncidentOpen,
+		KEV: kev, Ransomware: ransom, KEVDueAt: due}
 }
 
 func TestSLA_RansomwareTightensBeyondKEV(t *testing.T) {

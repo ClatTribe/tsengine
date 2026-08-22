@@ -106,7 +106,7 @@ type Node struct {
 	Evidence []string          `json:"evidence,omitempty"`
 	Attrs    map[string]string `json:"attrs,omitempty"`
 	// ObservedAt is when a surface last asserted it.
-	ObservedAt time.Time `json:"observed_at,omitempty"`
+	ObservedAt time.Time `json:"observed_at,omitzero"`
 }
 
 // Edge is one move, and what proves it.
@@ -120,7 +120,7 @@ type Edge struct {
 	// Why is the one-sentence reason a human reads. Not a substitute for Evidence.
 	Why        string    `json:"why,omitempty"`
 	Surface    string    `json:"surface,omitempty"`
-	ObservedAt time.Time `json:"observed_at,omitempty"`
+	ObservedAt time.Time `json:"observed_at,omitzero"`
 }
 
 // Graph is a tenant's estate. Not safe for concurrent writes; build then read.

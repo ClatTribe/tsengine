@@ -77,7 +77,7 @@ type Agent struct {
 	Sanctioned bool        `json:"sanctioned,omitempty"` // on the org's approved-tool list
 	Autonomy   string      `json:"autonomy,omitempty"`
 	Sessions   int         `json:"sessions,omitempty"`
-	LastSeen   time.Time   `json:"last_seen,omitempty"`
+	LastSeen   time.Time   `json:"last_seen,omitzero"`
 	MCPServers []MCPServer `json:"mcp_servers,omitempty"`
 	ToolUse    []ToolUse   `json:"tool_use,omitempty"`
 }

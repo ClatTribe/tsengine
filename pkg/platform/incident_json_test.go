@@ -33,7 +33,7 @@ func TestIncidentWithNoKEVDeadlineOmitsIt(t *testing.T) {
 // field entirely would pass it and silently delete the signal, so both directions are pinned.
 func TestIncidentWithAKEVDeadlineKeepsIt(t *testing.T) {
 	due := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	b, err := json.Marshal(Incident{ID: "inc-1", Severity: "high", Status: IncidentOpen, KEV: true, KEVDueAt: &due})
+	b, err := json.Marshal(Incident{ID: "inc-1", Severity: "high", Status: IncidentOpen, KEV: true, KEVDueAt: due})
 	if err != nil {
 		t.Fatal(err)
 	}

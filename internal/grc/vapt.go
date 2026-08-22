@@ -116,11 +116,11 @@ type VAPTFinding struct {
 	SSVCExploitation string    `json:"ssvc_exploitation,omitempty"`
 	SSVCAutomatable  string    `json:"ssvc_automatable,omitempty"`
 	SSVCImpact       string    `json:"ssvc_impact,omitempty"`
-	KEVDueDate       time.Time `json:"kev_due_date,omitempty"`
+	KEVDueDate       time.Time `json:"kev_due_date,omitzero"`
 	// DiscoveredAt is when a tool actually observed this. An auditor asking "how long has this been
 	// open?" is asking a question the report otherwise cannot answer, and a continuously-regenerated
 	// document with no per-finding date reads as though everything was found today.
-	DiscoveredAt time.Time `json:"discovered_at,omitempty"`
+	DiscoveredAt time.Time `json:"discovered_at,omitzero"`
 	FixReady     bool      `json:"fix_ready,omitempty"` // a remediation is prepared/queued
 }
 

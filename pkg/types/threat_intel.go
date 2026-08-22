@@ -51,7 +51,7 @@ type SSVC struct {
 
 type KEVStatus struct {
 	Listed    bool      `json:"listed"`
-	DateAdded time.Time `json:"date_added,omitempty"`
+	DateAdded time.Time `json:"date_added,omitzero"`
 	// Vendor + Product name the affected technology as CISA catalogs it
 	// ("Apache", "HTTP Server"). Optional (omitempty) so the dashboard
 	// contract and the embedded corpus snapshot stay byte-compatible. They
@@ -82,7 +82,7 @@ type KEVStatus struct {
 	// anywhere of how long a defender is considered to reasonably have. Preferred
 	// over a window computed from DateAdded, because a deadline the authority set
 	// beats one we derived.
-	DueDate time.Time `json:"due_date,omitempty"`
+	DueDate time.Time `json:"due_date,omitzero"`
 	// Ransomware reports CISA's knownRansomwareCampaignUse == "Known". It is a
 	// STRICTLY STRONGER claim than Listed: KEV means exploited in the wild,
 	// this means exploited by ransomware operators. The two must never be

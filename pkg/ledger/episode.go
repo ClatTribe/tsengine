@@ -156,7 +156,7 @@ type Cost struct {
 type Training struct {
 	Consented   bool      `json:"consented"`
 	ConsentedBy string    `json:"consented_by,omitempty"`
-	ConsentedAt time.Time `json:"consented_at,omitempty"`
+	ConsentedAt time.Time `json:"consented_at,omitzero"`
 	// Statement is the text the customer actually agreed to, kept verbatim so an
 	// auditor reads what was consented to rather than our summary of it — the same
 	// discipline pentest.RoE applies to active-exploitation consent.

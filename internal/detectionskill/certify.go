@@ -50,7 +50,7 @@ type Certification struct {
 
 	// Human accountability. Empty until a named person attests.
 	AttestedBy string    `json:"attested_by,omitempty"`
-	AttestedAt time.Time `json:"attested_at,omitempty"`
+	AttestedAt time.Time `json:"attested_at,omitzero"`
 }
 
 // Certify renders a validated Result as evidence, inheriting controls from the cited findings.
