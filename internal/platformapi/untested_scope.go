@@ -75,3 +75,45 @@ func (d Deps) untestedScope(ctx context.Context, tenantID string, scope []string
 	}
 	return out
 }
+
+// partiallyAssessedScope names in-scope targets that WERE scanned but whose most recent scan lost a
+// tool — a per-tool timeout, a crash, or a binary missing from the sandbox image.
+//
+// untestedScope answers "has anything ever run against this target", and the VAPT report already
+// refuses to call an unassessed estate clean on the strength of it. It cannot see the case one step
+// in: every target scanned, half the tools dead, and the report closing with "No open vulnerabilities
+// — every monitored asset is currently clean." That sentence is the most quotable line in a document
+// customers hand to prospects and auditors, and a scan that lost its tools has not earned it.
+//
+// Reuses coverage.Compute so this can never disagree with what the /coverage page shows about the
+// same asset — two answers to "was this properly scanned" is worse than one.
+func (d Deps) partiallyAssessedScope(ctx context.Context, tenantID string, scope []string) []string {
+	if len(scope) == 0 || d.Store == nil {
+		return nil
+	}
+	assets, err := d.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		return nil // cannot tell: say nothing rather than invent a caveat
+	}
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	if err != nil {
+		return nil
+	}
+	engs, err := d.Store.ListEngagements(ctx, tenantID)
+	if err != nil {
+		return nil
+	}
+	partial := map[string]bool{}
+	for _, a := range coverage.Compute(assets, findings, engs).Assets {
+		if a.Scanned && len(a.ToolsFailed) > 0 {
+			partial[a.Target] = true
+		}
+	}
+	var out []string
+	for _, t := range scope {
+		if t = strings.TrimSpace(t); t != "" && partial[t] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
