@@ -97,9 +97,7 @@ func (d Deps) assessAgentEstate(w http.ResponseWriter, r *http.Request, tenantID
 		if err := d.Store.PutFinding(r.Context(), tenantID, f); err != nil {
 			continue
 		}
-		if d.GRC != nil {
-			_ = d.GRC.Apply(r.Context(), tenantID, f)
-		}
+		d.foldIntoPosture(r.Context(), tenantID, []types.Finding{f})
 		saved = append(saved, f)
 		stored++
 	}

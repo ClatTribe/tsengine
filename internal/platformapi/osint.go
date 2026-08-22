@@ -71,9 +71,7 @@ func (d Deps) ingestOSINTSnapshot(ctx context.Context, tenantID string, snap osi
 		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
 			continue
 		}
-		if d.GRC != nil {
-			_ = d.GRC.Apply(ctx, tenantID, f)
-		}
+		d.foldIntoPosture(ctx, tenantID, []types.Finding{f})
 		saved = append(saved, f)
 		stored++
 	}

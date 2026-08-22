@@ -68,9 +68,7 @@ func (d Deps) persistDriftFindings(ctx context.Context, tenantID string, finding
 		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
 			continue
 		}
-		if d.GRC != nil {
-			_ = d.GRC.Apply(ctx, tenantID, f) // fold the change-control finding into the posture
-		}
+		d.foldIntoPosture(ctx, tenantID, []types.Finding{f})
 		saved = append(saved, f)
 	}
 	if d.IncidentOpener != nil && len(saved) > 0 {

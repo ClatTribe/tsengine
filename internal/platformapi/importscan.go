@@ -143,9 +143,7 @@ func (d Deps) storeImported(ctx context.Context, tenantID string, fs []types.Fin
 		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
 			continue
 		}
-		if d.GRC != nil {
-			_ = d.GRC.Apply(ctx, tenantID, f)
-		}
+		d.foldIntoPosture(ctx, tenantID, []types.Finding{f})
 		stored++
 	}
 	// Deliberately NOT proposing a fix for every imported finding. An import of 20,000 findings would
