@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { SHIELD, MARK, EMERALD, lattice } from "@/lib/brand-mark.mjs";
 
 // The default social-share card for every page that doesn't supply its own. Generated at
 // request time by next/og (no extra dependency, no static asset to maintain). Node runtime
@@ -8,6 +9,9 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 const ACCENT = "#6366f1";
+
+// The default cut — this card renders the mark large enough to use it as-is.
+const OG_LATTICE = lattice();
 
 export default function OpengraphImage() {
   return new ImageResponse(
@@ -37,26 +41,24 @@ export default function OpengraphImage() {
               height: "64px",
               borderRadius: "18px",
               background: "#0b1220",
-              boxShadow: "0 0 0 1px rgba(255,255,255,0.08), 0 18px 50px -12px rgba(34,211,238,0.5)",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.08), 0 18px 50px -12px rgba(99,102,241,0.5)",
             }}
           >
-            {/* brand mark — cyan shield + network + up-right arrow + warm clasp */}
-            <svg width="38" height="38" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2l8 3v6c0 5-3.4 8.4-8 11-4.6-2.6-8-6-8-11V5l8-3z" fill="#0ea5e9" fillOpacity="0.14" stroke="#38bdf8" strokeWidth="1.4" strokeLinejoin="round" />
-              <g stroke="#38bdf8" strokeWidth="0.8" opacity="0.7">
-                <path d="M12 6.5L7.5 10.5M12 6.5L16.5 10.5M7.5 10.5L9.5 15.5M16.5 10.5L14.5 15.5M9.5 15.5L14.5 15.5" />
-              </g>
-              <g fill="#38bdf8">
-                <circle cx="12" cy="6.5" r="0.9" />
-                <circle cx="7.5" cy="10.5" r="0.9" />
-                <circle cx="16.5" cy="10.5" r="0.9" />
-                <circle cx="9.5" cy="15.5" r="0.9" />
-                <circle cx="14.5" cy="15.5" r="0.9" />
-              </g>
-              <path d="M8.7 15L16 7.8" stroke="#7dd3fc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M12.6 7.3H16.5V11.2" stroke="#7dd3fc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="11.5" cy="12" r="2.6" fill="#fb923c" />
-              <circle cx="11.5" cy="12" r="1" fill="#fff7ed" />
+            {/* Lattice Shield, the solid cut — geometry from lib/brand-mark.mjs.
+                Solid rather than the stroked cut even though this renders at 42px
+                and the stroke would technically hold: a 1200x630 card is shown
+                scaled to a few hundred pixels in a feed or a chat unfurl, so the
+                mark is read at roughly 16px wherever anyone actually sees it. */}
+            <svg width="42" height="42" viewBox="0 0 48 48" fill="none">
+              <path fillRule="evenodd" fill={MARK} d={`${SHIELD} ${OG_LATTICE.path}`} />
+              <rect
+                x={OG_LATTICE.accent[0]}
+                y={OG_LATTICE.accent[1]}
+                width={OG_LATTICE.cell}
+                height={OG_LATTICE.cell}
+                rx={OG_LATTICE.radius}
+                fill={EMERALD}
+              />
             </svg>
           </div>
           <div style={{ fontSize: "40px", fontWeight: 700, letterSpacing: "-0.02em" }}>

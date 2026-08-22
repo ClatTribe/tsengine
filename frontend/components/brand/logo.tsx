@@ -1,67 +1,68 @@
 import { cn } from "@/lib/utils";
+import { SHIELD, EMERALD, lattice } from "@/lib/brand-mark.mjs";
 
-// LogoMark — the TensorShield brand mark. A cyan-gradient shield enclosing a node network
-// (the unified finding graph), a growth arrow breaking out to the upper-right (autonomous
-// security), and a warm "clasp" glow at the heart (the human-accountability layer — the
-// handshake). Self-contained gradients so it renders in full colour on any background; it's
-// designed to sit on a dark chip (see Logo). Simplified for legibility down to ~20px.
-export function LogoMark({ className, title = "TensorShield" }: { className?: string; title?: string }) {
+// ---------------------------------------------------------------------------
+// The TensorShield brand mark — "Lattice Shield". Geometry lives in
+// lib/brand-mark.mjs; this file only decides how it is cut and coloured.
+//
+// ONE CUT: the shield fills and the cells KNOCK OUT, so whatever sits behind the
+// mark shows through them and there is no light-on-dark variant to keep in sync.
+// That is the cut because of where the mark is actually read — every consumer in
+// this app (nav, footer, sidebar, login, signup, operator) renders it at 20-24px
+// inside the dark chip. A stroked alternative was drawn and rasterised at
+// 16/20/24/40px alongside it, and below ~28px its 2.8 stroke and the lattice
+// merge into stripes. Measured, not predicted; re-run that check before changing
+// the cut, at the sizes the mark ships at rather than the size you design it at.
+// ---------------------------------------------------------------------------
+
+// The default cut of the lattice. Optical sizes (the wider gap the 16px favicon
+// needs) live in scripts/gen-icons.mjs, which is the only caller that needs them.
+const L = lattice();
+
+// indigo-300. The mark's home is the dark chip below, and the app-token indigo
+// (#4F46E5) is too dark to read on it. Written as a literal, NOT interpolated
+// from brand-mark's MARK constant: Tailwind extracts class names statically, so
+// a template-built `text-[${MARK}]` would never be generated. Callers on a light
+// ground override with their own text-* class — the fill is currentColor and cn()
+// runs tailwind-merge, so the caller's colour wins.
+const ON_CHIP = "text-[#A5B4FC]";
+
+type MarkProps = {
+  className?: string;
+  title?: string;
+  /** Drop the emerald cell — monochrome, for a single-colour reproduction. */
+  mono?: boolean;
+};
+
+/**
+ * LogoMark — the solid cut, and what ships everywhere in the app. The shield
+ * fills and the cells knock out, so whatever is behind the mark shows through
+ * them and there is no light-on-dark variant to keep in sync.
+ */
+export function LogoMark({ className, title = "TensorShield", mono = false }: MarkProps) {
+  const [ax, ay] = L.accent;
   return (
-    <svg viewBox="0 0 48 48" fill="none" className={className} role="img" aria-label={title}>
+    <svg viewBox="0 0 48 48" fill="none" className={cn(ON_CHIP, className)} role="img" aria-label={title}>
       <title>{title}</title>
-      <defs>
-        <linearGradient id="ts-cyan" x1="9" y1="5" x2="40" y2="45" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#7dd3fc" />
-          <stop offset="0.5" stopColor="#38bdf8" />
-          <stop offset="1" stopColor="#4f46e5" />
-        </linearGradient>
-        <radialGradient id="ts-warm" cx="0.5" cy="0.5" r="0.5">
-          <stop stopColor="#fff7ed" />
-          <stop offset="0.45" stopColor="#fb923c" />
-          <stop offset="1" stopColor="#f97316" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-
-      {/* shield: faint inner fill + bright gradient edge */}
-      <path
-        d="M24 4 L40 9.6 V22.6 C40 32.4 33.1 40.2 24 44 C14.9 40.2 8 32.4 8 22.6 V9.6 Z"
-        fill="#0ea5e9"
-        fillOpacity="0.08"
-        stroke="url(#ts-cyan)"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-
-      {/* node network — the finding graph */}
-      <g stroke="url(#ts-cyan)" strokeWidth="1.2" strokeLinecap="round" opacity="0.75">
-        <path d="M24 12.5 L14 22 M24 12.5 L34 22 M14 22 L18.5 32 M34 22 L29.5 32 M18.5 32 L29.5 32 M14 22 L34 22" />
-      </g>
-      <g fill="url(#ts-cyan)">
-        <circle cx="24" cy="12.5" r="1.7" />
-        <circle cx="14" cy="22" r="1.7" />
-        <circle cx="34" cy="22" r="1.7" />
-        <circle cx="18.5" cy="32" r="1.7" />
-        <circle cx="29.5" cy="32" r="1.7" />
-      </g>
-
-      {/* growth arrow breaking out to the upper-right */}
-      <g stroke="url(#ts-cyan)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17.5 30.5 L33 15" />
-        <path d="M26 14.5 L33.5 14.5 L33.5 22" />
-      </g>
-
-      {/* human-accountability clasp — warm glow at the heart of the network */}
-      <circle cx="23.5" cy="24" r="6.2" fill="url(#ts-warm)" />
-      <circle cx="23.5" cy="24" r="1.8" fill="#fffaf2" />
+      <path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d={`${SHIELD} ${L.path}`} />
+      {!mono && <rect x={ax} y={ay} width={L.cell} height={L.cell} rx={L.radius} fill={EMERALD} />}
     </svg>
   );
 }
 
-// The dark chip the colour mark sits on — a deep navy like the brand art, with a hairline ring.
-// Exported so every lockup (nav, footer, auth) frames the mark identically.
+// There is deliberately NO second exported cut. A stroked variant (outline shield,
+// filled cells) was drawn and measured, and it lost every surface it was a
+// candidate for: the app renders the mark at 20-24px, and the OG card is read at
+// roughly 16px once a feed scales it down. Shipping it anyway would have been an
+// unreachable export of exactly the kind that let the old mark and app/icon.tsx
+// drift apart. If a genuine large-format surface appears (print, a hero), build it
+// from SHIELD + lattice() above rather than re-typing a path.
+
+// The dark chip the mark sits on — deep navy with a hairline ring. Exported so
+// every lockup (nav, footer, sidebar, auth, operator) frames the mark identically.
 export const logoChip = "bg-[#0b1220] ring-1 ring-white/10";
 
-// Logo — the mark inside the brand chip + the wordmark, the standard header/footer lockup.
+// Logo — mark in the chip plus the wordmark: the standard header/footer lockup.
 export function Logo({ className, markClass }: { className?: string; markClass?: string }) {
   return (
     <span className={cn("flex items-center gap-2.5", className)}>
