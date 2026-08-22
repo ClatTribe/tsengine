@@ -89,7 +89,7 @@ func (d Deps) handleProofQueue(w http.ResponseWriter, r *http.Request, tenantID 
 		// high/critical findings whose class an offensive driver can demonstrate." — which reads as a
 		// truncation, and asserts what the queue HOLDS in the one state where it holds nothing. The
 		// ownership caveat, the whole reason this field exists, came third behind that confusion.
-		"note": proofQueueNote(len(q)),
+		"note":      proofQueueNote(len(q)),
 		"max_batch": strconv.Itoa(maxProofBatch),
 	})
 }
