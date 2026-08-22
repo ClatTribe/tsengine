@@ -238,7 +238,13 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	fmt.Fprintf(&b, "- **Generated:** %s\n", r.GeneratedAt.UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "- **Assessed by:** %s — continuous automated assessment\n", r.Engine)
 	if r.Signer != "" {
-		fmt.Fprintf(&b, "- **Signed:** `%s` · sha256 `%s`\n", r.Signer, r.SHA256)
+		if r.SHA256 != "" {
+			fmt.Fprintf(&b, "- **Signed:** `%s` · sha256 `%s`\n", r.Signer, r.SHA256)
+		} else {
+			// A signer without a hash is a named sign-off, not an attestation — don't render an
+			// empty `sha256 ` code span next to their name on a document the customer forwards.
+			fmt.Fprintf(&b, "- **Signed off by:** %s\n", r.Signer)
+		}
 	}
 	b.WriteString("\n## Executive summary\n\n")
 	s := r.Summary
