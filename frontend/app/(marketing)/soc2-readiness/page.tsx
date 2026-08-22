@@ -7,7 +7,7 @@ import { SOC2Assessment } from "@/components/marketing/soc2-assessment";
 export const metadata = pageMeta({
   title: "Free SOC 2 Readiness Self-Assessment for Startups | TensorShield",
   description:
-    "Answer 15 plain-English questions and get your SOC 2 readiness score plus a prioritized list of the gaps to close first — free, no signup. Built for seed-stage founders.",
+    "Answer 15 plain-English questions and get your SOC 2 readiness score plus a prioritized list of the gaps to close first — free, no signup. Built for founders who are their own security team.",
   path: "/soc2-readiness",
 });
 
@@ -24,7 +24,7 @@ export default function SOC2ReadinessPage() {
             How SOC 2-ready are you?
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            Fifteen plain-English questions across the controls that actually sink seed-stage companies. Get a readiness
+            Fifteen plain-English questions across the controls that most often block a first enterprise deal. Get a readiness
             score and the exact gaps to close first — before you pay a consultant to find them.
           </p>
         </div>
