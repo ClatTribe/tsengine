@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 )
@@ -129,8 +130,10 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 	// configured, and a failure never touches the corpus already written above. The sidecar is a SEPARATE
 	// file (exploit_intel.json), so it cannot perturb the byte-stable dashboard corpus block.
 	if opts.ExploitIntelURL != "" {
-		if records := fetchExploitIntel(ctx, opts.HTTPClient, opts.ExploitIntelURL); len(records) > 0 {
-			_, _ = WriteExploitIntel(opts.OutDir, records)
+		if records, stats := fetchExploitIntel(ctx, opts.HTTPClient, opts.ExploitIntelURL); len(records) > 0 {
+			if _, werr := WriteExploitIntel(opts.OutDir, records); werr == nil {
+				logExploitIntelCoverage(stats)
+			}
 		}
 	}
 
@@ -167,4 +170,20 @@ func httpGet(ctx context.Context, c *http.Client, url string) (io.ReadCloser, er
 	}
 	// Bound the (compressed) body for every feed — defense-in-depth against an oversized/runaway response.
 	return limitedReadCloser{r: io.LimitReader(resp.Body, maxFeedBody), c: resp.Body}, nil
+}
+
+// logExploitIntelCoverage surfaces the offensive-corpus coverage gap so a raw:-only CVE that yields no
+// skeleton is VISIBLE, not silently absent (§5.2). Best-effort logging only — never affects the corpus.
+func logExploitIntelCoverage(stats ExploitIntelStats) {
+	if stats.SkippedNoSkeletonCount == 0 {
+		log.Printf("[corpus] exploit-intel: %d offensive skeletons built from %d CVE templates", stats.Built, stats.CVETemplates)
+		return
+	}
+	sample := stats.SkippedNoSkeleton
+	suffix := ""
+	if stats.SkippedNoSkeletonCount > len(sample) {
+		suffix = ", …"
+	}
+	log.Printf("[corpus] exploit-intel: %d offensive skeletons built from %d CVE templates; %d skipped (no HTTP skeleton — raw:-only/matcher-less, defender-face only) e.g. %v%s",
+		stats.Built, stats.CVETemplates, stats.SkippedNoSkeletonCount, sample, suffix)
 }
