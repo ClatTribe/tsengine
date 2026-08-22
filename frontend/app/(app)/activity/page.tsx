@@ -18,6 +18,20 @@ function dayLabel(iso: string, now: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: now.getFullYear() === d.getFullYear() ? undefined : "numeric" });
 }
 
+// withApprover names the human who passed a change through the HITL gate.
+//
+// The gate is the product's central invariant — the only write path is reached AFTER a human decides,
+// and every decision is signed into the ledger. WHO decided is therefore the accountability record,
+// and it was stored, signed, and shown nowhere: an applied change to a customer's cloud appeared with
+// no sign of who authorised it. Auto-applied tier-0/1 actions have no approver and correctly say so
+// by omission rather than by inventing one.
+function withApprover(meta: string | undefined, approver?: string): string {
+  const base = meta || "";
+  if (!approver) return base;
+  const who = `approved by ${approver}`;
+  return base ? `${base} · ${who}` : who;
+}
+
 export default async function ActivityPage() {
   const [incidents, engagements, approvals, actions] = await Promise.all([
     api.incidents("all"),
@@ -50,9 +64,9 @@ export default async function ActivityPage() {
     const v = a.verification;
     if (!v?.verified_at) continue;
     if (v.status === "fixed") {
-      events.push({ id: `fix-${a.id}`, at: v.verified_at, day: "", kind: "verified", title: `Fix verified — ${a.title || a.kind}`, meta: v.evidence, href: "/inbox" });
+      events.push({ id: `fix-${a.id}`, at: v.verified_at, day: "", kind: "verified", title: `Fix verified — ${a.title || a.kind}`, meta: withApprover(v.evidence, a.approver), href: "/inbox" });
     } else {
-      events.push({ id: `fix-${a.id}`, at: v.verified_at, day: "", kind: "regressed", title: `Fix did not close — ${a.title || a.kind}`, meta: v.evidence, href: "/inbox" });
+      events.push({ id: `fix-${a.id}`, at: v.verified_at, day: "", kind: "regressed", title: `Fix did not close — ${a.title || a.kind}`, meta: withApprover(v.evidence, a.approver), href: "/inbox" });
     }
   }
 
@@ -67,7 +81,7 @@ export default async function ActivityPage() {
       day: "",
       kind: "failed",
       title: `Could not deliver — ${a.title || a.kind}`,
-      meta: a.delivery_error,
+      meta: withApprover(a.delivery_error, a.approver),
       href: "/inbox",
     });
   }

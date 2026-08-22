@@ -127,6 +127,14 @@ var required = []struct {
 			"undeclared",
 	},
 	{
+		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "approver",
+		wouldOtherwiseClaim: "a change to a customer's cloud with no sign of who authorised it. The " +
+			"product's central invariant is that the only write path is reached AFTER a human decides " +
+			"(§18.2 inv. 3) and that every decision is signed into the ledger (inv. 4) — so WHO decided " +
+			"is the accountability record. It was stored and signed while no screen declared it",
+	},
+	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "unattributable_from_our_tools",
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +
@@ -154,7 +162,11 @@ func TestCoverageClaimsRenderTheFieldsThatQualifyThem(t *testing.T) {
 		// Word-boundary, not substring. A plain Contains passes on tools_failed_REMOVED,
 		// which is precisely how a field gets renamed out of a page while its guard stays
 		// green — the guard would then be one more thing that looks like it is checking.
-		if !regexp.MustCompile(`\b` + regexp.QuoteMeta(r.field) + `\b`).MatchString(src) {
+		// Comments are STRIPPED before matching. A guard that reads prose can be satisfied by the
+		// very comment explaining why the field matters — which is exactly what happened: the
+		// approver entry passed while the code had been renamed out, because the sentence above it
+		// said "approver". A check a comment can satisfy is a check that does not read code.
+		if !readsField(stripComments(src), r.field) {
 			t.Errorf("%s never references %q.\n\nWithout it the page asserts %s.\n\n"+
 				"The backend computes this field and (for tools_failed) a Go test already asserts "+
 				"it must not be folded into 'ran clean'. That test passes while the screen says the "+
@@ -256,4 +268,46 @@ func TestNoPageShadowsASharedClosedSet(t *testing.T) {
 			"twenty-five frameworks reached an auditor-facing page while the mirror-consistency "+
 			"test stayed green.", len(offenders), strings.Join(offenders, "\n  "))
 	}
+}
+
+// readsField reports whether the page READS the field off an object — `x.field`, `x?.field`, or
+// `x["field"]` — rather than merely containing the word.
+//
+// A bare word match is satisfied by things that are not consumption, and both bit this guard in one
+// sitting: first the comment explaining why the field matters, then a local PARAMETER of the same
+// name in the helper that formats it. Each time the guard passed while the code had been renamed
+// out. The question it exists to ask is whether the page reads the API's field, and only property
+// access answers it.
+func readsField(src, field string) bool {
+	q := regexp.QuoteMeta(field)
+	return regexp.MustCompile(`\??\.\s*`+q+`\b`).MatchString(src) ||
+		regexp.MustCompile(`\[\s*["'`+"`"+`]`+q+`["'`+"`"+`]\s*\]`).MatchString(src)
+}
+
+// stripComments removes // line comments and /* block */ comments (including JSX {/* … */}) so the
+// field checks above match CODE rather than the prose describing it.
+func stripComments(src string) string {
+	var b strings.Builder
+	for i := 0; i < len(src); i++ {
+		if src[i] == '/' && i+1 < len(src) {
+			if src[i+1] == '/' {
+				for i < len(src) && src[i] != '\n' {
+					i++
+				}
+				b.WriteByte('\n')
+				continue
+			}
+			if src[i+1] == '*' {
+				i += 2
+				for i+1 < len(src) && !(src[i] == '*' && src[i+1] == '/') {
+					i++
+				}
+				i++
+				b.WriteByte(' ')
+				continue
+			}
+		}
+		b.WriteByte(src[i])
+	}
+	return b.String()
 }
