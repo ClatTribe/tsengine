@@ -67,6 +67,7 @@ func (o *Okta) Fetch(ctx context.Context, token string, now time.Time) (Workspac
 	ws := Workspace{Provider: "okta"}
 
 	grants := map[string]*oktaGrantAgg{} // clientId → aggregated grant
+	var mfaUnread bool                   // any per-user factor/role read failed → disclose the gap once
 	next := o.OrgURL + "/api/v1/users?limit=200"
 	for next != "" {
 		var users []oktaUser
@@ -82,17 +83,36 @@ func (o *Okta) Fetch(ctx context.Context, token string, now time.Time) (Workspac
 			}
 			// Only active users get the per-user MFA/role/grant calls (and the checks that use them).
 			if !u.Suspended {
+				// Declining to assign on error is right; leaving MFA at its zero value is not.
+				// false is the value that FIRES a finding, so a failed factor read published
+				// "Administrator without MFA" at CRITICAL against an admin who has it. Okta reads
+				// factors one user at a time and rate-limits hard, so this is what a large org
+				// looks like — the customers for whom a fabricated critical costs the most.
 				if mfa, err := o.hasActiveFactor(ctx, token, ou.ID); err == nil {
 					u.MFA = mfa
+				} else {
+					u.MFAUnknown = true
+					mfaUnread = true
 				}
+				// The role read fails the other way — an unread admin is missed rather than
+				// invented — but it is the same silence, and it decides WHICH finding a user
+				// gets. Disclosed under the same gap rather than left to look like a clean read.
 				if admin, super, err := o.roleLevel(ctx, token, ou.ID); err == nil {
 					u.Admin, u.SuperAdmin = admin, super
+				} else {
+					u.MFAUnknown = true
+					mfaUnread = true
 				}
 				o.accumulateGrants(ctx, token, ou.ID, u.Email, grants)
 			}
 			ws.Users = append(ws.Users, u)
 		}
 		next = link
+	}
+	if mfaUnread {
+		// Once for the workspace, not once per user: the coverage finding says a check could not
+		// run, and repeating it per account would bury the accounts it actually affects.
+		ws.Unavailable = append(ws.Unavailable, "mfa")
 	}
 	ws.OAuthGrants = o.buildGrants(ctx, token, grants)
 	if o.grantReadAttempts > 0 && o.grantReadFailures == o.grantReadAttempts {
