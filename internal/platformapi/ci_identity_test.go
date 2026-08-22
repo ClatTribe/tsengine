@@ -1,7 +1,10 @@
 package platformapi
 
 import (
+	"context"
 	"fmt"
+	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"strings"
 	"testing"
 
@@ -272,5 +275,41 @@ func TestCIIdentityAssess_ConstrainedSAMLTrustIsClean(t *testing.T) {
 		if strings.HasPrefix(f.RuleID, "samltrust::") {
 			t.Errorf("a constrained trust was reported: %+v", f)
 		}
+	}
+}
+
+// A federated-trust finding must NOT be recorded as drift.
+//
+// It reused the drift persister, so the ledger read "cloud drift detected" with a drift_findings
+// count. A role trusting an unconstrained SAML provider is not drift: nothing changed, the policy has
+// most likely been that way since it was written. The ledger is where a claim is supposed to be
+// checkable, so "we detected drift" — a claim about an event that did not happen — is worse there
+// than anywhere else.
+func TestPersistCIIdentityFindings_IsNotRecordedAsDrift(t *testing.T) {
+	rec := ledger.NewRecorder()
+	d := Deps{Store: store.NewMemory(), Recorder: rec, NewID: func() string { return "1" }}
+
+	saved, n := d.persistCIIdentityFindings(context.Background(), "t1", []types.Finding{{
+		RuleID: "samltrust::saml_trust_audience_unconstrained", Tool: "samltrust",
+		Severity: types.SeverityHigh, Endpoint: "arn:aws:iam::1:role/R", Title: "unconstrained audience",
+	}})
+	if n != 1 || len(saved) != 1 {
+		t.Fatalf("the finding was not stored: n=%d saved=%d", n, len(saved))
+	}
+
+	var kinds, whats string
+	for _, st := range rec.Steps() {
+		kinds += st.Tool + " "
+		whats += st.Thought + " " + st.Observation + " "
+	}
+	if strings.Contains(strings.ToLower(kinds+whats), "drift") {
+		t.Errorf("a federated-trust finding was recorded as drift: kinds=%q what=%q", kinds, whats)
+	}
+	if !strings.Contains(kinds, "ci_identity") {
+		t.Errorf("the assessment was not recorded under its own kind: %q", kinds)
+	}
+	// And the id says what produced it, rather than attributing it to a drift run.
+	if strings.HasPrefix(saved[0].ID, "drift") {
+		t.Errorf("the finding id attributes it to drift: %q", saved[0].ID)
 	}
 }
