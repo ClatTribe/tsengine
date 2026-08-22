@@ -29,6 +29,10 @@ type CorpusRefresher struct {
 	// the sidecar unbuilt and the offensive seam dormant; opt-in because the source archive is large.
 	// Best-effort inside Refresh: a sidecar-build failure never blocks the KEV/EPSS refresh.
 	ExploitIntelURL string
+	// VulnrichmentURL, when set, also ingests CISA's SSVC decision points (the 7th feed). Opt-in for
+	// the same reason as the sidecar above — the archive is large — and best-effort, so a failure
+	// leaves the other six untouched.
+	VulnrichmentURL string
 	Log             *log.Logger
 }
 
@@ -45,12 +49,26 @@ func (c *CorpusRefresher) doRefresh(ctx context.Context) (threatintel.Manifest, 
 	if c.Refresh != nil {
 		return c.Refresh(ctx, dir)
 	}
-	m, _, err := threatintel.Refresh(ctx, threatintel.RefreshOptions{OutDir: dir, ExploitIntelURL: c.ExploitIntelURL})
+	m, _, err := threatintel.Refresh(ctx, c.refreshOptions(dir))
 	return m, err
 }
 
 // fresh reports whether the on-disk corpus is younger than Interval — so a platform restart doesn't
 // re-fetch a corpus that's already current (the feeds update at most daily).
+// refreshOptions is the seam between this scheduler's configuration and the corpus refresh.
+//
+// Extracted so the wiring can be asserted WITHOUT the network. The obvious test — configure a URL,
+// stub it, check it was requested — reaches the live internet for the other six feeds, which is the
+// exact trap threatintel's own test file documents as having happened twice. A slow, flaky test that
+// proves one struct field is copied is a bad trade; this makes the same assertion in microseconds.
+func (c *CorpusRefresher) refreshOptions(dir string) threatintel.RefreshOptions {
+	return threatintel.RefreshOptions{
+		OutDir:          dir,
+		ExploitIntelURL: c.ExploitIntelURL,
+		VulnrichmentURL: c.VulnrichmentURL,
+	}
+}
+
 func (c *CorpusRefresher) fresh(now time.Time) bool {
 	m, err := threatintel.LoadManifest(c.DataPath)
 	if err != nil {

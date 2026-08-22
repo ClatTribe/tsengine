@@ -587,6 +587,7 @@ func main() {
 		DataPath:        os.Getenv("TSENGINE_THREAT_INTEL_CORPUS"),
 		Interval:        corpusRefreshInterval(),
 		ExploitIntelURL: exploitIntelURL(), // ADR 0019: opt-in offensive-face sidecar for the L2 pentester
+		VulnrichmentURL: vulnrichmentURL(), // opt-in 7th feed: CISA's SSVC decision points
 	}
 	go func() { _ = corpusRefresher.Run(monitorCtx) }()
 
@@ -817,6 +818,22 @@ func exploitIntelURL() string {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("TSENGINE_EXPLOIT_INTEL"))) {
 	case "1", "true", "yes", "on":
 		return threatintel.ExploitIntelURL
+	}
+	return ""
+}
+
+// vulnrichmentURL enables the SSVC feed, mirroring exploitIntelURL.
+//
+// It exists because a feed the running platform cannot switch on is a feed nobody has. The parser,
+// the corpus field, the enrichment hook, the digest, the finding page and the probe planner were all
+// wired before this was — every one of them reachable only from a test.
+func vulnrichmentURL() string {
+	if u := strings.TrimSpace(os.Getenv("TSENGINE_SSVC_URL")); u != "" {
+		return u
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("TSENGINE_SSVC"))) {
+	case "1", "true", "yes", "on":
+		return threatintel.VulnrichmentURL
 	}
 	return ""
 }

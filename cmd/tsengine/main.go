@@ -432,10 +432,17 @@ func runCorpusRefresh(argv []string) error {
 	// or --exploit-intel-url to pin a tag/commit tarball for a reproducible evidence pack.
 	exploitIntel := fs.Bool("exploit-intel", false, "also build the offensive-face exploit_intel.json sidecar (nuclei template bodies, ADR 0019)")
 	exploitIntelURL := fs.String("exploit-intel-url", threatintel.ExploitIntelURL, "nuclei-templates archive URL for --exploit-intel")
+	// CISA SSVC decision points (the 7th feed). Off by default for the same reason: the archive is
+	// ~300k files. Without this the corpus carries no SSVC and the other six are unaffected.
+	ssvc := fs.Bool("ssvc", false, "also ingest CISA's SSVC decision points (Vulnrichment/ADP)")
+	ssvcURL := fs.String("ssvc-url", threatintel.VulnrichmentURL, "vulnrichment archive URL for --ssvc")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
 	opts := threatintel.RefreshOptions{OutDir: *out}
+	if *ssvc {
+		opts.VulnrichmentURL = *ssvcURL
+	}
 	if *exploitIntel {
 		opts.ExploitIntelURL = *exploitIntelURL
 	}
