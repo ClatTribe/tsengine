@@ -1,4 +1,4 @@
-# ADR 0021 — The signed-in product has one audience and one viewport; it needs two of each
+# ADR 0022 — The signed-in product has one audience and one viewport; it needs two of each
 
 **Status:** Proposed
 **Date:** 2026-08-22
