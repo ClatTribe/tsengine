@@ -72,6 +72,15 @@ var required = []struct {
 	},
 	{
 		page:  "frontend/app/(app)/incidents/page.tsx",
+		field: "onset",
+		wouldOtherwiseClaim: "that \"this bucket is public\" and \"this bucket became public forty " +
+			"minutes ago\" are the same alert. One is triaged next week and one is dealt with now, " +
+			"and the responder had no way to tell which they were holding. annotateOnset has computed " +
+			"it from the estate timeline on EVERY incidents request since the timeline landed — the " +
+			"work was done per request and the answer thrown away",
+	},
+	{
+		page:  "frontend/app/(app)/incidents/page.tsx",
 		field: "absent_passes",
 		wouldOtherwiseClaim: "that an incident whose issue has stopped appearing is in the same state " +
 			"as one still firing. The detector holds it open deliberately, because one quiet scan is " +
