@@ -105,3 +105,49 @@ func TestRenderDefenseLedger_NoNoticeWhenThereIsHeadroom(t *testing.T) {
 		t.Errorf("this substrate scores 50%% — the agent's +50%% lift is a real measurement:\n%s", out)
 	}
 }
+
+// Saturation is about PASSING, not about the remediation rate, and the difference is not academic:
+// a scenario can close every closeable finding (rate 100%) and still FAIL because it also acted on a
+// decoy. The first version of the headroom check used the rate, and therefore announced "no headroom"
+// about a run the substrate had just failed — the exact error it exists to prevent, made by the check.
+func TestRenderDefenseLedger_HeadroomIsMeasuredByPassesNotRate(t *testing.T) {
+	out := RenderDefenseLedgerMarkdown([]DefenseLedgerEntry{
+		// rate 100%, but it acted on a decoy, so pass=false → the substrate can still be beaten here.
+		entry("substrate", "decoy-trap", false, 1.0, 0, 0),
+		entry("agent", "decoy-trap", true, 1.0, 0, 0),
+	})
+	if strings.Contains(out, "No headroom") {
+		t.Errorf("the substrate FAILS this scenario, so there is room for an agent to do better:\n%s", out)
+	}
+}
+
+// A scenario one arm has never run has no comparison to make. Reading the missing arm's zero-valued
+// map entry as a score produced "-100%" for a scenario the agent had simply never been given.
+func TestRenderDefenseLedger_NoPhantomLiftForAnArmThatNeverRan(t *testing.T) {
+	out := RenderDefenseLedgerMarkdown([]DefenseLedgerEntry{
+		entry("substrate", "brand-new", true, 1.0, 1, 1),
+		entry("substrate", "shared", true, 1.0, 1, 1),
+		entry("agent", "shared", true, 1.0, 1, 1),
+	})
+	if strings.Contains(out, "-100%") {
+		t.Errorf("a fabricated regression for a scenario the agent never ran:\n%s", out)
+	}
+	if !strings.Contains(out, "has not run this scenario") {
+		t.Errorf("the missing arm must be named rather than scored:\n%s", out)
+	}
+}
+
+// The arm that DID run still needs its pass context. Without it the row read "substrate 100%" for a
+// scenario the substrate had failed — the rate-without-pass problem fixed in the per-mode tables,
+// surviving in the one branch that takes a different path.
+func TestRenderDefenseLedger_NotRunRowStillCarriesPassContext(t *testing.T) {
+	out := RenderDefenseLedgerMarkdown([]DefenseLedgerEntry{
+		entry("substrate", "only-substrate-ran", false, 1.0, 1, 0), // rate 100%, never passed
+		entry("substrate", "shared", true, 1.0, 1, 1),
+		entry("agent", "shared", true, 1.0, 1, 1),
+	})
+	if !strings.Contains(out, "substrate has never passed it") {
+		t.Errorf("a 100%% rate for a scenario the substrate has never passed must say so, even on the "+
+			"not-run row:\n%s", out)
+	}
+}

@@ -200,6 +200,27 @@ func RenderDefenseLedgerMarkdown(entries []DefenseLedgerEntry) string {
 		b.WriteString("\n| Scenario | Substrate rate | Agent rate | Lift |\n|---|---|---|---|\n")
 		ids := sortedScenarioIDs(sub.BestRate, agt.BestRate)
 		for _, id := range ids {
+			// A scenario ONE arm has never run has no comparison to make. Reading the missing arm's
+			// zero-valued map entry as a score produced "-100%" for a scenario the agent had simply
+			// never been given — a fabricated regression, and the same mistake as scoring an absence.
+			if sub.RunsPer[id] == 0 || agt.RunsPer[id] == 0 {
+				missing := "agent"
+				if sub.RunsPer[id] == 0 {
+					missing = "substrate"
+				}
+				// The arm that DID run still needs its pass context. Without this the row read
+				// "substrate 100%" for a scenario the substrate had failed — the rate-without-pass
+				// problem this file just fixed in the per-mode tables, surviving in the one branch
+				// that takes a different path.
+				note := fmt.Sprintf("— (%s has not run this scenario)", missing)
+				if ran := sub; missing == "agent" && ran.RunsPer[id] > 0 && ran.Passes[id] == 0 {
+					note += " · substrate has never passed it"
+				} else if missing == "substrate" && agt.RunsPer[id] > 0 && agt.Passes[id] == 0 {
+					note += " · agent has never passed it"
+				}
+				fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", id, rateCell(sub, id), rateCell(agt, id), note)
+				continue
+			}
 			s, a := sub.BestRate[id], agt.BestRate[id]
 			note := ""
 			// A lift computed between two arms that both FAIL this scenario every time is a delta
@@ -264,16 +285,30 @@ func pathRecallCell(m DefenseModeSummary, id string) string {
 	return fmt.Sprintf("%.0f%%", m.BestPath[id]*100)
 }
 
-// substrateAtCeiling reports whether the deterministic arm scores a perfect remediation rate on every
-// scenario it has run — the state in which the ablation this bench exists for measures nothing.
+// substrateAtCeiling reports whether the deterministic arm PASSES every scenario it has run — the
+// state in which the ablation this bench exists for measures nothing.
+//
+// Measured on PASSES, not on remediation rate, and the difference is not academic: a scenario can
+// close every closeable finding (rate 100%) and still fail, because it also acted on a decoy. The
+// first version of this check used the rate and therefore announced "no headroom" about a run the
+// substrate had just failed — which is the error it exists to prevent, made by the check itself.
 func substrateAtCeiling(sub DefenseModeSummary) (bool, int) {
-	if len(sub.BestRate) == 0 {
+	if len(sub.RunsPer) == 0 {
 		return false, 0
 	}
-	for _, r := range sub.BestRate {
-		if r < 1.0 {
-			return false, len(sub.BestRate)
+	for id, runs := range sub.RunsPer {
+		if runs == 0 || sub.Passes[id] == 0 {
+			return false, len(sub.RunsPer)
 		}
 	}
-	return true, len(sub.BestRate)
+	return true, len(sub.RunsPer)
+}
+
+// rateCell renders an arm's rate, or "—" when that arm has never run the scenario. A zero-valued map
+// lookup is not a score of zero.
+func rateCell(m DefenseModeSummary, id string) string {
+	if m.RunsPer[id] == 0 {
+		return "—"
+	}
+	return fmt.Sprintf("%.0f%%", m.BestRate[id]*100)
 }
