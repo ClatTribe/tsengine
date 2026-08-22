@@ -5,6 +5,11 @@
 Cyber), and proposes a concrete, sequenced path to close the cells that are now competitively
 load-bearing. Supersedes the earlier "accounting only" framing after competitor research
 (2026-08-23) showed one of the "structural" boundaries was merely unbuilt.
+
+**P1 implementation status (be exact):** *interface, agent tool, path-authorization semantics and
+fake-tested wiring implemented; live AWS/GCP/Azure provider adapters, platform injection, persisted
+proof evidence and a controlled live benchmark NOT implemented.* P1 is a seam, not yet a capability.
+Do not describe it as shipped provider proof until P1a–P1d below are done.
 **Date:** 2026-08-23
 **Depends on / reconciles:** the focus decision (2026-08-17, [specialist-roadmap.md](../specialist-roadmap.md) §1),
 ADR 0002 (AI Cloud Security Engineer — read-only, config-possible ≠ exploitable), ADR 0006 (active
@@ -192,8 +197,8 @@ incumbents prove exploitability three OTHER ways that are benign, and we ship NO
    performing it. This is a benign, authoritative proof of privilege-escalation reachability, and
    `grep` confirms **we call none of them** (`live.go` only re-reads config). This is the single
    highest-leverage missing primitive: it upgrades our cloud agent from "config-possible" (what a
-   policy permits, on paper) to "provider-confirmed exploitable" (what AWS itself says it would
-   allow) — the exact ADR-0002 ladder rung we defined and never built.
+   policy permits, on paper) to "provider-confirmed AUTHORIZATION" (what AWS itself says it would
+   authorize — see C1: that is not the same as exploitable) — the exact ADR-0002 ladder rung we defined and never built.
 2. **Digital-twin exploitation.** Replay the customer's snapshot into a sandbox, exploit destructively
    there, never touch prod (ADR 0020 G1). This is how you prove an identity takeover benignly.
 3. **Non-destructive credential validation.** "This leaked cred still authenticates" is provable with
@@ -225,6 +230,81 @@ scope, and three well-funded incumbents are winning deals by proving it benignly
 (cloud DEFENSE + web/api OFFENSE + compliance) is still coherent, but "cloud offense is impossible"
 was wrong — it is *unbuilt*, and now competitively load-bearing.
 
+## External review corrections (2026-08-23)
+
+An independent review of this ADR and the P1 scaffold raised six corrections. Five are accepted and
+folded in below; the code defects are already fixed on this branch. Recording them because the two
+code findings are exactly the failure mode this ADR exists to police, authored by the ADR itself.
+
+### C1 — "provider-confirmed exploitable" was an overclaim (ACCEPTED, fixed)
+A policy-simulator ALLOW confirms **authorization** for one (principal, action, resource, context)
+tuple at one moment. It does NOT prove exploitability, which additionally needs network reachability,
+credential acquisition, session context we did not supply (MFA / session tags / ExternalId / source-IP
+conditions), resource policies the simulator does not auto-retrieve, policy types it does not support,
+role-chaining and session-policy behaviour, service-side validation, and the remaining actions of a
+multi-step workflow. AWS states plainly that simulation can differ from live behaviour
+([IAM policy simulator docs](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_testing-policies.html)).
+The rung is renamed throughout, and the tool now disclaims exploitability in the same sentence it
+reports an ALLOW.
+
+### C2 — one allowed hop cannot prove a whole path (ACCEPTED, fixed)
+The first scaffold stamped `Issue.ProviderConfirmed` if **any** hop returned ALLOW — so a five-hop
+path could read as provider-backed on one allowed `iam:PassRole`. Now `pathAuthorizationStatus`
+requires **every authorization-requiring hop** to be confirmed, and `Issue.AuthorizationCoverage`
+carries `confirmed/required` so a PARTIAL proof stays visible instead of collapsing to a bare false.
+Network-reach hops are excluded from the denominator (a network fact is the *next* rung, not this
+one) rather than counted as authorized. Pinned by a mutation-verified regression test.
+
+### C3 — the verification ladder is now explicit (ACCEPTED)
+```
+config_possible → provider_authorization_confirmed → runtime_preconditions_validated
+                → twin_exploited → production_proven
+```
+P1 implements exactly the second rung and must never announce a higher one. A DENY is authoritative
+for that tuple and time only — it does not prove alternative paths to the same target are closed.
+
+### C4 — proof freshness / re-validation (ACCEPTED → P1c)
+A provider result is point-in-time; IAM, trust policies, SCPs and OIDC conditions change. Every
+persisted proof must carry snapshot hash, provider-result timestamp, request-context hash, a coverage
+statement, and an expiry/revalidation trigger invalidating it on relevant config drift. Otherwise a
+customer reads days-old "confirmed" evidence as current.
+
+### C5 — P2 credential validation is not an S-sized extension (ACCEPTED, re-sized S→M+)
+A benign auth attempt is still an **active authentication event**. It needs: customer-owned in-scope
+identities only; never third-party or unverified leaked credentials; explicit authorization separate
+from scan consent; lockout-safe rate limits; audit evidence and customer-visible disclosure; a proven
+credential→account mapping before testing. `sts:GetCallerIdentity` establishes credential *liveness*
+only — not the downstream privilege path.
+
+### C6 — P3 twin optimism (ACCEPTED, re-scoped)
+`awsinventory` builds an attack GRAPH; it does not generate a faithful Terraform replica of IAM
+policies and trust conditions, SCPs/boundaries/session behaviour, OIDC federation, Okta policy,
+resource policies, KMS, network endpoint policies, secrets, or runtime state. "Replay a customer
+snapshot into a twin" is withdrawn as a near-term promise. Lab-first instead:
+`known lab topology → controlled Terraform fixture → snapshot/graph ingestion → safe destructive proof
+→ fidelity comparison`. Customer-specific replicas only after that.
+
+### C7 — P4a was STALE (ACCEPTED, corrected)
+This ADR said "consolidate the `codeagent` on another branch." That is wrong: the code specialist is
+already present and wired — `internal/codeagent`, `internal/platformapi/codeinvestigate.go`,
+`codesweep.go`, and `autofix.go` (which routes to `codeagent.ProposePatch`, "execution-verified in
+tsbench cvepatch"). The residual gap is narrower: code graph / dependency / taint depth, a
+production-quality verifier integration, a neutral execution-verified benchmark result, and a measured
+agent lift over the deterministic substrate. ADR 0013's "design only — not built" needs the same fix.
+
+### Gap categories added
+| Gap | Why it matters |
+|---|---|
+| Full-path proof semantics | Stops a multi-hop path reading as confirmed on one allowed action (C2) |
+| Proof lifecycle / freshness | Stops stale authorization evidence being read as current (C4) |
+| Provider coverage disclosure | A simulator error, missing policy, unsupported service or absent context must become `unknown`, never a clean result |
+| Cross-surface CI identity proof | GitHub OIDC / GCP WIF trust-condition → provider authorization → target permission is MORE differentiated than generic IAM simulation |
+| Proof persistence | Provider results need immutable evidence, ledger linkage, and report/UI representation |
+| Controlled live benchmark | P1 needs a deployed test account with real simulator outcomes, not only fake-simulator tests |
+| Consent boundary for credential checks | P2 is an active authentication event (C5) |
+| Code runtime beyond web/API | Workers, CLIs, libraries, CI pipelines and supply-chain execution are real runtimes; "code exploitation == web/api" is usually-but-not-always true |
+| Capability measurement | ADR 0020's benchmark-headroom and neutral repair-score gaps are prerequisites for any "best-in-breed" claim |
+
 ## Decision — the proposal
 
 Close the two cells the incumbents made load-bearing, using the BENIGN proof methods (dry-run + twin),
@@ -255,7 +335,7 @@ allowed?" without performing it.
 - **Grounding (§10):** the PROVIDER is the oracle, not the LLM — zero new FP surface. A deny is
   authoritative (the path is closed); an error/unsupported is `unknown`, never "safe."
 - **Why first:** it is benign by construction (no mutation, no twin needed), it is the exact ADR-0002
-  "config-possible → provider-confirmed exploitable" rung we defined and skipped, and it directly
+  "config-possible → provider-confirmed authorization" rung we defined and skipped, and it directly
   answers Pentera's "safe real-world exploit of IAM privesc." Ships the cloud×pentester cell at the
   "proven reachable" tier without ever touching customer state.
 
@@ -290,17 +370,26 @@ the wire protocol. Extract transport + wire types into one package (each stack k
 higher-level `Generate` shape — they differ). Unblocks every new agent (P4) cheaply. Can run in
 parallel with P1.
 
-### Sequencing (blast radius ascending; value front-loaded)
+### Sequencing (revised after external review)
 ```
-NOW      P0 naming            0 code, ships today, stops the overclaim
-Sprint 1 P1 provider dry-run  ← THE unlock: benign, authoritative, fills cloud×pentester "reachable"
-         P5 llmclient         parallel lane, independent
-Sprint 2 P2 cred validation   reuses ssh_exec pattern → identity×pentester "credential live"
-Decide   P3 digital twin      product call: infra cost vs NodeZero/Pentera parity on literal exploit
-Later    P4 code depth + identity narrative agent (both gated on the above)
+NOW      P0   correct external positioning AND this ADR's status
+Sprint 1 P1a  AWS-only LIVE simulator adapter (SimulatePrincipalPolicy)
+         P1b  full-path AuthorizationProofPlan semantics (per-edge RequiredCheck,
+              partial/unknown states)  ← the every-hop rule is in; the plan struct is next
+         P1c  persist evidence: snapshot hash, timestamps, context hash, coverage, expiry
+         P1d  controlled AWS integration benchmark (real simulator outcomes, not the fake)
+         P5   llmclient extraction (independent lane)
+Sprint 2 CI-IDENTITY PROOF — GitHub OIDC / GCP WIF trust condition → provider authorization
+              → target permission. More differentiated than generic IAM simulation, and it
+              builds on ghoidc/gcpwif which already exist.
+Decide   P2   customer-AUTHORIZED credential liveness validation (M+, consent-gated)
+         P3   lab-first twin execution venue (NOT customer-snapshot replay)
+Later    identity multi-step narrative agent · code graph/taint depth (P4a, already wired)
 ```
-Rule (§2.2.1 #1): P1/P2 add a TOOL to the cloud engineer, not a new headline product. P3/P4 that would
-add a headline surface stay gated on a product decision to displace or extend the focus triad.
+The capability worth building is not generic cloud pentesting. It is **evidence-backed,
+provider-validated cloud and CI identity AUTHORIZATION-path proof, with explicit uncertainty and
+continuous re-validation** — which extends the real advantage (deterministic graph + context +
+verification) without claiming a policy simulator has compromised anything.
 
 ## Consequences
 

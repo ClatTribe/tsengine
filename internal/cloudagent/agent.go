@@ -81,10 +81,16 @@ type Issue struct {
 	FixKind     string   `json:"fix_kind,omitempty"`
 	FixContent  string   `json:"fix_content,omitempty"`
 	FixVerified bool     `json:"fix_verified,omitempty"`
-	// ProviderConfirmed is true when at least one move on this path was confirmed ALLOW by the
-	// provider's own policy simulator (ADR 0024 P1) — the path is provider-confirmed exploitable,
-	// not merely config-possible.
+	// ProviderConfirmed is true only when EVERY authorization-requiring hop on this path was
+	// confirmed ALLOW by the provider's own policy simulator (ADR 0024 P1). It means
+	// provider-confirmed AUTHORIZATION — NOT that the path is exploitable, which additionally needs
+	// network reachability, credential acquisition, unsupplied session context and the rest of the
+	// workflow (see internal/cloudagent/exploitprobe.go for the full ladder).
 	ProviderConfirmed bool `json:"provider_confirmed,omitempty"`
+	// AuthorizationCoverage is "confirmed/required" hops, so a PARTIAL result stays visible rather
+	// than collapsing to a bare false — "3 of 5 hops authorized" and "nothing was checked" are
+	// different facts, and rendering them alike is how a partial proof reads as a complete one.
+	AuthorizationCoverage string `json:"authorization_coverage,omitempty"`
 }
 
 // Report is the agent's output.
