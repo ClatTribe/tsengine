@@ -15,6 +15,8 @@ export function ChangePasswordForm({ forced, email }: { forced: boolean; email: 
   const [confirm, setConfirm] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [warning, setWarning] = useState("");
+  const [signedOut, setSignedOut] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +28,15 @@ export function ChangePasswordForm({ forced, email }: { forced: boolean; email: 
     setBusy(true);
     const res = await changePasswordAction(current, next);
     if ("ok" in res) {
+      // The password DID change. But if the server could not revoke the other sessions, navigating
+      // straight to the dashboard would bury the one fact most people came here for — so we stop and
+      // say it, and let them continue deliberately.
+      if (res.warning) {
+        setWarning(res.warning);
+        setSignedOut(Boolean(res.signedOut));
+        setBusy(false);
+        return;
+      }
       router.push("/dashboard");
       router.refresh();
     } else {
@@ -82,6 +93,19 @@ export function ChangePasswordForm({ forced, email }: { forced: boolean; email: 
         {!busy && <ArrowRight className="h-4 w-4" />}
       </button>
       {err && <p className="rounded-lg border border-critical/30 bg-critical/5 px-3 py-2 text-xs text-critical">{err}</p>}
+      {warning && (
+        <div className="rounded-lg border border-high/30 bg-high/5 px-3 py-2.5 text-xs">
+          <p className="font-medium text-ink">Your password was changed.</p>
+          <p className="mt-1 text-muted">{warning}</p>
+          <button
+            type="button"
+            onClick={() => (signedOut ? router.push("/login") : router.push("/dashboard"))}
+            className="mt-2 text-xs font-medium text-pulse underline underline-offset-2"
+          >
+            {signedOut ? "Sign in again" : "Continue"}
+          </button>
+        </div>
+      )}
       {email && <p className="text-[11px] text-faint">Signed in as {email}</p>}
     </form>
   );

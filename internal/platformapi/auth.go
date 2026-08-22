@@ -209,13 +209,39 @@ func (d Deps) handlePassword(w http.ResponseWriter, r *http.Request, s platform.
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
-	// Revoke the user's OTHER sessions (a credential change should evict any stolen token), but keep the
-	// caller signed in: wipe all, then re-put the current session. Best-effort on the wipe — a failure
-	// here must not block the (already-persisted) password change.
-	if err := d.Store.DeleteSessionsForUser(r.Context(), u.ID); err == nil {
-		_ = d.Store.PutSession(r.Context(), s)
+	// Revoke the user's OTHER sessions, keeping the caller signed in: wipe all, then re-put the
+	// current one. The password change is already persisted and must NOT be rolled back — a user who
+	// cannot change their password at all is worse off than one whose old sessions linger.
+	//
+	// BUT THE FAILURE IS REPORTED, because this is the security-relevant half. The reason someone
+	// changes a password is usually that they believe the old one is compromised, and "evict any
+	// stolen token" is what this call is for. Swallowing its error answered {"ok":true} to exactly
+	// that person while the attacker's session stayed valid — a silent failure of the one thing they
+	// came here to do.
+	revoked := true
+	if err := d.Store.DeleteSessionsForUser(r.Context(), u.ID); err != nil {
+		revoked = false
+	} else if err := d.Store.PutSession(r.Context(), s); err != nil {
+		// The wipe DID land, so every other session is gone and so is this one. The caller is signed
+		// out rather than exposed, which is the safe direction — but they are told, because
+		// otherwise their next request 401s for no reason they can see.
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "sessions_revoked": true, "signed_out": true,
+			"detail": "Your password was changed and all sessions were signed out, including this " +
+				"one. Sign in again with the new password.",
+		})
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	if !revoked {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "sessions_revoked": false,
+			"detail": "Your password was changed, but we could not sign out your other sessions. If " +
+				"you are changing it because it may have been stolen, that matters: an existing " +
+				"session elsewhere may still be active. Try again, and contact support if it persists.",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "sessions_revoked": true})
 }
 
 // handleInvite lets a workspace OWNER add a teammate. Without email infrastructure, the
