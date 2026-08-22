@@ -82,6 +82,14 @@ RULES
 				line += "  [" + s.Enrichment + "]"
 			}
 			b.WriteString(line + "\n")
+			if s.ExploitContext != "" {
+				// ADR-0019/0021: the skeleton is payload to ADAPT and its matcher is a FINGERPRINT,
+				// NOT proof — the agent must still elicit the class indicator to ground the finding.
+				b.WriteString("    EXPLOIT REFERENCE (adapt this request; the reference matcher is a fingerprint, NOT proof — still elicit the class indicator):\n")
+				for _, ln := range strings.Split(strings.TrimRight(s.ExploitContext, "\n"), "\n") {
+					b.WriteString("      " + ln + "\n")
+				}
+			}
 		}
 	}
 	if len(cc.Leads) > 0 {
