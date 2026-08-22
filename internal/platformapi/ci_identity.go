@@ -3,7 +3,6 @@ package platformapi
 import (
 	"context"
 	"encoding/json"
-	"strconv"
 	"strings"
 	"time"
 
@@ -111,29 +110,15 @@ func (d Deps) persistCIIdentityFindings(ctx context.Context, tenantID string, fs
 	if len(fs) == 0 || d.Store == nil {
 		return nil, 0
 	}
-	fs = enrichFindings(fs) // L1.5 parity (§11)
-	// The CI-identity surface was assessed — recorded under its own kind so a tenant can tell that
-	// this ran from the fact that clouddrift ran, which is a different question.
-	d.markPostureAssessed(ctx, tenantID, "ci_identity", time.Now().UTC())
+	return d.persistFindings(ctx, tenantID, fs, ciIdentityProvenance)
+}
 
-	saved := make([]types.Finding, 0, len(fs))
-	for i, f := range fs {
-		f.ID = d.newID("ciid") + "-" + strconv.Itoa(i)
-		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
-			continue
-		}
-		d.foldIntoPosture(ctx, tenantID, []types.Finding{f})
-		saved = append(saved, f)
-	}
-	if d.IncidentOpener != nil && len(saved) > 0 {
-		_, _ = d.IncidentOpener.OpenFor(ctx, tenantID, saved, nil)
-	}
-	if d.Recorder != nil && len(saved) > 0 {
-		d.Recorder.Record("federated trust assessed", "ci_identity",
-			map[string]any{"tenant_id": tenantID, "findings": len(saved)},
-			"a role's trust policy lets an external identity provider assume it")
-	}
-	return saved, len(saved)
+// ciIdentityProvenance: a role's trust policy lets an external identity provider assume it. The
+// policy has most likely been that way since it was written, so this is not drift.
+var ciIdentityProvenance = findingProvenance{
+	IDPrefix: "ciid", PostureKind: "ci_identity",
+	LedgerWhat: "federated trust assessed", LedgerTool: "ci_identity",
+	LedgerWhy: "a role's trust policy lets an external identity provider assume it",
 }
 
 // gcpCIIdentityFindings assesses the Workload Identity Federation surface of a posted GCP inventory.
