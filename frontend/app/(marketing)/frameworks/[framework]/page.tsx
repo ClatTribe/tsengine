@@ -7,6 +7,7 @@ import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from 
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
+import { POSTS } from "@/lib/blog";
 
 // Frameworks that culminate in a formal third-party certificate / attestation report (an auditor issues it) —
 // vs. regulations/frameworks that are an ongoing legal obligation, not a one-time certificate. Drives the
@@ -151,6 +152,60 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
           ))}
         </div>
         <FaqJsonLd items={faq} />
+      </section>
+
+      {/* WHAT TO DO BEFORE THE AUDIT — the outbound routes these pages never had.
+          These 25 programmatic pages are the largest crawlable surface on the site and, until now,
+          a dead end: the only internal links pointed at OTHER framework pages, so 25 templated
+          pages cycled among themselves and never sent a visitor to anything actionable. No link to
+          the readiness check, the sample report, or a single blog post.
+
+          That costs twice. A visitor who lands here from "ISO 27001 compliance" gets no next step
+          short of signing up, and the link equity these pages earn stays trapped in the cycle
+          instead of flowing to the pages written to convert. */}
+      <section className="border-y border-border bg-surface">
+        <div className="mx-auto max-w-5xl px-5 py-14">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent">Before the audit</span>
+            <h2 className="mt-3 text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+              Three things worth doing first.
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted">
+              All free, none of them require an account or a conversation with us.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {[
+              { href: "/soc2-readiness", t: "Check where you stand", d: "Fifteen plain-English questions and a prioritised list of the gaps to close first." },
+              { href: "/scan", t: "See what a buyer sees", d: "The externally-visible checks a customer's security team runs on your domain before they read a word of policy." },
+              { href: "/sample-report", t: "See the evidence format", d: "A worked example of the report we hand back, with the controls each finding affects." },
+            ].map((c) => (
+              <Link key={c.href} href={c.href} className="card group flex flex-col p-5 transition hover:border-border-strong">
+                <div className="text-sm font-semibold text-ink group-hover:text-accent">{c.t}</div>
+                <p className="mt-1.5 flex-1 text-sm leading-relaxed text-muted">{c.d}</p>
+                <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-accent">
+                  Open <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            ))}
+          </div>
+
+          {/* Content, so the pages written to rank also get read. */}
+          <div className="mt-8 border-t border-border pt-6">
+            <div className="text-xs font-semibold uppercase tracking-wider text-faint">Reading on getting audit-ready</div>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {POSTS.slice(0, 4).map((post) => (
+                <li key={post.slug}>
+                  <Link href={`/blog/${post.slug}`} className="group flex items-start gap-2 text-sm leading-relaxed text-muted transition hover:text-ink">
+                    <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
+                    <span>{post.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </section>
 
       {/* Internal-linking hub: other frameworks (SEO + discovery) */}
