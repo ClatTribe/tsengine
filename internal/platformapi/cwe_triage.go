@@ -34,25 +34,25 @@ const defaultCWEAttributionMax = 25
 //   - Allowed is the crosswalk's OWN key set, so a class we cannot map is discarded rather than
 //     annotated. An unmappable CWE would add an unusable annotation with a veneer of authority.
 //   - bounded per scan by TSENGINE_CWE_ATTRIBUTION_MAX (default 25); 0 or negative disables it.
-func (d Deps) CWEAttributor() func(ctx context.Context, tenantID string, fs []types.Finding) []types.Finding {
+func (d Deps) CWEAttributor() func(ctx context.Context, tenantID string, fs []types.Finding) ([]types.Finding, []types.AuditEntry) {
 	allowed := hooks.NewCompliance().MappedCWEs()
-	return func(ctx context.Context, tenantID string, fs []types.Finding) []types.Finding {
+	return func(ctx context.Context, tenantID string, fs []types.Finding) ([]types.Finding, []types.AuditEntry) {
 		max := cweAttributionMax()
 		if max <= 0 || len(fs) == 0 || len(allowed) == 0 {
-			return fs
+			return fs, nil
 		}
 		if d.Store == nil {
 			// resolveAgentLLM reads the tenant to apply the AI-mode and plan gates, so without a
 			// store there is no gate to apply — and this seam runs on every scan, where the correct
 			// behaviour under any doubt is to do nothing rather than to reason ungated.
-			return fs
+			return fs, nil
 		}
 		llm := d.resolveAgentLLM(ctx, tenantID)
 		if llm == nil {
-			return fs // no model: the findings keep the state they already have
+			return fs, nil // no model: the findings keep the state they already have
 		}
-		out, _ := cweattrib.Attributor{LLM: llm, Allowed: allowed}.Fill(ctx, fs, max)
-		return out
+		out, results := cweattrib.Attributor{LLM: llm, Allowed: allowed}.Fill(ctx, fs, max)
+		return out, attributionAudit(results)
 	}
 }
 
@@ -73,4 +73,28 @@ func cweAttributionMax() int {
 func attributeWith(llm cweattrib.LLM, fs []types.Finding, max int) ([]types.Finding, []cweattrib.Result) {
 	return cweattrib.Attributor{LLM: llm, Allowed: hooks.NewCompliance().MappedCWEs()}.Fill(
 		context.Background(), fs, max)
+}
+
+// attributionAudit turns the attributor's decisions into l15_audit_log entries.
+//
+// ONLY the attributions are logged, not the refusals. A model that declined, or proposed a class
+// outside the crosswalk, changed nothing — and a log of non-events buries the entries that record a
+// real change to a finding. What must be traceable is the opposite case: a CWE the scanner never
+// reported, now driving a compliance control mapping.
+func attributionAudit(results []cweattrib.Result) []types.AuditEntry {
+	var out []types.AuditEntry
+	for _, r := range results {
+		if r.CWE == "" {
+			continue
+		}
+		out = append(out, types.AuditEntry{
+			FindingID: r.FindingID,
+			Action:    "annotate",
+			Rule:      "cweattrib::model-attributed-cwe",
+			Reason: "the scanner reported no CWE; a model proposed " + r.CWE + " from the finding's " +
+				"own text, constrained to the compliance crosswalk (" + r.Reason + "). This class is " +
+				"OURS, not the scanner's, and it is what the control mapping keys on.",
+		})
+	}
+	return out
 }

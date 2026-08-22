@@ -153,7 +153,14 @@ type Service struct {
 	//
 	// nil disables it entirely: no model configured, no attribution, and the findings are left in
 	// exactly the state they are in today.
-	AttributeCWEs func(ctx context.Context, tenantID string, fs []types.Finding) []types.Finding
+	// It returns the findings AND an audit entry per attribution, which ride into the scan's
+	// l15_audit_log. That is not optional bookkeeping: the CWE it adds DRIVES compliance control
+	// mapping, so without it a class a model proposed is indistinguishable from one the scanner
+	// reported, and a control shows as affected on evidence nobody can trace. The KEV CWE backfill
+	// set the precedent one hook away — it logs threat_intel::kev-cwe-backfill for exactly this
+	// reason — and §2.5 requires L1.5 changes to be logged and recoverable so the security-engineer
+	// audience can audit them.
+	AttributeCWEs func(ctx context.Context, tenantID string, fs []types.Finding) ([]types.Finding, []types.AuditEntry)
 
 	// optional autonomous-loop collaborators
 	GRC          *grc.GRC         // fold each finding into the compliance system-of-record
@@ -735,11 +742,17 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 	// rather than hook 8: hook 7 is what turns a CWE into control mappings, so a CWE arriving after
 	// it is a CWE nobody maps. Best-effort by construction — the seam returns the findings unchanged
 	// when it cannot attribute.
+	var attrAudit []types.AuditEntry
 	if s.AttributeCWEs != nil {
-		findings = s.AttributeCWEs(ctx, a.TenantID, findings)
+		findings, attrAudit = s.AttributeCWEs(ctx, a.TenantID, findings)
 	}
 	enr := l15.EnrichDetailed(findings)
 	findings, eng.L15Audit, eng.L15Dismissed = enr.Enriched, enr.Audit, enr.Dismissed
+	// Attribution happened BEFORE the chain, so its audit entries lead — the log then reads in the
+	// order the changes were made, and the CWE that compliance.map keyed on is the first line.
+	if len(attrAudit) > 0 {
+		eng.L15Audit = append(attrAudit, eng.L15Audit...)
+	}
 	for i, f := range findings {
 		// Stamp the asset BEFORE storing. This is the only place in the system that knows,
 		// without guessing, which asset a finding came from — everything downstream had been
