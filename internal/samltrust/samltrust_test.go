@@ -122,3 +122,51 @@ func TestAssess_NoTrustPolicyIsSilent(t *testing.T) {
 		t.Errorf("an unobserved policy is not a finding and not a gap: %+v %+v", got.Findings, got.ChecksNotRun)
 	}
 }
+
+// PER-STATEMENT, not per-role — the shape a real account actually has.
+//
+// A role typically trusts more than one provider, and the realistic failure is a legacy one left
+// unconstrained beside a correctly configured one. Two ways to get this wrong: check only the first
+// statement and miss it, or condemn the whole role and tell the customer their working configuration
+// is broken. The finding must name the provider that is actually open.
+func TestAssess_FlagsOnlyTheUnconstrainedStatement(t *testing.T) {
+	trust := `{"Version":"2012-10-17","Statement":[
+	  {"Sid":"Constrained","Effect":"Allow","Action":"sts:AssumeRoleWithSAML",
+	   "Principal":{"Federated":"arn:aws:iam::1:saml-provider/Okta"},
+	   "Condition":{"StringEquals":{"SAML:aud":"https://signin.aws.amazon.com/saml"}}},
+	  {"Sid":"Open","Effect":"Allow","Action":"sts:AssumeRoleWithSAML",
+	   "Principal":{"Federated":"arn:aws:iam::1:saml-provider/Legacy"}}]}`
+
+	got := Assess(Estate{Roles: []Role{{ARN: "arn:aws:iam::1:role/R", TrustPolicy: trust}}}, time.Now())
+	if len(got.Findings) != 1 {
+		t.Fatalf("want exactly one finding — the open statement — got %d: %+v", len(got.Findings), got.Findings)
+	}
+	provs := got.Findings[0].ToolArgs["providers"]
+	if !strings.Contains(provs, "saml-provider/Legacy") {
+		t.Errorf("the finding must name the OPEN provider: %q", provs)
+	}
+	if strings.Contains(provs, "saml-provider/Okta") {
+		t.Errorf("the correctly-configured provider was named as at fault: %q", provs)
+	}
+}
+
+// SAML:sub IS DELIBERATELY NOT CHECKED, and this test exists to stop it being added.
+//
+// It looks like the obvious sibling of the audience check and it is not. In AWS SAML federation the
+// IdP's role-attribute mapping decides which users may assume which role — so a trust that does not
+// pin SAML:sub is the INTENDED design, not a weakness. Flagging it would fire on nearly every
+// correctly configured account in existence.
+//
+// The distinction is what makes the audience check sound: an absent SAML:aud lets in an assertion
+// minted for a DIFFERENT service provider, which the customer did not intend; an absent SAML:sub
+// admits the users the customer's own IdP chose to send.
+func TestAssess_AbsentSubjectConditionIsNotAWeakness(t *testing.T) {
+	got := Assess(role(`{"Statement":[{"Effect":"Allow","Action":"sts:AssumeRoleWithSAML",
+	  "Principal":{"Federated":"`+okta+`"},
+	  "Condition":{"StringEquals":{"SAML:aud":"https://signin.aws.amazon.com/saml"}}}]}`, true), time.Now())
+
+	if len(got.Findings) != 0 {
+		t.Errorf("a trust with a pinned audience and no subject condition is the normal, intended "+
+			"design — reporting it would fire on nearly every correct account: %+v", got.Findings)
+	}
+}
