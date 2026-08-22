@@ -7,7 +7,7 @@ _Track 1 verification artifact (`docs/competitive-roadmap.md`). Regenerate after
 | Web app · DAST | per-class Youden (TPR−FPR) | — not run (3 blockers found + 2 fixed; see below) | 56% — OWASP-ZAP 56% (best OSS DAST); commercial ceiling Acunetix/Netsparker 87% | — pending run |
 | Repository · SAST | overall Youden | **46.54%** — measured | 35% — Fortify 35%; Checkmarx 47%; ceiling Veracode 51% | ✅ at/above par — third on the published cohort |
 | L2 agent · autonomy | detection_rate (must-find) + verified_rate | — not run | 100% — must-find parity (detection_rate = 1.0), zero FP; verified_rate the differentiator | — pending run |
-| Cloud account · CSPM | CIS-section recall | — not run (needs LocalStack or real creds) | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
+| Cloud account · CSPM | CIS-section recall | **19/19 offline** (in-house fixture — see below); live still needs LocalStack or real creds | 100% — must-find CIS recall (Prowler/Scout/Wiz self-publish — no neutral leaderboard) | — pending run |
 | API · recall parity | recall vs standalone OSS | **1.000** — measured vs VAmPI | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | IP/host · recall parity | recall vs standalone OSS | — not measured (image lacked naabu) | 100% — orchestration drops nothing the standalone tool found | — pending run |
 | Domain · recall parity | recall vs standalone OSS | — not run | 100% — orchestration drops nothing the standalone tool found | — pending run |
@@ -42,6 +42,27 @@ still unproven is the single integrated run**: re-running the ip row through a r
 image to watch it report `tools_failed=1`. That needs a ~3GB image build, and the machine was
 at 901MB free. Stated as unproven rather than assumed, since assuming it is the same move this
 whole section is about.
+
+**The cloud row now has an OFFLINE number, and it is an IN-HOUSE one.** `tsbench cloud-baseline`
+scores 19/19 (recall 1.00) against a fixture account, with prowler-only at 18/19 — an engine lift of
++0.05 — and **0 unexpected findings**. Read it as §14.2.5 says to: an in-house answer key measures
+whether the fixtures and the code agree. It is not the market-axis number, which still needs a live
+account.
+
+The useful part was not the 1.00. `Unexpected` — the only specificity signal this lane has, and the
+thing that stops recall being gameable — had two defects that made it unreadable:
+
+- It was a **count with the identities discarded**, while its own comment called it "a signal to
+  investigate". Nobody can investigate an integer, and which resource it is decides what the number
+  means: a real false positive is a specificity problem in the engine, a violation the ground truth
+  never enumerated is a gap in the FIXTURE, and then recall is understated rather than the engine
+  being noisy. Naming them showed the single unexpected finding was `internet` — `cloudgraph.InternetID`,
+  our own synthetic attacker pseudo-node, counted as a flagged cloud resource. Neither an FP nor a
+  fixture gap: a permanent floor of 1 that both overstated our noise and would have masked the first
+  real unexpected finding, since it would have looked like no change at all.
+- It was **printed only when the engine had a lift over prowler**, nested inside that branch — so it
+  was withheld exactly when a reader most needs it, which is when we match prowler on recall and the
+  open question is whether we are merely noisier.
 
 **The API row was first recorded here as `0.000 — FAIL, MISSED sqli`. That was wrong, and
 how it was wrong is worth more than the number.**
