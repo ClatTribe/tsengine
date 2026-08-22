@@ -144,6 +144,15 @@ export interface Issue {
   confirmed: boolean; // ≥2 independent scanners agree
   finding_ids: string[];
   attacked?: boolean; // endpoint observed under attack in production (runtime signal)
+  // Data-tier prioritisation: the list is RE-SORTED by risk_rank (severity x tier), so a Medium on a
+  // customer-data asset can outrank a Medium on a low-sensitivity one. Without showing the tier, that
+  // reordering is invisible reasoning — two Mediums appear in an order the reader cannot account for,
+  // and the product has the answer.
+  //
+  // Both are omitempty and zero until an owner tiers the asset AND the issue is attributable to it,
+  // so the chip appears only where the tier actually moved something.
+  data_tier?: number; // 1 = customer data, 2 = standard, 3 = low sensitivity
+  risk_rank?: number;
   attack_count?: number;
   // Live-exploitable fusion (the ACSP "active/reachable/exploitable" lens): genuinely live, not
   // just present — under attack, OR internet-exposed on an attack path, OR exposed+serious+corroborated.

@@ -17,6 +17,34 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+// DataTierChip explains a position the reader would otherwise have to take on trust.
+//
+// The issues list is re-sorted by risk_rank (severity x tier), so a Medium on a customer-data asset
+// outranks a Medium on a low-sensitivity one. Shown without the tier, that is two Mediums in an
+// order nobody can account for — and the product knows exactly why.
+//
+// Deliberately silent for tier 2 (Standard), which is the default and the case where the tier moved
+// nothing. A chip on every row explains no ordering and trains people to stop reading chips.
+function DataTierChip({ tier }: { tier?: number }) {
+  if (tier !== 1 && tier !== 3) return null;
+  const customerData = tier === 1;
+  return (
+    <span
+      className={
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium " +
+        (customerData ? "bg-critical/10 text-critical" : "bg-surface-2 text-muted ring-1 ring-border")
+      }
+      title={
+        customerData
+          ? "This asset was tiered as holding customer data, so it is ranked above equal-severity issues elsewhere"
+          : "This asset was tiered low-sensitivity, so it is ranked below equal-severity issues elsewhere"
+      }
+    >
+      {customerData ? "customer data" : "low sensitivity"}
+    </span>
+  );
+}
+
 export default async function IssuesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const show = (await searchParams).show;
   const showingIgnored = show === "ignored";
@@ -208,6 +236,7 @@ function LeadCard({ issue, prior, explain }: { issue: Issue; prior?: PriorInv; e
             <SeverityBadge severity={issue.severity} />
             <span className="truncate text-sm font-medium text-ink">{explain?.headline || issue.title}</span>
             {explain && <UrgencyChip urgency={explain.urgency} label={explain.urgency_label} />}
+            <DataTierChip tier={issue.data_tier} />
           </div>
           <p className="mt-1.5 text-sm leading-relaxed text-muted">{reason}</p>
           {explain?.fix && <p className="mt-1.5 text-sm leading-relaxed text-ink"><span className="font-medium">Fix:</span> {explain.fix}</p>}

@@ -104,6 +104,14 @@ var required = []struct {
 			"months late — showing nothing tells them less than either",
 	},
 	{
+		page:  "frontend/app/(app)/issues/page.tsx",
+		field: "data_tier",
+		wouldOtherwiseClaim: "an ordering the reader cannot account for. The list is RE-SORTED by " +
+			"risk_rank (severity x tier), so a Medium on a customer-data asset outranks a Medium " +
+			"elsewhere — shown without the tier that is two Mediums in an unexplained order, and the " +
+			"product knows exactly why",
+	},
+	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "unattributable_from_our_tools",
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +
