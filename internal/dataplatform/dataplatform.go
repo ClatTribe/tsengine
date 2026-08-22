@@ -1,8 +1,12 @@
 // Package dataplatform is DATA-WAREHOUSE ACCESS POSTURE — who can read which table.
 //
-// THE GAP IT CLOSES. cloudgraph already classifies BigQuery, Redshift, Spanner and the rest as data
-// stores (classify.go), so an attack path can reach a warehouse and say "this leads to data". What it
-// cannot say is who holds the keys to what INSIDE it: cloud IAM governs access to the RESOURCE, while a
+// THE GAP IT CLOSES. cloudgraph's classifier RECOGNISES BigQuery, Redshift, Spanner and the rest as
+// data stores (classify.go) — but nothing ever hands it one: RawAWS carries users, roles, security
+// groups, instances, buckets and grants, and RawGCP the same shape, so no warehouse resource enters
+// the graph from any ingest. Verified 2026-08-23; only the classifier and unrelated packages even
+// know the words. An attack path therefore does not reach a warehouse today.
+//
+// Even where it did, it could not say who holds the keys to what INSIDE: cloud IAM governs access to the RESOURCE, while a
 // warehouse runs its own grant system underneath — a Snowflake role with SELECT on analytics.customers
 // is invisible to every AWS/GCP/Azure policy evaluator we have. Snowflake is not a cloud-provider
 // resource at all, so it never appears in an inventory in the first place.
