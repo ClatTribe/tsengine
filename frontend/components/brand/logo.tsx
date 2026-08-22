@@ -8,8 +8,8 @@ import { SHIELD, EMERALD, lattice } from "@/lib/brand-mark.mjs";
 // ONE CUT: the shield fills and the cells KNOCK OUT, so whatever sits behind the
 // mark shows through them and there is no light-on-dark variant to keep in sync.
 // That is the cut because of where the mark is actually read — every consumer in
-// this app (nav, footer, sidebar, login, signup, operator) renders it at 20-24px
-// inside the dark chip. A stroked alternative was drawn and rasterised at
+// this app (nav, footer, sidebar, login, signup, operator) renders it at 28-32px
+// directly on the page. A stroked alternative was drawn and rasterised at
 // 16/20/24/40px alongside it, and below ~28px its 2.8 stroke and the lattice
 // merge into stripes. Measured, not predicted; re-run that check before changing
 // the cut, at the sizes the mark ships at rather than the size you design it at.
@@ -19,13 +19,20 @@ import { SHIELD, EMERALD, lattice } from "@/lib/brand-mark.mjs";
 // needs) live in scripts/gen-icons.mjs, which is the only caller that needs them.
 const L = lattice();
 
-// indigo-300. The mark's home is the dark chip below, and the app-token indigo
-// (#4F46E5) is too dark to read on it. Written as a literal, NOT interpolated
-// from brand-mark's MARK constant: Tailwind extracts class names statically, so
-// a template-built `text-[${MARK}]` would never be generated. Callers on a light
-// ground override with their own text-* class — the fill is currentColor and cn()
-// runs tailwind-merge, so the caller's colour wins.
-const ON_CHIP = "text-[#A5B4FC]";
+// The mark takes the app's own accent token, so it themes itself: indigo-600
+// (#4F46E5) on the light canvas, indigo-400 (#818CF8) on the dark one. Both are
+// the colour the rest of the UI already uses for "the agent".
+//
+// It used to be a hardcoded indigo-300, because the mark sat on a hardcoded
+// near-black chip. That chip was a leftover from the dark console this product
+// stopped being in 2026-06 (frontend/DESIGN.md §3): it never resolved from a
+// variable, so in dark mode it matched the canvas to within a few points and
+// vanished as intended, while on the light canvas it rendered as a black square
+// behind the logo on every marketing page. The mark is a solid shield with the
+// lattice KNOCKED OUT — the ground shows through the cells — which is precisely
+// the cut that needs no chip. Callers override with their own text-* class if
+// they need to; the fill is currentColor and cn() runs tailwind-merge.
+const MARK_COLOR = "text-accent";
 
 type MarkProps = {
   className?: string;
@@ -42,7 +49,7 @@ type MarkProps = {
 export function LogoMark({ className, title = "TensorShield", mono = false }: MarkProps) {
   const [ax, ay] = L.accent;
   return (
-    <svg viewBox="0 0 48 48" fill="none" className={cn(ON_CHIP, className)} role="img" aria-label={title}>
+    <svg viewBox="0 0 48 48" fill="none" className={cn(MARK_COLOR, className)} role="img" aria-label={title}>
       <title>{title}</title>
       <path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d={`${SHIELD} ${L.path}`} />
       {!mono && <rect x={ax} y={ay} width={L.cell} height={L.cell} rx={L.radius} fill={EMERALD} />}
@@ -58,17 +65,23 @@ export function LogoMark({ className, title = "TensorShield", mono = false }: Ma
 // drift apart. If a genuine large-format surface appears (print, a hero), build it
 // from SHIELD + lattice() above rather than re-typing a path.
 
-// The dark chip the mark sits on — deep navy with a hairline ring. Exported so
-// every lockup (nav, footer, sidebar, auth, operator) frames the mark identically.
-export const logoChip = "bg-[#0b1220] ring-1 ring-white/10";
+// There is no exported chip any more. `logoChip` was `bg-[#0b1220] ring-1
+// ring-white/10` and every lockup hand-rolled the same two classes beside it, so
+// removing it here is only half the fix — the eight call sites are updated too.
+//
+// The two surfaces whose ground really is dark and fixed keep theirs, and neither
+// goes through this component: app/opengraph-image.tsx paints its own card, and
+// scripts/gen-icons.mjs paints the favicon tile. A chip is right there and wrong
+// here, which is why it now lives with each of them rather than as a shared token
+// applied to grounds that are not dark.
 
-// Logo — mark in the chip plus the wordmark: the standard header/footer lockup.
+// Logo — the mark plus the wordmark: the standard header/footer lockup.
 export function Logo({ className, markClass }: { className?: string; markClass?: string }) {
   return (
     <span className={cn("flex items-center gap-2.5", className)}>
-      <span className={cn("grid h-8 w-8 place-items-center rounded-lg shadow-sm", logoChip)}>
-        <LogoMark className={cn("h-5 w-5", markClass)} />
-      </span>
+      {/* 28px, not the 20px the chipped version used: without a chip the mark has
+          to carry the lockup's visual weight against the wordmark on its own. */}
+      <LogoMark className={cn("h-7 w-7", markClass)} />
       <span className="text-base font-semibold tracking-tight">TensorShield</span>
     </span>
   );
