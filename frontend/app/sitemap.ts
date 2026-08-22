@@ -19,6 +19,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/saas-posture", "/ci-cd", "/pricing", "/security", "/integrations", "/about", "/frameworks", "/scan", "/demo",
     // GTM pages that were crawlable but missing from the sitemap
     "/vs-consulting", "/partners", "/managed", "/startups", "/soc2-readiness", "/sample-report", "/blog",
+    // the published benchmark result — the site's only externally-scored proof
+    "/benchmarks",
     // per-asset SEO landing pages (content in lib/asset-marketing.ts)
     "/cloud-security", "/api-security", "/web-application-security", "/code-security", "/container-security",
     "/mobile-app-security", "/network-security", "/dns-domain-security",
