@@ -142,9 +142,7 @@ export function Sidebar({
       )}
     >
       <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
-        <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0b1220] ring-1 ring-white/10">
-          <LogoMark className="h-5 w-5" />
-        </div>
+        <LogoMark className="h-7 w-7" />
         <span className="text-sm font-semibold">TensorShield</span>
       </Link>
 

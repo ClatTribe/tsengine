@@ -109,9 +109,7 @@ export default function ResetPasswordPage() {
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm animate-fade-rise">
         <Link href="/" className="mb-10 inline-flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#0b1220] ring-1 ring-white/10 shadow-sm">
-            <LogoMark className="h-5 w-5" />
-          </span>
+          <LogoMark className="h-7 w-7" />
           <span className="text-base font-semibold tracking-tight">TensorShield</span>
         </Link>
         <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-muted" />}>

@@ -18,9 +18,7 @@ export default async function OperatorLayout({ children }: { children: React.Rea
     <div className="flex min-h-screen flex-col bg-bg">
       <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-bg/80 px-5 backdrop-blur-md">
         <Link href="/operator" className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#0b1220] ring-1 ring-white/10">
-            <LogoMark className="h-5 w-5" />
-          </span>
+          <LogoMark className="h-7 w-7" />
           <span className="text-sm font-semibold tracking-tight">TensorShield</span>
         </Link>
         <span className="hidden items-center gap-1.5 rounded-md border border-accent/30 bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent sm:inline-flex">
