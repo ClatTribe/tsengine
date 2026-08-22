@@ -50,12 +50,13 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const showingIgnored = show === "ignored";
   const showingLive = show === "live";
   const showingExternal = show === "external";
-  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live, explanations }, exclResp, funnel, llm, priorInv] = await Promise.all([
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live, explanations }, exclResp, funnel, llm, priorInv, fbResp] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
     api.triageFunnel(),
     api.llmSettings(),
     api.aiAnalyses("investigate"),
+    api.issueFeedback(),
   ]);
   const aiEnabled = llm.ai_enabled;
   // Persisted per-issue investigations keyed by issue key (scope) — so reopening Investigate shows the saved
@@ -126,6 +127,47 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
           hosts, typosquats, certificate issues — discovered from open sources. These already sit in your main list; this is
           just that slice.
         </p>
+      )}
+
+      {/* THE RETURN LEG OF THE FEEDBACK LOOP. The row-level control asks two questions — is this real,
+          and did the evidence show you why — and until now neither answer was ever shown back, so
+          someone who answered had no sign it landed. evidence_insufficient is a defect in OUR
+          write-up rather than in the finding, which is why it is called out separately from the
+          verdict counts and why the weakest-explained issues are named. */}
+      {fbResp.summary.total > 0 && (
+        <div className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm">
+          <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-faint">Your feedback so far</div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span>
+              <span className="font-medium text-ink">{fbResp.summary.total}</span>{" "}
+              <span className="text-muted">judged</span>
+            </span>
+            <span className="text-muted">
+              {fbResp.summary.real} real · {fbResp.summary.false_positive} false positive
+              {fbResp.summary.unclear > 0 && <> · {fbResp.summary.unclear} unclear</>}
+            </span>
+            {fbResp.summary.evidence_insufficient > 0 && (
+              <span title="You said the finding was real but our evidence did not show you why. That is a fault in how we explained it, not in the detection.">
+                <span className="font-medium text-ink">{fbResp.summary.evidence_insufficient}</span>{" "}
+                <span className="text-muted">we did not justify well enough</span>
+              </span>
+            )}
+          </div>
+          {(fbResp.summary.weakest_explanations?.length ?? 0) > 0 && (
+            <div className="mt-1.5 border-t border-border pt-1.5 text-[11px] text-muted">
+              Worst explained:{" "}
+              {fbResp.summary.weakest_explanations!.slice(0, 3).map((w, i) => (
+                <span key={w.issue_key}>
+                  {i > 0 && ", "}
+                  <span className="mono text-faint">{w.issue_key}</span> ({w.count})
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="mt-1.5 text-[11px] text-faint">
+            Recording an opinion changes nothing you see — nothing here is hidden or re-ranked because of it.
+          </p>
+        </div>
       )}
 
       {/* Plain-English legend for the header stats — the ICP is a non-security founder, so the

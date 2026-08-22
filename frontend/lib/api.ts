@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
+  FeedbackSummary,
   L15Audit, TenantEval, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
@@ -666,6 +667,18 @@ export const api = {
     call<unknown>("/v1/issues/feedback", {
       method: "POST",
       body: JSON.stringify({ key, verdict, evidence, note: note ?? "" }),
+    }),
+
+  // The return leg of the feedback loop: what this tenant's judgements add up to. Asking someone a
+  // question and never showing them the answer is not a loop.
+  issueFeedback: () =>
+    safe<{ feedback: unknown[]; count: number; summary: FeedbackSummary }>("/v1/issues/feedback", {
+      feedback: [],
+      count: 0,
+      summary: {
+        total: 0, real: 0, false_positive: 0, unclear: 0,
+        evidence_sufficient: 0, evidence_insufficient: 0, evidence_unanswered: 0,
+      },
     }),
 
   // Custom exclusion rules (path/package/rule-id/cve glob noise filters).

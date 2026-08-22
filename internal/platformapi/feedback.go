@@ -3,6 +3,7 @@ package platformapi
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -86,5 +87,76 @@ func (d Deps) handleListFeedback(w http.ResponseWriter, r *http.Request, tenantI
 	if fbs == nil {
 		fbs = []platform.Feedback{} // never null: the frontend maps over this
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"feedback": fbs, "count": len(fbs)})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"feedback": fbs, "count": len(fbs), "summary": summariseFeedback(fbs),
+	})
+}
+
+// FeedbackSummary is what the tenant's own judgements ADD UP TO.
+//
+// Both axes were being collected and neither was ever counted. The verdict axis reached
+// tenanteval as a case; the evidence axis reached it as PROSE appended to a case's reason string
+// ("and said our evidence did not show them why"), so answering "how often do customers say we
+// failed to justify a finding?" meant regexing English. That is the same shape retest.ApplyReattack
+// had before RescanSaidFixed/Disagreement were added — a real signal explained in a sentence and
+// recorded nowhere countable.
+//
+// EvidenceInsufficient is the actionable one, and it is a defect in OUR WRITE-UP rather than in the
+// finding: the customer is saying the thing is real and we did not show them why. Aggregated per
+// rule, it names which rule's description to fix.
+type FeedbackSummary struct {
+	Total int `json:"total"`
+	// By verdict. Unclear is first-class and counted separately — "I could not understand this
+	// finding" is an answer, not an absence of one, and folding it into either side loses it.
+	Real          int `json:"real"`
+	FalsePositive int `json:"false_positive"`
+	Unclear       int `json:"unclear"`
+	// By evidence axis. Unanswered is counted rather than dropped, so a low insufficient count is
+	// not mistaken for approval when most people simply did not answer that question.
+	EvidenceSufficient   int `json:"evidence_sufficient"`
+	EvidenceInsufficient int `json:"evidence_insufficient"`
+	EvidenceUnanswered   int `json:"evidence_unanswered"`
+	// WeakestExplanations are the issue keys drawing the most "you did not show me why", worst
+	// first. This is the list to act on.
+	WeakestExplanations []FeedbackCount `json:"weakest_explanations,omitempty"`
+}
+
+// FeedbackCount is one issue key and how many people said our evidence did not justify it.
+type FeedbackCount struct {
+	IssueKey string `json:"issue_key"`
+	Count    int    `json:"count"`
+}
+
+func summariseFeedback(fbs []platform.Feedback) FeedbackSummary {
+	sum := FeedbackSummary{Total: len(fbs)}
+	weak := map[string]int{}
+	for _, fb := range fbs {
+		switch fb.Verdict {
+		case platform.FeedbackReal:
+			sum.Real++
+		case platform.FeedbackFalsePositive:
+			sum.FalsePositive++
+		case platform.FeedbackUnclear:
+			sum.Unclear++
+		}
+		switch fb.Evidence {
+		case platform.EvidenceSufficient:
+			sum.EvidenceSufficient++
+		case platform.EvidenceInsufficient:
+			sum.EvidenceInsufficient++
+			weak[fb.IssueKey]++
+		default:
+			sum.EvidenceUnanswered++
+		}
+	}
+	for k, n := range weak {
+		sum.WeakestExplanations = append(sum.WeakestExplanations, FeedbackCount{IssueKey: k, Count: n})
+	}
+	sort.Slice(sum.WeakestExplanations, func(i, j int) bool {
+		if sum.WeakestExplanations[i].Count != sum.WeakestExplanations[j].Count {
+			return sum.WeakestExplanations[i].Count > sum.WeakestExplanations[j].Count
+		}
+		return sum.WeakestExplanations[i].IssueKey < sum.WeakestExplanations[j].IssueKey // deterministic
+	})
+	return sum
 }
