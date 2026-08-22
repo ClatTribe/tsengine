@@ -126,6 +126,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench defense-xbow: %v\n", err)
 			os.Exit(1)
 		}
+	case "improve":
+		if err := improveCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench improve: %v\n", err)
+			os.Exit(1)
+		}
 	case "accuracy":
 		if err := accuracyCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench accuracy: %v\n", err)
