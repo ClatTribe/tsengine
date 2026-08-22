@@ -9,6 +9,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -62,6 +63,21 @@ func TestEveryDeclaredKindIsActuallyProduced(t *testing.T) {
 	for _, g := range d3.computeDegradations(ctx, "t") {
 		produced[g.Kind] = true
 	}
+
+	// threat_intel_stale — driven from a FIXED clock, not from today's date.
+	//
+	// This kind fires on the real clock as things stand (the embedded snapshot is 113 days old as
+	// this is written), so the guard would pass without driving anything — and would silently stop
+	// covering this kind the moment someone refreshes the snapshot. A guard that only works while
+	// the bug is present is not a guard.
+	d5, st5 := stateDeps(t)
+	_ = st5.PutTenant(ctx, platform.Tenant{ID: "t", Name: "A"})
+	restore := nowUTC
+	nowUTC = func() time.Time { return hooks.ThreatIntelSnapshot.Add(400 * 24 * time.Hour) }
+	for _, g := range d5.computeDegradations(ctx, "t") {
+		produced[g.Kind] = true
+	}
+	nowUTC = restore
 
 	// cloud_coverage_incomplete — a stored snapshot that recorded what it could not answer
 	d4, st4 := stateDeps(t)
@@ -148,6 +164,14 @@ func TestHealthyWorkspace_ProducesNothing(t *testing.T) {
 		LLM: &platform.LLMConfig{Provider: "anthropic", Model: "claude-opus-5", KeyRef: "sealed"},
 	})
 	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t", Kind: platform.ConnGitHub, Status: platform.ConnActive})
+
+	// Healthy includes CURRENT THREAT INTEL, which is world state rather than anything about this
+	// tenant. Pinned to a fresh corpus rather than left on the wall clock: the embedded snapshot is
+	// months old, so on the real clock this test would fail for a reason that has nothing to do with
+	// the workspace being healthy — and pinning states the premise instead of hiding it.
+	restore := nowUTC
+	nowUTC = func() time.Time { return hooks.ThreatIntelSnapshot.Add(24 * time.Hour) }
+	defer func() { nowUTC = restore }()
 
 	if got := d.computeDegradations(ctx, "t"); len(got) != 0 {
 		t.Errorf("a healthy workspace produced %d degradation(s): %+v", len(got), got)
