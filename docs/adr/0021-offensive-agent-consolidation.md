@@ -124,6 +124,54 @@ benchmarks green.
 The ADR is done when step 5 lands or is explicitly deferred with steps 1–4 in place (which already
 removes the wire-twice tax and closes the ADR-0019 measurement gap).
 
+## Status & findings (2026-08-22)
+
+Implemented over 8 PRs (#1340 ADR, #1341, #1345, #1347, #1351, #1355, #1358, #1362). Per migration step:
+
+- **Step 1 — shared context feed: DONE + reachable.** #1341 (webagent hook), #1345 (the shared
+  `internal/offensivecontext` provider both agents read — pentest stays corpus-free per its layering
+  note), #1347 (`web-investigate --exploit-intel` + seeding from scan FINDINGS, which fixed a
+  built-but-unreachable `SeedFromFinding`). **Deliberate deviation:** the `tsbench xbow` ablation toggle
+  was NOT built — XBOW targets lack CVEs, so the honest measurement path is a CVE-bearing target via
+  `--scan <report> --exploit-intel <dir>`, not xbow.
+
+- **Step 2 — probes → predicate kinds: DONE for the predicate-expressible subset.** #1351
+  (`PredBOLADiff`, `PredPrivescTransition`), #1355 (`PredMarkerRevealed` = nosqli + tamper, with the
+  reflection guard), #1358 (enumerated in `specPrompt` so the D-agent can actually propose them —
+  another built-but-unreachable fix). **The subset is a hard architectural boundary, not laziness:** the
+  `DemoSpec` model proposes ALL probes UPFRONT and the `HTTPProber` has no cookie jar, so it cannot
+  express a flow whose request depends on state MINTED mid-flow. bola/privesc/nosqli/tamper fit because
+  their identities/cookies are known upfront (agent inputs); **session_idor** (the tampered session is
+  minted by the login response), **race** (needs concurrency + win-counting), **jwt** (crack+forge is a
+  computed token, then interactive), and **upload** (multipart is a tool, not a response-differential)
+  do NOT fit and correctly stay webagent-loop capabilities. This VALIDATES the split: the pentest core
+  proves the stateless-differential classes at any level; the L3 Hunt loop handles the interactive ones.
+
+- **Step 3 — exploitation tools → L3 Attempts + cross-attempt state: substantially SATISFIED, differently
+  than sketched.** The kill-chain the ADR wanted "generic" already works WITHIN a hunt: webagent's turn
+  History carries a captured cred (`ssh_exec` output) into later tool calls, so lateral movement is a
+  single-hunt capability today. A separate cross-ENGAGEMENT state bag was deliberately NOT added — it
+  would be built-but-unreachable until a multi-engagement kill-chain consumer exists.
+
+- **Step 4 — discovery pre-phase: ALREADY PRESENT.** `platformapi.runWebDiscovery` runs the target-first
+  hunt FIRST for consent-mode engagements, then the verify drivers prove what it found — exactly the
+  opt-in discovery→exploit phase the step describes, gated by `Mode.RequiresConsent()`.
+
+- **Step 5 — loop last: the seam LANDED (#1362 `pentest.HuntDriver`), production wiring deferred as
+  low-value/high-risk.** HuntDriver resolves the real blocker (webagent's multi-finding loop vs pentest's
+  one-Attempt Driver) via buffering, is reachable through `runner.Run`, and gates the hunt behind Active
+  consent. It is NOT yet swapped into `runWebDiscovery` because that path already achieves the outcome
+  (hunt findings → store → scorecard/VAPT, consent-gated) and replacing a benchmark-load-bearing path for
+  uniform RoE-gating is a refactor with regression risk out of proportion to the gain. `web-investigate`
+  → thin adapter and the browser/OOB dedupe are the same shape: cleanup with no capability upside, left
+  for a dedicated pass.
+
+**Net:** the two things that MOTIVATED the ADR — the wire-twice tax and the ADR-0019 measurement gap —
+are retired (steps 1–2). The remainder is either already-achieved-differently (3, 4), a landed seam whose
+production swap is a deliberate deferral (5), or bounded-out by a real architectural constraint (the
+stateless-predicate boundary). Per the done-criterion ("step 5 lands OR steps 1–4 in place with 5
+deferred"), the ADR is effectively COMPLETE with the loop-merge cleanup explicitly deferred.
+
 ## Why not X
 
 - **Leave two agents.** The wire-twice tax is proven (ADR 0019 wired once), the benchmark cannot measure
