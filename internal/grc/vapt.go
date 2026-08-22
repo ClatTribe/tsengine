@@ -25,9 +25,15 @@ type VAPTReport struct {
 	// Untested names scope targets that NOTHING has assessed yet. Zero findings across a scope
 	// nobody scanned is not a clean result, and this report is the document a customer hands an
 	// auditor or a prospect — it is the last place a silence should read as an all-clear.
-	Untested []string      `json:"untested,omitempty"`
-	Summary  VAPTSummary   `json:"summary"`
-	Findings []VAPTFinding `json:"findings"` // worst-severity first
+	Untested []string `json:"untested,omitempty"`
+	// PartiallyAssessed names scope targets that WERE scanned but whose most recent scan lost a tool.
+	// Distinct from Untested, and the distinction is the point: those targets were looked at, so they
+	// are not "not assessed" — but a scan missing tools has not earned "clean" either, and this
+	// report's closing line is the most quotable sentence in a document customers hand to prospects
+	// and auditors.
+	PartiallyAssessed []string      `json:"partially_assessed,omitempty"`
+	Summary           VAPTSummary   `json:"summary"`
+	Findings          []VAPTFinding `json:"findings"` // worst-severity first
 	// Attestation, when the report is signed (same scheme as the evidence pack).
 	Signer string `json:"signer,omitempty"`
 	SHA256 string `json:"sha256,omitempty"`
@@ -266,12 +272,20 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		for _, t := range r.Untested {
 			untested[t] = true
 		}
+		partial := map[string]bool{}
+		for _, t := range r.PartiallyAssessed {
+			partial[t] = true
+		}
 		for _, t := range r.Scope {
-			if untested[t] {
+			switch {
+			case untested[t]:
 				fmt.Fprintf(&b, "- `%s` — **not assessed** (no scan has run against this target)\n", t)
-				continue
+			case partial[t]:
+				fmt.Fprintf(&b, "- `%s` — **partially assessed** (the last scan lost one or more tools; "+
+					"what they would have found is not represented here)\n", t)
+			default:
+				fmt.Fprintf(&b, "- `%s`\n", t)
 			}
-			fmt.Fprintf(&b, "- `%s`\n", t)
 		}
 		b.WriteString("\n")
 	}
@@ -283,6 +297,13 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		} else if len(r.Untested) > 0 {
 			b.WriteString("_No open vulnerabilities in the scanned targets. " + joinTargets(r.Untested) +
 				" " + verbFor(len(r.Untested)) + " not been assessed._\n")
+		} else if len(r.PartiallyAssessed) > 0 {
+			// Scanned, but not completely. "Clean" is a claim about what was looked for, and a scan
+			// that lost its tools looked for less than it reports.
+			b.WriteString("_No open vulnerabilities in what was assessed. " + joinTargets(r.PartiallyAssessed) +
+				" " + verbFor(len(r.PartiallyAssessed)) + " only PARTIALLY assessed — the last scan lost " +
+				"one or more tools, so this is not a clean bill of health for " +
+				pronounFor(len(r.PartiallyAssessed)) + "._\n")
 		} else {
 			b.WriteString("_No open vulnerabilities — every monitored asset is currently clean._\n")
 		}
