@@ -523,20 +523,44 @@ bundles.
 
 ## L1 dashboard contract
 
-See CLAUDE.md §6 for the full schema. The contract is **frozen in Phase 0** — every wrapper must conform.
+See CLAUDE.md §6 for the full schema. Every wrapper must conform.
 
-Two views in one file:
+This summary listed six fields and `types.Scan` has eighteen. The seven it omitted were the ones that
+QUALIFY the rest, which is the wrong seven to leave out of a contract: a consumer building to the old
+list renders `findings_raw` and never learns the scan hit its deadline with three tools dead.
 
-* `findings_raw` — pre-L1.5 (security engineer audience)
+**Identity and timing**
+
+* `scan_id`, `asset` — what was scanned
+* `started_at` / `completed_at` — a missing `completed_at` on a scan that is not `partial` means it
+  is still running, not that it finished instantly
+
+**The findings**
+
+* `findings_raw` — pre-L1.5 (security-engineer audience)
 * `findings_enriched` — post-L1.5 (compliance audience + L2 input)
+* `l15_audit_log` — every demotion, dismissal and merge with its reason, so the security engineer can
+  audit and override what L1.5 did
 
-Plus:
+**What the scan could and could not do — read these before trusting the findings**
 
-* `l15_audit_log` — every demotion, dismissal, merge with reason (security engineer can override in webappsec)
-* `attestation` — cryptographic integrity for compliance evidence
-* `corpus` + `sandbox_image_digest` — for replay / reproducibility
+* `partial` — the scan did not finish. A findings list from a partial scan is a floor, not a result
+* `tools_failed` — tools that were dispatched and produced nothing. Distinct from a tool that ran
+  clean, and the difference is the whole question: absence of findings from a tool that DIED is not
+  evidence of absence
+* `stop_reason` — why it ended, when it did not end by completing
+* `anchors_fired` / `registry_fired` — which tools actually ran, so "we checked" is checkable
+* `discovered_surface` — what recon found and therefore what the fan-out covered
 
----
+**Provenance and integrity**
+
+* `corpus` + `engine.sandbox_image_digest` — the exact state a finding was assessed against (§10)
+* `attestation` — SHA-256 over canonical JSON + ed25519, so tampering is detectable
+
+**Onward work**
+
+* `child_assets` — subdomains and hosts the platform should spawn child scans for
+* `ai_assessment` — the L2 pass over this scan, when one ran
 
 ## Detection layer model (L0 → L3)
 

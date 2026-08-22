@@ -283,3 +283,52 @@ func TestArchMdCodePathsExist(t *testing.T) {
 		t.Fatalf("only %d paths parsed from arch.md — the pattern broke, not the doc", len(seen))
 	}
 }
+
+// arch.md must name every field of types.Scan — the L1 dashboard contract webappsec consumes.
+//
+// The summary listed six of eighteen, and the twelve it omitted included `partial`, `tools_failed`
+// and `stop_reason`. Those are the fields that QUALIFY every other claim in the file, so leaving them
+// out of a contract is the wrong omission to make: a consumer building to the documented list renders
+// findings_raw and never learns the scan hit its deadline with three tools dead. Absence of findings
+// from a tool that DIED is not evidence of absence, and the contract is where an integrator has to be
+// told that.
+//
+// The field list is read from the struct tags, so a field added to the contract without documenting
+// it fails here rather than shipping as a silent addition to an external interface.
+func TestArchMdDocumentsTheWholeScanContract(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "pkg", "types", "scan.go"))
+	if err != nil {
+		t.Fatalf("read scan.go: %v", err)
+	}
+	// Only the Scan struct's own tags, not those of the types nested below it.
+	body := string(src)
+	i := strings.Index(body, "type Scan struct")
+	if i < 0 {
+		t.Fatal("type Scan not found — the parser broke, not the doc")
+	}
+	j := strings.Index(body[i:], "\n}")
+	if j < 0 {
+		t.Fatal("could not find the end of type Scan")
+	}
+	tag := regexp.MustCompile(`json:"([a-z0-9_]+)`)
+	fields := tag.FindAllStringSubmatch(body[i:i+j], -1)
+	if len(fields) < 12 {
+		t.Fatalf("only %d fields parsed from type Scan — the parser broke", len(fields))
+	}
+
+	arch, err := os.ReadFile(filepath.Join("..", "..", "arch.md"))
+	if err != nil {
+		t.Fatalf("read arch.md: %v", err)
+	}
+	doc := string(arch)
+	for _, f := range fields {
+		name := f[1]
+		if name == "l" { // the truncated tag of a nested/embedded field, not a contract field
+			continue
+		}
+		if !strings.Contains(doc, name) {
+			t.Errorf("types.Scan carries %q and arch.md never names it — this is the contract an "+
+				"integrator builds against, and an undocumented field is one they will not read", name)
+		}
+	}
+}
