@@ -3,6 +3,7 @@ package platformapi
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -96,13 +97,43 @@ func ciIdentityAssess(provider string, body []byte) ([]types.Finding, map[string
 	return findings, notRun
 }
 
-// persistCIIdentityFindings enriches and stores them through the SAME path every other ingest uses
-// (§11), so a federated-trust finding flows into issues/incidents/grc/hitl like any other.
+// persistCIIdentityFindings enriches and stores them through the same L1.5 chain every other ingest
+// uses (§11), so a federated-trust finding flows into issues/incidents/grc/hitl like any other —
+// but with its OWN provenance.
+//
+// It reused persistDriftFindings, which stamps ids as "drift-…", marks the clouddrift posture
+// assessed, and writes a ledger entry reading "cloud drift detected" with a drift_findings count. A
+// role trusting an unconstrained SAML provider is not drift: nothing changed, the trust policy has
+// most likely been that way since it was written. The ledger is where a claim is supposed to be
+// checkable, so a false label there is worse than a vague one, and "we detected drift" is a claim
+// about an EVENT that did not happen.
 func (d Deps) persistCIIdentityFindings(ctx context.Context, tenantID string, fs []types.Finding) ([]types.Finding, int) {
 	if len(fs) == 0 || d.Store == nil {
 		return nil, 0
 	}
-	return d.persistDriftFindings(ctx, tenantID, fs)
+	fs = enrichFindings(fs) // L1.5 parity (§11)
+	// The CI-identity surface was assessed — recorded under its own kind so a tenant can tell that
+	// this ran from the fact that clouddrift ran, which is a different question.
+	d.markPostureAssessed(ctx, tenantID, "ci_identity", time.Now().UTC())
+
+	saved := make([]types.Finding, 0, len(fs))
+	for i, f := range fs {
+		f.ID = d.newID("ciid") + "-" + strconv.Itoa(i)
+		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
+			continue
+		}
+		d.foldIntoPosture(ctx, tenantID, []types.Finding{f})
+		saved = append(saved, f)
+	}
+	if d.IncidentOpener != nil && len(saved) > 0 {
+		_, _ = d.IncidentOpener.OpenFor(ctx, tenantID, saved, nil)
+	}
+	if d.Recorder != nil && len(saved) > 0 {
+		d.Recorder.Record("federated trust assessed", "ci_identity",
+			map[string]any{"tenant_id": tenantID, "findings": len(saved)},
+			"a role's trust policy lets an external identity provider assume it")
+	}
+	return saved, len(saved)
 }
 
 // gcpCIIdentityFindings assesses the Workload Identity Federation surface of a posted GCP inventory.
