@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/fixunit"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -18,17 +19,9 @@ import (
 // full FindingIDs set it resolves; the grouping key is derived from real tool output
 // (a package coordinate / rule id), never guessed.
 
-// fixKey returns the remediation unit a finding belongs to. Findings sharing a key are
-// fixable by one change:
-//   - SCA findings → the package coordinate (pkg@installed_version from the tool args):
-//     every CVE in lodash@4.17.0 is fixed by one upgrade.
-//   - everything else → the rule id: the same rule across files is one fix pattern.
-func fixKey(f types.Finding) string {
-	if pkg := f.ToolArgs["pkg"]; pkg != "" {
-		return "pkg:" + pkg + "@" + f.ToolArgs["installed_version"]
-	}
-	return "rule:" + f.RuleID
-}
+// The remediation unit a finding belongs to is defined by internal/fixunit, so the VAPT roadmap's
+// "step 1 closes these 4 findings" and the pull requests this engine actually opens can never
+// describe different work.
 
 // FixGroup is a set of findings fixable by one remediation, in stable order.
 type FixGroup struct {
@@ -39,21 +32,11 @@ type FixGroup struct {
 // GroupFindings buckets findings into fix groups, preserving first-seen order (both of
 // the groups and of findings within a group) so the output is deterministic.
 func GroupFindings(findings []types.Finding) []FixGroup {
-	order := []string{}
-	idx := map[string]int{}
-	var groups []FixGroup
-	for _, f := range findings {
-		k := fixKey(f)
-		i, ok := idx[k]
-		if !ok {
-			idx[k] = len(groups)
-			order = append(order, k)
-			groups = append(groups, FixGroup{Key: k})
-			i = idx[k]
-		}
-		groups[i].Findings = append(groups[i].Findings, f)
+	shared := fixunit.GroupBy(findings)
+	groups := make([]FixGroup, 0, len(shared))
+	for _, g := range shared {
+		groups = append(groups, FixGroup{Key: g.Key, Findings: g.Findings})
 	}
-	_ = order
 	return groups
 }
 

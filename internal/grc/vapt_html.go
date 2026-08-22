@@ -111,6 +111,9 @@ const vaptHTMLSource = `<!doctype html>
   .finding { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:0 0 12px; }
   .finding.crit { border-left:4px solid var(--crit); }
   .finding.hi { border-left:4px solid var(--high); }
+  .step { background:#fcfcfd; }
+  .stepno { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%;
+    background:var(--ink); color:#fff; font-size:12px; font-weight:700; flex:none; }
   .fhead { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; }
   .ftitle { font-size:14.5px; font-weight:650; }
   .facts { margin:0 0 8px; padding:0; list-style:none; font-size:12.5px; color:#374151; }
@@ -166,6 +169,32 @@ continuous, so this report reflects the current state, not a point-in-time snaps
 {{else}}<ul>
 {{range .Scope}}<li><code>{{.Target}}</code>{{if .Untested}} — <b>not assessed</b> (no scan has run against this target){{else if .Partial}} — <b>partially assessed</b> (the last scan lost one or more tools; what they would have found is not represented here){{end}}</li>
 {{end}}</ul>{{end}}
+
+{{if .Report.Roadmap}}
+<h2>Remediation plan</h2>
+<p>The findings below, grouped into the changes that fix them and ordered by what to do first.
+Priority is set by evidence of real exploitability (a captured proof-of-concept, then CISA’s
+actively-exploited catalogue) ahead of severity alone, so proven risk outranks theoretical worst
+case. Unconfirmed leads are listed last — validate them before spending effort. <b>No effort or
+time estimates are given: we cannot see your codebase, release process, or team, and an invented
+estimate is the one number in this report that nothing would support.</b></p>
+{{range .Report.Roadmap}}
+<div class="finding step">
+  <div class="fhead">
+    <span class="stepno">{{.Order}}</span>
+    <span class="pill {{sevClass .Severity}}">{{upper .Severity}}</span>
+    <span class="ftitle">{{.Title}}</span>
+  </div>
+  <ul class="facts">
+    <li><b>Closes:</b> {{.Closes}} {{if eq .Closes 1}}finding{{else}}findings{{end}}{{if .FixReady}} · <b>fix prepared, awaiting approval</b>{{end}}</li>
+    {{if .Why}}<li><b>Why here:</b> {{join .Why}}</li>{{end}}
+    {{if .Where}}<li><b>Where:</b> {{range .Where}}<code>{{.}}</code> {{end}}</li>{{end}}
+    {{if .Action}}<li><b>Fix:</b> {{.Action}}</li>{{end}}
+    <li class="muted"><b>Resolves:</b> {{join .Findings}}</li>
+  </ul>
+</div>
+{{end}}
+{{end}}
 
 <h2>Findings ({{len .Report.Findings}})</h2>
 {{if not .Report.Findings}}<p class="muted"><i>{{inline .EmptyNote}}</i></p>{{end}}
