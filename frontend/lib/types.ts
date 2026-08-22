@@ -53,6 +53,16 @@ export interface Finding {
   mitre_techniques?: string[];
   verification_status?: string;
   confidence?: number;
+  // The rule ids of the OTHER findings that independently agreed — the evidence behind the word
+  // "corroborated" and the confidence number beside it. The corroborator hook only counts findings
+  // from DISTINCT tools on the same surface, since two hits from one scanner are not independent.
+  // §10 is "every recorded issue cites tool evidence"; the citation was computed and reached the L2
+  // digest and the zero-JS console, and this page showed the verdict without it.
+  corroborated_by?: string[];
+  // How reachable the surface is (a login form outranks a robots.txt entry). Structurally identical
+  // to exploitability, which this page has always rendered with its reason — showing one and not the
+  // other left the reader with half of the ranking the engine actually computed.
+  surface_priority?: { score?: number; reason?: string };
   // What the TOOL itself said, and how it was invoked. Stored since Phase 0 and never shown until
   // now — a security engineer verifies a finding by reading the scanner's own output, not our
   // summary of it, and they cannot reproduce a result whose arguments they cannot see.

@@ -52,6 +52,13 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
   // of this file avoids. Stating the assessment and its reason is what the page can honestly say.
   const exploitReason = f.exploitability?.reason || null;
   const exploitScore = typeof f.exploitability?.score === "number" ? f.exploitability.score : null;
+  // Same shape as exploitability, and rendered the same way for the same reason: a score with no
+  // stated reason is an assertion, and this one is ours rather than the scanner's.
+  const surfaceReason = f.surface_priority?.reason || null;
+  const surfaceScore = typeof f.surface_priority?.score === "number" ? f.surface_priority.score : null;
+  const corroboratedBy = (Array.isArray(f.corroborated_by) ? f.corroborated_by : []).filter(
+    (r): r is string => typeof r === "string" && r.trim() !== "",
+  );
   // CISA's decision points. Automatable shows even when it is "no": between two CVEs with the same
   // CVSS and neither on KEV, "an attacker cannot automate this" is exactly the thing that separates
   // them, and hiding the negative would leave the reader where they started.
@@ -68,7 +75,14 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
     .slice(0, 6);
   const ssvcExploit = f.threat_intel?.ssvc?.exploitation || null;
   const hasThreatIntel =
-    kev || cvss !== null || epssPct !== null || publicExploit || exploitReason !== null || ssvcAuto !== null || advisories.length > 0;
+    kev ||
+    cvss !== null ||
+    epssPct !== null ||
+    publicExploit ||
+    exploitReason !== null ||
+    surfaceReason !== null ||
+    ssvcAuto !== null ||
+    advisories.length > 0;
   const controls = Object.entries(f.compliance ?? {}).filter(([, v]) => Array.isArray(v) && v.length > 0);
   const hasOpenReview = reviews.some((r) => r.subject_id === id && r.status === "open");
   // The remediation the agent has queued for THIS finding (if any) — the agentic signal.
@@ -89,6 +103,15 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
             <SeverityBadge severity={f.severity} />
             {f.verification_status && <Tag>{f.verification_status}</Tag>}
             {typeof f.confidence === "number" && f.confidence > 0 && <span className="text-xs text-faint">confidence {f.confidence.toFixed(2)}</span>}
+            {corroboratedBy.length > 0 && (
+              <span
+                className="text-xs text-faint"
+                title="Independent agreement from a DIFFERENT tool on the same surface — two hits from one scanner do not corroborate each other."
+              >
+                corroborated by{" "}
+                <span className="mono text-muted">{corroboratedBy.join(", ")}</span>
+              </span>
+            )}
           </div>
           <h1 className="mt-1.5 text-xl font-semibold leading-tight">{f.title}</h1>
         </div>
@@ -120,6 +143,13 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
                 <span className="text-faint">Exploitability</span>{" "}
                 <span className="font-medium text-ink">{exploitScore !== null ? `${exploitScore}/100` : "rated"}</span>
                 <span className="ml-1 text-muted">· {exploitReason}</span>
+              </span>
+            )}
+            {surfaceReason && (
+              <span title="tsengine's own surface-reachability assessment — how exposed the place this was found is. A login form outranks a robots.txt entry.">
+                <span className="text-faint">Surface</span>{" "}
+                <span className="font-medium text-ink">{surfaceScore !== null ? `${surfaceScore}/100` : "rated"}</span>
+                <span className="ml-1 text-muted">· {surfaceReason}</span>
               </span>
             )}
             {ssvcAuto && (

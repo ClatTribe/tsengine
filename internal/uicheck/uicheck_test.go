@@ -72,6 +72,24 @@ var required = []struct {
 	},
 	{
 		page:  "frontend/app/(app)/findings/[id]/page.tsx",
+		field: "corroborated_by",
+		wouldOtherwiseClaim: "'corroborated' as a bare word next to a confidence number, with no way " +
+			"to know that it means a DIFFERENT tool independently found the same thing — which is the " +
+			"entire substance of the claim, and the first question a sceptical reader asks. The hook " +
+			"attaches the agreeing rule ids and counts only distinct tools; the citation reached the " +
+			"L2 digest and the zero-JS console while this page showed the verdict without it, and " +
+			"§10 is that every recorded issue cites tool evidence",
+	},
+	{
+		page:  "frontend/app/(app)/findings/[id]/page.tsx",
+		field: "surface_priority",
+		wouldOtherwiseClaim: "half of the ranking the engine computed. It is the same {score, reason} " +
+			"shape as exploitability, sitting in the same struct and rendered on the same row — one " +
+			"was shown with its reason and the other was not, so a reader could see that we rated a " +
+			"finding exploitable but not that we rated its surface barely reachable",
+	},
+	{
+		page:  "frontend/app/(app)/findings/[id]/page.tsx",
 		field: "advisories",
 		wouldOtherwiseClaim: "nothing at all, which is the problem — the vendor advisory is the page " +
 			"that carries the patched version and the workaround, so a responder holding a KEV CVE " +
