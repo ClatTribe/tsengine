@@ -292,6 +292,54 @@ tsbench cvepatch"). The residual gap is narrower: code graph / dependency / tain
 production-quality verifier integration, a neutral execution-verified benchmark result, and a measured
 agent lift over the deterministic substrate. ADR 0013's "design only — not built" needs the same fix.
 
+### Follow-up corrections (2026-08-23, second pass)
+
+A re-read of the merged P1 code against this document found three more defects — all the shape this
+ADR exists to police, and all authored by it. Fixed on this branch.
+
+**C8 — C1 was applied to one tool of two.** The exploitability disclaimer landed on
+`check_reachable`'s result text but not on the `resolve_access` CATALOG description, which still read
+`ALLOW=confirmed exploitable`. That is the more frequently called tool, and a catalog description is
+the sentence the model consults when deciding what to record — so the correction recorded above as
+applied "throughout" was still live in the highest-leverage text in the system. The guard now checks
+every tool description, because fixing the instance is what let it survive the first time.
+
+**C9 — provider DENIALS were discarded.** The probe map stored only ALLOWs, and the tool instructed
+the model "DENY = do not record it". An authoritative provider refusal is the strongest negative
+evidence this system can obtain about a move, and it was computed and dropped — collapsing "we asked
+the provider and it said no" into "we never asked", the one distinction §10 exists to preserve. It
+also made provider coverage unreportable and left P1d unscoreable: a simulator adapter cannot be
+benchmarked while half its outcome space is discarded. Every verdict is now recorded and
+`Report.Probes` carries tested/allowed/denied/unknown with per-move records and the prober's own
+`Coverage()` line — nil when no prober was wired, so "we did not look" never renders as a clean
+account. This partly discharges the **provider coverage disclosure** gap category below.
+
+**C10 — "blast radius: none" was wrong, and the loop was unbounded.** Read-only is not
+side-effect-free: every simulate call writes an event into the CUSTOMER's audit trail and consumes a
+rate-limited quota. The tool called the provider afresh for every question, including already-answered
+ones, with no ceiling — and a throttle answers UNKNOWN, degrading proof quality exactly when coverage
+looks thinnest. Authoritative answers are now reused within a run; UNKNOWN is deliberately NOT cached
+(freezing a transient throttle would make a temporary failure permanent); `DefaultProbeBudget` caps
+live calls; and an exhausted budget is reported as NOT TESTED, never as anything the provider said.
+The Status table's "none" for P1 should read *read-only, but it writes to the customer's audit trail
+and spends their quota*.
+
+**Also fixed:** the agent's `ProviderConfirmed` / `AuthorizationCoverage` had **no consumer outside
+`internal/cloudagent`** — dropped when an Issue became a stored Finding, so nothing downstream (store,
+issues, incidents, GRC, UI) could tell a provider-confirmed path from a config-possible one, and P1's
+customer-visible value was zero. The finding now carries both, and its description states which rung
+it stands on: confirmed, PARTIAL with its real hop coverage, or config-possible — three renderings
+that must stay distinguishable, since rendering any two alike is how an unproven claim acquires the
+authority of a confirmed one. Both the probe and `check_live` also ran on `context.Background()`, so a
+scan timeout could not interrupt a live cloud call (§15); they now take the caller's context.
+
+**Still open from the same re-read** (not addressed here): identity gets no proof rung anywhere in
+P0–P5 — Okta appears once in this document, inside a list of things the twin cannot replicate; threat
+intelligence is absent from this ADR entirely, and cloud attack paths carry no MITRE ATT&CK
+attribution while every L1 finding does; the customer feedback loop has no case source for a disputed
+path or proof, so P1's output cannot enter `tenanteval`; and `cloudIssueToFinding` stamps
+`VerificationVerified` on every agent path regardless of rung.
+
 ### Gap categories added
 | Gap | Why it matters |
 |---|---|

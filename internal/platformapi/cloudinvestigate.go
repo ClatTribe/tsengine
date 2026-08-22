@@ -143,6 +143,12 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 		d.Recorder.Record("cloud investigated", "cloudagent", args, "AI Cloud Engineer investigation")
 	}
 	resp := map[string]any{"summary": rep.Summary, "paths_found": stored, "risks_proposed": risksProposed, "calls": rep.Calls, "issues": rep.Issues}
+	if rep.Probes != nil {
+		// What the provider was actually ASKED and what it answered, denials included. Omitted
+		// entirely when no dry-run path was wired, because a zeroed tally would read as an account
+		// that was checked and came back clean (§10).
+		resp["probe_coverage"] = rep.Probes
+	}
 	if episode.Delta != nil {
 		resp["posture_delta"] = episode.Delta
 	}
@@ -207,9 +213,15 @@ func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
 	if is.Remediation != "" {
 		desc += "\n\nRemediation: " + is.Remediation
 	}
+	// The agent computes which rung of the verification ladder this path sits on (ADR 0024 P1) and
+	// both fields were dropped here, so the strongest evidence the cloud engineer can produce died
+	// inside the agent struct: nothing downstream — store, issues, incidents, GRC, UI — could tell a
+	// provider-confirmed path from a purely config-possible one.
 	rawOut, _ := json.Marshal(map[string]any{
 		"path": is.Path, "evidence": is.Evidence, "fix_kind": is.FixKind, "fix_verified": is.FixVerified, "fix_content": is.FixContent,
+		"provider_confirmed": is.ProviderConfirmed, "authorization_coverage": is.AuthorizationCoverage,
 	})
+	desc += "\n\n" + authorizationRungLine(is)
 	title := is.TargetName
 	if title == "" {
 		title = is.Target
@@ -218,6 +230,31 @@ func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
 		ID: id, RuleID: cloudPathRuleID(is.Path), Tool: "cloudagent", Severity: sev,
 		Endpoint: is.Target, Title: title + " — reachable attack path", Description: desc,
 		VerificationStatus: types.VerificationVerified, RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
+	}
+}
+
+// authorizationRungLine states which rung of the verification ladder a recorded path stands on, in
+// the description a human actually reads.
+//
+// Silence here is not neutral: rendered without it, a path proven only by OUR resolved-IAM graph and
+// one confirmed hop-by-hop by the provider's own policy simulator look identical, and the reader
+// supplies the stronger reading. A PARTIAL proof is the case that most needs saying — "3 of 5 hops
+// authorized" is real evidence and is not the same claim as a complete one.
+func authorizationRungLine(is cloudagent.Issue) string {
+	const caveat = " This confirms AUTHORIZATION, not exploitability: network reachability, " +
+		"credential acquisition, unsupplied session context and the rest of the workflow stay unproven."
+	switch {
+	case is.ProviderConfirmed:
+		return "Verification: provider-confirmed authorization (" + is.AuthorizationCoverage +
+			" authorization-requiring hops confirmed ALLOW by the cloud provider's own policy simulator)." + caveat
+	case is.AuthorizationCoverage != "" && is.AuthorizationCoverage != "0/0":
+		return "Verification: PARTIAL — " + is.AuthorizationCoverage + " authorization-requiring hops " +
+			"confirmed ALLOW by the provider's own policy simulator; the remaining hops are config-possible " +
+			"only (our resolved-IAM graph says the permission exists, the provider was not asked or could " +
+			"not answer)." + caveat
+	default:
+		return "Verification: config-possible — this path comes from our resolved-IAM graph. No provider " +
+			"dry-run confirmed its hops, which is not the same as the path being denied or closed."
 	}
 }
 
