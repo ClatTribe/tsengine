@@ -21,9 +21,9 @@ import { ArrowRight, CheckCircle2, MinusCircle, FlaskConical } from "lucide-reac
 // competitors beat it is making a checkable claim; a vendor that publishes only wins is making a
 // marketing one. That difference is the entire point of the page.
 export const metadata = pageMeta({
-  title: "Benchmarks — what we score on a corpus we did not write | TensorShield",
+  title: "Benchmarks — Corpora We Did Not Write",
   description:
-    "Our SAST detection scores 46.5% Youden across all 2,740 OWASP BenchmarkJava cases — third on the published cohort, behind Veracode and Checkmarx. The methodology, the command to reproduce it, and what we have not measured yet.",
+    "Our SAST scores 46.5% Youden across all 2,740 OWASP BenchmarkJava cases — third on the published cohort. The method, how to reproduce it, and the gaps.",
   path: "/benchmarks",
 });
 

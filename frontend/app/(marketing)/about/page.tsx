@@ -6,7 +6,7 @@ import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { ArrowRight, Target, Heart, Sparkles } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "About — TensorShield",
+  title: "About",
   description: "Security shouldn't require a security hire. We're building the fractional security team every SMB deserves.",
   path: "/about",
 });

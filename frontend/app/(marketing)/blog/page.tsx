@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ArrowRight, BookOpen } from "lucide-react";
 import { pageMeta } from "@/lib/seo";
-import { POSTS } from "@/lib/blog";
+import { POSTS, readMinutes } from "@/lib/blog";
 
 export const metadata = pageMeta({
-  title: "Blog — Security & SOC 2 for teams selling to enterprises | TensorShield",
+  title: "Blog — Security & SOC 2 for B2B Founders",
   description:
-    "Plain-English security and SOC 2 guidance for founders: passing enterprise security questionnaires, getting audit-ready, and fixing the gaps that block deals — with free tools at every step.",
+    "Plain-English security and SOC 2 guidance for founders: passing enterprise questionnaires, getting audit-ready, and fixing the gaps that block deals.",
   path: "/blog",
 });
 
@@ -43,7 +43,7 @@ export default function BlogIndex() {
             <h2 className="mt-1.5 text-lg font-semibold leading-snug tracking-tight group-hover:text-accent">{p.title}</h2>
             <p className="mt-2 flex-1 text-sm leading-relaxed text-muted">{p.description}</p>
             <div className="mt-4 flex items-center justify-between text-xs text-faint">
-              <span>{fmtDate(p.date)} · {p.readMins} min read</span>
+              <span>{fmtDate(p.date)} · {readMinutes(p)} min read</span>
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5 group-hover:text-accent" />
             </div>
           </Link>

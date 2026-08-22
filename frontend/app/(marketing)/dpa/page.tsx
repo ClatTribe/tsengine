@@ -2,7 +2,7 @@ import { pageMeta } from "@/lib/seo";
 import { LegalDoc, type LegalSection } from "@/components/marketing/legal-doc";
 
 export const metadata = pageMeta({
-  title: "Data Processing Agreement — TensorShield",
+  title: "Data Processing Agreement",
   description: "How TensorShield processes personal data on your behalf as a processor (GDPR Art. 28 / DPDP).",
   path: "/dpa",
 });

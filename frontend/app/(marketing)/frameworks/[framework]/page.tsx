@@ -7,7 +7,7 @@ import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from 
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
-import { POSTS } from "@/lib/blog";
+import { postsFor } from "@/lib/blog";
 
 // Frameworks that culminate in a formal third-party certificate / attestation report (an auditor issues it) —
 // vs. regulations/frameworks that are an ongoing legal obligation, not a one-time certificate. Drives the
@@ -65,8 +65,12 @@ export async function generateMetadata({ params }: { params: Promise<{ framework
   const { framework } = await params;
   const i = info(framework);
   if (!i) return {};
-  const title = `${i.label} Compliance Automation for SMBs — TensorShield`;
-  const description = `Get ${i.label}-ready without a compliance consultant. TensorShield continuously maps your findings to ${i.label} controls, prepares fixes, and produces signed, auditor-ready evidence. ${i.desc}`;
+  const title = `${i.label} Compliance Automation for SMBs`;
+  // Kept under ~160 characters, which is all a search result shows. It used to append i.desc,
+  // whose length varies per framework and pushed all 25 pages to 238-286 chars — so a third of
+  // every one of them was written for nobody. i.desc still opens the page itself, where there
+  // is no limit. ADR 0023 decision 7 gates this.
+  const description = `Get ${i.label}-ready without a compliance consultant: your findings mapped to ${i.label} controls, fixes prepared, and signed auditor-ready evidence.`;
   return pageMeta({ title, description, path: `/frameworks/${framework}` });
 }
 
@@ -195,7 +199,7 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
           <div className="mt-8 border-t border-border pt-6">
             <div className="text-xs font-semibold uppercase tracking-wider text-faint">Reading on getting audit-ready</div>
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              {POSTS.slice(0, 4).map((post) => (
+              {postsFor(i.label).map((post) => (
                 <li key={post.slug}>
                   <Link href={`/blog/${post.slug}`} className="group flex items-start gap-2 text-sm leading-relaxed text-muted transition hover:text-ink">
                     <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />

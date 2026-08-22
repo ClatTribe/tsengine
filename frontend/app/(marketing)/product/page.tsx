@@ -11,7 +11,7 @@ import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 
 export const metadata = pageMeta({
   title: "Product — how TensorShield works",
-  description: "Connect a system and a fractional security team goes to work: detect across every surface, prove what's exploitable with a captured PoC, fix it, and prove your compliance — with you in the loop where it matters.",
+  description: "Connect a system and a fractional security team goes to work: detect across every surface, prove what is exploitable, fix it, and prove your compliance.",
   path: "/product",
 });
 

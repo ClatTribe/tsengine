@@ -21,9 +21,9 @@ import {
 // findings, a named human signing the report, retest after the fix, the free tier running on your
 // own LLM key. Nothing is asserted here that isn't true on /ai-pentest, /vapt or /pricing.
 export const metadata = pageMeta({
-  title: "Security for Series A and B startups — pass the review, keep the deal | TensorShield",
+  title: "Security for Series A & B Startups",
   description:
-    "An enterprise customer's security review is blocking your deal and security is nobody's full-time job yet. Get an exploitation-proven pentest report, the compliance evidence the questionnaire asks for, and proof the fixes landed — signed by a named human. Start free.",
+    "A customer's security review is blocking your deal and security is nobody's full-time job yet. Get the pentest report, the evidence, and proof fixes landed.",
   path: "/startups",
 });
 

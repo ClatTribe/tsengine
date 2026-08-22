@@ -3,7 +3,7 @@ import { LegalDoc, type LegalSection } from "@/components/marketing/legal-doc";
 import { legalPartyName } from "@/lib/site";
 
 export const metadata = pageMeta({
-  title: "Privacy Policy — TensorShield",
+  title: "Privacy Policy",
   description: "How TensorShield collects, uses, protects, and shares data — in plain English.",
   path: "/privacy",
 });

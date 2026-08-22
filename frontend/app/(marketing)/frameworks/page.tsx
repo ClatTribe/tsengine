@@ -6,9 +6,9 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY, frameworkGroups, FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
-  title: "Compliance Frameworks — SOC 2, ISO 27001, HIPAA, CMMC, EU AI Act & more | TensorShield",
+  title: "25 Compliance Frameworks — SOC 2, ISO, HIPAA",
   description:
-    `TensorShield automates ${FRAMEWORK_COUNT} compliance frameworks — SOC 2, ISO 27001/27701/27018/22301, PCI-DSS, HIPAA, GLBA, SOX, CIS, NIST CSF/800-53/800-171, FedRAMP, CMMC, GDPR, CCPA, PIPEDA, India DPDP, CERT-In, RBI CSF, SEBI CSCRF, ISO 42001, NIST AI RMF, and the EU AI Act — plus bring-your-own-framework, with continuous monitoring and signed evidence.`,
+    `${FRAMEWORK_COUNT} compliance frameworks — SOC 2, ISO 27001, PCI-DSS, HIPAA, NIST, GDPR, India DPDP and more — with continuous monitoring and signed evidence.`,
   path: "/frameworks",
 });
 

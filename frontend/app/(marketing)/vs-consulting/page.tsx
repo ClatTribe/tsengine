@@ -7,9 +7,9 @@ import {
 } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "vs. a security & compliance consultant — continuous, not a retainer | TensorShield",
+  title: "vs. a Security & Compliance Consultant",
   description:
-    "A security consultant retainer is expensive, slow, and point-in-time. TensorShield automates the repeatable 80% — scanning, fixes, evidence, monitoring, questionnaires — and keeps a named human for the judgment calls (risk acceptance, audit attestation, pentest sign-off). The outcome of a consultant, continuously, at a fraction of the cost.",
+    "A consultant retainer is expensive and point-in-time. We automate the repeatable 80% — scanning, fixes, evidence — and keep a named human for the judgment.",
   path: "/vs-consulting",
 });
 

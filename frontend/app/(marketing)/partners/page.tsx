@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "For MSPs & security consultancies — deliver more, hire less | TensorShield",
+  title: "For MSPs & Security Consultancies",
   description:
-    "Run security & compliance for your whole book of clients on TensorShield. The AI does the labor — scanning, fixing, evidence, monitoring — and your experts handle the judgment from one console. More clients per expert, your brand, your accountability.",
+    "Run security and compliance for your whole book of clients. The AI does the labour — scanning, fixing, evidence — and your experts handle the judgment calls.",
   path: "/partners",
 });
 

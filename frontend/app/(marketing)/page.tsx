@@ -12,10 +12,11 @@ import { TrustBar } from "@/components/marketing/trust-bar";
 import { Prioritize } from "@/components/marketing/prioritize";
 import { SCENARIOS, SURFACES, ALTERNATIVES } from "@/lib/solutions";
 import { FRAMEWORK_COUNT } from "@/lib/frameworks";
+import { pageMeta } from "@/lib/seo";
 
-const HOME_TITLE = "Clear the security review holding up your deal — TensorShield";
+const HOME_TITLE = "Clear the security review blocking your deal";
 const HOME_DESCRIPTION =
-  "For Series A and B teams: an AI security engineer finds what an attacker could actually reach across your code, cloud and SaaS and writes the fix, and an AI pentester proves it by breaking in. Someone on your team approves anything that touches your systems. SOC 2 evidence and a signed report built in.";
+  "An AI security engineer finds what an attacker could really reach across your code, cloud and SaaS and writes the fix. An AI pentester proves it by breaking in.";
 
 // The social card must say what the H1 says. Both now lead with the visitor's SITUATION — a deal
 // stuck behind a customer's security review — rather than with the two agents, which are the how.
@@ -23,20 +24,18 @@ const HOME_DESCRIPTION =
 const HOME_SOCIAL =
   "A customer's security review is holding up the deal. An AI security engineer finds what an attacker could actually reach and writes the fix; an AI pentester proves it by breaking in. You approve every change, and you get the signed report their security team is asking for.";
 
-export const metadata = {
+// Through pageMeta() like every other route. It used to hand-roll `openGraph`, and because a
+// page-level openGraph object REPLACES the parent's file-convention image rather than merging
+// with it, declaring one without `images` published no share card at all — on the single
+// most-linked URL on the site. The fix is not "remember the images key", it is that no route
+// hand-rolls this. ADR 0023 decision 2.
+export const metadata = pageMeta({
   title: HOME_TITLE,
   description: HOME_DESCRIPTION,
-  alternates: { canonical: "/" },
-  openGraph: {
-    title: "Clear the security review that's holding up your deal.",
-    description: HOME_SOCIAL,
-    url: "/",
-  },
-  twitter: {
-    title: "Clear the security review that's holding up your deal.",
-    description: HOME_SOCIAL,
-  },
-};
+  path: "/",
+  socialTitle: "Clear the security review that's holding up your deal.",
+  socialDescription: HOME_SOCIAL,
+});
 
 export default function Landing() {
   return (

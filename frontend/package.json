@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "check:seo": "node scripts/check-seo.mjs",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"

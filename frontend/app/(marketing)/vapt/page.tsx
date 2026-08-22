@@ -8,9 +8,9 @@ import {
 } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "VAPT report — continuous, evidence-grounded penetration testing | TensorShield",
+  title: "VAPT Report — Continuous Penetration Testing",
   description:
-    "An always-current VAPT / pentest report: the strongest findings are exploitation-proven with a captured proof you can replay, every finding grounded in scanner evidence and mapped to CWE, OWASP Top 10 & MITRE ATT&CK, with a recommended fix and a signed attestation. Not a point-in-time PDF that goes stale.",
+    "An always-current VAPT report: the strongest findings are exploitation-proven with a replayable proof, mapped to CWE, OWASP Top 10 and MITRE ATT&CK.",
   path: "/vapt",
 });
 

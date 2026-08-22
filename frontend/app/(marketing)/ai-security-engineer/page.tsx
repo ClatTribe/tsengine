@@ -11,9 +11,9 @@ import {
 import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
-  title: "Your AI security engineer — detects, triages, fixes, with you in the loop | TensorShield",
+  title: "AI Security Engineer — finds, triages, fixes",
   description:
-    "Not another scanner. An AI security engineer that runs the whole loop on best-in-class OSS — detect, triage real risk from noise, prepare the fix, and prove it — applying anything consequential only after you approve.",
+    "Not another scanner. An AI security engineer that runs the whole loop — detect, triage real risk from noise, prepare the fix — and applies nothing without you.",
   path: "/ai-security-engineer",
 });
 

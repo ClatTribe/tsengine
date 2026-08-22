@@ -10,23 +10,77 @@ export type Block =
 
 export interface Post {
   slug: string;
+  /** The editorial headline. Rendered as the page's h1, and allowed to be long. */
   title: string;
+  /**
+   * The <title> tag, when the headline is too long to survive a search result.
+   *
+   * Google shows about 60 characters. Several of these headlines are deliberately longer than
+   * that because they work as headlines — "Your US customer sent a security questionnaire to
+   * your Indian startup…" is 107 and earns it on the page. Capping the headline to fit a SERP
+   * would damage the writing to satisfy a tag, so the tag gets its own string instead and the
+   * h1 is left alone. Defaults to `title` when it already fits. ADR 0023 decision 7.
+   */
+  seoTitle?: string;
   description: string;
   category: string; // reader-facing topic
   date: string; // ISO
-  readMins: number;
+  /**
+   * Slugs of posts worth reading next.
+   *
+   * Before this the Block type was `p | h2 | ul | cta` and the renderer emitted paragraph text
+   * as an escaped React child, so a post could not link to another post even if someone wrote
+   * one — eight articles on one theme, none of them connected, which reads to a crawler as
+   * eight unrelated pages. These posts already cross-reference each other in prose: the DPDP
+   * post states its breach duty differs from CERT-In's, and there is a CERT-In post.
+   *
+   * A slug list rather than inline links is the cheaper half of ADR 0023 decision 5: it needs no
+   * change to the Block type or the renderer, and it captures most of the value. Unknown slugs
+   * are dropped rather than rendered as dead links — see relatedPosts.
+   */
+  related?: string[];
   body: Block[];
+}
+
+const WORDS_PER_MINUTE = 225;
+
+/**
+ * readMinutes derives the read time from the body.
+ *
+ * It used to be a hand-typed `readMins` field and it was wrong on all eight posts, always
+ * overstated, by up to 3.7× — a 351-word post was labelled "5 min read". It is rendered twice
+ * (the index card and under the post title), so it is the first promise a post makes and the
+ * one a reader can check for free. ADR 0023 decision 4: a value that is a function of the
+ * content is computed from the content, so it cannot drift when a post is edited.
+ *
+ * Floored at 1 — a very short post reads as "1 min", never "0 min".
+ */
+export function readMinutes(post: Post): number {
+  let words = 0;
+  for (const b of post.body) {
+    const text = b.t === "ul" ? b.items.join(" ") : b.text;
+    words += (text.match(/[A-Za-z0-9']+/g) ?? []).length;
+  }
+  return Math.max(1, Math.round(words / WORDS_PER_MINUTE));
 }
 
 export const POSTS: Post[] = [
   {
     slug: "pass-enterprise-security-questionnaire",
     title: "Will you pass an enterprise security questionnaire? The checks buyers run first",
+    seoTitle: "The checks buyers run first",
+    related: [
+      "india-saas-us-enterprise-security-questionnaire",
+      "soc2-readiness-for-seed-stage-startups",
+      // Curated rather than left to the recency top-up: this one is in a single-member category
+      // and third-oldest, so it never reaches anyone's fallback list and check-seo.mjs correctly
+      // reported it unreachable from anywhere but the blog index.
+      "security-for-the-sales-cycle",
+    ],
     description:
-      "Before a big customer signs, their security team runs a checklist against your domain. Here are the externally-visible checks that come first — and how to see your own score for free.",
+      "Before a customer signs, their security team runs a checklist against your domain. Here are the externally-visible checks that come first — and your free score.",
     category: "Security questionnaires",
     date: "2026-06-20",
-    readMins: 5,
     body: [
       { t: "p", text: "The first time most founders think about security is the day a promising deal stalls on a security questionnaire they can't answer. By then it's expensive: the deal slips a quarter while you scramble, and the buyer's trust takes a hit." },
       { t: "p", text: "The good news is that the first round of an enterprise security review is mostly mechanical. Before anyone reads your policies, their security team — or their automated vendor-risk tool — checks a handful of things about your domain and app that are visible from the outside, no access required. If those fail, you start the conversation on the back foot." },
@@ -37,11 +91,11 @@ export const POSTS: Post[] = [
         "HTTPS everywhere — HTTP redirects to HTTPS, modern TLS, and HSTS so browsers never fall back to plaintext.",
         "Security headers — Content-Security-Policy, X-Frame-Options / frame-ancestors, X-Content-Type-Options.",
         "A documented security contact — a /.well-known/security.txt or a /security page that tells a researcher where to report something.",
-        "No live, known vulnerabilities in your shipped dependencies.",
       ] },
+      { t: "p", text: "One more thing gets checked that this list deliberately leaves out: known vulnerabilities in the dependencies you ship. It belongs on a buyer's list, but not on this one — it is not visible from outside your domain, and no scanner can answer it without reading your lockfiles. Anyone who tells you they checked your dependencies from your domain name alone has not checked your dependencies." },
       { t: "p", text: "None of these are unusual to miss for a team shipping fast. They just all surface at once the moment a customer's security review begins — and they're the cheapest things in your whole security program to fix." },
       { t: "h2", text: "See your own score in 30 seconds" },
-      { t: "p", text: "You don't have to guess. Our free scanner runs exactly these read-only checks against your domain and gives you a grade plus the precise fix for anything that fails — no signup, nothing intrusive, just the public checks anyone could run." },
+      { t: "p", text: "You don't have to guess about the externally-visible ones. Our free scanner runs eight read-only checks against your domain — DMARC, SPF and DKIM for email authentication, HTTPS enforcement, HSTS, Content-Security-Policy, clickjacking and MIME protections, and whether you publish a security contact — and gives you a grade plus the precise fix for anything that fails. No signup, nothing intrusive, just the public checks anyone could run. Your dependencies need a connected repository; the domain scan cannot see them and does not claim to." },
       { t: "cta", text: "Run the free check on your domain", href: "/scan", label: "Scan my domain" },
       { t: "p", text: "If you score well, you can embed a badge on your site to show enterprise buyers you take this seriously. If you don't, you'll get the copy-paste fix for each gap. Either way you'll know where you stand before a customer tells you." },
     ],
@@ -49,11 +103,12 @@ export const POSTS: Post[] = [
   {
     slug: "soc2-readiness-for-seed-stage-startups",
     title: "SOC 2 for seed-stage startups: a founder's readiness checklist",
+    seoTitle: "SOC 2 for seed-stage startups",
+    related: ["soc2-iso27001-dpdp-which-one-for-your-deal", "pass-enterprise-security-questionnaire"],
     description:
-      "You don't need a compliance team to get SOC 2-ready. Here's the founder's-eye view of what a Type I actually requires, in plain English, with a free self-assessment.",
+      "You don't need a compliance team to get SOC 2-ready. The founder's-eye view of what a Type I actually requires, in plain English, with a free self-assessment.",
     category: "SOC 2",
     date: "2026-06-22",
-    readMins: 7,
     body: [
       { t: "p", text: "Once a deal has stalled on security once, SOC 2 stops being abstract. But the framework is written for auditors, not founders, and the consultancies quoting you five figures aren't incentivized to tell you how much you can do yourself. Here's the plain-English version." },
       { t: "h2", text: "Type I vs Type II — start with Type I" },
@@ -79,11 +134,12 @@ export const POSTS: Post[] = [
   {
     slug: "security-for-the-sales-cycle",
     title: "Security for the sales cycle: fixing the gaps before they block a deal",
+    seoTitle: "Security for the sales cycle",
+    related: ["pass-enterprise-security-questionnaire", "soc2-readiness-for-seed-stage-startups"],
     description:
-      "Security is cheaper before a deal stalls than during. Here's how a fractional, AI-run security team closes the gaps a buyer's review will find — without a hire.",
+      "Security is cheaper before a deal stalls than during. How a fractional, AI-run security team closes the gaps a buyer's review will find — without a hire.",
     category: "Sales & security",
     date: "2026-06-24",
-    readMins: 6,
     body: [
       { t: "p", text: "Every founder we talk to who got serious about security did so for the same reason: a deal they wanted stalled on a security review they couldn't pass. The lesson isn't \"do security earlier\" in the abstract — it's that the fix is dramatically cheaper before that happens than during a live deal with a customer waiting." },
       { t: "h2", text: "The choice you actually have" },
@@ -108,11 +164,12 @@ export const POSTS: Post[] = [
 {
     slug: "india-saas-us-enterprise-security-questionnaire",
     title: "Your US customer sent a security questionnaire to your Indian startup. Here's what they're actually checking",
+    seoTitle: "What a US security questionnaire checks",
+    related: ["soc2-iso27001-dpdp-which-one-for-your-deal", "pentest-report-us-enterprise-buyer-expects", "dpdp-act-compliance-for-indian-saas"],
     description:
-      "Selling from Bengaluru into a US enterprise means answering a security review written for US vendors. Here's what those questions map to, which Indian regulations matter to the buyer, and which ones they have never heard of.",
+      "Selling from Bengaluru into a US enterprise means answering a review written for US vendors. What those questions map to, and which Indian regulations matter.",
     category: "Selling into US enterprises",
     date: "2026-08-12",
-    readMins: 7,
     body: [
       { t: "p", text: "The first enterprise deal is going well until procurement forwards a spreadsheet. Two hundred rows, written by a security team in San Francisco or New York, assuming a vendor in the same country. You are in Bengaluru or Pune, your compliance posture is shaped by Indian law, and roughly a third of the questions do not obviously apply to you." },
       { t: "p", text: "They still have to be answered, and answered in the buyer's frame rather than yours. Here is how the two worlds line up." },
@@ -153,11 +210,12 @@ export const POSTS: Post[] = [
   {
     slug: "soc2-iso27001-dpdp-which-one-for-your-deal",
     title: "SOC 2, ISO 27001 or DPDP: which one does your deal actually need?",
+    seoTitle: "SOC 2, ISO 27001 or DPDP?",
+    related: ["dpdp-act-compliance-for-indian-saas", "india-saas-us-enterprise-security-questionnaire"],
     description:
-      "Indian SaaS founders are told to get all three. Most deals need one. A plain-English guide to which certification your specific buyer is asking for, and what it costs to say yes.",
+      "Indian SaaS founders are told to get all three. Most deals need one. Which certification your specific buyer is asking for, and what it costs to say yes.",
     category: "Selling into US enterprises",
     date: "2026-08-19",
-    readMins: 6,
     body: [
       { t: "p", text: "Ask five advisors and you will get five answers, all of them \"yes, and also the other two\". That is expensive advice. These three things are not alternatives to each other — they answer different questions, asked by different people, for different reasons." },
       { t: "h2", text: "They are not the same kind of thing" },
@@ -200,11 +258,12 @@ export const POSTS: Post[] = [
 {
     slug: "dpdp-act-compliance-for-indian-saas",
     title: "The DPDP Act for Indian SaaS: what you actually have to do",
+    seoTitle: "The DPDP Act for Indian SaaS",
+    related: ["certin-six-hour-incident-reporting", "soc2-iso27001-dpdp-which-one-for-your-deal"],
     description:
-      "India's data protection law applies to you whether or not a customer asks. A plain-English guide to the duties that matter, what changes for a B2B SaaS company, and how it lands in an enterprise security review.",
+      "India's data protection law applies whether or not a customer asks. The duties that matter, what changes for B2B SaaS, and how it lands in a security review.",
     category: "Selling into US enterprises",
     date: "2026-08-21",
-    readMins: 7,
     body: [
       { t: "p", text: "Most Indian SaaS founders meet the Digital Personal Data Protection Act the way they meet everything else in compliance: a customer's legal team asks a question they cannot answer. That is the wrong order, because unlike SOC 2 this one is not optional and not customer-driven. It is law, and it applies because of where your users are." },
       { t: "h2", text: "Who it applies to" },
@@ -233,11 +292,12 @@ export const POSTS: Post[] = [
   {
     slug: "certin-six-hour-incident-reporting",
     title: "CERT-In's six-hour rule: what it means when something actually happens",
+    seoTitle: "CERT-In's six-hour rule",
+    related: ["dpdp-act-compliance-for-indian-saas", "india-saas-us-enterprise-security-questionnaire"],
     description:
-      "India obliges you to report certain security incidents within six hours of noticing them. Here's which incidents count, what the report has to contain, and why it is worth telling your enterprise buyers about it.",
+      "India obliges you to report certain security incidents within six hours. Which ones count, what the report must contain, and why to raise it with buyers.",
     category: "Selling into US enterprises",
     date: "2026-08-22",
-    readMins: 6,
     body: [
       { t: "p", text: "The CERT-In Directions issued in April 2022 contain the tightest incident-reporting clock in mainstream data regulation: six hours from noticing a qualifying incident, not six hours from confirming it, and not one business day." },
       { t: "p", text: "Most Indian startups discover this the week it becomes relevant, which is the worst possible week to read a regulation for the first time." },
@@ -275,11 +335,12 @@ export const POSTS: Post[] = [
   {
     slug: "pentest-report-us-enterprise-buyer-expects",
     title: "The penetration test report a US buyer expects — and what Indian vendors usually send",
+    seoTitle: "The pentest report a US buyer expects",
+    related: ["india-saas-us-enterprise-security-questionnaire", "soc2-iso27001-dpdp-which-one-for-your-deal"],
     description:
-      "\"Do you have a recent pentest?\" is one of the most common blockers in an enterprise security review, and one of the easiest to answer badly. What the buyer is checking, and what makes a report fail on sight.",
+      "\"Do you have a recent pentest?\" is a common blocker in an enterprise security review, and an easy one to answer badly. What makes a report fail on sight.",
     category: "Selling into US enterprises",
     date: "2026-08-22",
-    readMins: 6,
     body: [
       { t: "p", text: "Somewhere in every enterprise vendor review is a row asking for a recent penetration test. It is one of the few questions where the answer is a document rather than a statement, which means it is one of the few where you can fail on sight." },
       { t: "h2", text: "What the buyer is actually checking" },
@@ -314,4 +375,59 @@ export const POSTS: Post[] = [
 
 export function postBySlug(slug: string): Post | undefined {
   return POSTS.find((p) => p.slug === slug);
+}
+
+/**
+ * relatedPosts resolves a post's `related` slugs, then tops up from the rest of the blog so
+ * every post carries links out whether or not anyone curated them.
+ *
+ * The top-up is what makes this a guarantee rather than a good intention: a post nobody
+ * remembered to cross-link still gets neighbours, and every post therefore has inbound links
+ * from somewhere other than the index. check-seo.mjs asserts exactly that.
+ *
+ * An unknown slug is DROPPED, not rendered — a related-reading list that 404s is worse than a
+ * shorter one.
+ */
+export function relatedPosts(post: Post, limit = 3): Post[] {
+  const curated = (post.related ?? [])
+    .map((s) => postBySlug(s))
+    .filter((p): p is Post => p !== undefined && p.slug !== post.slug);
+
+  const sameCategory = POSTS.filter(
+    (p) => p.slug !== post.slug && p.category === post.category && !curated.includes(p),
+  );
+  const rest = POSTS.filter(
+    (p) => p.slug !== post.slug && !curated.includes(p) && !sameCategory.includes(p),
+  );
+  const byNewest = (a: Post, b: Post) => b.date.localeCompare(a.date);
+
+  return [...curated, ...sameCategory.sort(byNewest), ...rest.sort(byNewest)].slice(0, limit);
+}
+
+/**
+ * postsFor picks the posts worth showing beside a piece of non-blog content.
+ *
+ * It replaces `POSTS.slice(0, 4)`, which each of the 25 framework pages used. POSTS is ordered
+ * oldest-first, so all 25 pages linked to the same four oldest articles and would have kept
+ * doing so however many were published — every new post structurally invisible to the largest
+ * block of internal links on the site. Measured before the change: those four had 26 inbound
+ * links each and the four newest, longest posts had one. The site was spending its internal
+ * link equity on its weakest content. ADR 0023 decision 4.
+ *
+ * Selection is by RELEVANCE first — a post whose title, category or description mentions the
+ * term (e.g. "SOC 2", "DPDP") — then most-recent to fill the remaining slots. Relevance is a
+ * plain case-insensitive substring match on purpose: it is predictable, needs no tagging pass
+ * over existing content, and when it finds nothing the recency fallback is still strictly
+ * better than array position.
+ */
+export function postsFor(term: string, limit = 4): Post[] {
+  const byNewest = [...POSTS].sort((a, b) => b.date.localeCompare(a.date));
+  const needle = term.trim().toLowerCase();
+  const matches = needle
+    ? byNewest.filter((p) =>
+        `${p.title} ${p.category} ${p.description}`.toLowerCase().includes(needle),
+      )
+    : [];
+  const rest = byNewest.filter((p) => !matches.includes(p));
+  return [...matches, ...rest].slice(0, limit);
 }
