@@ -48,12 +48,25 @@ type Workspace struct {
 
 // User is one workforce identity.
 type User struct {
-	Email         string `json:"email"`
-	Admin         bool   `json:"admin"`
-	SuperAdmin    bool   `json:"super_admin"`
-	MFA           bool   `json:"mfa"`
-	Suspended     bool   `json:"suspended"`
-	LastLoginDays int    `json:"last_login_days"` // days since last login (0 = today)
+	Email      string `json:"email"`
+	Admin      bool   `json:"admin"`
+	SuperAdmin bool   `json:"super_admin"`
+	MFA        bool   `json:"mfa"`
+	// MFAUnknown means the MFA state could not be determined for THIS user, as opposed to being
+	// determined to be absent. The distinction is load-bearing because MFA's zero value is the
+	// value that fires a finding: a provider call that fails leaves MFA false, and false emits
+	// "Administrator without MFA" at CRITICAL against an admin who has it.
+	//
+	// Okta reads factors with a per-user call, so this is not an edge case — it is what a
+	// rate-limited org looks like, which is to say a large one. The caller already declined to
+	// assign on error; the defect was that declining to assign and asserting "no MFA" are the
+	// same state.
+	//
+	// Default false = known, so a posted snapshot asserting mfa:false still means no MFA and
+	// snapshot behaviour is unchanged.
+	MFAUnknown    bool `json:"mfa_unknown,omitempty"`
+	Suspended     bool `json:"suspended"`
+	LastLoginDays int  `json:"last_login_days"` // days since last login (0 = today)
 }
 
 // DomainConfig is the email-auth posture of a sending domain.
@@ -146,7 +159,11 @@ func Assess(ws Workspace, opts Options) []types.Finding {
 func checkAdminMFA(ws Workspace, now time.Time, id func() string) []types.Finding {
 	var out []types.Finding
 	for _, u := range ws.Users {
-		if u.Suspended || !(u.Admin || u.SuperAdmin) || u.MFA {
+		// MFAUnknown before MFA: an undetermined admin is not an admin without MFA. Reporting
+		// one is worse than missing it — a fabricated CRITICAL sends someone to fix an account
+		// that is already correct, and teaches them what our criticals are worth. The gap is
+		// disclosed instead, via Workspace.Unavailable → the coverage finding.
+		if u.Suspended || u.MFAUnknown || !(u.Admin || u.SuperAdmin) || u.MFA {
 			continue
 		}
 		out = append(out, finding(id(), "operate::admin-without-mfa", types.SeverityCritical,
@@ -164,7 +181,7 @@ func checkAdminMFA(ws Workspace, now time.Time, id func() string) []types.Findin
 func checkUserMFA(ws Workspace, now time.Time, id func() string) []types.Finding {
 	var out []types.Finding
 	for _, u := range ws.Users {
-		if u.Suspended || u.Admin || u.SuperAdmin || u.MFA {
+		if u.Suspended || u.MFAUnknown || u.Admin || u.SuperAdmin || u.MFA {
 			continue
 		}
 		out = append(out, finding(id(), "operate::user-without-mfa", types.SeverityMedium,
