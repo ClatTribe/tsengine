@@ -356,7 +356,7 @@ func (p *SLAPolicy) Evaluate(inc Incident, now time.Time) (SLABreach, bool) {
 			ransomHours = p.RansomwareResolveHours
 		}
 	}
-	hasCISADue := p != nil && p.Enabled && inc.KEV && !inc.KEVDueAt.IsZero()
+	hasCISADue := p != nil && p.Enabled && inc.KEV && inc.KEVDueAt != nil && !inc.KEVDueAt.IsZero()
 	if !ok && kevHours <= 0 && ransomHours <= 0 && !hasCISADue {
 		return SLABreach{}, false
 	}
@@ -387,7 +387,7 @@ func (p *SLAPolicy) Evaluate(inc Incident, now time.Time) (SLABreach, bool) {
 	// authority already ran out — telling a customer they have two weeks when the
 	// government's answer is that they are months late.
 	if hasCISADue && (b.ResolveDueAt.IsZero() || inc.KEVDueAt.Before(b.ResolveDueAt)) {
-		b.ResolveDueAt = inc.KEVDueAt
+		b.ResolveDueAt = *inc.KEVDueAt
 		b.CISADeadline = true
 		b.KEVAccelerated, b.RansomwareAccelerated = false, false
 	}
@@ -981,7 +981,17 @@ type Incident struct {
 	// KEVDueAt is CISA's OWN published remediation deadline for the CVE — an
 	// absolute date, deliberately not a duration, so rediscovering an old KEV CVE
 	// cannot restart a clock the authority already ran out.
-	KEVDueAt time.Time `json:"kev_due_at,omitempty"`
+	//
+	// A POINTER because most incidents have no KEV CVE behind them and therefore no
+	// deadline, and "no deadline" must serialize as ABSENT. `omitempty` does not omit a
+	// zero time.Time — omitempty has no effect on a struct — so the field shipped
+	// `"kev_due_at":"0001-01-01T00:00:00Z"` on every incident. The frontend guard was
+	// written against the contract this tag advertises (`if (!i.kev_due_at) return null`),
+	// which a non-empty string passes, so the queue told the customer a CISA federal
+	// remediation deadline had PASSED — on incidents with no CVE at all. Asserting a
+	// government deadline nobody set, and that the reader is already late for it, is the
+	// §10 grounding failure in its most alarming form.
+	KEVDueAt *time.Time `json:"kev_due_at,omitempty"`
 }
 
 // Onset is when the state behind an incident actually changed.
