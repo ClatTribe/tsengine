@@ -293,8 +293,8 @@ type SLATarget struct {
 // SLABreach is the evaluated SLA state of one incident against the policy.
 type SLABreach struct {
 	Severity        string    `json:"severity"`
-	AckDueAt        time.Time `json:"ack_due_at,omitempty"`
-	ResolveDueAt    time.Time `json:"resolve_due_at,omitempty"`
+	AckDueAt        time.Time `json:"ack_due_at,omitzero"`
+	ResolveDueAt    time.Time `json:"resolve_due_at,omitzero"`
 	AckBreached     bool      `json:"ack_breached"`     // not acknowledged in time
 	ResolveBreached bool      `json:"resolve_breached"` // not resolved in time
 	// KEVAccelerated records that the resolve deadline came from the KEV override
@@ -356,7 +356,7 @@ func (p *SLAPolicy) Evaluate(inc Incident, now time.Time) (SLABreach, bool) {
 			ransomHours = p.RansomwareResolveHours
 		}
 	}
-	hasCISADue := p != nil && p.Enabled && inc.KEV && inc.KEVDueAt != nil && !inc.KEVDueAt.IsZero()
+	hasCISADue := p != nil && p.Enabled && inc.KEV && !inc.KEVDueAt.IsZero()
 	if !ok && kevHours <= 0 && ransomHours <= 0 && !hasCISADue {
 		return SLABreach{}, false
 	}
@@ -387,7 +387,7 @@ func (p *SLAPolicy) Evaluate(inc Incident, now time.Time) (SLABreach, bool) {
 	// authority already ran out — telling a customer they have two weeks when the
 	// government's answer is that they are months late.
 	if hasCISADue && (b.ResolveDueAt.IsZero() || inc.KEVDueAt.Before(b.ResolveDueAt)) {
-		b.ResolveDueAt = *inc.KEVDueAt
+		b.ResolveDueAt = inc.KEVDueAt
 		b.CISADeadline = true
 		b.KEVAccelerated, b.RansomwareAccelerated = false, false
 	}
@@ -629,7 +629,7 @@ type Engagement struct {
 	ScanID      string    `json:"scan_id,omitempty"`
 	LedgerRef   string    `json:"ledger_ref,omitempty"`
 	StartedAt   time.Time `json:"started_at"`
-	CompletedAt time.Time `json:"completed_at,omitempty"`
+	CompletedAt time.Time `json:"completed_at,omitzero"`
 
 	// L15Audit is every change the L1.5 chain made to this scan's findings — each demotion,
 	// dismissal and merge with the rule that caused it and why (§2.5: those decisions must be
@@ -728,7 +728,7 @@ type Action struct {
 	// ReviewedBy / ReviewedAt record who asked for changes and when. Distinct from Approver/DecidedAt,
 	// which mean the action was finally decided; a changes-requested action is still open.
 	ReviewedBy string    `json:"reviewed_by,omitempty"`
-	ReviewedAt time.Time `json:"reviewed_at,omitempty"`
+	ReviewedAt time.Time `json:"reviewed_at,omitzero"`
 	// Supersedes is the id of the action this one re-proposes after changes were requested, so the
 	// desk shows a review THREAD rather than two unrelated rows.
 	Supersedes string `json:"supersedes,omitempty"`
@@ -749,7 +749,7 @@ type Action struct {
 	// Cleared on a successful apply, so a retry that works leaves no stale explanation behind.
 	DeliveryError string    `json:"delivery_error,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
-	DecidedAt     time.Time `json:"decided_at,omitempty"`
+	DecidedAt     time.Time `json:"decided_at,omitzero"`
 	// ApplyBlocked is a KNOWN reason this action could not be applied if approved right now —
 	// computed at READ time from the connector's Preflight (never persisted, like Incident's
 	// SLABreach). It exists so the console can warn the human BEFORE they approve, rather than
@@ -887,7 +887,7 @@ const (
 type CERTInStatus struct {
 	DueAt       time.Time `json:"due_at"`   // NoticedAt + 6h
 	Reported    bool      `json:"reported"` // a human has filed it
-	ReportedAt  time.Time `json:"reported_at,omitempty"`
+	ReportedAt  time.Time `json:"reported_at,omitzero"`
 	Breached    bool      `json:"breached"`     // past due and still not reported
 	MinutesLeft int       `json:"minutes_left"` // negative once the window closed
 	Categories  []string  `json:"categories"`   // the Annexure I types this falls under (the evidence)
@@ -937,15 +937,15 @@ type Incident struct {
 	TriageRationale string    `json:"triage_rationale,omitempty"`
 	TriageSkill     string    `json:"triage_skill,omitempty"`
 	OpenedAt        time.Time `json:"opened_at"`
-	ResolvedAt      time.Time `json:"resolved_at,omitempty"`
+	ResolvedAt      time.Time `json:"resolved_at,omitzero"`
 	LedgerRef       string    `json:"ledger_ref,omitempty"`
 	// AcknowledgedAt/By record that a human took ownership of the incident (the MDR "I'm on it").
 	// An acknowledged incident is never auto-escalated. Zero = unacknowledged.
-	AcknowledgedAt time.Time `json:"acknowledged_at,omitempty"`
+	AcknowledgedAt time.Time `json:"acknowledged_at,omitzero"`
 	AcknowledgedBy string    `json:"acknowledged_by,omitempty"`
 	// LastEscalatedAt is when the timed auto-escalation last re-alerted this incident, so it
 	// re-pings at most once per AckWindowMins instead of every monitoring pass.
-	LastEscalatedAt time.Time `json:"last_escalated_at,omitempty"`
+	LastEscalatedAt time.Time `json:"last_escalated_at,omitzero"`
 	// SLABreach is a TRANSIENT, read-time annotation (the incident's state vs. the tenant's SLA
 	// policy) — populated by the API when returning incidents, NEVER persisted. nil = not tracked.
 	SLABreach *SLABreach `json:"sla_breach,omitempty"`
@@ -956,7 +956,7 @@ type Incident struct {
 	// CertInReportedAt / By are PERSISTED: when a named human filed the CERT-In report and
 	// who. A filing discharges the six-hour duty (even if late), so this is what stops the
 	// breach clock — the CERT-In analogue of AcknowledgedAt.
-	CertInReportedAt time.Time `json:"certin_reported_at,omitempty"`
+	CertInReportedAt time.Time `json:"certin_reported_at,omitzero"`
 	CertInReportedBy string    `json:"certin_reported_by,omitempty"`
 	// BlastRadius is a TRANSIENT, read-time impact annotation: whether this incident's finding sits on a
 	// cross-surface chain reaching a crown jewel (how big it can get). Computed by the API from the
@@ -982,16 +982,15 @@ type Incident struct {
 	// absolute date, deliberately not a duration, so rediscovering an old KEV CVE
 	// cannot restart a clock the authority already ran out.
 	//
-	// A POINTER because most incidents have no KEV CVE behind them and therefore no
-	// deadline, and "no deadline" must serialize as ABSENT. `omitempty` does not omit a
-	// zero time.Time — omitempty has no effect on a struct — so the field shipped
-	// `"kev_due_at":"0001-01-01T00:00:00Z"` on every incident. The frontend guard was
-	// written against the contract this tag advertises (`if (!i.kev_due_at) return null`),
-	// which a non-empty string passes, so the queue told the customer a CISA federal
-	// remediation deadline had PASSED — on incidents with no CVE at all. Asserting a
-	// government deadline nobody set, and that the reader is already late for it, is the
-	// §10 grounding failure in its most alarming form.
-	KEVDueAt *time.Time `json:"kev_due_at,omitempty"`
+	// OMITZERO, not omitempty: most incidents have no KEV CVE behind them and therefore no
+	// deadline, and "no deadline" must serialize as ABSENT. `omitempty` has no effect on a
+	// struct, so this shipped `"kev_due_at":"0001-01-01T00:00:00Z"` on every incident. The
+	// frontend guard was written against the contract the tag advertises (`if (!i.kev_due_at)
+	// return null`), which a non-empty string passes, so the queue told the customer a CISA
+	// federal remediation deadline had PASSED — on incidents with no CVE at all. Asserting a
+	// government deadline nobody set, and that the reader is already late for it, is the §10
+	// grounding failure in its most alarming form.
+	KEVDueAt time.Time `json:"kev_due_at,omitzero"`
 }
 
 // Onset is when the state behind an incident actually changed.
@@ -1067,7 +1066,7 @@ type Risk struct {
 	Firm     string `json:"firm,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
-	DecidedAt time.Time `json:"decided_at,omitempty"`
+	DecidedAt time.Time `json:"decided_at,omitzero"`
 	DecidedBy string    `json:"decided_by,omitempty"`
 	LedgerRef string    `json:"ledger_ref,omitempty"`
 }
@@ -1200,7 +1199,7 @@ type ControlAttestation struct {
 	Verdict    string    `json:"verdict"` // pending | passed | exception
 	Note       string    `json:"note,omitempty"`
 	AttestedBy string    `json:"attested_by,omitempty"` // the external auditor, by name
-	AttestedAt time.Time `json:"attested_at,omitempty"`
+	AttestedAt time.Time `json:"attested_at,omitzero"`
 	Capacity   string    `json:"capacity,omitempty"` // who the attester works for (resolved from roster)
 	Firm       string    `json:"firm,omitempty"`
 }
@@ -1214,15 +1213,15 @@ type AuditEngagement struct {
 	TenantID     string               `json:"tenant_id"`
 	Framework    string               `json:"framework"`
 	AuditType    string               `json:"audit_type"` // type_i | type_ii
-	PeriodStart  time.Time            `json:"period_start,omitempty"`
-	PeriodEnd    time.Time            `json:"period_end,omitempty"`
+	PeriodStart  time.Time            `json:"period_start,omitzero"`
+	PeriodEnd    time.Time            `json:"period_end,omitzero"`
 	AuditorName  string               `json:"auditor_name,omitempty"`
 	AuditorFirm  string               `json:"auditor_firm,omitempty"`
 	AuditorEmail string               `json:"auditor_email,omitempty"`
 	Status       string               `json:"status"`
 	Attestations []ControlAttestation `json:"attestations,omitempty"`
 	CreatedAt    time.Time            `json:"created_at"`
-	IssuedAt     time.Time            `json:"issued_at,omitempty"`
+	IssuedAt     time.Time            `json:"issued_at,omitzero"`
 	LedgerRef    string               `json:"ledger_ref,omitempty"`
 }
 
@@ -1268,7 +1267,7 @@ type Policy struct {
 	Version     int         `json:"version"`
 	Acks        []PolicyAck `json:"acks,omitempty"`
 	CreatedAt   time.Time   `json:"created_at"`
-	PublishedAt time.Time   `json:"published_at,omitempty"`
+	PublishedAt time.Time   `json:"published_at,omitzero"`
 	LedgerRef   string      `json:"ledger_ref,omitempty"`
 }
 
@@ -1431,7 +1430,7 @@ type ReviewRequest struct {
 	Resolution string    `json:"resolution,omitempty"`
 	Reviewer   string    `json:"reviewer,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
-	ResolvedAt time.Time `json:"resolved_at,omitempty"`
+	ResolvedAt time.Time `json:"resolved_at,omitzero"`
 }
 
 // ReadinessAttestation is a named human's answer to a security practice that cannot be scanned for.
@@ -1463,7 +1462,7 @@ type EpisodeRecord struct {
 	// ledger.Diff refuses a mismatch, so a trend over episodes has to filter by it.
 	Scope       string    `json:"scope"`
 	RanAt       time.Time `json:"ran_at"`
-	CompletedAt time.Time `json:"completed_at,omitempty"`
+	CompletedAt time.Time `json:"completed_at,omitzero"`
 	// LedgerSHA is the attestation hash of the signed trajectory this scores. Empty
 	// when the run produced no signed ledger, which is honest rather than fatal: the
 	// score still stands, it simply cannot be replayed back to the steps.
@@ -1588,7 +1587,7 @@ func SummarizeEpisodes(eps []EpisodeRecord) EpisodeStats {
 type TrainingConsent struct {
 	Consented bool      `json:"consented"`
 	By        string    `json:"by,omitempty"`
-	At        time.Time `json:"at,omitempty"`
+	At        time.Time `json:"at,omitzero"`
 	// Statement is the text the customer actually agreed to, verbatim. An auditor should
 	// read what was consented to, not our later summary of it — the same discipline
 	// pentest.RoE applies to active-exploitation consent.

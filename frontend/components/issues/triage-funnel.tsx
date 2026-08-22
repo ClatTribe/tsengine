@@ -37,9 +37,24 @@ export function TriageFunnel({ f }: { f: Funnel }) {
           </span>
           <div>
             <div className="text-sm font-semibold">Auto-triage</div>
+            {/* The zero case is a DIFFERENT SENTENCE, not the same one with a 0 in it. "The engine
+                handled 0 of 17 raw findings automatically — so you only triage what's real" promises
+                a benefit that did not occur, in the exact situation where the reader can see it did
+                not: the number beside this line is 0%. Nothing was removed, so the honest line says
+                that and says what it means for the reader's workload. */}
             <p className="mt-0.5 max-w-md text-xs text-muted">
-              The engine handled <span className="text-ink">{f.auto_triaged}</span> of{" "}
-              <span className="text-ink">{f.raw_findings}</span> raw findings automatically — so you only triage what's real.
+              {f.auto_triaged === 0 ? (
+                <>
+                  Nothing was removed automatically — no duplicates to merge, and nothing matched an
+                  exclusion or suppression rule. All <span className="text-ink">{f.raw_findings}</span>{" "}
+                  raw findings are still yours to triage.
+                </>
+              ) : (
+                <>
+                  The engine handled <span className="text-ink">{f.auto_triaged}</span> of{" "}
+                  <span className="text-ink">{f.raw_findings}</span> raw findings automatically — so you only triage what&apos;s real.
+                </>
+              )}
             </p>
           </div>
         </div>

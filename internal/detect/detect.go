@@ -415,13 +415,13 @@ func presentFindings(present map[string]types.Finding) []types.Finding {
 // zero time when there is none. Nil-safe at every hop: a finding with no threat intel,
 // no KEV entry, or no due date simply has no authority-set deadline — which is not the
 // same as having a generous one.
-// kevDueAt returns CISA's published deadline for the finding's CVE, or nil when there is
-// none. NIL, not the zero time: "no deadline" has to be absent all the way to the JSON, or
-// a reader downstream renders year 1 as a deadline that has already passed.
-func kevDueAt(f types.Finding) *time.Time {
-	if f.ThreatIntel == nil || f.ThreatIntel.KEV == nil || f.ThreatIntel.KEV.DueDate.IsZero() {
-		return nil
+// kevDueAt returns CISA's published deadline for the finding's CVE, or the zero time when
+// there is none. The zero time never reaches JSON: Incident.KEVDueAt is tagged `omitzero`,
+// so "no deadline" serializes as an absent field rather than as year 1 — which a reader
+// renders as a deadline that has already passed.
+func kevDueAt(f types.Finding) time.Time {
+	if f.ThreatIntel == nil || f.ThreatIntel.KEV == nil {
+		return time.Time{}
 	}
-	due := f.ThreatIntel.KEV.DueDate
-	return &due
+	return f.ThreatIntel.KEV.DueDate
 }

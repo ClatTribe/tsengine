@@ -88,7 +88,7 @@ type Ledger struct {
 	Target       string       `json:"target,omitempty"`
 	Engine       string       `json:"engine,omitempty"`
 	StartedAt    time.Time    `json:"started_at"`
-	CompletedAt  time.Time    `json:"completed_at,omitempty"`
+	CompletedAt  time.Time    `json:"completed_at,omitzero"`
 	Steps        []Step       `json:"steps"`
 	Decisions    []Decision   `json:"decisions"`
 	Summary      string       `json:"summary,omitempty"`

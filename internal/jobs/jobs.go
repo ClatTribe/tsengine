@@ -43,8 +43,8 @@ type Job struct {
 	Error      string    `json:"error,omitempty"`
 	Result     any       `json:"result,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
-	StartedAt  time.Time `json:"started_at,omitempty"`
-	FinishedAt time.Time `json:"finished_at,omitempty"`
+	StartedAt  time.Time `json:"started_at,omitzero"`
+	FinishedAt time.Time `json:"finished_at,omitzero"`
 }
 
 // Func is the work a job runs. Its return value becomes Job.Result; its error → Job.Error.

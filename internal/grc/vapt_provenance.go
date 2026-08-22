@@ -26,9 +26,9 @@ import (
 // IntelProvenance is the pinned state of the threat-intel corpus the report's KEV/EPSS/ransomware
 // claims were evaluated against.
 type IntelProvenance struct {
-	Version  string    `json:"version,omitempty"`   // the pinned corpus version
-	KEVAsOf  time.Time `json:"kev_as_of,omitempty"` // CISA KEV snapshot date
-	EPSSAsOf time.Time `json:"epss_as_of,omitempty"`
+	Version  string    `json:"version,omitempty"`  // the pinned corpus version
+	KEVAsOf  time.Time `json:"kev_as_of,omitzero"` // CISA KEV snapshot date
+	EPSSAsOf time.Time `json:"epss_as_of,omitzero"`
 	AgeDays  int       `json:"age_days"`
 	// Stale: older than the window in which the feeds meaningfully change (CISA adds to KEV most
 	// weeks). Embedded: running the snapshot compiled into the binary rather than a refreshed corpus.

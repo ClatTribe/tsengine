@@ -32,7 +32,7 @@ type Policy struct {
 	Tools       []string  `json:"tools,omitempty"`        // permitted tool names; empty = any
 	Hosts       []string  `json:"hosts,omitempty"`        // permitted target hostnames (any port); empty = any
 	MaxRequests int       `json:"max_requests,omitempty"` // per-container tool-run budget; 0 = unlimited
-	NotAfter    time.Time `json:"not_after,omitempty"`    // capability expiry; zero = no expiry
+	NotAfter    time.Time `json:"not_after,omitzero"`     // capability expiry; zero = no expiry
 }
 
 // targetKeys are the arg keys that carry a network target — the SAME set the sandbox client rewrites
