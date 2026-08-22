@@ -60,10 +60,27 @@ func ThreatInformedEscalation(findings []types.Finding) []asset.Dispatch {
 	// than N. Target the host/endpoint the matching product was seen on.
 	ids := make([]string, 0, len(probes))
 	target := ""
+	// Tally the SIGNALS that actually selected this batch, so the provenance names the grounds
+	// rather than a fixed pair. The label said "KEV/EPSS-targeted" no matter what chose the CVE,
+	// which became wrong the moment SSVC joined the gate: a probe selected on CISA's assessment
+	// that exploitation is ACTIVE was reported as KEV/EPSS-targeted, attributing it to two signals
+	// that had said nothing. §5.3 keeps EscalatedFrom for logging and audit, and a label that
+	// misnames why we spent a probe is worse than a vague one.
+	var kev, ssvc, epss, pub int
 	for _, p := range probes {
 		ids = append(ids, p.TemplateID)
 		if target == "" && p.URL != "" {
 			target = p.URL
+		}
+		switch {
+		case p.Reason.KEV:
+			kev++
+		case p.Reason.SSVCActive:
+			ssvc++
+		case p.Reason.EPSS > 0:
+			epss++
+		case p.Reason.PublicExploit:
+			pub++
 		}
 	}
 	args := tool.Args{"id": strings.Join(ids, ",")}
@@ -73,7 +90,7 @@ func ThreatInformedEscalation(findings []types.Finding) []asset.Dispatch {
 	return []asset.Dispatch{{
 		Tool:          nuc,
 		Args:          args,
-		EscalatedFrom: fmt.Sprintf("threat-intel→nuclei(%d KEV/EPSS-targeted templates)", len(ids)),
+		EscalatedFrom: threatProvenance(len(ids), kev, ssvc, epss, pub),
 	}}
 }
 
@@ -229,4 +246,31 @@ func ThreatInformedGaps(findings []types.Finding) []types.Finding {
 		out = append(out, f)
 	}
 	return out
+}
+
+// threatProvenance names the signals that selected a probe batch, strongest first.
+//
+// Strongest-first because the strongest is why the batch is worth running at all: "exploited in the
+// wild" and "a model of exploitation probability" are not interchangeable grounds, and a reader
+// auditing why we spent the probe budget needs the difference.
+func threatProvenance(total, kev, ssvc, epss, pub int) string {
+	var parts []string
+	if kev > 0 {
+		parts = append(parts, fmt.Sprintf("%d KEV", kev))
+	}
+	if ssvc > 0 {
+		parts = append(parts, fmt.Sprintf("%d SSVC-active", ssvc))
+	}
+	if epss > 0 {
+		parts = append(parts, fmt.Sprintf("%d EPSS", epss))
+	}
+	if pub > 0 {
+		parts = append(parts, fmt.Sprintf("%d public-exploit", pub))
+	}
+	if len(parts) == 0 {
+		// Should not happen — the planner emits nothing without a signal — but a batch we cannot
+		// explain is not labelled with a reason we made up.
+		return fmt.Sprintf("threat-intel→nuclei(%d templates, signal not recorded)", total)
+	}
+	return fmt.Sprintf("threat-intel→nuclei(%d templates: %s)", total, strings.Join(parts, ", "))
 }
