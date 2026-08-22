@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
+import { useMobileNav } from "@/components/shell/mobile-nav";
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badgeKey?: "pending" };
 
@@ -106,6 +107,7 @@ export function Sidebar({
   aiEnabled?: boolean;
 }) {
   const path = usePathname();
+  const { open: mobileNavOpen } = useMobileNav();
   // which group headers are collapsed — persisted so a founder's tidied-up nav sticks across sessions.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [ready, setReady] = useState(false);
@@ -130,7 +132,15 @@ export function Sidebar({
     });
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-bg/60 px-3 py-4">
+    // ADR 0022 §1 — below `md` this is an off-canvas drawer, not a fixed column. It used to be
+    // `flex w-56 shrink-0` at every width, which left 151px for the whole application at 375px.
+    <aside
+      className={cn(
+        "w-56 shrink-0 flex-col border-r border-border bg-bg/60 px-3 py-4",
+        "hidden md:flex",
+        mobileNavOpen && "fixed inset-y-0 left-0 z-50 flex w-[17rem] bg-bg shadow-2xl",
+      )}
+    >
       <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
         <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0b1220] ring-1 ring-white/10">
           <LogoMark className="h-5 w-5" />

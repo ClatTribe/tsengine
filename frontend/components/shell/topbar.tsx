@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MobileNavTrigger } from "@/components/shell/mobile-nav";
 import { useRouter } from "next/navigation";
 import { LogOut, Search, Settings, Building2, UserCog } from "lucide-react";
 import { RiskPill } from "@/components/ui/primitives";
@@ -35,7 +36,8 @@ export function TopBar({
   const svcLabel = serviceModel ? SERVICE_LABEL[serviceModel] : undefined;
   const who = practitioner?.firm || practitioner?.name;
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-5">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-3 md:px-5">
+      <MobileNavTrigger />
       {/* the workspace name — a founder should see "Acme", never a raw tenant id */}
       <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm font-medium">
         <Building2 className="h-3.5 w-3.5 text-faint" />
