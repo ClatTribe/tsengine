@@ -88,6 +88,22 @@ var required = []struct {
 			"page showed",
 	},
 	{
+		page:  "frontend/app/(app)/incidents/page.tsx",
+		field: "ransomware",
+		wouldOtherwiseClaim: "a ransomware-linked incident as an ordinary one. CISA records this " +
+			"separately from KEV BECAUSE it is a stronger claim — exploited in the wild versus " +
+			"exploited by crews who encrypt the estate — and a queue showing neither is ranked by " +
+			"severity alone, the number that knows least about who is using this",
+	},
+	{
+		page:  "frontend/app/(app)/incidents/page.tsx",
+		field: "kev_due_at",
+		wouldOtherwiseClaim: "that no external deadline exists. CISA publishes a BOD 22-01 due date " +
+			"and detect.go carries it VERBATIM rather than as a window from OpenedAt, precisely so a " +
+			"customer is not told they have a fortnight when the government's answer is that they are " +
+			"months late — showing nothing tells them less than either",
+	},
+	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "unattributable_from_our_tools",
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +
