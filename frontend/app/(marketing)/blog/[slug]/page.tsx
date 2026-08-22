@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { pageMeta } from "@/lib/seo";
 import { ArticleJsonLd } from "@/components/marketing/article-jsonld";
-import { POSTS, postBySlug, type Block } from "@/lib/blog";
+import { POSTS, postBySlug, readMinutes, type Block } from "@/lib/blog";
 
 export function generateStaticParams() {
   return POSTS.map((p) => ({ slug: p.slug }));
@@ -66,7 +66,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         <div className="text-[11px] font-medium uppercase tracking-wide text-accent">{post.category}</div>
         <h1 className="mt-2 text-3xl font-semibold leading-[1.15] tracking-tight sm:text-4xl">{post.title}</h1>
         <p className="mt-3 text-base leading-relaxed text-muted">{post.description}</p>
-        <div className="mt-4 text-xs text-faint">{fmtDate(post.date)} · {post.readMins} min read</div>
+        <div className="mt-4 text-xs text-faint">{fmtDate(post.date)} · {readMinutes(post)} min read</div>
       </div>
 
       <div className="mt-8 border-t border-border pt-2">

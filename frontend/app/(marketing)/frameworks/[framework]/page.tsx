@@ -7,7 +7,7 @@ import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_DESC, FRAMEWORK_CATEGORY } from 
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
-import { POSTS } from "@/lib/blog";
+import { postsFor } from "@/lib/blog";
 
 // Frameworks that culminate in a formal third-party certificate / attestation report (an auditor issues it) —
 // vs. regulations/frameworks that are an ongoing legal obligation, not a one-time certificate. Drives the
@@ -195,7 +195,7 @@ export default async function FrameworkLanding({ params }: { params: Promise<{ f
           <div className="mt-8 border-t border-border pt-6">
             <div className="text-xs font-semibold uppercase tracking-wider text-faint">Reading on getting audit-ready</div>
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              {POSTS.slice(0, 4).map((post) => (
+              {postsFor(i.label).map((post) => (
                 <li key={post.slug}>
                   <Link href={`/blog/${post.slug}`} className="group flex items-start gap-2 text-sm leading-relaxed text-muted transition hover:text-ink">
                     <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
