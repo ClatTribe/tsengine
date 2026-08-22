@@ -47,6 +47,31 @@ type RawGCP struct {
 	// anything, so without definitions every principal would appear able to escalate.
 	// See derivePrivesc for why that possibility is not enough to draw an edge.
 	RoleDefs map[string][]string `json:"role_defs,omitempty"`
+	// WIFProviders are the project's Workload Identity Federation pool providers — the objects that
+	// decide WHICH external tokens this project accepts.
+	//
+	// Without them internal/gcpwif had nothing to assess, so an estate federating entirely through
+	// GitHub Actions or an external IdP was invisible: no finding, and (before the coverage note)
+	// not even an admission that we had not looked. GCP splits the decision across two objects
+	// usually edited by different people — the provider's attribute condition and the service
+	// account's IAM binding — and neither half is wrong on its own, which is exactly why the join
+	// has to be expressible here.
+	WIFProviders []RawGCPWIFProvider `json:"wif_providers,omitempty"`
+}
+
+// RawGCPWIFProvider is one workload-identity pool provider, in the shape the GCP API returns it.
+type RawGCPWIFProvider struct {
+	ProjectNumber string `json:"project_number"`
+	PoolID        string `json:"pool_id"`
+	ID            string `json:"id"`
+	// IssuerURI names WHO is trusted (e.g. https://token.actions.githubusercontent.com).
+	IssuerURI        string   `json:"issuer_uri,omitempty"`
+	AllowedAudiences []string `json:"allowed_audiences,omitempty"`
+	// AttributeMapping maps google.*/attribute.* to assertion.* expressions.
+	AttributeMapping map[string]string `json:"attribute_mapping,omitempty"`
+	// AttributeCondition is the CEL gate. EMPTY is the one thing we can state definitively — that
+	// there is no condition at all; the adequacy of a present one is not ours to judge.
+	AttributeCondition string `json:"attribute_condition,omitempty"`
 }
 
 // RawGCPBinding is one IAM policy binding: a role granted to members, optionally
@@ -73,6 +98,11 @@ type RawGCPSA struct {
 	Email         string   `json:"email"`
 	Admin         bool     `json:"admin,omitempty"`
 	Impersonators []string `json:"impersonators,omitempty"`
+	// Bindings are the IAM policy ON THIS SERVICE ACCOUNT — who may impersonate it, and under
+	// which role. Distinct from Impersonators, which is a flat list with no role: gcpwif needs the
+	// role to tell an impersonation grant from an unrelated one, and assuming a role that was not
+	// reported would be guessing at the very fact the finding turns on.
+	Bindings []RawGCPBinding `json:"bindings,omitempty"`
 }
 
 // RawGCPMember is a user/group with project IAM roles (member string "user:foo@" / "group:bar@").

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
+	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
+	"github.com/ClatTribe/tsengine/internal/gcpwif"
 	"github.com/ClatTribe/tsengine/internal/ghoidc"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -29,11 +31,13 @@ import (
 // Admin flag rather than guessed — it escalates a finding one step and says why, so a wrong guess
 // would be a wrong severity on a real customer's role.
 func ciIdentityFindings(provider string, body []byte) []types.Finding {
-	if p := strings.ToLower(strings.TrimSpace(provider)); p != "" && p != "aws" {
-		// GCP's workload-identity equivalent (internal/gcpwif) is NOT wired here, and deliberately not
-		// half-wired: RawGCP carries no pool or provider objects at all, so there is nothing to assess.
-		// Running it over an empty estate would return a confident zero — the clean-because-we-did-not-
-		// look answer this codebase keeps having to fix. It needs an ingest field first.
+	switch p := strings.ToLower(strings.TrimSpace(provider)); p {
+	case "", "aws":
+	case "gcp":
+		return gcpCIIdentityFindings(body)
+	default:
+		// Azure has no equivalent analyser yet, and running one over an estate it cannot read would
+		// return a confident zero — the clean-because-we-did-not-look answer.
 		return nil
 	}
 	var raw awsinventory.RawAWS
@@ -66,4 +70,46 @@ func (d Deps) persistCIIdentityFindings(ctx context.Context, tenantID string, fs
 		return nil, 0
 	}
 	return d.persistDriftFindings(ctx, tenantID, fs)
+}
+
+// gcpCIIdentityFindings assesses the Workload Identity Federation surface of a posted GCP inventory.
+//
+// GCP splits this decision across TWO objects usually edited by different people: the pool
+// PROVIDER's attribute condition (which tokens the pool accepts) and the SERVICE ACCOUNT's IAM
+// binding (which identities may impersonate it). Neither half looks wrong alone — an unconditioned
+// provider reads as "fine, the bindings are narrow", a pool-wide binding as "fine, the provider is
+// conditioned" — and together every GitHub repository on the internet can impersonate the account.
+// That join is why this runs at ingest rather than being left to a reader comparing two screens.
+//
+// Grounded (§10): Privileged comes from the collector's own admin flag, never inferred; an estate
+// with no providers yields nothing; and gcpwif itself declares in ChecksNotRun any pool federating
+// an issuer it does not model, so a non-GitHub IdP reads as unchecked rather than clean.
+func gcpCIIdentityFindings(body []byte) []types.Finding {
+	var raw gcpinventory.RawGCP
+	if json.Unmarshal(body, &raw) != nil {
+		return nil // the caller already reported the parse failure
+	}
+	if len(raw.WIFProviders) == 0 {
+		return nil // nothing federates in, or the collector did not report it
+	}
+	est := gcpwif.Estate{}
+	for _, p := range raw.WIFProviders {
+		est.Providers = append(est.Providers, gcpwif.Provider{
+			ProjectNumber: p.ProjectNumber, PoolID: p.PoolID, ID: p.ID,
+			IssuerURI: p.IssuerURI, AllowedAudiences: p.AllowedAudiences,
+			AttributeMapping: p.AttributeMapping, AttributeCondition: p.AttributeCondition,
+		})
+	}
+	for _, sa := range raw.ServiceAccounts {
+		acct := gcpwif.ServiceAccount{Email: sa.Email, Privileged: sa.Admin}
+		for _, b := range sa.Bindings {
+			acct.Bindings = append(acct.Bindings, gcpwif.Binding{
+				Role: b.Role, Members: b.Members, Condition: b.Condition,
+			})
+		}
+		est.ServiceAccounts = append(est.ServiceAccounts, acct)
+	}
+	// ReposComplete stays FALSE for the same reason as AWS: a cloud inventory says nothing about
+	// which repositories the organisation owns, so the unowned-repository check must not run.
+	return gcpwif.Assess(est, time.Now().UTC()).Findings
 }
