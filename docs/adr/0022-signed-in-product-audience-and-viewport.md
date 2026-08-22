@@ -1,6 +1,6 @@
 # ADR 0022 — The signed-in product has one audience and one viewport; it needs two of each
 
-**Status:** Proposed
+**Status:** Accepted · implemented in #1353, #1356 and this change
 **Date:** 2026-08-22
 
 ## Context
@@ -113,7 +113,7 @@ reached *because something happened*.
 |---|---|---|
 | **1 — Operable on a phone** | Inbox (approve / reject / sign), Overview, Issues list + detail, Incidents | Full touch-grade layout. Every action completable. Targets ≥44px. This is the alert-response path. |
 | **2 — Readable on a phone** | Compliance posture, Readiness, Assets, Engagements list, Activity, **the AI Security Engineer console (`/engineer`)** | Legible and navigable; authoring actions may defer to desktop. Answers "what is the state" away from a desk. |
-| **3 — Desktop-only, stated honestly** | Settings, Eval, Compliance scope + questionnaire, Program, Audits, Risks, Reports, the depth specialists (`/cloud-engineer`, `/code-engineer`), operator console | A designed message naming the surface and why, not a crushed layout. |
+| **3 — ~~Desktop-only, stated honestly~~ DISSOLVED** | — | See below: measurement removed the need for this tier. |
 
 **Correction to a first draft of this table.** `/engineer` was originally placed in Tier 3
 with the other consoles, written before the page had been opened. Its lead control is a
@@ -123,7 +123,23 @@ wherever they are, and Tier 3 would have denied the console at the exact moment 
 most. The ask-and-read path moves to Tier 2; the depth specialists it delegates to stay in
 Tier 3, because those are authoring surfaces.
 
-Tier 3 is a real design deliverable, not a cop-out. A page that says *"Compliance scope is
+**Tier 3 was dissolved by measurement, before it was built.** The tier assumed data-dense pages
+would break at 375px and need a designed "open this on a laptop" state. Once the shell stopped
+taking 224px, that turned out to be false: **all 17 app routes render at 375px with zero horizontal
+overflow**, measured in real iframes rather than inferred, and there is not a single `<table>`
+element across the eleven pages the tier named. The app was built card-and-stack throughout, so the
+only thing making it unusable on a phone was the shell.
+
+Building Tier 3 would have put an "open this on a laptop" message in front of eleven pages that
+work — worse than what already ships, for eleven pages of effort. The tier is dissolved rather than
+deferred: it should not be revived without new evidence that a specific surface genuinely breaks.
+
+What survives from the idea is the invariant, which is cheap and still right: **a surface that
+cannot serve a viewport must say so.** Nothing currently qualifies.
+
+The original argument for the tier is preserved because it remains true of anything that would
+qualify in future: a page that renders its controls into 151px is the same failure as a silent
+degradation. A page that says *"Compliance scope is
 built for a wide screen — open it on a laptop"* respects the reader. A page that renders
 its controls into 151px does not, and it is the same failure mode as a silent degradation:
 the product knows it cannot serve you and shows you a broken thing instead of saying so.
@@ -182,11 +198,11 @@ Caption text keeps a 12px floor regardless: no token value rescues 10px.
 
 | Invariant | Mechanism |
 |---|---|
-| **Every action in the alert-response path is completable on a phone.** | Tier-1 routes carry a viewport test at 375px asserting no horizontal overflow, a reachable primary action, and ≥44px targets. |
-| **A surface that cannot serve a viewport says so.** | Tier-3 routes render a designed narrow-viewport state. A crushed layout is a bug, not a fallback. |
+| **Every action in the alert-response path is completable on a phone.** | `internal/viewportcheck` asserts the shell keeps its mobile mode — the sidebar's `hidden md:flex`, the drawer state, the provider and backdrop mount, and the trigger's 44px target. Mutation-verified: deleting the responsive class fails the test. A Go test guards TypeScript here for the same reason `internal/uicheck` does — the frontend has no test runner. |
+| **A surface that cannot serve a viewport says so.** | No surface currently qualifies — all 17 routes clear 375px with zero overflow. If one ever does, it renders a designed narrow-viewport state; a crushed layout is a bug, not a fallback. |
 | **No system message instructs a reader to do something they cannot do.** | `Degradation.Audience` is required; the existing guard test that drives every declared kind is extended to assert each has an audience and that no `tenant`-visible detail contains an env var, a shell command, or a host-level instruction. |
 | **A new degradation kind reaches someone.** | Default `both`. Omitting the field is a compile error, not a silent narrowing. |
-| **Every text token meets AA at its smallest permitted size.** | A test samples rendered text across the tier-1 and tier-2 routes, composites alpha against the real background stack, and asserts ≥4.5:1 (≥3:1 for large text) and ≥12px. Measuring the rendered result rather than the token catches the combination, which is where the failure actually lives. |
+| **Every text token meets AA at its smallest permitted size.** | `internal/viewportcheck` computes the ratio from the palette in `globals.css` for every text token against every ground it can be drawn on, in both themes. It asserts the PROPERTY, not a hex string, so a deliberate palette change survives and a careless one fails. Mutation-verified against all three values this ADR shipped and then had to correct. |
 
 ## Consequences
 
@@ -208,6 +224,17 @@ audience split is a field, a filter, and a copy pass over the existing degradati
 The contrast fix is one token value plus a visual check that the flatter hierarchy still
 reads — deliberately the cheapest of the three, because the alternative that preserved the
 design intent cost 321 edits and would have left failures standing while it ran.
+
+**Three wrong values before a right one, and what fixed it.** The contrast decision shipped a light
+value tuned against white (failed on `--c-bg`), then one tuned against `--c-bg` (failed on
+`--c-surface-2` and `--c-surface-3`), and a dark value tuned against `--c-surface` (failed on
+`--c-surface-3`). Each time the ground chosen was not the hardest one on the page.
+
+The guard that finally caught it was itself broken first: it looked for a `[data-theme="dark"]`
+block this codebase does not use, found nothing, called `t.Skip`, and `go test` printed `ok`. Two
+mutation runs both passed, which is the only reason the dead guard was noticed. It now fails hard
+when it cannot locate the palette. **A skip is not a pass**, and a guard that excuses itself when
+confused reports green for the rest of its life.
 
 **Already shipped alongside this ADR.** Incidents is in the navigation, the activity feed
 collapses clean scans, `/dashboard` has an `<h1>`, the sidebar group labels pass AA, and the

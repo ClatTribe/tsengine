@@ -15,13 +15,16 @@
     --c-border-strong: 211 216 226;
     --c-ink: 23 26 33;
     --c-muted: 90 100 115;
-    /* ADR 0022 §3 — darkened from #8B95A6 (2.82:1 on the page background) to meet WCAG AA at 12px.
-       `text-faint` is used 489 times, 321 of them on small text, so it is a TEXT token in practice
-       whatever the original decorative intent was. Measured against --c-bg (#F6F7F9), the harder of
-       the two surfaces: a value tuned to white alone still fails there. Hue preserved by scaling
-       along the original channel ratio. Now 4.91:1 on white / 4.58:1 on bg; --c-muted stays clearly
-       darker (5.59:1) so the two still read as different weights. */
-    --c-faint: 106 113 126;
+    /* ADR 0022 §3 — darkened from #8B95A6 to meet WCAG AA at 12px on EVERY ground, not just the
+       convenient one. `text-faint` is used 489 times, 321 of them on small text, so it is a TEXT
+       token in practice whatever the original decorative intent was.
+       Measured against --c-surface-3, the darkest light-theme ground and therefore the hardest.
+       Two earlier passes each picked a softer target and shipped a value that still failed: white
+       (4.50 white / 4.20 bg), then --c-bg (4.58 bg / 4.42 surface-2 / 4.11 surface-3). The second
+       was caught only when internal/viewportcheck started actually running.
+       Now 5.45 white / 5.08 bg / 4.91 surface-2 / 4.56 surface-3, with --c-muted still clear at
+       5.02 on surface-3 so the two read as different weights. Hue preserved by scaling. */
+    --c-faint: 99 106 118;
     --c-accent: 79 70 229;
     --c-accent-hover: 67 56 202;
     --c-accent-soft: 238 240 254;
