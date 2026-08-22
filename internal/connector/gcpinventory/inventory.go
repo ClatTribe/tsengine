@@ -29,6 +29,19 @@ type RawGCP struct {
 	// principal BECOME admin" answerable; the per-principal Admin flag only answers "is
 	// it already", and the second is the attack path.
 	Bindings []RawGCPBinding `json:"bindings,omitempty"`
+	// Denies are the project's IAM DENY policies. GCP evaluates deny BEFORE allow, so a deny on
+	// resourcemanager.projects.setIamPolicy blocks the escalation an allow would otherwise permit —
+	// and it is the documented guardrail a customer puts in place for exactly this.
+	//
+	// gcpiam.Authorize has always evaluated denies. This struct could not EXPRESS one, so
+	// derivePrivesc built its PolicySet without any, and a project protected by a deny policy was
+	// still reported as having a privilege-escalation path to administrator. That is a false
+	// positive against the customers who took the strongest available precaution.
+	//
+	// The same question BishopFox's AWS control set asks of every tool: "Does the tool evaluate
+	// deny's first before allows? Many tools ignore or incorrectly handle DENY actions." GCP had no
+	// answer because the input could not carry them.
+	Denies []RawGCPDeny `json:"denies,omitempty"`
 	// RoleDefs maps a role name to the permissions it grants ("*" = all). REQUIRED for
 	// any custom role: gcpiam treats a role it has no definition for as POSSIBLY granting
 	// anything, so without definitions every principal would appear able to escalate.
@@ -38,6 +51,16 @@ type RawGCP struct {
 
 // RawGCPBinding is one IAM policy binding: a role granted to members, optionally
 // condition-gated.
+// RawGCPDeny is one IAM deny policy rule, mirroring gcpiam.DenyRule. A rule whose condition we
+// cannot resolve is treated as NOT denying, the same conservative choice cloudiam makes: refusing to
+// prune a path on a deny we are not sure applies.
+type RawGCPDeny struct {
+	DeniedPermissions   []string `json:"denied_permissions"`
+	DeniedPrincipals    []string `json:"denied_principals"`
+	ExceptionPrincipals []string `json:"exception_principals,omitempty"`
+	Condition           string   `json:"condition,omitempty"`
+}
+
 type RawGCPBinding struct {
 	Role      string   `json:"role"`
 	Members   []string `json:"members"`
@@ -177,7 +200,16 @@ func derivePrivesc(inv *cloudgraph.Inventory, raw RawGCP) {
 			Role: b.Role, Members: b.Members, Condition: b.Condition,
 		})
 	}
-	ps := gcpiam.PolicySet{Resource: res, Roles: raw.RoleDefs}
+	denies := make([]gcpiam.DenyRule, 0, len(raw.Denies))
+	for _, d := range raw.Denies {
+		denies = append(denies, gcpiam.DenyRule{
+			DeniedPermissions:   d.DeniedPermissions,
+			DeniedPrincipals:    d.DeniedPrincipals,
+			ExceptionPrincipals: d.ExceptionPrincipals,
+			Condition:           d.Condition,
+		})
+	}
+	ps := gcpiam.PolicySet{Resource: res, Roles: raw.RoleDefs, Denies: denies}
 
 	// Every principal named anywhere in the bindings, in deterministic order.
 	seen := map[string]bool{}
