@@ -79,6 +79,13 @@ type Tenant struct {
 	// ingested" byte-identical in the findings store. Without this stamp the UI cannot tell them
 	// apart, and it showed the reassuring reading ("this posture source is clean") for both. An
 	// entry appears only after a real ingest, so ABSENCE means not-assessed, never clean (§10).
+	//
+	// sspm (SaaS posture) and osint (external exposure) were missing from BOTH halves — not listed
+	// as posture sources and not stamped by any door — while their findings flowed into issues
+	// normally. Both are grounded the same way, so a customer whose GitHub org was properly
+	// configured saw the same empty posture as one who had never connected. Every listed source now
+	// has a stamping door, asserted by a test, because a source shown with nothing stamping it can
+	// only ever read "not tested" — including for the customer who ran it.
 	PostureAssessed map[string]time.Time `json:"posture_assessed,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
