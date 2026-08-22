@@ -112,6 +112,21 @@ var required = []struct {
 			"product knows exactly why",
 	},
 	{
+		page:  "frontend/app/(app)/incidents/page.tsx",
+		field: "kev_accelerated",
+		wouldOtherwiseClaim: "an unexplained deadline — which is verbatim what the field's Go doc says " +
+			"it exists to prevent (\"so the UI can say WHY the clock is short instead of showing an " +
+			"unexplained deadline\"). SLABreach carries three such reasons and the TypeScript " +
+			"interface declared none of them",
+	},
+	{
+		page:  "frontend/app/(app)/incidents/page.tsx",
+		field: "kev",
+		wouldOtherwiseClaim: "a CISA deadline without being able to state the fact it follows from. " +
+			"kev_due_at and ransomware were surfaced while the base known-exploited flag was still " +
+			"undeclared",
+	},
+	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "unattributable_from_our_tools",
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +
