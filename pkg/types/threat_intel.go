@@ -25,6 +25,26 @@ type ThreatIntel struct {
 // KEVStatus is the CISA Known Exploited Vulnerabilities catalog state for
 // a CVE. Listed=true starts compliance SLA clocks; downstream consumers
 // rely on this.
+// SSVC is CISA's own decision assessment for a CVE, from the Vulnrichment (ADP) programme —
+// recorded VERBATIM, never computed.
+//
+// A full SSVC decision needs the DEFENDER's mission and deployment context, which we do not have;
+// inventing it would be a judgement dressed as CISA's. What we carry is the three decision points
+// CISA publishes, which are facts about the vulnerability:
+//
+//	Exploitation     none | poc | active   — CISA's read of exploitation status
+//	Automatable      yes | no              — can an attacker automate steps 1-4 of the kill chain
+//	TechnicalImpact  partial | total       — what control the attacker gains
+//
+// Automatable is the one no other feed provides. KEV is binary and covers ~1,700 CVEs, EPSS is a
+// probability, and neither separates a vulnerability exploited by hand against one target from one
+// that can be driven across an estate.
+type SSVC struct {
+	Exploitation    string `json:"exploitation,omitempty"`
+	Automatable     string `json:"automatable,omitempty"`
+	TechnicalImpact string `json:"technical_impact,omitempty"`
+}
+
 type KEVStatus struct {
 	Listed    bool      `json:"listed"`
 	DateAdded time.Time `json:"date_added,omitempty"`

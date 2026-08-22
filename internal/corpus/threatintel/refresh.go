@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // RefreshOptions configures an out-of-band corpus refresh.
@@ -18,6 +20,10 @@ type RefreshOptions struct {
 	ExploitDBURL  string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
 	MetasploitURL string       // override for tests; best-effort (a fetch failure doesn't fail the refresh)
 	NucleiURL     string       // override for tests; best-effort — the "can we test for this CVE" index
+	// VulnrichmentURL enables CISA's SSVC decision points (vulnrichment.go). OPT-IN because the
+	// archive is large; absent, the corpus carries no SSVC and says so by its absence rather than
+	// by a default.
+	VulnrichmentURL string
 	// ExploitIntelURL is the OPT-IN offensive-face source (ADR 0019): the nuclei-templates archive whose
 	// template BODIES become the exploit_intel.json sidecar. Only fetched when set (the archive is large),
 	// best-effort like ExploitDB — a failure never blocks the KEV+EPSS refresh; the sidecar is just skipped.
@@ -105,6 +111,18 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 		_ = body.Close()
 	}
 
+	// CISA Vulnrichment (SSVC) is OPT-IN + best-effort, like NVD: the archive is large (~300k files),
+	// so it is fetched only when a URL is configured, and a failure never blocks the KEV+EPSS
+	// refresh. Without it the corpus simply carries no SSVC — the other six feeds are unaffected,
+	// and nothing reports an assessment CISA did not make.
+	var ssvc map[string]*types.SSVC
+	if opts.VulnrichmentURL != "" {
+		if body, ferr := httpGet(ctx, opts.HTTPClient, opts.VulnrichmentURL); ferr == nil {
+			ssvc, _ = ParseVulnrichment(body)
+			_ = body.Close()
+		}
+	}
+
 	// NVD CVSS vectors are OPT-IN + best-effort: only fetched when a URL is configured (a bulk mirror / pager),
 	// and a failure never blocks the KEV+EPSS refresh.
 	var cvss map[string]NVDEntry
@@ -119,7 +137,7 @@ func Refresh(ctx context.Context, opts RefreshOptions) (Manifest, string, error)
 		KEV: kev, KEVAsOf: kevAsOf, KEVVer: kevVer,
 		EPSS: epss, EPSSAsOf: epssAsOf,
 		Exploits: exploits, Weaponized: weaponized, WeaponRank: weaponRank,
-		Templates: templates, CVSS: cvss,
+		Templates: templates, CVSS: cvss, SSVC: ssvc,
 	})
 	dataPath, err := Write(opts.OutDir, entries, m)
 	if err != nil {
