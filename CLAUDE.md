@@ -1149,6 +1149,8 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
    out** — say so, and treat its FP half (if it has one) as the number that still means something,
    because recall can only rise when detections are added.
 
+   A corollary the in-house scorecard needed: **a corpus must not SHRINK.** `internal/accuracybench` (`tsbench accuracy` â it had no runnable entry point, though it did gate itself via its own test) asserts every core at 1.00/1.00 and non-empty, which catches an accuracy regression but NOT a corpus that goes from 34 cases to 2: that still passes, at a perfect score, as a strictly weaker claim wearing the same number â the vacuous-pass shape where a rate rises as the evidence behind it disappears. Per-core case floors are recorded and gated. Live: 6 cores, 107 labeled cases, all perfect â which measures fixtureâcode agreement, NOT efficacy, and sits against BishopFox 64.5% and Rhino 65.2% on the same class of capability.
+
 ---
 
 ## 15. Coding conventions (Go)
