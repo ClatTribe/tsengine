@@ -64,6 +64,31 @@ func FileLine(endpoint string) (path string, line int, ok bool) {
 // blocks the merge). Only findings whose file:line is in the diff become comments — so the bot
 // reviews what the PR touched, never the whole backlog.
 func Build(findings []types.Finding, changed []ChangedFile, blockAt types.Severity) Review {
+	// NO CHANGED FILES IS NOT A PULL REQUEST. It is a diff we failed to obtain — a rate-limited
+	// API, a token without pull_requests:read, a fork PR, a CI step that errored and posted an
+	// empty list. Every finding is then skipped for want of a line to attach to, and the check
+	// reported "no new security findings on the changed lines ✅" in green, on a PR where the
+	// gate had not seen a single line. The merge proceeded.
+	//
+	// Deliberately NOT a failure: this is a broken pipeline rather than a discovered vulnerability,
+	// and blocking every merge on a transient API error would get the whole check switched off,
+	// which costs more than it saves. Neutral is the state that already means "informational, not
+	// a pass" here (a disabled policy uses it), and it is the honest one — nothing was checked,
+	// so nothing is claimed in either direction.
+	//
+	// Files WITH no changed lines are a different case and stay a pass: a PR that only deletes
+	// files or touches binaries legitimately has nothing to comment on, and the caller supplied
+	// the diff.
+	if len(changed) == 0 {
+		return Review{
+			Conclusion: "neutral",
+			Summary: "tsengine: no changed files were supplied, so NOTHING in this pull request was " +
+				"checked. This is not a clean result — it means the diff never reached the check. " +
+				"Verify the workflow can read the PR's changed files (pull_requests: read) and that " +
+				"the step producing them succeeded.",
+		}
+	}
+
 	idx := map[string]map[int]bool{}
 	for _, cf := range changed {
 		idx[normPath(cf.Path)] = cf.Lines

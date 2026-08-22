@@ -11,6 +11,17 @@
 #
 # The live inline-comment post to GitHub is the gated half (the GitHub App PR-write scope); this gate
 # works today from the check's exit code alone.
+#
+# REQUIRED: check out with full history, or this gate cannot see your diff.
+#
+#   - uses: actions/checkout@v4
+#     with: { fetch-depth: 0 }
+#
+# actions/checkout defaults to fetch-depth: 1, and `git diff origin/BASE...HEAD` needs a merge base
+# that a shallow clone of both sides frequently does not have. Every step below now FAILS LOUDLY
+# when it cannot do its job — an earlier version swallowed the fetch error, ignored git's exit code,
+# and posted an empty changed-file list, which the gate answered green. A security check that exits 0
+# because it could not look is worse than no check: it is a check everyone trusts.
 
 name: "TensorShield PR security gate"
 description: "Fail the PR when a high+ security finding lands on a changed line (cross-surface attack-path aware)."
@@ -25,14 +36,28 @@ runs:
       run: |
         set -euo pipefail
         BASE="${GITHUB_BASE_REF:-main}"
-        git fetch --no-tags --depth=1 origin "$BASE" || true
+        # NOT `|| true`. A fetch we could not complete means no merge base, which means an empty
+        # diff, which the gate would have to treat as "nothing changed" — a green tick over an
+        # unexamined pull request.
+        if ! git fetch --no-tags origin "$BASE"; then
+          echo "::error::cannot fetch origin/$BASE, so this PR's diff cannot be computed. Check out with fetch-depth: 0."
+          exit 1
+        fi
 
         # 1. changed_files: each changed file + the new-side line numbers it added/modified.
         python3 - "$BASE" > /tmp/changed.json <<'PY'
         import json, subprocess, sys, re
         base = sys.argv[1]
-        diff = subprocess.run(["git","diff","--unified=0",f"origin/{base}...HEAD"],
-                              capture_output=True, text=True).stdout
+        # check=True on purpose: git exits non-zero when there is no merge base (the usual result of
+        # a shallow checkout), and capture_output means the failure otherwise arrives as an empty
+        # string that looks exactly like "this PR changed nothing".
+        try:
+            diff = subprocess.run(["git","diff","--unified=0",f"origin/{base}...HEAD"],
+                                  capture_output=True, text=True, check=True).stdout
+        except subprocess.CalledProcessError as e:
+            sys.stderr.write("::error::git diff against origin/%s failed (%s). Check out with "
+                             "fetch-depth: 0 so a merge base exists.\n" % (base, e.stderr.strip()))
+            sys.exit(1)
         files, cur = {}, None
         for ln in diff.splitlines():
             if ln.startswith("+++ b/"):
@@ -50,14 +75,37 @@ runs:
         FINDINGS="${TSENGINE_FINDINGS_JSON:-[]}"
         [ -f findings.json ] && FINDINGS="$(cat findings.json)"
 
+        # A pull request that changes no files does not exist. An empty list here is always a
+        # broken diff, and sending it asks the gate to judge nothing and answer green.
+        if [ "$(jq 'length' /tmp/changed.json)" -eq 0 ]; then
+          echo "::error::no changed files were computed for this PR — the diff is broken, not empty. Check out with fetch-depth: 0."
+          exit 1
+        fi
+
         jq -n --argjson cf "$(cat /tmp/changed.json)" --argjson f "$FINDINGS" \
           '{changed_files:$cf, findings:$f}' > /tmp/body.json
 
         # 3. ask the gate; fail the build when blocked.
-        RESP="$(curl -sS -X POST "$TENSORSHIELD_URL/v1/ci/pr-check" \
+        # --fail-with-body so an HTTP error is an error: without it a 500 or an expired token left
+        # RESP empty, `.blocked` was not "true", and the action exited 0 — the gate reporting a pass
+        # because it never reached the server.
+        if ! RESP="$(curl -sS --fail-with-body -X POST "$TENSORSHIELD_URL/v1/ci/pr-check" \
           -H "Authorization: Bearer $TENSORSHIELD_TOKEN" \
-          -H "Content-Type: application/json" --data @/tmp/body.json)"
+          -H "Content-Type: application/json" --data @/tmp/body.json)"; then
+          echo "::error::the TensorShield PR check could not be reached (response: ${RESP:-none}). This PR was NOT checked."
+          exit 1
+        fi
         echo "$RESP" | jq .
+        CONCLUSION="$(echo "$RESP" | jq -r '.conclusion // empty')"
+        if [ -z "$CONCLUSION" ]; then
+          echo "::error::the PR check returned no conclusion. This PR was NOT checked."
+          exit 1
+        fi
+        if [ "$CONCLUSION" = "neutral" ]; then
+          # Not a pass and not a block: the check ran but could not gate (policy off, or it was
+          # handed nothing to inspect). Surfaced so it never reads as green.
+          echo "::warning::TensorShield did not gate this PR: $(echo "$RESP" | jq -r '.summary // empty')"
+        fi
         if [ "$(echo "$RESP" | jq -r '.blocked')" = "true" ]; then
           echo "::error::TensorShield blocked this PR — a high+ security finding was introduced on a changed line."
           exit 1
