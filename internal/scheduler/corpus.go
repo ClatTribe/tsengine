@@ -33,7 +33,13 @@ type CorpusRefresher struct {
 	// the same reason as the sidecar above — the archive is large — and best-effort, so a failure
 	// leaves the other six untouched.
 	VulnrichmentURL string
-	Log             *log.Logger
+
+	// NVDURL is the CVSS base-score/vector source. URL-only with NO boolean twin, unlike the other two
+	// opt-in feeds: NVD publishes no single canonical archive we could default to (the live API is
+	// paginated and rate-limited), so an operator must name a bulk mirror. Offering a flag that turned it
+	// "on" with nowhere to fetch from would be a switch that does nothing.
+	NVDURL string
+	Log    *log.Logger
 }
 
 func (c *CorpusRefresher) logf(format string, args ...any) {
@@ -66,6 +72,7 @@ func (c *CorpusRefresher) refreshOptions(dir string) threatintel.RefreshOptions 
 		OutDir:          dir,
 		ExploitIntelURL: c.ExploitIntelURL,
 		VulnrichmentURL: c.VulnrichmentURL,
+		NVDURL:          c.NVDURL,
 	}
 }
 

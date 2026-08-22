@@ -16,6 +16,7 @@ func TestRefreshOptions_CarriesTheOptInFeeds(t *testing.T) {
 	c := &CorpusRefresher{
 		ExploitIntelURL: "https://example.test/nuclei.tar.gz",
 		VulnrichmentURL: "https://example.test/vulnrichment.tar.gz",
+		NVDURL:          "https://example.test/nvd/",
 	}
 	got := c.refreshOptions("/tmp/corpus")
 
@@ -26,6 +27,10 @@ func TestRefreshOptions_CarriesTheOptInFeeds(t *testing.T) {
 	if got.ExploitIntelURL != c.ExploitIntelURL {
 		t.Errorf("ExploitIntelURL regressed: %q", got.ExploitIntelURL)
 	}
+	if got.NVDURL != c.NVDURL {
+		t.Errorf("NVDURL did not reach the refresh (%q) — nothing else populates the corpus's CVSS "+
+			"field, so without this every entry scores 0", got.NVDURL)
+	}
 	if got.OutDir != "/tmp/corpus" {
 		t.Errorf("OutDir = %q", got.OutDir)
 	}
@@ -35,7 +40,7 @@ func TestRefreshOptions_CarriesTheOptInFeeds(t *testing.T) {
 // default would make every deployment fetch them.
 func TestRefreshOptions_OptInFeedsAreOffByDefault(t *testing.T) {
 	got := (&CorpusRefresher{}).refreshOptions("/tmp/corpus")
-	if got.VulnrichmentURL != "" || got.ExploitIntelURL != "" {
+	if got.VulnrichmentURL != "" || got.ExploitIntelURL != "" || got.NVDURL != "" {
 		t.Errorf("opt-in feeds must stay off unless configured: %+v", got)
 	}
 }

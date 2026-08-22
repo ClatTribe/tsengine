@@ -37,7 +37,19 @@ func (a *ThreatIntel) LookupCVE(_ context.Context, cve string) (string, bool) {
 // priority (a KEV-listed, high-EPSS CVE outranks a higher-CVSS dormant one).
 func renderThreatIntel(cve string, ti *types.ThreatIntel) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s — CVSS %.1f", cve, ti.CVSS)
+	// A missing score is reported as MISSING, never as 0.0.
+	//
+	// 0.0 is a real CVSS score and it means no impact — the strongest de-prioritisation signal there is.
+	// Only NVD populates this field (threatintel.go: "this is the source that populates CVSS") and NVD is
+	// opt-in, so on a refreshed corpus every entry carries 0 and this line was telling the agent that
+	// Log4Shell scores zero. The two human-facing surfaces already guard it (the finding page renders the
+	// score only when > 0, the VAPT report likewise); the agent's channel did not — the exact inverse of
+	// the weapon_rank gap, where the agent was told something the human was not.
+	if ti.CVSS > 0 {
+		fmt.Fprintf(&b, "%s — CVSS %.1f", cve, ti.CVSS)
+	} else {
+		fmt.Fprintf(&b, "%s — CVSS unavailable (NVD not ingested; absent, not zero)", cve)
+	}
 	if ti.KEV != nil && ti.KEV.Listed {
 		b.WriteString("; KEV: LISTED")
 		if !ti.KEV.DateAdded.IsZero() {

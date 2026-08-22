@@ -587,7 +587,8 @@ func main() {
 		DataPath:        os.Getenv("TSENGINE_THREAT_INTEL_CORPUS"),
 		Interval:        corpusRefreshInterval(),
 		ExploitIntelURL: exploitIntelURL(), // ADR 0019: opt-in offensive-face sidecar for the L2 pentester
-		VulnrichmentURL: vulnrichmentURL(), // opt-in 7th feed: CISA's SSVC decision points
+		VulnrichmentURL: vulnrichmentURL(),
+		NVDURL:          strings.TrimSpace(os.Getenv("TSENGINE_NVD_URL")), // opt-in 7th feed: CISA's SSVC decision points
 	}
 	go func() { _ = corpusRefresher.Run(monitorCtx) }()
 
