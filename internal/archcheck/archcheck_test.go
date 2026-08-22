@@ -136,3 +136,57 @@ func TestArchMdDescribesTheSemgrepConfigWeActuallyRun(t *testing.T) {
 		}
 	}
 }
+
+// arch.md's L1.5 hook chain must name every hook the code actually runs.
+//
+// It had drifted twice by 2026-08-22: the list omitted `service_eol` and `confidence` entirely, and
+// showed one flat sequence where the code runs two passes. Both omissions matter more than a missing
+// line usually would, because this is the document a reader consults for the ORDER, and the order is
+// load-bearing — a new hook placed by that list would land in the wrong pass. The absent `confidence`
+// is the sharper one: it sets verification_status and the 0-1 scalar, which is the FP-control signal
+// the incident and finding badges read, so arch.md described an engine with no confidence signal.
+//
+// The authority is chain.go, not either document. This test reads the constructors out of the real
+// chain and asserts arch.md names each one, so the next drift fails CI instead of misleading someone.
+func TestArchMdNamesEveryL15Hook(t *testing.T) {
+	chain, err := os.ReadFile(filepath.Join("..", "tracer", "hooks", "chain.go"))
+	if err != nil {
+		t.Fatalf("read chain.go: %v", err)
+	}
+	arch, err := os.ReadFile(filepath.Join("..", "..", "arch.md"))
+	if err != nil {
+		t.Fatalf("read arch.md: %v", err)
+	}
+	// Constructors invoked inside the two Default* chains — the hooks that really run.
+	ctor := regexp.MustCompile(`\bNew([A-Z]\w+)\(\),`)
+	found := ctor.FindAllStringSubmatch(string(chain), -1)
+	if len(found) < 8 {
+		t.Fatalf("only %d hooks parsed from chain.go — the parser broke, not the docs", len(found))
+	}
+	// hookDoc maps the constructor to the name arch.md is expected to use.
+	hookDoc := map[string]string{
+		"FPFilter":         "fp_filter",
+		"ServiceEOL":       "service_eol",
+		"SurfacePriority":  "surface_priority",
+		"Exploitability":   "exploitability",
+		"ThreatIntel":      "threat_intel",
+		"Compliance":       "compliance",
+		"Corroborator":     "corroborator",
+		"PostEmitVerifier": "post_emit_verifier",
+		"CrossToolMerge":   "cross_tool_merge",
+		"Confidence":       "confidence",
+	}
+	for _, m := range found {
+		name := m[1]
+		doc, known := hookDoc[name]
+		if !known {
+			t.Errorf("chain.go runs New%s() and this test does not know its arch.md name — a hook "+
+				"was added without documenting it here, which is how the list drifted before", name)
+			continue
+		}
+		if !strings.Contains(string(arch), doc) {
+			t.Errorf("arch.md never mentions %q, but chain.go runs New%s() — arch.md is the document "+
+				"people read instead of the source", doc, name)
+		}
+	}
+}
