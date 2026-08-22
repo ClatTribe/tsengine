@@ -60,6 +60,10 @@ func codeAnchors(t *testing.T, root, asset string) []string {
 		t.Fatalf("cannot read the %s handler (%v) — a guard that cannot see what it guards must "+
 			"fail, not skip", asset, err)
 	}
+	// Comments inside the block are PROSE, not tool names. A comment writing ToolArgs["webserver"]
+	// made this guard demand that arch.md document a tool called "webserver" — it read its own
+	// documentation as data. Found by hitting it while adding a genuinely new anchor.
+	b = stripGoComments(b)
 	m := anchorBlockRe.FindSubmatch(b)
 	if m == nil {
 		// Same reasoning one level in: if the anchors were refactored out of this shape, arch.md's
@@ -84,7 +88,7 @@ func TestArchMdNamesEveryAnchorTool(t *testing.T) {
 	root := repoRoot(t)
 	b, err := os.ReadFile(filepath.Join(root, "arch.md"))
 	if err != nil {
-		t.Skipf("arch.md not present (%v)", err)
+		t.Fatalf("cannot read arch.md (%v) — a guard that cannot see what it guards must fail", err)
 	}
 	doc := strings.ToLower(string(b))
 
@@ -337,4 +341,12 @@ func TestArchMdDocumentsTheWholeScanContract(t *testing.T) {
 				"integrator builds against, and an undocumented field is one they will not read", name)
 		}
 	}
+}
+
+// stripGoComments removes // and /* */ comments so a quoted word inside an explanation is not read
+// as code. Deliberately simple: it does not need to handle strings containing comment markers,
+// because it runs over a var block of tool names.
+func stripGoComments(src []byte) []byte {
+	out := regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAll(src, []byte(" "))
+	return regexp.MustCompile(`//[^\n]*`).ReplaceAll(out, []byte(" "))
 }

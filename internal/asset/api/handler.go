@@ -306,7 +306,11 @@ func (h *Handler) PlanEscalation(target types.Asset, surface []string, findings 
 			},
 		},
 	}
-	return append(out, asset.EvalTriggers(triggers, surface, findings, tool.Get)...)
+	out = append(out, asset.EvalTriggers(triggers, surface, findings, tool.Get)...)
+	// THREAT-INFORMED PROBES (§7.1), now that something fingerprints the server. Grounded: a probe
+	// is emitted only for a CVE really in the pinned corpus with a real exploitation signal, matched
+	// against the product httpx actually observed. No corpus, or no observation, is a no-op.
+	return append(out, common.ThreatInformedEscalation(findings)...)
 }
 
 // Filter drops health/spec endpoints from any per-op dispatch (arch.md
@@ -382,6 +386,18 @@ const apiNucleiTags = "api,graphql,jwt,oauth,exposure,config,files,misconfig," +
 // anchorNames is the single-target fallback set (no-spec path).
 var anchorNames = []string{
 	"nuclei",
+	// httpx FINGERPRINTS the server, which is the upstream half of threat-informed discovery.
+	//
+	// Without it this asset observed nothing about what the target RUNS, so
+	// common.ObservationsFromFindings returned empty and no CVE probe could ever be grounded — the
+	// engine could know a CVE is exploited in the wild against nginx, be pointed at an API served by
+	// that nginx, and never look for it. CLAUDE.md §7.1 recorded api as deliberately unwired for
+	// exactly this reason and named the fix as a fingerprinting anchor rather than an escalation
+	// that reads nothing; this is that anchor.
+	//
+	// Cheap and already an anchor on web and domain: one HTTP request per target, and its
+	// ToolArgs["webserver"] is a shape the observation extractor already honours.
+	"httpx",
 }
 
 // registryNames are on-demand (the "dig deeper" replay tier, §4.2). kiterunner
