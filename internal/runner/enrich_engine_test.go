@@ -131,3 +131,44 @@ func TestEngineScanRecordsTheL15AuditTrailOnTheEngagement(t *testing.T) {
 	}
 	t.Logf("engagement recorded %d L1.5 audit entries", len(engs[0].L15Audit))
 }
+
+// The attributor's audit entries must reach the ENGAGEMENT's l15_audit_log.
+//
+// The attribution happens outside the hook chain, so its entries do not arrive with enr.Audit — the
+// runner has to carry them in. Without that the added CWE drives a compliance control mapping while
+// nothing records that a model, not the scanner, proposed the class.
+//
+// This tests the WIRING rather than the entry builder: mutation of the previous version showed the
+// builder's own tests passed with the runner discarding the result.
+func TestEngineScanCarriesTheAttributionAuditOntoTheEngagement(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	asset := platform.Asset{ID: "a1", TenantID: "t1", Type: "web_application", Target: "https://acme.test/"}
+	_ = st.PutAsset(ctx, asset)
+
+	s := &Service{
+		Store: st, Scanner: decoyScanner{}, NewID: func() string { return "id-1" },
+		AttributeCWEs: func(_ context.Context, _ string, fs []types.Finding) ([]types.Finding, []types.AuditEntry) {
+			return fs, []types.AuditEntry{{
+				FindingID: "f-x", Action: "annotate", Rule: "cweattrib::model-attributed-cwe",
+				Reason: "the scanner reported no CWE; a model proposed CWE-89",
+			}}
+		},
+	}
+	if _, _, err := s.scanAsset(ctx, asset, "test"); err != nil {
+		t.Fatalf("scanAsset: %v", err)
+	}
+	engs, err := st.ListEngagements(ctx, "t1")
+	if err != nil || len(engs) == 0 {
+		t.Fatalf("no engagement recorded: %v", err)
+	}
+	var found bool
+	for _, a := range engs[0].L15Audit {
+		if a.Rule == "cweattrib::model-attributed-cwe" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the attribution audit did not reach the engagement: %+v", engs[0].L15Audit)
+	}
+}

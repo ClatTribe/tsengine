@@ -2,6 +2,8 @@ package platformapi
 
 import (
 	"context"
+
+	"github.com/ClatTribe/tsengine/internal/cweattrib"
 	"strings"
 	"testing"
 
@@ -75,7 +77,10 @@ func TestCWEAttribution_RespectsTheBound(t *testing.T) {
 // this tier, so it must be a no-op rather than an error.
 func TestCWEAttributor_NoModelIsANoOp(t *testing.T) {
 	fs := []types.Finding{{ID: "f1", Title: "SQL injection"}}
-	out := Deps{}.CWEAttributor()(context.Background(), "t1", fs)
+	out, audit := Deps{}.CWEAttributor()(context.Background(), "t1", fs)
+	if len(audit) != 0 {
+		t.Errorf("nothing was attributed, so nothing should be logged: %+v", audit)
+	}
 	if len(out) != 1 || len(out[0].CWE) != 0 {
 		t.Errorf("attribution ran without a model: %+v", out)
 	}
@@ -87,5 +92,40 @@ func TestCWEAttribution_PromptCarriesTheFinding(t *testing.T) {
 	_, _ = attributeWith(llm, []types.Finding{{ID: "f1", Title: "unsafe deserialization of user input"}}, 5)
 	if !strings.Contains(llm.prompt, "unsafe deserialization") {
 		t.Errorf("the model was asked to classify without the finding's text: %q", llm.prompt)
+	}
+}
+
+// AN ATTRIBUTED CWE MUST BE VISIBLE AS OURS.
+//
+// The class a model proposes DRIVES compliance control mapping, so without an audit entry it is
+// indistinguishable from one the scanner reported — and a control shows as affected on evidence
+// nobody can trace back. The KEV CWE backfill one hook away logs threat_intel::kev-cwe-backfill for
+// exactly this reason, and §2.5 requires L1.5 changes to be logged and recoverable.
+//
+// This was missing when I wired the tier, which is the same defect the tier itself guards against.
+func TestAttributionAudit_RecordsTheClassAsOurs(t *testing.T) {
+	got := attributionAudit([]cweattrib.Result{
+		{FindingID: "f1", CWE: "CWE-89", Reason: "attributed from scanner text"},
+	})
+	if len(got) != 1 {
+		t.Fatalf("an attribution must be logged, got %d entries", len(got))
+	}
+	if got[0].FindingID != "f1" || !strings.Contains(got[0].Reason, "CWE-89") {
+		t.Errorf("the entry must name the finding and the class: %+v", got[0])
+	}
+	if !strings.Contains(got[0].Reason, "OURS") {
+		t.Errorf("the entry must say the class is ours rather than the scanner's: %q", got[0].Reason)
+	}
+}
+
+// A REFUSAL changes nothing, so it is not logged. A log of non-events buries the entries that record
+// a real change to a finding.
+func TestAttributionAudit_RefusalsAreNotLogged(t *testing.T) {
+	got := attributionAudit([]cweattrib.Result{
+		{FindingID: "f1", Reason: "model declined — not a weakness class"},
+		{FindingID: "f2", Reason: "CWE-99999 is outside the crosswalk — discarded rather than annotated"},
+	})
+	if len(got) != 0 {
+		t.Errorf("nothing changed on either finding, so nothing should be logged: %+v", got)
 	}
 }
