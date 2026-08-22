@@ -561,7 +561,7 @@ the intel loop is closed there by construction, and a nuclei probe has no live
 target inside an image. (An SBOM-x-KEV cross-check for packages grype's DB
 missed would need affected-VERSION-RANGE data the corpus does not carry;
 guessing from a product-name match alone would be FP-prone, so it is NOT done
--- Sec 10.)
+-- Sec 10.) **Investigated 2026-08-22 and the reason is stronger than "the corpus lacks ranges".** OSV.dev does publish them free and keyless, but NOT where a by-CVE ingest would look: verified live, the `CVE-2021-44228` record carries ONE affected entry with no package and only GIT commit ranges â the ecosystem data (Maven `org.apache.logging.log4j:log4j-core`, 2.13.0â2.15.0) lives in the aliased GHSA record. So the naive ingest yields package-less records and an SBOM cross-check that matches nothing, reading as "no KEV packages in your SBOM". The deeper reason not to build it: MATCHING a version against those ranges needs per-ecosystem ordering (Maven vs npm semver vs PEP 440 vs Go), and a hand-rolled comparator is the Sec 13 in-house engine, wrong in the direction of telling a customer they are affected when they are not. `osv-scanner` â which we already wrap â does it correctly, and its findings DO reach KEV/EPSS: `preferCVE` rewrites a GHSA-primary id to its CVE alias so `threat_intel`'s rule_id pattern can read it. That four-line function was UNTESTED and is now pinned; simplifying it to `return id` would have silently stripped all threat intel from every GHSA-primary dependency finding, Log4Shell included.
 
 **5th touchpoint — the OFFENSIVE face (ADR 0019, built + wired).** The six feeds above index the
 DEFENDER's face of a CVE (how bad / exploited / does a weapon exist — by reference). The offensive
