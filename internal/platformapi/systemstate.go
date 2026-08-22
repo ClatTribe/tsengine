@@ -59,6 +59,68 @@ type Degradation struct {
 	// ActionLabel/ActionHref point at the fix. Empty when there is nothing the user can do from here.
 	ActionLabel string `json:"action_label,omitempty"`
 	ActionHref  string `json:"action_href,omitempty"`
+	// Audience is WHO can act on this (ADR 0022 §2). The threat-intel banner told every tenant to
+	// "set TSENGINE_THREAT_INTEL_CORPUS and run `tsengine corpus refresh`" — against a binary they do
+	// not have. The corpus is global world-state (§7), so that is an operator's job, and the person
+	// reading it could do nothing but worry.
+	//
+	// A message that reaches one person too many is noise. A message that reaches nobody recreates
+	// the silent-signal bug this whole file exists to prevent — so AudienceBoth is the default, and
+	// narrowing is the deliberate act.
+	Audience string `json:"audience"`
+}
+
+// Who a degradation is for. Narrow only when the other reader genuinely cannot act AND does not
+// need to know the view may be wrong.
+const (
+	AudienceBoth     = "both"     // everyone: it changes what the screen means for any reader
+	AudienceTenant   = "tenant"   // the customer: their data, their connection, their choice
+	AudienceOperator = "operator" // whoever runs the deployment: env, binary, shared corpus
+)
+
+// degradationAudience is the assignment for every declared kind. It is a map rather than a field set
+// at each call site so the guard test can assert completeness against AllDegradationKinds() — a kind
+// added without an audience is a build failure, not a message that quietly reaches no one.
+var degradationAudience = map[string]string{
+	DegradationHalted:           AudienceBoth,   // the owner halted it; an operator debugging "why is nothing running" needs it too
+	DegradationLastScanFailed:   AudienceBoth,   // the tenant's findings are stale; the operator may need to look at the sandbox
+	DegradationAIOff:            AudienceTenant, // their plan, their key, their upgrade — an operator cannot add it for them
+	DegradationConnectionBroken: AudienceTenant, // their OAuth grant; only they can re-authorise
+	DegradationCloudCoverage:    AudienceTenant, // their snapshot is missing fields; their collector posts it
+	DegradationThreatIntelStale: AudienceBoth,   // BOTH, with different text — see below
+}
+
+// Audience returns who should see this degradation, defaulting to both when a kind has no explicit
+// assignment. Defaulting wide is the safe direction: over-showing is noise, under-showing is silence.
+func (d Degradation) audienceOrBoth() string {
+	if d.Audience != "" {
+		return d.Audience
+	}
+	if a, ok := degradationAudience[d.Kind]; ok {
+		return a
+	}
+	return AudienceBoth
+}
+
+// VisibleTo filters a degradation set for one reader. `operator` sees operator+both, everyone else
+// sees tenant+both.
+func VisibleTo(all []Degradation, isOperator bool) []Degradation {
+	out := make([]Degradation, 0, len(all))
+	for _, d := range all {
+		switch d.audienceOrBoth() {
+		case AudienceBoth:
+			out = append(out, d)
+		case AudienceOperator:
+			if isOperator {
+				out = append(out, d)
+			}
+		case AudienceTenant:
+			if !isOperator {
+				out = append(out, d)
+			}
+		}
+	}
+	return out
 }
 
 // The kinds. Every one must be produced by computeDegradations and is asserted so by a test — a kind
@@ -109,9 +171,14 @@ func AllDegradationKinds() []string {
 var degradationRank = map[string]int{"critical": 0, "warning": 1, "info": 2}
 
 // handleSystemState returns every active reason this tenant's view may be incomplete.
+//
+// FILTERED SERVER-SIDE, not in the UI (ADR 0022 §2). A tenant should never RECEIVE the operator
+// remedy, not merely be prevented from rendering it: shipping "set TSENGINE_THREAT_INTEL_CORPUS" to
+// a customer's browser and hiding it with CSS still puts our deployment's internals in their
+// devtools, and any future consumer of this endpoint would pick it back up.
 func (d Deps) handleSystemState(w http.ResponseWriter, r *http.Request, tenantID string) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"degradations": d.computeDegradations(r.Context(), tenantID),
+		"degradations": VisibleTo(d.computeDegradations(r.Context(), tenantID), false),
 	})
 }
 
@@ -216,21 +283,39 @@ func (d Deps) computeDegradations(ctx context.Context, tenantID string) []Degrad
 	// because this is the list of reasons the CURRENT VIEW may not mean what it says, and a stale
 	// KEV feed changes what every severity on every page is worth.
 	if age, stale, embedded := hooks.ThreatIntelAge(nowUTC()); stale {
-		detail := "Exploitation intelligence (CISA KEV, EPSS) is " + humanDays(age) + " old. " +
-			"Anything added to KEV since then is not flagged here: no known-exploited badge, no " +
-			"ransomware flag, and no accelerated CISA deadline. Severities below are correct for " +
-			"what was known then, not for today."
+		// ADR 0022 §2 — the SAME condition, told to two people who can do different things about it.
+		//
+		// The tenant needs the CONSEQUENCE: every severity on every page may understate a threat
+		// discovered since the snapshot. They cannot fix it — the corpus is global world-state (§7)
+		// and lives with the binary — so handing them an env var and a shell command was handing
+		// them homework they cannot do, in an alarm-coloured band, on the first screen after login.
+		//
+		// The operator needs the REMEDY, and is the only reader for whom it is actionable.
+		consequence := "Exploitation intelligence (the feeds that flag actively-exploited " +
+			"vulnerabilities) is " + humanDays(age) + " old. Anything newly known to be under attack " +
+			"since then is not badged here, so the severities on this page may be understated. " +
+			"Nothing you have connected is affected — this is our data, not yours."
+		out = append(out, Degradation{
+			Kind: DegradationThreatIntelStale, Severity: "warning", Audience: AudienceTenant,
+			Title:  "Threat data is " + humanDays(age) + " old",
+			Detail: consequence,
+		})
+
+		remedy := "Exploitation intelligence (CISA KEV, EPSS) is " + humanDays(age) + " old. " +
+			"Anything added to KEV since then is not flagged: no known-exploited badge, no " +
+			"ransomware flag, and no accelerated CISA deadline. Severities are correct for what was " +
+			"known then, not for today."
 		if embedded {
-			detail += " This deployment is using the snapshot built into the binary — set " +
+			remedy += " This deployment is using the snapshot built into the binary — set " +
 				"TSENGINE_THREAT_INTEL_CORPUS and run `tsengine corpus refresh` to keep it current."
 		} else {
-			detail += " The corpus is configured but has not refreshed — check the refresh job can " +
+			remedy += " The corpus is configured but has not refreshed — check the refresh job can " +
 				"reach cisa.gov and first.org."
 		}
 		out = append(out, Degradation{
-			Kind: DegradationThreatIntelStale, Severity: "warning",
+			Kind: DegradationThreatIntelStale, Severity: "warning", Audience: AudienceOperator,
 			Title:  "Exploitation intelligence is out of date",
-			Detail: detail,
+			Detail: remedy,
 		})
 	}
 
