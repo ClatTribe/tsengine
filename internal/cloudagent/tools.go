@@ -31,7 +31,7 @@ func tools() []toolDef {
 	return []toolDef{
 		{"list_resources", "list_resources(kind?, only_sensitive?) — inventory: ids/names/kind/flags. kind ∈ resource|principal|data|network", tList},
 		{"get_resource", "get_resource(id, live?) — one resource's metadata + its outgoing edges (moves an attacker could make from it). Pass live:true to ALSO re-read it from the account right now: everything else you see was captured before this investigation began, so a flag a path turns on (public, privileged) may already have changed. Do that before recording an issue whose severity depends on such a flag. Read-only; it answers AGREES / DIFFERS / COULD NOT CHECK and never reads an unread surface as an absent resource.", tGet},
-		{"resolve_access", "resolve_access(principal, resource, action?) — does the principal have an effective path of access to the resource? (graph reachability over resolved IAM). Pass action (a provider action e.g. iam:PassRole, s3:GetObject) to ALSO run a PROVIDER dry-run: ask AWS/GCP/Azure's own policy simulator whether the move would be ALLOWED right now, WITHOUT performing it — upgrading the answer from config-possible (our graph) to provider-confirmed (the authority that enforces the policy). Read-only; ALLOW=confirmed exploitable, DENY=confirmed closed (do not record it), UNKNOWN=unproven (never \"safe\").", tResolve},
+		{"resolve_access", "resolve_access(principal, resource, action?) — does the principal have an effective path of access to the resource? (graph reachability over resolved IAM). Pass action (a provider action e.g. iam:PassRole, s3:GetObject) to ALSO run a PROVIDER dry-run: ask AWS/GCP/Azure's own policy simulator whether the move would be ALLOWED right now, WITHOUT performing it — upgrading the answer from config-possible (our graph) to provider-confirmed (the authority that enforces the policy). Read-only; ALLOW=provider-confirmed AUTHORIZATION for that ONE action (NOT proof of exploitability \u2014 network reachability, credential acquisition and the rest of the workflow stay unproven), DENY=authoritative refusal for that tuple (do not record a path that depends on it), UNKNOWN=unproven (never \"safe\").", tResolve},
 		{"find_paths", "find_paths(target) — concrete attack paths from the internet/public surface to the target node, if any", tFindPaths},
 		{"blast_radius", "blast_radius(principal) — every crown jewel (sensitive data / privileged identity) reachable if this principal is compromised", tBlast},
 		{"enumerate_attack_paths", "enumerate_attack_paths() — the deterministic engine's candidate attack paths (a fast prepass to seed your investigation; verify/extend them)", tEnumerate},
@@ -450,7 +450,7 @@ func edgeNeedsAuthorization(k cloudgraph.EdgeKind) bool {
 // confirmed ALLOW this run. The action is not carried on the graph edge, so any confirmed action
 // across the hop counts for that hop.
 func (cc *Context) hopConfirmed(from, to string) bool {
-	for k, r := range cc.confirmed {
+	for k, r := range cc.probes {
 		if r.Verdict != VerdictAllow {
 			continue
 		}
