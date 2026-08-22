@@ -176,6 +176,7 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
           <ConfidenceBadge verification={i.verification} confidence={i.confidence} />
           <TriageBadge verdict={i.triage_verdict} skill={i.triage_skill} />
           <BlastRadiusBadge blast={i.blast_radius} />
+          <ConfirmingFixBadge status={i.status} absentPasses={i.absent_passes} />
           {respondPending && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30">
               <Wrench className="h-2.5 w-2.5" /> fix ready
@@ -257,6 +258,25 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
       />
       {href ? <Link href={href} className="block">{body}</Link> : body}
     </li>
+  );
+}
+
+// ConfirmingFixBadge says an open incident's issue has stopped appearing but is being held open until
+// the absence repeats. Without it the queue renders "still firing" and "gone from the last scan" the
+// same way — and the person most likely to be looking is the one who just deployed the fix, for whom
+// an unchanged alert reads as the fix having failed. Only the count we actually have is stated; the
+// configured threshold is a server-side policy this page is not told, and naming a number we cannot
+// see would be inventing the very thing the badge exists to be honest about.
+function ConfirmingFixBadge({ status, absentPasses }: { status?: string; absentPasses?: number }) {
+  const n = typeof absentPasses === "number" ? absentPasses : 0;
+  if (status !== "open" || n < 1) return null;
+  return (
+    <span
+      className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted"
+      title="This issue did not appear in the most recent scan(s), but one quiet scan is not proof it is gone — a scanner can succeed and simply report less. The incident stays open until the absence repeats, then resolves."
+    >
+      confirming fix · absent {n} {n === 1 ? "scan" : "scans"}
+    </span>
   );
 }
 

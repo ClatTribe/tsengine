@@ -631,6 +631,15 @@ export interface Incident {
   // blast_radius: read-time impact sizing — does this incident chain to a crown jewel, and how far away?
   blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
   attacked?: boolean; // escalated because the issue is under attack in production
+  // Consecutive authoritative scans in which this incident's issue did not appear, reset the moment
+  // it reappears. Non-zero on an OPEN incident means the fix is being confirmed, not that nothing
+  // has happened — and without it the queue renders "still firing" and "gone from the last scan,
+  // holding until the absence repeats" identically. That matters most to the person who just
+  // deployed a fix and is looking for whether it worked: seeing the alert unchanged reads as the
+  // fix having failed. The hysteresis exists because one quiet scan is not proof (measured on
+  // WAVSEP: dalfox found 7 cases in one run and 9 in the next on an unchanged target, succeeding
+  // both times, so no failure signal fired).
+  absent_passes?: number;
   // Ransomware use is a STRICTLY STRONGER claim than KEV listing — exploited in the wild versus
   // exploited by crews who encrypt the estate — which is why the corpus keeps them separate and only
   // CISA's literal "Known" counts. A queue that shows neither makes the responder rank by severity

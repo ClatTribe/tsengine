@@ -71,6 +71,16 @@ var required = []struct {
 			"(BOLA/BFLA needs two identities) was never reachable",
 	},
 	{
+		page:  "frontend/app/(app)/incidents/page.tsx",
+		field: "absent_passes",
+		wouldOtherwiseClaim: "that an incident whose issue has stopped appearing is in the same state " +
+			"as one still firing. The detector holds it open deliberately, because one quiet scan is " +
+			"not proof (dalfox found 7 cases in one WAVSEP run and 9 in the next on an unchanged " +
+			"target, succeeding both times, so no failure signal fired) — but rendered identically " +
+			"the reader cannot tell waiting-out-hysteresis from nothing-happened, and the reader most " +
+			"likely to be looking is the one who just deployed the fix",
+	},
+	{
 		page:  "frontend/app/(app)/findings/[id]/page.tsx",
 		field: "corroborated_by",
 		wouldOtherwiseClaim: "'corroborated' as a bare word next to a confidence number, with no way " +
