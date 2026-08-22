@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/cloudiam"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
 )
@@ -73,8 +74,55 @@ func CoverAWS(raw awsinventory.RawAWS) InventoryCoverage {
 			"%d principals carry no policy documents, so no escalation can be computed. The `admin` flag "+
 				"records who ALREADY is an administrator; it cannot answer who can BECOME one. Populate "+
 				"`policies` (and `permission_boundary`) per principal.", principals)
+		return c
+	}
+
+	// A policy that is PRESENT but unreadable is the case the check above cannot see: withPolicies
+	// counts it, so no note fires, while the ingest skips every unparseable document and the account
+	// comes back with no escalation paths. "We could not read your policies" and "nobody can escalate"
+	// then look identical, and only one of them is true.
+	//
+	// This is not hypothetical. A snapshot carrying AWS's own URL-encoded documents produced zero
+	// privescs and zero notes before this — a confident all-clear over an account nothing had been
+	// evaluated in. cloudiam.Parse now reads that form, so what lands here is genuinely unreadable,
+	// which is exactly when someone needs to be told.
+	if names := unreadablePrincipals(raw); len(names) > 0 {
+		c.Notes["unreadable-policies"] = fmt.Sprintf(
+			"%d principal(s) carry policy documents that could not be parsed, so nothing was evaluated "+
+				"for them and any escalation they permit is INVISIBLE here — not absent: %s. Check the "+
+				"collector is forwarding the policy JSON intact.", len(names), strings.Join(names, ", "))
 	}
 	return c
+}
+
+// unreadablePrincipals names principals whose every policy document failed to parse. Every-not-any
+// deliberately: a principal with one bad document and one good one was still evaluated against the
+// good one, so its escalations are reported and it is not the silent case this note is about.
+func unreadablePrincipals(raw awsinventory.RawAWS) []string {
+	var out []string
+	check := func(name string, docs []string) {
+		var present, bad int
+		for _, js := range docs {
+			if strings.TrimSpace(js) == "" {
+				continue
+			}
+			present++
+			if d, err := cloudiam.Parse([]byte(js)); err != nil || d == nil {
+				bad++
+			}
+		}
+		if present > 0 && bad == present {
+			out = append(out, name)
+		}
+	}
+	for _, r := range raw.Roles {
+		check(r.Name, r.PoliciesJSON)
+	}
+	for _, u := range raw.Users {
+		check(u.Name, u.PoliciesJSON)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // CoverGCP reports what a posted RawGCP cannot answer.

@@ -11,6 +11,7 @@ package cloudiam
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 )
 
@@ -57,13 +58,31 @@ func (s *stringOrSlice) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Parse decodes a policy document from JSON.
+// Parse decodes a policy document from JSON, accepting the URL-encoded form AWS's own API returns.
+//
+// GetRolePolicy, GetUserPolicy and GetPolicyVersion return PolicyDocument URL-ENCODED — the AWS API
+// documentation says so — and a collector that forwards that string verbatim is doing the obvious
+// thing. Before this it failed to parse, every policy was skipped as unreadable, and the account came
+// back with no escalation paths and nothing saying why: a realistic snapshot producing a confident
+// "you are clean". The coverage layer now names that case too, but a document we can plainly read is
+// better than a note explaining why we could not.
+//
+// This is a decode, not a guess: the fallback is accepted ONLY if the decoded bytes actually parse as
+// a policy document. Anything else returns the ORIGINAL error, since a failure to url-decode is not
+// the interesting half of "this is not a policy".
 func Parse(b []byte) (*Document, error) {
 	var d Document
-	if err := json.Unmarshal(b, &d); err != nil {
-		return nil, err
+	err := json.Unmarshal(b, &d)
+	if err == nil {
+		return &d, nil
 	}
-	return &d, nil
+	if dec, derr := url.QueryUnescape(string(b)); derr == nil && dec != string(b) {
+		var d2 Document
+		if json.Unmarshal([]byte(dec), &d2) == nil {
+			return &d2, nil
+		}
+	}
+	return nil, err
 }
 
 // Decision is the result of evaluating an (action, resource) against a policy.
