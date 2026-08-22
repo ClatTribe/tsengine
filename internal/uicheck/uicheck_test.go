@@ -72,6 +72,16 @@ var required = []struct {
 	},
 	{
 		page:  "frontend/app/(app)/findings/[id]/page.tsx",
+		field: "advisories",
+		wouldOtherwiseClaim: "nothing at all, which is the problem — the vendor advisory is the page " +
+			"that carries the patched version and the workaround, so a responder holding a KEV CVE " +
+			"had to go and find it. CISA publishes the links with every KEV entry (3,023 live) and " +
+			"the ingest was rescuing them from being discarded on the stated grounds of what a " +
+			"responder sees; they then reached exactly one renderer, the agent's on-demand lookup " +
+			"for CVEs that are NOT in the findings",
+	},
+	{
+		page:  "frontend/app/(app)/findings/[id]/page.tsx",
 		field: "weapon_rank",
 		wouldOtherwiseClaim: "that every public exploit is equally usable — a Metasploit module ranked " +
 			"excellent runs use/set/run and never crashes the service, one ranked manual may not work " +

@@ -56,8 +56,19 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
   // CVSS and neither on KEV, "an attacker cannot automate this" is exactly the thing that separates
   // them, and hiding the negative would leave the reader where they started.
   const ssvcAuto = f.threat_intel?.ssvc?.automatable || null;
+  // The vendor's own advisory — the page the responder actually needs, because it carries the patched
+  // version and the workaround. CISA publishes these with every KEV entry and the ingest was rescuing
+  // them from being discarded; they then reached exactly one renderer, the agent's on-demand CVE
+  // lookup, which is for CVEs that are NOT in the findings. So on the finding that HAS them, nobody
+  // could see them. Only real http(s) links are shown: the feed's notes field is prose, and a
+  // fragment of a sentence rendered as a link is worse than no link, since it does not resolve.
+  const advisories = (Array.isArray(ti?.advisories) ? ti.advisories : [])
+    .filter((u): u is string => typeof u === "string" && /^https?:\/\//i.test(u.trim()))
+    .map((u) => u.trim())
+    .slice(0, 6);
   const ssvcExploit = f.threat_intel?.ssvc?.exploitation || null;
-  const hasThreatIntel = kev || cvss !== null || epssPct !== null || publicExploit || exploitReason !== null || ssvcAuto !== null;
+  const hasThreatIntel =
+    kev || cvss !== null || epssPct !== null || publicExploit || exploitReason !== null || ssvcAuto !== null || advisories.length > 0;
   const controls = Object.entries(f.compliance ?? {}).filter(([, v]) => Array.isArray(v) && v.length > 0);
   const hasOpenReview = reviews.some((r) => r.subject_id === id && r.status === "open");
   // The remediation the agent has queued for THIS finding (if any) — the agentic signal.
@@ -130,6 +141,26 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
               </span>
             )}
           </div>
+
+          {advisories.length > 0 && (
+            <div className="mt-2 border-t border-border pt-2">
+              <div className="mb-1 text-[11px] text-faint">Vendor advisory</div>
+              <ul className="space-y-0.5">
+                {advisories.map((u) => (
+                  <li key={u}>
+                    <a
+                      href={u}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      className="mono break-all text-[11px] text-muted underline decoration-dotted underline-offset-2 transition hover:text-ink"
+                    >
+                      {u}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

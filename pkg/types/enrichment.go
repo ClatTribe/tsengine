@@ -82,6 +82,12 @@ func (f Finding) L15Summary() string {
 				t = append(t, "ssvc-impact:total")
 			}
 		}
+		// ThreatIntel.Advisories is deliberately NOT tagged here, and the omission is considered
+		// rather than an oversight: this line ranks, and a vendor advisory URL carries no ranking
+		// information — every CVE in the KEV catalogue has one. It belongs where a responder acts,
+		// which is the finding page, and it is reachable to an agent through query_threat_intel.
+		// Adding six URLs to a compact priority digest would cost the agent context and tell it
+		// nothing about what to do first.
 		if strings.Contains(ti.CVSSVector, "AV:N") {
 			t = append(t, "av:network") // NVD CVSS vector says network-attackable (no local access needed) — the strongest reachability signal
 		}
