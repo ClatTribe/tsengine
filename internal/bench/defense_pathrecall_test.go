@@ -73,3 +73,35 @@ func TestRenderDefenseLedger_MarksAScenarioNeitherArmPasses(t *testing.T) {
 		t.Errorf("a +0%% lift between two failing arms must be marked:\n%s", out)
 	}
 }
+
+// A lift table over a saturated substrate cannot measure a lift, and +0% then reads as "the agent
+// adds nothing" when the true statement is "this bench cannot tell".
+//
+// The cloud-engine lane already carries this idea (clouddiscrimination.go: with no headroom "the run
+// can't tell a great engineer from a mediocre one"). This lane — the one whose HERO metric IS the
+// ablation — had no such check, while its substrate sat at 100% on all four scenarios.
+func TestRenderDefenseLedger_SaysWhenTheAblationHasNoHeadroom(t *testing.T) {
+	out := RenderDefenseLedgerMarkdown([]DefenseLedgerEntry{
+		entry("substrate", "a", true, 1.0, 1, 1),
+		entry("substrate", "b", true, 1.0, 1, 1),
+		entry("agent", "a", true, 1.0, 1, 1),
+	})
+	if !strings.Contains(out, "No headroom") {
+		t.Errorf("a saturated substrate must be disclosed, or +0%% reads as a verdict on the agent:\n%s", out)
+	}
+	if !strings.Contains(out, "cannot tell") {
+		t.Error("and it must say what the +0% actually means")
+	}
+}
+
+// With real headroom the notice must NOT fire — a permanent caveat is one nobody reads, and it would
+// discredit a genuine +0% measured against a substrate that has room to be beaten.
+func TestRenderDefenseLedger_NoNoticeWhenThereIsHeadroom(t *testing.T) {
+	out := RenderDefenseLedgerMarkdown([]DefenseLedgerEntry{
+		entry("substrate", "a", false, 0.5, 2, 1), // the substrate can be beaten here
+		entry("agent", "a", true, 1.0, 2, 2),
+	})
+	if strings.Contains(out, "No headroom") {
+		t.Errorf("this substrate scores 50%% — the agent's +50%% lift is a real measurement:\n%s", out)
+	}
+}
