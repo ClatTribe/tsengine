@@ -266,7 +266,8 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	scanned := 0
 	var firstErr error
 	var current []types.Finding
-	// degraded: at least one asset's scan lost a tool to a timeout/error this pass.
+	// degraded: this pass is NOT AUTHORITATIVE ABOUT ABSENCE — some part of the estate it claims to
+	// cover was not actually looked at.
 	//
 	// Measured cause: TSENGINE_TOOL_TIMEOUT is a WALL-CLOCK cap and tools dispatch concurrently, so
 	// under CPU contention a tool that normally completes is killed and contributes nothing. The TOOL
@@ -278,10 +279,25 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// Detector.Reconcile RESOLVES an incident whose issue is gone, and retest.Verify marks a
 	// remediation "fixed" when its keys are gone. Either one tells the customer a live vulnerability
 	// was fixed because a scanner timed out.
+	//
+	// IT ORIGINALLY COVERED ONLY THE TOOL CASE, and a whole asset dropping out is a strictly larger
+	// absence than one tool inside it. An asset skipped for an inactive connection, or one whose scan
+	// errored, contributes NOTHING to `current` — so every finding key on it is missing, and
+	// retest.Verify reads that as a confirmed fix. FixStatusFixed is TERMINAL, so a revoked token or a
+	// quarantined connection produced a permanent, unretractable "your fix is confirmed" for an asset
+	// nobody looked at. That is the strongest positive claim this product makes, issued on no evidence.
 	degraded := false
 	for _, a := range assets {
 		if connInactive(statuses, a) {
 			// OM-5 fail-closed: an asset whose connection is unavailable/quarantined is not scanned.
+			// Not scanning it is correct; concluding anything from its silence is not.
+			//
+			// This sets neither firstErr nor scanned, so on a tenant where OTHER assets scan fine the
+			// pass looks complete: firstErr == nil, scanned > 0, and the reconcile + retest block runs
+			// over findings that are missing this asset entirely. retest.Verify then reads that absence
+			// as a confirmed fix and records FixStatusFixed, which is TERMINAL. One revoked GitHub token
+			// among several connections is enough, and that is the ordinary case rather than the edge.
+			degraded = true
 			slog.Info("[scan] skipped: connection inactive", "asset", a.ID, "type", a.Type, "target", a.Target)
 			continue
 		}
@@ -290,6 +306,10 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 			// Per-asset outcome is logged so a failed/empty scan is VISIBLE — RescanTenant only surfaces the
 			// first error to the caller, which used to hide why a given asset produced nothing.
 			slog.Warn("[scan] asset errored", "asset", a.ID, "type", a.Type, "target", a.Target, "err", err.Error())
+			// No degraded flag needed here: this path sets firstErr, and the reconcile + retest
+			// block is already gated on firstErr == nil, so an errored asset stops the whole pass
+			// from concluding anything from absence. The inactive-connection skip above is the case
+			// that slips through, because it sets neither firstErr nor scanned.
 			if firstErr == nil {
 				firstErr = err
 			}
