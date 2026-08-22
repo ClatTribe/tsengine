@@ -1,7 +1,15 @@
 # ADR 0023 — The marketing surface is correct everywhere it is generated and wrong everywhere it is typed
 
-**Status:** Proposed · three decisions below need an answer that is not in the repo (§Open)
+**Status:** Accepted · all seven decisions implemented (56b74b2, ef94657, 2db417f, 531b417).
+The three questions in §Open are still unanswered and are not blocked on any of them.
 **Date:** 2026-08-22
+
+> **Implementation note.** Building decision 7 showed that the audits behind this ADR had been
+> reading a subset of the site. Both scanned only the top level of `.next/server/app`, so the
+> 25 framework pages, 8 blog posts and 2 resources — 35 of 82 rendered pages — were never
+> length-checked. The guard walks recursively and reported 47 further problems on its first
+> run, all real. The counts in §What was measured are left as they were recorded; they
+> understated the problem, and the correction is the point.
 
 ## Context
 
