@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldAlert, CheckCircle2, Wrench, ArrowRight, Flame, TimerOff, CalendarClock } from "lucide-react";
+import { ShieldAlert, CheckCircle2, Wrench, ArrowRight, Flame, TimerOff, CalendarClock, Skull } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Incident } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
@@ -9,6 +9,23 @@ import { SOCScorecard } from "@/components/incidents/soc-scorecard";
 import { timeAgo, duration } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+// cisaDue reads the incident's CISA BOD 22-01 deadline. Returns null when there is none — most
+// incidents have no KEV CVE behind them, and a badge on every row is a badge nobody reads.
+//
+// Overdue is computed against the ABSOLUTE date CISA published, never against when we opened the
+// incident: a CVE catalogued months ago is already past its deadline the moment it is detected, and
+// the whole reason the date is carried verbatim is to avoid restarting a clock the authority has
+// already run out.
+function cisaDue(i: Incident): { label: string; overdue: boolean } | null {
+  if (!i.kev_due_at) return null;
+  const due = new Date(i.kev_due_at);
+  if (Number.isNaN(due.getTime())) return null;
+  return {
+    label: due.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+    overdue: due.getTime() < Date.now(),
+  };
+}
 
 export default async function IncidentsPage() {
   // Join incidents to the gated actions so an OPEN incident can show the agent's response
@@ -152,6 +169,32 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
             </span>
           )}
           {!resolved && <AckButton id={i.id} acknowledged={!!i.acknowledged_at} by={i.acknowledged_by} />}
+          {/* Ransomware use is a strictly stronger claim than KEV listing — exploited in the wild
+              versus exploited by crews who encrypt the estate. It outranks severity for ordering
+              work, and the queue showed neither it nor the deadline below. */}
+          {i.ransomware && (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[10px] font-semibold text-critical"
+              title="CISA records this CVE as used in known ransomware campaigns — a stronger claim than being exploited in the wild"
+            >
+              <Skull className="h-2.5 w-2.5" /> ransomware
+            </span>
+          )}
+          {!resolved && cisaDue(i) && (
+            // CISA's OWN due date, verbatim. Past-due is the common case rather than the exception:
+            // a CVE catalogued months ago arrives already overdue, and a window computed from when we
+            // opened the incident would have quietly restarted a clock the authority already ran out.
+            <span
+              className={
+                "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold " +
+                (cisaDue(i)!.overdue ? "bg-critical/10 text-critical" : "bg-surface-2 text-muted ring-1 ring-border")
+              }
+              title="CISA BOD 22-01 remediation deadline for this CVE — published by CISA, not computed by us"
+            >
+              <CalendarClock className="h-2.5 w-2.5" />
+              {cisaDue(i)!.overdue ? `CISA deadline passed ${cisaDue(i)!.label}` : `CISA due ${cisaDue(i)!.label}`}
+            </span>
+          )}
           {!resolved && i.sla_breach && (i.sla_breach.ack_breached || i.sla_breach.resolve_breached) && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[10px] font-semibold text-critical">
               <TimerOff className="h-2.5 w-2.5" /> SLA {i.sla_breach.resolve_breached ? "resolve" : "ack"} breached

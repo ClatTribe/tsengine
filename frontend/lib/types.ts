@@ -593,6 +593,17 @@ export interface Incident {
   // blast_radius: read-time impact sizing — does this incident chain to a crown jewel, and how far away?
   blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
   attacked?: boolean; // escalated because the issue is under attack in production
+  // Ransomware use is a STRICTLY STRONGER claim than KEV listing — exploited in the wild versus
+  // exploited by crews who encrypt the estate — which is why the corpus keeps them separate and only
+  // CISA's literal "Known" counts. A queue that shows neither makes the responder rank by severity
+  // alone, which is the number that knows least about who is using this.
+  ransomware?: boolean;
+  // CISA's OWN published BOD 22-01 due date, carried verbatim as an ABSOLUTE deadline rather than a
+  // window from when we opened the incident. That distinction is the point: a KEV CVE catalogued six
+  // months ago is already past its deadline, and a fresh window would tell a customer they have a
+  // fortnight when the government's answer is that they are months late. Showing nothing tells them
+  // less than either.
+  kev_due_at?: string;
   // Detection Skill triage (ADR 0017): the detection engineer's reasoning carried onto the alert, so
   // whoever is on shift inherits it instead of rediscovering it. triage_skill is "name@digest" —
   // provenance, so you can see exactly which skill version said this.
