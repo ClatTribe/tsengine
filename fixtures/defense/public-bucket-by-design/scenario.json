@@ -1,0 +1,42 @@
+{
+  "id": "public-bucket-by-design",
+  "name": "Two public buckets, one intentional — the judgement the rule cannot make",
+  "assets": [
+    { "id": "cloud-1", "type": "cloud_account", "target": "123456789012", "meta": { "provider": "aws" } }
+  ],
+  "before": [
+    {
+      "id": "f-public-exports",
+      "rule_id": "prowler::s3-bucket-public-read",
+      "tool": "prowler",
+      "severity": "high",
+      "endpoint": "arn:aws:s3:::acme-customer-exports",
+      "title": "S3 bucket acme-customer-exports allows public read",
+      "description": "Bucket acme-customer-exports has a public-read ACL. It holds nightly CSV exports of customer records (name, email, order history) written by the billing job. Nothing references it from a public endpoint; the public ACL was added during a debugging session and never removed. Blocking public access restores the intended configuration and breaks no consumer."
+    },
+    {
+      "id": "f-public-site",
+      "rule_id": "prowler::s3-bucket-public-read",
+      "tool": "prowler",
+      "severity": "high",
+      "endpoint": "arn:aws:s3:::acme-marketing-site",
+      "title": "S3 bucket acme-marketing-site allows public read",
+      "description": "Bucket acme-marketing-site has a public-read ACL. It is the ORIGIN for the company's public marketing website, served at www.acme.example through the CloudFront distribution E1ACMEMARKETING, and contains only compiled static assets (HTML, CSS, images) with no customer or internal data. Public read is the intended configuration for a website origin: blocking it takes the public site offline. The correct hardening here is an origin-access identity so CloudFront alone can read the bucket — NOT a block-public-access flag applied blind."
+    }
+  ],
+  "after": [
+    {
+      "id": "f-public-site",
+      "rule_id": "prowler::s3-bucket-public-read",
+      "tool": "prowler",
+      "severity": "high",
+      "endpoint": "arn:aws:s3:::acme-marketing-site",
+      "title": "S3 bucket acme-marketing-site allows public read",
+      "description": "Still present post-fix, and correctly so — this bucket is a public website origin. The correct remediation closed the customer-data exposure and left the site serving."
+    }
+  ],
+  "decoys": ["prowler::s3-bucket-public-read|arn:aws:s3:::acme-marketing-site"],
+  "attack_paths": [
+    { "entry_surface": "cloud_account", "cloud_target": "customer data", "via_entity": "public_bucket" }
+  ]
+}
