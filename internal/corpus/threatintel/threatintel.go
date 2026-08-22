@@ -52,6 +52,11 @@ type Entry struct {
 	// crashes the service and one that needs hand-holding are both "a module exists", and
 	// a defender choosing what to patch first should not have to treat them alike.
 	WeaponRank string `json:"weapon_rank,omitempty"`
+	// SSVC is CISA's own decision assessment (the Vulnrichment/ADP programme), recorded verbatim.
+	// Its Automatable point is the one signal none of the other six feeds carries: whether an
+	// attacker can automate the kill chain, which separates a vulnerability exploited by hand
+	// against one target from one that can be driven across an estate.
+	SSVC *types.SSVC `json:"ssvc,omitempty"`
 }
 
 // Manifest is the cheap-to-read provenance sidecar (no entries). resolveCorpus
@@ -71,9 +76,12 @@ type Manifest struct {
 	// TemplateCount is the CVEs we can actually probe for. Reported because the ratio to
 	// EntryCount is the honest size of what a threat-informed probe plan can reach: the
 	// rest of the corpus is CVEs we can rank but not test.
-	TemplateCount int       `json:"template_count,omitempty"`
-	CVSSCount     int       `json:"cvss_count,omitempty"`
-	BuiltAt       time.Time `json:"built_at"`
+	TemplateCount int `json:"template_count,omitempty"`
+	// SSVCCount is the CVEs CISA has published a decision assessment for. Reported alongside the
+	// others so a reader can see the reach of each feed rather than assuming they cover the same set.
+	SSVCCount int       `json:"ssvc_count,omitempty"`
+	CVSSCount int       `json:"cvss_count,omitempty"`
+	BuiltAt   time.Time `json:"built_at"`
 }
 
 // Build merges the parsed KEV + EPSS + ExploitDB sets into the corpus + manifest. The union is keyed
@@ -106,6 +114,9 @@ type Sources struct {
 	// world — see nuclei.go.
 	Templates map[string]string
 	CVSS      map[string]NVDEntry
+	// SSVC is CISA's DECISION assessment per CVE (vulnrichment.go). Distinct from KEV, which is
+	// binary and covers ~1,700 CVEs: this reaches CVEs KEV never lists.
+	SSVC map[string]*types.SSVC
 }
 
 // Build merges the parsed feeds into the corpus + manifest.
@@ -164,6 +175,19 @@ func Build(src Sources) (map[string]Entry, Manifest) {
 	// OR that a template exists for — an entry carrying nothing but a template path is
 	// still worth pinning, because "we can check this" is a useful fact even about a CVE
 	// with no EPSS score.
+	// CISA's SSVC decision points. Recorded for any CVE CISA has assessed, including ones the
+	// corpus knows nothing else about — an assessment from the authority that publishes KEV is
+	// worth pinning even with no EPSS score beside it.
+	ssvcCVEs := 0
+	for cve, a := range src.SSVC {
+		if a == nil {
+			continue
+		}
+		ent := entries[cve]
+		ent.SSVC = a
+		entries[cve] = ent
+		ssvcCVEs++
+	}
 	templateCVEs := 0
 	for cve, path := range templates {
 		if path == "" {
@@ -215,6 +239,7 @@ func Build(src Sources) (map[string]Entry, Manifest) {
 		ExploitCount:    exploitCVEs,
 		WeaponizedCount: weaponizedCVEs,
 		TemplateCount:   templateCVEs,
+		SSVCCount:       ssvcCVEs,
 		CVSSCount:       cvssCVEs,
 		BuiltAt:         time.Now().UTC(),
 	}
