@@ -436,6 +436,10 @@ func runCorpusRefresh(argv []string) error {
 	// ~300k files. Without this the corpus carries no SSVC and the other six are unaffected.
 	ssvc := fs.Bool("ssvc", false, "also ingest CISA's SSVC decision points (Vulnrichment/ADP)")
 	ssvcURL := fs.String("ssvc-url", threatintel.VulnrichmentURL, "vulnrichment archive URL for --ssvc")
+	// CVSS base scores + vectors. URL-only, with no boolean twin: NVD publishes no single canonical
+	// archive to default to, so the operator names a bulk mirror or this stays off. Until it is set the
+	// corpus carries NO CVSS at all — nothing else populates that field.
+	nvdURL := fs.String("nvd-url", "", "NVD bulk-mirror URL for CVSS base scores + vectors (off when empty)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -445,6 +449,9 @@ func runCorpusRefresh(argv []string) error {
 	}
 	if *exploitIntel {
 		opts.ExploitIntelURL = *exploitIntelURL
+	}
+	if u := strings.TrimSpace(*nvdURL); u != "" {
+		opts.NVDURL = u
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()

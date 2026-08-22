@@ -51,3 +51,30 @@ func TestRenderThreatIntel_KEVAndEPSS(t *testing.T) {
 		}
 	}
 }
+
+// An absent CVSS must never render as 0.0 — that is a real score meaning "no impact", and the agent
+// reading it cannot tell the difference between a harmless CVE and one we simply have no score for.
+func TestRenderThreatIntel_MissingCVSSIsNotZero(t *testing.T) {
+	got := renderThreatIntel("CVE-2021-44228", &types.ThreatIntel{
+		KEV: &types.KEVStatus{Listed: true},
+	})
+	if strings.Contains(got, "CVSS 0.0") {
+		t.Errorf("an absent score rendered as a real one: %q", got)
+	}
+	if !strings.Contains(got, "unavailable") {
+		t.Errorf("absence must be stated, not omitted silently: %q", got)
+	}
+	// The signals we DO have must still be there — refusing to invent a score is not a reason to drop
+	// the KEV listing that actually justifies the priority.
+	if !strings.Contains(got, "KEV: LISTED") {
+		t.Errorf("real signals lost: %q", got)
+	}
+}
+
+// A score we DO have is still stated plainly.
+func TestRenderThreatIntel_PresentCVSSIsStated(t *testing.T) {
+	got := renderThreatIntel("CVE-2021-44228", &types.ThreatIntel{CVSS: 10.0})
+	if !strings.Contains(got, "CVSS 10.0") {
+		t.Errorf("a real score was not reported: %q", got)
+	}
+}
