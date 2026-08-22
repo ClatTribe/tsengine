@@ -743,6 +743,8 @@ When the host tracer's `Add(finding)` is called, hooks fire in this order. Each 
 11. tracer.Append              â persists to findings_enriched
 ```
 
+**Two of these assessments reached the AGENT and not the READER.** `corroborator_ledger` (hook 5) attaches the agreeing rule ids and `surface_priority` (hook 3) a {score, reason} — both rode the L2 digest (`corrob:N`, `surface:N`) and the L2 ranking boost, and `corroborated_by` also rendered in the zero-JS console, while the flagship finding page showed the WORD "corroborated" beside a confidence number and never which tool agreed. That citation is the substance of the claim and the first thing a sceptical reader asks for; Â§10 is that every recorded issue cites tool evidence, and the evidence was computed and withheld. `surface_priority` is the same {score, reason} shape as `exploitability`, sitting in the same struct and rendered on the same row â one was shown with its reason and the other was not. Both now render, guarded by `internal/uicheck`. The recurring shape is worth naming: a new L1.5 signal gets wired to the agent because that is where the author is working, and the human surface is a separate file nobody opens â so ASSUME the reader half is missing until checked.
+
 `findings_raw` is captured **before** hook 1 â that's what the security engineer reads. `findings_enriched` is the post-hook view. Both ship.
 
 **The chain runs on BOTH doors — but the engine door had to be WIRED, it was never automatic.** The
