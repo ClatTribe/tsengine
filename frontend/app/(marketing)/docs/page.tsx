@@ -96,7 +96,7 @@ export default function Docs() {
           <h2 className="text-xl font-semibold tracking-tight">Start with one system</h2>
           <p className="max-w-lg text-sm leading-relaxed text-muted">
             Connect a repo or a cloud account and you will have real findings, mapped to controls, within a scan. The
-            free tier runs the deterministic engine; add your own model key when you want the agents.
+            free tier runs the scanning engine; add your own model key when you want the agents.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link

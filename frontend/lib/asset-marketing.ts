@@ -35,7 +35,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "CIS posture, multi-cloud", d: "AWS/GCP/Azure benchmark checks — encryption, logging, public exposure, network segmentation — scored against the live account." },
       { t: "IAM attack paths (CIEM)", d: "Effective-permission analysis that finds the role chain reaching sensitive data, not just one bad policy in isolation." },
       { t: "Data exposure (DSPM)", d: "Sensitive data sitting in a public bucket or an unencrypted store, prioritized by blast radius." },
-      { t: "Live, HITL remediation", d: "Block-public-access and storage hardening apply through a scoped write role — only after a human approves." },
+      { t: "Live remediation, with your approval", d: "Block-public-access and storage hardening apply through a scoped write role — only after a human approves." },
     ],
     tools: ["prowler", "scout-suite"],
     how: [
@@ -45,7 +45,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
     ],
     frameworks: "Cloud findings map to SOC 2 (CC6.x), PCI-DSS (1.x/3.x), HIPAA (164.312), NIST 800-53 (SC-7/SC-28/AC-6), CIS Controls, and FedRAMP — only where a real control nexus exists.",
     faq: [
-      { q: "Do you need write access to my cloud?", a: "No — scanning is read-only (a scoped SecurityAudit role). A live fix uses a separate, opt-in write role and only runs after a named human approves it at the HITL desk." },
+      { q: "Do you need write access to my cloud?", a: "No — scanning is read-only (a scoped SecurityAudit role). A live fix uses a separate, opt-in write role and only runs after a named human approves it at the approval desk." },
       { q: "How is this different from Prowler or Scout Suite?", a: "We wrap those best-in-class OSS scanners, then add what they don't: cross-resource attack-path correlation (CIEM), data-tier prioritization (DSPM), and a human-gated remediation loop." },
       { q: "Is a clean scan a compliance certification?", a: "No. We map findings to controls but never mark a control compliant from a scan — an independent auditor attests. We make you audit-ready, honestly." },
     ],

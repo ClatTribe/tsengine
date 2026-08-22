@@ -166,7 +166,7 @@ export default function Page() {
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">What it costs you now</span>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight">Start on the free plan.</h2>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            The free plan runs the full deterministic scanning engine across your code, cloud, and perimeter. Paste
+            The free plan runs the full scanning engine across your code, cloud, and perimeter. Paste
             in your own LLM key and both AI agents — the security engineer and the pentester — run on it too, at
             your model cost, with no upgrade and no sales call.
           </p>

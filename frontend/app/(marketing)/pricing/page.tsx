@@ -8,7 +8,7 @@ import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 export const metadata = pageMeta({
   title: "Pricing — TensorShield",
   description:
-    "Simple, transparent pricing in ₹ for Indian teams. Free to see your real posture with the deterministic + ML-based engine — and bring your own LLM key to run both AI agents at your model cost. Core adds your AI Security Engineer; Core + Pentest adds your AI Pentester, for when a security review is blocking a deal. Enterprise is for scale and delivery: unlimited targets, SSO, managed/MSP.",
+    "Simple, transparent pricing in ₹ for Indian teams. Free to see your real posture with the scanning engine — and bring your own LLM key to run both AI agents at your model cost. Core adds your AI Security Engineer; Core + Pentest adds your AI Pentester, for when a security review is blocking a deal. Enterprise is for scale and delivery: unlimited targets, SSO, managed/MSP.",
   path: "/pricing",
 });
 
@@ -32,7 +32,7 @@ const TIERS = [
     name: "Free",
     price: "₹0",
     cadence: "forever",
-    blurb: "A taste of the deterministic + ML-based scanning engine — 30+ scanners, cross-surface correlation, threat-intel, SOC 2 readiness. Free forever (no AI/LLM cost to run). No card.",
+    blurb: "A taste of the scanning engine — 30+ scanners, cross-surface correlation, threat-intel, SOC 2 readiness. Free forever (no AI/LLM cost to run). No card.",
     cta: "Start free",
     href: "/signup",
     highlight: false,
@@ -49,7 +49,7 @@ const TIERS = [
       "Bring your own LLM key → both AI agents (Security Engineer + Pentester), at your model cost",
       "2 scan targets",
       "All 5 categories — code · cloud · attack surface · identity · compliance",
-      "30+ OSS scanners (deterministic, on-demand)",
+      "30+ OSS scanners (on-demand)",
       `Findings dashboard + all ${FRAMEWORK_COUNT} frameworks mapped`,
       "Human-in-the-loop approvals — you approve every fix",
       "Signed decision ledger",
@@ -75,7 +75,7 @@ const TIERS = [
     features: [
       "★ AI Security Engineer — triages, explains in plain English, proposes fixes you approve",
       "Up to 25 scan targets",
-      "Full deterministic + ML detection — correlation, threat-intel, attack paths",
+      "Full full detection — correlation, threat-intel, attack paths",
       "Continuous monitoring + incidents",
       `All ${FRAMEWORK_COUNT} frameworks — SOC 2 · ISO · GDPR · PCI · HIPAA · NIST · …`,
       "Signed evidence packs + Trust Center",
@@ -100,7 +100,7 @@ const TIERS = [
     persona: true,
     features: [
       "Everything in Core, plus:",
-      "★ AI Pentester — exploitation-proven, not just flagged (XBOW-class)",
+      "★ AI Pentester — exploitation-proven, not just flagged",
       "VAPT report with a named human sign-off — what the reviewer is checking for",
       "Re-tests after every fix — proof the hole is closed",
       "Continuous testing, not once a year",
@@ -127,15 +127,15 @@ const TIERS = [
 ];
 
 const FAQ = [
-  ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the deterministic open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
+  ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
   ["What do I get on Core that Free doesn't have?", `Your AI Security Engineer — it triages what actually matters, explains each issue in plain English, and proposes the fix for you to approve. Plus the full scanning engine: every scanner with cross-surface correlation, continuous monitoring with incidents, all ${FRAMEWORK_COUNT} frameworks with signed evidence packs, and the human-in-the-loop apply loop that actually closes findings. ₹24,999/mo (or ₹2,49,990/yr), up to 25 targets.`],
-  ["How are the tiers structured?", "Free to see your real posture with the deterministic engine — and if you paste in your own LLM key, both AI agents run on Free at your model cost, no upgrade and no sales call. Core adds your AI Security Engineer (defense) on our side. Core + Pentest adds your AI Pentester (attack) — the one that proves which findings are actually exploitable, re-tests after each fix, and produces the VAPT report a customer's security review asks for. Enterprise is for when the constraint is scale or delivery rather than capability: unlimited targets, SSO, managed/MSP."],
+  ["How are the tiers structured?", "Free to see your real posture with the scanning engine — and if you paste in your own LLM key, both AI agents run on Free at your model cost, no upgrade and no sales call. Core adds your AI Security Engineer (defense) on our side. Core + Pentest adds your AI Pentester (attack) — the one that proves which findings are actually exploitable, re-tests after each fix, and produces the VAPT report a customer's security review asks for. Enterprise is for when the constraint is scale or delivery rather than capability: unlimited targets, SSO, managed/MSP."],
   ["Can I run the AI on my own LLM key?", "Yes, on any plan including Free. Connect your own key in Settings → AI engine — any OpenAI-compatible provider, or a local Ollama — and the agents run at your model cost instead of ours. Useful if you already have credits, or if your policy is that your code only goes to a model you control."],
   ["Are there API rate limits?", "Yes — generous per-plan fair-use limits on the API, so one customer's automation can never slow the platform down for everyone else. Normal interactive use and CI never come close; paid plans get more headroom, and Enterprise is unmetered. If you hit a limit you get a clear 429 with a retry hint, never a hard lockout. AI spend is capped separately by the monthly budget you set."],
   ["Do I need a security engineer to use it?", "No — that's the point. TensorShield does the security engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. Built for a non-technical founder or ops lead."],
   ["What does \"human in the loop\" mean?", "Low-risk fixes apply automatically. Anything consequential (a config change, an identity action) waits for one tap of your approval — and every decision, automated or human, is signed into a tamper-evident ledger."],
   ["What if I'd rather not run it at all?", "Have it fully managed. Our security expert — or your MSP / consultancy partner — operates TensorShield for you: they triage, approve, and sign off, and you get the outcome plus named accountability. Same engine and signed evidence, priced per engagement."],
-  ["Can auditors trust the evidence?", "Every finding cites the tool that proves it, and every compliance pack is ed25519-signed and pinned to the exact state it was assessed against — reproducible proof, not screenshots."],
+  ["Can auditors trust the evidence?", "Every finding cites the tool that proves it, and every compliance pack is cryptographically signed and pinned to the exact state it was assessed against — reproducible proof, not screenshots."],
 ];
 
 // ComparePlans — the at-a-glance matrix. Cell value: "yes" | "no" | a literal string. Mirrors
@@ -171,7 +171,7 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
     section: "AI agents — self-serve, no sales call",
     rows: [
       { label: "AI Security Engineer — prioritize · chain · fix · explain", cells: ["no", "yes", "yes", "yes"] },
-      { label: "AI Pentester — exploitation-proven VAPT (XBOW-class)", cells: ["no", "no", "yes", "yes"] },
+      { label: "AI Pentester — exploitation-proven VAPT", cells: ["no", "no", "yes", "yes"] },
       { label: "Plain-English findings — what broke, why it matters, what to do", cells: ["yes", "yes", "yes", "yes"] },
       { label: "Or: bring your own LLM key — AI on any plan, at your cost", cells: ["yes", "yes", "yes", "yes"] },
     ],
@@ -347,7 +347,7 @@ export default function Pricing() {
         </Reveal>
         <p className="mt-6 text-center text-xs text-faint">
           Prices in INR, exclusive of 18% GST. <span className="text-muted">Free is genuinely free — it runs only the
-          deterministic OSS scanners (no AI/LLM cost on our side), so we never have to take it away.</span> Annual billing
+          open-source scanners (no AI cost on our side), so we never have to take it away.</span> Annual billing
           on Core saves ~2 months. The signed decision ledger is on every plan.
         </p>
       </section>

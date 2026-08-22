@@ -17,7 +17,7 @@ const FRAMEWORKS = [
 ];
 
 const PRINCIPLES = [
-  { icon: Fingerprint, t: "Signed, tamper-evident evidence", d: "Every compliance pack is ed25519-signed over its canonical contents and pinned to the exact state it was assessed against. Altering it after the fact breaks the signature." },
+  { icon: Fingerprint, t: "Signed, tamper-evident evidence", d: "Every compliance pack is cryptographically signed over its canonical contents and pinned to the exact state it was assessed against. Altering it after the fact breaks the signature." },
   { icon: FileCheck2, t: "Grounded — never guessed", d: "The agent can't record a finding no tool supports. Every claim cites the scanner or evaluator that proves it, so there are no hallucinated vulnerabilities." },
   { icon: EyeOff, t: "Read-only by default", d: "Connections are least-privilege and read-only. The agent assesses freely but cannot change anything on its own." },
   { icon: KeyRound, t: "Human-gated writes", d: "The only write path is reached after a human approves it. Tier-gated, and every automated or human decision is signed into a replayable ledger." },
