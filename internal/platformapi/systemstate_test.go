@@ -215,3 +215,70 @@ func waitJob(t *testing.T, p *jobs.Pool, id string) {
 	}
 	t.Fatal("job did not settle")
 }
+
+// ADR 0022 §2 — a message must not tell a reader to do something they cannot do.
+//
+// The threat-intel banner told every tenant to "set TSENGINE_THREAT_INTEL_CORPUS and run
+// `tsengine corpus refresh`". The corpus is global world-state (CLAUDE.md §7): it lives with the
+// binary, and a tenant on a hosted deployment has neither. They were handed homework they could not
+// do, in an alarm-coloured band, on the first screen after login.
+//
+// This asserts the property rather than the instance: nothing a TENANT can see may contain an
+// environment variable, a shell command, or a host-level instruction.
+func TestTenantVisibleDegradationsCarryNoOperatorInstructions(t *testing.T) {
+	ctx := context.Background()
+	d, st := stateDeps(t)
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t", Name: "A", AgentsHalted: true, Plan: platform.PlanFree})
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c1", TenantID: "t", Kind: platform.ConnGitHub, Status: platform.ConnDegraded})
+
+	// Operator-shaped things: an env var we own, our CLI, or a host the customer does not run.
+	operatorOnly := []string{"TSENGINE_", "tsengine corpus", "the binary", "refresh job", "cisa.gov", "first.org"}
+
+	for _, g := range VisibleTo(d.computeDegradations(ctx, "t"), false) {
+		body := g.Title + " " + g.Detail
+		for _, frag := range operatorOnly {
+			if strings.Contains(body, frag) {
+				t.Errorf("tenant-visible degradation %q contains the operator-only instruction %q.\n"+
+					"A tenant cannot set an env var or run our CLI — the corpus is global world-state "+
+					"(CLAUDE.md §7). Give them the CONSEQUENCE and route the remedy to AudienceOperator.\n"+
+					"  detail: %s", g.Kind, frag, g.Detail)
+			}
+		}
+	}
+}
+
+// Every declared kind must have an audience, so a new one cannot quietly reach nobody.
+func TestEveryDegradationKindHasAnAudience(t *testing.T) {
+	for _, kind := range AllDegradationKinds() {
+		a, ok := degradationAudience[kind]
+		if !ok {
+			t.Errorf("%q has no entry in degradationAudience — defaulting is safe at runtime, but an "+
+				"unassigned kind means nobody decided who it is for", kind)
+			continue
+		}
+		switch a {
+		case AudienceBoth, AudienceTenant, AudienceOperator:
+		default:
+			t.Errorf("%q has audience %q, which is not one of both/tenant/operator", kind, a)
+		}
+	}
+}
+
+// The operator half must survive the filter — the remedy has to reach the one person who can act.
+func TestOperatorSeesTheRemedyTenantsDoNot(t *testing.T) {
+	ctx := context.Background()
+	d, st := stateDeps(t)
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t", Name: "A", Plan: platform.PlanFree})
+
+	all := d.computeDegradations(ctx, "t")
+	var opHasRemedy bool
+	for _, g := range VisibleTo(all, true) {
+		if g.Kind == DegradationThreatIntelStale && strings.Contains(g.Detail, "TSENGINE_") {
+			opHasRemedy = true
+		}
+	}
+	if !opHasRemedy {
+		t.Error("the operator sees no remedy for a stale corpus — the audience split removed the " +
+			"instruction from everyone instead of routing it")
+	}
+}

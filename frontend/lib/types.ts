@@ -1221,6 +1221,9 @@ export interface Degradation {
   detail: string;
   action_label?: string;
   action_href?: string;
+  /** who can act on this: "both" | "tenant" | "operator". The API already filters to the
+   *  caller's audience (ADR 0022 §2) — this is here so a client can style by it, never to hide. */
+  audience?: string;
 }
 
 export interface SystemState {
