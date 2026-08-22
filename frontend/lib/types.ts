@@ -339,6 +339,12 @@ export interface Action {
   title?: string;
   payload?: Record<string, unknown>;
   finding_keys?: string[];
+  // The named human who passed this through the HITL gate. The central invariant is that the only
+  // write path is reached AFTER a human decides (§18.2 inv. 3) and that every decision is signed
+  // into the ledger (inv. 4) — so WHO decided is the accountability record, not a nicety. It was
+  // stored on the action and signed, and no screen declared it, so an applied change to a customer's
+  // cloud showed no sign of who authorised it.
+  approver?: string;
   verification?: FixVerification; // set once an applied fix is re-tested (KF#4)
   // Why the last apply attempt failed, redacted server-side. A failed action deliberately stays at
   // "approved" so it is not lost, which also makes it look identical to one merely waiting — this is
