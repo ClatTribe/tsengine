@@ -190,3 +190,47 @@ func TestArchMdNamesEveryL15Hook(t *testing.T) {
 		}
 	}
 }
+
+// arch.md must name every threat-intel feed the corpus actually fetches — and must not name one it
+// does not.
+//
+// Before 2026-08-22 that section claimed a "GitHub PoC search" collector and a "per-vendor URL
+// corpus" for advisories. Neither exists: there is no GitHub collector at all, and the advisory links
+// come from CISA KEV's own notes field. It also predated three feeds (Metasploit rank, nuclei
+// availability, SSVC) and five annotation fields.
+//
+// A missing feed understates us; an INVENTED one is worse, because arch.md is what a reader consults
+// instead of the source, and "we search GitHub for proof-of-concept exploits" is a capability claim
+// someone could repeat to a customer.
+func TestArchMdNamesEveryThreatIntelFeed(t *testing.T) {
+	arch, err := os.ReadFile(filepath.Join("..", "..", "arch.md"))
+	if err != nil {
+		t.Fatalf("read arch.md: %v", err)
+	}
+	doc := string(arch)
+
+	// Each real feed, identified by the host in its source constant so the test tracks the code
+	// rather than a name someone could rename in both places.
+	feeds := map[string]string{
+		"KEV":        "cisa.gov",
+		"EPSS":       "epss.cyentia.com",
+		"ExploitDB":  "exploit-database",
+		"Metasploit": "rapid7",
+		"nuclei":     "nuclei-templates",
+		"NVD":        "nvd.nist.gov",
+		"SSVC":       "Vulnrichment",
+	}
+	for name, marker := range feeds {
+		if !strings.Contains(doc, marker) {
+			t.Errorf("arch.md does not name the %s feed (looked for %q) — the corpus fetches it and "+
+				"the doc is what people read instead of the source", name, marker)
+		}
+	}
+
+	// Feeds we do NOT have. Naming one is a capability claim we cannot support.
+	for _, phantom := range []string{"GitHub PoC search", "per-vendor URL corpus"} {
+		if strings.Contains(doc, phantom) {
+			t.Errorf("arch.md claims %q, which does not exist in internal/corpus/threatintel", phantom)
+		}
+	}
+}
