@@ -77,7 +77,8 @@ func copyFiles(t *testing.T, root string) map[string]string {
 		})
 	}
 	if len(out) == 0 {
-		t.Skip("no marketing copy found — skipping positioning guard")
+		t.Fatal("no marketing copy found — the positioning guard cannot run, and a guard that " +
+			"cannot see its subject must say so rather than report green")
 	}
 	return out
 }
@@ -159,7 +160,12 @@ func TestHomepageStatesTheApprovalGate(t *testing.T) {
 	root := frontendDir(t)
 	b, err := os.ReadFile(filepath.Join(root, "app", "(marketing)", "page.tsx"))
 	if err != nil {
-		t.Skipf("homepage not present (%v)", err)
+		// NOT a skip. The homepage is a required file, so "I cannot read it" means it was renamed
+		// or removed — which is exactly the change most likely to drop the approval-gate claim, and
+		// the moment this guard is most needed. A skip is green, so skipping here made the guard
+		// disappear precisely when it mattered.
+		t.Fatalf("cannot read the homepage (%v) — if it moved, update this path; a guard that cannot "+
+			"see what it guards must fail, not pass", err)
 	}
 	low := strings.ToLower(string(b))
 	// Any phrasing will do — the property is that approval is STATED, not that it is worded a

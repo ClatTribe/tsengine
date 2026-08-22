@@ -55,11 +55,17 @@ func codeAnchors(t *testing.T, root, asset string) []string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(root, "internal", "asset", asset, "handler.go"))
 	if err != nil {
-		t.Skipf("%s handler not present (%v)", asset, err)
+		// A missing handler is a rename or a removal, not an absence of anything to check — and the
+		// anchor list in arch.md would then go unverified while this test reported green.
+		t.Fatalf("cannot read the %s handler (%v) — a guard that cannot see what it guards must "+
+			"fail, not skip", asset, err)
 	}
 	m := anchorBlockRe.FindSubmatch(b)
 	if m == nil {
-		t.Skipf("%s declares no anchorNames block", asset)
+		// Same reasoning one level in: if the anchors were refactored out of this shape, arch.md's
+		// per-asset list stops being checked against anything. Fail so the refactor updates both.
+		t.Fatalf("%s declares no anchorNames block in the shape this guard reads — if the anchors "+
+			"moved, update this parser; silently skipping leaves arch.md unverified", asset)
 	}
 	var out []string
 	for _, q := range quotedRe.FindAllSubmatch(m[1], -1) {
