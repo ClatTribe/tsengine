@@ -335,7 +335,7 @@ Every asset has two tiers (CLAUDE.md §4):
 
 Anchor tools are curated for: high recall, low FP, low cost, low destructive risk. Registry tools are everything else worth wrapping — noisier scanners, slower deep-exploits, niche tools, paid tools (when licensed).
 
-A CI invariant (`tests/asset/anchor_tier_size_test.go`) caps the anchor count per asset (~12). Otherwise per-scan time explodes. Registry tier is unbounded.
+A CI invariant (`internal/l2/tools_external_test.go`) caps the anchor count per asset (~12). Otherwise per-scan time explodes. Registry tier is unbounded.
 
 ---
 
@@ -494,30 +494,32 @@ The mapping corpus lives in `compliance_corpus/` and is versioned independently 
 
 ## Reproducibility / attestation
 
-CLAUDE.md §10. The architectural shape:
+CLAUDE.md §10. **Process-reproducibility is NOT an invariant** — it was removed, and this section
+described it as current until 2026-08-22, including a CI gate at a tests/reproducibility path that has
+never existed. What is required is EVIDENCE GROUNDING: the context a finding was assessed against is
+pinned and signed, so an auditor can re-check the evidence. Not that a re-run produces byte-identical
+findings, which would push the engine toward a fixed deterministic spine with the LLM bolted on.
 
 ```
 scan start
-   ↓ resolve corpus versions (nuclei, semgrep, trivy, KEV, EPSS, compliance)
+   ↓ resolve corpus versions (nuclei, semgrep, trivy, KEV, EPSS, compliance corpus)
    ↓ resolve sandbox image digest
-   ↓ write to scan_manifest.json {scan_id, corpus, sandbox_image_digest, started_at}
+   ↓ cmd/tsengine writes runs/<scan_id>/scan_manifest.json {scan_id, corpus, digest, started_at}
 
 scan completion
-   ↓ canonicalize findings JSON (sorted keys, no float drift)
-   ↓ SHA-256 over canonical JSON + manifest
-   ↓ sign with tsengine-prod-key (ed25519)
-   ↓ write to vulnerabilities.json.attestation { sha256, signature, signer, signed_at }
+   ↓ internal/dashboard.Canonical  → canonical JSON (sorted keys, stable ordering)
+   ↓ SHA-256 over it, signed ed25519 → types.Attestation {sha256, signature, signer, signed_at}
+   ↓ vulnerabilities.json.attestation
 
-re-run by scan_id
-   ↓ load manifest, pin same corpus + image digest
-   ↓ spawn sandbox from same digest
-   ↓ replay anchor sequence
-   ↓ compare findings — expect equality (within tolerance: timestamps, ordering)
+what an auditor can then do
+   ↓ read the manifest: exactly which corpus and image the finding was assessed against
+   ↓ verify the signature: the findings and evidence have not been altered since
+   ↓ re-run the finding's own evidence predicate against that pinned state
 ```
 
-A CI test in `tests/reproducibility/` pins this: any new tool or hook that introduces nondeterminism breaks the gate.
-
----
+The same SHA-256-over-canonical-JSON + ed25519 scheme covers three artifacts, so one verifier serves
+all: the scan bundle here, `pkg/ledger` (every gated decision), and `internal/webagent` evidence
+bundles.
 
 ## L1 dashboard contract
 
@@ -778,7 +780,7 @@ The *shape* is identical across all 7 — applying the same `anchors → filter 
 
 | Path | Purpose |
 |---|---|
-| `internal/orchestrator/prepass.go` | L1 anchor dispatch. Reads `internal/asset/<asset>.Handler.Anchors()`, runs them concurrently, applies asset filter |
+| `internal/orchestrator/orchestrator.go` | L1 anchor dispatch. Reads `internal/asset/<asset>.Handler.Anchors()`, runs them concurrently, applies asset filter |
 | `internal/asset/<asset>/` | Per-asset Handler: anchors, filter, normalize |
 | `internal/tool/<tool>/` | Per-tool wrapper. `Tool` interface impl |
 | `internal/tool/registry.go` | Global Tool registry — host view sees all tools, dispatcher reads `SandboxExecution()` |
@@ -787,7 +789,7 @@ The *shape* is identical across all 7 — applying the same `anchors → filter 
 | `internal/sandbox/client.go` | Host-side HTTP client → tool-server |
 | `internal/tracer/tracer.go` | Findings store + L1.5 hook chain |
 | `internal/tracer/hooks/` | Individual L1.5 hooks (fp_filter, surface_priority, exploitability, corroborator, threat_intel, compliance, post_emit_verifier, cross_tool_merge) |
-| `internal/dashboard/render.go` | `vulnerabilities.json` renderer |
+| `internal/dashboard/canonical.go` | canonical JSON + attestation over the scan bundle; `cmd/tsengine` writes `runs/<scan_id>/vulnerabilities.json` |
 | `internal/replay/handler.go` | Tool-replay API |
 | `internal/bench/<asset>/` | Per-asset bench harness |
 | `compliance_corpus/` | Versioned YAML mappings (SOC2, PCI, HIPAA, CIS, NIST) |

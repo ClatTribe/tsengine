@@ -234,3 +234,52 @@ func TestArchMdNamesEveryThreatIntelFeed(t *testing.T) {
 		}
 	}
 }
+
+// Every CODE path arch.md names must exist.
+//
+// The section on attestation cited a CI gate at `tests/reproducibility/` — a directory that has
+// never existed, guarding an invariant CLAUDE.md §10 says was deliberately REMOVED. That is the
+// worst kind of stale reference: it is a claim about auditability, which is the compliance story, and
+// a reader has no way to tell a described gate from an imagined one without going to look.
+//
+// Two more sent readers to files that are not there: internal/orchestrator/prepass.go (the prepass is
+// in orchestrator.go) and internal/dashboard/render.go (that package canonicalises and signs; it does
+// not render).
+//
+// The check reads BACKTICKED paths only, which is the right line: a backticked path is "go here", and
+// prose naming a path in order to say it does not exist is not a pointer. This test caught its own
+// section's first draft on exactly that distinction.
+//
+// SCOPE: code locations only — internal/, cmd/, pkg/, tests/. The `bench/<name>` strings in the
+// benchmark tables are deliberately NOT checked: they are harness LABELS, used the same way in
+// CLAUDE.md §14, and the code for them lives in internal/bench with fixtures under fixtures/. Calling
+// those broken paths would be the wrong correction. Stated here rather than left as a silent gap in
+// the pattern.
+func TestArchMdCodePathsExist(t *testing.T) {
+	arch, err := os.ReadFile(filepath.Join("..", "..", "arch.md"))
+	if err != nil {
+		t.Fatalf("read arch.md: %v", err)
+	}
+	pat := regexp.MustCompile("`((?:internal|cmd|pkg|tests)/[A-Za-z0-9_./-]+)`")
+	repo := filepath.Join("..", "..")
+	seen := map[string]bool{}
+	for _, m := range pat.FindAllStringSubmatch(string(arch), -1) {
+		p := strings.TrimSuffix(m[1], "/")
+		if seen[p] || strings.ContainsAny(p, "<*") { // placeholders like internal/asset/<asset>/
+			continue
+		}
+		seen[p] = true
+		// A Go symbol reference (pkg/types.Foo) is not a path.
+		if strings.Contains(filepath.Base(p), ".") && !strings.HasSuffix(p, ".go") &&
+			!strings.HasSuffix(p, ".json") && !strings.HasSuffix(p, ".yml") {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(repo, p)); err != nil {
+			t.Errorf("arch.md points at %q, which does not exist — a reader sent there finds nothing, "+
+				"and cannot tell a stale reference from a capability we never built", p)
+		}
+	}
+	if len(seen) < 10 {
+		t.Fatalf("only %d paths parsed from arch.md — the pattern broke, not the doc", len(seen))
+	}
+}
