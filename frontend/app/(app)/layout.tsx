@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { riskRating } from "@/lib/utils";
 import { DegradationBar } from "@/components/shell/degradation-bar";
 import { Sidebar } from "@/components/shell/sidebar";
+import { MobileNavProvider, MobileNavBackdrop } from "@/components/shell/mobile-nav";
 import { TopBar } from "@/components/shell/topbar";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { hitlOwner } from "@/lib/service-model";
@@ -44,7 +45,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { selfOwned } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);
 
   return (
+    <MobileNavProvider>
     <div className="flex h-screen overflow-hidden">
+      <MobileNavBackdrop />
       <Sidebar
         pending={approvals.length}
         selfOwned={selfOwned}
@@ -62,11 +65,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             This replaced two banners that each had to be remembered separately — the arrangement that
             let a halted workspace read "agent online" and a failed scan render as an empty list. */}
         <DegradationBar degradations={system.degradations} />
-        <main className="flex-1 overflow-y-auto px-6 py-6">
+        {/* px-4 below md: 24px of gutter either side is a tenth of a 375px screen. */}
+        <main className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>
       </div>
       <CommandPalette />
     </div>
+    </MobileNavProvider>
   );
 }

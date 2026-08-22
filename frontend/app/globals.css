@@ -15,7 +15,13 @@
     --c-border-strong: 211 216 226;
     --c-ink: 23 26 33;
     --c-muted: 90 100 115;
-    --c-faint: 139 149 166;
+    /* ADR 0022 §3 — darkened from #8B95A6 (2.82:1 on the page background) to meet WCAG AA at 12px.
+       `text-faint` is used 489 times, 321 of them on small text, so it is a TEXT token in practice
+       whatever the original decorative intent was. Measured against --c-bg (#F6F7F9), the harder of
+       the two surfaces: a value tuned to white alone still fails there. Hue preserved by scaling
+       along the original channel ratio. Now 4.91:1 on white / 4.58:1 on bg; --c-muted stays clearly
+       darker (5.59:1) so the two still read as different weights. */
+    --c-faint: 106 113 126;
     --c-accent: 79 70 229;
     --c-accent-hover: 67 56 202;
     --c-accent-soft: 238 240 254;
@@ -36,7 +42,14 @@
     --c-border-strong: 57 67 86;
     --c-ink: 230 233 240; /* near-white primary text */
     --c-muted: 154 164 181;
-    --c-faint: 110 120 140;
+    /* ADR 0022 §3 — the dark theme was failing too, which the original audit missed because it ran
+       in light mode. Targeted at --c-surface-3 (the RAISED surface), not --c-surface: dark mode has
+       four grounds and the lightest one is the hardest. A first pass tuned to --c-surface measured
+       4.52 there and still failed at 4.01 on surface-2 and 3.46 on surface-3 — the same
+       wrong-surface mistake as picking white over the page background in the light theme.
+       Now 6.40 bg / 5.93 surface / 5.26 surface-2 / 4.55 surface-3, with --c-muted still clear
+       (5.46 on surface-3) so the two read as different weights. */
+    --c-faint: 136 149 174;
     --c-accent: 129 140 248; /* indigo-400 — pops on dark */
     --c-accent-hover: 165 173 251;
     --c-accent-soft: 33 33 64; /* dark indigo wash for chips */
