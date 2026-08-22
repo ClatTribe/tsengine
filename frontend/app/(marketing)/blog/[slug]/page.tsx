@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { pageMeta } from "@/lib/seo";
 import { ArticleJsonLd } from "@/components/marketing/article-jsonld";
-import { POSTS, postBySlug, readMinutes, type Block } from "@/lib/blog";
+import { POSTS, postBySlug, readMinutes, relatedPosts, type Block } from "@/lib/blog";
 
 export function generateStaticParams() {
   return POSTS.map((p) => ({ slug: p.slug }));
@@ -12,7 +12,14 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const post = postBySlug((await params).slug);
   if (!post) return pageMeta({ title: "Not found", description: "", path: "/blog" });
-  return pageMeta({ title: `${post.title}`, description: post.description, path: `/blog/${post.slug}` });
+  // seoTitle when the headline is too long for a search result; the h1 keeps the full headline.
+  // socialTitle stays the editorial one — a share card has room the SERP does not.
+  return pageMeta({
+    title: post.seoTitle ?? post.title,
+    description: post.description,
+    path: `/blog/${post.slug}`,
+    socialTitle: post.title,
+  });
 }
 
 function fmtDate(iso: string) {
@@ -74,6 +81,29 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           <BlockView key={i} b={b} />
         ))}
       </div>
+
+      {/* Related reading — ADR 0023 decision 5. Until this existed no post could link to another
+          post at all (the Block type has no link and paragraph text renders escaped), so eight
+          articles on one theme read to a crawler as eight unrelated pages. relatedPosts() always
+          returns neighbours, curated or not, so every post carries links out. */}
+      <nav aria-labelledby="related-heading" className="mt-12 border-t border-border pt-6">
+        <h2 id="related-heading" className="text-xs font-semibold uppercase tracking-wider text-faint">
+          Related reading
+        </h2>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-3">
+          {relatedPosts(post).map((r) => (
+            <li key={r.slug}>
+              <Link
+                href={`/blog/${r.slug}`}
+                className="group flex items-start gap-2 text-sm leading-relaxed text-muted transition hover:text-ink"
+              >
+                <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
+                <span>{r.title}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
 
       <div className="mt-12 rounded-2xl border border-border bg-surface-2 p-6 text-center">
         <p className="text-sm font-medium text-ink">See where your security stands — free, no signup.</p>

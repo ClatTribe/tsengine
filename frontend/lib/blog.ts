@@ -10,10 +10,35 @@ export type Block =
 
 export interface Post {
   slug: string;
+  /** The editorial headline. Rendered as the page's h1, and allowed to be long. */
   title: string;
+  /**
+   * The <title> tag, when the headline is too long to survive a search result.
+   *
+   * Google shows about 60 characters. Several of these headlines are deliberately longer than
+   * that because they work as headlines — "Your US customer sent a security questionnaire to
+   * your Indian startup…" is 107 and earns it on the page. Capping the headline to fit a SERP
+   * would damage the writing to satisfy a tag, so the tag gets its own string instead and the
+   * h1 is left alone. Defaults to `title` when it already fits. ADR 0023 decision 7.
+   */
+  seoTitle?: string;
   description: string;
   category: string; // reader-facing topic
   date: string; // ISO
+  /**
+   * Slugs of posts worth reading next.
+   *
+   * Before this the Block type was `p | h2 | ul | cta` and the renderer emitted paragraph text
+   * as an escaped React child, so a post could not link to another post even if someone wrote
+   * one — eight articles on one theme, none of them connected, which reads to a crawler as
+   * eight unrelated pages. These posts already cross-reference each other in prose: the DPDP
+   * post states its breach duty differs from CERT-In's, and there is a CERT-In post.
+   *
+   * A slug list rather than inline links is the cheaper half of ADR 0023 decision 5: it needs no
+   * change to the Block type or the renderer, and it captures most of the value. Unknown slugs
+   * are dropped rather than rendered as dead links — see relatedPosts.
+   */
+  related?: string[];
   body: Block[];
 }
 
@@ -43,8 +68,17 @@ export const POSTS: Post[] = [
   {
     slug: "pass-enterprise-security-questionnaire",
     title: "Will you pass an enterprise security questionnaire? The checks buyers run first",
+    seoTitle: "The checks buyers run first",
+    related: [
+      "india-saas-us-enterprise-security-questionnaire",
+      "soc2-readiness-for-seed-stage-startups",
+      // Curated rather than left to the recency top-up: this one is in a single-member category
+      // and third-oldest, so it never reaches anyone's fallback list and check-seo.mjs correctly
+      // reported it unreachable from anywhere but the blog index.
+      "security-for-the-sales-cycle",
+    ],
     description:
-      "Before a big customer signs, their security team runs a checklist against your domain. Here are the externally-visible checks that come first — and how to see your own score for free.",
+      "Before a customer signs, their security team runs a checklist against your domain. Here are the externally-visible checks that come first — and your free score.",
     category: "Security questionnaires",
     date: "2026-06-20",
     body: [
@@ -69,8 +103,10 @@ export const POSTS: Post[] = [
   {
     slug: "soc2-readiness-for-seed-stage-startups",
     title: "SOC 2 for seed-stage startups: a founder's readiness checklist",
+    seoTitle: "SOC 2 for seed-stage startups",
+    related: ["soc2-iso27001-dpdp-which-one-for-your-deal", "pass-enterprise-security-questionnaire"],
     description:
-      "You don't need a compliance team to get SOC 2-ready. Here's the founder's-eye view of what a Type I actually requires, in plain English, with a free self-assessment.",
+      "You don't need a compliance team to get SOC 2-ready. The founder's-eye view of what a Type I actually requires, in plain English, with a free self-assessment.",
     category: "SOC 2",
     date: "2026-06-22",
     body: [
@@ -98,8 +134,10 @@ export const POSTS: Post[] = [
   {
     slug: "security-for-the-sales-cycle",
     title: "Security for the sales cycle: fixing the gaps before they block a deal",
+    seoTitle: "Security for the sales cycle",
+    related: ["pass-enterprise-security-questionnaire", "soc2-readiness-for-seed-stage-startups"],
     description:
-      "Security is cheaper before a deal stalls than during. Here's how a fractional, AI-run security team closes the gaps a buyer's review will find — without a hire.",
+      "Security is cheaper before a deal stalls than during. How a fractional, AI-run security team closes the gaps a buyer's review will find — without a hire.",
     category: "Sales & security",
     date: "2026-06-24",
     body: [
@@ -126,8 +164,10 @@ export const POSTS: Post[] = [
 {
     slug: "india-saas-us-enterprise-security-questionnaire",
     title: "Your US customer sent a security questionnaire to your Indian startup. Here's what they're actually checking",
+    seoTitle: "What a US security questionnaire checks",
+    related: ["soc2-iso27001-dpdp-which-one-for-your-deal", "pentest-report-us-enterprise-buyer-expects", "dpdp-act-compliance-for-indian-saas"],
     description:
-      "Selling from Bengaluru into a US enterprise means answering a security review written for US vendors. Here's what those questions map to, which Indian regulations matter to the buyer, and which ones they have never heard of.",
+      "Selling from Bengaluru into a US enterprise means answering a review written for US vendors. What those questions map to, and which Indian regulations matter.",
     category: "Selling into US enterprises",
     date: "2026-08-12",
     body: [
@@ -170,8 +210,10 @@ export const POSTS: Post[] = [
   {
     slug: "soc2-iso27001-dpdp-which-one-for-your-deal",
     title: "SOC 2, ISO 27001 or DPDP: which one does your deal actually need?",
+    seoTitle: "SOC 2, ISO 27001 or DPDP?",
+    related: ["dpdp-act-compliance-for-indian-saas", "india-saas-us-enterprise-security-questionnaire"],
     description:
-      "Indian SaaS founders are told to get all three. Most deals need one. A plain-English guide to which certification your specific buyer is asking for, and what it costs to say yes.",
+      "Indian SaaS founders are told to get all three. Most deals need one. Which certification your specific buyer is asking for, and what it costs to say yes.",
     category: "Selling into US enterprises",
     date: "2026-08-19",
     body: [
@@ -216,8 +258,10 @@ export const POSTS: Post[] = [
 {
     slug: "dpdp-act-compliance-for-indian-saas",
     title: "The DPDP Act for Indian SaaS: what you actually have to do",
+    seoTitle: "The DPDP Act for Indian SaaS",
+    related: ["certin-six-hour-incident-reporting", "soc2-iso27001-dpdp-which-one-for-your-deal"],
     description:
-      "India's data protection law applies to you whether or not a customer asks. A plain-English guide to the duties that matter, what changes for a B2B SaaS company, and how it lands in an enterprise security review.",
+      "India's data protection law applies whether or not a customer asks. The duties that matter, what changes for B2B SaaS, and how it lands in a security review.",
     category: "Selling into US enterprises",
     date: "2026-08-21",
     body: [
@@ -248,8 +292,10 @@ export const POSTS: Post[] = [
   {
     slug: "certin-six-hour-incident-reporting",
     title: "CERT-In's six-hour rule: what it means when something actually happens",
+    seoTitle: "CERT-In's six-hour rule",
+    related: ["dpdp-act-compliance-for-indian-saas", "india-saas-us-enterprise-security-questionnaire"],
     description:
-      "India obliges you to report certain security incidents within six hours of noticing them. Here's which incidents count, what the report has to contain, and why it is worth telling your enterprise buyers about it.",
+      "India obliges you to report certain security incidents within six hours. Which ones count, what the report must contain, and why to raise it with buyers.",
     category: "Selling into US enterprises",
     date: "2026-08-22",
     body: [
@@ -289,8 +335,10 @@ export const POSTS: Post[] = [
   {
     slug: "pentest-report-us-enterprise-buyer-expects",
     title: "The penetration test report a US buyer expects — and what Indian vendors usually send",
+    seoTitle: "The pentest report a US buyer expects",
+    related: ["india-saas-us-enterprise-security-questionnaire", "soc2-iso27001-dpdp-which-one-for-your-deal"],
     description:
-      "\"Do you have a recent pentest?\" is one of the most common blockers in an enterprise security review, and one of the easiest to answer badly. What the buyer is checking, and what makes a report fail on sight.",
+      "\"Do you have a recent pentest?\" is a common blocker in an enterprise security review, and an easy one to answer badly. What makes a report fail on sight.",
     category: "Selling into US enterprises",
     date: "2026-08-22",
     body: [
@@ -327,6 +375,33 @@ export const POSTS: Post[] = [
 
 export function postBySlug(slug: string): Post | undefined {
   return POSTS.find((p) => p.slug === slug);
+}
+
+/**
+ * relatedPosts resolves a post's `related` slugs, then tops up from the rest of the blog so
+ * every post carries links out whether or not anyone curated them.
+ *
+ * The top-up is what makes this a guarantee rather than a good intention: a post nobody
+ * remembered to cross-link still gets neighbours, and every post therefore has inbound links
+ * from somewhere other than the index. check-seo.mjs asserts exactly that.
+ *
+ * An unknown slug is DROPPED, not rendered — a related-reading list that 404s is worse than a
+ * shorter one.
+ */
+export function relatedPosts(post: Post, limit = 3): Post[] {
+  const curated = (post.related ?? [])
+    .map((s) => postBySlug(s))
+    .filter((p): p is Post => p !== undefined && p.slug !== post.slug);
+
+  const sameCategory = POSTS.filter(
+    (p) => p.slug !== post.slug && p.category === post.category && !curated.includes(p),
+  );
+  const rest = POSTS.filter(
+    (p) => p.slug !== post.slug && !curated.includes(p) && !sameCategory.includes(p),
+  );
+  const byNewest = (a: Post, b: Post) => b.date.localeCompare(a.date);
+
+  return [...curated, ...sameCategory.sort(byNewest), ...rest.sort(byNewest)].slice(0, limit);
 }
 
 /**

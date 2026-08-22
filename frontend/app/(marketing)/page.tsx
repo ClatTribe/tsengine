@@ -16,7 +16,7 @@ import { pageMeta } from "@/lib/seo";
 
 const HOME_TITLE = "Clear the security review blocking your deal";
 const HOME_DESCRIPTION =
-  "For Series A and B teams: an AI security engineer finds what an attacker could actually reach across your code, cloud and SaaS and writes the fix, and an AI pentester proves it by breaking in. Someone on your team approves anything that touches your systems. SOC 2 evidence and a signed report built in.";
+  "An AI security engineer finds what an attacker could really reach across your code, cloud and SaaS and writes the fix. An AI pentester proves it by breaking in.";
 
 // The social card must say what the H1 says. Both now lead with the visitor's SITUATION — a deal
 // stuck behind a customer's security review — rather than with the two agents, which are the how.

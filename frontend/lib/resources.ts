@@ -81,9 +81,9 @@ export const RESOURCES: Record<string, Resource> = {
         ],
       },
     ],
-    seoTitle: "Free SOC 2 Readiness Checklist for Startups (PDF)",
+    seoTitle: "Free SOC 2 Readiness Checklist (PDF)",
     seoDesc:
-      "The ~40 controls auditors actually check, in plain English — which automate vs. need a human, the order to do them, and the evidence each needs. Free for founders.",
+      "The ~40 controls auditors actually check, in plain English: which automate, which need a human, the order to do them, and the evidence each one needs.",
   },
   "security-questionnaire-template": {
     slug: "security-questionnaire-template",
@@ -146,9 +146,9 @@ export const RESOURCES: Record<string, Resource> = {
         ],
       },
     ],
-    seoTitle: "Security Questionnaire Response Template (Free)",
+    seoTitle: "Free Security Questionnaire Template",
     seoDesc:
-      "The security questions enterprise buyers ask, grouped, with model answers and the evidence to attach — so you respond in a day, not a fortnight. Free for founders.",
+      "The security questions enterprise buyers ask, grouped, with model answers and the evidence to attach — so you respond in a day, not a fortnight.",
   },
 };
 

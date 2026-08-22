@@ -6,7 +6,7 @@ import { POSTS, readMinutes } from "@/lib/blog";
 export const metadata = pageMeta({
   title: "Blog — Security & SOC 2 for B2B Founders",
   description:
-    "Plain-English security and SOC 2 guidance for founders: passing enterprise security questionnaires, getting audit-ready, and fixing the gaps that block deals — with free tools at every step.",
+    "Plain-English security and SOC 2 guidance for founders: passing enterprise questionnaires, getting audit-ready, and fixing the gaps that block deals.",
   path: "/blog",
 });
 

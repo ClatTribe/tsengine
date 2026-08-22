@@ -11,7 +11,7 @@ import {
 export const metadata = pageMeta({
   title: "Integrations",
   description:
-    "Connect your stack in minutes: GitHub, GitLab, Bitbucket, Azure DevOps, AWS, Google Workspace, Microsoft 365, Okta, Docker Hub & GHCR — plus Jira, ServiceNow, Linear, Slack, Microsoft Teams, Discord, PagerDuty and signed outbound webhooks for delivery. Read-only by default, write-back only on approval.",
+    "Connect your stack in minutes: GitHub, GitLab, AWS, Google Workspace, M365, Okta and more — plus Jira, Slack, Teams and PagerDuty for tickets and alerts.",
   path: "/integrations",
 });
 

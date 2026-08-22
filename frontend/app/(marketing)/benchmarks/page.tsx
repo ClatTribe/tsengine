@@ -23,7 +23,7 @@ import { ArrowRight, CheckCircle2, MinusCircle, FlaskConical } from "lucide-reac
 export const metadata = pageMeta({
   title: "Benchmarks — Corpora We Did Not Write",
   description:
-    "Our SAST detection scores 46.5% Youden across all 2,740 OWASP BenchmarkJava cases — third on the published cohort, behind Veracode and Checkmarx. The methodology, the command to reproduce it, and what we have not measured yet.",
+    "Our SAST scores 46.5% Youden across all 2,740 OWASP BenchmarkJava cases — third on the published cohort. The method, how to reproduce it, and the gaps.",
   path: "/benchmarks",
 });
 

@@ -66,7 +66,11 @@ export async function generateMetadata({ params }: { params: Promise<{ framework
   const i = info(framework);
   if (!i) return {};
   const title = `${i.label} Compliance Automation for SMBs`;
-  const description = `Get ${i.label}-ready without a compliance consultant. TensorShield continuously maps your findings to ${i.label} controls, prepares fixes, and produces signed, auditor-ready evidence. ${i.desc}`;
+  // Kept under ~160 characters, which is all a search result shows. It used to append i.desc,
+  // whose length varies per framework and pushed all 25 pages to 238-286 chars — so a third of
+  // every one of them was written for nobody. i.desc still opens the page itself, where there
+  // is no limit. ADR 0023 decision 7 gates this.
+  const description = `Get ${i.label}-ready without a compliance consultant: your findings mapped to ${i.label} controls, fixes prepared, and signed auditor-ready evidence.`;
   return pageMeta({ title, description, path: `/frameworks/${framework}` });
 }
 

@@ -9,7 +9,7 @@ import {
 export const metadata = pageMeta({
   title: "AI agent controls",
   description:
-    "The controls security leaders require before they'll trust an AI to test their systems: a kill-switch, hard scope enforcement, agent/tool isolation, full signed logging, a human gate, and prompt-injection resistance. Built into TensorShield by construction.",
+    "The controls security leaders want before trusting an AI to test their systems: a kill-switch, hard scope enforcement, isolation, signed logs, a human gate.",
   path: "/agent-controls",
 });
 

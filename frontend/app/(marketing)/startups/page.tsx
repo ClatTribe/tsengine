@@ -23,7 +23,7 @@ import {
 export const metadata = pageMeta({
   title: "Security for Series A & B Startups",
   description:
-    "An enterprise customer's security review is blocking your deal and security is nobody's full-time job yet. Get an exploitation-proven pentest report, the compliance evidence the questionnaire asks for, and proof the fixes landed — signed by a named human. Start free.",
+    "A customer's security review is blocking your deal and security is nobody's full-time job yet. Get the pentest report, the evidence, and proof fixes landed.",
   path: "/startups",
 });
 

@@ -137,3 +137,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+      # Guards the marketing surface against defects that are invisible in source — a page-level
+      # openGraph object silently deleting the share card, a title that only overruns once
+      # rendered, four pages publishing identical metadata, a route nothing links to. It reads
+      # the built HTML, so it has to run here, after the build. ADR 0023 decision 7.
+      - run: npm run check:seo

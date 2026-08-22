@@ -7,7 +7,7 @@ import { RESOURCE_LIST } from "@/lib/resources";
 export const metadata = pageMeta({
   title: "Free Security & Compliance Resources",
   description:
-    "Free, no-fluff resources for founders tackling security and compliance: a SOC 2 readiness checklist and a security-questionnaire response template. The consultant's deliverables, free.",
+    "Free, no-fluff resources for founders: a SOC 2 readiness checklist and a security-questionnaire response template. The consultant's deliverables, for free.",
   path: "/resources",
 });
 

@@ -11,7 +11,7 @@ import { ProviderIcon } from "@/components/brand/provider-icon";
 export const metadata = pageMeta({
   title: "SSPM — SaaS & Identity Posture Management",
   description:
-    "Most breaches start with a misconfigured SaaS app or a missing MFA. TensorShield continuously checks your identity providers and SaaS apps for risky settings — grounded, compliance-mapped, and fixed with you in the loop.",
+    "Most breaches start with a misconfigured SaaS app or a missing MFA. We continuously check your identity providers and SaaS apps, and fix what we find.",
   path: "/saas-posture",
 });
 

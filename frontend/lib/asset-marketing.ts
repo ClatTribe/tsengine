@@ -61,7 +61,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Is a clean scan a compliance certification?", a: "No. We map findings to controls but never mark a control compliant from a scan — an independent auditor attests. We make you audit-ready, honestly." },
     ],
     seoTitle: "Cloud Security — CSPM + CIEM, AWS/GCP/Azure",
-    seoDesc: "Agentless cloud security: CIS posture, IAM attack paths, and data exposure across AWS/GCP/Azure — with human-gated remediation. Grounded in your live account, never a generic checklist.",
+    seoDesc: "Agentless cloud security: CIS posture, IAM attack paths and data exposure across AWS, GCP and Azure — grounded in your live account, with human-gated fixes.",
   },
   api: {
     slug: "api-security",
@@ -94,7 +94,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Is active testing safe?", a: "The active prober is consent-gated and benign-by-construction (canary probes, true/false differentials that extract no data). You authorize it per engagement." },
     ],
     seoTitle: "API Security Testing — REST, GraphQL, BOLA",
-    seoDesc: "Spec-driven API security: OpenAPI ingest, per-operation fuzzing, shadow-route discovery, and a differential BOLA/BFLA authz test that proves the bypass. Grounded, low-noise.",
+    seoDesc: "Spec-driven API security: OpenAPI ingest, per-operation fuzzing, shadow-route discovery, and a differential BOLA/BFLA test that proves the bypass.",
   },
   container: {
     slug: "container-security",
@@ -204,7 +204,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Does it handle WordPress?", a: "Yes — a WordPress/CMS surface triggers wpscan for vulnerable plugins/themes, user enumeration, and exposed wp-config." },
     ],
     seoTitle: "Web Application Security Testing (DAST)",
-    seoDesc: "Web app DAST: crawl-then-fuzz for SQLi, XSS, SSRF, auth flaws, and WordPress/CMS issues — with reliable authenticated scanning. Grounded, corroborated, low false positives.",
+    seoDesc: "Web app DAST: crawl-then-fuzz for SQLi, XSS, SSRF, auth flaws and CMS issues, with reliable authenticated scanning. Corroborated, low false positives.",
   },
   code: {
     slug: "code-security",
@@ -270,7 +270,7 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Will it find outdated services?", a: "Yes — a service below its minimum-safe version (e.g. an old OpenSSH or web server) is bumped above info and flagged with upgrade guidance, grounded in the real version nmap detected." },
     ],
     seoTitle: "Network & IP Scanning — Ports, Services, CVEs",
-    seoDesc: "Network security scanning for IPs/CIDRs: port + service discovery, per-port vulnerability templates, outdated-service flagging, and default-credential checks. Fast and low-noise.",
+    seoDesc: "Network scanning for IPs and CIDRs: port and service discovery, per-port vulnerability templates, outdated-service flagging, default-credential checks.",
   },
   dns: {
     slug: "dns-domain-security",
@@ -303,6 +303,6 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { q: "Can it fix email spoofing?", a: "It checks DMARC/SPF/DKIM from public DNS and hands you the exact TXT record to publish — the highest-leverage anti-phishing fix." },
     ],
     seoTitle: "Domain & DNS Security — Takeover, DMARC",
-    seoDesc: "Domain & DNS security: subdomain enumeration, subdomain-takeover detection, email-spoofing posture (DMARC/SPF/DKIM), and typosquat monitoring. Your attacker's-eye footprint.",
+    seoDesc: "Domain and DNS security: subdomain enumeration, takeover detection, email-spoofing posture (DMARC/SPF/DKIM), and typosquat monitoring.",
   },
 };

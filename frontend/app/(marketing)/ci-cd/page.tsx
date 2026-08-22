@@ -11,7 +11,7 @@ import {
 export const metadata = pageMeta({
   title: "CI/CD Security — Block the PR, Not the Team",
   description:
-    "Run TensorShield in your pipeline: a build gate that fails only on NEW issues over your threshold, native SARIF into GitHub's Security tab, and a one-command import for the scanners you already run. Best-in-class OSS underneath.",
+    "Run TensorShield in your pipeline: a gate that fails only on NEW issues over your threshold, native SARIF into GitHub's Security tab, one-command import.",
   path: "/ci-cd",
 });
 

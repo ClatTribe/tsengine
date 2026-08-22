@@ -7,7 +7,7 @@ import { SOC2Assessment } from "@/components/marketing/soc2-assessment";
 export const metadata = pageMeta({
   title: "Free SOC 2 Readiness Self-Assessment",
   description:
-    "Answer 15 plain-English questions and get your SOC 2 readiness score plus a prioritized list of the gaps to close first — free, no signup. Built for founders who are their own security team.",
+    "Answer 15 plain-English questions and get your SOC 2 readiness score plus the gaps to close first — free, no signup. For founders with no security team.",
   path: "/soc2-readiness",
 });
 
