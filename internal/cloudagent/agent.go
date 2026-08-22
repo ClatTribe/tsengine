@@ -63,9 +63,23 @@ type Context struct {
 	Summary string
 	Done    bool
 
-	issueN    int
-	calls     int
-	confirmed map[string]ProbeResult
+	// ProbeBudget bounds how many LIVE provider dry-runs this investigation may spend. A simulate
+	// call is read-only but NOT side-effect-free: it writes an audit event in the CUSTOMER's account
+	// and consumes a rate-limited quota, so an agent walking a multi-hop graph must not be able to
+	// issue an unbounded number of them. Zero means DefaultProbeBudget (a caller that never heard of
+	// this field still gets a bound, which is the point); cached answers do not spend it.
+	ProbeBudget int
+
+	issueN     int
+	calls      int
+	probeCalls int
+	// probes holds every dry-run outcome of this run, ALLOW and DENY and UNKNOWN alike, keyed by
+	// (principal, action, resource). It is both the coverage ledger and the within-run cache.
+	probes map[string]ProbeResult
+	// ctx is the investigation's context, stashed so tools can honour the caller's cancellation and
+	// deadline (§15). Tool handlers take only (cc, args), so without this a scan timeout could not
+	// interrupt a live provider call.
+	ctx context.Context
 }
 
 // Issue is one attack path the LLM determined AND the graph confirmed (grounded).
@@ -98,6 +112,10 @@ type Report struct {
 	Summary string  `json:"summary"`
 	Issues  []Issue `json:"issues"`
 	Calls   int     `json:"tool_calls"`
+	// Probes is what the provider was actually ASKED and what it answered — tested/allowed/denied/
+	// unknown plus the per-move records. Nil when no prober was configured, because "we did not
+	// look" and "we looked and found nothing" are different claims (§10).
+	Probes *ProbeCoverage `json:"probe_coverage,omitempty"`
 }
 
 // Options bounds the agent loop.
@@ -121,6 +139,7 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		opts.MaxHyp = 60
 	}
 	cc.MaxHyp = opts.MaxHyp
+	cc.ctx = ctx
 	reg := map[string]toolDef{}
 	for _, t := range tools() {
 		reg[t.name] = t
@@ -155,7 +174,7 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		opts.Ledger.Record(act.Thought, act.Tool, act.Args, obs)
 		transcript = agentloop.AppendCapped(transcript, fmt.Sprintf("ACTION %s(%s)\nOBSERVATION: %s", act.Tool, agentloop.CompactArgs(act.Args), obs))
 	}
-	return &Report{Summary: cc.Summary, Issues: cc.Issues, Calls: cc.calls}, nil
+	return &Report{Summary: cc.Summary, Issues: cc.Issues, Calls: cc.calls, Probes: cc.ProbeCoverage()}, nil
 }
 
 func toolNames() string {

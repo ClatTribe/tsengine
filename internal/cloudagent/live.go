@@ -73,7 +73,7 @@ func tCheckLive(cc *Context, args map[string]any) string {
 			"privileged) rather than on structure."
 	}
 
-	fact, err := cc.Live.CheckLive(context.Background(), id)
+	fact, err := cc.Live.CheckLive(cc.callCtx(), id)
 	if err != nil {
 		return fmt.Sprintf("live re-read failed for %s (%v). The snapshot is unconfirmed for this "+
 			"resource — treat its config flags as possibly stale. %s", id, err, cc.Live.Coverage())

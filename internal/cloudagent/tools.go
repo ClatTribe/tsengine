@@ -450,7 +450,7 @@ func edgeNeedsAuthorization(k cloudgraph.EdgeKind) bool {
 // confirmed ALLOW this run. The action is not carried on the graph edge, so any confirmed action
 // across the hop counts for that hop.
 func (cc *Context) hopConfirmed(from, to string) bool {
-	for k, r := range cc.confirmed {
+	for k, r := range cc.probes {
 		if r.Verdict != VerdictAllow {
 			continue
 		}
