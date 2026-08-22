@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/l15"
 	"github.com/ClatTribe/tsengine/internal/sandbox"
 	"github.com/ClatTribe/tsengine/internal/tool"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -119,7 +120,17 @@ func Replay(ctx context.Context, req Request, runsDir string, spawner Spawner) (
 			},
 		})
 	}
-	return &Response{ReplayID: replayID, Findings: findings}, nil
+	// THE SAME L1.5 CHAIN AS EVERY OTHER DOOR (§11).
+	//
+	// This path returned raw tool output. The platform's replay handler has always enriched, so the
+	// SAME "investigate deeper" click produced a KEV/EPSS/exploitability/confidence-annotated finding
+	// through one door and a bare one through the other — and the bare one is what a security engineer
+	// driving the engine directly received, which is the audience §2.1 says reads these findings to
+	// prioritise by exploited-in-the-wild.
+	//
+	// It is also what arch.md said already happened. The asymmetry is the same one platformapi.
+	// enrichFindings was written to close for the ingest paths; this is the last door.
+	return &Response{ReplayID: replayID, Findings: l15.Enrich(findings)}, nil
 }
 
 // HTTPHandler returns an http.HandlerFunc that serves POST /replay,
