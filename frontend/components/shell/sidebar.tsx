@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Sparkles,
   ClipboardCheck,
+  Activity,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,17 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
       // The human's half of the loop: every change either agent proposes waits here with its diff.
       { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "pending" },
+      // WHAT CHANGED since the last pass — and, until now, the only page in the app that NOTHING
+      // linked to. /incidents opens with "What changed since the last scan", carries the SOC
+      // performance numbers and a section literally headed "RESOLVED · THE AGENT'S WINS", and had
+      // zero inbound links: not the sidebar, not Overview, not Issues, not Inbox, not either agent
+      // console. It was reachable only by typing the URL.
+      //
+      // It belongs in this group rather than under an agent. `internal/detect` produces it, not the
+      // Engineer or the Pentester, and it answers the third question a human opens the app with:
+      // where am I (Overview), what needs me (Inbox), what changed (Incidents). That is the whole
+      // daily-driver loop, and two thirds of it were already here.
+      { href: "/incidents", label: "Incidents", icon: Activity },
     ],
   },
   {
@@ -137,7 +149,7 @@ export function Sidebar({
                 <button
                   type="button"
                   onClick={() => toggle(group.header!)}
-                  className="group/header flex items-center gap-1 px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-faint transition hover:text-muted"
+                  className="group/header flex items-center gap-1 px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted transition hover:text-ink"
                   aria-expanded={!isCollapsed}
                 >
                   <ChevronDown className={cn("h-3 w-3 transition-transform", isCollapsed && "-rotate-90")} />
