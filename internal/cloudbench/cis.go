@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 )
 
 // CISExpectation is one ground-truth CIS violation: the control it breaches + the resource it
@@ -46,6 +48,16 @@ type CISScore struct {
 	// a real FP OR a genuine violation the ground truth never enumerated, and this scorer cannot
 	// tell which (§10). Naming it honestly keeps it a signal to investigate, not a verdict.
 	Unexpected int `json:"unexpected"`
+	// UnexpectedResources NAMES them. The count alone was unactionable: this field's own comment
+	// calls it "a signal to investigate", and nobody can investigate an integer — the resource was
+	// known at the moment it was counted and thrown away one line later.
+	//
+	// It matters more here than a count usually would, because which one it is decides what the
+	// number MEANS. A real false positive is a specificity problem in the engine; a genuine
+	// violation the ground truth never enumerated is a gap in the FIXTURE, and the recall figure
+	// above is then understated rather than the engine being noisy. Same integer, opposite
+	// conclusions, and only the resource tells them apart.
+	UnexpectedResources []string `json:"unexpected_resources,omitempty"`
 }
 
 // CISResult records whether a control's violation was covered.
@@ -61,6 +73,20 @@ type CISResult struct {
 func ScoreCIS(coveredResources []string, expected []CISExpectation) CISScore {
 	s := CISScore{Total: len(expected), PerControl: map[string]bool{}, covered: map[string]CISResult{}}
 	for _, r := range coveredResources {
+		// cloudgraph.InternetID is a PSEUDO-NODE — "the well-known pseudo-node representing any
+		// external attacker" — not a cloud resource. It cannot breach a CIS control, so counting it
+		// as an unflagged-by-ground-truth resource permanently inflated the unexpected count by one,
+		// on every run, for every fixture.
+		//
+		// That is worse than a cosmetic off-by-one: unexpected is the only specificity signal this
+		// lane has, so a constant floor of 1 both overstates our noise and masks the first REAL
+		// unexpected finding, which would look like no change at all.
+		//
+		// Found by naming the unexpected resources rather than counting them. The count said "1 —
+		// either an FP or a fixture gap"; the name said "neither, it is our own attacker node".
+		if r == cloudgraph.InternetID {
+			continue
+		}
 		matched := false
 		for _, e := range expected {
 			if resourceMatch(r, e.Resource) {
@@ -70,6 +96,7 @@ func ScoreCIS(coveredResources []string, expected []CISExpectation) CISScore {
 		}
 		if !matched {
 			s.Unexpected++
+			s.UnexpectedResources = append(s.UnexpectedResources, r)
 		}
 	}
 	for _, e := range expected {
@@ -121,14 +148,29 @@ func RenderCIS(prowlerOnly, withEngine CISScore) string {
 	fmt.Fprintf(&b, "  tsengine (engine+DSPM/CWPP): %d/%d  recall %.2f", withEngine.Found, withEngine.Total, withEngine.Recall)
 	if lift := withEngine.Recall - prowlerOnly.Recall; lift > 0 {
 		fmt.Fprintf(&b, "   (engine lift +%.2f)", lift)
-
-		fmt.Fprintf(&b, "\n  unexpected findings:  prowler/scout %d, tsengine %d\n"+
-			"                        (NOT scored as false positives: on a curated fixture these are\n"+
-			"                        either FPs or violations the ground truth never listed. Recall\n"+
-			"                        alone is gameable — flag everything and it reads 1.00.)\n",
-			prowlerOnly.Unexpected, withEngine.Unexpected)
 	}
-	b.WriteString("\n\n")
+	b.WriteString("\n")
+
+	// OUTSIDE the lift branch, deliberately. This block used to be nested inside it, so the one
+	// number that stops recall being gameable was printed only when the engine had a lift to show —
+	// and withheld exactly when it did not, which is when a reader most needs to know whether we are
+	// merely noisier than prowler at the same recall.
+	fmt.Fprintf(&b, "  unexpected findings:  prowler/scout %d, tsengine %d\n"+
+		"                        (NOT scored as false positives: on a curated fixture these are\n"+
+		"                        either FPs or violations the ground truth never listed. Recall\n"+
+		"                        alone is gameable — flag everything and it reads 1.00.)\n",
+		prowlerOnly.Unexpected, withEngine.Unexpected)
+	// Named, because "a signal to investigate" is not something anyone can act on as an integer —
+	// and which resource it is decides what the number means. A real false positive is a specificity
+	// problem in the engine; a violation the ground truth never enumerated is a gap in the FIXTURE,
+	// and then the recall above is understated rather than the engine being noisy.
+	if len(withEngine.UnexpectedResources) > 0 {
+		b.WriteString("    tsengine flagged, not in ground truth:\n")
+		for _, r := range withEngine.UnexpectedResources {
+			fmt.Fprintf(&b, "      - %s\n", r)
+		}
+	}
+	b.WriteString("\n")
 	if len(withEngine.Missed) > 0 {
 		b.WriteString("  still missed:\n")
 		for _, m := range withEngine.Missed {
