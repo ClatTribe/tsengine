@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -76,6 +78,20 @@ const (
 	// whoever POSTED the inventory; the person who needs it is the one reading the page
 	// days later, and they were getting silence.
 	DegradationCloudCoverage = "cloud_coverage_incomplete"
+	// DegradationThreatIntelStale: the KEV/EPSS corpus is old enough that the priorities built on
+	// it have stopped meaning what they say.
+	//
+	// This one is not a failure anywhere — it is the DEFAULT. With TSENGINE_THREAT_INTEL_CORPUS
+	// unset the engine serves a snapshot compiled into the binary, and refresh is best-effort by
+	// design ("a failed fetch keeps the last good corpus, never blocks scans"), so a feed that
+	// stopped weeks ago looks exactly like one that ran this morning.
+	//
+	// What goes wrong is silent and one-directional: every CVE added to KEV since the snapshot is
+	// unflagged, so there is no KEV badge, no ransomware flag, no BOD 22-01 SLA acceleration and no
+	// CISA due date, and something that became actively exploited last month reads as an ordinary
+	// medium. Nothing is WRONG in a way a test could catch — it is the right answer to a question
+	// asked of an older world.
+	DegradationThreatIntelStale = "threat_intel_stale"
 )
 
 // AllDegradationKinds is the closed set, for the guard test and for the frontend's exhaustiveness.
@@ -86,6 +102,7 @@ func AllDegradationKinds() []string {
 		DegradationAIOff,
 		DegradationConnectionBroken,
 		DegradationCloudCoverage,
+		DegradationThreatIntelStale,
 	}
 }
 
@@ -193,11 +210,52 @@ func (d Deps) computeDegradations(ctx context.Context, tenantID string) []Degrad
 		}
 	}
 
+	// 6. The threat intel behind every priority on screen is old.
+	//
+	// Tenant-independent — the corpus is world state shared by everyone (§7) — but it belongs here
+	// because this is the list of reasons the CURRENT VIEW may not mean what it says, and a stale
+	// KEV feed changes what every severity on every page is worth.
+	if age, stale, embedded := hooks.ThreatIntelAge(nowUTC()); stale {
+		detail := "Exploitation intelligence (CISA KEV, EPSS) is " + humanDays(age) + " old. " +
+			"Anything added to KEV since then is not flagged here: no known-exploited badge, no " +
+			"ransomware flag, and no accelerated CISA deadline. Severities below are correct for " +
+			"what was known then, not for today."
+		if embedded {
+			detail += " This deployment is using the snapshot built into the binary — set " +
+				"TSENGINE_THREAT_INTEL_CORPUS and run `tsengine corpus refresh` to keep it current."
+		} else {
+			detail += " The corpus is configured but has not refreshed — check the refresh job can " +
+				"reach cisa.gov and first.org."
+		}
+		out = append(out, Degradation{
+			Kind: DegradationThreatIntelStale, Severity: "warning",
+			Title:  "Exploitation intelligence is out of date",
+			Detail: detail,
+		})
+	}
+
 	sort.SliceStable(out, func(i, j int) bool {
 		return degradationRank[out[i].Severity] < degradationRank[out[j].Severity]
 	})
 	return out
 }
+
+// humanDays renders an age the way the sentence needs to read.
+func humanDays(d time.Duration) string {
+	days := int(d.Hours() / 24)
+	switch {
+	case days <= 0:
+		return "of unknown age"
+	case days == 1:
+		return "1 day"
+	default:
+		return itoa(days) + " days"
+	}
+}
+
+// nowUTC is a variable so the guard test can drive staleness from a fixed clock rather than
+// depending on when the suite happens to run.
+var nowUTC = func() time.Time { return time.Now().UTC() }
 
 func plural(n int, one, many string) string {
 	if n == 1 {
