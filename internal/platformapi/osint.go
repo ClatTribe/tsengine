@@ -64,6 +64,12 @@ func (d Deps) handleIngestOSINT(w http.ResponseWriter, r *http.Request, tenantID
 func (d Deps) ingestOSINTSnapshot(ctx context.Context, tenantID string, snap osint.Snapshot, recLabel string) ([]types.Finding, int, int) {
 	findings := osint.Assess(snap, osint.Options{})
 	findings = enrichFindings(findings) // L1.5 parity: enrich platform-native findings like engine-scanned ones (§11)
+	// RECORD THAT THIS RAN. osint.Assess is grounded — a clean external footprint yields ZERO
+	// findings — so without the stamp "assessed and clean" and "never scanned" are byte-identical in
+	// the findings store, and the UI shows the reassuring reading for both (§10). Stamped here rather
+	// than in the handlers because BOTH doors (the posted snapshot and the live CT scan) funnel
+	// through this function, and a stamp in one handler would leave the other silent.
+	d.markPostureAssessed(ctx, tenantID, "osint", time.Now().UTC())
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {
