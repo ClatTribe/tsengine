@@ -54,9 +54,7 @@ func (d Deps) handleIngestIdentityEvents(w http.ResponseWriter, r *http.Request,
 		}
 		// Fold the finding into the compliance posture so the identity threat shows up as a real
 		// control gap (SOC 2 CC6.x / NIST IA-2 …) in the founder's posture — not just a raw finding.
-		if d.GRC != nil {
-			_ = d.GRC.Apply(r.Context(), tenantID, f)
-		}
+		d.foldIntoPosture(r.Context(), tenantID, []types.Finding{f})
 		saved = append(saved, f)
 		stored++
 	}

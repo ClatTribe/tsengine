@@ -149,9 +149,7 @@ func (d Deps) handleRunAuthzTest(w http.ResponseWriter, r *http.Request, tenantI
 		if err := d.Store.PutFinding(r.Context(), tenantID, f); err != nil {
 			continue
 		}
-		if d.GRC != nil {
-			_ = d.GRC.Apply(r.Context(), tenantID, f)
-		}
+		d.foldIntoPosture(r.Context(), tenantID, []types.Finding{f})
 		saved = append(saved, f)
 		stored++
 	}

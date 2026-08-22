@@ -50,9 +50,7 @@ func (d Deps) handleIngestCloudEvents(w http.ResponseWriter, r *http.Request, te
 		// (e.g. CWE-284 for public-exposure / SG-opened → access-control controls; audit-logging-disabled →
 		// logging controls), so a live threat should show up in GET /v1/compliance — not only in issues.
 		// Grounded (§10): grc.Apply marks a control a gap ONLY where the finding has a real compliance nexus.
-		if d.GRC != nil {
-			_ = d.GRC.Apply(r.Context(), tenantID, f)
-		}
+		d.foldIntoPosture(r.Context(), tenantID, []types.Finding{f})
 		saved = append(saved, f)
 	}
 	stored := len(saved)
