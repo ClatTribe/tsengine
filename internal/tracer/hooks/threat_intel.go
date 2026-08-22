@@ -41,10 +41,9 @@ type corpusEntry struct {
 	Advisories []string         `json:"advisories"`
 	Exploits   []string         `json:"exploits"`
 	WeaponRank string           `json:"weapon_rank,omitempty"`
-	// SSVC needs its json tag for the same reason NucleiTemplate did: this struct DECODES a corpus
-	// file written elsewhere, so a mismatched key leaves the field empty forever and the hook
-	// silently stops carrying it. Go field matching is case-insensitive but not
-	// underscore-insensitive.
+	// SSVC is decoded from the corpus file. The tag is explicitness rather than necessity: "ssvc"
+	// differs from the field name only in CASE, which Go's unmarshal bridges. An UNDERSCORE key
+	// like "nuclei_template" is the case where a tag is genuinely load-bearing.
 	SSVC *types.SSVC `json:"ssvc,omitempty"`
 }
 
