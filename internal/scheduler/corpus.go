@@ -23,7 +23,13 @@ type CorpusRefresher struct {
 	Interval time.Duration // refresh cadence; <=0 disables
 	// Refresh is injectable for tests; nil → the live threatintel.Refresh into DataPath's dir.
 	Refresh func(ctx context.Context, dir string) (threatintel.Manifest, error)
-	Log     *log.Logger
+	// ExploitIntelURL, when set, also builds the OFFENSIVE-face exploit_intel.json sidecar (ADR 0019)
+	// into the corpus dir on each refresh — the fuel the L2 pentester's bounded exploitation-checker
+	// reads (nuclei template bodies → known-triggering request skeletons). Empty (the default) leaves
+	// the sidecar unbuilt and the offensive seam dormant; opt-in because the source archive is large.
+	// Best-effort inside Refresh: a sidecar-build failure never blocks the KEV/EPSS refresh.
+	ExploitIntelURL string
+	Log             *log.Logger
 }
 
 func (c *CorpusRefresher) logf(format string, args ...any) {
@@ -39,7 +45,7 @@ func (c *CorpusRefresher) doRefresh(ctx context.Context) (threatintel.Manifest, 
 	if c.Refresh != nil {
 		return c.Refresh(ctx, dir)
 	}
-	m, _, err := threatintel.Refresh(ctx, threatintel.RefreshOptions{OutDir: dir})
+	m, _, err := threatintel.Refresh(ctx, threatintel.RefreshOptions{OutDir: dir, ExploitIntelURL: c.ExploitIntelURL})
 	return m, err
 }
 
