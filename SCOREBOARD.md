@@ -256,6 +256,21 @@ permission without `actAs` must fire nothing) — that is a regression guard, no
 specificity, and it is exactly the kind of self-graded number this section exists to warn
 about. Read the GCP row as one-sided until a neutral control set exists.
 
+`gcpinventory/deny_fp_test.go` is a stronger guard, because its ground truth is Google's rather than
+ours: GCP evaluates IAM **deny** before allow, so a deny on `resourcemanager.projects.setIamPolicy`
+blocks the escalation an allow would otherwise permit. It is the same question BishopFox's AWS
+control set asks of every tool — *"Does the tool evaluate deny's first before allows? Many tools
+ignore or incorrectly handle DENY actions."* — and GCP had no answer, because `RawGCP` could not
+EXPRESS a deny policy. `gcpiam.Authorize` had always honoured them; `derivePrivesc` built its
+`PolicySet` without any, so a project protected by a deny was still reported as having a path to
+administrator — a false positive aimed at the customers who had taken the strongest available
+precaution. Both directions are pinned: a deny naming someone else, and an explicitly EXCEPTED
+principal, must still report the escalation, because over-reading a deny trades false positives for
+false negatives and on an attack-path page that is the worse direction.
+
+Supplying the deny policies is the collector's job and stays the honestly-gated half; the parsing and
+the evaluation are tested and free.
+
 **Of the internal rows, the one that means something on its own is generalization.** The rest score ~100%
 because their ground truth and the code under test share an oracle — `holdout.go` says so
 in its own header. The held-out row deliberately does not: it labels truth with
