@@ -137,7 +137,7 @@ export function Sidebar({
                 <button
                   type="button"
                   onClick={() => toggle(group.header!)}
-                  className="group/header flex items-center gap-1 px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-faint transition hover:text-muted"
+                  className="group/header flex items-center gap-1 px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted transition hover:text-ink"
                   aria-expanded={!isCollapsed}
                 >
                   <ChevronDown className={cn("h-3 w-3 transition-transform", isCollapsed && "-rotate-90")} />
