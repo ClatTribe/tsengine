@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/asset"
 	"github.com/ClatTribe/tsengine/internal/codelocalize"
 	"github.com/ClatTribe/tsengine/internal/codesweep"
+	"github.com/ClatTribe/tsengine/internal/consensus"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -44,6 +46,17 @@ func (d Deps) handleCodeSweep(w http.ResponseWriter, r *http.Request, tenantID s
 	var body struct {
 		CWEs     []string `json:"cwes"`      // empty → every class codelocalize can localize
 		MaxTasks int      `json:"max_tasks"` // 0 → the package default
+		// Panel runs a SECOND OPINION over each surviving candidate before it is recorded: an odd
+		// panel of independently-personaed jurors, majority wins, ties keep the finding.
+		//
+		// This is the one place in the pipeline where a consensus vote may actually DROP something,
+		// and it is legitimate precisely because a sweep candidate is not tool-grounded — it is one
+		// model's proposal, so a panel disagreeing is a second opinion on an opinion, not an LLM
+		// overruling a scanner. Everywhere else an LLM verdict annotates and never suppresses (the
+		// Detection Skill triage is annotation-only for exactly this reason).
+		//
+		// Off by default: it costs jurors × candidates extra model calls.
+		Panel bool `json:"panel"`
 	}
 	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body)
 
@@ -81,6 +94,10 @@ func (d Deps) handleCodeSweep(w http.ResponseWriter, r *http.Request, tenantID s
 		return
 	}
 
+	dropped := 0
+	if body.Panel {
+		res.Candidates, dropped = panelReview(r.Context(), llm, res.Candidates)
+	}
 	findings := sweepFindings(res, repo, time.Now().UTC())
 	stored := 0
 	if d.Store != nil && len(findings) > 0 {
@@ -93,7 +110,10 @@ func (d Deps) handleCodeSweep(w http.ResponseWriter, r *http.Request, tenantID s
 		"refused":  res.Refused,
 		"failed":   res.Failed,
 		"coverage": res.Coverage(),
-		"stored":   stored,
+		// Reported, never silent: a panel that quietly halved the results would look like a sweep
+		// that found less.
+		"panel_dropped": dropped,
+		"stored":        stored,
 	})
 }
 
@@ -140,4 +160,33 @@ func sweepFindings(res codesweep.Result, repo string, now time.Time) []types.Fin
 		})
 	}
 	return out
+}
+
+// panelReview asks an odd panel of independent jurors whether each surviving candidate is a false
+// positive, and keeps the ones the majority believes.
+//
+// Ties and total juror failure KEEP the candidate — consensus.Validate fails open, and that is the
+// right direction here: a deadlocked panel is not evidence of absence.
+func panelReview(ctx context.Context, llm interface {
+	Generate(context.Context, string) (string, error)
+}, cands []codesweep.Candidate) ([]codesweep.Candidate, int) {
+	jurors := consensus.DefaultJurors(llm.Generate)
+	kept := make([]codesweep.Candidate, 0, len(cands))
+	dropped := 0
+	for _, c := range cands {
+		if !c.Vulnerable {
+			continue
+		}
+		d := consensus.Validate(ctx, types.Finding{
+			RuleID: "codesweep::" + c.CWE, Tool: "codesweep", Title: c.Title,
+			Description: c.Rationale, Endpoint: c.Path, CWE: []string{c.CWE},
+			Severity: types.Severity(strings.ToLower(c.Severity)),
+		}, jurors)
+		if d.FalsePositive {
+			dropped++
+			continue
+		}
+		kept = append(kept, c)
+	}
+	return kept, dropped
 }
