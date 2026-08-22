@@ -831,7 +831,7 @@ host internal/sandbox.Client.Execute()
    â host_tracer.Add(...)            â L1.5 hooks fire HERE
 ```
 
-The sidecar key is stripped from the returned `ToolResult` before callers see it.
+**NONE OF THE ABOVE IS IMPLEMENTED, and it is documented here as though it were.** `tool.Result.SandboxEmittedFindings` (json `_sandbox_emitted_findings`) is declared once in `internal/tool/tool.go` and written by NOTHING â no tool, no tool-server, not even a test. There is no sandbox-side tracer, `cmd/tool-server` holds none, and `internal/sandbox.Client.Execute` calls no host tracer, so no key is stripped because none is ever set. What really happens: a sandbox tool returns findings in `Result.Findings`; the client returns the Result unchanged; the ASSET HANDLER's `Normalize` lifts them (`internal/asset/common.emitted` reads the union of both fields, which is why the unused one is harmless); and `l15.Enrich` runs over the normalized set â that is where the hooks fire. The consequence worth keeping: findings do NOT self-propagate from the sandbox client, so a new asset handler that does not lift them in `Normalize` emits nothing. Pinned by `internal/tool.TestSandboxEmittedFindingsHasNoWriter`, which fails if the sidecar is implemented without these two documents being corrected.
 
 The propagation is best-effort â any failure during re-emission is logged + swallowed; it never crashes the execute path.
 
