@@ -18,6 +18,12 @@ export type AssetPage = {
   tools: string[]; // lead OSS tools wrapped (the "best-in-class OSS, not in-house" story)
   how: AssetCheck[]; // 3-step "how it works"
   frameworks: string; // which compliance controls/frameworks the findings map to
+  // The rows a customer's security questionnaire actually asks about THIS surface. These pages are
+  // the site's widest search surface — someone lands here from "cloud security" having never seen
+  // the homepage — and they sold capability without ever naming the reason the visitor is shopping.
+  // "security review" and "questionnaire" appeared zero times across all eight. Verbatim-style
+  // questionnaire rows connect the surface to the deal that is actually stuck.
+  reviewQuestions: string[];
   faq: AssetFaq[];
   seoTitle: string;
   seoDesc: string;
@@ -44,6 +50,11 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "Fix on approval", d: "Each fix is re-checked (does it cut the path?) and applied through the gated write path, signed into the ledger." },
     ],
     frameworks: "Cloud findings map to SOC 2 (CC6.x), PCI-DSS (1.x/3.x), HIPAA (164.312), NIST 800-53 (SC-7/SC-28/AC-6), CIS Controls, and FedRAMP — only where a real control nexus exists.",
+    reviewQuestions: [
+      "Is customer data encrypted at rest and in transit?",
+      "Who has administrative access to production, and is it MFA-protected?",
+      "Is any storage or service publicly accessible from the internet?",
+    ],
     faq: [
       { q: "Do you need write access to my cloud?", a: "No — scanning is read-only (a scoped SecurityAudit role). A live fix uses a separate, opt-in write role and only runs after a named human approves it at the approval desk." },
       { q: "How is this different from Prowler or Scout Suite?", a: "We wrap those best-in-class OSS scanners, then add what they don't: cross-resource attack-path correlation (CIEM), data-tier prioritization (DSPM), and a human-gated remediation loop." },
@@ -72,6 +83,11 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "Prove authz logic", d: "The consent-gated apiauthz prober demonstrates BOLA/BFLA with two real identities, so a finding is exploitation-proven." },
     ],
     frameworks: "API findings map to OWASP API Top 10, SOC 2 (CC6.1), and PCI-DSS (6.2.4) where a control nexus exists.",
+    reviewQuestions: [
+      "Are all API endpoints authenticated and authorised?",
+      "Can one customer access another customer\u2019s data?",
+      "Do you test your APIs for the OWASP API Top 10?",
+    ],
     faq: [
       { q: "Do you need the OpenAPI spec?", a: "It's ideal — the spec gives the exact operation inventory for precise, low-noise fuzzing. Without one we fall back to crawling the base URL." },
       { q: "Can you find BOLA/BFLA (broken object/function-level authorization)?", a: "Yes — that's the differential authz test: it replays one identity's request as another and flags a bypass only on proven access to the victim's data, so the finding is verified." },
@@ -100,6 +116,11 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "Fix the base", d: "Remediation targets the base image / package coordinate, with the upgrade that clears the most CVEs at once." },
     ],
     frameworks: "Image findings map to SOC 2 (CC7.1), PCI-DSS (6.3.x), and CIS Docker/Kubernetes benchmarks where applicable.",
+    reviewQuestions: [
+      "Do you scan container images for known vulnerabilities before deploy?",
+      "Can you produce a software bill of materials on request?",
+      "Do images run as a non-root user?",
+    ],
     faq: [
       { q: "Which scanners do you use?", a: "trivy and grype for CVEs (corroborated), dockle for misconfig, and syft for the SBOM — all best-in-class OSS, run together so one tool's miss is another's catch." },
       { q: "Can you scan on every push?", a: "Yes — a registry connector digest-diffs against last-seen and scans only new or changed images, so you're not re-scanning the unchanged set." },
@@ -139,6 +160,11 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "Fix with file:line", d: "Each finding names the exact file and line, so the fix is a code change, not a treasure hunt." },
     ],
     frameworks: "Mobile findings map to OWASP MASVS, SOC 2 (CC6.1/CC6.7), and HIPAA (164.312) where user data is handled.",
+    reviewQuestions: [
+      "Is sensitive data stored securely on the device?",
+      "Are API keys or credentials embedded in the app?",
+      "Do you use current, standard cryptography?",
+    ],
     faq: [
       { q: "Do you scan a built APK or IPA?", a: "No. We scan mobile SOURCE in a connected repository. Analysing a compiled bundle needs a decompile step we have not built, and we would rather say so than have you upload a binary and get a thin result." },
       { q: "Android and iOS both?", a: "Yes — Kotlin/Java and Swift/Objective-C source alike. The same mobile-SAST + secrets + dependency-CVE pass runs across both." },
@@ -167,6 +193,11 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "Confirm + fix", d: "A finding is corroborated across tools and re-fired to verify before it's surfaced — low false positives." },
     ],
     frameworks: "Web findings map to OWASP Top 10, SOC 2 (CC6.1), PCI-DSS (6.2.4), and GDPR Art. 32 where a control nexus exists.",
+    reviewQuestions: [
+      "Has the application been tested against the OWASP Top 10?",
+      "Do you perform authenticated security testing?",
+      "When was your last penetration test, and what was in scope?",
+    ],
     faq: [
       { q: "Can it scan behind a login?", a: "Yes — you configure a login flow (form/token/recorded) and we validate the session each scan and re-auth on expiry, so the scan never silently runs logged-out." },
       { q: "Will it break my site?", a: "No — destructive paths are filtered before testing, list-mode tools are scoped, and the scan respects your timeout. It's a safe, bounded DAST." },
@@ -195,6 +226,11 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "Fix in a PR", d: "A merge-gating PR-review bot comments inline on changed lines and a check-run blocks at your severity floor." },
     ],
     frameworks: "Code findings map to SOC 2 (CC7.1/CC8.1), PCI-DSS (6.x), and change-management controls where a nexus exists.",
+    reviewQuestions: [
+      "Do you scan source code for security defects before merge?",
+      "Do you track and patch known vulnerabilities in dependencies?",
+      "Do you scan for secrets committed to source control?",
+    ],
     faq: [
       { q: "SAST and dependency scanning both?", a: "Yes — semgrep/CodeQL for your code, trivy/govulncheck for dependencies (with reachability), and gitleaks/trufflehog for secrets, in one pass per repo." },
       { q: "Does it block bad PRs?", a: "Optionally — the PR-review bot comments inline on changed lines and posts a check-run that fails at the severity floor you set, so risky changes don't merge silently." },
@@ -223,6 +259,11 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "Flag + guide", d: "Outdated or default-credentialed services are surfaced with the concrete upgrade or hardening step." },
     ],
     frameworks: "Network findings map to SOC 2 (CC6.6/CC7.1), PCI-DSS (1.x/2.x), and CIS Controls where a nexus exists.",
+    reviewQuestions: [
+      "Which ports and services are exposed to the internet?",
+      "Are default or weak credentials in use on any exposed service?",
+      "How quickly do you patch internet-facing systems?",
+    ],
     faq: [
       { q: "What do you scan — a single IP or a range?", a: "An IP, a CIDR, or a range. Port discovery runs across the whole set and per-port vuln templates route to each discovered service." },
       { q: "Is it slow?", a: "No — instead of running every template against every port, each port's fingerprinted service triggers only the matching templates, which is roughly 50× faster than a blanket scan." },
@@ -251,6 +292,11 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
       { t: "Check email + takeover", d: "DMARC/SPF/DKIM and dangling-record checks run, each with the concrete record or cleanup to apply." },
     ],
     frameworks: "Domain findings map to SOC 2 (CC6.6/CC7.1), CIS 9.5 (email), and GDPR Art. 32 where a nexus exists.",
+    reviewQuestions: [
+      "Do you publish DMARC, SPF and DKIM to prevent email spoofing?",
+      "Do you monitor for lookalike domains impersonating your brand?",
+      "Are any DNS records pointing at services you no longer control?",
+    ],
     faq: [
       { q: "What does a domain scan find?", a: "Every subdomain (incl. forgotten ones), dangling records vulnerable to takeover, your email-spoofing posture (DMARC/SPF/DKIM), and registered look-alike/typosquat domains." },
       { q: "Does it scan the subdomains it finds?", a: "Yes — a live discovered host becomes a child asset and gets the right scan (web, IP) instead of being re-enumerated, so coverage compounds." },

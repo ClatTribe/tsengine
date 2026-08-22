@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Cloud, Network, Layers, ShieldCheck, Globe, GitBranch, CheckCircle2, User, Users, Building2 } from "lucide-react";
+import { ArrowRight, Cloud, Network, Layers, ShieldCheck, Globe, GitBranch, CheckCircle2, User, Users, Building2, FileCheck2 } from "lucide-react";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { FaqJsonLd } from "@/components/marketing/faq-jsonld";
 import type { AssetPage } from "@/lib/asset-marketing";
@@ -99,6 +99,54 @@ export function AssetMarketingPage({ data }: { data: AssetPage }) {
               <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-accent">{m.cta} <ArrowRight className="h-3.5 w-3.5" /></div>
             </Link>
           ))}
+        </div>
+      </section>
+
+      {/* WHY THE VISITOR IS ACTUALLY HERE.
+          These are the site's widest search surface — someone arrives from "cloud security" or
+          "container scanning" having never seen the homepage — and the pages sold capability without
+          ever naming the reason a founder is shopping for it. Across all eight, "security review"
+          and "questionnaire" appeared ZERO times while the homepage now leads with exactly that.
+          This band closes the gap: the rows below are the questions a customer's security team
+          actually asks about THIS surface, and the links go to the artefacts that answer them. */}
+      <section className="border-y border-border bg-surface">
+        <div className="mx-auto max-w-4xl px-5 py-14">
+          <div className="grid gap-x-10 gap-y-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-end">
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-accent">In a security review</span>
+              <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
+                This is what your customer will ask about.
+              </h2>
+            </div>
+            <p className="text-base leading-relaxed text-muted md:pb-1">
+              Most people reach this page because a deal is waiting on a security questionnaire. These
+              are the rows this surface answers — and the evidence that closes them.
+            </p>
+          </div>
+
+          <ul className="mt-8 grid gap-2.5">
+            {data.reviewQuestions.map((q) => (
+              <li key={q} className="flex items-start gap-3 rounded-xl border border-border bg-bg px-4 py-3">
+                <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                <span className="text-sm leading-relaxed text-ink">{q}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link
+              href="/soc2-readiness"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent-soft px-3.5 py-2 text-sm font-semibold text-accent transition hover:border-accent/60"
+            >
+              Check your readiness — free <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+            <Link
+              href="/sample-report"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3.5 py-2 text-sm font-semibold text-ink transition hover:border-border-strong"
+            >
+              See the report we hand back <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       </section>
 
