@@ -47,12 +47,25 @@ type Context struct {
 	// current" are different claims (§10).
 	Live LiveReader
 
+	// Prober answers "would the provider allow this action?" via the provider's own policy simulator
+	// (AWS SimulatePrincipalPolicy / GCP testIamPermissions / Azure checkAccess) WITHOUT performing
+	// it — the benign offensive-PROOF primitive (ADR 0024 P1). It upgrades a recorded path from
+	// config-possible (our graph says the permission exists) to provider-confirmed (the authority
+	// that enforces the policy says the move works). Read-only by construction; the provider is the
+	// oracle, so it adds no false-positive surface (§10).
+	//
+	// Optional. Nil means no dry-run path is configured and check_reachable says exactly that — the
+	// same honest degradation as Live and Estate: "we could not prove it" and "it is denied" are
+	// different answers.
+	Prober ExploitProber
+
 	Issues  []Issue
 	Summary string
 	Done    bool
 
-	issueN int
-	calls  int
+	issueN    int
+	calls     int
+	confirmed map[string]ProbeResult
 }
 
 // Issue is one attack path the LLM determined AND the graph confirmed (grounded).
@@ -68,6 +81,10 @@ type Issue struct {
 	FixKind     string   `json:"fix_kind,omitempty"`
 	FixContent  string   `json:"fix_content,omitempty"`
 	FixVerified bool     `json:"fix_verified,omitempty"`
+	// ProviderConfirmed is true when at least one move on this path was confirmed ALLOW by the
+	// provider's own policy simulator (ADR 0024 P1) — the path is provider-confirmed exploitable,
+	// not merely config-possible.
+	ProviderConfirmed bool `json:"provider_confirmed,omitempty"`
 }
 
 // Report is the agent's output.

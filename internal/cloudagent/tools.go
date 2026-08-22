@@ -31,7 +31,7 @@ func tools() []toolDef {
 	return []toolDef{
 		{"list_resources", "list_resources(kind?, only_sensitive?) — inventory: ids/names/kind/flags. kind ∈ resource|principal|data|network", tList},
 		{"get_resource", "get_resource(id, live?) — one resource's metadata + its outgoing edges (moves an attacker could make from it). Pass live:true to ALSO re-read it from the account right now: everything else you see was captured before this investigation began, so a flag a path turns on (public, privileged) may already have changed. Do that before recording an issue whose severity depends on such a flag. Read-only; it answers AGREES / DIFFERS / COULD NOT CHECK and never reads an unread surface as an absent resource.", tGet},
-		{"resolve_access", "resolve_access(principal, resource) — does the principal have an effective path of access to the resource? (graph reachability over resolved IAM)", tResolve},
+		{"resolve_access", "resolve_access(principal, resource, action?) — does the principal have an effective path of access to the resource? (graph reachability over resolved IAM). Pass action (a provider action e.g. iam:PassRole, s3:GetObject) to ALSO run a PROVIDER dry-run: ask AWS/GCP/Azure's own policy simulator whether the move would be ALLOWED right now, WITHOUT performing it — upgrading the answer from config-possible (our graph) to provider-confirmed (the authority that enforces the policy). Read-only; ALLOW=confirmed exploitable, DENY=confirmed closed (do not record it), UNKNOWN=unproven (never \"safe\").", tResolve},
 		{"find_paths", "find_paths(target) — concrete attack paths from the internet/public surface to the target node, if any", tFindPaths},
 		{"blast_radius", "blast_radius(principal) — every crown jewel (sensitive data / privileged identity) reachable if this principal is compromised", tBlast},
 		{"enumerate_attack_paths", "enumerate_attack_paths() — the deterministic engine's candidate attack paths (a fast prepass to seed your investigation; verify/extend them)", tEnumerate},
@@ -111,10 +111,20 @@ func tResolve(cc *Context, args map[string]any) string {
 	if cc.Snap.Node(r) == nil {
 		return "ERROR: no such resource " + r
 	}
+	var b strings.Builder
 	if reachableFrom(cc.Snap, p)[r] {
-		return fmt.Sprintf("YES — %s can reach %s over the resolved access/assume graph (effective IAM already applied at ingest).", p, r)
+		fmt.Fprintf(&b, "YES — %s can reach %s over the resolved access/assume graph (effective IAM already applied at ingest).", p, r)
+	} else {
+		fmt.Fprintf(&b, "NO — %s has no effective path of access to %s. A prowler finding here is likely inert.", p, r)
 	}
-	return fmt.Sprintf("NO — %s has no effective path of access to %s. A prowler finding here is likely inert.", p, r)
+	// Provider dry-run rides on resolve_access (it does NOT take its own catalog slot — the ≤12 cap,
+	// §2.6, is why check_live rides on get_resource too). When the model supplies an action, it wants
+	// the authoritative answer, not just our graph's: run the provider simulator and append its
+	// verdict in the SAME observation so the two views sit side by side.
+	if action := strings.TrimSpace(argStr(args, "action")); action != "" {
+		b.WriteString("\n" + tCheckReachable(cc, args))
+	}
+	return b.String()
 }
 
 func tFindPaths(cc *Context, args map[string]any) string {
@@ -244,6 +254,11 @@ func tRecord(cc *Context, args map[string]any) string {
 		Severity: argStr(args, "severity"), Rationale: argStr(args, "rationale"),
 		Evidence: argStrList(args, "evidence"),
 	}
+	// Grounding upgrade (ADR 0024 P1): if the model ran check_reachable on any move along this path
+	// and the provider answered ALLOW, the path is provider-CONFIRMED exploitable, not merely
+	// config-possible. We do not require it (a run with no Prober still records config-possible
+	// paths); we only STAMP the stronger claim when the provider actually backed a move.
+	is.ProviderConfirmed = cc.pathHasConfirmedMove(path)
 	cc.Issues = append(cc.Issues, is)
 	return fmt.Sprintf("recorded %s: %s (grounded — the path exists and reaches a crown jewel). Consider propose_fix(%s).", is.ID, strings.Join(path, " -> "), is.ID)
 }
@@ -384,6 +399,30 @@ func validatePath(snap *cloudgraph.Snapshot, nodes []string, target string) erro
 		return fmt.Errorf("%q is not a crown jewel (sensitive data or privileged identity) — no real impact", target)
 	}
 	return nil
+}
+
+// pathHasConfirmedMove reports whether any consecutive hop on the recorded path corresponds to a
+// (principal, action, resource) move the provider confirmed ALLOW during this run. The action is not
+// on the graph edge, so we match on the (from, *, to) endpoints — a confirmation on that hop, for any
+// action, is enough to call the hop provider-backed. Conservative: no confirmations recorded → false,
+// so a path is never mislabelled provider-confirmed.
+func (cc *Context) pathHasConfirmedMove(path []string) bool {
+	if len(cc.confirmed) == 0 || len(path) < 2 {
+		return false
+	}
+	for i := 0; i < len(path)-1; i++ {
+		from, to := path[i], path[i+1]
+		for k, r := range cc.confirmed {
+			if r.Verdict != VerdictAllow {
+				continue
+			}
+			parts := strings.SplitN(k, "\x00", 3)
+			if len(parts) == 3 && parts[0] == from && parts[2] == to {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func pathToAttackPath(snap *cloudgraph.Snapshot, id string, nodes []string) types.AttackPath {
