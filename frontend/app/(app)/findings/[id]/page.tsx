@@ -46,7 +46,13 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
   // capable could" and "anyone can, tonight" — the thing a responder is actually deciding on.
   const weaponLabel = WEAPON_RANK[String(ti?.weapon_rank ?? "").toLowerCase()] ?? null;
   const derivedFrom = Array.isArray(f.derived_from) ? f.derived_from : [];
-  const hasThreatIntel = kev || cvss !== null || epssPct !== null || publicExploit;
+  // Our own assessment, shown as ours. Deliberately NOT labelled a promotion: the audit entry that
+  // records a severity bump lives on the scan's l15_audit_log, not on the finding, so this page
+  // cannot prove one happened — and claiming it would be exactly the ungrounded inference the rest
+  // of this file avoids. Stating the assessment and its reason is what the page can honestly say.
+  const exploitReason = f.exploitability?.reason || null;
+  const exploitScore = typeof f.exploitability?.score === "number" ? f.exploitability.score : null;
+  const hasThreatIntel = kev || cvss !== null || epssPct !== null || publicExploit || exploitReason !== null;
   const controls = Object.entries(f.compliance ?? {}).filter(([, v]) => Array.isArray(v) && v.length > 0);
   const hasOpenReview = reviews.some((r) => r.subject_id === id && r.status === "open");
   // The remediation the agent has queued for THIS finding (if any) — the agentic signal.
@@ -91,6 +97,13 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
             {epssPct !== null && (
               <span title="FIRST.org EPSS — probability of exploitation in the next 30 days">
                 <span className="text-faint">EPSS</span> <span className="font-medium text-ink">{epssPct}%</span>
+              </span>
+            )}
+            {exploitReason && (
+              <span title="tsengine's own exploitability assessment — this is our judgement, not the scanner's, and it can raise a finding's severity">
+                <span className="text-faint">Exploitability</span>{" "}
+                <span className="font-medium text-ink">{exploitScore !== null ? `${exploitScore}/100` : "rated"}</span>
+                <span className="ml-1 text-muted">· {exploitReason}</span>
               </span>
             )}
             {publicExploit && (

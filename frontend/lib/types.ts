@@ -63,6 +63,12 @@ export interface Finding {
   discovery_method?: { primary?: string; replay_of?: string };
   // blast_radius: read-time impact sizing — does this finding chain to a crown jewel? (mirrors incidents)
   blast_radius?: { reaches_crown_jewel: boolean; crown_jewel_type?: string; hops?: number };
+  // Our OWN exploitability assessment, and the reason for it. The L1.5 hook can PROMOTE a finding's
+  // severity upward on this basis — a critical-class CWE rated below high becomes high — so the
+  // severity a reader sees is sometimes ours rather than the scanner's, and nothing said so. §2.5
+  // requires the L1 audience be able to audit and override what the AI decided; they cannot audit
+  // reasoning that is not shown.
+  exploitability?: { score?: number; reason?: string };
   threat_intel?: {
     cvss?: number;
     cvss_vector?: string; // CVSS base vector (NVD) — attack-vector detail
