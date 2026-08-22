@@ -10,6 +10,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
 	"github.com/ClatTribe/tsengine/internal/gcpwif"
 	"github.com/ClatTribe/tsengine/internal/ghoidc"
+	"github.com/ClatTribe/tsengine/internal/samltrust"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -73,8 +74,26 @@ func ciIdentityAssess(provider string, body []byte) ([]types.Finding, map[string
 	// organisation owns, so the unowned-repository check must not run. Assess declares that in
 	// ChecksNotRun rather than passing it silently — accusing a customer's real repository of being
 	// unowned because we never had the list would be worse than not running the check.
-	a := ghoidc.Assess(est, time.Now().UTC())
-	return a.Findings, a.ChecksNotRun
+	now := time.Now().UTC()
+	a := ghoidc.Assess(est, now)
+
+	// SAML federation is the WORKFORCE path into the account — an Okta, Entra or ADFS identity — and
+	// ghoidc deliberately refuses to judge it, declaring it unassessed instead. internal/samltrust
+	// assesses the ONE case that is decidable from the trust policy alone: no SAML:aud condition,
+	// which accepts an assertion minted for any service provider the IdP serves rather than only AWS.
+	// Everything else about a SAML trust stays declared rather than guessed at.
+	sam := samltrust.Assess(samltrust.Estate{Roles: samlRoles(raw)}, now)
+	findings := append(a.Findings, sam.Findings...)
+	notRun := a.ChecksNotRun
+	if len(sam.ChecksNotRun) > 0 {
+		if notRun == nil {
+			notRun = map[string]string{}
+		}
+		for k, v := range sam.ChecksNotRun {
+			notRun[k] = v
+		}
+	}
+	return findings, notRun
 }
 
 // persistCIIdentityFindings enriches and stores them through the SAME path every other ingest uses
@@ -132,4 +151,20 @@ func gcpCIIdentityAssess(body []byte) ([]types.Finding, map[string]string) {
 	// which repositories the organisation owns, so the unowned-repository check must not run.
 	a := gcpwif.Assess(est, time.Now().UTC())
 	return a.Findings, a.ChecksNotRun
+}
+
+// samlRoles maps the posted AWS inventory into the SAML analyser's estate. Privileged comes from the
+// collector's own admin flag — the same rule the GitHub path follows, and for the same reason: a
+// trust policy does not say what a role can do, so inferring it here would fabricate blast radius.
+func samlRoles(raw awsinventory.RawAWS) []samltrust.Role {
+	var out []samltrust.Role
+	for _, r := range raw.Roles {
+		if strings.TrimSpace(r.TrustPolicyJSON) == "" {
+			continue
+		}
+		out = append(out, samltrust.Role{
+			ARN: r.ARN, Name: r.Name, TrustPolicy: r.TrustPolicyJSON, Privileged: r.Admin,
+		})
+	}
+	return out
 }
