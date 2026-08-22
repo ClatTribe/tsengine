@@ -37,6 +37,26 @@ vet: ## go vet
 lint: ## golangci-lint (requires golangci-lint installed)
 	golangci-lint run
 
+.PHONY: gate
+gate: ## everything CI checks, failing loudly — run this before pushing
+	@echo "==> gofmt"
+	@out="$$(gofmt -l ./cmd ./internal ./pkg)"; \
+	if [ -n "$$out" ]; then \
+		echo "gofmt drift (run: gofmt -w <file>):"; echo "$$out"; exit 1; \
+	fi
+	@echo "==> go vet"
+	@go vet ./...
+	@echo "==> go test"
+	@go test ./...
+	@if [ -d frontend/node_modules ]; then \
+		echo "==> tsc --noEmit"; \
+		cd frontend && npx --no-install tsc --noEmit; \
+	else \
+		echo "!! SKIPPED tsc: frontend/node_modules is absent, so TypeScript was NOT checked."; \
+		echo "!! Run 'npm ci' in frontend/ if you touched any .ts/.tsx file."; \
+	fi
+	@echo "==> gate passed"
+
 .PHONY: cli
 cli: ## build the host CLI binary into ./bin/ (version-stamped)
 	mkdir -p bin

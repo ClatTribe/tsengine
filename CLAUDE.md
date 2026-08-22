@@ -1167,6 +1167,7 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 * Concurrency: `golang.org/x/sync/errgroup` for fan-out; bounded semaphore (`chan struct{}`) for tool dispatch (default `TSENGINE_DISPATCH_CONCURRENCY=4`)
 * Tests: `go test ./...` standard; integration tests under `tests/integration/` gated by `-tags=integration`
 * Lint: `golangci-lint run` with the project `.golangci.yml`; `govulncheck` on every PR
+* **`make gate` before pushing** â gofmt + vet + test + the frontend typecheck, in one command that FAILS rather than reports. `make all` is `build test vet` and does not check gofmt, so formatting drift reached CI as a lint failure. The trap is specific: `gofmt -l` PRINTS the drifting files and exits 0, so any pipeline that greps its output without checking emptiness reports success on a broken tree â the same "reports a problem, exits happy" shape as the guards in Â§14.2 rule 6. The target also says LOUDLY when it skipped the TypeScript check because `frontend/node_modules` is absent, since a silent skip there is how a .tsx change ships unchecked.
 * Iter naming: `iter-XX.Y` in commit messages, code comments, and test file names where relevant
 * PRs: squash-merge via `gh pr merge <N> --squash --delete-branch`
 * **Always update CLAUDE.md and arch.md when architecture changes**
