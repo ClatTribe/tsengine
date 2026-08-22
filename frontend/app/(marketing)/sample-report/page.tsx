@@ -55,13 +55,25 @@ export default function SampleReportPage() {
             </div>
           </div>
         </div>
-        <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
+        {/* Severity, then the three EVIDENCE TIERS reported separately. The strip used to show a
+            single "Verified 6" above a table in which four rows said Verified — a number that did
+            not survive a reader counting the rows, on the page that exists to prove our numbers
+            survive counting. All six values are now derived from the findings themselves. */}
+        <div className="mt-5 grid grid-cols-4 gap-3">
           <Stat n={SAMPLE_COUNTS.critical} label="Critical" tone="text-critical" />
           <Stat n={SAMPLE_COUNTS.high} label="High" tone="text-high" />
           <Stat n={SAMPLE_COUNTS.medium} label="Medium" tone="text-medium" />
           <Stat n={SAMPLE_COUNTS.low} label="Low" tone="text-muted" />
-          <Stat n={SAMPLE_COUNTS.exploitProven} label="Exploit-proven" tone="text-critical" />
-          <Stat n={SAMPLE_COUNTS.verified} label="Verified" tone="text-pulse" />
+        </div>
+        <div className="mt-3 rounded-xl border border-border bg-bg p-3">
+          <div className="text-[11px] uppercase tracking-wide text-faint">
+            Evidence — every one of the {SAMPLE_COUNTS.total} findings is backed, at one of three strengths
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-3">
+            <Stat n={SAMPLE_COUNTS.exploitProven} label="Exploit-proven" tone="text-critical" />
+            <Stat n={SAMPLE_COUNTS.verified} label="Verified" tone="text-pulse" />
+            <Stat n={SAMPLE_COUNTS.confirmed} label="Confirmed" tone="text-muted" />
+          </div>
         </div>
         <div className="mt-5 border-t border-border pt-4">
           <div className="text-[11px] uppercase tracking-wide text-faint">Scope</div>
