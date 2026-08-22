@@ -341,19 +341,37 @@ A CI invariant (`tests/asset/anchor_tier_size_test.go`) caps the anchor count pe
 
 ## L1.5 hook chain
 
-Every asset shares the same enrichment pipeline. Hooks fire in this order inside `tracer.Add`:
+Every asset shares the same enrichment pipeline. The order is load-bearing and the authority is
+`internal/tracer/hooks/chain.go` — this table was regenerated from it, having drifted twice.
+
+The chain runs in **two passes**, which the old flat list did not show and which explains the
+numbering: a per-finding hook sees ONE finding as it is emitted, a finalize hook sees the whole set.
+`corroborator` is step 5 in CLAUDE.md §11's order but runs in the finalize pass, because "did a
+second tool independently find this?" cannot be answered one finding at a time.
 
 ```
-1. pre_emission_fp_filter          → drops planted-decoy shapes; surfaces in l15_audit_log
-2. fp_filter.demote                → severity bumps per rule
-3. surface_priority.annotate       → annotates surface_priority block
-4. exploitability.annotate         → annotates exploitability block; may bump severity
-5. corroborator_ledger.check       → cross-source agreement → attaches corroborated_by[]
-6. threat_intel.enrich             → CVSS/KEV/EPSS/advisories for CVE-bearing findings
-7. compliance.map                  → SOC2/PCI/HIPAA/CIS/NIST control annotation
-8. post_emit_verifier              → re-fires via tool-replay to upgrade pattern_match → verified
-9. cross_tool_merge                → cross-tool dedup
-10. tracer.Append                  → persists to findings_enriched
+BEFORE the chain (platform scan path only, LLM-gated, opt-in)
+  0.  AttributeCWEs        → fills a MISSING CWE so compliance.map has something to key on.
+                             runner.Service.AttributeCWEs; no tenant model → no-op.
+
+PER-FINDING (tracer.Add, DefaultPerFinding)
+  1+2. fp_filter           → drops planted-decoy shapes, then demotes per rule; both hit l15_audit_log
+  1b.  service_eol         → an nmap-detected service below its minimum-safe version: info → medium.
+                             runs EARLY so the bump reaches priority/exploitability/compliance
+  3.   surface_priority    → annotates surface_priority {score, reason}
+  4.   exploitability      → annotates exploitability {score, reason}; may bump severity
+  6.   threat_intel        → CVSS(+vector)/KEV/EPSS/SSVC/exploits/advisories for CVE-bearing findings;
+                             also backfills a CWE from KEV so step 7 can map it
+  7.   compliance          → SOC2/PCI/HIPAA/CIS/NIST… control annotation (MERGES, never clobbers)
+
+FINALIZE (DefaultFinalize — needs the whole set)
+  5.   corroborator        → cross-tool agreement → corroborated_by[]. DISTINCT tools only: two hits
+                             from one scanner are not independent, and would self-confirm
+  8.   post_emit_verifier  → re-fires via tool-replay to upgrade pattern_match → verified (inert until L2.5)
+  9.   cross_tool_merge    → collapses exact duplicates
+  10.  confidence          → verification_status + the 0–1 scalar. LAST, so it sees the merged,
+                             corroborated set — this is the FP-control signal the UI badges read
+  11.  tracer.Append       → persists to findings_enriched
 ```
 
 **Ablation**: `TSENGINE_L15_DISABLED=1` skips the entire chain. The delta vs. the baseline at any asset's L1 bench is the L1.5 lift.
