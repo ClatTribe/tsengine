@@ -35,6 +35,10 @@ type VAPTReport struct {
 	PartiallyAssessed []string      `json:"partially_assessed,omitempty"`
 	Summary           VAPTSummary   `json:"summary"`
 	Findings          []VAPTFinding `json:"findings"` // worst-severity first
+	// Roadmap is the ordered remediation plan — the findings grouped into the changes that fix
+	// them, worst-first by real exploitation evidence. A list of findings is not a plan; this is
+	// the section that tells a team what to do on Monday. See vapt_roadmap.go.
+	Roadmap []RemediationStep `json:"roadmap,omitempty"`
 	// Attestation, when the report is signed (same scheme as the evidence pack).
 	Signer string `json:"signer,omitempty"`
 	SHA256 string `json:"sha256,omitempty"`
@@ -235,6 +239,7 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 		}
 		return r.Findings[i].ID < r.Findings[j].ID
 	})
+	r.Roadmap = BuildRoadmap(findings, fixReady)
 	r.Summary.RiskRating = vaptRisk(r.Summary.BySeverity)
 	// A scope nothing has assessed cannot be rated. "Clear" is a verdict; with no assessment behind it
 	// there is no verdict to give, and the word would be doing all the work in a document that gets
@@ -447,6 +452,7 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		}
 		b.WriteString("\n")
 	}
+	b.WriteString(RenderRoadmapMarkdown(r.Roadmap))
 	return b.String()
 }
 
