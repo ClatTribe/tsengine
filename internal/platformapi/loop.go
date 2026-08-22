@@ -327,6 +327,10 @@ func (d Deps) handleVAPTReport(w http.ResponseWriter, r *http.Request, tenantID 
 	// every asset, so a workspace that has connected assets but not yet scanned them is exactly the
 	// case that would have read "every monitored asset is currently clean".
 	rep.Untested = d.untestedScope(r.Context(), tenantID, rep.Scope)
+	// Scanned-but-incompletely is a THIRD state, between assessed and not assessed. Without it a
+	// tenant whose every target was scanned while half the tools died still closes with "every
+	// monitored asset is currently clean".
+	rep.PartiallyAssessed = d.partiallyAssessedScope(r.Context(), tenantID, rep.Scope)
 	grc.Reassess(rep)
 	if r.URL.Query().Get("format") == "json" {
 		writeJSON(w, http.StatusOK, rep)
