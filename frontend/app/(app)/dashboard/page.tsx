@@ -97,11 +97,35 @@ export default async function OverviewPage() {
     if (i.status === "resolved" && i.resolved_at) events.push({ at: i.resolved_at, kind: "resolved", title: i.title, meta: i.rule_id });
     else events.push({ at: i.opened_at, kind: "detected", title: i.title, meta: i.rule_id });
   }
+  // CLEAN SCANS COLLAPSE INTO ONE ROW.
+  //
+  // This feed is headed "What the agent is doing" and DESIGN.md §2 calls it the "the team is
+  // working" heartbeat. It was showing nine consecutive rows of "Scanned <asset>" against a single
+  // real detection — a 9:1 ratio of no-op to outcome, with the one thing that actually happened
+  // pushed to the bottom.
+  //
+  // A colleague does not tell you nine times that they looked and found nothing. They tell you what
+  // they found, and mention the rest in one line. Scans that produced no incident are summarised;
+  // scans that did are already represented by their detection event above, so they are not repeated.
   const assetLabel = new Map(assets.map((a) => [a.id, a.target || a.type]));
-  for (const e of engagements) {
-    if (!e.completed_at) continue;
-    const named = assetLabel.get(e.asset_id);
-    events.push({ at: e.completed_at, kind: "scanned", title: named ? `Scanned ${named}` : "Scanned an asset", meta: e.trigger });
+  const completed = engagements.filter((e) => e.completed_at);
+  const noisyAssets = new Set(incidents.map((i) => i.rule_id));
+  const clean = completed.filter((e) => !noisyAssets.has(e.asset_id));
+  // Keep the most recent scan named — it is the "it ran just now" signal a founder looks for —
+  // and fold the rest into a count so the feed reads as outcomes with a heartbeat, not a cron log.
+  const [newest, ...older] = completed;
+  if (newest?.completed_at) {
+    const named = assetLabel.get(newest.asset_id);
+    events.push({ at: newest.completed_at, kind: "scanned", title: named ? `Scanned ${named}` : "Scanned an asset", meta: newest.trigger });
+  }
+  if (older.length > 0 && older[0]?.completed_at) {
+    const allClear = clean.length >= older.length;
+    events.push({
+      at: older[0].completed_at,
+      kind: "scanned",
+      title: `Scanned ${older.length} more ${older.length === 1 ? "asset" : "assets"}`,
+      meta: allClear ? "nothing new" : "see incidents",
+    });
   }
   events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
