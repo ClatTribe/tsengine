@@ -1504,7 +1504,7 @@ an invited member's account carries `User.MustChangePassword`; while set, the `a
 middleware blocks every app endpoint with `403 password_change_required` (the auth-mgmt
 endpoints â me/logout/password â use `sessionAuth`, so they stay reachable), and
 `POST /v1/auth/password` (verify current â set new â clear the flag) unlocks it. So the
-owner-issued temp password can't remain the standing credential. Frontend: a top-level
+owner-issued temp password can't remain the standing credential. **A password change also revokes the user's OTHER sessions, and a FAILED revocation is now reported.** That call exists to evict a stolen token, which is why most people are on that page at all - and its error was swallowed, so the response said `{"ok":true}` to exactly the person who believed their password was compromised while an attacker's session stayed valid. The change itself still succeeds and is never rolled back (a user who cannot change their password is worse off than one whose old sessions linger); the response carries `sessions_revoked` plus a `detail` the change-password page renders instead of navigating away. `signed_out` covers the other branch - the wipe landed and took the caller's own session with it, which is safe but needs saying, or their next request bounces them to the login page for no visible reason. Frontend: a top-level
 `/change-password` route (outside the `(app)` group to avoid a redirect loop) + the `(app)`
 layout redirect on `me.must_change_password`. `cmd/platform` `newID()` is a random hex id
 (a restart-resetting counter previously overwrote tenants). Frontend: `/login`
