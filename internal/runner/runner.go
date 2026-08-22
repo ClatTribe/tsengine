@@ -440,10 +440,25 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// Compliance reconciliation: grc.Apply (in processFinding) opens control gaps but never closes
 	// one, so a remediated issue's gap would persist forever and the framework would read a stale
 	// "non-compliant". Reconcile flips a gap to Met when its driving finding is gone from this pass's
-	// `current` (mirrors the incident Detector). Guarded by scanned>0 like the detector — an
-	// ingest-only pass must not falsely clear scan-driven gaps.
+	// `current` (mirrors the incident Detector).
+	//
+	// It is the THIRD consumer that reasons from absence, and it was carrying only one of the three
+	// guards the other two have. The comment here said "Guarded by scanned>0 like the detector" while
+	// the detector was also gated on firstErr == nil and routed through OpenFor when degraded — so a
+	// timed-out tool, an errored asset or a revoked connection cleared compliance gaps. A control
+	// flipping to MET on that basis is the FALSE-COMPLIANT failure mode, and unlike the other two it
+	// lands in the Markdown report a customer hands an auditor.
+	//
+	// On a pass that cannot speak for the whole estate we refresh evidence and clear nothing, which
+	// is the same choice detect makes with OpenFor. The cost is a remediated gap staying open one
+	// more pass; the alternative cost is telling an auditor a control is met because a scanner timed
+	// out.
 	if s.GRC != nil && scanned > 0 {
-		if _, err := s.GRC.Reconcile(ctx, tenantID, current); err != nil && firstErr == nil {
+		reconcileGRC := s.GRC.Reconcile
+		if degraded || firstErr != nil {
+			reconcileGRC = s.GRC.RefreshEvidence
+		}
+		if _, err := reconcileGRC(ctx, tenantID, current); err != nil && firstErr == nil {
 			firstErr = err
 		}
 		// Continuous compliance evidence: capture a timestamped posture snapshot per assessed framework
