@@ -71,6 +71,23 @@ var required = []struct {
 			"(BOLA/BFLA needs two identities) was never reachable",
 	},
 	{
+		page:  "frontend/app/(app)/findings/[id]/page.tsx",
+		field: "weapon_rank",
+		wouldOtherwiseClaim: "that every public exploit is equally usable — a Metasploit module ranked " +
+			"excellent runs use/set/run and never crashes the service, one ranked manual may not work " +
+			"at all, and both read as \"Public exploit available\". The corpus discriminates (live: " +
+			"1,383 excellent against 78 manual) and the rank reached the L2 digest while the human " +
+			"triaging the finding saw the same sentence either way",
+	},
+	{
+		page:  "frontend/app/(app)/findings/[id]/page.tsx",
+		field: "derived_from",
+		wouldOtherwiseClaim: "a cross-surface finding as something observed, when nothing observed it — " +
+			"it was DERIVED by joining other findings, and those ids are its entire evidence. Its own Go " +
+			"doc says that without them it is \"an assertion with nothing behind it\", which is what the " +
+			"page showed",
+	},
+	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "unattributable_from_our_tools",
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +

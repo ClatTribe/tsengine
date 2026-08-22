@@ -70,7 +70,23 @@ export interface Finding {
     epss?: { score?: number; percentile?: number } | null; // FIRST.org exploit probability
     advisories?: string[];
     exploits?: string[]; // public exploit/PoC refs (ExploitDB/Metasploit)
+    // Metasploit's own reliability rank for the best module targeting this CVE: excellent | great |
+    // good | normal | average | low | manual.
+    //
+    // It exists because "a public exploit exists" collapses two very different situations. A module
+    // ranked excellent never crashes the service and runs use/set/run — an operator who could not
+    // write the exploit can run it tonight. One ranked manual needs hand-holding and may not work at
+    // all. The corpus discriminates in practice rather than sitting at the top (live: 1,383
+    // excellent against 78 manual), and it reached the L2 digest while the human triaging the
+    // finding saw the same sentence either way.
+    weapon_rank?: string;
   } | null;
+  // DerivedFrom are the finding ids a DERIVED finding rests on — one produced by JOINING other
+  // findings rather than by a tool observing something directly (a cross-surface chain: this leaked
+  // key reaches that cloud role). §10 requires every recorded issue to cite its evidence, and for a
+  // derived finding the evidence IS these ids. Its Go doc says that without them it would be "an
+  // assertion with nothing behind it" — which is exactly what the page showed before this.
+  derived_from?: string[];
   compliance?: Record<string, string[]> | null;
   // Cloud-to-Code: a runtime cloud finding traced back to the IaC resource +
   // file:line that provisioned it. Present only on cloud findings the
