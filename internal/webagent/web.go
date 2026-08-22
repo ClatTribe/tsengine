@@ -103,7 +103,20 @@ type SeedFinding struct {
 	Tool       string `json:"tool"`                 // the L1 scanner that raised it (provenance)
 	Severity   string `json:"severity,omitempty"`   // the L1 severity (so the agent confirms the worst first)
 	Enrichment string `json:"enrichment,omitempty"` // the L1.5 signals (KEV/EPSS/exploit/surface/corrob | compliance)
+	// ExploitContext is ADR-0019 offensive-face reference material for a CVE-bearing seed — the
+	// request SKELETON the agent ADAPTS. Populated by ExploitContextForFinding at seed-build time
+	// (like Enrichment), so webagent needs no threat-intel import. Empty on the no-intel path.
+	ExploitContext string `json:"exploit_context,omitempty"`
 }
+
+// ExploitContextForFinding, when set, returns ADR-0019 offensive-face reference material (a request
+// skeleton the agent ADAPTS) for a CVE-bearing finding, else "". It is the webagent half of the shared
+// exploit-intel feed (ADR 0021 migration step 1): the SAME resolver pentest.ExploitIntelForFinding uses,
+// injected as a func value so webagent gains no new import and the two agents cannot drift. Nil-safe —
+// unset leaves the seed's ExploitContext empty and the prompt is byte-identical to today. Grounded (§10):
+// the record is input to the PROPOSE step only; the deterministic indicator still DISPOSES, so a wrong or
+// stale skeleton widens what the agent TRIES, never what it records.
+var ExploitContextForFinding func(f types.Finding) string
 
 // SeedFromFinding maps an ENRICHED L1 finding to a confirmation seed, threading the L1.5 enrichment
 // (severity + types.Finding.L15Summary/compliance) so the web agent knows which leads are urgent
@@ -118,12 +131,17 @@ func SeedFromFinding(f types.Finding, class string) SeedFinding {
 			enr = c
 		}
 	}
+	exCtx := ""
+	if ExploitContextForFinding != nil {
+		exCtx = ExploitContextForFinding(f)
+	}
 	return SeedFinding{
-		Route:      f.Endpoint,
-		Class:      class,
-		Tool:       f.Tool,
-		Severity:   string(f.Severity),
-		Enrichment: enr,
+		Route:          f.Endpoint,
+		Class:          class,
+		Tool:           f.Tool,
+		Severity:       string(f.Severity),
+		Enrichment:     enr,
+		ExploitContext: exCtx,
 	}
 }
 
