@@ -2,6 +2,7 @@ package ghoidc
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -92,6 +93,16 @@ func Assess(est Estate, now time.Time) Assessment {
 				"role was NOT assessed and must not be read as clean"
 			continue
 		}
+		if len(an.OtherFederated) > 0 {
+			// A federated identity provider we do not evaluate can assume this role. Declaring it is
+			// the whole point: silently skipping made "an entire workforce IdP federates in here" and
+			// "nobody federates in here" the same answer, and the second is what a reader infers from
+			// an assessment that says nothing.
+			a.ChecksNotRun["federated_trust:"+role.ARN] = "this role is assumable by a federated " +
+				"identity provider this check does not evaluate (" +
+				strings.Join(dedupeSorted(an.OtherFederated), ", ") + ") — GitHub-Actions analysis " +
+				"does not apply to it and it was NOT assessed, so read it as unchecked rather than clean"
+		}
 		if !an.TrustsGitHub {
 			continue // not reachable from GitHub Actions at all
 		}
@@ -108,6 +119,21 @@ func Assess(est Estate, now time.Time) Assessment {
 
 // weaknessFinding renders one trust weakness as a finding, escalating severity when the
 // role is known-privileged.
+// dedupeSorted keeps the declaration stable and readable when several statements name the same
+// provider — a repeated ARN in the message reads like several distinct federations.
+func dedupeSorted(in []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if v = strings.TrimSpace(v); v != "" && !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 func weaknessFinding(fid string, role Role, w Weakness, now time.Time) types.Finding {
 	sev := severity(w.Severity)
 	desc := w.Detail + ". " + w.Fix + "."

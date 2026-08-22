@@ -90,6 +90,17 @@ type Analysis struct {
 	TrustsGitHub bool
 	Statements   []TrustStatement
 	Weaknesses   []Weakness
+	// OtherFederated names federated principals this analyser does NOT evaluate — an Okta or other
+	// SAML/OIDC provider ARN that some statement grants role assumption to.
+	//
+	// It exists because "not GitHub" was silently indistinguishable from "no federation". A role a
+	// customer's IdP can assume is a real identity transition into the cloud account, and dropping it
+	// meant the estate read clean: the caller could not tell a role nobody federates into from one an
+	// entire workforce IdP does. We do not assess these — the claim semantics differ per provider
+	// (SAML uses saml:aud/saml:sub, not the GitHub sub grammar) and guessing at them would be the
+	// wrong kind of confident — so this is DECLARED, not analysed. Same discipline as ReposComplete:
+	// a check that cannot run says so rather than passing silently.
+	OtherFederated []string
 }
 
 // Analyze reads a role's trust policy and reports its GitHub-OIDC weaknesses.
@@ -108,6 +119,8 @@ func Analyze(trustPolicy []byte) Analysis {
 	for _, st := range doc.Statement {
 		ts, ok := githubTrustStatement(st)
 		if !ok {
+			// Not a GitHub trust — but if it federates to SOMEONE, say so rather than dropping it.
+			a.OtherFederated = append(a.OtherFederated, otherFederatedProviders(st)...)
 			continue
 		}
 		a.TrustsGitHub = true
@@ -151,6 +164,19 @@ func hasWebIdentityAction(actions []string) bool {
 		la := strings.ToLower(strings.TrimSpace(a))
 		// "*" and "sts:*" both cover it; an exact action must be the web-identity one.
 		if la == "*" || la == "sts:*" || la == "sts:assumerolewithwebidentity" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasSAMLAction is the SAML twin of hasWebIdentityAction. An Okta or ADFS federation into AWS is
+// sts:AssumeRoleWithSAML, a DIFFERENT action from the OIDC one, so a check that only looked for
+// web-identity would miss the most common enterprise SSO-into-cloud path entirely.
+func hasSAMLAction(actions []string) bool {
+	for _, a := range actions {
+		la := strings.ToLower(strings.TrimSpace(a))
+		if la == "*" || la == "sts:*" || la == "sts:assumerolewithsaml" {
 			return true
 		}
 	}
@@ -352,6 +378,34 @@ func federatedGitHubProviders(raw []byte) []string {
 	var out []string
 	for _, p := range condValues(fed) {
 		if IsGitHubProvider(p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// otherFederatedProviders returns the non-GitHub federated principals an Allow statement grants role
+// assumption to. Restricted to Allow + an assume-role action for the same reason the GitHub path is: a
+// Deny naming a provider is the policy working, and reporting it as an unassessed trust would turn
+// good hygiene into a warning.
+func otherFederatedProviders(st cloudiam.Statement) []string {
+	if !strings.EqualFold(st.Effect, "Allow") {
+		return nil
+	}
+	if !hasWebIdentityAction(st.Action) && !hasSAMLAction(st.Action) {
+		return nil
+	}
+	var obj map[string]interface{}
+	if err := jsonUnmarshal(st.Principal, &obj); err != nil {
+		return nil
+	}
+	fed, ok := obj["Federated"]
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, p := range condValues(fed) {
+		if p = strings.TrimSpace(p); p != "" && !IsGitHubProvider(p) {
 			out = append(out, p)
 		}
 	}
