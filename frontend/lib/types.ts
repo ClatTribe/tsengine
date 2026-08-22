@@ -640,6 +640,16 @@ export interface Incident {
   // WAVSEP: dalfox found 7 cases in one run and 9 in the next on an unchanged target, succeeding
   // both times, so no failure signal fired).
   absent_passes?: number;
+  // WHEN the state behind this incident changed, read from the estate timeline at request time and
+  // never persisted (the timeline grows after an incident opens, so a frozen onset would go stale).
+  //
+  // It is the difference between two alerts that otherwise render identically: "this bucket is
+  // public" is a fact that gets triaged next week, "this bucket became public forty minutes ago" is
+  // something someone deals with now. `at` is when we FIRST OBSERVED the change — state is compared
+  // between captures, so it happened somewhere in the interval before that, and `note` says so.
+  // Absent when the timeline has nothing grounded to say (a near-miss is left unannotated rather
+  // than attached to the wrong resource).
+  onset?: { at: string; what: string; resource_id: string; note?: string };
   // Ransomware use is a STRICTLY STRONGER claim than KEV listing — exploited in the wild versus
   // exploited by crews who encrypt the estate — which is why the corpus keeps them separate and only
   // CISA's literal "Known" counts. A queue that shows neither makes the responder rank by severity

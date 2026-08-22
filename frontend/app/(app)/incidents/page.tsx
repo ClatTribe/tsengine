@@ -177,6 +177,7 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
           <TriageBadge verdict={i.triage_verdict} skill={i.triage_skill} />
           <BlastRadiusBadge blast={i.blast_radius} />
           <ConfirmingFixBadge status={i.status} absentPasses={i.absent_passes} />
+          <OnsetBadge onset={i.onset} />
           {respondPending && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30">
               <Wrench className="h-2.5 w-2.5" /> fix ready
@@ -258,6 +259,25 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
       />
       {href ? <Link href={href} className="block">{body}</Link> : body}
     </li>
+  );
+}
+
+// OnsetBadge says WHEN the state behind the alert changed. Two alerts that render identically —
+// "this bucket is public" and "this bucket became public forty minutes ago" — are a triage-next-week
+// item and a drop-everything item, and the responder had no way to tell them apart. The API has
+// computed this on every incidents request since the estate timeline landed and nothing displayed it.
+//
+// The honest limit travels WITH the timestamp rather than being left to the reader: we compare state
+// between captures, so this is when the change was first OBSERVED, not when it happened.
+function OnsetBadge({ onset }: { onset?: Incident["onset"] }) {
+  if (!onset?.at || !onset.what) return null;
+  return (
+    <span
+      className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted"
+      title={onset.note || "First observed in the capture at this time — state is compared between captures, so the change happened somewhere in the interval before it."}
+    >
+      {onset.what} · first seen {onset.at.slice(0, 16).replace("T", " ")}
+    </span>
   );
 }
 
