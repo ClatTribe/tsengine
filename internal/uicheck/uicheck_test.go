@@ -143,6 +143,15 @@ var required = []struct {
 			"and override what the AI decided, which they cannot do with reasoning that is not shown",
 	},
 	{
+		page:  "frontend/app/(app)/findings/[id]/page.tsx",
+		field: "ssvc",
+		wouldOtherwiseClaim: "that KEV and EPSS are all we know about exploitation. CISA's SSVC " +
+			"Automatable point is the only signal separating a vulnerability exploited by hand against " +
+			"one target from one that can be driven across an estate, and weapon_rank already reached " +
+			"the L2 agent for months while the human saw nothing — repeating that would be the same " +
+			"mistake twice",
+	},
+	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "unattributable_from_our_tools",
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +

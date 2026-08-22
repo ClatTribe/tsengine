@@ -41,6 +41,11 @@ type corpusEntry struct {
 	Advisories []string         `json:"advisories"`
 	Exploits   []string         `json:"exploits"`
 	WeaponRank string           `json:"weapon_rank,omitempty"`
+	// SSVC needs its json tag for the same reason NucleiTemplate did: this struct DECODES a corpus
+	// file written elsewhere, so a mismatched key leaves the field empty forever and the hook
+	// silently stops carrying it. Go field matching is case-insensitive but not
+	// underscore-insensitive.
+	SSVC *types.SSVC `json:"ssvc,omitempty"`
 }
 
 // cvePattern extracts a CVE id from a rule_id like "trivy::CVE-2021-42374".
@@ -157,6 +162,7 @@ func (h *ThreatIntel) Lookup(cve string) (*types.ThreatIntel, bool) {
 		Advisories: entry.Advisories,
 		Exploits:   entry.Exploits,
 		WeaponRank: entry.WeaponRank,
+		SSVC:       entry.SSVC,
 	}, true
 }
 

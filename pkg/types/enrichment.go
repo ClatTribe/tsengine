@@ -64,6 +64,24 @@ func (f Finding) L15Summary() string {
 				}
 			}
 		}
+		if ti.SSVC != nil {
+			// CISA's own decision points, tagged separately from KEV because they answer different
+			// questions and reach different CVEs. Automatable is the one no other feed provides —
+			// whether an attacker can automate the kill chain — so it is tagged even when the answer
+			// is "no", which is itself informative when ranking two otherwise-identical CVEs.
+			if a := ti.SSVC.Automatable; a != "" {
+				t = append(t, "ssvc-automatable:"+a)
+			}
+			// Exploitation is CISA's read, and it is NOT KEV: a CVE can be assessed here and never
+			// listed there. Tagged only when it says something beyond "none", so the digest does not
+			// carry a line for every assessed CVE.
+			if e := ti.SSVC.Exploitation; e != "" && e != "none" {
+				t = append(t, "ssvc-exploitation:"+e)
+			}
+			if ti.SSVC.TechnicalImpact == "total" {
+				t = append(t, "ssvc-impact:total")
+			}
+		}
 		if strings.Contains(ti.CVSSVector, "AV:N") {
 			t = append(t, "av:network") // NVD CVSS vector says network-attackable (no local access needed) — the strongest reachability signal
 		}

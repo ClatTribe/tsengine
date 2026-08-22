@@ -17,7 +17,11 @@ type ThreatIntel struct {
 	// It rates the MODULE, not your exposure. An excellent-ranked module says the exploit
 	// runs reliably where the vulnerability is present; it says nothing about whether this
 	// instance is affected.
-	WeaponRank string   `json:"weapon_rank,omitempty"`
+	WeaponRank string `json:"weapon_rank,omitempty"`
+	// SSVC is CISA's own decision assessment (Vulnrichment/ADP), recorded verbatim. Its Automatable
+	// point is the only signal here that separates a vulnerability exploited by hand against one
+	// target from one that can be driven across an estate — KEV is binary and EPSS is a probability.
+	SSVC       *SSVC    `json:"ssvc,omitempty"`
 	Advisories []string `json:"advisories,omitempty"`
 	Exploits   []string `json:"exploits,omitempty"`
 }

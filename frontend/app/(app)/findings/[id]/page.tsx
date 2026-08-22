@@ -52,7 +52,12 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
   // of this file avoids. Stating the assessment and its reason is what the page can honestly say.
   const exploitReason = f.exploitability?.reason || null;
   const exploitScore = typeof f.exploitability?.score === "number" ? f.exploitability.score : null;
-  const hasThreatIntel = kev || cvss !== null || epssPct !== null || publicExploit || exploitReason !== null;
+  // CISA's decision points. Automatable shows even when it is "no": between two CVEs with the same
+  // CVSS and neither on KEV, "an attacker cannot automate this" is exactly the thing that separates
+  // them, and hiding the negative would leave the reader where they started.
+  const ssvcAuto = f.threat_intel?.ssvc?.automatable || null;
+  const ssvcExploit = f.threat_intel?.ssvc?.exploitation || null;
+  const hasThreatIntel = kev || cvss !== null || epssPct !== null || publicExploit || exploitReason !== null || ssvcAuto !== null;
   const controls = Object.entries(f.compliance ?? {}).filter(([, v]) => Array.isArray(v) && v.length > 0);
   const hasOpenReview = reviews.some((r) => r.subject_id === id && r.status === "open");
   // The remediation the agent has queued for THIS finding (if any) — the agentic signal.
@@ -104,6 +109,17 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
                 <span className="text-faint">Exploitability</span>{" "}
                 <span className="font-medium text-ink">{exploitScore !== null ? `${exploitScore}/100` : "rated"}</span>
                 <span className="ml-1 text-muted">· {exploitReason}</span>
+              </span>
+            )}
+            {ssvcAuto && (
+              <span title="CISA's SSVC assessment (Vulnrichment). Automatable asks whether an attacker can automate steps 1-4 of the kill chain — the difference between one target exploited by hand and an estate.">
+                <span className="text-faint">CISA SSVC</span>{" "}
+                <span className={ssvcAuto === "yes" ? "font-medium text-high" : "font-medium text-ink"}>
+                  {ssvcAuto === "yes" ? "automatable" : "not automatable"}
+                </span>
+                {ssvcExploit && ssvcExploit !== "none" && (
+                  <span className="ml-1 text-muted">· exploitation: {ssvcExploit}</span>
+                )}
               </span>
             )}
             {publicExploit && (

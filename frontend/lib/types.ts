@@ -86,6 +86,13 @@ export interface Finding {
     // excellent against 78 manual), and it reached the L2 digest while the human triaging the
     // finding saw the same sentence either way.
     weapon_rank?: string;
+    // CISA's own decision assessment (Vulnrichment/ADP), recorded verbatim. Automatable is the only
+    // signal here that separates a vulnerability exploited by hand against one target from one that
+    // can be driven across an estate — KEV is binary and covers ~1,700 CVEs, EPSS is a probability,
+    // and neither answers it. Surfaced to the READER as well as the digest: weapon_rank reached the
+    // L2 agent for months while the human triaging the finding saw nothing, and repeating that with
+    // a second signal would be the same mistake twice.
+    ssvc?: { exploitation?: string; automatable?: string; technical_impact?: string };
   } | null;
   // DerivedFrom are the finding ids a DERIVED finding rests on — one produced by JOINING other
   // findings rather than by a tool observing something directly (a cross-surface chain: this leaked
