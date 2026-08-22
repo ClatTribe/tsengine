@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Download, ShieldCheck, FileCode2, Sheet, Braces, Lock, ArrowUpRight } from "lucide-react";
+import { FileText, Download, Printer, ShieldCheck, FileCode2, Sheet, Braces, Lock, ArrowUpRight } from "lucide-react";
 import { api, FRAMEWORK_LABEL } from "@/lib/api";
 import { Card, SectionTitle, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -40,12 +40,24 @@ export default async function ReportsPage() {
               document an enterprise customer or insurer asks for. Continuously regenerated, grounded in real scans.
             </div>
           </div>
-          <a
-            href="/api/vapt"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white transition hover:bg-accent-hover active:translate-y-px"
-          >
-            <Download className="h-3.5 w-3.5" /> Download
-          </a>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* The PDF path: a print-ready page the customer saves from their own browser. Opens in
+                a tab (not a download) because the next step is Cmd/Ctrl-P → Save as PDF. */}
+            <a
+              href="/api/vapt?format=html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white transition hover:bg-accent-hover active:translate-y-px"
+            >
+              <Printer className="h-3.5 w-3.5" /> Print / PDF
+            </a>
+            <a
+              href="/api/vapt"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-ink transition hover:border-border-strong active:translate-y-px"
+            >
+              <Download className="h-3.5 w-3.5" /> Markdown
+            </a>
+          </div>
         </Card>
       </div>
 
