@@ -60,6 +60,46 @@ specified as a decorative value, but with 321 text call sites it is a text token
 practice, whatever the intent was. Treating this as hygiene and writing a rule against
 future use would leave 321 existing failures in place while feeling addressed.
 
+### The same assumption, found again in the navigation
+
+A second pass over the product, this time asking whether it works as a **daily driver** for
+the ICP, produced two more instances of the same root cause. Both are fixed in the PR that
+carries this ADR; they are recorded here because they are the clearest evidence the
+assumption is systemic rather than incidental.
+
+**The page built for "what changed" had no way in.** `/incidents` opens with *"What changed
+since the last scan"*, carries the SOC performance numbers, and has a section headed
+*"RESOLVED · THE AGENT'S WINS"* — the most agentic framing anywhere in the product. It had
+**zero inbound links**: not the sidebar, not Overview, not Issues, not Inbox, not either
+agent console. It was reachable only by typing the URL.
+
+That omission is the operator assumption exactly. An operator living in the console does not
+need a "what changed since you were last here" surface, because they never left. A founder
+opens the product twice a week and needs nothing else first.
+
+**The heartbeat was a cron log.** The feed headed "What the agent is doing" rendered nine
+consecutive `Scanned <asset>` rows against a single real detection — a 9:1 ratio of no-op to
+outcome, with the one thing that happened pushed below the fold. A colleague does not tell
+you nine times that they looked and found nothing. Clean scans now collapse to one line.
+
+Neither was a missing capability. `internal/detect` computes the delta and always did; the
+feed had the outcome data and discarded it. Both were built and then not surfaced, which is
+what happens when the person designing the screen is also the person who already knows what
+the system did.
+
+### What the same pass found in good shape
+
+Worth recording, because it bounds the scope of this ADR. Information density is **not** a
+problem: 321 words, 2.6 screens, and eight primary nav rows for a product spanning six
+security surfaces. The two agent surfaces are the strongest screens in the product — Issues
+leads with *"START HERE — YOUR #1 FIX"* and explains its own judgement (*"We traced where
+this leads and found no path to sensitive data or an admin account. That lowers the stakes
+— it does not make it safe."*), and the Pentester explains its own empty queue rather than
+showing a blank panel.
+
+So this ADR is about the shell, and deliberately proposes nothing about what either agent
+says. The agents are not the weak part.
+
 ## Decision
 
 ### 1. Viewport tiers, not a responsive rewrite
@@ -72,8 +112,16 @@ reached *because something happened*.
 | Tier | Surfaces | Requirement |
 |---|---|---|
 | **1 — Operable on a phone** | Inbox (approve / reject / sign), Overview, Issues list + detail, Incidents | Full touch-grade layout. Every action completable. Targets ≥44px. This is the alert-response path. |
-| **2 — Readable on a phone** | Compliance posture, Readiness, Assets, Engagements list, Activity | Legible and navigable; authoring actions may defer to desktop. Answers "what is the state" away from a desk. |
-| **3 — Desktop-only, stated honestly** | Settings, Eval, Compliance scope + questionnaire, Program, Audits, Risks, Reports, the agent Consoles, operator console | A designed message naming the surface and why, not a crushed layout. |
+| **2 — Readable on a phone** | Compliance posture, Readiness, Assets, Engagements list, Activity, **the AI Security Engineer console (`/engineer`)** | Legible and navigable; authoring actions may defer to desktop. Answers "what is the state" away from a desk. |
+| **3 — Desktop-only, stated honestly** | Settings, Eval, Compliance scope + questionnaire, Program, Audits, Risks, Reports, the depth specialists (`/cloud-engineer`, `/code-engineer`), operator console | A designed message naming the surface and why, not a crushed layout. |
+
+**Correction to a first draft of this table.** `/engineer` was originally placed in Tier 3
+with the other consoles, written before the page had been opened. Its lead control is a
+query box whose example chip reads *"Are we exposed to log4j?"* — which is precisely a
+phone question. A founder who hears about a new CVE on a Sunday wants that answer from
+wherever they are, and Tier 3 would have denied the console at the exact moment it is worth
+most. The ask-and-read path moves to Tier 2; the depth specialists it delegates to stay in
+Tier 3, because those are authoring surfaces.
 
 Tier 3 is a real design deliverable, not a cop-out. A page that says *"Compliance scope is
 built for a wide screen — open it on a laptop"* respects the reader. A page that renders
@@ -160,6 +208,16 @@ audience split is a field, a filter, and a copy pass over the existing degradati
 The contrast fix is one token value plus a visual check that the flatter hierarchy still
 reads — deliberately the cheapest of the three, because the alternative that preserved the
 design intent cost 321 edits and would have left failures standing while it ran.
+
+**Already shipped alongside this ADR.** Incidents is in the navigation, the activity feed
+collapses clean scans, `/dashboard` has an `<h1>`, the sidebar group labels pass AA, and the
+stat tiles agree with their own numbers at n=1. None of those needed a decision; they are
+listed so this document is not read as proposing work that is already done.
+
+**Deferred, with the reason.** A true "since your last visit" band on Overview needs
+server-side last-seen tracking per user. That is a feature, not a design fix, and a
+half-built version would silently start lying after the first page refresh. The navigation
+fix closes most of the gap; this is the remainder.
 
 **What this does not address.** The review found the Inbox to be the strongest screen in
 either surface — evidence, citing finding, and the irreversible-action gate stated plainly
