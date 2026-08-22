@@ -53,7 +53,8 @@ var vaptHTMLTemplate = template.Must(template.New("vapt").Funcs(template.FuncMap
 			return "sev-info"
 		}
 	},
-	"has": func(m map[string]bool, k string) bool { return m[k] },
+	"has":         func(m map[string]bool, k string) bool { return m[k] },
+	"vectorProse": cvssVectorProse,
 }).Parse(vaptHTMLSource))
 
 const vaptHTMLSource = `<!doctype html>
@@ -121,6 +122,8 @@ const vaptHTMLSource = `<!doctype html>
   .facts b { color:var(--ink); font-weight:600; }
   .fix { background:#f9fafb; border:1px solid var(--line); border-radius:6px; padding:9px 12px;
     font-size:13px; margin-top:8px; }
+  .caveat { background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; border-radius:8px;
+    padding:11px 14px; font-size:13px; margin:14px 0 0; }
   .foot { margin-top:34px; padding-top:12px; border-top:1px solid var(--line);
     font-size:11.5px; color:var(--muted); }
 </style></head><body><div class="page">
@@ -147,9 +150,10 @@ const vaptHTMLSource = `<!doctype html>
       · <b>{{.S.KEV}} actively exploited</b> (CISA KEV) · <b>{{.S.FixesReady}} with a fix already prepared</b></li>
   {{if .SCATotal}}<li><b>Dependency patchability:</b> {{.S.PatchAvailable}} of {{.SCATotal}} dependency findings have an upstream fix you can upgrade to now; {{.S.PatchUnavailable}} have no fix available yet (mitigate)</li>{{end}}
   {{if .S.Ransomware}}<li><b>{{.S.Ransomware}} ransomware-linked</b> — CISA marks the CVE used in ransomware campaigns, a stronger signal than KEV listing</li>{{end}}
-  {{if .HasRetest}}<li><b>Fix verification:</b> {{.S.RetestConfirmed}} applied fix(es) re-tested and confirmed closed on re-scan; {{.S.RetestStillPresent}} still present after the fix</li>{{end}}
+  {{if .HasRetest}}<li><b>Fix verification:</b> {{.S.RetestConfirmed}} applied {{if eq .S.RetestConfirmed 1}}fix{{else}}fixes{{end}} re-tested and confirmed closed on re-scan; {{.S.RetestStillPresent}} still present after the fix</li>{{end}}
 </ul>
 <p>{{inline .Narrative}}</p>
+{{if .IntelCaveat}}<div class="caveat">{{inline .IntelCaveat}}</div>{{end}}
 
 <h2>Methodology &amp; confidence</h2>
 <p>Assessment is performed by the TensorShield engine, which wraps best-in-class open-source scanners
@@ -163,6 +167,7 @@ continuous, so this report reflects the current state, not a point-in-time snaps
       after the confirmed findings of the same severity and labelled inline, so a false positive can never
       masquerade as a confirmed result.</li>
 </ul>
+{{if .IntelLine}}<p>{{inline .IntelLine}}</p>{{end}}
 
 <h2>Scope</h2>
 {{if not .Report.Scope}}<p class="muted"><i>No assets in scope yet — connect a system to begin the assessment.</i></p>
@@ -216,10 +221,11 @@ estimate is the one number in this report that nothing would support.</b></p>
     {{if .CWE}}<li><b>CWE:</b> {{join .CWE}}</li>{{end}}
     {{if .OWASP}}<li><b>OWASP Top 10:</b> {{join .OWASP}}</li>{{end}}
     {{if .MITRE}}<li><b>MITRE ATT&amp;CK:</b> {{join .MITRE}}</li>{{end}}
-    {{if .CVSS}}<li><b>CVSS:</b> {{cvss .CVSS}}{{if .CVSSVector}} (<code>{{.CVSSVector}}</code>){{end}}</li>{{end}}
+    {{if .CVSS}}<li><b>CVSS:</b> {{cvss .CVSS}}{{if .CVSSVector}} (<code>{{.CVSSVector}}</code>){{end}}{{if .CVSSVector}}{{$prose := vectorProse .CVSSVector}}{{if $prose}}<br><span class="muted">{{$prose}}</span>{{end}}{{end}}</li>{{end}}
     {{if .EPSS}}<li><b>EPSS:</b> {{pct1 .EPSS}} exploit probability (FIRST.org)</li>{{end}}
     {{if notZero .KEVDueDate}}<li><b>CISA remediation deadline (BOD 22-01):</b> {{date .KEVDueDate}}</li>{{end}}
     <li><b>Evidence strength:</b> {{if .Verification}}{{.Verification}}{{else}}detected{{end}}{{if .Confidence}} · confidence {{pct .Confidence}}{{end}}</li>
+    {{if notZero .DiscoveredAt}}<li><b>First observed:</b> {{date .DiscoveredAt}}</li>{{end}}
   </ul>
   {{if .Description}}<p>{{inline .Description}}</p>{{end}}
   {{/* The PoC is EVIDENCE and stays verbatim in <pre> — never run through inline, which would
@@ -254,6 +260,10 @@ type vaptHTMLView struct {
 	Narrative   string
 	EmptyNote   string
 	RatingClass string
+	// IntelCaveat / IntelLine mirror the Markdown renderer's intel-provenance disclosure, so the
+	// print deliverable cannot quietly drop the caveat the other medium carries.
+	IntelCaveat string
+	IntelLine   string
 }
 
 // RenderVAPTHTML renders the report as a self-contained, print-ready HTML document — the form a
@@ -286,6 +296,8 @@ func RenderVAPTHTML(r *VAPTReport) string {
 		HasRetest:   r.Summary.RetestConfirmed > 0 || r.Summary.RetestStillPresent > 0,
 		Narrative:   narrativeSummary(r),
 		RatingClass: ratingClass(r.Summary.RiskRating),
+		IntelCaveat: r.Intel.IntelCaveat(),
+		IntelLine:   RenderIntelProvenance(r.Intel),
 	}
 	if len(r.Findings) == 0 {
 		v.EmptyNote = emptyFindingsNote(r)

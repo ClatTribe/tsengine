@@ -39,6 +39,10 @@ type VAPTReport struct {
 	// them, worst-first by real exploitation evidence. A list of findings is not a plan; this is
 	// the section that tells a team what to do on Monday. See vapt_roadmap.go.
 	Roadmap []RemediationStep `json:"roadmap,omitempty"`
+	// Intel is the pinned state of the threat-intel corpus this report's KEV / ransomware /
+	// exploit-probability claims were evaluated against. Filled by the caller (which can read the
+	// environment and the on-disk manifest); nil when unknown. See vapt_provenance.go.
+	Intel *IntelProvenance `json:"intel,omitempty"`
 	// Attestation, when the report is signed (same scheme as the evidence pack).
 	Signer string `json:"signer,omitempty"`
 	SHA256 string `json:"sha256,omitempty"`
@@ -101,7 +105,11 @@ type VAPTFinding struct {
 	Ransomware bool      `json:"ransomware,omitempty"`
 	WeaponRank string    `json:"weapon_rank,omitempty"`
 	KEVDueDate time.Time `json:"kev_due_date,omitempty"`
-	FixReady   bool      `json:"fix_ready,omitempty"` // a remediation is prepared/queued
+	// DiscoveredAt is when a tool actually observed this. An auditor asking "how long has this been
+	// open?" is asking a question the report otherwise cannot answer, and a continuously-regenerated
+	// document with no per-finding date reads as though everything was found today.
+	DiscoveredAt time.Time `json:"discovered_at,omitempty"`
+	FixReady     bool      `json:"fix_ready,omitempty"` // a remediation is prepared/queued
 }
 
 // VAPTReport assembles the report for a tenant from its current findings + monitored assets.
@@ -203,7 +211,7 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 			ID: f.ID, Title: f.Title, Severity: sev, Tool: f.Tool, RuleID: f.RuleID,
 			Endpoint: f.Endpoint, CWE: f.CWE, MITRE: f.MITRETechniques, Description: descBody, PoC: poc,
 			OWASP: owaspFor(f.CWE, f.Tool), Remediation: remediationFor(f.CWE, f.Tool),
-			Verification: string(f.VerificationStatus), Confidence: f.Confidence,
+			Verification: string(f.VerificationStatus), Confidence: f.Confidence, DiscoveredAt: f.DiscoveredAt,
 			Unconfirmed: !confirmed, KEV: kev, FixReady: fixReady[f.ID],
 		}
 		if f.ThreatIntel != nil {
@@ -291,8 +299,8 @@ func writeSignalLines(b *strings.Builder, s VAPTSummary) {
 		fmt.Fprintf(b, "- **%d ransomware-linked** — CISA marks the CVE used in ransomware campaigns, a stronger signal than KEV listing\n", s.Ransomware)
 	}
 	if s.RetestConfirmed > 0 || s.RetestStillPresent > 0 {
-		fmt.Fprintf(b, "- **Fix verification:** %d applied fix(es) re-tested and confirmed closed on re-scan; %d still present after the fix\n",
-			s.RetestConfirmed, s.RetestStillPresent)
+		fmt.Fprintf(b, "- **Fix verification:** %s re-tested and confirmed closed on re-scan; %d still present after the fix\n",
+			countNoun(s.RetestConfirmed, "applied fix", "applied fixes"), s.RetestStillPresent)
 	}
 }
 
@@ -325,6 +333,11 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	}
 	writeSignalLines(&b, s)
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
+	// The caveat belongs HERE, immediately under the exploitation counts it qualifies — not in a
+	// methodology note further down that a reader quoting "0 actively exploited" never reaches.
+	if c := r.Intel.IntelCaveat(); c != "" {
+		b.WriteString("\n" + c + "\n")
+	}
 	b.WriteString("\n## Methodology & confidence\n\n")
 	b.WriteString("Assessment is performed by the TensorShield engine, which wraps best-in-class open-source " +
 		"scanners across every asset class (web, API, code, containers, cloud, identity) and verifies exploitable " +
@@ -334,6 +347,9 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	b.WriteString("Each finding carries a **confidence tier** so you can triage accurately:\n\n" +
 		"- **Confirmed** — independently corroborated by ≥1 other tool, or actively re-verified. Treat as real.\n" +
 		"- **Unconfirmed** — a single-tool pattern match. A credible lead to validate, not a proven exploit — listed after the confirmed findings of the same severity and labelled inline, so a false positive can never masquerade as a confirmed result.\n\n")
+	if p := RenderIntelProvenance(r.Intel); p != "" {
+		b.WriteString(p + "\n\n")
+	}
 
 	b.WriteString("## Scope\n\n")
 	if len(r.Scope) == 0 {
@@ -400,6 +416,11 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		if f.CVSS > 0 {
 			if f.CVSSVector != "" {
 				fmt.Fprintf(&b, "- **CVSS:** %.1f (`%s`)\n", f.CVSS, f.CVSSVector)
+				// The vector carries the actionable half — decode it, keeping the raw form above
+				// because that is what an auditor cross-checks.
+				if prose := cvssVectorProse(f.CVSSVector); prose != "" {
+					fmt.Fprintf(&b, "  - %s\n", prose)
+				}
 			} else {
 				fmt.Fprintf(&b, "- **CVSS:** %.1f\n", f.CVSS)
 			}
@@ -436,6 +457,9 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 			status = "**exploitation-proven** · " + status
 		}
 		fmt.Fprintf(&b, "- **Evidence strength:** %s\n", status)
+		if !f.DiscoveredAt.IsZero() {
+			fmt.Fprintf(&b, "- **First observed:** %s\n", f.DiscoveredAt.UTC().Format("2006-01-02"))
+		}
 		if f.Description != "" {
 			fmt.Fprintf(&b, "\n%s\n", f.Description)
 		}
@@ -484,6 +508,11 @@ func RenderVAPTExecMarkdown(r *VAPTReport) string {
 	}
 	writeSignalLines(&b, s)
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
+	// The exec one-pager is the MOST forwarded artifact and the most quoted; if the KEV figure on it
+	// rests on stale intel, this is the page that has to say so.
+	if c := r.Intel.IntelCaveat(); c != "" {
+		b.WriteString("\n" + c + "\n")
+	}
 
 	// Top findings — title + severity + confidence tier only (the "what", not the "how"). Cap at 10
 	// so the exec page stays a page; the full technical report carries the rest.

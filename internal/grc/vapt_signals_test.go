@@ -90,7 +90,7 @@ func TestVAPTReport_RetestRollup(t *testing.T) {
 	if r.Summary.RetestConfirmed != 1 || r.Summary.RetestStillPresent != 1 {
 		t.Fatalf("retest rollup = confirmed %d / still %d, want 1/1", r.Summary.RetestConfirmed, r.Summary.RetestStillPresent)
 	}
-	if !strings.Contains(RenderVAPTMarkdown(r), "Fix verification:** 1 applied fix(es) re-tested and confirmed closed on re-scan; 1 still present") {
+	if !strings.Contains(RenderVAPTMarkdown(r), "Fix verification:** 1 applied fix re-tested and confirmed closed on re-scan; 1 still present") {
 		t.Error("fix-verification line missing/wrong")
 	}
 }
