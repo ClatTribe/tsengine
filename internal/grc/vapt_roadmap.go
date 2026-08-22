@@ -49,9 +49,10 @@ type RemediationStep struct {
 func BuildRoadmap(findings []types.Finding, fixReady map[string]bool) []RemediationStep {
 	type scored struct {
 		step RemediationStep
-		rank int // worst severity rank in the group
-		sig  int // exploitation-evidence tier
-		seq  int // first-seen, for a stable tiebreak
+		rank int  // worst severity rank in the group
+		sig  int  // exploitation-evidence tier
+		auto bool // CISA SSVC: an attacker can automate this
+		seq  int  // first-seen, for a stable tiebreak
 	}
 	var all []scored
 	for i, g := range fixunit.GroupBy(findings) {
@@ -86,7 +87,7 @@ func BuildRoadmap(findings []types.Finding, fixReady map[string]bool) []Remediat
 		st.Title = stepTitle(g, worst)
 		st.Action = stepAction(g, worst)
 		st.Why = stepWhy(g, st)
-		all = append(all, scored{step: st, rank: worstRank, sig: bestSig, seq: i})
+		all = append(all, scored{step: st, rank: worstRank, sig: bestSig, auto: automatable(g.Findings), seq: i})
 	}
 
 	sort.SliceStable(all, func(i, j int) bool {
@@ -104,6 +105,11 @@ func BuildRoadmap(findings []types.Finding, fixReady map[string]bool) []Remediat
 		}
 		if a.rank != b.rank {
 			return a.rank > b.rank
+		}
+		// Between two steps the evidence and severity cannot separate, an automatable one goes
+		// first: it reaches the whole estate rather than one target at a time.
+		if a.auto != b.auto {
+			return a.auto
 		}
 		// A change that closes more findings first — same job, more of the estate cleared.
 		if a.step.Closes != b.step.Closes {
@@ -125,13 +131,22 @@ func BuildRoadmap(findings []types.Finding, fixReady map[string]bool) []Remediat
 // a captured PoC, CISA's ransomware marking, a KEV listing, a published weapon.
 func evidenceTier(f types.Finding) int {
 	if poc, _ := extractPoC(f.Description); poc != "" {
-		return 5 // we exploited it here
+		return 6 // we exploited it here
 	}
 	if ti := f.ThreatIntel; ti != nil {
 		if ti.KEV != nil && ti.KEV.Ransomware {
-			return 4
+			return 5
 		}
 		if ti.KEV != nil && ti.KEV.Listed {
+			return 4
+		}
+		// CISA saying exploitation is ACTIVE is the same claim KEV makes, from the same authority,
+		// for a CVE it has not catalogued — KEV covers ~1,700 CVEs and SSVC reaches far beyond it.
+		// Without this rung a vulnerability CISA says is being exploited right now ranked BELOW a
+		// mere published PoC, because the absence of evidence in our KEV feed read as evidence of
+		// absence. Below KEV itself, which additionally carries a federal remediation mandate —
+		// the same ordering internal/threatinformed uses to rank probes (KEV +100, SSVC-active +75).
+		if ti.SSVC != nil && ti.SSVC.Exploitation == "active" {
 			return 3
 		}
 		if len(ti.Exploits) > 0 {
@@ -139,6 +154,18 @@ func evidenceTier(f types.Finding) int {
 		}
 	}
 	return 0
+}
+
+// automatable reports CISA's SSVC assessment that an attacker can automate steps 1-4 of the kill
+// chain against this finding — the difference between a vulnerability exploited by hand against one
+// target and one that can be driven across an estate.
+func automatable(fs []types.Finding) bool {
+	for _, f := range fs {
+		if ti := f.ThreatIntel; ti != nil && ti.SSVC != nil && ti.SSVC.Automatable == "yes" {
+			return true
+		}
+	}
+	return false
 }
 
 // stepTitle names the change. A package group names the upgrade (mirroring the bulk-PR title, so
@@ -251,6 +278,14 @@ func stepWhy(g fixunit.Group, st RemediationStep) []string {
 			}
 			if !ti.KEV.DueDate.IsZero() {
 				add("CISA remediation deadline " + ti.KEV.DueDate.UTC().Format("2006-01-02"))
+			}
+		}
+		if ti := f.ThreatIntel; ti != nil && ti.SSVC != nil {
+			if ti.SSVC.Exploitation == "active" {
+				add("CISA assesses exploitation as ACTIVE for this CVE (SSVC)")
+			}
+			if ti.SSVC.Automatable == "yes" {
+				add("CISA assesses this as automatable (SSVC) — it scales across an estate, not one target at a time")
 			}
 		}
 		if ti := f.ThreatIntel; ti != nil && ti.WeaponRank != "" {
