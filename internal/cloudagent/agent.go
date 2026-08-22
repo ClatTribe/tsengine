@@ -47,12 +47,25 @@ type Context struct {
 	// current" are different claims (§10).
 	Live LiveReader
 
+	// Prober answers "would the provider allow this action?" via the provider's own policy simulator
+	// (AWS SimulatePrincipalPolicy / GCP testIamPermissions / Azure checkAccess) WITHOUT performing
+	// it — the benign offensive-PROOF primitive (ADR 0024 P1). It upgrades a recorded path from
+	// config-possible (our graph says the permission exists) to provider-confirmed (the authority
+	// that enforces the policy says the move works). Read-only by construction; the provider is the
+	// oracle, so it adds no false-positive surface (§10).
+	//
+	// Optional. Nil means no dry-run path is configured and check_reachable says exactly that — the
+	// same honest degradation as Live and Estate: "we could not prove it" and "it is denied" are
+	// different answers.
+	Prober ExploitProber
+
 	Issues  []Issue
 	Summary string
 	Done    bool
 
-	issueN int
-	calls  int
+	issueN    int
+	calls     int
+	confirmed map[string]ProbeResult
 }
 
 // Issue is one attack path the LLM determined AND the graph confirmed (grounded).
@@ -68,6 +81,16 @@ type Issue struct {
 	FixKind     string   `json:"fix_kind,omitempty"`
 	FixContent  string   `json:"fix_content,omitempty"`
 	FixVerified bool     `json:"fix_verified,omitempty"`
+	// ProviderConfirmed is true only when EVERY authorization-requiring hop on this path was
+	// confirmed ALLOW by the provider's own policy simulator (ADR 0024 P1). It means
+	// provider-confirmed AUTHORIZATION — NOT that the path is exploitable, which additionally needs
+	// network reachability, credential acquisition, unsupplied session context and the rest of the
+	// workflow (see internal/cloudagent/exploitprobe.go for the full ladder).
+	ProviderConfirmed bool `json:"provider_confirmed,omitempty"`
+	// AuthorizationCoverage is "confirmed/required" hops, so a PARTIAL result stays visible rather
+	// than collapsing to a bare false — "3 of 5 hops authorized" and "nothing was checked" are
+	// different facts, and rendering them alike is how a partial proof reads as a complete one.
+	AuthorizationCoverage string `json:"authorization_coverage,omitempty"`
 }
 
 // Report is the agent's output.

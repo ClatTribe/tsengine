@@ -31,7 +31,7 @@ func tools() []toolDef {
 	return []toolDef{
 		{"list_resources", "list_resources(kind?, only_sensitive?) — inventory: ids/names/kind/flags. kind ∈ resource|principal|data|network", tList},
 		{"get_resource", "get_resource(id, live?) — one resource's metadata + its outgoing edges (moves an attacker could make from it). Pass live:true to ALSO re-read it from the account right now: everything else you see was captured before this investigation began, so a flag a path turns on (public, privileged) may already have changed. Do that before recording an issue whose severity depends on such a flag. Read-only; it answers AGREES / DIFFERS / COULD NOT CHECK and never reads an unread surface as an absent resource.", tGet},
-		{"resolve_access", "resolve_access(principal, resource) — does the principal have an effective path of access to the resource? (graph reachability over resolved IAM)", tResolve},
+		{"resolve_access", "resolve_access(principal, resource, action?) — does the principal have an effective path of access to the resource? (graph reachability over resolved IAM). Pass action (a provider action e.g. iam:PassRole, s3:GetObject) to ALSO run a PROVIDER dry-run: ask AWS/GCP/Azure's own policy simulator whether the move would be ALLOWED right now, WITHOUT performing it — upgrading the answer from config-possible (our graph) to provider-confirmed (the authority that enforces the policy). Read-only; ALLOW=confirmed exploitable, DENY=confirmed closed (do not record it), UNKNOWN=unproven (never \"safe\").", tResolve},
 		{"find_paths", "find_paths(target) — concrete attack paths from the internet/public surface to the target node, if any", tFindPaths},
 		{"blast_radius", "blast_radius(principal) — every crown jewel (sensitive data / privileged identity) reachable if this principal is compromised", tBlast},
 		{"enumerate_attack_paths", "enumerate_attack_paths() — the deterministic engine's candidate attack paths (a fast prepass to seed your investigation; verify/extend them)", tEnumerate},
@@ -111,10 +111,20 @@ func tResolve(cc *Context, args map[string]any) string {
 	if cc.Snap.Node(r) == nil {
 		return "ERROR: no such resource " + r
 	}
+	var b strings.Builder
 	if reachableFrom(cc.Snap, p)[r] {
-		return fmt.Sprintf("YES — %s can reach %s over the resolved access/assume graph (effective IAM already applied at ingest).", p, r)
+		fmt.Fprintf(&b, "YES — %s can reach %s over the resolved access/assume graph (effective IAM already applied at ingest).", p, r)
+	} else {
+		fmt.Fprintf(&b, "NO — %s has no effective path of access to %s. A prowler finding here is likely inert.", p, r)
 	}
-	return fmt.Sprintf("NO — %s has no effective path of access to %s. A prowler finding here is likely inert.", p, r)
+	// Provider dry-run rides on resolve_access (it does NOT take its own catalog slot — the ≤12 cap,
+	// §2.6, is why check_live rides on get_resource too). When the model supplies an action, it wants
+	// the authoritative answer, not just our graph's: run the provider simulator and append its
+	// verdict in the SAME observation so the two views sit side by side.
+	if action := strings.TrimSpace(argStr(args, "action")); action != "" {
+		b.WriteString("\n" + tCheckReachable(cc, args))
+	}
+	return b.String()
 }
 
 func tFindPaths(cc *Context, args map[string]any) string {
@@ -244,6 +254,13 @@ func tRecord(cc *Context, args map[string]any) string {
 		Severity: argStr(args, "severity"), Rationale: argStr(args, "rationale"),
 		Evidence: argStrList(args, "evidence"),
 	}
+	// Grounding upgrade (ADR 0024 P1): stamp provider-confirmed AUTHORIZATION only when EVERY
+	// authorization-requiring hop on this path was confirmed ALLOW by the provider. One allowed hop
+	// does not prove a multi-hop path (§10). Not required — a run with no Prober still records
+	// config-possible paths exactly as before; this only adds the stronger, fully-backed claim.
+	confirmed, okHops, authHops := cc.pathAuthorizationStatus(path)
+	is.ProviderConfirmed = confirmed
+	is.AuthorizationCoverage = fmt.Sprintf("%d/%d", okHops, authHops)
 	cc.Issues = append(cc.Issues, is)
 	return fmt.Sprintf("recorded %s: %s (grounded — the path exists and reaches a crown jewel). Consider propose_fix(%s).", is.ID, strings.Join(path, " -> "), is.ID)
 }
@@ -384,6 +401,65 @@ func validatePath(snap *cloudgraph.Snapshot, nodes []string, target string) erro
 		return fmt.Errorf("%q is not a crown jewel (sensitive data or privileged identity) — no real impact", target)
 	}
 	return nil
+}
+
+// pathAuthorizationStatus reports how much of a recorded path the PROVIDER has confirmed.
+//
+// The rule that matters (ADR 0024 P1b): a path is authorization-confirmed only when EVERY hop that
+// needs an authorization decision has been confirmed ALLOW. An earlier version returned true if ANY
+// single hop was confirmed — which would stamp a five-hop path as provider-backed on the strength of
+// one allowed iam:PassRole. That is the false-confidence this product exists to prevent (§10): a
+// multi-hop path needs several distinct authorizations, and proving one proves one.
+//
+// Returns (confirmed, confirmedHops, authHops). confirmed is true only when authHops > 0 and every
+// authorization-requiring hop is confirmed. Hops that need no authorization decision — a
+// network_reach edge is a reachability fact, not an IAM decision — are excluded from the denominator
+// rather than counted as confirmed, so they can neither block nor manufacture a confirmation.
+func (cc *Context) pathAuthorizationStatus(path []string) (confirmed bool, confirmedHops, authHops int) {
+	if len(path) < 2 {
+		return false, 0, 0
+	}
+	for i := 0; i < len(path)-1; i++ {
+		from, to := path[i], path[i+1]
+		e, ok := edgeBetween(cc.Snap, from, to)
+		if !ok || !edgeNeedsAuthorization(e.Kind) {
+			continue
+		}
+		authHops++
+		if cc.hopConfirmed(from, to) {
+			confirmedHops++
+		}
+	}
+	return authHops > 0 && confirmedHops == authHops, confirmedHops, authHops
+}
+
+// edgeNeedsAuthorization reports whether traversing this edge kind is an IAM authorization decision
+// the provider simulator can answer. A network_reach edge is a NETWORK fact (the runtime-preconditions
+// rung, not this one), so it is out of scope here rather than silently treated as authorized.
+func edgeNeedsAuthorization(k cloudgraph.EdgeKind) bool {
+	switch k {
+	case cloudgraph.EdgeAssumeRole, cloudgraph.EdgePassRole, cloudgraph.EdgeHasAccess,
+		cloudgraph.EdgePrivesc, cloudgraph.EdgeSecretAccess:
+		return true
+	default:
+		return false
+	}
+}
+
+// hopConfirmed reports whether some (principal, action, resource) move with these endpoints was
+// confirmed ALLOW this run. The action is not carried on the graph edge, so any confirmed action
+// across the hop counts for that hop.
+func (cc *Context) hopConfirmed(from, to string) bool {
+	for k, r := range cc.confirmed {
+		if r.Verdict != VerdictAllow {
+			continue
+		}
+		parts := strings.SplitN(k, "\x00", 3)
+		if len(parts) == 3 && parts[0] == from && parts[2] == to {
+			return true
+		}
+	}
+	return false
 }
 
 func pathToAttackPath(snap *cloudgraph.Snapshot, id string, nodes []string) types.AttackPath {
