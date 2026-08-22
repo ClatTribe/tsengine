@@ -178,3 +178,48 @@ func TestCIIdentityFindings_UnmodelledProviderIsSilent(t *testing.T) {
 		t.Errorf("azure has no analyser and must not be assessed by another cloud's: %+v", got)
 	}
 }
+
+// The DECLARATIONS must survive the ingest, not just the findings.
+//
+// ghoidc refuses to judge a federation whose issuer it does not model — an Okta or other SAML
+// provider — and says so instead of staying silent. The platform wiring took only .Findings, so that
+// honest half stayed in the package: an estate federating through Okta reached the platform looking
+// exactly like one that federates through nothing.
+func TestCIIdentityAssess_CarriesTheUnassessedFederation(t *testing.T) {
+	body := []byte(`{"account_id":"123456789012","roles":[{
+      "arn":"arn:aws:iam::123456789012:role/OktaAdmin","name":"OktaAdmin","admin":true,
+      "trust_policy":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRoleWithSAML\",\"Principal\":{\"Federated\":\"arn:aws:iam::123456789012:saml-provider/Okta\"}}]}"}]}`)
+
+	findings, notAssessed := ciIdentityAssess("aws", body)
+	if len(findings) != 0 {
+		t.Errorf("we do not model SAML, so there should be no verdict: %+v", findings)
+	}
+	if len(notAssessed) == 0 {
+		t.Fatal("the Okta federation was dropped — the estate now reads as though nothing federates in")
+	}
+	var joined string
+	for _, v := range notAssessed {
+		joined += v + " "
+	}
+	if !strings.Contains(joined, "saml-provider/Okta") {
+		t.Errorf("the declaration must name the provider to be actionable: %q", joined)
+	}
+}
+
+// A GCP pool federating an issuer gcpwif does not model declares the same way.
+func TestCIIdentityAssess_GCPCarriesTheUnassessedIssuer(t *testing.T) {
+	body := []byte(`{"project_id":"p","wif_providers":[{
+      "project_number":"1","pool_id":"corp","id":"okta","issuer_uri":"https://acme.okta.com"}]}`)
+
+	_, notAssessed := ciIdentityAssess("gcp", body)
+	if len(notAssessed) == 0 {
+		t.Fatal("a non-GitHub GCP issuer was dropped at the ingest")
+	}
+	var joined string
+	for _, v := range notAssessed {
+		joined += v + " "
+	}
+	if !strings.Contains(joined, "acme.okta.com") {
+		t.Errorf("the declaration must name the issuer: %q", joined)
+	}
+}

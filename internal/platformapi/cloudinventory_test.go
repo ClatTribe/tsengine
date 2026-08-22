@@ -226,3 +226,59 @@ func TestIngestInventory_NonEmptyStillStores(t *testing.T) {
 		t.Error("a real inventory was not stored")
 	}
 }
+
+// An Okta federation must reach the STORED coverage notes, not just the assessor.
+//
+// ghoidc declares a federation whose issuer it does not model rather than staying silent, and the
+// ingest merges that into the same coverage notes as the escalation gaps — stored, because the
+// reader of the attack-path page is rarely the CI job that posted the inventory.
+//
+// This tests the HANDLER rather than the assessor. Mutation showed the assessor-level tests passed
+// with the merge removed, which is the unit-versus-wiring gap in miniature.
+func TestIngestAWSInventory_StoresTheUnassessedFederation(t *testing.T) {
+	snaps := cloudsnap.NewMemStore()
+	d := Deps{CloudSnapshots: snaps}
+
+	body := `{
+		"account_id": "111122223333",
+		"users": [{"arn":"arn:aws:iam::111122223333:user/dev","name":"dev"}],
+		"buckets": [{"name":"logs"}],
+		"roles": [{"arn":"arn:aws:iam::111122223333:role/OktaAdmin","name":"OktaAdmin","admin":true,
+			"trust_policy":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRoleWithSAML\",\"Principal\":{\"Federated\":\"arn:aws:iam::111122223333:saml-provider/Okta\"}}]}"}]
+	}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/cloud/inventory", strings.NewReader(body))
+	d.handleIngestAWSInventory(rec, req, "ten-okta")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// The response tells the poster…
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	gaps, _ := resp["coverage_gaps"].(map[string]any)
+	var inResponse string
+	for _, v := range gaps {
+		if s, ok := v.(string); ok {
+			inResponse += s + " "
+		}
+	}
+	if !strings.Contains(inResponse, "saml-provider/Okta") {
+		t.Errorf("the response did not name the unassessed federation: %v", gaps)
+	}
+
+	// …and the SNAPSHOT tells whoever reads the estate later, which is the one that matters.
+	snap, ok, err := snaps.Get(context.Background(), "ten-okta")
+	if err != nil || !ok {
+		t.Fatalf("snapshot not stored: ok=%v err=%v", ok, err)
+	}
+	var stored string
+	for _, v := range snap.CoverageGaps {
+		stored += v + " "
+	}
+	if !strings.Contains(stored, "saml-provider/Okta") {
+		t.Errorf("the stored snapshot does not record the unassessed federation: %v", snap.CoverageGaps)
+	}
+}

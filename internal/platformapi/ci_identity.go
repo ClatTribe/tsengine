@@ -31,18 +31,31 @@ import (
 // Admin flag rather than guessed — it escalates a finding one step and says why, so a wrong guess
 // would be a wrong severity on a real customer's role.
 func ciIdentityFindings(provider string, body []byte) []types.Finding {
+	f, _ := ciIdentityAssess(provider, body)
+	return f
+}
+
+// ciIdentityAssess returns the findings AND what the assessment could NOT look at.
+//
+// The declarations are the point of the second return. ghoidc and gcpwif each refuse to judge a
+// federation whose issuer they do not model — an Okta or other SAML provider — and say so instead of
+// staying silent, because "we could not look" and "we looked and it was fine" are different claims.
+// Discarding that here left the honest half in the package and shipped only the verdicts, so an
+// estate federating through Okta reached the platform looking exactly like one that federates
+// through nothing.
+func ciIdentityAssess(provider string, body []byte) ([]types.Finding, map[string]string) {
 	switch p := strings.ToLower(strings.TrimSpace(provider)); p {
 	case "", "aws":
 	case "gcp":
-		return gcpCIIdentityFindings(body)
+		return gcpCIIdentityAssess(body)
 	default:
 		// Azure has no equivalent analyser yet, and running one over an estate it cannot read would
 		// return a confident zero — the clean-because-we-did-not-look answer.
-		return nil
+		return nil, nil
 	}
 	var raw awsinventory.RawAWS
 	if json.Unmarshal(body, &raw) != nil {
-		return nil // the caller has already reported the parse failure; do not double-report it
+		return nil, nil // the caller has already reported the parse failure; do not double-report it
 	}
 	est := ghoidc.Estate{}
 	for _, r := range raw.Roles {
@@ -54,13 +67,14 @@ func ciIdentityFindings(provider string, body []byte) []types.Finding {
 		})
 	}
 	if len(est.Roles) == 0 {
-		return nil
+		return nil, nil
 	}
 	// ReposComplete stays FALSE: a posted cloud inventory says nothing about which repositories the
 	// organisation owns, so the unowned-repository check must not run. Assess declares that in
 	// ChecksNotRun rather than passing it silently — accusing a customer's real repository of being
 	// unowned because we never had the list would be worse than not running the check.
-	return ghoidc.Assess(est, time.Now().UTC()).Findings
+	a := ghoidc.Assess(est, time.Now().UTC())
+	return a.Findings, a.ChecksNotRun
 }
 
 // persistCIIdentityFindings enriches and stores them through the SAME path every other ingest uses
@@ -85,12 +99,17 @@ func (d Deps) persistCIIdentityFindings(ctx context.Context, tenantID string, fs
 // with no providers yields nothing; and gcpwif itself declares in ChecksNotRun any pool federating
 // an issuer it does not model, so a non-GitHub IdP reads as unchecked rather than clean.
 func gcpCIIdentityFindings(body []byte) []types.Finding {
+	f, _ := gcpCIIdentityAssess(body)
+	return f
+}
+
+func gcpCIIdentityAssess(body []byte) ([]types.Finding, map[string]string) {
 	var raw gcpinventory.RawGCP
 	if json.Unmarshal(body, &raw) != nil {
-		return nil // the caller already reported the parse failure
+		return nil, nil // the caller already reported the parse failure
 	}
 	if len(raw.WIFProviders) == 0 {
-		return nil // nothing federates in, or the collector did not report it
+		return nil, nil // nothing federates in, or the collector did not report it
 	}
 	est := gcpwif.Estate{}
 	for _, p := range raw.WIFProviders {
@@ -111,5 +130,6 @@ func gcpCIIdentityFindings(body []byte) []types.Finding {
 	}
 	// ReposComplete stays FALSE for the same reason as AWS: a cloud inventory says nothing about
 	// which repositories the organisation owns, so the unowned-repository check must not run.
-	return gcpwif.Assess(est, time.Now().UTC()).Findings
+	a := gcpwif.Assess(est, time.Now().UTC())
+	return a.Findings, a.ChecksNotRun
 }

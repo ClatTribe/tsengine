@@ -120,8 +120,22 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 	// internal/ghoidc analyses exactly that and had no caller, so the surface was invisible in precisely
 	// the way that motivated building it. Runs before the store call so its findings ride the same
 	// enrich → store → issues/incidents path as drift.
-	_, ciStored := d.persistCIIdentityFindings(r.Context(), tenantID,
-		ciIdentityFindings(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body))
+	ciFindings, ciNotAssessed := ciIdentityAssess(
+		strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body)
+	_, ciStored := d.persistCIIdentityFindings(r.Context(), tenantID, ciFindings)
+	// WHAT THE CI-IDENTITY CHECK COULD NOT LOOK AT rides into the STORED coverage notes, next to the
+	// escalation gaps, for the reason those are stored: the reader of the attack-path page is rarely
+	// the CI job that posted the inventory. A role assumable by an Okta or other SAML provider we do
+	// not model is exactly what these declarations name, and dropping them here left the estate
+	// looking like one that federates through nothing.
+	if len(ciNotAssessed) > 0 {
+		if coverage.Notes == nil {
+			coverage.Notes = map[string]string{}
+		}
+		for k, v := range ciNotAssessed {
+			coverage.Notes[k] = v
+		}
+	}
 	_, summary, aerr := d.applyCloudInventoryWithCoverage(r.Context(), tenantID, inv, invJSON,
 		"live AWS inventory collected → stored for the AI cloud engineer", coverage)
 	if aerr != nil {
