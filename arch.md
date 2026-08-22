@@ -382,24 +382,29 @@ FINALIZE (DefaultFinalize — needs the whole set)
 
 ## Sandbox → host findings propagation
 
-Tools running inside the sandbox container that call `tracer.Add` from inside their body write to the sandbox-side tracer (which is hookless — L1.5 chain lives on host). The sidecar pattern bridges:
+**The sidecar bridge described here was never implemented, and this section described it as
+operative until 2026-08-22.** `tool.Result.SandboxEmittedFindings` (json `_sandbox_emitted_findings`)
+is declared once in `internal/tool/tool.go` and written by NOTHING — no tool, no tool-server, not even
+a test. There is no sandbox-side tracer, `cmd/tool-server` holds no tracer, and
+`internal/sandbox.Client.Execute` calls no host tracer.
+
+What actually happens is simpler, and the outcome is the same:
 
 ```
-sandbox tool calls tracer.Add(finding)
-   ↓ (writes to sandbox tracer singleton)
-tool-server snapshots tracer diff post-call
-   ↓ injects findings into ToolResult.SandboxEmittedFindings
-[HTTP response]
-host internal/sandbox.Client.Execute()
-   ↓ extracts SandboxEmittedFindings
-   ↓ host_tracer.Add(...)            ← L1.5 hooks fire HERE
+sandbox tool returns findings in tool.Result.Findings
+   ↓ [HTTP response from cmd/tool-server]
+host internal/sandbox.Client.Execute() → returns the Result unchanged
+   ↓
+the ASSET HANDLER's Normalize lifts them into []types.Finding
+   (internal/asset/common.emitted reads the UNION of Result.Findings and
+    Result.SandboxEmittedFindings, so the unused field is harmless)
+   ↓
+orchestrator / runner run l15.Enrich over the normalized set   ← L1.5 hooks fire HERE
 ```
 
-The sidecar key is stripped from the returned `ToolResult` before callers see it.
-
-The propagation is best-effort — any failure during re-emission is logged + swallowed; it never crashes the execute path.
-
----
+The load-bearing consequence, and why the fiction mattered: findings do NOT self-propagate from the
+sandbox client. **A new asset handler that does not lift them in `Normalize` emits nothing**, and the
+old diagram said the client did that for you.
 
 ## Tool-replay API
 
