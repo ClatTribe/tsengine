@@ -271,6 +271,17 @@ false negatives and on an attack-path page that is the worse direction.
 Supplying the deny policies is the collector's job and stays the honestly-gated half; the parsing and
 the evaluation are tested and free.
 
+**AWS had the identical hole, found by asking the same question.** `cloudiam.PolicySet` has always
+carried `SCPs` and evaluated them as the AWS Organizations ceiling — *"if any SCP is attached, some
+SCP must Allow"* — and `RawAWS` could not EXPRESS one, so the ingest built its `PolicySet` without
+any. An account governed by an org guardrail carving out `iam:CreateAccessKey` was still reported as
+having a privilege-escalation path. SCPs are the most common such guardrail in any estate large
+enough to have an Organization, so the false positive landed hardest on the best-run accounts.
+`awsinventory/scp_fp_test.go` pins all three directions: the ceiling blocks, a permissive SCP does
+NOT suppress, and an UNREADABLE SCP does not silently clear the account — the same direction the
+permission boundary already takes, because pruning a path on a ceiling we could not read would hide
+real escalations behind an unparseable document.
+
 **Of the internal rows, the one that means something on its own is generalization.** The rest score ~100%
 because their ground truth and the code under test share an oracle — `holdout.go` says so
 in its own header. The held-out row deliberately does not: it labels truth with

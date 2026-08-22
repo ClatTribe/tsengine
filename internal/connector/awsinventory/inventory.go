@@ -42,6 +42,20 @@ type RawAWS struct {
 	// jewel. They are asserted by the fetcher (policy evaluation), never inferred here: guessing
 	// which principals can read which buckets is exactly the fabricated-path failure mode.
 	Grants []RawGrant `json:"grants,omitempty"`
+	// SCPsJSON are the Service Control Policy documents on this account's OU path — the AWS
+	// Organizations CEILING. cloudiam applies them as one ("if any SCP is attached, some SCP must
+	// Allow"), so an SCP that does not permit iam:CreateAccessKey blocks the escalation an identity
+	// policy would otherwise grant.
+	//
+	// cloudiam.PolicySet has always had SCPs and evaluated them. This struct could not EXPRESS one,
+	// so derivePrivesc built its PolicySet without any and an account governed by an org guardrail
+	// was still reported as having a privilege-escalation path. SCPs are the most common such
+	// guardrail in any AWS estate large enough to have an Organization, which makes the false
+	// positive land hardest on the best-run accounts.
+	//
+	// Same hole as GCP's missing deny policies, in the other named cloud, found by asking the
+	// question BishopFox's control set asks: does the tool evaluate the deny side at all?
+	SCPsJSON []string `json:"scps,omitempty"`
 }
 
 // RawGrant records that a principal holds access to a resource.
@@ -129,7 +143,7 @@ func Build(raw RawAWS) cloudgraph.Inventory {
 			ID: u.ARN, Kind: cloudgraph.KindPrincipal, Type: "iam_user", Name: u.Name, Privileged: u.Admin,
 			AccessKeyIDs: u.AccessKeyIDs,
 		})
-		addPrivesc(&inv, u.ARN, u.PoliciesJSON, u.BoundaryJSON)
+		addPrivesc(&inv, u.ARN, u.PoliciesJSON, u.BoundaryJSON, raw.SCPsJSON)
 	}
 	for _, r := range raw.Roles {
 		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
@@ -138,7 +152,7 @@ func Build(raw RawAWS) cloudgraph.Inventory {
 		for _, p := range trustPrincipals(r.TrustPolicyJSON) {
 			inv.Trusts = append(inv.Trusts, cloudgraph.InvTrust{Principal: p, Role: r.ARN})
 		}
-		addPrivesc(&inv, r.ARN, r.PoliciesJSON, r.BoundaryJSON)
+		addPrivesc(&inv, r.ARN, r.PoliciesJSON, r.BoundaryJSON, raw.SCPsJSON)
 	}
 	// The synthetic admin node is declared only when something can actually reach it. An
 	// account with no escalation path should not carry a node implying one exists.
@@ -324,7 +338,7 @@ func stringOrArray(r json.RawMessage) []string {
 //     real one stays open.
 //   - An escalation reachable only through a CONDITIONED grant is marked Condition, so a
 //     path through it reads config-possible rather than confirmed (ADR 0002).
-func addPrivesc(inv *cloudgraph.Inventory, principal string, policiesJSON []string, boundaryJSON string) {
+func addPrivesc(inv *cloudgraph.Inventory, principal string, policiesJSON []string, boundaryJSON string, scpsJSON []string) {
 	if principal == "" || len(policiesJSON) == 0 {
 		return
 	}
@@ -353,7 +367,19 @@ func addPrivesc(inv *cloudgraph.Inventory, principal string, policiesJSON []stri
 		// everything — see RawIAMRole.BoundaryJSON.
 	}
 
-	ps := cloudiam.PolicySet{Identity: docs, Boundary: boundary, SameAccount: true}
+	// An SCP we cannot parse is SKIPPED rather than treated as denying everything: the same
+	// direction the boundary takes above, and for the same reason — refusing to prune a path on a
+	// ceiling we could not read would hide real escalations behind an unreadable document.
+	var scps []*cloudiam.Document
+	for _, js := range scpsJSON {
+		if strings.TrimSpace(js) == "" {
+			continue
+		}
+		if d, err := cloudiam.Parse([]byte(js)); err == nil && d != nil {
+			scps = append(scps, d)
+		}
+	}
+	ps := cloudiam.PolicySet{Identity: docs, Boundary: boundary, SCPs: scps, SameAccount: true}
 	// One shared predicate (cloudiam.PrivescOf) with the graph bridge and the CloudQuery
 	// path: all three used to open-code it, and all three carried the same "*"-resource
 	// blindness independently.
