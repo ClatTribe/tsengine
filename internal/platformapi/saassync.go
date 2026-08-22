@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/sspm"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -53,6 +54,10 @@ func (d Deps) handleSyncSaaSGitHub(w http.ResponseWriter, r *http.Request, tenan
 	}
 	findings := sspm.AssessGitHubOrg(snap, sspm.Options{})
 	findings = enrichFindings(findings) // L1.5 parity (§11)
+	// RECORD THAT THIS RAN. sspm is grounded — a hardened estate yields ZERO findings — so
+	// without the stamp "assessed and clean" and "never connected" are byte-identical in the
+	// findings store, and the UI shows the reassuring reading for both (§10).
+	d.markPostureAssessed(r.Context(), tenantID, "sspm", time.Now().UTC())
 
 	stored := 0
 	for _, f := range findings {
@@ -132,6 +137,10 @@ func (d Deps) handleSyncSaaSM365(w http.ResponseWriter, r *http.Request, tenantI
 	}
 	findings := sspm.AssessM365(snap, sspm.Options{})
 	findings = enrichFindings(findings) // L1.5 parity (§11)
+	// RECORD THAT THIS RAN. sspm is grounded — a hardened estate yields ZERO findings — so
+	// without the stamp "assessed and clean" and "never connected" are byte-identical in the
+	// findings store, and the UI shows the reassuring reading for both (§10).
+	d.markPostureAssessed(r.Context(), tenantID, "sspm", time.Now().UTC())
 
 	stored := 0
 	for _, f := range findings {

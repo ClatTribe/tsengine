@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/sspm"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -37,6 +38,10 @@ func (d Deps) handleIngestSaaSSnapshot(w http.ResponseWriter, r *http.Request, t
 	}
 
 	findings = enrichFindings(findings) // L1.5 parity (§11)
+	// RECORD THAT THIS RAN. sspm is grounded — a hardened estate yields ZERO findings — so
+	// without the stamp "assessed and clean" and "never connected" are byte-identical in the
+	// findings store, and the UI shows the reassuring reading for both (§10).
+	d.markPostureAssessed(r.Context(), tenantID, "sspm", time.Now().UTC())
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for _, f := range findings {
