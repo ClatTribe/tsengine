@@ -115,6 +115,13 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
+	// CI/FEDERATED-IDENTITY ASSESSMENT. The posted inventory carries each role's trust policy, which is
+	// the entire access-control decision for a workflow reaching this account with no stored credential.
+	// internal/ghoidc analyses exactly that and had no caller, so the surface was invisible in precisely
+	// the way that motivated building it. Runs before the store call so its findings ride the same
+	// enrich → store → issues/incidents path as drift.
+	_, ciStored := d.persistCIIdentityFindings(r.Context(), tenantID,
+		ciIdentityFindings(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body))
 	_, summary, aerr := d.applyCloudInventoryWithCoverage(r.Context(), tenantID, inv, invJSON,
 		"live AWS inventory collected → stored for the AI cloud engineer", coverage)
 	if aerr != nil {
@@ -130,6 +137,10 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 	// edges. "Nobody can become admin in your account" is the most reassuring thing this product can
 	// say and the most damaging thing to say wrongly.
 	summary["coverage"] = coverage.Summary()
+	// Reported so the poster can see the CI-trust surface was assessed at all. Zero is a real answer
+	// here — most roles are not federated — and it is reported as a count rather than omitted, so
+	// "assessed, nothing wrong" is distinguishable from "never ran".
+	summary["ci_identity_findings"] = ciStored
 	if !coverage.Complete() {
 		summary["coverage_gaps"] = coverage.Notes
 	}
