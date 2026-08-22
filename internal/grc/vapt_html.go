@@ -150,6 +150,7 @@ const vaptHTMLSource = `<!doctype html>
       · <b>{{.S.KEV}} actively exploited</b> (CISA KEV) · <b>{{.S.FixesReady}} with a fix already prepared</b></li>
   {{if .SCATotal}}<li><b>Dependency patchability:</b> {{.S.PatchAvailable}} of {{.SCATotal}} dependency findings have an upstream fix you can upgrade to now; {{.S.PatchUnavailable}} have no fix available yet (mitigate)</li>{{end}}
   {{if .S.Ransomware}}<li><b>{{.S.Ransomware}} ransomware-linked</b> — CISA marks the CVE used in ransomware campaigns, a stronger signal than KEV listing</li>{{end}}
+  {{if .S.Automatable}}<li><b>{{.S.Automatable}} automatable</b> — CISA assesses an attacker can automate exploitation, so these scale across an estate rather than costing effort per target</li>{{end}}
   {{if .HasRetest}}<li><b>Fix verification:</b> {{.S.RetestConfirmed}} applied {{if eq .S.RetestConfirmed 1}}fix{{else}}fixes{{end}} re-tested and confirmed closed on re-scan; {{.S.RetestStillPresent}} still present after the fix</li>{{end}}
 </ul>
 <p>{{inline .Narrative}}</p>
@@ -213,6 +214,11 @@ estimate is the one number in this report that nothing would support.</b></p>
     {{if .Ransomware}}<span class="flag flag-danger">ransomware-linked (CISA)</span>{{end}}
     {{if .WeaponRank}}<span class="flag flag-warn">weaponized: {{.WeaponRank}} (Metasploit)</span>{{end}}
     {{if .PublicExploit}}<span class="flag flag-warn">public exploit available</span>{{end}}
+    {{if .SSVCExploitation}}<span class="flag flag-danger">CISA SSVC exploitation: {{.SSVCExploitation}}</span>{{end}}
+    {{/* Stated either way: the NO is what separates two otherwise identical findings. */}}
+    {{if eq .SSVCAutomatable "yes"}}<span class="flag flag-warn">automatable (CISA SSVC)</span>
+    {{else if .SSVCAutomatable}}<span class="flag">not automatable (CISA SSVC)</span>{{end}}
+    {{if eq .SSVCImpact "total"}}<span class="flag">SSVC impact: total</span>{{end}}
     {{if .FixReady}}<span class="flag">fix prepared — awaiting approval</span>{{end}}
   </div>
   <ul class="facts">

@@ -61,7 +61,12 @@ type VAPTSummary struct {
 	// exploited in the wild). Kept separate from KEV so the urgent few are never diluted into
 	// the many. The engine computes it (§7); the report was dropping it on the floor.
 	Ransomware int `json:"ransomware,omitempty"`
-	FixesReady int `json:"fixes_ready"` // findings with a remediation already prepared
+	// Automatable counts findings CISA assesses an attacker can AUTOMATE (SSVC). It is the signal
+	// none of the other feeds provides: KEV is binary and covers ~1,700 CVEs, EPSS is a probability,
+	// and neither separates a vulnerability exploited by hand against one target from one that can
+	// be driven across an estate.
+	Automatable int `json:"automatable,omitempty"`
+	FixesReady  int `json:"fixes_ready"` // findings with a remediation already prepared
 	// RetestConfirmed / RetestStillPresent are the fix-verification roll-up — the "we don't just
 	// fix it, we prove it closed" differentiator (State-of-AI-in-Pentesting KF#4). Confirmed = an
 	// applied fix whose re-scan proved every claimed finding gone; StillPresent = a fix was applied
@@ -102,9 +107,16 @@ type VAPTFinding struct {
 	// Metasploit's own reliability name for the best module targeting it ("excellent"…"manual") —
 	// "an operator can run it tonight". KEVDueDate: CISA's own BOD 22-01 remediation deadline.
 	// All three are computed by the engine (§7) and were being dropped from this deliverable.
-	Ransomware bool      `json:"ransomware,omitempty"`
-	WeaponRank string    `json:"weapon_rank,omitempty"`
-	KEVDueDate time.Time `json:"kev_due_date,omitempty"`
+	Ransomware bool   `json:"ransomware,omitempty"`
+	WeaponRank string `json:"weapon_rank,omitempty"`
+	// CISA's SSVC decision points (Vulnrichment/ADP), recorded VERBATIM — we never compute an SSVC
+	// decision from them, which would need the defender's own mission and deployment context.
+	// Automatable is carried even when the answer is NO: between two findings with identical CVSS
+	// and neither on KEV, that negative is exactly what separates them.
+	SSVCExploitation string    `json:"ssvc_exploitation,omitempty"`
+	SSVCAutomatable  string    `json:"ssvc_automatable,omitempty"`
+	SSVCImpact       string    `json:"ssvc_impact,omitempty"`
+	KEVDueDate       time.Time `json:"kev_due_date,omitempty"`
 	// DiscoveredAt is when a tool actually observed this. An auditor asking "how long has this been
 	// open?" is asking a question the report otherwise cannot answer, and a continuously-regenerated
 	// document with no per-finding date reads as though everything was found today.
@@ -222,6 +234,18 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 			}
 			vf.PublicExploit = len(f.ThreatIntel.Exploits) > 0
 			vf.WeaponRank = f.ThreatIntel.WeaponRank
+			if sv := f.ThreatIntel.SSVC; sv != nil {
+				// "none" is the absence of a signal, not a finding about it — recording it would put
+				// a reassuring word on every unassessed CVE.
+				if sv.Exploitation != "" && sv.Exploitation != "none" {
+					vf.SSVCExploitation = sv.Exploitation
+				}
+				vf.SSVCAutomatable = sv.Automatable
+				vf.SSVCImpact = sv.TechnicalImpact
+				if sv.Automatable == "yes" {
+					r.Summary.Automatable++
+				}
+			}
 			if k := f.ThreatIntel.KEV; k != nil {
 				vf.Ransomware = k.Ransomware
 				vf.KEVDueDate = k.DueDate
@@ -297,6 +321,9 @@ func vaptRisk(by map[string]int) string {
 func writeSignalLines(b *strings.Builder, s VAPTSummary) {
 	if s.Ransomware > 0 {
 		fmt.Fprintf(b, "- **%d ransomware-linked** — CISA marks the CVE used in ransomware campaigns, a stronger signal than KEV listing\n", s.Ransomware)
+	}
+	if s.Automatable > 0 {
+		fmt.Fprintf(b, "- **%d automatable** — CISA assesses an attacker can automate exploitation, so these scale across an estate rather than costing effort per target\n", s.Automatable)
 	}
 	if s.RetestConfirmed > 0 || s.RetestStillPresent > 0 {
 		fmt.Fprintf(b, "- **Fix verification:** %s re-tested and confirmed closed on re-scan; %d still present after the fix\n",
@@ -452,6 +479,21 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		}
 		if f.WeaponRank != "" {
 			status += fmt.Sprintf(" · weaponized: %s (Metasploit)", f.WeaponRank)
+		}
+		if f.SSVCExploitation != "" {
+			status += fmt.Sprintf(" · **CISA SSVC exploitation: %s**", f.SSVCExploitation)
+		}
+		if f.SSVCAutomatable != "" {
+			// Stated either way — the NO is the half that discriminates between two otherwise
+			// identical findings, and dropping it would leave only the alarming case visible.
+			if f.SSVCAutomatable == "yes" {
+				status += " · **automatable (CISA SSVC)**"
+			} else {
+				status += " · not automatable (CISA SSVC)"
+			}
+		}
+		if f.SSVCImpact == "total" {
+			status += " · SSVC technical impact: total"
 		}
 		if f.PoC != "" {
 			status = "**exploitation-proven** · " + status
