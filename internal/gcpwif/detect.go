@@ -69,15 +69,31 @@ func Assess(est Estate, now time.Time) Assessment {
 	// to the provider that governs it. A binding on a pool with no GitHub provider is a
 	// different product's problem.
 	github := map[string][]Provider{}
+	// Pools this analyser did NOT assess, keyed by pool resource so a binding below can say which
+	// unassessed pool governs it.
+	unassessed := map[string]string{}
 	for _, p := range est.Providers {
 		if !p.FederatesGitHub() {
+			// Declared, not analysed. An Okta (or any other) OIDC issuer federating into GCP is a
+			// real identity transition into the project, and skipping it silently made "a workforce
+			// IdP can mint credentials here" indistinguishable from "nothing federates in". We do
+			// not judge it — the subject grammar is the issuer's, not GitHub's — but the estate must
+			// not read clean because the only thing we know how to check was absent.
+			iss := strings.TrimSpace(p.IssuerURI)
+			if iss == "" {
+				iss = "issuer not recorded"
+			}
+			unassessed[p.PoolResource()] = iss
+			a.ChecksNotRun["wif_provider:"+p.PoolResource()+"/"+p.ID] = "this pool federates " + iss +
+				", which this check does not evaluate — its providers and the service accounts they " +
+				"can impersonate were NOT assessed, so read them as unchecked rather than clean"
 			continue
 		}
 		github[p.PoolResource()] = append(github[p.PoolResource()], p)
 		a.Findings = append(a.Findings, providerFindings(id, p, now)...)
 	}
-	if len(github) == 0 {
-		return a // nothing federates GitHub; the bindings below cannot mean what we'd claim
+	if len(github) == 0 && len(unassessed) == 0 {
+		return a // no federation observed at all: nothing to assess and nothing claimed
 	}
 
 	for _, sa := range est.ServiceAccounts {
@@ -92,7 +108,15 @@ func Assess(est Estate, now time.Time) Assessment {
 				}
 				provs, governs := github[m.Pool]
 				if !governs {
-					continue // this pool has no GitHub provider — not our claim to make
+					// Not our claim to make — but if an issuer we did not assess can impersonate this
+					// service account, that is exactly the sentence a reader needs, and the previous
+					// silent skip made an impersonable SA look like an unreachable one.
+					if iss, known := unassessed[m.Pool]; known {
+						a.ChecksNotRun["wif_impersonation:"+sa.Email] = "this service account can be " +
+							"impersonated from a workload-identity pool federating " + iss + ", which " +
+							"this check does not evaluate — NOT assessed, not clean"
+					}
+					continue
 				}
 				a.Findings = append(a.Findings, bindingFindings(id, sa, b, m, provs, owned, est.ReposComplete, now)...)
 			}
