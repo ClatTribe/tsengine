@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ShieldAlert, CheckCircle2, Wrench, ArrowRight, Flame, TimerOff, CalendarClock, Skull } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Incident } from "@/lib/types";
+import type { Incident, SLABreach } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { AckButton } from "@/components/incidents/ack-button";
@@ -9,6 +9,19 @@ import { SOCScorecard } from "@/components/incidents/soc-scorecard";
 import { timeAgo, duration } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+// slaReason says why a deadline is short. Each flag's Go doc states that it exists for this — "so
+// the UI can say WHY the clock is short instead of showing an unexplained deadline", and "rather
+// than leaving a reader to assume we are being dramatic" — and none were rendered, so the badge
+// read "SLA resolve breached" with no reason at all.
+//
+// Ordered strongest-first and only one is shown: a responder needs the reason, not the derivation.
+function slaReason(b: SLABreach): string | null {
+  if (b.ransomware_accelerated) return "ransomware clock";
+  if (b.cisa_deadline) return "CISA's published date";
+  if (b.kev_accelerated) return "exploited in the wild";
+  return null;
+}
 
 // cisaDue reads the incident's CISA BOD 22-01 deadline. Returns null when there is none — most
 // incidents have no KEV CVE behind them, and a badge on every row is a badge nobody reads.
@@ -172,6 +185,16 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
           {/* Ransomware use is a strictly stronger claim than KEV listing — exploited in the wild
               versus exploited by crews who encrypt the estate. It outranks severity for ordering
               work, and the queue showed neither it nor the deadline below. */}
+          {/* The base exploitation fact. The deadline badge below follows FROM this, and the queue
+              could show the deadline without being able to state the reason for it. */}
+          {i.kev && !i.ransomware && (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-high/10 px-2 py-0.5 text-[10px] font-semibold text-high"
+              title="On CISA's Known Exploited Vulnerabilities catalogue — observed exploited in the wild"
+            >
+              <Flame className="h-2.5 w-2.5" /> known exploited
+            </span>
+          )}
           {i.ransomware && (
             <span
               className="inline-flex shrink-0 items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[10px] font-semibold text-critical"
@@ -198,6 +221,7 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
           {!resolved && i.sla_breach && (i.sla_breach.ack_breached || i.sla_breach.resolve_breached) && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-critical/10 px-2 py-0.5 text-[10px] font-semibold text-critical">
               <TimerOff className="h-2.5 w-2.5" /> SLA {i.sla_breach.resolve_breached ? "resolve" : "ack"} breached
+              {slaReason(i.sla_breach) && <span className="font-normal"> · {slaReason(i.sla_breach)}</span>}
             </span>
           )}
         </div>

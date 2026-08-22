@@ -606,6 +606,10 @@ export interface Incident {
   // exploited by crews who encrypt the estate — which is why the corpus keeps them separate and only
   // CISA's literal "Known" counts. A queue that shows neither makes the responder rank by severity
   // alone, which is the number that knows least about who is using this.
+  // The base exploitation signal. kev_due_at and ransomware were added while THIS was still
+  // undeclared, so the queue could show a CISA deadline without being able to say the CVE is
+  // known-exploited — the fact the deadline follows from.
+  kev?: boolean;
   ransomware?: boolean;
   // CISA's OWN published BOD 22-01 due date, carried verbatim as an ABSOLUTE deadline rather than a
   // window from when we opened the incident. That distinction is the point: a KEV CVE catalogued six
@@ -643,6 +647,14 @@ export interface SLABreach {
   resolve_due_at?: string;
   ack_breached: boolean;
   resolve_breached: boolean;
+  // WHY the clock is short. All three exist for this consumer — their Go docs say so in as many
+  // words ("so the UI can say WHY the clock is short instead of showing an unexplained deadline";
+  // "rather than leaving a reader to assume we are being dramatic") — and none of them were declared
+  // here, so the badge said "SLA resolve breached" and nothing else. An unexplained deadline is the
+  // thing they were added to prevent.
+  kev_accelerated?: boolean; // deadline came from CISA BOD 22-01, not the severity target
+  ransomware_accelerated?: boolean; // deadline came from the ransomware clock (stricter still)
+  cisa_deadline?: boolean; // an absolute date CISA published, not a window we derived
 }
 
 export interface MaintenanceWindow {
