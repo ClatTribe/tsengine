@@ -70,6 +70,16 @@ export interface Finding {
     epss?: { score?: number; percentile?: number } | null; // FIRST.org exploit probability
     advisories?: string[];
     exploits?: string[]; // public exploit/PoC refs (ExploitDB/Metasploit)
+    // Metasploit's own reliability rank for the best module targeting this CVE: excellent | great |
+    // good | normal | average | low | manual.
+    //
+    // It exists because "a public exploit exists" collapses two very different situations. A module
+    // ranked excellent never crashes the service and runs use/set/run — an operator who could not
+    // write the exploit can run it tonight. One ranked manual needs hand-holding and may not work at
+    // all. The corpus discriminates in practice rather than sitting at the top (live: 1,383
+    // excellent against 78 manual), and it reached the L2 digest while the human triaging the
+    // finding saw the same sentence either way.
+    weapon_rank?: string;
   } | null;
   compliance?: Record<string, string[]> | null;
   // Cloud-to-Code: a runtime cloud finding traced back to the IaC resource +

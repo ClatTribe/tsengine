@@ -18,6 +18,18 @@ const ACTION_META: Record<string, { icon: typeof Wrench; label: string }> = {
   draft_notification: { icon: FileWarning, label: "Breach disclosure draft" },
 };
 
+// Metasploit's own scale, in the responder's terms. Their words, not a grading we invented on top
+// of their numbers — the ranks mean specific things to the people who publish them.
+const WEAPON_RANK: Record<string, string> = {
+  excellent: "runs reliably and will not crash the service",
+  great: "reliable against a known target",
+  good: "works against a common default configuration",
+  normal: "works, but is version-specific",
+  average: "unreliable",
+  low: "rarely works",
+  manual: "needs hand-holding and may not work",
+};
+
 export default async function FindingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [f, reviews, approvals] = await Promise.all([api.finding(id), api.reviews(), api.approvals()]);
@@ -29,6 +41,10 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
   const cvssVector = ti?.cvss_vector || null;
   const epssPct = typeof ti?.epss?.score === "number" ? Math.round(ti.epss.score * 100) : null;
   const publicExploit = Array.isArray(ti?.exploits) && ti.exploits.length > 0;
+  // "A public exploit exists" is where this used to stop, and it reads the same for a module that
+  // runs reliably and one that barely works. Metasploit's own rank is the difference between "someone
+  // capable could" and "anyone can, tonight" — the thing a responder is actually deciding on.
+  const weaponLabel = WEAPON_RANK[String(ti?.weapon_rank ?? "").toLowerCase()] ?? null;
   const hasThreatIntel = kev || cvss !== null || epssPct !== null || publicExploit;
   const controls = Object.entries(f.compliance ?? {}).filter(([, v]) => Array.isArray(v) && v.length > 0);
   const hasOpenReview = reviews.some((r) => r.subject_id === id && r.status === "open");
@@ -77,7 +93,11 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
               </span>
             )}
             {publicExploit && (
-              <span className="font-medium text-high">Public exploit available (PoC published)</span>
+              <span className="font-medium text-high">
+                {weaponLabel
+                  ? `Weaponized — Metasploit module, ${weaponLabel}`
+                  : "Public exploit available (PoC published)"}
+              </span>
             )}
           </div>
         </div>
