@@ -136,3 +136,18 @@ func TestRenderDefenseLedger_NoPhantomLiftForAnArmThatNeverRan(t *testing.T) {
 		t.Errorf("the missing arm must be named rather than scored:\n%s", out)
 	}
 }
+
+// The arm that DID run still needs its pass context. Without it the row read "substrate 100%" for a
+// scenario the substrate had failed — the rate-without-pass problem fixed in the per-mode tables,
+// surviving in the one branch that takes a different path.
+func TestRenderDefenseLedger_NotRunRowStillCarriesPassContext(t *testing.T) {
+	out := RenderDefenseLedgerMarkdown([]DefenseLedgerEntry{
+		entry("substrate", "only-substrate-ran", false, 1.0, 1, 0), // rate 100%, never passed
+		entry("substrate", "shared", true, 1.0, 1, 1),
+		entry("agent", "shared", true, 1.0, 1, 1),
+	})
+	if !strings.Contains(out, "substrate has never passed it") {
+		t.Errorf("a 100%% rate for a scenario the substrate has never passed must say so, even on the "+
+			"not-run row:\n%s", out)
+	}
+}

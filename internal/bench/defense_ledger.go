@@ -208,8 +208,17 @@ func RenderDefenseLedgerMarkdown(entries []DefenseLedgerEntry) string {
 				if sub.RunsPer[id] == 0 {
 					missing = "substrate"
 				}
-				fmt.Fprintf(&b, "| %s | %s | %s | — (%s has not run this scenario) |\n",
-					id, rateCell(sub, id), rateCell(agt, id), missing)
+				// The arm that DID run still needs its pass context. Without this the row read
+				// "substrate 100%" for a scenario the substrate had failed — the rate-without-pass
+				// problem this file just fixed in the per-mode tables, surviving in the one branch
+				// that takes a different path.
+				note := fmt.Sprintf("— (%s has not run this scenario)", missing)
+				if ran := sub; missing == "agent" && ran.RunsPer[id] > 0 && ran.Passes[id] == 0 {
+					note += " · substrate has never passed it"
+				} else if missing == "substrate" && agt.RunsPer[id] > 0 && agt.Passes[id] == 0 {
+					note += " · agent has never passed it"
+				}
+				fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", id, rateCell(sub, id), rateCell(agt, id), note)
 				continue
 			}
 			s, a := sub.BestRate[id], agt.BestRate[id]
