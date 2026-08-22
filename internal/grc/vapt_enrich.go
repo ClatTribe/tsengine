@@ -148,16 +148,63 @@ func narrativeSummary(r *VAPTReport) string {
 	default:
 		lead = "no critical or high-severity issues were found; the remaining items are lower-risk hardening opportunities"
 	}
-	return fmt.Sprintf(
-		"This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**.%s %s. Of these, %d are tool-confirmed (corroborated or re-verified)%s and %d are unconfirmed single-tool pattern matches to validate before action — the latter are listed after the confirmed findings of the same severity and labelled inline, so no false positive is presented as a proven result. A remediation is already prepared for %d. Each finding below is grounded in the scanner evidence that proves it, mapped to its CWE and OWASP Top 10 category, with a recommended fix.",
-		r.TenantName, s.Total, s.RiskRating, untestedClause(r), capitalize(lead), s.Verified, kevClause(s.KEV), s.Unconfirmed, s.FixesReady)
+	// Built clause-by-clause rather than one big format string, because each clause has to agree
+	// in number with a count that is only known at render time. The old single-string version read
+	// "1 are unconfirmed single-tool pattern matches" for a singleton, and spliced the KEV clause
+	// mid-sentence producing a two-"and" run-on — both on the executive summary a customer forwards.
+	var b strings.Builder
+	fmt.Fprintf(&b, "This assessment of %s identified **%d finding(s)** across the monitored assets, giving an overall risk rating of **%s**.%s %s.",
+		r.TenantName, s.Total, s.RiskRating, untestedClause(r), capitalize(lead))
+
+	fmt.Fprintf(&b, " Of these, %s", numClause(s.Verified,
+		"is tool-confirmed (corroborated or re-verified)",
+		"are tool-confirmed (corroborated or re-verified)"))
+	if s.Unconfirmed > 0 {
+		fmt.Fprintf(&b, " and %s — the latter %s listed after the confirmed findings of the same severity and labelled inline, so no false positive is presented as a proven result",
+			numClause(s.Unconfirmed,
+				"is an unconfirmed single-tool pattern match to validate before action",
+				"are unconfirmed single-tool pattern matches to validate before action"),
+			verbIsAre(s.Unconfirmed))
+	}
+	b.WriteString(".")
+
+	if sentence := kevSentence(s.KEV); sentence != "" {
+		fmt.Fprintf(&b, " %s.", sentence)
+	}
+	if s.FixesReady > 0 {
+		fmt.Fprintf(&b, " %s.", numClause(s.FixesReady,
+			"has a remediation already prepared", "have a remediation already prepared"))
+	}
+	return b.String()
 }
 
-func kevClause(kev int) string {
-	if kev == 0 {
-		return ""
+// numClause renders "1 <singular>" or "N <plural>" so a count and its verb/noun always agree.
+func numClause(n int, singular, plural string) string {
+	if n == 1 {
+		return "1 " + singular
 	}
-	return fmt.Sprintf(", and %d is listed in CISA KEV as actively exploited in the wild", kev)
+	return fmt.Sprintf("%d %s", n, plural)
+}
+
+// verbIsAre picks the copula for a count.
+func verbIsAre(n int) string {
+	if n == 1 {
+		return "is"
+	}
+	return "are"
+}
+
+// kevSentence is the KEV clause as its own grammatical sentence (was spliced mid-sentence before,
+// which broke the surrounding prose). Empty when nothing is KEV-listed.
+func kevSentence(kev int) string {
+	switch {
+	case kev == 0:
+		return ""
+	case kev == 1:
+		return "1 of these is listed in CISA KEV as actively exploited in the wild"
+	default:
+		return fmt.Sprintf("%d of these are listed in CISA KEV as actively exploited in the wild", kev)
+	}
 }
 
 func capitalize(s string) string {
@@ -210,6 +257,6 @@ func untestedClause(r *VAPTReport) string {
 	if len(r.Untested) == 0 {
 		return ""
 	}
-	return fmt.Sprintf(" %s %s NOT assessed and is not covered by this rating.",
-		joinTargets(r.Untested), verbFor(len(r.Untested)))
+	return fmt.Sprintf(" %s %s NOT been assessed and %s not covered by this rating.",
+		joinTargets(r.Untested), verbFor(len(r.Untested)), verbIsAre(len(r.Untested)))
 }
