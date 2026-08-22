@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // The whole point of this wiring: a trust policy that lets ANY repository assume an admin role must
@@ -191,8 +193,14 @@ func TestCIIdentityAssess_CarriesTheUnassessedFederation(t *testing.T) {
       "trust_policy":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRoleWithSAML\",\"Principal\":{\"Federated\":\"arn:aws:iam::123456789012:saml-provider/Okta\"}}]}"}]}`)
 
 	findings, notAssessed := ciIdentityAssess("aws", body)
-	if len(findings) != 0 {
-		t.Errorf("we do not model SAML, so there should be no verdict: %+v", findings)
+	// A samltrust finding is EXPECTED now — the audience is unconstrained — and that is the point of
+	// the assertion below: assessing the one decidable case must not silence the declaration about
+	// everything else the SAML grammar can express. What must NOT appear is a ghoidc verdict, which
+	// would mean the GitHub analyser had judged a SAML trust it does not model.
+	for _, f := range findings {
+		if strings.HasPrefix(f.RuleID, "ghoidc::") {
+			t.Errorf("the GitHub analyser judged a SAML trust it does not model: %+v", f)
+		}
 	}
 	if len(notAssessed) == 0 {
 		t.Fatal("the Okta federation was dropped — the estate now reads as though nothing federates in")
@@ -221,5 +229,48 @@ func TestCIIdentityAssess_GCPCarriesTheUnassessedIssuer(t *testing.T) {
 	}
 	if !strings.Contains(joined, "acme.okta.com") {
 		t.Errorf("the declaration must name the issuer: %q", joined)
+	}
+}
+
+// The Okta trust that was previously only DECLARED is now a FINDING where it is decidable.
+//
+// Tested at ciIdentityAssess — the entry point the ingest calls — because three ticks running,
+// mutating the wiring caught tests that only exercised the assessor.
+func TestCIIdentityAssess_SAMLUnconstrainedAudienceBecomesAFinding(t *testing.T) {
+	body := []byte(`{"account_id":"123456789012","roles":[{
+      "arn":"arn:aws:iam::123456789012:role/OktaAdmin","name":"OktaAdmin","admin":true,
+      "trust_policy":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRoleWithSAML\",\"Principal\":{\"Federated\":\"arn:aws:iam::123456789012:saml-provider/Okta\"}}]}"}]}`)
+
+	findings, notAssessed := ciIdentityAssess("aws", body)
+	var samlFinding bool
+	for _, f := range findings {
+		if strings.HasPrefix(f.RuleID, "samltrust::") {
+			samlFinding = true
+			if f.Severity != types.SeverityCritical {
+				t.Errorf("an admin role open to any assertion audience should be critical, got %q", f.Severity)
+			}
+		}
+	}
+	if !samlFinding {
+		t.Fatalf("the SAML trust produced no finding at the ingest: %+v", findings)
+	}
+	// The declaration stays too: we assessed the audience, not the whole federation.
+	if len(notAssessed) == 0 {
+		t.Error("assessing one decidable case must not silence the declaration about the rest")
+	}
+}
+
+// A properly constrained SAML trust yields no finding, so the check is not simply alarming on every
+// federated role.
+func TestCIIdentityAssess_ConstrainedSAMLTrustIsClean(t *testing.T) {
+	body := []byte(`{"account_id":"1","roles":[{
+      "arn":"arn:aws:iam::1:role/Okta","name":"Okta","admin":true,
+      "trust_policy":"{\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRoleWithSAML\",\"Principal\":{\"Federated\":\"arn:aws:iam::1:saml-provider/Okta\"},\"Condition\":{\"StringEquals\":{\"SAML:aud\":\"https://signin.aws.amazon.com/saml\"}}}]}"}]}`)
+
+	findings, _ := ciIdentityAssess("aws", body)
+	for _, f := range findings {
+		if strings.HasPrefix(f.RuleID, "samltrust::") {
+			t.Errorf("a constrained trust was reported: %+v", f)
+		}
 	}
 }
