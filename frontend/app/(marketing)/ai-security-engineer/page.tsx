@@ -3,6 +3,7 @@ import { FeatureIcon } from "@/components/brand/feature-icon";
 import { pageMeta } from "@/lib/seo";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { AgenticActions } from "@/components/marketing/agentic-actions";
+import { AttackPathHero } from "@/components/marketing/attack-path-hero";
 import {
   Bot, ArrowRight, ScanLine, Filter, Wrench, FileCheck2, Fingerprint,
   UserCheck, ShieldCheck, GitPullRequest, Power, ScrollText, CheckCircle2, XCircle, Minus,
@@ -71,6 +72,19 @@ export default function AISecurityEngineer() {
             </Link>
           </div>
           <p className="mt-4 text-xs text-faint">OSS-grade detection · AI triage &amp; fixes · human-in-the-loop · signed</p>
+        </div>
+
+        {/* The cross-surface attack path, rehoused.
+            This graph was the homepage hero for a long time, where it asked a founder with a blocked
+            deal to parse a node graph before they felt anything. It belongs HERE — a reader on this
+            page has clicked through to the mechanics and wants exactly this: how a leaked key in code
+            and a stolen SaaS login become one route to cloud root, and where the engineer cuts it. */}
+        <div className="relative mx-auto max-w-3xl px-5 pb-16">
+          <AttackPathHero />
+          <p className="mt-3 text-center text-xs leading-relaxed text-faint">
+            This is the reasoning the engineer does across your estate — one route, not three
+            unrelated tickets.
+          </p>
         </div>
       </section>
 

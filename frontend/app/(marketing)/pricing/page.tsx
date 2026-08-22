@@ -255,7 +255,7 @@ export default function Pricing() {
           <div className="absolute -top-24 left-1/2 h-[24rem] w-[34rem] -translate-x-1/2 rounded-full bg-accent/15 blur-[110px] animate-aurora" />
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(16,24,40,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(16,24,40,0.025)_1px,transparent_1px)] bg-[size:44px_44px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
         </div>
-        <Reveal as="div" className="relative mx-auto max-w-3xl px-5 pb-6 pt-20 text-center">
+        <Reveal as="div" className="relative mx-auto max-w-3xl px-5 pb-4 pt-14 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs font-medium text-muted shadow-sm backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-accent" /> Built for Indian teams · priced in ₹
           </span>
@@ -265,24 +265,28 @@ export default function Pricing() {
               and aimode.go resolves availability as `lim.AutonomousPentest || ownKey`, so a customer with
               their own API key runs BOTH agents on Free. The page was therefore telling its highest-intent
               visitor that the thing they came for needs a sales call. */}
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">The AI agents aren&apos;t the premium. They&apos;re the product.</h1>
+          {/* Someone who clicked "Pricing" asked exactly one question, and the answer used to be
+              below the fold: this hero was a positioning line ("The AI agents aren't the premium.
+              They're the product.") followed by 60 words explaining tier architecture, with the
+              first number ~700px further down. The headline now carries a price, the paragraph is
+              one line, and the tier cards start near the fold. */}
+          <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+            Start free. Add the AI engineer for ₹24,999&nbsp;/&nbsp;month.
+          </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            Free to see your real posture — and if you bring your own LLM key, <strong className="font-semibold text-ink">both agents run on it</strong>, at your model cost, with no upgrade.{" "}
-            <strong className="font-semibold text-ink">Core</strong> funds the AI Security Engineer on our side.{" "}
-            <strong className="font-semibold text-ink">Core + Pentest</strong> adds the AI Pentester and the signed VAPT
-            report a customer&apos;s security review asks for. The service model — you run it, we run it, or your MSP
-            does — is yours to pick.
+            The scanning engine is free forever. Bring your own AI key and both agents run on it at
+            your cost, with no upgrade — or let us run them.
           </p>
           {/* The pricing spine in customer terms: deterministic + ML-based scanning on every tier, both AI
               agents reachable from Free via your own key, and a named human accountable. Personas cross-link out. */}
-          <div className="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs">
-            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Deterministic + ML scanning <span className="text-faint">· every tier</span></span>
+          <div className="mx-auto mt-5 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs">
+            <span className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink">Scanning engine <span className="text-faint">· free, every tier</span></span>
             <span className="text-faint">+</span>
             <Link href="/ai-security-engineer" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Security Engineer <span className="text-faint">· Core, or your key on Free</span></Link>
             <span className="text-faint">+</span>
             <Link href="/ai-pentest" className="rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-ink transition hover:border-accent/50 hover:text-accent">AI Pentester <span className="text-faint">· + Pentest, or your key on Free</span></Link>
             <span className="text-faint">+</span>
-            <span className="rounded-md border border-dashed border-border px-2.5 py-1 font-medium text-muted">a named human (HITL)</span>
+            <span className="rounded-md border border-dashed border-border px-2.5 py-1 font-medium text-muted">a named human who signs</span>
           </div>
         </Reveal>
       </section>

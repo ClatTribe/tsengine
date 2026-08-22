@@ -36,6 +36,13 @@ export function Prioritize() {
             Every raw alert runs through the same funnel a senior engineer would — live, on every scan. What&apos;s
             left is the short list that actually matters, in order.
           </p>
+          {/* The caveat used to sit UNDER the funnel in 12px faint text, after a reader had already
+              taken six large numerals as measured data. The honesty was there; the visual weight
+              contradicted it. Labelling the figures before they are read matches how the hero
+              already marks its attack path ("EXAMPLE · …"). */}
+          <div className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-faint">
+            Example figures · your estate will differ
+          </div>
         </Reveal>
 
         <Reveal delay={80} className="overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -100,8 +107,10 @@ export function Prioritize() {
         </Reveal>
 
         <p className="mt-5 text-center text-xs text-faint">
-          Illustrative funnel — your numbers vary. The mechanisms are real: dedup into one confirmed issue ·
-          duplicate alerts collapse into one issue · known false alarms are dropped · what attackers are actively exploiting ranks first · anything near customer data, or already being probed, jumps the queue.
+          The numbers above are an example; the mechanisms are real and run on every scan — duplicate
+          alerts collapse into one confirmed issue · known false alarms are dropped · what attackers
+          are actively exploiting ranks first · anything near customer data, or already being probed,
+          jumps the queue.
         </p>
       </div>
     </div>

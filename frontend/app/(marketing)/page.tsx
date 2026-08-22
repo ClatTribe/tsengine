@@ -5,7 +5,7 @@ import {
   Activity, ChevronDown, GitBranch, XCircle, Minus, Wallet, Crosshair,
 } from "lucide-react";
 import { ProviderIcon } from "@/components/brand/provider-icon";
-import { AttackPathHero } from "@/components/marketing/attack-path-hero";
+import { SecurityReviewHero } from "@/components/marketing/security-review-hero";
 import { VerificationPromise } from "@/components/marketing/verification-promise";
 import { Reveal } from "@/components/marketing/reveal";
 import { TrustBar } from "@/components/marketing/trust-bar";
@@ -115,9 +115,12 @@ export default function Landing() {
               <p className="mt-4 text-xs text-faint">No credit card · You approve every change</p>
             </div>
 
-            {/* the cross-surface attack path — code + SaaS bridge to cloud root (the wedge, visualized) */}
+            {/* The outcome, not the mechanism. The cloud-IAM attack-path graph that used to sit here
+                is the engineer's picture — it asks a founder to parse a node graph before they feel
+                anything. It now lives on /ai-security-engineer, where the reader has opted into the
+                mechanics; the hero shows the review clearing and the report they can send back. */}
             <div>
-              <AttackPathHero />
+              <SecurityReviewHero />
             </div>
           </div>
 
@@ -195,12 +198,14 @@ export default function Landing() {
         <div className="border-t border-border">
 
         <div className="mx-auto max-w-5xl px-5 py-16">
-          <Reveal className="mx-auto mb-10 max-w-2xl text-center">
-            <span className="text-xs font-semibold uppercase tracking-wider text-accent">The difference</span>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">
-              Most tools stop at the finding. TensorShield ships the fix.
-            </h2>
-            <p className="mt-3 text-base leading-relaxed text-muted">
+          <Reveal className="mb-10 grid gap-x-10 gap-y-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:items-end">
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-accent">The difference</span>
+              <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
+                Most tools stop at the finding. TensorShield ships the fix.
+              </h2>
+            </div>
+            <p className="text-base leading-relaxed text-muted md:pb-1">
               A dashboard full of risks is still your problem to solve. TensorShield prepares the actual remediation —
               and applies it the moment you approve.
             </p>
@@ -415,14 +420,16 @@ function TwoAgents() {
   return (
     <div>
       <div>
-        <Reveal className="mx-auto mb-10 max-w-2xl text-center">
+        <Reveal className="mb-10 grid gap-x-10 gap-y-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:items-end">
           {/* Was also "What you get" — the same eyebrow the stack pipeline directly above already
               uses for its outcomes column. Harmless when the two sat in different sections; inside
               one band it reads as the page repeating itself. The pipeline keeps the outcome
               framing, these cards name the agents. */}
-          <div className="text-xs font-medium uppercase tracking-wider text-faint">The two agents</div>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Two AI teammates, one human in charge</h2>
-          <p className="mt-3 text-base leading-relaxed text-muted">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wider text-faint">The two agents</div>
+            <h2 className="mt-2 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Two AI teammates, one human in charge</h2>
+          </div>
+          <p className="text-base leading-relaxed text-muted md:pb-1">
             Not a dashboard you have to staff. Two agents that do the work a security hire would, on the
             scanning engine underneath — with you signing off on anything that matters.
           </p>
@@ -534,6 +541,38 @@ function SolutionsRouter() {
             </Link>
           </div>
         ))}
+      </Reveal>
+
+      {/* FREE TOOLS, surfaced.
+          These three are the best top-of-funnel assets on the site — ungated, instantly useful, and
+          exactly what a visitor with a blocked deal wants before they will consider signing up. They
+          lived behind a nav dropdown and one small hero link. Placed here rather than in a section of
+          their own: someone who just answered "what brought you here?" and did not see themselves in
+          a lane still has a reason to stay. */}
+      <Reveal delay={140} className="mt-8 rounded-2xl border border-border bg-surface p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-ink">Not ready to sign up? Use these anyway.</div>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              Free, no account, no card. They are useful whether or not you ever buy anything.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { href: "/scan", label: "Scan your domain" },
+              { href: "/soc2-readiness", label: "SOC 2 readiness check" },
+              { href: "/sample-report", label: "See a real VAPT report" },
+            ].map((t) => (
+              <Link
+                key={t.href}
+                href={t.href}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent-soft px-3.5 py-2 text-sm font-semibold text-accent transition hover:border-accent/60"
+              >
+                {t.label} <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            ))}
+          </div>
+        </div>
       </Reveal>
     </section>
   );
