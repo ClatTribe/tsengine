@@ -683,6 +683,8 @@ POST /replay
 â { "replay_id": "uuid", "findings": [...] }
 ```
 
+**Two doors, both now enriched (Â§11).** `platformapi.handleReplay` (the tenant path) has always run `l15.Enrich`; `internal/replay` (the CLI/standalone engine, mounted at `/replay` by `internal/server`) returned RAW tool output until 2026-08-22 â so the same "investigate deeper" action produced an annotated finding through one door and a bare one through the other, and the bare one went to the security engineer driving the engine directly, who is exactly the audience Â§2.1 says prioritises by exploited-in-the-wild. **The append below is still aspirational for the CLI door**: it returns findings in the response and appends to no scan file. arch.md now says so rather than describing the intent as the behaviour.
+
 Replay output appends to the original scan's `findings_raw` + `findings_enriched` with `discovery_method.replay_of: <replay_id>`. Audit-trail preserved.
 
 Required for two use cases:

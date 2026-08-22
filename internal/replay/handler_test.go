@@ -271,3 +271,47 @@ func TestHTTPHandler_Success(t *testing.T) {
 		t.Error("missing replay_id")
 	}
 }
+
+// A replayed finding must arrive enriched, like one from any other door (§11).
+//
+// This path returned raw tool output while the platform's replay handler enriched, so the same
+// "investigate deeper" action produced an annotated finding through one door and a bare one through
+// the other — and the bare one went to the security engineer driving the engine directly, who is
+// exactly the audience that prioritises by exploited-in-the-wild.
+func TestReplay_FindingsAreEnriched(t *testing.T) {
+	dir := t.TempDir()
+	writeScan(t, dir, "scan-enrich", freshScan())
+
+	disp := &mockDispatcher{
+		expectTool: "grype",
+		result: tool.Result{
+			Findings: []types.SandboxEmittedFinding{{
+				RuleID:   "grype::CVE-2021-44228",
+				Tool:     "grype",
+				Severity: types.SeverityHigh,
+				Endpoint: "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1",
+				Title:    "Log4Shell",
+			}},
+		},
+	}
+	resp, err := Replay(context.Background(), Request{
+		ScanID: "scan-enrich", Tool: "grype", Target: "img",
+	}, dir, &mockSpawner{disp: disp})
+	if err != nil {
+		t.Fatalf("Replay: %v", err)
+	}
+	if len(resp.Findings) != 1 {
+		t.Fatalf("expected one finding, got %d", len(resp.Findings))
+	}
+	f := resp.Findings[0]
+	// The chain sets a verification status on every finding it processes, so a finding that skipped
+	// it carries the zero value. This asserts the CHAIN RAN without depending on which corpus is
+	// present — whether this CVE is in the embedded snapshot is not the point.
+	if f.VerificationStatus == "" {
+		t.Error("the finding carries no verification status — the L1.5 chain did not run on it")
+	}
+	// The provenance the replay path adds must survive the chain.
+	if f.DiscoveryMethod == nil || f.DiscoveryMethod.ReplayOf == "" {
+		t.Errorf("replay provenance was lost through enrichment: %+v", f.DiscoveryMethod)
+	}
+}

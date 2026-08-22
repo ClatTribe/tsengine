@@ -405,16 +405,25 @@ The propagation is best-effort — any failure during re-emission is logged + sw
 
 See CLAUDE.md §9 for the request/response spec. The architectural shape:
 
+There are TWO doors, and they are not the same code. The doc described one and attributed the
+other's behaviour to it.
+
 ```
-webappsec UI "investigate" button
-   ↓ HTTP POST tsengine:/replay
-internal/replay handler
-   ↓ resolves scan_id → corpus pin + sandbox image digest
-   ↓ spawns or reuses sandbox container (same digest)
-   ↓ dispatches via internal/sandbox.Client → tool-server /execute
-   ↓ findings flow through standard L1.5 chain
-   ↓ appended to original scan's findings_raw + findings_enriched
-   ↓ replay_id annotation on each new finding
+PLATFORM (a tenant clicks "investigate deeper")
+   ↓ POST /v1/replay → platformapi.handleReplay
+   ↓ re-runs the tool through the tenant's scanner (ToolReplayer)
+   ↓ l15.Enrich  → the same chain as every other door
+   ↓ optionally stored (?store) so it joins issues/incidents like any finding
+   ↓ a tool that returns nothing says so, and says it clears only THESE arguments
+
+CLI / standalone engine (a security engineer driving tsengine directly)
+   ↓ POST /replay (internal/server, bearer-token gated) → internal/replay.Replay
+   ↓ resolves scan_id → the original scan's corpus pin + sandbox image digest
+   ↓ spawns a sandbox on that SAME digest, dispatches via internal/sandbox.Client
+   ↓ l15.Enrich  → added 2026-08-22; this path returned raw tool output until then
+   ↓ discovery_method.replay_of on each finding
+   ↓ RETURNED in the response. It does not append to the original scan's
+     findings_raw/findings_enriched — §9 describes that append and no code does it.
 ```
 
 L2 reaches the same API via `dispatch_l2_probe(tool=..., args=...)` — no separate codepath.
