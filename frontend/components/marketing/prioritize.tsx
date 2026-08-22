@@ -25,7 +25,7 @@ export function Prioritize() {
   }, []);
 
   return (
-    <section className="border-y border-border bg-surface">
+    <div>
       <div className="mx-auto max-w-6xl px-5 py-16">
         <Reveal className="mx-auto mb-9 max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">Less noise</span>
@@ -104,6 +104,6 @@ export function Prioritize() {
           duplicate alerts collapse into one issue · known false alarms are dropped · what attackers are actively exploiting ranks first · anything near customer data, or already being probed, jumps the queue.
         </p>
       </div>
-    </section>
+    </div>
   );
 }

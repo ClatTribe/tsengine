@@ -21,7 +21,7 @@ const OSS = [
 
 export function TrustBar() {
   return (
-    <section className="border-b border-border bg-bg">
+    <div>
       <div className="mx-auto max-w-6xl px-5 py-14">
         <Reveal className="text-center">
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Why teams trust TensorShield</h2>
@@ -61,6 +61,6 @@ export function TrustBar() {
           ))}
         </div>
       </div>
-    </section>
+    </div>
   );
 }

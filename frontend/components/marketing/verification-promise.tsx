@@ -14,7 +14,7 @@ import { ShieldCheck, XCircle, CheckCircle2 } from "lucide-react";
 // product would fail its own tests otherwise, not because marketing says so.
 export function VerificationPromise() {
   return (
-    <section className="border-y border-border bg-surface">
+    <div>
       <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
         <div className="grid items-start gap-10 lg:grid-cols-[1.05fr_.95fr]">
           <div>
@@ -78,7 +78,7 @@ export function VerificationPromise() {
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
