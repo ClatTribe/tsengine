@@ -138,6 +138,17 @@ type Input struct {
 	// Without it, a row reported "Checked by nuclei, hydra, naabu — nothing open" about an asset the
 	// engine had never touched, while the coverage endpoint said scanned:false about the same asset.
 	Scanned map[string]bool
+	// FailedTools names tools that were DISPATCHED AND PRODUCED NO RESULT on the most recent scan of
+	// an asset — a per-tool timeout, a crash, or a binary missing from the sandbox image.
+	//
+	// Scanned answers "did the engine run against this asset type", which is one level too coarse for
+	// a row that names the tools it was checked by. An engagement completes and marks the type
+	// scanned even when the specific tool answering a row never ran, and the row then reads "Checked
+	// by nmap, nuclei, naabu — nothing open" while naming a tool that produced nothing.
+	//
+	// This is the same claim the Scanned field was added to stop, one level finer: there it was tools
+	// asserted about assets the engine never touched, here it is tools asserted about assets it did.
+	FailedTools map[string]bool
 	// FindingKeys are `tool` and `rule_id` values from the tenant's live findings, used to detect gaps.
 	FindingTools map[string]int
 	FindingRules map[string]int
@@ -245,6 +256,16 @@ func resolve(it Item, in Input) Result {
 		if !hasAny(it.Needs, in.Scanned, in.Scanned) {
 			r.Status = StatusNotChecked
 			r.Detail = "Connected, but not scanned yet — this is checked on the first scan."
+			break
+		}
+		// A named tool that did not run cannot be cited as having checked anything. Same rule as
+		// above, applied to the tools rather than the asset: this row's whole value is that it names
+		// what established the tick, and a tick resting on a tool that produced nothing is worth less
+		// than no tick at all.
+		if failed := failedAmong(it.Tools, in.FailedTools); len(failed) > 0 {
+			r.Status = StatusNotChecked
+			r.Detail = "Scanned, but " + strings.Join(failed, ", ") + " did not run on the last scan — " +
+				"this row cannot be answered until it does."
 			break
 		}
 		r.Status = StatusPass
@@ -377,4 +398,16 @@ func Summarize(stage Tier, rs []Result) Summary {
 		}
 	}
 	return s
+}
+
+// failedAmong returns the item's tools that did not run, in the item's own order so the sentence
+// reads the way the row does.
+func failedAmong(tools []string, failed map[string]bool) []string {
+	var out []string
+	for _, t := range tools {
+		if failed[t] {
+			out = append(out, t)
+		}
+	}
+	return out
 }

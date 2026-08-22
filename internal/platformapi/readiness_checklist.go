@@ -75,6 +75,7 @@ func (d Deps) readinessInput(ctx context.Context, tenantID string, t platform.Te
 		FindingTools: map[string]int{},
 		FindingRules: map[string]int{},
 		Capabilities: map[string]bool{},
+		FailedTools:  map[string]bool{},
 		Attestations: map[string]ctoreadiness.Attestation{},
 	}
 
@@ -100,6 +101,9 @@ func (d Deps) readinessInput(ctx context.Context, tenantID string, t platform.Te
 	// evidence that the engine ran against an asset; the asset's type — and the connection that
 	// delivered it — are then things we can honestly say were checked. Without this the checklist
 	// claimed specific tools had run on assets the engine had never touched.
+	// The LATEST completed engagement per asset, because tool failures are the point of this pass and
+	// a transient failure two weeks ago must not void a row the last scan answered fine.
+	latestEng := map[string]platform.Engagement{}
 	if engs, err := d.Store.ListEngagements(ctx, tenantID); err == nil {
 		for _, e := range engs {
 			if e.CompletedAt.IsZero() {
@@ -113,6 +117,16 @@ func (d Deps) readinessInput(ctx context.Context, tenantID string, t platform.Te
 			if k := connKindByID[a.ConnectionID]; k != "" {
 				in.Scanned[k] = true
 			}
+			if prev, seen := latestEng[e.AssetID]; !seen || e.CompletedAt.After(prev.CompletedAt) {
+				latestEng[e.AssetID] = e
+			}
+		}
+	}
+	// A tool that was dispatched and produced nothing cannot be cited as having checked anything —
+	// Scanned answers "did the engine run", which is one level too coarse for a row that names tools.
+	for _, e := range latestEng {
+		for _, tf := range e.ToolsFailed {
+			in.FailedTools[tf.Tool] = true
 		}
 	}
 	if fs, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{}); err == nil {
