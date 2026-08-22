@@ -572,7 +572,10 @@ a SEPARATE file (never `Entry` fields — the dashboard `corpus` block stays byt
 best-effort (`RefreshOptions.ExploitIntelURL`, `tsengine corpus refresh --exploit-intel`; a failure
 never blocks the KEV+EPSS refresh), and GLOBAL world-state like the rest of the corpus. It is WIRED to
 the L2 ModeDeep D-agent: `pentest.ExploitIntelForFinding` (installed by `platformapi`) feeds
-`RenderExploitContext` into `specPrompt` as reference material to ADAPT. Grounded §10 — the record is
+`RenderExploitContext` into `specPrompt` as reference material to ADAPT. In the running platform the
+sidecar is built by `scheduler.CorpusRefresher` when `TSENGINE_EXPLOIT_INTEL=1` (or
+`TSENGINE_EXPLOIT_INTEL_URL` pins a tarball) — off by default, one env var to fuel it; without it the
+offensive face is dormant and the checker reads only the defender face. Grounded §10 — the record is
 INPUT TO THE PROPOSE STEP ONLY: the skeleton is a payload the model adapts and the matcher is framed as
 a fingerprint (NOT the proof), while `specEmbedsCanary` + `DemoFromSpec` still dispose, so a wrong/stale
 record widens what the agent TRIES, never what it marks true (zero new FP surface). Phases 2/3

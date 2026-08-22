@@ -29,6 +29,10 @@
 //	                           than falling back to a library the operator did not choose.
 //	TSENGINE_THREAT_INTEL_CORPUS  path to the GLOBAL KEV/EPSS corpus file (else embedded snapshot)
 //	TSENGINE_CORPUS_REFRESH_INTERVAL  global threat-intel refresh cadence (default 24h; 0 disables)
+//	TSENGINE_EXPLOIT_INTEL     1 → also build the offensive-face exploit-intel sidecar (ADR 0019)
+//	                           from the nuclei-templates archive on each corpus refresh (opt-in; the
+//	                           L2 pentester's bounded exploitation-checker reads it). Off by default.
+//	TSENGINE_EXPLOIT_INTEL_URL pin a tag/commit nuclei-templates tarball for the sidecar (reproducible)
 //	TSENGINE_SLACK_WEBHOOK      Slack Incoming Webhook for approval notifications
 //	TSENGINE_SLACK_SIGNING_SECRET  verifies Slack approve/reject button callbacks
 //	TSENGINE_ACTIVE_EXPLOIT    1 → wire the live active-exploitation Prober (still
@@ -70,6 +74,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
 	"github.com/ClatTribe/tsengine/internal/console"
+	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/detectionskill"
 	"github.com/ClatTribe/tsengine/internal/email"
@@ -579,8 +584,9 @@ func main() {
 	// clock, so "continuously updating" intel doesn't depend on an external ops cron. Disabled unless
 	// TSENGINE_THREAT_INTEL_CORPUS points at a corpus file (else the engine uses its embedded snapshot).
 	corpusRefresher := &scheduler.CorpusRefresher{
-		DataPath: os.Getenv("TSENGINE_THREAT_INTEL_CORPUS"),
-		Interval: corpusRefreshInterval(),
+		DataPath:        os.Getenv("TSENGINE_THREAT_INTEL_CORPUS"),
+		Interval:        corpusRefreshInterval(),
+		ExploitIntelURL: exploitIntelURL(), // ADR 0019: opt-in offensive-face sidecar for the L2 pentester
 	}
 	go func() { _ = corpusRefresher.Run(monitorCtx) }()
 
@@ -799,6 +805,22 @@ func monitorInterval() time.Duration {
 // corpusRefreshInterval is the GLOBAL threat-intel refresh cadence (TSENGINE_CORPUS_REFRESH_INTERVAL,
 // e.g. "24h"). Default 24h (KEV/EPSS update at most daily); "0" disables the in-process refresher
 // (rely on an external `tsengine corpus refresh` cron instead).
+// exploitIntelURL returns the nuclei-templates archive URL used to build the OFFENSIVE-face
+// exploit-intel sidecar (ADR 0019), or "" to leave it unbuilt (the default — the offensive seam stays
+// dormant). Opt IN with TSENGINE_EXPLOIT_INTEL=1 (uses the project's main-branch archive) or pin a
+// tag/commit tarball with TSENGINE_EXPLOIT_INTEL_URL for a reproducible evidence pack. Only meaningful
+// when TSENGINE_THREAT_INTEL_CORPUS is set (the sidecar is written beside that corpus file).
+func exploitIntelURL() string {
+	if u := strings.TrimSpace(os.Getenv("TSENGINE_EXPLOIT_INTEL_URL")); u != "" {
+		return u
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("TSENGINE_EXPLOIT_INTEL"))) {
+	case "1", "true", "yes", "on":
+		return threatintel.ExploitIntelURL
+	}
+	return ""
+}
+
 func corpusRefreshInterval() time.Duration {
 	v := os.Getenv("TSENGINE_CORPUS_REFRESH_INTERVAL")
 	if v == "" {
