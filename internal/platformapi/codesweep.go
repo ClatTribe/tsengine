@@ -94,7 +94,7 @@ func (d Deps) handleCodeSweep(w http.ResponseWriter, r *http.Request, tenantID s
 		return
 	}
 
-	dropped := 0
+	var dropped []panelDrop
 	if body.Panel {
 		res.Candidates, dropped = panelReview(r.Context(), llm, res.Candidates)
 	}
@@ -112,8 +112,16 @@ func (d Deps) handleCodeSweep(w http.ResponseWriter, r *http.Request, tenantID s
 		"coverage": res.Coverage(),
 		// Reported, never silent: a panel that quietly halved the results would look like a sweep
 		// that found less.
-		"panel_dropped": dropped,
-		"stored":        stored,
+		"panel_dropped": len(dropped),
+		// The DROPPED candidates ride back with the panel's reasoning, not just a count.
+		//
+		// A count says something was removed; it does not let anyone see WHAT, or disagree. §2.5
+		// requires a dismissal to be logged and RECOVERABLE so the security-engineer audience can
+		// audit and override it, and that applies with more force here than to a deterministic
+		// filter: this is a panel of language models deleting a candidate finding. Reporting only
+		// the number would make an unreviewable deletion look like a tidy result.
+		"panel_dropped_detail": dropped,
+		"stored":               stored,
 	})
 }
 
@@ -169,10 +177,10 @@ func sweepFindings(res codesweep.Result, repo string, now time.Time) []types.Fin
 // right direction here: a deadlocked panel is not evidence of absence.
 func panelReview(ctx context.Context, llm interface {
 	Generate(context.Context, string) (string, error)
-}, cands []codesweep.Candidate) ([]codesweep.Candidate, int) {
+}, cands []codesweep.Candidate) ([]codesweep.Candidate, []panelDrop) {
 	jurors := consensus.DefaultJurors(llm.Generate)
 	kept := make([]codesweep.Candidate, 0, len(cands))
-	dropped := 0
+	var dropped []panelDrop
 	for _, c := range cands {
 		if !c.Vulnerable {
 			continue
@@ -183,10 +191,30 @@ func panelReview(ctx context.Context, llm interface {
 			Severity: types.Severity(strings.ToLower(c.Severity)),
 		}, jurors)
 		if d.FalsePositive {
-			dropped++
+			dropped = append(dropped, panelDrop{
+				Path: c.Path, CWE: c.CWE, Title: c.Title,
+				Votes: d.Votes, FPVotes: d.FPVotes, Agreement: d.Agreement,
+				// consensus.Decision.Rationales is documented as "every juror's reasoning — the
+				// audit trail", and discarding it is what made this a number instead of a record.
+				Rationales: d.Rationales,
+			})
 			continue
 		}
 		kept = append(kept, c)
 	}
 	return kept, dropped
+}
+
+// panelDrop is one candidate the panel removed, with enough to audit and dispute the removal.
+type panelDrop struct {
+	Path  string `json:"path"`
+	CWE   string `json:"cwe,omitempty"`
+	Title string `json:"title,omitempty"`
+	// The vote, so a 2-1 removal is distinguishable from a unanimous one — they are different
+	// grounds for trusting it.
+	Votes     int     `json:"votes"`
+	FPVotes   int     `json:"fp_votes"`
+	Agreement float64 `json:"agreement"`
+	// Why each juror said what it said.
+	Rationales []string `json:"rationales,omitempty"`
 }

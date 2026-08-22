@@ -109,8 +109,21 @@ func (s *stubJurorLLM) Generate(_ context.Context, _ string) (string, error) {
 func TestPanelReview_DropsWhatTheMajorityRejects(t *testing.T) {
 	llm := &stubJurorLLM{fp: true}
 	kept, dropped := panelReview(context.Background(), llm, []codesweep.Candidate{cand(true, "high")})
-	if dropped != 1 || len(kept) != 0 {
-		t.Errorf("a unanimously-rejected candidate survived: kept=%d dropped=%d", len(kept), dropped)
+	if len(dropped) != 1 || len(kept) != 0 {
+		t.Errorf("a unanimously-rejected candidate survived: kept=%d dropped=%d", len(kept), len(dropped))
+	}
+	// RECOVERABLE, not just counted. §2.5 requires a dismissal to be auditable and overridable, and
+	// this one is a panel of language models deleting a candidate finding — reporting only a number
+	// would make an unreviewable deletion look like a tidy result.
+	d := dropped[0]
+	if d.Path == "" || d.Title == "" {
+		t.Errorf("the drop must name what was removed: %+v", d)
+	}
+	if len(d.Rationales) == 0 {
+		t.Error("the jurors' reasoning was discarded — consensus.Decision.Rationales exists to be the audit trail")
+	}
+	if d.Votes == 0 {
+		t.Error("the vote must be recorded: a 2-1 removal and a unanimous one are different grounds for trusting it")
 	}
 	if llm.calls != len(consensus.Personas) {
 		t.Errorf("expected one call per persona, got %d", llm.calls)
@@ -120,8 +133,8 @@ func TestPanelReview_DropsWhatTheMajorityRejects(t *testing.T) {
 // A panel that agrees the finding is real keeps it.
 func TestPanelReview_KeepsWhatTheMajorityConfirms(t *testing.T) {
 	kept, dropped := panelReview(context.Background(), &stubJurorLLM{fp: false}, []codesweep.Candidate{cand(true, "high")})
-	if dropped != 0 || len(kept) != 1 {
-		t.Errorf("a confirmed candidate was dropped: kept=%d dropped=%d", len(kept), dropped)
+	if len(dropped) != 0 || len(kept) != 1 {
+		t.Errorf("a confirmed candidate was dropped: kept=%d dropped=%d", len(kept), len(dropped))
 	}
 }
 
@@ -129,8 +142,8 @@ func TestPanelReview_KeepsWhatTheMajorityConfirms(t *testing.T) {
 // panel must never be the reason a real weakness disappears.
 func TestPanelReview_JurorFailureKeepsTheCandidate(t *testing.T) {
 	kept, dropped := panelReview(context.Background(), brokenLLM{}, []codesweep.Candidate{cand(true, "high")})
-	if dropped != 0 || len(kept) != 1 {
-		t.Errorf("a broken panel dropped a candidate: kept=%d dropped=%d", len(kept), dropped)
+	if len(dropped) != 0 || len(kept) != 1 {
+		t.Errorf("a broken panel dropped a candidate: kept=%d dropped=%d", len(kept), len(dropped))
 	}
 }
 
