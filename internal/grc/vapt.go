@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -47,7 +48,18 @@ type VAPTSummary struct {
 	ExploitProven int            `json:"exploit_proven"` // a benign PoC was captured (active-driver proof — the strongest tier)
 	Unconfirmed   int            `json:"unconfirmed"`    // pattern-match only — leads to validate (FP-exposed)
 	KEV           int            `json:"kev"`            // actively exploited in the wild (CISA KEV)
-	FixesReady    int            `json:"fixes_ready"`    // findings with a remediation already prepared
+	// Ransomware counts KEV findings CISA marks as used in ransomware campaigns — a STRICTLY
+	// STRONGER claim than KEV listing (exploited by crews who encrypt the estate, not merely
+	// exploited in the wild). Kept separate from KEV so the urgent few are never diluted into
+	// the many. The engine computes it (§7); the report was dropping it on the floor.
+	Ransomware int `json:"ransomware,omitempty"`
+	FixesReady int `json:"fixes_ready"` // findings with a remediation already prepared
+	// RetestConfirmed / RetestStillPresent are the fix-verification roll-up — the "we don't just
+	// fix it, we prove it closed" differentiator (State-of-AI-in-Pentesting KF#4). Confirmed = an
+	// applied fix whose re-scan proved every claimed finding gone; StillPresent = a fix was applied
+	// but the finding is STILL there. Both 0 when nothing has been re-tested (honest, not "clean").
+	RetestConfirmed    int `json:"retest_confirmed,omitempty"`
+	RetestStillPresent int `json:"retest_still_present,omitempty"`
 	// PatchAvailable / PatchUnavailable: of the dependency (SCA) findings, how many have an upstream
 	// patched version the customer can upgrade to right now vs. none available yet — the competitor
 	// "fixable vs no-fix" executive signal. Only SCA findings (grype/trivy/osv-scanner) carry it.
@@ -78,7 +90,14 @@ type VAPTFinding struct {
 	Confidence    float64  `json:"confidence,omitempty"`   // 0–1 grounded confidence (per-tool base + corroboration)
 	Unconfirmed   bool     `json:"unconfirmed,omitempty"`  // pattern-match only — a lead to validate, not a confirmed exploit
 	KEV           bool     `json:"kev,omitempty"`          // actively exploited
-	FixReady      bool     `json:"fix_ready,omitempty"`    // a remediation is prepared/queued
+	// Ransomware: CISA marks this CVE used in ransomware campaigns (stronger than KEV). WeaponRank:
+	// Metasploit's own reliability name for the best module targeting it ("excellent"…"manual") —
+	// "an operator can run it tonight". KEVDueDate: CISA's own BOD 22-01 remediation deadline.
+	// All three are computed by the engine (§7) and were being dropped from this deliverable.
+	Ransomware bool      `json:"ransomware,omitempty"`
+	WeaponRank string    `json:"weapon_rank,omitempty"`
+	KEVDueDate time.Time `json:"kev_due_date,omitempty"`
+	FixReady   bool      `json:"fix_ready,omitempty"` // a remediation is prepared/queued
 }
 
 // VAPTReport assembles the report for a tenant from its current findings + monitored assets.
@@ -109,7 +128,27 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 			scope = append(scope, a.Target)
 		}
 	}
-	return ReportFromFindings(findings, scope, name, g.now(), fixReady), nil
+	rep := ReportFromFindings(findings, scope, name, g.now(), fixReady)
+
+	// Fix-verification roll-up (best-effort): the retest differentiator — a fix this product
+	// APPLIED and then re-tested, so the report can say "confirmed closed on re-scan" rather than
+	// "we filed a fix and hoped". Computed here (not in the pure core) because it needs the action
+	// store; a per-engagement report has no such history and simply carries zeros. Grounded (§10):
+	// counts come only from a real FixVerification the retester wrote, never inferred.
+	if actions, aerr := g.Store.ListActions(ctx, tenantID); aerr == nil {
+		for _, a := range actions {
+			if a.Verification == nil {
+				continue
+			}
+			switch a.Verification.Status {
+			case platform.FixStatusFixed:
+				rep.Summary.RetestConfirmed++
+			case platform.FixStatusStillPresent:
+				rep.Summary.RetestStillPresent++
+			}
+		}
+	}
+	return rep, nil
 }
 
 // ReportFromFindings builds a VAPT report from an explicit findings set + scope —
@@ -170,6 +209,14 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 				vf.EPSS = f.ThreatIntel.EPSS.Score
 			}
 			vf.PublicExploit = len(f.ThreatIntel.Exploits) > 0
+			vf.WeaponRank = f.ThreatIntel.WeaponRank
+			if k := f.ThreatIntel.KEV; k != nil {
+				vf.Ransomware = k.Ransomware
+				vf.KEVDueDate = k.DueDate
+				if k.Ransomware {
+					r.Summary.Ransomware++
+				}
+			}
 		}
 		r.Findings = append(r.Findings, vf)
 	}
@@ -230,6 +277,20 @@ func vaptRisk(by map[string]int) string {
 	}
 }
 
+// writeSignalLines appends executive-summary lines for signals that are only present when the
+// engine actually computed them — ransomware linkage and fix-verification. Conditional (never
+// "0 ...") so a clean report doesn't carry alarming-looking zeros; shared by the full + exec
+// renderers so the two never drift.
+func writeSignalLines(b *strings.Builder, s VAPTSummary) {
+	if s.Ransomware > 0 {
+		fmt.Fprintf(b, "- **%d ransomware-linked** — CISA marks the CVE used in ransomware campaigns, a stronger signal than KEV listing\n", s.Ransomware)
+	}
+	if s.RetestConfirmed > 0 || s.RetestStillPresent > 0 {
+		fmt.Fprintf(b, "- **Fix verification:** %d applied fix(es) re-tested and confirmed closed on re-scan; %d still present after the fix\n",
+			s.RetestConfirmed, s.RetestStillPresent)
+	}
+}
+
 // RenderVAPTMarkdown renders the report as portable Markdown — the form an SMB attaches to a
 // security questionnaire or emails a customer. Pure (no I/O), so it is deterministic + testable.
 func RenderVAPTMarkdown(r *VAPTReport) string {
@@ -257,6 +318,7 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		fmt.Fprintf(&b, "- **Dependency patchability:** %d of %d dependency findings have an upstream fix you can upgrade to now; %d have no fix available yet (mitigate)\n",
 			s.PatchAvailable, sca, s.PatchUnavailable)
 	}
+	writeSignalLines(&b, s)
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
 	b.WriteString("\n## Methodology & confidence\n\n")
 	b.WriteString("Assessment is performed by the TensorShield engine, which wraps best-in-class open-source " +
@@ -343,6 +405,9 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		if f.PublicExploit {
 			fmt.Fprintf(&b, "- **Public exploit available** (a working PoC is published — ExploitDB/Metasploit)\n")
 		}
+		if !f.KEVDueDate.IsZero() {
+			fmt.Fprintf(&b, "- **CISA remediation deadline (BOD 22-01):** %s\n", f.KEVDueDate.UTC().Format("2006-01-02"))
+		}
 		status := f.Verification
 		if status == "" {
 			status = "detected"
@@ -355,6 +420,12 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		}
 		if f.KEV {
 			status += " · **actively exploited (CISA KEV)**"
+		}
+		if f.Ransomware {
+			status += " · **ransomware-linked (CISA)**"
+		}
+		if f.WeaponRank != "" {
+			status += fmt.Sprintf(" · weaponized: %s (Metasploit)", f.WeaponRank)
 		}
 		if f.PoC != "" {
 			status = "**exploitation-proven** · " + status
@@ -405,6 +476,7 @@ func RenderVAPTExecMarkdown(r *VAPTReport) string {
 	if sca := s.PatchAvailable + s.PatchUnavailable; sca > 0 {
 		fmt.Fprintf(&b, "- **%d of %d dependency findings have an upstream fix available now**\n", s.PatchAvailable, sca)
 	}
+	writeSignalLines(&b, s)
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
 
 	// Top findings — title + severity + confidence tier only (the "what", not the "how"). Cap at 10
