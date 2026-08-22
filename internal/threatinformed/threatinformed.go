@@ -78,11 +78,20 @@ type Probe struct {
 // Reason is the grounded justification for a probe. Every field is a fact read
 // from the pinned corpus, so an operator can audit why a probe ran.
 type Reason struct {
-	KEV           bool    // CISA KEV: exploited in the wild (BOD 22-01)
-	EPSS          float64 // FIRST.org exploitation probability [0,1]
-	PublicExploit bool    // an Exploit-DB / PoC reference exists
-	ProductMatch  bool    // the corpus's KEV product matched an observed product
-	KEVProduct    string  // what the catalog says is affected
+	KEV bool // CISA KEV: exploited in the wild (BOD 22-01)
+	// SSVCActive is CISA's Vulnrichment assessment that exploitation is ACTIVE for a CVE it has
+	// not catalogued in KEV. Same authority, and it reaches CVEs KEV never lists — so without it a
+	// CVE CISA says is being exploited right now could fail the signal gate below and never be
+	// probed for.
+	SSVCActive bool
+	// SSVCAutomatable is CISA's assessment that an attacker can automate steps 1-4 of the kill
+	// chain. Orthogonal to every other signal here: KEV says someone did it, EPSS says how likely,
+	// a public exploit says a weapon exists — none of them says whether it scales.
+	SSVCAutomatable bool
+	EPSS            float64 // FIRST.org exploitation probability [0,1]
+	PublicExploit   bool    // an Exploit-DB / PoC reference exists
+	ProductMatch    bool    // the corpus's KEV product matched an observed product
+	KEVProduct      string  // what the catalog says is affected
 }
 
 // Options tunes selection. Zero value uses the documented defaults.
@@ -126,6 +135,14 @@ type Entry struct {
 	// NucleiTemplate is the template that checks for this CVE, when one exists. Empty
 	// means we cannot test it — see PlanWithGaps, which is the whole reason this is here.
 	NucleiTemplate string `json:"nuclei_template"`
+	// SSVC is CISA's decision assessment, decoded from the same corpus file threatintel writes.
+	//
+	// The tag here is for explicitness, NOT because omitting it would break: "ssvc" and the field
+	// name differ only in CASE, and Go's unmarshal is case-insensitive. NucleiTemplate's tag IS
+	// load-bearing because "nuclei_template" differs by an UNDERSCORE, which case-insensitivity
+	// cannot bridge — that is the whole distinction, and it is easy to state the stronger claim by
+	// mistake. Verified by mutating: removing this tag fails nothing.
+	SSVC *types.SSVC `json:"ssvc"`
 }
 
 // Plan selects the CVE probes worth running against the observed technology,
@@ -183,10 +200,20 @@ func PlanWithGaps(c Corpus, observed []Observation, opts Options) (probes, untes
 			epss = e.EPSS.Score
 		}
 		pub := len(e.Exploits) > 0
+		// CISA's own decision points. Only "active" counts as an exploitation signal: "poc" would
+		// double-count the public-exploit feeds, and "none" is the absence of one.
+		ssvcActive := e.SSVC != nil && e.SSVC.Exploitation == "active"
+		ssvcAuto := e.SSVC != nil && e.SSVC.Automatable == "yes"
 
 		// No exploitation signal → not a targeted probe candidate (§10: we
 		// don't probe on absence of evidence).
-		if !kev && epss < opts.MinEPSS && !pub {
+		//
+		// SSVCActive belongs in this gate, not just the ranking. KEV covers ~1,700 CVEs; CISA
+		// assesses far more, and a CVE it says is being exploited RIGHT NOW could previously fail
+		// every clause here — not KEV-catalogued, low EPSS, no public exploit in our feeds — and
+		// never be probed for. That is absence of evidence in OUR feeds being read as evidence of
+		// absence, against a statement from the same authority that publishes KEV.
+		if !kev && epss < opts.MinEPSS && !pub && !ssvcActive {
 			continue
 		}
 
@@ -212,7 +239,8 @@ func PlanWithGaps(c Corpus, observed []Observation, opts Options) (probes, untes
 			}
 		}
 
-		r := Reason{KEV: kev, EPSS: epss, PublicExploit: pub, ProductMatch: hit, KEVProduct: kevProduct}
+		r := Reason{KEV: kev, EPSS: epss, PublicExploit: pub, ProductMatch: hit, KEVProduct: kevProduct,
+			SSVCActive: ssvcActive, SSVCAutomatable: ssvcAuto}
 		p := Probe{
 			CVE:        cve,
 			TemplateID: cve, // nuclei names its CVE templates by the CVE id
@@ -286,6 +314,22 @@ func priority(r Reason) float64 {
 	p += r.EPSS * 50 // EPSS is [0,1]; a 1.0 is worth half a KEV listing
 	if r.PublicExploit {
 		p += 10
+	}
+	// Weighted against the existing signals rather than picked, and each is justified by what the
+	// signal MEANS:
+	//
+	//   SSVCActive (+75) is CISA saying exploitation is happening — the same claim KEV makes, from
+	//   the same authority — but below KEV's 100 because a KEV entry additionally carries a federal
+	//   remediation mandate and a stricter cataloguing bar. Ranking it equal would erase that.
+	//
+	//   Automatable (+20) is twice a public exploit's +10: a weapon that must be hand-driven reaches
+	//   one target, and one an attacker can automate reaches an estate. That is the difference the
+	//   capped probe budget should be spent on.
+	if r.SSVCActive {
+		p += 75
+	}
+	if r.SSVCAutomatable {
+		p += 20
 	}
 	if r.ProductMatch {
 		p += 25
