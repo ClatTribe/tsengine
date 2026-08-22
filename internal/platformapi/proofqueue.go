@@ -82,8 +82,26 @@ func (d Deps) handleProofQueue(w http.ResponseWriter, r *http.Request, tenantID 
 		// Stated explicitly so a caller does not read an empty queue as "nothing is unproven": with no
 		// ownership-verified target there is nothing we are permitted to probe, which is a different
 		// thing from having nothing worth probing.
-		"note": "unproven high/critical findings whose class an offensive driver can demonstrate. " +
-			"Empty also means no ownership-verified targets — verify asset ownership to enable proof.",
+		//
+		// The note is STATE-SPECIFIC and a COMPLETE SENTENCE, because its only consumer appends it to
+		// prose ("Nothing is queued for proof. " + note). It used to be a single definition fragment
+		// beginning lowercase, so the empty state rendered "Nothing is queued for proof. unproven
+		// high/critical findings whose class an offensive driver can demonstrate." — which reads as a
+		// truncation, and asserts what the queue HOLDS in the one state where it holds nothing. The
+		// ownership caveat, the whole reason this field exists, came third behind that confusion.
+		"note": proofQueueNote(len(q)),
 		"max_batch": strconv.Itoa(maxProofBatch),
 	})
+}
+
+// proofQueueNote is the caveat for the queue's CURRENT state. Both variants are complete sentences
+// that read correctly when a caller appends them to its own prose, and each is true only of the
+// state it describes — so a consumer cannot render a sentence that is false for what it is showing.
+func proofQueueNote(n int) string {
+	if n == 0 {
+		return "That can mean nothing high or critical is left unsettled — or that no target has " +
+			"verified ownership yet, so there is nothing we are permitted to probe. Verify asset " +
+			"ownership to enable proof."
+	}
+	return "Each entry is an unproven high or critical finding whose class an offensive driver can demonstrate."
 }

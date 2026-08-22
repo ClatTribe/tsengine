@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ShieldAlert, CheckCircle2, Wrench, ArrowRight, Flame, TimerOff, CalendarClock, Skull } from "lucide-react";
 import { api } from "@/lib/api";
+import { hasTime } from "@/lib/time";
 import type { Incident, SLABreach } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -23,6 +24,10 @@ function slaReason(b: SLABreach): string | null {
   return null;
 }
 
+// CISA BOD 22-01 issued 2021-11-03. It publishes no deadline earlier than itself, so anything
+// before this is not a deadline CISA set — it is a zero value that reached us wearing a date.
+const BOD_22_01_ISSUED = Date.UTC(2021, 10, 3);
+
 // cisaDue reads the incident's CISA BOD 22-01 deadline. Returns null when there is none — most
 // incidents have no KEV CVE behind them, and a badge on every row is a badge nobody reads.
 //
@@ -34,6 +39,16 @@ function cisaDue(i: Incident): { label: string; overdue: boolean } | null {
   if (!i.kev_due_at) return null;
   const due = new Date(i.kev_due_at);
   if (Number.isNaN(due.getTime())) return null;
+  // A date before BOD 22-01 issued cannot be a deadline it set, so treat it as no deadline.
+  //
+  // The absent-field check above is the contract the API advertises (`kev_due_at,omitempty`)
+  // and it was not being honoured: Go's omitempty does not omit a zero time.Time, so every
+  // incident arrived carrying "0001-01-01T00:00:00Z" — a non-empty string, which sails past
+  // `!i.kev_due_at`, parses cleanly, and lands in the past. The queue therefore told the
+  // customer a CISA federal remediation deadline had PASSED on incidents with no CVE behind
+  // them at all. The producer is fixed too, but this guard is the one that matters: it also
+  // covers records already stored with the zero time, and any future producer that regresses.
+  if (due.getTime() < BOD_22_01_ISSUED) return null;
   return {
     label: due.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
     overdue: due.getTime() < Date.now(),
@@ -183,7 +198,11 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
               <Wrench className="h-2.5 w-2.5" /> fix ready
             </span>
           )}
-          {!resolved && <AckButton id={i.id} acknowledged={!!i.acknowledged_at} by={i.acknowledged_by} />}
+          {/* hasTime, never truthiness: acknowledged_at arrives as the zero time "0001-01-01T00:00:00Z"
+              on incidents nobody has acknowledged, and that string is truthy. Every open incident
+              therefore rendered as acknowledged — and because AckButton shows the badge INSTEAD of the
+              button, the one action in the alert-response path could not be taken. */}
+          {!resolved && <AckButton id={i.id} acknowledged={hasTime(i.acknowledged_at)} by={i.acknowledged_by} />}
           {/* Ransomware use is a strictly stronger claim than KEV listing — exploited in the wild
               versus exploited by crews who encrypt the estate. It outranks severity for ordering
               work, and the queue showed neither it nor the deadline below. */}
