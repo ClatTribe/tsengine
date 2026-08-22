@@ -14,6 +14,7 @@ package detect
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -284,8 +285,14 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 		// per pass so a bulk ingest doesn't storm the on-call. An under-active-attack incident always
 		// pages (it's the strongest signal) regardless of the cap.
 		if d.Alerter != nil && (d.AlertCap == 0 || alerted < d.AlertCap || attacked[key]) {
-			_ = d.Alerter.IncidentOpened(ctx, inc) // best-effort; never fails the pass
-			alerted++
+			// The incident opens either way — it is real whether or not the heads-up landed — but a
+			// page that failed must not consume the cap, or a broken webhook silently spends the
+			// budget and suppresses the alerts that would have gone through.
+			if err := d.Alerter.IncidentOpened(ctx, inc); err != nil {
+				slog.Warn("[detect] incident alert failed", "incident", inc.ID, "tenant", tenantID, "err", err.Error())
+			} else {
+				alerted++
+			}
 		}
 		res.Opened = append(res.Opened, inc)
 	}
@@ -317,8 +324,23 @@ func (d *Detector) EscalateOverdue(ctx context.Context, tenantID string, ackWind
 		if !inc.Overdue(ackWindowMins, d.now()) {
 			continue
 		}
+		// A PAGE THAT DID NOT LAND IS NOT AN ESCALATION. The error was discarded here and
+		// LastEscalatedAt stamped regardless, which did three things on a Slack or PagerDuty
+		// outage: recorded incident_escalated in the SIGNED ledger, showed the incident as
+		// escalated, and — because Overdue allows at most one re-ping per window — SUPPRESSED
+		// the retry for a whole window. So the one mechanism that exists to make sure a critical
+		// incident is not ignored went quiet precisely when the alerting path was broken, and left
+		// an auditable record saying someone had been paged.
+		//
+		// Still best-effort: a failed page never blocks the other incidents, and it is not an
+		// error from this function. It simply is not recorded as having happened, so the next pass
+		// tries again — which is the behaviour anyone would expect from a page that did not send.
 		if d.Alerter != nil {
-			_ = d.Alerter.IncidentOpened(ctx, inc) // best-effort re-alert (the "page again")
+			if err := d.Alerter.IncidentOpened(ctx, inc); err != nil {
+				slog.Warn("[detect] re-alert FAILED — not recording an escalation; the next pass will retry",
+					"incident", inc.ID, "tenant", tenantID, "err", err.Error())
+				continue
+			}
 		}
 		inc.LastEscalatedAt = d.now()
 		d.record("incident_escalated", inc)
