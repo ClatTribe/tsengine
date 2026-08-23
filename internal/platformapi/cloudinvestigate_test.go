@@ -71,8 +71,10 @@ func TestCloudInvestigate_RunsAndViewReturnsPaths(t *testing.T) {
 	if view.Total != 1 || !view.Enabled {
 		t.Fatalf("view should show 1 path + enabled, got total=%d enabled=%v", view.Total, view.Enabled)
 	}
-	if view.Paths[0].Tool != "cloudagent" || view.Paths[0].VerificationStatus != types.VerificationVerified {
-		t.Errorf("stored path should be tool=cloudagent + verified, got %+v", view.Paths[0])
+	// pattern_match, not verified: this fixture's path was never put to a provider dry-run, so it
+	// sits on the config_possible rung (ADR 0024 C12 — the tier follows the rung).
+	if view.Paths[0].Tool != "cloudagent" || view.Paths[0].VerificationStatus != types.VerificationPatternMatch {
+		t.Errorf("stored path should be tool=cloudagent + pattern_match, got %+v", view.Paths[0])
 	}
 
 	// Tenant isolation: t2 sees none of t1's paths.

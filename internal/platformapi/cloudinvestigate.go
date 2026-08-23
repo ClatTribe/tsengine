@@ -229,7 +229,45 @@ func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
 	return types.Finding{
 		ID: id, RuleID: cloudPathRuleID(is.Path), Tool: "cloudagent", Severity: sev,
 		Endpoint: is.Target, Title: title + " — reachable attack path", Description: desc,
-		VerificationStatus: types.VerificationVerified, RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
+		VerificationStatus: authorizationRungStatus(is), RawOutput: rawOut, DiscoveredAt: time.Now().UTC(),
+	}
+}
+
+// authorizationRungStatus maps the verification ladder (ADR 0024 C3) onto types.VerificationState.
+//
+// It used to be the constant types.VerificationVerified, on every path the agent recorded, at every
+// rung. That is the strongest evidence tier this product has, and its own definition is "independent
+// method(s) ACTIVELY confirmed it" — so a path resting on nothing but our resolved-IAM graph was
+// handed the authority of one the cloud provider had been asked about and had confirmed.
+//
+// The cost was not internal. VerificationStatus is the field two CUSTOMER-FACING surfaces read:
+// grc/vapt.isVerified counts it as "tool-confirmed" in the report a customer hands an auditor, and
+// explain.urgency turns it into "we proved it is exploitable on your system, not just possible".
+// Both of those sentences were being written about a path nobody had checked with anything.
+//
+// The mapping below is not a judgement call — each tier's own doc comment decides it:
+//
+//	config_possible  → pattern_match. ONE source: our inventory. validatePath re-checks every edge,
+//	                   but against the SAME graph, so nothing independent has agreed and nothing was
+//	                   actively re-fired. This is the honest floor, and it is where most paths sit.
+//	PARTIAL          → corroborated. "≥2 INDEPENDENT assessments agreed ... without re-firing
+//	                   anything" — our graph and the provider, agreeing on a subset of the hops.
+//	provider-confirmed → verified. "independent method(s) ACTIVELY confirmed it": the provider's own
+//	                   policy simulator was called, per hop, and allowed every one.
+//
+// Note what verified still does NOT mean here, and why explain.go needs its own guard: it means the
+// AUTHORIZATION is confirmed, never that the path was exploited (ADR 0024 C1).
+//
+// The sibling made this call correctly first — codeinvestigate.go refuses `verified` for the code
+// agent and spends eleven lines saying why. This is that reasoning applied to the other agent.
+func authorizationRungStatus(is cloudagent.Issue) types.VerificationState {
+	switch {
+	case is.ProviderConfirmed:
+		return types.VerificationVerified
+	case is.AuthorizationCoverage != "" && is.AuthorizationCoverage != "0/0":
+		return types.VerificationCorroborated
+	default:
+		return types.VerificationPatternMatch
 	}
 }
 
