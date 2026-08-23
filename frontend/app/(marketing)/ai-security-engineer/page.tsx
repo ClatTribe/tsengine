@@ -11,37 +11,43 @@ import {
 import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
-  title: "AI Security Engineer — finds, triages, fixes",
+  title: "AI Security Engineer — the fix arrives written",
   description:
-    "Not another scanner. An AI security engineer that runs the whole loop — detect, triage real risk from noise, prepare the fix — and applies nothing without you.",
+    "It reads the noise so you don't, works out which handful of issues an attacker could actually use, and writes the change to close them. You approve; nothing moves without you.",
   path: "/ai-security-engineer",
 });
 
 // What the agent actually does, end to end.
+// EACH CARD ENDS ON THE CONSEQUENCE, NOT THE MECHANISM. "30+ open-source scanners" is a fact about
+// us; "you are not missing things a standalone tool would have caught" is the same fact told to the
+// person paying. If a card's last clause describes how it works, it is not finished.
 const LOOP = [
-  { icon: ScanLine, t: "Detects", d: "On a floor of 30+ open-source scanners across code, cloud, web, APIs, containers, identity & SaaS — recall no model can undercut." },
-  { icon: Filter, t: "Triages", d: "Separates real, exploitable risk from scanner noise — verifying, corroborating, and chaining findings into the attack paths that actually matter." },
-  { icon: Wrench, t: "Fixes", d: "Prepares the real remediation — a pull request, a config change, an identity action, a ticket — ready to ship the moment you say go." },
-  { icon: FileCheck2, t: "Proves", d: `Maps every finding to the controls it touches across ${FRAMEWORK_COUNT} frameworks and signs it into a tamper-evident evidence pack — for your auditor and your customers.` },
+  { icon: ScanLine, t: "It looks everywhere, every day", d: "Code, cloud, web, APIs, containers, identity and SaaS — on a floor of 30+ open-source scanners, so you are not quietly missing what a dedicated tool would have caught." },
+  { icon: Filter, t: "It tells you which five matter", d: "Hundreds of alerts become a handful, because it works out which ones an attacker could really use and what they reach. You stop guessing which are real." },
+  { icon: Wrench, t: "It writes the change", d: "A pull request, a config change, an access revocation — the actual fix, not remediation advice you still have to implement. It is ready the moment you say go." },
+  { icon: FileCheck2, t: "The evidence is already made", d: `The same work counts toward ${FRAMEWORK_COUNT} frameworks, signed and dated. So the answer to your customer's questionnaire is written before they ask.` },
 ];
 
 // Why it's trustworthy — the guardrails that make an autonomous agent safe.
+// THE REASSURANCE LAYER, AND IT IS ALLOWED TO BE PRECISE — but the card TITLE is what a sceptical
+// reader scans, so the title says what it means for them and the body keeps the mechanism intact.
+// "Grounded" and "tier-gated" are our words for these; nobody arrives already knowing them.
 const GUARDRAILS = [
-  { icon: Fingerprint, t: "Grounded — it can't hallucinate", d: "The agent can't record a finding no tool supports, or assert a permission the evaluator didn't return. Every claim cites the evidence that proves it. No invented vulnerabilities." },
-  { icon: UserCheck, t: "Human in the loop, by tier", d: "Low-risk fixes auto-apply; anything consequential waits for one tap of your approval. The autonomy is earned, never assumed — and tuned per action class." },
-  { icon: GitPullRequest, t: "It ships the fix, read-only until you say so", d: "Connections are least-privilege and read-only by default. The agent opens the PR / drafts the change and applies it only after the gate — never a surprise write." },
-  { icon: ScrollText, t: "Every decision is signed", d: "Auto-applied and human-approved actions alike record into a replayable, cryptographically signed ledger. You can audit exactly what the agent did, and why." },
-  { icon: Power, t: "One kill-switch, fail-closed", d: "Freeze all autonomous action for the whole tenant instantly. The switch beats any verdict; queued actions wait. The one human on the loop stays in control." },
-  { icon: ShieldCheck, t: "On best-in-class OSS", d: "The detection floor is the leading open-source tools the industry already trusts. The agent reasons on top — it doesn't replace proven scanners with a black box." },
+  { icon: Fingerprint, t: "You never chase a ghost", d: "It cannot report something it could not prove — no finding without a tool behind it, no claim about your permissions the evaluator did not actually return. If it cannot show you the evidence, you never see the finding." },
+  { icon: UserCheck, t: "Routine fixes just happen. Risky ones wait for you", d: "The low-stakes work goes through on its own so it stops piling up. Anything that could break something sits in your inbox until you tap approve — and you set where that line is." },
+  { icon: GitPullRequest, t: "It cannot write to anything until you let it", d: "Every connection is read-only by default and least-privilege. It opens the pull request or drafts the change, and applies it only after you approve. There is no surprise write." },
+  { icon: ScrollText, t: "You can show exactly what it did", d: "Every action — the ones you approved and the ones that went through on their own — is recorded in a signed log you can replay. Useful the day an auditor asks, and the day you want to know why something changed." },
+  { icon: Power, t: "One switch stops everything", d: "Freeze all autonomous action instantly, and it stays frozen: the switch beats any approval already given, and queued work waits. The one human on the loop stays in control." },
+  { icon: ShieldCheck, t: "The detection is the tools your engineers already trust", d: "Underneath is the leading open source the industry runs on. The agent reasons on top of proven scanners rather than replacing them with something nobody can inspect." },
 ];
 
 const COMPARE: { label: string; cells: string[] }[] = [
-  { label: "Best-in-class OSS detection underneath", cells: ["yes", "part", "yes"] },
-  { label: "Triages real risk from noise (not a 400-row dump)", cells: ["yes", "no", "part"] },
-  { label: "Prepares + ships the actual fix", cells: ["yes", "no", "no"] },
-  { label: "Human-in-the-loop gate + kill-switch", cells: ["yes", "no", "no"] },
-  { label: "Grounded — no hallucinated findings", cells: ["yes", "part", "no"] },
-  { label: "Signed, replayable decision ledger", cells: ["yes", "no", "no"] },
+  { label: "Detection on the open source your engineers already trust", cells: ["yes", "part", "yes"] },
+  { label: "Tells you which five matter, not all four hundred", cells: ["yes", "no", "part"] },
+  { label: "Writes the fix, not remediation advice", cells: ["yes", "no", "no"] },
+  { label: "You approve anything risky — and can stop it all instantly", cells: ["yes", "no", "no"] },
+  { label: "Never reports what it could not prove", cells: ["yes", "part", "no"] },
+  { label: "Shows exactly what changed, when, and who approved it", cells: ["yes", "no", "no"] },
   { label: "Cost for an SMB", cells: ["$/mo", "$/mo", "$$$$/yr"] },
 ];
 
@@ -53,15 +59,20 @@ export default function AISecurityEngineer() {
         <AuroraBackdrop />
         <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
-            <Bot className="h-3.5 w-3.5 text-accent" /> The agentic layer
+            <Bot className="h-3.5 w-3.5 text-accent" /> Your AI security engineer
           </span>
-          <h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl">
-            Meet your AI security engineer.
+          {/* The headline is the OFFER, not the machinery. It used to read "Meet your AI security
+              engineer" — an introduction, which asks the reader to work out what they get. What they
+              get is that the work arrives done. Grounding, tiers and the kill-switch are why they can
+              trust it, and trust is the SECOND question a visitor has; it is answered three sections
+              down, where it is asked. */}
+          <h1 className="mt-6 text-balance text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl">
+            The fix arrives written. You just say yes.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted">
-            A scanner hands you a list. TensorShield gives you an engineer: it runs best-in-class OSS detection, triages
-            the real risk from the noise, prepares the fix, and proves it — applying anything consequential only after
-            you approve. No security hire required.
+            Every other tool hands you a list and leaves the work with you. This one reads the noise so you don&apos;t,
+            works out the handful of issues an attacker could actually use, and writes the change that closes them —
+            as a pull request you approve, or not. Nothing ships without you.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px">
@@ -71,7 +82,7 @@ export default function AISecurityEngineer() {
               See the platform
             </Link>
           </div>
-          <p className="mt-4 text-xs text-faint">Open-source-grade detection · AI triage &amp; fixes · human-in-the-loop · signed</p>
+          <p className="mt-4 text-xs text-faint">You approve every change · It never reports what it could not prove · One switch stops it all</p>
         </div>
 
         {/* The cross-surface attack path, rehoused.
@@ -92,10 +103,10 @@ export default function AISecurityEngineer() {
       <section className="mx-auto max-w-6xl px-5 pb-4 pt-8">
         <div className="mx-auto mb-10 max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">What it does</span>
-          <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">It runs the whole loop — so you don&apos;t.</h2>
+          <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">The job you would hire for, done every day.</h2>
           <p className="mt-3 text-base leading-relaxed text-muted">
-            The work a security engineer would do, continuously: detect, triage, fix, prove. You step in only where
-            judgment is needed.
+            Not a tool your team has to operate — the work itself, running continuously. You step in only where a
+            judgment call is genuinely yours to make.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -26,6 +26,12 @@ export default function FrameworksIndex() {
             One platform, {FRAMEWORKS.length} frameworks. Pick the one your customers ask for — TensorShield maps your
             findings to its controls, prepares the fixes, and produces signed, auditor-ready evidence.
           </p>
+          {/* Pillar three, stated once and plainly: the evidence is a by-product of the security
+              work, not a second project with its own tool and its own bill. */}
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink">
+            None of it is a separate exercise. The same work that finds and closes a real problem is what fills in the
+            control — so compliance stops being a second project you run alongside security.
+          </p>
         </div>
       </section>
 

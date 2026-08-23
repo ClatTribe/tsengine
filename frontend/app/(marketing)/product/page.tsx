@@ -10,18 +10,47 @@ import { PlatformOverview } from "@/components/marketing/platform-overview";
 import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 
 export const metadata = pageMeta({
-  title: "Product — how TensorShield works",
-  description: "Connect a system and a fractional security team goes to work: detect across every surface, prove what is exploitable, fix it, and prove your compliance.",
+  title: "Continuous exposure validation — find the way in, prove you shut it",
+  description:
+    "TensorShield works out what an attacker could actually reach across your code, cloud, identity and SaaS, breaks in to prove it, writes the fix, then attacks the same hole again to confirm it is dead. Your audit evidence comes out of the same run.",
   path: "/product",
 });
 
+// THE LOOP IS THE PRODUCT — and it is written as five jobs a person has, not six things the
+// machine does. The step that was missing is the fourth: this page described detect → triage →
+// fix → approve → map-to-controls and then stopped, so "fixed" meant the same thing here that it
+// means in every tool the reader has already been let down by — a ticket someone closed. Attacking
+// the same hole again is the whole difference, and it was the one beat the loop did not have.
+//
+// The re-attack condition is stated, not implied: a re-scan runs for everyone, re-running the
+// actual exploit needs the pentester and an engagement authorised for active testing. The homepage
+// carries the same caveat in the same words; if one moves, move both.
 const LOOP = [
-  { name: "connect", t: "Connect", d: "OAuth into GitHub, AWS, Google Workspace, M365, or Okta. The agent discovers your assets — repos, accounts, identities — and starts immediately." },
-  { name: "detect", t: "Detect", d: "It runs the leading open-source scanners across every surface continuously, so coverage matches what a standalone security tool would find." },
-  { name: "triage", t: "Triage & prove", d: "An AI security engineer separates real, exploitable risk from scanner noise — and, where you authorize active testing, proves the exploit with a captured proof you can replay. A finding is confirmed, not just flagged." },
-  { name: "fix", t: "Fix", d: "It prepares the actual remediation — a pull request, a config change, an identity action, or a ticket — ready to ship." },
-  { name: "approve", t: "Approve", d: "Low-risk fixes apply automatically; anything consequential waits for one tap of your approval. Autonomy where it's earned." },
-  { name: "prove", t: "Prove", d: `Every finding maps to controls across ${FRAMEWORK_COUNT} frameworks and lands in a signed, auditor-ready evidence pack — automatically.` },
+  { name: "connect", t: "Connect, read-only", d: "One click of OAuth into GitHub, AWS, Google Workspace, M365 or Okta. Nothing to install, nothing to change in your infrastructure. It finds your repos, accounts and identities itself." },
+  { name: "detect", t: "Find", d: "It looks across code, cloud, identity and SaaS the way an attacker would — including how a small thing in one becomes a serious thing in another. Continuously, so the answer is about today." },
+  { name: "triage", t: "Prove", d: "Every lead is chased to a conclusion: reachable or not, exploitable or not, and what it opens up if it is. Where you have authorised active testing, you get the exact request that worked." },
+  { name: "fix", t: "Fix", d: "The real change arrives written — a pull request, a config change, an access revocation. Routine ones just happen; anything that could break something waits for you." },
+  { name: "approve", t: "Prove it is closed", d: "After the fix, the same hole is tested again — and on an authorised engagement, attacked again. If it still works you hear it from us. \u201cFixed\u201d stops meaning \u201csomebody closed the ticket\u201d." },
+  { name: "prove", t: "Evidence, already made", d: `The same run produces your control state across ${FRAMEWORK_COUNT} frameworks, signed and dated and tied to the finding that proves it — so the questionnaire is mostly answered before anyone sends it.` },
+];
+
+// What a week actually looks like, before and after. This is the section that answers "why do I
+// care", and it is deliberately concrete: a category noun ("continuous monitoring") describes the
+// machine, a Tuesday describes the reader.
+const WEEK_NOW = [
+  ["Monday", "340 new alerts across four tools. Nobody has read last week's."],
+  ["Wednesday", "You pick six by gut feel. You are fairly sure two of them are not real."],
+  ["Friday", "The fixes are tickets now. They will be tickets next quarter too."],
+  ["Next quarter", "The pentest firm finds one you had already ticketed. Six weeks, and stale the week it lands."],
+  ["Never", "Anyone re-tests. \u201cFixed\u201d means somebody closed the ticket."],
+];
+
+const WEEK_WITH = [
+  ["Monday", "Four issues. Each one comes with what it reaches and, where you authorised testing, the request that worked."],
+  ["Tuesday", "You approve three pull requests from your phone. The fourth needs a decision, so it waits for you."],
+  ["Wednesday", "Two are re-tested and gone. The third is not — it reopens itself and says so."],
+  ["Any day", "A customer sends a security questionnaire. Most of it is already answered, signed and dated."],
+  ["Always", "You can say what an attacker could reach today, and show the evidence for it."],
 ];
 
 const PERSONAS = [
@@ -37,11 +66,19 @@ export default function Product() {
       <section className="relative overflow-hidden">
         <AuroraBackdrop />
         <Reveal as="div" className="relative mx-auto max-w-3xl px-5 pb-10 pt-20 text-center">
-          <span className="text-xs font-semibold uppercase tracking-wider text-accent">The product</span>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">A security team in a loop, not a tool in a tab.</h1>
-          <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
-            Connect a system once. TensorShield runs the whole loop — detect, triage, fix, and prove — and pulls you in
-            only where human judgment matters.
+          {/* The category name lives HERE, in the eyebrow and the page title, and never in the
+              headline. Someone who already searches "continuous exposure validation" finds us;
+              someone who does not should never have to learn a category before they understand the
+              offer. Leading with the analyst term is still shouting a feature, in a more senior
+              voice. */}
+          <span className="text-xs font-semibold uppercase tracking-wider text-accent">Continuous exposure validation</span>
+          <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+            Find the way in before someone else does — and prove you shut it.
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-muted">
+            TensorShield goes at your code, cloud, identity and SaaS the way an attacker would. It works out what
+            someone could actually reach, proves it, writes the fix, then tests the same hole again to confirm it is
+            dead — and your audit evidence comes out of the same run.
           </p>
         </Reveal>
       </section>
@@ -62,6 +99,50 @@ export default function Product() {
             </div>
           ))}
         </Reveal>
+        <Reveal delay={120} className="mx-auto mt-8 max-w-3xl rounded-2xl border border-border bg-surface p-6 text-center">
+          <p className="text-base leading-relaxed text-muted">
+            Most teams cover that with a scanner, a pentest firm, a compliance platform and a ticket queue — and then
+            hire the person who runs them. <span className="font-semibold text-ink">That person is what this
+            replaces.</span> It is also why proving a fix is closed matters more than it sounds: buy the pieces
+            separately and the thing that checks your fix works for a different company than the thing that made it.
+          </p>
+        </Reveal>
+      </section>
+
+      {/* What actually changes for you. */}
+      <section className="border-y border-border bg-surface">
+        <div className="mx-auto max-w-5xl px-5 py-20">
+          <Reveal className="mx-auto mb-10 max-w-2xl text-center">
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent">What changes</span>
+            <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
+              Your week, before and after.
+            </h2>
+          </Reveal>
+          <Reveal delay={80} className="grid gap-4 md:grid-cols-2">
+            <div className="card p-6">
+              <div className="text-sm font-semibold text-muted">A normal week today</div>
+              <dl className="mt-4 divide-y divide-border">
+                {WEEK_NOW.map(([d, t]) => (
+                  <div key={d} className="grid grid-cols-[6.5rem_1fr] gap-3 py-3 first:pt-0 last:pb-0">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-faint">{d}</dt>
+                    <dd className="text-sm leading-relaxed text-muted">{t}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div className="card border-accent/40 bg-accent-soft/30 p-6">
+              <div className="text-sm font-semibold text-accent">A normal week with TensorShield</div>
+              <dl className="mt-4 divide-y divide-border">
+                {WEEK_WITH.map(([d, t]) => (
+                  <div key={d} className="grid grid-cols-[6.5rem_1fr] gap-3 py-3 first:pt-0 last:pb-0">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-faint">{d}</dt>
+                    <dd className="text-sm leading-relaxed text-ink">{t}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </Reveal>
+        </div>
       </section>
 
       {/* Two layers */}
