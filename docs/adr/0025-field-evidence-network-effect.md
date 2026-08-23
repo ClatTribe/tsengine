@@ -1,6 +1,6 @@
 # ADR 0025 — Field evidence: the network effect that calibrates VERIFICATION, not just ranking
 
-**Status:** Proposed — **design only, no code.** Nothing in this ADR is built. It names the two
+**Status:** Partially implemented — **F1 and F2 are BUILT single-tenant; F3 and the cross-tenant promotion are blocked on a consent decision, not on effort.** See the Status table. It names the two
 network effects available to this product, argues that only one of them is defensible, and fixes the
 invariants any implementation must satisfy — because the dangerous version of this feature is easy to
 build by accident and hard to withdraw once customers depend on it.
@@ -199,10 +199,11 @@ competitor can make: we can tell a new customer where *not* to trust us, with nu
 
 1. **Segment or publish variance?** Decide before F3; F1/F2 outcomes are less segment-sensitive than
    dispositions, which is another reason they go first.
-2. **Does F1 change `retest` behaviour automatically, or propose it?** Automatically tightening
-   verification is safe in the honest direction, but it is still the corpus changing engine behaviour.
-   Leaning toward automatic, since it can only ever *demand more evidence*, never less — but the
-   inverse (relaxing to rescan-only where re-attack always agreed) must NOT be automatic.
+2. ~~**Does F1 change `retest` behaviour automatically, or propose it?**~~ **SETTLED by the
+   implementation: automatic.** `retest.VerifyWithPolicy` consults the corpus on every pass and can
+   only ever withhold a confirmation, never grant one — asserted in both directions, including that a
+   distrusted class cannot rescue a still-present finding. The inverse (relaxing to rescan-only where
+   re-attack always agreed) is NOT built and must not be, for the reason given here originally.
 3. **How is contribution priced?** A contributing tenant funds the corpus every tenant reads. If
    contribution is free and consumption is paid, the incentive is backwards.
 
@@ -210,8 +211,36 @@ competitor can make: we can tell a new customer where *not* to trust us, with nu
 
 | Item | Effort | Risk | Status |
 |---|---|---|---|
-| **F1** rescan trustworthiness | S–M | low (annotate-only; nothing to suppress) | Proposed — **start here** |
-| **F2** remediation efficacy | M | low | Proposed |
-| **F3** disposition prior | M | **medium** — the suppression temptation lives here | Proposed — after F1/F2 |
-| consent + k-anonymity plumbing | M | — | Proposed — prerequisite to F1 shipping |
+| **F1** rescan trustworthiness | S–M | low (annotate-only; nothing to suppress) | **BUILT, single-tenant** (#1409, #1412) |
+| **F2** remediation efficacy | M | low | **BUILT, single-tenant** (#1413, #1414) |
+| **F3** disposition prior | M | **medium** — the suppression temptation lives here | Proposed — **blocked on the consent decision**, see below |
+| consent + k-anonymity plumbing | M | — | Proposed — **the real next step; a product/contract decision, not an eng one** |
 | fine-tuning | — | — | **Refused** (see above) |
+
+### What "BUILT, single-tenant" means, exactly
+
+F1 and F2 run today over **one tenant's own verification history**, which needs no consent and no
+anonymity threshold: a tenant reading its own record is not a disclosure. Shipped end to end —
+corpus, the `retest` policy that can only demand more evidence, the runner wiring, the API roll-up
+and the screens, each mutation-verified including the wiring itself.
+
+The cross-tenant gates are BUILT AND CONFIGURED but deliberately UNUSED: `MinContributors` and the
+per-tenant weight cap exist and are tested, and `ForTenant`/`RemediationsForTenant` disable both
+EXPLICITLY rather than by omission, because neither applies to your own data. Promotion to the shared
+corpus is a change of inputs and of two options — not a redesign.
+
+### Why the loop stopped here rather than continuing to F3
+
+F3's value is almost entirely **cross-tenant**: a prior built from a new customer's own dispositions
+on day one is empty, and a mature tenant can already suppress what it does not want with an
+`IgnoreRule`. Building the single-tenant half would be building the low-value half of the feed to
+keep moving, which §0 (rank by customer value, not by what is easy to build next) says not to do.
+
+What actually unblocks the rest is not engineering. Three decisions are needed:
+
+1. **Consent** — opt-in contribution, and a page that states exactly what leaves. Invariant 1
+   (world-state keys only) is what keeps that page short enough to be believed.
+2. **Segmentation** — segment the prior, or publish variance beside it. A single blended number
+   quietly averages a bank and a seed-stage startup.
+3. **Pricing** — a contributing tenant funds a corpus every tenant reads. Free contribution and paid
+   consumption has the incentive backwards.
