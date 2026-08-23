@@ -7,9 +7,9 @@ import {
 } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "Attack paths — one leaked key is never just one leaked key",
+  title: "Attack paths across code, cloud and SaaS",
   description:
-    "Three tools each say \u201cmedium\u201d and nobody tells you they are the same way in. We join them into the one route an attacker would take, and show you where to cut it.",
+    "Three tools each say \u201cmedium\u201d and nobody says they are one way in. We join them into the route an attacker would take, and show you where to cut it.",
   path: "/cross-detection",
 });
 

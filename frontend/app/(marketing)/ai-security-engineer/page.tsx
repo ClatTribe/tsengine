@@ -11,9 +11,9 @@ import {
 import { FRAMEWORK_COUNT } from "@/lib/frameworks";
 
 export const metadata = pageMeta({
-  title: "AI Security Engineer — the fix arrives written",
+  title: "AI Security Engineer — it writes the fix",
   description:
-    "It reads the noise so you don't, works out which handful of issues an attacker could actually use, and writes the change to close them. You approve; nothing moves without you.",
+    "It reads the noise so you don't, works out which handful of issues an attacker could really use, and writes the change. You approve; nothing moves without you.",
   path: "/ai-security-engineer",
 });
 

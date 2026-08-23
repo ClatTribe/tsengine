@@ -10,9 +10,11 @@ import { PlatformOverview } from "@/components/marketing/platform-overview";
 import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 
 export const metadata = pageMeta({
-  title: "Continuous exposure validation — find the way in, prove you shut it",
+  // Bare title only — the root layout appends " | TensorShield", and check-seo measures the
+  // RENDERED length against 60. The promise lives in the H1; this is the search result.
+  title: "Continuous exposure validation",
   description:
-    "TensorShield works out what an attacker could actually reach across your code, cloud, identity and SaaS, breaks in to prove it, writes the fix, then attacks the same hole again to confirm it is dead. Your audit evidence comes out of the same run.",
+    "TensorShield works out what an attacker could really reach across your code, cloud, identity and SaaS, proves it, writes the fix, then checks the fix held.",
   path: "/product",
 });
 
