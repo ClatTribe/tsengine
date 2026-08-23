@@ -7,6 +7,7 @@ import { ASSET_SURFACES } from "@/lib/assets";
 import { AuroraBackdrop } from "@/components/marketing/aurora";
 import { Reveal } from "@/components/marketing/reveal";
 import { PlatformOverview } from "@/components/marketing/platform-overview";
+import { EVIDENCE_RUNGS } from "@/lib/evidence-rungs";
 import { UnifiedPlatform } from "@/components/marketing/unified-platform";
 
 export const metadata = pageMeta({
@@ -14,7 +15,7 @@ export const metadata = pageMeta({
   // RENDERED length against 60. The promise lives in the H1; this is the search result.
   title: "Continuous exposure validation",
   description:
-    "Find what an attacker can really reach across code, cloud, identity, SaaS, web apps, APIs and containers — proved by exploiting it, fixed, then re-attacked.",
+    "Find what an attacker can really reach across code, cloud, identity, SaaS, web apps, APIs and containers — how far each is proved, then the fix and a re-test.",
   path: "/product",
 });
 
@@ -30,7 +31,7 @@ export const metadata = pageMeta({
 const LOOP = [
   { name: "connect", t: "Connect, read-only", d: "One click of OAuth into GitHub, AWS, Google Workspace, M365 or Okta. Nothing to install, nothing to change in your infrastructure. It finds your repos, accounts and identities itself." },
   { name: "detect", t: "Find", d: "It looks across code, cloud, identity, SaaS and the web apps, APIs and containers you ship, the way an attacker would — including how a small thing in one becomes a serious thing in another. Continuously, so the answer is about today." },
-  { name: "triage", t: "Prove", d: "Every lead is chased to a conclusion: reachable or not, exploitable or not, and what it opens up if it is. Where you have authorised active testing, you get the exact request that worked." },
+  { name: "triage", t: "Prove", d: "Each lead is pushed as far as we can actually take it, and we tell you which rung it reached. On a web app or API you have authorised, that means breaking in and showing you the request that worked. On other surfaces it means less, and the finding says so rather than borrowing the stronger word." },
   { name: "fix", t: "Fix", d: "The real change arrives written — a pull request, a config change, an access revocation. Routine ones just happen; anything that could break something waits for you." },
   { name: "approve", t: "Prove it is closed", d: "After the fix, the same hole is tested again — and on an authorised engagement, attacked again. If it still works you hear it from us. \u201cFixed\u201d stops meaning \u201csomebody closed the ticket\u201d." },
   { name: "prove", t: "Evidence, already made", d: `The same run produces your control state across ${FRAMEWORK_COUNT} frameworks, signed and dated and tied to the finding that proves it — so the questionnaire is mostly answered before anyone sends it.` },
@@ -79,9 +80,9 @@ export default function Product() {
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-muted">
             TensorShield goes at your code, cloud, identity and SaaS — and the web apps, APIs and containers you
-            ship — the way an attacker would. It works out what someone could actually reach, proves it, writes the
-            fix, then tests the same hole again to confirm it is dead — and your audit evidence comes out of the
-            same run.
+            ship — the way an attacker would. It works out what someone could actually reach, establishes how far
+            we can prove it, writes the fix, then tests the same hole again to confirm it is dead — and your audit
+            evidence comes out of the same run.
           </p>
         </Reveal>
       </section>
@@ -144,6 +145,53 @@ export default function Product() {
                 ))}
               </dl>
             </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* What "proved" means — the evidence ladder, stated rather than implied.
+          This band exists because the page used to say we prove findings across every surface. We
+          exploit on two, ask the provider on one, read the code on one, and report a scanner's word
+          on the rest. A reader who cannot tell those apart supplies the strongest reading, which is
+          the overclaim; and the ladder is checkable, which is worth more here than a stronger
+          adjective. The rows mirror the engine's own enum (lib/evidence-rungs.ts) and a Go guard
+          fails if the two ever disagree. */}
+      <section className="border-y border-border bg-surface">
+        <div className="mx-auto max-w-5xl px-5 py-20">
+          <Reveal className="mx-auto mb-10 max-w-2xl text-center">
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent">What we mean by proved</span>
+            <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
+              Not every finding can be proved the same way. We tell you which.
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-muted">
+              &quot;Verified&quot; is doing a lot of work in this industry. Every finding we show you carries the
+              rung it actually reached, so you never have to guess how much was really done.
+            </p>
+          </Reveal>
+          <Reveal delay={80} className="overflow-hidden rounded-2xl border border-border">
+            {EVIDENCE_RUNGS.map((r, i) => (
+              <div
+                key={r.id}
+                className={`grid gap-x-6 gap-y-1.5 p-5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,1.6fr)] ${
+                  i > 0 ? "border-t border-border" : ""
+                } ${r.claimsExploitability ? "bg-accent-soft/40" : "bg-bg"}`}
+              >
+                <div className="text-sm font-semibold text-ink">
+                  {r.act}
+                  {r.claimsExploitability && (
+                    <span className="ml-2 rounded bg-accent px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-white">
+                      proven exploitable
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-muted">{r.surfaces}</div>
+                <div className="text-sm leading-relaxed text-muted">{r.limit}</div>
+              </div>
+            ))}
+          </Reveal>
+          <Reveal delay={140} className="mx-auto mt-6 max-w-2xl text-center text-sm leading-relaxed text-muted">
+            Only the top rung means someone got in. Everything below it is real evidence and a smaller claim, and
+            we would rather say so than let the word do work the engine did not.
           </Reveal>
         </div>
       </section>
