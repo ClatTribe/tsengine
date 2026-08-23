@@ -79,11 +79,14 @@ func (r EvidenceRung) Label() string {
 // which is the mistake the whole file is here to prevent.
 func (r EvidenceRung) ClaimsExploitability() bool { return r == RungExploited }
 
-// Rung reports the strongest thing we can honestly say about how this finding was established.
+// DeriveRung reports the strongest thing we can honestly say about how this finding was established.
+//
+// It is the AUTHORITY; Finding.Rung is where the L1.5 chain stamps the result so consumers do not
+// each re-derive it. Anything holding a finding from an older store can recompute with this.
 //
 // Order matters and is by ACT, not by confidence: attacking something outranks asking the provider
 // about it, which outranks analysing the code, which outranks two scanners agreeing.
-func (f Finding) Rung() EvidenceRung {
+func (f Finding) DeriveRung() EvidenceRung {
 	// 1. Exploited. A captured proof-of-concept is the artifact a demonstration leaves behind, and
 	//    nothing else in the system produces one — the active driver appends it only when the
 	//    predicate held. The verification state alone is NOT sufficient here: that is the exact

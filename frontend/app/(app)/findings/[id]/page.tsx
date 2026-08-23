@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ShieldAlert, Flame, Wrench, GitPullRequest, Settings2, Ticket, FileWarning, ArrowRight, Radar, FileCode2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { RUNG_SHORT, RUNG_TOOLTIP } from "@/lib/evidence-rungs";
 import { LocalizeFinding } from "@/components/findings/localize-finding";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import { AutofixButton } from "@/components/findings/autofix-button";
@@ -101,7 +102,23 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
         <div>
           <div className="flex items-center gap-2">
             <SeverityBadge severity={f.severity} />
-            {f.verification_status && <Tag>{f.verification_status}</Tag>}
+            {/* The RUNG, not the raw verification word.
+                This rendered `{f.verification_status}` as a bare tag, so "verified" appeared
+                identically on a web finding the agent EXPLOITED and a cloud path the provider's
+                policy simulator merely AUTHORIZED. Those are different claims — the cloud path's own
+                code says so at length — and the reader was left to supply the stronger one.
+                ADR 0029 D2d. */}
+            {f.rung ? (
+              // The tooltip rides on a wrapper because Tag takes no title — same shape the
+              // corroborated-by hint below uses. The badge carries the claim; the tooltip carries
+              // its limit, and the limit is the half that stops "provider-confirmed" being read as
+              // "we broke in".
+              <span title={RUNG_TOOLTIP[f.rung]}>
+                <Tag>{RUNG_SHORT[f.rung]}</Tag>
+              </span>
+            ) : (
+              f.verification_status && <Tag>{f.verification_status}</Tag>
+            )}
             {typeof f.confidence === "number" && f.confidence > 0 && <span className="text-xs text-faint">confidence {f.confidence.toFixed(2)}</span>}
             {corroboratedBy.length > 0 && (
               <span

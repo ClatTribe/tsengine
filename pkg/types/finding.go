@@ -40,7 +40,20 @@ type Finding struct {
 	MITRETechniques []string          `json:"mitre_techniques,omitempty"`
 	CorpusVersion   string            `json:"corpus_version,omitempty"`
 	ToolArgs        map[string]string `json:"tool_args,omitempty"`
-	DiscoveredAt    time.Time         `json:"discovered_at"`
+
+	// Rung is HOW this finding was established — exploited | provider_confirmed |
+	// reachability_confirmed | corroborated | scanner_reported (ADR 0029 D2d).
+	//
+	// DERIVED, not authored: Rung() computes it from the fields above and is the authority. It is
+	// stamped onto the finding by the L1.5 chain so every consumer — the API, the finding page, the
+	// exports — reads one word without each re-deriving it, and so a stored finding carries the same
+	// claim the report does.
+	//
+	// It exists because VerificationStatus could not carry the distinction: "verified" means an
+	// exploit RAN when the offensive agent sets it and means the cloud provider AUTHORIZED it when the
+	// cloud agent does, and the finding page rendered that single word as a bare tag.
+	Rung         EvidenceRung `json:"rung,omitempty"`
+	DiscoveredAt time.Time    `json:"discovered_at"`
 
 	// L1.5 enrichment annotations. Only populated on FindingsEnriched.
 	SurfacePriority *SurfacePriority `json:"surface_priority,omitempty"`

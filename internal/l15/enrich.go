@@ -71,7 +71,8 @@ func EnrichDetailed(findings []types.Finding) Result {
 	if len(findings) == 0 {
 		return Result{Enriched: findings}
 	}
-	tr := tracer.New(os.Getenv("TSENGINE_L15_DISABLED") == "1", hooks.DefaultPerFinding(), hooks.DefaultFinalize())
+	disabled := os.Getenv("TSENGINE_L15_DISABLED") == "1"
+	tr := tracer.New(disabled, hooks.DefaultPerFinding(), hooks.DefaultFinalize())
 	for _, f := range findings {
 		tr.Add(f)
 	}
@@ -94,5 +95,19 @@ func EnrichDetailed(findings []types.Finding) Result {
 			}
 		}
 	}
-	return Result{Enriched: tr.Enriched(), Audit: audit, Dismissed: dismissed}
+	// Stamp the evidence rung LAST, after every hook that could change what it depends on —
+	// confidence sets VerificationStatus in the finalize pass, so deriving earlier would record a rung
+	// for a finding the chain had not finished describing (ADR 0029 D2d).
+	//
+	// Gated on the ablation flag with everything else. A test caught this: the stamp ran
+	// unconditionally, so with L1.5 DISABLED the findings still came back carrying a rung —
+	// enrichment leaking through the ablation, which silently inflates the L1 baseline the flag
+	// exists to measure (§14.1).
+	enriched := tr.Enriched()
+	if !disabled {
+		for i := range enriched {
+			enriched[i].Rung = enriched[i].DeriveRung()
+		}
+	}
+	return Result{Enriched: enriched, Audit: audit, Dismissed: dismissed}
 }

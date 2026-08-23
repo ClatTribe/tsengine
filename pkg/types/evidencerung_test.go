@@ -17,24 +17,24 @@ func TestRung_ExploitedAndProviderConfirmedAreNotTheSameClaim(t *testing.T) {
 		Description: "role can reach admin; every hop allowed by the provider's simulator",
 	}
 
-	if exploited.Rung() != RungExploited {
-		t.Errorf("an exploit with a captured PoC is %q, want %q", exploited.Rung(), RungExploited)
+	if exploited.DeriveRung() != RungExploited {
+		t.Errorf("an exploit with a captured PoC is %q, want %q", exploited.DeriveRung(), RungExploited)
 	}
-	if authorized.Rung() != RungProviderConfirmed {
-		t.Errorf("a provider-simulated cloud path is %q, want %q", authorized.Rung(), RungProviderConfirmed)
+	if authorized.DeriveRung() != RungProviderConfirmed {
+		t.Errorf("a provider-simulated cloud path is %q, want %q", authorized.DeriveRung(), RungProviderConfirmed)
 	}
-	if exploited.Rung() == authorized.Rung() {
+	if exploited.DeriveRung() == authorized.DeriveRung() {
 		t.Fatal("the two rungs are identical. One of these was attacked and one was asked about; " +
 			"rendering them the same is the defect ADR 0029 D2d exists to close.")
 	}
-	if !exploited.Rung().ClaimsExploitability() {
+	if !exploited.DeriveRung().ClaimsExploitability() {
 		t.Error("an exploited finding must be allowed to claim exploitability")
 	}
-	if authorized.Rung().ClaimsExploitability() {
+	if authorized.DeriveRung().ClaimsExploitability() {
 		t.Error("a provider-confirmed AUTHORIZATION must never claim exploitability (ADR 0024 C1). " +
 			"This is the single most important assertion in this file.")
 	}
-	if exploited.Rung().Label() == authorized.Rung().Label() {
+	if exploited.DeriveRung().Label() == authorized.DeriveRung().Label() {
 		t.Error("the two labels read identically to a human, which is where the claim is actually made")
 	}
 }
@@ -90,7 +90,7 @@ func TestRung_TheLadder(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.f.Rung(); got != tc.want {
+			if got := tc.f.DeriveRung(); got != tc.want {
 				t.Errorf("rung = %q, want %q", got, tc.want)
 			}
 		})
@@ -117,7 +117,7 @@ func TestRung_OffensiveProducerListIsClosed(t *testing.T) {
 	// reachable by a name that merely looks offensive.
 	for _, tool := range []string{"nuclei", "sqlmap", "dalfox", "grype", "web-investigator", "pentester"} {
 		f := Finding{Tool: tool, VerificationStatus: VerificationVerified}
-		if f.Rung() == RungExploited {
+		if f.DeriveRung() == RungExploited {
 			t.Errorf("%q was treated as an offensive producer. Membership must be a deliberate entry in "+
 				"the list, not a resemblance to one of the names in it.", tool)
 		}

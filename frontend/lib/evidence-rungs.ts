@@ -68,3 +68,22 @@ export const EVIDENCE_RUNGS: EvidenceRung[] = [
       "A lead worth looking at, and where most findings honestly sit. We label it rather than dressing it up.",
   },
 ];
+
+/**
+ * RUNG_SHORT is the badge text — what fits beside a severity chip.
+ *
+ * Deliberately not the raw id: "provider_confirmed" is our word, and a customer reading a badge
+ * should get the claim, not the enum. The full sentence lives in the tooltip.
+ */
+export const RUNG_SHORT: Record<EvidenceRungID, string> = {
+  exploited: "exploited",
+  provider_confirmed: "provider-confirmed",
+  reachability_confirmed: "reachable in your code",
+  corroborated: "corroborated",
+  scanner_reported: "scanner-reported",
+};
+
+/** RUNG_TOOLTIP states the limit of the claim, which is the half a badge cannot carry. */
+export const RUNG_TOOLTIP: Record<EvidenceRungID, string> = Object.fromEntries(
+  EVIDENCE_RUNGS.map((r) => [r.id, `${r.act}. ${r.limit}`]),
+) as Record<EvidenceRungID, string>;

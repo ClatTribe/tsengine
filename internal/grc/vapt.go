@@ -238,7 +238,7 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 			ID: f.ID, Title: f.Title, Severity: sev, Tool: f.Tool, RuleID: f.RuleID,
 			Endpoint: f.Endpoint, CWE: f.CWE, MITRE: f.MITRETechniques, Description: descBody, PoC: poc,
 			OWASP: owaspFor(f.CWE, f.Tool), Remediation: remediationFor(f.CWE, f.Tool),
-			Verification: string(f.VerificationStatus), Rung: string(f.Rung()), Confidence: f.Confidence, DiscoveredAt: f.DiscoveredAt,
+			Verification: string(f.VerificationStatus), Rung: string(f.DeriveRung()), Confidence: f.Confidence, DiscoveredAt: f.DiscoveredAt,
 			Unconfirmed: !confirmed, KEV: kev, FixReady: fixReady[f.ID],
 		}
 		if f.ThreatIntel != nil {
