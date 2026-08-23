@@ -179,3 +179,61 @@ func TestHomepageStatesTheApprovalGate(t *testing.T) {
 		"That gate is the product's central claim against fully-autonomous competitors, and a buyer " +
 		"who does not expect it meets it for the first time in their inbox.")
 }
+
+// # 3. The surface list must not omit the surface we are BEST at
+//
+// The inverse of the usual marketing guard, and worth having for that reason. Most copy checks stop
+// a claim we cannot support; this one stops an omission that costs us.
+//
+// /product described the surfaces as "code, cloud, identity and SaaS" in its SEO description, its
+// hero and its Find card. That silently dropped web apps, APIs and containers — three of the seven
+// focus assets, and the ones carrying the strongest capability in the product (exploitation-proven
+// web/API testing, benchmarked above published SOTA). A security buyer evaluating exposure coverage
+// works down an asset checklist, and we were failing rows we actually win.
+//
+// Deliberately narrow: it checks the ONE page whose job is the full capability story. The homepage
+// speaks to a different buyer and is allowed to be shorter.
+func TestProductPageNamesTheSurfacesWeAreStrongestAt(t *testing.T) {
+	dir := frontendDir(t)
+	b, err := os.ReadFile(filepath.Join(dir, "app", "(marketing)", "product", "page.tsx"))
+	if err != nil {
+		t.Fatalf("cannot read the product page: %v — if it moved, update this guard rather than "+
+			"letting it cover nothing", err)
+	}
+	// Scoped to the SEO description — one user-visible string, and the first thing a security buyer
+	// searching the category reads. A bare Contains over the whole file was the first version and it
+	// was worthless: "api" occurs in import paths and component names, so reverting the copy left the
+	// guard green. Check the sentence, not the file.
+	desc := descriptionOf(string(b))
+	if desc == "" {
+		t.Fatal("could not find the product page's description string: this guard cannot see its subject")
+	}
+	low := strings.ToLower(desc)
+	for _, surface := range []string{"api", "container"} {
+		if !strings.Contains(low, surface) {
+			t.Errorf("the product page description never mentions %q:\n  %s\n\n"+
+				"It is one of the seven focus assets and, for web/API, the surface carrying our "+
+				"strongest measured capability. A buyer working down an asset checklist marks it "+
+				"absent — we lose a row we actually win.", surface, desc)
+		}
+	}
+}
+
+// descriptionOf lifts the metadata description string from a marketing page.
+func descriptionOf(src string) string {
+	i := strings.Index(src, "description:")
+	if i < 0 {
+		return ""
+	}
+	rest := src[i:]
+	a := strings.Index(rest, `"`)
+	if a < 0 {
+		return ""
+	}
+	rest = rest[a+1:]
+	b := strings.Index(rest, `"`)
+	if b < 0 {
+		return ""
+	}
+	return rest[:b]
+}
