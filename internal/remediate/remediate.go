@@ -68,7 +68,7 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		// connector write path (today: AWS S3 public-access block), carry the
 		// machine-readable remediation_type + the resource-level target so connector.Apply
 		// can promote it from a runbook to a real, HITL-gated mutation (ADR 0009 Phase 5).
-		payload := map[string]any{"target": asset.Target, "remediation": fixBody(f)}
+		payload := map[string]any{"target": asset.Target, "remediation": fixBody(f), "owner": ownerLine(asset)}
 		if rt, tgt := liveCloudMutation(f, asset.Meta["provider"]); rt != "" {
 			payload["remediation_type"] = rt
 			payload["target"] = tgt // the specific bucket, not the whole account
@@ -116,6 +116,7 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 			"target":      nz(f.Endpoint, asset.Target),
 			"remediation": runbook + "\n\n" + fixBody(f),
 			"summary":     runbook,
+			"owner":       ownerLine(asset),
 		}
 		// Mitigate now, patch later: for a class whose real fix is a CODE change, something at the
 		// edge or the runtime can reduce exposure today. Carried ALONGSIDE the fix, never instead of
@@ -141,8 +142,26 @@ func genericTicket(f types.Finding, asset platform.Asset, idgen func() string) p
 		ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 		Kind: platform.ActFileTicket, Tier: 1, Status: platform.ActProposed,
 		Title:   "tsengine: review " + f.Title,
-		Payload: map[string]any{"summary": fixBody(f)},
+		Payload: map[string]any{"summary": fixBody(f), "owner": ownerLine(asset)},
 	}
+}
+
+// ownerLine names who this asset belongs to, for the ticket body and the approval desk.
+//
+// An unowned asset SAYS it is unowned. The alternative — silence, or a fallback to the tenant owner —
+// either loses the question or answers it with a name nobody agreed to, and "nobody owns this" is
+// exactly what a scoping exercise needs to see (ADR 0028 G1).
+func ownerLine(asset platform.Asset) string {
+	switch {
+	case asset.Owner != "" && asset.Team != "":
+		return "Owner: " + asset.Owner + " (" + asset.Team + ")"
+	case asset.Owner != "":
+		return "Owner: " + asset.Owner
+	case asset.Team != "":
+		return "Owner: " + asset.Team
+	}
+	return "Owner: UNASSIGNED — nobody is recorded as owning this asset, so this fix has no route to " +
+		"a person. Set an owner on the asset."
 }
 
 func fixBody(f types.Finding) string {
