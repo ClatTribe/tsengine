@@ -7,7 +7,7 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
-func ruleIDs(fs []types.Finding) []string {
+func ruleIDs(fs []types.SandboxEmittedFinding) []string {
 	out := make([]string, 0, len(fs))
 	for _, f := range fs {
 		out = append(out, f.RuleID)

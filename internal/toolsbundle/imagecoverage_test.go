@@ -44,6 +44,7 @@ func TestSandboxImageProvidesEveryToolBinary(t *testing.T) {
 	// registers as "openapi_spec_ingest").
 	inProcess := map[string]bool{
 		"crtsh":               true, // crt.sh JSON API over HTTPS
+		"api_response_sample": true, // unauthenticated GET + classify via internal/dataclass
 		"openapi_spec_ingest": true, // spec fetch + parse
 		"seed_auth":           true, // form/passthrough login via net/http
 	}

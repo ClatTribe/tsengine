@@ -13,6 +13,7 @@ package toolsbundle
 
 import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
+	_ "github.com/ClatTribe/tsengine/internal/tool/apisample"
 	_ "github.com/ClatTribe/tsengine/internal/tool/apkid"
 	_ "github.com/ClatTribe/tsengine/internal/tool/bandit"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"

@@ -48,6 +48,42 @@ func TestScopeCoverageCountsDetectableFromTheProseNotAFlag(t *testing.T) {
 	}
 }
 
+// COVERED, GATED AND UNCOVERED ARE THREE CLAIMS, NOT TWO. A class detected only when
+// an owner supplies two identities, or only inside an L2 agent run, is not something a
+// customer experiences from a normal scan — reporting it as covered describes a
+// capability they will not see. Nor is it uncovered: the detector exists. An item lands
+// in the WORST bucket any of its classes earns.
+func TestGatedIsItsOwnBucketAndAnItemTakesItsWorstClass(t *testing.T) {
+	f := &Fixture{DocumentedVulnerabilities: []DocumentedVuln{
+		{Class: "Excessive data exposure", CoveredBy: "apisample + apiexposure", OWASPAPI: "API3"},
+		{Class: "Mass assignment", CoveredBy: "privesc_probe", OWASPAPI: "API3", Gated: true},
+		{Class: "BOLA", CoveredBy: "apiauthz", OWASPAPI: "API1", Gated: true},
+		{Class: "SSRF", CoveredBy: "nuclei", OWASPAPI: "API7"},
+		{Class: "Rate limiting", CoveredBy: "NOT COVERED", OWASPAPI: "API4"},
+	}}
+	sc := scopeCoverage(f)
+
+	// API3 has one ungated and one gated class: gated wins, because a customer running
+	// a normal scan gets only half of it.
+	if len(sc.OWASPCovered) != 1 || sc.OWASPCovered[0] != "API7" {
+		t.Errorf("covered = %v, want [API7] only — API3 has a gated class and must not be credited", sc.OWASPCovered)
+	}
+	if len(sc.OWASPGated) != 2 || sc.OWASPGated[0] != "API1" || sc.OWASPGated[1] != "API3" {
+		t.Errorf("gated = %v, want [API1 API3]", sc.OWASPGated)
+	}
+	if len(sc.OWASPUncovered) != 1 || sc.OWASPUncovered[0] != "API4" {
+		t.Errorf("uncovered = %v, want [API4]", sc.OWASPUncovered)
+	}
+	// A gated class is still DETECTABLE — the detector exists — so it counts toward the
+	// denominator's detectable tally rather than being written off.
+	if sc.Detectable != 4 {
+		t.Errorf("detectable = %d, want 4 (gated classes are detected, just not by default)", sc.Detectable)
+	}
+	if len(sc.GatedClasses) != 2 {
+		t.Errorf("gated classes = %v, want both named", sc.GatedClasses)
+	}
+}
+
 // THE LOAD-BEARING RULE. An OWASP item with one covered class and one uncovered class
 // is a GAP, not a win. Crediting it is the direction that overclaims, and it is the
 // direction a careless implementation takes, because the covered class is seen first.

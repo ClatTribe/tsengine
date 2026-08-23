@@ -99,6 +99,17 @@ type DocumentedVuln struct {
 	// worth recording: VAmPI's headline SQL injection is not a 2023 Top 10 item,
 	// because Injection was folded away when the list was revised.
 	OWASPAPI string `json:"owasp_api,omitempty"`
+
+	// Gated marks a class that IS detected, but only when a precondition outside a
+	// normal scan is met — an owner supplying two identities, or an L2 agent run.
+	//
+	// COVERED AND GATED ARE DIFFERENT CLAIMS AND MUST NOT COLLAPSE. ADR 0026's whole
+	// finding is that API1 and API5 have a real differential prober which never fires
+	// by default, so a scoreboard reporting them as flatly "covered" would describe a
+	// capability the customer will not experience. Reported as its own bucket rather
+	// than folded into either, because folding it into covered overclaims and folding
+	// it into uncovered erases work that exists.
+	Gated bool `json:"gated,omitempty"`
 }
 
 // Covered reports whether anything in the product detects this class today. It reads

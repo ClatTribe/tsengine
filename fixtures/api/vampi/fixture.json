@@ -25,27 +25,30 @@
       "endpoint": "GET/POST /books/v1/{book}",
       "cwe": "CWE-639",
       "covered_by": "bola_probe / apiauthz — L2 agent + operator-declared TestConfig, NOT the L1 anchor pass",
-      "owasp_api": "API1"
+      "owasp_api": "API1",
+      "gated": true
     },
     {
       "class": "Unauthorized password change",
       "endpoint": "PUT /users/v1/{username}/password",
       "cwe": "CWE-863",
       "covered_by": "apiauthz TestConfig — needs two declared identities",
-      "owasp_api": "API5"
+      "owasp_api": "API5",
+      "gated": true
     },
     {
       "class": "Mass assignment",
       "endpoint": "register/update",
       "cwe": "CWE-915",
       "covered_by": "privesc_probe — L2 agent tool",
-      "owasp_api": "API3"
+      "owasp_api": "API3",
+      "gated": true
     },
     {
       "class": "Excessive data exposure",
       "endpoint": "GET /users/v1/_debug",
       "cwe": "CWE-200",
-      "covered_by": "NOT COVERED — no L1 detector for over-broad response bodies",
+      "covered_by": "apisample + apiexposure — unauthenticated GET, classified via internal/dataclass",
       "owasp_api": "API3"
     },
     {

@@ -72,8 +72,8 @@ type Response struct {
 // Assess classifies each response body and returns findings under the rules above.
 // A body that is not JSON, is empty, or classifies to nothing yields nothing — a
 // clean API produces zero findings.
-func Assess(responses []Response) []types.Finding {
-	var out []types.Finding
+func Assess(responses []Response) []types.SandboxEmittedFinding {
+	var out []types.SandboxEmittedFinding
 	for _, r := range responses {
 		cols := columnsFromJSON(r.Body)
 		if len(cols) == 0 {
@@ -94,7 +94,7 @@ func Assess(responses []Response) []types.Finding {
 }
 
 // finding applies the grounding line to one classified response.
-func finding(r Response, res dataclass.Result) (types.Finding, bool) {
+func finding(r Response, res dataclass.Result) (types.SandboxEmittedFinding, bool) {
 	credential := false
 	var personal []string
 	for _, c := range res.Classes {
@@ -108,7 +108,7 @@ func finding(r Response, res dataclass.Result) (types.Finding, bool) {
 
 	switch {
 	case credential:
-		return types.Finding{
+		return types.SandboxEmittedFinding{
 			RuleID:      RuleCredential,
 			Tool:        "apiexposure",
 			Severity:    types.SeverityHigh,
@@ -120,7 +120,7 @@ func finding(r Response, res dataclass.Result) (types.Finding, bool) {
 		}, true
 
 	case len(personal) > 0 && !r.Authenticated:
-		return types.Finding{
+		return types.SandboxEmittedFinding{
 			RuleID:      RuleUnauthPersonal,
 			Tool:        "apiexposure",
 			Severity:    types.SeverityHigh,
@@ -136,7 +136,7 @@ func finding(r Response, res dataclass.Result) (types.Finding, bool) {
 		// vulnerability — but it is recorded, because "we looked and said nothing" and "we
 		// never looked" must not render identically. Whether the caller was entitled to
 		// ANOTHER user's data is API1 and needs apiauthz's two identities to answer.
-		return types.Finding{
+		return types.SandboxEmittedFinding{
 			RuleID:      RuleObservation,
 			Tool:        "apiexposure",
 			Severity:    types.SeverityInfo,
@@ -147,7 +147,7 @@ func finding(r Response, res dataclass.Result) (types.Finding, bool) {
 			ToolArgs:    map[string]string{"owasp_api": "API3", "authenticated": "true"},
 		}, true
 	}
-	return types.Finding{}, false
+	return types.SandboxEmittedFinding{}, false
 }
 
 // describe renders the classifier's own evidence. dataclass guarantees the evidence

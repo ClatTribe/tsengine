@@ -58,9 +58,18 @@ type ScopeCoverage struct {
 	// rather than counted: a count says something is missing without letting
 	// anyone see what, or disagree.
 	UncoveredClasses []string `json:"uncovered_classes,omitempty"`
-	// OWASPCovered / OWASPUncovered partition the mapped Top 10 items, so a claim
-	// about the list is reported per item instead of as one figure.
+	// GatedClasses names what is detected only behind a precondition.
+	GatedClasses []string `json:"gated_classes,omitempty"`
+	// OWASPCovered / OWASPGated / OWASPUncovered partition the mapped Top 10 items,
+	// so a claim about the list is reported per item instead of as one figure.
+	//
+	// GATED IS ITS OWN BUCKET. An item detected only when an owner supplies two
+	// identities, or only inside an L2 agent run, is not something a customer
+	// experiences from a normal scan — reporting it as covered describes a
+	// capability they will not see. Nor is it uncovered: the detector exists. An
+	// item is Covered only when EVERY mapped class is detected without a gate.
 	OWASPCovered   []string `json:"owasp_covered,omitempty"`
+	OWASPGated     []string `json:"owasp_gated,omitempty"`
 	OWASPUncovered []string `json:"owasp_uncovered,omitempty"`
 }
 
@@ -72,33 +81,45 @@ func scopeCoverage(f *Fixture) *ScopeCoverage {
 		return nil
 	}
 	sc := &ScopeCoverage{Documented: len(f.DocumentedVulnerabilities), Measured: len(f.MustFind)}
-	seenCov, seenUnc := map[string]bool{}, map[string]bool{}
+	// An item lands in the WORST bucket any of its classes earns: uncovered beats
+	// gated beats covered. A partial is a gap, and the reverse — crediting the item
+	// because one class is fine — is the direction that overclaims, and the one a
+	// careless implementation takes because the covered class is encountered first.
+	worst := map[string]int{} // 0 covered, 1 gated, 2 uncovered
+	bump := func(id string, rank int) {
+		if id == "" {
+			return
+		}
+		if cur, seen := worst[id]; !seen || rank > cur {
+			worst[id] = rank
+		}
+	}
 	for _, d := range f.DocumentedVulnerabilities {
-		if d.Covered() {
+		switch {
+		case !d.Covered():
+			sc.UncoveredClasses = append(sc.UncoveredClasses, d.Class)
+			bump(d.OWASPAPI, 2)
+		case d.Gated:
 			sc.Detectable++
-			if d.OWASPAPI != "" && !seenCov[d.OWASPAPI] {
-				seenCov[d.OWASPAPI] = true
-				sc.OWASPCovered = append(sc.OWASPCovered, d.OWASPAPI)
-			}
-			continue
-		}
-		sc.UncoveredClasses = append(sc.UncoveredClasses, d.Class)
-		if d.OWASPAPI != "" && !seenUnc[d.OWASPAPI] {
-			seenUnc[d.OWASPAPI] = true
-			sc.OWASPUncovered = append(sc.OWASPUncovered, d.OWASPAPI)
+			sc.GatedClasses = append(sc.GatedClasses, d.Class)
+			bump(d.OWASPAPI, 1)
+		default:
+			sc.Detectable++
+			bump(d.OWASPAPI, 0)
 		}
 	}
-	// An item with one covered class and one uncovered class is NOT covered: the
-	// list is scored per item, and a partial is a gap. Reported this way round
-	// because the reverse — crediting the item — is the direction that overclaims.
-	kept := sc.OWASPCovered[:0]
-	for _, id := range sc.OWASPCovered {
-		if !seenUnc[id] {
-			kept = append(kept, id)
+	for id, rank := range worst {
+		switch rank {
+		case 0:
+			sc.OWASPCovered = append(sc.OWASPCovered, id)
+		case 1:
+			sc.OWASPGated = append(sc.OWASPGated, id)
+		default:
+			sc.OWASPUncovered = append(sc.OWASPUncovered, id)
 		}
 	}
-	sc.OWASPCovered = kept
 	sort.Strings(sc.OWASPCovered)
+	sort.Strings(sc.OWASPGated)
 	sort.Strings(sc.OWASPUncovered)
 	return sc
 }
