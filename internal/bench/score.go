@@ -34,6 +34,94 @@ type Score struct {
 	// product, this is a statement about the run. See withholdIfTruncated.
 	Unmeasured       bool   `json:"unmeasured,omitempty"`
 	UnmeasuredReason string `json:"unmeasured_reason,omitempty"`
+
+	// Scope qualifies DetectionRecall against the target's OWN documented defect
+	// list. Present only when the fixture records one.
+	//
+	// DetectionRecall is recall over MustFind, and MustFind is deliberately the
+	// subset a scan can currently surface — so on a target documenting nine
+	// defects with one of them in MustFind, a perfect 1.000 means "we found the
+	// one we look for", not "we found everything". Rendering the first without
+	// the second is how a narrow gate comes to read as broad coverage.
+	Scope *ScopeCoverage `json:"scope,omitempty"`
+}
+
+// ScopeCoverage is the honest denominator behind a recall figure.
+type ScopeCoverage struct {
+	// Documented is how many defects the target is documented to contain.
+	Documented int `json:"documented"`
+	// Detectable is how many of those anything in the product covers today.
+	Detectable int `json:"detectable"`
+	// Measured is how many the fixture actually gates on (len(MustFind)).
+	Measured int `json:"measured"`
+	// UncoveredClasses names what the target contains and nothing detects. Named
+	// rather than counted: a count says something is missing without letting
+	// anyone see what, or disagree.
+	UncoveredClasses []string `json:"uncovered_classes,omitempty"`
+	// GatedClasses names what is detected only behind a precondition.
+	GatedClasses []string `json:"gated_classes,omitempty"`
+	// OWASPCovered / OWASPGated / OWASPUncovered partition the mapped Top 10 items,
+	// so a claim about the list is reported per item instead of as one figure.
+	//
+	// GATED IS ITS OWN BUCKET. An item detected only when an owner supplies two
+	// identities, or only inside an L2 agent run, is not something a customer
+	// experiences from a normal scan — reporting it as covered describes a
+	// capability they will not see. Nor is it uncovered: the detector exists. An
+	// item is Covered only when EVERY mapped class is detected without a gate.
+	OWASPCovered   []string `json:"owasp_covered,omitempty"`
+	OWASPGated     []string `json:"owasp_gated,omitempty"`
+	OWASPUncovered []string `json:"owasp_uncovered,omitempty"`
+}
+
+// scopeCoverage builds the qualifier from the fixture's documented list. Returns nil
+// when the fixture records none — absent, not zeroed, so a fixture without a
+// documented denominator does not render as one with an empty one.
+func scopeCoverage(f *Fixture) *ScopeCoverage {
+	if len(f.DocumentedVulnerabilities) == 0 {
+		return nil
+	}
+	sc := &ScopeCoverage{Documented: len(f.DocumentedVulnerabilities), Measured: len(f.MustFind)}
+	// An item lands in the WORST bucket any of its classes earns: uncovered beats
+	// gated beats covered. A partial is a gap, and the reverse — crediting the item
+	// because one class is fine — is the direction that overclaims, and the one a
+	// careless implementation takes because the covered class is encountered first.
+	worst := map[string]int{} // 0 covered, 1 gated, 2 uncovered
+	bump := func(id string, rank int) {
+		if id == "" {
+			return
+		}
+		if cur, seen := worst[id]; !seen || rank > cur {
+			worst[id] = rank
+		}
+	}
+	for _, d := range f.DocumentedVulnerabilities {
+		switch {
+		case !d.Covered():
+			sc.UncoveredClasses = append(sc.UncoveredClasses, d.Class)
+			bump(d.OWASPAPI, 2)
+		case d.Gated:
+			sc.Detectable++
+			sc.GatedClasses = append(sc.GatedClasses, d.Class)
+			bump(d.OWASPAPI, 1)
+		default:
+			sc.Detectable++
+			bump(d.OWASPAPI, 0)
+		}
+	}
+	for id, rank := range worst {
+		switch rank {
+		case 0:
+			sc.OWASPCovered = append(sc.OWASPCovered, id)
+		case 1:
+			sc.OWASPGated = append(sc.OWASPGated, id)
+		default:
+			sc.OWASPUncovered = append(sc.OWASPUncovered, id)
+		}
+	}
+	sort.Strings(sc.OWASPCovered)
+	sort.Strings(sc.OWASPGated)
+	sort.Strings(sc.OWASPUncovered)
+	return sc
 }
 
 // ScoreScan evaluates a scan against a fixture. Detection is scored on
@@ -69,6 +157,9 @@ func ScoreScan(f *Fixture, scan *types.Scan) Score {
 	} else {
 		s.DetectionRecall = 1.0 // nothing required → trivially complete
 	}
+	// Attach the honest denominator wherever the fixture records one, so the recall
+	// above is never read as coverage of the whole target. See ScopeCoverage.
+	s.Scope = scopeCoverage(f)
 
 	// False positives over must_not_find (specific rule_ids that must not appear).
 	for _, bad := range f.MustNotFind {

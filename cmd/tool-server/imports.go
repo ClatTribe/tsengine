@@ -5,6 +5,7 @@ package main
 // AND adding its binary to docker/sandbox/Dockerfile.
 import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/amass"
+	_ "github.com/ClatTribe/tsengine/internal/tool/apisample"
 	_ "github.com/ClatTribe/tsengine/internal/tool/bandit"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkdmarc"
 	_ "github.com/ClatTribe/tsengine/internal/tool/checkov"

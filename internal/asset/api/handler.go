@@ -121,6 +121,23 @@ func (h *Handler) PlanFanout(target types.Asset, surface []string) []asset.Dispa
 				"tags":    apiNucleiTags,
 			}})
 		}
+		// OWASP API3 — excessive data exposure. nuclei matches SIGNATURES and cannot
+		// answer "does this endpoint hand back data the caller should not have": that
+		// is a question about the CONTENT of a response, and no template encodes it.
+		// api_response_sample GETs each declared operation with NO credentials and
+		// classifies the bodies through internal/dataclass, so an endpoint returning
+		// personal data or a credential to an anonymous caller becomes a finding.
+		//
+		// It runs here rather than as an escalation because the signal it needs is the
+		// surface itself — there is no cheaper precondition to wait for, and a check
+		// gated on a trigger nobody hits is the shape ADR 0026 records as the reason
+		// API1 and API5 never fire. Bounded and GET-only by construction; see the
+		// package doc for why that makes it safe outside the RoE gate.
+		if smp, ok := tool.Get("api_response_sample"); ok {
+			out = append(out, asset.Dispatch{Tool: smp, Args: tool.Args{
+				"targets": strings.Join(dedup(endpoints), "\n"),
+			}})
+		}
 	}
 
 	// INJECTION IS A FUZZING JOB, NOT A SIGNATURE ONE.
