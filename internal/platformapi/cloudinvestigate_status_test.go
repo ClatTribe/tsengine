@@ -59,7 +59,7 @@ func TestCloudIssueToFinding_VerificationStatusFollowsTheRung(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := cloudIssueToFinding("f1", tc.is).VerificationStatus
+			got := cloudIssueToFinding("f1", tc.is, nil).VerificationStatus
 			if got != tc.want {
 				t.Fatalf("rung %q/%v → status %q, want %q",
 					tc.is.AuthorizationCoverage, tc.is.ProviderConfirmed, got, tc.want)
@@ -71,7 +71,7 @@ func TestCloudIssueToFinding_VerificationStatusFollowsTheRung(t *testing.T) {
 // The specific regression, stated as itself rather than as a table row: the old code returned
 // verified unconditionally, and this is the input that made that a lie.
 func TestCloudIssueToFinding_AnUncheckedPathIsNotVerified(t *testing.T) {
-	f := cloudIssueToFinding("f1", cloudagent.Issue{Target: "arn:aws:s3:::crown", Severity: "critical"})
+	f := cloudIssueToFinding("f1", cloudagent.Issue{Target: "arn:aws:s3:::crown", Severity: "critical"}, nil)
 	if f.VerificationStatus == types.VerificationVerified {
 		t.Fatal("a path no provider was asked about carries the tier reserved for one an " +
 			"independent method actively confirmed — grc/vapt will count it as tool-confirmed in " +
