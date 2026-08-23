@@ -40,6 +40,10 @@ type Point struct {
 	// Episodes ran that day; Unscored is how many of them produced no measurable delta.
 	Episodes int `json:"episodes"`
 	Unscored int `json:"unscored"`
+	// NetChange is Closed minus Opened, serialised so the reader is not doing arithmetic across
+	// eight rows to see direction. Net() computed this and nothing called it — a method with a
+	// carefully argued name and no caller.
+	NetChange int `json:"net_change"`
 }
 
 // Net is closed minus opened for the period. Negative means exposure grew.
@@ -116,7 +120,9 @@ func Compute(eps []platform.EpisodeRecord, actions []platform.Action, scope stri
 	}
 	sort.Strings(days)
 	for _, d := range days {
-		t.Points = append(t.Points, *byDay[d])
+		p := *byDay[d]
+		p.NetChange = p.Net()
+		t.Points = append(t.Points, p)
 	}
 	for s := range scopes {
 		t.ScopesIncluded = append(t.ScopesIncluded, s)

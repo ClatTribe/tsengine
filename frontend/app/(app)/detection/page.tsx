@@ -37,6 +37,9 @@ export default async function DetectionPage() {
             </span>
             <span className="text-muted">
               <span className="font-medium text-high">{dv.not_detected}</span> missed
+              {dv.missed_proven > 0 && (
+                <span className="text-high"> ({dv.missed_proven} of them proved a real vulnerability)</span>
+              )}
             </span>
             <span className="text-muted">
               <span className="font-medium text-medium">{dv.undetermined}</span> undetermined
@@ -64,7 +67,14 @@ export default async function DetectionPage() {
                         )}
                       </>
                     )}
-                    {r.verdict === "not_detected" && <>Your controls did not report this probe</>}
+                    {r.verdict === "not_detected" && (
+                      <>
+                        Your controls did not report this probe
+                        {r.proven && (
+                          <span className="text-high"> — and this one proved a real vulnerability</span>
+                        )}
+                      </>
+                    )}
                     {r.verdict === "undetermined" && <>We cannot tell whether this was detected</>}
                   </div>
                   <div className="mt-0.5 truncate font-mono text-xs text-subtle">{r.target}</div>

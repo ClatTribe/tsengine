@@ -76,6 +76,11 @@ type Result struct {
 	Blocked bool   `json:"blocked,omitempty"`
 	Why     string `json:"why,omitempty"`
 	EventID string `json:"event_id,omitempty"`
+	// Proven reports that this probe actually DEMONSTRATED a vulnerability, not merely that it was
+	// attempted. It rode on the Probe and was never read, which flattened the sharpest statement this
+	// package can make: "your controls missed a probe" and "your controls missed the attack that
+	// worked" are the same sentence without it, and only the second is an incident.
+	Proven bool `json:"proven,omitempty"`
 }
 
 // Report is the estate-wide answer.
@@ -85,8 +90,12 @@ type Report struct {
 	NotDetected  int      `json:"not_detected"`
 	Undetermined int      `json:"undetermined"`
 	// Blocked counts detections where a control intervened rather than observed.
-	Blocked int    `json:"blocked"`
-	Caveat  string `json:"caveat"`
+	Blocked int `json:"blocked"`
+	// MissedProven counts probes that DEMONSTRATED a vulnerability and which the controls did not
+	// report. It is the number worth acting on: a missed probe that proved nothing is a coverage gap,
+	// a missed probe that WORKED is an attacker who would not have been seen.
+	MissedProven int    `json:"missed_proven"`
+	Caveat       string `json:"caveat"`
 }
 
 const caveat = "A probe with no matching alert is only reported as a MISS when the sensor proved it " +
@@ -107,7 +116,7 @@ func Validate(probes []Probe, events []platform.RuntimeEvent, window time.Durati
 		if strings.TrimSpace(p.Canary) == "" {
 			continue // nothing to join on; never guessed at (§10)
 		}
-		r := Result{Canary: p.Canary, Target: p.Target}
+		r := Result{Canary: p.Canary, Target: p.Target, Proven: p.Proven}
 		var alive bool
 		var best *platform.RuntimeEvent
 		var bestStrength string
@@ -144,6 +153,9 @@ func Validate(probes []Probe, events []platform.RuntimeEvent, window time.Durati
 			r.Why = "the sensor reported other activity in this window, so it was watching and did " +
 				"not report this"
 			rep.NotDetected++
+			if p.Proven {
+				rep.MissedProven++
+			}
 		default:
 			r.Verdict = Undetermined
 			r.Why = "no sensor telemetry at all in this window — an undeployed sensor, late telemetry " +

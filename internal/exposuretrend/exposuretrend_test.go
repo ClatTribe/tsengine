@@ -123,3 +123,25 @@ func TestCompute_EmptyCorpusIsEmpty(t *testing.T) {
 		t.Error("the caveat must ride even on an empty trend")
 	}
 }
+
+// Net() computed direction and nothing called it — a method with a carefully argued name and no
+// caller. It is now serialised, so the reader sees direction without doing arithmetic across a
+// week of rows.
+func TestCompute_NetChangeIsSerialised(t *testing.T) {
+	tr := exposuretrend.Compute([]platform.EpisodeRecord{
+		ep("2026-08-20", "s", 5, 1, 0), // exposure grew
+		ep("2026-08-22", "s", 1, 6, 0), // exposure shrank
+	}, nil, "")
+	if tr.Points[0].NetChange != -4 {
+		t.Errorf("day one grew: want -4, got %d", tr.Points[0].NetChange)
+	}
+	if tr.Points[1].NetChange != 5 {
+		t.Errorf("day two shrank: want 5, got %d", tr.Points[1].NetChange)
+	}
+	// The serialised value must agree with the method it replaced being unused, not drift from it.
+	for _, p := range tr.Points {
+		if p.NetChange != p.Net() {
+			t.Errorf("NetChange (%d) disagrees with Net() (%d)", p.NetChange, p.Net())
+		}
+	}
+}

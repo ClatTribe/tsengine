@@ -69,6 +69,19 @@ var required = []struct {
 	},
 	{
 		page:  "frontend/app/(app)/detection/page.tsx",
+		field: "missed_proven",
+		wouldOtherwiseClaim: "that every missed probe is equally serious, when a missed probe that " +
+			"proved nothing is a coverage gap and a missed probe that WORKED is an attacker who would " +
+			"not have been seen",
+	},
+	{
+		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "net_change",
+		wouldOtherwiseClaim: "a per-day opened/closed list with no direction, leaving the reader to " +
+			"do arithmetic across a week of rows to answer the one question the page exists for",
+	},
+	{
+		page:  "frontend/app/(app)/detection/page.tsx",
 		field: "undetermined",
 		wouldOtherwiseClaim: "that every probe the sensor did not report was MISSED, when an " +
 			"undeployed sensor, late telemetry and a genuine miss are indistinguishable — the page " +

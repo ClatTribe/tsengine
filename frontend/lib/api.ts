@@ -380,7 +380,7 @@ export const api = {
 
   coverage: () => safe<CoverageSummary>("/v1/coverage", { assets: [], total_assets: 0, scanned_assets: 0 }),
   detectionValidation: () =>
-    safe<DetectionValidation>("/v1/detection-validation", { results: [], detected: 0, not_detected: 0, undetermined: 0, blocked: 0, caveat: "" }),
+    safe<DetectionValidation>("/v1/detection-validation", { results: [], detected: 0, not_detected: 0, undetermined: 0, blocked: 0, missed_proven: 0, caveat: "" }),
   exposureTrend: () =>
     safe<ExposureTrend>("/v1/exposure-trend", { points: [], confirmed_fixed: 0, unscored: 0, caveat: "" }),
   attackCoverage: () =>
