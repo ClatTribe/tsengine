@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
+  ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
   L15Audit, TenantEval, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
@@ -377,6 +378,8 @@ export const api = {
     }),
 
   coverage: () => safe<CoverageSummary>("/v1/coverage", { assets: [], total_assets: 0, scanned_assets: 0 }),
+  exposureTrend: () =>
+    safe<ExposureTrend>("/v1/exposure-trend", { points: [], confirmed_fixed: 0, unscored: 0, caveat: "" }),
   attackCoverage: () =>
     safe<AttackCoverage>("/v1/attack-coverage", { techniques: [], observed: 0, exercised_clean: 0, not_exercised: 0, denominator: "" }),
   connections: () => safe<Connection[]>("/v1/connections", []),

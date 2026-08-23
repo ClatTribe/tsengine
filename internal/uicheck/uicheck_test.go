@@ -69,6 +69,19 @@ var required = []struct {
 	},
 	{
 		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "confirmed_fixed",
+		wouldOtherwiseClaim: "that every issue which stopped appearing was fixed — a descoped asset " +
+			"and a degraded scan produce the same movement, and only a re-test proves closure. The " +
+			"burndown built on \"no longer detected\" is the flattering chart",
+	},
+	{
+		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "unscored",
+		wouldOtherwiseClaim: "that a run whose effect nobody could measure was a quiet one, when " +
+			"counted as zero it reads as \"nothing changed\" — the opposite fact",
+	},
+	{
+		page:  "frontend/app/(app)/activity/page.tsx",
 		field: "weakest_remediations",
 		wouldOtherwiseClaim: "that every applied fix worked, when the tenant's own history can name " +
 			"the (class, remediation) pairings that were applied and left the finding still there — " +

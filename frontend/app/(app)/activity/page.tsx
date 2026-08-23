@@ -1,4 +1,4 @@
-import { Radio, CheckCircle2, XCircle, ShieldQuestion, Wrench } from "lucide-react";
+import { Radio, CheckCircle2, XCircle, ShieldQuestion, Wrench, TrendingDown } from "lucide-react";
 import { api } from "@/lib/api";
 import { ActivityTimeline, type ActivityEvent } from "@/components/activity/activity-timeline";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -33,11 +33,12 @@ function withApprover(meta: string | undefined, approver?: string): string {
 }
 
 export default async function ActivityPage() {
-  const [incidents, engagements, approvals, actions] = await Promise.all([
+  const [incidents, engagements, approvals, actions, trend] = await Promise.all([
     api.incidents("all"),
     api.engagements(),
     api.approvals(),
     api.actions(),
+    api.exposureTrend(),
   ]);
 
   const events: ActivityEvent[] = [];
@@ -160,6 +161,35 @@ export default async function ActivityPage() {
               ))}
             </span>
           </span>
+        </div>
+      )}
+      {trend.points.length > 0 && (
+        <div className="card px-4 py-3 text-sm">
+          <div className="flex items-center gap-2">
+            <TrendingDown className="h-4 w-4 shrink-0 text-muted" />
+            <span className="font-medium text-ink">Is exposure going down?</span>
+          </div>
+          <div className="mt-2 space-y-1 text-xs">
+            {trend.points.slice(-8).map((p) => (
+              <div key={p.day} className="flex gap-3 text-muted">
+                <span className="font-mono text-subtle">{p.day}</span>
+                <span>+{p.opened} opened</span>
+                <span>&minus;{p.closed} stopped appearing</span>
+                {p.unscored > 0 && <span className="text-medium">{p.unscored} unmeasured</span>}
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            <span className="font-medium text-ink">{trend.confirmed_fixed}</span> were confirmed
+            fixed by a re-test.{" "}
+            {trend.mixed && (
+              <span className="text-medium">
+                This series mixes {trend.scopes_included?.length} scopes, which census different
+                things and are not directly comparable.{" "}
+              </span>
+            )}
+            <span className="mt-1 block text-subtle">{trend.caveat}</span>
+          </p>
         </div>
       )}
       <ActivityTimeline events={events} />
