@@ -279,7 +279,19 @@ function DetailPane({
           F2). "Closed 8 of 10" and "reopened 5 of 8" are different decisions for the person about to
           approve this, and before this they read identically. Absent when there is not enough
           history — silence means "not known", never "this will work". */}
-      {action.fix_efficacy && (action.fix_efficacy.closed + action.fix_efficacy.not_closed) > 0 && (
+      {action.fix_efficacy?.muted && (
+        <div className="flex items-start gap-2 border-b border-line px-5 py-2.5 text-xs">
+          <History className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
+          <div className="min-w-0 text-muted">
+            <span className="font-medium text-ink">This fix has a history, but we cannot score it.</span>{" "}
+            {action.fix_efficacy.unproven} previous {action.fix_efficacy.unproven === 1 ? "application" : "applications"}
+            {" "}could not be confirmed either way, so there is not enough settled evidence to say whether
+            this kind of fix works. That is not the same as it having no track record.
+          </div>
+        </div>
+      )}
+      {action.fix_efficacy && !action.fix_efficacy.muted &&
+        (action.fix_efficacy.closed + action.fix_efficacy.not_closed) > 0 && (
         <div className="flex items-start gap-2 border-b border-line px-5 py-2.5 text-xs">
           <History className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
           <div className="min-w-0 text-muted">

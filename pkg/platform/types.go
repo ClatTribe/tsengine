@@ -744,6 +744,15 @@ type Action struct {
 	// across scans (finding IDs are regenerated per scan; keys are not). Drives FixVerification.
 	FindingKeys  []string         `json:"finding_keys,omitempty"`
 	Verification *FixVerification `json:"verification,omitempty"` // set once the applied fix is re-tested
+	// VerificationHistory is the APPEND-ONLY record of every materially different verdict this action
+	// has received. Verification above is the current one; this is what actually happened.
+	//
+	// It exists because deriving evidence from current state silently FORGETS. ApplyReattack replaces
+	// Verification wholesale, so an action contradicted in one pass and re-verified clean in a later
+	// one lost the contradiction entirely — and a contradiction is precisely the fact
+	// internal/fieldevidence exists to remember. Worse, the erasure biased toward TRUST and grew
+	// stronger the more diligently a customer fixed things.
+	VerificationHistory []FixVerification `json:"verification_history,omitempty"`
 	// DeliveryError is why the last apply attempt failed, redacted and bounded.
 	//
 	// Without it a delivery failure was INVISIBLE: hitl.Desk deliberately leaves a failed action at
@@ -1625,4 +1634,37 @@ type FixEfficacy struct {
 	// overclaim F1 exists to prevent — and reported so the reader can see the sample is smaller
 	// than the number of applications.
 	Unproven int `json:"unproven,omitempty"`
+	// Muted reports that a track record EXISTS but cannot be scored, because too few applications
+	// were ever confirmed either way. Distinct from absence: "we cannot judge this yet, and here is
+	// why" is a different statement from "this remediation has no history", and rendering the first
+	// as the second is the more comfortable of the two.
+	Muted bool `json:"muted,omitempty"`
+}
+
+// maxVerificationHistory bounds the append-only log. Appends are change-only, so reaching this needs
+// dozens of genuine verdict FLIPS on one action — pathological, not routine. The oldest entries are
+// dropped at that point, which is a real (if remote) loss of an early contradiction; it is preferred
+// over an unbounded row, and anything that noisy has told us what we needed long before entry 32.
+const maxVerificationHistory = 32
+
+// RecordVerification sets the current verdict AND appends it to the history when it is materially
+// different from the last one.
+//
+// "Materially different" is (status, disagreement, rescan-said-fixed) — the tuple fieldevidence reads.
+// Re-recording an unchanged verdict every monitoring pass would inflate the corpus with duplicates of
+// one event, which is the mirror of the erasure bug: one action out-voting the estate instead of
+// vanishing from it.
+func (a *Action) RecordVerification(v FixVerification) {
+	a.Verification = &v
+	if n := len(a.VerificationHistory); n > 0 {
+		last := a.VerificationHistory[n-1]
+		if last.Status == v.Status && last.Disagreement == v.Disagreement &&
+			last.RescanSaidFixed == v.RescanSaidFixed {
+			return
+		}
+	}
+	a.VerificationHistory = append(a.VerificationHistory, v)
+	if len(a.VerificationHistory) > maxVerificationHistory {
+		a.VerificationHistory = a.VerificationHistory[len(a.VerificationHistory)-maxVerificationHistory:]
+	}
 }

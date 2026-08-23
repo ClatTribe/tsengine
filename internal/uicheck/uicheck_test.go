@@ -48,6 +48,13 @@ var required = []struct {
 }{
 	{
 		page:  "frontend/components/inbox/inbox-client.tsx",
+		field: "muted",
+		wouldOtherwiseClaim: "that a fix with a history we cannot SCORE has no history at all — the " +
+			"comfortable reading. F1 tightening shrinks F2's denominator, so silence arrives exactly " +
+			"where the fixes deserve the most scrutiny (ADR 0025)",
+	},
+	{
+		page:  "frontend/components/inbox/inbox-client.tsx",
 		field: "fix_efficacy",
 		wouldOtherwiseClaim: "that every proposed fix is equally likely to work, when the tenant's " +
 			"own verified history can say this kind of fix closed this kind of finding 8 of 10 times " +
@@ -422,4 +429,24 @@ func stripComments(src string) string {
 		b.WriteByte(src[i])
 	}
 	return b.String()
+}
+
+// A field-presence guard is satisfied by ANY read of the field — including one that only HIDES
+// something. Mutation proved it: deleting the muted banner while leaving `!fix_efficacy.muted` on
+// the neighbouring block kept the guard green, so the page still "read" the field while saying
+// nothing. When a field's whole purpose is to make the product admit something, the guard has to
+// check that the admission is actually rendered.
+func TestInboxRendersTheMutedExplanationNotJustTheField(t *testing.T) {
+	b, err := os.ReadFile("../../frontend/components/inbox/inbox-client.tsx")
+	if err != nil {
+		t.Fatalf("cannot read the inbox: %v — if it moved, update this guard", err)
+	}
+	src := stripComments(string(b))
+	for _, phrase := range []string{"cannot score", "not the same as it having no track record"} {
+		if !strings.Contains(src, phrase) {
+			t.Errorf("the inbox no longer explains a MUTED track record (missing %q).\n"+
+				"Without it, a fix whose history we cannot score renders identically to one with no "+
+				"history at all — the comfortable reading of the two.", phrase)
+		}
+	}
 }
