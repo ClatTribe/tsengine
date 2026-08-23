@@ -615,7 +615,18 @@ type Asset struct {
 	Type         string            `json:"type"` // repository | cloud_account | web_application | ...
 	Target       string            `json:"target"`
 	Meta         map[string]string `json:"meta,omitempty"`
-	DiscoveredAt time.Time         `json:"discovered_at"`
+	// Owner and Team are who to route a finding on this asset to (ADR 0028 G1). Owner exists on Risk
+	// and Policy — the vCISO artifacts — so the product could say who ACCEPTED a risk and not who
+	// should fix the finding underneath it.
+	//
+	// Empty means UNOWNED, and that is a real answer rather than a missing one. Falling back to the
+	// tenant owner so every ticket has an assignee manufactures accountability: it names someone who
+	// never agreed to it, and it hides the fact a scoping exercise most needs to surface. Contact
+	// metadata like Contact, not a credential — stored plain, and never an authorization input, or an
+	// unowned asset becomes an unprotectable one.
+	Owner        string    `json:"owner,omitempty"`
+	Team         string    `json:"team,omitempty"`
+	DiscoveredAt time.Time `json:"discovered_at"`
 }
 
 // Engagement trigger kinds.
