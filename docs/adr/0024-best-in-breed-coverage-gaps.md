@@ -1,6 +1,7 @@
 # ADR 0024 — The best-in-breed coverage matrix: what "AI Security Engineer + AI Pentester for cloud, code, identity" actually covers, and the gaps
 
-**Status:** Proposed — **gap accounting + a build proposal.** Records the honest state of the
+**Status:** Proposed — **gap accounting + a build proposal.** Revised three times; the third pass
+(below) EXECUTED probes rather than re-reading, added C11–C18, and put a Sprint 0 in front of P1. Records the honest state of the
 (agent × asset) matrix, compares it to the autonomous-pentest incumbents (NodeZero / Pentera / XM
 Cyber), and proposes a concrete, sequenced path to close the cells that are now competitively
 load-bearing. Supersedes the earlier "accounting only" framing after competitor research
@@ -10,6 +11,15 @@ load-bearing. Supersedes the earlier "accounting only" framing after competitor 
 fake-tested wiring implemented; live AWS/GCP/Azure provider adapters, platform injection, persisted
 proof evidence and a controlled live benchmark NOT implemented.* P1 is a seam, not yet a capability.
 Do not describe it as shipped provider proof until P1a–P1d below are done.
+
+**And P1 is a SECOND seam, not the first (C11).** `internal/cloudengine/live.go` already implements
+this ladder — rung 2 (`iam:SimulatePrincipalPolicy`), rung 3 (passive network reachability), rung 4
+(a benign `sts:GetCallerIdentity` probe), rung 5 refused and queued for a human — per edge, budget-
+bounded, gated through `cloudsafety.Guard` whose allowlist already contains `"Simulate"`. It has NO
+non-test constructor, `cloudsafety.NewGuard` has NO non-test caller, and `Analyzer` has exactly one
+implementation: a mock. This ADR mentioned `cloudengine` once, in P5, about LLM wire protocols, and
+proposed building the ladder again. **P1a is therefore a wiring task with a design decision in front
+of it — which ladder survives — not a subsystem to write.**
 **Date:** 2026-08-23
 **Depends on / reconciles:** the focus decision (2026-08-17, [specialist-roadmap.md](../specialist-roadmap.md) §1),
 ADR 0002 (AI Cloud Security Engineer — read-only, config-possible ≠ exploitable), ADR 0006 (active
@@ -46,10 +56,12 @@ corpus we did not write — because a cell scored only against our own fixtures 
    CLOUD         │ internal/cloudagent            │ read-only BY CONSTRUCTION          │
    [IAM-Vuln,    │ grounded graph; validatePath   │ (live.go:20-22, cloudsafety)       │
     CloudGoat]   │ refuses ungrounded paths       │ = attack-path DISCOVERY, not       │
-                 │ 16/16 privesc primitives       │ exploitation. ADR 0002.            │
-                 │ agent 100% recall, 0 invented  │ WHY: proof == the mutation (B1)    │
+                 │ NEUTRAL: IAM-Vulnerable 64.5%  │ exploitation. ADR 0002.            │
+                 │ · Rhino GCP 65.2%              │ WHY: proof == the mutation (B1)    │
+                 │ (in-house: 16/16 primitives,   │ SEE C11 — the ladder EXISTS in     │
+                 │  agent 100% recall, 0 invented)│ cloudengine, unwired.              │
                  ├────────────────────────────────┼────────────────────────────────────┤
-                 │ BUILT, depth gap open          │ EMPTY (collapses into web/api)     │
+                 │ BUILT, depth gap open          │ N/A — collapses into web/api       │
    CODE          │ codeagent + codesweep          │ "exploiting code" needs a RUNNING  │
    [OWASP Bench] │ propose/dispose, Refused count │ instance — which IS the web/api    │
                  │ SAST 46.54% Youden — 3rd on    │ column. Static-only = SAST (L1).   │
@@ -80,9 +92,20 @@ corpus we did not write — because a cell scored only against our own fixtures 
                  │ SCuBA 0.993 (SHALL 0.990)      │ WHY: proof == account takeover(B1) │
                  └────────────────────────────────┴────────────────────────────────────┘
 
-  CLAIMED (cloud/code/identity × 2)  : 2 of 6 cells built, 1 deliberate, 3 empty
+  CLAIMED (cloud/code/identity × 2)  : 2 of 6 cells built, 1 deliberate, 1 N/A, 2 empty
   ACTUAL best-in-breed claims        : 3 — cloud defense, web/api offense, compliance
                                           (exactly the 2026-08-17 focus triad)
+
+  TWO AXES THIS GRID DOES NOT SCORE, and both change the reading (C15, C16):
+    FIX        every number above measures FIND. The engineer is defined "find + fix"
+               and the fix half has NO recorded number in any cell — `tsbench defense`
+               and `defense-xbow` define remediation-capture as the hero metric and
+               have never produced one.
+    CONTINUITY a cell can be BUILT and still not be MONITORED. Four producers re-derive
+               each pass (asset scans, SaaS posture, OSINT, cloud drift). The cloud
+               engineer, the code engineer, codesweep, ghoidc/gcpwif/samltrust, TPRM,
+               device posture, dataplatform and the identity ITDR ingest are all
+               ONE-SHOT, and absence-as-evidence then works against them.
 ```
 
 Three facts behind the grid, each grep-confirmed:
@@ -333,12 +356,122 @@ that must stay distinguishable, since rendering any two alike is how an unproven
 authority of a confirmed one. Both the probe and `check_live` also ran on `context.Background()`, so a
 scan timeout could not interrupt a live cloud call (§15); they now take the caller's context.
 
-**Still open from the same re-read** (not addressed here): identity gets no proof rung anywhere in
-P0–P5 — Okta appears once in this document, inside a list of things the twin cannot replicate; threat
-intelligence is absent from this ADR entirely, and cloud attack paths carry no MITRE ATT&CK
-attribution while every L1 finding does; the customer feedback loop has no case source for a disputed
-path or proof, so P1's output cannot enter `tenanteval`; and `cloudIssueToFinding` stamps
-`VerificationVerified` on every agent path regardless of rung.
+**Still open from the same re-read:** identity gets no proof rung anywhere in P0–P5 — Okta appears
+once in this document, inside a list of things the twin cannot replicate; threat intelligence is
+absent from this ADR entirely, and cloud attack paths carry no MITRE ATT&CK attribution while every
+L1 finding does (`grep` over `cloudagent`/`cloudengine`/`cloudinvestigate` → no `MITRETechniques`);
+and the customer feedback loop has no case source for a disputed path or proof, so P1's output cannot
+enter `tenanteval`. The last item on that list — `cloudIssueToFinding` stamping
+`VerificationVerified` on every agent path regardless of rung — is promoted to **C12** below, because
+its consumers turned out to be the VAPT report and the customer-facing urgency line.
+
+### Third pass (2026-08-23) — executed, not read
+
+The first two passes were re-reads. This one RAN the code: three probes compiled against the tree and
+each failed, and the rest are `grep`-confirmed absences of a caller. The distinction matters because
+every finding below is a thing the documents already described correctly at the level of intent — the
+defect is one layer down, in what the wiring actually does with it.
+
+**C11 — the P1 ladder was already built, and P1 built a second one.** `internal/cloudengine/live.go`
+implements `Analyzer` + `LiveValidator`: rung 2 `iam:SimulatePrincipalPolicy`, rung 3 passive network
+reachability (`ec2:DescribeNetworkInsightsAnalyses`), rung 4 a benign `sts:GetCallerIdentity` probe,
+rung 5 never auto-run and queued to `Pending` for a human — evaluated PER EDGE, budget-bounded, every
+call gated through `cloudsafety.Guard`, whose read-only allowlist already contains `"Simulate"`. That
+is P1 and P2 together, plus the runtime-preconditions rung C3 named and no P-item proposed. It is
+entirely dormant: `NewLiveValidator` has no non-test constructor, `cloudsafety.NewGuard` has no
+non-test caller, and `Analyzer` has exactly one implementation, a mock in `live_test.go`. This ADR
+mentions `cloudengine` once — in P5, about LLM wire protocols. So the highest-leverage item in the
+plan was scoped as a subsystem to write when it is a subsystem to WIRE, and the work now carries a
+decision that did not exist before: **which of the two ladders survives.** They must not both ship —
+two implementations of "the provider said ALLOW" with different semantics is how a rung comes to mean
+different things on different screens.
+
+**C12 — every cloud agent path is stamped `verified`, and two consumers render that as proof.** The
+second pass recorded the stamp (`cloudinvestigate.go:232`) as still-open. Its blast radius was not
+recorded, and it is where the harm is. Executed:
+
+```
+Explain(cloudagent finding, rung=config_possible) →
+  urgency = "now"
+  because = "we proved it is exploitable on your system, not just possible"
+```
+
+`explain.go` already carries the guard for exactly this overstatement — an `assessorTools` allowlist
+whose comment says conflating an assessor's certainty with a pentester's proof "put *Fix today — we
+proved it is exploitable* on a Vercel setting nobody had attacked". `cloudagent` is not in the set.
+The second consumer is worse because it leaves the building: `grc/vapt.go` `isVerified` counts the
+same finding as **tool-confirmed (corroborated or re-verified)** in the VAPT report a customer hands
+an auditor. C1 corrected the sentences that DESCRIBE the rung; the two surfaces that render a VERDICT
+were untouched, which is C8's lesson repeating one layer out. The tree already contains the right
+answer, written by the sibling: `codeinvestigate.go:285` refuses `VerificationVerified` for the code
+agent and explains why in eleven lines. The reasoning exists; it was applied to one agent of two.
+
+**C13 — the cloud cell cited our own number where the neutral key it names says 64.5%.** The matrix
+brackets `[IAM-Vuln, CloudGoat]` as the cloud cell's answer key and then printed "16/16 privesc
+primitives · agent 100% recall" — both in-house. BishopFox IAM-Vulnerable scores 64.5% and Rhino's
+GCP catalogue 65.2%, and NEITHER number appeared anywhere in this document (`grep -c` → 0) while both
+are registered in `claimcheck`. Web/api and compliance cite neutral numbers in the same grid. So the
+one cell where the in-house and neutral keys disagree by 35 points is the one that showed the
+in-house figure, unlabelled — §14.2 rule 5 failing inside the document that invokes it. Fixed in the
+matrix above: the neutral numbers lead, the in-house ones are parenthesised and marked as ours.
+
+**C14 — `code × pentester` is N/A, not EMPTY.** B2 already argues it correctly: exploiting code needs
+a running instance, and a running instance IS the web/api column. Rendering that conclusion as EMPTY
+in the grid manufactures a gap the ADR's own reasoning says does not exist, and a future session
+reading only the picture would go build a duplicate of `internal/pentest`. Marked N/A.
+
+**C15 — the fix half is unmeasured in every cell.** The engineer column is defined "defense: find +
+fix". Every number in the grid, and all six claims in `claimcheck.Registry()`, measure FIND.
+`tsbench defense` and `tsbench defense-xbow` exist, and CLAUDE.md §14 names remediation-capture as
+their hero metric — "the defensive XBOW-clean hero metric", execution-verified through the same
+`retest.Verify` the product uses. Neither has ever produced a recorded number. This is not a build:
+it is a run, and until it happens "AI Security Engineer" is measured on half of its own definition.
+
+**C16 — a cell can be BUILT and not MONITORED, and this GATES P1.** `runner.RescanTenant` has exactly
+four continuous producers (`runner.go:352,359,364,369`: asset scans, SaaS posture, OSINT, cloud
+drift). The cloud engineer, the code engineer, `codesweep`, `ghoidc`/`gcpwif`/`samltrust`, TPRM,
+device posture, `dataplatform` and the identity ITDR ingest are all ONE-SHOT — nothing re-derives
+them on a pass. `detect.Reconcile` and `retest.Verify` then reason from their absence. Both probes
+executed, both fail:
+
+```
+incident status after 3 routine passes: resolved (absent=2)
+fix verification:                       fixed — "1 of 1 confirmed fixed in re-scan"
+```
+
+The first: the cloud engineer's own attack-path incident resolves itself, on a tenant whose only other
+asset scans clean, with nobody having fixed anything. The second is worse — `FixStatusFixed` is
+TERMINAL, so a remediation against a cloud path is permanently marked confirmed by a pass that never
+ran the agent. `runner.go:379` names the shape ("the ingest-incident-survives-a-scan-pass case is a
+documented follow-on") but frames it as an ingest edge case, so nobody connected it to the flagship
+agent. This is the same absence-as-evidence failure the three degraded-pass guards exist to prevent,
+arriving through a door those guards do not watch: the pass is not degraded, it is COMPLETE — it just
+never asked the agent.
+
+**It is a prerequisite for P1, not a parallel item.** P1c worries a provider proof will go STALE.
+C16 means it goes AWAY: a `provider_authorization_confirmed` path is stored as a finding, nothing
+re-derives it, and two passes later its incident is resolved and any remediation against it is
+terminally "fixed". Shipping P1 before C16 spends a live provider call to produce evidence the next
+monitoring pass deletes.
+
+**C17 — the guards and this document were left stale by their own fixes.** `claimcheck`'s package
+comment names four headline claims — SCuBA, XBOW, SAST, "96% crosswalk corroboration" — and the
+registry holds six claims, none of them the crosswalk. The guard written to stop headline drift does
+not cover a quarter of the headlines it names. Same shape twice in this ADR: C10 states the Status
+table's "blast radius: none" for P1 "should read *read-only, but it writes to the customer's audit
+trail and spends their quota*" and the table was not edited; C7 corrected P4a and the P4a Status row
+still said "consolidate other-branch `codeagent`". Both corrected below. Adjacent doc drift found the
+same way: CLAUDE.md still says `internal/estategraph` has no consumer ("the substrate ships first,
+deliberately") — it now has seven, including `cloudagent.Context.Estate`.
+
+**C18 — the grid's row set is smaller than the product's asset set.** Five rows against seven focus
+assets: `container_image`, `ip_address` and `domain` have no row in either column. And there is no
+`ai_application` row at all, though ADR 0012 fixed the approach, the **garak wrapper is built and
+registered on both the host and sandbox sides**, and `ctoreadiness/items.go:44` states honestly that
+nothing can be pointed at it because `pkg/types` has no such asset type. A product named *AI*
+Security Engineer whose coverage matrix has no row for testing the customer's own AI application is
+an omission worth stating, particularly as it is the cheapest new row in the document: the tool
+already exists and is unreachable.
 
 ### Gap categories added
 | Gap | Why it matters |
@@ -352,6 +485,11 @@ path or proof, so P1's output cannot enter `tenanteval`; and `cloudIssueToFindin
 | Consent boundary for credential checks | P2 is an active authentication event (C5) |
 | Code runtime beyond web/API | Workers, CLIs, libraries, CI pipelines and supply-chain execution are real runtimes; "code exploitation == web/api" is usually-but-not-always true |
 | Capability measurement | ADR 0020's benchmark-headroom and neutral repair-score gaps are prerequisites for any "best-in-breed" claim |
+| **Proof CONTINUITY** (C16) | A cell can be built and not monitored. Absence-as-evidence resolves the incidents and terminally confirms the fixes of every one-shot producer — including the cloud engineer. **Gates P1**: proof the next pass deletes is worth nothing |
+| **Rung-faithful verification status** (C12) | `VerificationStatus` is the field the VAPT report and the urgency line read. Stamping `verified` on every rung hands a config-possible path the authority of an exploited one, in the two places a customer sees |
+| **The FIX half of "find + fix"** (C15) | Every measured number is a detection number. `tsbench defense`/`defense-xbow` define the metric and have never been run to a recorded value |
+| **Neutral-key discipline inside the grid** (C13) | A cell must print its neutral key's score or say it has none. Printing the in-house figure under a neutral bracket is §14.2 rule 5 failing inside the document that cites it |
+| **Row set vs asset set** (C18) | `container_image`, `ip_address`, `domain` have no row; `ai_application` has neither row nor asset type, though garak is built and registered on both sides |
 
 ## Decision — the proposal
 
@@ -418,26 +556,100 @@ the wire protocol. Extract transport + wire types into one package (each stack k
 higher-level `Generate` shape — they differ). Unblocks every new agent (P4) cheaply. Can run in
 parallel with P1.
 
-### Sequencing (revised after external review)
+### Sequencing (revised again after the third pass)
+
+The change from the previous sequence is a tier ADDED IN FRONT, and the reason is not tidiness: R2
+(C16) is a hard prerequisite for P1, because a provider proof that the next monitoring pass resolves
+is a live cloud call spent on evidence we delete. Everything in Sprint 0 REPAIRS a capability the
+tree already has, which per §0 outranks adding one — the value at risk is the three best-in-breed
+claims we can already make, not a cell we cannot.
+
 ```
-NOW      P0   correct external positioning AND this ADR's status
-Sprint 1 P1a  AWS-only LIVE simulator adapter (SimulatePrincipalPolicy)
+NOW      P0   correct external positioning AND this ADR's status (0 code, time-sensitive:
+              NodeZero entered web-app pentesting, the lane we lead and do not advertise)
+
+Sprint 0 — REPAIR WHAT IS BUILT (blocks P1; every item protects an existing claim)
+         R1   rung-faithful VerificationStatus (C12). cloudIssueToFinding stops stamping
+              `verified` below the provider-confirmed rung; `explain.assessorTools` and
+              `grc/vapt.isVerified` stop reading a config-possible path as proof.
+              Copy codeinvestigate.go:285 — the sibling already made this call correctly.
+         R2   proof continuity (C16). Either re-derive the one-shot producers on a pass, or
+              exempt their keys from `detect.Reconcile`'s resolve and `retest.Verify`'s
+              confirm. The second is smaller and honest: an agent surface nothing re-ran is
+              not evidence of absence. Pin with the two probes from C16 as regression tests.
+         R3   measurement integrity. Register the 96% crosswalk claim in `claimcheck` (C17);
+              run `tsbench defense` + `defense-xbow` to a RECORDED number and register it,
+              closing the fix axis (C15); keep the neutral figures in the grid (C13, done).
+
+Sprint 1 — CLOUD PROOF (P1, re-scoped by C11)
+         P1a  DECIDE which ladder survives, then write ONE live `cloudengine.Analyzer`
+              (3 methods, AWS SDK, its own package like the *remediate ones). This yields
+              rungs 2 AND 3 AND 4 together, not P1's rung 2 alone — the subsystem, the
+              Guard, the budget and the per-edge semantics are already written and tested.
          P1b  full-path AuthorizationProofPlan semantics (per-edge RequiredCheck,
               partial/unknown states)  ← the every-hop rule is in; the plan struct is next
          P1c  persist evidence: snapshot hash, timestamps, context hash, coverage, expiry
          P1d  controlled AWS integration benchmark (real simulator outcomes, not the fake)
-         P5   llmclient extraction (independent lane)
-Sprint 2 CI-IDENTITY PROOF — GitHub OIDC / GCP WIF trust condition → provider authorization
-              → target permission. More differentiated than generic IAM simulation, and it
-              builds on ghoidc/gcpwif which already exist.
-Decide   P2   customer-AUTHORIZED credential liveness validation (M+, consent-gated)
+         P5   llmclient extraction (independent lane; no customer value, pure enabler)
+
+Sprint 2 — CI-IDENTITY PROOF (promoted: this is the MOAT item)
+              GitHub OIDC / GCP WIF / SAML trust condition → provider authorization →
+              target permission. This ADR already says it is more differentiated than
+              generic IAM simulation and then sequenced it behind everything; ghoidc,
+              gcpwif and samltrust exist, so on top of P1a it is small. "This public
+              repository can assume this production role, and the provider agrees" is a
+              sentence the incumbents' generic IAM simulation does not produce.
+
+Decide   P2   customer-AUTHORIZED credential liveness validation (M+, consent-gated).
+              The ONLY identity proof rung in the whole plan, and rung 4 is already
+              specified in cloudengine/live.go.
+         AIA  the `ai_application` asset type (C18) — cheapest new row: garak is built,
+              registered host+sandbox, and unreachable for want of a types.AssetType.
          P3   lab-first twin execution venue (NOT customer-snapshot replay)
+
 Later    identity multi-step narrative agent · code graph/taint depth (P4a, already wired)
+              · MITRE attribution + threat intel on cloud paths · a tenanteval case source
+              for a disputed path or proof
 ```
 The capability worth building is not generic cloud pentesting. It is **evidence-backed,
 provider-validated cloud and CI identity AUTHORIZATION-path proof, with explicit uncertainty and
 continuous re-validation** — which extends the real advantage (deterministic graph + context +
 verification) without claiming a policy simulator has compromised anything.
+
+## What "5 of 5 surfaces" would actually require
+
+The question this ADR gets asked is "what closes the matrix". Stating the target precisely is half the
+answer, because two of the cells counted as gaps are not gaps and one of the surfaces has no neutral
+key to be measured against.
+
+**The target grid is five surfaces × two columns, with compliance as an OUTCOME riding on all five
+rather than a sixth row.** Compliance has no offensive column (a control mapping cannot be exploited)
+and no independent defensive one (it annotates the other five at emission, §8) — modelling it as a row
+double-counts the same evidence.
+
+A cell counts as CLOSED only when all four hold: the capability exists · a NEUTRAL key scores it ·
+it is continuously monitored · and it reports the rung it actually stands on.
+
+| Surface | Engineer (find + fix) | Pentester | What closing it needs |
+|---|---|---|---|
+| **web** | find: continuous, L1/L1.5, no agent · fix: built [#1397], **unmeasured** | **closed** — XBOW 85.6% > MAPTA 76.9% | Publish the offence number (P0). Engineer side needs the live WAVSEP number (§16, target-gated) and R3's fix number. |
+| **api** | find: continuous · fix: built [#1397], **unmeasured** | capability real, **no neutral key** — `apiauthz` live-wired behind an operator env + per-request consent, plus `bola_probe`/`privesc_probe`; CLAUDE.md §14 says "None public — internal only" | Find a neutral corpus, or **state plainly that none exists**. Do not fill the cell with a fixture score — that is C13 again. |
+| **cloud** | 64.5% neutral · fix unmeasured · one-shot | seam only | R1 + R2 → P1a (wire the dormant `Analyzer`) → P1c → P1d. |
+| **code** | 46.54% SAST · `cvepatch` fix execution-verified but unscaled | **N/A by construction** (B2/C14) | Mark N/A, not empty. Then P4a depth + a scaled `cvepatch` number. |
+| **identity** | SCuBA 0.993 detection · fix = account-suspend on three IdPs only | empty | P2 credential liveness with the C5 consent boundary. Detection needs nothing. |
+
+Note what the FIX column does to the two cells that look finished: web and api offence are the
+strongest work in the tree, and the engineer beside them has a fix path that shipped days ago and has
+never been scored. That is C15 stated per-surface — the fix axis is unmeasured in **all five**, not
+only in the weak cells.
+
+Two honest consequences of that table. **First, seven of the ten cells are decided by work already in
+the tree** — wiring `cloudengine.Analyzer`, registering numbers in `claimcheck`, running a benchmark
+that exists, marking one cell N/A. Only P2, P3 and the api neutral key are genuinely new. **Second,
+literal cloud/identity EXPLOITATION proof is P3 and nothing else.** P1 and P2 close those cells at the
+authorization and credential-liveness rungs, which is real and sellable and is not what NodeZero and
+Pentera claim. Saying "5 of 5" while P3 is unbuilt would be the same overclaim C1 corrected, moved up
+to the level of the grid.
 
 ## Consequences
 
@@ -449,16 +661,27 @@ verification) without claiming a policy simulator has compromised anything.
 - **Neutral:** the four real agents (cloud engineer, code engineer, web/api pentester, plus the L2
   Lead) were reviewed as well-engineered — grounding is structural, the loop terminates, the RoE gate
   is correct. The gaps here are coverage/naming, not quality.
+- **Corrected by the third pass:** that last sentence was true of the agents and false of the seams
+  around them. C11, C12 and C16 are not coverage or naming — they are a ladder built twice and wired
+  never, a verification rung that reaches a customer-facing report as proof, and continuous monitoring
+  that deletes the agents' own findings. The recurring shape across all three is the one CLAUDE.md
+  keeps naming: **the capability was built and the wiring that makes it survive was not**, so the
+  document describing it stayed accurate about intent while the product did something else. The
+  practical consequence for this ADR is a Sprint 0 that adds no capability at all.
 
 ## Status of each item
 
 | Item | Effort | Blast radius | Status |
 |---|---|---|---|
 | **P0** naming binding | 0 code | none | Proposed — **do now** |
-| **P1** provider dry-run (`check_reachable`) | S–M | none (read-only, provider is oracle) | Proposed — **the unlock**, not started |
+| **R1** rung-faithful VerificationStatus | S | none | **Blocks P1** — the stamp reaches the VAPT report and the urgency line (C12) |
+| **R2** proof continuity | S–M | none | **Blocks P1** — a proof the next pass resolves is worth nothing (C16) |
+| **R3** measurement integrity | S | none | Registers the crosswalk claim; runs the fix benchmark to a number (C15, C17) |
+| **P1** provider dry-run (`check_reachable`) | S–M — **wiring, not writing** (C11) | read-only, but each simulate call writes to the CUSTOMER's audit trail and spends their rate-limited quota (C10) | Seam built TWICE (`cloudagent` + the dormant `cloudengine` ladder), wired zero times. Blocked on R1+R2 |
 | **P2** non-destructive cred validation | S | one benign auth attempt | Proposed — reuses `ssh_exec` pattern |
 | **P3** digital twin (ADR 0020 G1) | XL | destructive, but only vs replica | Proposed — **product-gated**, do not start before P1 |
-| **P4a** code depth (ADR 0013) | XL | none | Proposed — consolidate other-branch `codeagent` |
+| **P4a** code depth (ADR 0013) | XL | none | Proposed — `codeagent` is ALREADY wired (C7); the residual is graph/taint depth + a scaled neutral number |
+| **AIA** `ai_application` asset type | S | active-by-nature — RoE + consent + ownership (ADR 0012) | Proposed — garak is built and unreachable (C18) |
 | **P4b** identity narrative agent | L | none | Proposed — after P1–P3, on `agentloop`+`llmclient` |
 | **P5** `internal/llmclient` extract | S | none | Proposed — parallel lane, unblocks P4 |
 
