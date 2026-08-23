@@ -49,4 +49,9 @@ export const SECURITY_TABS: Tab[] = [
   // Your evals completes the trio: Coverage says what was tested, Verify says what was suppressed,
   // and this says whether the setup still agrees with your own experts about your own findings.
   { href: "/eval", label: "Your evals" },
+  // Detection closes the loop the other three open. Coverage says what WE tested, Verify what we
+  // suppressed, Your evals whether we still agree with you — and this says whether the defences you
+  // already pay for noticed when we proved an attack works. It is the only one of the four that
+  // grades somebody else's product, which is why it refuses to call silence a miss.
+  { href: "/detection", label: "Detection" },
 ];

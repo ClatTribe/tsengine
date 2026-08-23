@@ -68,6 +68,25 @@ var required = []struct {
 			"or was reopened 5 of 8 — different decisions for the person about to approve it (ADR 0025 F2)",
 	},
 	{
+		page:  "frontend/app/(app)/detection/page.tsx",
+		field: "undetermined",
+		wouldOtherwiseClaim: "that every probe the sensor did not report was MISSED, when an " +
+			"undeployed sensor, late telemetry and a genuine miss are indistinguishable — the page " +
+			"would accuse a control it could not observe (ADR 0027 S1)",
+	},
+	{
+		page:  "frontend/app/(app)/detection/page.tsx",
+		field: "caveat",
+		wouldOtherwiseClaim: "a missed-vs-undetermined split with no statement of what separates " +
+			"them, which is the number people quote and nobody checks",
+	},
+	{
+		page:  "frontend/app/(app)/detection/page.tsx",
+		field: "blocked",
+		wouldOtherwiseClaim: "that a control which merely OBSERVED the attack stopped it — " +
+			"monitor-only passing for prevention",
+	},
+	{
 		page:  "frontend/app/(app)/activity/page.tsx",
 		field: "confirmed_fixed",
 		wouldOtherwiseClaim: "that every issue which stopped appearing was fixed — a descoped asset " +
@@ -504,6 +523,27 @@ func TestCoverageRendersWhyATechniqueWasNotExercised(t *testing.T) {
 			t.Errorf("the coverage page no longer names WHICH techniques went unexercised or WHY "+
 				"(missing %q). A count of unchecked techniques with none of them named is the number "+
 				"without the substance.", phrase)
+		}
+	}
+}
+
+// Field-presence is satisfied by any read, including one that suppresses — a lesson this session
+// learned three times. The detection page's whole value is the distinction between "missed" and
+// "we cannot tell", so guard that the page actually SAYS both, not merely that it touches the fields.
+func TestDetectionPageDistinguishesAMissFromNotKnowing(t *testing.T) {
+	b, err := os.ReadFile("../../frontend/app/(app)/detection/page.tsx")
+	if err != nil {
+		t.Fatalf("cannot read the detection page: %v — if it moved, update this guard", err)
+	}
+	src := stripComments(string(b))
+	// "saw but did not stop" is here for a specific reason: the field-presence guard for `blocked` is
+	// satisfied by the SUMMARY counts line, so deleting the per-result monitor-only wording left it
+	// green while the page claimed every detection was an interception.
+	for _, phrase := range []string{"did not report this probe", "cannot tell whether this was detected",
+		"saw but did not stop"} {
+		if !strings.Contains(src, phrase) {
+			t.Errorf("the detection page no longer distinguishes a MISS from NOT KNOWING (missing %q).\n"+
+				"Collapsed, the page accuses a control that may simply never have been watching.", phrase)
 		}
 	}
 }
