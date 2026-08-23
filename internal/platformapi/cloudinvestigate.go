@@ -64,6 +64,10 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 		// than trusting a snapshot captured before it started. Nil when no live path is configured,
 		// and check_live says so.
 		Live: d.liveReaderOrNil(r.Context(), tenantID),
+		// ADR 0024 P1: ask the PROVIDER whether a move is authorized, rather than inferring it from
+		// our own resolved-IAM graph. Nil when the tenant has no connected account or the deployment
+		// has no live path — check_reachable then says the provider was not asked (§10).
+		Prober: d.proberOrNil(r.Context(), tenantID),
 	}
 	// Bracket the run (ADR 0018 §4). The before-state has to be censused HERE, before the
 	// agent acts — after the fact there is no way to tell an issue the agent surfaced from
@@ -330,6 +334,7 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 			Bridges: d.tenantCloudBridges(ctx, tenantID), // G2: cross-surface footholds (code→cloud wedge)
 			Estate:  d.estateOrNil(ctx, tenantID),        // the walkable graph behind those hints
 			Live:    d.liveReaderOrNil(ctx, tenantID),    // confirm config flags against the live account
+			Prober:  d.proberOrNil(ctx, tenantID),        // ADR 0024 P1: the provider's own authorization answer
 		}
 		// Bounded specialist run (it's a nested agent — keep it tight). pentest.SpecLLM satisfies
 		// cloudengine.LLM structurally (same Generate), as the on-demand handler above relies on.
