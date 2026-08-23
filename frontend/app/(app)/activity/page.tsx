@@ -175,6 +175,9 @@ export default async function ActivityPage() {
                 <span className="font-mono text-subtle">{p.day}</span>
                 <span>+{p.opened} opened</span>
                 <span>&minus;{p.closed} stopped appearing</span>
+                <span className={p.net_change < 0 ? "text-high" : "text-muted"}>
+                  net {p.net_change > 0 ? "+" : ""}{p.net_change}
+                </span>
                 {p.unscored > 0 && <span className="text-medium">{p.unscored} unmeasured</span>}
               </div>
             ))}

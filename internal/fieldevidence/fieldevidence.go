@@ -179,7 +179,12 @@ func (c *Corpus) RescanSufficient(class string) (sufficient, known bool) {
 	return e.ContradictionRate() < c.Opts.ContradictionThreshold, true
 }
 
-// Evidence returns the record for a class, for citing in the audit trail. ok=false when unknown.
+// Evidence returns the record for a class. ok=false when the class is unknown.
+//
+// Deliberately kept though no PRODUCT code calls it: it is the only way to inspect a class the corpus
+// does NOT distrust, because Distrusted returns just the failing ones — so an assertion that a clean
+// class really is clean has no other route. A "no non-test caller" audit flags this; a test-only
+// accessor that makes the negative case checkable is not the same thing as dead code.
 func (c *Corpus) Evidence(class string) (ClassEvidence, bool) {
 	if c == nil {
 		return ClassEvidence{}, false

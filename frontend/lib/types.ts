@@ -1425,6 +1425,9 @@ export interface ExposurePoint {
   persisted: number;
   episodes: number;
   unscored: number;
+  /** closed − opened. Deliberately not called "reduction": closed counts issues that stopped
+   *  appearing, which a descoped asset and a degraded scan also produce. */
+  net_change: number;
 }
 export interface ExposureTrend {
   points: ExposurePoint[];
@@ -1449,6 +1452,9 @@ export interface DetectionResult {
   blocked?: boolean;
   why?: string;
   event_id?: string;
+  /** This probe DEMONSTRATED a vulnerability. A missed probe that proved nothing is a coverage gap;
+   *  a missed probe that worked is an attacker who would not have been seen. */
+  proven?: boolean;
 }
 export interface DetectionValidation {
   results: DetectionResult[];
@@ -1456,5 +1462,6 @@ export interface DetectionValidation {
   not_detected: number;
   undetermined: number;
   blocked: number;
+  missed_proven: number;
   caveat: string;
 }

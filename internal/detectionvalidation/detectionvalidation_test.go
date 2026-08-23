@@ -119,3 +119,43 @@ func TestProbesFrom_OnlyAttemptsThatActuallyFired(t *testing.T) {
 		t.Fatalf("only the allowed, canary-carrying attempt is a probe, got %+v", got)
 	}
 }
+
+// "Your controls missed a probe" and "your controls missed the attack that WORKED" are the same
+// sentence without this, and only the second is an incident. Proven rode on the Probe and was never
+// read — the sharpest statement this package can make, flattened.
+func TestValidate_AMissedProbeThatProvedSomethingIsCountedSeparately(t *testing.T) {
+	awake := event("e-other", t0.Add(time.Minute), func(e *platform.RuntimeEvent) {
+		e.AttackKind = "xss"
+		e.Endpoint = "https://app/elsewhere"
+	})
+	harmless := probe("c1")
+	worked := probe("c2")
+	worked.Proven = true
+
+	r := dv.Validate([]dv.Probe{harmless, worked}, []platform.RuntimeEvent{awake}, 0)
+	if r.NotDetected != 2 {
+		t.Fatalf("both probes were missed, got %d", r.NotDetected)
+	}
+	if r.MissedProven != 1 {
+		t.Fatalf("only the one that PROVED a vulnerability counts here, got %d", r.MissedProven)
+	}
+	for _, res := range r.Results {
+		if res.Canary == "c2" && !res.Proven {
+			t.Error("the result must carry whether the probe proved something")
+		}
+		if res.Canary == "c1" && res.Proven {
+			t.Error("a probe that proved nothing must not be marked proven")
+		}
+	}
+}
+
+// A DETECTED probe that proved something is not a miss, however much it worked.
+func TestValidate_ProvenDoesNotInflateTheMissCount(t *testing.T) {
+	worked := probe("c1")
+	worked.Proven = true
+	r := dv.Validate([]dv.Probe{worked},
+		[]platform.RuntimeEvent{event("e1", t0.Add(time.Minute), nil)}, 0)
+	if r.Detected != 1 || r.MissedProven != 0 {
+		t.Fatalf("a detected proven probe is not a missed one, got %+v", r)
+	}
+}
