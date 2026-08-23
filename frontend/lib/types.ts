@@ -440,6 +440,12 @@ export interface ActionsView {
   failed_delivery: number;
   /** Rule classes whose clean re-scans this tenant's own history shows have been contradicted. */
   distrusted_classes?: DistrustedClass[];
+  /**
+   * (finding class, remediation type) pairings that most often FAILED to close, worst first — the
+   * runbooks to rewrite. Distinct from distrusted_classes, which is about our RE-SCAN being wrong;
+   * this is about the FIX being wrong.
+   */
+  weakest_remediations?: WeakRemediation[];
 }
 
 // DistrustedClass — where our own absence-evidence has measurably failed.
@@ -1376,5 +1382,14 @@ export interface FixEfficacy {
   not_closed: number;
   /** Applications whose re-scan said gone but was not accepted as confirmation (F1). Not a success
    *  and not a failure — excluded from the rate, reported so the sample size is honest. */
+  unproven?: number;
+}
+
+// WeakRemediation — a fix that keeps not closing the thing it claimed to close.
+export interface WeakRemediation {
+  class: string;
+  remediation_type: string;
+  closed: number;
+  not_closed: number;
   unproven?: number;
 }

@@ -777,6 +777,12 @@ type actionsView struct {
 	// has failed, worst first. Empty until enough labelled examples exist, which is the honest
 	// reading: "we have not caught ourselves being wrong here" is not "we are never wrong here".
 	DistrustedClasses []fieldevidence.ClassEvidence `json:"distrusted_classes,omitempty"`
+	// WeakestRemediations names the (finding class, remediation type) pairings that most often
+	// FAILED to close, worst first (ADR 0025 F2) — the runbooks to rewrite. Distinct from
+	// DistrustedClasses, which is about our re-scan being wrong; this is about the FIX being wrong,
+	// and conflating them would send someone to fix the wrong thing. Empty until enough decided
+	// applications exist, because "we have not seen this fail" is not "this always works".
+	WeakestRemediations []fieldevidence.RemediationEfficacy `json:"weakest_remediations,omitempty"`
 	// FailedDelivery counts approved actions whose apply attempt failed. A failed action deliberately
 	// stays at ActApproved so it is not lost — which also makes it indistinguishable, in the list,
 	// from one merely waiting. This count is what makes the difference visible.
@@ -819,6 +825,7 @@ func (d Deps) handleActions(w http.ResponseWriter, r *http.Request, tenantID str
 	// Why any fix is awaiting proof, from this tenant's own verification history (ADR 0025 F1). Built
 	// from the actions already in hand, so it costs no extra I/O.
 	v.DistrustedClasses = fieldevidence.ForTenant(tenantID, acts, fieldevidence.Options{}).Distrusted()
+	v.WeakestRemediations = fieldevidence.RemediationsForTenant(tenantID, acts, fieldevidence.Options{}).Weakest()
 	respond(w, v, nil)
 }
 

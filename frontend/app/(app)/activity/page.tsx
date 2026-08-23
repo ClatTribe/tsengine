@@ -1,4 +1,4 @@
-import { Radio, CheckCircle2, XCircle, ShieldQuestion } from "lucide-react";
+import { Radio, CheckCircle2, XCircle, ShieldQuestion, Wrench } from "lucide-react";
 import { api } from "@/lib/api";
 import { ActivityTimeline, type ActivityEvent } from "@/components/activity/activity-timeline";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -140,6 +140,25 @@ export default async function ActivityPage() {
                 ))}
               </span>
             )}
+          </span>
+        </div>
+      )}
+      {actions.weakest_remediations && actions.weakest_remediations.length > 0 && (
+        <div className="card flex items-start gap-3 px-4 py-3 text-sm">
+          <Wrench className="mt-0.5 h-4 w-4 shrink-0 text-medium" />
+          <span className="text-muted">
+            <span className="font-medium text-ink">Fixes that keep not working.</span> These
+            remediations were applied and the finding was still there afterwards — the runbook is
+            wrong, not the scan.
+            <span className="mt-2 block space-y-1 text-xs">
+              {actions.weakest_remediations.map((w) => (
+                <span key={`${w.class}:${w.remediation_type}`} className="block">
+                  <span className="font-mono text-subtle">{w.remediation_type}</span> on{" "}
+                  <span className="font-mono text-subtle">{w.class}</span> — closed {w.closed} of{" "}
+                  {w.closed + w.not_closed}
+                </span>
+              ))}
+            </span>
           </span>
         </div>
       )}

@@ -100,3 +100,59 @@ func TestActionsRollup_NoContradictionsNamesNothing(t *testing.T) {
 		t.Errorf("nothing should await proof here, got %v", got["awaiting_proof"])
 	}
 }
+
+// Weakest() names the (class, remediation) pairings that were applied and left the finding still
+// there — the runbooks to rewrite. It was written in the F2 iteration with no caller outside its own
+// tests: the same silent-signal defect the iteration BEFORE it had just fixed for Distrusted().
+func TestActionsRollup_NamesTheRemediationsThatKeepNotWorking(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme"})
+	// A runbook that works, and one that does not. Only the failing one should be named.
+	for i := 0; i < 6; i++ {
+		a := act("good"+strconv.Itoa(i), "nuclei::headers", "", &platform.FixVerification{Status: platform.FixStatusFixed})
+		a.Payload = map[string]any{"remediation_type": "set_security_headers"}
+		_ = st.PutAction(ctx, a)
+		b := act("bad"+strconv.Itoa(i), "nuclei::sqli", "", &platform.FixVerification{Status: platform.FixStatusStillPresent})
+		b.Payload = map[string]any{"remediation_type": "parameterize_query"}
+		_ = st.PutAction(ctx, b)
+	}
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/actions", "t1", "")
+	var got struct {
+		Weakest []struct {
+			Class     string `json:"class"`
+			Type      string `json:"remediation_type"`
+			Closed    int    `json:"closed"`
+			NotClosed int    `json:"not_closed"`
+		} `json:"weakest_remediations"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if len(got.Weakest) != 1 {
+		t.Fatalf("only the FAILING pairing may be named, got %+v", got.Weakest)
+	}
+	w := got.Weakest[0]
+	if w.Class != "nuclei::sqli" || w.Type != "parameterize_query" || w.NotClosed != 6 || w.Closed != 0 {
+		t.Errorf("the record must carry the real pairing and counts, got %+v", w)
+	}
+}
+
+// "We have not seen this fail" is not "this always works". A tenant whose fixes have all worked must
+// be told nothing at all rather than shown an empty reassurance.
+func TestActionsRollup_NoFailedFixesNamesNothing(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme"})
+	for i := 0; i < 6; i++ {
+		a := act("g"+strconv.Itoa(i), "nuclei::headers", "", &platform.FixVerification{Status: platform.FixStatusFixed})
+		a.Payload = map[string]any{"remediation_type": "set_security_headers"}
+		_ = st.PutAction(ctx, a)
+	}
+	h := NewHandler(Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok"})
+	rec := do(h, "GET", "/v1/actions", "t1", "")
+	var got map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if _, present := got["weakest_remediations"]; present {
+		t.Errorf("a clean record must name nothing, got %v", got["weakest_remediations"])
+	}
+}
