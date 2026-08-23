@@ -14,7 +14,7 @@ export const metadata = pageMeta({
   // RENDERED length against 60. The promise lives in the H1; this is the search result.
   title: "Continuous exposure validation",
   description:
-    "TensorShield works out what an attacker could really reach across your code, cloud, identity and SaaS, proves it, writes the fix, then checks the fix held.",
+    "TensorShield works out what an attacker could really reach across your code, cloud, identity, SaaS and the web apps, APIs and containers you ship — proves it by exploiting it, writes the fix, then re-attacks to confirm the hole is dead.",
   path: "/product",
 });
 
@@ -29,7 +29,7 @@ export const metadata = pageMeta({
 // carries the same caveat in the same words; if one moves, move both.
 const LOOP = [
   { name: "connect", t: "Connect, read-only", d: "One click of OAuth into GitHub, AWS, Google Workspace, M365 or Okta. Nothing to install, nothing to change in your infrastructure. It finds your repos, accounts and identities itself." },
-  { name: "detect", t: "Find", d: "It looks across code, cloud, identity and SaaS the way an attacker would — including how a small thing in one becomes a serious thing in another. Continuously, so the answer is about today." },
+  { name: "detect", t: "Find", d: "It looks across code, cloud, identity, SaaS and the web apps, APIs and containers you ship, the way an attacker would — including how a small thing in one becomes a serious thing in another. Continuously, so the answer is about today." },
   { name: "triage", t: "Prove", d: "Every lead is chased to a conclusion: reachable or not, exploitable or not, and what it opens up if it is. Where you have authorised active testing, you get the exact request that worked." },
   { name: "fix", t: "Fix", d: "The real change arrives written — a pull request, a config change, an access revocation. Routine ones just happen; anything that could break something waits for you." },
   { name: "approve", t: "Prove it is closed", d: "After the fix, the same hole is tested again — and on an authorised engagement, attacked again. If it still works you hear it from us. \u201cFixed\u201d stops meaning \u201csomebody closed the ticket\u201d." },
@@ -78,9 +78,10 @@ export default function Product() {
             Find the way in before someone else does — and prove you shut it.
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-muted">
-            TensorShield goes at your code, cloud, identity and SaaS the way an attacker would. It works out what
-            someone could actually reach, proves it, writes the fix, then tests the same hole again to confirm it is
-            dead — and your audit evidence comes out of the same run.
+            TensorShield goes at your code, cloud, identity and SaaS — and the web apps, APIs and containers you
+            ship — the way an attacker would. It works out what someone could actually reach, proves it, writes the
+            fix, then tests the same hole again to confirm it is dead — and your audit evidence comes out of the
+            same run.
           </p>
         </Reveal>
       </section>
