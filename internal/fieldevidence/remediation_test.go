@@ -114,3 +114,28 @@ func TestRemediations_KeyedOnClassAndTypeTogether(t *testing.T) {
 		t.Errorf("Weakest must name only the failing pairing, got %+v", w)
 	}
 }
+
+// Weakest is a WORST-FIRST list, and the order is the substance of it: someone reading it acts on
+// the top entry. Ordered best-first it sends them to rewrite the runbook that is mostly working
+// while the one failing two thirds of the time sits below the fold.
+func TestRemediations_WeakestIsOrderedWorstFirst(t *testing.T) {
+	var acts []platform.Action
+	// mild: closes 5 of 6. bad: closes 2 of 6. worst: closes 0 of 6.
+	acts = append(acts, remHistory("c-mild", "t", platform.FixStatusFixed, 5)...)
+	acts = append(acts, remHistory("c-mild", "t", platform.FixStatusStillPresent, 1)...)
+	acts = append(acts, remHistory("c-bad", "t", platform.FixStatusFixed, 2)...)
+	acts = append(acts, remHistory("c-bad", "t", platform.FixStatusStillPresent, 4)...)
+	acts = append(acts, remHistory("c-worst", "t", platform.FixStatusStillPresent, 6)...)
+
+	got := RemediationsForTenant("t1", acts, Options{}).Weakest()
+	if len(got) != 3 {
+		t.Fatalf("all three failing pairings must be listed, got %d: %+v", len(got), got)
+	}
+	want := []string{"c-worst", "c-bad", "c-mild"}
+	for i, w := range want {
+		if got[i].Class != w {
+			t.Errorf("position %d = %s (rate %.2f), want %s — the list must lead with the worst",
+				i, got[i].Class, got[i].ClosureRate(), w)
+		}
+	}
+}

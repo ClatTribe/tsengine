@@ -55,6 +55,13 @@ var required = []struct {
 	},
 	{
 		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "weakest_remediations",
+		wouldOtherwiseClaim: "that every applied fix worked, when the tenant's own history can name " +
+			"the (class, remediation) pairings that were applied and left the finding still there — " +
+			"the runbooks to rewrite (ADR 0025 F2)",
+	},
+	{
+		page:  "frontend/app/(app)/activity/page.tsx",
 		field: "awaiting_proof",
 		wouldOtherwiseClaim: "that every re-tested fix either closed or failed, hiding the ones " +
 			"found gone on re-scan but NOT counted as confirmed because a clean re-scan for that " +
