@@ -407,36 +407,6 @@ func validatePath(snap *cloudgraph.Snapshot, nodes []string, target string) erro
 	return nil
 }
 
-// pathAuthorizationStatus reports how much of a recorded path the PROVIDER has confirmed.
-//
-// The rule that matters (ADR 0024 P1b): a path is authorization-confirmed only when EVERY hop that
-// needs an authorization decision has been confirmed ALLOW. An earlier version returned true if ANY
-// single hop was confirmed — which would stamp a five-hop path as provider-backed on the strength of
-// one allowed iam:PassRole. That is the false-confidence this product exists to prevent (§10): a
-// multi-hop path needs several distinct authorizations, and proving one proves one.
-//
-// Returns (confirmed, confirmedHops, authHops). confirmed is true only when authHops > 0 and every
-// authorization-requiring hop is confirmed. Hops that need no authorization decision — a
-// network_reach edge is a reachability fact, not an IAM decision — are excluded from the denominator
-// rather than counted as confirmed, so they can neither block nor manufacture a confirmation.
-func (cc *Context) pathAuthorizationStatus(path []string) (confirmed bool, confirmedHops, authHops int) {
-	if len(path) < 2 {
-		return false, 0, 0
-	}
-	for i := 0; i < len(path)-1; i++ {
-		from, to := path[i], path[i+1]
-		e, ok := edgeBetween(cc.Snap, from, to)
-		if !ok || !edgeNeedsAuthorization(e.Kind) {
-			continue
-		}
-		authHops++
-		if cc.hopConfirmed(from, to) {
-			confirmedHops++
-		}
-	}
-	return authHops > 0 && confirmedHops == authHops, confirmedHops, authHops
-}
-
 // edgeNeedsAuthorization reports whether traversing this edge kind is an IAM authorization decision
 // the provider simulator can answer. A network_reach edge is a NETWORK fact (the runtime-preconditions
 // rung, not this one), so it is out of scope here rather than silently treated as authorized.
@@ -448,22 +418,6 @@ func edgeNeedsAuthorization(k cloudgraph.EdgeKind) bool {
 	default:
 		return false
 	}
-}
-
-// hopConfirmed reports whether some (principal, action, resource) move with these endpoints was
-// confirmed ALLOW this run. The action is not carried on the graph edge, so any confirmed action
-// across the hop counts for that hop.
-func (cc *Context) hopConfirmed(from, to string) bool {
-	for k, r := range cc.probes {
-		if r.Verdict != VerdictAllow {
-			continue
-		}
-		parts := strings.SplitN(k, "\x00", 3)
-		if len(parts) == 3 && parts[0] == from && parts[2] == to {
-			return true
-		}
-	}
-	return false
 }
 
 func pathToAttackPath(snap *cloudgraph.Snapshot, id string, nodes []string) types.AttackPath {
