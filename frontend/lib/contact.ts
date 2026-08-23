@@ -20,12 +20,16 @@ import { SITE_URL } from "@/lib/site";
 // Everything below is a NEXT_PUBLIC_* build-time value, the same mechanism the
 // legal identity in lib/site.ts already uses, so a deploy sets it once.
 //
-// GROUNDING (CLAUDE.md §10): an address or number that is not configured is NOT
-// invented and NOT rendered. Publishing hello@ or a placeholder number that
-// bounces is worse than publishing nothing, for the same reason the threat-intel
-// ingest drops an advisory link that is not a real URL — a channel that does not
-// reach anyone is worse than an honestly absent one. Callers check the
-// `*_CONFIGURED` flags and fall back to the channel that does work.
+// GROUNDING (CLAUDE.md §10): a channel is published only when it is REAL. The
+// general email and phone below are the owner's actual, monitored ones; nothing
+// here is a plausible-looking guess. Publishing a hello@ that bounces is worse
+// than publishing nothing, for the same reason the threat-intel ingest drops an
+// advisory link that is not a real URL — a channel that reaches nobody is worse
+// than an honestly absent one.
+//
+// The `*_CONFIGURED` flags and the conditional rendering stay: a deployment that
+// genuinely has no phone (a US arm, a white-label) blanks the constant and every
+// surface drops it cleanly, instead of rendering a label with nothing beside it.
 // ---------------------------------------------------------------------------
 
 /** The bare host from SITE_URL — "tensorshield.com" — so role addresses follow the site. */
@@ -34,17 +38,17 @@ export const SITE_HOST = SITE_URL.replace(/^https?:\/\//, "").replace(/\/.*$/, "
 const env = (v: string | undefined) => v?.trim() || "";
 
 /**
- * General enquiries / sales. Unset by default ON PURPOSE: there is no way to
- * guess a real mailbox, and a published address that bounces costs more trust
- * than it wins. Set NEXT_PUBLIC_CONTACT_EMAIL to switch it on everywhere.
+ * General enquiries / sales. The default is the live, monitored mailbox — supplied
+ * by the owner, not guessed, which is the whole condition for publishing one.
+ * NEXT_PUBLIC_CONTACT_EMAIL overrides it per deploy.
  */
-export const CONTACT_EMAIL = env(process.env.NEXT_PUBLIC_CONTACT_EMAIL);
+export const CONTACT_EMAIL = env(process.env.NEXT_PUBLIC_CONTACT_EMAIL) || "shieldtensor@gmail.com";
 
 /**
- * Phone, as a human would read it — e.g. "+91 80 4718 2100". Unset by default,
- * same reasoning.
+ * Phone, as a human would read it. Same source, same rule.
+ * NEXT_PUBLIC_CONTACT_PHONE overrides it per deploy.
  */
-export const CONTACT_PHONE = env(process.env.NEXT_PUBLIC_CONTACT_PHONE);
+export const CONTACT_PHONE = env(process.env.NEXT_PUBLIC_CONTACT_PHONE) || "+91 80049 20400";
 
 /**
  * The same number for a `tel:` href. Derived by stripping everything a dialler
