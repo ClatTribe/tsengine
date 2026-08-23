@@ -81,7 +81,11 @@ const SERVICE_MODELS: Item[] = [
 const COMPANY: Item[] = [
   { href: "/about", label: "About", desc: "Who we are and why we built this", icon: Building2 },
   { href: "/blog", label: "Blog", desc: "Notes on security, compliance & AI", icon: BookOpen },
-  { href: "/demo", label: "Contact us", desc: "Book a demo or talk to the team", icon: Mail },
+  // Points at /contact, not /demo. This item has said "Contact us" all along while sending
+  // people to a booking form — the one place in the nav a visitor looks for an address or a
+  // number was the place that offered neither. /contact leads with the email and phone and
+  // still carries the demo CTA, so the booking path is not lost.
+  { href: "/contact", label: "Contact us", desc: "Email us, call us, or book a demo", icon: Mail },
 ];
 
 export function MarketingNav() {
