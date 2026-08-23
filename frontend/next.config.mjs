@@ -13,6 +13,13 @@ const nextConfig = {
     return [
       { source: "/identity", destination: "/saas-posture", permanent: true },
       { source: "/supply-chain", destination: "/code-security", permanent: true },
+      // /mobile-app-security is retired. The page sold a surface the product does not
+      // deliver as its own asset: CLAUDE.md §3 descopes mobile_application, a user cannot
+      // add one, and the only mobile scanning that runs is mobsfscan firing as a REPOSITORY
+      // escalation on mobile source files. /code-security is where that actually happens, so
+      // the redirect sends the visitor to the page that can do the thing rather than 404ing
+      // a URL that may be indexed or linked.
+      { source: "/mobile-app-security", destination: "/code-security", permanent: true },
     ];
   },
 };

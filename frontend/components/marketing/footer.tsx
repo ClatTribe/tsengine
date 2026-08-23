@@ -51,7 +51,6 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/web-application-security", label: "Web app security" },
       { href: "/code-security", label: "Code security" },
       { href: "/container-security", label: "Container security" },
-      { href: "/mobile-app-security", label: "Mobile app security" },
       { href: "/network-security", label: "Network & IP" },
       { href: "/dns-domain-security", label: "Domain & DNS" },
     ],

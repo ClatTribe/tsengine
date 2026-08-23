@@ -129,50 +129,6 @@ export const ASSET_PAGES: Record<string, AssetPage> = {
     seoTitle: "Container Security — CVEs, Misconfig, SBOM",
     seoDesc: "Container image scanning with corroborated CVEs (trivy + grype), Dockerfile misconfiguration checks, full SBOM, and scan-on-push. Low false positives by design.",
   },
-  // MOBILE SOURCE, not a built bundle.
-  //
-  // This page used to sell APK/IPA scanning: "upload the bundle", "a built artifact is enough".
-  // None of that was true. There is no decompiler in the image (no apktool, no jadx), no upload
-  // endpoint, and mobile_application is not a type a user can add — so a prospect could read the
-  // page, click "Scan a mobile app", sign up, and find no way to do it.
-  //
-  // What IS real: mobsfscan fires as a repository escalation when a finding lands in a mobile source
-  // file, alongside gitleaks and trivy over the same tree. That is genuine mobile SAST reached
-  // through the repo connection, so the page now sells that and says plainly that a compiled binary
-  // is not supported.
-  mobile: {
-    slug: "mobile-app-security",
-    icon: "shield",
-    eyebrow: "Mobile app security",
-    h1: "Ship the app without shipping the keys.",
-    sub: "Connect the repo holding your Android or iOS source and we scan it for insecure storage, weak crypto, and hardcoded secrets — the mobile flaws that leak user data and API keys. Source only; we do not decompile a built APK or IPA.",
-    ctaPrimary: "Connect your repo",
-    checks: [
-      { t: "Mobile SAST", d: "mobsfscan flags insecure storage, weak/disabled crypto, exported components, and unsafe WebView config in your source." },
-      { t: "Hardcoded secrets", d: "gitleaks finds API keys, tokens, and credentials committed alongside the app code." },
-      { t: "Dependency CVEs", d: "trivy scans the app's third-party libraries in your lockfiles for known vulnerabilities." },
-      { t: "Grounded, low-noise", d: "A clean tree yields zero findings — every flag cites the offending file and line." },
-    ],
-    tools: ["mobsfscan", "gitleaks", "trivy"],
-    how: [
-      { t: "Connect the repo", d: "GitHub or GitLab. The mobile source is scanned with the rest of the tree, mounted read-only in the sandbox." },
-      { t: "Mobile SAST runs where it matters", d: "When a finding lands in mobile source, mobsfscan runs over the tree — mobile-specific checks the general SAST packs miss." },
-      { t: "Fix with file:line", d: "Each finding names the exact file and line, so the fix is a code change, not a treasure hunt." },
-    ],
-    frameworks: "Mobile findings map to OWASP MASVS, SOC 2 (CC6.1/CC6.7), and HIPAA (164.312) where user data is handled.",
-    reviewQuestions: [
-      "Is sensitive data stored securely on the device?",
-      "Are API keys or credentials embedded in the app?",
-      "Do you use current, standard cryptography?",
-    ],
-    faq: [
-      { q: "Do you scan a built APK or IPA?", a: "No. We scan mobile SOURCE in a connected repository. Analysing a compiled bundle needs a decompile step we have not built, and we would rather say so than have you upload a binary and get a thin result." },
-      { q: "Android and iOS both?", a: "Yes — Kotlin/Java and Swift/Objective-C source alike. The same mobile-SAST + secrets + dependency-CVE pass runs across both." },
-      { q: "Is this dynamic (running-app) testing?", a: "No. It is static analysis of your source — the highest-ROI mobile coverage without a device farm. Runtime testing is not built." },
-    ],
-    seoTitle: "Mobile App Security — Android & iOS SAST",
-    seoDesc: "Mobile app security for Android and iOS SOURCE: insecure storage, weak crypto, hardcoded secrets, and dependency CVEs, scanned from your connected repository.",
-  },
   web: {
     slug: "web-application-security",
     icon: "globe",

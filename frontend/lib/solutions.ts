@@ -78,7 +78,6 @@ export const SURFACES: SolutionLink[] = [
   { href: "/container-security", label: "Containers", prompt: "Images, base layers, CVEs, Dockerfile hygiene" },
   { href: "/network-security", label: "Network & IPs", prompt: "Exposed ports, services, default credentials" },
   { href: "/dns-domain-security", label: "Domains & DNS", prompt: "Spoofable email, subdomain takeover, certs" },
-  { href: "/mobile-app-security", label: "Mobile source", prompt: "Mobile code in a connected repository" },
   { href: "/ci-cd", label: "CI/CD", prompt: "Pull-request checks and merge gating" },
 ];
 
