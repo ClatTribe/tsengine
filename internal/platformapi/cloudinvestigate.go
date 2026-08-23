@@ -267,6 +267,13 @@ func cloudIssueToFinding(id string, is cloudagent.Issue, probes *cloudagent.Prob
 // The sibling made this call correctly first — codeinvestigate.go refuses `verified` for the code
 // agent and spends eleven lines saying why. This is that reasoning applied to the other agent.
 func authorizationRungStatus(is cloudagent.Issue) types.VerificationState {
+	// A REFUSED path must not be "corroborated". That tier means two independent assessments AGREE;
+	// here they disagree — our graph says the route exists and the provider says a required hop is
+	// shut. Reporting disagreement as corroboration would be the exact inversion the rung ladder
+	// exists to prevent, so it falls to the floor (ADR 0024 P1b).
+	if p := is.ProofPlan; p != nil && p.Status == cloudagent.PathDenied {
+		return types.VerificationPatternMatch
+	}
 	switch {
 	case is.ProviderConfirmed:
 		return types.VerificationVerified
@@ -287,6 +294,17 @@ func authorizationRungStatus(is cloudagent.Issue) types.VerificationState {
 func authorizationRungLine(is cloudagent.Issue) string {
 	const caveat = " This confirms AUTHORIZATION, not exploitability: network reachability, " +
 		"credential acquisition, unsupplied session context and the rest of the workflow stay unproven."
+	// A REFUSED path is a state this line could not previously express, because the ratio it read had
+	// no way to represent a denial (ADR 0024 P1b). It matters most of all: the provider has told us a
+	// required hop is shut, and rendering that as "1/3 confirmed" presents authoritative evidence
+	// AGAINST the path as partial progress toward it.
+	if p := is.ProofPlan; p != nil && p.Status == cloudagent.PathDenied {
+		return "Verification: REFUSED BY THE PROVIDER — a hop this path requires was explicitly " +
+			"denied by the cloud provider's own policy simulator, so the path as traced does not " +
+			"authorize. That is authoritative for the actions asked, at this moment, on this route: it " +
+			"does NOT prove the target is unreachable by another path, and it does not mean the " +
+			"finding was wrong to investigate."
+	}
 	switch {
 	case is.ProviderConfirmed:
 		return "Verification: provider-confirmed authorization (" + is.AuthorizationCoverage +

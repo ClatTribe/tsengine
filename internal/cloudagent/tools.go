@@ -258,9 +258,13 @@ func tRecord(cc *Context, args map[string]any) string {
 	// authorization-requiring hop on this path was confirmed ALLOW by the provider. One allowed hop
 	// does not prove a multi-hop path (§10). Not required — a run with no Prober still records
 	// config-possible paths exactly as before; this only adds the stronger, fully-backed claim.
-	confirmed, okHops, authHops := cc.pathAuthorizationStatus(path)
-	is.ProviderConfirmed = confirmed
-	is.AuthorizationCoverage = fmt.Sprintf("%d/%d", okHops, authHops)
+	plan := cc.authorizationProofPlan(path)
+	is.ProofPlan = &plan
+	// ProviderConfirmed stays the strict every-hop claim from C2 — a DENIED or PARTIAL path is not
+	// confirmed. Kept as a separate bool rather than derived at every read site, because a consumer
+	// that forgets to check Status would otherwise treat any non-empty plan as a confirmation.
+	is.ProviderConfirmed = plan.Status == PathConfirmed
+	is.AuthorizationCoverage = plan.Coverage()
 	cc.Issues = append(cc.Issues, is)
 	return fmt.Sprintf("recorded %s: %s (grounded — the path exists and reaches a crown jewel). Consider propose_fix(%s).", is.ID, strings.Join(path, " -> "), is.ID)
 }
