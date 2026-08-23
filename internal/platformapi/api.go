@@ -22,6 +22,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/attackcoverage"
+	"github.com/ClatTribe/tsengine/internal/bench"
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
@@ -36,6 +37,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/ratelimit"
 	"github.com/ClatTribe/tsengine/internal/runner"
+	"github.com/ClatTribe/tsengine/internal/scubaingest"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -248,6 +250,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage))           // ATT&CK techniques exercised vs unchecked
 	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))             // is exposure going down?
 	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation)) // did their controls catch our probes?
+	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                // correlate a customer ScubaGear run against ours
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
@@ -866,6 +869,50 @@ func (d Deps) handleCoverage(w http.ResponseWriter, r *http.Request, tenantID st
 		return
 	}
 	respond(w, coverage.Compute(assets, findings, engs), nil)
+}
+
+// handleScubaIngest correlates a ScubaGear/ScubaGoggles run the CUSTOMER performed against our own
+// identity/SaaS assessment (ADR 0028 follow-on).
+//
+// Ingest rather than wrap, deliberately. §13 says wrap the OSS tool and identity is the one surface
+// where we do not — but our SCuBA recall is 0.993 with every mapping execution-proven, so running
+// ScubaGear ourselves would add a PowerShell runtime and a second credential ask to obtain a second
+// opinion about detections we can already demonstrate. Their run costs neither, and CISA's tool is
+// one many tenants already have. What it buys is the thing wrapping was for: corroboration from the
+// authority that publishes the baseline, and a list of policies where WE were silent and they were
+// not.
+//
+// The policy→rule mapping comes from the SCuBA bench catalogue, which is the single home that proves
+// its mappings by execution — a second copy here would be one that can drift from the proven one.
+func (d Deps) handleScubaIngest(w http.ResponseWriter, r *http.Request, tenantID string) {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, 32<<20))
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	outcomes, err := scubaingest.Parse(raw)
+	if err != nil {
+		// Including ErrNoPoliciesRecognized: a document we could not read is reported as unreadable,
+		// never as a tenant with nothing wrong.
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	findings, ferr := d.Store.ListFindings(r.Context(), tenantID, store.FindingFilter{})
+	if ferr != nil {
+		respond(w, nil, ferr)
+		return
+	}
+	fired := make(map[string]bool, len(findings))
+	for _, f := range findings {
+		fired[f.RuleID] = true
+	}
+	policyRules := make(map[string][]string)
+	for _, p := range bench.SCuBACatalog() {
+		if len(p.Rules) > 0 {
+			policyRules[p.ID] = p.Rules
+		}
+	}
+	respond(w, scubaingest.Correlate(outcomes, fired, policyRules), nil)
 }
 
 // handleDetectionValidation answers the question that defines this product category: when we proved
