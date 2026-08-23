@@ -73,6 +73,12 @@ type VAPTSummary struct {
 	// but the finding is STILL there. Both 0 when nothing has been re-tested (honest, not "clean").
 	RetestConfirmed    int `json:"retest_confirmed,omitempty"`
 	RetestStillPresent int `json:"retest_still_present,omitempty"`
+	// RetestAwaitingProof counts fixes the re-scan found gone but which are NOT counted as confirmed,
+	// because a clean re-scan for that class has been contradicted by a live exploit before (ADR 0025
+	// F1). Reported separately and never folded into either other number: rolled into confirmed it
+	// would overstate, rolled into still-present it would claim the fix failed, and omitted entirely
+	// it would silently shrink the totals — the reader would see a smaller report and no reason why.
+	RetestAwaitingProof int `json:"retest_awaiting_proof,omitempty"`
 	// PatchAvailable / PatchUnavailable: of the dependency (SCA) findings, how many have an upstream
 	// patched version the customer can upgrade to right now vs. none available yet — the competitor
 	// "fixable vs no-fix" executive signal. Only SCA findings (grype/trivy/osv-scanner) carry it.
@@ -169,6 +175,8 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 				rep.Summary.RetestConfirmed++
 			case platform.FixStatusStillPresent:
 				rep.Summary.RetestStillPresent++
+			case platform.FixStatusRescanUnconfirmed:
+				rep.Summary.RetestAwaitingProof++
 			}
 		}
 	}
@@ -324,6 +332,11 @@ func writeSignalLines(b *strings.Builder, s VAPTSummary) {
 	}
 	if s.Automatable > 0 {
 		fmt.Fprintf(b, "- **%d automatable** — CISA assesses an attacker can automate exploitation, so these scale across an estate rather than costing effort per target\n", s.Automatable)
+	}
+	if s.RetestAwaitingProof > 0 {
+		b.WriteString(fmt.Sprintf(" %s found gone on re-scan but not counted as confirmed: a clean "+
+			"re-scan for that class has been contradicted by a live exploit before, so it awaits re-attack.",
+			countNoun(s.RetestAwaitingProof, "applied fix was", "applied fixes were")))
 	}
 	if s.RetestConfirmed > 0 || s.RetestStillPresent > 0 {
 		fmt.Fprintf(b, "- **Fix verification:** %s re-tested and confirmed closed on re-scan; %d still present after the fix\n",

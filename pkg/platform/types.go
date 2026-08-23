@@ -783,13 +783,20 @@ type Action struct {
 const (
 	FixStatusFixed        = "fixed"
 	FixStatusStillPresent = "still_present"
+	// FixStatusRescanUnconfirmed: every finding was GONE from the re-scan, but for this rule class a
+	// clean re-scan has measurably been contradicted by a live exploit before (ADR 0025 F1), so the
+	// re-scan alone is not accepted as the terminal "fixed" claim. Deliberately NOT terminal — a
+	// re-attack can still settle it either way. It says "gone, on evidence we know has failed for
+	// this class", which is a different statement from both "fixed" and "still present" and must not
+	// be rendered as either.
+	FixStatusRescanUnconfirmed = "rescan_unconfirmed"
 	// DiscoveryHumanReinstated marks a finding a person put back after the filter dropped it — the
 	// strongest correction signal the product records.
 	DiscoveryHumanReinstated = "human_reinstated"
 )
 
 type FixVerification struct {
-	Status       string    `json:"status"` // FixStatusFixed | FixStatusStillPresent
+	Status       string    `json:"status"` // FixStatusFixed | FixStatusStillPresent | FixStatusRescanUnconfirmed
 	Method       string    `json:"method"` // "rescan" — re-ran detection and compared keys
 	VerifiedAt   time.Time `json:"verified_at"`
 	Fixed        []string  `json:"fixed,omitempty"`         // finding keys confirmed gone from the fresh scan

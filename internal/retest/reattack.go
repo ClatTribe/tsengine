@@ -139,5 +139,14 @@ func ApplyReattack(actions []platform.Action, verdicts map[string]ReattackVerdic
 
 // alreadyFixedByRescan reports whether the rescan had concluded the finding was gone.
 func alreadyFixedByRescan(a platform.Action) bool {
-	return a.Verification != nil && a.Verification.Status == platform.FixStatusFixed
+	if a.Verification == nil {
+		return false
+	}
+	// FixStatusRescanUnconfirmed means the re-scan DID conclude the finding was gone — we simply
+	// declined to treat that alone as terminal for this class (ADR 0025 F1). So it satisfies the
+	// "rescan agreed" half of closed_with_proof. Without this, withholding the confirmation would
+	// also make the STRONGEST claim unreachable: a re-attack proving the fix closed could never be
+	// recorded as proven, and demanding more evidence would have destroyed the reward for supplying it.
+	return a.Verification.Status == platform.FixStatusFixed ||
+		a.Verification.Status == platform.FixStatusRescanUnconfirmed
 }

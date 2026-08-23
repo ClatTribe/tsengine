@@ -22,6 +22,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/detect"
+	"github.com/ClatTribe/tsengine/internal/fieldevidence"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"github.com/ClatTribe/tsengine/internal/osint"
@@ -441,7 +442,14 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 			for _, a := range acts {
 				byID[a.ID] = a
 			}
-			for _, verified := range retest.VerifyScoped(acts, current, s.now(), cov) {
+			// ADR 0025 F1: what this tenant's own history says about whether a clean re-scan is
+			// sufficient evidence for each rule class. Built from `acts`, already in hand, so it costs
+			// no I/O. It can only ever DEMAND MORE evidence — a class with no record, a thin record or
+			// a clean record all behave exactly as before, so a tenant with no re-attack history sees
+			// no change at all. Where the record shows a clean re-scan HAS been contradicted by a live
+			// exploit, the fix is not stamped terminally "fixed" on the re-scan alone.
+			policy := fieldevidence.ForTenant(tenantID, acts, fieldevidence.Options{})
+			for _, verified := range retest.VerifyWithPolicy(acts, current, s.now(), cov, policy) {
 				byID[verified.ID] = verified // carry the fresh verdict into the re-attack step
 				if perr := s.Store.PutAction(ctx, verified); perr != nil && firstErr == nil {
 					firstErr = perr

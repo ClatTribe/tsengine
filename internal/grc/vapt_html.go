@@ -151,7 +151,7 @@ const vaptHTMLSource = `<!doctype html>
   {{if .SCATotal}}<li><b>Dependency patchability:</b> {{.S.PatchAvailable}} of {{.SCATotal}} dependency findings have an upstream fix you can upgrade to now; {{.S.PatchUnavailable}} have no fix available yet (mitigate)</li>{{end}}
   {{if .S.Ransomware}}<li><b>{{.S.Ransomware}} ransomware-linked</b> — CISA marks the CVE used in ransomware campaigns, a stronger signal than KEV listing</li>{{end}}
   {{if .S.Automatable}}<li><b>{{.S.Automatable}} automatable</b> — CISA assesses an attacker can automate exploitation, so these scale across an estate rather than costing effort per target</li>{{end}}
-  {{if .HasRetest}}<li><b>Fix verification:</b> {{.S.RetestConfirmed}} applied {{if eq .S.RetestConfirmed 1}}fix{{else}}fixes{{end}} re-tested and confirmed closed on re-scan; {{.S.RetestStillPresent}} still present after the fix</li>{{end}}
+  {{if .HasRetest}}<li><b>Fix verification:</b> {{.S.RetestConfirmed}} applied {{if eq .S.RetestConfirmed 1}}fix{{else}}fixes{{end}} re-tested and confirmed closed on re-scan; {{.S.RetestStillPresent}} still present after the fix{{if .S.RetestAwaitingProof}}; {{.S.RetestAwaitingProof}} found gone on re-scan but awaiting re-attack, because a clean re-scan for that class has been contradicted by a live exploit before{{end}}</li>{{end}}
 </ul>
 <p>{{inline .Narrative}}</p>
 {{if .IntelCaveat}}<div class="caveat">{{inline .IntelCaveat}}</div>{{end}}
@@ -299,7 +299,7 @@ func RenderVAPTHTML(r *VAPTReport) string {
 	v := vaptHTMLView{
 		Report: r, S: r.Summary, Sev: sev, Scope: rows,
 		SCATotal:    r.Summary.PatchAvailable + r.Summary.PatchUnavailable,
-		HasRetest:   r.Summary.RetestConfirmed > 0 || r.Summary.RetestStillPresent > 0,
+		HasRetest:   r.Summary.RetestConfirmed > 0 || r.Summary.RetestStillPresent > 0 || r.Summary.RetestAwaitingProof > 0,
 		Narrative:   narrativeSummary(r),
 		RatingClass: ratingClass(r.Summary.RiskRating),
 		IntelCaveat: r.Intel.IntelCaveat(),

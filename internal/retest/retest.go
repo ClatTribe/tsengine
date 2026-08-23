@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/detect"
+	"github.com/ClatTribe/tsengine/internal/fieldevidence"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -81,6 +82,34 @@ func Verify(actions []platform.Action, current []types.Finding, now time.Time) [
 // whole remediation closed on partial evidence — and the record is terminal, so there is no later
 // pass to correct it.
 func VerifyScoped(actions []platform.Action, current []types.Finding, now time.Time, cov detect.Coverage) []platform.Action {
+	return VerifyWithPolicy(actions, current, now, cov, nil)
+}
+
+// RescanPolicy answers "is a clean re-scan sufficient evidence to terminally close this class?".
+// Satisfied by *fieldevidence.Corpus. Declared here rather than imported so retest stays testable
+// without building a corpus, and so the dependency runs consumer → corpus and never back.
+type RescanPolicy interface {
+	// RescanSufficient reports sufficiency and whether anything is known at all. known=false MUST
+	// leave behaviour unchanged — see VerifyWithPolicy.
+	RescanSufficient(class string) (sufficient, known bool)
+}
+
+// VerifyWithPolicy is VerifyScoped with the re-scan's SUFFICIENCY consulted rather than assumed
+// (ADR 0025 F1).
+//
+// coversAll already refuses the absence claim when this pass could not observe a producer. This is
+// the same refusal one level deeper: even when the pass WAS authoritative, a clean re-scan is only
+// as good as clean re-scans have proven to be for that class — and we now measure that, because
+// FixVerification records what the re-scan concluded separately from what a re-attack then proved.
+//
+// It can only ever DEMAND MORE evidence. A nil policy, an unknown class, or a class with a clean
+// record all yield exactly today's behaviour; there is no branch that turns a still_present into a
+// fixed, or that skips a check. An empty corpus changes nothing.
+//
+// A distrusted class taints the WHOLE action, matching coversAll's reasoning: an action claims to
+// resolve a SET, and confirming it terminally while one member rests on evidence we know has failed
+// would close the whole remediation on that evidence.
+func VerifyWithPolicy(actions []platform.Action, current []types.Finding, now time.Time, cov detect.Coverage, policy RescanPolicy) []platform.Action {
 	present := make(map[string]bool, len(current))
 	for _, f := range current {
 		present[detect.Key(f)] = true
@@ -105,8 +134,14 @@ func VerifyScoped(actions []platform.Action, current []types.Finding, now time.T
 			}
 		}
 		status := platform.FixStatusFixed
+		note := ""
 		if len(still) > 0 {
 			status = platform.FixStatusStillPresent
+		} else if class, ok := distrustedClass(policy, a.FindingKeys); ok {
+			// Everything is gone from the re-scan — and for this class that has been wrong before.
+			status = platform.FixStatusRescanUnconfirmed
+			note = " — but a clean re-scan for " + class + " has been contradicted by a live exploit " +
+				"before, so this is not accepted as a confirmed fix until a re-attack settles it"
 		}
 		// Skip if the verdict is unchanged from what's already recorded (idempotent re-runs).
 		if a.Verification != nil && a.Verification.Status == status &&
@@ -119,14 +154,32 @@ func VerifyScoped(actions []platform.Action, current []types.Finding, now time.T
 			VerifiedAt:   now,
 			Fixed:        fixed,
 			StillPresent: still,
-			Evidence:     evidence(status, len(fixed), len(a.FindingKeys)),
+			Evidence:     evidence(status, len(fixed), len(a.FindingKeys)) + note,
 		}
 		changed = append(changed, a)
 	}
 	return changed
 }
 
+// distrustedClass returns the first of these keys' classes whose clean re-scans are known to have
+// been contradicted. Order is the action's own key order, so the message is reproducible.
+func distrustedClass(policy RescanPolicy, keys []string) (string, bool) {
+	if policy == nil {
+		return "", false
+	}
+	for _, k := range keys {
+		class := fieldevidence.ClassOf(k)
+		if sufficient, known := policy.RescanSufficient(class); known && !sufficient {
+			return class, true
+		}
+	}
+	return "", false
+}
+
 func evidence(status string, fixed, total int) string {
+	if status == platform.FixStatusRescanUnconfirmed {
+		return fmt.Sprintf("%d of %d gone in re-scan", fixed, total)
+	}
 	if status == platform.FixStatusFixed {
 		return fmt.Sprintf("%d of %d confirmed fixed in re-scan", fixed, total)
 	}
