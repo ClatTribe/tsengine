@@ -122,6 +122,12 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 	// enrich → store → issues/incidents path as drift.
 	ciFindings, ciNotAssessed := ciIdentityAssess(
 		strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body)
+	// THE JOIN (ADR 0024 Sprint 2). ghoidc says a trust is over-broad; the provider dry-run says what
+	// that role can then REACH. Separately each is deferrable — plenty of broadly-trusted roles hold
+	// nothing — and together they are the finding, so the reach ANNOTATES the existing weakness rather
+	// than splitting one fact across two rows. No prober, no declared crown jewel, or a correctly
+	// scoped trust → the findings pass through untouched.
+	ciFindings = annotateCIReach(r.Context(), rawAWSOrEmpty(body), ciFindings, d.proberOrNil(r.Context(), tenantID))
 	_, ciStored := d.persistCIIdentityFindings(r.Context(), tenantID, ciFindings)
 	// WHAT THE CI-IDENTITY CHECK COULD NOT LOOK AT rides into the STORED coverage notes, next to the
 	// escalation gaps, for the reason those are stored: the reader of the attack-path page is rarely
