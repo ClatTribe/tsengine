@@ -424,8 +424,24 @@ export interface ActionsView {
   verified: number;
   confirmed_fix: number;
   still_present: number;
+  /**
+   * Fixes the re-scan found gone but which are NOT counted as confirmed, because a clean re-scan for
+   * that class has been contradicted by a live exploit before (ADR 0025 F1). A third state — neither
+   * a confirmed fix nor a failed one — so it must never be folded into either.
+   */
+  awaiting_proof: number;
   /** Approved actions whose apply attempt failed — they are stuck, not pending. */
   failed_delivery: number;
+  /** Rule classes whose clean re-scans this tenant's own history shows have been contradicted. */
+  distrusted_classes?: DistrustedClass[];
+}
+
+// DistrustedClass — where our own absence-evidence has measurably failed.
+export interface DistrustedClass {
+  class: string;
+  contributors: number;
+  clean_rescans: number;
+  contradicted: number;
 }
 
 // AssetCoverage — the per-asset "what was actually tested" statement (visibility most teams lack).

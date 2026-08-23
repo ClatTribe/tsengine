@@ -45,6 +45,11 @@ const (
 	DefaultContradictionThreshold = 0.1
 )
 
+// noPerTenantCap disables the per-tenant cap, for a corpus with only one contributor. Deliberately a
+// named constant rather than a bare sentinel, because "0 means unlimited" and "0 means use the
+// default" are both plausible readings of a zero and only one of them is safe.
+const noPerTenantCap = int(^uint(0) >> 1)
+
 // Observation is one verified outcome: a re-scan said a finding was gone, and a live re-attack either
 // agreed or contradicted it.
 //

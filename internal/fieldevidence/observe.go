@@ -51,5 +51,12 @@ func FromActions(tenant string, actions []platform.Action) []Observation {
 // MinContributors, not a redesign.
 func ForTenant(tenant string, actions []platform.Action, opts Options) *Corpus {
 	opts.MinContributors = 1
+	// The per-tenant cap is disabled here for the same reason, and it is NOT cosmetic: applied to a
+	// tenant's own corpus it truncates their history in ARRIVAL ORDER, which distorts the very rate
+	// the corpus exists to compute. Six contradictions followed by twenty clean re-scans would count
+	// the first five only and read as 100% contradicted instead of 23% — turning a class that is
+	// mostly fine into one we refuse to confirm. The cap exists to stop one estate dominating a
+	// SHARED statistic; there is no one else here to dominate.
+	opts.MaxPerTenant = noPerTenantCap
 	return Aggregate(FromActions(tenant, actions), opts)
 }

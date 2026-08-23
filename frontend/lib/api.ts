@@ -365,7 +365,7 @@ export const api = {
   approvals: () => safe<Action[]>("/v1/approvals", []),
   // All remediations + the fix-verification roll-up (did the applied fix actually close the finding? KF#4).
   actions: () =>
-    safe<ActionsView>("/v1/actions", { actions: [], applied: 0, verified: 0, confirmed_fix: 0, still_present: 0, failed_delivery: 0 }),
+    safe<ActionsView>("/v1/actions", { actions: [], applied: 0, verified: 0, confirmed_fix: 0, still_present: 0, awaiting_proof: 0, failed_delivery: 0 }),
   // Per-asset "what was actually tested" — the tools each scan runs, when it last ran, what it surfaced.
   // One-shot Postgres scan. The DSN is used for this request and never stored — see database.go, which
   // asserts at the source that it never reaches the store or the vault.
