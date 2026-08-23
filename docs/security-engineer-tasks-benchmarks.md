@@ -213,7 +213,7 @@ neutral benchmark cannot be claimed best-in-breed at all — only described.
 |---|---|---|---|
 | **AI Cloud Security Engineer** | **CloudGoat** (Rhino) · **IAM-Vulnerable** (Bishop Fox) | ✅ **running, offline-transcribed** — 16/16 AWS privesc primitives, blocked-privesc precision, multi-hop, cross-account, GCP/Azure chains; a proxy-driven agent run reached admin over third-party ground truth | Offline: **nothing** (scenarios transcribed from the public Terraform into `cloudquery` tables — zero creds, zero disk). Live 31-scenario deploy: an AWS account + Terraform |
 | **AI AppSec Engineer** | **OWASP Benchmark** (SAST) · **WAVSEP** (DAST) · **CVE-Bench** · **BountyBench-Patch** · **BackportBench** · **SEC-bench** | 🟡 harnesses built; SAST Youden **0.387** measured; the patch/exploit lanes are **LLM-gated (no number)** | GitHub connection (repo assets) · the Docker sandbox image · a deployed WAVSEP target · **a funded LLM key** for every patch lane |
-| **AI Identity/SaaS Engineer** | **CISA SCuBA** — `cisagov/ScubaGear` (M365) + `cisagov/ScubaGoggles` (Google Workspace) | ✅ **built + improved this session** (`internal/bench/scuba.go`): 169 published policies, 146 scanner-detectable, **recall 0.322** (from 0.178), **SHALL recall 0.426** (from 0.218) — 89-policy worklist remaining | Offline: **nothing** (catalog transcribed; CC0). The gaps are mostly *fetch-surface* gaps, so closing them needs **Graph scopes** (`Policy.Read.All`, `SharePointTenantSettings.Read.All`, Teams/Exchange admin reads) and **Admin SDK** reads for Gmail/Drive/session settings |
+| **AI Identity/SaaS Engineer** | **CISA SCuBA** — `cisagov/ScubaGear` (M365) + `cisagov/ScubaGoggles` (Google Workspace) | ✅ **MEASURED LIVE: recall 0.993, SHALL recall 0.990** (145/146 detectable, 100/101 SHALL). Trajectory over successive passes: 0.178 → 0.322 → **0.993** (SHALL 0.218 → 0.426 → **0.990**) — the row below records the pass that took it to the middle figure | Offline: **nothing** (catalog transcribed; CC0). The gaps are mostly *fetch-surface* gaps, so closing them needs **Graph scopes** (`Policy.Read.All`, `SharePointTenantSettings.Read.All`, Teams/Exchange admin reads) and **Admin SDK** reads for Gmail/Drive/session settings |
 | **AI SOC Analyst** | **ExCyTIn-Bench** (ICML 2026, `microsoft/SecRL`, MIT — 7.5k questions over 57 Sentinel log tables) · SecRespond · SIR-Bench | 🔴 **scores 0 by construction** — capability verified absent, see §2.2.2 | ExCyTIn needs **10–33 GB** of MySQL log volumes (measured from its own setup script) — infeasible under the disk constraint; SIR-Bench's dataset is **announced but unreleased**. The real blocker is not disk: it is a **SIEM/log-store connector + a `query_logs` agent tool**, which the codebase has nowhere |
 | **AI Compliance Engineer** | **OpenCRE** (OWASP, CWE↔standard) · **SCF** + **CSA CCM** control cross-mapping | ✅ **MEASURED LIVE: 96%** — 48 of our 50 mapped CWEs are corroborated by OpenCRE (only CWE-1395 and CWE-693 are in-house-only). The lane was silently dead until this session; see §2.2.3 | OpenCRE is a **keyless live API** — no credential, no disk, runs today via `tsengine corpus compliance-provenance`. The SCF/CCM axis still needs an operator-supplied matrix export (SCF is CC BY-ND — parseable, not redistributable) |
 | **AI EASM/OSINT Engineer** | **none exists** | 🔴 **honest gap** — the public material is vendor/analyst comparison (Expert Insights, buyer guides), not a reproducible dataset with ground truth | Nothing to run. The two honest options are (a) **subfinder/amass discovery-rate parity** on a domain we own, or (b) define one publicly, as we did for the defense bench |
@@ -229,7 +229,7 @@ neutral benchmark cannot be claimed best-in-breed at all — only described.
    (benchmark exists, not built) and EASM/OSINT (no benchmark exists). Saying so
    is the point — §4's rule is that a SKIP is not a pass.
 
-### 2.2.1 The SCuBA benchmark: 0.178 → 0.322, and why the denominator matters
+### 2.2.1 The SCuBA benchmark: 0.178 → 0.322 (→ 0.993 today), and why the denominator matters
 
 `internal/bench/scuba.go` transcribes all 169 policies from eight baselines
 (Entra ID, Exchange, SharePoint/OneDrive, Teams, GWS common controls, Drive,
@@ -288,10 +288,15 @@ by ease — one theme, the three things an SMB actually gets breached through:
   lists, missing external-sender tagging, inbound spoofing of the org's own domain, and
   unauthenticated mail delivered normally.
 
-| Measure | Before | After |
-|---|---|---|
-| recall (of 146 detectable) | 0.178 | **0.322** |
-| mandatory (SHALL) recall | 0.218 (22/101) | **0.426** (43/101) |
+This section records ONE pass. The numbers below are that pass's before/after, not the current
+state: recall has since reached **0.993** and SHALL recall **0.990** (145/146 · 100/101). They are
+kept because how the denominator was chosen is the durable part, and because a trajectory is
+checkable in a way a single figure is not.
+
+| Measure | Before | After (this pass) | Today |
+|---|---|---|---|
+| recall (of 146 detectable) | 0.178 | **0.322** | **0.993** |
+| mandatory (SHALL) recall | 0.218 (22/101) | **0.426** (43/101) | **0.990** |
 | rules proven live | 25 | **46** |
 | m365/exchange · m365/sharepoint | 0.600 · 0.375 | **0.800 · 0.750** |
 
