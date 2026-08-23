@@ -61,6 +61,13 @@ export default function VAPT() {
             hand over today, and again next month. Every finding grounded in real scanner evidence, mapped to CWE,
             OWASP Top 10 and MITRE ATT&amp;CK, with a recommended fix and a signed attestation.
           </p>
+          {/* The tie-back. This report is not a separate product you also buy — it is what the
+              testing already produced. Without this line a reader files it under "another
+              compliance tool", which is exactly the thing that makes it look expensive. */}
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink">
+            You do not commission this. It comes out of the same run that went looking for the way in — so the report
+            is current the day a customer asks, not six weeks after you booked someone.
+          </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/signup"

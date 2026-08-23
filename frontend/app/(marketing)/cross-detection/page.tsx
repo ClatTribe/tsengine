@@ -7,38 +7,38 @@ import {
 } from "lucide-react";
 
 export const metadata = pageMeta({
-  title: "Cross-Surface Detection — One Attack Path",
+  title: "Attack paths across code, cloud and SaaS",
   description:
-    "Most tools hand you a pile of findings per scanner. We unify them: one issue from many scanners, chained across surfaces into the attack path that matters.",
+    "Three tools each say \u201cmedium\u201d and nobody says they are one way in. We join them into the route an attacker would take, and show you where to cut it.",
   path: "/cross-detection",
 });
 
 // What the unified platform actually does — each maps to a shipped capability.
 const PILLARS = [
   {
-    icon: Layers, t: "One issue, many signals",
-    d: "The same CVE flagged by three scanners is ONE issue, confirmed by three sources — not three rows. Findings collapse by CVE (or rule + location) into a single row carrying the worst severity and every tool that saw it.",
+    icon: Layers, t: "One issue, not three tickets",
+    d: "When three scanners flag the same thing you get one row — and the fact that three tools agree becomes a reason to believe it, instead of three copies of the same job. Your queue gets shorter and more trustworthy at once.",
   },
   {
-    icon: Spline, t: "Attack paths across surfaces",
-    d: "A leaked key in code, an exposed host, a cloud admin role — separately they're medium findings. TensorShield bridges them on a real shared identifier into the chain that reaches a crown jewel, and shows it as one path.",
+    icon: Spline, t: "The chain nobody else joins up",
+    d: "A key in code, an exposed host, an over-privileged cloud role: on their own, three mediums sitting in three different tools. Together they are one route into your cloud account — and you see it as one route, not as three unrelated tickets.",
   },
   {
-    icon: EyeOff, t: "Triage, not noise",
-    d: "Multi-tool-confirmed issues rise to the top; the rest is de-duplicated away. Ignore a false positive or accept a risk with a reason — it's recorded, reversible, and off your queue.",
+    icon: EyeOff, t: "A queue you can actually finish",
+    d: "What several tools agree on rises to the top and duplicates fold away. Dismiss something as a false positive, or accept the risk with a reason, and it leaves your list — recorded and reversible, never quietly deleted.",
   },
   {
-    icon: Radar, t: "What's under attack right now",
-    d: "When an in-app firewall / RASP sensor observes an attack hit one of your endpoints in production, TensorShield matches it to the finding behind it and flags the issue under active attack — observed-in-the-wild is the strongest exploitability signal, so what's actually being hit jumps the queue.",
+    icon: Radar, t: "What someone is trying right now",
+    d: "If a sensor in your app sees a real attack land on one of your endpoints, we match it to the issue behind it and move that issue to the front. Someone actually trying it is the strongest evidence there is that it matters today.",
   },
 ];
 
 // The grounded "why you can trust the connections" guardrails.
 const GROUNDING = [
-  { icon: ShieldCheck, t: "Links only on real evidence", d: "An attack-path hop is drawn only when two findings share a concrete identifier — a key, an ARN, a host. Never an inferred or guessed connection." },
-  { icon: GitMerge, t: "Built on best-in-class OSS", d: "The detection underneath is the leading open-source scanners. The platform correlates on top — it adds no black-box detector, only connects what the tools already proved." },
-  { icon: Crown, t: "Crown-jewel aware", d: "Paths terminate at what matters — a cloud account with admin access, a privilege-escalation finding — so you see blast radius, not just a list." },
-  { icon: Boxes, t: "Every surface, one pane", d: "Code, dependencies, containers, cloud, web, APIs, identity & SaaS — discovered, scanned, and correlated into a single prioritized view." },
+  { icon: ShieldCheck, t: "A line is only drawn when it is real", d: "Two findings are joined when they genuinely share something concrete — the same key, the same ARN, the same host. Never because they looked related. A guessed connection sends you to fix the wrong thing." },
+  { icon: GitMerge, t: "Detection your engineers can inspect", d: "Underneath is the leading open source the industry already runs. We connect what those tools proved; we do not add a detector nobody can look inside." },
+  { icon: Crown, t: "It ends at what you would hate to lose", d: "A path stops at something that matters — an account with admin access, a route to your customer data — so what you are reading is how bad it gets, not how many rows there are." },
+  { icon: Boxes, t: "Everything you run, in one list", d: "Code, dependencies, containers, cloud, web, APIs, identity and SaaS — found, scanned and joined up in one ranked view instead of eight tabs." },
 ];
 
 export default function CrossDetection() {
@@ -49,15 +49,18 @@ export default function CrossDetection() {
         <AuroraBackdrop />
         <div className="relative animate-fade-rise mx-auto max-w-3xl px-5 pb-12 pt-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-sm">
-            <Workflow className="h-3.5 w-3.5 text-accent" /> Unified platform
+            <Workflow className="h-3.5 w-3.5 text-accent" /> Cross-surface attack paths
           </span>
-          <h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl">
-            Every surface. One platform. The dots, connected.
+          {/* Named after the consequence, not after the machinery that produces it. "Cross-surface
+              detection" is what we built; what the reader HAS is three tools all saying "medium" and
+              nobody able to tell them the three are one way in. */}
+          <h1 className="mt-6 text-balance text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl">
+            One leaked key is never just one leaked key.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted">
-            Point tools at your stack and you get a pile of findings — per scanner, per surface, duplicated and
-            unranked. TensorShield unifies them: one issue from many signals, weaknesses that chain into attack
-            paths, and a queue that's real risk instead of noise.
+            A key in your code. A role with more access than it needs. A host you forgot was public. Three tools each
+            call one of those a medium and none of them mentions the other two — which is how a chain of mediums
+            becomes the way into your whole account. We draw the line between them, and mark the hop that breaks it.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px">
@@ -67,7 +70,7 @@ export default function CrossDetection() {
               See the platform
             </Link>
           </div>
-          <p className="mt-4 text-xs text-faint">cross-scanner dedup · cross-surface attack paths · grounded, never guessed</p>
+          <p className="mt-4 text-xs text-faint">One issue, not three tickets · Ranked by what it reaches · Never a guessed connection</p>
         </div>
       </section>
 

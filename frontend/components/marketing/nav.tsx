@@ -26,8 +26,8 @@ const FRAMEWORK_GROUPS = frameworkGroups();
 // (vs-consulting lives in the footer Compare column; runtime "Protect" is held off until the managed-Zen
 // wrap, so we never advertise a pillar we don't fill.)
 const PERSONAS: Item[] = [
-  { href: "/ai-security-engineer", label: "AI Security Engineer", desc: "Defense — triage, fix & explain, one click at a time", icon: Bot },
-  { href: "/ai-pentest", label: "AI Pentester", desc: "Attack — continuous, exploitation-proven testing", icon: Crosshair },
+  { href: "/ai-security-engineer", label: "AI Security Engineer", desc: "The fix arrives written — you just say yes", icon: Bot },
+  { href: "/ai-pentest", label: "AI Pentester", desc: "Breaks in to show you the way in, then checks your fix held", icon: Crosshair },
 ];
 const COVERAGE: Item[] = [
   { href: "/cloud-security", label: "Cloud security", desc: "CSPM, attack paths & drift across AWS/GCP/Azure", icon: Cloud },

@@ -259,7 +259,7 @@ export default function Landing() {
                 { icon: Wrench, t: "Fix prepared", d: "PR · config · runbook" },
                 { icon: CheckCircle2, t: "You approve", d: "1 tap; routine fixes skip you" },
                 { icon: GitBranch, t: "Applied", d: "via your connector" },
-                { icon: ShieldCheck, t: "Re-verified", d: "confirmed gone" },
+                { icon: ShieldCheck, t: "Proven closed", d: "tested again, not assumed" },
               ].map(({ icon: Icon, t, d }, i, arr) => (
                 <div key={t} className="flex items-stretch gap-1.5">
                   <div className="w-[8.2rem] shrink-0 rounded-xl border border-border bg-surface p-3 text-center shadow-card">
