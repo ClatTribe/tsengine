@@ -23,7 +23,10 @@
 // is required, so a number can never enter the product with no provenance at all.
 package claimcheck
 
-import "github.com/ClatTribe/tsengine/internal/bench"
+import (
+	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
+)
 
 // Docs is the document set scanned for stale values. Every file here must exist — a claims guard that
 // silently stops reading a document it was written to police is worse than no guard, because the
@@ -33,6 +36,7 @@ var Docs = []string{
 	"arch.md",
 	"docs/adr/0024-best-in-breed-coverage-gaps.md",
 	"docs/specialist-roadmap.md",
+	"docs/security-engineer-tasks-benchmarks.md",
 }
 
 // Claim is one externally-facing headline number.
@@ -100,6 +104,33 @@ func Registry() []Claim {
 			Value:  "64.5%",
 			Source: "BishopFox IAM-Vulnerable, ~31 named privesc paths; NOT recomputable in CI — needs IAM_VULNERABLE_DIR",
 			Home:   "CLAUDE.md",
+		},
+		{
+			// ADR 0024 C17. The package comment above names four headline claims and the registry
+			// held three of them: the crosswalk figure — one of the product's three best-in-breed
+			// claims — was missing from the guard written to police exactly this. A guard that does
+			// not cover a quarter of the list it prints is §14.2 rule 6 inside the rule's own
+			// enforcement.
+			Name:  "crosswalk_corroboration",
+			Value: "96%",
+			Source: "tsengine corpus compliance-provenance against OpenCRE (OWASP), the keyless live " +
+				"CWE↔standard API — 48 of the 50 mapped CWEs corroborated, CWE-1395 and CWE-693 " +
+				"in-house-only; NOT recomputable in CI, it needs network",
+			Home: "docs/security-engineer-tasks-benchmarks.md",
+		},
+		{
+			// The ratio's DENOMINATOR, and the reason it is registered separately: 96% is a rate, and
+			// a rate rises as the evidence behind it disappears. A crosswalk cut from 50 CWEs to 2
+			// could still corroborate at 96% — the same vacuous-pass shape internal/accuracybench had
+			// to grow per-core case floors to prevent, where a perfect score covers strictly less than
+			// anyone reading it believes. This half IS computable offline, so it is the one that can
+			// actually fail in CI.
+			Name:      "crosswalk_mapped_cwes",
+			Value:     "50",
+			Source:    "recomputed offline from hooks.NewCompliance().MappedCWEs() over the embedded compliance.json crosswalk",
+			Home:      "docs/security-engineer-tasks-benchmarks.md",
+			Recompute: func() float64 { return float64(len(hooks.NewCompliance().MappedCWEs())) },
+			Format:    "%.0f",
 		},
 		{
 			Name:   "rhino_gcp_recall",

@@ -420,7 +420,23 @@ a running instance, and a running instance IS the web/api column. Rendering that
 in the grid manufactures a gap the ADR's own reasoning says does not exist, and a future session
 reading only the picture would go build a duplicate of `internal/pentest`. Marked N/A.
 
-**C15 — the fix half is unmeasured in every cell.** The engineer column is defined "defense: find +
+**C15 — the fix half is unmeasured in every cell.** *(R3 update, 2026-08-23: partly wrong, and the
+correction matters more than the original. `tsbench defense` DOES run offline and DOES write a
+durable ledger — 42 substrate runs and 7 agent runs were already sitting in `bench/defense-ledger.jsonl`.
+The number was recorded and never SURFACED: no document, no claim, no registry entry, so from
+outside the repo it did not exist. Run now, it reports **100% remediation capture on all five
+scenarios**, with 3 of 5 clearing the full pass gate (which also scores path recall and decoys).
+Two things must be said alongside it or the figure misleads. First, it is an IN-HOUSE key over five
+scenarios we authored — registering it as a headline claim would be C13 committed by the person who
+wrote C13, so it is deliberately NOT in `claimcheck.Registry()`; the neutral half is
+`tsbench defense-xbow`, still infrastructure-gated. Second, and more useful: **the measured agent
+lift over the deterministic substrate is +0% on every scenario.** The AI Security Engineer is not
+beating its own substrate on this corpus. That is exactly the "measured agent lift" C7 named as a
+residual gap, and it now has a number rather than an absence. What the corpus needed was a FLOOR —
+100% over five scenarios and 100% over one are the same figure for very different claims, and
+`tsbench defense` errors only on an empty directory — so `TestDefenseCorpus_DoesNotShrink` pins it.)*
+
+The original finding, still true of the other cells: The engineer column is defined "defense: find +
 fix". Every number in the grid, and all six claims in `claimcheck.Registry()`, measure FIND.
 `tsbench defense` and `tsbench defense-xbow` exist, and CLAUDE.md §14 names remediation-capture as
 their hero metric — "the defensive XBOW-clean hero metric", execution-verified through the same
@@ -577,9 +593,14 @@ Sprint 0 — REPAIR WHAT IS BUILT (blocks P1; every item protects an existing cl
               exempt their keys from `detect.Reconcile`'s resolve and `retest.Verify`'s
               confirm. The second is smaller and honest: an agent surface nothing re-ran is
               not evidence of absence. Pin with the two probes from C16 as regression tests.
-         R3   measurement integrity. Register the 96% crosswalk claim in `claimcheck` (C17);
-              run `tsbench defense` + `defense-xbow` to a RECORDED number and register it,
-              closing the fix axis (C15); keep the neutral figures in the grid (C13, done).
+         R3   measurement integrity. DONE — the crosswalk claim is registered (C17), together
+              with its DENOMINATOR (`crosswalk_mapped_cwes`, recomputable offline), because 96%
+              is a rate and a rate rises as its evidence disappears. Adding
+              docs/security-engineer-tasks-benchmarks.md to the scanned set immediately found
+              two live stale SCuBA quotes in a document the guard had never been pointed at —
+              C17's own shape, third instance. The fix axis is measured and SURFACED rather than
+              registered: 100% remediation capture, +0% agent lift, in-house, with a corpus
+              floor (see C15). The neutral fix number still needs `defense-xbow`.
 
 Sprint 1 — CLOUD PROOF (P1, re-scoped by C11)
          P1a  DECIDE which ladder survives, then write ONE live `cloudengine.Analyzer`
