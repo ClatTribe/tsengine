@@ -30,6 +30,31 @@ type HandlerResolver func(types.AssetType) (asset.Handler, error)
 type EngineRunner struct {
 	Resolve       HandlerResolver
 	NewDispatcher func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error)
+
+	// NewDispatcherWithWorkspace, when set, SUPERSEDES NewDispatcher for scans and additionally
+	// reports the host path holding this asset's source tree (empty for assets that have none).
+	//
+	// It is a second field rather than a changed signature because every existing caller — the
+	// tests, and any future embedder — keeps working untouched. ADR 0029 D2a.
+	NewDispatcherWithWorkspace func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, string, func(), error)
+
+	// Reachability, when set, annotates dependency findings with whether this repository's code can
+	// actually reach them. It runs INSIDE the scan, while the workspace still exists — the platform
+	// clones a repo for the duration of a scan and tears it down after, so there is no later moment
+	// at which the tree is available.
+	//
+	// Nil, or a scan with no workspace, means no annotation. An absent verdict is not a claim; §10.
+	Reachability func(root string, findings []types.Finding) []types.Finding
+}
+
+// dispatcherFor resolves the dispatcher and the scan's workspace path, preferring the
+// workspace-aware factory when one is wired.
+func (e *EngineRunner) dispatcherFor(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, string, func(), error) {
+	if e.NewDispatcherWithWorkspace != nil {
+		return e.NewDispatcherWithWorkspace(ctx, a)
+	}
+	disp, cleanup, err := e.NewDispatcher(ctx, a)
+	return disp, "", cleanup, err
 }
 
 // Scan runs the engine over one asset and returns its grounded findings.
@@ -47,7 +72,7 @@ func (e *EngineRunner) ScanWithReport(ctx context.Context, a platform.Asset) ([]
 	if err != nil {
 		return nil, ScanReport{}, fmt.Errorf("engine: resolve handler for %q: %w", a.Type, err)
 	}
-	disp, cleanup, err := e.NewDispatcher(ctx, a)
+	disp, workspace, cleanup, err := e.dispatcherFor(ctx, a)
 	if err != nil {
 		return nil, ScanReport{}, fmt.Errorf("engine: dispatcher: %w", err)
 	}
@@ -62,6 +87,11 @@ func (e *EngineRunner) ScanWithReport(ctx context.Context, a platform.Asset) ([]
 		// sandbox tool-execution / propagation gap (vs the tools genuinely finding nothing).
 		slog.Warn("[engine] scan errored", "type", a.Type, "target", a.Target, "fired", fired, "err", err.Error())
 		return nil, ScanReport{}, fmt.Errorf("engine: scan %s: %w", a.Target, err)
+	}
+	// The code surface's validation rung, run here and nowhere else because here is the only place
+	// the source tree exists: cleanup() is deferred above and destroys the clone on return.
+	if e.Reachability != nil && workspace != "" {
+		findings = e.Reachability(workspace, findings)
 	}
 	slog.Info("[engine] scan complete", "type", a.Type, "target", a.Target, "tools_fired", fired, "findings", len(findings))
 	return findings, ScanReport{ToolsRan: fired, ToolsFailed: toolsFailed}, nil
