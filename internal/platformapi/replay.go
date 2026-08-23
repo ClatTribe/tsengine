@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ClatTribe/tsengine/internal/l15"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/tool"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -99,16 +98,22 @@ func (d Deps) handleReplay(w http.ResponseWriter, r *http.Request, tenantID stri
 	}
 	// Replay findings go through the same L1.5 chain as everything else, so what the engineer gets
 	// back is comparable with the rest of the queue rather than a differently-shaped answer.
-	findings = l15.Enrich(findings)
+	findings = enrichFindings(findings) // one name for this call across the package (ADR 0029 D1b)
 
 	resp := replayResponse{ReplayID: replayID, Tool: req.Tool, Target: target.Target, Findings: findings}
 	if req.Store {
+		// ADR 0029 D1a — the third door that enriched and never folded. "Investigate deeper" is the
+		// action a security engineer takes on a finding they already suspect, so a finding it turns up
+		// is one of the most likely to be real, and it opened no control gap.
+		stored := make([]types.Finding, 0, len(findings))
 		for _, f := range findings {
 			if err := d.Store.PutFinding(r.Context(), tenantID, f); err != nil {
 				continue
 			}
 			resp.Stored++
+			stored = append(stored, f)
 		}
+		d.foldIntoPosture(r.Context(), tenantID, stored)
 	}
 	if len(findings) == 0 {
 		resp.Note = fmt.Sprintf("%s ran and returned nothing. That is a result about these arguments only — "+

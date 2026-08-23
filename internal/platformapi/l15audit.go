@@ -170,6 +170,11 @@ func (d Deps) handleL15Reinstate(w http.ResponseWriter, r *http.Request, tenantI
 		respond(w, nil, err)
 		return
 	}
+	// ADR 0029 D1a. A reinstatement is a NAMED HUMAN overruling our filter to say this finding is
+	// real — the strongest reason a control gap should exist. It is deliberately NOT re-enriched:
+	// the chain is what dismissed it, and running it again would re-apply the judgement the human
+	// just reversed.
+	d.foldIntoPosture(r.Context(), tenantID, []types.Finding{*found})
 	if d.Recorder != nil {
 		d.Recorder.Record("l1.5 dismissal overridden", "l15_reinstate",
 			map[string]any{"tenant_id": tenantID, "finding_id": req.FindingID, "by": who, "reason": req.Reason},

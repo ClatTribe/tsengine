@@ -59,7 +59,11 @@ func (d Deps) handleSyncSaaSGitHub(w http.ResponseWriter, r *http.Request, tenan
 	// findings store, and the UI shows the reassuring reading for both (§10).
 	d.markPostureAssessed(r.Context(), tenantID, "sspm", time.Now().UTC())
 
+	// ADR 0029 D1a. Both live sync doors enriched and never folded, while saasposture.go — the SAME
+	// assessor output arriving as a posted snapshot — folds. So the identical finding opened a
+	// control gap through one door and not the other, decided by which button the customer pressed.
 	stored := 0
+	folded := make([]types.Finding, 0, len(findings))
 	for _, f := range findings {
 		f.ID = d.newID("sspm")
 		if serr := d.Store.PutFinding(r.Context(), tenantID, f); serr != nil {
@@ -67,7 +71,9 @@ func (d Deps) handleSyncSaaSGitHub(w http.ResponseWriter, r *http.Request, tenan
 			return
 		}
 		stored++
+		folded = append(folded, f)
 	}
+	d.foldIntoPosture(r.Context(), tenantID, folded)
 	if d.Recorder != nil && stored > 0 {
 		d.Recorder.Record("saas posture assessed (live)", "saas_posture",
 			map[string]any{"tenant_id": tenantID, "provider": "github_org", "source": "live", "org": snap.Login, "findings": stored},
@@ -142,7 +148,11 @@ func (d Deps) handleSyncSaaSM365(w http.ResponseWriter, r *http.Request, tenantI
 	// findings store, and the UI shows the reassuring reading for both (§10).
 	d.markPostureAssessed(r.Context(), tenantID, "sspm", time.Now().UTC())
 
+	// ADR 0029 D1a. Both live sync doors enriched and never folded, while saasposture.go — the SAME
+	// assessor output arriving as a posted snapshot — folds. So the identical finding opened a
+	// control gap through one door and not the other, decided by which button the customer pressed.
 	stored := 0
+	folded := make([]types.Finding, 0, len(findings))
 	for _, f := range findings {
 		f.ID = d.newID("sspm")
 		if serr := d.Store.PutFinding(r.Context(), tenantID, f); serr != nil {
@@ -150,7 +160,9 @@ func (d Deps) handleSyncSaaSM365(w http.ResponseWriter, r *http.Request, tenantI
 			return
 		}
 		stored++
+		folded = append(folded, f)
 	}
+	d.foldIntoPosture(r.Context(), tenantID, folded)
 	if d.Recorder != nil && stored > 0 {
 		d.Recorder.Record("saas posture assessed (live)", "saas_posture",
 			map[string]any{"tenant_id": tenantID, "provider": "m365", "source": "live", "tenant": snap.Name, "findings": stored},

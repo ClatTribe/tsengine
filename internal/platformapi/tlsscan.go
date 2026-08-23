@@ -81,6 +81,9 @@ func (d Deps) handleTLSScan(w http.ResponseWriter, r *http.Request, tenantID str
 			}
 		}
 	}
+	// ADR 0029 D1a — enriched above, never folded until now. A TLS weakness maps to real controls
+	// (SOC 2 CC6.7, PCI 4.2.1, NIST SC-8/SC-13); without the fold the gap never opened.
+	d.foldIntoPosture(r.Context(), tenantID, saved)
 	if d.Recorder != nil {
 		d.Recorder.Record("tls posture scanned", "tlsscan",
 			map[string]any{"tenant_id": tenantID, "scanned": scanned, "findings": len(saved)}, "TLS/SSL posture")

@@ -57,6 +57,15 @@ var toolBaseConfidence = map[string]float64{
 	// With this entry the ladder shows up in confidence too: graph-only 0.75, and the provider-
 	// confirmed rung still reaches the 0.95 floor through the verified branch below.
 	"cloudagent": 0.75,
+	// The offensive agent, listed for the same reason cloudagent is. ADR 0029 D1c: when the
+	// pentester's findings finally started reaching this chain, "web-investigate" was an UNKNOWN tool
+	// and fell to the 0.50 default — below semgrep, for a finding whose predicate actually fired
+	// against the live target. The verified branch below then floored it at 0.95, so the number came
+	// out right BY ACCIDENT and would have come out wrong the moment a finding arrived here unproven
+	// (a LEAD the agent could not demonstrate). A demonstrated, predicate-gated exploit is the most
+	// precise producer in this system; an unproven lead from the same producer is not, and the base
+	// has to be honest for both.
+	"web-investigate": 0.85,
 }
 
 const defaultBaseConfidence = 0.50
