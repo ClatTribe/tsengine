@@ -110,8 +110,12 @@ func (d Deps) ReattackVerdicts(ctx context.Context, tenantID string, keys []stri
 		return out
 	}
 
-	results := pentest.Reattack(ctx, toProbe, d.Prober,
-		func(i int) string { return fmt.Sprintf("tsrt%s%04d", shortID(tenantID), i) }, nil)
+	// The canary must be unique ACROSS RUNS, not just within one (ADR 0027 S0). It was
+	// tsrt<tenant><index>, so every run reused index 0 — fine while a canary only had to be findable
+	// in one response, and wrong the moment it becomes a correlation key. Detection validation joins
+	// an alert to the probe that caused it; a canary two runs share cannot say which run was seen,
+	// and a stale alert from last week would be credited to today's probe.
+	results := pentest.Reattack(ctx, toProbe, d.Prober, reattackCanaryFn(tenantID), nil)
 
 	for i, r := range results {
 		if i >= len(probeKeys) {
@@ -145,6 +149,16 @@ func ownsEndpoint(endpoint string, owned []string) bool {
 
 // shortID gives the canary a per-tenant prefix so a probe observed in a customer's logs is
 // attributable to their own account and not confusable with another tenant's.
+// reattackCanaryFn builds this run's canary generator.
+//
+// Extracted so a test can call the REAL one. The first version of that test rebuilt the format
+// inline and passed happily while production was reverted — a test that reimplements what it checks
+// verifies its own copy.
+func reattackCanaryFn(tenantID string) func(int) string {
+	run := randSuffix()
+	return func(i int) string { return fmt.Sprintf("tsrt%s%s%04d", shortID(tenantID), run, i) }
+}
+
 func shortID(tenantID string) string {
 	if len(tenantID) > 4 {
 		return tenantID[:4]
