@@ -65,6 +65,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
+	"github.com/ClatTribe/tsengine/internal/cloudagent"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
@@ -72,6 +73,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/awsfetch"
 	"github.com/ClatTribe/tsengine/internal/connector/awsremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
+	"github.com/ClatTribe/tsengine/internal/connector/cloudprobe"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
@@ -497,6 +499,20 @@ func main() {
 				Buckets:    awsfetch.NewS3Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Principals: awsfetch.NewIAMLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Compute:    awsfetch.NewEC2Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+			}
+		},
+		// LIVE provider dry-run (ADR 0024 P1a's remaining half): ask AWS's own policy simulator whether
+		// a move is authorized, through the SAME scoped read-only role recorded at connect time.
+		// iam:SimulatePrincipalPolicy is a READ, so this needs no new credential and no new consent —
+		// the role ARN is c.SecretRef and the tenant id is the external-id guard, exactly as AWSFetcher
+		// above. Nil connection → proberOrNil returns nil → check_reachable says the provider was not
+		// asked, rather than reporting a path proven or unproven.
+		CloudProber: func(c platform.Connection) cloudagent.ExploitProber {
+			return &cloudprobe.Prober{
+				Sim: cloudprobe.NewAWSSimulator(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				// The stamp layout is load-bearing: ADR 0024 P1c parses it to age a proof, and a
+				// differently-formatted one would make every proof unreadable and so StandingUnknown.
+				Now: platformapi.ProbeStamp,
 			}
 		},
 		CloudSnapshots: cloudSnaps,

@@ -116,6 +116,10 @@ type Deps struct {
 	// AWSFetcher builds a LIVE read-only fetcher for a connected AWS account. Nil → POST
 	// /v1/cloud/sync reports that live read is unavailable rather than returning an empty account.
 	AWSFetcher AWSFetcherFor
+	// CloudProber builds the tenant's PROVIDER DRY-RUN (ADR 0024 P1) over the same scoped read-only
+	// role — iam:SimulatePrincipalPolicy is a read, so it needs no new credential. Nil → the agent's
+	// check_reachable reports the provider was not asked, rather than a path proven or unproven.
+	CloudProber CloudProberFunc
 	// TLSAssess overrides the TLS handshake assessor; nil → the real one. Test seam only.
 	TLSAssess TLSAssessor
 	// CloudHistory is the APPEND-ONLY timeline of the estate's security-relevant state — what makes
