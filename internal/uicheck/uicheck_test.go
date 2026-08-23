@@ -83,6 +83,19 @@ var required = []struct {
 	},
 	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
+		field: "not_exercised",
+		wouldOtherwiseClaim: "that every attacker technique tsengine's tools speak to was checked " +
+			"against this estate, when a technique nobody exercised is not a clean one — the whole " +
+			"point of an ATT&CK coverage view",
+	},
+	{
+		page:  "frontend/app/(app)/coverage/page.tsx",
+		field: "denominator",
+		wouldOtherwiseClaim: "a coverage count with no stated universe, which is the number people " +
+			"quote and nobody checks — here the universe is our OWN tool set, not ATT&CK Enterprise",
+	},
+	{
+		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "tools_failed",
 		wouldOtherwiseClaim: "that a tool which never ran 'ran, found nothing' — a clean result " +
 			"from a tool that has no opinion about the target",
@@ -447,6 +460,30 @@ func TestInboxRendersTheMutedExplanationNotJustTheField(t *testing.T) {
 			t.Errorf("the inbox no longer explains a MUTED track record (missing %q).\n"+
 				"Without it, a fix whose history we cannot score renders identically to one with no "+
 				"history at all — the comfortable reading of the two.", phrase)
+		}
+	}
+}
+
+// LIMIT OF THIS GUARD, stated because a guard whose reach is unclear invites false confidence: it
+// reads SOURCE TEXT, so it catches the section being deleted or renamed — the realistic regression —
+// but not a live branch stubbed to false, which leaves the text in place. Reachability needs a
+// rendering test, which this repo has no runner for.
+//
+// Field-presence again is not enough. Deleting the per-technique "not exercised — why" detail left
+// the guard green, because the SUMMARY row still reads attack.not_exercised. The page would then
+// show a count of unchecked techniques while naming none of them and giving no reason — the number
+// without the substance. Where the whole value is the admission, guard the admission.
+func TestCoverageRendersWhyATechniqueWasNotExercised(t *testing.T) {
+	b, err := os.ReadFile("../../frontend/app/(app)/coverage/page.tsx")
+	if err != nil {
+		t.Fatalf("cannot read the coverage page: %v — if it moved, update this guard", err)
+	}
+	src := stripComments(string(b))
+	for _, phrase := range []string{"not exercised", "t.why"} {
+		if !strings.Contains(src, phrase) {
+			t.Errorf("the coverage page no longer names WHICH techniques went unexercised or WHY "+
+				"(missing %q). A count of unchecked techniques with none of them named is the number "+
+				"without the substance.", phrase)
 		}
 	}
 }

@@ -22,6 +22,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 export default async function CoveragePage() {
   const cov = await api.coverage();
+  const attack = await api.attackCoverage();
 
   return (
     <div className="space-y-5">
@@ -215,6 +216,38 @@ export default async function CoveragePage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ATT&CK coverage. Counts only — the denominator is tsengine's own tool set, so a percentage
+          would measure us against ourselves, and it is rendered verbatim for that reason. The
+          not-exercised column is the point: a technique nobody checked is not a clean one. */}
+      {attack.techniques.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-sm font-medium text-ink">Attacker techniques exercised</h2>
+          <p className="mt-1 text-xs text-muted">{attack.denominator}</p>
+          <div className="mt-3 flex gap-4 text-xs text-muted">
+            <span><span className="font-medium text-high">{attack.observed}</span> observed</span>
+            <span><span className="font-medium text-ink">{attack.exercised_clean}</span> exercised, nothing found</span>
+            <span><span className="font-medium text-medium">{attack.not_exercised}</span> not exercised</span>
+          </div>
+          <ul className="mt-3 space-y-1.5">
+            {attack.techniques.map((t) => (
+              <li key={t.id} className="flex items-start gap-2 text-xs">
+                <span className="font-mono text-subtle">{t.id}</span>
+                <span className="min-w-0">
+                  <span className="text-ink">{t.name || t.id}</span>
+                  {t.status === "observed" && (
+                    <span className="ml-2 text-high">{t.findings} finding{t.findings === 1 ? "" : "s"}</span>
+                  )}
+                  {t.status === "exercised_clean" && <span className="ml-2 text-muted">exercised, nothing found</span>}
+                  {t.status === "not_exercised" && (
+                    <span className="ml-2 text-medium">not exercised{t.why ? ` — ${t.why}` : ""}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

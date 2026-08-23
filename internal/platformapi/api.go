@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
+	"github.com/ClatTribe/tsengine/internal/attackcoverage"
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
@@ -241,7 +242,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/approvals", d.auth(d.handleApprovals))
 	mux.HandleFunc("GET /v1/proof-queue", d.auth(d.handleProofQueue)) // doubt→prove: findings the engineer surfaced that the pentester has not settled
 	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))        // all remediations + fix-verification status
-	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage))      // per-asset "what was actually tested"
+	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage))
+	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage)) // ATT&CK techniques exercised vs unchecked
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
@@ -860,6 +862,33 @@ func (d Deps) handleCoverage(w http.ResponseWriter, r *http.Request, tenantID st
 		return
 	}
 	respond(w, coverage.Compute(assets, findings, engs), nil)
+}
+
+// handleAttackCoverage answers "which attacker techniques did we actually exercise against this
+// estate, and which did nobody check?" — the axis this product category is compared on, and the one
+// tsengine could not answer despite every tool already declaring its ATT&CK techniques.
+//
+// Reports counts, never a percentage. The only denominator available is the set of techniques our own
+// tools declare, and a percentage over that is a tautology dressed as a measurement (see the package
+// comment); Report.Denominator says so in words and the UI renders it verbatim.
+func (d Deps) handleAttackCoverage(w http.ResponseWriter, r *http.Request, tenantID string) {
+	ctx := r.Context()
+	assets, err := d.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	engs, err := d.Store.ListEngagements(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	respond(w, attackcoverage.Compute(assets, findings, engs), nil)
 }
 
 // handleApps returns the tenant's third-party OAuth app inventory (the SaaS/app

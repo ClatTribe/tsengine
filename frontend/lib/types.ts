@@ -1396,3 +1396,22 @@ export interface WeakRemediation {
   not_closed: number;
   unproven?: number;
 }
+
+// AttackTechnique / AttackCoverage — which ATT&CK techniques were exercised against this estate.
+// "not_exercised" is NOT clean: nobody checked. Counts only, never a percentage — the denominator is
+// tsengine's own tool set, so a percentage would measure us against ourselves.
+export interface AttackTechnique {
+  id: string;
+  name?: string;
+  tools: string[];
+  status: "observed" | "exercised_clean" | "not_exercised";
+  findings?: number;
+  why?: string;
+}
+export interface AttackCoverage {
+  techniques: AttackTechnique[];
+  observed: number;
+  exercised_clean: number;
+  not_exercised: number;
+  denominator: string;
+}
