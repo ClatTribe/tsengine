@@ -106,9 +106,16 @@ type VAPTFinding struct {
 	OWASP         []string `json:"owasp,omitempty"`        // OWASP Top 10 (2021) category mapping
 	Remediation   string   `json:"remediation,omitempty"`  // the recommended fix (CWE-class standard)
 	Verification  string   `json:"verification,omitempty"` // verified | corroborated | pattern_match
-	Confidence    float64  `json:"confidence,omitempty"`   // 0–1 grounded confidence (per-tool base + corroboration)
-	Unconfirmed   bool     `json:"unconfirmed,omitempty"`  // pattern-match only — a lead to validate, not a confirmed exploit
-	KEV           bool     `json:"kev,omitempty"`          // actively exploited
+	// Rung is HOW this was established — exploited | provider_confirmed | reachability_confirmed |
+	// corroborated | scanner_reported (ADR 0029 D2d).
+	//
+	// It exists because Verification could not tell two very different claims apart: a web finding the
+	// agent EXPLOITED and a cloud path the provider's policy simulator merely AUTHORIZED both arrive
+	// here as the word "verified", and this document is the one a customer forwards to an auditor.
+	Rung        string  `json:"rung,omitempty"`
+	Confidence  float64 `json:"confidence,omitempty"`  // 0–1 grounded confidence (per-tool base + corroboration)
+	Unconfirmed bool    `json:"unconfirmed,omitempty"` // pattern-match only — a lead to validate, not a confirmed exploit
+	KEV         bool    `json:"kev,omitempty"`         // actively exploited
 	// Ransomware: CISA marks this CVE used in ransomware campaigns (stronger than KEV). WeaponRank:
 	// Metasploit's own reliability name for the best module targeting it ("excellent"…"manual") —
 	// "an operator can run it tonight". KEVDueDate: CISA's own BOD 22-01 remediation deadline.
@@ -231,7 +238,7 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 			ID: f.ID, Title: f.Title, Severity: sev, Tool: f.Tool, RuleID: f.RuleID,
 			Endpoint: f.Endpoint, CWE: f.CWE, MITRE: f.MITRETechniques, Description: descBody, PoC: poc,
 			OWASP: owaspFor(f.CWE, f.Tool), Remediation: remediationFor(f.CWE, f.Tool),
-			Verification: string(f.VerificationStatus), Confidence: f.Confidence, DiscoveredAt: f.DiscoveredAt,
+			Verification: string(f.VerificationStatus), Rung: string(f.Rung()), Confidence: f.Confidence, DiscoveredAt: f.DiscoveredAt,
 			Unconfirmed: !confirmed, KEV: kev, FixReady: fixReady[f.ID],
 		}
 		if f.ThreatIntel != nil {
@@ -474,8 +481,13 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		if !f.KEVDueDate.IsZero() {
 			fmt.Fprintf(&b, "- **CISA remediation deadline (BOD 22-01):** %s\n", f.KEVDueDate.UTC().Format("2006-01-02"))
 		}
-		status := f.Verification
-		if status == "" {
+		// The rung leads, because it is the sentence that survives being read quickly. The raw
+		// verification state used to be printed here on its own, so "verified" covered both an exploit
+		// we ran and a policy the provider merely allowed.
+		status := f.Rung
+		if status != "" {
+			status = types.EvidenceRung(status).Label()
+		} else if status = f.Verification; status == "" {
 			status = "detected"
 		}
 		if f.Confidence > 0 {
@@ -508,7 +520,9 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		if f.SSVCImpact == "total" {
 			status += " · SSVC technical impact: total"
 		}
-		if f.PoC != "" {
+		if f.PoC != "" && f.Rung != string(types.RungExploited) {
+			// Belt and braces: a captured proof with anything other than the exploited rung is a
+			// contradiction worth showing rather than smoothing over.
 			status = "**exploitation-proven** · " + status
 		}
 		fmt.Fprintf(&b, "- **Evidence strength:** %s\n", status)
