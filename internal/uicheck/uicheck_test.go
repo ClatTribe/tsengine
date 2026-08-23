@@ -48,6 +48,13 @@ var required = []struct {
 }{
 	{
 		page:  "frontend/components/inbox/inbox-client.tsx",
+		field: "interim_mitigation",
+		wouldOtherwiseClaim: "that nothing can be done until the code fix ships, when for these classes " +
+			"an edge or runtime control reduces the exposure today — the whole exposure window is the " +
+			"gap between finding it and shipping the patch",
+	},
+	{
+		page:  "frontend/components/inbox/inbox-client.tsx",
 		field: "muted",
 		wouldOtherwiseClaim: "that a fix with a history we cannot SCORE has no history at all — the " +
 			"comfortable reading. F1 tightening shrinks F2's denominator, so silence arrives exactly " +

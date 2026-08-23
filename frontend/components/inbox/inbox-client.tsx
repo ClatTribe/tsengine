@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine, MessageSquare, AlertTriangle, History } from "lucide-react";
+import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine, MessageSquare, AlertTriangle, History, Clock } from "lucide-react";
 import type { Action, Finding } from "@/lib/types";
 import { decideAction, requestChangesAction } from "@/app/(app)/inbox/actions";
 import { SeverityBadge } from "@/components/ui/primitives";
@@ -279,6 +279,22 @@ function DetailPane({
           F2). "Closed 8 of 10" and "reopened 5 of 8" are different decisions for the person about to
           approve this, and before this they read identically. Absent when there is not enough
           history — silence means "not known", never "this will work". */}
+      {/* Mitigate now, patch later. Shown ALONGSIDE the fix, never instead of it: the real fix here
+          is a code change and lands on a release cycle, while the exposure is live today. The copy
+          keeps the caveat the server wrote — a customer who applies a WAF rule and watches the
+          finding vanish would believe the bug is gone. */}
+      {typeof action.payload?.interim_mitigation === "string" && (
+        <div className="flex items-start gap-2 border-b border-line px-5 py-2.5 text-xs">
+          <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-medium" />
+          <div className="min-w-0 text-muted">
+            <span className="font-medium text-ink">Reduce exposure today, while the fix lands.</span>
+            <span className="mt-1 block whitespace-pre-line">
+              {action.payload.interim_mitigation as string}
+            </span>
+          </div>
+        </div>
+      )}
+
       {action.fix_efficacy?.muted && (
         <div className="flex items-start gap-2 border-b border-line px-5 py-2.5 text-xs">
           <History className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
