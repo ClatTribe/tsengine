@@ -27,6 +27,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/email"
+	"github.com/ClatTribe/tsengine/internal/fieldevidence"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
@@ -727,6 +728,17 @@ type actionsView struct {
 	Verified     int               `json:"verified"`      // re-tested at least once
 	ConfirmedFix int               `json:"confirmed_fix"` // re-test proved the fix closed the finding(s)
 	StillPresent int               `json:"still_present"` // re-test showed the fix did NOT close it (reopen)
+	// AwaitingProof counts fixes the re-scan found gone but which are NOT counted as confirmed,
+	// because a clean re-scan for that class has been contradicted by a live exploit before
+	// (ADR 0025 F1). Neither a confirmed fix nor a failed one — a third state, counted as itself.
+	// Without this it was Verified-but-neither: the roll-up's own numbers stopped adding up, and the
+	// missing fix was the one the customer most needed to be told about.
+	AwaitingProof int `json:"awaiting_proof"`
+	// DistrustedClasses names the rule classes whose clean re-scans this tenant's OWN history shows
+	// have been contradicted by a live exploit — the product stating where its own absence-evidence
+	// has failed, worst first. Empty until enough labelled examples exist, which is the honest
+	// reading: "we have not caught ourselves being wrong here" is not "we are never wrong here".
+	DistrustedClasses []fieldevidence.ClassEvidence `json:"distrusted_classes,omitempty"`
 	// FailedDelivery counts approved actions whose apply attempt failed. A failed action deliberately
 	// stays at ActApproved so it is not lost — which also makes it indistinguishable, in the list,
 	// from one merely waiting. This count is what makes the difference visible.
@@ -754,13 +766,21 @@ func (d Deps) handleActions(w http.ResponseWriter, r *http.Request, tenantID str
 			continue
 		}
 		v.Verified++
+		// The CONSTANTS, not string literals. The literals are why adding a third status silently
+		// skipped this roll-up: a grep for FixStatusFixed did not reach here, so a withheld
+		// confirmation counted as Verified and landed in no bucket at all.
 		switch a.Verification.Status {
-		case "fixed":
+		case platform.FixStatusFixed:
 			v.ConfirmedFix++
-		case "still_present":
+		case platform.FixStatusStillPresent:
 			v.StillPresent++
+		case platform.FixStatusRescanUnconfirmed:
+			v.AwaitingProof++
 		}
 	}
+	// Why any fix is awaiting proof, from this tenant's own verification history (ADR 0025 F1). Built
+	// from the actions already in hand, so it costs no extra I/O.
+	v.DistrustedClasses = fieldevidence.ForTenant(tenantID, acts, fieldevidence.Options{}).Distrusted()
 	respond(w, v, nil)
 }
 

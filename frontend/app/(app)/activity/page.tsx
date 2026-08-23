@@ -1,4 +1,4 @@
-import { Radio, CheckCircle2, XCircle } from "lucide-react";
+import { Radio, CheckCircle2, XCircle, ShieldQuestion } from "lucide-react";
 import { api } from "@/lib/api";
 import { ActivityTimeline, type ActivityEvent } from "@/components/activity/activity-timeline";
 import { PageIntro } from "@/components/ui/page-intro";
@@ -118,6 +118,28 @@ export default async function ActivityPage() {
               <> — <span className="font-medium text-high">{actions.still_present}</span> did not close and stay open</>
             )}
             . We don&apos;t just propose fixes, we prove they worked.
+          </span>
+        </div>
+      )}
+      {actions.awaiting_proof > 0 && (
+        <div className="card flex items-start gap-3 px-4 py-3 text-sm">
+          <ShieldQuestion className="mt-0.5 h-4 w-4 shrink-0 text-medium" />
+          <span className="text-muted">
+            <span className="font-medium text-ink">{actions.awaiting_proof}</span>{" "}
+            {actions.awaiting_proof === 1 ? "fix was" : "fixes were"} found gone on re-scan but{" "}
+            <span className="font-medium text-ink">not counted as confirmed</span> — a clean re-scan for
+            {" "}{actions.awaiting_proof === 1 ? "that class" : "those classes"} has been contradicted by a
+            live exploit before, so it awaits a re-attack.
+            {actions.distrusted_classes && actions.distrusted_classes.length > 0 && (
+              <span className="mt-2 block text-xs text-subtle">
+                Where our own evidence has failed:{" "}
+                {actions.distrusted_classes.map((c) => (
+                  <span key={c.class} className="mr-2 inline-block font-mono">
+                    {c.class} ({c.contradicted}/{c.clean_rescans})
+                  </span>
+                ))}
+              </span>
+            )}
           </span>
         </div>
       )}

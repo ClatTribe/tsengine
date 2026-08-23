@@ -47,6 +47,20 @@ var required = []struct {
 	page, field, wouldOtherwiseClaim string
 }{
 	{
+		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "awaiting_proof",
+		wouldOtherwiseClaim: "that every re-tested fix either closed or failed, hiding the ones " +
+			"found gone on re-scan but NOT counted as confirmed because a clean re-scan for that " +
+			"class has been contradicted by a live exploit before (ADR 0025 F1) — the roll-up's own " +
+			"numbers stop adding up, and the missing fix is the one most worth knowing about",
+	},
+	{
+		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "distrusted_classes",
+		wouldOtherwiseClaim: "that a fix is unconfirmed for no stated reason, when the product " +
+			"can name exactly which rule classes its own absence-evidence has failed on and how often",
+	},
+	{
 		page:  "frontend/app/(app)/coverage/page.tsx",
 		field: "tools_failed",
 		wouldOtherwiseClaim: "that a tool which never ran 'ran, found nothing' — a clean result " +

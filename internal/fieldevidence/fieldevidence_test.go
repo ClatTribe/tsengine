@@ -206,3 +206,41 @@ func TestRescanSaidFixedHasOneWriter(t *testing.T) {
 			"re-attack ran, or fieldevidence.FromActions will count unlabelled rows as agreements.", writers)
 	}
 }
+
+// The per-tenant cap exists to stop ONE estate deciding a shared statistic. Applied to a tenant's own
+// corpus it truncates their history in ARRIVAL ORDER and distorts the rate it is meant to compute:
+// six contradictions followed by twenty clean re-scans would count the first five only and read as
+// 100% contradicted instead of 23% — refusing to confirm a class that is mostly fine.
+func TestForTenant_CapDoesNotTruncateATenantsOwnHistory(t *testing.T) {
+	var acts []platform.Action
+	add := func(n int, contradicted bool) {
+		for i := 0; i < n; i++ {
+			v := &platform.FixVerification{RescanSaidFixed: true}
+			if contradicted {
+				v.Disagreement = platform.DisagreeRescanMissedLiveExploit
+			}
+			acts = append(acts, platform.Action{
+				FindingKeys:  []string{"r1|e" + strings.Repeat("x", len(acts))},
+				Verification: v,
+			})
+		}
+	}
+	add(2, true)   // the contradictions arrive first...
+	add(60, false) // ...and the far larger clean record follows
+	c := ForTenant("t1", acts, Options{})
+	e, ok := c.Evidence("r1")
+	if !ok {
+		t.Fatal("the class must be known")
+	}
+	if e.CleanRescans != 62 || e.Contradicted != 2 {
+		t.Fatalf("the tenant's whole history must count, got %d rescans / %d contradicted",
+			e.CleanRescans, e.Contradicted)
+	}
+	// 2/62 = 3%, well under the threshold: this class is fine and must stay confirmable. Under the
+	// capped behaviour only the first 5 counted — 2 contradicted of 5 = 40% — so a healthy class was
+	// refused confirmation entirely on an artefact of arrival order.
+	if sufficient, known := c.RescanSufficient("r1"); !known || !sufficient {
+		t.Errorf("a mostly-clean class must stay sufficient (rate %.2f), got sufficient=%v known=%v",
+			e.ContradictionRate(), sufficient, known)
+	}
+}
