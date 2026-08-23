@@ -148,14 +148,14 @@ func VerifyWithPolicy(actions []platform.Action, current []types.Finding, now ti
 			len(a.Verification.StillPresent) == len(still) {
 			continue
 		}
-		a.Verification = &platform.FixVerification{
+		a.RecordVerification(platform.FixVerification{
 			Status:       status,
 			Method:       "rescan",
 			VerifiedAt:   now,
 			Fixed:        fixed,
 			StillPresent: still,
 			Evidence:     evidence(status, len(fixed), len(a.FindingKeys)) + note,
-		}
+		})
 		changed = append(changed, a)
 	}
 	return changed

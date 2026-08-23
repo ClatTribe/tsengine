@@ -61,6 +61,12 @@ func remKey(class, rtype string) string { return class + "\x00" + rtype }
 func RemediationsForTenant(tenant string, actions []platform.Action, opts Options) *RemediationCorpus {
 	opts = opts.withDefaults()
 	c := &RemediationCorpus{Entries: map[string]RemediationEfficacy{}, Opts: opts}
+	// Deliberately reads CURRENT state, not the event log F1 uses. The two feeds ask different
+	// questions: F1 asks "was our absence-evidence ever wrong", which is a question about EVENTS and
+	// must never forget one; F2 asks "did this remediation close the finding", which is a question
+	// about the END STATE. A fix that did not close at first and closed after a second attempt did,
+	// in the end, work — counting it as both a failure and a success would let one remediation vote
+	// twice about its own runbook.
 	for _, a := range actions {
 		if a.Verification == nil || a.Status != platform.ActApplied {
 			continue // never verified, or never applied — says nothing about whether the fix works
@@ -115,6 +121,27 @@ func (c *RemediationCorpus) For(class, rtype string) (RemediationEfficacy, bool)
 	}
 	e, ok := c.Entries[remKey(strings.TrimSpace(class), strings.TrimSpace(rtype))]
 	if !ok || e.Decided() < c.Opts.MinObservations {
+		return RemediationEfficacy{}, false
+	}
+	return e, true
+}
+
+// Muted returns a record that EXISTS but cannot be scored, because too few of its applications were
+// ever confirmed either way.
+//
+// This closes a coupling between the two feeds that is easy to miss. Every rescan_unconfirmed
+// application is excluded from F2's denominator, so the harder F1 distrusts a class, the smaller
+// F2's decided sample becomes — and it can fall back under the floor and go SILENT for exactly the
+// fixes that most need scrutiny. Rendered as nothing, that is indistinguishable from "this
+// remediation has no history", which is a different and much more comfortable statement.
+//
+// ok=false when there is genuinely nothing (no applications at all), which stays silent as before.
+func (c *RemediationCorpus) Muted(class, rtype string) (RemediationEfficacy, bool) {
+	if c == nil {
+		return RemediationEfficacy{}, false
+	}
+	e, ok := c.Entries[remKey(strings.TrimSpace(class), strings.TrimSpace(rtype))]
+	if !ok || e.Decided() >= c.Opts.MinObservations || e.Unproven == 0 {
 		return RemediationEfficacy{}, false
 	}
 	return e, true

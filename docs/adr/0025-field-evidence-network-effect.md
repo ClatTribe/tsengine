@@ -229,6 +229,39 @@ per-tenant weight cap exist and are tested, and `ForTenant`/`RemediationsForTena
 EXPLICITLY rather than by omission, because neither applies to your own data. Promotion to the shared
 corpus is a change of inputs and of two options — not a redesign.
 
+### Drift analysis (2026-08-23) — asked of the built system, not the design
+
+Three feedback pathologies were looked for. Two were real and are fixed; the third is coupling that is
+now surfaced rather than removed.
+
+**Erasure (REAL, fixed, and the dangerous one).** Evidence was derived from an action's CURRENT
+verification, and `ApplyReattack` replaces that wholesale. An action contradicted in one pass and
+re-verified clean in a later one swung the corpus −1 contradicted / +1 clean, deleting the single fact
+this corpus exists to remember. It biased toward TRUST and grew stronger the more diligently a
+customer fixed things. Now `Action.VerificationHistory` is append-only and change-only, with a
+fallback to current state so a deploy cannot silently empty the corpus.
+
+**F1 starving F2 (REAL, surfaced).** Every `rescan_unconfirmed` application is excluded from F2's
+denominator, so the harder F1 distrusts a class the closer F2 comes to going silent for exactly the
+fixes that most deserve scrutiny — and silence reads as "no history", the comfortable answer.
+`RemediationCorpus.Muted` now reports "a record exists and cannot be scored, here is why". The
+coupling is intentional and stays; only its invisibility was the defect.
+
+**No recency weighting (REAL, open).** A contradiction from a year-old template counts the same as
+yesterday's, so a class that has genuinely improved stays distrusted on stale evidence. This errs
+SAFE (false distrust, never false trust), which is why it is recorded rather than rushed. The
+append-only log makes it a query rather than a schema change.
+
+**Checked and NOT drift paths:** no self-reinforcement (a withheld confirmation contributes nothing
+until a re-attack settles it); no sampling bias from our side (`appliedFindingKeys` filters only on
+`ActApplied`, so terminally-fixed actions keep being re-attacked); no double counting.
+
+**Cold start is honest but stark:** an observation needs a re-attack, which is gated on the AI
+Pentester tier, the operator's `TSENGINE_ACTIVE_EXPLOIT`, and proven asset ownership — all
+fail-closed. For a tenant without those the corpus is not slow to warm, it is **inert**. Empty reads
+as `known=false` and changes nothing, so that is safe rather than broken; but it is the strongest
+argument for the cross-tenant step, which is the only real cold-start answer.
+
 ### Why the loop stopped here rather than continuing to F3
 
 F3's value is almost entirely **cross-tenant**: a prior built from a new customer's own dispositions

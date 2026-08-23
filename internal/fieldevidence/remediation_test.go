@@ -139,3 +139,37 @@ func TestRemediations_WeakestIsOrderedWorstFirst(t *testing.T) {
 		}
 	}
 }
+
+// F1 tightening SHRINKS F2's denominator: every rescan_unconfirmed application is excluded from the
+// rate. So the harder F1 distrusts a class, the closer F2 gets to going silent for exactly the fixes
+// that most need scrutiny — and silence is indistinguishable from "this remediation has no history",
+// which is a much more comfortable statement.
+func TestRemediations_MostlyUnconfirmedReportsMutedRatherThanNothing(t *testing.T) {
+	var acts []platform.Action
+	acts = append(acts, remHistory("r1", "t", platform.FixStatusFixed, 2)...)
+	acts = append(acts, remHistory("r1", "t", platform.FixStatusRescanUnconfirmed, 9)...)
+	c := RemediationsForTenant("t1", acts, Options{})
+
+	if _, ok := c.For("r1", "t"); ok {
+		t.Fatal("2 decided applications is below the floor — it must not be scored")
+	}
+	e, ok := c.Muted("r1", "t")
+	if !ok {
+		t.Fatal("a record that EXISTS but cannot be scored must report as muted, not as absence")
+	}
+	if e.Unproven != 9 {
+		t.Errorf("the muted record must carry why it cannot be scored, got %+v", e)
+	}
+}
+
+// Genuine absence stays silent. Muted is for "we cannot judge this yet", not "there is nothing here".
+func TestRemediations_GenuineAbsenceIsNotMuted(t *testing.T) {
+	if _, ok := RemediationsForTenant("t1", nil, Options{}).Muted("r1", "t"); ok {
+		t.Error("no history at all must not report as muted")
+	}
+	// Enough decided evidence → scored, not muted.
+	c := RemediationsForTenant("t1", remHistory("r1", "t", platform.FixStatusFixed, 6), Options{})
+	if _, ok := c.Muted("r1", "t"); ok {
+		t.Error("a scoreable record must not also report as muted")
+	}
+}

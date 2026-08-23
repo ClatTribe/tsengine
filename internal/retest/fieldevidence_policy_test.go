@@ -145,3 +145,32 @@ func TestApplyReattack_LiveExploitStillBeatsAWithheldConfirmation(t *testing.T) 
 		t.Fatalf("want %s, got %+v", StatusStillExploitable, got)
 	}
 }
+
+// The log has to be written by the REAL re-attack path, not only by RecordVerification in isolation.
+// Mutation showed the difference: reverting ApplyReattack to assign Verification directly broke
+// nothing, because every test exercised the append helper rather than the function that must call it.
+func TestApplyReattack_WritesToTheAppendOnlyLog(t *testing.T) {
+	a := applied("a1", "nuclei::sqli|https://a")
+	a.Verification = &platform.FixVerification{Status: platform.FixStatusFixed}
+	got := ApplyReattack([]platform.Action{a},
+		map[string]ReattackVerdict{"nuclei::sqli|https://a": {Verified: true, Exploitable: true}}, t0)
+	if len(got) != 1 {
+		t.Fatalf("want one changed action, got %d", len(got))
+	}
+	if len(got[0].VerificationHistory) == 0 {
+		t.Fatal("the re-attack verdict never reached the append-only log, so fieldevidence cannot see it")
+	}
+	last := got[0].VerificationHistory[len(got[0].VerificationHistory)-1]
+	if last.Status != StatusStillExploitable || last.Disagreement != platform.DisagreeRescanMissedLiveExploit {
+		t.Errorf("the logged event must carry the contradiction, got %+v", last)
+	}
+}
+
+// Same for the rescan path.
+func TestVerifyWithPolicy_WritesToTheAppendOnlyLog(t *testing.T) {
+	got := VerifyWithPolicy([]platform.Action{applied("a1", "nuclei::sqli|https://a")},
+		nil, t0, detect.AllProducers(), nil)
+	if len(got) != 1 || len(got[0].VerificationHistory) != 1 {
+		t.Fatalf("the rescan verdict must be logged, got %+v", got)
+	}
+}

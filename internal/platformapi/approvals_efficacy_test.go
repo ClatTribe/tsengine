@@ -113,3 +113,30 @@ func TestApprovals_WithheldConfirmationsAreReportedNotCountedAsClosed(t *testing
 		t.Errorf("unproven is not a failure either, got not_closed=%d", num("not_closed"))
 	}
 }
+
+// F1 tightening shrinks F2's denominator, so a class can fall under the floor and go silent for
+// exactly the fixes that most need scrutiny. Silence reads as "no history", which is the comfortable
+// answer. Mutation showed this path was entirely untested at the API layer.
+func TestApprovals_UnscoreableTrackRecordIsReportedAsMutedNotAbsent(t *testing.T) {
+	st := store.NewMemory()
+	ctx := context.Background()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1", Name: "Acme"})
+	for i := 0; i < 2; i++ {
+		_ = st.PutAction(ctx, histAct("d"+strconv.Itoa(i), "r1", "t", platform.FixStatusFixed))
+	}
+	for i := 0; i < 9; i++ {
+		_ = st.PutAction(ctx, histAct("u"+strconv.Itoa(i), "r1", "t", platform.FixStatusRescanUnconfirmed))
+	}
+	_ = st.PutAction(ctx, pendingAct("r1", "t"))
+
+	eff, ok := approvals(t, st)[0]["fix_efficacy"].(map[string]any)
+	if !ok {
+		t.Fatal("a record that exists but cannot be scored must still be reported, not omitted")
+	}
+	if eff["muted"] != true {
+		t.Errorf("it must say it cannot be scored, got %v", eff)
+	}
+	if f, _ := eff["unproven"].(float64); int(f) != 9 {
+		t.Errorf("and say WHY it cannot be scored, got %v", eff)
+	}
+}

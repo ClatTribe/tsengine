@@ -24,22 +24,45 @@ import (
 func FromActions(tenant string, actions []platform.Action) []Observation {
 	var out []Observation
 	for _, a := range actions {
-		v := a.Verification
-		if v == nil || !v.RescanSaidFixed {
-			continue // no re-scan claim, or no re-attack to check it against — not a labelled example
-		}
-		contradicted := v.Disagreement == platform.DisagreeRescanMissedLiveExploit
-		seen := map[string]bool{}
-		for _, k := range a.FindingKeys {
-			class := strings.TrimSpace(ClassOf(k))
-			if class == "" || seen[class] {
-				continue
+		for _, v := range verificationEvents(a) {
+			if !v.RescanSaidFixed {
+				continue // no re-scan claim, or no re-attack to check it against — not a labelled example
 			}
-			seen[class] = true
-			out = append(out, Observation{Tenant: tenant, Class: class, Contradicted: contradicted})
+			contradicted := v.Disagreement == platform.DisagreeRescanMissedLiveExploit
+			// One observation per distinct class PER EVENT. Per-event is the fix for the erasure
+			// drift: an action contradicted once and re-verified clean later is TWO labelled
+			// examples, both true, and reading only current state kept just the second — which is
+			// the flattering one. Still deduped by class within an event, so one remediation
+			// spanning five findings of a class does not out-vote five separate ones.
+			seen := map[string]bool{}
+			for _, k := range a.FindingKeys {
+				class := strings.TrimSpace(ClassOf(k))
+				if class == "" || seen[class] {
+					continue
+				}
+				seen[class] = true
+				out = append(out, Observation{Tenant: tenant, Class: class, Contradicted: contradicted})
+			}
 		}
 	}
 	return out
+}
+
+// verificationEvents returns the append-only log, falling back to the CURRENT verdict for actions
+// stored before the log existed.
+//
+// The fallback is load-bearing, not politeness: without it every action written before this change
+// has an empty history, so the corpus would silently empty itself on deploy and quietly discard all
+// accumulated evidence — a regression that shows up as "we no longer distrust anything", which is
+// indistinguishable from good news.
+func verificationEvents(a platform.Action) []platform.FixVerification {
+	if len(a.VerificationHistory) > 0 {
+		return a.VerificationHistory
+	}
+	if a.Verification != nil {
+		return []platform.FixVerification{*a.Verification}
+	}
+	return nil
 }
 
 // ForTenant builds a corpus from ONE tenant's own history.

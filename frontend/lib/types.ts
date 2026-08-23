@@ -1383,6 +1383,9 @@ export interface FixEfficacy {
   /** Applications whose re-scan said gone but was not accepted as confirmation (F1). Not a success
    *  and not a failure — excluded from the rate, reported so the sample size is honest. */
   unproven?: number;
+  /** A track record EXISTS but cannot be scored — too few applications were ever confirmed either
+   *  way. Distinct from absence, and must not be rendered as it. */
+  muted?: boolean;
 }
 
 // WeakRemediation — a fix that keeps not closing the thing it claimed to close.

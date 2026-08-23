@@ -131,7 +131,9 @@ func ApplyReattack(actions []platform.Action, verdicts map[string]ReattackVerdic
 				"re-scan still reports this finding, so the scanner may be seeing a variant the re-test "+
 				"does not cover — treat this as partial.", len(closed))
 		}
-		a.Verification = &fv
+		// Append-only: a contradiction recorded here must survive a later clean re-verification of
+		// the same action, or the corpus forgets the one fact it exists to remember.
+		a.RecordVerification(fv)
 		changed = append(changed, a)
 	}
 	return changed

@@ -702,9 +702,19 @@ func (d Deps) annotateFixEfficacy(ctx context.Context, tenantID string, acts []p
 			continue // nothing to attribute a track record to
 		}
 		for _, k := range a.FindingKeys {
-			if e, ok := corpus.For(fieldevidence.ClassOf(k), rtype); ok {
+			class := fieldevidence.ClassOf(k)
+			if e, ok := corpus.For(class, rtype); ok {
 				acts[i].FixEfficacy = &platform.FixEfficacy{
 					Closed: e.Closed, NotClosed: e.NotClosed, Unproven: e.Unproven,
+				}
+				break
+			}
+			// A record that exists but cannot be scored is reported AS THAT, not as absence — see
+			// RemediationCorpus.Muted. F1 tightening shrinks F2's denominator, so silence here would
+			// arrive exactly where the fixes deserve the most scrutiny.
+			if e, ok := corpus.Muted(class, rtype); ok {
+				acts[i].FixEfficacy = &platform.FixEfficacy{
+					Closed: e.Closed, NotClosed: e.NotClosed, Unproven: e.Unproven, Muted: true,
 				}
 				break
 			}
