@@ -29,7 +29,7 @@ func TestSyncOSINT_DiscoversNewExposedHostFromCT(t *testing.T) {
 		},
 	}
 
-	out := svc.syncOSINT(ctx, "t1")
+	out, _ := svc.syncOSINT(ctx, "t1")
 	var host *types.Finding
 	for i := range out {
 		if out[i].RuleID == "osint::exposed-host" && strings.Contains(out[i].Endpoint, "staging.acme.com") {
@@ -54,13 +54,13 @@ func TestSyncOSINT_NoDomainsOrFetcherIsNoop(t *testing.T) {
 	// has a fetcher but no domain asset
 	svc := &Service{Store: st, NewID: func() string { return "x" },
 		OSINTFetcher: func(_ context.Context, _ string) ([]byte, error) { return []byte(`[]`), nil }}
-	if out := svc.syncOSINT(ctx, "t1"); out != nil {
+	if out, _ := svc.syncOSINT(ctx, "t1"); out != nil {
 		t.Errorf("no domain assets → nil, got %+v", out)
 	}
 	// has a domain but no fetcher
 	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "t1", Type: string(types.AssetDomain), Target: "acme.com"})
 	svc2 := &Service{Store: st, NewID: func() string { return "x" }}
-	if out := svc2.syncOSINT(ctx, "t1"); out != nil {
+	if out, _ := svc2.syncOSINT(ctx, "t1"); out != nil {
 		t.Errorf("no fetcher → nil, got %+v", out)
 	}
 }

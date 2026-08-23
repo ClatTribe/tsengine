@@ -51,7 +51,7 @@ func TestSyncOSINT_DoesNotReturnAFindingItFailedToStore(t *testing.T) {
 		},
 	}
 
-	got := svc.syncOSINT(ctx, "t1")
+	got, _ := svc.syncOSINT(ctx, "t1")
 	if st.attempts == 0 {
 		t.Fatal("the store was never asked to save anything — this test would pass without exercising " +
 			"the loop it exists to check, which is how the first version of it asserted nothing")
@@ -79,7 +79,7 @@ func TestSyncOSINT_ReturnsWhatItStored(t *testing.T) {
 			return []byte(`[{"name_value":"forgotten-staging.acme.example"}]`), nil
 		},
 	}
-	if got := svc.syncOSINT(ctx, "t1"); len(got) == 0 {
+	if got, _ := svc.syncOSINT(ctx, "t1"); len(got) == 0 {
 		t.Fatal("a working store must still yield the finding — otherwise the fix trades a view " +
 			"mismatch for losing the detection entirely")
 	}

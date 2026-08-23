@@ -117,6 +117,21 @@ type Result struct {
 // REGARDLESS of the severity floor — a live exploit attempt is itself urgent — and the
 // incident is marked Attacked. Pass nil when there is no runtime signal.
 func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []types.Finding, attacked map[string]bool) (Result, error) {
+	return d.ReconcileScoped(ctx, tenantID, current, attacked, AllProducers())
+}
+
+// ReconcileScoped is Reconcile with the pass's authority stated rather than assumed: it resolves only
+// incidents whose PRODUCER this pass actually observed (see coverage.go / ADR 0024 C16).
+//
+// Reconcile keeps the old signature and passes AllProducers() because some callers genuinely sweep
+// everything, and because silently narrowing an existing caller's authority would trade a false
+// resolve for a permanent false non-resolve — the same failure pointed the other way, which the
+// degraded-pass work already had to learn once.
+//
+// An uncovered incident is not merely left unresolved: its AbsentPasses is NOT incremented either.
+// Counting absences we were never in a position to observe would resolve the incident on schedule
+// anyway, just more slowly, which is the bug with a delay rather than a fix.
+func (d *Detector) ReconcileScoped(ctx context.Context, tenantID string, current []types.Finding, attacked map[string]bool, cov Coverage) (Result, error) {
 	present := d.presentIssues(current, attacked)
 
 	openByKey, err := d.openIncidentsByKey(ctx, tenantID)
@@ -133,6 +148,11 @@ func (d *Detector) Reconcile(ctx context.Context, tenantID string, current []typ
 	// state (a full scan pass). Event-driven ingests use OpenFor (open-only) instead, so they never
 	// falsely resolve a scan incident whose key they don't carry.
 	for key, inc := range openByKey {
+		if !cov.Covers(inc.RuleID) {
+			// Nothing this pass ran could have re-observed this producer, so its silence carries no
+			// information. Leave the incident exactly as it is — status, streak and all.
+			continue
+		}
 		if _, still := present[key]; still {
 			// Reappeared: any absence streak is over. Persist the reset so a later gap starts
 			// counting from zero rather than inheriting a stale count.

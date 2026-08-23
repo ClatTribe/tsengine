@@ -147,7 +147,7 @@ func TestSyncCloud_UnavailableIsSilentAndHarmless(t *testing.T) {
 		CloudSyncer: func(context.Context, string) ([]types.Finding, error) {
 			return nil, fmt.Errorf("%w: no AWS account is connected", ErrCloudSyncUnavailable)
 		}}
-	if out := svc.syncCloud(ctx, "t1"); out != nil {
+	if out, _ := svc.syncCloud(ctx, "t1"); out != nil {
 		t.Errorf("an unavailable cloud read produced findings: %+v", out)
 	}
 }
@@ -156,7 +156,7 @@ func TestSyncCloud_UnavailableIsSilentAndHarmless(t *testing.T) {
 // exactly as it did before.
 func TestSyncCloud_NoSyncerIsNoop(t *testing.T) {
 	svc := &Service{Store: store.NewMemory(), NewID: itoa1}
-	if out := svc.syncCloud(context.Background(), "t1"); out != nil {
+	if out, _ := svc.syncCloud(context.Background(), "t1"); out != nil {
 		t.Errorf("no CloudSyncer should be a no-op, got %+v", out)
 	}
 }
@@ -166,7 +166,7 @@ func TestSyncCloud_NoSyncerIsNoop(t *testing.T) {
 func TestSyncCloud_UnchangedAccountYieldsNothing(t *testing.T) {
 	svc := &Service{Store: store.NewMemory(), NewID: itoa1,
 		CloudSyncer: func(context.Context, string) ([]types.Finding, error) { return nil, nil }}
-	if out := svc.syncCloud(context.Background(), "t1"); len(out) != 0 {
+	if out, _ := svc.syncCloud(context.Background(), "t1"); len(out) != 0 {
 		t.Errorf("an unchanged account invented %d findings", len(out))
 	}
 }
