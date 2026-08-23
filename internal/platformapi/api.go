@@ -27,6 +27,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/detect"
+	"github.com/ClatTribe/tsengine/internal/detectionvalidation"
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/exposuretrend"
 	"github.com/ClatTribe/tsengine/internal/fieldevidence"
@@ -244,8 +245,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/proof-queue", d.auth(d.handleProofQueue)) // doubt→prove: findings the engineer surfaced that the pentester has not settled
 	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))        // all remediations + fix-verification status
 	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage))
-	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage)) // ATT&CK techniques exercised vs unchecked
-	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))   // is exposure going down?
+	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage))           // ATT&CK techniques exercised vs unchecked
+	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))             // is exposure going down?
+	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation)) // did their controls catch our probes?
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
@@ -864,6 +866,33 @@ func (d Deps) handleCoverage(w http.ResponseWriter, r *http.Request, tenantID st
 		return
 	}
 	respond(w, coverage.Compute(assets, findings, engs), nil)
+}
+
+// handleDetectionValidation answers the question that defines this product category: when we proved
+// an attack works, did the customer's own defences notice? (ADR 0027 S1.)
+//
+// Needs no new integration: the probes come from engagements we already store and the events from
+// the runtime sensor ingest that already exists. A probe with no matching alert is reported as a MISS
+// only when the sensor proved it was watching — otherwise undetermined, because an undeployed sensor
+// and a genuine miss look identical from here, and calling that a miss accuses a control we could
+// not observe.
+func (d Deps) handleDetectionValidation(w http.ResponseWriter, r *http.Request, tenantID string) {
+	ctx := r.Context()
+	engs, err := d.Store.ListPentests(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	events, err := d.Store.ListRuntimeEvents(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	var probes []detectionvalidation.Probe
+	for _, e := range engs {
+		probes = append(probes, detectionvalidation.ProbesFrom(e.Attempts)...)
+	}
+	respond(w, detectionvalidation.Validate(probes, events, 0), nil)
 }
 
 // handleExposureTrend answers "is exposure going down?" — the question CTEM exists to make
