@@ -1432,15 +1432,20 @@ const (
 // on an endpoint that is ALSO being attacked in production is observed-in-the-wild,
 // the strongest exploitability signal there is.
 type RuntimeEvent struct {
-	ID         string    `json:"id"`
-	TenantID   string    `json:"tenant_id"`
-	App        string    `json:"app,omitempty"`         // the app/service that reported it
-	AttackKind string    `json:"attack_kind,omitempty"` // sql_injection | ssrf | path_traversal | xss | ...
-	Endpoint   string    `json:"endpoint,omitempty"`    // the route the attack hit
-	Sink       string    `json:"sink,omitempty"`        // the dangerous sink reached, if known
-	SourceIP   string    `json:"source_ip,omitempty"`   // the attacker IP (informational)
-	Blocked    bool      `json:"blocked"`               // did the sensor block it (vs monitor-only)
-	Source     string    `json:"source,omitempty"`      // sensor name (e.g. "zen")
+	ID         string `json:"id"`
+	TenantID   string `json:"tenant_id"`
+	App        string `json:"app,omitempty"`         // the app/service that reported it
+	AttackKind string `json:"attack_kind,omitempty"` // sql_injection | ssrf | path_traversal | xss | ...
+	Endpoint   string `json:"endpoint,omitempty"`    // the route the attack hit
+	Sink       string `json:"sink,omitempty"`        // the dangerous sink reached, if known
+	SourceIP   string `json:"source_ip,omitempty"`   // the attacker IP (informational)
+	Blocked    bool   `json:"blocked"`               // did the sensor block it (vs monitor-only)
+	// Marker is a token the sensor observed in the request, when it captures one. Optional: most
+	// sensors report only the shape of an attack. When present it is the STRONG join for detection
+	// validation (ADR 0027 S1) — an exact tie between one alert and the probe that caused it, rather
+	// than an inference from endpoint, class and timing.
+	Marker     string    `json:"marker,omitempty"`
+	Source     string    `json:"source,omitempty"` // sensor name (e.g. "zen")
 	OccurredAt time.Time `json:"occurred_at"`
 }
 

@@ -127,6 +127,24 @@ cheapest version of the category-defining capability is a correlation, not an in
 
 ---
 
+### Correction (2026-08-23) — S1 was mis-sized, found by building it
+
+This ADR claimed "the ingest, the canary and the finding join all exist, so the cheapest version of
+the category-defining capability is a correlation, not an integration." Half right, and the wrong
+half mattered: **the canary existed only at generation time.** It was created inside `ActiveDriver`,
+embedded in a request and discarded — nothing persisted it, so after the fact there was nothing to
+correlate an alert against. `RuntimeEvent` likewise had no field for a token a sensor observed.
+
+Two additions made S1 real, both small and both prerequisites rather than the feature:
+`ProposedAction.Canary` → `AttemptRecord.Canary` (the join key, persisted on an engagement record
+that was already stored), and `RuntimeEvent.Marker` (optional — most sensors report only the shape of
+an attack, so a marker is a bonus and its absence must not break correlation).
+
+The claim survives with a correction: S1 needs no *connector* and no new credential surface, which
+was the point — but it did need a persisted join key, which the original text asserted already
+existed. Recorded because an ADR that turns out to be wrong when built is worth more corrected than
+quietly worked around.
+
 ## What this ADR does NOT decide
 
 - **Which control planes first.** EDR, SIEM, WAF and NGFW are four different integration surfaces
