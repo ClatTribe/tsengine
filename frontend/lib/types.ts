@@ -1415,3 +1415,22 @@ export interface AttackCoverage {
   not_exercised: number;
   denominator: string;
 }
+
+// ExposureTrend — is exposure going down? "closed" counts issues that STOPPED APPEARING, which a
+// descoped asset and a degraded scan also produce; only confirmed_fixed rests on a re-test.
+export interface ExposurePoint {
+  day: string;
+  opened: number;
+  closed: number;
+  persisted: number;
+  episodes: number;
+  unscored: number;
+}
+export interface ExposureTrend {
+  points: ExposurePoint[];
+  confirmed_fixed: number;
+  unscored: number;
+  scopes_included?: string[];
+  mixed?: boolean;
+  caveat: string;
+}

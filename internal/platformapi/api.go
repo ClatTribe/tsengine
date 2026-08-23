@@ -28,6 +28,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/email"
+	"github.com/ClatTribe/tsengine/internal/exposuretrend"
 	"github.com/ClatTribe/tsengine/internal/fieldevidence"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/l2"
@@ -244,6 +245,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))        // all remediations + fix-verification status
 	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage))
 	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage)) // ATT&CK techniques exercised vs unchecked
+	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))   // is exposure going down?
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
@@ -862,6 +864,29 @@ func (d Deps) handleCoverage(w http.ResponseWriter, r *http.Request, tenantID st
 		return
 	}
 	respond(w, coverage.Compute(assets, findings, engs), nil)
+}
+
+// handleExposureTrend answers "is exposure going down?" — the question CTEM exists to make
+// answerable, and one a lifetime total cannot answer: "opened 40, closed 38" says nothing about
+// direction.
+//
+// Reports the movement series and, BESIDE it, the confirmed-fixed count. They are never merged:
+// Closed counts issues that stopped appearing, which a descoped asset and a degraded scan also
+// produce; only confirmed-fixed rests on a re-test proving closure. ?scope= filters to one census,
+// because episodes from different scopes are not comparable to each other.
+func (d Deps) handleExposureTrend(w http.ResponseWriter, r *http.Request, tenantID string) {
+	ctx := r.Context()
+	eps, err := d.Store.ListEpisodes(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	acts, err := d.Store.ListActions(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	respond(w, exposuretrend.Compute(eps, acts, r.URL.Query().Get("scope")), nil)
 }
 
 // handleAttackCoverage answers "which attacker techniques did we actually exercise against this
