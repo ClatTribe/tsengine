@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -62,6 +63,49 @@ type Fixture struct {
 	// out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree). The harness
 	// skips running it but still renders its competitor numbers.
 	Runnable bool `json:"runnable"`
+
+	// DocumentedVulnerabilities is the target's OWN documented defect list — the
+	// HONEST DENOMINATOR. MustFind carries only the subset a scan can currently
+	// surface, so that a fixture is a measurement rather than a permanently-red
+	// gate; this records everything the target actually contains so the gap is
+	// not quietly defined away.
+	//
+	// IT MUST BE READ, NOT MERELY WRITTEN. These fields were present in
+	// fixtures/api/vampi/fixture.json with a note explaining they exist "so the
+	// gap stays visible instead of being quietly defined away" — and the struct
+	// had no field for either, so json.Unmarshal dropped both and no report ever
+	// mentioned them. The denominator was visible only to someone who opened the
+	// JSON, which is the same failure the note warns about, one level up.
+	//
+	// The consequence is specific: a fixture whose MustFind holds one token scores
+	// `detection_recall: 1.000` and reads as "we find everything", when the honest
+	// statement is "we find 1 of the 9 defects this target deliberately contains".
+	DocumentedVulnerabilities []DocumentedVuln `json:"documented_vulnerabilities,omitempty"`
+	// GroundTruthNote explains why MustFind is narrower than the documented list.
+	GroundTruthNote string `json:"ground_truth_note,omitempty"`
+}
+
+// DocumentedVuln is one defect the target is documented to contain, whether or not
+// anything here can currently detect it.
+type DocumentedVuln struct {
+	Class    string `json:"class"`
+	Endpoint string `json:"endpoint,omitempty"`
+	CWE      string `json:"cwe,omitempty"`
+	// CoveredBy names the tool or component that detects it, or says plainly that
+	// nothing does. "NOT COVERED" (case-insensitive prefix) is what Covered reads.
+	CoveredBy string `json:"covered_by,omitempty"`
+	// OWASPAPI is the OWASP API Security Top 10 (2023) item this maps to — "API1"
+	// … "API10". Empty when the class is not on that list at all, which is itself
+	// worth recording: VAmPI's headline SQL injection is not a 2023 Top 10 item,
+	// because Injection was folded away when the list was revised.
+	OWASPAPI string `json:"owasp_api,omitempty"`
+}
+
+// Covered reports whether anything in the product detects this class today. It reads
+// CoveredBy rather than taking a separate boolean, so the prose and the flag cannot
+// disagree — the failure mode where a field says "NOT COVERED" beside covered:true.
+func (d DocumentedVuln) Covered() bool {
+	return !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(d.CoveredBy)), "NOT COVERED")
 }
 
 // Competitors carries the neutral competitor scorecard for a fixture.

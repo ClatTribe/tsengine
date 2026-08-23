@@ -1,6 +1,7 @@
 # ADR 0026 — Best-in-breed on the OWASP API Security Top 10: what is covered, what is gated, and what is absent
 
-**Status:** Proposed · the coverage map is measured from the handlers; the build order is a proposal
+**Status:** Proposed · decision 4 IMPLEMENTED (this change); decisions 1–3 are the build order.
+The coverage map is measured from the handlers, not read off the docs.
 **Date:** 2026-08-23
 
 ## Context
@@ -55,12 +56,24 @@ least likely to ever see.
 ### What "best-in-breed" would have to mean here
 
 CLAUDE.md §14.2 rule 5 is unambiguous: an in-house answer key measures whether the fixtures and the
-code agree, not whether the product works. The API ground truth today is
-`bench/pentest_e2e/vampi.groundtruth.txt`, and it contains **two entries** — `sqli` and `idor`.
+code agree, not whether the product works.
 
-A two-item corpus cannot support a Top 10 claim, and adding detections without extending it produces
-a number that only rises. Any claim of best-in-breed is a claim about a score, and that score does
-not exist yet.
+**A first draft of this section said the API ground truth "contains two entries" and was wrong.**
+It read `bench/pentest_e2e/vampi.groundtruth.txt` (which does hold two, for a different harness) and
+missed `fixtures/api/vampi/fixture.json` — which is careful work: it records **all nine** defects
+VAmPI documents, each with its CWE and the component that detects it or a plain "NOT COVERED", and
+carries a note explaining that `must_find` is deliberately narrower because *"a fixture that can
+never pass is a permanently-red gate rather than a measurement"*.
+
+The real defect is one level up, and it is this repo's most familiar shape. **Nothing read it.**
+`bench.Fixture` had no field for `documented_vulnerabilities` or `ground_truth_note`, so
+`json.Unmarshal` dropped both silently. The note says the denominator exists *"so the gap stays
+visible instead of being quietly defined away"* — and it was visible only to someone who opened the
+JSON. No report has ever mentioned it.
+
+The consequence is precise: a fixture whose `must_find` holds one token scores
+`detection_recall: 1.000`, which reads as *we find everything*, when the honest statement is *we find
+one of the nine defects this target deliberately contains*.
 
 ## Decision
 
@@ -119,15 +132,41 @@ declines on purpose.
 
 No detection changes. This is the highest-value item on the list and it is a UX change.
 
-### 4. Extend the ground truth before claiming anything
+### 4. Make the denominator readable, and key it to the Top 10 — IMPLEMENTED
 
-`vampi.groundtruth.txt` goes from two entries to one per Top 10 item VAmPI actually exhibits, each
-tagged with its API-number, so recall can be reported **per OWASP item** rather than as one figure.
-crAPI is the second corpus (CLAUDE.md §14 already names both) and covers items VAmPI does not.
+Not "extend the ground truth": the ground truth was already right. The work is to stop discarding it.
 
-The number is recorded **before** the work in decisions 1–3 lands, so the improvement is falsifiable.
-Fixing a benchmark and the thing it measures in one commit makes the result unfalsifiable — §14.2
-rule 5, which this repo has already learned twice.
+- `bench.Fixture` gains `DocumentedVulnerabilities` and `GroundTruthNote`, so the fields the fixture
+  has always carried are parsed instead of dropped.
+- `DocumentedVuln.OWASPAPI` maps each class to its 2023 item. **SQL injection is deliberately left
+  unmapped** — Injection was API8:2019 and was folded away in the revision, so giving VAmPI's
+  headline defect a 2023 number would invent coverage of an item it does not exercise. A test pins
+  that, because it is the kind of blank someone tidies up.
+- `Score.Scope` reports `documented / detectable / measured`, names the uncovered classes rather than
+  counting them, and partitions the mapped items into covered and uncovered — so a recall figure
+  never travels without the denominator that qualifies it.
+- `DocumentedVuln.Covered()` reads the **prose** in `covered_by` rather than a parallel boolean, so
+  a field reading "NOT COVERED" cannot sit beside `covered: true`.
+
+**An item with one covered class and one uncovered class counts as UNCOVERED.** That is the rule the
+implementation turns on and the one a careless version gets backwards, because the covered class is
+encountered first. It is mutation-verified: crediting the partial makes VAmPI report API2 as covered,
+and the test fails naming it.
+
+Measured on VAmPI with the mapping applied — the first per-item number this product has had:
+
+```
+mapped by VAmPI : API1 API2 API3 API4 API5     (five of ten; it exercises no others)
+covered         : API1 API5
+uncovered       : API2 API3 API4
+```
+
+crAPI remains the second corpus (CLAUDE.md §14 names both) and reaches items VAmPI does not. API6
+and API10 are exercised by neither, which is consistent with decision 5 below: they are not proposed,
+so nothing claims them.
+
+This baseline is recorded **before** decisions 1–3 land, so their effect is falsifiable. Fixing a
+benchmark and the thing it measures in one commit makes the result unfalsifiable — §14.2 rule 5.
 
 ## Invariants
 

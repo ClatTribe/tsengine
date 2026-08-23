@@ -2,7 +2,7 @@
   "name": "api-vampi",
   "asset": "api",
   "target": "http://host.docker.internal:5002/",
-  "description": "VAmPI (erev0s/vampi), a deliberately vulnerable API. Ground truth is VAmPI's OWN documented vulnerability list (9 classes, from its README) \u2014 NOT derived from what our tools happen to emit, which would be circular. Target is the BASE URL, not the spec: openapi_spec_ingest discovers /openapi.json from commonSpecPaths and emits the SPEC marker that PlanFanout needs to dispatch schemathesis. Deploy: docker run -d -p 5002:5000 -e vulnerable=1 erev0s/vampi",
+  "description": "VAmPI (erev0s/vampi), a deliberately vulnerable API. Ground truth is VAmPI's OWN documented vulnerability list (9 classes, from its README) — NOT derived from what our tools happen to emit, which would be circular. Target is the BASE URL, not the spec: openapi_spec_ingest discovers /openapi.json from commonSpecPaths and emits the SPEC marker that PlanFanout needs to dispatch schemathesis. Deploy: docker run -d -p 5002:5000 -e vulnerable=1 erev0s/vampi",
   "metric": "must_find_recall",
   "must_find": [
     "sqli"
@@ -12,7 +12,7 @@
     "leaderboard": "",
     "note": "No neutral API-security leaderboard exists (unlike WAVSEP/OWASP-Benchmark). VAmPI + crAPI are the community reference targets; recall here is against the SUT's own documented vulnerability list."
   },
-  "ground_truth_note": "VAmPI documents 9 deliberate vulnerabilities. must_find carries ONE token per detectable class (was two spellings of SQLi, which capped recall at 0.5 for a single class \u2014 a ground-truth bug, not an engine miss). It carries only the classes an L1 api scan can currently surface, because a fixture that can never pass is a permanently-red gate rather than a measurement. The full denominator is recorded here so the gap stays visible instead of being quietly defined away \u2014 the same failure the WAVSEP scorer had when unreached cases were graded as misses.",
+  "ground_truth_note": "VAmPI documents 9 deliberate vulnerabilities. must_find carries ONE token per detectable class (was two spellings of SQLi, which capped recall at 0.5 for a single class — a ground-truth bug, not an engine miss). It carries only the classes an L1 api scan can currently surface, because a fixture that can never pass is a permanently-red gate rather than a measurement. The full denominator is recorded here so the gap stays visible instead of being quietly defined away — the same failure the WAVSEP scorer had when unreached cases were graded as misses.",
   "documented_vulnerabilities": [
     {
       "class": "SQL injection",
@@ -24,49 +24,57 @@
       "class": "Broken object level authorization (BOLA)",
       "endpoint": "GET/POST /books/v1/{book}",
       "cwe": "CWE-639",
-      "covered_by": "bola_probe / apiauthz \u2014 L2 agent + operator-declared TestConfig, NOT the L1 anchor pass"
+      "covered_by": "bola_probe / apiauthz — L2 agent + operator-declared TestConfig, NOT the L1 anchor pass",
+      "owasp_api": "API1"
     },
     {
       "class": "Unauthorized password change",
       "endpoint": "PUT /users/v1/{username}/password",
       "cwe": "CWE-863",
-      "covered_by": "apiauthz TestConfig \u2014 needs two declared identities"
+      "covered_by": "apiauthz TestConfig — needs two declared identities",
+      "owasp_api": "API5"
     },
     {
       "class": "Mass assignment",
       "endpoint": "register/update",
       "cwe": "CWE-915",
-      "covered_by": "privesc_probe \u2014 L2 agent tool"
+      "covered_by": "privesc_probe — L2 agent tool",
+      "owasp_api": "API3"
     },
     {
       "class": "Excessive data exposure",
       "endpoint": "GET /users/v1/_debug",
       "cwe": "CWE-200",
-      "covered_by": "NOT COVERED \u2014 no L1 detector for over-broad response bodies"
+      "covered_by": "NOT COVERED — no L1 detector for over-broad response bodies",
+      "owasp_api": "API3"
     },
     {
       "class": "User/password enumeration",
       "endpoint": "GET /users/v1",
       "cwe": "CWE-204",
-      "covered_by": "NOT COVERED \u2014 requires differential response analysis"
+      "covered_by": "NOT COVERED — requires differential response analysis",
+      "owasp_api": "API2"
     },
     {
       "class": "JWT authentication bypass (weak signing key)",
       "endpoint": "token issuance",
       "cwe": "CWE-347",
-      "covered_by": "nuclei jwt tags \u2014 the api tag set includes jwt"
+      "covered_by": "nuclei jwt tags — the api tag set includes jwt",
+      "owasp_api": "API2"
     },
     {
       "class": "RegexDOS",
       "endpoint": "multiple",
       "cwe": "CWE-1333",
-      "covered_by": "NOT COVERED \u2014 needs fuzzing/load, not pattern matching"
+      "covered_by": "NOT COVERED — needs fuzzing/load, not pattern matching",
+      "owasp_api": "API4"
     },
     {
       "class": "Lack of resources & rate limiting",
       "endpoint": "all",
       "cwe": "CWE-770",
-      "covered_by": "NOT COVERED \u2014 needs load generation"
+      "covered_by": "NOT COVERED — needs load generation",
+      "owasp_api": "API4"
     }
   ],
   "runnable": true
