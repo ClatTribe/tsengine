@@ -110,17 +110,25 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		if !ok {
 			return genericTicket(f, asset, idgen), true
 		}
+		payload := map[string]any{
+			"remediation_type": rt,
+			// The finding's OWN endpoint, never the asset-wide target — grounded (§10).
+			"target":      nz(f.Endpoint, asset.Target),
+			"remediation": runbook + "\n\n" + fixBody(f),
+			"summary":     runbook,
+		}
+		// Mitigate now, patch later: for a class whose real fix is a CODE change, something at the
+		// edge or the runtime can reduce exposure today. Carried ALONGSIDE the fix, never instead of
+		// it — see interimMitigation for why it can never close the finding.
+		if mt, steps, has := interimMitigation(rt); has {
+			payload["interim_mitigation_type"] = mt
+			payload["interim_mitigation"] = steps
+		}
 		return platform.Action{
 			ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 			Kind: platform.ActFileTicket, Tier: 1, Status: platform.ActProposed,
-			Title: "tsengine: fix " + f.Title,
-			Payload: map[string]any{
-				"remediation_type": rt,
-				// The finding's OWN endpoint, never the asset-wide target — grounded (§10).
-				"target":      nz(f.Endpoint, asset.Target),
-				"remediation": runbook + "\n\n" + fixBody(f),
-				"summary":     runbook,
-			},
+			Title:   "tsengine: fix " + f.Title,
+			Payload: payload,
 		}, true
 	}
 }
