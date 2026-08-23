@@ -58,12 +58,21 @@ export const CONTACT_PHONE = env(process.env.NEXT_PUBLIC_CONTACT_PHONE) || "+91 
 export const CONTACT_PHONE_TEL =
   env(process.env.NEXT_PUBLIC_CONTACT_PHONE_TEL) || CONTACT_PHONE.replace(/[^\d+]/g, "");
 
-// The three role addresses that were ALREADY published on the site. Their defaults
-// are the values that were hardcoded, so this module changes where they are edited,
-// not what they say.
-export const PRIVACY_EMAIL = env(process.env.NEXT_PUBLIC_PRIVACY_EMAIL) || `privacy@${SITE_HOST}`;
-export const SECURITY_EMAIL = env(process.env.NEXT_PUBLIC_SECURITY_EMAIL) || `security@${SITE_HOST}`;
-export const LEGAL_EMAIL = env(process.env.NEXT_PUBLIC_LEGAL_EMAIL) || `legal@${SITE_HOST}`;
+// The three role addresses. They default to CONTACT_EMAIL — the one mailbox that is
+// actually monitored — rather than to privacy@ / security@ / legal@ at SITE_HOST.
+//
+// Those role-shaped addresses were what the site published before, and they were
+// never verified to exist. That is not a cosmetic risk: privacy@ is where GDPR and
+// DPDP data-subject requests are legally directed, and security@ is the address in
+// .well-known/security.txt that a researcher uses to report a vulnerability. An
+// address that looks official and bounces is worse than an informal one that
+// arrives — it fails silently, on the two channels where silence costs most.
+//
+// Set NEXT_PUBLIC_PRIVACY_EMAIL / _SECURITY_EMAIL / _LEGAL_EMAIL to split them out
+// the moment real role mailboxes exist; every surface follows without another edit.
+export const PRIVACY_EMAIL = env(process.env.NEXT_PUBLIC_PRIVACY_EMAIL) || CONTACT_EMAIL;
+export const SECURITY_EMAIL = env(process.env.NEXT_PUBLIC_SECURITY_EMAIL) || CONTACT_EMAIL;
+export const LEGAL_EMAIL = env(process.env.NEXT_PUBLIC_LEGAL_EMAIL) || CONTACT_EMAIL;
 
 /** True when a deploy has supplied a general contact address. */
 export const CONTACT_EMAIL_CONFIGURED = CONTACT_EMAIL !== "";
@@ -89,9 +98,9 @@ export type Channel = {
 };
 
 export function contactChannels(): Channel[] {
-  const out: Channel[] = [];
+  const raw: Channel[] = [];
   if (CONTACT_EMAIL_CONFIGURED) {
-    out.push({
+    raw.push({
       kind: "email",
       label: "General & sales",
       value: CONTACT_EMAIL,
@@ -100,7 +109,7 @@ export function contactChannels(): Channel[] {
     });
   }
   if (CONTACT_PHONE_CONFIGURED) {
-    out.push({
+    raw.push({
       kind: "phone",
       label: "Phone",
       value: CONTACT_PHONE,
@@ -108,7 +117,7 @@ export function contactChannels(): Channel[] {
       detail: "Business hours, India Standard Time.",
     });
   }
-  out.push(
+  raw.push(
     {
       kind: "email",
       label: "Security",
@@ -131,5 +140,36 @@ export function contactChannels(): Channel[] {
       detail: "Contracts and anything about our terms.",
     },
   );
-  return out;
+
+  // COLLAPSE BY ADDRESS. The role addresses default to CONTACT_EMAIL, so out of the box
+  // four of these five entries carry the same mailbox — and rendering four identical
+  // cards under four different headings tells a visitor there are four ways in when
+  // there is one. It reads as padding, and it hides the phone among the duplicates.
+  //
+  // Merging keeps the information that matters (this address does cover security and
+  // privacy) while showing the address once. Split them out by setting the per-role env
+  // vars and the cards separate again on their own — nothing here needs changing.
+  const byValue = new Map<string, Channel>();
+  const merged: string[][] = [];
+  for (const c of raw) {
+    const seen = byValue.get(c.value);
+    if (!seen) {
+      byValue.set(c.value, { ...c });
+      merged.push([c.label]);
+      continue;
+    }
+    merged[[...byValue.keys()].indexOf(c.value)].push(c.label);
+  }
+
+  return [...byValue.values()].map((c, i) => {
+    const labels = merged[i];
+    if (labels.length === 1) return c;
+    // "General & sales" already covers the general case; name what else it reaches.
+    const extra = labels.slice(1).join(", ").toLowerCase();
+    return {
+      ...c,
+      label: labels[0],
+      detail: `${c.detail} Also reaches ${extra} — one monitored inbox.`,
+    };
+  });
 }
