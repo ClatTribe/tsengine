@@ -168,6 +168,14 @@ services:
         NEXT_PUBLIC_LEGAL_COUNTRY: ${NEXT_PUBLIC_LEGAL_COUNTRY:-India}
         NEXT_PUBLIC_LEGAL_ADDRESS: ${NEXT_PUBLIC_LEGAL_ADDRESS:-}
         NEXT_PUBLIC_SMTP_SUBPROCESSOR: ${NEXT_PUBLIC_SMTP_SUBPROCESSOR:-}
+        # Contact details — footer on every marketing page, /contact, the legal documents
+        # and .well-known/security.txt. Unset renders nothing rather than a dead mailto.
+        NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:-}
+        NEXT_PUBLIC_CONTACT_PHONE: ${NEXT_PUBLIC_CONTACT_PHONE:-}
+        NEXT_PUBLIC_CONTACT_PHONE_TEL: ${NEXT_PUBLIC_CONTACT_PHONE_TEL:-}
+        NEXT_PUBLIC_PRIVACY_EMAIL: ${NEXT_PUBLIC_PRIVACY_EMAIL:-}
+        NEXT_PUBLIC_SECURITY_EMAIL: ${NEXT_PUBLIC_SECURITY_EMAIL:-}
+        NEXT_PUBLIC_LEGAL_EMAIL: ${NEXT_PUBLIC_LEGAL_EMAIL:-}
     environment:
       TSENGINE_API_URL: http://platform:8090 # server-side only; the browser never sees it
       NODE_ENV: production

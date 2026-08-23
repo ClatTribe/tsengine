@@ -1,4 +1,5 @@
 import { ShieldAlert } from "lucide-react";
+import { PRIVACY_EMAIL } from "@/lib/contact";
 
 // A legal/policy section. A string is a paragraph; a string[] renders as a bullet list.
 export type LegalSection = { h: string; body: (string | string[])[] };
@@ -63,7 +64,7 @@ export function LegalDoc({
       </div>
 
       <p className="mt-12 border-t border-border pt-6 text-sm text-faint">
-        Questions about this document? Contact <span className="text-muted">privacy@tensorshield.io</span>.
+        Questions about this document? Contact <span className="text-muted">{PRIVACY_EMAIL}</span>.
       </p>
     </article>
   );
