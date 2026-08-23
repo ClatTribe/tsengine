@@ -105,6 +105,14 @@ type Issue struct {
 	// than collapsing to a bare false — "3 of 5 hops authorized" and "nothing was checked" are
 	// different facts, and rendering them alike is how a partial proof reads as a complete one.
 	AuthorizationCoverage string `json:"authorization_coverage,omitempty"`
+	// ProofPlan is the per-hop form of the same answer (ADR 0024 P1b): what this path REQUIRES in
+	// order to authorize, and what the provider said about each requirement.
+	//
+	// It exists because the ratio above cannot express a DENIAL. A hop the provider explicitly
+	// refused counted exactly like one nobody asked about — both "not confirmed" — so a path the
+	// provider had told us was CLOSED rendered as partial evidence that it is OPEN. The plan also
+	// separates untested from unknown, which the ratio merged.
+	ProofPlan *AuthorizationProofPlan `json:"proof_plan,omitempty"`
 }
 
 // Report is the agent's output.
