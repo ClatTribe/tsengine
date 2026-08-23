@@ -34,6 +34,7 @@ func Render(f *Fixture, res *RunResult) string {
 		if len(last.FalsePositives) > 0 {
 			fmt.Fprintf(&b, "FALSE POSITIVES:  %s\n", strings.Join(last.FalsePositives, ", "))
 		}
+		b.WriteString(renderScope(last.Scope))
 	}
 
 	b.WriteString(renderCompetitors(f.Competitors))
@@ -106,5 +107,42 @@ func RenderAblation(f *Fixture, a *Ablation) string {
 	fmt.Fprintf(&b, "enrichment coverage L1.5-on=%.3f  L1.5-off=%.3f  (Δ=%.3f — THIS is the L1.5 lift)\n",
 		a.Enabled.EnrichStats.Median, a.Disabled.EnrichStats.Median,
 		a.Enabled.EnrichStats.Median-a.Disabled.EnrichStats.Median)
+	return b.String()
+}
+
+// renderScope prints the honest denominator directly beneath the recall figure it
+// qualifies.
+//
+// IT MUST BE HERE, NOT ONLY IN THE JSON. The scope was added so a perfect recall over a
+// one-token must_find could not be read as total coverage — and then it was computed and
+// rendered nowhere, leaving the report saying exactly what the scope exists to prevent.
+// That is the same defect this codebase keeps finding — a signal computed for a consumer
+// that never consumes it — introduced by the change meant to fix it.
+//
+// The uncovered classes are NAMED, not counted: a count says something is missing without
+// letting anyone see what, or disagree with the judgement.
+func renderScope(sc *ScopeCoverage) string {
+	if sc == nil {
+		return "" // the fixture documents no denominator; claiming one would invent it
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "scope:            %d of %d documented defect classes are detectable; this fixture gates on %d\n",
+		sc.Detectable, sc.Documented, sc.Measured)
+	if len(sc.OWASPCovered) > 0 {
+		fmt.Fprintf(&b, "  OWASP covered:   %s\n", strings.Join(sc.OWASPCovered, " "))
+	}
+	if len(sc.OWASPGated) > 0 {
+		// Named separately because a customer running a normal scan does not get these.
+		fmt.Fprintf(&b, "  OWASP gated:     %s  (detected only behind a precondition)\n", strings.Join(sc.OWASPGated, " "))
+	}
+	if len(sc.OWASPUncovered) > 0 {
+		fmt.Fprintf(&b, "  OWASP uncovered: %s\n", strings.Join(sc.OWASPUncovered, " "))
+	}
+	if len(sc.UncoveredClasses) > 0 {
+		fmt.Fprintf(&b, "  NOT DETECTED:    %s\n", strings.Join(sc.UncoveredClasses, "; "))
+	}
+	if len(sc.GatedClasses) > 0 {
+		fmt.Fprintf(&b, "  gated classes:   %s\n", strings.Join(sc.GatedClasses, "; "))
+	}
 	return b.String()
 }
