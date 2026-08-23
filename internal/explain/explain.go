@@ -202,9 +202,24 @@ func urgency(f types.Finding, ctx Context) (Urgency, []string) {
 	// exploit ran and worked. Conflating them put "Fix today — we proved it is exploitable" on a
 	// Vercel setting nobody had attacked, which is the precise overstatement the urgency ladder
 	// exists to prevent. Certainty is not urgency.
-	proven := f.VerificationStatus == types.VerificationVerified && !isAssessor(f.Tool)
+	proven := f.VerificationStatus == types.VerificationVerified &&
+		!isAssessor(f.Tool) && !isAuthorizationOnly(f.Tool)
 	if proven {
 		because = append(because, "we proved it is exploitable on your system, not just possible")
+	}
+	// The third kind of "verified", and the reason the assessor guard above was not enough. A cloud
+	// attack path can reach the top tier honestly — the provider's own policy simulator was called
+	// per hop and allowed every one — and that is still not an exploit. Nothing was sent to the
+	// target, no access was used, and the things standing between authorization and exploitation
+	// (network reachability, credential acquisition, unsupplied session context, the rest of the
+	// workflow) are exactly what ADR 0024 C1 lists as unproven. Saying it in the same words as a
+	// captured proof-of-concept would give a strong claim the language of the strongest one.
+	//
+	// It still lands at NOW: an authority confirming an attacker holds every permission on a route to
+	// a crown jewel is not something to read next week. What changes is the sentence, not the rank.
+	if f.VerificationStatus == types.VerificationVerified && isAuthorizationOnly(f.Tool) {
+		because = append(because, "the cloud provider's own policy simulator confirmed every "+
+			"permission this path needs — that is confirmed access, not a demonstrated exploit")
 	}
 	if len(because) > 0 {
 		return UrgencyNow, because
@@ -393,6 +408,21 @@ var assessorTools = map[string]bool{
 }
 
 func isAssessor(tool string) bool { return assessorTools[strings.ToLower(strings.TrimSpace(tool))] }
+
+// authorizationOnlyTools reach types.VerificationVerified by having an AUTHORITY confirm access,
+// never by running an exploit. Kept separate from assessorTools because the two need opposite
+// handling everywhere else: an assessor writes its own customer-ready prose and must not be
+// re-translated, whereas a cloud path is translated normally — only its urgency SENTENCE differs.
+//
+// Deliberately a tool allowlist rather than a rung field on the finding: a new producer that reaches
+// "verified" without exploiting anything must be added here consciously, and a tool absent from the
+// list keeps the strict old meaning. Erring toward the exploit wording for an unknown tool would be
+// the overclaim; erring toward this line for a real exploit merely under-sells it.
+var authorizationOnlyTools = map[string]bool{"cloudagent": true}
+
+func isAuthorizationOnly(tool string) bool {
+	return authorizationOnlyTools[strings.ToLower(strings.TrimSpace(tool))]
+}
 
 // assessorVerb splits the assessor's own title into the headline verb and the SUBJECT it names, so the
 // headline can say which project rather than a generic one.

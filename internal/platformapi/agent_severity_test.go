@@ -54,20 +54,44 @@ func TestAgentSeverity_CodePathKeepsItsNeutralDefault(t *testing.T) {
 // ("actively re-fired"). The two agents earn different tiers, and the distinction is the product's
 // no-FP bar, so pin it:
 //
-//   - CLOUD: validatePath deterministically re-checks every edge against the inventory and requires a
-//     crown-jewel endpoint. An evaluator confirms it, not the model → verified.
+//   - CLOUD: the tier now FOLLOWS THE RUNG (authorizationRungStatus, ADR 0024 C3/C12). See below.
 //   - CODE:  evidenceGrounded proves the agent READ real source at real path:line, but exploitability
 //     is the model's judgment, re-confirmed by nothing → corroborated.
 //
 // Claiming "verified" for the code path would inflate a model judgement to 0.95+ confidence on a
 // label it did not earn.
+//
+// THE CLOUD HALF OF THIS TEST USED TO ASSERT THE OPPOSITE, and the reason it changed is worth
+// writing down. It read: "validatePath deterministically re-checks every edge against the inventory
+// ... an evaluator confirms it, not the model → verified." That argument is sound about a different
+// question. It establishes the path is GROUNDED — not invented by the model — which is §10's bar and
+// which validatePath genuinely meets. It does not establish that an INDEPENDENT method ACTIVELY
+// confirmed it, which is what this tier means: the re-check walks the SAME inventory the agent read,
+// so there is one source, and nothing was re-fired against anything.
+//
+// The distinction was invisible while the graph was the only thing we could consult — there was no
+// higher rung for a cloud path to occupy, so the flattering reading cost nothing visible. ADR 0024
+// built one. Leaving graph-only at "verified" now means the ladder is real in the description text
+// and FLAT in the field that grc/vapt and explain actually read, which is the same defect one layer
+// down: a provider-confirmed path and an unchecked one arriving indistinguishable.
 func TestAgentFindings_VerificationTierMatchesWhatWasProven(t *testing.T) {
+	// Graph-only — the rung ADR 0024 calls config_possible.
 	cloud := cloudIssueToFinding("f1", cloudagent.Issue{
 		Target: "s3://crown", Severity: "high", Path: []string{"internet", "s3://crown"},
 	})
-	if cloud.VerificationStatus != types.VerificationVerified {
-		t.Errorf("cloud attack path = %q, want verified — every edge is deterministically re-checked",
+	if cloud.VerificationStatus != types.VerificationPatternMatch {
+		t.Errorf("graph-only cloud path = %q, want pattern_match — one source, nothing re-fired",
 			cloud.VerificationStatus)
+	}
+	// And the rung above it, so this test pins the LADDER rather than a single value: asking the
+	// provider is what earns the tier the graph alone cannot.
+	confirmed := cloudIssueToFinding("f1b", cloudagent.Issue{
+		Target: "s3://crown", Severity: "high", Path: []string{"internet", "s3://crown"},
+		ProviderConfirmed: true, AuthorizationCoverage: "2/2",
+	})
+	if confirmed.VerificationStatus != types.VerificationVerified {
+		t.Errorf("provider-confirmed cloud path = %q, want verified — the provider's own simulator "+
+			"actively answered for every authorization-requiring hop", confirmed.VerificationStatus)
 	}
 
 	code := codeIssueToFinding("f2", "repo/x", "app/db.go:42", codeagent.CodeIssue{

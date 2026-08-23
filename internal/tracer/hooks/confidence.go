@@ -44,6 +44,19 @@ var toolBaseConfidence = map[string]float64{
 	"checkov":     0.65,
 	"hadolint":    0.65,
 	"dockle":      0.70,
+	// A cloud attack path is a deterministic evaluation over COLLECTED inventory — validatePath
+	// refuses an edge the graph does not support — so it is precise in the way a DB match is, and
+	// belongs above the static pattern scanners. It sits below the tools that observe live behaviour
+	// because it still carries the inference the ADR-0024 ladder calls unproven: that the route is
+	// USABLE, not merely present.
+	//
+	// It is listed here because of what taking it out of the "verified" tier would otherwise do. The
+	// tier used to be stamped unconditionally, which floored every cloud path at 0.95; making the
+	// tier follow the rung (C12) dropped an unchecked path to the 0.50 UNKNOWN-TOOL default, below
+	// semgrep — trading an overclaim for an underclaim, on a producer we know a great deal about.
+	// With this entry the ladder shows up in confidence too: graph-only 0.75, and the provider-
+	// confirmed rung still reaches the 0.95 floor through the verified branch below.
+	"cloudagent": 0.75,
 }
 
 const defaultBaseConfidence = 0.50
