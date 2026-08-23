@@ -1434,3 +1434,27 @@ export interface ExposureTrend {
   mixed?: boolean;
   caveat: string;
 }
+
+// DetectionValidation — when we proved an attack works, did the customer's own defences notice?
+//
+// "undetermined" is NOT a miss and must never render as one: an undeployed sensor, late telemetry and
+// a genuine miss are indistinguishable, so only `not_detected` accuses a control.
+export interface DetectionResult {
+  canary: string;
+  target: string;
+  verdict: "detected" | "not_detected" | "undetermined";
+  /** "marker" = the sensor reported OUR token (exact). "correlated" = endpoint+class+timing (an inference). */
+  strength?: "marker" | "correlated";
+  /** The control INTERVENED rather than merely observing. Monitor-only is a different answer. */
+  blocked?: boolean;
+  why?: string;
+  event_id?: string;
+}
+export interface DetectionValidation {
+  results: DetectionResult[];
+  detected: number;
+  not_detected: number;
+  undetermined: number;
+  blocked: number;
+  caveat: string;
+}
