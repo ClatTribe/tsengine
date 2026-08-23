@@ -7,10 +7,18 @@ Cyber), and proposes a concrete, sequenced path to close the cells that are now 
 load-bearing. Supersedes the earlier "accounting only" framing after competitor research
 (2026-08-23) showed one of the "structural" boundaries was merely unbuilt.
 
-**P1 implementation status (be exact):** *interface, agent tool, path-authorization semantics and
-fake-tested wiring implemented; live AWS/GCP/Azure provider adapters, platform injection, persisted
-proof evidence and a controlled live benchmark NOT implemented.* P1 is a seam, not yet a capability.
-Do not describe it as shipped provider proof until P1a–P1d below are done.
+**P1 implementation status (be exact, 2026-08-23 — superseding the "P1 is a seam" note this section
+used to carry):** P1a, P1b and P1c are **implemented AND WIRED**: the live AWS adapter
+(`iam:SimulatePrincipalPolicy`) is constructed per tenant from the scoped read-only role already
+recorded at connect time, the agent Context receives it at both call sites, the per-hop proof plan
+carries a DENIAL as a denial, and every proof states when it was taken and against what. Sprint 2's
+CI-identity proof is implemented and wired to the cloud-inventory ingest.
+
+**What is still NOT true, and must not be claimed:** *the adapter has never spoken to a real AWS
+account.* **P1d — a controlled live benchmark — is BLOCKED on a deployed test account, and no number
+will be published until it has one.* GCP and Azure adapters are unwritten; the surviving seam
+supports them and nothing more. So the honest sentence is "provider-confirmed AUTHORIZATION is
+implemented end to end and unproven against a live account", never "provider proof ships".
 
 **And P1 is a SECOND seam, not the first (C11).** `internal/cloudengine/live.go` already implements
 this ladder — rung 2 (`iam:SimulatePrincipalPolicy`), rung 3 (passive network reachability), rung 4
@@ -593,6 +601,34 @@ the wire protocol. Extract transport + wire types into one package (each stack k
 higher-level `Generate` shape — they differ). Unblocks every new agent (P4) cheaply. Can run in
 parallel with P1.
 
+### What actually shipped (2026-08-23)
+
+The sequence below was followed in order and Sprint 0, P1a–c and Sprint 2 are done. Two things are
+worth recording because they are lessons rather than status.
+
+**C11a — the ladder decision, made.** The `cloudagent`/`cloudprobe` seam survives; `cloudengine`'s is
+superseded. Not for being newer — the older one is RICHER, covering rungs 3 and 4 that nothing else
+does — but because its interface cannot express the call: `PermActive(principal, action)` has no
+resource parameter and passes the graph EDGE KIND as the action, while `SimulatePrincipalPolicy`
+needs a real IAM action and `ResourceArns`. And it returns `(bool, error)`, so there is no UNKNOWN —
+`guarded()` renders an error as "not reachable", meaning a throttle or a missing simulate permission
+silently CLOSES every path it touches. That is C9 and C10 as a type signature. What the loser had is
+not lost: `cloudsafety.Guard`, rung 3 (passive network reachability — the runtime-preconditions rung
+C3 names and no P-item proposes) and rung 4 (most of P2) are now follow-ons against ONE seam.
+
+**Mutation caught "built but not wired" TWICE, in this campaign's own work, after review had passed
+it.** Deleting the `Prober` assignment from the agent Context compiled and every unit test still
+passed; so did deleting the whole reach-join call from the cloud-inventory ingest. In both cases the
+tests written to prove the wiring exercised the helper directly, which is the built-but-not-wired gap
+reproduced INSIDE the guard against it. Both now drive the HTTP handler and assert an observable the
+routing must produce — `probe_coverage` in the response, and the annotation on the STORED finding.
+**The rule this yields: a wiring test that does not go through the caller is not a wiring test**, and
+the only reliable way to know is to delete the wiring and watch what fails.
+
+Also worth stating plainly: `internal/ciproof` shipped one PR BEFORE its caller and said so in its own
+PR body rather than reading as finished. That is the shape C11 describes, deliberately time-boxed to a
+single PR instead of left standing.
+
 ### Sequencing (revised again after the third pass)
 
 The change from the previous sequence is a tier ADDED IN FRONT, and the reason is not tidiness: R2
@@ -602,10 +638,11 @@ tree already has, which per §0 outranks adding one — the value at risk is the
 claims we can already make, not a cell we cannot.
 
 ```
-NOW      P0   correct external positioning AND this ADR's status (0 code, time-sensitive:
-              NodeZero entered web-app pentesting, the lane we lead and do not advertise)
+NOW      P0   [STILL OPEN] correct external positioning (0 code, time-sensitive: NodeZero
+              entered web-app pentesting, the lane we lead and do not advertise). This ADR's
+              own status is now corrected — see "What actually shipped" above.
 
-Sprint 0 — REPAIR WHAT IS BUILT (blocks P1; every item protects an existing claim)
+Sprint 0 — REPAIR WHAT IS BUILT [DONE] (blocked P1; every item protected an existing claim)
          R1   rung-faithful VerificationStatus (C12). cloudIssueToFinding stops stamping
               `verified` below the provider-confirmed rung; `explain.assessorTools` and
               `grc/vapt.isVerified` stop reading a config-possible path as proof.
@@ -623,7 +660,7 @@ Sprint 0 — REPAIR WHAT IS BUILT (blocks P1; every item protects an existing cl
               registered: 100% remediation capture, +0% agent lift, in-house, with a corpus
               floor (see C15). The neutral fix number still needs `defense-xbow`.
 
-Sprint 1 — CLOUD PROOF (P1, re-scoped by C11)
+Sprint 1 — CLOUD PROOF (P1, re-scoped by C11) [P1a/b/c DONE · P1d BLOCKED]
          P1a  DECIDE which ladder survives, then write ONE live `cloudengine.Analyzer`
               (3 methods, AWS SDK, its own package like the *remediate ones). This yields
               rungs 2 AND 3 AND 4 together, not P1's rung 2 alone — the subsystem, the
@@ -632,9 +669,11 @@ Sprint 1 — CLOUD PROOF (P1, re-scoped by C11)
               partial/unknown states)  ← the every-hop rule is in; the plan struct is next
          P1c  persist evidence: snapshot hash, timestamps, context hash, coverage, expiry
          P1d  controlled AWS integration benchmark (real simulator outcomes, not the fake)
+              ^^ BLOCKED: needs a deployed AWS test account. The adapter has never spoken to a
+              real one, and no number is published until it has.
          P5   llmclient extraction (independent lane; no customer value, pure enabler)
 
-Sprint 2 — CI-IDENTITY PROOF (promoted: this is the MOAT item)
+Sprint 2 — CI-IDENTITY PROOF (promoted: this is the MOAT item) [DONE, and WIRED]
               GitHub OIDC / GCP WIF / SAML trust condition → provider authorization →
               target permission. This ADR already says it is more differentiated than
               generic IAM simulation and then sequenced it behind everything; ghoidc,
@@ -715,12 +754,16 @@ to the level of the grid.
 
 | Item | Effort | Blast radius | Status |
 |---|---|---|---|
-| **P0** naming binding | 0 code | none | Proposed — **do now** |
-| **R1** rung-faithful VerificationStatus | S | none | **Blocks P1** — the stamp reaches the VAPT report and the urgency line (C12) |
-| **R2** proof continuity | S–M | none | **Blocks P1** — a proof the next pass resolves is worth nothing (C16) |
-| **R3** measurement integrity | S | none | Registers the crosswalk claim; runs the fix benchmark to a number (C15, C17) |
-| **P1** provider dry-run (`check_reachable`) | S–M — **wiring, not writing** (C11) | read-only, but each simulate call writes to the CUSTOMER's audit trail and spends their rate-limited quota (C10) | Seam built TWICE (`cloudagent` + the dormant `cloudengine` ladder), wired zero times. Blocked on R1+R2 |
-| **P2** non-destructive cred validation | S | one benign auth attempt | Proposed — reuses `ssh_exec` pattern |
+| **P0** naming binding | 0 code | none | **STILL OPEN** — the only unstarted item that costs nothing, and the ADR calls it time-sensitive |
+| **R1** rung-faithful VerificationStatus | S | none | **SHIPPED** #1401 — the tier now follows the rung; `explain` and `grc/vapt` stop reading a config-possible path as proof (C12) |
+| **R2** proof continuity | S–M | none | **SHIPPED** #1402 — a pass concludes only about producers it actually ran (C16) |
+| **R3** measurement integrity | S | none | **SHIPPED** #1403 — crosswalk claim + its denominator registered; two stale SCuBA quotes found in a document the guard had never read (C17) |
+| **P1a** live AWS simulator | S–M — **wiring, not writing** (C11) | read-only, but each simulate call writes to the CUSTOMER's audit trail and spends their rate-limited quota (C10) | **SHIPPED** #1404 (adapter) + #1408 (constructor). Ladder decision made — see C11a |
+| **P1b** full-path proof plan | S | none | **SHIPPED** #1406 — per-hop verdict; the ratio could not represent a DENIAL |
+| **P1c** proof freshness | S | none | **SHIPPED** #1405 — drift invalidates, age downgrades, unknown stays unknown |
+| **P1d** controlled live benchmark | M | live account | **BLOCKED — needs a deployed AWS test account.** The adapter is unit-tested and has never spoken to a real account. No number will be published until it has |
+| **Sprint 2** CI-identity proof | M | none beyond P1a | **SHIPPED** #1407 (primitive) + #1410 (join). The moat item: who may *become* the principal, joined to what it can reach |
+| **P2** non-destructive cred validation | M+ (C5) | one benign auth attempt | Proposed — reuses `ssh_exec` pattern; the only identity proof rung in the plan |
 | **P3** digital twin (ADR 0020 G1) | XL | destructive, but only vs replica | Proposed — **product-gated**, do not start before P1 |
 | **P4a** code depth (ADR 0013) | XL | none | Proposed — `codeagent` is ALREADY wired (C7); the residual is graph/taint depth + a scaled neutral number |
 | **AIA** `ai_application` asset type | S | active-by-nature — RoE + consent + ownership (ADR 0012) | Proposed — garak is built and unreachable (C18) |
