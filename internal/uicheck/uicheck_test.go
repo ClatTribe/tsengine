@@ -47,6 +47,13 @@ var required = []struct {
 	page, field, wouldOtherwiseClaim string
 }{
 	{
+		page:  "frontend/components/inbox/inbox-client.tsx",
+		field: "fix_efficacy",
+		wouldOtherwiseClaim: "that every proposed fix is equally likely to work, when the tenant's " +
+			"own verified history can say this kind of fix closed this kind of finding 8 of 10 times " +
+			"or was reopened 5 of 8 — different decisions for the person about to approve it (ADR 0025 F2)",
+	},
+	{
 		page:  "frontend/app/(app)/activity/page.tsx",
 		field: "awaiting_proof",
 		wouldOtherwiseClaim: "that every re-tested fix either closed or failed, hiding the ones " +

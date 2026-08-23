@@ -766,6 +766,12 @@ type Action struct {
 	// Empty means "no known blocker", NOT "guaranteed to work": a connector may not implement
 	// Preflight at all, and the provider can still deny the call (§10).
 	ApplyBlocked string `json:"apply_blocked,omitempty"`
+	// FixEfficacy is a READ-TIME annotation (never persisted, like ApplyBlocked): what this tenant's
+	// own history says about whether THIS kind of fix has actually closed THIS kind of finding
+	// before (ADR 0025 F2). Nil when there is not enough history to say — rendering "0 of 0" beside
+	// a proposed fix would read as a fix that never works, which is the opposite of what an absence
+	// of data means.
+	FixEfficacy *FixEfficacy `json:"fix_efficacy,omitempty"`
 }
 
 // FixVerification records whether an APPLIED remediation actually closed the findings it claimed
@@ -1606,4 +1612,17 @@ type TrainingConsent struct {
 	// read what was consented to, not our later summary of it — the same discipline
 	// pentest.RoE applies to active-exploitation consent.
 	Statement string `json:"statement,omitempty"`
+}
+
+// FixEfficacy is the measured track record of one kind of remediation against one kind of finding.
+// Transient: computed at read time from the tenant's own verified actions, never stored.
+type FixEfficacy struct {
+	// Closed / NotClosed are applications that actually settled either way.
+	Closed    int `json:"closed"`
+	NotClosed int `json:"not_closed"`
+	// Unproven counts applications whose re-scan said gone but was not accepted as confirmation
+	// (ADR 0025 F1). Excluded from the rate — counting "we do not know" as a success is the
+	// overclaim F1 exists to prevent — and reported so the reader can see the sample is smaller
+	// than the number of applications.
+	Unproven int `json:"unproven,omitempty"`
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine, MessageSquare, AlertTriangle } from "lucide-react";
+import { Check, X, GitPullRequest, Settings2, Ticket, ShieldQuestion, Loader2, FileWarning, PenLine, MessageSquare, AlertTriangle, History } from "lucide-react";
 import type { Action, Finding } from "@/lib/types";
 import { decideAction, requestChangesAction } from "@/app/(app)/inbox/actions";
 import { SeverityBadge } from "@/components/ui/primitives";
@@ -271,6 +271,32 @@ function DetailPane({
             <div className="mt-0.5 text-muted">
               Your approval is still recorded — but connect the write path first if you want the fix to land.
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* The remediation's measured track record, from this tenant's OWN verified history (ADR 0025
+          F2). "Closed 8 of 10" and "reopened 5 of 8" are different decisions for the person about to
+          approve this, and before this they read identically. Absent when there is not enough
+          history — silence means "not known", never "this will work". */}
+      {action.fix_efficacy && (action.fix_efficacy.closed + action.fix_efficacy.not_closed) > 0 && (
+        <div className="flex items-start gap-2 border-b border-line px-5 py-2.5 text-xs">
+          <History className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
+          <div className="min-w-0 text-muted">
+            <span className="font-medium text-ink">
+              This kind of fix has closed this kind of finding {action.fix_efficacy.closed} of{" "}
+              {action.fix_efficacy.closed + action.fix_efficacy.not_closed} times
+            </span>{" "}
+            on your estate.
+            {action.fix_efficacy.not_closed > 0 && (
+              <> {action.fix_efficacy.not_closed} did not close and had to be reopened.</>
+            )}
+            {action.fix_efficacy.unproven ? (
+              <div className="mt-0.5">
+                A further {action.fix_efficacy.unproven} could not be confirmed either way, so they are
+                excluded from that count rather than counted as successes.
+              </div>
+            ) : null}
           </div>
         </div>
       )}
