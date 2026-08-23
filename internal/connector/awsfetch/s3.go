@@ -124,6 +124,15 @@ func (l *S3Lister) client(ctx context.Context) (s3API, error) {
 // per-tenant external id (the confused-deputy guard). Shared by every lister so they cannot drift
 // into assuming the role differently — one of them getting the external id wrong would fail in a way
 // that looks like a permissions problem on the customer's side.
+// AssumeRoleConfig is exported so the policy-simulator adapter (internal/connector/cloudprobe) can
+// reach the customer's account through the SAME scoped read-only cross-account role this package
+// already uses. iam:SimulatePrincipalPolicy is a READ permission, so it belongs inside that role
+// rather than the remediation write role — and sharing one implementation means the two cannot drift
+// apart on region defaulting or ExternalID handling.
+func AssumeRoleConfig(ctx context.Context, region, roleARN, externalID string) (aws.Config, error) {
+	return assumeRoleConfig(ctx, region, roleARN, externalID)
+}
+
 func assumeRoleConfig(ctx context.Context, region, roleARN, externalID string) (aws.Config, error) {
 	if region == "" {
 		region = "us-east-1"

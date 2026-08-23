@@ -386,6 +386,27 @@ decision that did not exist before: **which of the two ladders survives.** They 
 two implementations of "the provider said ALLOW" with different semantics is how a rung comes to mean
 different things on different screens.
 
+**C11a — the ladder decision, made (P1a).** C11 said the work carried a decision that did not exist
+before: which of the two ladders survives. **The `cloudagent` / `cloudprobe` seam survives; the
+`cloudengine` one is superseded.** Not because it is newer — the older one is richer, covering rungs
+3 and 4 that nothing else does — but because its INTERFACE cannot express the call:
+
+- `Analyzer.PermActive(principal, action)` has **no resource parameter**, and passes the graph EDGE
+  KIND as the action (`string(e.Kind)` — "assume_role", "privesc"). `SimulatePrincipalPolicy` needs a
+  real IAM action and `ResourceArns`. The tuple the provider evaluates cannot be built from it.
+- It returns `(bool, error)`, so there is **no UNKNOWN**. `guarded()` maps an error to false and
+  renders it "not reachable / not active" — a throttle, an expired session or a role without
+  `iam:SimulatePrincipalPolicy` would silently close every path it touched. That is C9 and C10 as a
+  type signature: the strongest negative evidence and the absence of evidence share one value.
+
+`cloudprobe.Decision` carries `Allowed`/`Known`/`Why` over the real `(principal, action, resource)`
+tuple, which is why it is the one that can be wired honestly. What `cloudengine` had that the survivor
+does not is worth naming rather than losing: `cloudsafety.Guard` (read-only allowlist + live-call
+budget, and `NewGuard` has no non-test caller either), plus rung 3 (passive network reachability) and
+rung 4 (a benign `sts:GetCallerIdentity` probe). Rung 3 is the "runtime preconditions validated" rung
+C3 defines and no P-item proposes; rung 4 is most of P2. Both are now follow-ons against the surviving
+seam rather than a second implementation.
+
 **C12 — every cloud agent path is stamped `verified`, and two consumers render that as proof.** The
 second pass recorded the stamp (`cloudinvestigate.go:232`) as still-open. Its blast radius was not
 recorded, and it is where the harm is. Executed:
