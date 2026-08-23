@@ -1,5 +1,6 @@
 import { pageMeta } from "@/lib/seo";
 import { SMTP_SUBPROCESSOR } from "@/lib/site";
+import { PRIVACY_EMAIL } from "@/lib/contact";
 
 export const metadata = pageMeta({
   title: "Subprocessors",
@@ -69,7 +70,7 @@ export default function Subprocessors() {
       </p>
       <p className="mt-6 border-t border-border pt-6 text-sm text-faint">
         To be notified of changes or object to a subprocessor, email{" "}
-        <span className="text-muted">privacy@tensorshield.io</span>.
+        <span className="text-muted">{PRIVACY_EMAIL}</span>.
       </p>
     </article>
   );

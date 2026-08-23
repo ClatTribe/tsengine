@@ -45,7 +45,11 @@ export function legalPartyName(): string {
 }
 
 /** Governing-law sentence; omits the forum clause entirely when no city is configured. */
-export function governingLawSentence(contactEmail = "legal@tensorshield.io"): string {
+// The address is a REQUIRED argument, not a default spelled out here. lib/contact.ts is
+// the single source for every address, and it reads SITE_URL from this file — so a
+// default here would make the two modules import each other. The one caller passes
+// LEGAL_EMAIL; the cycle stays broken and the address still lives in one place.
+export function governingLawSentence(contactEmail: string): string {
   const base = `These Terms are governed by the laws of ${LEGAL_COUNTRY}`;
   const forum = LEGAL_JURISDICTION_CITY
     ? `, with exclusive jurisdiction in the courts of ${LEGAL_JURISDICTION_CITY}`

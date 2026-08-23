@@ -1,5 +1,14 @@
 import Link from "next/link";
+import { Mail, Phone } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
+import {
+  CONTACT_CONFIGURED,
+  CONTACT_EMAIL,
+  CONTACT_EMAIL_CONFIGURED,
+  CONTACT_PHONE,
+  CONTACT_PHONE_CONFIGURED,
+  CONTACT_PHONE_TEL,
+} from "@/lib/contact";
 
 const COLS: { title: string; links: { href: string; label: string }[] }[] = [
   {
@@ -65,6 +74,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/partners", label: "For MSPs & consultancies" },
       { href: "/blog", label: "Blog" },
       { href: "/demo", label: "Book a demo" },
+      { href: "/contact", label: "Contact us" },
       { href: "/login", label: "Sign in" },
     ],
   },
@@ -83,6 +93,35 @@ export function MarketingFooter() {
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
               The fractional security team for SMBs — automated, with a human in the loop.
             </p>
+            {/* The site-wide answer to "how do I reach these people". The footer is on every
+                marketing page, so configuring an address or a number in lib/contact.ts surfaces
+                it everywhere at once. Renders nothing when unset rather than a dead mailto. */}
+            {CONTACT_CONFIGURED && (
+              <ul className="mt-4 space-y-1.5">
+                {CONTACT_EMAIL_CONFIGURED && (
+                  <li>
+                    <a
+                      href={`mailto:${CONTACT_EMAIL}`}
+                      className="inline-flex items-center gap-2 text-sm text-muted transition hover:text-ink"
+                    >
+                      <Mail className="h-3.5 w-3.5 shrink-0 text-faint" />
+                      {CONTACT_EMAIL}
+                    </a>
+                  </li>
+                )}
+                {CONTACT_PHONE_CONFIGURED && (
+                  <li>
+                    <a
+                      href={`tel:${CONTACT_PHONE_TEL}`}
+                      className="inline-flex items-center gap-2 text-sm text-muted transition hover:text-ink"
+                    >
+                      <Phone className="h-3.5 w-3.5 shrink-0 text-faint" />
+                      {CONTACT_PHONE}
+                    </a>
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
           {COLS.map((c) => (
             <div key={c.title}>

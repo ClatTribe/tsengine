@@ -1,6 +1,7 @@
 import { pageMeta } from "@/lib/seo";
 import { LegalDoc, type LegalSection } from "@/components/marketing/legal-doc";
 import { legalPartyName } from "@/lib/site";
+import { PRIVACY_EMAIL } from "@/lib/contact";
 
 export const metadata = pageMeta({
   title: "Privacy Policy",
@@ -61,7 +62,7 @@ const SECTIONS: LegalSection[] = [
   {
     h: "Your rights",
     body: [
-      "Depending on your jurisdiction, you may access, correct, export, or delete your personal data, object to or restrict processing, and withdraw consent. Exercise any of these by emailing privacy@tensorshield.io; we respond within the period your law requires.",
+      `Depending on your jurisdiction, you may access, correct, export, or delete your personal data, object to or restrict processing, and withdraw consent. Exercise any of these by emailing ${PRIVACY_EMAIL}; we respond within the period your law requires.`,
     ],
   },
   {
@@ -73,7 +74,7 @@ const SECTIONS: LegalSection[] = [
   {
     h: "Changes & contact",
     body: [
-      "We'll update this page and the date above when this policy changes. Questions or requests: privacy@tensorshield.io.",
+      `We'll update this page and the date above when this policy changes. Questions or requests: ${PRIVACY_EMAIL}.`,
     ],
   },
 ];

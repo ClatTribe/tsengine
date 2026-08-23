@@ -1,5 +1,6 @@
 import { pageMeta } from "@/lib/seo";
 import { LegalDoc, type LegalSection } from "@/components/marketing/legal-doc";
+import { PRIVACY_EMAIL } from "@/lib/contact";
 
 export const metadata = pageMeta({
   title: "Data Processing Agreement",
@@ -65,7 +66,7 @@ const SECTIONS: LegalSection[] = [
   },
   {
     h: "Contact",
-    body: ["Data-protection questions or to request a counter-signed copy: privacy@tensorshield.io."],
+    body: [`Data-protection questions or to request a counter-signed copy: ${PRIVACY_EMAIL}.`],
   },
 ];
 

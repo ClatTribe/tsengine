@@ -1,6 +1,7 @@
 import { pageMeta } from "@/lib/seo";
 import { LegalDoc, type LegalSection } from "@/components/marketing/legal-doc";
 import { governingLawSentence, legalPartyName } from "@/lib/site";
+import { LEGAL_EMAIL } from "@/lib/contact";
 
 export const metadata = pageMeta({
   title: "Terms of Service",
@@ -73,7 +74,7 @@ const SECTIONS: LegalSection[] = [
   {
     h: "Governing law & contact",
     body: [
-      governingLawSentence(),
+      governingLawSentence(LEGAL_EMAIL),
     ],
   },
 ];
