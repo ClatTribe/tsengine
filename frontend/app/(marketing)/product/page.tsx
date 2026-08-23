@@ -14,7 +14,7 @@ export const metadata = pageMeta({
   // RENDERED length against 60. The promise lives in the H1; this is the search result.
   title: "Continuous exposure validation",
   description:
-    "TensorShield works out what an attacker could really reach across your code, cloud, identity, SaaS and the web apps, APIs and containers you ship — proves it by exploiting it, writes the fix, then re-attacks to confirm the hole is dead.",
+    "Find what an attacker can really reach across code, cloud, identity, SaaS, web apps, APIs and containers — proved by exploiting it, fixed, then re-attacked.",
   path: "/product",
 });
 
