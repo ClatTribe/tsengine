@@ -22,7 +22,7 @@ func TestAgentSeverity_InvalidCannotSilenceAProvenAttackPath(t *testing.T) {
 			f := cloudIssueToFinding("f1", cloudagent.Issue{
 				Target: "s3://crown", TargetName: "crown", Severity: modelWrote,
 				Path: []string{"internet", "s3://crown"},
-			})
+			}, nil)
 			if !f.Severity.Valid() {
 				t.Fatalf("stored severity %q is not a recognised severity — it ranks 0, below info", f.Severity)
 			}
@@ -78,7 +78,7 @@ func TestAgentFindings_VerificationTierMatchesWhatWasProven(t *testing.T) {
 	// Graph-only — the rung ADR 0024 calls config_possible.
 	cloud := cloudIssueToFinding("f1", cloudagent.Issue{
 		Target: "s3://crown", Severity: "high", Path: []string{"internet", "s3://crown"},
-	})
+	}, nil)
 	if cloud.VerificationStatus != types.VerificationPatternMatch {
 		t.Errorf("graph-only cloud path = %q, want pattern_match — one source, nothing re-fired",
 			cloud.VerificationStatus)
@@ -88,7 +88,7 @@ func TestAgentFindings_VerificationTierMatchesWhatWasProven(t *testing.T) {
 	confirmed := cloudIssueToFinding("f1b", cloudagent.Issue{
 		Target: "s3://crown", Severity: "high", Path: []string{"internet", "s3://crown"},
 		ProviderConfirmed: true, AuthorizationCoverage: "2/2",
-	})
+	}, nil)
 	if confirmed.VerificationStatus != types.VerificationVerified {
 		t.Errorf("provider-confirmed cloud path = %q, want verified — the provider's own simulator "+
 			"actively answered for every authorization-requiring hop", confirmed.VerificationStatus)
@@ -153,7 +153,7 @@ func TestCloudFindingIdentity_DistinctRoutesStayDistinctAndStable(t *testing.T) 
 		Path: []string{"internet", "repo/leaked-key", "role/ci", crown}}
 
 	key := func(is cloudagent.Issue) string {
-		f := cloudIssueToFinding("x", is)
+		f := cloudIssueToFinding("x", is, nil)
 		return string(f.RuleID) + "|" + f.Endpoint
 	}
 

@@ -18,7 +18,7 @@ func TestCloudIssueToFinding_CarriesTheAuthorizationRung(t *testing.T) {
 		Path:              []string{"a", "b"},
 		ProviderConfirmed: true, AuthorizationCoverage: "2/2",
 	}
-	f := cloudIssueToFinding("f-1", is)
+	f := cloudIssueToFinding("f-1", is, nil)
 
 	var raw map[string]any
 	if err := json.Unmarshal(f.RawOutput, &raw); err != nil {
@@ -43,7 +43,7 @@ func TestCloudIssueToFinding_CarriesTheAuthorizationRung(t *testing.T) {
 // Collapsing it into a bare "not confirmed" loses it; rendering it as confirmed overclaims it.
 func TestCloudIssueToFinding_PartialProofStaysVisibleAndIsNotAConfirmation(t *testing.T) {
 	is := cloudagent.Issue{Target: "t", Severity: "high", ProviderConfirmed: false, AuthorizationCoverage: "2/5"}
-	f := cloudIssueToFinding("f-2", is)
+	f := cloudIssueToFinding("f-2", is, nil)
 	if !strings.Contains(f.Description, "PARTIAL") || !strings.Contains(f.Description, "2/5") {
 		t.Fatalf("a partial proof must be stated with its real coverage, got: %s", f.Description)
 	}
@@ -55,7 +55,7 @@ func TestCloudIssueToFinding_PartialProofStaysVisibleAndIsNotAConfirmation(t *te
 // No dry-run ran. "We could not look" must not render as "we looked and it is closed" — and must not
 // render as nothing either, because silence is read as the stronger claim.
 func TestCloudIssueToFinding_ConfigPossibleSaysSoAndIsNotADenial(t *testing.T) {
-	f := cloudIssueToFinding("f-3", cloudagent.Issue{Target: "t", Severity: "high"})
+	f := cloudIssueToFinding("f-3", cloudagent.Issue{Target: "t", Severity: "high"}, nil)
 	if !strings.Contains(f.Description, "config-possible") {
 		t.Fatalf("an unprobed path must say it is config-possible, got: %s", f.Description)
 	}

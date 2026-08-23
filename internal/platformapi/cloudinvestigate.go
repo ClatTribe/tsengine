@@ -98,7 +98,7 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	// "Not yet wired: cloudinvestigate.go"). Honors TSENGINE_L15_DISABLED (the ablation).
 	built := make([]types.Finding, 0, len(rep.Issues))
 	for i, is := range rep.Issues {
-		built = append(built, cloudIssueToFinding(d.newID("cloudagent")+"-"+strconv.Itoa(i), is))
+		built = append(built, cloudIssueToFinding(d.newID("cloudagent")+"-"+strconv.Itoa(i), is, rep.Probes))
 	}
 	stored := 0
 	saved := make([]types.Finding, 0, len(built))
@@ -199,7 +199,7 @@ func cloudPathRuleID(path []string) string {
 
 // cloudIssueToFinding maps an agent-proven attack path to a stored finding (verified — the agent only
 // records paths it confirmed via the graph tools, §10).
-func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
+func cloudIssueToFinding(id string, is cloudagent.Issue, probes *cloudagent.ProbeCoverage) types.Finding {
 	// The agent's PATH is grounded (validatePath proves every edge and a crown-jewel endpoint), but
 	// its severity is free text the model chose. An unrecognised value ("P1", "moderate") ranks 0 —
 	// BELOW info — so it would sort under every informational note AND fall under detect's threshold,
@@ -222,6 +222,12 @@ func cloudIssueToFinding(id string, is cloudagent.Issue) types.Finding {
 		"provider_confirmed": is.ProviderConfirmed, "authorization_coverage": is.AuthorizationCoverage,
 	})
 	desc += "\n\n" + authorizationRungLine(is)
+	// A provider proof is a point-in-time answer, and this is the only surface a human reads it on
+	// (ADR 0024 P1c / C4). Stating the rung without stating WHEN and AGAINST WHAT renders a proof
+	// taken three weeks ago against a since-re-scoped account identically to one taken a minute ago.
+	if line := proofProvenanceLine(is, probes); line != "" {
+		desc += " " + line
+	}
 	title := is.TargetName
 	if title == "" {
 		title = is.Target
@@ -345,4 +351,39 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 		}
 		return out, nil
 	}
+}
+
+// proofProvenanceLine states when a provider proof was obtained and which account state it was
+// evaluated against.
+//
+// Only for findings that actually STAND on a provider answer: a config-possible path has no proof to
+// date, and stamping one with a snapshot hash would dress our own graph up as something the provider
+// had been asked about. Empty when there is nothing honest to say — silence here costs nothing,
+// whereas a provenance line on an unproven claim is the overclaim this whole rung exists to prevent.
+func proofProvenanceLine(is cloudagent.Issue, probes *cloudagent.ProbeCoverage) string {
+	if probes == nil {
+		return ""
+	}
+	if !is.ProviderConfirmed && (is.AuthorizationCoverage == "" || is.AuthorizationCoverage == "0/0") {
+		return ""
+	}
+	f := probes.Freshness
+	if f.ObtainedAt == "" {
+		return ""
+	}
+	line := "Obtained at " + f.ObtainedAt
+	if f.SnapshotHash != "" {
+		// The hash is what makes the claim re-checkable: an auditor can re-run the same tuples
+		// against the same recorded state (§10's reproducibility base).
+		line += " against account state " + shortSnapshot(f.SnapshotHash)
+	}
+	return line + ". A provider answer describes that moment; re-check it after any IAM, trust-policy " +
+		"or SCP change."
+}
+
+func shortSnapshot(h string) string {
+	if len(h) <= 12 {
+		return h
+	}
+	return h[:12]
 }
