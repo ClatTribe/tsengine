@@ -393,6 +393,12 @@ export interface Action {
   // never persisted). Shown BEFORE the decision so nobody approves a fix that cannot land. Absent
   // means "no known blocker", not "guaranteed to work".
   apply_blocked?: string;
+  /**
+   * What this tenant's own history says about whether THIS kind of fix has actually closed THIS kind
+   * of finding before (ADR 0025 F2). Read-time, never persisted. ABSENT means "not enough history" —
+   * never "this will work", and never render a zeroed record, which reads as a fix that never works.
+   */
+  fix_efficacy?: FixEfficacy;
   created_at?: string;
   decided_at?: string; // when the approve/reject verdict landed
   // diff is the unified diff this action would apply, rendered for a human to READ. Without it a
@@ -1362,4 +1368,13 @@ export interface TenantEval {
   // rise as a customer does less.
   agreement?: number;
   note?: string;
+}
+
+// FixEfficacy — the measured track record of one kind of remediation against one kind of finding.
+export interface FixEfficacy {
+  closed: number;
+  not_closed: number;
+  /** Applications whose re-scan said gone but was not accepted as confirmation (F1). Not a success
+   *  and not a failure — excluded from the rate, reported so the sample size is honest. */
+  unproven?: number;
 }

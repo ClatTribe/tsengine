@@ -671,8 +671,46 @@ func (d Deps) handleApprovals(w http.ResponseWriter, r *http.Request, tenantID s
 	a, err := d.Store.PendingApprovals(r.Context(), tenantID)
 	if err == nil {
 		a = d.annotateApplyBlocked(r.Context(), tenantID, a)
+		a = d.annotateFixEfficacy(r.Context(), tenantID, a)
 	}
 	respond(w, a, err)
+}
+
+// annotateFixEfficacy tells the human about to approve a fix whether THIS kind of fix has actually
+// closed THIS kind of finding before, from the tenant's own verified history (ADR 0025 F2).
+//
+// Both fix catalogs already stamp a machine-readable remediation_type, and retest already writes the
+// outcome onto the same action, so this was answerable from stored data and simply never asked. At
+// the approval desk "this closed 9 of 10 times" and "this was reopened 5 of 8 times" are different
+// decisions, and today they read identically.
+//
+// Read-time only, nothing persisted (mirrors annotateApplyBlocked and annotateSLA). Grounded (§10):
+// silence means "not enough history", never "this will work" — an action with no track record is
+// left UNANNOTATED rather than shown a zeroed one.
+func (d Deps) annotateFixEfficacy(ctx context.Context, tenantID string, acts []platform.Action) []platform.Action {
+	if len(acts) == 0 {
+		return acts
+	}
+	all, err := d.Store.ListActions(ctx, tenantID)
+	if err != nil {
+		return acts // cannot check → say nothing
+	}
+	corpus := fieldevidence.RemediationsForTenant(tenantID, all, fieldevidence.Options{})
+	for i, a := range acts {
+		rtype, _ := a.Payload["remediation_type"].(string)
+		if rtype == "" {
+			continue // nothing to attribute a track record to
+		}
+		for _, k := range a.FindingKeys {
+			if e, ok := corpus.For(fieldevidence.ClassOf(k), rtype); ok {
+				acts[i].FixEfficacy = &platform.FixEfficacy{
+					Closed: e.Closed, NotClosed: e.NotClosed, Unproven: e.Unproven,
+				}
+				break
+			}
+		}
+	}
+	return acts
 }
 
 // annotateApplyBlocked marks each queued config-apply with a KNOWN reason it could not be applied,
