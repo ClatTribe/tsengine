@@ -309,6 +309,9 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// quarantined connection produced a permanent, unretractable "your fix is confirmed" for an asset
 	// nobody looked at. That is the strongest positive claim this product makes, issued on no evidence.
 	degraded := false
+	// cov accumulates the producers this pass actually observed. Its zero value covers NOTHING, so a
+	// pass that runs nothing concludes nothing — the safe direction (detect/coverage.go).
+	cov := detect.Coverage{}
 	for _, a := range assets {
 		if connInactive(statuses, a) {
 			// OM-5 fail-closed: an asset whose connection is unavailable/quarantined is not scanned.
@@ -350,23 +353,47 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 				"asset", a.ID, "target", a.Target, "tools_failed", names)
 		}
 		current = append(current, fs...)
+		// COVERAGE (ADR 0024 C16). A tool that DISPATCHED is authoritative about what it did not
+		// find; one that never ran is not, and the two are byte-identical in `fs`. eng.ToolsRan is
+		// the only record of the difference, so it is what decides whether an incident from this
+		// producer may resolve.
+		if eng != nil {
+			cov = cov.With(eng.ToolsRan...)
+		}
+		// A non-engine ScanRunner reports no tools (MuxRunner routes a workspace asset to
+		// internal/operate, which has none). Its producer is knowable from the asset type instead, and
+		// omitting it would leave identity-posture incidents permanently open — the false NON-resolve
+		// that is this change's own mirror failure.
+		cov = cov.With(producersForAssetType(a.Type)...)
 		scanned++
 	}
 	// Autonomous SaaS-posture: if the tenant has a GitHub connection, run the SSPM checks live
 	// via its onboarded token each pass (read-only, grounded — a hardened org adds nothing), so
 	// posture findings flow into incidents like any other. Best-effort: a fetch failure (e.g.
 	// insufficient scope) is logged + skipped, never failing the pass or falsely resolving.
-	current = append(current, s.syncSaaSPosture(ctx, tenantID)...)
+	saasFindings, saasRan := s.syncSaaSPosture(ctx, tenantID)
+	current = append(current, saasFindings...)
+	if saasRan {
+		cov = cov.With("sspm")
+	}
 	// Autonomous external-exposure (OSINT): each pass, run the keyless Certificate-Transparency
 	// collector over the tenant's domains so a newly-exposed host becomes a finding the Detector
 	// turns into an incident ("new exposed host → alert" — the EASM continuous-monitoring promise).
 	// Best-effort + grounded: nil fetcher / no domains → nil; a clean footprint adds nothing.
-	current = append(current, s.syncOSINT(ctx, tenantID)...)
+	osintFindings, osintRan := s.syncOSINT(ctx, tenantID)
+	current = append(current, osintFindings...)
+	if osintRan {
+		cov = cov.With("osint")
+	}
 	// Autonomous cloud drift: re-read the connected account through its read-only role and diff it
 	// against the previous snapshot, so a resource that became public or a principal that gained
 	// admin opens an incident on its own rather than waiting for a human to press Sync.
 	// Best-effort + grounded: no syncer / no connected account → nil; an unchanged account adds nothing.
-	current = append(current, s.syncCloud(ctx, tenantID)...)
+	cloudFindings, cloudRan := s.syncCloud(ctx, tenantID)
+	current = append(current, cloudFindings...)
+	if cloudRan {
+		cov = cov.With("clouddrift")
+	}
 	// continuous-monitoring: reconcile this pass's findings into incidents (what's NEW,
 	// what's RESOLVED since last pass). Runs over the whole tenant — a full pass is the
 	// authoritative present state. Only when every asset scanned cleanly, so a partial
@@ -388,7 +415,9 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		// A degraded pass is not authoritative about absence, so route to the OPEN-ONLY path — the
 		// same distinction the detector already draws for event-driven ingests, which use OpenFor so
 		// they never falsely resolve. New findings are still real and still open incidents.
-		reconcile := s.Detector.Reconcile
+		reconcile := func(ctx context.Context, tid string, cur []types.Finding, atk map[string]bool) (detect.Result, error) {
+			return s.Detector.ReconcileScoped(ctx, tid, cur, atk, cov)
+		}
 		if degraded {
 			reconcile = s.Detector.OpenFor
 		}
@@ -412,7 +441,7 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 			for _, a := range acts {
 				byID[a.ID] = a
 			}
-			for _, verified := range retest.Verify(acts, current, s.now()) {
+			for _, verified := range retest.VerifyScoped(acts, current, s.now(), cov) {
 				byID[verified.ID] = verified // carry the fresh verdict into the re-attack step
 				if perr := s.Store.PutAction(ctx, verified); perr != nil && firstErr == nil {
 					firstErr = perr
@@ -513,13 +542,13 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 // scope, transient API error) yields nil so the pass continues uninterrupted. Findings are both
 // persisted (so they appear in Issues like the manual /v1/saas/github_org/sync) and returned so
 // the detector reconciles them into incidents this pass.
-func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) []types.Finding {
+func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) ([]types.Finding, bool) {
 	if s.Store == nil || s.Tokens == nil || s.NewID == nil {
-		return nil
+		return nil, false
 	}
 	conns, err := s.Store.ListConnections(ctx, tenantID)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	var gh *platform.Connection
 	for i := range conns {
@@ -529,15 +558,15 @@ func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) []types.
 		}
 	}
 	if gh == nil {
-		return nil
+		return nil, false
 	}
 	token, terr := s.Tokens.Resolve(ctx, *gh)
 	if terr != nil || token == "" {
-		return nil
+		return nil, false
 	}
 	snap, ferr := sspm.FetchGitHubOrg(ctx, s.GitHubAPIBase, gh.Account, token, nil)
 	if ferr != nil {
-		return nil // honestly skipped (logged by the caller's monitoring); never a false finding
+		return nil, false // honestly skipped (logged by the caller's monitoring); never a false finding
 	}
 	findings := sspm.AssessGitHubOrg(snap, sspm.Options{})
 	// Same L1.5 chain the POSTed-snapshot twin runs (§11) — the scheduled door must not produce
@@ -562,7 +591,9 @@ func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) []types.
 		}
 		saved = append(saved, findings[i])
 	}
-	return saved
+	// ran=true: the org was really fetched and assessed, so this pass CAN speak to the absence of a
+	// SaaS-posture finding. Every earlier return is a surface we did not observe (ADR 0024 C16).
+	return saved, true
 }
 
 // syncOSINT runs the keyless Certificate-Transparency collector (crt.sh) over the tenant's domain
@@ -571,13 +602,13 @@ func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) []types.
 // flow into the Detector, so a host that newly appears in CT (e.g. a forgotten staging subdomain)
 // opens an incident — the EASM "new exposure → alert" behaviour, for free, via the existing machinery.
 // Best-effort + grounded (§10): no fetcher wired, no domain assets, or a clean footprint → no findings.
-func (s *Service) syncOSINT(ctx context.Context, tenantID string) []types.Finding {
+func (s *Service) syncOSINT(ctx context.Context, tenantID string) ([]types.Finding, bool) {
 	if s.Store == nil || s.NewID == nil || s.OSINTFetcher == nil {
-		return nil
+		return nil, false
 	}
 	assets, err := s.Store.ListAssets(ctx, tenantID)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	known := map[string]bool{}
 	var domains []string
@@ -592,7 +623,7 @@ func (s *Service) syncOSINT(ctx context.Context, tenantID string) []types.Findin
 		}
 	}
 	if len(domains) == 0 {
-		return nil // nothing to monitor externally (no domain assets) — never a false finding
+		return nil, false // nothing to monitor externally (no domain assets) — never a false finding
 	}
 	snap := osint.CollectCT(ctx, tenantID, domains, known, s.OSINTFetcher)
 	findings := osint.Assess(snap, osint.Options{NewID: s.NewID})
@@ -608,7 +639,9 @@ func (s *Service) syncOSINT(ctx context.Context, tenantID string) []types.Findin
 		}
 		saved = append(saved, findings[i])
 	}
-	return saved
+	// ran=true: the collector really ran over the tenant's domains, so this pass can speak to the
+	// absence of an OSINT finding (ADR 0024 C16).
+	return saved, true
 }
 
 // ErrCloudSyncUnavailable means a live cloud read was never possible — no fetcher wired on this
@@ -635,9 +668,9 @@ type CloudSyncer func(ctx context.Context, tenantID string) ([]types.Finding, er
 // Grounded (§10): findings come only from a real diff against the stored previous snapshot. A first
 // sync has no baseline and an unchanged account has no changes, and both correctly yield nothing —
 // silence here means "no change was observed", never "we did not look".
-func (s *Service) syncCloud(ctx context.Context, tenantID string) []types.Finding {
+func (s *Service) syncCloud(ctx context.Context, tenantID string) ([]types.Finding, bool) {
 	if s.CloudSyncer == nil {
-		return nil
+		return nil, false
 	}
 	drift, err := s.CloudSyncer(ctx, tenantID)
 	if err != nil {
@@ -647,12 +680,14 @@ func (s *Service) syncCloud(ctx context.Context, tenantID string) []types.Findin
 		if !errors.Is(err, ErrCloudSyncUnavailable) {
 			slog.Warn("[scan] cloud sync failed", "tenant", tenantID, "err", err)
 		}
-		return nil
+		return nil, false
 	}
 	if len(drift) > 0 {
 		slog.Info("[scan] cloud drift detected", "tenant", tenantID, "findings", len(drift))
 	}
-	return drift
+	// ran=true only here: the account was really re-read. A sync that was unavailable or errored
+	// returns false above, so its silence never resolves a drift incident.
+	return drift, true
 }
 
 // OnTrigger handles a single provider event (a push) — find the matching asset and
@@ -842,4 +877,25 @@ func appliedFindingKeys(actions []platform.Action) []string {
 	}
 	sort.Strings(out) // stable order so a pass is reproducible and diffable
 	return out
+}
+
+// producersForAssetType names the finding producers a successful scan of this asset type observes
+// but does NOT report through Engagement.ToolsRan.
+//
+// It exists for the non-engine ScanRunners. MuxRunner routes a workspace asset to internal/operate,
+// a deterministic rule engine with no tool dispatch at all, so its scan completes with ToolsRan
+// empty. Without this the identity-posture producers would never be covered and their incidents
+// could never resolve — trading the false resolve this change removes for a permanent false
+// non-resolve, which is the same defect pointed the other way.
+//
+// Deliberately a small explicit table rather than a fallback like "cover everything this asset
+// emitted": a producer that ran and found nothing emits nothing, so an emission-derived rule cannot
+// see the clean case, which is exactly the case resolution depends on.
+func producersForAssetType(assetType string) []string {
+	switch assetType {
+	case "workspace":
+		return []string{"operate"}
+	default:
+		return nil
+	}
 }

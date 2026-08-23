@@ -65,6 +65,22 @@ func KeysForIDs(ids []string, findings []types.Finding) []string {
 // one is skipped). "fixed" is terminal — a vuln that REAPPEARS later is a regression that
 // detect.Reconcile opens as a NEW incident, not a re-flip of the old fix's verification.
 func Verify(actions []platform.Action, current []types.Finding, now time.Time) []platform.Action {
+	return VerifyScoped(actions, current, now, detect.AllProducers())
+}
+
+// VerifyScoped is Verify with the re-scan's authority stated rather than assumed (ADR 0024 C16).
+//
+// "Fixed" is the strongest positive claim this product makes and it is TERMINAL, decided entirely by
+// absence. So it must not be reached for a finding whose producer this pass never ran. The cloud
+// engineer is the case that made this urgent: it runs on demand, nothing re-derives its attack paths
+// on a monitoring pass, and a remediation against one was being stamped "1 of 1 confirmed fixed in
+// re-scan" by a pass that never asked the agent anything.
+//
+// An action is skipped when ANY of its keys is uncovered, not only when all are. An action claims to
+// resolve a SET of findings, and confirming it while one member was unobservable would report the
+// whole remediation closed on partial evidence — and the record is terminal, so there is no later
+// pass to correct it.
+func VerifyScoped(actions []platform.Action, current []types.Finding, now time.Time, cov detect.Coverage) []platform.Action {
 	present := make(map[string]bool, len(current))
 	for _, f := range current {
 		present[detect.Key(f)] = true
@@ -76,6 +92,9 @@ func Verify(actions []platform.Action, current []types.Finding, now time.Time) [
 		}
 		if a.Verification != nil && a.Verification.Status == platform.FixStatusFixed {
 			continue // terminal
+		}
+		if !coversAll(cov, a.FindingKeys) {
+			continue // this pass could not observe one of these producers; its silence proves nothing
 		}
 		var fixed, still []string
 		for _, k := range a.FindingKeys {
@@ -112,4 +131,14 @@ func evidence(status string, fixed, total int) string {
 		return fmt.Sprintf("%d of %d confirmed fixed in re-scan", fixed, total)
 	}
 	return fmt.Sprintf("%d of %d still present in re-scan — fix did not close them", total-fixed, total)
+}
+
+// coversAll reports whether the pass was authoritative about every producer this action touches.
+func coversAll(cov detect.Coverage, keys []string) bool {
+	for _, k := range keys {
+		if !cov.Covers(k) {
+			return false
+		}
+	}
+	return true
 }
