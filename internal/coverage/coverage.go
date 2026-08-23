@@ -25,14 +25,19 @@ import (
 // tier tools are on-demand and deliberately NOT listed here (they're surfaced separately as available
 // depth). Mirrors the per-asset anchor tiers in the asset modules; keep in sync when an anchor changes.
 var Toolset = map[string][]string{
-	"web_application":    {"katana", "httpx", "nuclei", "dalfox", "sqlmap"},
-	"api":                {"nuclei", "kiterunner", "inql"},
-	"repository":         {"gitleaks", "trufflehog", "semgrep", "trivy", "grype"},
-	"container_image":    {"trivy", "grype", "dockle", "cosign"},
-	"ip_address":         {"naabu", "nmap", "httpx", "nuclei"},
-	"domain":             {"subfinder", "amass", "dnstwist", "httpx"},
-	"cloud_account":      {"prowler"},
-	"mobile_application": {"mobsfscan", "gitleaks", "trufflehog", "semgrep", "trivy", "apkid"},
+	// Anchors come from each handler's own anchorNames; entries marked (recon) or (fan-out) fire
+	// unconditionally via Recon()/PlanFanout() rather than PlanAnchors(). TestToolsetMatchesTheHandlers
+	// ItMirrors compares this against the live handlers, because this list drifted in BOTH directions
+	// while nothing checked it — and over-declaring names a tool that did not run on the page built to
+	// answer "what was actually tested".
+	"web_application":    {"katana", "httpx", "nuclei", "dalfox", "sqlmap"}, // katana (recon)
+	"api":                {"httpx", "nuclei"},
+	"repository":         {"semgrep", "gitleaks", "trufflehog", "trivy", "grype", "osv-scanner", "checkov", "hadolint", "syft"},
+	"container_image":    {"trivy", "grype", "dockle", "syft", "cosign"},
+	"ip_address":         {"naabu", "nmap", "httpx", "nuclei"},        // naabu (recon), nuclei (fan-out)
+	"domain":             {"subfinder", "amass", "dnstwist", "httpx"}, // amass (recon), dnstwist + httpx (fan-out)
+	"cloud_account":      {"prowler", "scoutsuite"},
+	"mobile_application": {"mobsfscan", "gitleaks", "trivy"},
 	"workspace":          {"identity posture (MFA · OAuth grants · email-auth · stale accounts)"},
 }
 

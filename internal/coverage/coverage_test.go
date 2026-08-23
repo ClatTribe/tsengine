@@ -28,8 +28,12 @@ func TestCompute_ScannedAssetCoverage(t *testing.T) {
 	if !c.Scanned || !c.LastScannedAt.Equal(scanT) {
 		t.Errorf("scanned/at: %+v", c)
 	}
-	if len(c.RunsTools) != 5 { // repository anchor set
-		t.Errorf("RunsTools: %+v", c.RunsTools)
+	// Derived, not a magic number: the count is whatever the repository anchor set declares. A
+	// hard-coded 5 pinned a stale list and had to be edited every time the real anchors changed,
+	// which is how it came to disagree with the handlers in the first place.
+	if len(c.RunsTools) != len(Toolset["repository"]) {
+		t.Errorf("RunsTools (%d) must mirror the declared repository toolset (%d): %+v",
+			len(c.RunsTools), len(Toolset["repository"]), c.RunsTools)
 	}
 	if c.FindingsCount != 2 {
 		t.Errorf("findings count: %d", c.FindingsCount)
