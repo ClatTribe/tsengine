@@ -15,6 +15,7 @@
 export type EvidenceRungID =
   | "exploited"
   | "provider_confirmed"
+  | "config_observed"
   | "reachability_confirmed"
   | "corroborated"
   | "scanner_reported";
@@ -48,6 +49,13 @@ export const EVIDENCE_RUNGS: EvidenceRung[] = [
       "This confirms the permission exists, not that anyone could use it end to end. It is not the same as breaking in, and we never call it that.",
   },
   {
+    id: "config_observed",
+    act: "We read the setting from the system's own API",
+    surfaces: "SaaS, identity, devices, vendors, data warehouses",
+    limit:
+      "A definite fact about how something is configured. It is not a claim that anyone exploited it, and not the same as your cloud provider approving an action.",
+  },
+  {
     id: "reachability_confirmed",
     act: "We read your code and found the path to it",
     surfaces: "Dependencies in connected repositories",
@@ -78,6 +86,7 @@ export const EVIDENCE_RUNGS: EvidenceRung[] = [
 export const RUNG_SHORT: Record<EvidenceRungID, string> = {
   exploited: "exploited",
   provider_confirmed: "provider-confirmed",
+  config_observed: "observed in your config",
   reachability_confirmed: "reachable in your code",
   corroborated: "corroborated",
   scanner_reported: "scanner-reported",

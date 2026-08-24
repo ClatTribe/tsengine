@@ -26,15 +26,18 @@ import (
 //   - a rung the engine gained that nobody advertised is a capability quietly withheld, which is the
 //     smaller failure but the same defect.
 
-// engineRungs is the authority. Sorted for comparison, not for ranking.
+// engineRungs reads the engine's OWN enumeration rather than restating it.
+//
+// It used to restate it — five constants, hand-written here. A sixth rung was added to the engine,
+// this list was not updated, and the guard compared five against five and PASSED. A check built to
+// stop two lists drifting had become a third list that drifted. types.AllEvidenceRungs() is pinned
+// against the source's declarations by its own test, so there is now one authority.
 func engineRungs() []string {
-	return []string{
-		string(types.RungExploited),
-		string(types.RungProviderConfirmed),
-		string(types.RungReachabilityConfirmed),
-		string(types.RungCorroborated),
-		string(types.RungScannerReported),
+	var out []string
+	for _, r := range types.AllEvidenceRungs() {
+		out = append(out, string(r))
 	}
+	return out
 }
 
 var rungIDRe = regexp.MustCompile(`(?m)^\s*id:\s*"([a-z_]+)"`)
