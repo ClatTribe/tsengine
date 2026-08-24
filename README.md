@@ -19,7 +19,12 @@ Paired with `webappsec` (the SaaS wrapper that consumes tsengine output and talk
 make cli                      # → ./bin/tsengine
 ./bin/tsengine version
 
-# build the sandbox image (OSS tools live here, not on the host)
+# get the sandbox image (OSS tools live here, not on the host).
+# PULL the published one (~5.8 GB, every scanner):
+docker pull ghcr.io/clattribe/tsengine/sandbox:full-latest
+# …or a SLIM per-asset image — a container-only box does not need codeql/prowler:
+docker pull ghcr.io/clattribe/tsengine/sandbox:repository-latest
+# …or build it yourself:
 make sandbox-image            # → tsengine/sandbox:0.1.0
 
 # run a scan

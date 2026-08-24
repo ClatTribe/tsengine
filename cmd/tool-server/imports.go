@@ -17,7 +17,6 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/dnstwist"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/ffuf"
-	_ "github.com/ClatTribe/tsengine/internal/tool/garak"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gitleaks"
 	_ "github.com/ClatTribe/tsengine/internal/tool/gosec"
 	_ "github.com/ClatTribe/tsengine/internal/tool/govulncheck"

@@ -80,9 +80,10 @@ services:
     restart: unless-stopped
 
   platform:
-    build:
-      context: .
-      dockerfile: docker/platform/Dockerfile
+    # PULLED, not built. CI publishes this image (.github/workflows/images.yml); a VM should not be
+    # compiling Go before it can serve a request. To build locally instead:
+    #   docker compose -f docker-compose.prod.yml -f docker-compose.build.yml up -d --build
+    image: ${PLATFORM_IMAGE:-ghcr.io/clattribe/tsengine/platform:latest}
     # THE .env FILE IS THE SOURCE OF TRUTH. Without this, every credential documented in
     # .env.example (SMTP_*, *_CLIENT_ID/SECRET, LLM_*, notify webhooks, threat-intel corpus)
     # is silently DROPPED — the platform boots but has no email, no OAuth onboarding, no LLM
@@ -106,7 +107,14 @@ services:
       # records `sandbox_image_digest` — that is only meaningful against a fixed image).
       # Keep in lockstep with SANDBOX_IMAGE in the Makefile. Prefer a @sha256:… digest once
       # the image is published to a registry.
-      TSENGINE_SANDBOX_IMAGE: ${TSENGINE_SANDBOX_IMAGE:-tsengine/sandbox:0.1.0}
+      # The published sandbox image, PULLED like the rest. `full` carries every scanner and is
+      # always correct for every asset.
+      TSENGINE_SANDBOX_IMAGE: ${TSENGINE_SANDBOX_IMAGE:-ghcr.io/clattribe/tsengine/sandbox:full-latest}
+      # Optional: per-asset SLIM images. With this set, a repository scan pulls the repository
+      # toolset instead of the full image (no prowler/scoutsuite/cloudfox). {toolset} is
+      # substituted per asset; any asset without a slim image falls back to the full one above.
+      # The platform logs the resolved image per asset type at startup.
+      TSENGINE_SANDBOX_IMAGE_TEMPLATE: ${TSENGINE_SANDBOX_IMAGE_TEMPLATE:-}
       # Per-scan sandbox isolation (P1 hardening; docs §5.1). The sandbox joins THIS
       # network (no host port published — the platform reaches it by container IP) and
       # gets a read-only rootfs. Resource/PID/file limits apply by default.
@@ -155,27 +163,10 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      # NEXT_PUBLIC_* must be BUILD args — Next.js inlines them into the bundle at build time,
-      # so runtime env cannot set them. Without these the site publishes canonical/sitemap URLs
-      # for the placeholder domain and legal docs with no named entity or jurisdiction.
-      args:
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${TSENGINE_SITE_ADDRESS:-localhost}}
-        NEXT_PUBLIC_LEGAL_ENTITY: ${NEXT_PUBLIC_LEGAL_ENTITY:-}
-        NEXT_PUBLIC_LEGAL_JURISDICTION_CITY: ${NEXT_PUBLIC_LEGAL_JURISDICTION_CITY:-}
-        NEXT_PUBLIC_LEGAL_COUNTRY: ${NEXT_PUBLIC_LEGAL_COUNTRY:-India}
-        NEXT_PUBLIC_LEGAL_ADDRESS: ${NEXT_PUBLIC_LEGAL_ADDRESS:-}
-        NEXT_PUBLIC_SMTP_SUBPROCESSOR: ${NEXT_PUBLIC_SMTP_SUBPROCESSOR:-}
-        # Contact details — footer on every marketing page, /contact, the legal documents
-        # and .well-known/security.txt. Unset renders nothing rather than a dead mailto.
-        NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:-}
-        NEXT_PUBLIC_CONTACT_PHONE: ${NEXT_PUBLIC_CONTACT_PHONE:-}
-        NEXT_PUBLIC_CONTACT_PHONE_TEL: ${NEXT_PUBLIC_CONTACT_PHONE_TEL:-}
-        NEXT_PUBLIC_PRIVACY_EMAIL: ${NEXT_PUBLIC_PRIVACY_EMAIL:-}
-        NEXT_PUBLIC_SECURITY_EMAIL: ${NEXT_PUBLIC_SECURITY_EMAIL:-}
-        NEXT_PUBLIC_LEGAL_EMAIL: ${NEXT_PUBLIC_LEGAL_EMAIL:-}
+    # PULLED, not built — same reason as platform. NEXT_PUBLIC_* are inlined into the bundle at
+    # BUILD time, so the published image already carries them; CI passes them from repo variables.
+    # Building locally (docker-compose.build.yml) still reads them from .env.
+    image: ${FRONTEND_IMAGE:-ghcr.io/clattribe/tsengine/frontend:latest}
     environment:
       TSENGINE_API_URL: http://platform:8090 # server-side only; the browser never sees it
       NODE_ENV: production

@@ -42,7 +42,7 @@ const env = (v: string | undefined) => v?.trim() || "";
  * by the owner, not guessed, which is the whole condition for publishing one.
  * NEXT_PUBLIC_CONTACT_EMAIL overrides it per deploy.
  */
-export const CONTACT_EMAIL = env(process.env.NEXT_PUBLIC_CONTACT_EMAIL) || "shieldtensor@gmail.com";
+export const CONTACT_EMAIL = env(process.env.NEXT_PUBLIC_CONTACT_EMAIL) || "tensorshield@gmail.com";
 
 /**
  * Phone, as a human would read it. Same source, same rule.

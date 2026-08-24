@@ -145,6 +145,25 @@ func main() {
 	log.Printf("[platform] sandbox images — scan=%s pentest=%s (set TSENGINE_PENTEST_SANDBOX_IMAGE to split the exploitation toolset into a leaner image; unset → both use the scan image)",
 		sandboxImages.Scan, sandboxImages.Pentest)
 
+	// PER-ASSET SCAN IMAGES. TSENGINE_SANDBOX_IMAGE_TEMPLATE (containing "{toolset}") opts the whole
+	// deployment into the slim per-asset images CI publishes, so a box that only scans repositories
+	// stops pulling codeql, prowler and scoutsuite. Unset → every asset uses the full image,
+	// which is exactly today's behaviour.
+	scanImages := sandbox.ScanImages{
+		Full:     sandboxImages.Scan,
+		Template: os.Getenv("TSENGINE_SANDBOX_IMAGE_TEMPLATE"),
+	}
+	// Log the RESOLVED image per asset, not the template. An operator who mistypes the placeholder
+	// gets the full image everywhere and no error — the fallback is deliberate (§10: never guess an
+	// image name), which means the only way to see it took effect is to print what it resolved to.
+	for _, at := range types.AllAssetTypes() {
+		if img, slim := scanImages.For(at); slim {
+			log.Printf("[platform] scan image for %-18s %s (slim)", at, img)
+		} else {
+			log.Printf("[platform] scan image for %-18s %s (full)", at, img)
+		}
+	}
+
 	st := openStore()
 	// AWS: read-only onboarding + the live, reversible remediation write path. The S3 writer is
 	// wired ONLY when a remediation role/creds are configured — else Apply stays the honest stub.
@@ -397,11 +416,11 @@ func main() {
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
 		engine := &runner.EngineRunner{
 			Resolve:       assetregistry.HandlerFor,
-			NewDispatcher: sandboxDispatcher(sandboxImages.Scan, st, vault),
+			NewDispatcher: sandboxDispatcher(scanImages, st, vault),
 			// The workspace-aware factory + the code surface's validation rung (ADR 0029 D2a). Wired
 			// HERE rather than left as a seam, because a capability reachable only from a test is the
 			// defect this ADR exists to stop repeating.
-			NewDispatcherWithWorkspace: sandboxDispatcherWS(sandboxImages.Scan, st, vault),
+			NewDispatcherWithWorkspace: sandboxDispatcherWS(scanImages, st, vault),
 			Reachability:               runner.TriageReachability,
 		}
 		svc.Scanner = &runner.MuxRunner{Engine: engine, Workspace: workspaceRunner}
@@ -678,8 +697,8 @@ func repoScratchDir() string {
 //
 // It is the workspace-unaware adapter over sandboxDispatcherWS, kept because EngineRunner.ReplayTool
 // takes this shape and a replay has no use for the source tree.
-func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
-	ws := sandboxDispatcherWS(image, st, vault)
+func sandboxDispatcher(images sandbox.ScanImages, st store.Store, vault secret.Vault) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
+	ws := sandboxDispatcherWS(images, st, vault)
 	return func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
 		disp, _, cleanup, err := ws(ctx, a)
 		return disp, cleanup, err
@@ -693,9 +712,12 @@ func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ct
 // The clone's whole lifetime is this dispatcher's: created here, torn down by the returned cleanup.
 // Anything that needs the tree has to run inside that window, which is why the path is returned
 // rather than left implicit.
-func sandboxDispatcherWS(image string, st store.Store, vault secret.Vault) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, string, func(), error) {
+func sandboxDispatcherWS(images sandbox.ScanImages, st store.Store, vault secret.Vault) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, string, func(), error) {
 	return func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, string, func(), error) {
-		opts := sandbox.SpawnOptions{Image: image}
+		// The per-asset image: slim when a template is configured and this asset has a toolset,
+		// else the full image. Resolved per scan rather than once, so the asset decides.
+		scanImage, _ := images.For(types.AssetType(a.Type))
+		opts := sandbox.SpawnOptions{Image: scanImage}
 		var cloneDir string
 		switch types.AssetType(a.Type) {
 		case types.AssetCloudAccount:

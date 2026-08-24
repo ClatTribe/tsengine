@@ -8,6 +8,20 @@
 #
 # TS_TOOLSET is a comma-separated asset list, or `full` for everything (production parity).
 
+# ts_want_any <asset-list> — true when the build wants ANY asset in a space-separated list.
+#
+# WHY A LIST. Tools do not belong to one asset. grype is dispatched by BOTH container and repository;
+# httpx by api, domain, ip AND web; sqlmap by api as well as web. Each was gated on a single asset,
+# so the slim image for the OTHER asset stubbed a tool its handler dispatches — a container image
+# with no grype, three images with no httpx. The gating vocabulary has to be able to say "either",
+# or the groups can only ever be wrong for multi-asset tools.
+ts_want_any() {
+  for _want in $1; do
+    if ts_want "${_want}"; then return 0; fi
+  done
+  return 1
+}
+
 # ts_want <asset> — true when the build should install this asset's tooling.
 ts_want() {
   case ",${TS_TOOLSET}," in
@@ -37,11 +51,15 @@ STUB
 #
 # A failed install also stubs rather than failing the build: one unavailable tool degrades that
 # tool's wrapper, and the image-coverage test is what catches a tool that should have been there.
+# ts_install <asset-list> <binary> <module@version> — install when ANY listed asset is selected.
+#
+# The first argument is a SPACE-SEPARATED LIST (quote it): every asset whose handler dispatches this
+# tool. A single word still works and means what it always did.
 ts_install() {
   _asset="$1"
   _bin="$2"
   shift 2
-  if ts_want "${_asset}"; then
+  if ts_want_any "${_asset}"; then
     go install "$@" || ts_stub "${_bin}"
   else
     echo "skip ${_bin} (TOOLSET=${TS_TOOLSET})"

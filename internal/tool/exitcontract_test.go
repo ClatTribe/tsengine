@@ -30,7 +30,7 @@ import (
 var swallowing = map[string]bool{
 	"amass": true, "apkid": true, "bandit": true, "checkdmarc": true, "checkov": true,
 	"cloudfox": true, "codeql": true, "dalfox": true, "dnstwist": true, "dockle": true,
-	"garak": true, "gitleaks": true, "gosec": true, "govulncheck": true, "hadolint": true,
+	"gitleaks": true, "gosec": true, "govulncheck": true, "hadolint": true,
 	"httpx": true, "hydra": true, "inql": true, "katana": true, "kiterunner": true,
 	"mobsfscan": true, "modelscan": true, "naabu": true, "nikto": true, "nmap": true,
 	"nuclei": true, "osvscanner": true, "padbuster": true, "semgrep": true, "sqlmap": true,

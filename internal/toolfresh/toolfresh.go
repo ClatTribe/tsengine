@@ -100,7 +100,7 @@ var (
 	// for an image nobody inspected — §14.2's vacuous pass, inside the tool built to prevent it.
 	tsInstallRe = regexp.MustCompile(`ts_install\s+\S+\s+(\S+)\s+(\S+?)@(\S+)`)
 	// PKGS="$PKGS sqlmap checkov prowler==4.6.0" — the image builds its Python toolset by appending
-	// to a shell variable and pip-installing the list. Ten real scanners (sqlmap, checkov, garak,
+	// to a shell variable and pip-installing the list. Ten real scanners (sqlmap, checkov, bandit,
 	// scoutsuite, schemathesis, …) arrive this way with NO version, and only prowler is pinned.
 	// Unmatched, they were absent from the report entirely rather than counted as unmanaged.
 	pkgsAppendRe = regexp.MustCompile(`PKGS="\$PKGS ([^"]+)"`)

@@ -6,7 +6,9 @@
 # ON so real OSS-tool scans run in isolated, hardened sandboxes.
 #
 #   scripts/deploy-single-box.sh           # full deploy
-#   scripts/deploy-single-box.sh --check   # prereqs + config validation only (no build/up)
+#   scripts/deploy-single-box.sh           # pull published images + roll the stack
+#   scripts/deploy-single-box.sh --check   # prereqs + config validation only (no pull/up)
+#   scripts/deploy-single-box.sh --build   # build images locally instead of pulling
 #
 # Idempotent: re-running re-builds + rolls the stack; it never regenerates an existing .env.
 set -euo pipefail
@@ -14,7 +16,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CHECK_ONLY=0
-[ "${1:-}" = "--check" ] && CHECK_ONLY=1
+# Build locally instead of pulling published images. The default is PULL — see step 4.
+BUILD_LOCAL=0
+for arg in "$@"; do
+  case "$arg" in
+    --check) CHECK_ONLY=1 ;;
+    --build) BUILD_LOCAL=1 ;;
+    *) printf 'unknown flag: %s\nusage: %s [--check] [--build]\n' "$arg" "$0" >&2; exit 2 ;;
+  esac
+done
 
 SITE_ADDRESS="${TSENGINE_SITE_ADDRESS:-localhost}"
 COMPOSE=(docker compose -f docker-compose.prod.yml)
@@ -124,13 +134,35 @@ if [ "$CHECK_ONLY" = 1 ]; then
   exit 0
 fi
 
-# --- 4. build the OSS-tool sandbox image (the engine needs it) ---
-say "building the sandbox image (OSS scan tools)"
-make sandbox-image
+# --- 4. obtain the images ---
+#
+# DEFAULT IS PULL. CI publishes platform, frontend and the sandbox (.github/workflows/images.yml),
+# and a VM should not be compiling Go, building a Next.js bundle and assembling a forty-five-scanner
+# sandbox image before it can serve a request — that was minutes-to-hours of the old deploy, and it
+# made the box's toolchain part of the production surface.
+#
+# --build restores the old behaviour for an air-gapped install, a fork that publishes nowhere, or a
+# deploy of uncommitted changes.
+if [ "$BUILD_LOCAL" = 1 ]; then
+  say "building images locally (--build)"
+  make sandbox-image
+  COMPOSE+=(-f docker-compose.build.yml)
+  BUILD_FLAG=(--build)
+else
+  say "pulling published images"
+  "${COMPOSE[@]}" pull
+  # The sandbox is not a compose service, so it is pulled directly. A missing sandbox image is a
+  # HARD failure: the stack would come up, accept assets and return zero findings for every tech
+  # scan — the silent-clean-scan shape, one layer up.
+  SANDBOX_REF="${TSENGINE_SANDBOX_IMAGE:-ghcr.io/clattribe/tsengine/sandbox:full-latest}"
+  say "pulling sandbox image ${SANDBOX_REF}"
+  docker pull "$SANDBOX_REF" || die "could not pull ${SANDBOX_REF}. Set TSENGINE_SANDBOX_IMAGE to an image you can reach, or re-run with --build to build it locally."
+  BUILD_FLAG=()
+fi
 
 # --- 5. bring up the hardened stack ---
 say "starting the hardened stack"
-"${COMPOSE[@]}" up --build -d
+"${COMPOSE[@]}" up "${BUILD_FLAG[@]}" -d
 
 # --- 6. smoke test via the TLS edge (-k: the default uses Caddy's internal CA) ---
 say "waiting for the edge to become healthy"

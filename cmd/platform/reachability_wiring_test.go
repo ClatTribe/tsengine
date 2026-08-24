@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ClatTribe/tsengine/internal/sandbox"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
@@ -35,7 +36,7 @@ func TestSandboxDispatcherWS_ReportsAWorkspaceOnlyForRepositories(t *testing.T) 
 	// This drives the factory far enough to see the repository branch allocate a clone dir and then
 	// FAIL at git clone (the target is not a real repo). The assertion is about the failure being the
 	// clone rather than the wiring: a signature that could not carry a workspace would not compile.
-	f := sandboxDispatcherWS("tsengine/sandbox:test", store.NewMemory(), nilVault{})
+	f := sandboxDispatcherWS(sandbox.ScanImages{Full: "tsengine/sandbox:test"}, store.NewMemory(), nilVault{})
 
 	_, ws, cleanup, err := f(context.Background(), platform.Asset{
 		Type: "repository", Target: "https://example.invalid/not/a/repo",
