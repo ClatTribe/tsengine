@@ -272,12 +272,23 @@ build is in exactly that position — if `.next` is absent it fails, it does not
 
 ## Open — these need an answer that is not in the repo
 
-**Which domain is real.** `SITE_URL` defaults to `tensorshield.com` and is the value baked
-into every canonical, every `og:url` and all 76 sitemap entries. Every contact address on
-the site — privacy policy, DPA, subprocessors page, governing-law clause, six occurrences —
-is `@tensorshield.io`. Only one can be right, and if the live site is the `.io` then every
-canonical URL published points at a domain we do not own. This ADR does not pick one;
-picking one from the code would be guessing at a fact about the business.
+**Which domain is real — ANSWERED 2026-08-24: `tensorshield.in`.**
+
+The question was: `SITE_URL` defaulted to `tensorshield.com` and was baked into every canonical,
+every `og:url` and all 82 sitemap entries, while the contact addresses on the site were
+`@tensorshield.io`. This ADR refused to pick, because picking from the code would be guessing at a
+fact about the business.
+
+The owner has answered, and the answer is that **NEITHER value in the tree was right**. The live
+domain is `tensorshield.in`. That is worth recording rather than quietly fixing: the ADR framed it as
+a choice between two candidates, and the correct answer was outside both. A repo cannot rank two
+wrong values into a right one, which is exactly why this was marked open instead of resolved by
+majority — six occurrences of `.io` against one of `.com` would have "won", and lost.
+
+`SITE_URL` now defaults to `https://tensorshield.in`, and `images.yml` defaults the build arg to the
+same, so an unconfigured `NEXT_PUBLIC_SITE_URL` no longer publishes a domain we do not own. Contact
+addresses are a separate axis and already resolve to the owner's real mailbox via `CONTACT_EMAIL`
+(see #1439) rather than to a `@tensorshield.io` that never existed.
 
 **Whether `/solutions` should exist.** It has zero inbound links and is not in the sitemap.
 Link it and add it, or delete it and redirect it — both are correct, and the decision is a

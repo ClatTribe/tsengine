@@ -7,7 +7,8 @@ import { SITE_URL } from "@/lib/site";
 //
 // It was a static file in public/, and it had drifted exactly the way a hand-maintained file
 // does: it hardcoded a third contact address nothing else knew about, and three
-// https://tensorshield.io URLs while SITE_URL says tensorshield.com. Generating it means the
+// https://tensorshield.io URLs while SITE_URL said tensorshield.com — neither was the real domain
+// (it is tensorshield.in; see ADR 0023). Generating it means the
 // address comes from lib/contact.ts and the URLs from SITE_URL, so neither can disagree with
 // the rest of the site again.
 //

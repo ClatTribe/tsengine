@@ -14,8 +14,11 @@ import { SITE_URL } from "@/lib/site";
 //   · The only published addresses were privacy@ and legal@, buried in legal
 //     documents, hardcoded at six call sites.
 //   · public/.well-known/security.txt hardcoded a THIRD address plus three
-//     tensorshield.io URLs, while SITE_URL defaults to tensorshield.com — a
-//     domain split that no single edit could fix.
+//     tensorshield.io URLs, while SITE_URL defaulted to tensorshield.com — a
+//     domain split that no single edit could fix. ADR 0023 left "which domain is
+//     real" open because picking one from the code would be guessing at a fact
+//     about the business. The owner has since answered: TENSORSHIELD.IN, so both
+//     of the values that were in the tree were wrong.
 //
 // Everything below is a NEXT_PUBLIC_* build-time value, the same mechanism the
 // legal identity in lib/site.ts already uses, so a deploy sets it once.
@@ -32,7 +35,7 @@ import { SITE_URL } from "@/lib/site";
 // surface drops it cleanly, instead of rendering a label with nothing beside it.
 // ---------------------------------------------------------------------------
 
-/** The bare host from SITE_URL — "tensorshield.com" — so role addresses follow the site. */
+/** The bare host from SITE_URL — "tensorshield.in" — so role addresses follow the site. */
 export const SITE_HOST = SITE_URL.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
 
 const env = (v: string | undefined) => v?.trim() || "";
