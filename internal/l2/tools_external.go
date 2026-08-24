@@ -190,6 +190,12 @@ func externalTools(d Deps) Catalog {
 					"focus": str("what to investigate, e.g. 'paths to the production database' or a cloud finding/resource"),
 				}, "focus"),
 			},
+			// An investigation/delegation tool — exploratory, so it must NOT linger into the terminal
+			// report phase, which accumulates every cumulative tool and is the binding ≤12-cap
+			// constraint (§2.6). Without this, a tenant with BOTH investigators wired pushed report to
+			// 14 and l2.New failed the whole run — exactly the code+cloud flagship customer.
+			Phases:       []Phase{PhaseTriage, PhaseInvestigate, PhaseChain},
+			OnlyInPhases: true,
 			Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 				out, err := ci(ctx, strings.TrimSpace(argStr(args, "focus")))
 				if err != nil {
@@ -216,6 +222,10 @@ func externalTools(d Deps) Catalog {
 					"focus": str("what to investigate, e.g. a code finding id, a file, or 'the SQLi in the search handler'"),
 				}, "focus"),
 			},
+			// Exploratory delegation — scoped out of the report phase for the same ≤12-cap reason as
+			// investigate_cloud above (the code+cloud tenant wired both, blowing report to 14).
+			Phases:       []Phase{PhaseTriage, PhaseInvestigate, PhaseChain},
+			OnlyInPhases: true,
 			Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 				out, err := ki(ctx, strings.TrimSpace(argStr(args, "focus")))
 				if err != nil {
