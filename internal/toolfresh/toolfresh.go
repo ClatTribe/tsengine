@@ -10,9 +10,12 @@
 //     none of them is this; the `refresh` targets in the Makefile are demo data.
 //   - No workflow rebuilds the sandbox image on a schedule. `release.yml` fires on `v*` tags only,
 //     so every baked binary and every baked corpus ages with the manual release cadence.
-//   - Pinning is a mix. Six tools carry a VERSION arg and three of those are `latest`; two `go
-//     install` lines are `@latest`; the rest are apt/pip/curl with no version control at all. So two
-//     builds of the same Dockerfile can ship different scanners, and nothing records which shipped.
+//   - Pinning was a mix. Six tools carried a VERSION arg and three of those were `latest`; two `go
+//     install` lines were `@latest`; the rest are apt/pip/curl with no version control at all. So two
+//     builds of the same Dockerfile could ship different scanners, and nothing recorded which shipped.
+//     THE FLOATING FOUR (dalfox, subfinder, gitleaks, naabu) ARE NOW PINNED and CI fails on a
+//     reintroduced floating ref (`tool-freshness --fail-on-floating`). The apt/pip/curl tail is not
+//     version-controlled and is still reported as unmanaged — an honest remainder, not a clean bill.
 //   - nuclei's BINARY is pinned to 3.3.7 while upstream is well past it — a fact independent of the
 //     template corpus, and one nobody could see.
 //
@@ -121,6 +124,14 @@ func Parse(dockerfile string) Report {
 			continue
 		}
 		for _, m := range goInstallRe.FindAllStringSubmatch(line, -1) {
+			// A version given as a variable reference (`@${NAABU_VERSION}`) says nothing about what
+			// will actually be installed — the ARG line does, and it is recorded separately. Counting
+			// the literal "${NAABU_VERSION}" as a version would classify it PinExact and report an
+			// irreproducible build as reproducible, which is the one conclusion this package exists to
+			// prevent. Skip it and let the ARG speak.
+			if isVarRef(m[2]) {
+				continue
+			}
 			add(Tool{Name: goModuleName(m[1]), Version: m[2], Pin: pinOf(m[2]), Installer: "go", Line: n})
 		}
 		for _, m := range pipPinnedRe.FindAllStringSubmatch(line, -1) {
@@ -140,6 +151,12 @@ func Parse(dockerfile string) Report {
 		}
 	}
 	return rep
+}
+
+// isVarRef reports a version that is a build-arg reference rather than a version.
+func isVarRef(v string) bool {
+	v = strings.TrimSpace(v)
+	return strings.HasPrefix(v, "${") || strings.HasPrefix(v, "$")
 }
 
 func pinOf(v string) PinState {

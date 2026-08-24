@@ -48,11 +48,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # NOT --fail-on-floating yet. Four tools float today; turning the gate on in the same change
-      # that adds the check would land a red main and teach everyone to skip it. Pin those four,
-      # then flip this flag in the commit that does — a gate is worth having only once it can pass.
+      # The gate is ON. The four tools that floated when this workflow landed — dalfox, subfinder,
+      # gitleaks, naabu — are pinned as of the commit that flipped this flag, so the check passes on
+      # a clean tree and only fires when someone reintroduces a floating ref. That was the condition
+      # the previous comment set: a gate is worth having only once it can pass.
+      #
+      # What it protects: with a floating ref, two builds of this Dockerfile ship different scanners,
+      # and neither the evidence pack nor the VAPT report can say which one tested the customer. The
+      # report line naming a version is only worth reading if the version is real.
       - name: Report scanner + signature freshness
-        run: go run ./cmd/tsengine tool-freshness
+        run: go run ./cmd/tsengine tool-freshness --fail-on-floating
 
   rebuild:
     name: rebuild sandbox image
