@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/ClatTribe/tsengine/internal/webauth"
 )
 
 // llmSnippetCap bounds the raw response body shown to the LLM per turn. It must be large enough to
@@ -238,6 +240,12 @@ func tSend(cc *Context, args map[string]any) string {
 	resp, err := cc.req.Send(cc.ctx, method, rawURL, body, headers)
 	if err != nil {
 		return "REQUEST FAILED: " + err.Error()
+	}
+	// Grounded session-health signal (ADR 0030 Phase D): the deterministic classifier decides —
+	// never the model's reading. Counted; the COORDINATOR decides what it means (only an authed
+	// chunk's walls indicate session loss).
+	if webauth.IsLoginWall(resp.Status, resp.Location, resp.Body, webauth.LoginFlow{}) {
+		cc.AuthWalls++
 	}
 	ind := indicators(payload, body, resp)
 	cc.turnN++

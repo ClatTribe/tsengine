@@ -76,14 +76,18 @@ type CVEProbe struct {
 // Chunk is one scoped slice of the surface for a single worker. Declares (Class × Routes) so a
 // completed chunk with no finding grounds a Clean (Phase B): we know what was ATTEMPTED.
 type Chunk struct {
-	ID      string                 `json:"id"`
-	Tier    int                    `json:"tier"`
-	Score   int                    `json:"score"`
-	Reason  string                 `json:"reason"`
-	Class   string                 `json:"class,omitempty"` // the class this chunk attempts (seeds/cve); "" = general
-	Routes  []string               `json:"routes"`          // raw URLs the worker probes
-	AuthCtx string                 `json:"auth_ctx,omitempty"`
-	Seeds   []webagent.SeedFinding `json:"-"` // the seeds this chunk confirms (fed to the worker)
+	ID      string   `json:"id"`
+	Tier    int      `json:"tier"`
+	Score   int      `json:"score"`
+	Reason  string   `json:"reason"`
+	Class   string   `json:"class,omitempty"` // the class this chunk attempts (seeds/cve); "" = general
+	Routes  []string `json:"routes"`          // raw URLs the worker probes
+	AuthCtx string   `json:"auth_ctx,omitempty"`
+	// StateKey names shared/reset state this chunk's differentials depend on (e.g. a coupon
+	// re-armed between race phases). Chunks sharing one never run in the same wave — concurrent
+	// probes would corrupt each other's controls (ADR 0030 Phase C, §5.1 rule 4 ported).
+	StateKey string                 `json:"state_key,omitempty"`
+	Seeds    []webagent.SeedFinding `json:"-"` // the seeds this chunk confirms (fed to the worker)
 }
 
 // DecomposeResult is the ordered plan plus the honest overflow disclosure (D5 vector 1).

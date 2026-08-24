@@ -1000,6 +1000,38 @@ ONE gateway back into the sandbox:
 Miss the second and the tool-server 404s "unknown tool". Then add the binary to `docker/sandbox/Dockerfile`
 and (if it should be agent-reachable) to the `dispatch_oss` `ossSpecialists` registry.
 
+### 12.8 The engagement fleet + worldview (`internal/fleet`, ADR 0030 — Phases A–D BUILT)
+
+The offensive agents scale out WITHOUT changing: `webagent.Investigate` is called UNCHANGED per
+worker (strangler-pinned byte-identical at 1 worker). The coordinator decomposes an authorized
+surface into an intelligence-led, capped chunk plan (scanner seeds ranked by L1.5 enrichment >
+CVE probes > crown-jewel routes > shape-deduped residual — ordering IS the bound), splits it into
+state-coupled WAVES (auth-dependent chunks run after establishment; shared `StateKey` or shared
+route never share a wave), and runs ≤N workers per wave. Every worker is bound by a shared
+`fleet.Governor`: ONE request envelope drawn down atomically across workers (the absolute wall) +
+ONE latching breaker with health kinds (`waf_blocked`/`target_unhealthy` recorded from grounded
+Coverage facts; `session_invalidated` API-wired, no auto-detector yet). Termination guards are
+deterministic and disclosed: schedulability skipping (settled route×class at CoverK costs zero),
+a stall watchdog (StaleWaves verdict-free waves → halt naming what didn't run), envelope/breaker
+halts with disclosure. Health signals are ALL grounded: `waf_blocked`/`target_unhealthy` from Coverage facts,
+`session_invalidated` from the deterministic `webauth.IsLoginWall` classifier counted during the
+run and recorded ONLY for chunks that declared an authenticated session. The WORLDVIEW is the
+per-engagement coverage ledger keyed by `estategraph.Canonical("web", route)` × class —
+evidence-or-refuse (`ErrNoEvidence`), Contested-not-averaged (Vulnerable×Clean → Contested, with
+PER-SIDE evidence buckets so Phase D's panel can judge actual turns). Adjudication
+(`AdjudicateContested`) is an odd 3-persona majority that may only SELECT between the two
+evidenced sides (`ResolveContested` refuses everything else); ties/abstentions/failed panels KEEP
+Contested with every vote recorded — fail-open as an outcome, never silence. Assurance tiers:
+`fast` = CoverK 1; `verified` = CoverK≥2 + envelope ×2 (paid through the clamp, disclosed) + panel.
+Usage/cost: all three cloudengine clients now accumulate usage (they parsed-and-discarded it);
+pricing lives ONCE in `cloudengine.EstimateCost` and l2 delegates — fleet and L2 runs priced by
+one book; a brain without usage renders "unknown", never "$0"; engagement totals exact via one
+shared counter, per-worker attribution approximate by design. A route with no verdict
+renders as "NO established verdict", never clean. D6 estate write-back DEFERRED until a worker
+produces cross-surface claims (no producer = no pipe). CLI: `tsengine web-investigate --workers N
+--assurance fast|verified` / `TSENGINE_FLEET_WORKERS`, `TSENGINE_FLEET_ASSURANCE`; unset =
+today's single-agent engagement exactly.
+
 ---
 
 ## 13. No new in-house detection engines

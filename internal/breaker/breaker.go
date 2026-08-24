@@ -26,6 +26,15 @@ const (
 	ScopeDenied   Kind = "scope_denied"   // an out-of-scope tool/target was refused by the capability envelope
 	VolumeAnomaly Kind = "volume_anomaly" // request rate crossed the expected envelope
 	HoneytokenHit Kind = "honeytoken_hit" // a planted decoy credential/resource was touched (a strong compromise signal)
+
+	// Health kinds (ADR 0030 Phase C): signals that ASSESSMENT CONDITIONS degraded, recorded by the
+	// fleet from real run state (worker Report.Coverage facts), never inferred. Tripping on them
+	// pauses the WHOLE engagement — a WAF that started blocking, or a target that stopped answering,
+	// invalidates every further probe's evidentiary value (a finding absent behind a WAF is not proof
+	// the class is absent).
+	WAFBlocked      Kind = "waf_blocked"         // a worker ran into WAF/filter signatures (Coverage.DefensesHit)
+	TargetUnhealthy Kind = "target_unhealthy"    // a worker sent requests but landed none on a known route
+	SessionInvalid  Kind = "session_invalidated" // RESERVED: no grounded detector in the run loop yet — wiring it to a guess would be the false-signal shape this package exists to prevent
 )
 
 // Breaker trips when the count of a given Kind within the sliding window reaches its limit. A limit of

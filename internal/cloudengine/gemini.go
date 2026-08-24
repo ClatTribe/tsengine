@@ -25,6 +25,7 @@ type LLM interface {
 // line, an error message, or anything written to disk. There is no literal key
 // anywhere in the code.
 type Gemini struct {
+	usage  usageCounter
 	apiKey string // from os.Getenv("LLM_API_KEY") — never logged
 	model  string
 	http   *http.Client
@@ -76,6 +77,11 @@ type geminiResp struct {
 	Candidates []struct {
 		Content geminiContent `json:"content"`
 	} `json:"candidates"`
+	UsageMetadata struct {
+		PromptTokenCount        int64 `json:"promptTokenCount"`
+		CandidatesTokenCount    int64 `json:"candidatesTokenCount"`
+		CachedContentTokenCount int64 `json:"cachedContentTokenCount"`
+	} `json:"usageMetadata"`
 }
 
 // Generate sends one prompt and returns the model's text. The key rides in the
@@ -112,5 +118,19 @@ func (g *Gemini) Generate(ctx context.Context, prompt string) (string, error) {
 	if len(out.Candidates) == 0 || len(out.Candidates[0].Content.Parts) == 0 {
 		return "", fmt.Errorf("gemini: empty response")
 	}
+	// ADR 0030 Phase D: usage was parsed-and-discarded here, so no offensive run could state its
+	// cost. Accumulate atomically — concurrent fleet workers sharing this client yield an exact
+	// engagement total via TotalUsage().
+	g.usage.add(Usage{
+		InputTokens:     out.UsageMetadata.PromptTokenCount,
+		OutputTokens:    out.UsageMetadata.CandidatesTokenCount,
+		CacheReadTokens: out.UsageMetadata.CachedContentTokenCount,
+	})
 	return out.Candidates[0].Content.Parts[0].Text, nil
 }
+
+// TotalUsage is the cumulative token count across every call this client made (UsageReporter).
+func (g *Gemini) TotalUsage() Usage { return g.usage.total() }
+
+// ModelName reports the model id this client drives (ModelNamer — pricing needs it).
+func (g *Gemini) ModelName() string { return g.model }

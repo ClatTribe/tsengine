@@ -19,6 +19,7 @@ import (
 // SECRET HANDLING (mirrors gemini.go): the key is read from ANTHROPIC_API_KEY at runtime and sent
 // ONLY in the x-api-key header — never in a URL, log, error, or on disk. No literal key in code.
 type Anthropic struct {
+	usage   usageCounter
 	apiKey  string // from ANTHROPIC_API_KEY — never logged
 	model   string
 	baseURL string
@@ -67,6 +68,11 @@ type anthropicResp struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	} `json:"content"`
+	Usage struct {
+		InputTokens          int64 `json:"input_tokens"`
+		OutputTokens         int64 `json:"output_tokens"`
+		CacheReadInputTokens int64 `json:"cache_read_input_tokens"`
+	} `json:"usage"`
 }
 
 // Generate sends one prompt and returns Claude's text. The key rides in the x-api-key header; the
@@ -97,6 +103,11 @@ func (a *Anthropic) Generate(ctx context.Context, prompt string) (string, error)
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", fmt.Errorf("anthropic: decode: %w", err)
 	}
+	a.usage.add(Usage{
+		InputTokens:     out.Usage.InputTokens,
+		OutputTokens:    out.Usage.OutputTokens,
+		CacheReadTokens: out.Usage.CacheReadInputTokens,
+	})
 	for _, c := range out.Content { // concatenate text blocks (skip any non-text/thinking block)
 		if c.Type == "text" {
 			return c.Text, nil
@@ -104,3 +115,9 @@ func (a *Anthropic) Generate(ctx context.Context, prompt string) (string, error)
 	}
 	return "", fmt.Errorf("anthropic: empty response")
 }
+
+// TotalUsage is the cumulative token count across every call this client made (UsageReporter).
+func (a *Anthropic) TotalUsage() Usage { return a.usage.total() }
+
+// ModelName reports the model id this client drives (ModelNamer).
+func (a *Anthropic) ModelName() string { return a.model }

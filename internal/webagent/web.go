@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/internal/breaker"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -21,6 +22,12 @@ type Context struct {
 	Routes   []string      // known request surface (target + seeded/discovered)
 	Seeds    []SeedFinding // suspected L1 findings the agent should confirm
 	Defenses []string      // WAF/filter signatures the agent has hit
+	// AuthWalls counts responses the deterministic webauth.IsLoginWall classifier flagged — a
+	// session that is being shown login forms / auth errors where the agent expected content.
+	// The fleet coordinator turns this into the grounded `session_invalidated` health signal for
+	// AUTHED chunks (ADR 0030 Phase D); unauthenticated chunks legitimately hit login pages, so
+	// they never trip it.
+	AuthWalls int
 
 	// Leads is grounded ESTATE CONTEXT: what a route actually reaches, derived from the estate graph.
 	// The pentester otherwise sees a flat list of URLs and cannot tell the login form that fronts a PII
@@ -115,6 +122,10 @@ type Coverage struct {
 	// DefensesHit are the WAF/filter signatures the agent ran into; a finding
 	// absent behind a WAF is not proof the class is absent.
 	DefensesHit []string `json:"defenses_hit,omitempty"`
+	// LoginWalls counts responses the deterministic webauth.IsLoginWall classifier flagged during
+	// the run (login form served / auth error body / 401). Grounded input for the fleet's
+	// session_invalidated health signal on authenticated chunks.
+	LoginWalls int `json:"login_walls"`
 }
 
 // SeedFinding is a suspected vuln handed to the agent by an L1 scanner
@@ -206,6 +217,15 @@ type Options struct {
 	// blind-SQLi extraction, WordPress CVEs, etc. Nil (standalone host-side runs) → the tool degrades
 	// gracefully and says so.
 	Dispatcher Dispatcher
+	// Envelope, when set, is the ENGAGEMENT-wide request budget shared atomically by every worker in
+	// a fleet run (ADR 0030 Phase C). The per-worker MaxRequests stays the worker-local guard; the
+	// envelope is the absolute outer wall. Nil → serial behavior, unchanged.
+	Envelope *Envelope
+	// SharedBreaker, when set, replaces this worker's private auto-halt breaker so one worker's trip
+	// latches for the WHOLE fleet (a WAF that started blocking, or a dead target, invalidates every
+	// further probe's evidence). The egress callback records into whichever breaker is installed.
+	// Nil → a private breaker, exactly today's behavior.
+	SharedBreaker *breaker.Breaker
 }
 
 // Investigate runs the LLM-as-brain loop against a live target (the cloudagent
@@ -229,6 +249,14 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 	}
 	if cc.req == nil {
 		cc.req = NewRequester(allowHostsFor(cc.Target, allowSeeds), opts.MaxRequests, opts.MinInterval)
+		// Fleet wiring (ADR 0030 Phase C): attach the shared engagement envelope and, when the caller
+		// provides one, swap in the SHARED breaker. The egress callback dereferences r.breaker at call
+		// time, so the swap is picked up by every later blocked-egress event. Both nil-safe: unset →
+		// exactly today's serial behavior.
+		cc.req.envelope = opts.Envelope
+		if opts.SharedBreaker != nil {
+			cc.req.breaker = opts.SharedBreaker
+		}
 	}
 	cc.ctx = ctx
 	cc.dispatcher = opts.Dispatcher
@@ -308,12 +336,13 @@ func (cc *Context) coverage(stopReason string, iters, iterCap int) Coverage {
 		RoutesProbed:    len(cc.probedRoutes()),
 		RequestBudget:   cc.req.max,
 		RequestsSent:    sent,
-		BudgetExhausted: cc.req.max > 0 && sent >= cc.req.max,
+		BudgetExhausted: (cc.req.max > 0 && sent >= cc.req.max) || (cc.req.envelope != nil && cc.req.envelope.Left() == 0),
 		IterationsUsed:  iters,
 		IterationCap:    iterCap,
 		EgressDenied:    cc.req.Denied(),
 		BreakerTripped:  tripped,
 		DefensesHit:     uniqStrings(cc.Defenses),
+		LoginWalls:      cc.AuthWalls,
 	}
 	// A request-budget exhaustion is a more specific truth than "iteration_cap":
 	// the run stopped because it ran out of requests, not turns.

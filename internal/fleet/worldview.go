@@ -18,6 +18,7 @@ package fleet
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 )
 
@@ -79,13 +80,17 @@ type Claim struct {
 	Evidence []string `json:"evidence"` // turn IDs from the worker's own History
 }
 
-// ClassVerdict is the merged state for one route×class.
+// ClassVerdict is the merged state for one route×class. Evidence keeps the union; VulnEvidence /
+// CleanEvidence keep each SIDE's citations so a Contested verdict can later be ADJUDICATED — a
+// panel that cannot see which turns backed which claim could only re-litigate blind (Phase D).
 type ClassVerdict struct {
-	Route    string   `json:"route"`
-	Class    string   `json:"class"`
-	Verdict  Verdict  `json:"verdict"`
-	Evidence []string `json:"evidence"` // union across contributing claims, sorted (deterministic)
-	Workers  int      `json:"workers"`  // independent looks that touched this route×class
+	Route         string   `json:"route"`
+	Class         string   `json:"class"`
+	Verdict       Verdict  `json:"verdict"`
+	Evidence      []string `json:"evidence"`                 // union across contributing claims, sorted (deterministic)
+	VulnEvidence  []string `json:"vuln_evidence,omitempty"`  // the turns backing the Vulnerable side
+	CleanEvidence []string `json:"clean_evidence,omitempty"` // the turns backing the Clean/Denied side
+	Workers       int      `json:"workers"`                  // independent looks that touched this route×class
 }
 
 // Worldview is the per-engagement coverage ledger, keyed by route×class.
@@ -118,17 +123,57 @@ func (w *Worldview) Update(claims []Claim) error {
 		k := key(c.Route, c.Class)
 		cur, ok := w.verdicts[k]
 		if !ok {
-			w.verdicts[k] = ClassVerdict{
+			cv := ClassVerdict{
 				Route: c.Route, Class: c.Class, Verdict: c.Verdict,
 				Evidence: sortUnique(c.Evidence), Workers: 1,
 			}
+			cv.bucket(c)
+			w.verdicts[k] = cv
 			continue
 		}
 		cur.Verdict = resolve(cur.Verdict, c.Verdict)
 		cur.Evidence = sortUnique(append(cur.Evidence, c.Evidence...))
+		cur.bucket(c)
 		cur.Workers++ // one more independent look touched this route×class
 		w.verdicts[k] = cur
 	}
+	return nil
+}
+
+// bucket files one claim's evidence under its side (Vulnerable vs everything else) — the raw
+// material adjudication needs to judge a disagreement on the actual turns.
+func (cv *ClassVerdict) bucket(c Claim) {
+	if c.Verdict == Vulnerable {
+		cv.VulnEvidence = sortUnique(append(cv.VulnEvidence, c.Evidence...))
+	} else {
+		cv.CleanEvidence = sortUnique(append(cv.CleanEvidence, c.Evidence...))
+	}
+}
+
+// ResolveContested settles ONE contested route×class to an evidenced side (ADR 0030 Phase D
+// adjudication). It REFUSES anything else: only a Contested entry may move, only to Vulnerable or
+// Clean, and only when that side actually holds cited evidence — the panel SELECTS between two
+// evidenced claims, it can never manufacture one (§10). The losing side's evidence stays in the
+// record (the union is untouched); rationale names who decided and why.
+func (w *Worldview) ResolveContested(route, class string, to Verdict, rationale string) error {
+	k := key(route, class)
+	cur, ok := w.verdicts[k]
+	if !ok || cur.Verdict != Contested {
+		return errors.New("fleet: ResolveContested requires an existing Contested verdict")
+	}
+	if to != Vulnerable && to != Clean {
+		return fmt.Errorf("fleet: contested may only resolve to vulnerable or clean, got %q", to)
+	}
+	side := cur.VulnEvidence
+	if to == Clean {
+		side = cur.CleanEvidence
+	}
+	if len(side) == 0 {
+		return fmt.Errorf("fleet: refusing to resolve %s×%s to %s — that side carries no cited evidence", route, class, to)
+	}
+	cur.Verdict = to
+	cur.Evidence = sortUnique(append(cur.Evidence, "adjudicated: "+rationale))
+	w.verdicts[k] = cur
 	return nil
 }
 

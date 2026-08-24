@@ -30,6 +30,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -56,6 +57,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/dashboard"
 	"github.com/ClatTribe/tsengine/internal/exporter"
 	"github.com/ClatTribe/tsengine/internal/findingstore"
+	"github.com/ClatTribe/tsengine/internal/fleet"
 	"github.com/ClatTribe/tsengine/internal/gate"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/importers"
@@ -1128,6 +1130,8 @@ func runWebInvestigate(argv []string) error {
 	signer := fs.String("signer", "", "human-readable signer id recorded in the bundle (default: derived from key)")
 	ossSandbox := fs.String("oss-sandbox", "", "spawn this sandbox image so the agent can dispatch OSS specialists (sqlmap/wpscan/nuclei/…) via dispatch_oss (§13). Omit → dispatch_oss reports the tools unavailable and the agent uses its in-process tools only")
 	exploitIntelDir := fs.String("exploit-intel", "", "corpus dir holding the ADR-0019 exploit-intel sidecar; when set, a CVE-bearing seed carries the request skeleton known to trigger it (adapted by the agent, still grounded by the indicator). Omit → no offensive-face context")
+	fleetWorkers := fs.Int("workers", 0, "ADR-0030 fleet: run as a bounded-parallel fleet of N workers over an intelligence-led chunk plan (scanner seeds first, then residual routes; shared request envelope = --max-requests; waves keep state-coupled chunks serial). 0 = read TSENGINE_FLEET_WORKERS (default 1 = today's single-agent engagement)")
+	assurance := fs.String("assurance", "", "fleet assurance tier: fast (CoverK=1, pass@1 economics) or verified (CoverK>=2, envelope x2 — paid through the same clamp, contested pairs adjudicated by a 3-juror panel, $/finding reported). Empty reads TSENGINE_FLEET_ASSURANCE")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -1233,6 +1237,93 @@ func runWebInvestigate(argv []string) error {
 			_ = sandbox.Destroy(context.Background(), info)
 		}()
 		opts.Dispatcher = webagent.SandboxDispatcher(sandbox.NewClient(info))
+	}
+
+	// ADR-0030 fleet path: --workers > 1 (or the env twin) runs a bounded-parallel fleet over an
+	// intelligence-led chunk plan. The frontier is built from what this command already has — L1
+	// seed findings (Tier 1, enrichment-ranked) and the remaining seed routes (Tier 4 residual);
+	// CVE probes (Tier 2) arrive when threat-informed planning is wired to the CLI, not guessed here.
+	// The engagement envelope equals --max-requests: a fleet costs no more than today's run unless
+	// TSENGINE_FLEET_TOTAL_REQUESTS raises it. Workers share one latching breaker + one envelope.
+	if workers := resolveFleetWorkers(*fleetWorkers); workers > 1 && (len(seedFindings) > 0 || len(seed) > 0) {
+		in := fleet.FrontierInput{Target: *target, Seeds: seedFindings, Discovered: seed}
+		tier := *assurance
+		if tier == "" {
+			tier = os.Getenv("TSENGINE_FLEET_ASSURANCE")
+		}
+		res, ferr := fleet.RunFleet(agentCtx, llm, *target, in, opts, fleet.Config{
+			Workers:       workers,
+			TotalRequests: envIntOr("TSENGINE_FLEET_TOTAL_REQUESTS", *maxReq),
+			CoverK:        envIntOr("TSENGINE_FLEET_COVER_K", 1),
+			StaleWaves:    envIntOr("TSENGINE_FLEET_STALL_WAVES", 2),
+			Assurance:     tier,
+		})
+		if ferr != nil {
+			return ferr
+		}
+		for i, rep := range res.Reports {
+			fmt.Printf("--- worker %s ---\n%s", res.Plan.Chunks[i].ID, webagent.Render(rep))
+		}
+		fmt.Print(res.Ledger())
+		for _, d := range res.Disclosures {
+			fmt.Println("disclosure: " + d)
+		}
+		if *ledgerOut != "" {
+			var decisions []ledger.Decision
+			for _, rep := range res.Reports {
+				for _, f := range rep.Findings {
+					decisions = append(decisions, ledger.Decision{
+						ID: f.ID, Kind: f.Class, Severity: f.Severity, Refs: f.Evidence, Detail: f.Rationale,
+					})
+				}
+			}
+			l := rec.Build(ledger.Meta{
+				AgentKind: "webagent-fleet", Target: *target, Engine: "tsengine " + Version,
+				Summary: fmt.Sprintf("fleet of %d worker(s): %d finding(s), %d chunk(s), %d disclosure(s)",
+					workers, len(decisions), len(res.Reports), len(res.Disclosures)),
+				StartedAt: startedAt, CompletedAt: time.Now().UTC(), Decisions: decisions,
+			})
+			if werr := signAndWriteLedger(l, *signKey, *signer, *ledgerOut, "web-investigate --workers"); werr != nil {
+				return werr
+			}
+		}
+		// Evidence + transcripts are PER-WORKER (a bundle must cite one coherent turn history; a
+		// merged transcript would splice unrelated t-001s). Suffixed files keep them apart.
+		for i, rep := range res.Reports {
+			cc := res.Contexts[i]
+			suffix := "-" + strings.TrimPrefix(res.Plan.Chunks[i].ID, "chunk-")
+			if *transcriptOut != "" {
+				tj, terr := json.MarshalIndent(struct {
+					Chunk    string             `json:"chunk"`
+					Target   string             `json:"target"`
+					Summary  string             `json:"summary"`
+					Findings []webagent.Finding `json:"findings"`
+					History  []webagent.Turn    `json:"history"`
+				}{res.Plan.Chunks[i].ID, cc.Target, cc.Summary, cc.Findings, cc.History}, "", "  ")
+				if terr == nil {
+					_ = os.WriteFile(*transcriptOut+suffix, tj, 0o644) //nolint:gosec // operator-provided path
+				}
+			}
+			if *exportEvidence != "" {
+				priv, id, kerr := attest.LoadOrCreate(*signKey)
+				if kerr != nil {
+					return fmt.Errorf("evidence: load signing key: %w", kerr)
+				}
+				if *signer != "" {
+					id = *signer
+				}
+				bundle := webagent.BuildEvidence(rep, cc, "tsengine "+Version+" fleet")
+				if serr := webagent.SignEvidence(bundle, id, priv, time.Now().UTC()); serr != nil {
+					return serr
+				}
+				if werr := webagent.ExportEvidence(*exportEvidence+suffix, bundle); werr != nil {
+					return werr
+				}
+				fmt.Fprintf(os.Stderr, "[web-investigate] signed evidence bundle (%d finding(s)) → %s%s\n",
+					len(bundle.Findings), *exportEvidence, suffix)
+			}
+		}
+		return nil
 	}
 
 	rep, err := webagent.Investigate(agentCtx, llm, cc, opts)
@@ -2526,3 +2617,23 @@ func shortID(s string) string {
 // nuclei/dalfox blank imports above are the only users)
 var _ = tool.All
 var _ = strings.TrimSpace
+
+// resolveFleetWorkers maps --workers (0 = unset) to an effective count: the flag wins, then
+// TSENGINE_FLEET_WORKERS, then 1 — today's single-agent engagement. Values < 1 collapse to 1;
+// the fleet machinery never parallelizes unless asked.
+func resolveFleetWorkers(flagVal int) int {
+	if flagVal > 0 {
+		return flagVal
+	}
+	return envIntOr("TSENGINE_FLEET_WORKERS", 1)
+}
+
+// envIntOr reads a positive-int env var, else returns def.
+func envIntOr(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return def
+}

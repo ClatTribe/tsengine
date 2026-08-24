@@ -40,6 +40,9 @@ type Requester struct {
 	last    time.Time
 	denied  int              // egress-guard rejections (a host rebound to metadata/loopback)
 	breaker *breaker.Breaker // auto-halt: repeated egress blocks trip it, and Send refuses once tripped
+	// envelope, when set, is the ENGAGEMENT-wide budget shared by every worker in a fleet run — the
+	// absolute outer wall drawn down atomically (ADR 0030 D5 vector 2). Nil in serial runs.
+	envelope *Envelope
 }
 
 // NewRequester builds a Requester scoped to allowHosts (lowercased host[:port]).
@@ -177,6 +180,11 @@ func (r *Requester) Send(ctx context.Context, method, rawURL, body string, heade
 	}
 	if r.sent >= r.max {
 		return nil, fmt.Errorf("request budget exhausted (%d) — stop and report what you have", r.max)
+	}
+	// ENGAGEMENT ENVELOPE (fleet runs): the shared, atomic outer wall. Checked after the local cap so
+	// a lone worker's message stays about ITS budget; refused takes consume nothing.
+	if r.envelope != nil && !r.envelope.Take() {
+		return nil, fmt.Errorf("engagement request envelope exhausted — the fleet's shared budget is spent; stop and report")
 	}
 	if r.minInterval > 0 {
 		if wait := r.minInterval - time.Since(r.last); wait > 0 {

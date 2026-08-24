@@ -1,6 +1,47 @@
 # ADR 0030 — Agent fleet over an engagement worldview: two graphs, one identity space, every generative step paired with its counter
 
-**Status:** Proposed.
+**Status:** **Accepted. Phases A–D IMPLEMENTED** (`internal/fleet` worldview + decomposition +
+waves + bounded parallelism + Governor; `internal/cloudengine` usage accounting + the one price
+table; `internal/fleet/adjudicate.go` contested-pair panel; assurance tiers;
+`tsengine web-investigate --workers/--assurance`). **Open, each with its gate:** D6 estate
+write-back stays deferred until a worker produces cross-surface claims (no producer = no pipe);
+the platform `Discoverer` remains single-agent pending an interface decision; per-worker COST
+attribution is approximate under concurrency by design — engagement totals are exact (one shared
+counter), and that is the number the ablation reads.
+
+**Implementation deltas from the text below** (the text is the design record; these are what
+actually shipped):
+
+- The envelope + shared breaker ship as ONE type, `fleet.Governor` (`NewGovernor(EnvelopeConfig)`),
+  so the two walls cannot drift apart: `Reserve` grants from the SAME pool workers spend from at
+  send time, and a tripped breaker zeroes reservations.
+- Health kinds are all grounded now: `waf_blocked` / `target_unhealthy` from `Coverage` facts;
+  `session_invalidated` from `webauth.IsLoginWall` (a deterministic classifier) counted during the
+  run and recorded ONLY for chunks that declared an authenticated session — an unauthenticated
+  chunk hitting login pages is normal probing and records nothing.
+- Wave partitioning is dependency-based, porting §5.1 rule 4 exactly: auth-dependent chunks order
+  strictly after establishment; chunks sharing a `StateKey` (reset endpoints) or a route never
+  share a wave; everything else parallelizes within a wave (`errgroup`, bounded by
+  `TSENGINE_FLEET_WORKERS`, default 1).
+- Frontier monotonicity ships as schedulability skipping: a chunk whose declared route×class holds
+  verdicts at CoverK is skipped and disclosed; general chunks are never auto-settled (guessing
+  "covered" is refused). The stall watchdog halts after StaleWaves consecutive verdict-free waves,
+  naming what did not run.
+- Contested adjudication (`AdjudicateContested`, Phase D): verdicts bucket their evidence PER SIDE
+  at merge time, so the panel judges actual turns; an odd 3-persona majority selects BETWEEN the
+  two evidenced sides only (`ResolveContested` refuses non-contested entries, non-evidenced sides,
+  and any third value); ties, abstentions and failed panels KEEP Contested — fail-open is recorded
+  as its own outcome with every vote in the audit line.
+- Assurance tiers: `fast` (CoverK=1, pass@1 economics) vs `verified` (CoverK≥2, engagement
+  envelope ×2 — the extra looks are PAID through the same clamp and the doubling is disclosed —
+  plus panel adjudication). `$`/finding comes from usage accounting added to ALL THREE
+  cloudengine clients (they parsed-and-discarded usage blocks before); pricing lives ONCE in
+  `cloudengine.EstimateCost` and l2's verifier delegates to it, so fleet and L2 runs can never be
+  priced by different books. A brain that reports no usage renders "unknown", never "$0".
+- Wiring: `tsengine web-investigate --workers N --assurance fast|verified` (env twins:
+  `TSENGINE_FLEET_WORKERS`, `TSENGINE_FLEET_ASSURANCE`); the XBOW driver inherits via env with no
+  tsbench change. Per-worker evidence bundles and transcripts are suffixed per chunk (a bundle
+  must cite one coherent turn history); one combined signed ledger covers the engagement.
 
 **Date:** 2026-08-24
 

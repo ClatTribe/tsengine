@@ -19,6 +19,7 @@ import (
 // SECRET HANDLING mirrors Gemini: the key (if any) rides only in the Authorization header, never a URL
 // or log. A local Ollama needs no key.
 type OpenAICompat struct {
+	usage   usageCounter
 	apiKey  string
 	model   string
 	baseURL string
@@ -131,6 +132,13 @@ type oaiChatResp struct {
 	Choices []struct {
 		Message oaiChatMsg `json:"message"`
 	} `json:"choices"`
+	Usage struct {
+		PromptTokens        int64 `json:"prompt_tokens"`
+		CompletionTokens    int64 `json:"completion_tokens"`
+		PromptTokensDetails struct {
+			CachedTokens int64 `json:"cached_tokens"`
+		} `json:"prompt_tokens_details"`
+	} `json:"usage"` // Ollama/local backends may omit it — zero then, never invented
 }
 
 // Generate sends one prompt and returns the model's text.
@@ -162,5 +170,16 @@ func (o *OpenAICompat) Generate(ctx context.Context, prompt string) (string, err
 	if len(out.Choices) == 0 {
 		return "", fmt.Errorf("openai-compat: empty response")
 	}
+	o.usage.add(Usage{
+		InputTokens:     out.Usage.PromptTokens,
+		OutputTokens:    out.Usage.CompletionTokens,
+		CacheReadTokens: out.Usage.PromptTokensDetails.CachedTokens,
+	})
 	return out.Choices[0].Message.Content, nil
 }
+
+// TotalUsage is the cumulative token count across every call this client made (UsageReporter).
+func (o *OpenAICompat) TotalUsage() Usage { return o.usage.total() }
+
+// ModelName reports the model id this client drives (ModelNamer).
+func (o *OpenAICompat) ModelName() string { return o.model }

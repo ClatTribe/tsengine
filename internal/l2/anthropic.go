@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
 )
 
 // AnthropicClient is the default Client implementation (Claude). Other
@@ -191,28 +193,13 @@ func (c *AnthropicClient) parseResponse(blob []byte) (Response, error) {
 	return out, nil
 }
 
-// price is per-million-token USD (input, output). Cache reads bill at ~10%
-// of input — the cost lever strix found load-bearing. Approximate; the
-// authoritative cost is the provider invoice.
-type price struct{ in, out float64 }
-
-var pricing = map[string]price{
-	"claude-sonnet-4-5": {3.0, 15.0},
-	"claude-opus-4-1":   {15.0, 75.0},
-	"claude-haiku-4-5":  {1.0, 5.0},
-}
-
+// estimateCost delegates to the ONE price table in internal/cloudengine (ADR 0030 Phase D): two
+// tables was two chances to drift — a fleet run and an l2 run priced by different books would make
+// $/finding incomparable across agents, which is the comparison the ablation exists to make.
 func estimateCost(model string, u Usage) float64 {
-	p, ok := pricing[model]
-	if !ok {
-		p = price{3.0, 15.0} // sensible default
-	}
-	const m = 1_000_000.0
-	fresh := u.InputTokens - u.CacheReadTokens
-	if fresh < 0 {
-		fresh = u.InputTokens
-	}
-	return (float64(fresh)*p.in +
-		float64(u.CacheReadTokens)*p.in*0.1 +
-		float64(u.OutputTokens)*p.out) / m
+	return cloudengine.EstimateCost(model, cloudengine.Usage{
+		InputTokens:     int64(u.InputTokens),
+		OutputTokens:    int64(u.OutputTokens),
+		CacheReadTokens: int64(u.CacheReadTokens),
+	})
 }
