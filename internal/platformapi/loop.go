@@ -251,6 +251,17 @@ type frameworkPosture struct {
 	CoveragePct float64 `json:"coverage_pct"` // assessed / assessable, 0..100
 	Certifiable bool    `json:"certifiable"`  // ALWAYS false — automated scanning is not a certification
 	Readiness   string  `json:"readiness"`    // honest status line, never "Compliant"
+	// ShallowCrosswalk / DepthNote say that CoveragePct's denominator is OUR crosswalk's control
+	// count, not the framework's. Measured live: gdpr is assessable=2 and nist_800_53 is 20, so the
+	// shallower mapping produces the better percentage — the vacuous-pass shape §14.2 names.
+	//
+	// grc.Coverage grew these fields and this DTO did not, so the FLAG stopped at the API boundary
+	// while only the sentence inside Readiness travelled. A consumer could print the caveat and could
+	// not badge, sort or filter on it — and a caveat that survives only as prose is one a redesign
+	// drops without noticing. Same seam defect this codebase keeps finding, in the layer that exposes
+	// the fix for it.
+	ShallowCrosswalk bool   `json:"shallow_crosswalk,omitempty"`
+	DepthNote        string `json:"depth_note,omitempty"`
 }
 
 // handlePostureSummary (GET /v1/posture) returns every framework's posture summary the tenant has
@@ -278,6 +289,7 @@ func (d Deps) handlePostureSummary(w http.ResponseWriter, r *http.Request, tenan
 			Framework: f, Total: cov.AssessedControls, Met: cov.Met, Gap: cov.Gaps,
 			Assessable: cov.AssessableControls, NotAssessed: cov.NotAssessed,
 			CoveragePct: cov.AutomatedCoveragePct, Certifiable: cov.Certifiable, Readiness: cov.Readiness,
+			ShallowCrosswalk: cov.ShallowCrosswalk, DepthNote: cov.DepthNote,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"frameworks": out})
