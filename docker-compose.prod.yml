@@ -111,7 +111,7 @@ services:
       # always correct for every asset.
       TSENGINE_SANDBOX_IMAGE: ${TSENGINE_SANDBOX_IMAGE:-ghcr.io/clattribe/tsengine/sandbox:full-latest}
       # Optional: per-asset SLIM images. With this set, a repository scan pulls the repository
-      # toolset instead of the full image (no codeql/prowler/garak ML stack). {toolset} is
+      # toolset instead of the full image (no prowler/scoutsuite/cloudfox). {toolset} is
       # substituted per asset; any asset without a slim image falls back to the full one above.
       # The platform logs the resolved image per asset type at startup.
       TSENGINE_SANDBOX_IMAGE_TEMPLATE: ${TSENGINE_SANDBOX_IMAGE_TEMPLATE:-}

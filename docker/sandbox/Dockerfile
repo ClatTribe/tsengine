@@ -132,7 +132,7 @@ ARG NUCLEI_VERSION=3.3.7
 #
 # WHY IT EXISTS: the image installs tooling for all seven assets whether or not you scan them, and the
 # heavy half is asset-specific — CodeQL (~1GB) and KICS serve `repository` escalation only, prowler /
-# scoutsuite / checkov serve `cloud_account` only, garak pulls an ML stack for `ai_application`, and
+# scoutsuite / checkov serve `cloud_account` only, and
 # the nuclei template corpus + SecLists serve the web/api/ip family. A developer working on container
 # and repository scanning pays for all of it, on every rebuild, and a 16GB laptop runs out of disk
 # before the build finishes. (It did.)
@@ -175,9 +175,10 @@ RUN chmod +x /usr/local/bin/ts_want.sh
 # heavy resolvers (semgrep/prowler/checkov/scoutsuite) often pin
 # incompatible shared deps; isolating each install avoids backtracking hell.
 #
-# garak (NVIDIA's LLM vulnerability scanner) is the ai_application anchor. It is deliberately LAST:
-# it pulls a large ML dependency set, and the per-tool isolation above means a resolver conflict
-# there degrades garak alone rather than taking the image down with it.
+# garak (the ai_application anchor) WAS installed here and is not any more. Nothing could dispatch it:
+# no asset handler, no agent, no dispatcher, and no `ai_application` asset type to point at it — it
+# was the only registered tool with zero callers. It shipped a large ML dependency set in every image
+# for a capability that could not be invoked. It returns when the asset does (ADR 0012).
 RUN . /usr/local/bin/ts_want.sh \
     && PKGS="" \
     && { ts_want repository && PKGS="$PKGS semgrep==1.96.0 mobsfscan bandit"; } || true \
@@ -189,13 +190,22 @@ RUN . /usr/local/bin/ts_want.sh \
     && { ts_want api && PKGS="$PKGS schemathesis inql"; } || true \
     && { ts_want cloud && PKGS="$PKGS prowler==4.6.0 scoutsuite"; } || true \
     && { { ts_want repository || ts_want cloud; } && PKGS="$PKGS checkov"; } || true \
-    && { ts_want ai && PKGS="$PKGS modelscan garak"; } || true \
+    && { ts_want repository && PKGS="$PKGS modelscan"; } || true \
     && echo "python toolset: ${PKGS:-<none>}" \
+    # A CONSTRAINTS FILE, because the pin above was being silently defeated. These installs run ONE
+    # AT A TIME on purpose (isolation, see the comment above), which means `semgrep==1.96.0` installs
+    # first and then `mobsfscan` — which requires semgrep UNPINNED — quietly upgrades it. Measured:
+    # the Dockerfile pinned 1.96.0 and the image ran 1.172.0, while `tool-freshness` reported 1.96.0.
+    # A version claim about a binary that is not the one installed, which is the same defect as
+    # claiming a version for a binary that is not there at all. A constraint applies across every
+    # install without merging them into one resolve, so the isolation is kept and the pin holds.
+    && printf 'semgrep==1.96.0\n' > /tmp/pip-constraints.txt \
     && for p in $PKGS; do \
-        pip3 install --no-cache-dir --break-system-packages "$p" \
-        || pip3 install --no-cache-dir "$p" \
+        pip3 install --no-cache-dir --break-system-packages -c /tmp/pip-constraints.txt "$p" \
+        || pip3 install --no-cache-dir -c /tmp/pip-constraints.txt "$p" \
         || echo "WARN: pip install $p failed (tool will be unavailable)"; \
-    done
+    done \
+    && rm -f /tmp/pip-constraints.txt
 
 # wpscan (WordPress CMS-specialist DAST — web registry/escalation tool).
 # Ruby gem; best-effort so a build-time failure degrades to "unavailable"
@@ -276,32 +286,64 @@ RUN . /usr/local/bin/ts_want.sh \
 # CodeQL CLI + query bundle (repository escalation, E3 — interprocedural
 # taint). Large (~hundreds of MB); escalation-only, fired only when semgrep
 # flags an injection candidate. Pinned bundle for reproducibility (§10).
+# THIS FETCH WAS 404-ing AND THE BUILD SWALLOWED IT. The release publishes codeql-linux64.ZIP; this
+# asked for .tar.gz, got a 404, and `|| echo "non-fatal"` turned that into a successful build. codeql
+# has never been in the image at this pin — so the repository asset shipped without its taint-analysis
+# escalation, and `tsengine tool-freshness` reported codeql "pinned 2.20.3", asserting a version for a
+# binary that was not there. Same defect class as a scanner that cannot reach its DB reporting a clean
+# scan: a failure swallowed into a success.
+#
+# codeql publishes ONE linux build and it is x86_64 ONLY — there is no arm64 CLI. The old CQ_ARCH
+# ternary printed linux64 in BOTH branches, which dressed that fact up as arch handling and hid it.
+# Measured on an arm64 build with the URL fixed: the 469MB download and unzip both succeed, then
+# `codeql version` dies with "Trace/breakpoint trap" — an x86_64 binary under emulation. So on arm64
+# it is STUBBED rather than installed broken: the stub exits 127, tool.DidNotRun reports "did not
+# run", and the repository escalation lands in ToolsFailed saying so. An unrunnable binary on $PATH
+# would instead fail at scan time with an error nobody could map back to the image's architecture.
 ARG CODEQL_VERSION=2.20.3
 RUN . /usr/local/bin/ts_want.sh \
-    && if ts_want repository; then \
-       CQ_ARCH="$([ "${TARGETARCH}" = "amd64" ] && echo linux64 || echo linux64)" \
-       && curl -fL -o /tmp/codeql.tar.gz \
-       "https://github.com/github/codeql-cli-binaries/releases/download/v${CODEQL_VERSION}/codeql-${CQ_ARCH}.tar.gz" \
-       && tar -xzf /tmp/codeql.tar.gz -C /opt \
-       && ln -s /opt/codeql/codeql /usr/local/bin/codeql \
-       && rm -f /tmp/codeql.tar.gz \
-       || echo "codeql fetch failed (non-fatal; codeql escalation will degrade)" ; \
-    else echo "skip codeql (TOOLSET=$TS_TOOLSET)"; fi
+    && if ! ts_want repository; then echo "skip codeql (TOOLSET=$TS_TOOLSET)"; \
+    elif [ "${TARGETARCH}" != "amd64" ]; then \
+       echo "codeql: no arm64 CLI upstream — stubbing (taint escalation unavailable on this arch)"; \
+       printf '#!/bin/sh\necho "codeql is not installed in this image (upstream ships no arm64 CLI; build for linux/amd64 to get the taint-analysis escalation)." >&2\nexit 127\n' > /usr/local/bin/codeql \
+       && chmod +x /usr/local/bin/codeql; \
+    else \
+       curl -fL --retry 3 --retry-delay 2 -o /tmp/codeql.zip \
+       "https://github.com/github/codeql-cli-binaries/releases/download/v${CODEQL_VERSION}/codeql-linux64.zip" \
+       && unzip -q /tmp/codeql.zip -d /opt \
+       && ln -sf /opt/codeql/codeql /usr/local/bin/codeql \
+       && rm -f /tmp/codeql.zip \
+       && /opt/codeql/codeql version --format=terse \
+       || { echo "FATAL: codeql install failed on amd64, where it is supposed to work. The repository asset would lose its taint-analysis escalation and nothing downstream would say so." >&2; exit 1; } ; \
+    fi
 
-# KICS (deeper IaC SAST, repository registry-tier). Ships per-arch release tarballs that bundle the `kics`
-# binary + its `assets/queries` corpus (a bare `go install` would omit the queries). Non-fatal: a fetch
-# failure degrades the on-demand kics pass, never the build.
-ARG KICS_VERSION=2.1.3
+# KICS (deeper IaC SAST, repository registry-tier). THREE bugs here, all silent:
+#
+#  1. v2.1.3 publishes NO platform binaries at all (only extracted-info.zip), so the URL 404'd.
+#  2. The arch string was wrong anyway — releases use linux_amd64, not linux_x64.
+#  3. The comment claimed the tarball "bundles the kics binary + its assets/queries corpus".
+#     IT DOES NOT: the archive holds LICENSE, README and the binary, nothing else. kics without its
+#     queries runs and finds nothing — a scanner reporting clean because it has no rules, which is
+#     worse than a scanner that is absent, because an absent one is reported in ToolsFailed.
+#
+# So the queries come from the SOURCE archive for the same tag (17,928 files), extracted next to the
+# binary where kics looks for them. Pinned together so the corpus and the binary always match.
+ARG KICS_VERSION=2.1.20
 RUN . /usr/local/bin/ts_want.sh \
     && if ts_want repository; then \
-       KX_ARCH="$([ "${TARGETARCH}" = "amd64" ] && echo x64 || echo arm64)" \
-       && mkdir -p /opt/kics \
-       && curl -fL -o /tmp/kics.tar.gz \
-       "https://github.com/Checkmarx/kics/releases/download/v${KICS_VERSION}/kics_${KICS_VERSION}_linux_${KX_ARCH}.tar.gz" \
+       mkdir -p /opt/kics \
+       && curl -fL --retry 3 --retry-delay 2 -o /tmp/kics.tar.gz \
+       "https://github.com/Checkmarx/kics/releases/download/v${KICS_VERSION}/kics_${KICS_VERSION}_linux_${TARGETARCH}.tar.gz" \
        && tar -xzf /tmp/kics.tar.gz -C /opt/kics \
-       && ln -s /opt/kics/kics /usr/local/bin/kics \
-       && rm -f /tmp/kics.tar.gz \
-       || echo "kics fetch failed (non-fatal; kics registry pass will degrade)" ; \
+       && curl -fL --retry 3 --retry-delay 2 -o /tmp/kics-src.tar.gz \
+       "https://github.com/Checkmarx/kics/archive/refs/tags/v${KICS_VERSION}.tar.gz" \
+       && tar -xzf /tmp/kics-src.tar.gz -C /tmp "kics-${KICS_VERSION}/assets/queries" \
+       && mv "/tmp/kics-${KICS_VERSION}/assets" /opt/kics/assets \
+       && ln -sf /opt/kics/kics /usr/local/bin/kics \
+       && rm -rf /tmp/kics.tar.gz /tmp/kics-src.tar.gz "/tmp/kics-${KICS_VERSION}" \
+       && /opt/kics/kics version \
+       && [ "$(find /opt/kics/assets/queries -name '*.rego' | head -1)" ] \
+       || { echo "FATAL: kics install failed (binary or query corpus missing). kics without queries reports a clean scan because it has no rules." >&2; exit 1; } ; \
     else echo "skip kics (TOOLSET=$TS_TOOLSET)"; fi
 
 # Set unconditionally: the path is harmless when kics was not installed, and keeping it out of the
@@ -346,3 +388,15 @@ ENV TSENGINE_ADDR=:8080
 EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/tool-server"]
+
+
+# ---------------------------------------------------------------------------
+# THE IMAGE MUST CONTAIN WHAT IT CLAIMS TO. Last step on purpose: everything is installed by now, and
+# a missing scanner should break the build here rather than surface months later as a degraded
+# customer scan. This is what codeql and kics needed and did not have — see verify-tools.sh.
+# ---------------------------------------------------------------------------
+# --chmod on the COPY, not a chmod in the RUN: by this point the stage has dropped to a non-root
+# user, so `chmod` is "Operation not permitted" and the build dies on the guard rather than on
+# anything it was guarding.
+COPY --chmod=0755 docker/sandbox/verify-tools.sh /usr/local/bin/verify-tools.sh
+RUN /usr/local/bin/verify-tools.sh

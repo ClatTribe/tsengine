@@ -45,9 +45,11 @@ func Items() []Item {
 			// type yet, so a customer cannot point it at anything. Claiming this row on the strength
 			// of a tool nobody can reach would be the same overclaim as a green tick for a scan that
 			// never ran; it flips when the asset type lands (ADR 0012).
-			Instead: "garak (NVIDIA's LLM scanner) is wrapped and ships in our sandbox image, but you " +
-				"cannot yet point it at an app here — that needs the ai_application asset type. Run " +
-				"garak against your assistant yourself in the meantime.",
+			Instead: "We do not test this. garak (NVIDIA's LLM scanner) is the tool to use — run it " +
+				"against your assistant yourself. The wrapper was removed from our sandbox image " +
+				"because nothing could dispatch it without the ai_application asset type (ADR 0012); " +
+				"naming a tool we ship but cannot point at anything would be the same overclaim as a " +
+				"green tick for a scan that never ran.",
 		},
 		{
 			ID: "appsec.remediation_sla", Category: "Application Security", Tier: TierSeriesB,

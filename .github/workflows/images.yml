@@ -120,7 +120,7 @@ jobs:
   #
   # `full` carries every scanner and is always correct — it is the only safe default and the
   # fallback for any asset with no slim image. The per-asset variants exist because the full image
-  # drags codeql, prowler and garak's ML dependency set into a box that may only ever scan
+  # drags codeql, prowler and scoutsuite into a box that may only ever scan
   # repositories. TOOLSET is read by docker/sandbox/toolset.sh, which STUBS an unselected tool to
   # exit 127 — which tool.DidNotRun reports as "did not run", so a slim image used for the wrong
   # asset degrades the scan honestly instead of reporting a clean one.

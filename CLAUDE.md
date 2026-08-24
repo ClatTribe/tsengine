@@ -195,7 +195,9 @@ ingest paths rather than through a scanned asset type, and `ip_address`/`domain`
 surface underneath web and api rather than separate things we sell. Say "six surfaces" to a
 customer and "seven asset types" to the engine, and do not let either list quietly become the other.
 
-**`ai_application` HAS NOT STARTED.** The garak wrapper exists and is unreachable; there is no asset
+**`ai_application` HAS NOT STARTED.** The garak wrapper has been REMOVED — it was the only registered
+tool with zero callers (no handler, no agent, no dispatcher), so it shipped a large ML dependency set
+in every image for a capability nobody could invoke. It returns when the asset does. There is no asset
 type, so nothing can be pointed at it. It is not a supported surface, it is not on the launch list,
 and no page may imply otherwise (§13's AI-application note carries the detail).
 
@@ -865,7 +867,7 @@ was green at the moment it was least able to see.
 Now: 21 pinned · 0 floating · 14 unmanaged of 35 seen. `ts_install`, the `PKGS` list and branch-ref
 `curl | sh` installers are all parsed; a version given as `@${ARG}` defers to the ARG rather than
 being counted as a literal pin (which classified an irreproducible build as reproducible). The
-unmanaged 14 (sqlmap, checkov, garak, scoutsuite, syft, trufflehog, …) are **rendered and named**,
+unmanaged 13 (sqlmap, checkov, scoutsuite, syft, trufflehog, …) are **rendered and named**,
 not just counted — pinning a PyPI/OS package can break the install, so they are reported rather than
 gated. `Render` states its OWN coverage, because a tool absent from every list must read as
 UNVERIFIED, never as confirmed-pinned. When adding a scanner, check `tool-freshness` actually SEES
@@ -1628,9 +1630,59 @@ now PULLS; `docker-compose.build.yml` is the override that restores local buildi
 fork, uncommitted changes), and `deploy-single-box.sh` pulls by default with `--build` for the old
 behaviour. `make pull` / `make pull-slim` / `make up-prod`.
 
+**THE IMAGE MUST CONTAIN WHAT IT CLAIMS TO — codeql and kics were absent from EVERY image.** Both
+fetches 404'd and both were swallowed by `|| echo "non-fatal"`, so the build exited 0:
+codeql publishes `codeql-linux64.ZIP` and we asked for `.tar.gz`; kics v2.1.3 publishes NO platform
+binaries at all (and the arch string was `x64` where releases use `amd64`). Both gate on
+`ts_want repository`, which `full` satisfies — so production shipped without the repository asset's
+taint-analysis escalation (§5.3) and its deeper IaC pass, while `tool-freshness` reported both as
+"pinned", asserting a version for a binary that was not there. Same defect class as a scanner that
+cannot reach its DB reporting a clean scan (§12.3): a failure swallowed into a success.
+
+**codeql is x86_64-ONLY and that was invisible too.** Upstream ships one Linux CLI, `codeql-linux64`,
+and the old `CQ_ARCH` ternary printed `linux64` in BOTH branches — dressing the absence of an arm64
+build up as arch handling. Measured on an arm64 build with the URL corrected: the 469MB download and
+the unzip both SUCCEED, then `codeql version` dies with `Trace/breakpoint trap`, an x86_64 binary
+under emulation. So on arm64 it is deliberately STUBBED (exit 127 → `tool.DidNotRun` → `ToolsFailed`)
+rather than installed broken: an unrunnable binary on `$PATH` fails at scan time with an error nobody
+can map back to the image's architecture. The taint escalation is an amd64 capability, and the image
+now says so instead of implying otherwise. `verify-tools.sh` exempts codeql on non-x86_64 for the
+same reason — demanding a binary upstream does not publish is not a check, it is a broken build.
+
+A third bug rode along: the kics release tarball does NOT bundle `assets/queries`, despite the
+comment saying so — it holds LICENSE, README and the binary. kics without its query corpus RUNS AND
+FINDS NOTHING, which is worse than being absent, because an absent tool lands in `ToolsFailed`. The
+corpus now comes from the source archive for the same tag, pinned together so binary and rules match.
+
+Why the existing guard missed it: `toolsbundle.TestSandboxImageProvidesEveryToolBinary` asks whether
+a tool's NAME APPEARS IN THE DOCKERFILE — a textual check, as its own doc says. Both names appear, on
+the install lines that were failing. It verifies INTENT; nothing verified OUTCOME.
+`docker/sandbox/verify-tools.sh` now runs as the FINAL build step and fails the build when a
+`TOOLSET=full` image is missing any scanner binary or has one stubbed. Its list is kept in sync with
+the wrappers by `TestVerifyToolsListMatchesTheWrappers` (a hardcoded list is only as good as what
+stops it drifting). It skips slim images by design — there a stub is the intended outcome.
+
+**A pip PIN was being silently defeated, found by the same check.** The Python toolset installs one
+package at a time (deliberate — isolating each install avoids resolver backtracking), so
+`semgrep==1.96.0` installed first and then `mobsfscan`, which requires semgrep UNPINNED, quietly
+upgraded it. Measured: the Dockerfile pinned 1.96.0 and the image ran **1.172.0**, while
+`tool-freshness` reported 1.96.0 — a version claim about a different binary than the one installed,
+the same defect as claiming a version for a binary that is not there. Fixed with a pip CONSTRAINTS
+file (`-c`), which applies across every install without merging them into one resolve, so the
+isolation is kept and the pin holds. Verified in the built image: semgrep 1.96.0, with mobsfscan,
+bandit and modelscan all still installing.
+
+**garak was REMOVED.** It was the only registered tool with ZERO callers — no asset handler, no
+agent, no dispatcher — because `ai_application` does not exist, so it shipped a large ML dependency
+set in every image for a capability nobody could invoke. Wrapper, registrations and image install are
+gone; it returns when the asset does (ADR 0012). `ctoreadiness` still RECOMMENDS garak to the
+customer but no longer claims we ship it. `modelscan` moved from the `ai` toolset to `repository`,
+which is the asset that actually dispatches it — it would otherwise have been stubbed in the very
+slim image that needs it.
+
 **PER-ASSET SLIM SANDBOX IMAGES.** The sandbox is built once per TOOLSET (`full` + web · api ·
 repository · container · ip · domain · cloud), so a box that only scans repositories stops pulling
-codeql, prowler and garak's ML stack. `sandbox.ScanImages.For(assetType)` resolves the image per
+codeql, prowler and scoutsuite. `sandbox.ScanImages.For(assetType)` resolves the image per
 scan: an explicit override, else `TSENGINE_SANDBOX_IMAGE_TEMPLATE` with `{toolset}` substituted, else
 **the full image** — the only safe default. `sandbox.AssetToolset` is the asset→toolset mapping,
 written out rather than derived by string-munging (cutting `container_image` at the underscore also

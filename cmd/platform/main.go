@@ -147,7 +147,7 @@ func main() {
 
 	// PER-ASSET SCAN IMAGES. TSENGINE_SANDBOX_IMAGE_TEMPLATE (containing "{toolset}") opts the whole
 	// deployment into the slim per-asset images CI publishes, so a box that only scans repositories
-	// stops pulling codeql, prowler and garak's ML stack. Unset → every asset uses the full image,
+	// stops pulling codeql, prowler and scoutsuite. Unset → every asset uses the full image,
 	// which is exactly today's behaviour.
 	scanImages := sandbox.ScanImages{
 		Full:     sandboxImages.Scan,
