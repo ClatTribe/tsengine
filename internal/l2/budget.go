@@ -72,9 +72,10 @@ const (
 	StopBudgetToks StopReason = "budget_tokens"
 	StopMaxIters   StopReason = "max_iterations"
 	StopWallClock  StopReason = "wall_clock"
-	StopStalled    StopReason = "stalled"   // watchdog: no progress
-	StopCancelled  StopReason = "cancelled" // ctx cancelled
-	StopRunning    StopReason = ""          // not stopped yet
+	StopStalled    StopReason = "stalled"     // watchdog: no progress
+	StopCancelled  StopReason = "cancelled"   // ctx cancelled
+	StopError      StopReason = "model_error" // a permanent LLM error ended the run
+	StopRunning    StopReason = ""            // not stopped yet
 )
 
 // exceeded returns the StopReason if any HARD bound is hit, else

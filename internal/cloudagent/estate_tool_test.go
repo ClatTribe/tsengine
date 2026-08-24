@@ -73,3 +73,43 @@ func TestEstateContext_UnknownIDIsRefused(t *testing.T) {
 		t.Errorf("an unknown node id must be refused, got %q", out)
 	}
 }
+
+// chokeFixture: two internet→crown routes that BOTH pass through cloud:role/etl, which is
+// therefore the choke point. Each route crosses surfaces (web → code → cloud edges).
+func chokeFixture() *estategraph.Graph {
+	g := estategraph.New()
+	g.AddNode(estategraph.Node{ID: estategraph.InternetID, Kind: estategraph.KindNetwork, Public: true})
+	g.AddNode(estategraph.Node{ID: "web:app", Kind: estategraph.KindResource, Name: "app", Surfaces: []string{"web"}, Public: true})
+	g.AddNode(estategraph.Node{ID: "cloud:role/etl", Kind: estategraph.KindPrincipal, Name: "etl", Surfaces: []string{"cloud"}})
+	g.AddNode(estategraph.Node{ID: "cloud:s3/pii", Kind: estategraph.KindData, Name: "customer-PII", Surfaces: []string{"cloud"}, Sensitive: estategraph.SensHigh})
+	g.AddNode(estategraph.Node{ID: "cloud:rds/db", Kind: estategraph.KindData, Name: "prod-db", Surfaces: []string{"cloud"}, Sensitive: estategraph.SensHigh})
+	_ = g.AddEdge(estategraph.Edge{From: estategraph.InternetID, To: "web:app", Kind: estategraph.EdgeReaches, Surface: "web", Evidence: []string{"f-exposed"}, Why: "public"})
+	_ = g.AddEdge(estategraph.Edge{From: "web:app", To: "cloud:role/etl", Kind: estategraph.EdgeAssumes, Surface: "code", Evidence: []string{"f-oidc"}, Why: "workflow assumes the role"})
+	_ = g.AddEdge(estategraph.Edge{From: "cloud:role/etl", To: "cloud:s3/pii", Kind: estategraph.EdgeGrants, Surface: "cloud", Evidence: []string{"f-s3"}, Why: "reads the bucket"})
+	_ = g.AddEdge(estategraph.Edge{From: "cloud:role/etl", To: "cloud:rds/db", Kind: estategraph.EdgeGrants, Surface: "cloud", Evidence: []string{"f-rds"}, Why: "reads the db"})
+	return g
+}
+
+func TestEstateContext_ChokePoints(t *testing.T) {
+	cc := &Context{Estate: chokeFixture()}
+	out := tEstate(cc, map[string]any{"chokepoints": true})
+	if !strings.Contains(out, "cloud:role/etl") {
+		t.Errorf("the shared interior node must be reported as the choke point:\n%s", out)
+	}
+	if !strings.Contains(out, "Highest-leverage") {
+		t.Errorf("chokepoints view should render the leverage heading:\n%s", out)
+	}
+	// The id-alias form works too.
+	if out2 := tEstate(cc, map[string]any{"id": "chokepoints"}); !strings.Contains(out2, "cloud:role/etl") {
+		t.Errorf("estate_context(id:\"chokepoints\") should also render the view:\n%s", out2)
+	}
+}
+
+// No cross-surface choke point → an honest "each path is separate work", never a promoted node.
+func TestEstateContext_ChokePoints_NoneIsHonest(t *testing.T) {
+	cc := &Context{Estate: estateFixture()} // no InternetID entry → no internet→crown routes
+	out := tEstate(cc, map[string]any{"chokepoints": true})
+	if !strings.Contains(out, "No cross-surface choke point") {
+		t.Errorf("an estate with no shared route must say so, not invent a choke point:\n%s", out)
+	}
+}

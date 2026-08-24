@@ -86,6 +86,7 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 	rejected := map[string]int{}
 	compactions := 0
 	stop := StopRunning
+	var runErr error
 	for {
 		if ctx.Err() != nil {
 			stop = StopCancelled
@@ -113,7 +114,14 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 		tools := a.catalog.exposedIn(st.Phase)
 		resp, err := a.generate(ctx, system, history, tools)
 		if err != nil {
-			return Outcome{}, fmt.Errorf("l2: generate: %w", err)
+			// A permanent LLM error (transients already retried in generate)
+			// ends the run — but the findings emitted so far are real and
+			// grounded, so we STOP and return them rather than discarding the
+			// whole run (the webagent partial-findings precedent). The error is
+			// still surfaced; only the Outcome is no longer thrown away.
+			runErr = fmt.Errorf("l2: generate: %w", err)
+			stop = StopError
+			break
 		}
 		a.budget.record(resp.Usage)
 
@@ -168,7 +176,7 @@ func (a *Agent) Run(ctx context.Context, target types.Asset, l1 []types.Finding)
 		Tokens:      a.budget.spentToks,
 		Compactions: compactions,
 		Model:       a.client.Model(),
-	}, nil
+	}, runErr
 }
 
 // generate calls the LLM with bounded retry-with-backoff on TRANSIENT errors only

@@ -222,6 +222,55 @@ func TestAgent_RetriesTransientLLMError(t *testing.T) {
 	}
 }
 
+// lateFailClient succeeds for the first okN Generate calls, then fails every
+// call with a permanent error — models a long run that dies mid-flight (e.g.
+// context overflow surfaced as a 400) AFTER real findings were emitted.
+type lateFailClient struct {
+	Client
+	okN   int
+	err   error
+	calls int
+}
+
+func (f *lateFailClient) Generate(ctx context.Context, s string, h []Message, t []ToolSchema) (Response, error) {
+	f.calls++
+	if f.calls > f.okN {
+		return Response{}, f.err
+	}
+	return f.Client.Generate(ctx, s, h, t)
+}
+
+// P0-3: a permanent LLM error must NOT discard findings already emitted. The
+// run stops with StopError and surfaces the error, but the Outcome carries the
+// grounded findings it produced before the failure (the webagent precedent).
+func TestAgent_PermanentErrorPreservesEmittedFindings(t *testing.T) {
+	mc := &MockClient{ModelName: "mock", Script: []Response{
+		scriptCall("advance_phase", nil, 0.001), // triage→investigate
+		scriptCall("create_vulnerability_report", map[string]any{
+			"title": "SQLi", "severity": "high",
+			"evidence_finding_ids": []string{"f-001"}, "plain_english": "blind sqli",
+		}, 0.001),
+		// The 3rd Generate call fails permanently — after the report was emitted.
+	}}
+	lf := &lateFailClient{Client: mc, okN: 2, err: errors.New("anthropic: status 400: context length exceeded")}
+	a, err := New(lf, BuildCatalog(Deps{Target: webTarget(), L1Findings: sampleFindings()}), DefaultBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.sleep = func(context.Context, time.Duration) error { return nil }
+
+	out, err := a.Run(context.Background(), webTarget(), sampleFindings())
+	if err == nil {
+		t.Error("a permanent error should still be surfaced")
+	}
+	if out.StopReason != StopError {
+		t.Errorf("stop = %q, want %q", out.StopReason, StopError)
+	}
+	if len(out.Findings) != 1 {
+		t.Fatalf("the finding emitted before the error must be preserved, got %d", len(out.Findings))
+	}
+}
+
 func TestAgent_PermanentLLMErrorFailsFast(t *testing.T) {
 	mc := &MockClient{Script: []Response{scriptCall("finish_scan", map[string]any{"executive_summary": "ok"}, 0.001)}}
 	flaky := &flakyClient{Client: mc, failN: 1, err: errors.New("anthropic: status 400: bad request")}

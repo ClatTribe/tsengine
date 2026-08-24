@@ -68,6 +68,29 @@ func Detect(g *estategraph.Graph, opts Options) []types.Finding {
 	return out
 }
 
+// ChokePoints ranks the highest-leverage nodes across the estate's CROSS-SURFACE
+// internet→crown routes — the exact route set detectInternetToCrown reasons over, so an agent's
+// "what to fix first" view can never disagree with the estate::choke-point finding the detector
+// emits. Returns nil when there is no internet entry, no cross-surface route, or no interior node
+// more than one route shares — each a real answer (§10), never a promoted least-unshared node.
+func ChokePoints(g *estategraph.Graph, opts Options) []estategraph.ChokePoint {
+	if g == nil || len(g.Nodes) == 0 {
+		return nil
+	}
+	o := opts.norm()
+	if _, ok := g.Nodes[estategraph.InternetID]; !ok {
+		return nil
+	}
+	paths, _ := g.PathsFrom(estategraph.InternetID, estategraph.Crown, o.MaxDepth, o.MaxPaths)
+	var cross []estategraph.Path
+	for _, p := range paths {
+		if surfaceSpan(g, p) >= 2 {
+			cross = append(cross, p)
+		}
+	}
+	return estategraph.ChokePoints(cross)
+}
+
 // detectSecretBridges finds the canonical cross-surface exploit: a credential exposed on one
 // surface that is a LIVE identity on another. The secret node carries both surfaces because code
 // and cloud converge on the same shared id — that convergence IS the detection.

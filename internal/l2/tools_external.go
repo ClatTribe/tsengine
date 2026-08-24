@@ -2,6 +2,7 @@ package l2
 
 import (
 	"context"
+	"fmt"
 	"strings"
 )
 
@@ -34,6 +35,16 @@ type Prober interface {
 // status+headers+truncated-body summary.
 type HTTPDoer interface {
 	Do(ctx context.Context, method, url string, headers map[string]string, body string) (summary string, err error)
+}
+
+// confirmationHint tells the model the handle a just-executed active check was
+// recorded under, and that citing it is what unlocks the "verified" tier. The
+// handle is the only thing verifyGate accepts as an active method — a bare
+// "send_request" string no longer counts, so the model must cite what really
+// ran (the free-text-verified_by bypass this closes).
+func confirmationHint(handle string) string {
+	return fmt.Sprintf("\n\n[active confirmation recorded as %q — cite it in "+
+		"update_finding(verified_by=[%q]) to upgrade a finding to 'verified'.]", handle, handle)
 }
 
 // externalTools builds the fetch-external / re-dispatch / primitive tools —
@@ -110,7 +121,7 @@ func externalTools(d Deps) Catalog {
 					"args": objParam("tool-specific args (include target/url, templates, tamper, etc.)"),
 				}, "tool"),
 			},
-			Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
+			Handler: func(ctx context.Context, args map[string]any, st *State) (ToolResult, error) {
 				tool := strings.TrimSpace(argStr(args, "tool"))
 				if tool == "" {
 					return ToolResult{Err: true, Content: "tool is required, e.g. sqlmap"}, nil
@@ -119,7 +130,11 @@ func externalTools(d Deps) Catalog {
 				if err != nil {
 					return ToolResult{Err: true, Content: "probe failed: " + err.Error()}, nil
 				}
-				return ToolResult{Content: summary}, nil
+				// The probe really ran → record it as an active confirmation the
+				// model can cite to reach "verified" (§10: the executed tool is
+				// the evidence, not the model's say-so).
+				h := st.RecordConfirmation("dispatch_l2_probe:"+tool, tool)
+				return ToolResult{Content: summary + confirmationHint(h)}, nil
 			},
 		})
 	}
@@ -139,7 +154,7 @@ func externalTools(d Deps) Catalog {
 					"body":    str("optional request body"),
 				}, "url"),
 			},
-			Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
+			Handler: func(ctx context.Context, args map[string]any, st *State) (ToolResult, error) {
 				url := strings.TrimSpace(argStr(args, "url"))
 				if url == "" {
 					return ToolResult{Err: true, Content: "url is required (absolute)"}, nil
@@ -152,7 +167,10 @@ func externalTools(d Deps) Catalog {
 				if err != nil {
 					return ToolResult{Err: true, Content: "request failed: " + err.Error()}, nil
 				}
-				return ToolResult{Content: summary}, nil
+				// The request really went out → record it as an active
+				// confirmation the model can cite to reach "verified".
+				h := st.RecordConfirmation("send_request", method+" "+url)
+				return ToolResult{Content: summary + confirmationHint(h)}, nil
 			},
 		})
 	}
@@ -172,6 +190,12 @@ func externalTools(d Deps) Catalog {
 					"focus": str("what to investigate, e.g. 'paths to the production database' or a cloud finding/resource"),
 				}, "focus"),
 			},
+			// An investigation/delegation tool — exploratory, so it must NOT linger into the terminal
+			// report phase, which accumulates every cumulative tool and is the binding ≤12-cap
+			// constraint (§2.6). Without this, a tenant with BOTH investigators wired pushed report to
+			// 14 and l2.New failed the whole run — exactly the code+cloud flagship customer.
+			Phases:       []Phase{PhaseTriage, PhaseInvestigate, PhaseChain},
+			OnlyInPhases: true,
 			Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 				out, err := ci(ctx, strings.TrimSpace(argStr(args, "focus")))
 				if err != nil {
@@ -198,6 +222,10 @@ func externalTools(d Deps) Catalog {
 					"focus": str("what to investigate, e.g. a code finding id, a file, or 'the SQLi in the search handler'"),
 				}, "focus"),
 			},
+			// Exploratory delegation — scoped out of the report phase for the same ≤12-cap reason as
+			// investigate_cloud above (the code+cloud tenant wired both, blowing report to 14).
+			Phases:       []Phase{PhaseTriage, PhaseInvestigate, PhaseChain},
+			OnlyInPhases: true,
 			Handler: func(ctx context.Context, args map[string]any, _ *State) (ToolResult, error) {
 				out, err := ki(ctx, strings.TrimSpace(argStr(args, "focus")))
 				if err != nil {

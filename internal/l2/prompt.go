@@ -192,7 +192,15 @@ func digestFindings(l1 []types.Finding) []string {
 	out := make([]string, 0, len(sorted))
 	for i, f := range sorted {
 		if i >= cap {
-			out = append(out, fmt.Sprintf("… (+%d more)", len(sorted)-cap))
+			// The digest is severity-sorted, so the tail is the lowest-priority
+			// findings — but "lowest-priority" is not "unreachable". The old
+			// "+N more" printed no ids, so the Lead could not get_finding them
+			// and they were silently invisible to reporting. Surface their ids
+			// (id-only — far cheaper than full lines) so every finding stays
+			// addressable via get_finding. If even the id list would be huge,
+			// bound it and SAY the remainder is unlisted (a declared limit, not
+			// a silent drop — §5.2.5's coverage-disclosure ethic).
+			out = append(out, tailIDLine(sorted[cap:]))
 			break
 		}
 		line := fmt.Sprintf("- [%s] %s %s %s — %s",
@@ -203,6 +211,33 @@ func digestFindings(l1 []types.Finding) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+// maxTailIDs bounds how many truncated finding ids the digest enumerates, so a
+// pathological scan can't blow the prompt with a bare-id list. Ids beyond it
+// are declared unlisted rather than silently dropped.
+const maxTailIDs = 300
+
+// tailIDLine renders the truncated (beyond-cap) findings as an id-only line the
+// Lead can feed to get_finding, keeping them reachable.
+func tailIDLine(tail []types.Finding) string {
+	n := len(tail)
+	shown := tail
+	if n > maxTailIDs {
+		shown = tail[:maxTailIDs]
+	}
+	ids := make([]string, 0, len(shown))
+	for _, f := range shown {
+		ids = append(ids, f.ID)
+	}
+	line := fmt.Sprintf("… (+%d more, lowest-priority — reachable by id via get_finding: %s)",
+		n, strings.Join(ids, " "))
+	if n > maxTailIDs {
+		line = fmt.Sprintf("… (+%d more, lowest-priority — first %d reachable by id via get_finding: %s; "+
+			"the remaining %d are not individually listed, narrow the scan to inspect them)",
+			n, maxTailIDs, strings.Join(ids, " "), n-maxTailIDs)
+	}
+	return line
 }
 
 // l15Boost is the within-severity-band triage weight from the L1.5 signals:

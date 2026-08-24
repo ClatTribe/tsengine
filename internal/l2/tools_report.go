@@ -94,7 +94,7 @@ func reportTools(d Deps) Catalog {
 					"plain_english": str("revised plain-English explanation"),
 					"remediation":   str("revised remediation"),
 					"verification":  enumStr("evidence strength after verifying", "pattern_match", "verified"),
-					"verified_by":   strArr("independent method(s) that confirmed it, e.g. send_request, dispatch_l2_probe:sqlmap"),
+					"verified_by":   strArr("method(s) that confirmed it. To reach 'verified' cite the conf-N handle a send_request / dispatch_l2_probe returned (a real executed check); tool NAMES that agreed (e.g. nuclei) may be listed as the extra corroborator a high/critical needs, but a name alone is not proof it ran."),
 				}, "id"),
 			},
 			Handler: func(_ context.Context, args map[string]any, st *State) (ToolResult, error) {
@@ -139,7 +139,7 @@ func reportTools(d Deps) Catalog {
 					// L2-4 discipline: a report may only become "verified" once
 					// independent methods confirm it, and HIGH/CRITICAL need ≥2.
 					if vs == types.VerificationVerified {
-						if msg, ok := verifyGate(f.Severity, f.L2.VerifiedBy); !ok {
+						if msg, ok := verifyGate(f.Severity, f.L2.VerifiedBy, st.Confirmations); !ok {
 							return ToolResult{Err: true, Content: msg}, nil
 						}
 					}
@@ -178,20 +178,17 @@ func reportTools(d Deps) Catalog {
 	}
 }
 
-// activeConfirmationVerbs name an EXECUTED re-confirmation — a re-fire, a live
-// request, a reproduced PoC — as opposed to a passive signature match. The
-// substring is matched case-insensitively against each verified_by entry.
-var activeConfirmationVerbs = []string{
-	"send_request", "dispatch_l2_probe", "probe", "replay",
-	"poc", "exploit", "reproduc", "curl", "confirmed",
-}
-
-// isActiveConfirmation reports whether a verified_by method names an executed
-// re-confirmation (vs a bare tool-signature agreement).
-func isActiveConfirmation(method string) bool {
-	m := strings.ToLower(method)
-	for _, v := range activeConfirmationVerbs {
-		if strings.Contains(m, v) {
+// isRecordedConfirmation reports whether a verified_by entry names an active
+// re-confirmation that ACTUALLY EXECUTED this run — i.e. it is a handle
+// (conf-N) present in the State ledger, written only by a successful
+// send_request / dispatch_l2_probe. This is the anti-hallucination guard: the
+// old gate substring-matched the string ("confirmed via send_request" passed
+// having run nothing); now the string must resolve to a tool that really fired
+// (§10 — the LLM proposes the upgrade, an executed tool disposes).
+func isRecordedConfirmation(method string, confs []Confirmation) bool {
+	m := strings.TrimSpace(method)
+	for _, c := range confs {
+		if c.Handle == m {
 			return true
 		}
 	}
@@ -207,12 +204,17 @@ func isActiveConfirmation(method string) bool {
 //
 //   - it has ≥1 method (HIGH/CRITICAL need ≥2 independent methods — the
 //     ≥2-source rule against lone-signature false positives), AND
-//   - at least one method is an ACTIVE confirmation (a re-fire / PoC / live
-//     request), not purely passive multi-tool agreement.
+//   - at least one method is an ACTIVE confirmation that REALLY RAN — a
+//     verified_by entry naming a conf-N handle from the run ledger, not a
+//     free-text description of a check nobody executed.
 //
-// VerifiedBy is kept deduped (mergeUnique), so distinct entries ⇒ distinct
-// methods.
-func verifyGate(sev types.Severity, methods []string) (msg string, ok bool) {
+// The active leg is grounded (a real send_request / dispatch_l2_probe). The
+// second method a HIGH/CRITICAL needs may still be a named corroborator (the
+// L1 tools that agreed) — the load-bearing evidence is the executed
+// confirmation, and requiring a second independent signal stays cautious
+// without demanding two live re-fires. VerifiedBy is deduped (mergeUnique), so
+// distinct entries ⇒ distinct methods.
+func verifyGate(sev types.Severity, methods []string, confs []Confirmation) (msg string, ok bool) {
 	need := 1
 	if sev == types.SeverityHigh || sev == types.SeverityCritical {
 		need = 2
@@ -222,24 +224,24 @@ func verifyGate(sev types.Severity, methods []string) (msg string, ok bool) {
 			"OBSERVE: you marked a %s report verified with %d independent method(s). ORIENT: %s findings need ≥%d "+
 				"(a lone signature match is the false-positive class L2 filters). DECIDE: gather another, independent "+
 				"confirmation. ACT: send_request to confirm the response AND/OR dispatch_l2_probe(<tool>), then "+
-				"update_finding(id, verified_by=[...]).",
+				"update_finding(id, verified_by=[...]) citing the conf-N handle it returns.",
 			sev, len(methods), sev, need), false
 	}
 	hasActive := false
 	for _, m := range methods {
-		if isActiveConfirmation(m) {
+		if isRecordedConfirmation(m, confs) {
 			hasActive = true
 			break
 		}
 	}
 	if !hasActive {
 		return fmt.Sprintf(
-			"OBSERVE: you marked a %s report verified, but every method is a passive signature match. ORIENT: "+
-				"'verified' is the exploitation-VERIFIED tier — it needs an EXECUTED re-confirmation (a re-fire / PoC / "+
-				"live request); passive multi-tool agreement is 'corroborated', not 'verified' (the false-positive class "+
-				"L2 filters). DECIDE: actively reproduce it. ACT: send_request to reproduce the response, or "+
-				"dispatch_l2_probe(<tool>) to re-fire, then update_finding(id, verified_by=[...]); or set "+
-				"verification=corroborated if you cannot.",
+			"OBSERVE: you marked a %s report verified, but no cited method is an executed confirmation from this run. "+
+				"ORIENT: 'verified' is the exploitation-VERIFIED tier — it needs a re-check that ACTUALLY RAN "+
+				"(send_request / dispatch_l2_probe), cited by the conf-N handle that tool returned; a tool NAME or a "+
+				"prose description is not proof it ran (that is the false-positive class L2 filters). DECIDE: actively "+
+				"reproduce it. ACT: call send_request to reproduce the response, or dispatch_l2_probe(<tool>) to re-fire, "+
+				"then update_finding(id, verified_by=[\"conf-N\"]); or set verification=corroborated if you cannot.",
 			sev), false
 	}
 	return "", true

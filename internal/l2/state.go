@@ -1,6 +1,10 @@
 package l2
 
-import "github.com/ClatTribe/tsengine/pkg/types"
+import (
+	"fmt"
+
+	"github.com/ClatTribe/tsengine/pkg/types"
+)
 
 // State is the run state shared between the agent loop and tool handlers.
 // Tools mutate it (advance the phase, emit a finding, set the final
@@ -31,8 +35,48 @@ type State struct {
 	// Summary is the finish_scan output (executive narrative).
 	Summary *FinalReport
 
+	// Confirmations is the run's ledger of active re-confirmations that
+	// ACTUALLY EXECUTED — one entry per successful send_request /
+	// dispatch_l2_probe. It is the ground truth verifyGate consults: a report
+	// reaches the "verified" tier only by citing a handle recorded here, never
+	// on a free-text verified_by the model asserted. §10 — the LLM proposes the
+	// upgrade; a tool that really ran disposes. (The precedent is webagent's
+	// per-turn evidence grounding: record_finding accepts a class only when a
+	// cited turn really carries the indicator.)
+	Confirmations []Confirmation
+
 	// Done is set by finish_scan — the terminal signal.
 	Done bool
+}
+
+// Confirmation records one active re-confirmation the Lead actually executed.
+// Handle is the short, model-visible id (conf-N) the tool result announces so
+// the model can cite it back in update_finding(verified_by=[...]); a made-up or
+// mis-typed handle matches nothing and the gate refuses the upgrade.
+type Confirmation struct {
+	Handle string `json:"handle"` // e.g. "conf-1"
+	Method string `json:"method"` // "send_request" | "dispatch_l2_probe:<tool>"
+	Ref    string `json:"ref"`    // the url / probe target, for the audit trail
+}
+
+// RecordConfirmation appends an executed active confirmation and returns its
+// handle. Called by the send_request / dispatch_l2_probe handlers on success —
+// the only two tools that actually re-fire a check — so the ledger cannot hold
+// a confirmation nothing produced.
+func (s *State) RecordConfirmation(method, ref string) string {
+	h := fmt.Sprintf("conf-%d", len(s.Confirmations)+1)
+	s.Confirmations = append(s.Confirmations, Confirmation{Handle: h, Method: method, Ref: ref})
+	return h
+}
+
+// confirmation returns the recorded confirmation with the given handle, if any.
+func (s *State) confirmation(handle string) (Confirmation, bool) {
+	for _, c := range s.Confirmations {
+		if c.Handle == handle {
+			return c, true
+		}
+	}
+	return Confirmation{}, false
 }
 
 // Hypothesis is one durable plan item the Lead commits via record_hypothesis.

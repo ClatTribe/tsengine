@@ -15,6 +15,7 @@ func Render(r *Report) string {
 	}
 	fmt.Fprintf(&b, "proved %d finding(s) over %d tool call(s), %d request(s) sent\n",
 		len(r.Findings), r.Calls, r.Requests)
+	writeCoverage(&b, r.Coverage)
 	for _, f := range r.Findings {
 		tick := " "
 		if f.Verified {
@@ -29,6 +30,38 @@ func Render(r *Report) string {
 		}
 	}
 	return b.String()
+}
+
+// writeCoverage renders the honest reach-and-limits block, so a short findings
+// list is never mistaken for a thorough clean bill of health.
+func writeCoverage(b *strings.Builder, c Coverage) {
+	fmt.Fprintf(b, "coverage: stopped=%s · probed %d/%d known routes · %d/%d requests",
+		c.StopReason, c.RoutesProbed, c.RoutesKnown, c.RequestsSent, c.RequestBudget)
+	if c.IterationCap > 0 {
+		fmt.Fprintf(b, " · %d/%d iterations", c.IterationsUsed, c.IterationCap)
+	}
+	b.WriteString("\n")
+	// The caveats — each one a reason findings may be INCOMPLETE. Named
+	// explicitly so an empty result is not read as "nothing to find".
+	var caveats []string
+	if c.StopReason != "completed" {
+		caveats = append(caveats, "run did not finish (surface not fully worked)")
+	}
+	if c.BudgetExhausted {
+		caveats = append(caveats, "request budget exhausted")
+	}
+	if c.EgressDenied > 0 {
+		caveats = append(caveats, fmt.Sprintf("%d probe(s) refused by the egress guard", c.EgressDenied))
+	}
+	if c.BreakerTripped {
+		caveats = append(caveats, "circuit-breaker tripped mid-engagement")
+	}
+	if len(c.DefensesHit) > 0 {
+		caveats = append(caveats, "defenses encountered: "+strings.Join(c.DefensesHit, ", ")+" (a finding absent behind a WAF is not proof the class is absent)")
+	}
+	for _, cv := range caveats {
+		fmt.Fprintf(b, "  ⚠ %s\n", cv)
+	}
 }
 
 // Score measures recorded findings against a set of known-vulnerable routes (the
