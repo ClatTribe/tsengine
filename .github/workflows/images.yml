@@ -102,7 +102,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ github.ref_name }}
-            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL || 'https://tensorshield.com' }}
             NEXT_PUBLIC_LEGAL_ENTITY=${{ vars.NEXT_PUBLIC_LEGAL_ENTITY }}
             NEXT_PUBLIC_LEGAL_JURISDICTION_CITY=${{ vars.NEXT_PUBLIC_LEGAL_JURISDICTION_CITY }}
             NEXT_PUBLIC_LEGAL_COUNTRY=${{ vars.NEXT_PUBLIC_LEGAL_COUNTRY }}

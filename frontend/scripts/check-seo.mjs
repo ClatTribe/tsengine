@@ -216,6 +216,24 @@ if (!existsSync(sitemapPath)) {
 } else {
   const xml = readFileSync(sitemapPath, "utf8");
   const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+
+  // EVERY <loc> MUST BE ABSOLUTE. The sitemap protocol requires it and crawlers reject a relative
+  // one, so this failure de-lists the whole site while the file still looks populated — which is
+  // why the route-coverage check below cannot catch it: it strips the origin before comparing, so
+  // it passes just as happily when there was no origin to strip.
+  //
+  // The live cause: SITE_URL fell back with `??`, which only catches null/undefined. An unset
+  // GitHub repo variable passed as `--build-arg X=${vars.X}` arrives as an EMPTY STRING, so the
+  // fallback did not fire and every URL lost its host. Verified with a real docker build.
+  const relative = locs.filter((u) => !/^https?:\/\//.test(u));
+  if (relative.length > 0) {
+    fail(
+      `${relative.length} sitemap URL(s) are not absolute (e.g. "${relative[0]}"). The sitemap ` +
+        `protocol requires absolute URLs; a crawler discards this file. Check NEXT_PUBLIC_SITE_URL ` +
+        `reached the build — an empty value is not the same as an unset one.`,
+    );
+  }
+
   const paths = new Set(locs.map((u) => u.replace(/^https?:\/\/[^/]+/, "")));
   for (const r of marketingRoutes()) {
     if (!paths.has(r)) {
