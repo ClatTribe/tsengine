@@ -100,6 +100,13 @@ type Tenant struct {
 	// urgently" for a new incident). nil/disabled = today's behaviour (alert every configured
 	// channel). No secret material — channel names only.
 	Escalation *EscalationPolicy `json:"escalation,omitempty"`
+	// ExposureObjective is the programme's stated target for the exposure trend — CTEM's scoping
+	// question ("how is success measured?"), which the product could show a series for and not answer.
+	//
+	// nil means no objective, and that is reported as itself rather than defaulted: a target nobody
+	// chose is not a statement of intent, and "we cannot say whether this is good" is the honest
+	// reading of a chart with no target. No secret material.
+	ExposureObjective *ExposureObjective `json:"exposure_objective,omitempty"`
 	// SLA is the per-tenant remediation SLA policy (per-severity time-to-acknowledge +
 	// time-to-resolve targets). nil/disabled = no SLA tracking. No secret material.
 	SLA *SLAPolicy `json:"sla,omitempty"`
@@ -111,6 +118,11 @@ type Tenant struct {
 	// "escalation matrix with contact number"). Ordered by escalation precedence. Contact PII
 	// (email/phone), not a bearer secret, so stored plain like team-member emails.
 	Contacts []Contact `json:"contacts,omitempty"`
+	// BusinessServices map critical business services to the assets that carry them — CTEM's scoping
+	// phase (ADR 0028 G2). DataTier says an asset is tier 1; only this says CHECKOUT depends on it,
+	// and it is the service that has an owner and someone who gets paged. No secret → stored plain,
+	// like Contacts and Practitioners.
+	BusinessServices []BusinessService `json:"business_services,omitempty"`
 	// ServiceModel records WHO provides the human-in-the-loop expertise for this tenant — the only
 	// difference between the two product GTM models. self_serve = the tenant's own team; msp = a
 	// partner firm's expert (the MSP runs the product, their expert does HITL); managed = our hired
@@ -1683,4 +1695,42 @@ func (a *Action) RecordVerification(v FixVerification) {
 	if len(a.VerificationHistory) > maxVerificationHistory {
 		a.VerificationHistory = a.VerificationHistory[len(a.VerificationHistory)-maxVerificationHistory:]
 	}
+}
+
+// ExposureObjective is the stated target a tenant's exposure trend is graded against (ADR 0028 G3).
+//
+// It mirrors internal/exposuretrend.Objective rather than importing it, for the same reason every
+// other policy on Tenant is defined here: pkg/platform is the domain model and must not depend on an
+// internal analysis package. The API converts between them at the boundary, and a test asserts the
+// two shapes stay in step — a mirror that drifts silently would grade against a target the customer
+// did not set.
+type ExposureObjective struct {
+	// Declared records that a human set this. Explicit, never inferred from the values: "close at
+	// least as much as opens" is NetPerWindow 0, the most natural target in the product, and deriving
+	// declaredness from non-zero fields made it indistinguishable from having no objective at all.
+	Declared bool `json:"declared"`
+	// WindowDays is the period the target applies over; 0 = the whole series.
+	WindowDays int `json:"window_days,omitempty"`
+	// NetPerWindow is the required closed-minus-opened over the window.
+	NetPerWindow int `json:"net_per_window"`
+	// MinConfirmedFixed is the required count of RE-TEST-PROVEN closures. 0 disables the clause.
+	MinConfirmedFixed int `json:"min_confirmed_fixed,omitempty"`
+}
+
+// BusinessService is one named business service and the assets that carry it (ADR 0028 G2).
+//
+// Declared by the customer, never inferred: which assets serve checkout is a fact about their
+// architecture that no scan can discover, and guessing it would route the wrong team to the wrong
+// incident — worse than leaving it unmapped.
+type BusinessService struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Criticality is the business dependency: critical | high | medium | low. Orders the view.
+	Criticality string `json:"criticality,omitempty"`
+	// Owner is the team or person accountable for this service — who gets paged, not who accepted a
+	// risk (that is Risk.Owner, a different question).
+	Owner string `json:"owner,omitempty"`
+	// AssetIDs are the assets that carry it. An id that no longer resolves is skipped rather than
+	// counted, because a dangling reference is not evidence of anything.
+	AssetIDs []string `json:"asset_ids,omitempty"`
 }

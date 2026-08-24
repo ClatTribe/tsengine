@@ -23,6 +23,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/attackcoverage"
 	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/bizservice"
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
@@ -85,6 +86,13 @@ type Deps struct {
 	// only when the operator has enabled live active exploitation; per-engagement
 	// explicit consent still gates every probe.
 	Prober pentest.Prober
+	// ScanImage is the sandbox image findings were produced by — the DETECTION corpus's identity.
+	//
+	// The VAPT report could say how old the threat intel was and nothing about how old the
+	// SIGNATURES were, so a months-old template set rendered as a clean scope. This is the minimum
+	// that makes the question answerable, and when it is a mutable tag the report says so rather
+	// than printing a reference that looks like an identity (§10).
+	ScanImage string
 	// AuthzProber drives the LIVE BOLA/BFLA differential test (POST /v1/assets/{id}/authz-test/run).
 	// Nil → the run endpoint is gated (403): active authz testing is off. Set only when the operator
 	// enabled live active testing (TSENGINE_ACTIVE_EXPLOIT) → apiauthz.LiveProber(); per-request
@@ -247,10 +255,13 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/proof-queue", d.auth(d.handleProofQueue)) // doubt→prove: findings the engineer surfaced that the pentester has not settled
 	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))        // all remediations + fix-verification status
 	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage))
-	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage))           // ATT&CK techniques exercised vs unchecked
-	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))             // is exposure going down?
-	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation)) // did their controls catch our probes?
-	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                // correlate a customer ScubaGear run against ours
+	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage)) // ATT&CK techniques exercised vs unchecked
+	mux.HandleFunc("GET /v1/business-services", d.auth(d.handleBusinessServices))
+	mux.HandleFunc("PUT /v1/settings/business-services", d.auth(d.handleSetBusinessServices))
+	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))                     // is exposure going down?
+	mux.HandleFunc("PUT /v1/settings/exposure-objective", d.auth(d.handleSetExposureObjective)) // …and is that good? (ADR 0028 G3)
+	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation))         // did their controls catch our probes?
+	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                        // correlate a customer ScubaGear run against ours
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
@@ -962,7 +973,61 @@ func (d Deps) handleExposureTrend(w http.ResponseWriter, r *http.Request, tenant
 		respond(w, nil, err)
 		return
 	}
-	respond(w, exposuretrend.Compute(eps, acts, r.URL.Query().Get("scope")), nil)
+	trend := exposuretrend.Compute(eps, acts, r.URL.Query().Get("scope"))
+
+	// Grade it against the programme's stated objective (ADR 0028 G3). Without this the endpoint
+	// answers "what happened" and the page has no answer to "is this good?" — which is the CTEM
+	// scoping question the audit found unanswerable.
+	//
+	// A tenant read failure does not fail the request: the series is still the truth, and Evaluate
+	// with no objective reports honestly that none is set.
+	var obj exposuretrend.Objective
+	if t, terr := d.Store.GetTenant(ctx, tenantID); terr == nil && t.ExposureObjective != nil {
+		o := t.ExposureObjective
+		obj = exposuretrend.Objective{
+			Declared: o.Declared, WindowDays: o.WindowDays,
+			NetPerWindow: o.NetPerWindow, MinConfirmedFixed: o.MinConfirmedFixed,
+		}
+	}
+	respond(w, struct {
+		exposuretrend.Trend
+		Objective exposuretrend.Verdict `json:"objective"`
+	}{Trend: trend, Objective: exposuretrend.Evaluate(trend, obj)}, nil)
+}
+
+// handleSetExposureObjective declares the programme's exposure target (ADR 0028 G3).
+//
+// A PUT rather than a POST because it is one value per tenant, replaced wholesale. Declared is forced
+// true here: reaching this handler IS the declaration, and letting a caller send declared:false with
+// values would store an objective nobody had stated.
+func (d Deps) handleSetExposureObjective(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body platform.ExposureObjective
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	if body.WindowDays < 0 || body.MinConfirmedFixed < 0 {
+		writeJSON(w, http.StatusBadRequest, errBody("window_days and min_confirmed_fixed cannot be negative"))
+		return
+	}
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	body.Declared = true
+	t.ExposureObjective = &body
+	if err := d.Store.PutTenant(r.Context(), t); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("exposure objective set", "exposure_objective",
+			map[string]any{"tenant_id": tenantID, "net_per_window": body.NetPerWindow,
+				"window_days": body.WindowDays, "min_confirmed_fixed": body.MinConfirmedFixed},
+			"programme exposure target declared")
+	}
+	respond(w, body, nil)
 }
 
 // handleAttackCoverage answers "which attacker techniques did we actually exercise against this
@@ -1295,4 +1360,79 @@ func (d Deps) tenantHalted(ctx context.Context, tenantID string) bool {
 		return false
 	}
 	return t.AgentsHalted
+}
+
+// handleBusinessServices is the CTEM scoping view (ADR 0028 G2): exposure grouped by the business
+// service it threatens, rather than by the asset that happens to carry it.
+//
+// The scanned-asset set comes from COMPLETED engagements — the same source the coverage view uses —
+// because "has this been assessed" must mean the same thing on both pages.
+func (d Deps) handleBusinessServices(w http.ResponseWriter, r *http.Request, tenantID string) {
+	ctx := r.Context()
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	assets, err := d.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	engs, err := d.Store.ListEngagements(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	scanned := map[string]bool{}
+	for _, e := range engs {
+		if e.CompletedAt.IsZero() {
+			continue // an engagement still running has not established anything
+		}
+		scanned[e.AssetID] = true
+	}
+	respond(w, bizservice.Compute(t.BusinessServices, assets, findings, scanned), nil)
+}
+
+// handleSetBusinessServices replaces the service map. Wholesale rather than per-service because it is
+// a small declared list the customer edits as a whole, exactly like Contacts.
+func (d Deps) handleSetBusinessServices(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		Services []platform.BusinessService `json:"services"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<18)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	for i := range body.Services {
+		if strings.TrimSpace(body.Services[i].Name) == "" {
+			writeJSON(w, http.StatusBadRequest, errBody("every service needs a name — an unnamed service "+
+				"cannot be routed to an owner, which is the point of declaring one"))
+			return
+		}
+		if body.Services[i].ID == "" {
+			body.Services[i].ID = d.newID("svc")
+		}
+	}
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	t.BusinessServices = body.Services
+	if err := d.Store.PutTenant(r.Context(), t); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("business services mapped", "business_services",
+			map[string]any{"tenant_id": tenantID, "services": len(body.Services)},
+			"CTEM scoping: services mapped to the assets that carry them")
+	}
+	respond(w, body.Services, nil)
 }

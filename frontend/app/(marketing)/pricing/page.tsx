@@ -112,7 +112,10 @@ const TIERS = [
     cadence: "scale + delivery",
     blurb: "For when the constraint is scale or delivery rather than capability: unlimited targets, SSO, a managed or MSP partner desk, and a named human accountable for the calls that matter.",
     cta: "Contact sales",
-    href: "/demo",
+    // /contact, not /demo. This said "Contact sales" and sent the buyer to the lead FORM — the exact
+    // defect lib/contact.ts's own header says it fixed across nine pages, missed on the page where
+    // someone with budget most wants a phone number and an address.
+    href: "/contact",
     highlight: false,
     persona: false,
     features: [

@@ -492,6 +492,10 @@ func main() {
 	}
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
+		// The DETECTION corpus's identity, so the VAPT report can say what was capable of finding
+		// things — not only how old the threat intel was. A mutable tag here makes the report say it
+		// cannot identify the build, which is the honest answer and the one that prompts a rebuild.
+		ScanImage: sandboxImages.Scan,
 		// Per-tenant fair-use rate limiting on the authenticated API (plan.APIRatePerMin):
 		// one tenant's runaway automation can't degrade the shared platform, and paid
 		// tiers get more headroom. Fail-open (generous defaults; Enterprise unmetered).

@@ -232,6 +232,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine gate: %v\n", err)
 			os.Exit(1)
 		}
+	case "tool-freshness":
+		if err := runToolFreshness(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine tool-freshness: %v\n", err)
+			os.Exit(1)
+		}
 	case "import":
 		if err := runImport(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsengine import: %v\n", err)

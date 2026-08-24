@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/grc"
@@ -24,4 +25,17 @@ func stampIntel(r *grc.VAPTReport, now time.Time) {
 		Version: version, KEVAsOf: kevAsOf, EPSSAsOf: epssAsOf,
 		AgeDays: int(age.Hours() / 24), Stale: stale, Embedded: embedded,
 	}
+}
+
+// stampDetection records the DETECTION corpus's identity on a report — the twin of stampIntel, and
+// for the same reason: a claim about what was found needs the state of what could find it.
+//
+// It reports what is knowable and refuses to invent the rest. A tag is not a build, so when that is
+// all we have, RenderDetectionProvenance says the report cannot state which signatures ran. That
+// sentence is the finding, not a gap in the finding.
+func stampDetection(r *grc.VAPTReport, image string, _ time.Time) {
+	if r == nil || strings.TrimSpace(image) == "" {
+		return
+	}
+	r.Detection = &grc.DetectionProvenance{ImageRef: strings.TrimSpace(image)}
 }

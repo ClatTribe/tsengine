@@ -1,0 +1,90 @@
+name: Signature refresh
+
+# THE MECHANISM CLAUDE.md §5 DESCRIBED AND THE REPO DID NOT HAVE.
+#
+# An audit went looking for "L0 corpora — cron-paged + delta-verified against L1 benches" and found:
+# no schedule on any workflow, no script anywhere that updates a scanner or a signature corpus, and
+# release.yml firing on `v*` tags only. So every baked binary and every baked corpus aged with the
+# manual release cadence, and nothing reported it.
+#
+# What ages, and how (the detail is in internal/toolfresh, which this job runs):
+#   · nuclei templates      baked by `nuclei -update-templates` at image build → age with the image
+#   · trivy / grype DBs      fetched by the tools per scan → fresh IF egress works
+#   · semgrep rule packs     pulled from semgrep.dev per scan → same
+#   · threat intel           scheduler.CorpusRefresher, 24h — the one corpus that already refreshes
+#
+# So this job's real job is the FIRST line: rebuild the image so the baked corpus and the baked
+# binaries move. The freshness report runs alongside it because a rebuild that silently shipped the
+# same four floating tools at new versions is not something anyone should discover from a customer.
+#
+# DISK: the build is the expensive part and it runs on a hosted runner, not on anybody's box. The
+# report itself reads one file and allocates nothing — it is safe to run on every PR, which is why
+# the check job below is separate and cheap.
+
+on:
+  schedule:
+    # 04:10 UTC on Mondays. Weekly rather than nightly on purpose: the image is large, the corpora
+    # that matter most (trivy/grype/semgrep) already refresh per scan, and a nightly rebuild would
+    # spend a lot of runner time to move one corpus that changes slowly.
+    - cron: "10 4 * * 1"
+  workflow_dispatch: {}
+  pull_request:
+    # The cheap half only — see the `report` job's own `if`.
+    paths:
+      - "docker/sandbox/Dockerfile"
+      - "internal/toolfresh/**"
+      - ".github/workflows/signatures.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  report:
+    name: freshness report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # NOT --fail-on-floating yet. Four tools float today; turning the gate on in the same change
+      # that adds the check would land a red main and teach everyone to skip it. Pin those four,
+      # then flip this flag in the commit that does — a gate is worth having only once it can pass.
+      - name: Report scanner + signature freshness
+        run: go run ./cmd/tsengine tool-freshness
+
+  rebuild:
+    name: rebuild sandbox image
+    # Scheduled + manual only. A PR does not need a 20-minute image build to know whether a
+    # Dockerfile line pins a version.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Tagged `signatures-<date>` and `signatures-latest`, never `latest`: a scheduled rebuild is
+      # not a release, and an operator choosing to run week-old signatures should be able to.
+      - name: Build + push refreshed sandbox image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/sandbox/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/sandbox:signatures-${{ github.run_id }}
+            ghcr.io/${{ github.repository }}/sandbox:signatures-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The rebuild's whole point is that the corpus moved. Say what shipped, so a stale corpus is
+      # visible in the run log rather than inferred from the date.
+      - name: State what the refreshed image contains
+        run: |
+          echo "Refreshed sandbox image pushed. Baked corpora move with this build:"
+          go run ./cmd/tsengine tool-freshness || true

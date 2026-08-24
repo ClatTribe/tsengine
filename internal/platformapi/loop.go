@@ -333,6 +333,7 @@ func (d Deps) handleVAPTReport(w http.ResponseWriter, r *http.Request, tenantID 
 	rep.PartiallyAssessed = d.partiallyAssessedScope(r.Context(), tenantID, rep.Scope)
 	grc.Reassess(rep)
 	stampIntel(rep, time.Now().UTC())
+	stampDetection(rep, d.ScanImage, time.Now().UTC())
 	switch r.URL.Query().Get("format") {
 	case "json":
 		writeJSON(w, http.StatusOK, rep)

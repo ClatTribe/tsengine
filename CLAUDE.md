@@ -186,10 +186,25 @@ Reasoning over data already in context, reformatting, and decisions encoded inli
 
 ## 3. Asset types (7 — the focus set)
 
-**The product focuses on these seven assets** — the ICP-relevant surfaces (code, cloud, and the
-network/web/api perimeter) where our OSS coverage + L1.5 enrichment + L2 agents are deep enough that
-a named human-in-the-loop can stand behind the output. New asset-facing work targets this set; do not
-add or revive an eighth asset without an ADR.
+**The product is sold on SIX surfaces: cloud, code, identity, web, api, container.** That is the
+launch claim and the list every roadmap, page and benchmark should be read against.
+
+The seven asset TYPES below are how the engine models scan targets, and the two lists are not the
+same shape — `identity` is a surface delivered through the `workspace` asset plus the SaaS/identity
+ingest paths rather than through a scanned asset type, and `ip_address`/`domain` are the recon
+surface underneath web and api rather than separate things we sell. Say "six surfaces" to a
+customer and "seven asset types" to the engine, and do not let either list quietly become the other.
+
+**`ai_application` HAS NOT STARTED.** The garak wrapper exists and is unreachable; there is no asset
+type, so nothing can be pointed at it. It is not a supported surface, it is not on the launch list,
+and no page may imply otherwise (§13's AI-application note carries the detail).
+
+**KUBERNETES IS NOT A SUPPORTED SURFACE EITHER** — no cluster scanner is wrapped (no kube-bench /
+kubescape / kube-hunter), and a live cluster is not a scannable asset. prowler/kics/checkov touch
+k8s only as IaC text. Recorded here because an audit read the absence as a gap; it is a scope
+decision, and the two are different claims.
+
+New asset-facing work targets the six surfaces; do not add or revive an asset type without an ADR.
 
 Every scan target maps to exactly one asset type. The asset type determines which anchor tools fire, which filter rules apply, and which competitor leaderboard the bench compares against.
 

@@ -185,3 +185,106 @@ func joinAnd(s []string) string {
 	}
 	return strings.Join(s[:len(s)-1], ", ") + " and " + s[len(s)-1]
 }
+
+// ── The DETECTION corpus — the other half, and the one that was missing ─────────────────────────
+//
+// An audit found the report scrupulous about the INTEL corpus's age and silent about the DETECTION
+// corpus's. That asymmetry matters because they answer different questions and only one of them was
+// being asked:
+//
+//	intel     → how confident are we about the PRIORITY of what we found (KEV, EPSS, ransomware)
+//	detection → what were we CAPABLE OF FINDING AT ALL
+//
+// The second determines the finding count. nuclei's templates are baked into the sandbox image at
+// build time and have no runtime refresh, so on a deployment running a months-old image the report's
+// "0 findings" is partly a statement about our signatures rather than about the customer — and the
+// document said nothing that would let a reader tell.
+//
+// The honest hard case is a TAG. If the deployment runs `tsengine/sandbox:latest`, the report cannot
+// say what tested the customer, because the tag does not identify a build. Saying so is the point:
+// an unanswerable question rendered as silence reads as a clean answer.
+
+// DetectionProvenance is the state of the SIGNATURE corpora a scan's findings came from.
+type DetectionProvenance struct {
+	// ImageRef is the sandbox image as configured — possibly a mutable tag, which is why Digest exists.
+	ImageRef string `json:"image_ref,omitempty"`
+	// Digest is the immutable image identity, when a scan resolved one.
+	Digest string `json:"digest,omitempty"`
+	// BuiltAt is when that image was built, when known. The baked corpora are as old as this.
+	BuiltAt time.Time `json:"built_at,omitzero"`
+	AgeDays int       `json:"age_days,omitempty"`
+	// Stale: the baked corpora are older than the window in which detection content meaningfully moves.
+	Stale bool `json:"stale,omitempty"`
+}
+
+// DetectionStaleAfterDays is when baked signatures stop being a current answer. Deliberately shorter
+// than the intel window: nuclei merges templates most days, so a month-old template set is a
+// materially different scanner from a current one.
+const DetectionStaleAfterDays = 30
+
+// RenderDetectionProvenance states what was capable of finding things, for the methodology section.
+//
+// It returns a sentence even when almost nothing is known, because "we cannot tell you which
+// signatures tested you" is the most important version of this line, not the one to omit.
+func RenderDetectionProvenance(p *DetectionProvenance) string {
+	if p == nil {
+		return ""
+	}
+	var parts []string
+	switch {
+	case p.Digest != "":
+		parts = append(parts, "sandbox image `"+shortDigest(p.Digest)+"`")
+	case p.ImageRef != "":
+		parts = append(parts, "sandbox image `"+p.ImageRef+"`")
+	}
+	if !p.BuiltAt.IsZero() {
+		line := "built " + p.BuiltAt.UTC().Format("2006-01-02")
+		if p.AgeDays > 0 {
+			line += " (" + days(p.AgeDays) + " ago)"
+		}
+		parts = append(parts, line)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	s := "**Detection corpus:** " + strings.Join(parts, " · ") + ". " +
+		"Baked signatures — the nuclei template set — move only when this image is rebuilt; " +
+		"trivy, grype and semgrep fetch theirs at scan time."
+	// A tag is not a build. Say so rather than letting the reference look like an identity.
+	if p.Digest == "" && p.ImageRef != "" && p.BuiltAt.IsZero() {
+		s += " The image is identified by a mutable tag and no build date was recorded, so this " +
+			"report cannot state which signature versions tested this scope."
+	}
+	return s
+}
+
+// DetectionCaveat is the warning that belongs next to the finding count when the baked signatures
+// are old enough that a low count is partly about us. Mirrors IntelCaveat deliberately — a reader
+// who has learned to look for one should find the other in the same place, in the same shape.
+func (p *DetectionProvenance) DetectionCaveat() string {
+	if p == nil {
+		return ""
+	}
+	if !p.Stale && p.AgeDays <= DetectionStaleAfterDays {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("**The detection signatures behind this report are not current.** ")
+	if p.AgeDays > 0 {
+		fmt.Fprintf(&b, "The sandbox image carrying them was built %s ago. ", days(p.AgeDays))
+	}
+	b.WriteString("Its baked template set has no runtime refresh, so checks published since that " +
+		"build did not run here. A finding count is therefore partly a statement about which " +
+		"signatures were available, not only about this scope — rebuild the scanning image and " +
+		"re-run before reading a low count as an all-clear.")
+	return b.String()
+}
+
+// shortDigest trims sha256:<64> to something a report can print without wrapping, keeping enough to
+// identify the build.
+func shortDigest(d string) string {
+	if i := strings.Index(d, ":"); i >= 0 && len(d) > i+13 {
+		return d[:i+13]
+	}
+	return d
+}

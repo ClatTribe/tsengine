@@ -13,7 +13,7 @@ import {
   ChevronDown,
   Sparkles,
   ClipboardCheck,
-  Activity,
+  Activity, LifeBuoy,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -196,6 +196,18 @@ export function Sidebar({
           );
         })}
       </nav>
+
+      {/* HOW A CUSTOMER REACHES A HUMAN, FROM INSIDE THE PRODUCT.
+          An audit found /contact linked from the marketing nav and footer and from nowhere in the
+          signed-in app — so the people actually using the thing, who are the ones most likely to
+          need help, had no route to us. The only "contacts" in Settings is their OWN escalation
+          roster, which is a different thing entirely. */}
+      <a
+        href="/contact"
+        className="mx-2 mb-1 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted transition hover:bg-surface-2 hover:text-ink"
+      >
+        <LifeBuoy className="h-3.5 w-3.5" /> Talk to a human
+      </a>
 
       <AgentStatus halted={halted} aiEnabled={aiEnabled} />
     </aside>
