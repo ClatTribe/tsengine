@@ -6,7 +6,7 @@
 // SITE_URL then became "" and every absolute URL on the site turned relative: the sitemap emitted
 // <loc>/pricing</loc>, which the sitemap protocol forbids and crawlers reject, and robots.txt
 // advertised `Sitemap: /sitemap.xml` with an empty Host. lib/contact.ts already guards this way.
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://tensorshield.com").replace(/\/$/, "");
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://tensorshield.in").replace(/\/$/, "");
 
 // ---------------------------------------------------------------------------
 // Legal identity — THE ONE PLACE to set who is legally publishing this service.
