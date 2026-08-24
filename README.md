@@ -15,6 +15,7 @@ Paired with `webappsec` (the SaaS wrapper that consumes tsengine output and talk
 ## Quickstart
 
 ```bash
+# (cutting a release? see RELEASE.md — one v* tag fires two workflows and publishes twelve artifacts)
 # build the version-stamped CLI
 make cli                      # → ./bin/tsengine
 ./bin/tsengine version
