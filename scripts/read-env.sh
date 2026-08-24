@@ -15,8 +15,16 @@
 # compose and broke under make, which is worse than either failing — the two halves of one product
 # disagreeing about the same input.
 #
-# Usage:  . scripts/read-env.sh [path]      (sourced, so the exports land in the caller)
-_envfile="${1:-.env}"
+# Usage:
+#   . scripts/read-env.sh                    reads ./.env
+#   TS_ENV_FILE=other.env . scripts/read-env.sh
+#
+# THE PATH COMES FROM AN ENV VAR, NOT A POSITIONAL ARG. POSIX `.` does not take arguments: bash and
+# macOS's sh accept `. file arg` and set $1, dash — which is /bin/sh on Ubuntu, and therefore on CI —
+# ignores it. So `. read-env.sh custom.env` read $1 as unset, fell back to ./.env, found nothing and
+# exported nothing. Measured: same command, dash gives an empty variable where bash gives the value.
+# $1 is still honoured where the shell provides it, but nothing depends on that.
+_envfile="${TS_ENV_FILE:-${1:-.env}}"
 [ -f "$_envfile" ] || return 0 2>/dev/null || exit 0
 
 while IFS= read -r _line || [ -n "$_line" ]; do

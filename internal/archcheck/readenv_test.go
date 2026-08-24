@@ -47,8 +47,11 @@ NOT_AN_ASSIGNMENT
 		t.Fatal(err)
 	}
 
+	// TS_ENV_FILE, not a positional arg: POSIX `.` takes no arguments, and /bin/sh is dash on CI.
+	// Passing the path as $1 worked on macOS and silently read nothing on Ubuntu — this test failed
+	// in CI having passed locally, which is exactly the platform gap it should have been written for.
 	out, err := exec.Command("sh", "-c",
-		". "+script+" "+envFile+`; printf '%s\n%s\n%s\n%s\n%s\n' "$SPACED" "$DQUOTED" "$SQUOTED" "$DSN" "$EXPORTED"`).CombinedOutput()
+		"TS_ENV_FILE="+envFile+" . "+script+`; printf '%s\n%s\n%s\n%s\n%s\n' "$SPACED" "$DQUOTED" "$SQUOTED" "$DSN" "$EXPORTED"`).CombinedOutput()
 	if err != nil {
 		t.Fatalf("read-env.sh failed: %v\n%s", err, out)
 	}
@@ -77,7 +80,7 @@ func TestReadEnv_AbsentFileIsNotAnError(t *testing.T) {
 	root, _ := filepath.Abs("../..")
 	script := filepath.Join(root, "scripts", "read-env.sh")
 	out, err := exec.Command("sh", "-c",
-		". "+script+" "+filepath.Join(t.TempDir(), "nope.env")+`; echo ALIVE`).CombinedOutput()
+		"TS_ENV_FILE="+filepath.Join(t.TempDir(), "nope.env")+" . "+script+`; echo ALIVE`).CombinedOutput()
 	if err != nil {
 		t.Fatalf("a missing .env aborted the build: %v\n%s", err, out)
 	}
