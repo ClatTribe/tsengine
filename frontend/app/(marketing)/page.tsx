@@ -287,6 +287,114 @@ export default function Landing() {
               </div>
       </section>
 
+      {/* ── 5b · THE PROGRAMME, AS ONE PICTURE ──────────────────────────────────────────────────
+          The category we compete in has a name and the homepage never used it. More to the point, a
+          visitor could read this whole page and still not see that the five things we do are ONE
+          loop rather than five features — and the loop is the argument for buying one product
+          instead of four. Five tiles, one line each, the fourth marked because it is the one nobody
+          else closes. */}
+      <section className="border-y border-border bg-bg">
+        <div className="mx-auto max-w-5xl px-5 py-16">
+          <Reveal className="mx-auto mb-9 max-w-2xl text-center">
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent">
+              Continuous exposure validation
+            </span>
+            <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
+              Five jobs. Today they are four vendors and someone to run them.
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-muted">
+              A scanner, a pentest firm, a compliance tool and a ticket queue — plus the security hire who
+              stitches them together. This is that loop, running by itself.
+            </p>
+          </Reveal>
+          <Reveal delay={80} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {[
+              { n: "1", t: "Find", d: "Across code, cloud, identity, web, APIs and containers — including how a small thing in one becomes serious in another.", mark: false },
+              { n: "2", t: "Prove", d: "Break in, inside limits you set. On a web app or API you authorised, you get the exact request that worked.", mark: false },
+              { n: "3", t: "Fix", d: "The real change arrives written — a pull request, a config, an access revocation. You approve it.", mark: false },
+              { n: "4", t: "Prove it is closed", d: "We attack the same hole again. If your fix did not take, you hear it from us — not from a customer.", mark: true },
+              { n: "5", t: "Evidence", d: "The same run fills in your SOC 2, ISO and 23 other frameworks. Signed, dated, tied to the finding.", mark: false },
+            ].map(({ n, t, d, mark }) => (
+              <div
+                key={t}
+                className={`card p-5 ${mark ? "border-accent/50 bg-accent-soft/30" : ""}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-semibold ${mark ? "bg-accent text-white" : "bg-surface-2 text-muted"}`}>
+                    {n}
+                  </span>
+                  <span className="text-sm font-semibold text-ink">{t}</span>
+                </div>
+                <p className="mt-2 text-[13px] leading-relaxed text-muted">{d}</p>
+              </div>
+            ))}
+          </Reveal>
+          <Reveal delay={140} className="mx-auto mt-7 max-w-2xl text-center text-sm leading-relaxed text-muted">
+            <span className="font-semibold text-ink">Step 4 is the one to look at.</span> Buy these separately and the
+            thing that checks your fix works for a different company than the thing that made it.
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 5c · WHO THIS IS NOT FOR ─────────────────────────────────────────────────────────────
+          The site said what we do and never who should not buy. That costs twice: a bad-fit trial
+          burns our time and their goodwill, and a buyer who cannot find the boundary assumes we are
+          hiding it. Naming it is also the strongest evidence the rest of the page is honest — a
+          vendor who tells you where they stop is easier to believe about where they reach. */}
+      <section className="border-b border-border bg-surface">
+        <div className="mx-auto max-w-5xl px-5 py-16">
+          <Reveal className="mx-auto mb-9 max-w-2xl text-center">
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent">Straight answer</span>
+            <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
+              Is this you?
+            </h2>
+          </Reveal>
+          <Reveal delay={80} className="grid gap-4 md:grid-cols-2">
+            <div className="card border-accent/40 bg-accent-soft/20 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-accent">
+                <CheckCircle2 className="h-4 w-4" /> Buy this if
+              </div>
+              <ul className="mt-4 space-y-2.5 text-sm text-ink">
+                {[
+                  "You ship software on AWS, GCP or Azure and a customer has started asking security questions.",
+                  "Nobody here does security full-time, and the work lands on whoever is least busy.",
+                  "You need a pentest report and SOC 2 evidence, and you would rather not buy two products for it.",
+                  "You want the fix written for you, not a dashboard that assigns it back.",
+                ].map((x) => (
+                  <li key={x} className="flex items-start gap-2.5">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-pulse" /> {x}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="card p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-muted">
+                <Minus className="h-4 w-4 text-faint" /> Do not buy this if
+              </div>
+              <ul className="mt-4 space-y-2.5 text-sm text-muted">
+                {[
+                  "Your risk lives on an internal network — Active Directory, Kerberos, laptops on a LAN. We do not test those.",
+                  "You need a Kubernetes cluster pentested. Not a surface we cover.",
+                  "You want your own LLM features red-teamed. We have not started that.",
+                  "You already employ a security team and want a tool they operate. This is built to do the work, not to be staffed.",
+                ].map((x) => (
+                  <li key={x} className="flex items-start gap-2.5">
+                    <Minus className="mt-0.5 h-4 w-4 shrink-0 text-faint" /> {x}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 rounded-lg border border-border bg-bg px-3 py-2 text-xs leading-relaxed text-muted">
+                Not sure which side you are on?{" "}
+                <Link href="/contact" className="font-medium text-accent hover:underline">
+                  Ask us
+                </Link>{" "}
+                — we will tell you if it is not a fit.
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── 6 · WHO IS BEHIND IT ────────────────────────────────────────────────────────────────
           The trust bar and the stat strip both answered "is this real?" — one with provenance, one
           with numbers — from opposite ends of the page. Merged, with the counts corrected: the
@@ -359,6 +467,13 @@ export default function Landing() {
             </Link>
             <Link href="/pricing" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/15">
               See pricing
+            </Link>
+          </div>
+          {/* The homepage body carried no way to reach a human — only the nav and footer chrome did. */}
+          <div className="mt-5 text-sm text-white/75">
+            Would rather talk first?{" "}
+            <Link href="/contact" className="font-semibold text-white underline decoration-white/40 hover:decoration-white">
+              Email or call us
             </Link>
           </div>
         </div>
