@@ -97,7 +97,10 @@ func TestRealDockerfile_IsInspectableAndFullyPinned(t *testing.T) {
 	}
 	r := Parse(string(b))
 
-	if len(r.Tools) < 6 {
+	// FLOOR RAISED FROM 6. Eight tools cleared the old floor while the parser was blind to 26 of the
+	// image's scanners, so the guard passed at its most useless moment — the precise failure it was
+	// written to catch, one level up.
+	if len(r.Tools) < 25 {
 		t.Fatalf("only saw %d tools in the real Dockerfile — the parser has stopped matching and this "+
 			"whole package would report a clean bill of health for an image nobody inspected", len(r.Tools))
 	}
@@ -147,5 +150,60 @@ func TestParse_VariableVersionDefersToTheArg(t *testing.T) {
 	if r.Floating != 1 || r.Pinned != 0 {
 		t.Errorf("counts = %d floating / %d pinned, want 1/0 — the ARG says `latest`, so the tool "+
 			"floats; the go-install line must not out-vote it with a fake pin", r.Floating, r.Pinned)
+	}
+}
+
+// TestParse_SeesTheInstallFormsThisImageActuallyUses is the regression test for the coverage gap
+// that made this package report a clean bill of health for an image it barely inspected. It matched
+// ARG/go-install/pip-pinned only, so eleven ts_install scanners on @latest and ten unpinned pip
+// scanners were absent — the report said "0 floating · 0 unmanaged" and CI gated on that.
+func TestParse_SeesTheInstallFormsThisImageActuallyUses(t *testing.T) {
+	const df = `
+RUN . /usr/local/bin/ts_want.sh && ts_install repository grype github.com/anchore/grype/cmd/grype@latest
+RUN . /usr/local/bin/ts_want.sh && ts_install domain amass github.com/owasp-amass/amass/v4/...@v4.2.0
+RUN PKGS="$PKGS sqlmap" \
+    && { ts_want cloud && PKGS="$PKGS prowler==4.6.0 scoutsuite"; } || true
+RUN curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh
+`
+	got := map[string]Tool{}
+	for _, tl := range Parse(df).Tools {
+		got[tl.Name] = tl
+	}
+	for name, want := range map[string]PinState{
+		"grype":      PinFloating,  // ts_install @latest — was invisible
+		"amass":      PinExact,     // ts_install pinned
+		"sqlmap":     PinUnmanaged, // pip, no version — was invisible
+		"scoutsuite": PinUnmanaged, // pip, no version
+		"prowler":    PinExact,     // pip ==
+		"syft":       PinUnmanaged, // curl installer off a branch
+	} {
+		g, ok := got[name]
+		if !ok {
+			t.Errorf("%s was not seen at all — an install nobody counts does not appear in any total, "+
+				"so the report reads as a statement about the whole image while covering part of it", name)
+			continue
+		}
+		if g.Pin != want {
+			t.Errorf("%s = %s, want %s", name, g.Pin, want)
+		}
+	}
+	if got["prowler"].Version != "4.6.0" {
+		t.Errorf("prowler version = %q, want 4.6.0", got["prowler"].Version)
+	}
+}
+
+// TestRender_StatesItsOwnCoverage: totals that cover part of an image must say so, or a tool absent
+// from every list reads as confirmed-pinned rather than unverified (§5.2 rule 5).
+func TestRender_StatesItsOwnCoverage(t *testing.T) {
+	out := Parse("ARG NUCLEI_VERSION=3.3.7\nRUN PKGS=\"$PKGS sqlmap\"\n").Render()
+	if !strings.Contains(out, "COVERAGE") {
+		t.Error("no coverage disclosure: the totals read as a claim about the whole image")
+	}
+	if !strings.Contains(out, "UNMANAGED") {
+		t.Error("an unmanaged tool was counted but never rendered — invisible in the report that " +
+			"exists to make version control visible")
+	}
+	if !strings.Contains(out, "sqlmap") {
+		t.Error("the unmanaged tool is not named; a count alone does not tell anyone what to pin")
 	}
 }
