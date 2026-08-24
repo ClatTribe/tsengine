@@ -71,7 +71,7 @@ func TestCTEMLoop_ProveFixReattackAndTheEvidence(t *testing.T) {
 
 	// ── 1. FIND + PROVE ───────────────────────────────────────────────────────────────────────────
 	eng := `{"name":"e2e","mode":"active","rules_of_engagement":{"authorized_targets":["app.acme.com"],` +
-		`"max_requests":40,"allow_active":true,"authorized_by":"alice","consent":"authorized by alice"}}`
+		`"max_requests":40,"allow_active":true,"authorized_by":"alice","consent":"authorized by alice","target_environment":"staging"}}`
 	var created struct {
 		ID string `json:"id"`
 	}

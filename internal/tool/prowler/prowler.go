@@ -3,10 +3,12 @@
 // init().
 //
 // prowler needs cloud credentials (forwarded into the sandbox via env —
-// see the cloud asset Handler + CLI). Without credentials it exits
-// reporting an auth error; the wrapper surfaces that as zero findings
-// rather than a hard failure, so a misconfigured scan degrades
-// gracefully.
+// see the cloud asset Handler + CLI). EXIT CONTRACT (ADR 0031 D1): no
+// --exit-code-style flag is passed, so EVERY non-zero exit is an ERROR —
+// bad/expired credentials chief among them — and is returned via
+// tool.Failed so the pass degrades LOUDLY. A missing output file after a
+// clean exit is equally an error: a cloud scan with no output has not
+// looked, and "not looked" must never render as clean.
 package prowler
 
 import (
@@ -74,16 +76,19 @@ func (*Prowler) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		"--output-filename", "prowler",
 		"--ignore-exit-code-3",
 	)
-	combined, runErr := cmd.CombinedOutput()
+	// Output() (not Run/CombinedOutput) so ExitError.Stderr is populated and
+	// tool.ExitDetail can carry the FATAL line naming the cause.
+	_, runErr := cmd.Output()
+	if tool.Failed(runErr) {
+		return tool.Result{}, fmt.Errorf("prowler: %s", tool.ExitDetail(runErr))
+	}
 
 	blob, readErr := readOCSF(outDir)
 	if readErr != nil {
-		// No output file — prowler likely failed to authenticate. Degrade
-		// gracefully: no findings, surface prowler's stderr for the
-		// security engineer to see why.
-		return tool.Result{Output: string(combined)}, nil
+		return tool.Result{}, fmt.Errorf(
+			"prowler: exited cleanly but produced no OCSF output (%v) — this is an authentication or "+
+				"execution failure, NEVER a clean estate; fix the credentials and re-run", readErr)
 	}
-	_ = runErr
 	return tool.Result{Output: string(blob), Findings: parseOCSF(blob)}, nil
 }
 

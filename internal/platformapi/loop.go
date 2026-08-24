@@ -38,6 +38,9 @@ type Posturer interface {
 	// the UI never presents a clean posture as "compliant".
 	Coverage(ctx context.Context, tenantID, framework string) (grc.Coverage, error)
 	Report(ctx context.Context, tenantID, framework string) (*grc.Report, error)
+	// EvidencePack builds the signed-ready evidence pack for one framework (posture + gaps +
+	// generated-at), the artifact grc.Sign attests (ADR 0031 D2b).
+	EvidencePack(ctx context.Context, tenantID, framework string) (*grc.EvidencePack, error)
 	Questionnaire(ctx context.Context, tenantID string) (*grc.Questionnaire, error)
 	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
 	// OSCAL emits the crosswalk's control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible).

@@ -57,12 +57,18 @@ func (*ScoutSuite) Run(ctx context.Context, args tool.Args) (tool.Result, error)
 
 	cmd := exec.CommandContext(ctx, "scout", provider,
 		"--no-browser", "--force", "--report-dir", outDir)
-	combined, _ := cmd.CombinedOutput()
+	// EXIT CONTRACT (ADR 0031 D1): scout passes no findings-exit flag, so every non-zero exit is an
+	// ERROR. Output() populates ExitError.Stderr for tool.ExitDetail.
+	_, runErr := cmd.Output()
+	if tool.Failed(runErr) {
+		return tool.Result{}, fmt.Errorf("scoutsuite: %s", tool.ExitDetail(runErr))
+	}
 
 	blob, readErr := readResults(outDir)
 	if readErr != nil {
-		// No results file → auth/availability failure. Degrade gracefully.
-		return tool.Result{Output: string(combined)}, nil
+		return tool.Result{}, fmt.Errorf(
+			"scoutsuite: exited cleanly but produced no results file (%v) — this is an authentication or "+
+				"execution failure, NEVER a clean estate; fix the credentials and re-run", readErr)
 	}
 	return tool.Result{Output: string(blob), Findings: parse(blob)}, nil
 }

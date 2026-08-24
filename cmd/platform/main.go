@@ -44,6 +44,7 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -65,6 +66,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/assetregistry"
+	"github.com/ClatTribe/tsengine/internal/attest"
 	"github.com/ClatTribe/tsengine/internal/cloudagent"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
@@ -516,6 +518,10 @@ func main() {
 	}
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
+		// SIGNED compliance evidence pack (ADR 0031 D2b): the auditor-facing artifact is ed25519-
+		// attested with the platform's key. Nil-safe downstream — without a key the endpoint
+		// returns 501 rather than serving an unsigned artifact from a signed route.
+		EvidenceSigner: func() (ed25519.PrivateKey, string, error) { return attest.LoadOrCreate(attest.DefaultKeyPath()) },
 		// The DETECTION corpus's identity, so the VAPT report can say what was capable of finding
 		// things — not only how old the threat intel was. A mutable tag here makes the report say it
 		// cannot identify the build, which is the honest answer and the one that prompts a rebuild.

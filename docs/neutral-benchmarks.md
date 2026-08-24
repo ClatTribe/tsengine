@@ -42,7 +42,7 @@ An internal fixture set fails (1) and (2) no matter how carefully it is built.
 |---|---|---|---|
 | **Fix a real vulnerability** | **[PatchEval-Verified](https://github.com/bytedance/PatchEval)** (ByteDance, Apache-2.0) — 230 CVEs, 2015–2025, **Go / JavaScript / Python** | Docker execution: `fix-run.sh` must exit clean AND the vuln must no longer be exploitable | **Not wired — top priority.** Language mix is exactly our customers' stack. Published baselines: GPT-5.6-Sol 83.9%, DeepSeek-V4-Flash 80.4%. |
 | PoC generation + patching on real CVEs | **[SEC-bench](https://arxiv.org/pdf/2506.11791)** (NeurIPS 2025) | Reproducible PoC artifacts + validated patches | **Not wired.** Previously rejected as C/C++-heavy and ~200GB; PatchEval covers our languages better. Reported ceiling: 18% PoC, 34% patching. |
-| SAST detection accuracy (L1, not the agent) | **OWASP Benchmark v1.2** | Per-CWE TP/FP → Youden | **Wired** (`internal/bench/sast.go`). Measured 0.387 Youden. |
+| SAST detection accuracy (L1, not the agent) | **OWASP Benchmark v1.2** | Per-CWE TP/FP → Youden | **Wired** (`internal/bench/sast.go`). Measured 0.4654 Youden (reproduced on all 2,740 cases; see SCOREBOARD.md — a carried 0.387 predated it). |
 | Cloud config posture | **CIS Benchmarks** | Control pass/fail | **Wired** (`internal/bench/cloud.go`, `tsbench cloud-baseline`). CIS is neutral; the fixture account is ours. |
 | Vulnerability *reasoning* quality | **SecLLMHolmes** | Hand-built CVE instances with known answers | **Not wired.** |
 | Threat hunting / blue-team response | **[standardised threat-hunting benchmark](https://arxiv.org/html/2509.23571v3)** (2025) | Detection of injected malicious activity | **Not wired.** Newest option; evaluate before committing. |

@@ -162,7 +162,7 @@ team would — continuously, not point-in-time:
 | **Agentic SOC** (Dropzone, Prophet, Exaforce) | ◑ triages *alerts* | ◑ enterprise SOC | ✅ | ❌ | ❌ SaaS | ❌ enterprise |
 | **Offensive AI** (XBOW) | ✅ pentest | ❌ | ◑ | ❌ | ❌ | ❌ enterprise |
 | **vCISO** | ◑ | ◑ human advice | ❌ point-in-time | manual | n/a | ❌ |
-| **TensorShield** | ✅ | ✅ **autonomous + gated** | ✅ | ✅ **14 frameworks** | ✅ **self-hosted** | ✅ |
+| **TensorShield** | ✅ | ✅ **autonomous + gated** | ✅ | ✅ **25 frameworks** | ✅ **self-hosted** | ✅ |
 
 **The reads:**
 - **Vanta/Drata** proved SMBs pay — but they collect evidence, they don't *do* security. We

@@ -27,6 +27,16 @@ import (
 // flags ITS call site passes and calling tool.Failed with them.
 //
 // THE RATCHET IS THE POINT: a NEW wrapper may not join this list. New code declares its contract.
+// mustDeclare is the MEASURED-ERROR class (ADR 0031 D1): wrappers whose call site passes no
+// findings-exit flag, so a non-zero exit is unambiguously an error and swallowing it reports a
+// failed scan as clean — the trivy defect, and for prowler/scoutsuite the way a bad-credential
+// cloud scan rendered as an all-clear estate. These MUST appear in the declaring set; the ratchet
+// previously could not see wrappers that used NEITHER symbol, which is exactly how the cloud pair
+// stayed invisible.
+var mustDeclare = map[string]bool{
+	"trivy": true, "grype": true, "prowler": true, "scoutsuite": true,
+}
+
 var swallowing = map[string]bool{
 	"amass": true, "apkid": true, "bandit": true, "checkdmarc": true, "checkov": true,
 	"cloudfox": true, "codeql": true, "dalfox": true, "dnstwist": true, "dockle": true,
@@ -91,6 +101,14 @@ func TestExitContract_NoNewWrapperMaySwallowSilently(t *testing.T) {
 				"passes, then call tool.Failed with the exits that mean \"found something\" (none, for "+
 				"most tools). A wrapper that guesses reports either a failed scan as clean — the trivy "+
 				"defect — or a successful scan as degraded.", name, name)
+		}
+	}
+	for name := range mustDeclare {
+		if !containsStr(declares, name) {
+			t.Errorf("%s is on the measured-error list (no findings-exit flag at its call site) but does "+
+				"not call tool.Failed — it either swallows its exec error or uses neither contract "+
+				"symbol. A scanner whose non-zero exit means ERROR must fail loudly: a swallowed error "+
+				"is how a bad-credential cloud scan reported a clean estate.", name)
 		}
 	}
 	for name := range swallowing {

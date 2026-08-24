@@ -11,6 +11,7 @@ package platformapi
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -47,13 +48,17 @@ import (
 
 // Deps are the API's collaborators.
 type Deps struct {
-	Store          store.Store
-	Connectors     *connector.Registry
-	Runner         *runner.Service
-	Jobs           *jobs.Pool       // optional: runs rescans off the request path (nil → synchronous)
-	Desk           Decider          // optional: the HITL desk (approvals decide)
-	Submitter      Submitter        // optional: queue a proposed remediation Action at the desk (self-remediating loop)
-	GRC            Posturer         // optional: the compliance system-of-record (posture)
+	Store      store.Store
+	Connectors *connector.Registry
+	Runner     *runner.Service
+	Jobs       *jobs.Pool // optional: runs rescans off the request path (nil → synchronous)
+	Desk       Decider    // optional: the HITL desk (approvals decide)
+	Submitter  Submitter  // optional: queue a proposed remediation Action at the desk (self-remediating loop)
+	GRC        Posturer   // optional: the compliance system-of-record (posture)
+	// EvidenceSigner supplies the ed25519 key + signer id for the SIGNED compliance evidence pack
+	// (ADR 0031 D2b). Optional: nil → GET .../evidence-pack returns 501 rather than serving an
+	// unsigned artifact from a signed endpoint. Wired in cmd/platform via attest.LoadOrCreate.
+	EvidenceSigner func() (ed25519.PrivateKey, string, error)
 	IncidentOpener IncidentOpener   // optional: opens incidents for event-driven ingest (identity/SaaS)
 	Vault          Sealer           // optional: seals OAuth tokens before persistence
 	Recorder       *ledger.Recorder // optional: signs review request/resolve into the ledger
@@ -387,6 +392,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/posture/{framework}", d.auth(d.handlePosture))
 	mux.HandleFunc("GET /v1/compliance/{framework}/report", d.auth(d.handleComplianceReport))
 	mux.HandleFunc("GET /v1/compliance/{framework}/fixes", d.auth(d.handleComplianceFixes))              // compliance→remediation bridge: which gaps are fixable now (findings + queued actions)
+	mux.HandleFunc("GET /v1/compliance/{framework}/evidence-pack", d.auth(d.handleEvidencePack))         // SIGNED evidence pack (ADR 0031 D2b) — never serves unsigned
 	mux.HandleFunc("GET /v1/compliance/{framework}/evidence-history", d.auth(d.handleEvidenceHistory))   // continuous-evidence timeline: posture snapshots over the audit window (SOC 2 Type II proof)
 	mux.HandleFunc("POST /v1/compliance/{framework}/evidence/capture", d.auth(d.handleEvidenceCapture))  // on-demand: snapshot this framework's posture onto the timeline now
 	mux.HandleFunc("POST /v1/compliance/{framework}/remediation", d.auth(d.handleComplianceRemediation)) // vCISO "how do I close this gap?" — LLM remediation guidance (gated)

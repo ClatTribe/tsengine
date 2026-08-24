@@ -1,6 +1,12 @@
 # Pricing model — the economics behind the three tiers (INR)
 
-This is the cost calculation the pricing page is derived from. It exists so the tiers make
+> **STALE ON PURPOSE (ADR 0031 D5):** this page was written for an earlier tier model
+> (Growth ₹7,999). The LIVE tiers are **Core ₹24,999/mo · Enterprise ₹64,999/mo · Free**
+> (`frontend/app/(marketing)/pricing/page.tsx` + `pkg/platform/plan.go` — those are authoritative).
+> The cost math below is kept as the original derivation; it has NOT been re-derived for the new
+> prices, because invented economics would be worse than stale ones.
+
+This is the cost calculation the pricing page was originally derived from. It exists so the tiers make
 **economic sense** (each price covers its marginal cost with a healthy margin) and so the
 "Free is genuinely free for us" claim is grounded, not marketing. The tiers are enforced by
 `pkg/platform/plan.go` (`Entitlements`), so the page and the product can't drift.
@@ -36,12 +42,12 @@ SMB/startup ICP, still ~70–75% gross margin. Prices are exclusive of 18% GST.
 
 ## The three tiers (must match `Entitlements`)
 
-| | Free | Growth (₹7,999/mo) | Enterprise (talk to us) |
+| | Free | Growth (₹7,999/mo — RETIRED tier name; see banner) | Enterprise (talk to us) |
 |---|---|---|---|
 | Scan targets (`MaxAssets`) | 2 | 25 | Unlimited |
 | AI engineer (`AIEnabled`) | — | ✓ | ✓ |
 | Continuous monitoring | — | ✓ | ✓ |
-| Frameworks (`AllFrameworks`) | Core (SOC 2 readiness) | All 22 | All 22 + custom |
+| Frameworks (`AllFrameworks`) | Core (SOC 2 readiness) | All 25 (`grc.Frameworks`) | All 25 + custom |
 | HITL apply loop | — | ✓ | ✓ |
 | Autonomous pentest | — | — | ✓ |
 
