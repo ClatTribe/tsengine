@@ -118,6 +118,11 @@ type Tenant struct {
 	// "escalation matrix with contact number"). Ordered by escalation precedence. Contact PII
 	// (email/phone), not a bearer secret, so stored plain like team-member emails.
 	Contacts []Contact `json:"contacts,omitempty"`
+	// BusinessServices map critical business services to the assets that carry them — CTEM's scoping
+	// phase (ADR 0028 G2). DataTier says an asset is tier 1; only this says CHECKOUT depends on it,
+	// and it is the service that has an owner and someone who gets paged. No secret → stored plain,
+	// like Contacts and Practitioners.
+	BusinessServices []BusinessService `json:"business_services,omitempty"`
 	// ServiceModel records WHO provides the human-in-the-loop expertise for this tenant — the only
 	// difference between the two product GTM models. self_serve = the tenant's own team; msp = a
 	// partner firm's expert (the MSP runs the product, their expert does HITL); managed = our hired
@@ -1710,4 +1715,22 @@ type ExposureObjective struct {
 	NetPerWindow int `json:"net_per_window"`
 	// MinConfirmedFixed is the required count of RE-TEST-PROVEN closures. 0 disables the clause.
 	MinConfirmedFixed int `json:"min_confirmed_fixed,omitempty"`
+}
+
+// BusinessService is one named business service and the assets that carry it (ADR 0028 G2).
+//
+// Declared by the customer, never inferred: which assets serve checkout is a fact about their
+// architecture that no scan can discover, and guessing it would route the wrong team to the wrong
+// incident — worse than leaving it unmapped.
+type BusinessService struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Criticality is the business dependency: critical | high | medium | low. Orders the view.
+	Criticality string `json:"criticality,omitempty"`
+	// Owner is the team or person accountable for this service — who gets paged, not who accepted a
+	// risk (that is Risk.Owner, a different question).
+	Owner string `json:"owner,omitempty"`
+	// AssetIDs are the assets that carry it. An id that no longer resolves is skipped rather than
+	// counted, because a dangling reference is not evidence of anything.
+	AssetIDs []string `json:"asset_ids,omitempty"`
 }

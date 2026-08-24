@@ -23,6 +23,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/apiauthz"
 	"github.com/ClatTribe/tsengine/internal/attackcoverage"
 	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/bizservice"
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
@@ -254,7 +255,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/proof-queue", d.auth(d.handleProofQueue)) // doubt→prove: findings the engineer surfaced that the pentester has not settled
 	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))        // all remediations + fix-verification status
 	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage))
-	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage))                   // ATT&CK techniques exercised vs unchecked
+	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage)) // ATT&CK techniques exercised vs unchecked
+	mux.HandleFunc("GET /v1/business-services", d.auth(d.handleBusinessServices))
+	mux.HandleFunc("PUT /v1/settings/business-services", d.auth(d.handleSetBusinessServices))
 	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))                     // is exposure going down?
 	mux.HandleFunc("PUT /v1/settings/exposure-objective", d.auth(d.handleSetExposureObjective)) // …and is that good? (ADR 0028 G3)
 	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation))         // did their controls catch our probes?
@@ -1357,4 +1360,79 @@ func (d Deps) tenantHalted(ctx context.Context, tenantID string) bool {
 		return false
 	}
 	return t.AgentsHalted
+}
+
+// handleBusinessServices is the CTEM scoping view (ADR 0028 G2): exposure grouped by the business
+// service it threatens, rather than by the asset that happens to carry it.
+//
+// The scanned-asset set comes from COMPLETED engagements — the same source the coverage view uses —
+// because "has this been assessed" must mean the same thing on both pages.
+func (d Deps) handleBusinessServices(w http.ResponseWriter, r *http.Request, tenantID string) {
+	ctx := r.Context()
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	assets, err := d.Store.ListAssets(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	findings, err := d.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	engs, err := d.Store.ListEngagements(ctx, tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	scanned := map[string]bool{}
+	for _, e := range engs {
+		if e.CompletedAt.IsZero() {
+			continue // an engagement still running has not established anything
+		}
+		scanned[e.AssetID] = true
+	}
+	respond(w, bizservice.Compute(t.BusinessServices, assets, findings, scanned), nil)
+}
+
+// handleSetBusinessServices replaces the service map. Wholesale rather than per-service because it is
+// a small declared list the customer edits as a whole, exactly like Contacts.
+func (d Deps) handleSetBusinessServices(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		Services []platform.BusinessService `json:"services"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<18)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	for i := range body.Services {
+		if strings.TrimSpace(body.Services[i].Name) == "" {
+			writeJSON(w, http.StatusBadRequest, errBody("every service needs a name — an unnamed service "+
+				"cannot be routed to an owner, which is the point of declaring one"))
+			return
+		}
+		if body.Services[i].ID == "" {
+			body.Services[i].ID = d.newID("svc")
+		}
+	}
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	t.BusinessServices = body.Services
+	if err := d.Store.PutTenant(r.Context(), t); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("business services mapped", "business_services",
+			map[string]any{"tenant_id": tenantID, "services": len(body.Services)},
+			"CTEM scoping: services mapped to the assets that carry them")
+	}
+	respond(w, body.Services, nil)
 }
