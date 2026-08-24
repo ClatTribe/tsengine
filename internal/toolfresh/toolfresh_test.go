@@ -85,10 +85,10 @@ func TestRender_LeadsWithWhatIsNotReproducible(t *testing.T) {
 	}
 }
 
-// TestRealDockerfile_IsInspectableAndReportsTheKnownDrift runs against the actual build definition.
+// TestRealDockerfile_IsInspectableAndFullyPinned runs against the actual build definition.
 // It asserts the parser SEES it (a parser that matched nothing would pass every test above while
-// telling us nothing about the product) and pins the specific drift the audit found.
-func TestRealDockerfile_IsInspectableAndReportsTheKnownDrift(t *testing.T) {
+// telling us nothing about the product) and that nothing floats.
+func TestRealDockerfile_IsInspectableAndFullyPinned(t *testing.T) {
 	path := filepath.Join("..", "..", "docker", "sandbox", "Dockerfile")
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -101,9 +101,20 @@ func TestRealDockerfile_IsInspectableAndReportsTheKnownDrift(t *testing.T) {
 		t.Fatalf("only saw %d tools in the real Dockerfile — the parser has stopped matching and this "+
 			"whole package would report a clean bill of health for an image nobody inspected", len(r.Tools))
 	}
-	if r.Floating == 0 {
-		t.Log("no floating pins found — if that is because they were fixed, lower nothing and delete " +
-			"this log; if it is because the patterns stopped matching, the count above would also be low")
+	// EVERY tool is pinned, and this asserts it rather than logging about it. dalfox, subfinder,
+	// gitleaks and naabu floated on `latest` when this package was written; they are pinned now, so
+	// zero is the intended state and a regression must fail here as well as in CI. The tool count
+	// checked above is what separates "nothing floats" from "the parser stopped matching".
+	if r.Floating != 0 {
+		var names []string
+		for _, tl := range r.Tools {
+			if tl.Pin == PinFloating {
+				names = append(names, tl.Name)
+			}
+		}
+		t.Errorf("%d scanner(s) float on an unpinned ref: %v. Two builds of this Dockerfile then ship "+
+			"different scanners, and neither the evidence pack nor the VAPT report can say which one "+
+			"tested the customer. Pin it to a real version.", r.Floating, names)
 	}
 	if len(r.Signatures) == 0 {
 		t.Error("no signature corpora recorded")
@@ -120,4 +131,21 @@ func TestRealDockerfile_IsInspectableAndReportsTheKnownDrift(t *testing.T) {
 			"that fact is the reason this package exists — if it changed, the note must change with it.")
 	}
 	t.Logf("real image: %d pinned, %d floating, %d unmanaged", r.Pinned, r.Floating, r.Unmanaged)
+}
+
+// TestParse_VariableVersionDefersToTheArg closes a hole that would let this package call an
+// irreproducible build reproducible. `go install x@${FOO_VERSION}` carries no version of its own;
+// treating the literal "${FOO_VERSION}" as a version string classifies it PinExact — a confident
+// wrong answer, and the exact failure mode the package exists to report on.
+func TestParse_VariableVersionDefersToTheArg(t *testing.T) {
+	r := Parse("ARG NAABU_VERSION=latest\nRUN go install github.com/projectdiscovery/naabu/v2/cmd/naabu@${NAABU_VERSION}\n")
+	for _, tl := range r.Tools {
+		if tl.Installer == "go" && strings.Contains(tl.Version, "$") {
+			t.Errorf("a build-arg reference was recorded as the version: %+v", tl)
+		}
+	}
+	if r.Floating != 1 || r.Pinned != 0 {
+		t.Errorf("counts = %d floating / %d pinned, want 1/0 — the ARG says `latest`, so the tool "+
+			"floats; the go-install line must not out-vote it with a fake pin", r.Floating, r.Pinned)
+	}
 }

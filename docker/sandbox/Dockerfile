@@ -46,22 +46,23 @@ RUN chmod +x /usr/local/bin/ts_want.sh
 
 # Build dalfox from source — naming on dalfox releases has been
 # historically inconsistent; `go install` is deterministic.
-ARG DALFOX_VERSION=latest
+ARG DALFOX_VERSION=v2.13.0
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     ts_install web dalfox github.com/hahwul/dalfox/v2@${DALFOX_VERSION}
 
 # subfinder — ProjectDiscovery, Go.
-ARG SUBFINDER_VERSION=latest
+ARG SUBFINDER_VERSION=v2.16.0
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     ts_install domain subfinder github.com/projectdiscovery/subfinder/v2/cmd/subfinder@${SUBFINDER_VERSION}
 
 # gitleaks — secret scanner (repository asset), Go. NOTE the module path
 # is still declared as zricethezav/gitleaks even though the repo moved
 # orgs, so install by that path.
-ARG GITLEAKS_VERSION=latest
+ARG GITLEAKS_VERSION=v8.30.1
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     ts_install repository gitleaks github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION}
 
+ARG NAABU_VERSION=v2.6.1
 # Additional Go-native scanners (CGO-free): grype (SCA, anchore), httpx
 # (ProjectDiscovery HTTP prober), dockle (container CIS linter).
 # trufflehog is NOT here — its go.mod has replace directives that block
@@ -83,7 +84,7 @@ RUN . /usr/local/bin/ts_want.sh && export GOOS=${TARGETOS} GOARCH=${TARGETARCH} 
 RUN . /usr/local/bin/ts_want.sh \
     && if ts_want ip; then apt-get update && apt-get install -y --no-install-recommends libpcap-dev \
        && CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-          go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest || ts_stub naabu; \
+          go install github.com/projectdiscovery/naabu/v2/cmd/naabu@${NAABU_VERSION} || ts_stub naabu; \
        else echo "skip naabu (TOOLSET=$TS_TOOLSET)"; ts_stub naabu; fi \
     && rm -rf /var/lib/apt/lists/*
 

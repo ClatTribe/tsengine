@@ -72,8 +72,13 @@ func (*Trivy) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "trivy", cliArgs...)
 	stdout, err := cmd.Output()
 	if err != nil {
-		if tool.DidNotRun(err) {
-			return tool.Result{}, fmt.Errorf("trivy: exec: %w", err)
+		// NO --exit-code IS PASSED ABOVE, so trivy exits 0 on findings and non-zero only on error:
+		// an unreachable vulnerability DB, a bad registry credential, an unreadable target. Every one
+		// of those used to be swallowed and parsed as an empty report, which reported a FAILED scan as
+		// a CLEAN one. Measured: TRIVY_DB_REPOSITORY="::::invalid" trivy fs → exit 1, 0 bytes stdout,
+		// and this wrapper returned err=nil, findings=0.
+		if tool.Failed(err) {
+			return tool.Result{}, fmt.Errorf("trivy: %s", tool.ExitDetail(err))
 		}
 		// trivy may exit non-zero on findings-found / network issues;
 		// still attempt parse.

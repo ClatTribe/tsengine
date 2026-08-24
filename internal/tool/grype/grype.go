@@ -42,8 +42,10 @@ func (*Grype) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "grype", target, "-o", "json", "-q")
 	stdout, err := cmd.Output()
 	if err != nil {
-		if tool.DidNotRun(err) {
-			return tool.Result{}, fmt.Errorf("grype: exec: %w", err)
+		// No --fail-on is passed above, so grype exits 0 on findings and non-zero only on error —
+		// the same shape as trivy, and the same swallowed-failure bug. See tool.Failed.
+		if tool.Failed(err) {
+			return tool.Result{}, fmt.Errorf("grype: %s", tool.ExitDetail(err))
 		}
 	}
 	return tool.Result{Output: string(stdout), Findings: parse(stdout, target)}, nil

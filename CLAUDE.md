@@ -823,6 +823,40 @@ type Tool interface {
 
 Default for any new tool is `SandboxExecution() = true`. Opt-out only for host-only framework tools.
 
+**A tool's EXIT CONTRACT is declared at the call site, not assumed from the tool.** `tool.DidNotRun`
+separates "never ran" (missing binary, 126/127, killed) from "ran and exited non-zero", and every
+wrapper then SWALLOWED the second case and parsed whatever came out. That is right for semgrep,
+gitleaks and hadolint, which exit 1 to MEAN "found something", and wrong for any tool not given a
+findings-exit flag. Measured: we pass no `--exit-code` to trivy and no `--fail-on` to grype, so both
+exit non-zero only on ERROR — and
+`TRIVY_DB_REPOSITORY="::::invalid" trivy fs` (exit 1, 0 bytes stdout, FATAL on stderr) came back
+through our wrapper as `err=nil, findings=0`. **A scanner that could not reach its vulnerability
+database reported a CLEAN SCAN**, the pass stayed authoritative, and the three absence-reasoning
+consumers acted on it: `detect.Reconcile` resolved incidents, `retest.Verify` confirmed fixes,
+`grc.Reconcile` flipped control gaps to MET. The degraded-pass guards built for exactly that cascade
+never fired, because the failure never became a failure.
+
+So `tool.Failed(err, findingExits ...int)`: a wrapper names the exits ITS flags make mean "found
+something" (usually none) and everything else is an error. The declaration is per call site because
+it depends on the flags that call site passes — which is precisely what the old comment got wrong
+about trivy. `tool.ExitDetail` carries the stderr line naming the cause into the failure reason,
+because "exit status 1" is the same string for a bad credential, an unreadable target and an
+unreachable DB, and that string is what an operator reads in `Scan.ToolsFailed`.
+
+**A BLANKET RULE IS NOT THE SAFER DIRECTION.** Flipping all 37 wrappers on the assumption that
+trivy's semantics generalise would report every successful semgrep scan as a failure — a permanently
+degraded pass in which incidents never resolve and no fix is ever confirmed. trivy and grype were
+converted because their behaviour was MEASURED; the remaining 34 are recorded in
+`internal/tool.swallowing` as the honest, countable remainder, and
+`TestExitContract_NoNewWrapperMaySwallowSilently` is a ratchet: a NEW wrapper may not join that list,
+and a converted one must leave it.
+
+**Scanner versions are PINNED and CI enforces it.** dalfox, subfinder, gitleaks and naabu floated on
+`latest`, so two builds of the same Dockerfile shipped different scanners and no evidence pack could
+say which one tested the customer. All four are pinned; `tsengine tool-freshness --fail-on-floating`
+runs in `.github/workflows/signatures.yml` and fails on a reintroduced floating ref. The apt/pip/curl
+tail is still unversioned and is reported as `unmanaged` rather than counted clean.
+
 When the host calls `dispatcher.Dispatch(ctx, "nuclei", args)`:
 
 1. Dispatcher reads tool's `SandboxExecution()`
