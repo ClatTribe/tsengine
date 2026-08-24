@@ -148,3 +148,28 @@ func TestChokePointIsInteriorAndOnlyWhenShared(t *testing.T) {
 		return // found and valid
 	}
 }
+
+func TestChokePoints_AgreesWithTheDetectorFinding(t *testing.T) {
+	g := estategraph.New()
+	g.AddNode(estategraph.Node{ID: estategraph.InternetID, Kind: estategraph.KindNetwork, Public: true})
+	g.AddNode(estategraph.Node{ID: "web:app", Kind: estategraph.KindResource, Surfaces: []string{"web"}, Public: true})
+	g.AddNode(estategraph.Node{ID: "cloud:role/etl", Kind: estategraph.KindPrincipal, Name: "etl", Surfaces: []string{"cloud"}})
+	g.AddNode(estategraph.Node{ID: "cloud:s3/pii", Kind: estategraph.KindData, Surfaces: []string{"cloud"}, Sensitive: estategraph.SensHigh})
+	g.AddNode(estategraph.Node{ID: "cloud:rds/db", Kind: estategraph.KindData, Surfaces: []string{"cloud"}, Sensitive: estategraph.SensHigh})
+	_ = g.AddEdge(estategraph.Edge{From: estategraph.InternetID, To: "web:app", Kind: estategraph.EdgeReaches, Surface: "web", Evidence: []string{"e1"}})
+	_ = g.AddEdge(estategraph.Edge{From: "web:app", To: "cloud:role/etl", Kind: estategraph.EdgeAssumes, Surface: "code", Evidence: []string{"e2"}})
+	_ = g.AddEdge(estategraph.Edge{From: "cloud:role/etl", To: "cloud:s3/pii", Kind: estategraph.EdgeGrants, Surface: "cloud", Evidence: []string{"e3"}})
+	_ = g.AddEdge(estategraph.Edge{From: "cloud:role/etl", To: "cloud:rds/db", Kind: estategraph.EdgeGrants, Surface: "cloud", Evidence: []string{"e4"}})
+
+	cps := ChokePoints(g, Options{})
+	if len(cps) == 0 || cps[0].ID != "cloud:role/etl" {
+		t.Fatalf("expected cloud:role/etl as the top choke point, got %+v", cps)
+	}
+	if cps[0].Paths < 2 {
+		t.Errorf("the choke point must be on ≥2 routes, got %d", cps[0].Paths)
+	}
+	// A graph with no internet entry has no cross-surface route → nil.
+	if got := ChokePoints(estategraph.New(), Options{}); got != nil {
+		t.Errorf("empty estate must yield no choke points, got %+v", got)
+	}
+}

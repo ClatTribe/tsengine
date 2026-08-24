@@ -16,6 +16,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
+	"github.com/ClatTribe/tsengine/internal/estatedetect"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -36,7 +37,7 @@ func tools() []toolDef {
 		{"blast_radius", "blast_radius(principal) — every crown jewel (sensitive data / privileged identity) reachable if this principal is compromised", tBlast},
 		{"enumerate_attack_paths", "enumerate_attack_paths() — the deterministic engine's candidate attack paths (a fast prepass to seed your investigation; verify/extend them)", tEnumerate},
 		{"detect_privesc", "detect_privesc(principal) — known IAM privilege-escalation moves available to the principal", tPrivesc},
-		{"estate_context", "estate_context(id) — what the WHOLE estate knows about this node: which surfaces asserted it (code/cloud/saas/identity/warehouse), and every neighbour in or out with the evidence for that hop. Use it to PIVOT off a cross-surface foothold — e.g. a leaked key's origin in code, or what else can reach a principal. Cloud-only questions stay with get_resource/find_paths. Context only: record_issue grounds against the CLOUD graph, so do not build a path out of estate ids — cross-surface paths are reported by the estate detector.", tEstate},
+		{"estate_context", "estate_context(id | chokepoints:true) — what the WHOLE estate knows about this node: which surfaces asserted it (code/cloud/saas/identity/warehouse), and every neighbour in or out with the evidence for that hop. Use it to PIVOT off a cross-surface foothold — e.g. a leaked key's origin in code, or what else can reach a principal. Pass chokepoints:true (no id) for the estate-wide 'what to fix first' view: the single nodes the most internet→crown routes cross. Cloud-only questions stay with get_resource/find_paths. Context only: record_issue grounds against the CLOUD graph, so do not build a path out of estate ids — cross-surface paths are reported by the estate detector.", tEstate},
 		{"get_findings", "get_findings(resource?) — prowler config-bad findings (the 'tools say' lens; most are NOT exploitable — your job is to tell which are)", tFindings},
 		{"record_issue", "record_issue(target, path[], severity, rationale, evidence[]) — commit a REAL attack path you've determined. REJECTED unless the path actually exists in the graph and ends at a crown jewel.", tRecord},
 		{"propose_fix", "propose_fix(issue_id) — generate an applyable, cloudiam-verified remediation that cuts the recorded issue's cheapest edge", tFix},
@@ -539,6 +540,13 @@ func tEstate(cc *Context, args map[string]any) string {
 		return "the cross-surface estate graph is not available for this run — only this cloud " +
 			"account is in view. Use get_resource / find_paths for cloud-only questions."
 	}
+	// estate_context(chokepoints:true) — the estate-wide "what to fix first" view: the single nodes
+	// the most cross-surface internet→crown routes run through. Computed by the SAME enumeration the
+	// estate detector emits its choke-point finding from, so the agent's priority can't disagree
+	// with the finding the customer sees.
+	if argBool(args, "chokepoints") || strings.EqualFold(argStr(args, "id"), "chokepoints") {
+		return renderEstateChokePoints(estatedetect.ChokePoints(cc.Estate, estatedetect.Options{}))
+	}
 	id := argStr(args, "id")
 	n, ok := cc.Estate.Nodes[id]
 	if !ok {
@@ -566,6 +574,27 @@ func tEstate(cc *Context, args map[string]any) string {
 	}
 	writeEdges(&b, cc.Estate, "moves FROM here", cc.Estate.Out(id), true)
 	writeEdges(&b, cc.Estate, "reaches this", cc.Estate.In(id), false)
+	return b.String()
+}
+
+// renderEstateChokePoints presents the highest-leverage cross-surface nodes. An empty set is a
+// real answer — each attack route is separate work — not a rendering failure (§10), so it says so
+// rather than promoting the least-unshared node to look decisive.
+func renderEstateChokePoints(cps []estategraph.ChokePoint) string {
+	if len(cps) == 0 {
+		return "No cross-surface choke point: no single node sits on more than one internet→crown " +
+			"route, so each path is separate work. There is no one fix that collapses several here. " +
+			"(This is about CROSS-surface routes; use find_paths for cloud-only choke analysis.)"
+	}
+	var b strings.Builder
+	b.WriteString("Highest-leverage cross-surface nodes (cutting one severs every route through it):\n")
+	for _, c := range cps {
+		name := c.Name
+		if name == "" {
+			name = c.ID
+		}
+		fmt.Fprintf(&b, "  - %s (%s) — on %d routes. %s\n", name, c.ID, c.Paths, c.Why)
+	}
 	return b.String()
 }
 
