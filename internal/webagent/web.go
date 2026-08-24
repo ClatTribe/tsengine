@@ -75,6 +75,46 @@ type Report struct {
 	Findings []Finding `json:"findings"`
 	Requests int       `json:"requests_sent"`
 	Calls    int       `json:"tool_calls"`
+	// Coverage is the honest "what this run did and did NOT reach". Without it a
+	// findings list reads as "we tested everything and this is all there was",
+	// when the run may have been cut short by the request budget or the
+	// iteration cap, throttled by egress denials, or stonewalled by a WAF —
+	// §5.2.5's coverage-disclosure ethic applied to the offensive agent.
+	Coverage Coverage `json:"coverage"`
+}
+
+// Coverage records the run's reach and its limits — every field a real fact
+// from run state, never an estimate (§10). A caller (and the VAPT report) can
+// tell an empty findings list that means "clean" from one that means "we ran
+// out of budget before we finished".
+type Coverage struct {
+	// StopReason is WHY the loop ended: "completed" (the agent called finish),
+	// "iteration_cap", "request_budget", or "model_error". Anything but
+	// "completed" means the surface was not fully worked.
+	StopReason string `json:"stop_reason"`
+	// RoutesKnown is the in-scope surface the agent was aware of; RoutesProbed
+	// is how many of them it actually sent a request to. Probed < Known means
+	// part of the known surface went untested.
+	RoutesKnown  int `json:"routes_known"`
+	RoutesProbed int `json:"routes_probed"`
+	// RequestBudget is the cap; RequestsSent (mirrored on Report.Requests) how
+	// many went out. BudgetExhausted means the cap, not the work, ended the run.
+	RequestBudget   int  `json:"request_budget"`
+	RequestsSent    int  `json:"requests_sent"`
+	BudgetExhausted bool `json:"budget_exhausted"`
+	// IterationsUsed / IterationCap: hitting the cap is a truncated run.
+	IterationsUsed int `json:"iterations_used"`
+	IterationCap   int `json:"iteration_cap"`
+	// EgressDenied is the count of outbound requests the egress guard refused
+	// (a scoped host that resolved to metadata/loopback). It was counted and
+	// read by nothing until now; a non-zero value means probes did not land.
+	EgressDenied int `json:"egress_denied"`
+	// BreakerTripped: the auto-halt latched (repeated egress blocks), so the run
+	// stopped defending itself mid-engagement — coverage is definitely partial.
+	BreakerTripped bool `json:"breaker_tripped"`
+	// DefensesHit are the WAF/filter signatures the agent ran into; a finding
+	// absent behind a WAF is not proof the class is absent.
+	DefensesHit []string `json:"defenses_hit,omitempty"`
 }
 
 // SeedFinding is a suspected vuln handed to the agent by an L1 scanner
@@ -216,9 +256,13 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 	}
 
 	var transcript []string
+	stopReason := "iteration_cap" // default: the loop ran out of iterations without the agent finishing
+	iters := 0
 	for i := 0; i < opts.MaxIters && !cc.Done; i++ {
+		iters = i + 1
 		out, err := generateWithRetry(ctx, llm, buildPrompt(cc, transcript), 3)
 		if err != nil {
+			stopReason = "model_error"
 			if cc.Summary == "" {
 				cc.Summary = fmt.Sprintf("engagement stopped early after a model failure (%v); %d finding(s) recorded so far", err, len(cc.Findings))
 			}
@@ -244,10 +288,65 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 			opts.Progress(cc) // flush partial state so a timeout/SIGKILL can't erase a captured flag
 		}
 	}
+	if cc.Done {
+		stopReason = "completed"
+	}
 	return &Report{
 		Target: cc.Target, Summary: cc.Summary, Findings: cc.Findings,
 		Requests: cc.req.Sent(), Calls: cc.calls,
+		Coverage: cc.coverage(stopReason, iters, opts.MaxIters),
 	}, nil
+}
+
+// coverage builds the honest reach-and-limits block from real run state.
+func (cc *Context) coverage(stopReason string, iters, iterCap int) Coverage {
+	sent := cc.req.Sent()
+	tripped, _ := cc.req.Breaker().Tripped()
+	cov := Coverage{
+		StopReason:      stopReason,
+		RoutesKnown:     len(uniqStrings(cc.Routes)),
+		RoutesProbed:    len(cc.probedRoutes()),
+		RequestBudget:   cc.req.max,
+		RequestsSent:    sent,
+		BudgetExhausted: cc.req.max > 0 && sent >= cc.req.max,
+		IterationsUsed:  iters,
+		IterationCap:    iterCap,
+		EgressDenied:    cc.req.Denied(),
+		BreakerTripped:  tripped,
+		DefensesHit:     uniqStrings(cc.Defenses),
+	}
+	// A request-budget exhaustion is a more specific truth than "iteration_cap":
+	// the run stopped because it ran out of requests, not turns.
+	if cov.BudgetExhausted && stopReason == "iteration_cap" {
+		cov.StopReason = "request_budget"
+	}
+	return cov
+}
+
+// probedRoutes is the set of distinct request URLs the agent actually sent —
+// the surface it TESTED, as opposed to the surface it merely KNEW (cc.Routes).
+func (cc *Context) probedRoutes() map[string]bool {
+	probed := map[string]bool{}
+	for _, t := range cc.History {
+		if t.URL != "" {
+			probed[t.URL] = true
+		}
+	}
+	return probed
+}
+
+// uniqStrings returns the distinct non-empty entries, preserving order.
+func uniqStrings(in []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range in {
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // allowHostsFor derives the network allowlist from the target + seed routes. The

@@ -364,3 +364,50 @@ func TestSeedFromFinding_ThreadsL15(t *testing.T) {
 		}
 	}
 }
+
+// P1-6: a run that FINISHES reports completed coverage; a run cut short by the
+// iteration cap discloses that it did not finish, so an empty findings list is
+// never mistaken for a thorough clean result.
+func TestReport_CoverageDisclosesTruncation(t *testing.T) {
+	srv := mockTarget()
+	defer srv.Close()
+
+	// A brain that keeps probing and never calls finish → the loop hits the
+	// iteration cap.
+	send := fmt.Sprintf(`{"thought":"probe","tool":"send_request","args":{"method":"GET","url":%q}}`, srv.URL+"/search?q=x")
+	brain := &scriptLLM{steps: []string{send, send, send, send, send}}
+	cc := &Context{Target: srv.URL}
+	rep, err := Investigate(context.Background(), brain, cc, Options{MaxIters: 2, MaxRequests: 50})
+	if err != nil {
+		t.Fatalf("Investigate: %v", err)
+	}
+	if rep.Coverage.StopReason != "iteration_cap" {
+		t.Errorf("a run that never finished must report iteration_cap, got %q", rep.Coverage.StopReason)
+	}
+	if rep.Coverage.IterationsUsed != 2 || rep.Coverage.IterationCap != 2 {
+		t.Errorf("iterations used/cap not recorded: %d/%d", rep.Coverage.IterationsUsed, rep.Coverage.IterationCap)
+	}
+	if rep.Coverage.RoutesKnown < 1 {
+		t.Errorf("the target route should be known: %+v", rep.Coverage)
+	}
+	if !strings.Contains(Render(rep), "did not finish") {
+		t.Errorf("render must disclose the run did not finish:\n%s", Render(rep))
+	}
+}
+
+func TestReport_CoverageCompletedRun(t *testing.T) {
+	srv := mockTarget()
+	defer srv.Close()
+	brain := &scriptLLM{steps: []string{`{"tool":"finish","args":{"summary":"nothing to probe"}}`}}
+	cc := &Context{Target: srv.URL}
+	rep, err := Investigate(context.Background(), brain, cc, Options{MaxIters: 10, MaxRequests: 50})
+	if err != nil {
+		t.Fatalf("Investigate: %v", err)
+	}
+	if rep.Coverage.StopReason != "completed" {
+		t.Errorf("a finished run must report completed, got %q", rep.Coverage.StopReason)
+	}
+	if strings.Contains(Render(rep), "did not finish") {
+		t.Errorf("a completed run must NOT carry the did-not-finish caveat:\n%s", Render(rep))
+	}
+}
