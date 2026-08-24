@@ -68,12 +68,12 @@ ARG NAABU_VERSION=v2.6.1
 # trufflehog is NOT here — its go.mod has replace directives that block
 # `go install`; it's installed via its release script in stage 2.
 RUN . /usr/local/bin/ts_want.sh && export GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    && ts_install repository grype github.com/anchore/grype/cmd/grype@latest \
-    && ts_install web httpx github.com/projectdiscovery/httpx/cmd/httpx@latest \
-    && ts_install container dockle github.com/goodwithtech/dockle/cmd/dockle@latest \
-    && ts_install web katana github.com/projectdiscovery/katana/cmd/katana@latest \
-    && ts_install repository gosec github.com/securego/gosec/v2/cmd/gosec@latest \
-    && ts_install repository govulncheck golang.org/x/vuln/cmd/govulncheck@latest
+    && ts_install repository grype github.com/anchore/grype/cmd/grype@v0.117.0 \
+    && ts_install web httpx github.com/projectdiscovery/httpx/cmd/httpx@v1.10.0 \
+    && ts_install container dockle github.com/goodwithtech/dockle/cmd/dockle@v0.4.14 \
+    && ts_install web katana github.com/projectdiscovery/katana/cmd/katana@v1.7.0 \
+    && ts_install repository gosec github.com/securego/gosec/v2/cmd/gosec@v2.28.0 \
+    && ts_install repository govulncheck golang.org/x/vuln/cmd/govulncheck@v1.7.0
 
 # naabu — fast port scanner, the ip_address recon tool (A1). Requires
 # libpcap + CGO (unlike the other ProjectDiscovery tools). Our wrapper
@@ -90,20 +90,20 @@ RUN . /usr/local/bin/ts_want.sh \
 
 # amass — OWASP subdomain enumerator (domain asset, A2). Go, CGO-free.
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    ts_install domain amass github.com/owasp-amass/amass/v4/...@master
+    ts_install domain amass github.com/owasp-amass/amass/v4/...@v4.2.0
 
 # osv-scanner — Google OSV.dev SCA (repository asset, A5). Go, CGO-free.
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    ts_install repository osv-scanner github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
+    ts_install repository osv-scanner github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.5.1
 
 # cloudfox — BishopFox read-only cloud IAM attack-path enum (cloud_account
 # registry tier, A3). Go, CGO-free.
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    ts_install cloud cloudfox github.com/BishopFox/cloudfox@latest
+    ts_install cloud cloudfox github.com/BishopFox/cloudfox@v1.17.0
 
 # ffuf — web content discovery (web escalation, E1). Go, CGO-free.
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    ts_install web ffuf github.com/ffuf/ffuf/v2@latest
+    ts_install web ffuf github.com/ffuf/ffuf/v2@v2.2.1
 
 # kiterunner — undocumented API route discovery (api escalation, E2). Go.
 # The binary's main package is cmd/kiterunner (NOT cmd/kr); install it and
@@ -119,7 +119,7 @@ RUN . /usr/local/bin/ts_want.sh \
 # cosign — image signature / SLSA provenance verification (container, E4).
 # Go, CGO-free.
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    ts_install container cosign github.com/sigstore/cosign/v2/cmd/cosign@latest
+    ts_install container cosign github.com/sigstore/cosign/v2/cmd/cosign@v2.6.5
 
 # ---- Stage 2: runtime image ----
 FROM ubuntu:22.04

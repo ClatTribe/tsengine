@@ -93,13 +93,33 @@ var (
 	argVersionRe = regexp.MustCompile(`^(?:ARG|ENV)\s+([A-Z0-9_]+)_VERSION=(\S+)`)
 	goInstallRe  = regexp.MustCompile(`go install\s+(\S+?)@(\S+)`)
 	pipPinnedRe  = regexp.MustCompile(`pip3? install[^\n]*?([a-zA-Z0-9_.-]+)==(\S+)`)
+	// ts_install <group> <name> <module>@<version> — the Dockerfile's own helper, and the form MOST
+	// of this image's Go scanners are installed with. It was not matched at all, so eleven scanners
+	// floating on @latest were invisible: the report said "0 floating" and a CI gate was turned on
+	// over that. A parser that silently covers a fifth of its subject reports a clean bill of health
+	// for an image nobody inspected — §14.2's vacuous pass, inside the tool built to prevent it.
+	tsInstallRe = regexp.MustCompile(`ts_install\s+\S+\s+(\S+)\s+(\S+?)@(\S+)`)
+	// PKGS="$PKGS sqlmap checkov prowler==4.6.0" — the image builds its Python toolset by appending
+	// to a shell variable and pip-installing the list. Ten real scanners (sqlmap, checkov, garak,
+	// scoutsuite, schemathesis, …) arrive this way with NO version, and only prowler is pinned.
+	// Unmatched, they were absent from the report entirely rather than counted as unmanaged.
+	pkgsAppendRe = regexp.MustCompile(`PKGS="\$PKGS ([^"]+)"`)
+	// A curl'd installer script fetched from a BRANCH (syft, trufflehog) is the same problem in a
+	// different shape: whatever upstream's main happened to be on build day.
+	curlInstallRe = regexp.MustCompile(`raw\.githubusercontent\.com/[^/]+/([^/]+)/(?:main|master)/[^\s]*install\.sh`)
 )
 
 // Parse reads a Dockerfile and reports what it can see about every tool's version control.
 //
-// Unrecognised install lines are NOT silently dropped — anything that looks like a tool install but
-// carries no version becomes PinUnmanaged, because an install nobody counted is exactly how a
-// forty-tool image ends up with six recorded versions.
+// An install that expresses NO version becomes PinUnmanaged rather than being dropped, because an
+// install nobody counted is exactly how a forty-five-tool image ends up with six recorded versions.
+// That is not a hypothetical: this parser originally matched only ARG/go-install/pip-pinned lines,
+// so the eleven `ts_install` scanners floating on @latest and the ten unpinned pip scanners were
+// invisible, and the report read "0 floating · 0 unmanaged" — a clean bill of health covering under
+// a fifth of the image, with a CI gate switched on over it.
+//
+// COVERAGE IS STILL PARTIAL AND THE REPORT SAYS SO. apt packages and versioned curl fetches are not
+// classified here; Render states that limit rather than letting the totals read as the whole image.
 func Parse(dockerfile string) Report {
 	rep := Report{Signatures: knownSignatures()}
 	seen := map[string]bool{}
@@ -133,6 +153,25 @@ func Parse(dockerfile string) Report {
 				continue
 			}
 			add(Tool{Name: goModuleName(m[1]), Version: m[2], Pin: pinOf(m[2]), Installer: "go", Line: n})
+		}
+		for _, m := range tsInstallRe.FindAllStringSubmatch(line, -1) {
+			if isVarRef(m[3]) {
+				continue // an ARG line carries the real answer; see isVarRef
+			}
+			add(Tool{Name: strings.ToLower(m[1]), Version: m[3], Pin: pinOf(m[3]), Installer: "go", Line: n})
+		}
+		for _, m := range pkgsAppendRe.FindAllStringSubmatch(line, -1) {
+			for _, pkg := range strings.Fields(m[1]) {
+				if name, ver, ok := strings.Cut(pkg, "=="); ok {
+					add(Tool{Name: strings.ToLower(name), Version: ver, Pin: PinExact, Installer: "pip", Line: n})
+					continue
+				}
+				// No version expressed at all — whatever PyPI served on build day.
+				add(Tool{Name: strings.ToLower(pkg), Pin: PinUnmanaged, Installer: "pip", Line: n})
+			}
+		}
+		for _, m := range curlInstallRe.FindAllStringSubmatch(line, -1) {
+			add(Tool{Name: strings.ToLower(m[1]), Pin: PinUnmanaged, Installer: "curl", Line: n})
 		}
 		for _, m := range pipPinnedRe.FindAllStringSubmatch(line, -1) {
 			add(Tool{Name: strings.ToLower(m[1]), Version: m[2], Pin: PinExact, Installer: "pip", Line: n})
@@ -218,12 +257,32 @@ func (r Report) Render() string {
 		}
 		b.WriteString("\n")
 	}
+	if r.Unmanaged > 0 {
+		b.WriteString("UNMANAGED — installed with no version expressed at all, so the build takes whatever\n")
+		b.WriteString("upstream served that day. Not gated by --fail-on-floating (pinning an OS/PyPI package\n")
+		b.WriteString("can break the install), but these are real scanners and their versions are unrecorded:\n")
+		for _, t := range r.Tools {
+			if t.Pin == PinUnmanaged {
+				fmt.Fprintf(&b, "  %-18s %-8s via %-4s  Dockerfile:%d\n", t.Name, "-", t.Installer, t.Line)
+			}
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString("PINNED:\n")
 	for _, t := range r.Tools {
 		if t.Pin == PinExact {
 			fmt.Fprintf(&b, "  %-18s %-8s via %-4s  Dockerfile:%d\n", t.Name, t.Version, t.Installer, t.Line)
 		}
 	}
+	// §5.2 rule 5 applied to this report: what it could NOT classify is part of its result. Rendered
+	// as nothing, an unclassified install is indistinguishable from a pinned one, and the totals above
+	// read as a statement about the whole image when they cover the part this parser understands.
+	b.WriteString("\nCOVERAGE — what these totals do and do not cover:\n")
+	b.WriteString("  Counted: ARG *_VERSION, `go install`, `ts_install`, and the pip toolset list.\n")
+	b.WriteString("  NOT counted: apt packages and versioned curl fetches (nuclei, codeql, kics, hadolint,\n")
+	b.WriteString("  padbuster, trivy) — some carry a version in the URL or an ARG counted above, others do\n")
+	b.WriteString("  not. A tool absent from every list above is unverified here, not confirmed pinned.\n")
+
 	b.WriteString("\nSIGNATURE CORPORA — the axis that actually determines recall:\n")
 	for _, s := range r.Signatures {
 		fmt.Fprintf(&b, "  %-52s %s\n      %s\n", s.Name, s.Refresh, s.Note)

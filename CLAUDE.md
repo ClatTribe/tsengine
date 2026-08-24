@@ -851,11 +851,25 @@ converted because their behaviour was MEASURED; the remaining 34 are recorded in
 `TestExitContract_NoNewWrapperMaySwallowSilently` is a ratchet: a NEW wrapper may not join that list,
 and a converted one must leave it.
 
-**Scanner versions are PINNED and CI enforces it.** dalfox, subfinder, gitleaks and naabu floated on
-`latest`, so two builds of the same Dockerfile shipped different scanners and no evidence pack could
-say which one tested the customer. All four are pinned; `tsengine tool-freshness --fail-on-floating`
-runs in `.github/workflows/signatures.yml` and fails on a reintroduced floating ref. The apt/pip/curl
-tail is still unversioned and is reported as `unmanaged` rather than counted clean.
+**Scanner versions are PINNED and CI enforces it — and the FIRST attempt at this was a vacuous pass.**
+Four tools (dalfox, subfinder, gitleaks, naabu) floated on `latest`, so two builds of the same
+Dockerfile shipped different scanners and no evidence pack could say which tested the customer. They
+were pinned and `tool-freshness --fail-on-floating` was switched on in `.github/workflows/
+signatures.yml`. **The gate then passed on a tree where ELEVEN MORE SCANNERS STILL FLOATED**, because
+`toolfresh` matched only `ARG *_VERSION` / `go install` / pinned-pip lines and this image installs
+most of its Go scanners via the `ts_install` helper and its Python scanners by appending to a `PKGS`
+shell variable. 8 of 45 tools were visible; the report read `0 floating · 0 unmanaged` and a CI gate
+was built on top of that. §14.2 rule 6, reproduced inside the tool written to enforce it — the guard
+was green at the moment it was least able to see.
+
+Now: 21 pinned · 0 floating · 14 unmanaged of 35 seen. `ts_install`, the `PKGS` list and branch-ref
+`curl | sh` installers are all parsed; a version given as `@${ARG}` defers to the ARG rather than
+being counted as a literal pin (which classified an irreproducible build as reproducible). The
+unmanaged 14 (sqlmap, checkov, garak, scoutsuite, syft, trufflehog, …) are **rendered and named**,
+not just counted — pinning a PyPI/OS package can break the install, so they are reported rather than
+gated. `Render` states its OWN coverage, because a tool absent from every list must read as
+UNVERIFIED, never as confirmed-pinned. When adding a scanner, check `tool-freshness` actually SEES
+it; the parser's floor test (`len(r.Tools) < 25`) exists because 8 tools cleared the old floor of 6.
 
 When the host calls `dispatcher.Dispatch(ctx, "nuclei", args)`:
 
