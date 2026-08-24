@@ -395,7 +395,15 @@ func main() {
 	}
 	workspaceRunner := &runner.OperateRunner{Source: workspaceSource, Apps: st}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
-		engine := &runner.EngineRunner{Resolve: assetregistry.HandlerFor, NewDispatcher: sandboxDispatcher(sandboxImages.Scan, st, vault)}
+		engine := &runner.EngineRunner{
+			Resolve:       assetregistry.HandlerFor,
+			NewDispatcher: sandboxDispatcher(sandboxImages.Scan, st, vault),
+			// The workspace-aware factory + the code surface's validation rung (ADR 0029 D2a). Wired
+			// HERE rather than left as a seam, because a capability reachable only from a test is the
+			// defect this ADR exists to stop repeating.
+			NewDispatcherWithWorkspace: sandboxDispatcherWS(sandboxImages.Scan, st, vault),
+			Reachability:               runner.TriageReachability,
+		}
 		svc.Scanner = &runner.MuxRunner{Engine: engine, Workspace: workspaceRunner}
 	} else {
 		log.Print("[platform] NO_ENGINE mode: tech-asset scanning disabled (operate workspace assets still run)")
@@ -663,8 +671,26 @@ func repoScratchDir() string {
 
 // sandboxDispatcher returns a factory that spawns a per-asset sandbox and hands back
 // the orchestrator Dispatcher + a teardown. Mirrors cmd/tsengine's scan path.
+//
+// It is the workspace-unaware adapter over sandboxDispatcherWS, kept because EngineRunner.ReplayTool
+// takes this shape and a replay has no use for the source tree.
 func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
+	ws := sandboxDispatcherWS(image, st, vault)
 	return func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, func(), error) {
+		disp, _, cleanup, err := ws(ctx, a)
+		return disp, cleanup, err
+	}
+}
+
+// sandboxDispatcherWS is the real factory. It additionally reports the HOST PATH of the repository
+// clone it made for this scan (empty for every other asset type), so the scan can run host-side
+// analysis over the tree while it exists — ADR 0029 D2a.
+//
+// The clone's whole lifetime is this dispatcher's: created here, torn down by the returned cleanup.
+// Anything that needs the tree has to run inside that window, which is why the path is returned
+// rather than left implicit.
+func sandboxDispatcherWS(image string, st store.Store, vault secret.Vault) func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, string, func(), error) {
+	return func(ctx context.Context, a platform.Asset) (orchestrator.Dispatcher, string, func(), error) {
 		opts := sandbox.SpawnOptions{Image: image}
 		var cloneDir string
 		switch types.AssetType(a.Type) {
@@ -673,22 +699,22 @@ func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ct
 		case types.AssetRepository:
 			dir, err := os.MkdirTemp(repoScratchDir(), "tsengine-repo-*")
 			if err != nil {
-				return nil, nil, fmt.Errorf("sandboxDispatcher: temp dir: %w", err)
+				return nil, "", nil, fmt.Errorf("sandboxDispatcher: temp dir: %w", err)
 			}
 			if cerr := os.Chmod(dir, 0o755); cerr != nil {
 				_ = os.RemoveAll(dir)
-				return nil, nil, fmt.Errorf("sandboxDispatcher: chmod temp dir: %w", cerr)
+				return nil, "", nil, fmt.Errorf("sandboxDispatcher: chmod temp dir: %w", cerr)
 			}
 			auth, aerr := repoAuth(ctx, st, vault, a)
 			if aerr != nil {
 				_ = os.RemoveAll(dir)
-				return nil, nil, aerr
+				return nil, "", nil, aerr
 			}
 			if _, cerr := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
 				URL: repoCloneURL(a), Auth: auth, Depth: 1, SingleBranch: true,
 			}); cerr != nil {
 				_ = os.RemoveAll(dir)
-				return nil, nil, fmt.Errorf("sandboxDispatcher: clone %s: %w", a.Target, cerr)
+				return nil, "", nil, fmt.Errorf("sandboxDispatcher: clone %s: %w", a.Target, cerr)
 			}
 			cloneDir = dir
 			opts.Mounts = append(opts.Mounts, sandbox.Mount{HostPath: dir, ContainerPath: repoasset.WorkspacePath})
@@ -698,7 +724,7 @@ func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ct
 			if cloneDir != "" {
 				_ = os.RemoveAll(cloneDir)
 			}
-			return nil, nil, err
+			return nil, "", nil, err
 		}
 		cleanup := func() {
 			_ = sandbox.Destroy(context.Background(), info)
@@ -706,7 +732,7 @@ func sandboxDispatcher(image string, st store.Store, vault secret.Vault) func(ct
 				_ = os.RemoveAll(cloneDir)
 			}
 		}
-		return sandbox.NewClient(info), cleanup, nil
+		return sandbox.NewClient(info), cloneDir, cleanup, nil
 	}
 }
 

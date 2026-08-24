@@ -1,3 +1,5 @@
+import type { EvidenceRungID } from "@/lib/evidence-rungs";
+
 // Mirrors the Go /v1 JSON contracts (pkg/types + pkg/platform). Only the fields the UI uses.
 
 // AIAnalysis — a persisted run of the AI Security Engineer (Triage / Investigate / Cloud), so a run
@@ -52,6 +54,11 @@ export interface Finding {
   cwe?: string[];
   mitre_techniques?: string[];
   verification_status?: string;
+  /**
+   * How this finding was established — the engine's evidence ladder (ADR 0029 D2d).
+   * Mirrors pkg/types.EvidenceRung; see lib/evidence-rungs.ts for the labels.
+   */
+  rung?: EvidenceRungID;
   confidence?: number;
   // The rule ids of the OTHER findings that independently agreed — the evidence behind the word
   // "corroborated" and the confidence number beside it. The corroborator hook only counts findings
