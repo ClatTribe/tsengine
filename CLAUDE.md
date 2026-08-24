@@ -1612,6 +1612,35 @@ secrets via the Docker-secret `*_FILE` convention; `scripts/backup.sh`/`restore.
 `platform-data` volume; one-command **`make deploy-prod`** (`scripts/deploy-single-box.sh`,
 `--check` dry-run) + `make prod-validate`. Threats T1âT8 each have a shipped mitigation (#259â264).
 
+**IMAGES ARE PUBLISHED; A VM PULLS.** `release.yml` used to publish exactly ONE image — `host`, the
+engine CLI. The three images a deployment actually runs were never built by CI, so
+`docker-compose.prod.yml` carried `build:` stanzas and every VM compiled Go, built a Next.js bundle
+and assembled a 45-scanner sandbox before it could serve a request — putting the box's toolchain on
+the production surface. Meanwhile prod pointed at `tsengine/sandbox:0.1.0`, a LOCAL tag nothing
+pushed, while the weekly signature rebuild published `sandbox:signatures-latest`, an address nothing
+read: a refresh pipeline publishing where no deployment looks is indistinguishable from no refresh
+pipeline, and the only signal it worked was a green tick.
+
+`.github/workflows/images.yml` publishes `platform`, `frontend` (both multi-arch) and `sandbox` to
+GHCR. It is REUSABLE (`workflow_call`) and `signatures.yml` calls it for the weekly rebuild, so the
+refresh produces the SAME tags a deployment consumes — one definition, no drift. `docker-compose.prod.yml`
+now PULLS; `docker-compose.build.yml` is the override that restores local building (air-gapped, a
+fork, uncommitted changes), and `deploy-single-box.sh` pulls by default with `--build` for the old
+behaviour. `make pull` / `make pull-slim` / `make up-prod`.
+
+**PER-ASSET SLIM SANDBOX IMAGES.** The sandbox is built once per TOOLSET (`full` + web · api ·
+repository · container · ip · domain · cloud), so a box that only scans repositories stops pulling
+codeql, prowler and garak's ML stack. `sandbox.ScanImages.For(assetType)` resolves the image per
+scan: an explicit override, else `TSENGINE_SANDBOX_IMAGE_TEMPLATE` with `{toolset}` substituted, else
+**the full image** — the only safe default. `sandbox.AssetToolset` is the asset→toolset mapping,
+written out rather than derived by string-munging (cutting `container_image` at the underscore also
+"works" for `ip_address`, and would silently produce garbage the day an asset is renamed); an asset
+absent from it falls back to full, and a test pins it against `types.AllAssetTypes()`. Safety is
+STRUCTURAL, not documentary: `toolset.sh` STUBS an unselected tool to exit **127**, which
+`tool.DidNotRun` reports as "did not run" → `ToolsFailed` → degraded pass. So the wrong slim image
+degrades a scan honestly instead of returning a clean one — verified end to end. **The DB is still
+SQLite on a volume (single-node); Postgres remains the `store.Store` successor.**
+
 **Still single-box, not scale-grade** (the multi-machine gaps, each behind an existing seam â
 docs/production-single-box.md Â§6): single-node file/SQLite store (Postgres is the `store.Store`
 successor), env/file secrets (cloud-KMS is the `secret.Vault` successor), no HA/multi-node

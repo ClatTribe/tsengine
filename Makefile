@@ -3,6 +3,10 @@
 # dependencies — Go tooling handles its own caching.
 
 SANDBOX_IMAGE ?= tsengine/sandbox:0.1.0
+# Published images (GHCR). Override REGISTRY_OWNER for a fork.
+REGISTRY_OWNER ?= clattribe/tsengine
+SANDBOX_REGISTRY ?= ghcr.io/$(REGISTRY_OWNER)/sandbox
+SANDBOX_PULL_IMAGE ?= $(SANDBOX_REGISTRY):full-latest
 # TOOLSET picks which assets' tooling the DEV image installs (see docker/sandbox/Dockerfile).
 # `full` is production parity; a comma list builds only those assets and is much smaller/faster.
 TOOLSET ?= container,repository
@@ -149,6 +153,26 @@ up: ## bring up the full product stack (platform API + frontend) via docker comp
 .PHONY: down
 down: ## stop the product stack
 	docker compose down
+
+.PHONY: pull
+pull: ## pull the published platform/frontend/sandbox images (no local build)
+	@echo "pulling published images from GHCR…"
+	docker compose -f docker-compose.prod.yml pull
+	docker pull $(SANDBOX_PULL_IMAGE)
+	@echo "→ pulled. Bring the stack up with: make up-prod"
+
+.PHONY: pull-slim
+pull-slim: ## pull the per-asset SLIM sandbox images (repository/web/api/container/ip/domain/cloud)
+	@for ts in repository web api container ip domain cloud; do \
+		echo "→ sandbox:$$ts-latest"; \
+		docker pull $(SANDBOX_REGISTRY):$$ts-latest || exit 1; \
+	done
+	@echo "→ set TSENGINE_SANDBOX_IMAGE_TEMPLATE=$(SANDBOX_REGISTRY):{toolset}-latest in .env to use them"
+
+.PHONY: up-prod
+up-prod: ## bring up the hardened prod stack from PUBLISHED images (no build)
+	docker compose -f docker-compose.prod.yml up -d
+	@echo "→ up. Building locally instead: docker compose -f docker-compose.prod.yml -f docker-compose.build.yml up -d --build"
 
 .PHONY: deploy-prod
 deploy-prod: ## production single-box deploy (hardened stack: TLS edge + socket-proxy + engine)

@@ -1,0 +1,195 @@
+name: Images
+
+# THE DEPLOYMENT GAP THIS CLOSES.
+#
+# Before this workflow, `release.yml` published exactly ONE image — `host`, the engine CLI. The
+# three images a deployment actually runs (platform, frontend, sandbox) were never built by CI, so
+# `docker-compose.prod.yml` had `build:` stanzas and every VM compiled Go, built a Next.js bundle and
+# assembled a forty-five-scanner sandbox image locally before it could serve a request. Worse, the
+# prod compose pointed at `tsengine/sandbox:0.1.0` — a purely local tag that nothing anywhere pushed
+# — while the weekly signature rebuild pushed `sandbox:signatures-latest`, an address nothing read.
+#
+# So: build every image here, publish to GHCR, and let a VM PULL.
+#
+# REUSABLE ON PURPOSE (`workflow_call`). The weekly signature refresh needs to rebuild the sandbox to
+# move its baked corpora, and it must produce the SAME tags a deployment consumes — the previous
+# split definition is exactly how the rebuild came to publish somewhere nobody was looking.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      sandbox_arm64:
+        description: "Also build sandbox for linux/arm64 (roughly doubles build time)"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      images:
+        description: "Which images to build: all | sandbox"
+        type: string
+        default: all
+      tag_prefix:
+        description: "Extra tag to publish alongside latest, e.g. signatures-20260824"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  # Never let two runs push the same moving tag; the loser would silently win.
+  group: images-${{ github.ref }}-${{ inputs.images || 'all' }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  # Lowercased at use — GHCR rejects an uppercase path, and github.repository preserves owner case.
+  IMAGE_BASE: ghcr.io/${{ github.repository }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The two small images. Multi-arch is cheap here (a Go binary and a Next build)
+  # and matters: Graviton/arm64 VMs are the cheapest place to run this.
+  # ---------------------------------------------------------------------------
+  app:
+    name: ${{ matrix.image }} image
+    if: ${{ (inputs.images || 'all') == 'all' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: platform
+            file: docker/platform/Dockerfile
+          - image: frontend
+            file: frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lowercase the image path
+        id: ref
+        run: echo "base=$(echo '${{ env.IMAGE_BASE }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ steps.ref.outputs.base }}/${{ matrix.image }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,format=short
+      # NEXT_PUBLIC_* are baked into the static bundle at BUILD time, so they must be passed here or
+      # the published frontend carries the Dockerfile defaults forever. They are public config, not
+      # secrets, so they come from repo VARIABLES; each falls back to a sane default rather than
+      # rendering an empty legal page.
+      - name: Build + push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_LEGAL_ENTITY=${{ vars.NEXT_PUBLIC_LEGAL_ENTITY }}
+            NEXT_PUBLIC_LEGAL_JURISDICTION_CITY=${{ vars.NEXT_PUBLIC_LEGAL_JURISDICTION_CITY }}
+            NEXT_PUBLIC_LEGAL_COUNTRY=${{ vars.NEXT_PUBLIC_LEGAL_COUNTRY }}
+            NEXT_PUBLIC_LEGAL_ADDRESS=${{ vars.NEXT_PUBLIC_LEGAL_ADDRESS }}
+            NEXT_PUBLIC_SMTP_SUBPROCESSOR=${{ vars.NEXT_PUBLIC_SMTP_SUBPROCESSOR }}
+            NEXT_PUBLIC_CONTACT_EMAIL=${{ vars.NEXT_PUBLIC_CONTACT_EMAIL }}
+            NEXT_PUBLIC_CONTACT_PHONE=${{ vars.NEXT_PUBLIC_CONTACT_PHONE }}
+            NEXT_PUBLIC_CONTACT_PHONE_TEL=${{ vars.NEXT_PUBLIC_CONTACT_PHONE_TEL }}
+            NEXT_PUBLIC_PRIVACY_EMAIL=${{ vars.NEXT_PUBLIC_PRIVACY_EMAIL }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # ---------------------------------------------------------------------------
+  # The sandbox, once per TOOLSET.
+  #
+  # `full` carries every scanner and is always correct — it is the only safe default and the
+  # fallback for any asset with no slim image. The per-asset variants exist because the full image
+  # drags codeql, prowler and garak's ML dependency set into a box that may only ever scan
+  # repositories. TOOLSET is read by docker/sandbox/toolset.sh, which STUBS an unselected tool to
+  # exit 127 — which tool.DidNotRun reports as "did not run", so a slim image used for the wrong
+  # asset degrades the scan honestly instead of reporting a clean one.
+  #
+  # amd64 only by default: this is the long build, and arm64 doubles the matrix. The
+  # workflow_dispatch input turns it on when an arm64 VM actually needs it.
+  # ---------------------------------------------------------------------------
+  sandbox:
+    name: sandbox:${{ matrix.toolset }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolset: [full, web, api, repository, container, ip, domain, cloud]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        if: ${{ inputs.sandbox_arm64 }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lowercase the image path
+        id: ref
+        run: echo "base=$(echo '${{ env.IMAGE_BASE }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      # Tags are `<toolset>-latest` plus, on a release, `<toolset>-<version>`, and optionally the
+      # caller's own prefix. TSENGINE_SANDBOX_IMAGE_TEMPLATE substitutes {toolset}, so
+      # `…/sandbox:{toolset}-latest` resolves for every asset with one env var.
+      - name: Compute tags
+        id: tags
+        run: |
+          BASE="${{ steps.ref.outputs.base }}/sandbox"
+          TS="${{ matrix.toolset }}"
+          TAGS="$BASE:$TS-latest"
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            TAGS="$TAGS,$BASE:$TS-${{ github.ref_name }}"
+          fi
+          if [ -n "${{ inputs.tag_prefix }}" ]; then
+            TAGS="$TAGS,$BASE:$TS-${{ inputs.tag_prefix }}"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "publishing: $TAGS"
+      - name: Build + push sandbox
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/sandbox/Dockerfile
+          platforms: ${{ inputs.sandbox_arm64 && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: true
+          build-args: |
+            TOOLSET=${{ matrix.toolset }}
+          tags: ${{ steps.tags.outputs.tags }}
+          # Scoped per toolset: one shared scope would have eight builds evicting each other's layers
+          # from a 10GB cache and every run would be cold.
+          cache-from: type=gha,scope=sandbox-${{ matrix.toolset }}
+          cache-to: type=gha,mode=max,scope=sandbox-${{ matrix.toolset }}
+
+  # What actually shipped, in the run log. A published image whose scanner versions nobody recorded
+  # is the same problem as a scan whose tool versions nobody recorded.
+  manifest:
+    name: what shipped
+    needs: [sandbox]
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run ./cmd/tsengine tool-freshness

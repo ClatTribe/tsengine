@@ -59,37 +59,25 @@ jobs:
       - name: Report scanner + signature freshness
         run: go run ./cmd/tsengine tool-freshness --fail-on-floating
 
+  # THE WEEKLY REBUILD IS THE POINT: it moves the baked corpora (nuclei templates) and picks up the
+  # pinned scanners. It now delegates to images.yml so it publishes the SAME tags a deployment
+  # consumes — `sandbox:<toolset>-latest`, for all eight toolsets.
+  #
+  # It used to build here, inline, and push `sandbox:signatures-latest` — an address NOTHING read,
+  # while docker-compose.prod.yml pointed at the local tag `tsengine/sandbox:0.1.0` that nothing
+  # pushed. A refresh pipeline publishing where no deployment looks is indistinguishable from no
+  # refresh pipeline; the only signal it was working was a green tick.
   rebuild:
-    name: rebuild sandbox image
+    name: rebuild + publish sandbox images
     # Scheduled + manual only. A PR does not need a 20-minute image build to know whether a
     # Dockerfile line pins a version.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      # Tagged `signatures-<date>` and `signatures-latest`, never `latest`: a scheduled rebuild is
-      # not a release, and an operator choosing to run week-old signatures should be able to.
-      - name: Build + push refreshed sandbox image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/sandbox/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/sandbox:signatures-${{ github.run_id }}
-            ghcr.io/${{ github.repository }}/sandbox:signatures-latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      # The rebuild's whole point is that the corpus moved. Say what shipped, so a stale corpus is
-      # visible in the run log rather than inferred from the date.
-      - name: State what the refreshed image contains
-        run: |
-          echo "Refreshed sandbox image pushed. Baked corpora move with this build:"
-          go run ./cmd/tsengine tool-freshness || true
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/images.yml
+    with:
+      images: sandbox
+      # A dated tag alongside the moving one, so an operator who needs last week's scanners can pin
+      # to a build rather than being told the only option is whatever `latest` now means.
+      tag_prefix: signatures-${{ github.run_id }}
