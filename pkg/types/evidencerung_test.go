@@ -123,3 +123,49 @@ func TestRung_OffensiveProducerListIsClosed(t *testing.T) {
 		}
 	}
 }
+
+// TestRung_PostureProducersAreNotProviderConfirmed is the regression for a bug that SHIPPED and was
+// found by running the product, not by reading it.
+//
+// Live output from a real ingest before the fix:
+//
+//	dataplatform  verified  rung=provider_confirmed  dataplatform::account-wide-grant
+//	sspm          verified  rung=provider_confirmed  sspm::github::2fa-not-enforced
+//	tprm          verified  rung=provider_confirmed  tprm::vendor-uncertified
+//
+// The VAPT report therefore told a customer that "your cloud provider's own policy evaluator allowed
+// every step" about a VENDOR CERTIFICATION finding. Every producer below sets `verified` legitimately
+// — a configuration read is a definite observation — so the rung cannot be inferred from that field.
+func TestRung_PostureProducersAreNotProviderConfirmed(t *testing.T) {
+	for _, tool := range []string{"sspm", "tprm", "dataplatform", "deviceposture", "identitythreat", "operate", "osint"} {
+		f := Finding{Tool: tool, VerificationStatus: VerificationVerified}
+		got := f.DeriveRung()
+		if got == RungProviderConfirmed {
+			t.Errorf("%q reads as %q. That claims a cloud policy evaluator was asked and allowed it, "+
+				"which never happened — this producer read a setting.", tool, got)
+		}
+		if got != RungConfigObserved {
+			t.Errorf("%q reads as %q, want %q", tool, got, RungConfigObserved)
+		}
+		if got.ClaimsExploitability() {
+			t.Errorf("%q claims exploitability", tool)
+		}
+	}
+}
+
+func TestRung_OnlyTheCloudPolicyProducersAreProviderConfirmed(t *testing.T) {
+	for _, tool := range []string{"cloudagent", "cloudprobe"} {
+		f := Finding{Tool: tool, VerificationStatus: VerificationVerified}
+		if got := f.DeriveRung(); got != RungProviderConfirmed {
+			t.Errorf("%q reads as %q, want %q — this producer really did ask the provider's evaluator",
+				tool, got, RungProviderConfirmed)
+		}
+	}
+	// And the list is CLOSED: a name that merely looks cloudy must not join it.
+	for _, tool := range []string{"cloudsomething", "prowler", "scoutsuite", "cloud"} {
+		f := Finding{Tool: tool, VerificationStatus: VerificationVerified}
+		if got := f.DeriveRung(); got == RungProviderConfirmed {
+			t.Errorf("%q was treated as a cloud policy producer by resemblance, not by membership", tool)
+		}
+	}
+}
