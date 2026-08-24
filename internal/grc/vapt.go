@@ -43,6 +43,10 @@ type VAPTReport struct {
 	// exploit-probability claims were evaluated against. Filled by the caller (which can read the
 	// environment and the on-disk manifest); nil when unknown. See vapt_provenance.go.
 	Intel *IntelProvenance `json:"intel,omitempty"`
+	// Detection is the state of the SIGNATURE corpora the findings came from — what we were capable
+	// of finding, as distinct from how confident we are about priority. Silent until now, which let a
+	// months-old template set render as a clean scope.
+	Detection *DetectionProvenance `json:"detection,omitempty"`
 	// Attestation, when the report is signed (same scheme as the evidence pack).
 	Signer string `json:"signer,omitempty"`
 	SHA256 string `json:"sha256,omitempty"`
@@ -382,6 +386,9 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
 	// The caveat belongs HERE, immediately under the exploitation counts it qualifies — not in a
 	// methodology note further down that a reader quoting "0 actively exploited" never reaches.
+	if c := r.Detection.DetectionCaveat(); c != "" {
+		fmt.Fprintf(&b, "\n%s\n", c)
+	}
 	if c := r.Intel.IntelCaveat(); c != "" {
 		b.WriteString("\n" + c + "\n")
 	}
@@ -394,6 +401,9 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	b.WriteString("Each finding carries a **confidence tier** so you can triage accurately:\n\n" +
 		"- **Confirmed** — independently corroborated by ≥1 other tool, or actively re-verified. Treat as real.\n" +
 		"- **Unconfirmed** — a single-tool pattern match. A credible lead to validate, not a proven exploit — listed after the confirmed findings of the same severity and labelled inline, so a false positive can never masquerade as a confirmed result.\n\n")
+	if p := RenderDetectionProvenance(r.Detection); p != "" {
+		fmt.Fprintf(&b, "\n%s\n", p)
+	}
 	if p := RenderIntelProvenance(r.Intel); p != "" {
 		b.WriteString(p + "\n\n")
 	}
@@ -579,6 +589,9 @@ func RenderVAPTExecMarkdown(r *VAPTReport) string {
 	b.WriteString("\n" + narrativeSummary(r) + "\n")
 	// The exec one-pager is the MOST forwarded artifact and the most quoted; if the KEV figure on it
 	// rests on stale intel, this is the page that has to say so.
+	if c := r.Detection.DetectionCaveat(); c != "" {
+		fmt.Fprintf(&b, "\n%s\n", c)
+	}
 	if c := r.Intel.IntelCaveat(); c != "" {
 		b.WriteString("\n" + c + "\n")
 	}

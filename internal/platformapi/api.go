@@ -85,6 +85,13 @@ type Deps struct {
 	// only when the operator has enabled live active exploitation; per-engagement
 	// explicit consent still gates every probe.
 	Prober pentest.Prober
+	// ScanImage is the sandbox image findings were produced by — the DETECTION corpus's identity.
+	//
+	// The VAPT report could say how old the threat intel was and nothing about how old the
+	// SIGNATURES were, so a months-old template set rendered as a clean scope. This is the minimum
+	// that makes the question answerable, and when it is a mutable tag the report says so rather
+	// than printing a reference that looks like an identity (§10).
+	ScanImage string
 	// AuthzProber drives the LIVE BOLA/BFLA differential test (POST /v1/assets/{id}/authz-test/run).
 	// Nil → the run endpoint is gated (403): active authz testing is off. Set only when the operator
 	// enabled live active testing (TSENGINE_ACTIVE_EXPLOIT) → apiauthz.LiveProber(); per-request
