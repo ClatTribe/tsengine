@@ -100,6 +100,13 @@ type Tenant struct {
 	// urgently" for a new incident). nil/disabled = today's behaviour (alert every configured
 	// channel). No secret material — channel names only.
 	Escalation *EscalationPolicy `json:"escalation,omitempty"`
+	// ExposureObjective is the programme's stated target for the exposure trend — CTEM's scoping
+	// question ("how is success measured?"), which the product could show a series for and not answer.
+	//
+	// nil means no objective, and that is reported as itself rather than defaulted: a target nobody
+	// chose is not a statement of intent, and "we cannot say whether this is good" is the honest
+	// reading of a chart with no target. No secret material.
+	ExposureObjective *ExposureObjective `json:"exposure_objective,omitempty"`
 	// SLA is the per-tenant remediation SLA policy (per-severity time-to-acknowledge +
 	// time-to-resolve targets). nil/disabled = no SLA tracking. No secret material.
 	SLA *SLAPolicy `json:"sla,omitempty"`
@@ -1683,4 +1690,24 @@ func (a *Action) RecordVerification(v FixVerification) {
 	if len(a.VerificationHistory) > maxVerificationHistory {
 		a.VerificationHistory = a.VerificationHistory[len(a.VerificationHistory)-maxVerificationHistory:]
 	}
+}
+
+// ExposureObjective is the stated target a tenant's exposure trend is graded against (ADR 0028 G3).
+//
+// It mirrors internal/exposuretrend.Objective rather than importing it, for the same reason every
+// other policy on Tenant is defined here: pkg/platform is the domain model and must not depend on an
+// internal analysis package. The API converts between them at the boundary, and a test asserts the
+// two shapes stay in step — a mirror that drifts silently would grade against a target the customer
+// did not set.
+type ExposureObjective struct {
+	// Declared records that a human set this. Explicit, never inferred from the values: "close at
+	// least as much as opens" is NetPerWindow 0, the most natural target in the product, and deriving
+	// declaredness from non-zero fields made it indistinguishable from having no objective at all.
+	Declared bool `json:"declared"`
+	// WindowDays is the period the target applies over; 0 = the whole series.
+	WindowDays int `json:"window_days,omitempty"`
+	// NetPerWindow is the required closed-minus-opened over the window.
+	NetPerWindow int `json:"net_per_window"`
+	// MinConfirmedFixed is the required count of RE-TEST-PROVEN closures. 0 disables the clause.
+	MinConfirmedFixed int `json:"min_confirmed_fixed,omitempty"`
 }

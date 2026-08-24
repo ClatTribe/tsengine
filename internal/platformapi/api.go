@@ -254,10 +254,11 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/proof-queue", d.auth(d.handleProofQueue)) // doubt→prove: findings the engineer surfaced that the pentester has not settled
 	mux.HandleFunc("GET /v1/actions", d.auth(d.handleActions))        // all remediations + fix-verification status
 	mux.HandleFunc("GET /v1/coverage", d.auth(d.handleCoverage))
-	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage))           // ATT&CK techniques exercised vs unchecked
-	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))             // is exposure going down?
-	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation)) // did their controls catch our probes?
-	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                // correlate a customer ScubaGear run against ours
+	mux.HandleFunc("GET /v1/attack-coverage", d.auth(d.handleAttackCoverage))                   // ATT&CK techniques exercised vs unchecked
+	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))                     // is exposure going down?
+	mux.HandleFunc("PUT /v1/settings/exposure-objective", d.auth(d.handleSetExposureObjective)) // …and is that good? (ADR 0028 G3)
+	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation))         // did their controls catch our probes?
+	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                        // correlate a customer ScubaGear run against ours
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
@@ -969,7 +970,61 @@ func (d Deps) handleExposureTrend(w http.ResponseWriter, r *http.Request, tenant
 		respond(w, nil, err)
 		return
 	}
-	respond(w, exposuretrend.Compute(eps, acts, r.URL.Query().Get("scope")), nil)
+	trend := exposuretrend.Compute(eps, acts, r.URL.Query().Get("scope"))
+
+	// Grade it against the programme's stated objective (ADR 0028 G3). Without this the endpoint
+	// answers "what happened" and the page has no answer to "is this good?" — which is the CTEM
+	// scoping question the audit found unanswerable.
+	//
+	// A tenant read failure does not fail the request: the series is still the truth, and Evaluate
+	// with no objective reports honestly that none is set.
+	var obj exposuretrend.Objective
+	if t, terr := d.Store.GetTenant(ctx, tenantID); terr == nil && t.ExposureObjective != nil {
+		o := t.ExposureObjective
+		obj = exposuretrend.Objective{
+			Declared: o.Declared, WindowDays: o.WindowDays,
+			NetPerWindow: o.NetPerWindow, MinConfirmedFixed: o.MinConfirmedFixed,
+		}
+	}
+	respond(w, struct {
+		exposuretrend.Trend
+		Objective exposuretrend.Verdict `json:"objective"`
+	}{Trend: trend, Objective: exposuretrend.Evaluate(trend, obj)}, nil)
+}
+
+// handleSetExposureObjective declares the programme's exposure target (ADR 0028 G3).
+//
+// A PUT rather than a POST because it is one value per tenant, replaced wholesale. Declared is forced
+// true here: reaching this handler IS the declaration, and letting a caller send declared:false with
+// values would store an objective nobody had stated.
+func (d Deps) handleSetExposureObjective(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body platform.ExposureObjective
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
+		return
+	}
+	if body.WindowDays < 0 || body.MinConfirmedFixed < 0 {
+		writeJSON(w, http.StatusBadRequest, errBody("window_days and min_confirmed_fixed cannot be negative"))
+		return
+	}
+	t, err := d.Store.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	body.Declared = true
+	t.ExposureObjective = &body
+	if err := d.Store.PutTenant(r.Context(), t); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if d.Recorder != nil {
+		d.Recorder.Record("exposure objective set", "exposure_objective",
+			map[string]any{"tenant_id": tenantID, "net_per_window": body.NetPerWindow,
+				"window_days": body.WindowDays, "min_confirmed_fixed": body.MinConfirmedFixed},
+			"programme exposure target declared")
+	}
+	respond(w, body, nil)
 }
 
 // handleAttackCoverage answers "which attacker techniques did we actually exercise against this
