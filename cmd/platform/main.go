@@ -451,8 +451,13 @@ func main() {
 		log.Print("[platform] OAST collaborator wired (TSENGINE_OAST_POLL_URL) — blind-class proof enabled for deep pentests")
 	}
 	// Headless-browser channel for DOM-XSS / client-side proof in deep mode (ADR-0008 D3).
-	// Nil (the chromedp impl is sandbox-gated) → those classes stay leads.
+	// Host-side chromedp (§12.6 — no sandbox rebuild), gated by TSENGINE_HEADLESS_BROWSER and
+	// a Chrome binary on the host. Nil when unconfigured → those classes stay unproven leads,
+	// never false positives.
 	browser := pentest.NewBrowserFromEnv()
+	if browser != nil {
+		log.Print("[platform] headless-browser channel wired (TSENGINE_HEADLESS_BROWSER) — DOM-XSS / client-side execution proof enabled for deep pentests")
+	}
 	// ModeDeep D-agent: the LLM spec generator. cloudengine.LLMFromEnv resolves a cloud key OR a local
 	// Ollama (LLM_BASE_URL); nil when neither is configured → the deterministic HeuristicSpecGen.
 	var agentLLM pentest.SpecLLM
