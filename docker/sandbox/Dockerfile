@@ -60,7 +60,7 @@ RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 # orgs, so install by that path.
 ARG GITLEAKS_VERSION=v8.30.1
 RUN . /usr/local/bin/ts_want.sh && GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    ts_install repository gitleaks github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION}
+    ts_install "repository mobile" gitleaks github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION}
 
 ARG NAABU_VERSION=v2.6.1
 # Additional Go-native scanners (CGO-free): grype (SCA, anchore), httpx
@@ -68,8 +68,8 @@ ARG NAABU_VERSION=v2.6.1
 # trufflehog is NOT here — its go.mod has replace directives that block
 # `go install`; it's installed via its release script in stage 2.
 RUN . /usr/local/bin/ts_want.sh && export GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    && ts_install repository grype github.com/anchore/grype/cmd/grype@v0.117.0 \
-    && ts_install web httpx github.com/projectdiscovery/httpx/cmd/httpx@v1.10.0 \
+    && ts_install "repository container" grype github.com/anchore/grype/cmd/grype@v0.117.0 \
+    && ts_install "web api domain ip" httpx github.com/projectdiscovery/httpx/cmd/httpx@v1.10.0 \
     && ts_install container dockle github.com/goodwithtech/dockle/cmd/dockle@v0.4.14 \
     && ts_install web katana github.com/projectdiscovery/katana/cmd/katana@v1.7.0 \
     && ts_install repository gosec github.com/securego/gosec/v2/cmd/gosec@v2.28.0 \
@@ -181,15 +181,17 @@ RUN chmod +x /usr/local/bin/ts_want.sh
 # for a capability that could not be invoked. It returns when the asset does (ADR 0012).
 RUN . /usr/local/bin/ts_want.sh \
     && PKGS="" \
-    && { ts_want repository && PKGS="$PKGS semgrep==1.96.0 mobsfscan bandit"; } || true \
+    && { ts_want_any "repository mobile" && PKGS="$PKGS semgrep==1.96.0 mobsfscan"; } || true \
+    && { ts_want repository && PKGS="$PKGS bandit"; } || true \
     # apkid analyses a BUILT APK, which is the mobile_application capability §3 deprecated. mobsfscan
     # stays: it is the mobile-SOURCE escalation inside a connected repository, which is supported.
     && { ts_want mobile && PKGS="$PKGS apkid"; } || true \
-    && { ts_want web && PKGS="$PKGS sqlmap"; } || true \
+    && { ts_want_any "web api" && PKGS="$PKGS sqlmap"; } || true \
     && { ts_want domain && PKGS="$PKGS checkdmarc dnstwist"; } || true \
-    && { ts_want api && PKGS="$PKGS schemathesis inql"; } || true \
+    && { ts_want_any "api web" && PKGS="$PKGS schemathesis"; } || true \
+    && { ts_want api && PKGS="$PKGS inql"; } || true \
     && { ts_want cloud && PKGS="$PKGS prowler==4.6.0 scoutsuite"; } || true \
-    && { { ts_want repository || ts_want cloud; } && PKGS="$PKGS checkov"; } || true \
+    && { ts_want_any "repository cloud" && PKGS="$PKGS checkov"; } || true \
     && { ts_want repository && PKGS="$PKGS modelscan"; } || true \
     && echo "python toolset: ${PKGS:-<none>}" \
     # A CONSTRAINTS FILE, because the pin above was being silently defeated. These installs run ONE

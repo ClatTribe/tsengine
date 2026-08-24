@@ -1680,6 +1680,29 @@ customer but no longer claims we ship it. `modelscan` moved from the `ai` toolse
 which is the asset that actually dispatches it — it would otherwise have been stubbed in the very
 slim image that needs it.
 
+**THE TOOLSET GROUPS DID NOT MATCH DISPATCH, so every slim image was broken.** `toolset.sh` gates a
+tool on ONE asset, and that mechanism was written for `make sandbox-image-dev` — whose own help text
+says "partial coverage, dev only" — then reused to publish per-asset PRODUCTION images. Tools do not
+belong to one asset. Measured against the handlers: `grype` gated on repository but dispatched by
+**container** too; `httpx` gated on web but dispatched by **api, domain and ip**; `sqlmap` gated on
+web but dispatched by **api**; `schemathesis` gated on api but dispatched by **web**; `modelscan`
+gated on `ai` but dispatched by **repository**. So `sandbox:container-latest` had no grype — a
+primary container CVE scanner — and three images had no httpx. Confirmed by building one: modelscan
+was genuinely absent from the repository image.
+
+`ts_want_any` + a quoted list on `ts_install` make the gate able to say "either", and every group is
+widened to the assets that really dispatch it.
+`TestToolsetGroupsCoverEveryDispatchingAsset` derives the requirement FROM THE HANDLERS and fails
+when a gate is narrower than dispatch — the groups were wrong precisely because nothing connected
+them to dispatch, so fixing the five without that guard would leave the next tool to drift the same
+way, silently, in an image nobody builds locally. Mutation-verified: reverting grype or httpx
+reproduces the original defect by name.
+
+Proven by building one: `TOOLSET=container` now carries trivy, grype, dockle, syft AND cosign — all
+five the container handler dispatches, grype included — while correctly excluding semgrep, codeql,
+prowler and sqlmap. **1.43 GB against 5.8 GB for `full`**, so the slim images are worth having now
+that they are correct.
+
 **PER-ASSET SLIM SANDBOX IMAGES.** The sandbox is built once per TOOLSET (`full` + web · api ·
 repository · container · ip · domain · cloud), so a box that only scans repositories stops pulling
 codeql, prowler and scoutsuite. `sandbox.ScanImages.For(assetType)` resolves the image per
