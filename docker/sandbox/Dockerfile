@@ -265,12 +265,19 @@ COPY --from=builder /go/bin/govulncheck /usr/local/bin/govulncheck
 
 # ffuf content-discovery wordlist (SecLists common.txt). Not packaged for
 # Ubuntu, so fetch the single list to the path the ffuf wrapper defaults to.
+#
+# FATAL, not "non-fatal", and the change matters: this is ffuf's DEFAULT wordlist. A swallowed
+# failure left ffuf on a path with no file, so content discovery ran and found nothing — a scanner
+# reporting clean because it has no input, which is the same shape as kics without its query corpus
+# and worse than the tool being absent, since an absent tool lands in ToolsFailed. The nuclei
+# template step below has asserted its corpus all along; these two had not.
 RUN . /usr/local/bin/ts_want.sh \
     && if ts_want web; then \
        mkdir -p /usr/share/seclists/Discovery/Web-Content \
        && curl -fL -o /usr/share/seclists/Discovery/Web-Content/common.txt \
        https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt \
-       || echo "seclists common.txt fetch failed (non-fatal; pass an explicit ffuf wordlist arg)" ; \
+       && test -s /usr/share/seclists/Discovery/Web-Content/common.txt \
+       || { echo "FATAL: seclists common.txt is missing or empty. It is the wordlist the ffuf wrapper DEFAULTS to, so content discovery would run with no list and find nothing — a scanner reporting clean because it has no input." >&2; exit 1; } ; \
     else echo "skip seclists (TOOLSET=$TS_TOOLSET)"; fi
 
 # kiterunner API-route wordlist (assetnote routes-small). Escalation-only,
@@ -282,7 +289,8 @@ RUN . /usr/local/bin/ts_want.sh \
        https://wordlists-cdn.assetnote.io/data/kiterunner/routes-small.kite.tar.gz \
        && tar -xzf /tmp/routes-small.kite.tar.gz -C /usr/share/kiterunner \
        && rm -f /tmp/routes-small.kite.tar.gz \
-       || echo "kiterunner wordlist fetch failed (non-fatal; pass an explicit wordlist arg)" ; \
+       && [ "$(find /usr/share/kiterunner -name '*.kite' | head -1)" ] \
+       || { echo "FATAL: the kiterunner route corpus is missing. kiterunner without routes discovers no shadow endpoints and returns nothing." >&2; exit 1; } ; \
     else echo "skip kiterunner wordlist (TOOLSET=$TS_TOOLSET)"; fi
 
 # CodeQL CLI + query bundle (repository escalation, E3 — interprocedural

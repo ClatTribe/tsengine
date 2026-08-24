@@ -163,8 +163,13 @@ func severityRank(s types.Severity) int {
 }
 
 // complianceControls flattens a finding's compliance annotation into framework→controls. Enumerated
-// explicitly over the 22-framework set (CLAUDE.md §8) — the same grounded mirror discipline as the rest of
-// the crosswalk; a new framework adds one line here.
+// explicitly over the framework set (CLAUDE.md §8) — the same grounded mirror discipline as the rest
+// of the crosswalk; a new framework adds one line here.
+//
+// A HAND-ENUMERATED MIRROR IS ONLY AS GOOD AS WHAT STOPS IT DRIFTING. This one sat at 22 while the
+// rest of the product moved to 25, so certin/rbi/sebi were silently unmappable per asset. The
+// existing frameworks mirror test checks a DIFFERENT function, which is why nothing caught it —
+// TestComplianceControlsCoversEveryFramework now pins this one against types.Compliance itself.
 func complianceControls(c *types.Compliance) map[string][]string {
 	if c == nil {
 		return nil
@@ -197,5 +202,11 @@ func complianceControls(c *types.Compliance) map[string][]string {
 	add("pipeda", c.PIPEDA)
 	add("glba", c.GLBA)
 	add("eu_ai_act", c.EUAIAct)
+	// The India regulatory trio. They were absent while every other view carried them, so a tenant
+	// who bought this product FOR CERT-In/RBI/SEBI saw those frameworks in the compliance report and
+	// not in the per-asset view — the same finding mapped in one place and unmapped in another.
+	add("certin", c.CERTIn)
+	add("rbi", c.RBI)
+	add("sebi", c.SEBI)
 	return m
 }
