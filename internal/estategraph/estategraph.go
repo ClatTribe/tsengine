@@ -38,6 +38,7 @@ package estategraph
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -121,6 +122,19 @@ type Edge struct {
 	Why        string    `json:"why,omitempty"`
 	Surface    string    `json:"surface,omitempty"`
 	ObservedAt time.Time `json:"observed_at,omitzero"`
+
+	// Proof is how well the hop is PROVEN, which is a different question from Evidence (who asserted
+	// it exists). Defaults to ProofConfigPossible, so a producer that says nothing claims the weakest
+	// thing rather than inheriting a stronger one. See proof.go.
+	Proof EdgeProof `json:"proof"`
+	// ProofRefs cite the recorded attempt behind an evidenced Proof — required for one, refused
+	// without it, because a proof nobody can replay is not a proof.
+	ProofRefs []string `json:"proof_refs,omitempty"`
+	// ProofAt is WHEN the attempt happened. Required for an evidenced Proof: it is what lets a reader
+	// age a proof, and what orders two contradicting attempts so an old failure cannot erase a new
+	// crossing. Nothing here ever expires a proof automatically — "we have not re-checked" and "it no
+	// longer works" are different claims.
+	ProofAt time.Time `json:"proof_at,omitzero"`
 }
 
 // Graph is a tenant's estate. Not safe for concurrent writes; build then read.
@@ -192,6 +206,22 @@ func (g *Graph) AddEdge(e Edge) error {
 		return ErrNoEvidence
 	}
 	e.Evidence = dedupe(e.Evidence)
+	e.Proof = normProof(e.Proof)
+	switch e.Proof {
+	case ProofConfigPossible:
+		// The default claim: the configuration permits this hop. It needs no attempt behind it,
+		// because it asserts that nobody attempted anything.
+	case ProofDemonstrated, ProofExploitFailed:
+		e.ProofRefs = dedupe(e.ProofRefs)
+		if len(e.ProofRefs) == 0 {
+			return ErrProofUngrounded
+		}
+		if e.ProofAt.IsZero() {
+			return ErrProofUnstamped
+		}
+	default:
+		return fmt.Errorf("%w: %q", ErrUnknownProof, e.Proof)
+	}
 
 	for _, id := range []string{e.From, e.To} {
 		if _, ok := g.Nodes[id]; !ok {
@@ -209,6 +239,17 @@ func (g *Graph) AddEdge(e Edge) error {
 			if e.ObservedAt.After(g.Edges[i].ObservedAt) {
 				g.Edges[i].ObservedAt = e.ObservedAt
 			}
+			// The proof claims are merged by MergeProof, and the refs follow the claim that SURVIVES —
+			// carrying the loser's refs forward would leave an edge citing an attempt that no longer
+			// backs what the edge says.
+			win, at := MergeProof(g.Edges[i].Proof, g.Edges[i].ProofAt, e.Proof, e.ProofAt)
+			switch {
+			case win == g.Edges[i].Proof && win == e.Proof:
+				g.Edges[i].ProofRefs = dedupe(append(g.Edges[i].ProofRefs, e.ProofRefs...))
+			case win == e.Proof:
+				g.Edges[i].ProofRefs = dedupe(e.ProofRefs)
+			}
+			g.Edges[i].Proof, g.Edges[i].ProofAt = win, at
 			return nil
 		}
 	}

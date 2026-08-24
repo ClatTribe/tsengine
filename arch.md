@@ -33,10 +33,11 @@ For deeper invariants (host vs sandbox boundary, the L1.5 hook order, the
 11. [Host vs sandbox boundary](#host-vs-sandbox-boundary)
 12. [L2 OODA loop (parked)](#l2-ooda-loop-parked)
 13. [Benchmark infrastructure](#benchmark-infrastructure)
-14. [Repo layout](#repo-layout)
-15. [Build phases](#build-phases)
-16. [The repeating pattern](#the-repeating-pattern)
-17. [Where to look in code](#where-to-look-in-code)
+14. [Capability map — the AEV lane](#capability-map--the-aev-lane-adversarial-exposure-validation)
+15. [Repo layout](#repo-layout)
+16. [Build phases](#build-phases)
+17. [The repeating pattern](#the-repeating-pattern)
+18. [Where to look in code](#where-to-look-in-code)
 
 ---
 
@@ -729,6 +730,150 @@ This is **gated behind an ADR** (safety/sandbox model, cap exemption,
 reproducibility fence) — never enabled by default, and reachable only as a
 registry-tier capability, so the deterministic+reproducible translator L2
 stays the product's spine.
+
+---
+
+## Capability map — the AEV lane (Adversarial Exposure Validation)
+
+**The category this engine sits in now has an analyst name, and its definition is §10.**
+Gartner folded automated pentesting, red-teaming and breach-and-attack simulation into
+**Adversarial Exposure Validation (AEV)**: technologies delivering *continuous, automated
+evidence of the FEASIBILITY of an attack* — executing safe scenarios to prove whether an
+actor can circumvent existing controls — and closing the mobilization loop by *retesting
+after remediation*. Post-Mythos that lane is where the budget went, because a model that
+finds thousands of zero-days makes a RANKED LIST worth less and a PROVEN PATH worth more.
+
+The lane has two halves. They are different claims, backed by different evidence, and
+conflating them is the failure mode this section exists to prevent.
+
+### Half 1 — VALIDATION: proof of feasibility
+
+"Is this reachable, and can it actually be exploited?" — the claim a severity score cannot make.
+
+| AEV requirement | Mechanism here | The refusal that makes it evidence |
+|---|---|---|
+| Execute a real attack, safely | `internal/pentest` — `ActiveDriver` playbooks, `OpenEndedDriverIterative` (ModeDeep), browser + OOB channels | Agent PROPOSES a `DemoSpec`; a named deterministic predicate DISPOSES. The model can never upgrade a finding by itself, across any number of attempts |
+| Bounded, authorized, non-destructive | `roe.go` (scope · budget · absolute destructive ban · explicit-consent active gate), `ownership_gate.go` | Active mode needs `AllowActive` + a named `AuthorizedBy` + a recorded consent statement, all three, signed into the ledger |
+| Effective-permission truth, not model recall | `cloudiam` / `gcpiam` / `azureiam` `Authorize` → `cloudgraph.PruneUnauthorized` | An edge is pruned only on a DEFINITIVE deny; missing or uncertain policy data KEEPS the edge |
+| Real network reachability | `cloudgraph.InternetReachable` → `PruneUnreachable` | CIDR coverage, not overlap — a corp-CIDR rule is not internet-open; absent rule data never prunes |
+| **Cross-surface** path, not one surface | `internal/estategraph` + `internal/estatedetect` | `AddEdge` returns `ErrNoEvidence`; identity resolution is exact-format only, never resemblance. Only what the JOIN adds is reported |
+| Business-logic classes no scanner grounds | `bola_probe` (three-leg differential), `privesc_probe` (before→after on the session's OWN privilege) | A one-session "different id, different data" heuristic was deliberately NOT shipped |
+
+### Half 2 — CLOSURE: proof of remediation
+
+"Did the fix actually close it?" — the half the >99%-unpatched number indicts, and the half
+where absence-based checking silently lies.
+
+| Requirement | Mechanism here | The rule |
+|---|---|---|
+| Re-test after remediation | `internal/retest` `Verify` — keyed on `detect.Key` so it can never drift from the detector | `fixed` only when EVERY claimed finding key is provably absent; an action with no stamped keys is never guessed at |
+| Catch the re-test lying | `internal/retest/reattack.go` `ApplyReattack` | **RE-ATTACK BEATS RESCAN.** A live exploit is evidence; a scanner's silence is not. The disagreement is machine-readable (`RescanSaidFixed`, `Disagreement`), split into `rescan_missed_live_exploit` (absence-as-evidence failed) and `scanner_sees_variant` (the playbook failed) |
+| Never claim closure from a partial pass | degraded-mode twins: `Detector.OpenFor`, skipped `retest.Verify`, `grc.RefreshEvidence` | THREE consumers reason from absence and all three must be gated the same way; a pass that did not see the whole estate makes all three lie |
+| Say what was not tested | `asset.CoverageRulePrefix` (`coverage::`), `internal/coverage`, `ChecksNotRun` | A declared gap is INFORMATIONAL by construction and is excluded from the counts describing how well an asset was covered |
+
+### The six capabilities of the lane, and where this engine sits
+
+Scored against what competitors DEMONSTRABLY ship (their published material), never against a
+category label. §0's corollary applies in both directions: their column is their website, ours is
+checkable in this tree — so a "lead" here means *we can point at the mechanism and they cannot*,
+not that we win the deal.
+
+| # | Capability | What we have | What the lane has | Verdict |
+|---|---|---|---|---|
+| 1 | **Exploitation — proof of feasibility** | `internal/pentest`: playbooks + `OpenEndedDriverIterative`, browser/OOB channels, `dispatch_oss` gateway, `ssh_exec`; model PROPOSES, a named predicate DISPOSES (`sql_boolean`, `bola_confirmed`, `privesc_confirmed`, `race_confirmed`) | XBOW (validators + case-file per finding, #1 on HackerOne globally), Horizon3 (proof of every exploit), Pentera (kill-chain) | **BEHIND** on breadth + productization; **PARITY** on grounding rigour |
+| 2 | **Closure — proof of remediation** | Two independent verdicts: `retest.Verify` (absence) ⨯ `pentest` re-attack (closure), merged by `retest.ApplyReattack` with RE-ATTACK WINS, and the contradiction kept as data | Horizon3 "1-Click Verify" re-runs the same exploit and returns proof of non-exploitability, ticket-integrated (internal envs today); Novee re-assesses, mechanism unspecified | **PARITY** on mechanism, **BEHIND** on product. What is ours alone is the *disagreement*, not the re-attack |
+| 3 | **Cross-surface path validation** | `estategraph` (`ErrNoEvidence`, exact-format identity only) + `estatedetect` (`leaked-credential-is-live`, `cross-surface-path-to-crown`, `choke-point`, `exposed-identity-no-mfa`) across code · cloud · SaaS · identity · OSINT · warehouse | XBOW chains within web/API; Horizon3 chains network → AD → cloud. Neither joins SOURCE CODE + SaaS + identity into one evidence-carrying graph | **LEAD** — the only clean one, and on a different axis from Horizon3's |
+| 4 | **Offence → audit evidence** | 25 frameworks incl. CERT-In / RBI / SEBI, live control-state SoR, gap→citing-finding resolution, OSCAL component-def + assessment-results, evidence timeline, signed attestation, coverage layer that refuses "compliant" | XBOW: reports "meet pentest requirements for 40+ frameworks" — REPORT ACCEPTANCE, i.e. one control | **PARITY on the datasheet line, LEAD on substance** — and a buyer comparing datasheets cannot see the difference |
+| 5 | **Named-human accountability** | Capacity + firm stamped from the ROSTER onto risks / sign-offs / policies / attestations; operator desk gated to the practitioner's own book; ledger-signed. RBI requires testing by an *independent agency*, which makes this a compliance mechanism, not a channel nicety | Horizon3 has an MSP channel. Whether anyone stamps accountability onto the artifact is **unverified** | **LIKELY DIFFERENTIATED, UNVERIFIED** — do not claim it as a lead |
+| 6 | **Falsifiable external measurement** | XBOW key 85.6% (89/104) · IAM-Vulnerable 64.5% (with FP set) · Rhino 65.2% · SCuBA 0.993 · OWASP 46.5% | XBOW is #1 on HackerOne with ~1,060 accepted real-world reports — adversarially graded by the programs paying out | **BEHIND** XBOW; ahead of the rest. The defensible claim is narrow: *we publish numbers that can go down* |
+
+### The agent overlay — which capability each product owns
+
+The **AI Security Engineer** and the **AI Pentester** are one loop pointed in opposite directions:
+the pentester proves a path is OPEN, the engineer proves it is CLOSED. Only two of the six are
+agent capabilities; the rest are substrate on purpose (§10 — an agent asserting a control, or
+grading itself, is the false-confidence failure this engine exists to refuse).
+
+| # | Capability | Owner | Why it sits there |
+|---|---|---|---|
+| 1 | Exploitation | **AI Pentester** | Open-ended "what should I try" is exactly what stays L2 (§5.3); deterministic escalation stays L1 |
+| 2 | Closure | **HANDOFF — both** | The engineer applies the fix; the PENTESTER re-runs its own exploit to grade it |
+| 3 | Cross-surface paths | **Substrate**, read by both | Agents traverse the graph; they never author it |
+| 4 | Audit evidence | **Substrate** (`grc`) | LLM-free by construction |
+| 5 | Named-human accountability | **Neither** | The point is that no agent may make this call (§18.4) |
+| 6 | Measurement | **Neither** | Benches grade agents; an agent must not grade itself (§14.2) |
+
+Both agents read the SAME ground truth, and both directions are wired:
+
+- **Engineer** — `cloudagent` catalog (12, at the §2.6 cap): `resolve_access`, `find_paths`,
+  `enumerate_attack_paths`, `detect_privesc`, `blast_radius`, `get_resource`, `list_resources`,
+  `get_findings`, `estate_context`, `record_issue`, `propose_fix`, `finish`. Code twin `codeagent`:
+  `read_source`, `grep_code`, `trace_secret`, `list_findings`, `blast_radius`, `fix_location`,
+  `record_issue` + `patch.go` / `patch_iterative.go` / `regression.go`.
+- **Pentester** — `webagent.Context.Leads` ← `estateingest.LeadsForRoutes` ← `platformapi.leadsFor`:
+  the graph tells it which route fronts a crown jewel, so budget is spent by STAKES not by shape.
+  The deterministic indicators still dispose, so a lead can never fabricate a finding.
+
+```
+estategraph ──Leads──────────→ AI PENTESTER ──exploit──→ verified finding      [cap 1]
+     └──────estate_context──→ AI SEC ENGINEER
+                                   ├── propose_fix / patch → PR → prbot gate    [cap 2a]
+                                   └── HITL tier → connector.Apply
+                                              ↓
+                    retest.Verify (absence)  ⨯  pentest re-attack (closure)     [cap 2b]
+                                              ↓
+              closed_with_proof | still_exploitable | DISAGREEMENT
+                                              ↓
+                    grc control state → OSCAL → named human signs             [caps 4, 5]
+```
+
+**The load-bearing edge runs BACKWARDS**: the offensive agent audits the defensive agent's work.
+That is the architectural argument for one system rather than two vendors — in a two-vendor stack
+the thing that proves the fix belongs to a different company than the thing that made it.
+
+**Where the overlay is incomplete** (stated so nobody infers completeness from the diagram):
+
+- **The exploit's proof does not yet return to the graph.** `estategraph.Edge` now carries a PROOF
+  STATE (`config_possible` → `demonstrated` → `exploit_failed`, ADR 0026 phase 1: refusals + merge
+  rules + weakest-hop path aggregation), but **no converter populates it** — nothing turns a pentest
+  demonstration into an edge fact, so in the running product every edge is still `config_possible`.
+  Until phase 2 lands, a hop the pentester actually traversed and a hop a policy merely permits still
+  render identically to both agents. See [ADR 0026](docs/adr/0026-proven-edges.md).
+- **Closure is keyed on findings, not paths.** A fix that closes hop 3 of a 5-hop path resolves a
+  finding key; the PATH's status is not recomputed.
+- **`ai_application` is still unbuilt** (ADR 0012), so neither agent can be pointed at the customer's
+  own LLM application.
+- **No internal AD / Kerberos / lateral surface**, so the pentester's reach stops where Horizon3's
+  revenue base begins.
+
+### What this engine does NOT cover in the lane
+
+Stated here so a reader does not infer it from the tables above:
+
+- **Internal network / Active Directory / Kerberos / credential lateral movement.** The
+  largest revenue pool in AEV and there is no capability for it in this tree. Not a gap to
+  close casually — it is a different collection surface and a different safety envelope.
+- **Live production `verified_rate`.** The harnesses exist (`tsbench agent`, `tsbench xbow`);
+  the number needs a deployed target and a frontier key.
+- **Scale.** Single-box store and sandbox lifecycle (CLAUDE.md §18.3); the successors sit
+  behind today's interfaces and are unbuilt.
+
+### How the lane is measured here
+
+**External answer keys only.** §14.2 rule 5: an in-house corpus measures whether the fixtures
+and the code agree. Every in-house capability bench scored ~100% while external keys put the
+same capability at ~65%. The numbers that count in this lane:
+
+| Key | Whose | Score | Read |
+|---|---|---|---|
+| XBOW 104-benchmark | a competitor's | 85.6% (89/104) | flag-capture, ungameable; tractable ceiling reached |
+| BishopFox IAM-Vulnerable | external | 64.5% | has an FP control set — the half that can go DOWN |
+| Rhino GCP privesc catalogue | external | 65.2% | RECALL ONLY — no published FP set |
+| CISA SCuBA | external | 0.993 (SHALL 0.990) | execution-proven mappings — the assessor must really fire on a violating snapshot |
+| OWASP BenchmarkJava | external | 46.5% Youden | third on the published cohort |
+
+A number from a corpus we authored is not a capability claim in this lane, and a competitor's
+column is their website while ours is checkable in this tree (§0 corollary).
 
 ---
 
