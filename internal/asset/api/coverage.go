@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/ClatTribe/tsengine/internal/asset"
+	"github.com/ClatTribe/tsengine/internal/asset/common"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -41,7 +42,24 @@ const authzGapRule = asset.CoverageRulePrefix + "api-authorization-untested"
 // operations are waiting. No spec, or a spec with no operations, means there is nothing to
 // point a test at and nothing is claimed. It asserts an ABSENCE OF TESTING and never a
 // vulnerability, so it is informational by construction.
+// CoverageGaps returns BOTH of this asset's disclosures. The threat-informed half was missing:
+// api runs threat-informed escalation (httpx joined its anchor set precisely to fingerprint the
+// server), so a KEV-listed CVE can match observed software and still be untestable because nuclei
+// ships no template for it. On web, ip and domain that vanishing set is declared through
+// common.ThreatInformedGaps; on api it silently disappeared, which is the §10 failure this layer
+// exists to prevent — a capped probe plan reads as "we checked everything" instead of "we checked
+// what we could".
+//
+// COMPOSED, NOT REPLACED. The obvious fix — "add the CoverageGaps reporter, web/ip/domain pattern" —
+// overwrites this method and deletes the authorization disclosure below, trading one silent gap for
+// another. An asset can have more than one thing it did not check.
 func (h *Handler) CoverageGaps(_ types.Asset, findings []types.Finding) []types.Finding {
+	gaps := common.ThreatInformedGaps(findings)
+	return append(gaps, h.authzGap(findings)...)
+}
+
+// authzGap is the disclosure this asset had all along; see the type comment above.
+func (h *Handler) authzGap(findings []types.Finding) []types.Finding {
 	ops, ok := declaredOperations(findings)
 	if !ok || ops == 0 {
 		return nil

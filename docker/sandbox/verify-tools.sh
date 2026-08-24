@@ -64,4 +64,34 @@ if [ -n "$missing" ] || [ -n "$stubbed" ]; then
     exit 1
 fi
 
-echo "verify-tools: all $(echo $BINARIES | wc -w) scanner binaries present and non-stubbed"
+# ---------------------------------------------------------------------------
+# CORPORA. A binary without its rules is not a working scanner.
+#
+# The binary checks above would have passed happily on an image where kics had no queries, ffuf had
+# no wordlist and nuclei had no templates — every one of those RUNS and returns nothing, which reads
+# as a clean scan and is worse than the tool being absent, because an absent tool lands in
+# ToolsFailed and a ruleless one does not. kics shipped exactly that way.
+#
+# Each entry is "<description>|<test>". Kept small on purpose: only corpora a scanner DEFAULTS to,
+# where its absence is silent.
+# ---------------------------------------------------------------------------
+corpus_missing=""
+check_corpus() {
+    # $1 description, $2 a path that must exist and be non-empty (file) or contain a match (glob)
+    if [ ! -s "$2" ]; then
+        corpus_missing="$corpus_missing
+    $1 ($2)"
+    fi
+}
+check_corpus "nuclei templates"  "$(find /home/tsengine/nuclei-templates -name '*.yaml' 2>/dev/null | head -1)"
+check_corpus "kics queries"      "$(find /opt/kics/assets/queries -name '*.rego' 2>/dev/null | head -1)"
+check_corpus "ffuf wordlist"     "/usr/share/seclists/Discovery/Web-Content/common.txt"
+check_corpus "kiterunner routes" "$(find /usr/share/kiterunner -name '*.kite' 2>/dev/null | head -1)"
+
+if [ -n "$corpus_missing" ]; then
+    echo "FATAL: a TOOLSET=full image is missing detection corpora:$corpus_missing" >&2
+    echo "  A scanner without its rules RUNS and returns nothing, which reads as a clean scan." >&2
+    exit 1
+fi
+
+echo "verify-tools: all $(echo $BINARIES | wc -w) scanner binaries present and non-stubbed, and every corpus loaded"

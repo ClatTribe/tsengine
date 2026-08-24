@@ -647,7 +647,7 @@ Frameworks supported (25 â keys defined once in `grc.Frameworks`, mirrored 
   per-finding nexus and mapping them would be exactly the false-compliance §8/§10 forbid.
 * **AI governance**: ISO 42001:2023, NIST AI RMF 1.0, EU AI Act (mapped only to the security-relevant AI controls â access, data governance, AI-system lifecycle security; most AI-governance + BCMS controls are procedural â attestation, surfaced honestly by the coverage layer)
 
-Competitor parity (Sprinto/Vanta/Drata): the 25 named frameworks close the bulk of the gap; the remaining tail (CSA STAR, TISAX, C5, FFIEC, FERPA, regional regs) is best served by a custom/"bring-your-own-framework" capability (how Sprinto reaches 200+) â the documented next step, not more hard-coded entries.
+Competitor parity (Sprinto/Vanta/Drata): the 25 named frameworks close the bulk of the gap; the remaining tail (CSA STAR, TISAX, C5, FFIEC, FERPA, regional regs) is best served by a custom/"bring-your-own-framework" capability (how Sprinto reaches 200+) â **BUILT** (`internal/grc/custom.go`), not more hard-coded entries. This line called it "the documented next step" for some time after it shipped, which is the inverse of the usual doc drift and just as misleading: a capability we HAVE, described as one we plan.
 
 A finding maps to a framework **only where the crosswalk has a real control nexus** (grounding Â§10) â e.g. an injection CWE cites NIST SI-10 and GDPR Art. 32; a data-exposure CWE additionally cites CCPA Â§1798.150 and SOX access-controls; a memory-safety CWE does not. Adding a framework is one entry in each of the four mirrors above; adding a control mapping is one key in `compliance.json`.
 
@@ -980,8 +980,11 @@ ONE gateway back into the sandbox:
 * **`dispatch_oss(tool, args)`** (`internal/webagent/dispatch.go`) is the agent's single catalog slot
   that reaches the whole OSS registry -- mirroring the L2 Lead's `dispatch_l2_probe` (Sec 2.6 / Sec 9:
   one slot, many tools, so the LLM's tool list stays small). The curated registry today is 6 tools:
-  **sqlmap, wpscan, nuclei, ffuf, hydra, padbuster**. This is the 14th webagent tool but it is the
-  GATEWAY, not N per-tool slots -- it does NOT break the <=12-tool spirit (Sec 2.6).
+  **sqlmap, wpscan, nuclei, ffuf, hydra, padbuster**. It is ONE catalog slot acting as a GATEWAY, not N
+  per-tool slots -- which is why it does NOT break the <=12-tool spirit (Sec 2.6). (This line used to
+  say "the 14th webagent tool"; the agent has grown well past that. An ORDINAL in a doc is a number
+  nobody updates when the thing it counts changes, and the count was never the point -- one slot
+  reaching many tools is.)
 * **`webagent.SandboxDispatcher`** (`internal/webagent/sandbox_dispatch.go`) adapts the SAME sandbox
   executor the L1 orchestrator uses (`Execute(ctx, tool, tool.Args) (tool.Result, error)`, satisfied by
   `*sandbox.Client`) to the agent's string `Dispatcher`. So it is ONE dispatch path (Sec 9) -- the
