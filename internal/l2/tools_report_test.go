@@ -157,13 +157,18 @@ func TestUpdateFinding_VerificationDiscipline(t *testing.T) {
 		"evidence_finding_ids": []string{"f-001"}, "plain_english": "x",
 	})
 
+	// Two active checks really ran this run (as if send_request +
+	// dispatch_l2_probe executed) → their handles are the only active proof.
+	h1 := st.RecordConfirmation("send_request", "GET https://x/search?q=1")
+	h2 := st.RecordConfirmation("dispatch_l2_probe:sqlmap", "sqlmap")
+
 	// 0 methods → rejected.
 	if res, _ := uf.Handler(context.Background(), map[string]any{"id": "l2-001", "verification": "verified"}, st); !res.Err {
 		t.Error("critical verified with 0 methods must be rejected")
 	}
-	// 1 method → still rejected (critical needs ≥2).
+	// 1 method (a real handle) → still rejected (critical needs ≥2).
 	res, _ := uf.Handler(context.Background(), map[string]any{
-		"id": "l2-001", "verified_by": []string{"send_request"}, "verification": "verified",
+		"id": "l2-001", "verified_by": []string{h1}, "verification": "verified",
 	}, st)
 	if !res.Err {
 		t.Error("critical verified with 1 method must be rejected")
@@ -171,9 +176,9 @@ func TestUpdateFinding_VerificationDiscipline(t *testing.T) {
 	if st.Findings[0].L2.Verification == types.VerificationVerified {
 		t.Error("verification must NOT have flipped to verified on a rejected gate")
 	}
-	// 2nd independent method → now allowed.
+	// 2nd independent, executed method → now allowed.
 	res2, _ := uf.Handler(context.Background(), map[string]any{
-		"id": "l2-001", "verified_by": []string{"dispatch_l2_probe:sqlmap"}, "verification": "verified",
+		"id": "l2-001", "verified_by": []string{h2}, "verification": "verified",
 	}, st)
 	if res2.Err {
 		t.Fatalf("critical verified with 2 independent methods should pass: %s", res2.Content)
@@ -192,11 +197,12 @@ func TestUpdateFinding_LowSeverityVerifiesWithOneMethod(t *testing.T) {
 		"title": "Info leak", "severity": "low",
 		"evidence_finding_ids": []string{"f-002"}, "plain_english": "x",
 	})
+	h := st.RecordConfirmation("send_request", "GET https://x/info")
 	res, _ := uf.Handler(context.Background(), map[string]any{
-		"id": "l2-001", "verified_by": []string{"send_request"}, "verification": "verified",
+		"id": "l2-001", "verified_by": []string{h}, "verification": "verified",
 	}, st)
 	if res.Err {
-		t.Fatalf("low severity should verify with a single method: %s", res.Content)
+		t.Fatalf("low severity should verify with a single executed method: %s", res.Content)
 	}
 	if st.Findings[0].L2.Verification != types.VerificationVerified {
 		t.Error("low-severity report should be verified")
@@ -204,6 +210,13 @@ func TestUpdateFinding_LowSeverityVerifiesWithOneMethod(t *testing.T) {
 }
 
 func TestVerifyGate_RequiresActiveConfirmation(t *testing.T) {
+	// confs is the run ledger: conf-1 (send_request) and conf-2
+	// (dispatch_l2_probe) really executed; "nuclei"/"grype"/"send_request" as
+	// bare strings did NOT and must not count as active.
+	confs := []Confirmation{
+		{Handle: "conf-1", Method: "send_request", Ref: "GET https://x"},
+		{Handle: "conf-2", Method: "dispatch_l2_probe:sqlmap", Ref: "sqlmap"},
+	}
 	cases := []struct {
 		name    string
 		sev     types.Severity
@@ -211,34 +224,35 @@ func TestVerifyGate_RequiresActiveConfirmation(t *testing.T) {
 		wantOK  bool
 	}{
 		{"critical 2 passive → blocked (no active)", types.SeverityCritical, []string{"nuclei", "semgrep"}, false},
-		{"critical 1 passive 1 active → ok", types.SeverityCritical, []string{"nuclei", "send_request"}, true},
-		{"critical 1 active only → blocked (needs 2)", types.SeverityCritical, []string{"send_request"}, false},
+		{"critical 1 passive 1 executed → ok", types.SeverityCritical, []string{"nuclei", "conf-1"}, true},
+		{"critical 1 executed only → blocked (needs 2)", types.SeverityCritical, []string{"conf-1"}, false},
 		{"high 2 passive → blocked (no active)", types.SeverityHigh, []string{"nuclei", "grype"}, false},
-		{"high 2 active → ok", types.SeverityHigh, []string{"send_request", "dispatch_l2_probe:sqlmap"}, true},
+		{"high 2 executed → ok", types.SeverityHigh, []string{"conf-1", "conf-2"}, true},
+		{"critical: a made-up active-sounding string is NOT active", types.SeverityCritical, []string{"nuclei", "confirmed via send_request"}, false},
 		{"low 1 passive → blocked (verified needs active)", types.SeverityLow, []string{"nuclei"}, false},
-		{"low 1 active → ok", types.SeverityLow, []string{"send_request"}, true},
-		{"medium probe → ok", types.SeverityMedium, []string{"dispatch_l2_probe:sqlmap"}, true},
+		{"low unrecorded handle → blocked", types.SeverityLow, []string{"conf-9"}, false},
+		{"low 1 executed → ok", types.SeverityLow, []string{"conf-1"}, true},
+		{"medium executed probe → ok", types.SeverityMedium, []string{"conf-2"}, true},
 		{"low 0 methods → blocked", types.SeverityLow, nil, false},
 	}
 	for _, c := range cases {
-		_, ok := verifyGate(c.sev, c.methods)
+		_, ok := verifyGate(c.sev, c.methods, confs)
 		if ok != c.wantOK {
 			t.Errorf("%s: verifyGate=%v, want %v", c.name, ok, c.wantOK)
 		}
 	}
 }
 
-func TestIsActiveConfirmation(t *testing.T) {
-	active := []string{"send_request", "dispatch_l2_probe:sqlmap", "replay:nuclei", "reproduced 500", "curl PoC", "Exploit confirmed"}
-	passive := []string{"nuclei", "semgrep", "grype signature", "trivy", "static-match"}
-	for _, m := range active {
-		if !isActiveConfirmation(m) {
-			t.Errorf("%q should be active", m)
-		}
+func TestIsRecordedConfirmation(t *testing.T) {
+	confs := []Confirmation{{Handle: "conf-1", Method: "send_request", Ref: "GET https://x"}}
+	if !isRecordedConfirmation("conf-1", confs) {
+		t.Error("conf-1 is in the ledger and must count as active")
 	}
-	for _, m := range passive {
-		if isActiveConfirmation(m) {
-			t.Errorf("%q should be passive", m)
+	// The exact strings the old substring gate accepted must now be REJECTED
+	// unless they resolve to a real handle — this is the P0 bypass being closed.
+	for _, m := range []string{"send_request", "dispatch_l2_probe:sqlmap", "confirmed via send_request", "curl PoC", "conf-2", "nuclei"} {
+		if isRecordedConfirmation(m, confs) {
+			t.Errorf("%q must not count as active (not a recorded run handle)", m)
 		}
 	}
 }
@@ -262,15 +276,75 @@ func TestUpdateFinding_PassiveOnlyVerifiedRejected(t *testing.T) {
 	if st.Findings[0].L2.Verification == types.VerificationVerified {
 		t.Error("verification must NOT have flipped to verified on a passive-only gate")
 	}
-	// Adding an active re-confirmation unblocks it.
+	// Adding an EXECUTED active re-confirmation unblocks it.
+	h := st.RecordConfirmation("send_request", "GET https://x/search?q=1")
 	res2, _ := uf.Handler(context.Background(), map[string]any{
-		"id": "l2-001", "verified_by": []string{"send_request"}, "verification": "verified",
+		"id": "l2-001", "verified_by": []string{h}, "verification": "verified",
 	}, st)
 	if res2.Err {
-		t.Fatalf("critical with 2 passive + 1 active should pass: %s", res2.Content)
+		t.Fatalf("critical with 2 passive + 1 executed active should pass: %s", res2.Content)
 	}
 	if st.Findings[0].L2.Verification != types.VerificationVerified {
 		t.Error("should be verified once an active confirmation is present")
+	}
+}
+
+// TestUpdateFinding_FreeTextActiveStringRejected is the P0 regression guard: a
+// verified_by that merely DESCRIBES an active check ("confirmed via
+// send_request") — the exact shape the old substring gate accepted — must be
+// refused when no send_request / dispatch_l2_probe actually ran this turn.
+func TestUpdateFinding_FreeTextActiveStringRejected(t *testing.T) {
+	c := BuildCatalog(fullDeps())
+	uf, _ := c.find("update_finding")
+	st := &State{} // empty ledger — nothing executed
+	emit(t, c, st, map[string]any{
+		"title": "SQLi", "severity": "low", // low so the ≥2-method rule can't be the reason
+		"evidence_finding_ids": []string{"f-001"}, "plain_english": "x",
+	})
+	res, _ := uf.Handler(context.Background(), map[string]any{
+		"id": "l2-001", "verified_by": []string{"confirmed via send_request"}, "verification": "verified",
+	}, st)
+	if !res.Err {
+		t.Fatalf("a free-text active-sounding method with no executed check must be rejected, got: %s", res.Content)
+	}
+	if st.Findings[0].L2.Verification == types.VerificationVerified {
+		t.Error("verification must NOT flip to verified on a free-text claim")
+	}
+}
+
+// TestSendRequestRecordsConfirmation proves the executed-tool → ledger → gate
+// path end to end: a real send_request records a handle, and citing THAT handle
+// verifies the finding.
+func TestSendRequestRecordsConfirmation(t *testing.T) {
+	c := BuildCatalog(Deps{Target: webTarget(), L1Findings: sampleFindings(), HTTP: &mockHTTP{summary: "200 OK; payload reflected"}})
+	sr, ok := c.find("send_request")
+	if !ok {
+		t.Fatal("send_request missing")
+	}
+	st := &State{}
+	emit(t, c, st, map[string]any{
+		"title": "XSS", "severity": "medium",
+		"evidence_finding_ids": []string{"f-001"}, "plain_english": "x",
+	})
+	res, err := sr.Handler(context.Background(), map[string]any{"url": "https://x/search?q=<script>"}, st)
+	if err != nil || res.Err {
+		t.Fatalf("send_request failed: %v %q", err, res.Content)
+	}
+	if len(st.Confirmations) != 1 || st.Confirmations[0].Handle != "conf-1" {
+		t.Fatalf("send_request must record a confirmation handle, got %+v", st.Confirmations)
+	}
+	if !strings.Contains(res.Content, "conf-1") {
+		t.Errorf("tool result should announce the handle so the model can cite it: %q", res.Content)
+	}
+	uf, _ := c.find("update_finding")
+	vres, _ := uf.Handler(context.Background(), map[string]any{
+		"id": "l2-001", "verified_by": []string{"conf-1"}, "verification": "verified",
+	}, st)
+	if vres.Err {
+		t.Fatalf("citing the recorded handle should verify: %s", vres.Content)
+	}
+	if st.Findings[0].L2.Verification != types.VerificationVerified {
+		t.Error("finding should be verified after citing the executed confirmation")
 	}
 }
 
