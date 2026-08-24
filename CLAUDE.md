@@ -1236,6 +1236,13 @@ Recall (FN) is measured per-asset above; the **FP** half is measured by `metric:
 * Iter naming: `iter-XX.Y` in commit messages, code comments, and test file names where relevant
 * PRs: squash-merge via `gh pr merge <N> --squash --delete-branch`
 * **Always update CLAUDE.md and arch.md when architecture changes**
+* **Releasing: [RELEASE.md](RELEASE.md).** One `v*` tag fires BOTH `release.yml` and `images.yml`,
+  publishing twelve artifacts across two workflows that neither wait for nor check each other — so a
+  GitHub Release can exist while an image build failed. The doc carries the tag taxonomy, the pre-tag
+  checklist, and the rollback rule that matters most: deployments default to MOVING tags
+  (`platform:latest`, `sandbox:full-latest`), so a rollback is a pin, not a revert, and a published
+  tag is never moved or deleted — a scan records `sandbox_image_digest` as evidence (§6), and an
+  evidence pack pointing at a digest nobody can pull stops being evidence.
 
 ---
 
