@@ -1,7 +1,6 @@
 package fleet
 
 import (
-	"github.com/ClatTribe/tsengine/internal/estategraph"
 	"github.com/ClatTribe/tsengine/internal/webagent"
 )
 
@@ -29,7 +28,7 @@ func ClaimsFromFindings(findings []webagent.Finding) []Claim {
 			continue // no cited evidence / unlabeled → cannot enter (Update would refuse it anyway)
 		}
 		claims = append(claims, Claim{
-			Route:    estategraph.Canonical(surfaceWeb, f.Route),
+			Route:    routeID(f.Route),
 			Class:    f.Class,
 			Verdict:  Vulnerable,
 			Evidence: ev,
@@ -46,7 +45,7 @@ func CanonicalRoutes(routes []string) []string {
 		if r == "" {
 			continue
 		}
-		out = append(out, estategraph.Canonical(surfaceWeb, r))
+		out = append(out, routeID(r))
 	}
 	return sortUnique(out)
 }
