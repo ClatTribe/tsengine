@@ -1251,6 +1251,11 @@ func runWebInvestigate(argv []string) error {
 		if tier == "" {
 			tier = os.Getenv("TSENGINE_FLEET_ASSURANCE")
 		}
+		if tier == "verified" && opts.MaxIters > 0 {
+			// Verified tier pays with TIME as well as requests (ADR 0030 Phase D): tonight's dev
+			// runs died on the wall clock mid-chain, which measured our ceiling, not the brain's.
+			opts.MaxIters = opts.MaxIters * 2
+		}
 		res, ferr := fleet.RunFleet(agentCtx, llm, *target, in, opts, fleet.Config{
 			Workers:       workers,
 			TotalRequests: envIntOr("TSENGINE_FLEET_TOTAL_REQUESTS", *maxReq),

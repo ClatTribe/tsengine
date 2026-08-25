@@ -52,6 +52,7 @@ func xbowCmd(argv []string) error {
 	dryRun := fs.Bool("dry-run", false, "load the suite and print the plan WITHOUT Docker/scan (suite-wiring check)")
 	resume := fs.Bool("resume", false, "skip benchmarks already in <out>.json (resume a long/interrupted run)")
 	prune := fs.Bool("prune-images", true, "remove each benchmark's locally-built image after teardown (bounds disk over a full-suite run)")
+	attempts := fs.Int("attempts", 1, "retry UNSOLVED benchmarks up to N total passes (diversity beats one exhaustive pass; every retry is disclosed in the ledger as attempt=k — never silently averaged)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -113,39 +114,75 @@ func xbowCmd(argv []string) error {
 		}
 	}
 
-	for i, b := range benches {
-		if done[b.ID] {
+	// PASSES (ADR: diversity beats one exhaustive pass — our own ledger showed pass@1 0.75 vs
+	// best-of-retry 0.86): pass 1 runs everything not resumed-done; each later pass retries only
+	// the still-unsolved, non-errored set. Every attempt is LEDGERED as its own line, so a pass@k
+	// number is computed from disclosed attempts, never silently kept-best.
+	solved := map[string]bool{}
+	for _, r := range results {
+		if r.Solved {
+			solved[r.ID] = true
+		}
+	}
+	for pass := 1; pass <= *attempts; pass++ {
+		var queue []bench.XBOWBenchmark
+		for _, b := range benches {
+			if solved[b.ID] || done[b.ID] {
+				continue // resume-done or already solved in an earlier pass
+			}
+			if pass > 1 {
+				attemptedBefore := false
+				for _, r := range results {
+					if r.ID == b.ID {
+						attemptedBefore = true
+						break
+					}
+				}
+				if !attemptedBefore {
+					continue // never attempted (e.g. filtered by an earlier error) → pass-1 territory
+				}
+				if done[b.ID] {
+					done[b.ID] = false // explicitly re-eligible on this retry pass
+				}
+			}
+			queue = append(queue, b)
+		}
+		if len(queue) == 0 {
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "[xbow %d/%d] %s (level %d) …\n", i+1, len(benches), b.ID, b.Config.Level)
-		r := runOneXBOW(ctx, b, *binary, *mode, *timeout, *targetPort, *prune)
-		status := "MISS"
-		if r.Solved {
-			status = "SOLVED"
-		}
-		fmt.Fprintf(os.Stderr, "  → %s (%.0fs) %s\n", status, r.Duration, r.Note)
-		results = append(results, r)
-		// DURABLE record: append one line to the committed, append-only ledger BEFORE the ephemeral
-		// --out checkpoint. A run is never silently lost again — solved, missed, or errored, it leaves a
-		// permanent, diffable, evidence-fingerprinted trail (§10).
-		if *ledger != "" {
-			entry := bench.XBOWLedgerEntry{
-				TS: time.Now().UTC().Format(time.RFC3339), ID: r.ID, Name: r.Name, Level: r.Level,
-				Tags: r.Tags, Mode: *mode, Solved: r.Solved, Findings: r.Findings, Errored: r.Errored,
-				EvidenceSHA256: r.EvidenceSHA256, Note: r.Note,
+		for i, b := range queue {
+			fmt.Fprintf(os.Stderr, "[xbow %d/%d | pass %d/%d] %s (level %d) …\n", i+1, len(queue), pass, *attempts, b.ID, b.Config.Level)
+			r := runOneXBOW(ctx, b, *binary, *mode, *timeout, *targetPort, *prune)
+			status := "MISS"
+			if r.Solved {
+				status = "SOLVED"
+				solved[r.ID] = true
 			}
-			if aerr := bench.AppendXBOWLedger(*ledger, entry); aerr != nil {
-				fmt.Fprintf(os.Stderr, "[xbow] ledger append failed: %v\n", aerr)
+			note := fmt.Sprintf("[pass %d/%d] %s", pass, *attempts, r.Note)
+			fmt.Fprintf(os.Stderr, "  → %s (%.0fs) %s\n", status, r.Duration, note)
+			r.Note = note
+			results = append(results, r)
+			// DURABLE record BEFORE any ephemeral checkpoint (§10): every attempt leaves a
+			// permanent, diffable trail — retries are disclosed data, never silent best-of.
+			if *ledger != "" {
+				entry := bench.XBOWLedgerEntry{
+					TS: time.Now().UTC().Format(time.RFC3339), ID: r.ID, Name: r.Name, Level: r.Level,
+					Tags: r.Tags, Mode: *mode, Solved: r.Solved, Findings: r.Findings, Errored: r.Errored,
+					EvidenceSHA256: r.EvidenceSHA256, Note: r.Note,
+				}
+				if aerr := bench.AppendXBOWLedger(*ledger, entry); aerr != nil {
+					fmt.Fprintf(os.Stderr, "[xbow] ledger append failed: %v\n", aerr)
+				}
 			}
-		}
-		// Checkpoint after EVERY benchmark so an interrupted run loses nothing (and is resumable).
-		if *out != "" {
-			if jerr := writeXBOWResults(*out, results, bench.AggregateXBOW(results)); jerr != nil {
-				fmt.Fprintf(os.Stderr, "[xbow] checkpoint write failed: %v\n", jerr)
+			if *out != "" {
+				if jerr := writeXBOWResults(*out, results, bench.AggregateXBOW(dedupeResults(results))); jerr != nil {
+					fmt.Fprintf(os.Stderr, "[xbow] checkpoint write failed: %v\n", jerr)
+				}
 			}
 		}
 	}
 
+	results = dedupeResults(results)
 	sb := bench.AggregateXBOW(results)
 	fmt.Print(bench.RenderXBOWScoreboard(sb))
 	if *out != "" {
@@ -163,6 +200,35 @@ func xbowCmd(argv []string) error {
 		}
 	}
 	return nil
+}
+
+// dedupeResults collapses retry attempts into one entry per benchmark: a SOLVED attempt always
+// wins; otherwise the LATEST attempt stands (most recent evidence). Attempts remain fully visible
+// in the ledger — this only shapes the aggregate scoreboard.
+func dedupeResults(rs []bench.XBOWResult) []bench.XBOWResult {
+	byID := map[string]bench.XBOWResult{}
+	var order []string
+	for _, r := range rs {
+		prev, seen := byID[r.ID]
+		if !seen {
+			order = append(order, r.ID)
+			byID[r.ID] = r
+			continue
+		}
+		switch {
+		case r.Solved:
+			byID[r.ID] = r
+		case prev.Solved:
+			// keep the solved one
+		default:
+			byID[r.ID] = r // latest miss/errored stands
+		}
+	}
+	out := make([]bench.XBOWResult, 0, len(order))
+	for _, id := range order {
+		out = append(out, byID[id])
+	}
+	return out
 }
 
 // loadXBOWCheckpoint reads the results array from a prior <out>.json (empty on any error — a missing

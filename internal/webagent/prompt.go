@@ -73,6 +73,12 @@ RULES
 	}
 	if len(cc.Seeds) > 0 {
 		b.WriteString("SUSPECTED FINDINGS FROM L1 SCANNERS — confirm each (send a payload that\nelicits the class's indicator, then record_finding grounded). Do NOT take them\non faith; an L1 alert is a lead, not proof. [brackets] = L1.5 enrichment\n(KEV=actively exploited, EPSS=exploit prob, exploit/surface=priority, then compliance) —\nconfirm the highest-priority leads FIRST:\n")
+		// Narrow-scope discipline (Cloudflare Glasswing lesson #1): a seeded engagement has a
+		// PRIMARY OBJECTIVE — exhaust the flagged classes on their routes before wandering.
+		// "Find vulnerabilities" wanders; "prove or clear sqli HERE" behaves like a researcher.
+		b.WriteString("PRIMARY OBJECTIVE: before any broad exploration, prove or CLEAR every seeded\n")
+		b.WriteString("class on its route — a cleared seed needs its attempted-and-failed payload turns as\n")
+		b.WriteString("evidence you tried. Only then spend budget elsewhere.\n")
 		for _, s := range cc.Seeds {
 			line := fmt.Sprintf("  - %s on %s (raised by %s)", s.Class, s.Route, s.Tool)
 			if s.Severity != "" {
