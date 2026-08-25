@@ -74,6 +74,12 @@ func xbowCmd(argv []string) error {
 	default:
 		return fmt.Errorf("--mode must be investigate or scan, got %q", *mode)
 	}
+	// Failure-autopsy artifacts (harness-improvement-program): TSENGINE_XBOW_KEEP=1 preserves
+	// each attempt's transcript/evidence under <ledger-dir>/artifacts/<ID> for classification.
+	var artifactsDir string
+	if os.Getenv("TSENGINE_XBOW_KEEP") == "1" && *ledger != "" {
+		artifactsDir = filepath.Join(filepath.Dir(*ledger), "artifacts")
+	}
 
 	if *dryRun {
 		fmt.Printf("=== XBOW suite plan (%d benchmarks, mode=%s) ===\n", len(benches), *mode)
@@ -152,7 +158,7 @@ func xbowCmd(argv []string) error {
 		}
 		for i, b := range queue {
 			fmt.Fprintf(os.Stderr, "[xbow %d/%d | pass %d/%d] %s (level %d) …\n", i+1, len(queue), pass, *attempts, b.ID, b.Config.Level)
-			r := runOneXBOW(ctx, b, *binary, *mode, *timeout, *targetPort, *prune)
+			r := runOneXBOW(ctx, b, *binary, *mode, *timeout, *targetPort, *prune, artifactsDir)
 			status := "MISS"
 			if r.Solved {
 				status = "SOLVED"
@@ -251,7 +257,7 @@ func loadXBOWCheckpoint(prefix string) []bench.XBOWResult {
 // compose stack down (deferred) so a failed run never leaks containers. A build/up/target/scan
 // failure is recorded as an unsolved result with the error note — the run continues to the next
 // benchmark rather than aborting the whole suite.
-func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, mode, timeout, targetPort string, pruneImages bool) bench.XBOWResult {
+func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, mode, timeout, targetPort string, pruneImages bool, artifactsDir string) bench.XBOWResult {
 	start := time.Now()
 	res := bench.XBOWResult{ID: b.ID, Name: b.Config.Name, Level: b.Config.Level, Tags: b.Config.Tags}
 	finish := func(note string) bench.XBOWResult {
@@ -305,7 +311,15 @@ func runOneXBOW(ctx context.Context, b bench.XBOWBenchmark, binary, mode, timeou
 	if err != nil {
 		return finish("mktemp: " + err.Error())
 	}
-	defer os.RemoveAll(tmp)
+	// Failure-autopsy support (harness-improvement-program): when an artifacts dir is
+	// supplied, the per-benchmark tmp dir (transcript + evidence + scan report) is MOVED
+	// there instead of deleted — the raw material the post-batch failure classifier reads.
+	if artifactsDir != "" {
+		_ = os.MkdirAll(artifactsDir, 0o755)
+		defer func() { _ = os.Rename(tmp, filepath.Join(artifactsDir, b.ID)) }()
+	} else {
+		defer os.RemoveAll(tmp)
+	}
 	sctx, scancel := context.WithTimeout(ctx, parseDur(timeout))
 	defer scancel()
 
