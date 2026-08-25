@@ -171,6 +171,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench autonomy: %v\n", err)
 			os.Exit(1)
 		}
+	case "leadrun":
+		if err := leadCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench leadrun: %v\n", err)
+			os.Exit(1)
+		}
 	case "scorecard":
 		if err := scorecardCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench scorecard: %v\n", err)
