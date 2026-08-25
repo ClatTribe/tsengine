@@ -166,6 +166,14 @@ type Config struct {
 	// Governor, when set, is used instead of one built from TotalRequests (tests inject a
 	// pre-tripped or clock-controlled governor). Nil → built internally.
 	Governor *Governor
+	// Gapfill runs a SECOND, narrower pass over route×class pairs whose verdict came back
+	// Inconclusive (touched but not actually tested) after the main waves — Cloudflare's gapfill
+	// stage: hunters flag what they touched without covering; those re-queue for another attempt.
+	// Bounded by the SAME envelope remainder (a gapfill can never exceed the engagement's
+	// authorization) and capped at MaxGapfill chunks.
+	Gapfill bool // TSENGINE_FLEET_GAPFILL
+	// MaxGapfill caps gapfill chunks per engagement (default 12).
+	MaxGapfill int
 	// NewWorkerLLM, when set, builds the brain for EACH worker (keyed by chunk id); nil → every
 	// worker shares the caller's llm, which MUST then be safe for concurrent use. The seam exists
 	// because a scripted/fake LLM carries per-instance position state — real HTTP-backed brains are
@@ -205,6 +213,8 @@ func FromEnv(baseMaxRequests int) Config {
 		CoverK:        envInt("TSENGINE_FLEET_COVER_K", 1),
 		StaleWaves:    envInt("TSENGINE_FLEET_STALL_WAVES", 2),
 		Assurance:     os.Getenv("TSENGINE_FLEET_ASSURANCE"),
+		Gapfill:       os.Getenv("TSENGINE_FLEET_GAPFILL") == "1",
+		MaxGapfill:    envInt("TSENGINE_FLEET_MAX_GAPFILL", 12),
 	}
 }
 

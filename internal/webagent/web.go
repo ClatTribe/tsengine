@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -312,6 +313,9 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		obs := t.handler(cc, act.Args)
 		opts.Ledger.Record(act.Thought, act.Tool, act.Args, obs)
 		transcript = appendCapped(transcript, fmt.Sprintf("ACTION %s(%s)\nOBSERVATION: %s", act.Tool, compactArgs(act.Args), obs))
+		if os.Getenv("TSENGINE_AGENT_COMPACT") == "1" {
+			transcript = compactTranscript(transcript, cc)
+		}
 		if opts.Progress != nil {
 			opts.Progress(cc) // flush partial state so a timeout/SIGKILL can't erase a captured flag
 		}

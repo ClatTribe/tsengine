@@ -1262,6 +1262,8 @@ func runWebInvestigate(argv []string) error {
 			CoverK:        envIntOr("TSENGINE_FLEET_COVER_K", 1),
 			StaleWaves:    envIntOr("TSENGINE_FLEET_STALL_WAVES", 2),
 			Assurance:     tier,
+			Gapfill:       os.Getenv("TSENGINE_FLEET_GAPFILL") == "1",
+			MaxGapfill:    envIntOr("TSENGINE_FLEET_MAX_GAPFILL", 12),
 		})
 		if ferr != nil {
 			return ferr

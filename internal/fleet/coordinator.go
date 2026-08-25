@@ -116,6 +116,7 @@ func RunFleet(ctx context.Context, llm cloudengine.LLM, target string, in Fronti
 
 	lastVerdicts := -1
 	staleWaves := 0
+	rawByCanon := map[string]string{} // canonical id → first raw URL that mapped to it (gapfill needs real URLs back)
 
 	for wi, wave := range waves {
 		if tripped, reason := gov.Tripped(); tripped {
@@ -200,6 +201,16 @@ func RunFleet(ctx context.Context, llm cloudengine.LLM, target string, in Fronti
 			res.KnownRoutes = append(res.KnownRoutes, kn...)
 		}
 		res.KnownRoutes = sortUnique(res.KnownRoutes)
+		for i := range runnable {
+			if reports[i] == nil {
+				continue
+			}
+			for _, raw := range runnable[i].Routes {
+				if _, seen := rawByCanon[routeID(raw)]; !seen {
+					rawByCanon[routeID(raw)] = raw
+				}
+			}
+		}
 		res.Reports = append(res.Reports, reports...)
 		res.Contexts = append(res.Contexts, ctxs...)
 
@@ -216,6 +227,86 @@ func RunFleet(ctx context.Context, llm cloudengine.LLM, target string, in Fronti
 		} else {
 			staleWaves = 0
 			lastVerdicts = n
+		}
+	}
+
+	// GAPFILL (Cloudflare's stage, on our worldview): Inconclusive means "touched but never
+	// actually tested" — a request landed, no class payload fired. Those are exactly the areas a
+	// hunter touched without covering, so they re-queue as narrow one-pair chunks with a prompt
+	// that names what failed before. Bounded twice: by the envelope remainder (a gapfill can
+	// never exceed the engagement's authorization) and MaxGapfill. Sequential — these are
+	// precision retries, not breadth.
+	if cfg.Gapfill {
+		type pair struct{ route, class, raw string }
+		var pairs []pair
+		for _, v := range w.Verdicts() {
+			if v.Verdict != Inconclusive {
+				continue
+			}
+			raw, ok := rawByCanon[v.Route]
+			if !ok || v.Class == "" {
+				continue
+			}
+			pairs = append(pairs, pair{v.Route, v.Class, raw})
+		}
+		max := cfg.MaxGapfill
+		if max <= 0 {
+			max = 12
+		}
+		dropped := 0
+		if len(pairs) > max {
+			dropped = len(pairs) - max
+			pairs = pairs[:max]
+		}
+		if len(pairs) > 0 && envelope.Left() > 0 {
+			res.Disclosures = append(res.Disclosures,
+				fmt.Sprintf("gapfill: %d inconclusive route×class pair(s) re-queued for a narrower second attempt%s",
+					len(pairs), map[bool]string{true: fmt.Sprintf(" (%d beyond cap, disclosed)", dropped), false: ""}[dropped > 0]))
+			for i, pr := range pairs {
+				if tripped, _ := gov.Tripped(); tripped || ctx.Err() != nil || envelope.Left() <= 0 {
+					res.Disclosures = append(res.Disclosures,
+						fmt.Sprintf("gapfill halted after %d chunk(s): breaker/envelope/ctx", i))
+					break
+				}
+				chunk := Chunk{
+					ID: fmt.Sprintf("gap-%03d", i+1), Tier: tierResidual,
+					Class: pr.class, Routes: []string{pr.raw},
+					Reason: "gapfill: previous pass left this inconclusive — try a DIFFERENT payload class or encoding than the first pass",
+				}
+				opts := baseOpts
+				opts.Seed = append(opts.Seed, chunk.Routes...)
+				opts.SeedFindings = []webagent.SeedFinding{{
+					Route: chunk.Routes[0], Class: chunk.Class, Tool: "gapfill", Severity: "medium",
+					Enrichment: "second pass: previous attempt was inconclusive (touched, not tested)",
+				}}
+				opts.Envelope = envelope
+				opts.SharedBreaker = gov.Breaker()
+				cc := &webagent.Context{Target: target}
+				wllm := llm
+				if cfg.NewWorkerLLM != nil {
+					wllm = cfg.NewWorkerLLM(chunk.ID)
+				}
+				rep, err := webagent.Investigate(ctx, wllm, cc, opts)
+				if err != nil {
+					return nil, err
+				}
+				observeHealth(gov, chunk, rep.Coverage)
+				if claims := ClaimsFromChunk(chunk, rep.Findings, cc.History); len(claims) > 0 {
+					if err := w.Update(claims); err != nil {
+						return nil, err
+					}
+				}
+				res.Reports = append(res.Reports, rep)
+				res.Contexts = append(res.Contexts, cc)
+				res.Plan.Chunks = append(res.Plan.Chunks, chunk)
+			}
+			res.KnownRoutes = sortUnique(append(res.KnownRoutes, CanonicalRoutes(func() []string {
+				var out []string
+				for _, pr := range pairs {
+					out = append(out, pr.raw)
+				}
+				return out
+			}())...))
 		}
 	}
 
