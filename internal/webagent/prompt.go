@@ -2,6 +2,7 @@ package webagent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -97,6 +98,18 @@ RULES
 				}
 			}
 		}
+	}
+	// Post-exploit escalation lever (TSENGINE_AGENT_PXE=1): CHAIN-INCOMPLETE was the top
+	// failure category in the dev-set autopsy — the agent PROVES a primitive but never asks
+	// what else that primitive opens. Generic pentest craft (escalate proven access toward
+	// adjacent artifacts/data), NOT flag-hunting: every new claim still requires the class's
+	// deterministic indicator, so this widens TRYING, never RECORDING (§10).
+	if os.Getenv("TSENGINE_AGENT_PXE") == "1" {
+		b.WriteString("ESCALATION OBJECTIVE: once a primitive is PROVEN (a recorded, verified\n")
+		b.WriteString("finding), do not stop — ask what ELSE that primitive opens. Use it to read\n")
+		b.WriteString("adjacent server-side artifacts (files, environment, app config, webroot\n")
+		b.WriteString("neighbors) via the SAME vector. Any NEW vuln class this proves must still be\n")
+		b.WriteString("grounded by its own indicator before record_finding.\n")
 	}
 	if len(cc.Leads) > 0 {
 		b.WriteString("\nWHAT THESE ROUTES REACH (from the estate graph — spend your budget where the stakes are\nhighest). A lead tells you WHERE a route leads; it is NOT proof of a vulnerability. You still have\nto find and ground the vuln with the class's indicator — a lead only tells you which door is worth\npicking:\n")
