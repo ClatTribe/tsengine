@@ -45,12 +45,22 @@ func leadCmd(argv []string) error {
 		return fmt.Errorf("scan has no findings to triage")
 	}
 
-	client := l2.ClientFromEnv()
+	// Keyless proxy first: an opencode serve endpoint drives the Lead through the SAME
+	// free-tier brains the pentester uses (prompt-side tool-calling bridge). Native
+	// tool-calling providers still win when explicitly configured below.
+	var client l2.Client
+	if oc := l2.OpenCodeClientFromEnv(); oc != nil {
+		client = oc
+	} else {
+		client = l2.ClientFromEnv()
+	}
 	if client == nil {
 		return fmt.Errorf("leadrun needs a tool-calling LLM: set LLM_BASE_URL=http://localhost:11434/v1 + LLM_MODEL=qwen3:8b (local Ollama), or ANTHROPIC_API_KEY")
 	}
 
+	fmt.Fprintln(os.Stderr, "[leadrun] building catalog…")
 	catalog := l2.BuildCatalog(l2.Deps{L1Findings: findings})
+	fmt.Fprintln(os.Stderr, "[leadrun] starting Lead run…")
 	agent, err := l2.New(client, catalog, l2.Budget{
 		MaxCostUSD:     2.0,
 		MaxIterations:  *maxIters,
