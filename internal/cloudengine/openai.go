@@ -108,6 +108,12 @@ func LLMFromEnv() (LLM, bool) {
 	// Native Claude first (most specific env — ANTHROPIC_API_KEY), then an OpenAI-compat backend
 	// (LLM_BASE_URL, incl. a local Ollama), then Gemini (LLM_API_KEY). So setting ANTHROPIC_API_KEY
 	// drives the L2 agents on a frontier brain.
+	// TSENGINE_LLM_OPENCODE is checked FIRST: it is the explicit local-proxy override (drive the
+	// agents through a local `opencode serve` and whatever model its operator configured) and must
+	// win over ambient provider env, never lose to it.
+	if o, ok := OpenCodeFromEnv(); ok {
+		return o, true
+	}
 	if a, ok := AnthropicFromEnv(); ok {
 		return a, true
 	}
