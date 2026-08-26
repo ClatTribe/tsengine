@@ -252,7 +252,15 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                     // global kill-switch: halt/resume all agent action
 	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                               // agent capability manifest (WRD-1): what the automation can touch
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                                       // owner's shareable Trust Center token
-	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                               // PUBLIC, HMAC-token-gated; safe aggregates only
+	mux.HandleFunc("GET /v1/trust/{tenant}", d.handleTrust)                                               // PUBLIC, HMAC-token-gated; aggregates + the document catalog this visitor may see
+	mux.HandleFunc("POST /v1/trust/{tenant}/request", d.handleTrustAccessRequest)                         // PUBLIC: a buyer asks to read the gated document tier (rate-limited)
+	mux.HandleFunc("POST /v1/trust/{tenant}/nda", d.handleTrustNDA)                                       // PUBLIC: click-through acceptance, recorded with the digest of the exact text
+	mux.HandleFunc("GET /v1/trust/{tenant}/doc", d.handleTrustDocument)                                   // PUBLIC: serve one document, re-checking the gate rather than trusting the listing
+	mux.HandleFunc("GET /v1/settings/trust-center", d.auth(d.handleGetTrustSettings))                     // owner: config + share link + what a buyer can actually be shown
+	mux.HandleFunc("PUT /v1/settings/trust-center", d.auth(d.handlePutTrustSettings))                     // owner: save config (normalized; corrections ride back)
+	mux.HandleFunc("POST /v1/settings/trust-center/revoke-link", d.auth(d.handleRevokeTrustLink))         // owner: kill every outstanding share link for THIS tenant
+	mux.HandleFunc("GET /v1/trust-requests", d.auth(d.handleListTrustRequests))                           // owner: the access desk
+	mux.HandleFunc("POST /v1/trust-requests/{id}/decision", d.auth(d.handleDecideTrustRequest))           // owner: approve / deny / revoke (access token returned ONCE on approve)
 	mux.HandleFunc("GET /v1/assess", d.handlePublicAssess)                                                // PUBLIC PLG lead-magnet: read-only email-auth score for any domain
 	mux.HandleFunc("POST /v1/lead", d.handleLead)                                                         // PUBLIC: book-a-demo / talk-to-sales lead capture
 	mux.HandleFunc("GET /v1/assess/badge", d.handleAssessBadge)                                           // PUBLIC: embeddable SVG grade badge (viral loop)
@@ -398,6 +406,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/compliance/{framework}/remediation", d.auth(d.handleComplianceRemediation)) // vCISO "how do I close this gap?" — LLM remediation guidance (gated)
 	mux.HandleFunc("POST /v1/compliance/{framework}/advisor", d.auth(d.handleComplianceAdvisor))         // vCISO advisor — prioritized audit-readiness roadmap over coverage+gaps+readiness (gated)
 	mux.HandleFunc("GET /v1/questionnaire", d.auth(d.handleQuestionnaire))
+	mux.HandleFunc("POST /v1/questionnaire/attest/{id}", d.auth(d.handleQuestionnaireAttest)) // a named human answers what no scan can reach; REFUSED on an evidenced question
 	mux.HandleFunc("GET /v1/vapt/report", d.auth(d.handleVAPTReport))
 	mux.HandleFunc("POST /v1/reviews", d.auth(d.handleCreateReview))
 	mux.HandleFunc("GET /v1/reviews", d.auth(d.handleListReviews))

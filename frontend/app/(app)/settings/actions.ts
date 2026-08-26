@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { api } from "@/lib/api";
-import type { EscalationPolicy, SLAPolicy } from "@/lib/types";
+import type { EscalationPolicy, SLAPolicy, TrustCenterConfig } from "@/lib/types";
 
 // Engage/disengage the global kill-switch (agentic-SMB spec OM-3 / TS-5). When engaged the
 // platform takes no autonomous agent action — no scans, no remediation writes — until a
@@ -161,4 +161,43 @@ export async function addPractitioner(body: {
 export async function deletePractitioner(id: string): Promise<void> {
   await api.deletePractitioner(id);
   revalidatePath("/settings");
+}
+
+// --- Trust Center ---------------------------------------------------------------------
+
+// Save the buyer-facing share page's configuration. The server NORMALIZES what it is given —
+// clamping a document that names open findings out of "public", dropping a wildcard
+// auto-approve rule, bounding the grant window — and returns every correction it made. Those
+// are passed straight back rather than swallowed: a config silently altered on save is one the
+// owner believes says something it does not, and here that belief is about who can read their
+// penetration-test report.
+export async function setTrustCenter(cfg: TrustCenterConfig): Promise<{
+  config: TrustCenterConfig;
+  link: string;
+  available: Record<string, boolean>;
+  corrections: { field: string; reason: string }[];
+}> {
+  const r = await api.setTrustSettings(cfg);
+  revalidatePath("/settings");
+  return r;
+}
+
+// Rotate the share token: every outstanding link for THIS tenant stops working, and no other
+// tenant's is touched.
+export async function revokeTrustLink(): Promise<{ link: string; token_version: number }> {
+  const r = await api.revokeTrustLink();
+  revalidatePath("/settings");
+  return r;
+}
+
+// Approve / deny / revoke one buyer's access request. On approve the response carries the access
+// token ONCE — only its digest is stored — so the caller must show it immediately or it is gone.
+export async function decideTrustRequest(
+  id: string,
+  decision: "approve" | "deny" | "revoke",
+  by: string,
+): Promise<{ access_token?: string; access_link?: string }> {
+  const r = await api.decideTrustRequest(id, decision, by);
+  revalidatePath("/settings");
+  return { access_token: r.access_token, access_link: r.access_link };
 }

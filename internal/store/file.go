@@ -160,6 +160,13 @@ func (f *File) PutEvalRun(ctx context.Context, r platform.EvalRun) error {
 	return f.persist()
 }
 
+func (f *File) PutTrustAccessRequest(ctx context.Context, r platform.TrustAccessRequest) error {
+	if err := f.Memory.PutTrustAccessRequest(ctx, r); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutComplianceSnapshot(ctx context.Context, s platform.ComplianceSnapshot) error {
 	if err := f.Memory.PutComplianceSnapshot(ctx, s); err != nil {
 		return err
