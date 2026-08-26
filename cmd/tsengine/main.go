@@ -618,6 +618,7 @@ func runScan(argv []string) error {
 			fmt.Fprintf(os.Stderr, "[%s] quote refused: %v\n", scanID, missing)
 		}
 	}
+	ctx, scanTrace := orchestrator.NewTrace(ctx)
 	fmt.Fprintf(os.Stderr, "[%s] orchestrator running anchors against %s\n", scanID, *target)
 	var runOpts []orchestrator.RunOption
 	if at == types.AssetRepository {
@@ -632,6 +633,19 @@ func runScan(argv []string) error {
 		}
 	}
 	findings, fired, surface, toolsFailed, err := orchestrator.RunWithSurface(ctx, assetTarget, handler, client, runOpts...)
+	// ADR 0032 D5: write the SIGNED stage trace next to vulnerabilities.json —
+	// one file an auditor can replay to see which stage produced what.
+	if scanTrace != nil && len(scanTrace.Records()) > 0 {
+		signerID, _ := signingKey() // same key the attestation uses — one key family
+		tracePath := filepath.Join(*outDir, scanID, "trace.json")
+		if serr := attest.SignTraceFile(tracePath, scanTrace.Records(), signerID, keyPriv, time.Now().UTC()); serr != nil {
+			fmt.Fprintf(os.Stderr, "[%s] trace sign failed: %v\n", scanID, serr)
+		} else {
+			fmt.Fprintf(os.Stderr, "[%s] signed stage trace (%d record(s), signer=%s) → %s\n",
+				scanID, len(scanTrace.Records()), signerID, tracePath)
+		}
+	}
+
 	// A deadline (scan --timeout) is NOT fatal: the orchestrator returns the
 	// findings that completed before the cutoff. Persist them, flagged
 	// partial — a 0-finding timeout must be distinguishable from a clean

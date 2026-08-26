@@ -6,8 +6,13 @@
   (neighbors/paths/why/chokepoints all answer from graph contents with evidence refs; chokepoints
   exclude endpoints per estategraph semantics). Still open on D6: PERSISTING snapshots keyed
   (repo, commit) with heartbeat-skip.
-- Open in sequence: **D5 stage trace**, **D7 envelope generalization**, **D8 HITL provenance
-  lifts**, D6 persistence half. Platform rescan depth-passthrough rides the next API PR.
+- **D5 IMPLEMENTED**: `orchestrator.NewTrace` collects stage records through the scan context
+  (detection/escalation/coverage/sweep — sweep records carry brain + usage deltas); the CLI writes
+  `runs/<id>/trace.json` via `attest.SignTraceFile` — hash-chained records + ed25519 over the final
+  chain hash, one verifier family as the evidence bundles. Tamper test pins it.
+- Open in sequence: **D7 envelope generalization**, **D8 HITL provenance lifts**, D6 persistence
+  half (needs a Store schema decision — proposal: `EstateSnapshot{TenantID, Key, GraphJSON,
+  CreatedAt}` across all store impls). Platform rescan depth-passthrough rides the next API PR.
 
 Implementation notes: tier override is env-only (`TSENGINE_MODEL_BREADTH` / `TSENGINE_MODEL_VERIFY`
 rebind the model id on the resolved provider; provider/endpoint/keys are config-level). Disprover

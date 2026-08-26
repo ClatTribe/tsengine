@@ -64,6 +64,7 @@ func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handl
 	for _, o := range opts {
 		o(&ro)
 	}
+	ctx, tr := NewTrace(ctx)
 	// Collect tool failures for the caller's artifact. Attached here rather than passed down: the
 	sink := &failureSink{}
 	ctx = withFailureSink(ctx, sink)
@@ -81,7 +82,7 @@ func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handl
 	// so tsengine never hits strix's "model ignored the recon directive"
 	// class of bug (CLAUDE.md §10).
 	if rh, ok := handler.(asset.ReconHandler); ok && len(rh.Recon()) > 0 {
-		rf, rFired, rSurface, rErr := runWithRecon(ctx, target, handler, rh, dispatcher, &ro)
+		rf, rFired, rSurface, rErr := runWithRecon(ctx, target, handler, rh, dispatcher, &ro, tr)
 		return rf, rFired, rSurface, sink.snapshot(), rErr
 	}
 
@@ -93,7 +94,7 @@ func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handl
 	// the CLI can persist them (err signals "partial", findings are kept).
 	// Single-stage assets have no recon surface; the target itself is it.
 	single := []string{target.Target}
-	findings, allFired := finalizeWithEscalation(ctx, target, handler, dispatcher, results, fired, single, &ro)
+	findings, allFired := finalizeWithEscalation(ctx, target, handler, dispatcher, results, fired, single, &ro, tr)
 	return findings, allFired, single, sink.snapshot(), err
 }
 
@@ -108,7 +109,7 @@ func RunWithSurface(ctx context.Context, target types.Asset, handler asset.Handl
 //
 // Recon findings (if any) + fan-out findings are both normalized, so a
 // recon tool that also emits a finding never loses it.
-func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler, rh asset.ReconHandler, dispatcher Dispatcher, ro *runOptions) ([]types.Finding, []string, []string, error) {
+func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler, rh asset.ReconHandler, dispatcher Dispatcher, ro *runOptions, tr *Trace) ([]types.Finding, []string, []string, error) {
 	// A ReconPlanner shapes its own recon dispatches (crawl depth, seeds);
 	// otherwise fall back to the generic single-arg target mapping.
 	var reconDispatches []asset.Dispatch
@@ -121,7 +122,7 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 	if err != nil {
 		// Recon itself was cut short — normalize + return whatever it
 		// produced (usually empty) so the caller persists it.
-		findings, f := finalizeWithEscalation(ctx, target, handler, dispatcher, reconResults, reconFired, []string{target.Target}, ro)
+		findings, f := finalizeWithEscalation(ctx, target, handler, dispatcher, reconResults, reconFired, []string{target.Target}, ro, tr)
 		return findings, f, []string{target.Target}, err // recon cut short — surface is just the target
 	}
 
@@ -142,7 +143,7 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 
 	allResults := append(reconResults, fanoutResults...)
 	allFired := append(reconFired, fanoutFired...)
-	findings, fnFired := finalizeWithEscalation(ctx, target, handler, dispatcher, allResults, allFired, surface, ro)
+	findings, fnFired := finalizeWithEscalation(ctx, target, handler, dispatcher, allResults, allFired, surface, ro, tr)
 	return findings, fnFired, surface, fanoutErr
 }
 
@@ -157,7 +158,7 @@ func runWithRecon(ctx context.Context, target types.Asset, handler asset.Handler
 // TSENGINE_ESCALATION_MAX so a flood of signals can't explode cost, and by
 // the per-tool timeout (C3). This is the L1 (reproducible) half of "which
 // tool when"; the open-ended half is L2 (Phase 6). CLAUDE.md §5.3.
-func finalizeWithEscalation(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher, detResults []tool.Result, detFired []string, surface []string, ro *runOptions) ([]types.Finding, []string) {
+func finalizeWithEscalation(ctx context.Context, target types.Asset, handler asset.Handler, dispatcher Dispatcher, detResults []tool.Result, detFired []string, surface []string, ro *runOptions, tr *Trace) ([]types.Finding, []string) {
 	allResults := detResults
 	allFired := detFired
 
@@ -199,6 +200,9 @@ func finalizeWithEscalation(ctx context.Context, target types.Asset, handler ass
 		if gaps := cr.CoverageGaps(target, findings); len(gaps) > 0 {
 			fmt.Fprintf(os.Stderr, "[coverage] %d gap(s) declared by the %s handler\n", len(gaps), target.Type)
 			findings = append(findings, gaps...)
+			if tr != nil {
+				tr.Add("coverage", fmt.Sprintf("%d gap(s) declared", len(gaps)), "", 0, 0, "disclosed")
+			}
 		}
 	}
 	// ADR 0032 D1: the repository hypothesis sweep runs AFTER coverage disclosure so both

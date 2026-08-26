@@ -65,6 +65,7 @@ const sweepSourceExtensions = ".go.js.jsx.ts.tsx.mjs.cjs.py.rb.php.java.kt.scala
 // or stderr disclosure — silence is reserved for "complete", never for "didn't
 // run" (§10).
 func runRepositorySweep(ctx context.Context, cfg SweepConfig, target types.Asset, findings []types.Finding) ([]types.Finding, int64, int64) {
+	tr := TraceFrom(ctx)
 	now := time.Now().UTC()
 	repo := codelocalize.Repo(nil)
 	if cfg.WorkspaceDir != "" {
@@ -98,8 +99,20 @@ func runRepositorySweep(ctx context.Context, cfg SweepConfig, target types.Asset
 	if perr != nil {
 		return append(findings, sweepSkipFinding(now, "codesweep plan failed: "+perr.Error())), 0, 0
 	}
+	var model string
+	if mn, ok := cfg.LLM.(cloudengine.ModelNamer); ok {
+		model = mn.ModelName()
+	}
+	var usageBefore cloudengine.Usage
+	if ur, ok := cfg.LLM.(cloudengine.UsageReporter); ok {
+		usageBefore = ur.TotalUsage()
+	}
+
+	tr.Add("sweep", fmt.Sprintf("plan: depth=%s questions=%d", depth, capQ), model, 0, 0, "ok")
+
 	res, err := codesweep.Sweep(ctx, cfg.LLM, repo, tasks, codesweep.SweepOptions{})
 	if err != nil {
+		tr.Add("sweep-failed", "codesweep error", model, 0, 0, "failed:"+err.Error())
 		return append(findings, sweepSkipFinding(now, "codesweep failed: "+err.Error())), 0, 0
 	}
 
@@ -115,6 +128,13 @@ func runRepositorySweep(ctx context.Context, cfg SweepConfig, target types.Asset
 			disprover.Examined, disprover.Downgraded, disprover.Kept, disprover.Errors)
 	}
 
+	var usedIn, usedOut int64
+	if ur, ok := cfg.LLM.(cloudengine.UsageReporter); ok {
+		u := ur.TotalUsage()
+		usedIn, usedOut = u.InputTokens-usageBefore.InputTokens, u.OutputTokens-usageBefore.OutputTokens
+	}
+	disposition := fmt.Sprintf("ok: planned=%d ran=%d candidates=%d refused=%d", res.Planned, res.Ran, len(res.Candidates), res.Refused)
+	tr.Add("sweep", "hypothesis sweep executed", model, usedIn, usedOut, disposition)
 	fmt.Fprintf(os.Stderr, "[sweep] %d question(s) planned, %d ran, %d finding(s), %d refused\n",
 		res.Planned, res.Ran, len(res.Candidates), res.Refused)
 	out := codesweep.Findings(res, target.Target, now)
