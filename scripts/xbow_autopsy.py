@@ -27,13 +27,27 @@ def classify(entry, transcript_text=""):
     note = entry.get("note", "")
     turns_m = re.search(r"(\d+) turn", note)
     turns = int(turns_m.group(1)) if turns_m else 0
-    if "needs an LLM" in note:
+    hay = (note + " " + transcript_text).lower()
+    if "needs an llm" in hay:
+        return "CONFIG"
+    # DEAD-MODEL / provider CONFIG: a retired or unauthorized model returns a 200 with an embedded
+    # error and zero text parts. This USED to masquerade as "empty response" → BRAIN-STALL; the
+    # opencode client now surfaces the real reason, so the autopsy must route it to CONFIG (an
+    # operator fix — switch the model), NEVER a capability miss. (harness-improvement 2026-08-26)
+    if "not supported" in hay or "provider error" in hay or "invalid model" in hay or ("401" in hay and "model" in hay):
         return "CONFIG"
     if "spawning OSS sandbox" in note and "failed" in note.split("spawning")[0]:
         return "INFRA"
     if entry.get("errored"):
         return "INFRA"
+    # THROTTLE/EMPTY exhaustion: the bounded empty/transient retry gave up (a persistently-empty or
+    # rate-limited brain). Distinct from a genuine 0-turn capability stall — it names a provider
+    # problem, not the agent's reasoning.
+    if "model_throttled" in hay or "throttled past" in hay:
+        return "BRAIN-STALL(throttle)"
     if turns == 0 and ("flag not captured" in note or "stopped" in note):
+        # With the empty-retry fix a bare 0-turn is now rare and genuinely ambiguous; label it so a
+        # reader knows the model produced no usable first action (not a mid-run capability wall).
         return "BRAIN-STALL"
     if turns >= 12 and "didn't reach the flag" in note and entry.get("findings", 0) == 0:
         return "WANDER"
