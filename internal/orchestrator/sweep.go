@@ -11,6 +11,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/codelocalize"
 	"github.com/ClatTribe/tsengine/internal/codesweep"
+	"github.com/ClatTribe/tsengine/internal/envelope"
 	"github.com/ClatTribe/tsengine/internal/estimate"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -37,6 +38,11 @@ import (
 // entirely (fast depth, or no brain configured → coverage:: disclosure instead of
 // a silent skip).
 type SweepConfig struct {
+	// TokenBudget, when set, is the engagement-wide TOKEN budget for this stage
+	// (ADR 0032 D7): consumed post-hoc from brain usage deltas. A breach flips
+	// budget semantics once and emits a disclosure — halt-after-breach matches
+	// fleet semantics; unknown-usage brains cannot be enforced and say so.
+	TokenBudget  *envelope.TokenBudget
 	LLM          cloudengine.LLM // required when the stage should run
 	Depth        string          // fast | standard | deep ("" → standard)
 	MaxQuestions int             // hard cap override; 0 → estimate.SweepQuestionCap(depth)
@@ -132,6 +138,17 @@ func runRepositorySweep(ctx context.Context, cfg SweepConfig, target types.Asset
 	if ur, ok := cfg.LLM.(cloudengine.UsageReporter); ok {
 		u := ur.TotalUsage()
 		usedIn, usedOut = u.InputTokens-usageBefore.InputTokens, u.OutputTokens-usageBefore.OutputTokens
+	}
+	if cfg.TokenBudget != nil && (usedIn > 0 || usedOut > 0) {
+		breached := !cfg.TokenBudget.Spend(usedIn + usedOut)
+		tr.Add("sweep-budget", "token budget check", model, usedIn, usedOut,
+			map[bool]string{true: "BREACH — budget exceeded", false: "within budget"}[breached])
+		if breached {
+			res.Candidates = res.Candidates[:0] // budget exhausted: findings stay disclosed via trace, sweep re-runs capped next scan
+			fmt.Fprintf(os.Stderr, "[sweep] token budget BREACHED (%d+%d tokens) — candidates withheld, disclosure emitted\n", usedIn, usedOut)
+			return append(findings, sweepSkipFinding(now,
+				fmt.Sprintf("sweep token budget breached after %d+%d tokens — findings withheld rather than rendered as complete", usedIn, usedOut))), 0, 0
+		}
 	}
 	disposition := fmt.Sprintf("ok: planned=%d ran=%d candidates=%d refused=%d", res.Planned, res.Ran, len(res.Candidates), res.Refused)
 	tr.Add("sweep", "hypothesis sweep executed", model, usedIn, usedOut, disposition)
