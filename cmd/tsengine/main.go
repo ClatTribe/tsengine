@@ -55,6 +55,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/correlate"
 	"github.com/ClatTribe/tsengine/internal/dashboard"
+	"github.com/ClatTribe/tsengine/internal/estimate"
 	"github.com/ClatTribe/tsengine/internal/exporter"
 	"github.com/ClatTribe/tsengine/internal/findingstore"
 	"github.com/ClatTribe/tsengine/internal/fleet"
@@ -493,6 +494,7 @@ func runScan(argv []string) error {
 	target := fs.String("target", "", "scan target URL/host")
 	image := fs.String("image", "tsengine/sandbox:0.1.0", "sandbox docker image")
 	outDir := fs.String("out", "runs", "output directory (one subdir per scan)")
+	depth := fs.String("depth", "", "ADR-0032 depth dial: fast | standard | deep — controls model-backed stages (hypothesis sweep on repositories; caps scale per tier). Empty = standard")
 	timeout := fs.Duration("timeout", 10*time.Minute, "overall scan timeout")
 	// Authenticated-scan flags (web_application). Supply EITHER a ready
 	// session cookie (--auth-cookie) OR form-login credentials
@@ -601,8 +603,34 @@ func runScan(argv []string) error {
 		return fmt.Errorf("write manifest: %w", err)
 	}
 
+	// ADR 0032 D2: pre-run quote from grounded size signals. Repository scans derive it from
+	// the local tree; URL-scoped assets quote from target count until a surface exists.
+	d := estimate.NormalizeDepth(*depth)
+	scanDepth := string(d)
+	var quote *float64
+	if at == types.AssetRepository {
+		files := countSourceFiles(repoWorkspaceDir(*target))
+		q, missing, ok := estimate.Quote(d, envOrStr("LLM_MODEL", "unknown"), estimate.Signals{Files: files})
+		if ok {
+			quote = &q.CostUSD
+			fmt.Fprintf(os.Stderr, "[%s] quote: $%.4f (%s)\n", scanID, q.CostUSD, strings.Join(q.Basis, "; "))
+		} else {
+			fmt.Fprintf(os.Stderr, "[%s] quote refused: %v\n", scanID, missing)
+		}
+	}
 	fmt.Fprintf(os.Stderr, "[%s] orchestrator running anchors against %s\n", scanID, *target)
-	findings, fired, surface, toolsFailed, err := orchestrator.RunWithSurface(ctx, assetTarget, handler, client)
+	var runOpts []orchestrator.RunOption
+	if at == types.AssetRepository {
+		llm, hasLLM := cloudengine.LLMFromEnv()
+		runOpts = append(runOpts, orchestrator.WithRepositorySweep(orchestrator.SweepConfig{
+			LLM: llm, Depth: scanDepth,
+			WorkspaceDir: repoWorkspaceDir(*target),
+		}))
+		if !hasLLM {
+			fmt.Fprintf(os.Stderr, "[%s] sweep enabled but no brain configured — a coverage:: disclosure will say so\n", scanID)
+		}
+	}
+	findings, fired, surface, toolsFailed, err := orchestrator.RunWithSurface(ctx, assetTarget, handler, client, runOpts...)
 	// A deadline (scan --timeout) is NOT fatal: the orchestrator returns the
 	// findings that completed before the cutoff. Persist them, flagged
 	// partial — a 0-finding timeout must be distinguishable from a clean
@@ -657,6 +685,8 @@ func runScan(argv []string) error {
 		ChildAssets:       childAssets,
 		Partial:           partial,
 		StopReason:        stopReason,
+		Depth:             scanDepth,
+		QuotedCostUSD:     quote,
 	}
 
 	// Dual-view: for a cloud_account scan with an inventory snapshot, attach the
@@ -2643,4 +2673,53 @@ func envIntOr(key string, def int) int {
 		}
 	}
 	return def
+}
+
+// repoWorkspaceDir resolves the LOCAL directory a repository scan targets. A bare path is used
+// verbatim; anything else returns "" (remote git URLs are cloned by the workspace layer upstream,
+// and this CLI does not re-derive that location here).
+func repoWorkspaceDir(target string) string {
+	t := strings.TrimSpace(target)
+	if t == "" || strings.Contains(t, "://") {
+		return ""
+	}
+	if st, err := os.Stat(t); err == nil && st.IsDir() {
+		return t
+	}
+	return ""
+}
+
+// envOrStr reads an env var with a default.
+func envOrStr(key, def string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return def
+}
+
+// countSourceFiles mirrors codelocalize's extension/skip rules for the pre-run quote signal.
+func countSourceFiles(dir string) int {
+	if dir == "" {
+		return 0
+	}
+	n := 0
+	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" ||
+				name == "dist" || name == "build" || name == "__pycache__" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		switch strings.ToLower(filepath.Ext(d.Name())) {
+		case ".go", ".js", ".jsx", ".ts", ".tsx", ".py", ".rb", ".php", ".java", ".kt", ".cs", ".c", ".cpp", ".h", ".hpp", ".rs", ".swift":
+			n++
+		}
+		return nil
+	})
+	return n
 }

@@ -556,6 +556,13 @@ list renders `findings_raw` and never learns the scan hit its deadline with thre
   clean, and the difference is the whole question: absence of findings from a tool that DIED is not
   evidence of absence
 * `stop_reason` — why it ended, when it did not end by completing
+* `depth` — the ADR 0032 dial: `fast | standard | deep`. Controls model-backed stages (the
+  repository hypothesis sweep; caps per tier). Empty = standard. The dial adjusts caps, never
+  grounding
+* `quoted_cost_usd` / `actual_cost_usd` — pre-run estimate vs incurred model spend, both present so
+  an overrun or an unknown is visible rather than silent. `quoted_cost_usd` is ABSENT when size
+  signals could not ground an estimate (refused, never invented); `actual_cost_usd` is ABSENT when
+  the brain does not report usage — unknown ≠ $0
 * `anchors_fired` / `registry_fired` — which tools actually ran, so "we checked" is checkable
 * `discovered_surface` — what recon found and therefore what the fan-out covered
 

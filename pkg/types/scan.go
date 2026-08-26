@@ -51,6 +51,13 @@ type Scan struct {
 	// dispatched tool completed — NOT that no tools were dispatched.
 	ToolsFailed []ToolFailure `json:"tools_failed,omitempty"`
 	StopReason  string        `json:"stop_reason,omitempty"`
+	// ADR 0032 D2: depth dial + priced depth. Quoted is the pre-run estimate (nil when
+	// size signals could not support one — refused, never invented); Actual is the model
+	// spend the run incurred, nil when the brain does not report usage. Both render so an
+	// overrun or an unknown is visible rather than silent.
+	Depth         string   `json:"depth,omitempty"`
+	QuotedCostUSD *float64 `json:"quoted_cost_usd,omitempty"`
+	ActualCostUSD *float64 `json:"actual_cost_usd,omitempty"`
 }
 
 // ChildAsset is an asset discovered DURING a scan that warrants its own
