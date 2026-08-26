@@ -10,6 +10,8 @@ func TestIsTransient(t *testing.T) {
 		// keyword signals
 		"overloaded", "context deadline exceeded", "connection reset by peer", "i/o timeout",
 		"rate limit exceeded", "server temporarily unavailable",
+		// an empty completion is a retryable hiccup (a working model can return one empty on turn 0)
+		"opencode: empty response (200, no text part and no embedded error)",
 		// "status <code>" spelling
 		"anthropic: status 429: x", "status 503", "status 529", "status: 500",
 		// "HTTP <code>" spelling — the format EVERY client in this tree actually emits.
@@ -30,7 +32,7 @@ func TestIsTransient(t *testing.T) {
 		"anthropic: status 400: bad request", "status 401: unauthorized", "no such host", "invalid model",
 		"opencode: HTTP 400", "opencode: HTTP 401", "opencode: HTTP 404", "gemini: g returned HTTP 403",
 		// a bare number that is NOT an HTTP status must not trip the retry
-		"opencode: empty response", "read 500 bytes then closed", "listening on port 5031",
+		"read 500 bytes then closed", "listening on port 5031",
 	}
 	for _, s := range permanent {
 		if IsTransient(errors.New(s)) {

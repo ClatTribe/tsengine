@@ -17,6 +17,13 @@ import "strings"
 var transientSignals = []string{
 	"rate limit", "overloaded", "timeout", "i/o timeout", "deadline exceeded",
 	"connection reset", "connection refused", "eof", "temporarily",
+	// An EMPTY completion (a 200 with no text part and no embedded provider error) is a
+	// nondeterministic hiccup, not a permanent fault: a model verified working on the same run
+	// (short prompts, 100KB prompts) returned a single empty on turn 0 and — because the loop
+	// treated it as permanent — zeroed an entire benchmark. Retrying is cheap and bounded (the
+	// caller caps total retries), so an empty is worth a retry everywhere; a model that empties
+	// DETERMINISTICALLY still fails, but after the cap and with a visible reason, not silently.
+	"empty response",
 }
 
 // IsTransient reports whether err is a transient LLM fault worth a backoff+retry. A permanent
