@@ -102,9 +102,28 @@ func runRepositorySweep(ctx context.Context, cfg SweepConfig, target types.Asset
 	if err != nil {
 		return append(findings, sweepSkipFinding(now, "codesweep failed: "+err.Error())), 0, 0
 	}
+
+	// ADR 0032 D4: adversarial second pass over the sweep's uncovered-class findings.
+	// Verify-tier brain (TSENGINE_MODEL_VERIFY override on the same resolution), gated by
+	// TSENGINE_SWEEP_DISPROVER=1. Downgrade-only: clean/abstain, never create; abstain and
+	// errors fail open. Every downgrade stays in the candidate evidence trail.
+	var disprover codesweep.DisproverResult
+	if os.Getenv("TSENGINE_SWEEP_DISPROVER") == "1" {
+		verify := cloudengine.LLMTiered(cfg.LLM, cloudengine.TierVerify)
+		disprover = codesweep.ApplyDisprover(ctx, verify, &res, repo, 400)
+		fmt.Fprintf(os.Stderr, "[sweep] disprover: examined=%d downgraded=%d kept=%d errors=%d\n",
+			disprover.Examined, disprover.Downgraded, disprover.Kept, disprover.Errors)
+	}
+
 	fmt.Fprintf(os.Stderr, "[sweep] %d question(s) planned, %d ran, %d finding(s), %d refused\n",
 		res.Planned, res.Ran, len(res.Candidates), res.Refused)
-	return append(findings, codesweep.Findings(res, target.Target, now)...), 0, 0
+	out := codesweep.Findings(res, target.Target, now)
+	if disprover.Downgraded > 0 {
+		out = append(out, sweepSkipFinding(now, fmt.Sprintf(
+			"adversarial disprover ran on %d finding(s): %d downgraded, %d kept — downgrades are recorded on their candidates",
+			disprover.Examined, disprover.Downgraded, disprover.Kept)))
+	}
+	return append(findings, out...), 0, 0
 }
 
 // sweepSkipFinding states WHY the stage did not run — rendered as nothing, a skip

@@ -121,3 +121,14 @@ func (a *Anthropic) TotalUsage() Usage { return a.usage.total() }
 
 // ModelName reports the model id this client drives (ModelNamer).
 func (a *Anthropic) ModelName() string { return a.model }
+
+// WithModel returns a copy of this client bound to a different model id
+// (ADR 0032 D3 tiered routing). bool is false when model is empty.
+func (a *Anthropic) WithModel(model string) (LLM, bool) {
+	if strings.TrimSpace(model) == "" {
+		return nil, false
+	}
+	c := *a
+	c.model = model
+	return &c, true
+}

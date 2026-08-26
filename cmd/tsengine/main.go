@@ -621,7 +621,8 @@ func runScan(argv []string) error {
 	fmt.Fprintf(os.Stderr, "[%s] orchestrator running anchors against %s\n", scanID, *target)
 	var runOpts []orchestrator.RunOption
 	if at == types.AssetRepository {
-		llm, hasLLM := cloudengine.LLMFromEnv()
+		baseLLM, hasLLM := cloudengine.LLMFromEnv()
+		llm := cloudengine.LLMTiered(baseLLM, cloudengine.TierBreadth) // ADR 0032 D3: breadth tier
 		runOpts = append(runOpts, orchestrator.WithRepositorySweep(orchestrator.SweepConfig{
 			LLM: llm, Depth: scanDepth,
 			WorkspaceDir: repoWorkspaceDir(*target),

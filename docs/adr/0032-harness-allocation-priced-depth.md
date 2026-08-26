@@ -1,6 +1,15 @@
 # ADR 0032 — Harness allocation: the hypothesis sweep enters the scan path, models get tiers, and depth gets a price tag
 
-**Status:** PROPOSED.
+**Status:** **ACCEPTED — D1, D2, D3, D4 IMPLEMENTED** on `main`. Open in sequence: D5 stage
+trace (lands with the next instrumentation pass), D6 estate persistence + `l2.Deps.Graph` wiring,
+D7 envelope generalization once multi-model runs are real, D8 HITL provenance lifts. Platform
+rescan depth-passthrough rides the next API PR.
+
+Implementation notes: tier override is env-only (`TSENGINE_MODEL_BREADTH` / `TSENGINE_MODEL_VERIFY`
+rebind the model id on the resolved provider; provider/endpoint/keys are config-level). Disprover
+is env-gated (`TSENGINE_SWEEP_DISPROVER=1`) and Verify-tier by default. Sweep findings enter at
+`pattern_match` with counted refusals; disprover downgrades stay on the candidate evidence trail
+and emit their own disclosure.
 
 **What IS proposed:** eight engineering items that close the gaps three external analyses
 converged on when pointed at this tree — [OpenWorker](https://github.com/andrewyng/openworker)

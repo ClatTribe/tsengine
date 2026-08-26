@@ -189,3 +189,14 @@ func (o *OpenAICompat) TotalUsage() Usage { return o.usage.total() }
 
 // ModelName reports the model id this client drives (ModelNamer).
 func (o *OpenAICompat) ModelName() string { return o.model }
+
+// WithModel returns a copy of this client bound to a different model id
+// (ADR 0032 D3 tiered routing). bool is false when model is empty.
+func (o *OpenAICompat) WithModel(model string) (LLM, bool) {
+	if strings.TrimSpace(model) == "" {
+		return nil, false
+	}
+	c := *o
+	c.model = model
+	return &c, true
+}

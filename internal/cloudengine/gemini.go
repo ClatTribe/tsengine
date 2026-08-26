@@ -134,3 +134,14 @@ func (g *Gemini) TotalUsage() Usage { return g.usage.total() }
 
 // ModelName reports the model id this client drives (ModelNamer — pricing needs it).
 func (g *Gemini) ModelName() string { return g.model }
+
+// WithModel returns a copy of this client bound to a different model id
+// (ADR 0032 D3 tiered routing). bool is false when model is empty.
+func (g *Gemini) WithModel(model string) (LLM, bool) {
+	if strings.TrimSpace(model) == "" {
+		return nil, false
+	}
+	c := *g
+	c.model = model
+	return &c, true
+}
