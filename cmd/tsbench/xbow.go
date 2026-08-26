@@ -65,18 +65,39 @@ func xbowCmd(argv []string) error {
 	if err != nil {
 		return err
 	}
+	// Holdout is computed on the LEVEL-filtered, sorted set BEFORE --only, so `--holdout 20 --level 1`
+	// reserves 20 held-out level-1s (not the 20 highest IDs across all levels). The reserved IDs are
+	// then EXCLUDED from whatever --only selects, so a holdout member can never be run during tuning —
+	// running the holdout after tuning would measure memory, not capability.
+	holdoutIDs := map[string]bool{}
 	if *holdout > 0 {
-		if len(benches) > *holdout {
-			hold := benches[len(benches)-*holdout:]
+		pool := filterXBOW(benches, "", *level) // level-only view, already ID-sorted by LoadXBOWSuite
+		if len(pool) > *holdout {
+			hold := pool[len(pool)-*holdout:]
 			fmt.Fprintf(os.Stderr, "[xbow] holdout: reserving %d benchmark(s) untouched for final measurement:", *holdout)
 			for _, b := range hold {
+				holdoutIDs[b.ID] = true
 				fmt.Fprintf(os.Stderr, " %s", b.ID)
 			}
 			fmt.Fprintln(os.Stderr)
-			benches = benches[:len(benches)-*holdout]
+		} else {
+			fmt.Fprintf(os.Stderr, "[xbow] holdout: pool of %d ≤ requested %d — refusing to reserve (would leave nothing to run)\n", len(pool), *holdout)
 		}
 	}
 	benches = filterXBOW(benches, *only, *level)
+	if len(holdoutIDs) > 0 {
+		kept := benches[:0]
+		for _, b := range benches {
+			if holdoutIDs[b.ID] {
+				if strings.TrimSpace(*only) != "" {
+					fmt.Fprintf(os.Stderr, "[xbow] holdout: --only named %s but it is RESERVED — skipping it (measure the holdout separately, on the frozen harness)\n", b.ID)
+				}
+				continue
+			}
+			kept = append(kept, b)
+		}
+		benches = kept
+	}
 	if len(benches) == 0 {
 		return fmt.Errorf("no benchmarks matched --only/--level")
 	}
