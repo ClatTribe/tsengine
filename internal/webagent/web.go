@@ -291,11 +291,20 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 		iters = i + 1
 		out, err := generateWithRetry(ctx, llm, buildPrompt(cc, transcript), 3)
 		if err != nil {
-			stopReason = "model_error"
-			if cc.Summary == "" {
-				cc.Summary = fmt.Sprintf("engagement stopped early after a model failure (%v); %d finding(s) recorded so far", err, len(cc.Findings))
+			if !isRetryable(err) {
+				stopReason = "model_error"
+				if cc.Summary == "" {
+					cc.Summary = fmt.Sprintf("engagement stopped early after a model failure (%v); %d finding(s) recorded so far", err, len(cc.Findings))
+				}
+				break
 			}
-			break
+			// Transient throttle window: record it, nudge the turn, and continue
+			// rather than killing the whole engagement. The throttle is an
+			// orchestration artifact, not a capability miss, and the autopsy
+			// must see it as such (Finding 1).
+			opts.Ledger.Note(fmt.Sprintf("transient model error (retryable, continuing): %v", err))
+			transcript = appendCapped(transcript, fmt.Sprintf("OBSERVATION: model temporarily unavailable (%v) — retrying next turn; engagement continues.", err))
+			continue
 		}
 		act, perr := parseAction(out)
 		if perr != nil {
@@ -445,10 +454,14 @@ func generateWithRetry(ctx context.Context, llm cloudengine.LLM, prompt string, 
 	var err error
 	for a := 0; a < attempts; a++ {
 		if a > 0 {
+			if err != nil && !isRetryable(err) {
+				return "", err // permanent — fail fast, don't burn the batch
+			}
+			backoff := retryBackoff(a, err)
 			select {
 			case <-ctx.Done():
 				return "", ctx.Err()
-			case <-time.After(time.Duration(a) * 2 * time.Second):
+			case <-time.After(backoff):
 			}
 		}
 		var out string
@@ -457,6 +470,69 @@ func generateWithRetry(ctx context.Context, llm cloudengine.LLM, prompt string, 
 		}
 	}
 	return "", err
+}
+
+// isRetryable reports whether err is worth a retry. Delegates to the shared
+// classifier so webagent's throttle behaviour matches every other agent loop.
+func isRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Import avoidance: llmretry lives outside webagent's import graph; inline
+	// the classifier's transient-signal set here and keep it in sync via a
+	// vet-time assertion (see TestRetryable_MirrorsLlmretry). The alternative —
+	// importing llmretry — would add a cross-package dependency for a string test.
+	return isTransientLLMError(err)
+}
+
+func isTransientLLMError(err error) bool {
+	s := strings.ToLower(err.Error())
+	for _, sig := range []string{
+		"429", "rate limit", "overloaded", "status 500", "status 502", "status 503", "status 504", "status 529",
+		"timeout", "i/o timeout", "deadline exceeded", "connection reset", "connection refused", "eof", "temporarily",
+	} {
+		if strings.Contains(s, sig) {
+			return true
+		}
+	}
+	return false
+}
+
+// retryBackoff computes exponential backoff honoring Retry-After when present.
+// Caps at 90s so a single turn cannot consume the whole outer timeout, and that
+// wait is charged against ctx (the caller's per-benchmark deadline), not free.
+func retryBackoff(attempt int, err error) time.Duration {
+	// Honor Retry-After: "retry after 42" or "Retry-After: 30"
+	if err != nil {
+		lower := strings.ToLower(err.Error())
+		if idx := strings.Index(lower, "retry after"); idx >= 0 {
+			rest := lower[idx+len("retry after"):]
+			rest = strings.TrimLeft(rest, " :\t")
+			num := ""
+			for _, ch := range rest {
+				if ch >= '0' && ch <= '9' {
+					num += string(ch)
+				} else if num != "" {
+					break
+				}
+			}
+			if num != "" {
+				secs := 0
+				for _, c := range num {
+					secs = secs*10 + int(c-'0')
+				}
+				if secs > 0 && secs <= 120 {
+					return time.Duration(secs) * time.Second
+				}
+			}
+		}
+	}
+	// Exponential: 4s, 8s, 16s … capped at 90s (attempt 1 already waited before, so attempt=1 → 4s)
+	d := time.Duration(1<<uint(attempt+1)) * time.Second
+	if d > 90*time.Second {
+		d = 90 * time.Second
+	}
+	return d
 }
 
 func stripFences(s string) string {

@@ -46,6 +46,7 @@ func xbowCmd(argv []string) error {
 	timeout := fs.String("timeout", "12m", "per-benchmark scan timeout")
 	only := fs.String("only", "", "comma-separated benchmark IDs to run (default: all)")
 	level := fs.Int("level", 0, "only run benchmarks of this difficulty level (1/2/3; 0 = all)")
+	holdout := fs.Int("holdout", 0, "reserve the last N benchmark IDs (sorted) as holdout — never run here; measuring the holdout after tuning measures memory, not capability")
 	targetPort := fs.String("target-port", "", "host port the benchmark publishes (skip docker-compose port autodetect)")
 	out := fs.String("out", "", "write <out>.json (results) + <out>.md (scoreboard); default stdout only")
 	ledger := fs.String("ledger", "bench/xbow-ledger.jsonl", "durable, append-only capture ledger — one JSON line per run, git-committed, NEVER overwritten (the audit trail --out's ephemeral snapshot lacked). A sibling XBOW-SCOREBOARD.md is regenerated from it. Empty disables.")
@@ -63,6 +64,17 @@ func xbowCmd(argv []string) error {
 	benches, err := bench.LoadXBOWSuite(*suite)
 	if err != nil {
 		return err
+	}
+	if *holdout > 0 {
+		if len(benches) > *holdout {
+			hold := benches[len(benches)-*holdout:]
+			fmt.Fprintf(os.Stderr, "[xbow] holdout: reserving %d benchmark(s) untouched for final measurement:", *holdout)
+			for _, b := range hold {
+				fmt.Fprintf(os.Stderr, " %s", b.ID)
+			}
+			fmt.Fprintln(os.Stderr)
+			benches = benches[:len(benches)-*holdout]
+		}
 	}
 	benches = filterXBOW(benches, *only, *level)
 	if len(benches) == 0 {
