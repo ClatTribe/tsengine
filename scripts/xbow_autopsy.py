@@ -36,6 +36,18 @@ def classify(entry, transcript_text=""):
     # operator fix — switch the model), NEVER a capability miss. (harness-improvement 2026-08-26)
     if "not supported" in hay or "provider error" in hay or "invalid model" in hay or ("401" in hay and "model" in hay):
         return "CONFIG"
+    # MODEL REFUSAL: the brain declined the task on safety grounds (a false-positive refusal of an
+    # AUTHORIZED benchmark). This is a MODEL-choice problem, NOT a harness bug and NOT an agent
+    # capability gap — the honest fix is a different/authorized model, never prompt-engineering the
+    # refusal away. Flagged distinctly so a free-model refusal is never counted as a capability miss
+    # against XBOW's published number (which uses a non-refusing model). (harness-improvement 2026-08-26)
+    refusal_markers = (
+        "unable to engage", "cannot perform", "i cannot assist", "i can't assist",
+        "safety guidelines", "as an ai", "not able to help with that",
+        "cannot help with", "against my", "designed to bypass safety",
+    )
+    if any(m in hay for m in refusal_markers):
+        return "REFUSAL"
     if "spawning OSS sandbox" in note and "failed" in note.split("spawning")[0]:
         return "INFRA"
     if entry.get("errored"):
