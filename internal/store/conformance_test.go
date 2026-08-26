@@ -88,6 +88,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.PutEpisode(ctx, platform.EpisodeRecord{ID: tid + "-ep", TenantID: tid, AgentKind: "cloudagent", Scope: "cloud:" + tid}))
 	must(s.PutAuditEngagement(ctx, platform.AuditEngagement{ID: tid + "-au", TenantID: tid, Framework: "soc2", Status: platform.AuditPlanning}))
 	must(s.PutPolicy(ctx, platform.Policy{ID: tid + "-pol", TenantID: tid, Name: "p", Status: platform.PolicyDraft}))
+	must(s.PutTrustAccessRequest(ctx, platform.TrustAccessRequest{ID: tid + "-tr", TenantID: tid, Email: "buyer@" + tid + ".example", Status: platform.TrustReqPending}))
 	must(s.PutReviewRequest(ctx, platform.ReviewRequest{ID: tid + "-r", TenantID: tid, Status: platform.ReviewOpen}))
 	must(s.PutFeedback(ctx, platform.Feedback{TenantID: tid, IssueKey: tid + "-fb", Verdict: platform.FeedbackReal}))
 	must(s.ReplaceThirdPartyApps(ctx, tid, "gworkspace", []platform.ThirdPartyApp{{TenantID: tid, Provider: "gworkspace", AppID: tid + "-app"}}))
@@ -179,6 +180,13 @@ func TestStoreConformance(t *testing.T) {
 				pols, err := s.ListPolicies(ctx, tid)
 				orFail(t, err)
 				isolated("policies", tid, ids(pols, func(p platform.Policy) string { return p.ID }))
+
+				// Isolation matters more here than for most entities: a leak across tenants
+				// would hand one customer the access tokens and buyer identities of another's
+				// deals.
+				trs, err := s.ListTrustAccessRequests(ctx, tid)
+				orFail(t, err)
+				isolated("trust_requests", tid, ids(trs, func(r platform.TrustAccessRequest) string { return r.ID }))
 
 				revs, err := s.ListReviewRequests(ctx, tid)
 				orFail(t, err)

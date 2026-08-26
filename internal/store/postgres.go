@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS eval_runs       (seq BIGSERIAL, tenant_id TEXT, id TE
 CREATE TABLE IF NOT EXISTS episodes        (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS trust_requests (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (seq BIGSERIAL, tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
 CREATE TABLE IF NOT EXISTS feedback    (seq BIGSERIAL, tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
 CREATE TABLE IF NOT EXISTS exclusions  (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -248,6 +249,13 @@ func (p *Postgres) PutEvalRun(ctx context.Context, r platform.EvalRun) error {
 }
 func (p *Postgres) ListEvalRuns(ctx context.Context, tenantID string) ([]platform.EvalRun, error) {
 	return listJSON[platform.EvalRun](ctx, p.db, pgRebind(`SELECT data FROM eval_runs WHERE tenant_id=? ORDER BY seq`), tenantID)
+}
+func (p *Postgres) PutTrustAccessRequest(ctx context.Context, r platform.TrustAccessRequest) error {
+	return p.upsertTID(ctx, `INSERT INTO trust_requests(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, r.TenantID, r.ID, r)
+}
+func (p *Postgres) ListTrustAccessRequests(ctx context.Context, tenantID string) ([]platform.TrustAccessRequest, error) {
+	out, err := listJSON[platform.TrustAccessRequest](ctx, p.db, pgRebind(`SELECT data FROM trust_requests WHERE tenant_id=? ORDER BY seq`), tenantID)
+	return sortTrustRequests(out), err
 }
 func (p *Postgres) PutComplianceSnapshot(ctx context.Context, s platform.ComplianceSnapshot) error {
 	return p.upsertTID(ctx, `INSERT INTO compliance_snaps(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, s.TenantID, s.ID, s)

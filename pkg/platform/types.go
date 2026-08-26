@@ -155,6 +155,11 @@ type Tenant struct {
 	// framework:control, CWE, or rule id), so a custom framework's posture is DERIVED from live findings
 	// — never asserted. No secret → stored plain on the Tenant (like Contacts/Practitioners).
 	CustomFrameworks []CustomFramework `json:"custom_frameworks,omitempty"`
+	// TrustCenter is the buyer-facing share page's configuration — which documents are offered,
+	// at which gate, under which NDA. nil = the page serves only the aggregate posture it always
+	// has, so an existing tenant is unaffected. No secret material (the buyer access tokens live
+	// hashed on TrustAccessRequest, never here) → stored plain, like Contacts and SLA.
+	TrustCenter *TrustCenterConfig `json:"trust_center,omitempty"`
 }
 
 // CustomFramework is a tenant-defined compliance framework. Its controls map to signals tsengine already

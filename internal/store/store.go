@@ -143,6 +143,13 @@ type Store interface {
 	PutComplianceSnapshot(ctx context.Context, s platform.ComplianceSnapshot) error
 	ListComplianceSnapshots(ctx context.Context, tenantID string) ([]platform.ComplianceSnapshot, error)
 
+	// --- Trust Center access requests (a buyer asking to read the gated document tier, and what
+	// happened to it). List returns a tenant's requests newest-first. Denied and expired requests
+	// are KEPT: "we said no" and "nobody asked" are different facts about a deal, and the view log
+	// on each request is the security record for documents that left the building. ---
+	PutTrustAccessRequest(ctx context.Context, r platform.TrustAccessRequest) error
+	ListTrustAccessRequests(ctx context.Context, tenantID string) ([]platform.TrustAccessRequest, error)
+
 	// --- audit engagements (external-auditor attestation; the legal layer) ---
 	PutAuditEngagement(ctx context.Context, e platform.AuditEngagement) error
 	ListAuditEngagements(ctx context.Context, tenantID string) ([]platform.AuditEngagement, error)
