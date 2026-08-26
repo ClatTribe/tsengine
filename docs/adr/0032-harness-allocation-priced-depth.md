@@ -1,9 +1,13 @@
 # ADR 0032 — Harness allocation: the hypothesis sweep enters the scan path, models get tiers, and depth gets a price tag
 
-**Status:** **ACCEPTED — D1, D2, D3, D4 IMPLEMENTED** on `main`. Open in sequence: D5 stage
-trace (lands with the next instrumentation pass), D6 estate persistence + `l2.Deps.Graph` wiring,
-D7 envelope generalization once multi-model runs are real, D8 HITL provenance lifts. Platform
-rescan depth-passthrough rides the next API PR.
+**Status:** **ACCEPTED — D1, D2, D3, D4 IMPLEMENTED; D6 wiring-half DONE** on `main`.
+- **D6 partial**: `traverse_estate` is now REACHABLE — `platformapi/estate_adapter.go` implements
+  `l2.EstateGraph` over the composed graph and `runTranslate` sets `l2.Deps.Graph` from it
+  (neighbors/paths/why/chokepoints all answer from graph contents with evidence refs; chokepoints
+  exclude endpoints per estategraph semantics). Still open on D6: PERSISTING snapshots keyed
+  (repo, commit) with heartbeat-skip.
+- Open in sequence: **D5 stage trace**, **D7 envelope generalization**, **D8 HITL provenance
+  lifts**, D6 persistence half. Platform rescan depth-passthrough rides the next API PR.
 
 Implementation notes: tier override is env-only (`TSENGINE_MODEL_BREADTH` / `TSENGINE_MODEL_VERIFY`
 rebind the model id on the resolved provider; provider/endpoint/keys are config-level). Disprover

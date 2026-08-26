@@ -136,6 +136,11 @@ func (d Deps) runEstateAgent(ctx context.Context, tenantID string, client l2.Cli
 		AttackPaths: renderChains(crossdetect.Correlate(pAssets, allFindings)),
 	}
 	dep := l2.Deps{Target: target, L1Findings: l1Findings}
+	// ADR 0032 D6 (wiring completion): the walkable estate graph powers traverse_estate.
+	// Built-but-unreachable until now — translate.go never set Deps.Graph (PR #1444 note).
+	if adapter := newEstateGraphAdapter(d.estateOrNil(ctx, tenantID)); adapter != nil {
+		dep.Graph = adapter
+	}
 	// Cloud-depth delegation: when a stored cloud snapshot exists, the generalist can call investigate_cloud
 	// to run the cloud specialist over it. nil when no snapshot store → tool not exposed.
 	dep.CloudInvestigator = d.cloudInvestigator(tenantID)
