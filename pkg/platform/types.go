@@ -146,6 +146,15 @@ type Tenant struct {
 	// gated behind just-in-time elevation, whether every change is reviewed. A named human answers;
 	// it is never inferred from findings. Keyed by practice id.
 	ReadinessAttestations map[string]ReadinessAttestation `json:"readiness_attestations,omitempty"`
+	// QuestionnaireAttestations answer the security-questionnaire questions no scan can reach —
+	// background checks, physical security, whether the recovery plan was actually tested. A
+	// named human answers and the rendered document says so, because an assertion and an
+	// observation must never look alike to a buyer.
+	//
+	// A SEPARATE map from ReadinessAttestations rather than a shared one: the two have distinct
+	// id namespaces (a readiness practice and a questionnaire question can both be "BC-1"), and
+	// merging them would let an answer given for one purpose silently answer the other.
+	QuestionnaireAttestations map[string]QuestionnaireAttestation `json:"questionnaire_attestations,omitempty"`
 	// ComplianceProfile holds the applicability facts that determine which frameworks/controls are in
 	// scope — handles PHI (HIPAA), processes card data (PCI), sells to government (FedRAMP/800-171),
 	// EU/India data subjects (GDPR/DPDP). Drives framework suggestions + scoping. No secret → plain.
@@ -1500,6 +1509,20 @@ type ReviewRequest struct {
 // Both answers are recorded, including "not in place" — a record that only keeps the yes is one
 // nobody should trust, and knowing a gap is acknowledged is more useful than not knowing at all.
 type ReadinessAttestation struct {
+	InPlace bool   `json:"in_place"`
+	By      string `json:"by"`
+	At      string `json:"at"`
+	Note    string `json:"note,omitempty"`
+}
+
+// QuestionnaireAttestation is a named human's answer to a security-questionnaire question that
+// cannot be scanned for. Same shape as ReadinessAttestation and deliberately its own type: these
+// answers are published to a buyer through the Trust Center, so a change to one must not silently
+// change what the other asserts to a third party.
+//
+// InPlace false is a real, useful answer — "no, we do not carry cyber insurance" is what the buyer
+// asked — so it is recorded rather than treated as an absent answer.
+type QuestionnaireAttestation struct {
 	InPlace bool   `json:"in_place"`
 	By      string `json:"by"`
 	At      string `json:"at"`

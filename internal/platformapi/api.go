@@ -406,6 +406,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/compliance/{framework}/remediation", d.auth(d.handleComplianceRemediation)) // vCISO "how do I close this gap?" — LLM remediation guidance (gated)
 	mux.HandleFunc("POST /v1/compliance/{framework}/advisor", d.auth(d.handleComplianceAdvisor))         // vCISO advisor — prioritized audit-readiness roadmap over coverage+gaps+readiness (gated)
 	mux.HandleFunc("GET /v1/questionnaire", d.auth(d.handleQuestionnaire))
+	mux.HandleFunc("POST /v1/questionnaire/attest/{id}", d.auth(d.handleQuestionnaireAttest)) // a named human answers what no scan can reach; REFUSED on an evidenced question
 	mux.HandleFunc("GET /v1/vapt/report", d.auth(d.handleVAPTReport))
 	mux.HandleFunc("POST /v1/reviews", d.auth(d.handleCreateReview))
 	mux.HandleFunc("GET /v1/reviews", d.auth(d.handleListReviews))

@@ -612,6 +612,15 @@ export const api = {
   setEscalationSettings: (pol: EscalationPolicy) =>
     call<EscalationPolicy>("/v1/settings/escalation", { method: "PUT", body: JSON.stringify(pol) }),
 
+  // Record a named human's answer to a questionnaire question no scan can reach. The API REFUSES
+  // an evidenced question (reason: "not_attestable") — a typed answer must not overwrite an
+  // observation in a document a buyer relies on.
+  attestQuestion: (id: string, inPlace: boolean, by: string, note: string) =>
+    call<{ question: string; attestation: { in_place: boolean; by: string; at: string; note?: string } }>(
+      `/v1/questionnaire/attest/${encodeURIComponent(id)}`,
+      { method: "POST", body: JSON.stringify({ in_place: inPlace, by, note }) },
+    ),
+
   // Trust Center: the tenant's buyer-facing share page. The GET carries `available` and
   // `unavailable` alongside the config, because what a buyer is actually shown differs from what
   // the owner configured — a document nothing can produce is silently absent from the public

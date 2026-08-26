@@ -671,6 +671,45 @@ Example annotation:
 
 No L1 tool **decides** whether something violates SOC2. The tool emits the technical finding; the mapping layer annotates.
 
+**The security questionnaire (`internal/grc/questionnaire.go` + `questionnaire_corpus.go`) has TWO
+evidence tiers, and keeping them apart is what lets it grow.** A questionnaire answer is an
+attestation to someone else's procurement team, and the file's own history is the warning: answers
+were once derived from control GAPS alone, so a tenant with nothing connected answered "Yes" to
+every question including "is MFA enforced?". The fix — a "Yes" requires the EVIDENCE SOURCE to be
+connected, else "Not assessed" — is what the OBSERVED tier still enforces.
+
+**Why the corpus is 52 questions and not 261.** CAIQ v4 has 261 and SIG Lite around 300, and
+importing one wholesale is the obvious move that makes the deliverable WORSE: most of those ask
+about things no scanner can see (HR screening, physical security, BCM rehearsals, legal terms), so
+a wholesale import turns ten unanswered rows into two hundred and thirty. The proportion answered
+does not improve; the honesty layer just prints more of the same admission. So the corpus grows
+along BOTH axes instead — **OBSERVED** (35) expands to everything the engine genuinely evidences
+(identity, cloud, endpoints, SaaS, vendors, external exposure, detection and response were all
+already assessed and none were being asked about), and **ATTESTED** (17) covers what no scan can
+reach, answered by a NAMED HUMAN via `POST /v1/questionnaire/attest/{id}` and rendered as theirs.
+
+The tiers are NOT interchangeable, mirroring `internal/ctoreadiness` which had to make the same
+distinction: **an OBSERVED question is never answered by someone typing** (the attest endpoint
+REFUSES one — a typed answer would replace an observation with an opinion in a document a buyer
+relies on) and **an ATTESTED question is never inferred from findings** (its control mapping exists
+so the answer can cite what it speaks to, not as a route to inferring it; letting a finding decide
+"have your employees had background checks?" would invent an observation out of an unrelated one).
+Both refusals are mutation-verified. `AnswerNo` exists because a questionnaire that could not say
+no would be a form with one possible answer, and a vendor honestly reporting a gap is giving the
+buyer exactly what they asked for. `AnswerNeedsYou` is deliberately DISTINCT from `AnswerNotAssessed`:
+one is fixed by connecting a system and the other by a person sitting down to answer, and merged,
+the reader is told to fix the wrong thing — so the rendered document carries the two admissions as
+SEPARATE notes above the table. No single percentage is emitted, for `ctoreadiness`'s reason: a
+figure mixing "a scanner confirmed this" with "somebody typed yes" would RISE as a customer
+connected less and asserted more. An attested row renders "stated by <name> on <date>" — the name
+is what stops an assertion reading as something we established, and the date because the age of an
+attestation is part of what it is worth. `Tenant.QuestionnaireAttestations` is a SEPARATE map from
+`ReadinessAttestations` (distinct id namespaces — a readiness practice and a questionnaire question
+can both be "BC-1" — and merging them would let an answer given for one purpose silently answer the
+other). A question earns an OBSERVED slot only when a detector in this tree really produces the
+signal; adding one for a capability we lack would sit at "Not assessed" forever while implying a
+check exists.
+
 **Five emission paths feed the framework set** (all grounded, all annotation-only) â keep them in sync when adding a framework or control:
 
 1. **CWE crosswalk** â `internal/tracer/hooks/data/compliance.json` (the `compliance.map` hook) maps a finding's CWE â controls. Covers appsec/SAST/SCA findings.

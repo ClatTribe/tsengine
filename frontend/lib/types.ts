@@ -986,19 +986,32 @@ export interface QAnswer {
   id: string;
   domain: string;
   text: string;
+  // "observed" = a detector answers it; "attested" = only a named human can. The two are never
+  // rendered alike: an assertion presented as an observation is the one thing this document
+  // must not do.
+  evidence: "observed" | "attested";
   controls?: Record<string, string[]>;
-  answer: string; // "Yes" | "In Progress"
+  answer: string; // "Yes" | "No" | "In Progress" | "Not assessed" | "Needs your answer"
   gap_controls?: string[];
   evidence_ids?: string[];
   missing_sources?: string[]; // what to connect to make an unanswered question answerable
+  why?: string; // why we cannot answer an attested question ourselves
+  attested_by?: string;
+  attested_at?: string;
+  attested_note?: string;
 }
 export interface Questionnaire {
   tenant_id: string;
   generated_at: string;
   answers: QAnswer[] | null; // Go nil slice → null
   yes: number;
+  no: number; // a human attested that a practice is NOT in place — a real answer, published as one
   in_progress: number;
   not_assessed: number; // questions with no connected evidence source — refused, not assumed compliant
+  needs_you: number; // attested questions nobody has answered — fixed by a person, not by connecting
+  observed: number;
+  observed_yes: number; // Yes from the EVIDENCED half alone — the only figure a percentage may be built from
+  attested: number;
 }
 
 export interface Asset {
