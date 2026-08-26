@@ -94,7 +94,11 @@ type QAnswer struct {
 
 // Questionnaire is the auto-answered result — the attachable procurement deliverable.
 type Questionnaire struct {
-	TenantID    string    `json:"tenant_id"`
+	TenantID string `json:"tenant_id"`
+	// Org is the display name for the rendered document. Set by callers whose audience is
+	// external (the Trust Center); empty in-app, where the tenant id is what the caller has and
+	// nobody outside sees it.
+	Org         string    `json:"org,omitempty"`
 	GeneratedAt time.Time `json:"generated_at"`
 	Answers     []QAnswer `json:"answers"`
 	Yes         int       `json:"yes"`
@@ -190,7 +194,16 @@ func dedupeStrings(in []string) []string {
 // team can read.
 func RenderQuestionnaireMarkdown(q *Questionnaire) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Security Questionnaire — %s\n\n", q.TenantID)
+	// Org when the caller supplied it, else the tenant id. This document is now handed to a
+	// BUYER through the Trust Center, and there it was titling itself with an internal
+	// identifier ("ten-6302143adb9e") — which tells the reader nothing, exposes a key they have
+	// no business seeing, and reads as unfinished on the one page whose whole job is to be
+	// believed. In-app the id was harmless; the moment the audience changed it stopped being.
+	who := q.Org
+	if who == "" {
+		who = q.TenantID
+	}
+	fmt.Fprintf(&b, "# Security Questionnaire — %s\n\n", who)
 	fmt.Fprintf(&b, "_Auto-answered from live control state · %d Yes · %d In Progress · %d Not assessed · generated %s_\n\n",
 		q.Yes, q.InProgress, q.NotAssessed, q.GeneratedAt.Format("2006-01-02"))
 	// Say it above the table, not in a footnote: a reader must not skim a mostly-unanswered

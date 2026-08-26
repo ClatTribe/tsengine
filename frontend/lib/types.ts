@@ -862,14 +862,94 @@ export interface User {
 }
 
 // Public Trust Center aggregate (safe projection — coverage only, never findings).
+// TrustDocEntry is one document row as THIS visitor sees it. `readable` is the server's
+// decision, never re-derived here: the page must not be able to disagree with the endpoint
+// about what is gated. `url` arrives only when the visitor may actually follow it.
+export interface TrustDocEntry {
+  kind: string;
+  title: string;
+  framework?: string;
+  note?: string;
+  visibility: "public" | "gated" | "private";
+  readable: boolean;
+  generated: boolean;
+  url?: string;
+}
+
 export interface TrustView {
   org: string;
+  headline?: string;
   monitored: boolean;
   signed: boolean;
   // coverage = ASSESSMENT coverage (assessed/assessable %), not a met/total "score" — keeps the public page
   // honest (never a green "100% compliant" to the tenant's customers).
   frameworks: { framework: string; coverage: number; assessed: number; assessable: number; gaps: number }[] | null; // Go nil slice → null
+  documents: TrustDocEntry[] | null; // Go nil slice → null
+  granted: boolean;
+  nda_required: boolean;
+  // nda_pending distinguishes "waiting on a human" from "waiting on your own click" — the
+  // buyer can act on one of those and not the other, so collapsing them would strand them.
+  nda_pending: boolean;
+  nda_text?: string;
+  contact_email?: string;
   generated_at: string;
+}
+
+export interface TrustSubprocessor {
+  name: string;
+  purpose?: string;
+  location?: string;
+  url?: string;
+}
+
+export interface TrustDocument {
+  kind: string;
+  title?: string;
+  visibility: "public" | "gated" | "private";
+  framework?: string;
+  url?: string;
+  note?: string;
+}
+
+export interface TrustCenterConfig {
+  enabled: boolean;
+  token_version?: number;
+  headline?: string;
+  contact_email?: string;
+  documents?: TrustDocument[];
+  nda_text?: string;
+  auto_approve_domains?: string[];
+  subprocessors?: TrustSubprocessor[];
+  grant_ttl_hours?: number;
+}
+
+export interface TrustAccessRequest {
+  id: string;
+  tenant_id: string;
+  email: string;
+  name?: string;
+  company?: string;
+  reason?: string;
+  status: "pending" | "approved" | "denied";
+  requested_at: string;
+  decided_at?: string;
+  decided_by?: string;
+  auto_approved?: boolean;
+  expires_at?: string;
+  revoked?: boolean;
+  nda_accepted_at?: string;
+  nda_name?: string;
+  views?: { at: string; kind: string; framework?: string }[];
+}
+
+export interface TrustSettings {
+  config: TrustCenterConfig;
+  link: string;
+  available: Record<string, boolean>;
+  // Documents the owner configured that a buyer is NOT being shown, and why. Surfaced because
+  // the honest omission is invisible on the public page and would otherwise read as a bug.
+  unavailable?: { key: string; title: string; reason: string }[];
+  pending_requests: number;
 }
 
 export interface TrustLink {

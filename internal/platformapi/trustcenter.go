@@ -479,6 +479,9 @@ func (d Deps) renderTrustDocument(ctx context.Context, t platform.Tenant, cfg pl
 		if err != nil {
 			return "", err
 		}
+		// The reader is a stranger, so the document says who it is about by name. In-app it
+		// titles itself with the tenant id, which is fine there and useless-to-alarming here.
+		q.Org = t.Name
 		b.WriteString(grc.RenderQuestionnaireMarkdown(q))
 	case platform.DocComplianceReport:
 		if d.GRC == nil {

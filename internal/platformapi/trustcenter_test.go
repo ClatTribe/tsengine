@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/internal/trustcenter"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -477,6 +478,31 @@ func TestGeneratedDocumentIsWatermarkedForItsRecipient(t *testing.T) {
 	}
 	if !strings.Contains(body, "Amazon Web Services") {
 		t.Errorf("the document body is missing:\n%s", body)
+	}
+}
+
+func TestBuyerFacingDocumentsNameTheOrgNotTheTenantID(t *testing.T) {
+	// Caught by running it: the questionnaire titled itself "Security Questionnaire —
+	// ten-6302143adb9e". In-app that identifier is what the caller has and nobody outside sees
+	// it; through the Trust Center the audience changed, and there it tells the reader nothing,
+	// exposes an internal key, and reads as unfinished on the one page whose job is to be
+	// believed.
+	trustRequestLimiter.reset()
+	st := store.NewMemory()
+	d := Deps{Store: st, Connectors: connector.NewRegistry(), Token: "platform-tok", GRC: &grc.GRC{Store: st}}
+	h := NewHandler(d)
+	seedTrustTenant(t, st, "ten-abc123", "Northwind", platform.TrustCenterConfig{
+		Enabled:   true,
+		Documents: []platform.TrustDocument{{Kind: platform.DocQuestionnaire, Visibility: platform.VisPublic}},
+	})
+	tok := d.trustTokenFor("ten-abc123", platform.TrustCenterConfig{})
+
+	body := get(t, h, "/v1/trust/ten-abc123/doc?token="+tok+"&kind=questionnaire").Body.String()
+	if !strings.Contains(body, "Northwind") {
+		t.Errorf("the document does not name the company:\n%s", body[:min(400, len(body))])
+	}
+	if strings.Contains(body, "ten-abc123") {
+		t.Errorf("the internal tenant id is printed on a buyer-facing document:\n%s", body[:min(400, len(body))])
 	}
 }
 
