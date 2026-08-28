@@ -70,9 +70,13 @@ type Context struct {
 	// this field still gets a bound, which is the point); cached answers do not spend it.
 	ProbeBudget int
 
-	issueN     int
-	calls      int
-	probeCalls int
+	issueN int
+	// finishNudges counts how many times finish() has been held back because recorded
+	// issues had no proposed fix. BOUNDED at one: the second finish always closes, so the
+	// completeness check can never trap the agent in a loop.
+	finishNudges int
+	calls        int
+	probeCalls   int
 	// probes holds every dry-run outcome of this run, ALLOW and DENY and UNKNOWN alike, keyed by
 	// (principal, action, resource). It is both the coverage ledger and the within-run cache.
 	probes map[string]ProbeResult
