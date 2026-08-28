@@ -3,6 +3,7 @@ package bench
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -95,10 +96,22 @@ func RunCrossSurfaceAgent(ctx context.Context, fx CrossSurfaceFixture, llm cloud
 	}
 	est := BuildCrossSurfaceEstate(fx, now)
 
+	// PROGRESS to stderr. Each arm is a full agent investigation — minutes on a slow model — and
+	// the result prints only when BOTH have finished, so a run killed mid-arm produced an empty
+	// log and said nothing about where it stopped. Same silent-signal defect as defense-xbow
+	// before its phase logging; naming the arm as it starts turns "it hung" into "it hung in
+	// <arm>".
+	fmt.Fprintf(os.Stderr, "[crosssurface-agent] %s arm=cloud_only starting\n", fx.Name)
 	// Arm A — cloud only: exactly what a cloud scanner's agent sees. No Estate, no Bridges.
 	res.CloudOnly = runCrossSurfaceArm(ctx, "cloud_only", fx, llm, maxIters, nil, nil)
+	fmt.Fprintf(os.Stderr, "[crosssurface-agent] %s arm=cloud_only done: chain=%v issues=%d %s\n",
+		fx.Name, res.CloudOnly.ReportedChain, res.CloudOnly.Issues, res.CloudOnly.Err)
+
+	fmt.Fprintf(os.Stderr, "[crosssurface-agent] %s arm=estate_aware starting\n", fx.Name)
 	// Arm B — estate aware: the joined graph plus the grounded bridge hint, as production wires it.
 	res.Estate = runCrossSurfaceArm(ctx, "estate_aware", fx, llm, maxIters, est, crossSurfaceBridges(fx, est))
+	fmt.Fprintf(os.Stderr, "[crosssurface-agent] %s arm=estate_aware done: chain=%v issues=%d %s\n",
+		fx.Name, res.Estate.ReportedChain, res.Estate.Issues, res.Estate.Err)
 
 	res.Lift = res.Estate.Scored() && res.CloudOnly.Scored() &&
 		res.Estate.ReportedChain && !res.CloudOnly.ReportedChain &&
