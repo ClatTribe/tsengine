@@ -32,3 +32,33 @@ table BEFORE writing a new bench.
 3. **A corpus that told us what to add is no longer held out** — lead with its FP half if it has one.
 4. **Don't score against classes we have no detector for** — that is the honest denominator
    (bountybench prints it: 21 covered / 25 not).
+
+## AWSGoat (INE) — neutral cross-asset calibration, static
+
+Cloned read-only (82MB); **never deployed** (`terraform apply` would stand up internet-exposed
+vulnerable infra in a real AWS account — outward-facing and billable). The Terraform IS the estate:
+`cloudtocode.IndexDir` reads 246 (module-1) + 40 (module-2) resources with no AWS credentials.
+
+Ground truth = INE's 11 published attack manuals (an answer key we did not write).
+
+**Step coverage: 9/11** — verified against the same "must name a real detector" rule as bountybench.
+Uncovered: CWE-200 sensitive-data-exposure (app-level, see refusals above), CWE-668 ECS breakout.
+IAM privesc is covered and VERIFIED: `cloudiam.DetectPrivesc` finds the `AttachRolePolicy`
+escalation module-1's manual documents, from the Terraform alone.
+
+### THE GAP THIS CORPUS FOUND (worth more than the 9/11)
+
+AWSGoat's module-1 chain is: XSS → SQLi → IDOR → **SSRF → IMDS → stolen instance creds → IAM
+privesc**. We detect the individual steps, but **nothing bridges SSRF to the cloud role it
+compromises**:
+
+- `internal/correlate` has NO ssrf handling at all, and no notion of `169.254.169.254`/IMDS.
+- `EntAWSKey` extracts static `AKIA` keys from finding text. Credentials obtained via IMDS never
+  appear as such a string, so no entity links the web finding to the cloud principal.
+
+So on the canonical cloud attack chain we would report a web SSRF and a cloud privesc as two
+unrelated findings — missing exactly the cross-surface hop the product is sold on. Our own
+`discover` fixtures bridge via leaked keys/ARNs/hosts, which is why they never surfaced this.
+
+**This is the argument for neutral corpora in one example**: 8/8 on fixtures we wrote, and a
+first-class gap on the first externally-authored chain we checked.
