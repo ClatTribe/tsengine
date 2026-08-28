@@ -133,6 +133,12 @@ func tFindPaths(cc *Context, args map[string]any) string {
 	if cc.Snap.Node(target) == nil {
 		return "ERROR: no such target " + target
 	}
+	// Record that the agent LOOKED at this target, so finish()'s coverage gate can tell a jewel
+	// the agent examined and declined (no path / a decoy) from one it never looked at.
+	if cc.queried == nil {
+		cc.queried = map[string]bool{}
+	}
+	cc.queried[target] = true
 	var found []string
 	seen := map[string]bool{}
 	for _, entry := range entryPoints(cc.Snap) {
@@ -390,6 +396,48 @@ func tFix(cc *Context, args map[string]any) string {
 	return fmt.Sprintf("fix for %s: %s [%s, %s]\n%s", id, art.Title, art.Kind, v, art.Content)
 }
 
+// uncoveredJewels are crown jewels the agent has NEITHER recorded NOR looked at with find_paths,
+// AND that actually have a reachable path from the internet. The path check is what keeps the
+// coverage gate honest: a decoy or an isolated jewel has no path, so it is not "uncovered" — the
+// agent cannot be asked to record a path that does not exist. Only a jewel that is reachable and
+// unexamined counts, so the gate fires exactly on the seed-3 failure (the model quit with real,
+// findable jewels left) and never on a clean account that merely contains decoys.
+func uncoveredJewels(cc *Context) []string {
+	if cc.Snap == nil {
+		return nil // no graph → nothing is knowably reachable; never gate on absence of data
+	}
+	recorded := map[string]bool{}
+	for _, is := range cc.Issues {
+		recorded[is.Target] = true
+	}
+	var out []string
+	for _, id := range sortedNodeIDs(cc.Snap) {
+		n := cc.Snap.Nodes[id]
+		if !(cloudgraph.SensitiveData(n) || cloudgraph.PrivilegedIdentity(n)) {
+			continue
+		}
+		if recorded[id] || cc.queried[id] {
+			continue
+		}
+		// Reachable? Reuse the same path search find_paths/record_issue ground against.
+		if hasInternetPath(cc.Snap, id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// hasInternetPath reports whether any entry point reaches target — the existence check the
+// coverage gate needs without rendering the path.
+func hasInternetPath(snap *cloudgraph.Snapshot, target string) bool {
+	for _, entry := range entryPoints(snap) {
+		if len(snap.FindPaths(entry, func(n *cloudgraph.Node) bool { return n != nil && n.ID == target }, cloudgraph.AllAttackEdges, 8, 1)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func tFinish(cc *Context, args map[string]any) string {
 	// COMPLETENESS CHECK (E-component / termination). The prompt's own flow is "record_issue
 	// the confirmed ones, propose_fix each, then finish" — but finish closed unconditionally,
@@ -407,6 +455,24 @@ func tFinish(cc *Context, args map[string]any) string {
 			"Call propose_fix(<issue_id>) for each, then finish again. (Calling finish again "+
 			"without them will close the investigation and they will be reported unremediated.)",
 			len(unfixed), strings.Join(unfixed, ", "))
+	}
+	// COVERAGE GATE (E-component / termination). fix#2's disclosure NAMES the crown jewels the
+	// prepass did not examine, but it is ADVICE — measured on seed 3, a weak model recorded 5,
+	// fixed all 5, then called finish with 41 turns unused and 6 real, findable jewels ignored.
+	// This converts the advice into a bounded refusal, symmetric with the unfixed-issue gate: it
+	// holds finish ONCE, naming the reachable-but-unexamined jewels, then the next finish closes
+	// (so a genuinely unreachable jewel can never trap the model). It enforces a TRUE property —
+	// "you have not looked here" — and never an answer: it names the jewel, never a path to it.
+	if uncovered := uncoveredJewels(cc); len(uncovered) > 0 && cc.coverageNudges == 0 {
+		cc.coverageNudges++
+		shown := uncovered
+		if len(shown) > 12 {
+			shown = append(append([]string{}, shown[:12]...), fmt.Sprintf("… (+%d more)", len(uncovered)-12))
+		}
+		return fmt.Sprintf("NOT CLOSED YET — %d crown jewel(s) are reachable from the internet and you have "+
+			"not examined them: %s. Call find_paths(<id>) on each and record any real path before you "+
+			"finish. (Calling finish again will close the investigation with these left uncovered.)",
+			len(uncovered), strings.Join(shown, ", "))
 	}
 	cc.Summary = argStr(args, "summary")
 	cc.Done = true
