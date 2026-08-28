@@ -51,3 +51,6 @@ platform.db
 scratchpad/
 /tsmcp
 .bench-targets/
+
+# CVE-Bench-derived dataset: embeds third-party source at pinned SHAs; regenerate with scripts/cvebench_to_cvepatch.py
+fixtures/cvepatch/cvebench.json
