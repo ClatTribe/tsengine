@@ -213,6 +213,16 @@ var coveredCWEs = map[string]string{
 	"CWE-862": "missing authorization — apiauthz",
 	"CWE-863": "incorrect authorization — apiauthz + privesc_probe",
 	"CWE-918": "SSRF — nuclei DAST/OAST",
+	// Added after the BountyBench inventory showed 25 classes uncovered: this one is a
+	// MAPPING gap, not a capability gap. internal/pentest/active.go ships `openRedirect`,
+	// a real playbook that matches "CWE-601" by name, sends a canary redirect probe and
+	// confirms via the 30x Location header — a machine-checkable predicate, not a mention.
+	//
+	// DELIBERATELY NOT ADDED, though the corpus would reward it: CWE-400 (resource
+	// exhaustion). Its only hits in this tree are comments about OUR OWN rate limiting, not
+	// a detector for the class. Adding it would inflate the honest denominator this
+	// inventory exists to report — the one number here that must never be gamed.
+	"CWE-601": "open redirect — pentest openRedirect playbook (canary Location predicate)",
 }
 
 // BountyInventory summarises a corpus: how many tasks of each type, and how many fall in a class we
