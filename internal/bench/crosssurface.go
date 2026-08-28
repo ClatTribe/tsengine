@@ -94,6 +94,34 @@ func LeakedKeyToCloudCrown() CrossSurfaceFixture {
 }
 
 // ScoreCrossSurface runs both substrates over the fixture and reports the delta.
+
+// BuildCrossSurfaceEstate assembles the joined cloud+code estate for a fixture. Extracted so the
+// SUBSTRATE scorer and the AGENT bench reason over the IDENTICAL graph — two copies of "how the
+// surfaces join" would let the agent be scored against a different estate than the substrate, and
+// the whole point of the comparison is that only the input differs.
+func BuildCrossSurfaceEstate(fx CrossSurfaceFixture, now time.Time) *estategraph.Graph {
+	est := estateingest.Compose(fx.Cloud, nil, "", fx.CodeFindings, now)
+	// The bridge the join creates: the leaked key authenticates AS the role. An ingest that reads
+	// live IAM would assert this from the key's own identity; the fixture asserts it with the same
+	// evidence the code finding carries, so the edge is grounded exactly as the real path would be.
+	if secret := findSecretNode(est); secret != "" {
+		_ = est.AddEdge(estategraph.Edge{
+			From: secret, To: estategraph.Canonical("cloud", "arn:aws:iam::000000000000:role/deploy-role"),
+			Kind: estategraph.EdgeAssumes, Surface: "cloud", Evidence: []string{"f-leak"},
+			Why: "the committed key authenticates as deploy-role", ObservedAt: now,
+		})
+		// A public repository is reachable from the internet — that is the entry point the cloud
+		// account does not have.
+		_ = est.AddEdge(estategraph.Edge{
+			From: estategraph.InternetID, To: secret, Kind: estategraph.EdgeReaches,
+			Surface: "code", Evidence: []string{"f-leak"},
+			Why: "the repository holding the key is public", ObservedAt: now,
+		})
+		est.AddNode(estategraph.Node{ID: estategraph.InternetID, Kind: estategraph.KindNetwork, Name: "internet"})
+	}
+	return est
+}
+
 func ScoreCrossSurface(fx CrossSurfaceFixture) CrossSurfaceScore {
 	sc := CrossSurfaceScore{Scenario: fx.Name, Question: fx.Question}
 	now := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
@@ -114,25 +142,7 @@ func ScoreCrossSurface(fx CrossSurfaceFixture) CrossSurfaceScore {
 	}
 
 	// --- substrate B: the joined estate (cloud + code) ---
-	est := estateingest.Compose(fx.Cloud, nil, "", fx.CodeFindings, now)
-	// The bridge the join creates: the leaked key authenticates AS the role. An ingest that reads
-	// live IAM would assert this from the key's own identity; the fixture asserts it with the same
-	// evidence the code finding carries, so the edge is grounded exactly as the real path would be.
-	if secret := findSecretNode(est); secret != "" {
-		_ = est.AddEdge(estategraph.Edge{
-			From: secret, To: estategraph.Canonical("cloud", "arn:aws:iam::000000000000:role/deploy-role"),
-			Kind: estategraph.EdgeAssumes, Surface: "cloud", Evidence: []string{"f-leak"},
-			Why: "the committed key authenticates as deploy-role", ObservedAt: now,
-		})
-		// A public repository is reachable from the internet — that is the entry point the cloud
-		// account does not have.
-		_ = est.AddEdge(estategraph.Edge{
-			From: estategraph.InternetID, To: secret, Kind: estategraph.EdgeReaches,
-			Surface: "code", Evidence: []string{"f-leak"},
-			Why: "the repository holding the key is public", ObservedAt: now,
-		})
-		est.AddNode(estategraph.Node{ID: estategraph.InternetID, Kind: estategraph.KindNetwork, Name: "internet"})
-	}
+	est := BuildCrossSurfaceEstate(fx, now)
 	crownID := estategraph.Canonical("cloud", fx.Crown)
 	estateEntry := fx.EstateEntry
 	if estateEntry == "" {
