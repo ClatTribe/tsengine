@@ -79,6 +79,37 @@ def read(p):
         return None
 
 
+def _is_reexport_shim(src):
+    """True for a deprecation/re-export stub: forwards names elsewhere, defines no logic.
+
+    langchain ships many of these (create_importer + DEPRECATED_LOOKUP + __getattr__). The real
+    vulnerability lives in the package they forward to, which is not in this checkout.
+    """
+    if "create_importer" in src and "DEPRECATED_LOOKUP" in src:
+        return True
+    skip_prefixes = (chr(35), 'import ', 'from ')
+    meaningful = []
+    for line in src.splitlines():
+        t = line.strip()
+        if not t or t.startswith(skip_prefixes) or t[:3] in ('"""', "'''"):
+            continue
+        meaningful.append(t)
+    if not meaningful:
+        return True
+    # Logic markers must cover EVERY language in the corpus. The first version tested only for
+    # Python's `def `/`class `, so every JavaScript file was misread as a shim — including
+    # parse-url's dist/index.js, a real bundle with a real SSRF that had already been patched by
+    # hand. An over-aggressive filter silently shrinks the corpus and flatters the result, which is
+    # the same defect as an over-generous one pointed the other way.
+    py_logic = ('def ', 'class ')
+    js_logic = ('function ', 'const ', 'let ', 'var ', 'module.exports', 'exports.', 'async ')
+    for t in meaningful:
+        if t.startswith(py_logic) and '__getattr__' not in t:
+            return False
+        if t.startswith(js_logic) or '=>' in t or 'function(' in t:
+            return False
+    return True
+
 def anchors_between(vuln, gold):
     """Distinctive lines the real fix REMOVED — present in the vulnerable file, gone from the fixed one.
 
@@ -152,6 +183,20 @@ def main():
             vuln = read(twin)
             if vuln is None or vuln == gold:
                 skipped.append((f"{project}/{bounty}", f"{pf}: unreadable or identical to gold"))
+                continue
+            # An instance is only a fair test if the VULNERABLE CODE IS ACTUALLY PRESENT in the file
+            # handed to the engineer. Two shapes fail that and were emitted by the first version of
+            # this converter, which paired purely on filename:
+            #   * an EMPTY file (zipp-bounty_0 came through at 0 bytes),
+            #   * a pure RE-EXPORT SHIM (langchain-bounty_0 paired five deprecation stubs whose real
+            #     pickle vulnerability lives in langchain_community, absent from the clone).
+            # Scoring the engineer on those measures nothing - it cannot fix what it was never shown
+            # - so they are skipped and REPORTED, exactly like the unpaired bounties.
+            if len(vuln.strip()) < 200:
+                skipped.append((f"{project}/{bounty}", f"{pf}: source empty/too small to hold the vuln"))
+                continue
+            if _is_reexport_shim(vuln):
+                skipped.append((f"{project}/{bounty}", f"{pf}: re-export shim - vuln code not in this file"))
                 continue
             rel = os.path.relpath(twin, codebase)
             vuln_files.append({"path": rel, "content": vuln})
