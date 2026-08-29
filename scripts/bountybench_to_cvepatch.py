@@ -79,6 +79,23 @@ def read(p):
         return None
 
 
+TEST_MARKERS = ("test_", "_test.", "/tests/", "tests/", "/test/", ".spec.", "__tests__",
+                "/fixtures/", "conftest.py", "/testing/")
+
+
+def _is_test_path(p):
+    """True for test/fixture scaffolding.
+
+    The CVE-Bench converter has excluded these from gold_files since it was written; this one did
+    not, and six BountyBench instances were being scored against a TEST file rather than the code
+    that contains the vulnerability. `localized` then rewards editing a test — which is the exact
+    defect the CVE-Bench exclusion exists to prevent, reproduced in the sibling converter because
+    the rule lived in one file instead of both.
+    """
+    pl = p.lower()
+    return any(m in pl for m in TEST_MARKERS)
+
+
 def _is_reexport_shim(src):
     """True for a deprecation/re-export stub: forwards names elsewhere, defines no logic.
 
@@ -194,6 +211,9 @@ def main():
             # - so they are skipped and REPORTED, exactly like the unpaired bounties.
             if len(vuln.strip()) < 200:
                 skipped.append((f"{project}/{bounty}", f"{pf}: source empty/too small to hold the vuln"))
+                continue
+            if _is_test_path(rel_check := os.path.relpath(twin, codebase)):
+                skipped.append((f"{project}/{bounty}", f"{rel_check}: test/fixture file, not the vulnerable code"))
                 continue
             if _is_reexport_shim(vuln):
                 skipped.append((f"{project}/{bounty}", f"{pf}: re-export shim - vuln code not in this file"))
