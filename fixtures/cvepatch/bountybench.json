@@ -27,7 +27,8 @@
     },
     "pair_confidence": {
       "src/index.js": 0.912
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "InvokeAI-bounty_1",
@@ -88,7 +89,8 @@
       "invokeai/app/services/model_load/model_load_default.py": 0.882,
       "invokeai/backend/model_manager/util/model_util.py": 0.986,
       "invokeai/backend/model_manager/probe.py": 0.97
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "InvokeAI-bounty_0",
@@ -110,7 +112,8 @@
     "gold_anchors": {},
     "pair_confidence": {
       "invokeai/app/services/image_files/image_files_disk.py": 1.0
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "open-webui-bounty_0",
@@ -139,7 +142,8 @@
     },
     "pair_confidence": {
       "backend/open_webui/apps/webui/routers/utils.py": 0.813
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "langchain-bounty_1",
@@ -204,7 +208,8 @@
     },
     "pair_confidence": {
       "libs/core/langchain_core/output_parsers/xml.py": 0.325
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "langchain-bounty_0",
@@ -332,7 +337,8 @@
       "libs/community/langchain_community/vectorstores/faiss.py": 0.743,
       "libs/community/langchain_community/vectorstores/scann.py": 0.99,
       "libs/community/langchain_community/vectorstores/tiledb.py": 1.0
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "LibreChat-bounty_1",
@@ -369,7 +375,8 @@
     },
     "pair_confidence": {
       "api/server/routes/files/files.js": 0.85
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "LibreChat-bounty_0",
@@ -398,7 +405,8 @@
     },
     "pair_confidence": {
       "api/server/services/Files/Local/crud.js": 0.974
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "LibreChat-bounty_2",
@@ -424,7 +432,8 @@
     },
     "pair_confidence": {
       "api/server/middleware/checkBan.js": 0.93
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "LibreChat-bounty_4",
@@ -456,7 +465,8 @@
     "pair_confidence": {
       "api/server/utils/handleText.js": 0.984,
       "api/server/routes/files/multer.js": 1.0
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "LibreChat-bounty_3",
@@ -517,7 +527,8 @@
     },
     "pair_confidence": {
       "api/server/routes/files/files.js": 0.695
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "gpt_academic-bounty_0",
@@ -557,7 +568,8 @@
     },
     "pair_confidence": {
       "shared_utils/handle_upload.py": 0.847
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "llama_index-bounty_0",
@@ -594,7 +606,8 @@
     },
     "pair_confidence": {
       "llama-index-experimental/llama_index/experimental/exec_utils.py": 0.875
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "paddle-bounty_0",
@@ -659,7 +672,8 @@
     },
     "pair_confidence": {
       "python/paddle/utils/download.py": 0.485
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "mlflow-bounty_1",
@@ -722,7 +736,8 @@
     },
     "pair_confidence": {
       "mlflow/server/handlers.py": 0.954
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "mlflow-bounty_0",
@@ -814,7 +829,8 @@
       "mlflow/store/model_registry/abstract_store.py": 0.918,
       "mlflow/tracking/client.py": 0.938,
       "mlflow/store/model_registry/file_store.py": 0.973
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "mlflow-bounty_2",
@@ -836,7 +852,8 @@
     "gold_anchors": {},
     "pair_confidence": {
       "mlflow/data/http_dataset_source.py": 0.91
-    }
+    },
+    "commit_state": "verified"
   },
   {
     "id": "mlflow-bounty_3",
@@ -901,7 +918,8 @@
     },
     "pair_confidence": {
       "mlflow/server/handlers.py": 0.669
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "zipp-bounty_0",
@@ -954,7 +972,8 @@
     },
     "pair_confidence": {
       "zipp/__init__.py": 0.749
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "vllm-bounty_0",
@@ -1019,7 +1038,8 @@
     },
     "pair_confidence": {
       "vllm/distributed/device_communicators/shm_broadcast.py": 0.786
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "gunicorn-bounty_0",
@@ -1045,7 +1065,8 @@
     },
     "pair_confidence": {
       "gunicorn/http/message.py": 0.917
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "gradio-bounty_1",
@@ -1158,7 +1179,8 @@
     "pair_confidence": {
       "gradio/components/file_explorer.py": 0.327,
       "gradio/routes.py": 0.327
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "gradio-bounty_0",
@@ -1271,7 +1293,8 @@
     "pair_confidence": {
       "gradio/routes.py": 0.591,
       "gradio/utils.py": 0.699
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "gradio-bounty_2",
@@ -1512,7 +1535,8 @@
       "gradio/helpers.py": 0.534,
       "gradio/components/json_component.py": 0.743,
       "gradio/processing_utils.py": 0.714
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "curl-bounty_0",
@@ -1541,7 +1565,8 @@
     },
     "pair_confidence": {
       "lib/fopen.c": 0.622
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "gluon-cv-bounty_0",
@@ -1563,7 +1588,8 @@
     "gold_anchors": {},
     "pair_confidence": {
       "gluoncv/utils/filesystem.py": 0.948
-    }
+    },
+    "commit_state": "verified"
   },
   {
     "id": "yaml-bounty_0",
@@ -1590,7 +1616,8 @@
     },
     "pair_confidence": {
       "src/errors.ts": 0.974
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "pytorch-lightning-bounty_1",
@@ -1618,7 +1645,8 @@
     "pair_confidence": {
       "src/lightning/app/core/api.py": 0.994,
       "src/lightning/app/core/app.py": 0.998
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "pytorch-lightning-bounty_0",
@@ -1644,7 +1672,8 @@
     },
     "pair_confidence": {
       "src/lightning/app/core/api.py": 0.921
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "lunary-bounty_1",
@@ -1709,7 +1738,8 @@
     },
     "pair_confidence": {
       "packages/backend/src/api/v1/auth/index.ts": 0.236
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "lunary-bounty_0",
@@ -1803,7 +1833,8 @@
     "pair_confidence": {
       "packages/backend/src/utils/authorization.ts": 0.135,
       "packages/backend/src/api/v1/projects/index.ts": 0.16
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "lunary-bounty_2",
@@ -1868,7 +1899,8 @@
     },
     "pair_confidence": {
       "packages/backend/src/api/v1/auth/index.ts": 0.225
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "setuptools-bounty_0",
@@ -1933,7 +1965,8 @@
     },
     "pair_confidence": {
       "setuptools/package_index.py": 0.839
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "node-bounty_0",
@@ -1998,7 +2031,8 @@
     },
     "pair_confidence": {
       "lib/internal/fs/utils.js": 0.802
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "composio-bounty_0",
@@ -2024,7 +2058,8 @@
     },
     "pair_confidence": {
       "python/composio/server/api.py": 0.989
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "django-bounty_0",
@@ -2059,7 +2094,8 @@
     },
     "pair_confidence": {
       "django/utils/html.py": 0.962
-    }
+    },
+    "commit_state": "mismatch"
   },
   {
     "id": "bentoml-bounty_1",
@@ -2333,7 +2369,8 @@
       "src/_bentoml_impl/loader.py": 0.54,
       "src/_bentoml_impl/worker/service.py": 0.669,
       "src/_bentoml_impl/server/serving.py": 0.749
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "bentoml-bounty_0",
@@ -2359,7 +2396,8 @@
     },
     "pair_confidence": {
       "src/bentoml/_internal/server/runner_app.py": 0.843
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "agentscope-bounty_0",
@@ -2386,7 +2424,8 @@
     },
     "pair_confidence": {
       "src/agentscope/studio/_app.py": 0.989
-    }
+    },
+    "commit_state": "unverifiable"
   },
   {
     "id": "scikit-learn-bounty_0",
@@ -2440,6 +2479,7 @@
     },
     "pair_confidence": {
       "sklearn/feature_extraction/text.py": 0.951
-    }
+    },
+    "commit_state": "unverifiable"
   }
 ]

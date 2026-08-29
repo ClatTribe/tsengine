@@ -35,6 +35,7 @@ Usage: bountybench_to_cvepatch.py <bountytasks-dir> <out.json> [--limit N]
 import json
 import os
 import re
+import subprocess
 import sys
 
 _ANCHOR_MIN_LEN = 12
@@ -113,6 +114,58 @@ def _is_non_source(p):
     if pl.endswith(NON_SOURCE_EXT):
         return True
     return os.path.basename(pl).rsplit(".", 1)[0] in NON_SOURCE_NAMES
+
+
+def _commit_state(codebase, declared):
+    """Is the checked-out source actually AT the commit this bounty calls vulnerable?
+
+    THE DEFECT. This converter reads whatever commit `codebase/` happens to be checked out
+    at; it never checks out `bounty_metadata.json`'s `vulnerable_commit`. That is not a
+    theoretical concern — measured on the corpus:
+
+      * Of the 16 bounties declaring a raw SHA, 12 are at a DIFFERENT commit.
+      * mlflow settles it: four bounties declare four different vulnerable commits and the
+        single checkout sits at exactly one of them (bounty_2's). The other three are being
+        served source from another point in that project's history.
+      * The same holds for LibreChat (5 bounties, 2 declared commits, 1 checkout), gradio
+        (3/3/1), langchain, lunary, bentoml, InvokeAI, pytorch-lightning.
+
+    The consequence is NOT a mis-paired file — the pairing can be perfect — but source in
+    which the vulnerability has already been fixed. Verified by hand on two of them:
+    scikit-learn-bounty_0 (CVE-2024-5206) contains no `stop_words_` at all and
+    `_limit_features` already returns the fixed shape, and django-bounty_0's html.py carries
+    every CVE-2024-38875 bound (MAX_URL_LENGTH gating both regexes, trim_url's max(0, ...),
+    the 63-char email-domain guard, MAX_STRIP_TAGS_DEPTH). An engineer graded on those is
+    being asked to fix code that is not broken, and scores zero however good it is.
+
+    THREE STATES, and the third is the point. Tags cannot be resolved in these shallow
+    clones (measured: 0 tags fetched for LibreChat/yaml/node, 1 for zipp), so a
+    tag-declared bounty is UNVERIFIABLE here — reported as itself rather than folded into
+    either "verified" or "mismatch", because a check that could not run is not a check that
+    passed. Nothing is dropped on this signal: it is disclosed so a reader can score the
+    verified subset separately, and fixing it properly means checking out each bounty's own
+    commit, which is a corpus-build decision with real network and disk cost.
+    """
+    if not declared:
+        return "unverifiable"
+    try:
+        head = subprocess.run(["git", "-C", codebase, "rev-parse", "HEAD"],
+                              capture_output=True, text=True, timeout=30).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unverifiable"
+    if not head:
+        return "unverifiable"
+    if re.fullmatch(r"[0-9a-f]{7,40}", declared):
+        return "verified" if (head.startswith(declared) or declared.startswith(head)) else "mismatch"
+    try:
+        res = subprocess.run(["git", "-C", codebase, "rev-parse", "--verify", "-q",
+                              declared + "^{commit}"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return "unverifiable"
+    resolved = res.stdout.strip()
+    if not resolved:
+        return "unverifiable"   # shallow clone: the tag was never fetched
+    return "verified" if resolved == head else "mismatch"
 
 
 def _line_overlap(a, b):
@@ -330,6 +383,10 @@ def main():
             # visible to whoever reads the score rather than being indistinguishable from
             # an engineer that failed. Never reaches the engineer's prompt.
             "pair_confidence": pair_conf,
+            # Whether the checked-out source is really AT the declared vulnerable commit.
+            # "mismatch" means the engineer may be shown ALREADY-FIXED code (see
+            # _commit_state). Reported, never used to silently drop an instance.
+            "commit_state": _commit_state(codebase, str(deep_get(meta, "vulnerable_commit") or "")),
             # `verify` intentionally omitted — their verify.sh is the oracle and we do not run it.
         })
         if limit and len(instances) >= limit:
@@ -340,6 +397,15 @@ def main():
     print(f"wrote {len(instances)} agentic patch instance(s) → {out_path}")
     print("  source: BountyBench (Stanford) — real paid bounties, externally authored")
     print("  execution oracle NOT wired: scores produced + localized + anchors; `fixed` stays unjudged")
+    by_state = {}
+    for i in instances:
+        by_state.setdefault(i["commit_state"], []).append(i["id"])
+    print("  commit pin: " + ", ".join(f"{k} {len(v)}" for k, v in sorted(by_state.items())))
+    if by_state.get("mismatch"):
+        print("    MISMATCH — source is NOT at the declared vulnerable commit; the "
+              "vulnerability may already be fixed in what the engineer is shown:")
+        for iid in sorted(by_state["mismatch"]):
+            print(f"      {iid}")
     weak = [(i["id"], p, c) for i in instances for p, c in i["pair_confidence"].items() if c < 0.35]
     if weak:
         print(f"  {len(weak)} weakly-paired file(s) KEPT and reported (not dropped — the corpus must not shrink):")
