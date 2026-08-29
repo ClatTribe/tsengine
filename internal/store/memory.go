@@ -32,6 +32,7 @@ type Memory struct {
 	complianceSnaps map[string]map[string]platform.ComplianceSnapshot // tenantID → snapshotID → evidence snapshot
 	audits          map[string]map[string]platform.AuditEngagement    // tenantID → engagementID → audit
 	policies        map[string]map[string]platform.Policy             // tenantID → policyID → policy
+	trustReqs       map[string]map[string]platform.TrustAccessRequest // tenantID → requestID → Trust Center access request
 
 	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
 	feedback    map[string]map[string]platform.Feedback      // tenantID → issueKey → latest human judgement
@@ -64,6 +65,7 @@ func NewMemory() *Memory {
 		complianceSnaps: map[string]map[string]platform.ComplianceSnapshot{},
 		audits:          map[string]map[string]platform.AuditEngagement{},
 		policies:        map[string]map[string]platform.Policy{},
+		trustReqs:       map[string]map[string]platform.TrustAccessRequest{},
 		ignores:         map[string]map[string]platform.IgnoreRule{},
 		feedback:        map[string]map[string]platform.Feedback{},
 		exclusions:      map[string]map[string]platform.ExclusionRule{},
@@ -497,6 +499,41 @@ func (m *Memory) ListEvalRuns(_ context.Context, tenantID string) ([]platform.Ev
 	return out, nil
 }
 
+func (m *Memory) PutTrustAccessRequest(_ context.Context, r platform.TrustAccessRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.trustReqs[r.TenantID] == nil {
+		m.trustReqs[r.TenantID] = map[string]platform.TrustAccessRequest{}
+	}
+	m.trustReqs[r.TenantID][r.ID] = r
+	return nil
+}
+
+func (m *Memory) ListTrustAccessRequests(_ context.Context, tenantID string) ([]platform.TrustAccessRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.TrustAccessRequest, 0, len(m.trustReqs[tenantID]))
+	for _, r := range m.trustReqs[tenantID] {
+		out = append(out, r)
+	}
+	return sortTrustRequests(out), nil
+}
+
+// sortTrustRequests is the ONE ordering every Store backend uses for access requests:
+// newest-first, id-tiebroken so it is stable across calls. Shared rather than repeated per
+// backend because the map-ranging memory store has no inherent order and the SQL stores have
+// insertion order, so three hand-written sorts would be three chances to disagree — and the
+// conformance suite would pass each of them.
+func sortTrustRequests(reqs []platform.TrustAccessRequest) []platform.TrustAccessRequest {
+	sort.Slice(reqs, func(i, j int) bool {
+		if reqs[i].RequestedAt.Equal(reqs[j].RequestedAt) {
+			return reqs[i].ID < reqs[j].ID
+		}
+		return reqs[i].RequestedAt.After(reqs[j].RequestedAt)
+	})
+	return reqs
+}
+
 func (m *Memory) PutComplianceSnapshot(_ context.Context, s platform.ComplianceSnapshot) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -743,6 +780,7 @@ type Snapshot struct {
 	Episodes        map[string]map[string]platform.EpisodeRecord      `json:"episodes,omitempty"`
 	Audits          map[string]map[string]platform.AuditEngagement    `json:"audits,omitempty"`
 	Policies        map[string]map[string]platform.Policy             `json:"policies,omitempty"`
+	TrustReqs       map[string]map[string]platform.TrustAccessRequest `json:"trust_requests,omitempty"`
 	Ignores         map[string]map[string]platform.IgnoreRule         `json:"ignores,omitempty"`
 	Feedback        map[string]map[string]platform.Feedback           `json:"feedback,omitempty"`
 	Exclusions      map[string]map[string]platform.ExclusionRule      `json:"exclusions,omitempty"`
@@ -777,6 +815,7 @@ func (m *Memory) Export() Snapshot {
 		Episodes:        m.episodes,
 		Audits:          m.audits,
 		Policies:        m.policies,
+		TrustReqs:       m.trustReqs,
 		Ignores:         m.ignores,
 		Feedback:        m.feedback,
 		Exclusions:      m.exclusions,
@@ -810,6 +849,7 @@ func (m *Memory) load(s Snapshot) {
 	m.episodes = orEmptyEpisodes(s.Episodes)
 	m.audits = orEmptyAudits(s.Audits)
 	m.policies = orEmptyPolicies(s.Policies)
+	m.trustReqs = orEmptyTrustReqs(s.TrustReqs)
 	m.ignores = orEmptyIgnores(s.Ignores)
 	m.feedback = orEmptyFeedback(s.Feedback)
 	m.exclusions = orEmptyExclusions(s.Exclusions)
@@ -944,6 +984,13 @@ func clone[T any](xs []T) []T {
 	out := make([]T, len(xs))
 	copy(out, xs)
 	return out
+}
+
+func orEmptyTrustReqs(m map[string]map[string]platform.TrustAccessRequest) map[string]map[string]platform.TrustAccessRequest {
+	if m == nil {
+		return map[string]map[string]platform.TrustAccessRequest{}
+	}
+	return m
 }
 
 func orEmptyEvalRuns(m map[string]map[string]platform.EvalRun) map[string]map[string]platform.EvalRun {

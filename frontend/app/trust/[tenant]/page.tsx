@@ -3,6 +3,7 @@ import { ShieldCheck, CheckCircle2, Lock, Activity, UserCheck } from "lucide-rea
 import { apiBase } from "@/lib/auth";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import type { TrustView } from "@/lib/types";
+import { DocumentTier } from "@/components/trust/document-tier";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -12,13 +13,16 @@ export const metadata = {
   description: "Live security & compliance posture, continuously monitored and signed.",
 };
 
-async function fetchTrust(tenant: string, token: string): Promise<TrustView | null> {
+async function fetchTrust(tenant: string, token: string, access: string): Promise<TrustView | null> {
   if (!token) return null;
   try {
-    const res = await fetch(
-      `${apiBase()}/v1/trust/${encodeURIComponent(tenant)}?token=${encodeURIComponent(token)}`,
-      { cache: "no-store" },
-    );
+    const q = new URLSearchParams({ token });
+    // The access token rides along so the server can decide what THIS visitor may see. It is
+    // optional: arriving without one is the ordinary way to reach the page.
+    if (access) q.set("access", access);
+    const res = await fetch(`${apiBase()}/v1/trust/${encodeURIComponent(tenant)}?${q.toString()}`, {
+      cache: "no-store",
+    });
     if (!res.ok) return null;
     return (await res.json()) as TrustView;
   } catch {
@@ -31,11 +35,11 @@ export default async function TrustCenter({
   searchParams,
 }: {
   params: Promise<{ tenant: string }>;
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string; access?: string }>;
 }) {
   const { tenant } = await params;
-  const { token } = await searchParams;
-  const data = await fetchTrust(tenant, token ?? "");
+  const { token, access } = await searchParams;
+  const data = await fetchTrust(tenant, token ?? "", access ?? "");
 
   if (!data) {
     return (
@@ -93,7 +97,9 @@ export default async function TrustCenter({
               </span>
             )}
             <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">{data.org}</h1>
-            <p className="mt-3 text-lg text-muted">Security &amp; compliance posture — live, and independently verifiable.</p>
+            <p className="mt-3 text-lg text-muted">
+              {data.headline || "Security & compliance posture — live, and independently verifiable."}
+            </p>
           </div>
 
           {/* trust pills — each one is a claim, so each appears only when the server can back it.
@@ -144,6 +150,8 @@ export default async function TrustCenter({
               </div>
             </div>
           )}
+
+          <DocumentTier tenant={tenant} token={token ?? ""} access={access ?? ""} data={data} />
 
           {/* footer */}
           <div className="mx-auto mt-12 max-w-2xl border-t border-border pt-6 text-center">

@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS eval_runs (tenant_id TEXT, id TEXT, data TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS episodes (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS trust_requests (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS ignores     (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
 CREATE TABLE IF NOT EXISTS feedback    (tenant_id TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,issue_key));
 CREATE TABLE IF NOT EXISTS exclusions  (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -265,6 +266,17 @@ func (s *SQLite) PutEvalRun(ctx context.Context, r platform.EvalRun) error {
 }
 func (s *SQLite) ListEvalRuns(ctx context.Context, tenantID string) ([]platform.EvalRun, error) {
 	return listJSON[platform.EvalRun](ctx, s.db, `SELECT data FROM eval_runs WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+func (s *SQLite) PutTrustAccessRequest(ctx context.Context, r platform.TrustAccessRequest) error {
+	return s.upsertTID(ctx, `INSERT INTO trust_requests(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, r.TenantID, r.ID, r)
+}
+func (s *SQLite) ListTrustAccessRequests(ctx context.Context, tenantID string) ([]platform.TrustAccessRequest, error) {
+	// Sorted in Go, not by rowid: the ordering is part of the Store contract, and rowid is
+	// insertion order — which diverges from newest-first the moment a request is UPDATED
+	// (approved, viewed) rather than inserted. Sharing one comparator with the memory store is
+	// what keeps the backends conformant instead of merely both plausible.
+	out, err := listJSON[platform.TrustAccessRequest](ctx, s.db, `SELECT data FROM trust_requests WHERE tenant_id=? ORDER BY rowid`, tenantID)
+	return sortTrustRequests(out), err
 }
 func (s *SQLite) PutComplianceSnapshot(ctx context.Context, snap platform.ComplianceSnapshot) error {
 	return s.upsertTID(ctx, `INSERT INTO compliance_snaps(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, snap.TenantID, snap.ID, snap)

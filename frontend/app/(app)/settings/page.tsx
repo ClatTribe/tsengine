@@ -9,6 +9,8 @@ import { ProviderIcon } from "@/components/brand/provider-icon";
 import { Card, SectionTitle } from "@/components/ui/primitives";
 import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
+import { TrustCenterControl } from "@/components/settings/trust-center-control";
+import { TrustRequestsDesk } from "@/components/settings/trust-requests-desk";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
 import { CloudRemediationControl } from "@/components/settings/cloud-remediation-control";
@@ -40,7 +42,7 @@ export default async function SettingsPage() {
   const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation, aiMode] = await Promise.all([
     api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(), api.aiMode(),
   ]);
-  const [sla, maintenance, contacts, practitioners, training] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings()]);
+  const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -191,10 +193,17 @@ export default async function SettingsPage() {
           </SectionTitle>
           <Card className="space-y-3 p-5">
             <p className="text-xs text-muted">
-              Share a live, public proof of your security &amp; compliance posture — coverage only, never your findings.
-              The link is non-guessable; revoke it by rotating your platform secret.
+              Turn the security review into a link. Buyers self-serve your posture and documents instead of booking a
+              call — the public tier shows coverage only, never your findings, and anything that names them sits
+              behind your approval.
             </p>
-            <TrustShare path={trust.path} />
+            <TrustShare path={trustSettings.link || trust.path} />
+            <TrustCenterControl initial={trustSettings} />
+            <TrustRequestsDesk
+              requests={trustRequests.requests}
+              ndaRequired={trustRequests.nda_required}
+              me={me?.email ?? ""}
+            />
           </Card>
         </div>
       )}

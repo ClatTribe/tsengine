@@ -267,6 +267,15 @@ type assessLimiter struct {
 
 var publicAssessLimiter = &assessLimiter{hit: map[string][]time.Time{}, max: 20}
 
+// reset clears the window. Only tests call it: the limiters are package-level, so without it
+// one test's requests count against the next one's, and a suite that passes alone fails when
+// run with its neighbours — or worse, passes for the wrong reason.
+func (l *assessLimiter) reset() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.hit = map[string][]time.Time{}
+}
+
 func (l *assessLimiter) allow(ip string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -5,7 +5,7 @@ import type {
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, User } from "./types";
+  L15Audit, TenantEval, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -611,6 +611,43 @@ export const api = {
     safe<EscalationPolicy>("/v1/settings/escalation", { enabled: false, ack_window_mins: 0, tiers: [] }),
   setEscalationSettings: (pol: EscalationPolicy) =>
     call<EscalationPolicy>("/v1/settings/escalation", { method: "PUT", body: JSON.stringify(pol) }),
+
+  // Record a named human's answer to a questionnaire question no scan can reach. The API REFUSES
+  // an evidenced question (reason: "not_attestable") — a typed answer must not overwrite an
+  // observation in a document a buyer relies on.
+  attestQuestion: (id: string, inPlace: boolean, by: string, note: string) =>
+    call<{ question: string; attestation: { in_place: boolean; by: string; at: string; note?: string } }>(
+      `/v1/questionnaire/attest/${encodeURIComponent(id)}`,
+      { method: "POST", body: JSON.stringify({ in_place: inPlace, by, note }) },
+    ),
+
+  // Trust Center: the tenant's buyer-facing share page. The GET carries `available` and
+  // `unavailable` alongside the config, because what a buyer is actually shown differs from what
+  // the owner configured — a document nothing can produce is silently absent from the public
+  // page, and the owner needs to be told that rather than left to notice.
+  trustSettings: () =>
+    safe<TrustSettings>("/v1/settings/trust-center", {
+      config: { enabled: false }, link: "", available: {}, unavailable: [], pending_requests: 0,
+    }),
+  setTrustSettings: (cfg: TrustCenterConfig) =>
+    call<{ config: TrustCenterConfig; link: string; available: Record<string, boolean>; corrections: { field: string; reason: string }[] }>(
+      "/v1/settings/trust-center", { method: "PUT", body: JSON.stringify(cfg) },
+    ),
+  // Rotates this tenant's share token — every outstanding link stops working, and only this
+  // tenant's. Before the token was versioned there was no way to do either half.
+  revokeTrustLink: () =>
+    call<{ link: string; token_version: number }>("/v1/settings/trust-center/revoke-link", { method: "POST" }),
+  trustRequests: () =>
+    safe<{ requests: { request: TrustAccessRequest; granted: boolean; views: number }[]; nda_required: boolean }>(
+      "/v1/trust-requests", { requests: [], nda_required: false },
+    ),
+  // The access token comes back ONCE, on approve — only its digest is stored, so this response is
+  // the only chance to deliver it to the requester.
+  decideTrustRequest: (id: string, decision: "approve" | "deny" | "revoke", by: string) =>
+    call<{ request: TrustAccessRequest; access_token?: string; access_link?: string; shown_once?: string }>(
+      `/v1/trust-requests/${encodeURIComponent(id)}/decision`,
+      { method: "POST", body: JSON.stringify({ decision, by }) },
+    ),
 
   // Per-tenant remediation SLA policy: per-severity time-to-acknowledge + time-to-resolve targets.
   slaSettings: () => safe<SLAPolicy>("/v1/settings/sla", { enabled: false, targets: [] }),

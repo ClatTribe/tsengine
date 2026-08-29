@@ -32,7 +32,7 @@ func trustDeps(t *testing.T) (Deps, string) {
 func fetchTrust(t *testing.T, d Deps, tenant string) trustView {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet,
-		"/v1/trust/"+tenant+"?token="+d.trustToken(tenant), nil)
+		"/v1/trust/"+tenant+"?token="+d.trustTokenFor(tenant, platform.TrustCenterConfig{}), nil)
 	req.SetPathValue("tenant", tenant)
 	w := httptest.NewRecorder()
 	d.handleTrust(w, req)

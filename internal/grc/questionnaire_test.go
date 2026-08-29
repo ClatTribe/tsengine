@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -19,8 +20,22 @@ func TestQuestionnaire_HardenedTenantAllYes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(q.Answers) == 0 || q.InProgress != 0 || q.Yes != len(q.Answers) {
-		t.Fatalf("hardened tenant should be all Yes: %d yes / %d in-progress of %d", q.Yes, q.InProgress, len(q.Answers))
+	// Every OBSERVED question reads Yes — assessed everywhere and clean is exactly what the
+	// fixture sets up. The attested ones do NOT: connecting systems cannot answer a question no
+	// scan can reach, and a hardened estate is not a statement about background checks.
+	if len(q.Answers) == 0 || q.InProgress != 0 {
+		t.Fatalf("hardened tenant should have no gaps: %d yes / %d in-progress of %d", q.Yes, q.InProgress, len(q.Answers))
+	}
+	if q.Observed == 0 || q.Attested == 0 {
+		t.Fatalf("corpus should hold both kinds, got observed=%d attested=%d", q.Observed, q.Attested)
+	}
+	if q.Yes != q.Observed {
+		t.Errorf("hardened tenant: %d Yes of %d observed questions — a fully assessed, clean estate should "+
+			"answer every evidenced question", q.Yes, q.Observed)
+	}
+	if q.NeedsYou != q.Attested {
+		t.Errorf("NeedsYou = %d of %d attested — onboarding must not silently answer what only a person can",
+			q.NeedsYou, q.Attested)
 	}
 }
 
@@ -101,9 +116,27 @@ func fullyOnboarded(t *testing.T, st *store.Memory, tenantID string) {
 	if err := st.PutConnection(ctx, platform.Connection{ID: "c-slack", TenantID: tenantID, Kind: platform.ConnSlack, Status: platform.ConnActive}); err != nil {
 		t.Fatal(err)
 	}
-	for i, typ := range []string{"cloud_account", "repository", "container_image", "web_application", "api", "domain"} {
+	for i, typ := range []string{"cloud_account", "repository", "container_image", "web_application", "api", "domain", "ip_address"} {
 		if err := st.PutAsset(ctx, platform.Asset{ID: fmt.Sprintf("a-%d", i), TenantID: tenantID, Type: typ, Target: "t"}); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// The snapshot-driven posture sources have no connection and no asset — a device fleet or a
+	// vendor portfolio arrives as a posted inventory, and PostureAssessed is stamped only after a
+	// real ingest. Without them "fully onboarded" would silently mean "onboarded except for the
+	// three asset classes a pure scanner misses", and the endpoint and vendor questions would
+	// read Not assessed for a customer who had actually sent the data.
+	tn, err := st.GetTenant(ctx, tenantID)
+	if err != nil {
+		tn = platform.Tenant{ID: tenantID}
+	}
+	tn.PostureAssessed = map[string]time.Time{
+		"deviceposture": time.Now().UTC(),
+		"tprm":          time.Now().UTC(),
+		"sspm":          time.Now().UTC(),
+		"osint":         time.Now().UTC(),
+	}
+	if err := st.PutTenant(ctx, tn); err != nil {
+		t.Fatal(err)
 	}
 }

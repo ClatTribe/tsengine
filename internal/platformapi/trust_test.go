@@ -21,7 +21,7 @@ func TestPublicTrust_FrameworksIsEmptyArrayNotNull(t *testing.T) {
 
 	// A fresh tenant with no posture data: the PUBLIC trust page must serialize frameworks as []
 	// not null (a null crashes the customer-shared page's .map — the nil-slice → JSON-null footgun).
-	tok := d.trustToken("t1")
+	tok := d.trustTokenFor("t1", platform.TrustCenterConfig{})
 	req := httptest.NewRequest("GET", "/v1/trust/t1?token="+tok, nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
