@@ -436,6 +436,10 @@ func main() {
 	// durable queue to scale out.
 	scanJobs := jobs.NewPool(scanWorkers(), 256, 2000, scanJobTimeout(), newID)
 	obsv.RegisterScanJobsInflight(func() float64 { return float64(scanJobs.Inflight()) })
+	// Top of the activation funnel. The in-process counter resets on restart; publishing it as
+	// a Prometheus counter is what makes the series durable, and /v1/funnel says so rather than
+	// presenting a since-boot number as a lifetime one.
+	platformapi.RegisterFunnelMetrics()
 	// Live active-exploitation is opt-in at the operator level (belt-and-suspenders on
 	// top of per-engagement explicit consent): only wire a live Prober when
 	// TSENGINE_ACTIVE_EXPLOIT=1. Absent → active engagements run the passive driver.

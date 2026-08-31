@@ -305,6 +305,12 @@ func (d Deps) handlePublicAssess(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusTooManyRequests, errBody("too many requests — try again in a minute"))
 		return
 	}
+	// Top of the activation funnel (internal/funnel). Counted AFTER the validity and
+	// rate-limit gates so the number means "an assessment was served", not "a request
+	// arrived" — a bot hammering the endpoint would otherwise inflate the one figure the
+	// funnel uses to judge whether the lead magnet works. Only a count: which domain was
+	// scanned is deliberately not recorded (see obsv.RegisterPublicAssessCount).
+	publicAssessCount.Add(1)
 	ctx, cancel := context.WithTimeout(r.Context(), 9*time.Second)
 	defer cancel()
 	// A domain that does not exist must not be reported as failing anything. FetchDomain treats a
