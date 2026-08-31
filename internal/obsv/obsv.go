@@ -85,6 +85,24 @@ func RegisterScanJobsInflight(count func() float64) {
 	}, count))
 }
 
+// RegisterPublicAssessCount publishes the number of public /v1/assess assessments served as
+// a counter. Same shape as the gauge above — the caller passes a snapshot function, so this
+// package stays decoupled from platformapi.
+//
+// WHY A METRIC RATHER THAN A STORED RECORD. This is the top of the activation funnel, and it
+// is the one stage with no tenant to attach itself to: the caller is an anonymous stranger
+// evaluating their own domain. Counting it in the metrics system gives the durable series
+// (the scraper stores it) without putting a list of who was checking their security posture
+// into the product database — a record this product tells its own customers not to keep. The
+// in-process value resets on restart, which is why the funnel report labels it as such and
+// points at the scrape series for a trend.
+func RegisterPublicAssessCount(count func() float64) {
+	prometheus.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "tsengine_public_assess_total",
+		Help: "Public /v1/assess assessments served since process start (top of the activation funnel).",
+	}, count))
+}
+
 // Middleware records a request's count + latency and emits a structured access log. It is
 // the outermost wrapper around the platform mux. Metrics labels stay low-cardinality
 // (method + status code, never the raw path — ids in the path would explode the series
