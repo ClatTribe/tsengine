@@ -157,7 +157,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
       {/* Complete your coverage — the readiness categories that aren't a one-click OAuth card. /compliance tells
           the founder they need SaaS / email / web-API coverage; this bridges them to the real path for each
           (honest §10: SaaS posture is sync/snapshot, not OAuth; email/web are add-a-target). */}
-      <section>
+      {/* <section>
         <SectionTitle>Complete your coverage</SectionTitle>
         <p className="mb-3 -mt-1 text-xs text-muted">
           Your compliance posture needs more than code, cloud, and identity. Here&apos;s how to cover the rest —
@@ -197,7 +197,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
           <Link href="/compliance" className="text-accent hover:underline">compliance page</Link>; your team, our managed
           expert, or your MSP signs them off.
         </p>
-      </section>
+      </section> */}
 
       {/* Connected systems */}
       <section>
