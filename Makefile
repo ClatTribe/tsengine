@@ -187,6 +187,10 @@ deploy-prod: ## production single-box deploy (hardened stack: TLS edge + socket-
 backup: ## back up the platform-data volume to ./backups
 	./scripts/backup.sh
 
+.PHONY: launch-check
+launch-check: ## pre-outreach gate against a DEPLOYED url — make launch-check URL=https://tensorshield.in
+	@./scripts/launch-check.sh "$(URL)"
+
 .PHONY: prod-validate
 prod-validate: ## validate the hardened single-box stack (compose + Caddyfile) without secrets
 	@TSENGINE_SECRET_KEY=validate TSENGINE_PLATFORM_TOKEN=validate \
