@@ -156,6 +156,8 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 	// highest-risk issues lead (live first, then a finding on a customer-data asset jumps a finding
 	// on a low-sensitivity one). No-op on ranking while every asset is at the default Standard tier.
 	issues = crossdetect.PrioritizeByDataTier(issues, assets)
+		conns, _ := d.Store.ListConnections(ctx, tenantID)
+	issues = crossdetect.AnnotatePlatform(issues, findings, assets, conns)
 
 	// Plain-English explanations — what broke, why it matters here, what to do, how soon. Our reader
 	// has no security engineer, so a list of rule ids is a list they cannot act on. Deterministic
