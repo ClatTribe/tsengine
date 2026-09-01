@@ -212,6 +212,7 @@ export interface Issue {
   cvss?: number; // worst CVSS base score across the group
   cvss_vector?: string; // CVSS base vector (NVD) — attack-vector detail
   public_exploit?: boolean; // a public exploit/PoC exists (ExploitDB/Metasploit)
+  platform?: string; // source connector kind (github|aws|gcp|gworkspace|okta)
 }
 
 // Explanation is the plain-English answer for a reader with no security background: what broke, why it
