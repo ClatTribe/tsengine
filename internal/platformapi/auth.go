@@ -261,6 +261,7 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 	var body struct {
 		Email string `json:"email"`
 		Name  string `json:"name"`
+		Role  string `json:"role"` // "" | member | auditor — never owner
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
@@ -269,6 +270,17 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 	email := strings.ToLower(strings.TrimSpace(body.Email))
 	if !strings.Contains(email, "@") {
 		writeJSON(w, http.StatusBadRequest, errBody("a valid email is required"))
+		return
+	}
+	role := platform.RoleMember
+	switch strings.ToLower(strings.TrimSpace(body.Role)) {
+	case "", platform.RoleMember:
+	case platform.RoleAuditor:
+		role = platform.RoleAuditor
+	default:
+		// Owner is not an invitable role — a workspace has the one that created it — and an
+		// unknown role must not silently become a member seat.
+		writeJSON(w, http.StatusBadRequest, errBody("role must be member or auditor"))
 		return
 	}
 	if _, err := d.Store.GetUserByEmail(r.Context(), email); err == nil {
@@ -291,7 +303,7 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 	}
 	u := platform.User{
 		ID: d.newID("usr"), TenantID: s.TenantID, Email: email, Name: strings.TrimSpace(body.Name),
-		Role: platform.RoleMember, PasswordHash: hash, CreatedAt: time.Now().UTC(),
+		Role: role, PasswordHash: hash, CreatedAt: time.Now().UTC(),
 		MustChangePassword: true, // the temp password is the owner's; force the member to set their own
 	}
 	if err := d.Store.PutUser(r.Context(), u); err != nil {

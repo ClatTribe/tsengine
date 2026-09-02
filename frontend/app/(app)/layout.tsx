@@ -65,6 +65,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             This replaced two banners that each had to be remembered separately — the arrangement that
             let a halted workspace read "agent online" and a failed scan render as an empty list. */}
         <DegradationBar degradations={system.degradations} />
+        {me?.role === "auditor" && (
+          <div className="border-b border-border bg-surface-2 px-4 py-1.5 text-center text-xs text-muted md:px-6">
+            Read-only auditor access — you can read every finding, control and report here; actions that change the workspace are refused.
+          </div>
+        )}
         {/* px-4 below md: 24px of gutter either side is a tenth of a 375px screen. */}
         <main className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
           <div className="mx-auto max-w-6xl">{children}</div>
