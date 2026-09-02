@@ -29,7 +29,6 @@ type OpenCode struct {
 	pass      string
 	model     string // provider/model
 	http      *http.Client
-	usage     usageCounter // unknown from this seam; kept zero → TotalUsage reports zeros, callers render "unknown"
 	mu        sync.Mutex
 	sessionID string
 }

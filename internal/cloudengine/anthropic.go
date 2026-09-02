@@ -19,8 +19,8 @@ import (
 // SECRET HANDLING (mirrors gemini.go): the key is read from ANTHROPIC_API_KEY at runtime and sent
 // ONLY in the x-api-key header — never in a URL, log, error, or on disk. No literal key in code.
 type Anthropic struct {
-	usage   usageCounter
-	apiKey  string // from ANTHROPIC_API_KEY — never logged
+	usage   *usageCounter // shared with WithModel copies — one engagement, one total (pointer: an atomic must not be copied)
+	apiKey  string        // from ANTHROPIC_API_KEY — never logged
 	model   string
 	baseURL string
 	http    *http.Client
@@ -51,7 +51,7 @@ func NewAnthropic(apiKey, model, baseURL string) *Anthropic {
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	// The agent loop is long-horizon; give each call a generous ceiling (matches the OpenAI-compat client).
-	return &Anthropic{apiKey: apiKey, model: model, baseURL: baseURL, http: &http.Client{Timeout: 300 * time.Second}}
+	return &Anthropic{usage: &usageCounter{}, apiKey: apiKey, model: model, baseURL: baseURL, http: &http.Client{Timeout: 300 * time.Second}}
 }
 
 type anthropicReq struct {
@@ -128,7 +128,6 @@ func (a *Anthropic) WithModel(model string) (LLM, bool) {
 	if strings.TrimSpace(model) == "" {
 		return nil, false
 	}
-	c := *a
-	c.model = model
-	return &c, true
+	c := &Anthropic{usage: a.usage, apiKey: a.apiKey, model: model, baseURL: a.baseURL, http: a.http}
+	return c, true
 }
