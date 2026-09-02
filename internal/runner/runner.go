@@ -238,7 +238,14 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 		return 0, fmt.Errorf("runner: discover: %w", err)
 	}
 	s.registerWebhooks(ctx, conn, c.Kind, tok, assets)
+	// One asset that will not scan must not stop the rest. This loop used to return on the first
+	// scan error, so an org whose third repository failed (an empty repo, a sandbox hiccup) left every
+	// repository after it registered but never scanned — and the caller learned only "3 scanned".
+	// Mirror RescanTenant: keep going, count what scanned, return the first error alongside it so
+	// the caller can report a partial pass as partial. A store error still stops: if assets cannot
+	// be persisted nothing downstream is trustworthy.
 	scanned := 0
+	var firstErr error
 	for i := range assets {
 		if assets[i].ID == "" {
 			assets[i].ID = s.newID("asset")
@@ -247,11 +254,14 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 			return scanned, err
 		}
 		if _, _, err := s.scanAsset(ctx, assets[i], platform.TriggerSchedule); err != nil {
-			return scanned, err
+			if firstErr == nil {
+				firstErr = fmt.Errorf("runner: scan %s: %w", assets[i].Target, err)
+			}
+			continue
 		}
 		scanned++
 	}
-	return scanned, nil
+	return scanned, firstErr
 }
 
 // registerWebhooks installs a push webhook on each discovered repo so future events

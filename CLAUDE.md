@@ -1625,7 +1625,14 @@ memory/file impls â `TSENGINE_PLATFORM_DB=/data/platform.db` (a `.db`/`.sql
 it; a `.json` path still gets the snapshot file store. Async scans: **`internal/jobs`** is
 a bounded in-process worker pool (back-pressure â 429) so `POST /v1/rescan` returns `202` +
 a pollable `Job` (`GET /v1/jobs/{id}`, tenant-scoped) instead of blocking the request for a
-minutes-long scan; `Jobs==nil` falls back to synchronous (test back-compat). Observability:
+minutes-long scan; `Jobs==nil` falls back to synchronous (test back-compat). **The OAuth
+callback queues the FIRST scan the same way** (`kind:"connect"`, redirect carries `&job=<id>`,
+`/assets` polls it via `/api/job`): it used to run `DiscoverAndScan` synchronously INSIDE the
+provider redirect, so the browser sat on GitHub's redirect page for the whole scan, the edge timed
+out first, and the cancelled request context killed the scan mid-flight — the one moment the
+funnel is built around ended on a timeout page. `DiscoverAndScan` also now continues past a single
+failing asset (as `RescanTenant` always did) and returns the first error beside the count, so a
+partial first pass is reported as partial. Observability:
 **`internal/obsv`** installs a structured **slog** default (text, or JSON via
 `TSENGINE_LOG_FORMAT=json`; level via `TSENGINE_LOG_LEVEL`) â which also routes the existing
 `log.Print` lines â and a Prometheus **`GET /metrics`** (request count/latency,

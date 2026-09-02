@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -214,17 +215,62 @@ func (d Deps) handleConnectCallback(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
-	// onboarding: discover + scan the freshly connected assets
+	// Onboarding: discover + scan the freshly connected assets — OFF the request path.
+	//
+	// This used to run DiscoverAndScan synchronously, inside the provider's OAuth redirect. The
+	// browser sat on GitHub's "redirecting…" page for the whole scan; a twenty-repo org is minutes,
+	// the edge proxy times out long before that, and when the client went away r.Context() was
+	// cancelled and the scan died mid-flight with its error discarded. So the ONE moment the funnel
+	// is optimised for — connect, then see a real finding — ended on a timeout page, while the
+	// /assets banner (written as if this were already async) promised findings "in a few minutes".
+	//
+	// With a job pool the callback enqueues the work and lands the browser immediately; the banner
+	// polls the job. Without a pool (tests, non-browser callers) it stays synchronous, exactly as the
+	// rescan handler does.
 	scanned := 0
-	if d.Runner != nil {
+	jobID := ""
+	if d.Runner != nil && d.Jobs != nil {
+		connection := c
+		job, jerr := d.Jobs.Enqueue("connect", tenantID, func(ctx context.Context) (any, error) {
+			n, scanErr := d.Runner.DiscoverAndScan(ctx, connection)
+			res := map[string]any{"connection_id": connection.ID, "kind": connection.Kind, "assets_scanned": n}
+			if scanErr != nil {
+				res["warning"] = scanErr.Error()
+			}
+			// Same rule as rescan: only a total failure fails the job. One repository that would not
+			// scan must not make "connect GitHub" read as failed when nineteen others did.
+			if scanErr != nil && n == 0 {
+				return res, scanErr
+			}
+			return res, nil
+		})
+		if jerr != nil {
+			// The connection IS stored; only the automatic first scan could not be queued. Fall back to
+			// the synchronous path rather than leaving the tenant connected-but-unscanned: a queue that
+			// is momentarily full is not a reason to skip the aha moment.
+			slog.Warn("connect: could not queue first scan, running inline", "kind", kind, "err", jerr)
+			scanned, _ = d.Runner.DiscoverAndScan(r.Context(), c)
+		} else {
+			jobID = job.ID
+		}
+	} else if d.Runner != nil {
 		scanned, _ = d.Runner.DiscoverAndScan(r.Context(), c)
 	}
 	// Browser-facing OAuth redirect: land the founder back in the app on a "✓ connected, scanning
 	// now" state instead of dumping a raw JSON blob in their browser (the post-connect "aha"). Only
 	// when an app base is configured; otherwise keep the JSON (tests / non-browser callers).
 	if d.AppURL != "" {
-		dest := fmt.Sprintf("%s/assets?connected=%s&scanned=%d", strings.TrimRight(d.AppURL, "/"), url.QueryEscape(kind), scanned)
+		dest := fmt.Sprintf("%s/assets?connected=%s", strings.TrimRight(d.AppURL, "/"), url.QueryEscape(kind))
+		if jobID != "" {
+			dest += "&job=" + url.QueryEscape(jobID)
+		} else {
+			dest += fmt.Sprintf("&scanned=%d", scanned)
+		}
 		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
+	}
+	if jobID != "" {
+		writeJSON(w, http.StatusAccepted, map[string]any{"connection_id": c.ID, "job_id": jobID})
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"connection_id": c.ID, "assets_scanned": scanned})
