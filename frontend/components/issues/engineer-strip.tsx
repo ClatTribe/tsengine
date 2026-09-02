@@ -30,7 +30,8 @@ export function EngineerStrip({ aiEnabled }: { aiEnabled: boolean }) {
         <Sparkles className="h-4 w-4 shrink-0 text-muted" />
         <span className="min-w-0 flex-1 text-muted">
           <span className="font-medium text-ink">Turn on your AI Security Engineer</span> to triage this list, rank by real
-          impact, and explain every issue — beyond the deterministic scan.
+          impact, draft the fix, and explain every issue — beyond the deterministic scan. Included on Core, or bring your own
+          model key on any plan.
         </span>
         <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-accent">
           Enable <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
