@@ -414,7 +414,10 @@ func main() {
 			platform.ConnOkta:       operate.NewOkta(os.Getenv("OKTA_ORG_URL")),
 		}, EmailAuth: operate.NewEmailAuth()},
 	}
-	workspaceRunner := &runner.OperateRunner{Source: workspaceSource, Apps: st}
+	// Employees: the stored HRIS roster (Settings → HR system, POST /v1/hris/sync) is joined against the
+	// identity provider's accounts on EVERY monitoring pass, so a leaver whose account is still enabled
+	// is an incident the next pass after HR records the departure — not the next time someone clicks.
+	workspaceRunner := &runner.OperateRunner{Source: workspaceSource, Apps: st, Employees: st}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
 		engine := &runner.EngineRunner{
 			Resolve:       assetregistry.HandlerFor,
@@ -563,10 +566,13 @@ func main() {
 		},
 		CloudSnapshots: cloudSnaps,
 		CloudHistory:   cloudHist,
-		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
-		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
-		Detector:       detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)
-		Token:          token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
+		// The HRIS sync joins the fetched roster against the SAME identity source the runner scans
+		// with, so the on-demand join and the scheduled one see the same accounts.
+		WorkspaceSource: workspaceSource,
+		Recorder:        rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
+		IncidentOpener:  detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
+		Detector:        detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)
+		Token:           token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// AppURL lands the user back in the app after OAuth (else they'd see a raw JSON blob).
 		// Defaults to the public base (same-origin behind the TLS edge), override with TSENGINE_APP_URL.
 		AppURL:             envOr("TSENGINE_APP_URL", os.Getenv("TSENGINE_PLATFORM_PUBLIC")),
@@ -583,6 +589,10 @@ func main() {
 	// reaches it.
 	svc.AttributeCWEs = apiDeps.CWEAttributor()
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
+	// Device posture becomes a continuously-monitored surface: the SAME fetcher construction the
+	// Settings "Sync now" button uses (sealed credential via the vault, Intune borrowing the M365
+	// connection), so the scheduled door and the on-demand door cannot authenticate differently.
+	svc.MDMFetcher = apiDeps.MDMFetcherFor
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
 	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the

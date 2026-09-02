@@ -299,3 +299,10 @@ func (f *File) ReplaceThirdPartyApps(ctx context.Context, tenantID, provider str
 	}
 	return f.persist()
 }
+
+func (f *File) ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error {
+	if err := f.Memory.ReplaceEmployees(ctx, tenantID, source, emps); err != nil {
+		return err
+	}
+	return f.persist()
+}

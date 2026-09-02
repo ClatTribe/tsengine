@@ -6,7 +6,7 @@ import type {
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
+  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -632,6 +632,22 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(cfg),
     }),
+  // Device-management source (Kandji / Jamf / Intune). GET never returns a credential; PUT seals
+  // them. POST /v1/devices/sync reads the fleet live and runs the same ingest as a posted snapshot.
+  mdmSettings: () =>
+    safe<MDMSettings>("/v1/settings/mdm", {
+      provider: "", base_url: "", has_token: false, client_id: "", has_client_secret: false, m365_connected: false, providers: ["kandji", "jamf", "intune"],
+    }),
+  setMDMSettings: (cfg: { provider: string; base_url: string; api_token: string; client_id: string; client_secret: string }) =>
+    call<MDMSettings>("/v1/settings/mdm", { method: "PUT", body: JSON.stringify(cfg) }),
+  syncDevices: () => call<DeviceSyncResult>("/v1/devices/sync", { method: "POST" }),
+  // HR-system source (Merge / Finch). POST /v1/hris/sync fetches the roster and joins it against
+  // every connected identity provider.
+  hrisSettings: () =>
+    safe<HRISSettings>("/v1/settings/hris", { provider: "", has_key: false, has_account_token: false, employees: 0, providers: ["merge", "finch"] }),
+  setHRISSettings: (cfg: { provider: string; api_key: string; account_token: string }) =>
+    call<HRISSettings>("/v1/settings/hris", { method: "PUT", body: JSON.stringify(cfg) }),
+  syncHRIS: () => call<HRISSyncResult>("/v1/hris/sync", { method: "POST" }),
 
   // Per-tenant incident escalation matrix (MDR/SOC): severity-tiered routing to alert channels.
   escalationSettings: () =>

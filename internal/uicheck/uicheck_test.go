@@ -338,6 +338,26 @@ var required = []struct {
 		wouldOtherwiseClaim: "that a part-answered review is finished — the count of accounts still " +
 			"awaiting a decision is the difference between an access review and a list of accounts",
 	},
+	{
+		page:  "frontend/components/settings/mdm-control.tsx",
+		field: "checks_not_run",
+		wouldOtherwiseClaim: "that a fleet fetched live from Intune with zero findings has encrypted disks " +
+			"AND locked screens AND firewalls on, when Intune's device record cannot report the last " +
+			"three at all — the provider's limits and the devices it could not read travel in this " +
+			"field, and rendering only the count turns 'not assessed' into 'compliant'",
+	},
+	{
+		page:  "frontend/components/settings/hris-control.tsx",
+		field: "checks_not_run",
+		wouldOtherwiseClaim: "that zero leavers with access means offboarding works, when the roster may " +
+			"have been stored with no identity provider to join against — the reason the join could " +
+			"not conclude is in this field, and without it a stored-but-unjoined roster reads as clean",
+	},
+	{
+		page:                "frontend/components/settings/hris-control.tsx",
+		field:               "joined",
+		wouldOtherwiseClaim: "a completed check when the sync only stored the roster",
+	},
 }
 
 func TestCoverageClaimsRenderTheFieldsThatQualifyThem(t *testing.T) {

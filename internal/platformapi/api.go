@@ -86,6 +86,17 @@ type Deps struct {
 	// GraphAPIBase overrides the Microsoft Graph base for the live M365 SaaS-posture
 	// sync (default https://graph.microsoft.com). Test/staging override only.
 	GraphAPIBase string
+	// MDMHTTP overrides the client the live device-posture sync uses to reach the tenant's Kandji /
+	// Jamf (default: the SSRF-guarded client, since the base URL is tenant-controlled). Tests only.
+	MDMHTTP *http.Client
+	// HRISHTTP / MergeAPIBase / FinchAPIBase override the HRIS fetch (fixed provider hosts). Tests only.
+	HRISHTTP     *http.Client
+	MergeAPIBase string
+	FinchAPIBase string
+	// WorkspaceSource yields the identity provider's accounts for a workspace asset — the same source
+	// the runner's OperateRunner uses. The HRIS sync joins the fetched roster against it on demand.
+	// Nil → the sync stores the roster and says the join did not run.
+	WorkspaceSource runner.WorkspaceSource
 	// Prober drives live active-exploitation probes (the Phase-1 ActiveDriver). Nil →
 	// active engagements fall back to the passive driver (no live exploitation). Set
 	// only when the operator has enabled live active exploitation; per-engagement
@@ -234,6 +245,10 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/settings/drata/sync", d.auth(d.handleSyncDrata))                             // push control posture as Drata records
 	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                              // per-tenant Jira ticketing destination (base/email/project + has_token)
 	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                              // set + seal the tenant's Jira API token (Bucket B)
+	mux.HandleFunc("GET /v1/settings/mdm", d.auth(d.handleGetMDMSettings))                                // per-tenant device-management source (Kandji / Jamf / Intune), credentials never returned
+	mux.HandleFunc("PUT /v1/settings/mdm", d.auth(d.handlePutMDMSettings))                                // set + seal the MDM credential (Bucket B)
+	mux.HandleFunc("GET /v1/settings/hris", d.auth(d.handleGetHRISSettings))                              // per-tenant HR-system source (Merge / Finch) + roster size
+	mux.HandleFunc("PUT /v1/settings/hris", d.auth(d.handlePutHRISSettings))                              // set + seal the HRIS credentials (Bucket B)
 	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))                  // per-tenant incident escalation matrix (MDR/SOC)
 	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))                  // set the escalation tiers (severity → channels)
 	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                                // per-tenant remediation SLA policy (ack/resolve targets)
@@ -361,6 +376,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                                                       // "search your cloud like a database" — query the inventory + relationships
 	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                                                         // third-party / vendor risk (TPRM) inventory → findings
 	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))                                             // endpoint/device posture (MDM-lite) inventory → findings
+	mux.HandleFunc("POST /v1/devices/sync", d.auth(d.handleSyncDevices))                                                       // LIVE device posture fetched from the configured MDM (Bucket A)
+	mux.HandleFunc("POST /v1/hris/sync", d.auth(d.handleSyncHRIS))                                                             // LIVE HR roster fetch + joiner/leaver join against the IdP
 	mux.HandleFunc("GET /v1/settings/ai-mode", d.auth(d.handleGetAIMode))                                                      // what AI is running, why, and this month's spend
 	mux.HandleFunc("PUT /v1/settings/ai-mode", d.auth(d.handleSetAIMode))                                                      // deterministic-only | +engineer | +pentester
 	mux.HandleFunc("POST /v1/database/scan", d.auth(d.handleDatabaseScan))                                                     // connect Postgres (Supabase/Neon/RDS) — DSN used once, never stored

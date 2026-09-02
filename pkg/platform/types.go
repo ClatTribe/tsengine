@@ -137,6 +137,16 @@ type Tenant struct {
 	// (KeyRef); the connection/resource ids are stored once EnsureConnection creates them, so a
 	// re-sync reuses the connection instead of making a new one each time.
 	Drata *DrataConfig `json:"drata,omitempty"`
+	// MDM is the tenant's device-management source (Kandji / Jamf Pro / Intune) — the FETCH half of
+	// device posture. internal/deviceposture could always assess a posted inventory; this is where the
+	// inventory now comes from on its own. Provider and base URL are plain identifiers; every credential
+	// is sealed (TokenRef / ClientSecretRef). Redacted() drops the whole block.
+	MDM *MDMConfig `json:"mdm,omitempty"`
+	// HRIS is the tenant's employment-records source (Merge.dev / Finch unified HRIS APIs) — the one
+	// surface the product had nothing for. An IdP shows ACCOUNTS; only HR shows EMPLOYMENT, and the
+	// join between the two is the finding an auditor asks for first (a leaver whose account is still
+	// active). Credentials sealed; Redacted() drops the block.
+	HRIS *HRISConfig `json:"hris,omitempty"`
 	// Escalation is the per-tenant incident escalation matrix (the MDR/SOC "who is alerted, how
 	// urgently" for a new incident). nil/disabled = today's behaviour (alert every configured
 	// channel). No secret material — channel names only.
@@ -530,6 +540,97 @@ func (j *JiraConfig) HasToken() bool {
 	return j != nil && j.BaseURL != "" && j.Email != "" && j.Project != "" && j.TokenRef != ""
 }
 
+// MDM providers the device-posture fetch understands.
+const (
+	MDMKandji = "kandji"
+	MDMJamf   = "jamf"
+	MDMIntune = "intune"
+)
+
+// MDMConfig is the per-tenant device-management source. Provider picks the fetcher; BaseURL is the
+// customer's own Kandji / Jamf tenant URL (Intune needs none — Graph is a fixed host). TokenRef is a
+// sealed API token (Kandji, Jamf bearer, or an Intune Graph token); ClientID + ClientSecretRef are the
+// Jamf Pro API-client alternative (a Jamf bearer token expires in thirty minutes, so a standing
+// integration mints one per sync). For Intune with no token of its own, the sync reuses the onboarded
+// Microsoft 365 connection's token — reuse a connection before adding one (CLAUDE.md §2.2.1 rule 3).
+type MDMConfig struct {
+	Provider        string `json:"provider"`
+	BaseURL         string `json:"base_url,omitempty"`
+	TokenRef        string `json:"token_ref,omitempty"`
+	ClientID        string `json:"client_id,omitempty"`
+	ClientSecretRef string `json:"client_secret_ref,omitempty"`
+}
+
+// HasCredential reports whether the config carries something a fetch could authenticate with.
+// Intune is the exception handled by the caller (it may borrow the M365 connection's token).
+func (m *MDMConfig) HasCredential() bool {
+	if m == nil {
+		return false
+	}
+	return m.TokenRef != "" || (m.ClientID != "" && m.ClientSecretRef != "")
+}
+
+// HRIS providers — unified APIs, deliberately: one integration each covers most of the market.
+const (
+	HRISMerge = "merge"
+	HRISFinch = "finch"
+)
+
+// HRISConfig is the per-tenant employment-records source. Merge needs the account's API key (KeyRef)
+// plus the linked-account token for THIS employer (AccountTokenRef); Finch needs only the employer's
+// access token (KeyRef). All sealed. BaseURL overrides the provider endpoint for tests and regional
+// deployments; empty means the provider's public API.
+type HRISConfig struct {
+	Provider        string `json:"provider"`
+	KeyRef          string `json:"key_ref,omitempty"`
+	AccountTokenRef string `json:"account_token_ref,omitempty"`
+	BaseURL         string `json:"base_url,omitempty"`
+}
+
+// HasCredential reports whether a fetch could authenticate.
+func (h *HRISConfig) HasCredential() bool {
+	if h == nil {
+		return false
+	}
+	switch h.Provider {
+	case HRISMerge:
+		return h.KeyRef != "" && h.AccountTokenRef != ""
+	case HRISFinch:
+		return h.KeyRef != ""
+	}
+	return false
+}
+
+// Employment statuses, normalised from whatever the HRIS calls them. Only EmploymentTerminated
+// drives a finding; the rest exist so a roster can be read back honestly.
+const (
+	EmploymentActive     = "active"
+	EmploymentPending    = "pending" // hired, not yet started
+	EmploymentTerminated = "terminated"
+	EmploymentUnknown    = "unknown" // the HRIS reported a status we do not recognise
+)
+
+// Employee is one employment record from the tenant's HRIS, as stored. It is the HR half of the
+// joiner/leaver join: the IdP knows an account exists; this knows whether the person still works
+// here. Every field is what the HRIS asserted — nothing is inferred from a name or an address.
+type Employee struct {
+	TenantID string `json:"tenant_id"`
+	Source   string `json:"source"` // HRISMerge | HRISFinch
+	ID       string `json:"id"`     // the HRIS's own id for the record
+	Name     string `json:"name,omitempty"`
+	// WorkEmail is the address the IdP account is expected to carry. PersonalEmails are the other
+	// addresses the HRIS asserts belong to the same person — an assertion by a system that knows,
+	// which is what makes matching on them a join rather than a guess (cf. estateingest/ghidentity).
+	WorkEmail      string    `json:"work_email,omitempty"`
+	PersonalEmails []string  `json:"personal_emails,omitempty"`
+	Status         string    `json:"status"`                    // EmploymentActive | EmploymentPending | EmploymentTerminated | EmploymentUnknown
+	EmploymentType string    `json:"employment_type,omitempty"` // employee | contractor | intern | … as the HRIS said
+	StartDate      string    `json:"start_date,omitempty"`      // YYYY-MM-DD
+	EndDate        string    `json:"end_date,omitempty"`        // YYYY-MM-DD — the termination / separation date
+	Department     string    `json:"department,omitempty"`
+	FetchedAt      time.Time `json:"fetched_at"`
+}
+
 // PRBotPolicy is the per-tenant repository PR-review-bot policy: whether to post inline review
 // comments + a merge-gating check-run on a pull request, and the severity at/above which the
 // check-run FAILS (blocks merge). No secret material — safe to return to the client.
@@ -626,6 +727,9 @@ func (t Tenant) Redacted() Tenant {
 	t.LLMRoles = nil // per-role overrides carry sealed key refs too — same reason as LLM
 	t.SlackWebhookRef = ""
 	t.Jira = nil
+	t.Drata = nil
+	t.MDM = nil
+	t.HRIS = nil
 	return t
 }
 

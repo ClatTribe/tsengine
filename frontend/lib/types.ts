@@ -844,6 +844,54 @@ export interface DrataSettings {
   base_url?: string;
 }
 
+// Device-management source (Kandji / Jamf Pro / Intune). Credentials are never returned — only
+// whether one is set. m365_connected tells the Intune case whether a sync can borrow the connected
+// Microsoft 365 tenant's token when no token of its own is configured.
+export interface MDMSettings {
+  provider: string; // "" = not configured
+  base_url: string;
+  has_token: boolean;
+  client_id: string;
+  has_client_secret: boolean;
+  m365_connected: boolean;
+  providers: string[];
+}
+
+// Result of a live device sync. checks_not_run carries what the fetch could NOT assess — the
+// provider's per-device limits and the devices it could not fully read — and must be rendered
+// beside the counts, or "0 issues" reads as a claim about settings the MDM never reported.
+export interface DeviceSyncResult {
+  provider: string;
+  source: string;
+  devices: number;
+  issues_detected: number;
+  findings: Finding[];
+  checks_not_run?: string[];
+}
+
+// HR-system source (Merge.dev / Finch). Credentials never returned; employees is the stored roster size.
+export interface HRISSettings {
+  provider: string; // "" = not configured
+  has_key: boolean;
+  has_account_token: boolean;
+  employees: number;
+  last_synced_at?: string;
+  providers: string[];
+}
+
+// Result of a live HRIS sync + join. joined is false when the roster was stored but no identity
+// provider was available to join against — a state checks_not_run explains and the page must show,
+// because a stored-but-unjoined roster is not "no leavers with access".
+export interface HRISSyncResult {
+  provider: string;
+  source: string;
+  employees: number;
+  issues_detected: number;
+  joined: boolean;
+  findings: Finding[];
+  checks_not_run?: string[];
+}
+
 export interface Tenant {
   id: string;
   name: string;

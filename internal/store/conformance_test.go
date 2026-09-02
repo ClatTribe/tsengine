@@ -92,6 +92,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.PutReviewRequest(ctx, platform.ReviewRequest{ID: tid + "-r", TenantID: tid, Status: platform.ReviewOpen}))
 	must(s.PutFeedback(ctx, platform.Feedback{TenantID: tid, IssueKey: tid + "-fb", Verdict: platform.FeedbackReal}))
 	must(s.ReplaceThirdPartyApps(ctx, tid, "gworkspace", []platform.ThirdPartyApp{{TenantID: tid, Provider: "gworkspace", AppID: tid + "-app"}}))
+	must(s.ReplaceEmployees(ctx, tid, "merge", []platform.Employee{{TenantID: tid, Source: "merge", ID: tid + "-emp", WorkEmail: tid + "@example.com"}}))
 }
 
 func TestStoreConformance(t *testing.T) {
@@ -196,6 +197,14 @@ func TestStoreConformance(t *testing.T) {
 				orFail(t, err)
 				if len(apps) != 1 || apps[0].TenantID != tid {
 					t.Errorf("ISOLATION apps[%s]: %+v", tid, apps)
+				}
+
+				// The employee roster is PII about another company's staff — a leak here hands one
+				// customer the names, emails and termination dates of another's workforce.
+				emps, err := s.ListEmployees(ctx, tid)
+				orFail(t, err)
+				if len(emps) != 1 || emps[0].TenantID != tid {
+					t.Errorf("ISOLATION employees[%s]: %+v", tid, emps)
 				}
 
 				// GetAction is tenant-scoped: t1's action id is invisible to t2.

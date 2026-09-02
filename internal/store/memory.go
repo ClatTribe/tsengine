@@ -41,6 +41,7 @@ type Memory struct {
 	pentests    map[string]map[string]pentest.Engagement     // tenantID → engagementID → pentest
 	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
 	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
+	employees   map[string][]platform.Employee               // tenantID → HRIS employee roster
 	users       map[string]platform.User                     // userID → user (email globally unique)
 	sessions    map[string]platform.Session                  // token → session
 	operators   map[string]platform.Operator                 // operatorID → operator (cross-tenant; global)
@@ -73,6 +74,7 @@ func NewMemory() *Memory {
 		pentests:        map[string]map[string]pentest.Engagement{},
 		reviews:         map[string]map[string]platform.ReviewRequest{},
 		apps:            map[string][]platform.ThirdPartyApp{},
+		employees:       map[string][]platform.Employee{},
 		users:           map[string]platform.User{},
 		sessions:        map[string]platform.Session{},
 		operators:       map[string]platform.Operator{},
@@ -762,6 +764,27 @@ func (m *Memory) ListThirdPartyApps(_ context.Context, tenantID string) ([]platf
 	return clone(m.apps[tenantID]), nil
 }
 
+// ReplaceEmployees swaps the tenant's roster for one HRIS source with the freshly-fetched set,
+// leaving other sources untouched — the same shape as ReplaceThirdPartyApps.
+func (m *Memory) ReplaceEmployees(_ context.Context, tenantID, source string, emps []platform.Employee) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	kept := make([]platform.Employee, 0, len(m.employees[tenantID]))
+	for _, e := range m.employees[tenantID] {
+		if e.Source != source {
+			kept = append(kept, e)
+		}
+	}
+	m.employees[tenantID] = append(kept, emps...)
+	return nil
+}
+
+func (m *Memory) ListEmployees(_ context.Context, tenantID string) ([]platform.Employee, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return clone(m.employees[tenantID]), nil
+}
+
 // Snapshot is the serializable form of a Memory store — what the file-backed store
 // persists. Fields are exported so encoding/json can round-trip them.
 type Snapshot struct {
@@ -788,6 +811,7 @@ type Snapshot struct {
 	Pentests        map[string]map[string]pentest.Engagement          `json:"pentests,omitempty"`
 	Reviews         map[string]map[string]platform.ReviewRequest      `json:"reviews"`
 	Apps            map[string][]platform.ThirdPartyApp               `json:"apps"`
+	Employees       map[string][]platform.Employee                    `json:"employees,omitempty"`
 	Users           map[string]platform.User                          `json:"users"`
 	Sessions        map[string]platform.Session                       `json:"sessions"`
 	Operators       map[string]platform.Operator                      `json:"operators,omitempty"`
@@ -823,6 +847,7 @@ func (m *Memory) Export() Snapshot {
 		Pentests:        m.pentests,
 		Reviews:         m.reviews,
 		Apps:            m.apps,
+		Employees:       m.employees,
 		Users:           m.users,
 		Sessions:        m.sessions,
 		Operators:       m.operators,
@@ -857,6 +882,7 @@ func (m *Memory) load(s Snapshot) {
 	m.pentests = orEmptyPentests(s.Pentests)
 	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)
+	m.employees = orEmpty(s.Employees)
 	m.users = s.Users
 	if m.users == nil {
 		m.users = map[string]platform.User{}

@@ -191,6 +191,13 @@ type Store interface {
 	ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error
 	ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error)
 
+	// --- employee roster (refreshed per HRIS sync, per source) ---
+	// The HR half of the joiner/leaver join: the IdP knows an account exists, only this knows
+	// whether the person still works here. Replaced wholesale per source so a record the HRIS
+	// deleted disappears rather than lingering as a phantom employee.
+	ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error
+	ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error)
+
 	// --- users & sessions (real account auth) ---
 	PutUser(ctx context.Context, u platform.User) error
 	GetUser(ctx context.Context, id string) (platform.User, error)
