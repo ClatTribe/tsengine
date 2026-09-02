@@ -836,6 +836,13 @@ export interface BrandingSettings {
   white_labelled: boolean;
   default_brand: string;
 }
+export interface DrataSettings {
+  configured: boolean;
+  has_key: boolean;
+  connected: boolean;
+  workspace_id?: number;
+  base_url?: string;
+}
 
 export interface Tenant {
   id: string;

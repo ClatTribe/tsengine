@@ -132,6 +132,11 @@ type Tenant struct {
 	// operator-env Jira is the fallback). BaseURL/Email/Project are plain identifiers; the API token
 	// is sealed (TokenRef). Redacted() drops the whole block.
 	Jira *JiraConfig `json:"jira,omitempty"`
+	// Drata is the per-tenant push-to-Drata config: the customer's Drata Custom Connection that the
+	// engine writes control-posture records into (their tests evaluate them). The API key is sealed
+	// (KeyRef); the connection/resource ids are stored once EnsureConnection creates them, so a
+	// re-sync reuses the connection instead of making a new one each time.
+	Drata *DrataConfig `json:"drata,omitempty"`
 	// Escalation is the per-tenant incident escalation matrix (the MDR/SOC "who is alerted, how
 	// urgently" for a new incident). nil/disabled = today's behaviour (alert every configured
 	// channel). No secret material — channel names only.
@@ -507,6 +512,18 @@ type JiraConfig struct {
 	Project  string `json:"project"`
 	TokenRef string `json:"token_ref,omitempty"`
 }
+
+// DrataConfig is a tenant's push-to-Drata destination. See Tenant.Drata.
+type DrataConfig struct {
+	KeyRef       string `json:"key_ref,omitempty"` // sealed API key
+	WorkspaceID  int    `json:"workspace_id,omitempty"`
+	ConnectionID int    `json:"connection_id,omitempty"` // set once the connection is created
+	ResourceID   int    `json:"resource_id,omitempty"`
+	BaseURL      string `json:"base_url,omitempty"` // override the public endpoint (testing / gov)
+}
+
+// HasKey reports whether a Drata API key is configured (without exposing it).
+func (d *DrataConfig) HasKey() bool { return d != nil && d.KeyRef != "" }
 
 // HasToken reports whether a usable Jira destination is configured (without exposing the token).
 func (j *JiraConfig) HasToken() bool {
