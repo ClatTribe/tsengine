@@ -71,6 +71,7 @@ func (d Deps) handleSignup(w http.ResponseWriter, r *http.Request) {
 		Email     string `json:"email"`
 		Password  string `json:"password"`
 		Name      string `json:"name"`
+		Source    string `json:"source"` // optional attribution: the ?ref= the signup arrived with
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
@@ -95,7 +96,7 @@ func (d Deps) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenant := platform.Tenant{ID: d.newID("ten"), Name: ws, Plan: "free", CreatedAt: time.Now().UTC()}
+	tenant := platform.Tenant{ID: d.newID("ten"), Name: ws, Plan: "free", CreatedAt: time.Now().UTC(), Source: normalizeSource(body.Source)}
 	if err := d.Store.PutTenant(r.Context(), tenant); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
@@ -339,4 +340,21 @@ func inviteEmailHTML(publicURL, addr, temp string) string {
 		`<p><b>Email:</b> ` + addr + `<br><b>One-time password:</b> <code>` + temp + `</code></p>` +
 		`<p>You'll be asked to set your own password immediately after signing in.</p>` +
 		`<p>If you weren't expecting this invitation, you can ignore this email.</p>`
+}
+
+// normalizeSource bounds an attribution tag so it can be COUNTED: lower-case, trimmed, only
+// [a-z0-9._-], at most 64 characters. Anything else is dropped to "" (direct/unknown) rather than
+// stored raw — a free-text field that accepts anything is one nobody can group by, and an
+// attacker-controlled query string is not something to persist verbatim on every tenant record.
+func normalizeSource(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if len(raw) > 64 {
+		raw = raw[:64]
+	}
+	for _, r := range raw {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+			return ""
+		}
+	}
+	return raw
 }
