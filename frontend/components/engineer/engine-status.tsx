@@ -33,12 +33,17 @@ export function EngineStatus({ hasKey, aiEnabled }: { hasKey: boolean; aiEnabled
         cross-surface correlation, fix-verification on re-scan, evidence capture and reporting. Those are
         deterministic and need no model.
       </p>
-      <Link
-        href="/settings"
-        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
-      >
-        Add your own model key — works on any plan <ArrowUpRight className="h-3.5 w-3.5" />
-      </Link>
+      {/* Two doors, stated as two: Core funds the model on our side; a key of your own runs it on any
+          plan at your model cost. This used to name only the key, which reads as "there is no paid
+          path" to the buyer who would rather pay than fetch a key. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium">
+        <Link href="/pricing" className="inline-flex items-center gap-1.5 text-accent hover:underline">
+          Upgrade to Core — the engineer runs on our model <ArrowUpRight className="h-3.5 w-3.5" />
+        </Link>
+        <Link href="/settings" className="inline-flex items-center gap-1.5 text-accent hover:underline">
+          or add your own model key — works on any plan <ArrowUpRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
     </div>
   );
 }

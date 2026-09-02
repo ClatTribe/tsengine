@@ -23,7 +23,7 @@ import { ArrowRight, CheckCircle2, MinusCircle, FlaskConical } from "lucide-reac
 export const metadata = pageMeta({
   title: "Benchmarks — Corpora We Did Not Write",
   description:
-    "Our SAST scores 46.5% Youden across all 2,740 OWASP BenchmarkJava cases — third on the published cohort. The method, how to reproduce it, and the gaps.",
+    "Our SAST scores 46.5% Youden across all 2,740 OWASP BenchmarkJava cases — third on the published cohort — and two-thirds on BishopFox's and Rhino's cloud privilege-escalation keys. The method, how to reproduce it, and the gaps.",
   path: "/benchmarks",
 });
 
@@ -33,6 +33,34 @@ const COHORT = [
   { name: "TensorShield", score: "46.5", us: true },
   { name: "Fortify", score: "35", us: false },
   { name: "SonarQube", score: "6", us: false },
+];
+
+// The other answer keys we did not write. Each is stated with the thing that limits it, because a
+// number without its limit is a marketing claim wearing a benchmark's clothes:
+//   - a corpus that has TOLD us what to add is no longer held out, so its recall can only rise from
+//     here and stops meaning much — the false-positive half (where one exists) is what still moves;
+//   - a recall-only key says nothing about specificity, and is said to be recall-only;
+//   - a key whose mappings are execution-proven (a violating snapshot is built, the real assessor
+//     runs, and an unproven mapping FAILS the test) is a stronger claim than one that is transcribed.
+const EXTERNAL_KEYS = [
+  {
+    t: "Cloud IAM privilege escalation — BishopFox IAM-Vulnerable",
+    score: "64.5%",
+    unit: "recall over ~31 named escalation paths, first run",
+    d: "The first capability answer key in the repository we did not write. Every internal bench for the same capability scored 100%; this scored two-thirds. It ships a false-positive control set — deny precedence, resource and condition constraints — which is the half that can go DOWN as detections are added, and the number we watch now that the corpus has told us what to fix.",
+  },
+  {
+    t: "GCP privilege escalation — Rhino Security Labs catalogue",
+    score: "65.2%",
+    unit: "recall over 23 published methods, first run",
+    d: "Almost exactly the AWS figure, from an independent key. Recall only: Rhino publishes no false-positive control set, so this says nothing about specificity and should be read one-sided.",
+  },
+  {
+    t: "Identity & SaaS baselines — CISA SCuBA (M365 + Google Workspace)",
+    score: "0.993",
+    unit: "detection recall, 145 of 146 scanner-detectable policies · 100 of 101 mandatory SHALL",
+    d: "The strongest of the three, because every mapping is execution-proven: for each policy the test builds a violating tenant snapshot, runs the real assessor, and fails if the rule does not fire — an unproven mapping cannot inflate the score. It went 0.32 → 0.75 → 0.99 across successive passes, so it is no longer held out either; what it proves is that the detectors exist and fire, not that a live fetch reaches every setting they read.",
+  },
 ];
 
 // Everything the scorecard rates below High confidence, stated as not-yet-proof rather than omitted.
@@ -139,6 +167,37 @@ export default function Benchmarks() {
             </p>
           </div>
         </div>
+      </section>
+
+      {/* The other keys we did not write — each with the thing that limits it. */}
+      <section className="mx-auto max-w-3xl px-5 py-16">
+        <div className="text-xs font-semibold uppercase tracking-wider text-accent">Three more answer keys</div>
+        <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
+          Two-thirds, twice, on capabilities our own benches scored perfect.
+        </h2>
+        <p className="mt-4 text-base leading-relaxed text-muted">
+          An in-house benchmark measures whether the fixtures and the code agree, not whether the
+          product works. These are the corpora other people published for cloud privilege escalation
+          and identity baselines, scored before the gaps they named were closed. Each comes with its
+          limit, because the limit is what makes the number readable.
+        </p>
+        <div className="mt-8 space-y-3">
+          {EXTERNAL_KEYS.map((k) => (
+            <div key={k.t} className="rounded-xl border border-border bg-surface p-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <div className="text-sm font-semibold text-ink">{k.t}</div>
+                <div className="text-2xl font-semibold tabular-nums text-accent">{k.score}</div>
+              </div>
+              <div className="mt-0.5 text-xs text-faint">{k.unit}</div>
+              <p className="mt-2.5 text-sm leading-relaxed text-muted">{k.d}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-xs leading-relaxed text-faint">
+          Not on this page: any number for the AI agents themselves. Their runs to date were driven
+          through a development proxy rather than a production model key, and a figure produced that
+          way is not one you could reproduce. It goes up here when it is.
+        </p>
       </section>
 
       {/* What we will not claim yet. */}
