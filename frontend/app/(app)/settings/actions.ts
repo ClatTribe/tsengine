@@ -209,3 +209,13 @@ export async function setBranding(b: Branding): Promise<BrandingSettings> {
   revalidatePath("/settings");
   return r;
 }
+
+// Push-to-Drata: configure the destination, and run the posture sync.
+export async function setDrata(cfg: { api_key: string; workspace_id: number }) {
+  const r = await api.setDrataSettings(cfg);
+  revalidatePath("/settings");
+  return r;
+}
+export async function syncDrata() {
+  return api.syncDrata();
+}

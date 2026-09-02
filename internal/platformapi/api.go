@@ -229,6 +229,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("PUT /v1/settings/branding", d.auth(d.handlePutBranding))
 	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // per-tenant Slack incident webhook (has_slack_webhook)
 	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's Slack incident webhook (Bucket B)
+	mux.HandleFunc("GET /v1/settings/drata", d.auth(d.handleGetDrata))                                    // push-to-Drata config (has_key/connected)
+	mux.HandleFunc("PUT /v1/settings/drata", d.auth(d.handlePutDrata))                                    // set + seal the Drata API key + workspace
+	mux.HandleFunc("POST /v1/settings/drata/sync", d.auth(d.handleSyncDrata))                             // push control posture as Drata records
 	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                              // per-tenant Jira ticketing destination (base/email/project + has_token)
 	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                              // set + seal the tenant's Jira API token (Bucket B)
 	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))                  // per-tenant incident escalation matrix (MDR/SOC)

@@ -18,6 +18,7 @@ import { CloudRemediationControl } from "@/components/settings/cloud-remediation
 import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
 import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
 import { JiraControl } from "@/components/settings/jira-control";
+import { DrataControl } from "@/components/settings/drata-control";
 import { EscalationControl } from "@/components/settings/escalation-control";
 import { SLAControl } from "@/components/settings/sla-control";
 import { MaintenanceControl } from "@/components/settings/maintenance-control";
@@ -45,6 +46,7 @@ export default async function SettingsPage() {
   ]);
   const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests()]);
   const branding = await api.brandingSettings();
+  const drata = await api.drataSettings();
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -225,6 +227,7 @@ export default async function SettingsPage() {
           <p className="text-xs text-muted">Where the agent reaches a human. Connect your own Slack below; other channels are provisioned by your administrator.</p>
           <SlackWebhookControl configured={notify.has_slack_webhook} />
           <JiraControl config={jira} />
+          <DrataControl initial={drata} />
           <EscalationControl policy={escalation} />
           <ContactsControl contacts={contacts} />
           <SLAControl policy={sla} />

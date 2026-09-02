@@ -5,7 +5,7 @@ import type {
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, Branding, BrandingSettings, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
+  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -596,6 +596,12 @@ export const api = {
 
   // Per-tenant Jira ticketing destination (Bucket B). GET reports base/email/project + has_token
   // (never the token); PUT seals the token server-side. An empty base_url clears it.
+  // Push-to-Drata: the engine's control posture as records the customer's Drata tests evaluate.
+  drataSettings: () =>
+    safe<DrataSettings>("/v1/settings/drata", { configured: false, has_key: false, connected: false }),
+  setDrataSettings: (cfg: { api_key: string; workspace_id: number; base_url?: string }) =>
+    call<DrataSettings>("/v1/settings/drata", { method: "PUT", body: JSON.stringify(cfg) }),
+  syncDrata: () => call<{ pushed: number; session_id: string; replaced: boolean; connection_id: number }>("/v1/settings/drata/sync", { method: "POST" }),
   jiraSettings: () =>
     safe<{ base_url: string; email: string; project: string; has_token: boolean }>(
       "/v1/settings/jira", { base_url: "", email: "", project: "", has_token: false },
