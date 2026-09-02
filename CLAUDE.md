@@ -125,6 +125,20 @@ decision, not on effort.
    remediate within a domain are phases of ONE investigation loop — §5.3 / the
    cloudagent enumerate→verify→record→fix loop; task-split re-loads context and
    breaks continuity).
+2b. **TERMINATION IS THE HARNESS'S JOB, NOT THE MODEL'S** (`cloudagent`'s `tFinish`).
+   `finish` used to close unconditionally, so a weak model ended a run that looked
+   complete and was not: measured, one recorded 7 issues and proposed 1 fix
+   (verified_rate 0.14), and another recorded 5, fixed all 5, then quit with 41 turns
+   unused and 6 reachable, findable crown jewels never examined. Two gates now hold
+   `finish`: recorded issues with no proposed fix, and crown jewels that are reachable
+   from the internet and were never looked at. Each is **BOUNDED AT ONE NUDGE** — the
+   second `finish` always closes — so a genuinely unreachable jewel can never trap the
+   agent, and each enforces a TRUE property ("you have not looked here"), never an
+   answer: it names the jewel, never a path to it. `find_paths` records what the agent
+   EXAMINED, so a jewel looked at and correctly declined (a decoy) is covered, not
+   uncovered. Both the gate and its bound are mutation-verified. When you add a
+   terminal tool to an agent, ask what an unfinished run looks like from the outside —
+   if it is indistinguishable from a finished one, the harness owes a gate.
 3. **Integrations are SHARED across specialists** — the GitHub connection serves
    AppSec + SSPM + OSINT-leak-search; an IdP serves Identity + SOC; the cloud
    role serves Cloud + Compliance evidence. So "go comprehensive" costs almost
