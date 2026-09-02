@@ -2,6 +2,8 @@ package platformapi
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -323,8 +325,13 @@ func (d Deps) handlePublicAssess(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errBody("that domain doesn't resolve — check the spelling, e.g. acme.com"))
 		return
 	}
-	// Email-auth (DNS) and web posture (HTTPS) are independent — run them concurrently to keep the
-	// public endpoint snappy. Both are read-only and public-safe.
+	writeJSON(w, http.StatusOK, assessResolved(ctx, domain))
+}
+
+// assessResolved runs the two probes for a domain already validated + known to resolve. Email-auth
+// (DNS) and web posture (HTTPS) are independent — run them concurrently to keep the public endpoint
+// snappy. Both are read-only and public-safe.
+func assessResolved(ctx context.Context, domain string) assessResult {
 	var dc operate.DomainConfig
 	var wp webPosture
 	var wg sync.WaitGroup
@@ -332,7 +339,39 @@ func (d Deps) handlePublicAssess(w http.ResponseWriter, r *http.Request) {
 	go func() { defer wg.Done(); dc = operate.NewEmailAuth().FetchDomain(ctx, domain) }()
 	go func() { defer wg.Done(); wp = probeWeb(ctx, domain) }()
 	wg.Wait()
-	writeJSON(w, http.StatusOK, assess(dc, wp))
+	return assess(dc, wp)
+}
+
+// AssessReport is the public assessment as the /v1/assess endpoint returns it. Exposed for the
+// batch CLI (tsengine assess), which runs the SAME checks the lead-magnet page runs — so what the
+// founder sees at /scan?domain= and what an outbound email quotes cannot disagree.
+type AssessReport = assessResult
+
+// AssessCheck / AssessFix are the per-check shapes inside an AssessReport.
+type (
+	AssessCheck = assessCheck
+	AssessFix   = checkFix
+)
+
+// ErrAssessDomain is returned by AssessDomain for an input that is not a public domain, or one that
+// does not resolve. The CLI reports it per domain and moves on; the public handler answers 400.
+var ErrAssessDomain = errors.New("not a public domain, or it does not resolve")
+
+// AssessDomain is the batch entry point behind /v1/assess: same normalisation, same refusal of
+// non-public namespaces, same "an unregistered domain is not failing anything" guard, same two
+// probes. It carries NO rate limiter — that guards the public endpoint against strangers, and the
+// operator running a list of prospects from their own machine is not a stranger; tripping their own
+// 20-per-IP limit was the reason this function exists. Read-only and public-safe by construction:
+// nothing here touches a server the domain does not itself publish.
+func AssessDomain(ctx context.Context, raw string) (AssessReport, error) {
+	domain := normalizeDomain(raw)
+	if domain == "" {
+		return AssessReport{Domain: strings.TrimSpace(raw)}, fmt.Errorf("%q: %w", raw, ErrAssessDomain)
+	}
+	if !domainResolves(ctx, domain) {
+		return AssessReport{Domain: domain}, fmt.Errorf("%q: %w", domain, ErrAssessDomain)
+	}
+	return assessResolved(ctx, domain), nil
 }
 
 // domainResolves reports whether the domain exists in DNS at all. Any ONE of NS, address or MX
