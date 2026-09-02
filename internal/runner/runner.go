@@ -238,7 +238,21 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 		return 0, fmt.Errorf("runner: discover: %w", err)
 	}
 	s.registerWebhooks(ctx, conn, c.Kind, tok, assets)
+	// The plan's asset cap applies to DISCOVERED assets too. POST /v1/assets refused an over-cap add
+	// with a 402, but a connection's Discover registered every repository in the org regardless, so
+	// on Free (2 assets) the cap was theatre for the path most tenants actually take. Enforce it here
+	// and SAY which assets were left out: a cap applied silently leaves the customer believing the
+	// whole org is scanned when only the first two repositories are. Reported through the same
+	// first-error channel as a failed scan, so the banner shows it as a partial pass.
+	assets, capErr := s.applyAssetCap(ctx, c.TenantID, assets)
+	// One asset that will not scan must not stop the rest. This loop used to return on the first
+	// scan error, so an org whose third repository failed (an empty repo, a sandbox hiccup) left every
+	// repository after it registered but never scanned — and the caller learned only "3 scanned".
+	// Mirror RescanTenant: keep going, count what scanned, return the first error alongside it so
+	// the caller can report a partial pass as partial. A store error still stops: if assets cannot
+	// be persisted nothing downstream is trustworthy.
 	scanned := 0
+	firstErr := capErr
 	for i := range assets {
 		if assets[i].ID == "" {
 			assets[i].ID = s.newID("asset")
@@ -247,11 +261,61 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 			return scanned, err
 		}
 		if _, _, err := s.scanAsset(ctx, assets[i], platform.TriggerSchedule); err != nil {
-			return scanned, err
+			if firstErr == nil {
+				firstErr = fmt.Errorf("runner: scan %s: %w", assets[i].Target, err)
+			}
+			continue
 		}
 		scanned++
 	}
-	return scanned, nil
+	return scanned, firstErr
+}
+
+// applyAssetCap trims a batch of discovered assets to what the tenant's plan allows, counting the
+// assets already registered (an already-known asset re-discovered does not consume a slot). Returns
+// the assets to register and, when anything was left out, an error naming them. No tenant record or
+// an unlimited plan → the batch unchanged.
+func (s *Service) applyAssetCap(ctx context.Context, tenantID string, discovered []platform.Asset) ([]platform.Asset, error) {
+	t, err := s.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		return discovered, nil
+	}
+	lim := platform.Entitlements(t.Plan)
+	if lim.MaxAssets < 0 {
+		return discovered, nil
+	}
+	existing, _ := s.Store.ListAssets(ctx, tenantID)
+	known := make(map[string]bool, len(existing))
+	for _, a := range existing {
+		known[a.Type+"|"+a.Target] = true
+	}
+	room := lim.MaxAssets - len(existing)
+	var keep []platform.Asset
+	var skipped []string
+	for _, a := range discovered {
+		if known[a.Type+"|"+a.Target] {
+			keep = append(keep, a)
+			continue
+		}
+		if room > 0 {
+			keep = append(keep, a)
+			room--
+			continue
+		}
+		skipped = append(skipped, a.Target)
+	}
+	if len(skipped) == 0 {
+		return keep, nil
+	}
+	return keep, fmt.Errorf("runner: the %s plan includes up to %d scan targets, so %d discovered %s not registered: %s",
+		lim.Label, lim.MaxAssets, len(skipped), plural(len(skipped), "asset was", "assets were"), strings.Join(skipped, ", "))
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 // registerWebhooks installs a push webhook on each discovered repo so future events

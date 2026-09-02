@@ -1340,6 +1340,9 @@ export interface Job {
   kind: string;
   status: string; // queued | running | done | failed
   error?: string;
+  /** What the job produced. For "rescan" and "connect" jobs: how many assets scanned, plus a
+   *  warning when a partial pass had a per-asset error (the job still counts as done). */
+  result?: { assets_scanned?: number; warning?: string; kind?: string };
   created_at: string;
   started_at?: string;
   finished_at?: string;
