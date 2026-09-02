@@ -450,8 +450,16 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 			// app unlocks (the owner who issued the temp password knows it). The auth-
 			// management endpoints (me/logout/password) use sessionAuth, not this gate, so
 			// the user can still see who they are and rotate the password.
-			if u, err := d.Store.GetUser(r.Context(), s.UserID); err == nil && u.MustChangePassword {
+			u, uerr := d.Store.GetUser(r.Context(), s.UserID)
+			if uerr == nil && u.MustChangePassword {
 				writeJSON(w, http.StatusForbidden, errCode("set a new password to continue", "password_change_required"))
+				return
+			}
+			// An auditor reads. Every request that could change state — start a scan, approve a
+			// fix, change a setting, spend a model call — is refused here, at the one gate all app
+			// endpoints share, so the refusal does not depend on any handler remembering to check.
+			if uerr == nil && u.Role == platform.RoleAuditor && !readOnlyMethod(r.Method) {
+				writeJSON(w, http.StatusForbidden, errCode("auditor access is read-only", "read_only_role"))
 				return
 			}
 			if !d.rateOK(r, w, s.TenantID) {
@@ -462,6 +470,11 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 		}
 		writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
 	}
+}
+
+// readOnlyMethod is the set of HTTP methods an auditor may use: reads only.
+func readOnlyMethod(m string) bool {
+	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
 }
 
 // rateOK enforces the per-tenant fair-use ceiling (plan.APIRatePerMin). Limiting is
