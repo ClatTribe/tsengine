@@ -528,7 +528,11 @@ func retryBackoff(attempt int, err error) time.Duration {
 		}
 	}
 	// Exponential: 4s, 8s, 16s … capped at 90s (attempt 1 already waited before, so attempt=1 → 4s)
-	d := time.Duration(1<<uint(attempt+1)) * time.Second
+	shift := attempt + 1
+	if shift > 7 { // 2^7 s = 128 s > the 90 s cap; bounding the shift keeps gosec's int→uint check quiet and the arithmetic in range
+		shift = 7
+	}
+	d := time.Duration(1<<shift) * time.Second
 	if d > 90*time.Second {
 		d = 90 * time.Second
 	}

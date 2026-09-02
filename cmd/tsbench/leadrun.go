@@ -89,7 +89,7 @@ func leadCmd(argv []string) error {
 		string(outcome.StopReason), outcome.Iterations, outcome.CostUSD,
 		emittedOf(outcome), citedIDs(outcome), droppedIDs(findings, citedIDs(outcome))}, "", "  ")
 	if *out != "" {
-		if werr := os.WriteFile(*out, blob, 0o644); werr != nil {
+		if werr := os.WriteFile(*out, blob, 0o600); werr != nil {
 			return werr
 		}
 		fmt.Fprintf(os.Stderr, "[leadrun] outcome → %s\n", *out)
