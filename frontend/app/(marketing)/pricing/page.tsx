@@ -110,7 +110,7 @@ const TIERS = [
     name: "Enterprise",
     price: "Talk to us",
     cadence: "scale + delivery",
-    blurb: "For when the constraint is scale or delivery rather than capability: unlimited targets, SSO, a managed or MSP partner desk, and a named human accountable for the calls that matter.",
+    blurb: "For when the constraint is scale or delivery rather than capability: unlimited targets, a managed or MSP partner desk, and a named human accountable for the calls that matter.",
     cta: "Contact sales",
     // /contact, not /demo. This said "Contact sales" and sent the buyer to the lead FORM — the exact
     // defect lib/contact.ts's own header says it fixed across nine pages, missed on the page where
@@ -122,7 +122,7 @@ const TIERS = [
       "Everything in Core + Pentest, plus:",
       "Unlimited scan targets",
       "Managed service + MSP / partner desk",
-      "SSO / SAML + role-based access",
+      "Role-based access (owner / member) — SSO / SAML on request, not yet shipped",
       "Custom / bring-your-own frameworks",
       "Dedicated success engineer + SLAs · on-prem option",
     ],
@@ -132,7 +132,7 @@ const TIERS = [
 const FAQ = [
   ["Is the Free plan really free — for me and for you?", "Yes, both ways. Free runs only the open-source scanners across all five categories, so there's no AI/LLM cost on our side — which is exactly why we can keep it free forever. You connect up to 2 targets, see your real posture and SOC 2 readiness, with no credit card. The AI security engineer turns on when you upgrade."],
   ["What do I get on Core that Free doesn't have?", `Your AI Security Engineer — it triages what actually matters, explains each issue in plain English, and proposes the fix for you to approve. Plus the full scanning engine: every scanner with cross-surface correlation, continuous monitoring with incidents, all ${FRAMEWORK_COUNT} frameworks with signed evidence packs, and the human-in-the-loop apply loop that actually closes findings. ₹24,999/mo (or ₹2,49,990/yr), up to 25 targets.`],
-  ["How are the tiers structured?", "Free to see your real posture with the scanning engine — and if you paste in your own LLM key, both AI agents run on Free at your model cost, no upgrade and no sales call. Core adds your AI Security Engineer (defense) on our side. Core + Pentest adds your AI Pentester (attack) — the one that proves which findings are actually exploitable, re-tests after each fix, and produces the VAPT report a customer's security review asks for. Enterprise is for when the constraint is scale or delivery rather than capability: unlimited targets, SSO, managed/MSP."],
+  ["How are the tiers structured?", "Free to see your real posture with the scanning engine — and if you paste in your own LLM key, both AI agents run on Free at your model cost, no upgrade and no sales call. Core adds your AI Security Engineer (defense) on our side. Core + Pentest adds your AI Pentester (attack) — the one that proves which findings are actually exploitable, re-tests after each fix, and produces the VAPT report a customer's security review asks for. Enterprise is for when the constraint is scale or delivery rather than capability: unlimited targets, managed/MSP. SSO / SAML is not shipped yet — ask, and we will tell you where it is on the roadmap."],
   ["Can I run the AI on my own LLM key?", "Yes, on any plan including Free. Connect your own key in Settings → AI engine — any OpenAI-compatible provider, or a local Ollama — and the agents run at your model cost instead of ours. Useful if you already have credits, or if your policy is that your code only goes to a model you control."],
   ["Are there API rate limits?", "Yes — generous per-plan fair-use limits on the API, so one customer's automation can never slow the platform down for everyone else. Normal interactive use and CI never come close; paid plans get more headroom, and Enterprise is unmetered. If you hit a limit you get a clear 429 with a retry hint, never a hard lockout. AI spend is capped separately by the monthly budget you set."],
   ["Do I need a security engineer to use it?", "No — that's the point. TensorShield does the security engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. Built for a non-technical founder or ops lead."],
@@ -146,7 +146,7 @@ const FAQ = [
 // The load-bearing line: the AI agents are SELF-SERVE, not Enterprise-only. Core carries the AI Security
 // Engineer (plan.go: PlanGrowth, labelled "Core", has AIEnabled) and Core + Pentest adds the AI Pentester
 // via the "+pentest" add-on — the same add-on token the code already models, which is also why the tier
-// is named for it now. Enterprise is scale and delivery — unlimited targets, SSO, managed/MSP — not a
+// is named for it now. Enterprise is scale and delivery — unlimited targets, managed/MSP — not a
 // capability gate. This comment said the opposite long after the code changed, which is how a stale
 // claim ends up in the page description search engines show.
 const COMPARE: { section: string; rows: { label: string; cells: [string, string, string, string] }[] }[] = [
@@ -184,7 +184,11 @@ const COMPARE: { section: string; rows: { label: string; cells: [string, string,
     rows: [
       { label: "Service model — self-serve · managed · MSP", cells: ["Self-serve", "Any", "Any", "Any"] },
       { label: "Integrations (Slack · Jira · email)", cells: ["no", "yes", "yes", "yes"] },
-      { label: "SSO / SAML + role-based access", cells: ["no", "no", "no", "yes"] },
+      { label: "Role-based access (owner / member)", cells: ["yes", "yes", "yes", "yes"] },
+      // SSO / SAML is NOT built (ADR 0031 D3b). It sat here as a "yes" in the Enterprise column, which a
+      // Series A/B security review reads as a shipped capability. Marketing a control we do not have is
+      // the same overclaim as a green tick on unscanned scope, so the row says so instead.
+      { label: "SSO / SAML", cells: ["no", "no", "no", "on request — not yet shipped"] },
       { label: "Support", cells: ["Community", "Standard", "Standard", "Dedicated + SLA"] },
     ],
   },

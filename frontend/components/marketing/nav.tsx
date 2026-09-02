@@ -38,6 +38,7 @@ const COMPLIANCE: Item[] = [
   { href: "/frameworks", label: "Frameworks", desc: "SOC 2, ISO, HIPAA, PCI + 18 more — auto-mapped", icon: FileCheck2 },
   { href: "/vapt", label: "VAPT & evidence", desc: "Always-current, signed reports", icon: FileText },
   { href: "/soc2-readiness", label: "SOC 2 readiness", desc: "Where you'd fail the questionnaire — free", icon: ClipboardCheck },
+  { href: "/security-questionnaire", label: "Security questionnaires", desc: "35 answered by the scan, 17 by a named human", icon: FileText },
 ];
 const AGENT_CONTROLS: Item = { href: "/agent-controls", label: "AI agent controls", desc: "Kill-switch, isolation, human gate, signed log", icon: ShieldCheck };
 // The combined "Security" set for the mobile accordion (personas + coverage + controls under one heading).

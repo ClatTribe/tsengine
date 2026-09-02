@@ -27,6 +27,13 @@ type Tenant struct {
 	Name      string    `json:"name"`
 	Plan      string    `json:"plan,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// Source records where this workspace CAME FROM — the `?ref=` a signup arrived with (a partner
+	// listing, a VC perk page, an outbound sequence, an accelerator batch) or the operator-supplied
+	// source on POST /v1/tenants. Nothing could attribute a signup before this: every GTM motion that
+	// pays a partner, measures a channel, or watches a segment depends on exactly this field, and
+	// the funnel could count signups but not say which door they used. Free-form but bounded and
+	// lower-cased at capture; empty means "direct / unknown" and is reported as that, never guessed.
+	Source string `json:"source,omitempty"`
 	// AgentsHalted is the global kill-switch (agentic-SMB spec OM-3 / TS-5): when true,
 	// the platform performs NO autonomous agent action for this tenant — no new scans and
 	// no remediation writes (auto-applied or human-approved alike). It fails closed: a

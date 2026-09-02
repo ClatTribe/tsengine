@@ -1660,7 +1660,14 @@ The `auth` middleware accepts **either** the shared platform token (+`X-Tenant-I
 operator `POST /v1/tenants` / Slack / tests) **or** a user session token â and for a session
 the tenant comes FROM the session, so a spoofed `X-Tenant-ID` header cannot cross tenants.
 Signup creates a workspace (tenant) + owner; an owner can invite members (one-time temp
-password â email-based invites are the next step). **Forced first-login rotation is wired**:
+password â email-based invites are the next step). **A third role, `auditor`, is READ-ONLY** — the external SOC 2 / ISO auditor, a CPA-firm partner,
+a customer's security reviewer: they read every finding, control, report and evidence pack and can
+change nothing. Enforced in the `auth` middleware (every non-GET/HEAD/OPTIONS request is refused
+`403 read_only_role`), not by hiding buttons, so a hand-crafted request is refused the same way a
+click is; the auth-management endpoints stay open so an auditor can rotate their own password.
+Invited via `POST /v1/auth/invite` with `role: auditor`; `owner` is never invitable and an unknown
+role is a 400, never a silent member seat. Before this the only way to give an auditor access was a
+full member seat, which can start scans and approve fixes. **Forced first-login rotation is wired**:
 an invited member's account carries `User.MustChangePassword`; while set, the `auth`
 middleware blocks every app endpoint with `403 password_change_required` (the auth-mgmt
 endpoints â me/logout/password â use `sessionAuth`, so they stay reachable), and

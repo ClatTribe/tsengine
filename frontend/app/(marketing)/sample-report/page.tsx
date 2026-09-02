@@ -30,12 +30,39 @@ export default function SampleReportPage() {
         <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
           {/* NOT "a real, anonymized example". That phrasing claims provenance — that this came out of an
               actual engagement and we stripped the names — and nothing supports it: the subject is
-              Acme at acme-sample.com. A prospect who asks "whose report is this?" on a sales call
+              a fictional Example Corp on RFC 2606 reserved domains, which is exactly why nobody can
+              mistake it for one. A prospect who asks "whose report is this?" on a sales call
               should not catch us. What IS true is the part worth saying: this is the exact format and
               structure the product emits, findings and all. */}
           A worked example in the exact format the product emits — the same sections, evidence and control
           mapping a customer receives. Findings proven, not guessed, each with evidence, a fix, and the
           compliance controls it affects.
+        </p>
+        {/* The download is UNGATED — no email wall. The argument this page makes is that our
+            reports are generated from grounded posture rather than written, and a reader cannot
+            check that claim through a form. Lead capture already exists one step along at /scan,
+            which assesses the reader's OWN domain — a better magnet than a document about a
+            fictional company. Both links hit /api/sample-report, which proxies the platform's
+            public endpoint; the document is rendered on request by the SAME generator a paying
+            customer's report goes through, so unlike an uploaded PDF it cannot go stale. */}
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+          <a
+            href="/api/sample-report?format=html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft/40 px-5 py-2.5 text-sm font-semibold text-accent transition hover:bg-accent-soft/70"
+          >
+            <FileText className="h-4 w-4" /> Read the full report
+          </a>
+          <a
+            href="/api/sample-report"
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-5 py-2.5 text-sm font-medium transition hover:border-accent/40 hover:text-accent"
+          >
+            Download as Markdown
+          </a>
+        </div>
+        <p className="mt-2.5 text-xs text-faint">
+          No email required. Generated on request by the same engine that writes a customer&rsquo;s report.
         </p>
       </div>
 
@@ -48,17 +75,20 @@ export default function SampleReportPage() {
             <div className="mono mt-0.5 text-xs text-muted">{SAMPLE_META.target}</div>
           </div>
           <div className="text-right text-xs text-faint">
-            <div>{new Date(SAMPLE_META.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</div>
+            {/* No frozen date. The downloadable report is GENERATED on request, so a hardcoded
+                date here would age into a contradiction — a "sample from June" beside a document
+                stamped today, on the page arguing our reports cannot go stale. */}
+            <div>Generated on request</div>
             <div className="mono mt-0.5">{SAMPLE_META.engine}</div>
             <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-high/10 px-2 py-0.5 text-[11px] font-semibold text-high">
               <ShieldAlert className="h-3 w-3" /> Risk: {SAMPLE_META.riskRating}
             </div>
           </div>
         </div>
-        {/* Severity, then the three EVIDENCE TIERS reported separately. The strip used to show a
+        {/* Severity, then the four EVIDENCE TIERS reported separately. The strip used to show a
             single "Verified 6" above a table in which four rows said Verified — a number that did
             not survive a reader counting the rows, on the page that exists to prove our numbers
-            survive counting. All six values are now derived from the findings themselves. */}
+            survive counting. Every value here is derived from the findings themselves. */}
         <div className="mt-5 grid grid-cols-4 gap-3">
           <Stat n={SAMPLE_COUNTS.critical} label="Critical" tone="text-critical" />
           <Stat n={SAMPLE_COUNTS.high} label="High" tone="text-high" />
@@ -67,12 +97,15 @@ export default function SampleReportPage() {
         </div>
         <div className="mt-3 rounded-xl border border-border bg-bg p-3">
           <div className="text-[11px] uppercase tracking-wide text-faint">
-            Evidence — every one of the {SAMPLE_COUNTS.total} findings is backed, at one of three strengths
+            Evidence — each of the {SAMPLE_COUNTS.total} findings is labelled with how strongly it is backed
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-3">
+          <div className="mt-2 grid grid-cols-4 gap-3">
             <Stat n={SAMPLE_COUNTS.exploitProven} label="Exploit-proven" tone="text-critical" />
             <Stat n={SAMPLE_COUNTS.verified} label="Verified" tone="text-pulse" />
             <Stat n={SAMPLE_COUNTS.confirmed} label="Confirmed" tone="text-muted" />
+            {/* Shown even though it is the weakest tier — a preview that hid it would be
+                claiming a certainty the report itself declines to claim. */}
+            <Stat n={SAMPLE_COUNTS.unconfirmed} label="Unconfirmed" tone="text-muted" />
           </div>
         </div>
         <div className="mt-5 border-t border-border pt-4">
