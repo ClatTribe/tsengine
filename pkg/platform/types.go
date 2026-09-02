@@ -22,6 +22,27 @@ import (
 
 // Tenant is one customer organization. Every other entity is scoped to a TenantID;
 // the store enforces isolation on that key.
+// DefaultBrand is the product's own name, used wherever a tenant has no Branding.
+const DefaultBrand = "TensorShield"
+
+// Branding is a tenant's white-label identity for outward-facing artifacts. See Tenant.Branding.
+type Branding struct {
+	Name         string `json:"name"`                    // shown in place of the product name; required when set
+	LogoURL      string `json:"logo_url,omitempty"`      // https only; rendered on the public Trust Center
+	SupportEmail string `json:"support_email,omitempty"` // where the reader of a branded artifact is told to write
+}
+
+// Brand returns the name to render for this tenant: its white-label name, else the product's.
+func (t Tenant) Brand() string {
+	if t.Branding != nil && strings.TrimSpace(t.Branding.Name) != "" {
+		return strings.TrimSpace(t.Branding.Name)
+	}
+	return DefaultBrand
+}
+
+// WhiteLabelled reports whether outward artifacts carry a brand other than the product's.
+func (t Tenant) WhiteLabelled() bool { return t.Brand() != DefaultBrand }
+
 type Tenant struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -34,6 +55,14 @@ type Tenant struct {
 	// the funnel could count signups but not say which door they used. Free-form but bounded and
 	// lower-cased at capture; empty means "direct / unknown" and is reported as that, never guessed.
 	Source string `json:"source,omitempty"`
+	// Branding is the WHITE-LABEL: the name, logo and support address that appear on the artifacts
+	// this workspace hands to OTHER people — the VAPT report a customer's security team reads, the
+	// public Trust Center a buyer opens. An MSP or consultancy reselling the managed tier puts its
+	// own name here so those artifacts carry the firm the customer actually bought from. Nil means
+	// the product's own brand. It rebrands PROSE and CHROME only: the engine identifier in a
+	// report's provenance block is evidence about how the assessment was produced (§10 pinned
+	// context) and is never replaced — an auditor re-running a finding needs to know what ran.
+	Branding *Branding `json:"branding,omitempty"`
 	// AgentsHalted is the global kill-switch (agentic-SMB spec OM-3 / TS-5): when true,
 	// the platform performs NO autonomous agent action for this tenant — no new scans and
 	// no remediation writes (auto-applied or human-approved alike). It fails closed: a

@@ -10,6 +10,7 @@ import { Card, SectionTitle } from "@/components/ui/primitives";
 import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
 import { TrustCenterControl } from "@/components/settings/trust-center-control";
+import { BrandingControl } from "@/components/settings/branding-control";
 import { TrustRequestsDesk } from "@/components/settings/trust-requests-desk";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
@@ -43,6 +44,7 @@ export default async function SettingsPage() {
     api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(), api.aiMode(),
   ]);
   const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests()]);
+  const branding = await api.brandingSettings();
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -64,6 +66,14 @@ export default async function SettingsPage() {
           {tenant?.created_at && (
             <Row icon={CheckCircle2} label="Member since" value={<span className="text-sm text-muted">{new Date(tenant.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>} />
           )}
+        </Card>
+      </div>
+
+      {/* White-label — what the workspace's outward artifacts are branded as. */}
+      <div>
+        <SectionTitle action={<span className="text-[11px] text-faint">VAPT report · Trust Center</span>}>Branding</SectionTitle>
+        <Card className="p-5">
+          <BrandingControl initial={branding} />
         </Card>
       </div>
 
