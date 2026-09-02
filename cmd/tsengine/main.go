@@ -2725,7 +2725,9 @@ func countSourceFiles(dir string) int {
 		return 0
 	}
 	n := 0
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	// The callback swallows every error (an unreadable subtree counts as zero files), so WalkDir's
+	// return is always nil here; the explicit discard says that rather than leaving it to errcheck.
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
