@@ -28,7 +28,9 @@ func TestSignup_RecordsNormalizedSource(t *testing.T) {
 	}
 
 	st := store.NewMemory()
-	d := Deps{Store: st, Token: "tok"}
+	t.Setenv("TSENGINE_SALES_EMAIL", "sales@example.com")
+	mailer := &captureMailer{}
+	d := Deps{Store: st, Token: "tok", Mailer: mailer}
 	h := NewHandler(d)
 	req := httptest.NewRequest("POST", "/v1/auth/signup", strings.NewReader(`{"workspace":"Acme","email":"a@acme.io","password":"longenough1","source":"Peak-XV-Perk"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -40,6 +42,11 @@ func TestSignup_RecordsNormalizedSource(t *testing.T) {
 	tenants, _ := st.ListTenants(context.Background())
 	if len(tenants) != 1 || tenants[0].Source != "peak-xv-perk" {
 		t.Fatalf("the tenant must carry the normalized source, got %+v", tenants)
+	}
+	// The signup is delivered to sales like every other lead, tagged with the door it came through —
+	// it used to be the one inbound event nobody was told about.
+	if mailer.sent != 1 || mailer.to != "sales@example.com" || !strings.Contains(mailer.subject, "signup:peak-xv-perk") {
+		t.Fatalf("signup must notify sales with the source in the subject, got sent=%d to=%q subject=%q", mailer.sent, mailer.to, mailer.subject)
 	}
 
 	// Operator onboarding carries it too (a managed / MSP tenant is attributed by whoever created it).

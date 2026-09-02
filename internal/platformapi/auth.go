@@ -114,6 +114,16 @@ func (d Deps) handleSignup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
+	// A signup is the warmest lead the site produces and it reached nobody: the demo form, the scan
+	// page and the SOC 2 assessment all notify sales, while the person who went one step further
+	// and created a workspace was visible only to whoever queried the store. Same delivery path,
+	// same gate (TSENGINE_SALES_EMAIL + a configured Mailer, else a log line), source tagged so the
+	// nurture sequence can be keyed to the trigger — and to the door they came through.
+	leadSource := "signup"
+	if tenant.Source != "" {
+		leadSource += ":" + tenant.Source
+	}
+	d.notifySalesLead(r.Context(), user.Name, email, ws, leadSource, "")
 	writeJSON(w, http.StatusCreated, out)
 }
 
