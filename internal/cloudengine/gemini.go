@@ -25,8 +25,8 @@ type LLM interface {
 // line, an error message, or anything written to disk. There is no literal key
 // anywhere in the code.
 type Gemini struct {
-	usage  usageCounter
-	apiKey string // from os.Getenv("LLM_API_KEY") — never logged
+	usage  *usageCounter // shared with WithModel copies (pointer: an atomic must not be copied)
+	apiKey string        // from os.Getenv("LLM_API_KEY") — never logged
 	model  string
 	http   *http.Client
 }
@@ -47,7 +47,7 @@ func GeminiFromEnv() (*Gemini, bool) {
 	if model == "" {
 		model = "gemini-2.0-flash"
 	}
-	return &Gemini{apiKey: key, model: model, http: &http.Client{Timeout: 90 * time.Second}}, true
+	return &Gemini{usage: &usageCounter{}, apiKey: key, model: model, http: &http.Client{Timeout: 90 * time.Second}}, true
 }
 
 // NewGemini builds a Gemini client from an explicit key + model (the per-tenant path — the customer's
@@ -56,7 +56,7 @@ func NewGemini(apiKey, model string) *Gemini {
 	if strings.TrimSpace(model) == "" {
 		model = "gemini-2.0-flash"
 	}
-	return &Gemini{apiKey: apiKey, model: model, http: &http.Client{Timeout: 90 * time.Second}}
+	return &Gemini{usage: &usageCounter{}, apiKey: apiKey, model: model, http: &http.Client{Timeout: 90 * time.Second}}
 }
 
 type geminiReq struct {
@@ -141,7 +141,6 @@ func (g *Gemini) WithModel(model string) (LLM, bool) {
 	if strings.TrimSpace(model) == "" {
 		return nil, false
 	}
-	c := *g
-	c.model = model
-	return &c, true
+	c := &Gemini{usage: g.usage, apiKey: g.apiKey, model: model, http: g.http}
+	return c, true
 }

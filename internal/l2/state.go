@@ -69,16 +69,6 @@ func (s *State) RecordConfirmation(method, ref string) string {
 	return h
 }
 
-// confirmation returns the recorded confirmation with the given handle, if any.
-func (s *State) confirmation(handle string) (Confirmation, bool) {
-	for _, c := range s.Confirmations {
-		if c.Handle == handle {
-			return c, true
-		}
-	}
-	return Confirmation{}, false
-}
-
 // Hypothesis is one durable plan item the Lead commits via record_hypothesis.
 type Hypothesis struct {
 	// Statement is what the Lead believes / wants to test (e.g. "f-001 SQLi
