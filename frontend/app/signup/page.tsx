@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { readSignupSource } from "@/lib/signup-source";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, BadgeCheck, Sparkles, ArrowRight, CheckCircle2 } from "lucide-react";
@@ -22,7 +23,7 @@ export default function SignupPage() {
     const res = await fetch("/api/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspace, name, email, password }),
+      body: JSON.stringify({ workspace, name, email, password, source: readSignupSource() }),
     });
     if (res.ok) {
       router.push("/dashboard");

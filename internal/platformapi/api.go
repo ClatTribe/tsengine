@@ -519,8 +519,9 @@ func (d Deps) platformAuth(h http.HandlerFunc) http.HandlerFunc {
 // tenant with its generated id, which the caller then uses as X-Tenant-ID.
 func (d Deps) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
-		Plan string `json:"plan,omitempty"`
+		Name   string `json:"name"`
+		Plan   string `json:"plan,omitempty"`
+		Source string `json:"source,omitempty"` // attribution (partner / perk / outbound) — see platform.Tenant.Source
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil || body.Name == "" {
 		writeJSON(w, http.StatusBadRequest, errBody("a tenant needs a name"))
@@ -539,7 +540,7 @@ func (d Deps) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		}
 		plan = canonical
 	}
-	t := platform.Tenant{ID: d.newID("ten"), Name: body.Name, Plan: plan}
+	t := platform.Tenant{ID: d.newID("ten"), Name: body.Name, Plan: plan, Source: normalizeSource(body.Source)}
 	if err := d.Store.PutTenant(r.Context(), t); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
