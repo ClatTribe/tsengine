@@ -126,3 +126,48 @@ func TestConnectCallback_NoPoolStaysSynchronous(t *testing.T) {
 		t.Fatalf("pool-less callback should redirect with the synchronous scanned count, got %q", loc)
 	}
 }
+
+// The first findings ever to land in a workspace are the activation event the free tier is built
+// around, and nobody was told about them. The queued first scan emails the OWNER once — and only
+// when the workspace went from no findings to some; a later connect on a workspace that already has
+// findings sends nothing (monitoring has its own channels).
+func TestConnectCallback_EmailsOwnerOnFirstFindingsOnce(t *testing.T) {
+	st := store.NewMemory()
+	reg := connector.NewRegistry(exchConn{})
+	svc := &runner.Service{Store: st, Connectors: reg, Tokens: fakeTokens{}, Scanner: fakeScanner{}}
+	pool := jobs.NewPool(1, 4, 8, 0, func() string { return "j" })
+	defer func() { _ = pool.Shutdown(context.Background()) }()
+	mailer := &captureMailer{}
+	d := Deps{Store: st, Connectors: reg, Runner: svc, Vault: &recordingSealer{}, Jobs: pool, Mailer: mailer, Token: "tok", PublicURL: "https://app", AppURL: "https://app.example"}
+	_ = st.PutUser(context.Background(), platform.User{ID: "u1", TenantID: "t1", Email: "founder@acme.io", Role: platform.RoleOwner})
+	_ = st.PutUser(context.Background(), platform.User{ID: "u2", TenantID: "t1", Email: "dev@acme.io", Role: platform.RoleMember})
+	h := NewHandler(d)
+
+	connect := func() {
+		req := httptest.NewRequest("GET", "/v1/connect/github/callback?code=abc&state="+url.QueryEscape(d.signOAuthState("t1")), nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("want 303, got %d %s", rec.Code, rec.Body.String())
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if j, _ := pool.Get("j"); j.Status == jobs.StatusDone || j.Status == jobs.StatusFailed {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatal("connect job did not finish")
+	}
+	connect()
+	if mailer.sent != 1 || mailer.to != "founder@acme.io" || !strings.Contains(mailer.subject, "first findings") {
+		t.Fatalf("the owner (and only the owner) must get the first-findings email once, got sent=%d to=%q subject=%q", mailer.sent, mailer.to, mailer.subject)
+	}
+	if !strings.Contains(mailer.body, "https://app.example/issues") {
+		t.Fatalf("the email must link to the findings, got %q", mailer.body)
+	}
+	connect() // the workspace already has findings — monitoring, not activation
+	if mailer.sent != 1 {
+		t.Fatalf("a later scan must not re-send the activation email, got sent=%d", mailer.sent)
+	}
+}

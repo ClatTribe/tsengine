@@ -231,8 +231,10 @@ func (d Deps) handleConnectCallback(w http.ResponseWriter, r *http.Request) {
 	jobID := ""
 	if d.Runner != nil && d.Jobs != nil {
 		connection := c
+		hadFindings := d.hasAnyFinding(r.Context(), tenantID)
 		job, jerr := d.Jobs.Enqueue("connect", tenantID, func(ctx context.Context) (any, error) {
 			n, scanErr := d.Runner.DiscoverAndScan(ctx, connection)
+			d.notifyFirstFindings(ctx, tenantID, kind, hadFindings)
 			res := map[string]any{"connection_id": connection.ID, "kind": connection.Kind, "assets_scanned": n}
 			if scanErr != nil {
 				res["warning"] = scanErr.Error()
