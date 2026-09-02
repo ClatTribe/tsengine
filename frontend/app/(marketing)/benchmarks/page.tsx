@@ -23,7 +23,7 @@ import { ArrowRight, CheckCircle2, MinusCircle, FlaskConical } from "lucide-reac
 export const metadata = pageMeta({
   title: "Benchmarks — Corpora We Did Not Write",
   description:
-    "Our SAST scores 46.5% Youden across all 2,740 OWASP BenchmarkJava cases — third on the published cohort — and two-thirds on BishopFox's and Rhino's cloud privilege-escalation keys. The method, how to reproduce it, and the gaps.",
+    "46.5% Youden on all 2,740 OWASP Benchmark cases, third on the published cohort; two-thirds on BishopFox's and Rhino's cloud privesc keys. Method, repro, and the gaps.",
   path: "/benchmarks",
 });
 
