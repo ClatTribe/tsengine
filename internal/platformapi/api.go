@@ -222,9 +222,11 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                  // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
 	mux.HandleFunc("GET /v1/settings/training", d.auth(d.handleGetTrainingSettings))                   // may our agent runs improve the product (ADR 0018 §4)
 	mux.HandleFunc("PUT /v1/settings/training", d.auth(d.handlePutTrainingSettings))
-	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                           // repository PR-review-bot policy (ADR 0010)
-	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                           // set enable + merge-gating block severity
-	mux.HandleFunc("GET /v1/launch-readiness", d.platformAuth(d.handleLaunchReadiness))                   // operator: what nobody set (mail, leads, OAuth apps, model, corpus, URLs)
+	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))         // repository PR-review-bot policy (ADR 0010)
+	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))         // set enable + merge-gating block severity
+	mux.HandleFunc("GET /v1/launch-readiness", d.platformAuth(d.handleLaunchReadiness)) // operator: what nobody set (mail, leads, OAuth apps, model, corpus, URLs)
+	mux.HandleFunc("GET /v1/settings/branding", d.auth(d.handleGetBranding))            // white-label: name/logo/support on outward artifacts
+	mux.HandleFunc("PUT /v1/settings/branding", d.auth(d.handlePutBranding))
 	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // per-tenant Slack incident webhook (has_slack_webhook)
 	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's Slack incident webhook (Bucket B)
 	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                              // per-tenant Jira ticketing destination (base/email/project + has_token)

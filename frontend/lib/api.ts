@@ -5,7 +5,7 @@ import type {
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
+  L15Audit, TenantEval, Job, Branding, BrandingSettings, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -625,6 +625,10 @@ export const api = {
   // `unavailable` alongside the config, because what a buyer is actually shown differs from what
   // the owner configured — a document nothing can produce is silently absent from the public
   // page, and the owner needs to be told that rather than left to notice.
+  // White-label: the name/logo/support address on outward artifacts. Empty name = the product's brand.
+  brandingSettings: () =>
+    safe<BrandingSettings>("/v1/settings/branding", { branding: { name: "" }, effective_name: "TensorShield", white_labelled: false, default_brand: "TensorShield" }),
+  setBranding: (b: Branding) => call<BrandingSettings>("/v1/settings/branding", { method: "PUT", body: JSON.stringify(b) }),
   trustSettings: () =>
     safe<TrustSettings>("/v1/settings/trust-center", {
       config: { enabled: false }, link: "", available: {}, unavailable: [], pending_requests: 0,

@@ -824,11 +824,25 @@ export interface PlanLimits {
   human_in_loop_apply: boolean;
 }
 
+/** White-label identity for outward artifacts (VAPT report, public Trust Center). */
+export interface Branding {
+  name: string;
+  logo_url?: string;
+  support_email?: string;
+}
+export interface BrandingSettings {
+  branding: Branding;
+  effective_name: string;
+  white_labelled: boolean;
+  default_brand: string;
+}
+
 export interface Tenant {
   id: string;
   name: string;
   plan?: string;
   created_at?: string;
+  branding?: Branding;
   agents_halted?: boolean; // global kill-switch: when true, no autonomous agent action runs
   // The resolved entitlements, so a surface never has to infer them from the plan string — which is
   // exactly how the pricing page and the backend drifted apart.
@@ -879,6 +893,11 @@ export interface TrustDocEntry {
 
 export interface TrustView {
   org: string;
+  /** White-label chrome (platform.Tenant.Branding). `white_labelled` false = the product's own brand. */
+  brand: string;
+  brand_logo_url?: string;
+  brand_support_email?: string;
+  white_labelled: boolean;
   headline?: string;
   monitored: boolean;
   signed: boolean;

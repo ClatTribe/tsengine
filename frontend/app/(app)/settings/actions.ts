@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { api } from "@/lib/api";
-import type { EscalationPolicy, SLAPolicy, TrustCenterConfig } from "@/lib/types";
+import type { Branding, BrandingSettings, EscalationPolicy, SLAPolicy, TrustCenterConfig } from "@/lib/types";
 
 // Engage/disengage the global kill-switch (agentic-SMB spec OM-3 / TS-5). When engaged the
 // platform takes no autonomous agent action — no scans, no remediation writes — until a
@@ -200,4 +200,12 @@ export async function decideTrustRequest(
   const r = await api.decideTrustRequest(id, decision, by);
   revalidatePath("/settings");
   return { access_token: r.access_token, access_link: r.access_link };
+}
+
+// White-label branding for outward artifacts (VAPT report, public Trust Center). An empty name
+// clears it — back to the product's own brand.
+export async function setBranding(b: Branding): Promise<BrandingSettings> {
+  const r = await api.setBranding(b);
+  revalidatePath("/settings");
+  return r;
 }

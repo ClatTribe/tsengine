@@ -21,8 +21,14 @@ import (
 type VAPTReport struct {
 	TenantName  string    `json:"tenant_name"`
 	GeneratedAt time.Time `json:"generated_at"`
-	Engine      string    `json:"engine"`
-	Scope       []string  `json:"scope"` // the monitored asset targets assessed
+	// Engine identifies what produced the assessment. It is PROVENANCE (§10 pinned context) and is
+	// never rebranded: an auditor re-running a finding needs to know what ran.
+	Engine string `json:"engine"`
+	// Brand is the name the report's PROSE carries — the white-label (platform.Tenant.Brand()) when
+	// the tenant has one, else the product's. Empty renders as the product's brand, so every caller
+	// that predates the field is unchanged.
+	Brand string   `json:"brand,omitempty"`
+	Scope []string `json:"scope"` // the monitored asset targets assessed
 	// Untested names scope targets that NOTHING has assessed yet. Zero findings across a scope
 	// nobody scanned is not a clean result, and this report is the document a customer hands an
 	// auditor or a prospect — it is the last place a silence should read as an all-clear.
@@ -170,6 +176,9 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 		}
 	}
 	rep := ReportFromFindings(findings, scope, name, g.now(), fixReady)
+	if t, terr := g.Store.GetTenant(ctx, tenantID); terr == nil {
+		rep.Brand = t.Brand()
+	}
 
 	// Fix-verification roll-up (best-effort): the retest differentiator — a fix this product
 	// APPLIED and then re-tested, so the report can say "confirmed closed on re-scan" rather than
@@ -192,6 +201,14 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 		}
 	}
 	return rep, nil
+}
+
+// brand is the name the report's prose carries: the white-label when set, else the product's.
+func (r *VAPTReport) brand() string {
+	if strings.TrimSpace(r.Brand) != "" {
+		return strings.TrimSpace(r.Brand)
+	}
+	return platform.DefaultBrand
 }
 
 // ReportFromFindings builds a VAPT report from an explicit findings set + scope —
@@ -393,7 +410,7 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		b.WriteString("\n" + c + "\n")
 	}
 	b.WriteString("\n## Methodology & confidence\n\n")
-	b.WriteString("Assessment is performed by the TensorShield engine, which wraps best-in-class open-source " +
+	b.WriteString("Assessment is performed by the " + r.brand() + " engine, which wraps best-in-class open-source " +
 		"scanners across every asset class (web, API, code, containers, cloud, identity) and verifies exploitable " +
 		"findings through an evidence-grounded agent. **Every finding below cites the tool and rule that proves it** — " +
 		"no result is asserted that a tool did not demonstrate (anti-hallucination grounding). The assessment is " +
@@ -549,7 +566,7 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 		if f.Remediation != "" {
 			fmt.Fprintf(&b, "\n**Recommended fix:** %s", f.Remediation)
 			if f.FixReady {
-				b.WriteString(" _(TensorShield has already prepared this fix — it's awaiting your approval.)_")
+				b.WriteString(" _(" + r.brand() + " has already prepared this fix — it's awaiting your approval.)_")
 			}
 			b.WriteString("\n")
 		}
