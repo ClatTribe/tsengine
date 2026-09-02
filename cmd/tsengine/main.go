@@ -170,6 +170,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsengine corpus: %v\n", err)
 			os.Exit(1)
 		}
+	case "assess":
+		if err := runAssess(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsengine assess: %v\n", err)
+			os.Exit(1)
+		}
 	case "cloud-assess":
 		if err := runCloudAssess(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsengine cloud-assess: %v\n", err)
@@ -281,6 +286,8 @@ Usage:
                   [--auth-cookie <c> | --auth-login-url <url> --auth-username <u> --auth-password <p>]
                   [--snapshot <inventory.json>]   # cloud_account: emit the AI-engineer dual-view
   tsengine replay --scan-id <id> --tool <name> [--target <url>]
+  tsengine assess --domain <d> [--domain <d>...] | --domains <file|-> [--json] [--concurrency N]
+                  # the public /v1/assess checks (email-auth + web posture) in batch, for the outbound list
   tsengine cloud-assess --snapshot <inventory.json> [--prowler <findings.json>] [--out <assessment.json>]
   tsengine operate --snapshot <workspace.json> [--out <findings.json>] [--stale-days N] [--max-super-admins N]
   tsengine osint --snapshot <osint.json> [--out <findings.json>]   # external-exposure (OSINT) → grounded findings
