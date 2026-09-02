@@ -133,6 +133,12 @@ func tFindPaths(cc *Context, args map[string]any) string {
 	if cc.Snap.Node(target) == nil {
 		return "ERROR: no such target " + target
 	}
+	// Record that the agent LOOKED at this target, so finish()'s coverage gate can tell a jewel
+	// the agent examined and declined (no path / a decoy) from one it never looked at.
+	if cc.queried == nil {
+		cc.queried = map[string]bool{}
+	}
+	cc.queried[target] = true
 	var found []string
 	seen := map[string]bool{}
 	for _, entry := range entryPoints(cc.Snap) {
@@ -174,6 +180,32 @@ func tBlast(cc *Context, args map[string]any) string {
 	return fmt.Sprintf("blast radius of %s: %d resources reachable, %d crown jewel(s):\n%s", p, len(reach)-1, len(jewels), strings.Join(jewels, "\n"))
 }
 
+// unexaminedJewels lists crown jewels that neither the prepass reached (`reached`) nor the agent
+// has already recorded an issue for, in stable order. Shared by the prepass disclosure and the
+// per-record progress line so the two can never disagree about what is left.
+//
+// It is a COVERAGE statement, not a hint: it says which jewels nobody has looked at yet, never
+// whether a path to one exists. Deriving both call sites from one function is deliberate — a
+// second, drifting copy of "what is left" is how a checklist starts lying.
+func unexaminedJewels(cc *Context, reached map[string]bool) []string {
+	recorded := map[string]bool{}
+	for _, is := range cc.Issues {
+		recorded[is.Target] = true
+	}
+	var out []string
+	for _, id := range sortedNodeIDs(cc.Snap) {
+		n := cc.Snap.Nodes[id]
+		if !(cloudgraph.SensitiveData(n) || cloudgraph.PrivilegedIdentity(n)) {
+			continue
+		}
+		if reached[id] || recorded[id] {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
 func tEnumerate(cc *Context, _ map[string]any) string {
 	a := cloudengine.Assess(cc.Snap, cc.Prowler, cloudengine.SnapshotOracle{}, cloudengine.Options{MaxHypotheses: cc.MaxHyp})
 	if len(a.Paths) == 0 {
@@ -185,9 +217,55 @@ func tEnumerate(cc *Context, _ map[string]any) string {
 		if n := len(p.Graph.Nodes); n > 0 {
 			end = p.Graph.Nodes[n-1].ID
 		}
-		rows = append(rows, fmt.Sprintf("  target=%s  impact=%.2f  %s", end, p.RealImpact.Score, p.Narrative))
+		// Render the CANONICAL node-id chain, not only the prose narrative. The narrative names
+		// resources by DISPLAY NAME ("i-1024"), while record_issue grounds against graph NODE IDS
+		// ("arn:aws:ec2:...:instance/pub-1023") — so an agent that followed the documented flow
+		// (enumerate -> record_issue) had its first record REJECTED as ungrounded and had to spend
+		// turns re-deriving each path through find_paths. The prepass already HOLDS the ids; not
+		// printing them made the seed unusable as a seed. Observed live: a frontier-model run's
+		// first record_issue was rejected for exactly this ("no attack edge internet -> i-1024").
+		// The narrative stays — it carries the human-readable why — but the path an agent must
+		// pass back is now quoted verbatim.
+		ids := make([]string, 0, len(p.Graph.Nodes))
+		for _, n := range p.Graph.Nodes {
+			ids = append(ids, n.ID)
+		}
+		row := fmt.Sprintf("  target=%s  impact=%.2f  %s", end, p.RealImpact.Score, p.Narrative)
+		if len(ids) >= 2 {
+			row += "\n      path (record_issue format): " + strings.Join(ids, " -> ")
+		}
+		rows = append(rows, row)
 	}
-	return fmt.Sprintf("deterministic prepass — %d candidate path(s):\n%s\n(verify/extend these, then record_issue the ones you confirm)", len(a.Paths), strings.Join(rows, "\n"))
+	// COVERAGE DISCLOSURE (§5.2 inv. 5, with the AGENT as the reader). The prepass is a
+	// BOUNDED worklist — cloudengine truncates candidates at MaxHypotheses (engine.go:
+	// `cands = cands[:opts.MaxHypotheses]`) — yet this list rendered as if it were the
+	// account's complete set of attack paths. Rendered that way, a jewel the prepass never
+	// examined is indistinguishable from one it cleared, which is exactly the failure the
+	// coverage layer exists to prevent; the agent then treats the seed as the answer and
+	// stops. Measured: on a bounded run the prepass returned 5 paths and 6 further crown
+	// jewels were genuinely reachable and never mentioned.
+	//
+	// This states only what was NOT examined — never where a path is — so it adds no answer
+	// key, and it degrades to silence on a complete pass (asserted by test).
+	var disclosure string
+	reached := map[string]bool{}
+	for _, p := range a.Paths {
+		if n := len(p.Graph.Nodes); n > 0 {
+			reached[p.Graph.Nodes[n-1].ID] = true
+		}
+	}
+	unreached := unexaminedJewels(cc, reached)
+	if len(unreached) > 0 {
+		shown := unreached
+		if len(shown) > 20 {
+			shown = append(append([]string{}, shown[:20]...), fmt.Sprintf("… (+%d more)", len(unreached)-20))
+		}
+		disclosure = fmt.Sprintf("\nCOVERAGE: this prepass is a BOUNDED worklist (cap %d), not a complete inventory. "+
+			"%d crown jewel(s) are NOT named above — they were not examined, which is NOT the same as proven "+
+			"unreachable. Check them with find_paths(<id>) before concluding the account is clear:\n  %s",
+			cc.MaxHyp, len(unreached), strings.Join(shown, "\n  "))
+	}
+	return fmt.Sprintf("deterministic prepass — %d candidate path(s):\n%s\n(verify/extend these, then record_issue the ones you confirm — pass the quoted \"path (record_issue format)\" node ids verbatim as `path`)%s", len(a.Paths), strings.Join(rows, "\n"), disclosure)
 }
 
 func tPrivesc(cc *Context, args map[string]any) string {
@@ -267,7 +345,27 @@ func tRecord(cc *Context, args map[string]any) string {
 	is.ProviderConfirmed = plan.Status == PathConfirmed
 	is.AuthorizationCoverage = plan.Coverage()
 	cc.Issues = append(cc.Issues, is)
-	return fmt.Sprintf("recorded %s: %s (grounded — the path exists and reaches a crown jewel). Consider propose_fix(%s).", is.ID, strings.Join(path, " -> "), is.ID)
+	// LIVE COVERAGE (S-component / state tracking). The prepass discloses what it did not examine
+	// ONCE, at turn one; by the time the agent has worked through a few jewels, that snapshot is
+	// stale and the agent is carrying the remaining checklist in its head — which is where it stops
+	// early. Measured: runs that acted on the disclosure still ended at 7/11 and 10/11, not 11/11.
+	// Restating what is LEFT at the natural checkpoint (a jewel just closed out) keeps the
+	// checklist in the harness rather than in the model's memory.
+	//
+	// Coverage only: it names jewels nobody has examined, never whether a path to one exists — so
+	// it adds no answer key. Derived from the same unexaminedJewels helper the prepass uses, so the
+	// two can never drift apart.
+	progress := ""
+	if left := unexaminedJewels(cc, nil); len(left) > 0 {
+		shown := left
+		if len(shown) > 10 {
+			shown = append(append([]string{}, shown[:10]...), fmt.Sprintf("… (+%d more)", len(left)-10))
+		}
+		progress = fmt.Sprintf(" REMAINING: %d crown jewel(s) still unexamined — %s. "+
+			"Check each with find_paths(<id>) before you finish; unexamined is not proven unreachable.",
+			len(left), strings.Join(shown, ", "))
+	}
+	return fmt.Sprintf("recorded %s: %s (grounded — the path exists and reaches a crown jewel). Consider propose_fix(%s).%s", is.ID, strings.Join(path, " -> "), is.ID, progress)
 }
 
 func tFix(cc *Context, args map[string]any) string {
@@ -298,10 +396,98 @@ func tFix(cc *Context, args map[string]any) string {
 	return fmt.Sprintf("fix for %s: %s [%s, %s]\n%s", id, art.Title, art.Kind, v, art.Content)
 }
 
+// uncoveredJewels are crown jewels the agent has NEITHER recorded NOR looked at with find_paths,
+// AND that actually have a reachable path from the internet. The path check is what keeps the
+// coverage gate honest: a decoy or an isolated jewel has no path, so it is not "uncovered" — the
+// agent cannot be asked to record a path that does not exist. Only a jewel that is reachable and
+// unexamined counts, so the gate fires exactly on the seed-3 failure (the model quit with real,
+// findable jewels left) and never on a clean account that merely contains decoys.
+func uncoveredJewels(cc *Context) []string {
+	if cc.Snap == nil {
+		return nil // no graph → nothing is knowably reachable; never gate on absence of data
+	}
+	recorded := map[string]bool{}
+	for _, is := range cc.Issues {
+		recorded[is.Target] = true
+	}
+	var out []string
+	for _, id := range sortedNodeIDs(cc.Snap) {
+		n := cc.Snap.Nodes[id]
+		if !(cloudgraph.SensitiveData(n) || cloudgraph.PrivilegedIdentity(n)) {
+			continue
+		}
+		if recorded[id] || cc.queried[id] {
+			continue
+		}
+		// Reachable? Reuse the same path search find_paths/record_issue ground against.
+		if hasInternetPath(cc.Snap, id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// hasInternetPath reports whether any entry point reaches target — the existence check the
+// coverage gate needs without rendering the path.
+func hasInternetPath(snap *cloudgraph.Snapshot, target string) bool {
+	for _, entry := range entryPoints(snap) {
+		if len(snap.FindPaths(entry, func(n *cloudgraph.Node) bool { return n != nil && n.ID == target }, cloudgraph.AllAttackEdges, 8, 1)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func tFinish(cc *Context, args map[string]any) string {
+	// COMPLETENESS CHECK (E-component / termination). The prompt's own flow is "record_issue
+	// the confirmed ones, propose_fix each, then finish" — but finish closed unconditionally,
+	// so a run that recorded 7 issues and proposed 1 fix ended looking complete. Measured live:
+	// verified_rate 0.14 on a 7-issue run. A recorded attack path with no fix is half a
+	// deliverable: this product's contract (§18.4) is that the engine proposes a VERIFIED
+	// remediation for what it finds.
+	//
+	// BOUNDED at a single nudge — the second finish always closes — so this can never trap the
+	// agent (the autoBypassThreshold precedent). It names the unfixed issue ids and nothing
+	// else: it never fabricates a fix, and never blocks the summary a second time.
+	if unfixed := unfixedIssueIDs(cc); len(unfixed) > 0 && cc.finishNudges == 0 {
+		cc.finishNudges++
+		return fmt.Sprintf("NOT CLOSED YET — %d recorded issue(s) have no proposed fix: %s. "+
+			"Call propose_fix(<issue_id>) for each, then finish again. (Calling finish again "+
+			"without them will close the investigation and they will be reported unremediated.)",
+			len(unfixed), strings.Join(unfixed, ", "))
+	}
+	// COVERAGE GATE (E-component / termination). fix#2's disclosure NAMES the crown jewels the
+	// prepass did not examine, but it is ADVICE — measured on seed 3, a weak model recorded 5,
+	// fixed all 5, then called finish with 41 turns unused and 6 real, findable jewels ignored.
+	// This converts the advice into a bounded refusal, symmetric with the unfixed-issue gate: it
+	// holds finish ONCE, naming the reachable-but-unexamined jewels, then the next finish closes
+	// (so a genuinely unreachable jewel can never trap the model). It enforces a TRUE property —
+	// "you have not looked here" — and never an answer: it names the jewel, never a path to it.
+	if uncovered := uncoveredJewels(cc); len(uncovered) > 0 && cc.coverageNudges == 0 {
+		cc.coverageNudges++
+		shown := uncovered
+		if len(shown) > 12 {
+			shown = append(append([]string{}, shown[:12]...), fmt.Sprintf("… (+%d more)", len(uncovered)-12))
+		}
+		return fmt.Sprintf("NOT CLOSED YET — %d crown jewel(s) are reachable from the internet and you have "+
+			"not examined them: %s. Call find_paths(<id>) on each and record any real path before you "+
+			"finish. (Calling finish again will close the investigation with these left uncovered.)",
+			len(uncovered), strings.Join(shown, ", "))
+	}
 	cc.Summary = argStr(args, "summary")
 	cc.Done = true
 	return "investigation closed."
+}
+
+// unfixedIssueIDs lists recorded issues carrying no proposed remediation, in record order.
+func unfixedIssueIDs(cc *Context) []string {
+	var out []string
+	for _, is := range cc.Issues {
+		if strings.TrimSpace(is.FixKind) == "" && strings.TrimSpace(is.FixContent) == "" {
+			out = append(out, is.ID)
+		}
+	}
+	return out
 }
 
 // --- graph helpers ---

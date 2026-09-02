@@ -30,11 +30,26 @@ RULES
   record an issue whose severity depends on such a flag, confirm it with get_resource(id, live:true).
   If it answers COULD NOT CHECK, say so in the rationale rather than treating the snapshot as
   confirmed — and never read an unchecked surface as proof a resource is gone.
-- A good flow: enumerate_attack_paths to seed, then verify each candidate with find_paths /
-  blast_radius, record_issue the confirmed ones, propose_fix each, then finish.
+- record_issue VALIDATES THE PATH ITSELF against the graph (it rejects any path whose edges
+  do not exist or that does not end at a crown jewel). A path returned by find_paths is
+  therefore already groundable — record it directly. Do NOT spend a second call confirming
+  that a path exists; use blast_radius to judge IMPACT, not existence. Every redundant call
+  is budget you no longer have for a crown jewel nobody has looked at.
+- A good flow: enumerate_attack_paths to seed, then find_paths for each unexamined crown
+  jewel, record_issue what it returns, propose_fix each, then finish.
 - When done, call finish(summary) with a short executive summary.
 
 `)
+	// COST + HONESTY. The rules tell the agent to confirm a flag-dependent severity with
+	// get_resource(id, live:true). With no live reader wired that answers COULD NOT CHECK every
+	// time, so the agent spends one call PER JEWEL discovering a fact the harness knew before the
+	// run began. Saying it up front removes the wasted calls without weakening the disclosure:
+	// the agent must still record that the flag was unconfirmed.
+	if cc.Live == nil {
+		b.WriteString("LIVE RE-READ IS NOT CONFIGURED for this run: get_resource(id, live:true) will answer\n" +
+			"COULD NOT CHECK for every resource. Do not spend calls discovering that — note in each\n" +
+			"rationale that the flag comes from the snapshot and could not be live-confirmed.\n\n")
+	}
 	fmt.Fprintf(&b, "ACCOUNT: %s (%s) — %d resources, %d prowler findings.\n",
 		cc.Snap.AccountID, cc.Snap.Provider, len(cc.Snap.Nodes), len(cc.Prowler))
 	fmt.Fprintf(&b, "Crown jewels (sensitive data / privileged identities): %s\n\n", crownJewels(cc.Snap))

@@ -87,6 +87,14 @@ func StripFences(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// transcriptEntryCap bounds one transcript entry; transcriptEntryTail is how much of the END is
+// preserved verbatim, because a tool result's actionable half (what is left to do, what to call
+// next) is written last.
+const (
+	transcriptEntryCap  = 1800
+	transcriptEntryTail = 700
+)
+
 // CompactArgs renders an action's args as compact JSON, truncated for the transcript.
 func CompactArgs(args map[string]any) string {
 	b, _ := json.Marshal(args)
@@ -99,8 +107,19 @@ func CompactArgs(args map[string]any) string {
 // AppendCapped adds an entry to a transcript, truncating an over-long entry and keeping only the most recent
 // entries so the prompt can't grow unbounded over a long-horizon run.
 func AppendCapped(t []string, entry string) []string {
-	if len(entry) > 1800 {
-		entry = entry[:1800] + " …(truncated)"
+	// HEAD+TAIL, not head-only (the webagent precedent, browser.go/dispatch.go). A tool
+	// observation puts its most ACTIONABLE content LAST: the coverage disclosure naming which
+	// crown jewels nobody examined, the "REMAINING: N still unexamined" countdown, the
+	// "Consider propose_fix(ai-001)" hint. A head-only cut destroys precisely those and leaves
+	// the bulk listing that the agent least needs. Measured live on a 908-resource account: the
+	// prepass observation was cut at "COVERAGE: this prepass is a BOUNDED wor …(truncated)", so
+	// the agent never saw the jewels it was being told to check — the disclosure was computed,
+	// rendered, and then thrown away one layer later.
+	if len(entry) > transcriptEntryCap {
+		head := transcriptEntryCap - transcriptEntryTail
+		entry = entry[:head] +
+			fmt.Sprintf(" …[%d bytes elided]… ", len(entry)-head-transcriptEntryTail) +
+			entry[len(entry)-transcriptEntryTail:]
 	}
 	t = append(t, entry)
 	const keep = 24

@@ -70,7 +70,20 @@ type Context struct {
 	// this field still gets a bound, which is the point); cached answers do not spend it.
 	ProbeBudget int
 
-	issueN     int
+	issueN int
+	// finishNudges counts how many times finish() has been held back because recorded
+	// issues had no proposed fix. BOUNDED at one: the second finish always closes, so the
+	// completeness check can never trap the agent in a loop.
+	finishNudges int
+	// coverageNudges bounds the coverage gate on finish() at a single hold, exactly like
+	// finishNudges bounds the unfixed-issue gate — a jewel that is genuinely unreachable must
+	// not trap the agent, so the second finish always closes.
+	coverageNudges int
+	// queried is the set of crown-jewel ids the agent actually looked at with find_paths —
+	// distinct from recorded. A jewel examined and correctly declined (a decoy, or one with no
+	// path) is NOT an uncovered jewel; only one never looked at is. Without this the coverage
+	// gate would fire on every clean run that has decoys.
+	queried    map[string]bool
 	calls      int
 	probeCalls int
 	// probes holds every dry-run outcome of this run, ALLOW and DENY and UNKNOWN alike, keyed by
