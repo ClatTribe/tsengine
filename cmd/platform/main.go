@@ -748,11 +748,11 @@ func sandboxDispatcherWS(images sandbox.ScanImages, st store.Store, vault secret
 		case types.AssetCloudAccount:
 			opts.Env = cloudCredentialEnv()
 			if gac := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); gac != "" {
-	opts.Mounts = append(opts.Mounts, sandbox.Mount{HostPath: gac, ContainerPath: gac})
-}
-if pid := a.Meta["project_id"]; pid != "" {
-	opts.Env = append(opts.Env, "TSENGINE_GCP_PROJECT="+pid)
-}
+				opts.Mounts = append(opts.Mounts, sandbox.Mount{HostPath: gac, ContainerPath: gac})
+			}
+			if pid := a.Meta["project_id"]; pid != "" {
+				opts.Env = append(opts.Env, "TSENGINE_GCP_PROJECT="+pid)
+			}
 		case types.AssetRepository:
 			dir, err := os.MkdirTemp(repoScratchDir(), "tsengine-repo-*")
 			if err != nil {
