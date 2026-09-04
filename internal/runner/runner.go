@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"github.com/ClatTribe/tsengine/internal/l15"
 	"github.com/ClatTribe/tsengine/internal/tool"
+	"github.com/ClatTribe/tsengine/internal/training"
 	"log/slog"
 	"sort"
 	"strings"
@@ -476,6 +477,16 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	if cloudRan {
 		cov = cov.With("clouddrift")
 	}
+	// Security-awareness training: whether someone owes their training is a function of TIME as much
+	// as of anything anybody does — a completion lapses on its anniversary with no event at all — so
+	// it is assessed on the clock rather than on a write. Grounded: an empty roster produces nothing
+	// AND is not counted as covered, because "nobody owes training" and "we do not know who works
+	// here" must not read the same.
+	trainingFindings, trainingRan := s.assessTraining(ctx, tenantID)
+	current = append(current, trainingFindings...)
+	if trainingRan {
+		cov = cov.With("training")
+	}
 	// continuous-monitoring: reconcile this pass's findings into incidents (what's NEW,
 	// what's RESOLVED since last pass). Runs over the whole tenant — a full pass is the
 	// authoritative present state. Only when every asset scanned cleanly, so a partial
@@ -690,6 +701,81 @@ func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) ([]types
 // two doors authenticate identically. Best-effort + grounded (§10): no factory, no MDM configured, or
 // a fetch error → (nil, false): the fleet was not observed and nothing downstream may reason from
 // the absence of a device finding. A fleet that was read and is compliant → (nil, true).
+// foldPosture opens the control gaps a batch of findings cites.
+//
+// It exists because the per-asset path gets this for free (processFinding → GRC.Apply) and the
+// per-pass SYNC paths did not: they stored findings and stopped, so a device or training finding
+// never opened a gap and the compliance posture read clean while the finding sat in the issues list.
+// The posted-inventory doors (/v1/devices/ingest and friends) always folded, so the two doors for
+// the SAME assessor disagreed — which is precisely the drift the ingest path's own comment warns
+// about. A compliance control is opened only because a real finding cites it (§18.2 inv. 5); a
+// finding nobody folds is evidence the control layer never sees.
+func (s *Service) foldPosture(ctx context.Context, tenantID string, findings []types.Finding) {
+	if s.GRC == nil {
+		return
+	}
+	for _, f := range findings {
+		if err := s.GRC.Apply(ctx, tenantID, f); err != nil {
+			slog.Warn("[scan] finding stored but NOT folded into compliance posture — the control gap "+
+				"it should open will not appear",
+				"tenant", tenantID, "rule", f.RuleID, "err", err.Error())
+		}
+	}
+}
+
+// assessTraining reports who owes their security-awareness training, each pass.
+//
+// It reads only stored state — the roster and the completions — so it costs no network call and
+// cannot fail for an external reason. The bool is the honest half: an EMPTY roster returns false, so
+// the questionnaire's training question reads "not assessed" rather than answering Yes for a company
+// whose workforce we cannot see. Nothing found and nothing to look at are different claims (§10).
+func (s *Service) assessTraining(ctx context.Context, tenantID string) ([]types.Finding, bool) {
+	if s.Store == nil || s.NewID == nil {
+		return nil, false
+	}
+	emps, err := s.Store.ListEmployees(ctx, tenantID)
+	if err != nil {
+		return nil, false
+	}
+	users, err := s.Store.ListUsers(ctx, tenantID)
+	if err != nil {
+		return nil, false
+	}
+	people := training.RosterFrom(emps, users)
+	if len(people) == 0 {
+		return nil, false
+	}
+	comps, err := s.Store.ListTrainingCompletions(ctx, tenantID)
+	if err != nil {
+		return nil, false
+	}
+	now := s.now()
+	sts := training.Evaluate(training.Default(), people, comps, now)
+	findings := l15.Enrich(training.Assess(sts, now)) // §11, as every other ingest path does
+	saved := make([]types.Finding, 0, len(findings))
+	for i := range findings {
+		findings[i].ID = s.NewID()
+		if err := s.Store.PutFinding(ctx, tenantID, findings[i]); err != nil {
+			slog.Warn("[scan] training finding could not be stored — it will not appear in issues",
+				"tenant", tenantID, "rule", findings[i].RuleID, "err", err.Error())
+			continue
+		}
+		saved = append(saved, findings[i])
+	}
+	s.foldPosture(ctx, tenantID, saved)
+	// Stamp that the programme was assessed: a fully-trained roster yields zero findings, and without
+	// the stamp that reads identically to never having looked.
+	if t, terr := s.Store.GetTenant(ctx, tenantID); terr == nil {
+		if t.PostureAssessed == nil {
+			t.PostureAssessed = map[string]time.Time{}
+		}
+		t.PostureAssessed["training"] = now
+		_ = s.Store.PutTenant(ctx, t)
+	}
+	slog.Info("[scan] security training assessed", "tenant", tenantID, "people", len(people), "owing", len(saved))
+	return saved, true
+}
+
 func (s *Service) syncDevices(ctx context.Context, tenantID string) ([]types.Finding, bool) {
 	if s.Store == nil || s.NewID == nil || s.MDMFetcher == nil {
 		return nil, false
@@ -720,6 +806,7 @@ func (s *Service) syncDevices(ctx context.Context, tenantID string) ([]types.Fin
 		}
 		saved = append(saved, findings[i])
 	}
+	s.foldPosture(ctx, tenantID, saved)
 	// Stamp that the fleet was assessed: a compliant fleet yields zero findings, and without the
 	// stamp the posture page shows "never checked" for a customer whose laptops are all encrypted.
 	if t.PostureAssessed == nil {

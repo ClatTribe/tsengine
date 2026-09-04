@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -32,11 +31,6 @@ import (
 // each person carries the source they came from — an HRIS roster and a list of people who happen to
 // have logged in here are very different statements about who works at a company, and a completion
 // rate is only as honest as the denominator under it.
-
-const (
-	rosterSourceHRIS = "hris"
-	rosterSourceApp  = "workspace_users"
-)
 
 type trainingResponse struct {
 	Curriculum training.Curriculum `json:"curriculum"`
@@ -173,52 +167,18 @@ func (d Deps) actingEmail(r *http.Request) string {
 	return strings.ToLower(strings.TrimSpace(u.Email))
 }
 
-// trainingRoster is everyone expected to complete the curriculum: the HRIS roster where one is
-// connected, plus this product's own users.
-//
-// Only ACTIVE employees are assigned. Someone who has left does not owe training, and listing them
-// would fill the outstanding column with people nobody can chase — the same reason the HRIS join
-// treats a future end date as still employed rather than as a leaver.
-//
-// The HRIS wins on a duplicate: both sources describe the same human, and the HRIS knows their name
-// and their employment status while the user table knows only that they logged in.
+// trainingRoster is everyone expected to complete the curriculum. The assembly itself lives in
+// internal/training because the monitoring pass needs the identical answer, and two copies would
+// eventually disagree about who works at a company — the roster is the denominator under every
+// number the programme reports.
 func (d Deps) trainingRoster(ctx context.Context, tenantID string) ([]training.Person, error) {
-	byEmail := map[string]training.Person{}
-
 	emps, err := d.Store.ListEmployees(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range emps {
-		if e.Status != platform.EmploymentActive {
-			continue
-		}
-		email := strings.ToLower(strings.TrimSpace(e.WorkEmail))
-		if email == "" {
-			continue
-		}
-		byEmail[email] = training.Person{Email: email, Name: e.Name, Source: rosterSourceHRIS}
-	}
-
 	users, err := d.Store.ListUsers(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	for _, u := range users {
-		email := strings.ToLower(strings.TrimSpace(u.Email))
-		if email == "" {
-			continue
-		}
-		if _, ok := byEmail[email]; ok {
-			continue // the HRIS record is the better one
-		}
-		byEmail[email] = training.Person{Email: email, Name: u.Name, Source: rosterSourceApp}
-	}
-
-	out := make([]training.Person, 0, len(byEmail))
-	for _, p := range byEmail {
-		out = append(out, p)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Email < out[j].Email })
-	return out, nil
+	return training.RosterFrom(emps, users), nil
 }

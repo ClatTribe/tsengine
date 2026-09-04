@@ -155,9 +155,9 @@ type Status struct {
 	// Tier and At describe the completion behind a complete or expired state. Empty when outstanding —
 	// there is nothing to describe.
 	Tier      Tier      `json:"tier,omitempty"`
-	At        time.Time `json:"at,omitempty"`
+	At        time.Time `json:"at,omitzero"`
 	Provider  string    `json:"provider,omitempty"`
-	ExpiresAt time.Time `json:"expires_at,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
 }
 
 const (
