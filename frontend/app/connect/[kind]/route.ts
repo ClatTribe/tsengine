@@ -12,6 +12,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ kind: string }
   if (!s) return NextResponse.redirect(new URL("/login", _req.url));
   try {
     const { authorize_url } = await api.connectURL(kind);
+        // Grant-based providers (GCP) have no OAuth redirect-back: route them to a setup page that
+    // shows the grant link + collects the project id, instead of a dead-end redirect to the console.
+    if (kind === "gcp") {
+      const setup = new URL(`/connect-setup/${kind}`, _req.url);
+      setup.searchParams.set("u", authorize_url);
+      return NextResponse.redirect(setup);
+    }
     return NextResponse.redirect(authorize_url);
   } catch (e) {
     const status = e instanceof ApiError ? e.status : 502;
