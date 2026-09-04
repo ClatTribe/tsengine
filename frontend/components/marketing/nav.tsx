@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { FRAMEWORKS, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY, frameworkGroups } from "@/lib/frameworks";
+import { FRAMEWORKS, FRAMEWORK_COUNT, FRAMEWORK_LABEL, FRAMEWORK_CATEGORY, frameworkGroups } from "@/lib/frameworks";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; desc: string; icon: typeof Bot };
@@ -35,7 +35,10 @@ const COVERAGE: Item[] = [
   { href: "/saas-posture", label: "Identity & SaaS posture", desc: "MFA, OAuth grants, stale access, SSPM", icon: KeyRound },
 ];
 const COMPLIANCE: Item[] = [
-  { href: "/frameworks", label: "Frameworks", desc: "SOC 2, ISO, HIPAA, PCI + 18 more — auto-mapped", icon: FileCheck2 },
+  // The count is DERIVED, minus the four named in the sentence. It read "+ 18 more" (=22) against a
+  // set of 25 — the same drift lib/frameworks.ts documents having fixed in twenty other strings, in
+  // the one place a buyer reads first.
+  { href: "/frameworks", label: "Frameworks", desc: `SOC 2, ISO, HIPAA, PCI + ${FRAMEWORK_COUNT - 4} more — auto-mapped`, icon: FileCheck2 },
   { href: "/vapt", label: "VAPT & evidence", desc: "Always-current, signed reports", icon: FileText },
   { href: "/soc2-readiness", label: "SOC 2 readiness", desc: "Where you'd fail the questionnaire — free", icon: ClipboardCheck },
   { href: "/security-questionnaire", label: "Security questionnaires", desc: "35 answered by the scan, 17 by a named human", icon: FileText },

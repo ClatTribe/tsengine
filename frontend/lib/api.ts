@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
+  AccessReview,
   DetectionValidation,
   ExposureTrend,
   AttackCoverage,
@@ -482,6 +483,26 @@ export const api = {
   attestReadiness: (id: string, inPlace: boolean, by: string) =>
     call<{ item: string }>(`/v1/readiness/attest/${id}`, {
       method: "POST", body: JSON.stringify({ in_place: inPlace, by }),
+    }),
+
+  // The periodic access review (SOC 2 CC6.2/CC6.3). Rebuilt from CURRENT identity findings on every
+  // read, with stored decisions merged back on — so the reviewer is always answering about who has
+  // access now, not a list frozen when the campaign opened.
+  accessReview: () =>
+    safe<AccessReview>("/v1/access-review", {
+      progress: { total: 0, reviewed: 0, keep: 0, revoke: 0, pending: 0, complete: false },
+      identities: [],
+      detail:
+        "No accounts are currently flagged for review. This is not a completed access review — " +
+        "connect an identity provider so we can see who has access.",
+    }),
+
+  // One reviewer's verdict on one account. `by` is required by the server: an unattributed decision
+  // is a log line, not audit evidence. Recording "revoke" does not revoke anything.
+  decideAccessReview: (subject: string, decision: "keep" | "revoke", by: string, note: string) =>
+    call<AccessReview>("/v1/access-review/decide", {
+      method: "POST",
+      body: JSON.stringify({ subject, decision, by, note }),
     }),
 
   // Change the signed-in user's password (also clears the forced-rotation flag for an

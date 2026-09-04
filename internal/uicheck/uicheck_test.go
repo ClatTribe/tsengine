@@ -324,6 +324,20 @@ var required = []struct {
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +
 			"tie back to this asset",
 	},
+	{
+		page:  "frontend/app/(app)/access-review/page.tsx",
+		field: "detail",
+		wouldOtherwiseClaim: "that a campaign with nobody in it is a COMPLETED access review. The " +
+			"server writes the sentence that separates the two (\"this is not a completed access " +
+			"review\") because \"0 of 0\" and \"12 of 12\" read the same to someone skimming, and this " +
+			"page's output is filed as SOC 2 CC6.2/CC6.3 evidence",
+	},
+	{
+		page:  "frontend/app/(app)/access-review/page.tsx",
+		field: "pending",
+		wouldOtherwiseClaim: "that a part-answered review is finished — the count of accounts still " +
+			"awaiting a decision is the difference between an access review and a list of accounts",
+	},
 }
 
 func TestCoverageClaimsRenderTheFieldsThatQualifyThem(t *testing.T) {

@@ -12,14 +12,19 @@
 
 export type Tab = { href: string; label: string };
 
-// COMPLIANCE — the audit-readiness outcome. Four genuinely distinct artifacts, not one page sliced
-// four ways: the live control posture (findings → controls), the risk register (accept/mitigate
-// decisions a named human makes), the external-auditor engagement, and the policy set.
+// COMPLIANCE — the audit-readiness outcome. Five genuinely distinct artifacts, not one page sliced
+// five ways: the live control posture (findings → controls), the risk register (accept/mitigate
+// decisions a named human makes), the external-auditor engagement, the policy set, and the periodic
+// access review.
 export const COMPLIANCE_TABS: Tab[] = [
   { href: "/compliance", label: "Posture" },
   { href: "/risks", label: "Risks" },
   { href: "/audits", label: "Audits" },
   { href: "/program", label: "Program" },
+  // The access review sits here rather than under Connections because it is an AUDIT artifact, not an
+  // inventory: CC6.2/CC6.3 ask for a named person's recorded answer, and the answer is filed beside
+  // the risk decisions and the policy set that an auditor reads in the same sitting.
+  { href: "/access-review", label: "Access review" },
 ];
 
 // CONNECTIONS — what you have connected. Inventories, not finding-views: the risk these carry already

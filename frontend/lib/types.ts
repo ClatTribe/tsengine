@@ -1595,3 +1595,36 @@ export interface DetectionValidation {
   missed_proven: number;
   caveat: string;
 }
+// ── Access review (SOC 2 CC6.2/CC6.3) ────────────────────────────────────────────────────────────
+// The attestation half of access control: a NAMED person answering "does this individual still need
+// this?" for every flagged account, on a date. `detail` is the server's own honest sentence about
+// what the numbers mean and is rendered verbatim — "0 of 0" and "12 of 12" both read as complete to
+// someone skimming, and only one of them is.
+
+export type AccessReviewIdentity = {
+  subject: string;
+  reasons: string[];
+  finding_ids: string[];
+  severity: string;
+  decision: "" | "keep" | "revoke";
+  decided_by?: string;
+  decided_at?: string;
+  note?: string;
+};
+
+export type AccessReviewProgress = {
+  total: number;
+  reviewed: number;
+  keep: number;
+  revoke: number;
+  pending: number;
+  /** True ONLY when every flagged account has a decision — never for an empty campaign. */
+  complete: boolean;
+};
+
+export type AccessReview = {
+  progress: AccessReviewProgress;
+  identities: AccessReviewIdentity[];
+  detail: string;
+  revocations?: AccessReviewIdentity[];
+};
