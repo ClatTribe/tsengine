@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS pentests    (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
+CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (token TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS operators   (id TEXT PRIMARY KEY, email TEXT, data TEXT NOT NULL);
@@ -422,6 +423,21 @@ func (s *SQLite) ReplaceEmployees(ctx context.Context, tenantID, source string, 
 }
 func (s *SQLite) ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error) {
 	return listJSON[platform.Employee](ctx, s.db, `SELECT data FROM employees WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+// --- security-awareness training completions (append-only; upsert by the record's own id) ---
+
+func (s *SQLite) PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error {
+	d, err := enc(c)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO training(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, c.TenantID, c.ID, d)
+	return err
+}
+func (s *SQLite) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
+	return listJSON[platform.TrainingCompletion](ctx, s.db, `SELECT data FROM training WHERE tenant_id=? ORDER BY id`, tenantID)
 }
 
 // --- users & sessions ---

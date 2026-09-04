@@ -48,19 +48,27 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 // Tier is how we know a person was trained. The two are not interchangeable and are never summed.
-type Tier string
+//
+// ALIASES, not copies. The stored record lives in pkg/platform (internal/store may not import an
+// internal package), and a mirrored struct here would be two types free to drift apart — with the
+// drift landing in an audit record. One type, two names.
+type Tier = platform.TrainingTier
 
 const (
 	// TierDelivered — rendered in this product, confirmed by the person, at a recorded time.
-	TierDelivered Tier = "delivered"
+	TierDelivered = platform.TrainingDelivered
 	// TierAttested — completed elsewhere; someone recorded it, naming the provider.
-	TierAttested Tier = "attested_external"
+	TierAttested = platform.TrainingAttested
 )
 
-func (t Tier) Valid() bool { return t == TierDelivered || t == TierAttested }
+// Valid reports whether t is one of the two tiers. A method cannot be declared on an aliased type
+// from another package, so it is a function.
+func ValidTier(t Tier) bool { return t == TierDelivered || t == TierAttested }
 
 var (
 	// ErrUnknownModule refuses a completion citing a module that is not in the curriculum.
@@ -75,22 +83,8 @@ var (
 	ErrBadTier = errors.New(`training: tier must be "delivered" or "attested_external"`)
 )
 
-// Completion is one person finishing one module, once.
-type Completion struct {
-	// Subject is the person, by the email their identity provider knows them as — the same key the
-	// HRIS join matches on, so a roster row and a training record refer to the same human.
-	Subject  string    `json:"subject"`
-	ModuleID string    `json:"module_id"`
-	Tier     Tier      `json:"tier"`
-	At       time.Time `json:"at"`
-	// Provider names who delivered it. For TierDelivered it is this product; for TierAttested it is
-	// required, because "trained externally" without naming the source is not a fact anyone can check.
-	Provider string `json:"provider,omitempty"`
-	// RecordedBy is the human who entered an external attestation. Empty for TierDelivered, where the
-	// subject confirmed it themselves and the product observed it.
-	RecordedBy string `json:"recorded_by,omitempty"`
-	Note       string `json:"note,omitempty"`
-}
+// Completion is one person finishing one module, once. An alias of the stored record — see Tier.
+type Completion = platform.TrainingCompletion
 
 // Person is someone who is expected to complete the curriculum.
 type Person struct {
@@ -109,7 +103,7 @@ func NewCompletion(subject, moduleID string, tier Tier, provider, recordedBy, no
 	if subject == "" {
 		return Completion{}, ErrNoSubject
 	}
-	if !tier.Valid() {
+	if !ValidTier(tier) {
 		return Completion{}, ErrBadTier
 	}
 	m, ok := c.Module(moduleID)
@@ -131,14 +125,24 @@ func NewCompletion(subject, moduleID string, tier Tier, provider, recordedBy, no
 		provider = SelfProvider
 		recordedBy = ""
 	}
+	at := now.UTC()
 	return Completion{
-		Subject: subject, ModuleID: m.ID, Tier: tier, At: now.UTC(),
-		Provider: provider, RecordedBy: recordedBy, Note: strings.TrimSpace(note),
+		ID:      CompletionID(subject, m.ID, at),
+		Subject: subject, ModuleID: m.ID, Tier: tier, At: at,
+		CurriculumVersion: c.Version,
+		Provider:          provider, RecordedBy: recordedBy, Note: strings.TrimSpace(note),
 	}, nil
 }
 
 // SelfProvider is the provider recorded for content this product delivered.
 const SelfProvider = "TensorShield"
+
+// CompletionID is the storage key: person, module, DAY. Day-granular so confirming twice in one
+// sitting overwrites rather than accumulating, while a genuine re-take next year is its own record —
+// the history is the evidence an auditor asks for.
+func CompletionID(subject, moduleID string, at time.Time) string {
+	return strings.ToLower(strings.TrimSpace(subject)) + "|" + moduleID + "|" + at.UTC().Format("2006-01-02")
+}
 
 // Status is where one person stands on one module.
 type Status struct {
@@ -233,14 +237,21 @@ type Summary struct {
 	// RosterSources names where the roster came from, because an HRIS roster and this product's own
 	// user list are very different claims about completeness.
 	RosterSources []string `json:"roster_sources,omitempty"`
+	// OffRoster names people who have a completion on record but are not on the roster — someone
+	// recorded training for an address the HRIS and the user list do not know. It is reported rather
+	// than silently dropped: the roster bounds the denominator, so those records count towards
+	// nothing, and the person who entered them would otherwise watch the summary not move and assume
+	// it had landed.
+	OffRoster []string `json:"off_roster,omitempty"`
 	// Detail states in words what the numbers mean, so a reader skimming cannot take an empty
 	// programme for a finished one.
 	Detail string `json:"detail"`
 }
 
 // Summarize counts the statuses. `people` is passed separately so an empty roster is reported as an
-// absent denominator rather than as a programme with nothing outstanding.
-func Summarize(c Curriculum, people []Person, sts []Status) Summary {
+// absent denominator rather than as a programme with nothing outstanding, and `comps` so a record
+// stored against somebody who is not on the roster is NAMED rather than silently uncounted.
+func Summarize(c Curriculum, people []Person, sts []Status, comps []Completion) Summary {
 	s := Summary{People: len(people), Modules: len(c.Modules)}
 	seen := map[string]bool{}
 	for _, p := range people {
@@ -267,25 +278,52 @@ func Summarize(c Curriculum, people []Person, sts []Status) Summary {
 		}
 	}
 
+	onRoster := map[string]bool{}
+	for _, p := range people {
+		onRoster[strings.ToLower(strings.TrimSpace(p.Email))] = true
+	}
+	off := map[string]bool{}
+	for _, cp := range comps {
+		if subj := strings.ToLower(strings.TrimSpace(cp.Subject)); subj != "" && !onRoster[subj] {
+			off[subj] = true
+		}
+	}
+	for subj := range off {
+		s.OffRoster = append(s.OffRoster, subj)
+	}
+	sort.Strings(s.OffRoster)
+
 	s.NoRoster = len(people) == 0
 	s.Detail = detail(s)
 	return s
 }
 
 func detail(s Summary) string {
+	off := ""
+	if n := len(s.OffRoster); n > 0 {
+		off = fmt.Sprintf(" %d %s a training record but %s not on the roster, so %s counted towards nothing here.",
+			n, plural2(n, "person has", "people have"), plural2(n, "is", "are"), plural2(n, "it is", "they are"))
+	}
 	switch {
 	case s.NoRoster:
 		return "Nobody is on the roster yet, so there is no training programme to report on — this is " +
 			"not a trained workforce. Connect an HRIS, or invite your team, and everyone who works here " +
-			"appears with what they still owe."
+			"appears with what they still owe." + off
 	case s.Outstanding == 0 && s.Expired == 0:
 		return fmt.Sprintf("Every one of the %d assignments across %d people is current: %d confirmed in "+
 			"this product and %d recorded as completed elsewhere. The two are counted separately because "+
-			"they are different evidence.", s.Assignments, s.People, s.CompleteDelivered, s.CompleteAttested)
+			"they are different evidence.", s.Assignments, s.People, s.CompleteDelivered, s.CompleteAttested) + off
 	default:
 		return fmt.Sprintf("%d of %d assignments are still open — %d never started and %d completed too "+
 			"long ago to still count. Of those that are current, %d were confirmed in this product and %d "+
 			"were recorded as completed elsewhere.",
-			s.Outstanding+s.Expired, s.Assignments, s.Outstanding, s.Expired, s.CompleteDelivered, s.CompleteAttested)
+			s.Outstanding+s.Expired, s.Assignments, s.Outstanding, s.Expired, s.CompleteDelivered, s.CompleteAttested) + off
 	}
+}
+
+func plural2(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

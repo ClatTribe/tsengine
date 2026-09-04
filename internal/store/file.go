@@ -306,3 +306,10 @@ func (f *File) ReplaceEmployees(ctx context.Context, tenantID, source string, em
 	}
 	return f.persist()
 }
+
+func (f *File) PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error {
+	if err := f.Memory.PutTrainingCompletion(ctx, c); err != nil {
+		return err
+	}
+	return f.persist()
+}

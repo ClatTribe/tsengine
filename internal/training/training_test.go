@@ -91,7 +91,7 @@ func TestACompletionOlderThanItsRecurrenceIsExpiredNotComplete(t *testing.T) {
 func TestExpiredIsNotFoldedIntoOutstanding(t *testing.T) {
 	people := []Person{{Email: "ada@acme.io", Source: "hris"}, {Email: "grace@acme.io", Source: "hris"}}
 	comps := []Completion{mustComplete(t, "ada@acme.io", "phishing", TierDelivered, "", "", now.AddDate(0, 0, -400))}
-	s := Summarize(Default(), people, Evaluate(Default(), people, comps, now))
+	s := Summarize(Default(), people, Evaluate(Default(), people, comps, now), comps)
 	if s.Expired != 1 {
 		t.Errorf("Expired = %d, want 1", s.Expired)
 	}
@@ -134,7 +134,7 @@ func TestSummaryCountsTheTiersSeparatelyAndPublishesNoCombinedRate(t *testing.T)
 		}
 		comps = append(comps, mustComplete(t, "ada@acme.io", m.ID, tier, prov, by, now.AddDate(0, 0, -5)))
 	}
-	s := Summarize(Default(), people, Evaluate(Default(), people, comps, now))
+	s := Summarize(Default(), people, Evaluate(Default(), people, comps, now), comps)
 	if s.CompleteDelivered == 0 || s.CompleteAttested == 0 {
 		t.Fatalf("tiers not both counted: %+v", s)
 	}
@@ -155,7 +155,7 @@ func TestSummaryCountsTheTiersSeparatelyAndPublishesNoCombinedRate(t *testing.T)
 // With no roster there is no denominator. "Nothing outstanding" over nobody is not a trained
 // workforce, and a reader skimming the counts must not be able to take it for one.
 func TestAnEmptyRosterIsReportedAsAnAbsentDenominatorNotAsSuccess(t *testing.T) {
-	s := Summarize(Default(), nil, Evaluate(Default(), nil, nil, now))
+	s := Summarize(Default(), nil, Evaluate(Default(), nil, nil, now), nil)
 	if !s.NoRoster {
 		t.Fatal("NoRoster is false with nobody on the roster")
 	}
@@ -172,7 +172,7 @@ func TestAnEmptyRosterIsReportedAsAnAbsentDenominatorNotAsSuccess(t *testing.T) 
 // different statements about who works here.
 func TestRosterSourcesAreReported(t *testing.T) {
 	people := []Person{{Email: "a@acme.io", Source: "hris"}, {Email: "b@acme.io", Source: "workspace_users"}}
-	s := Summarize(Default(), people, Evaluate(Default(), people, nil, now))
+	s := Summarize(Default(), people, Evaluate(Default(), people, nil, now), nil)
 	if len(s.RosterSources) != 2 {
 		t.Fatalf("RosterSources = %v, want both sources named", s.RosterSources)
 	}

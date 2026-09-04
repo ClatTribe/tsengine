@@ -631,6 +631,51 @@ type Employee struct {
 	FetchedAt      time.Time `json:"fetched_at"`
 }
 
+// TrainingTier is HOW we know a person was trained. The two values are not interchangeable and are
+// never summed into one figure — see internal/training for the reasoning. It lives here rather than
+// in internal/training because the completion record is a stored entity and the store may not import
+// internal packages; internal/training aliases both this and TrainingCompletion, so there is ONE
+// type with two names rather than two types that drift.
+type TrainingTier string
+
+const (
+	// TrainingDelivered — the content was rendered in THIS product and the person confirmed it at a
+	// recorded time. The strongest claim software can make without proctoring an exam.
+	TrainingDelivered TrainingTier = "delivered"
+	// TrainingAttested — completed elsewhere; a named human recorded it, naming the provider. A
+	// second-hand claim, and rendered as one.
+	TrainingAttested TrainingTier = "attested_external"
+)
+
+// TrainingCompletion is one person finishing one security-awareness module, once.
+//
+// Completions are APPEND-ONLY: a new one never replaces an older one. "Trained every year since
+// 2024" is the thing an auditor actually asks for, and it is unanswerable from current state alone.
+// Currency is decided at read time by internal/training.Evaluate, which takes the newest completion
+// per (person, module) and expires it against the module's recurrence.
+type TrainingCompletion struct {
+	TenantID string `json:"tenant_id"`
+	// ID is subject|module|date. Day-granular on purpose: clicking confirm twice in one sitting must
+	// not create two records, and nobody legitimately completes the same module twice in a day.
+	ID string `json:"id"`
+	// Subject is the person, lower-cased, by the address their identity provider knows them as — the
+	// same key the HRIS roster joins on, so a roster row and a training record name the same human.
+	Subject  string       `json:"subject"`
+	ModuleID string       `json:"module_id"`
+	Tier     TrainingTier `json:"tier"`
+	At       time.Time    `json:"at"`
+	// CurriculumVersion pins WHICH content this attests to. A completion is evidence about the text
+	// that was shown, and the text can change — the same reason a scan pins its corpus version (§10).
+	CurriculumVersion string `json:"curriculum_version,omitempty"`
+	// Provider names who delivered it. Required for the attested tier, because "trained externally"
+	// without naming the source is not a fact anybody can check.
+	Provider string `json:"provider,omitempty"`
+	// RecordedBy is the human who entered an external attestation. Empty for the delivered tier, where
+	// the subject confirmed it themselves and the product observed it.
+	RecordedBy string `json:"recorded_by,omitempty"`
+	Note       string `json:"note,omitempty"`
+}
+
 // PRBotPolicy is the per-tenant repository PR-review-bot policy: whether to post inline review
 // comments + a merge-gating check-run on a pull request, and the severity at/above which the
 // check-run FAILS (blocks merge). No secret material — safe to return to the client.

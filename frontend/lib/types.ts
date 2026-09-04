@@ -1676,3 +1676,55 @@ export type AccessReview = {
   detail: string;
   revocations?: AccessReviewIdentity[];
 };
+
+// ── Security-awareness training (SOC 2 CC1.4/CC2.2 · ISO A.6.3 · PCI 12.6 · HIPAA 164.308(a)(5)) ──
+// Two evidence tiers that are never merged, and NO combined completion rate: one figure spanning
+// "we showed them the content and they confirmed" and "somebody says it happened elsewhere" would
+// rise as a customer asserted more and evidenced less.
+
+export type TrainingTier = "delivered" | "attested_external";
+
+export type TrainingModule = {
+  id: string;
+  title: string;
+  why: string;
+  recur_every_days: number;
+  controls: Record<string, string[]>;
+  body: string[];
+};
+
+export type TrainingStatus = {
+  subject: string;
+  name?: string;
+  module_id: string;
+  title: string;
+  /** complete | expired | outstanding — expired and outstanding are different problems. */
+  state: "complete" | "expired" | "outstanding";
+  tier?: TrainingTier;
+  at?: string;
+  provider?: string;
+  expires_at?: string;
+};
+
+export type TrainingSummary = {
+  people: number;
+  modules: number;
+  assignments: number;
+  complete_delivered: number;
+  complete_attested: number;
+  expired: number;
+  outstanding: number;
+  /** True when nobody is on the roster: no denominator, NOT a trained workforce. */
+  no_roster: boolean;
+  roster_sources?: string[];
+  /** Completions recorded against people the roster does not know — they count towards nothing. */
+  off_roster?: string[];
+  detail: string;
+};
+
+export type TrainingProgramme = {
+  curriculum: { version: string; modules: TrainingModule[] };
+  summary: TrainingSummary;
+  statuses: TrainingStatus[];
+  me?: string;
+};

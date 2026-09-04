@@ -34,18 +34,19 @@ type Memory struct {
 	policies        map[string]map[string]platform.Policy             // tenantID → policyID → policy
 	trustReqs       map[string]map[string]platform.TrustAccessRequest // tenantID → requestID → Trust Center access request
 
-	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
-	feedback    map[string]map[string]platform.Feedback      // tenantID → issueKey → latest human judgement
-	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
-	runtimeEvts map[string][]platform.RuntimeEvent           // tenantID → runtime-protection events (append-only)
-	pentests    map[string]map[string]pentest.Engagement     // tenantID → engagementID → pentest
-	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
-	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
-	employees   map[string][]platform.Employee               // tenantID → HRIS employee roster
-	users       map[string]platform.User                     // userID → user (email globally unique)
-	sessions    map[string]platform.Session                  // token → session
-	operators   map[string]platform.Operator                 // operatorID → operator (cross-tenant; global)
-	opSessions  map[string]platform.OperatorSession          // token → operator session
+	ignores     map[string]map[string]platform.IgnoreRule         // tenantID → issueKey → ignore rule
+	feedback    map[string]map[string]platform.Feedback           // tenantID → issueKey → latest human judgement
+	exclusions  map[string]map[string]platform.ExclusionRule      // tenantID → ruleID → exclusion rule
+	runtimeEvts map[string][]platform.RuntimeEvent                // tenantID → runtime-protection events (append-only)
+	pentests    map[string]map[string]pentest.Engagement          // tenantID → engagementID → pentest
+	reviews     map[string]map[string]platform.ReviewRequest      // tenantID → reviewID → review
+	apps        map[string][]platform.ThirdPartyApp               // tenantID → third-party apps
+	employees   map[string][]platform.Employee                    // tenantID → HRIS employee roster
+	training    map[string]map[string]platform.TrainingCompletion // tenantID → completionID → record
+	users       map[string]platform.User                          // userID → user (email globally unique)
+	sessions    map[string]platform.Session                       // token → session
+	operators   map[string]platform.Operator                      // operatorID → operator (cross-tenant; global)
+	opSessions  map[string]platform.OperatorSession               // token → operator session
 }
 
 // NewMemory returns an empty in-memory store.
@@ -75,6 +76,7 @@ func NewMemory() *Memory {
 		reviews:         map[string]map[string]platform.ReviewRequest{},
 		apps:            map[string][]platform.ThirdPartyApp{},
 		employees:       map[string][]platform.Employee{},
+		training:        map[string]map[string]platform.TrainingCompletion{},
 		users:           map[string]platform.User{},
 		sessions:        map[string]platform.Session{},
 		operators:       map[string]platform.Operator{},
@@ -785,6 +787,29 @@ func (m *Memory) ListEmployees(_ context.Context, tenantID string) ([]platform.E
 	return clone(m.employees[tenantID]), nil
 }
 
+// PutTrainingCompletion upserts one completion by its id. Keyed rather than appended so confirming
+// the same module twice in one day is idempotent, while last year's completion stays on record.
+func (m *Memory) PutTrainingCompletion(_ context.Context, c platform.TrainingCompletion) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.training[c.TenantID] == nil {
+		m.training[c.TenantID] = map[string]platform.TrainingCompletion{}
+	}
+	m.training[c.TenantID][c.ID] = c
+	return nil
+}
+
+func (m *Memory) ListTrainingCompletions(_ context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.TrainingCompletion, 0, len(m.training[tenantID]))
+	for _, c := range m.training[tenantID] {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
 // Snapshot is the serializable form of a Memory store — what the file-backed store
 // persists. Fields are exported so encoding/json can round-trip them.
 type Snapshot struct {
@@ -812,6 +837,7 @@ type Snapshot struct {
 	Reviews         map[string]map[string]platform.ReviewRequest      `json:"reviews"`
 	Apps            map[string][]platform.ThirdPartyApp               `json:"apps"`
 	Employees       map[string][]platform.Employee                    `json:"employees,omitempty"`
+	Training        map[string]map[string]platform.TrainingCompletion `json:"training,omitempty"`
 	Users           map[string]platform.User                          `json:"users"`
 	Sessions        map[string]platform.Session                       `json:"sessions"`
 	Operators       map[string]platform.Operator                      `json:"operators,omitempty"`
@@ -848,6 +874,7 @@ func (m *Memory) Export() Snapshot {
 		Reviews:         m.reviews,
 		Apps:            m.apps,
 		Employees:       m.employees,
+		Training:        m.training,
 		Users:           m.users,
 		Sessions:        m.sessions,
 		Operators:       m.operators,
@@ -883,6 +910,7 @@ func (m *Memory) load(s Snapshot) {
 	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)
 	m.employees = orEmpty(s.Employees)
+	m.training = orEmptyTraining(s.Training)
 	m.users = s.Users
 	if m.users == nil {
 		m.users = map[string]platform.User{}
@@ -1029,6 +1057,13 @@ func orEmptyEvalRuns(m map[string]map[string]platform.EvalRun) map[string]map[st
 func orEmptyEpisodes(m map[string]map[string]platform.EpisodeRecord) map[string]map[string]platform.EpisodeRecord {
 	if m == nil {
 		return map[string]map[string]platform.EpisodeRecord{}
+	}
+	return m
+}
+
+func orEmptyTraining(m map[string]map[string]platform.TrainingCompletion) map[string]map[string]platform.TrainingCompletion {
+	if m == nil {
+		return map[string]map[string]platform.TrainingCompletion{}
 	}
 	return m
 }

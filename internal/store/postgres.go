@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS pentests    (seq BIGSERIAL, tenant_id TEXT, id TEXT, 
 CREATE TABLE IF NOT EXISTS reviews     (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (seq BIGSERIAL, tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS employees   (seq BIGSERIAL, tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
+CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (seq BIGSERIAL, id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (seq BIGSERIAL, token TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS operators   (seq BIGSERIAL, id TEXT PRIMARY KEY, email TEXT, data TEXT NOT NULL);
@@ -397,6 +398,21 @@ func (p *Postgres) ReplaceEmployees(ctx context.Context, tenantID, source string
 }
 func (p *Postgres) ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error) {
 	return listJSON[platform.Employee](ctx, p.db, pgRebind(`SELECT data FROM employees WHERE tenant_id=? ORDER BY rowid`), tenantID)
+}
+
+// --- security-awareness training completions (append-only; upsert by the record's own id) ---
+
+func (p *Postgres) PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error {
+	d, err := enc(c)
+	if err != nil {
+		return err
+	}
+	_, err = p.db.ExecContext(ctx, pgRebind(`INSERT INTO training(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=EXCLUDED.data`), c.TenantID, c.ID, d)
+	return err
+}
+func (p *Postgres) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
+	return listJSON[platform.TrainingCompletion](ctx, p.db, pgRebind(`SELECT data FROM training WHERE tenant_id=? ORDER BY id`), tenantID)
 }
 
 // --- users & sessions ---

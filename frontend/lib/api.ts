@@ -2,6 +2,7 @@ import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
   AccessReview,
+  TrainingProgramme,
   DetectionValidation,
   ExposureTrend,
   AttackCoverage,
@@ -483,6 +484,32 @@ export const api = {
   attestReadiness: (id: string, inPlace: boolean, by: string) =>
     call<{ item: string }>(`/v1/readiness/attest/${id}`, {
       method: "POST", body: JSON.stringify({ in_place: inPlace, by }),
+    }),
+
+  // The security-awareness programme: curriculum, every person's status, and the honest summary.
+  training: () =>
+    safe<TrainingProgramme>("/v1/training", {
+      curriculum: { version: "", modules: [] },
+      summary: {
+        people: 0, modules: 0, assignments: 0, complete_delivered: 0, complete_attested: 0,
+        expired: 0, outstanding: 0, no_roster: true,
+        detail: "Nobody is on the roster yet, so there is no training programme to report on — this is not a trained workforce.",
+      },
+      statuses: [],
+    }),
+
+  // The SIGNED-IN person confirms they read a module. The subject comes from the session server-side
+  // and cannot be supplied here — "delivered" asserts we showed it to THAT person.
+  completeTraining: (moduleID: string) =>
+    call<TrainingProgramme>("/v1/training/complete", {
+      method: "POST", body: JSON.stringify({ module_id: moduleID }),
+    }),
+
+  // Records training somebody completed ELSEWHERE. Always lands as the attested tier, naming the
+  // provider and whoever entered it.
+  recordTraining: (subject: string, moduleID: string, provider: string, on: string, note: string) =>
+    call<TrainingProgramme>("/v1/training/record", {
+      method: "POST", body: JSON.stringify({ subject, module_id: moduleID, provider, on, note }),
     }),
 
   // The periodic access review (SOC 2 CC6.2/CC6.3). Rebuilt from CURRENT identity findings on every

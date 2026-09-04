@@ -25,6 +25,10 @@ export const COMPLIANCE_TABS: Tab[] = [
   // inventory: CC6.2/CC6.3 ask for a named person's recorded answer, and the answer is filed beside
   // the risk decisions and the policy set that an auditor reads in the same sitting.
   { href: "/access-review", label: "Access review" },
+  // Training sits here for the same reason the access review does: it is evidence a named person
+  // produces, filed beside the policy set an auditor reads in the same sitting. It is the only tab
+  // on this row that most of the company will ever open.
+  { href: "/training", label: "Training" },
 ];
 
 // CONNECTIONS — what you have connected. Inventories, not finding-views: the risk these carry already

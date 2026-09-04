@@ -198,6 +198,12 @@ type Store interface {
 	ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error
 	ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error)
 
+	// Training completions are APPEND-ONLY — Put upserts one record by its own id (person|module|day)
+	// and never removes an older one. "Trained every year since 2024" is what an auditor asks for and
+	// is unanswerable from current state; currency is decided at read time by training.Evaluate.
+	PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error
+	ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error)
+
 	// --- users & sessions (real account auth) ---
 	PutUser(ctx context.Context, u platform.User) error
 	GetUser(ctx context.Context, id string) (platform.User, error)

@@ -406,6 +406,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("GET /v1/identities", d.auth(d.handleNonHumanIdentities)) // non-human / AI-agent identity posture (ACSP agentic lens)
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
+	mux.HandleFunc("GET /v1/training", d.auth(d.handleTraining))                      // security-awareness programme: curriculum, per-person status, honest summary
+	mux.HandleFunc("POST /v1/training/complete", d.auth(d.handleTrainingComplete))    // the SIGNED-IN person confirms they read a module we rendered
+	mux.HandleFunc("POST /v1/training/record", d.auth(d.handleTrainingRecord))        // a named human records training completed ELSEWHERE
 	mux.HandleFunc("GET /v1/access-review", d.auth(d.handleRecertify))                // SOC 2 CC6.2/6.3 periodic access review
 	mux.HandleFunc("POST /v1/access-review/decide", d.auth(d.handleRecertifyDecide))  // a NAMED human keeps or removes access
 	mux.HandleFunc("GET /v1/readiness/checklist", d.auth(d.handleReadinessChecklist)) // staged CTO practice checklist, resolved against real state
