@@ -488,6 +488,15 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 				writeJSON(w, http.StatusForbidden, errCode("auditor access is read-only", "read_only_role"))
 				return
 			}
+			// An employee seat reaches ONLY their own training and policy acknowledgements. Refused
+			// at the same gate, for the same reason: hiding the nav is cosmetic, and the request
+			// that matters is the hand-crafted one. Closed by default — an endpoint added later is
+			// out of scope for an employee until somebody deliberately adds it (employee_scope.go).
+			if uerr == nil && u.Role == platform.RoleEmployee && !employeeMayReach(r.Method, r.URL.Path) {
+				writeJSON(w, http.StatusForbidden, errCode(
+					"this account can complete security training and acknowledge policies", "employee_scope"))
+				return
+			}
 			if !d.rateOK(r, w, s.TenantID) {
 				return
 			}

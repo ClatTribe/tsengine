@@ -14,6 +14,19 @@ const (
 	// auth middleware (every non-read request is refused with read_only_role), not by hiding
 	// buttons, so a hand-crafted request is refused the same way a click would be.
 	RoleAuditor = "auditor"
+	// RoleEmployee is the narrowest seat: a colleague who was asked to do their security training
+	// and acknowledge the policies, and who has no business seeing the security estate.
+	//
+	// It exists because the training programme is unusable without it. Asking forty people to
+	// complete their modules meant inviting forty MEMBERS, and a member can read every finding,
+	// every attack path and every pentest report, start a scan and approve a fix. Nobody will send
+	// that invite, so the programme that every framework requires would sit permanently unstarted.
+	//
+	// Enforced by an ALLOWLIST in the auth middleware, not a denylist and not by hiding buttons.
+	// The direction matters: with a denylist every endpoint added later is exposed to the whole
+	// company by default, and the person adding it has no reason to think about employees at all.
+	// A test drives every registered route to hold the allowlist to that.
+	RoleEmployee = "employee"
 )
 
 // User is a person who signs in to a tenant. Authentication is email + password
@@ -24,7 +37,7 @@ type User struct {
 	TenantID     string    `json:"tenant_id"`
 	Email        string    `json:"email"`
 	Name         string    `json:"name,omitempty"`
-	Role         string    `json:"role"` // RoleOwner | RoleMember | RoleAuditor
+	Role         string    `json:"role"` // RoleOwner | RoleMember | RoleAuditor | RoleEmployee
 	PasswordHash string    `json:"password_hash,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	// MustChangePassword is set when an account is provisioned with a temporary password

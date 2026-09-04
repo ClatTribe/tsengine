@@ -96,3 +96,49 @@ func TestExternalRecordFormAsksWhoDeliveredItAndWhen(t *testing.T) {
 			"separately from training completed here")
 	}
 }
+
+// The EMPLOYEE seat: the server allowlist is the boundary, but the shell has to agree with it or the
+// product is broken in one of two ways — a nav of links that 403 into blank pages, or an invite
+// nobody can find. These check the halves the compiler cannot.
+func TestEmployeeShellMatchesTheServerAllowlist(t *testing.T) {
+	src := frontendFile(t, "components", "shell", "employee-shell.tsx")
+
+	// Both allowed destinations, and nothing else. A link to an estate page here would render a
+	// page that comes back EMPTY rather than forbidden — "my data vanished" rather than "not for you".
+	for _, want := range []string{`"/training"`, `"/program"`} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the employee shell has no %s destination — the seat exists to reach exactly those two", want)
+		}
+	}
+	for _, banned := range []string{`"/findings"`, `"/issues"`, `"/pentest"`, `"/attack-paths"`, `"/settings"`, `"/dashboard"`} {
+		if strings.Contains(src, banned) {
+			t.Errorf("the employee shell links to %s, which the API refuses this account (403 "+
+				"employee_scope) — the page would render blank, and blank reads as data loss rather "+
+				"than as a boundary", banned)
+		}
+	}
+	if !strings.Contains(src, "This account is for security training") {
+		t.Error("an out-of-scope path renders nothing instead of saying why. 'Nothing here' and 'not " +
+			"for your account' look identical, and only one of them is true.")
+	}
+}
+
+// The layout must return the employee shell BEFORE the estate fetches. Rendering the normal shell
+// would fire seven calls this account is refused, each falling back to its empty default — drawing a
+// risk rating of zero and an empty findings badge for someone who simply may not see them.
+func TestAppLayoutReturnsTheEmployeeShellBeforeFetchingTheEstate(t *testing.T) {
+	src := frontendFile(t, "app", "(app)", "layout.tsx")
+	empIdx := strings.Index(src, `me.role === "employee"`)
+	if empIdx < 0 {
+		t.Fatal("the app layout does not branch on the employee role at all")
+	}
+	fetchIdx := strings.Index(src, "api.findingsSummary()")
+	if fetchIdx < 0 {
+		t.Fatal("api.findingsSummary() is gone from the layout — move this guard with it rather than " +
+			"letting it check nothing")
+	}
+	if empIdx > fetchIdx {
+		t.Error("the employee branch sits AFTER the estate fetches, so an employee's page load still " +
+			"makes seven calls it is refused and renders a shell built from their empty fallbacks")
+	}
+}

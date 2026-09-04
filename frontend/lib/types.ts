@@ -926,7 +926,7 @@ export interface User {
   tenant_id: string;
   email: string;
   name?: string;
-  role: string; // "owner" | "member"
+  role: string; // "owner" | "member" | "auditor" | "employee"
   created_at: string;
   must_change_password?: boolean; // invited member with a temp password; app is gated until they rotate it
 }
