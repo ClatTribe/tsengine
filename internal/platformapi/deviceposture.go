@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,8 +22,8 @@ type deviceRequest struct {
 // "finding issues" capability. A connector (or the customer) POSTs the device inventory; deviceposture.Assess
 // surfaces grounded device-posture findings (unencrypted disk, end-of-life OS, jailbroken/tampered, no screen
 // lock, firewall off, no EDR, auto-update off) into the same store, flowing through issues/incidents/grc/hitl.
-// Grounded + LLM-free: a compliant fleet yields zero. A live MDM connector (Kandji/Jamf/Intune/Kolide) is the
-// follow-on; the posted-inventory path works today (mirrors the OSINT/SaaS/tprm ingest).
+// Grounded + LLM-free: a compliant fleet yields zero. The LIVE twin is POST /v1/devices/sync (mdmsettings.go),
+// which fetches the same inventory from Kandji / Jamf / Intune and hands it to the same ingestDevices.
 func (d Deps) handleDevicePostureIngest(w http.ResponseWriter, r *http.Request, tenantID string) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 8<<20))
 	if err != nil {
@@ -34,56 +35,70 @@ func (d Deps) handleDevicePostureIngest(w http.ResponseWriter, r *http.Request, 
 		writeJSON(w, http.StatusBadRequest, errBody("invalid device inventory: "+err.Error()))
 		return
 	}
-	findings := deviceposture.Assess(req.Devices, deviceposture.Options{})
+	resp := d.ingestDevices(r.Context(), tenantID, req.Devices, "device-inventory ingest", nil)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ingestDevices is the ONE path a device inventory takes into the store, whichever door it came
+// through — the posted snapshot or a live MDM fetch. One path so the two doors cannot drift the way
+// the SaaS-posture doors once did (ADR 0029 D1a: enriched through one, folded through the other).
+//
+// extraNotes are disclosures the CALLER owes — for a live fetch, the provider's own limits and the
+// devices it could not fully read. They are appended to checks_not_run beside the per-device
+// silences this function computes, because "0 issues" over a fleet whose MDM cannot report
+// firewalls is a claim about firewalls unless the response says otherwise.
+func (d Deps) ingestDevices(ctx context.Context, tenantID string, devices []deviceposture.Device, why string, extraNotes []string) map[string]any {
+	findings := deviceposture.Assess(devices, deviceposture.Options{})
 	findings = enrichFindings(findings) // L1.5 parity (§11)
 	// Record that the fleet was assessed — a compliant fleet yields zero findings, which must not
 	// read the same as never having checked.
-	d.markPostureAssessed(r.Context(), tenantID, "deviceposture", time.Now().UTC())
+	d.markPostureAssessed(ctx, tenantID, "deviceposture", time.Now().UTC())
 	stored := 0
 	saved := make([]types.Finding, 0, len(findings))
 	for i, f := range findings {
 		f.ID = d.newID("dev") + "-" + strconv.Itoa(i)
-		if err := d.Store.PutFinding(r.Context(), tenantID, f); err != nil {
+		if err := d.Store.PutFinding(ctx, tenantID, f); err != nil {
 			continue
 		}
-		d.foldIntoPosture(r.Context(), tenantID, []types.Finding{f})
+		d.foldIntoPosture(ctx, tenantID, []types.Finding{f})
 		saved = append(saved, f)
 		stored++
 	}
 	// Findings that arrive by ingest reach the approval desk too — the same remediate.Propose
 	// the runner uses for engine-scanned findings. Nil ProposeFix/Submitter → no-op.
-	d.proposeForFindings(r.Context(), tenantID, saved)
+	d.proposeForFindings(ctx, tenantID, saved)
 	if d.IncidentOpener != nil && stored > 0 {
-		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
+		_, _ = d.IncidentOpener.OpenFor(ctx, tenantID, saved, nil)
 	}
 	if d.Recorder != nil && stored > 0 {
 		d.Recorder.Record("device posture assessed", "device_posture",
-			map[string]any{"tenant_id": tenantID, "devices": len(req.Devices), "findings": stored}, "device-inventory ingest")
+			map[string]any{"tenant_id": tenantID, "devices": len(devices), "findings": stored}, why)
 	}
 	if findings == nil {
 		findings = []types.Finding{}
 	}
-	resp := map[string]any{"devices": len(req.Devices), "issues_detected": stored, "findings": findings}
+	resp := map[string]any{"devices": len(devices), "issues_detected": stored, "findings": findings}
 	// Say how many devices we could not read, rather than letting a silent skip read as a clean fleet.
 	// "0 issues over 2 devices" is a compliance claim about disk encryption; if the export did not name
 	// the devices we assessed none of them, and that has to be visible here (§10).
-	names := make([]string, 0, len(req.Devices))
-	for _, dv := range req.Devices {
+	names := make([]string, 0, len(devices))
+	for _, dv := range devices {
 		names = append(names, dv.Name)
 	}
-	notes := ingestNotes(len(req.Devices), countNamed(names), "device", "devices",
+	notes := ingestNotes(len(devices), countNamed(names), "device", "devices",
 		"they did not carry a device name")
 	// The same reasoning one level down: a device can be READ and still not report a given setting.
 	// Those settings are no longer treated as "off" (they used to be, which manufactured findings from
 	// missing data), so the silence has to be said out loud — otherwise "0 issues" reads as "firewalls
 	// are on" when the export never mentioned firewalls.
-	if note := unreportedSettingsNote(req.Devices); note != "" {
+	if note := unreportedSettingsNote(devices); note != "" {
 		notes = append(notes, note)
 	}
+	notes = append(notes, extraNotes...)
 	if len(notes) > 0 {
 		resp["checks_not_run"] = notes
 	}
-	writeJSON(w, http.StatusOK, resp)
+	return resp
 }
 
 // unreportedSettingsNote names the protective settings the export did not carry, and how many

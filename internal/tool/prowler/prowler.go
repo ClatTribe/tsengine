@@ -71,17 +71,17 @@ func (*Prowler) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	defer os.RemoveAll(outDir)
 
 	pargs := []string{provider,
-	"--output-formats", "json-ocsf",
-	"--output-directory", outDir,
-	"--output-filename", "prowler",
-	"--ignore-exit-code-3",
-}
-if provider == "gcp" {
-	if pid := strings.TrimSpace(os.Getenv("TSENGINE_GCP_PROJECT")); pid != "" {
-		pargs = append(pargs, "--project-id", pid)
+		"--output-formats", "json-ocsf",
+		"--output-directory", outDir,
+		"--output-filename", "prowler",
+		"--ignore-exit-code-3",
 	}
-}
-cmd := exec.CommandContext(ctx, "prowler", pargs...)
+	if provider == "gcp" {
+		if pid := strings.TrimSpace(os.Getenv("TSENGINE_GCP_PROJECT")); pid != "" {
+			pargs = append(pargs, "--project-id", pid)
+		}
+	}
+	cmd := exec.CommandContext(ctx, "prowler", pargs...)
 	// Output() (not Run/CombinedOutput) so ExitError.Stderr is populated and
 	// tool.ExitDetail can carry the FATAL line naming the cause.
 	_, runErr := cmd.Output()

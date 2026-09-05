@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"github.com/ClatTribe/tsengine/internal/l15"
 	"github.com/ClatTribe/tsengine/internal/tool"
+	"github.com/ClatTribe/tsengine/internal/training"
 	"log/slog"
 	"sort"
 	"strings"
@@ -22,9 +23,11 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/crossdetect"
 	"github.com/ClatTribe/tsengine/internal/detect"
+	"github.com/ClatTribe/tsengine/internal/deviceposture"
 	"github.com/ClatTribe/tsengine/internal/fieldevidence"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/mdm"
 	"github.com/ClatTribe/tsengine/internal/osint"
 	"github.com/ClatTribe/tsengine/internal/retest"
 	"github.com/ClatTribe/tsengine/internal/sspm"
@@ -125,6 +128,13 @@ type Service struct {
 	// domains (the same crt.sh path as POST /v1/osint/scan), so a newly-exposed host appears as a
 	// finding and the Detector opens an incident for it. nil → no continuous OSINT (manual-scan only).
 	OSINTFetcher osint.Fetcher
+
+	// MDMFetcher, when set, makes the device fleet a CONTINUOUSLY-monitored surface: each monitoring
+	// pass reads the tenant's configured Kandji / Jamf / Intune (the same fetch as POST
+	// /v1/devices/sync) and assesses it, so a laptop whose disk encryption was turned off opens an
+	// incident on its own. Given the tenant so the factory can open its sealed credential; an error
+	// (no source configured, credential unreadable) means the fleet was NOT observed this pass.
+	MDMFetcher func(ctx context.Context, t platform.Tenant) (mdm.Fetcher, error)
 
 	// CloudSyncer, when set, makes the connected cloud account a CONTINUOUSLY-monitored surface:
 	// each pass re-reads the account through its read-only role and diffs it against the previous
@@ -454,10 +464,28 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	// against the previous snapshot, so a resource that became public or a principal that gained
 	// admin opens an incident on its own rather than waiting for a human to press Sync.
 	// Best-effort + grounded: no syncer / no connected account → nil; an unchanged account adds nothing.
+	// Autonomous device posture: read the fleet from the tenant's MDM each pass, so an unencrypted
+	// or tampered laptop is an incident the day the MDM sees it. Best-effort + grounded: no source
+	// configured / fetch failed → the fleet was not observed and "deviceposture" is not covered.
+	deviceFindings, devicesRan := s.syncDevices(ctx, tenantID)
+	current = append(current, deviceFindings...)
+	if devicesRan {
+		cov = cov.With("deviceposture")
+	}
 	cloudFindings, cloudRan := s.syncCloud(ctx, tenantID)
 	current = append(current, cloudFindings...)
 	if cloudRan {
 		cov = cov.With("clouddrift")
+	}
+	// Security-awareness training: whether someone owes their training is a function of TIME as much
+	// as of anything anybody does — a completion lapses on its anniversary with no event at all — so
+	// it is assessed on the clock rather than on a write. Grounded: an empty roster produces nothing
+	// AND is not counted as covered, because "nobody owes training" and "we do not know who works
+	// here" must not read the same.
+	trainingFindings, trainingRan := s.assessTraining(ctx, tenantID)
+	current = append(current, trainingFindings...)
+	if trainingRan {
+		cov = cov.With("training")
 	}
 	// continuous-monitoring: reconcile this pass's findings into incidents (what's NEW,
 	// what's RESOLVED since last pass). Runs over the whole tenant — a full pass is the
@@ -665,6 +693,128 @@ func (s *Service) syncSaaSPosture(ctx context.Context, tenantID string) ([]types
 	}
 	// ran=true: the org was really fetched and assessed, so this pass CAN speak to the absence of a
 	// SaaS-posture finding. Every earlier return is a surface we did not observe (ADR 0024 C16).
+	return saved, true
+}
+
+// syncDevices reads the tenant's device fleet from its configured MDM each monitoring pass and
+// assesses it — the scheduled twin of POST /v1/devices/sync, built on the SAME fetcher factory so the
+// two doors authenticate identically. Best-effort + grounded (§10): no factory, no MDM configured, or
+// a fetch error → (nil, false): the fleet was not observed and nothing downstream may reason from
+// the absence of a device finding. A fleet that was read and is compliant → (nil, true).
+// foldPosture opens the control gaps a batch of findings cites.
+//
+// It exists because the per-asset path gets this for free (processFinding → GRC.Apply) and the
+// per-pass SYNC paths did not: they stored findings and stopped, so a device or training finding
+// never opened a gap and the compliance posture read clean while the finding sat in the issues list.
+// The posted-inventory doors (/v1/devices/ingest and friends) always folded, so the two doors for
+// the SAME assessor disagreed — which is precisely the drift the ingest path's own comment warns
+// about. A compliance control is opened only because a real finding cites it (§18.2 inv. 5); a
+// finding nobody folds is evidence the control layer never sees.
+func (s *Service) foldPosture(ctx context.Context, tenantID string, findings []types.Finding) {
+	if s.GRC == nil {
+		return
+	}
+	for _, f := range findings {
+		if err := s.GRC.Apply(ctx, tenantID, f); err != nil {
+			slog.Warn("[scan] finding stored but NOT folded into compliance posture — the control gap "+
+				"it should open will not appear",
+				"tenant", tenantID, "rule", f.RuleID, "err", err.Error())
+		}
+	}
+}
+
+// assessTraining reports who owes their security-awareness training, each pass.
+//
+// It reads only stored state — the roster and the completions — so it costs no network call and
+// cannot fail for an external reason. The bool is the honest half: an EMPTY roster returns false, so
+// the questionnaire's training question reads "not assessed" rather than answering Yes for a company
+// whose workforce we cannot see. Nothing found and nothing to look at are different claims (§10).
+func (s *Service) assessTraining(ctx context.Context, tenantID string) ([]types.Finding, bool) {
+	if s.Store == nil || s.NewID == nil {
+		return nil, false
+	}
+	emps, err := s.Store.ListEmployees(ctx, tenantID)
+	if err != nil {
+		return nil, false
+	}
+	users, err := s.Store.ListUsers(ctx, tenantID)
+	if err != nil {
+		return nil, false
+	}
+	people := training.RosterFrom(emps, users)
+	if len(people) == 0 {
+		return nil, false
+	}
+	comps, err := s.Store.ListTrainingCompletions(ctx, tenantID)
+	if err != nil {
+		return nil, false
+	}
+	now := s.now()
+	sts := training.Evaluate(training.Default(), people, comps, now)
+	findings := l15.Enrich(training.Assess(sts, now)) // §11, as every other ingest path does
+	saved := make([]types.Finding, 0, len(findings))
+	for i := range findings {
+		findings[i].ID = s.NewID()
+		if err := s.Store.PutFinding(ctx, tenantID, findings[i]); err != nil {
+			slog.Warn("[scan] training finding could not be stored — it will not appear in issues",
+				"tenant", tenantID, "rule", findings[i].RuleID, "err", err.Error())
+			continue
+		}
+		saved = append(saved, findings[i])
+	}
+	s.foldPosture(ctx, tenantID, saved)
+	// Stamp that the programme was assessed: a fully-trained roster yields zero findings, and without
+	// the stamp that reads identically to never having looked.
+	if t, terr := s.Store.GetTenant(ctx, tenantID); terr == nil {
+		if t.PostureAssessed == nil {
+			t.PostureAssessed = map[string]time.Time{}
+		}
+		t.PostureAssessed["training"] = now
+		_ = s.Store.PutTenant(ctx, t)
+	}
+	slog.Info("[scan] security training assessed", "tenant", tenantID, "people", len(people), "owing", len(saved))
+	return saved, true
+}
+
+func (s *Service) syncDevices(ctx context.Context, tenantID string) ([]types.Finding, bool) {
+	if s.Store == nil || s.NewID == nil || s.MDMFetcher == nil {
+		return nil, false
+	}
+	t, err := s.Store.GetTenant(ctx, tenantID)
+	if err != nil || t.MDM == nil {
+		return nil, false
+	}
+	f, err := s.MDMFetcher(ctx, t)
+	if err != nil {
+		slog.Warn("[scan] device fleet not observed — MDM source unusable", "tenant", tenantID, "provider", t.MDM.Provider, "err", err.Error())
+		return nil, false
+	}
+	devices, rep, ferr := f.Fetch(ctx)
+	if ferr != nil {
+		slog.Warn("[scan] device fleet not observed — MDM fetch failed", "tenant", tenantID, "provider", t.MDM.Provider, "err", ferr.Error())
+		return nil, false
+	}
+	findings := deviceposture.Assess(devices, deviceposture.Options{})
+	findings = l15.Enrich(findings) // §11, as the /v1/devices/ingest twin does
+	saved := make([]types.Finding, 0, len(findings))
+	for i := range findings {
+		findings[i].ID = s.NewID()
+		if err := s.Store.PutFinding(ctx, tenantID, findings[i]); err != nil {
+			slog.Warn("[scan] device posture finding could not be stored — it will not appear in issues",
+				"tenant", tenantID, "rule", findings[i].RuleID, "err", err.Error())
+			continue
+		}
+		saved = append(saved, findings[i])
+	}
+	s.foldPosture(ctx, tenantID, saved)
+	// Stamp that the fleet was assessed: a compliant fleet yields zero findings, and without the
+	// stamp the posture page shows "never checked" for a customer whose laptops are all encrypted.
+	if t.PostureAssessed == nil {
+		t.PostureAssessed = map[string]time.Time{}
+	}
+	t.PostureAssessed["deviceposture"] = s.now()
+	_ = s.Store.PutTenant(ctx, t)
+	slog.Info("[scan] device fleet assessed", "tenant", tenantID, "provider", rep.Provider, "devices", rep.Devices, "unread", len(rep.Unread), "findings", len(saved))
 	return saved, true
 }
 

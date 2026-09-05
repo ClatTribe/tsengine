@@ -12,7 +12,7 @@ import { AuroraBackdrop } from "@/components/marketing/aurora";
 export const metadata = pageMeta({
   title: "How to Answer a Security Questionnaire",
   description:
-    "Answer CAIQ/SIG-style security questionnaires with evidence, not adjectives: 35 questions a scan answers, 17 a named human attests. Free to try.",
+    "Answer CAIQ/SIG-style security questionnaires with evidence, not adjectives: 36 questions a scan answers, 16 a named human attests. Free to try.",
   path: "/security-questionnaire",
 });
 
@@ -30,13 +30,16 @@ const OBSERVED_DOMAINS = [
   ["Data protection", 1],
   ["Email security", 1],
   ["SaaS security", 1],
+  // Personnel arrived here when the training programme landed: "do employees receive security
+  // awareness training annually" stopped being something only a person could answer.
+  ["Personnel", 1],
 ] as const;
 
 const ATTESTED_DOMAINS = [
   ["Data protection", 4],
   ["Business continuity", 3],
   ["Governance", 3],
-  ["Personnel", 3],
+  ["Personnel", 2],
   ["Change management", 1],
   ["Incident response", 1],
   ["Physical security", 1],
@@ -84,7 +87,7 @@ export default function SecurityQuestionnairePage() {
         <div className="mx-auto max-w-4xl px-5 py-16">
           <div className="text-xs font-semibold uppercase tracking-wider text-accent">Two kinds of answer, never mixed</div>
           <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight">
-            35 questions a scan answers. 17 only a person can.
+            36 questions a scan answers. 16 only a person can.
           </h2>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted">
             Every other tool renders a typed &quot;Yes&quot; identically to an observed one. We keep them apart

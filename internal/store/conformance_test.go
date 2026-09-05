@@ -92,6 +92,9 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.PutReviewRequest(ctx, platform.ReviewRequest{ID: tid + "-r", TenantID: tid, Status: platform.ReviewOpen}))
 	must(s.PutFeedback(ctx, platform.Feedback{TenantID: tid, IssueKey: tid + "-fb", Verdict: platform.FeedbackReal}))
 	must(s.ReplaceThirdPartyApps(ctx, tid, "gworkspace", []platform.ThirdPartyApp{{TenantID: tid, Provider: "gworkspace", AppID: tid + "-app"}}))
+	must(s.ReplaceEmployees(ctx, tid, "merge", []platform.Employee{{TenantID: tid, Source: "merge", ID: tid + "-emp", WorkEmail: tid + "@example.com"}}))
+	must(s.PutTrainingCompletion(ctx, platform.TrainingCompletion{TenantID: tid, ID: tid + "-tc", Subject: tid + "@example.com", ModuleID: "phishing", Tier: platform.TrainingDelivered}))
+	must(s.PutVendor(ctx, platform.Vendor{TenantID: tid, ID: tid + "-vendor", Name: tid + " Supplier", DataAccess: platform.VendorDataPII}))
 }
 
 func TestStoreConformance(t *testing.T) {
@@ -196,6 +199,31 @@ func TestStoreConformance(t *testing.T) {
 				orFail(t, err)
 				if len(apps) != 1 || apps[0].TenantID != tid {
 					t.Errorf("ISOLATION apps[%s]: %+v", tid, apps)
+				}
+
+				// The employee roster is PII about another company's staff — a leak here hands one
+				// customer the names, emails and termination dates of another's workforce.
+				emps, err := s.ListEmployees(ctx, tid)
+				orFail(t, err)
+				if len(emps) != 1 || emps[0].TenantID != tid {
+					t.Errorf("ISOLATION employees[%s]: %+v", tid, emps)
+				}
+
+				// A training completion names a person and asserts what they were taught and when. Leaked,
+				// it is one company's staff list plus a claim about each of them.
+				tcs, err := s.ListTrainingCompletions(ctx, tid)
+				orFail(t, err)
+				if len(tcs) != 1 || tcs[0].TenantID != tid {
+					t.Errorf("ISOLATION training[%s]: %+v", tid, tcs)
+				}
+
+				// The vendor register is one company's supplier list — who they buy from, what data each
+				// holds and which of them have been breached. Leaked, it is a competitor's map of the
+				// business.
+				vs, err := s.ListVendors(ctx, tid)
+				orFail(t, err)
+				if len(vs) != 1 || vs[0].TenantID != tid {
+					t.Errorf("ISOLATION vendors[%s]: %+v", tid, vs)
 				}
 
 				// GetAction is tenant-scoped: t1's action id is invisible to t2.

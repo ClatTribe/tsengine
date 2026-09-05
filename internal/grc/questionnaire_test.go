@@ -135,8 +135,89 @@ func fullyOnboarded(t *testing.T, st *store.Memory, tenantID string) {
 		"tprm":          time.Now().UTC(),
 		"sspm":          time.Now().UTC(),
 		"osint":         time.Now().UTC(),
+		// Training is stamped by the monitoring pass and ONLY when a roster exists, so it belongs
+		// with the other posture sources rather than with the connections: a hardened tenant is one
+		// whose workforce we can see and who are current, not one that merely connected an IdP.
+		"training": time.Now().UTC(),
 	}
 	if err := st.PutTenant(ctx, tn); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// HR-2 was promoted from the attested tier to the observed one. The promotion is only safe if a
+// roster that has done NO training cannot answer "Yes" — that is the false-compliant mode the tier
+// split exists to prevent, and it is worth its own test because the failure would be silent and
+// would land in a document a buyer's procurement team reads.
+func TestQuestionnaire_TrainingQuestionCannotAnswerYesForAnUntrainedRoster(t *testing.T) {
+	ctx := context.Background()
+
+	find := func(q *Questionnaire) QAnswer {
+		t.Helper()
+		for _, a := range q.Answers {
+			if a.ID == "HR-2" {
+				return a
+			}
+		}
+		t.Fatal("HR-2 is not in the corpus")
+		return QAnswer{}
+	}
+
+	// 1. Nothing stamped: we cannot see who works here, so the answer is NOT ASSESSED — never Yes.
+	st := store.NewMemory()
+	fullyOnboarded(t, st, "t1")
+	tn, _ := st.GetTenant(ctx, "t1")
+	delete(tn.PostureAssessed, "training")
+	if err := st.PutTenant(ctx, tn); err != nil {
+		t.Fatal(err)
+	}
+	q, err := (&GRC{Store: st}).Questionnaire(ctx, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := find(q); a.Answer != AnswerNotAssessed {
+		t.Errorf("with no roster assessed HR-2 answered %q; want %q", a.Answer, AnswerNotAssessed)
+	}
+
+	// 2. Assessed, and somebody owes their training: IN PROGRESS. The finding cites CC1.4, which is
+	//    the control the question maps to, so the gap answers it — this is the case that makes the
+	//    promotion honest rather than a Yes waiting to happen.
+	st2 := store.NewMemory()
+	fullyOnboarded(t, st2, "t1")
+	owed := types.Finding{
+		ID: "f-train", RuleID: "training::incomplete", Endpoint: "ada@acme.io",
+		Severity: types.SeverityMedium, Title: "Ada has not completed 5 security training modules",
+		Compliance: &types.Compliance{SOC2: []string{"CC1.4"}, PCI: []string{"12.6.1"}},
+	}
+	if err := st2.PutFinding(ctx, "t1", owed); err != nil {
+		t.Fatal(err)
+	}
+	g2 := &GRC{Store: st2}
+	// Apply is what OPENS the gap — the same call the runner makes for every finding it stores.
+	if err := g2.Apply(ctx, "t1", owed); err != nil {
+		t.Fatal(err)
+	}
+	q2, err := g2.Questionnaire(ctx, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := find(q2); a.Answer != AnswerInProgress {
+		t.Errorf("with an outstanding training finding HR-2 answered %q; want %q — a roster that has "+
+			"done nothing must never read as trained", a.Answer, AnswerInProgress)
+	}
+
+	// 3. Assessed and current: Yes. The mirror matters as much — a promotion that could only ever say
+	//    "in progress" would be a permanent false negative traded for the false positive.
+	if a := find(q); a.Answer == AnswerYes {
+		t.Fatal("guard 1 was supposed to be Not assessed")
+	}
+	st3 := store.NewMemory()
+	fullyOnboarded(t, st3, "t1")
+	q3, err := (&GRC{Store: st3}).Questionnaire(ctx, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := find(q3); a.Answer != AnswerYes {
+		t.Errorf("with the roster assessed and clean HR-2 answered %q; want %q", a.Answer, AnswerYes)
 	}
 }

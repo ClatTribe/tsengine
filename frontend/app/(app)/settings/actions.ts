@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { api } from "@/lib/api";
-import type { Branding, BrandingSettings, EscalationPolicy, SLAPolicy, TrustCenterConfig } from "@/lib/types";
+import type {
+  Branding, BrandingSettings, DeviceSyncResult, EscalationPolicy, HRISSettings, HRISSyncResult, MDMSettings, SLAPolicy, TrustCenterConfig,
+} from "@/lib/types";
 
 // Engage/disengage the global kill-switch (agentic-SMB spec OM-3 / TS-5). When engaged the
 // platform takes no autonomous agent action — no scans, no remediation writes — until a
@@ -28,6 +30,42 @@ export async function syncGitHubPosture(): Promise<{ findings: number }> {
   revalidatePath("/settings");
   revalidatePath("/issues");
   return { findings: r.findings_detected };
+}
+
+// Set (or clear) the tenant's device-management source (Bucket B). Credentials are sealed
+// server-side and never returned; we get back the redacted view.
+export async function setMDM(cfg: {
+  provider: string; base_url: string; api_token: string; client_id: string; client_secret: string;
+}): Promise<MDMSettings> {
+  const r = await api.setMDMSettings(cfg);
+  revalidatePath("/settings");
+  return r;
+}
+
+// Read the fleet from the configured MDM now and assess it. The result carries what the sync could
+// NOT assess (provider limits, unread devices) beside the count, so the caller can show both.
+export async function syncDevices(): Promise<DeviceSyncResult> {
+  const r = await api.syncDevices();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  revalidatePath("/posture");
+  return r;
+}
+
+// Set (or clear) the tenant's HR-system source (Bucket B). Credentials sealed, never returned.
+export async function setHRIS(cfg: { provider: string; api_key: string; account_token: string }): Promise<HRISSettings> {
+  const r = await api.setHRISSettings(cfg);
+  revalidatePath("/settings");
+  return r;
+}
+
+// Fetch the roster now and join it against every connected identity provider.
+export async function syncHRIS(): Promise<HRISSyncResult> {
+  const r = await api.syncHRIS();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  revalidatePath("/posture");
+  return r;
 }
 
 // Set the tenant's incident escalation matrix (severity-tiered routing to alert channels).
