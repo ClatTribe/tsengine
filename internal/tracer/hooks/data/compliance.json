@@ -9,6 +9,9 @@
     "cmmc": [
       "AU.L2-3.3.1"
     ],
+    "dora": [
+      "Art. 9(2)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -73,6 +76,13 @@
       "RA.L2-3.11.2",
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Security update management"
+    ],
+    "dora": [
+      "Art. 24(1)",
+      "Art. 8(2)"
+    ],
     "fedramp": [
       "RA-5"
     ],
@@ -123,6 +133,9 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -171,6 +184,12 @@
     ],
     "cmmc": [
       "IA.L2-3.5.3"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -234,6 +253,13 @@
       "RA.L2-3.11.2",
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Security update management"
+    ],
+    "dora": [
+      "Art. 24(1)",
+      "Art. 8(2)"
+    ],
     "fedramp": [
       "RA-5"
     ],
@@ -286,6 +312,14 @@
     "cmmc": [
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
+    ],
+    "cyber_essentials": [
+      "Secure configuration",
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(2)",
+      "Art. 9(4)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -371,6 +405,14 @@
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
     ],
+    "cyber_essentials": [
+      "Secure configuration",
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(2)",
+      "Art. 9(4)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -453,6 +495,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -509,6 +557,12 @@
     ],
     "cmmc": [
       "IA.L2-3.5.3"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -577,6 +631,12 @@
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
     ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
+    ],
     "eu_ai_act": [
       "Art.15"
     ],
@@ -642,6 +702,12 @@
     "cmmc": [
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "eu_ai_act": [
       "Art.15"
@@ -713,6 +779,12 @@
     "cmmc": [
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "eu_ai_act": [
       "Art.15"
@@ -787,6 +859,12 @@
     "cmmc": [
       "IA.L2-3.5.3"
     ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -860,6 +938,9 @@
     "cmmc": [
       "SC.L2-3.13.11"
     ],
+    "dora": [
+      "Art. 9(2)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -932,6 +1013,12 @@
     "cmmc": [
       "IA.L2-3.5.3"
     ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -1001,6 +1088,12 @@
     "cmmc": [
       "IA.L2-3.5.3"
     ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
+    ],
     "eu_ai_act": [
       "Art.15"
     ],
@@ -1058,6 +1151,9 @@
     ],
     "cmmc": [
       "SC.L2-3.13.11"
+    ],
+    "dora": [
+      "Art. 9(2)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -1132,6 +1228,9 @@
     "cmmc": [
       "SC.L2-3.13.11"
     ],
+    "dora": [
+      "Art. 9(2)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -1204,6 +1303,9 @@
     ],
     "cmmc": [
       "SC.L2-3.13.11"
+    ],
+    "dora": [
+      "Art. 9(2)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -1278,6 +1380,9 @@
     "cmmc": [
       "SC.L2-3.13.11"
     ],
+    "dora": [
+      "Art. 9(2)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -1351,6 +1456,9 @@
     "cmmc": [
       "SC.L2-3.13.11"
     ],
+    "dora": [
+      "Art. 9(2)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -1417,6 +1525,9 @@
     ],
     "cmmc": [
       "SC.L2-3.13.11"
+    ],
+    "dora": [
+      "Art. 9(2)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -1528,6 +1639,9 @@
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
     ],
+    "dora": [
+      "Art. 9(2)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -1636,6 +1750,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -1695,6 +1815,12 @@
     ],
     "cmmc": [
       "IA.L2-3.5.3"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -1762,6 +1888,9 @@
     ],
     "cmmc": [
       "AU.L2-3.3.1"
+    ],
+    "dora": [
+      "Art. 9(2)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -1835,6 +1964,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -1891,6 +2026,9 @@
     ],
     "cmmc": [
       "AU.L2-3.3.1"
+    ],
+    "dora": [
+      "Art. 9(2)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -1962,6 +2100,12 @@
     "cmmc": [
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -2042,6 +2186,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -2091,6 +2241,13 @@
   "CWE-693": {
     "cmmc": [
       "SI.L2-3.14.1"
+    ],
+    "cyber_essentials": [
+      "Firewalls and internet gateways",
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -2145,6 +2302,12 @@
     "cmmc": [
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "eu_ai_act": [
       "Art.15"
@@ -2218,6 +2381,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -2277,6 +2446,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -2333,6 +2508,9 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -2379,6 +2557,12 @@
     ],
     "cmmc": [
       "SI.L2-3.14.1"
+    ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -2441,6 +2625,12 @@
     ],
     "cmmc": [
       "IA.L2-3.5.3"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -2510,6 +2700,12 @@
     "cmmc": [
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "eu_ai_act": [
       "Art.15"
@@ -2581,6 +2777,12 @@
     "cmmc": [
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "eu_ai_act": [
       "Art.15"
@@ -2654,6 +2856,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -2717,6 +2925,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -2776,6 +2990,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -2833,6 +3053,12 @@
     "cmmc": [
       "AC.L2-3.1.1",
       "AC.L2-3.1.5"
+    ],
+    "cyber_essentials": [
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(4)"
     ],
     "eu_ai_act": [
       "Art.15"
@@ -2903,6 +3129,12 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -2960,6 +3192,14 @@
     "cmmc": [
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Firewalls and internet gateways",
+      "User access control"
+    ],
+    "dora": [
+      "Art. 9(3)",
+      "Art. 9(4)"
+    ],
     "dpdp": [
       "Sec. 8(5)"
     ],
@@ -3011,6 +3251,13 @@
       "RA.L2-3.11.2",
       "SI.L2-3.14.1"
     ],
+    "cyber_essentials": [
+      "Security update management"
+    ],
+    "dora": [
+      "Art. 24(1)",
+      "Art. 8(2)"
+    ],
     "fedramp": [
       "RA-5"
     ],
@@ -3060,6 +3307,12 @@
     ],
     "cmmc": [
       "SI.L2-3.14.1"
+    ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
     ],
     "dpdp": [
       "Sec. 8(5)"
@@ -3125,6 +3378,12 @@
     ],
     "cmmc": [
       "SI.L2-3.14.1"
+    ],
+    "cyber_essentials": [
+      "Secure configuration"
+    ],
+    "dora": [
+      "Art. 9(3)"
     ],
     "dpdp": [
       "Sec. 8(5)"

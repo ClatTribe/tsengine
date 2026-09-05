@@ -11,7 +11,7 @@ const (
 	ThreatIntelCorpusVersion = "ti-snapshot-2026-05-01"
 
 	// ComplianceCorpusVersion identifies the embedded CWE→control map.
-	ComplianceCorpusVersion = "soc2-1.0+pci-4.0+hipaa-2024+cis-v8+nist-csf-2.0"
+	ComplianceCorpusVersion = "soc2-1.0+pci-4.0+hipaa-2024+cis-v8+nist-csf-2.0+dora-2022-2554+uk-ce"
 )
 
 // ThreatIntelSnapshot is the as-of date of the embedded KEV/EPSS data.

@@ -54,6 +54,10 @@ func TestRealCrosswalkDepth_PerFrameworkFloors(t *testing.T) {
 		"nist_800_53": 20, "fedramp": 18, "nist_800_171": 18, "pci": 14, "cis_v8": 13,
 		"nist_csf": 13, "iso27001": 9, "soc2": 9, "cmmc": 7, "rbi": 6, "sebi": 6,
 		"hipaa": 5, "glba": 4, "iso27018": 4, "iso27701": 3, "iso42001": 3, "nist_ai_rmf": 3,
+		// Measured 5 Sep 2026 when both landed. DORA is 5 because it is mapped only to the ICT-risk
+		// articles a finding can evidence; Cyber Essentials is 4 of its 5 controls, because no CWE in
+		// the crosswalk carries the malware-protection nexus (SI-3) — an honest 4, not a missing 5th.
+		"dora": 5, "cyber_essentials": 4,
 		"ccpa": 2, "certin": 2, "eu_ai_act": 2, "gdpr": 2,
 		"dpdp": 1, "iso22301": 1, "pipeda": 1, "sox": 1,
 	}
