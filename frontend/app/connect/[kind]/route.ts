@@ -14,7 +14,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ kind: string }
     const { authorize_url } = await api.connectURL(kind);
         // Grant-based providers (GCP) have no OAuth redirect-back: route them to a setup page that
     // shows the grant link + collects the project id, instead of a dead-end redirect to the console.
-    if (kind === "gcp") {
+    if (kind === "gcp" || kind === "aws") {
       const setup = new URL(`/connect-setup/${kind}`, _req.url);
       setup.searchParams.set("u", authorize_url);
       return NextResponse.redirect(setup);
