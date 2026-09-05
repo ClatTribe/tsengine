@@ -8,6 +8,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudiam"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
+	"github.com/ClatTribe/tsengine/internal/connector/k8sinventory"
 )
 
 // inventorycoverage.go states what a POSTED cloud inventory could not answer.
@@ -154,4 +155,93 @@ func CoverGCP(raw gcpinventory.RawGCP) InventoryCoverage {
 			". Populate `role_defs` with each role's permission list."
 	}
 	return c
+}
+
+// CoverK8s reports what a posted RawK8s cannot answer.
+//
+// Kubernetes was the fourth provider to reach this ingest and the only one that returned an EMPTY
+// coverage — so a manifest missing the very objects the analysis reads produced zero privesc edges,
+// zero internet reach, and no note saying why. On an attack-path page zero reads as "nobody can
+// become admin in this cluster", which is the single most reassuring thing this product can say and
+// the most damaging to say wrongly. It is the same defect CoverAWS and CoverGCP exist to prevent,
+// arriving through the door that had no guard.
+//
+// The gaps are named per CONCERN, and each names the FIELD to populate — the caller is usually a
+// script running `kubectl get`, and "something is missing" is not something a script author can act
+// on.
+//
+// Note what is NOT reported: an empty `secrets` or `pods` list. A cluster genuinely may have neither,
+// and a note there would fire on healthy clusters until people learned to ignore all of them.
+// Bindings and roles are different: without them RBAC cannot be evaluated AT ALL, so their absence
+// changes what the result MEANS rather than what it contains.
+func CoverK8s(raw k8sinventory.RawK8s) InventoryCoverage {
+	c := InventoryCoverage{Notes: map[string]string{}}
+
+	if len(raw.ServiceAccounts) == 0 {
+		c.Notes["identity"] = "no service accounts in the snapshot — a cluster runs its workloads as " +
+			"ServiceAccounts, so with none there is no principal an attack path can start from. " +
+			"Populate `service_accounts` (kubectl get serviceaccounts -A)."
+	}
+
+	// RBAC is TWO objects and either one alone decides nothing: a role carries the verbs, a binding
+	// says who holds them. Missing either yields no grant edge and therefore no escalation, and the
+	// two are reported separately because the fix differs.
+	if len(raw.Roles) == 0 {
+		c.Notes["rbac-roles"] = "no roles in the snapshot — escalating VERBS (bind, escalate, " +
+			"impersonate, create-pod) live on Roles and ClusterRoles, so with none present no " +
+			"privilege escalation can be computed and an empty result means UNREAD. Populate `roles` " +
+			"(kubectl get roles,clusterroles -A)."
+	}
+	if len(raw.Bindings) == 0 {
+		c.Notes["rbac-bindings"] = "no bindings in the snapshot — a Role grants nothing until a " +
+			"RoleBinding names who holds it, so no principal can be connected to any permission. " +
+			"Populate `bindings` (kubectl get rolebindings,clusterrolebindings -A)."
+	}
+
+	// A binding pointing at a role we do not have is the cluster twin of GCP's unresolvable custom
+	// role, and it fails the same way: the grant is real, the verbs are unknown, and no edge is
+	// built. Silence there under-reports exactly the principals somebody granted something to.
+	if missing := unresolvedRoleRefs(raw); len(missing) > 0 {
+		c.Notes["unresolved-roles"] = fmt.Sprintf(
+			"%d binding(s) reference a role that is not in the snapshot, so what they grant is unknown "+
+				"and no escalation was computed for their subjects — not absent, UNREAD: %s. Include "+
+				"ClusterRoles as well as namespaced Roles.", len(missing), strings.Join(missing, ", "))
+	}
+
+	// Exposure is the other half of a path. Without Services nothing is internet-reachable, which
+	// makes every workload look internal — a cluster with a LoadBalancer in front of it would render
+	// as unreachable from outside.
+	if len(raw.Services) == 0 {
+		c.Notes["exposure"] = "no services in the snapshot — internet reach is derived from " +
+			"LoadBalancer / NodePort / externally-addressed Services, so with none present every " +
+			"workload reads as internal whether or not it is. Populate `services` " +
+			"(kubectl get services -A)."
+	}
+	return c
+}
+
+// unresolvedRoleRefs names bindings whose roleRef matches no role in the snapshot.
+//
+// Matched on NAME alone, deliberately: a RoleBinding may reference a ClusterRole, which carries no
+// namespace, so requiring the namespaces to agree would report every legitimate cluster-role binding
+// as unresolved — a note that fires constantly is one nobody reads.
+func unresolvedRoleRefs(raw k8sinventory.RawK8s) []string {
+	known := make(map[string]bool, len(raw.Roles))
+	for _, r := range raw.Roles {
+		known[r.Name] = true
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, b := range raw.Bindings {
+		ref := strings.TrimSpace(b.RoleRef)
+		if ref == "" || known[ref] {
+			continue
+		}
+		if label := b.Name + "→" + ref; !seen[label] {
+			seen[label] = true
+			out = append(out, label)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

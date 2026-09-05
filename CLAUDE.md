@@ -216,10 +216,30 @@ in every image for a capability nobody could invoke. It returns when the asset d
 type, so nothing can be pointed at it. It is not a supported surface, it is not on the launch list,
 and no page may imply otherwise (§13's AI-application note carries the detail).
 
-**KUBERNETES IS NOT A SUPPORTED SURFACE EITHER** — no cluster scanner is wrapped (no kube-bench /
-kubescape / kube-hunter), and a live cluster is not a scannable asset. prowler/kics/checkov touch
-k8s only as IaC text. Recorded here because an audit read the absence as a gap; it is a scope
-decision, and the two are different claims.
+**KUBERNETES IS AN ATTACK-PATH INGEST, NOT A SCANNED ASSET — and this paragraph used to deny both.**
+It read "KUBERNETES IS NOT A SUPPORTED SURFACE EITHER" after `internal/connector/k8sinventory` had
+already landed, so the file loaded into every turn told the reader a capability we HAVE does not
+exist — the inverse doc-drift this file warns about elsewhere, pointed at scope. Corrected in three
+parts, because they are three different claims and only one of them changed:
+
+* **BUILT**: `POST /v1/cloud/inventory?provider=kubernetes` maps a cluster's RBAC + workload +
+  exposure state into a `cloudgraph.Inventory` — a ServiceAccount is a principal, a RoleBinding a
+  grant, a Pod runs-as its SA, an externally-addressed Service an internet reach, and the verbs that
+  let one identity become another (bind / escalate / impersonate / create-pod) are privesc edges. A
+  fourth `Build()`, not a fourth engine: reachability, chaining, pruning and remediation come free.
+  `connector.CoverK8s` declares what a posted manifest could not answer — it returned an EMPTY
+  coverage at first, so a manifest missing roles and bindings produced zero privesc edges and no
+  note, and on an attack-path page zero reads as "nobody can become admin in this cluster".
+* **STILL NOT BUILT**: no cluster benchmark scanner is wrapped (no kube-bench / kubescape /
+  kube-hunter), so CIS-benchmark posture for a cluster is not something this engine produces.
+  prowler/kics/checkov touch k8s only as IaC text.
+* **STILL NOT AN ASSET TYPE**: `AllAssetTypes()` has no Kubernetes entry, so a live cluster is not a
+  scan target — it arrives as posted state, like a cloud inventory. The live client-go read is the
+  credential-gated half.
+
+Recorded at this length because an audit once read the absence as a gap and a scope decision was
+written down to settle it; the decision then went stale in one clause and stayed authoritative in
+all of them.
 
 New asset-facing work targets the six surfaces; do not add or revive an asset type without an ADR.
 

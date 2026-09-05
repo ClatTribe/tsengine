@@ -65,7 +65,7 @@ func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, co
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid Kubernetes inventory body")
 		}
-		return k8sinventory.Build(raw), connector.InventoryCoverage{}, nil
+		return k8sinventory.Build(raw), connector.CoverK8s(raw), nil
 	default:
 		return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("unknown provider %q (expected aws|gcp|azure|kubernetes)", provider)
 	}
