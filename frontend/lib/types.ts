@@ -1728,3 +1728,41 @@ export type TrainingProgramme = {
   statuses: TrainingStatus[];
   me?: string;
 };
+
+// ── Vendor register (SOC 2 CC9.2 · GDPR Art. 28 · PCI 12.8) ──────────────────────────────────────
+// The durable third-party inventory — NOT the findings it raises. A list derived from findings names
+// the suppliers that failed a check and omits every well-managed one, which is not an inventory.
+
+export type Vendor = {
+  id: string;
+  name: string;
+  /** Empty means UNOWNED and renders as such — a default would name someone who never agreed to it. */
+  owner?: string;
+  category?: string;
+  data_access?: "" | "none" | "metadata" | "pii" | "sensitive";
+  subprocessor?: boolean;
+  handles_card_data?: boolean;
+  certifications?: string[];
+  has_dpa?: boolean;
+  breached?: boolean;
+  breach_note?: string;
+  criticality?: string;
+  /** "" means NEVER reviewed — a different claim from "reviewed a long time ago". */
+  last_assessed?: string;
+  notes?: string;
+  /** "register" (a person curated it) or "ingest" (a job posted it) — different completeness claims. */
+  source?: string;
+  updated_at?: string;
+};
+
+export type VendorsResponse = {
+  vendors: Vendor[];
+  summary: {
+    total: number;
+    subprocessors: number;
+    sensitive_data: number;
+    never_reviewed: number;
+    unowned: number;
+    detail: string;
+  };
+};

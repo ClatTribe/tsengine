@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS reviews     (seq BIGSERIAL, tenant_id TEXT, id TEXT, 
 CREATE TABLE IF NOT EXISTS apps        (seq BIGSERIAL, tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS employees   (seq BIGSERIAL, tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (seq BIGSERIAL, id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (seq BIGSERIAL, token TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS operators   (seq BIGSERIAL, id TEXT PRIMARY KEY, email TEXT, data TEXT NOT NULL);
@@ -413,6 +414,25 @@ func (p *Postgres) PutTrainingCompletion(ctx context.Context, c platform.Trainin
 }
 func (p *Postgres) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
 	return listJSON[platform.TrainingCompletion](ctx, p.db, pgRebind(`SELECT data FROM training WHERE tenant_id=? ORDER BY id`), tenantID)
+}
+
+// --- vendor register (upsert by id; the durable inventory, not the findings it raises) ---
+
+func (p *Postgres) PutVendor(ctx context.Context, v platform.Vendor) error {
+	d, err := enc(v)
+	if err != nil {
+		return err
+	}
+	_, err = p.db.ExecContext(ctx, pgRebind(`INSERT INTO vendors(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=EXCLUDED.data`), v.TenantID, v.ID, d)
+	return err
+}
+func (p *Postgres) ListVendors(ctx context.Context, tenantID string) ([]platform.Vendor, error) {
+	return listJSON[platform.Vendor](ctx, p.db, pgRebind(`SELECT data FROM vendors WHERE tenant_id=? ORDER BY id`), tenantID)
+}
+func (p *Postgres) DeleteVendor(ctx context.Context, tenantID, id string) error {
+	_, err := p.db.ExecContext(ctx, pgRebind(`DELETE FROM vendors WHERE tenant_id=? AND id=?`), tenantID, id)
+	return err
 }
 
 // --- users & sessions ---

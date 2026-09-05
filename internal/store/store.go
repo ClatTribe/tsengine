@@ -204,6 +204,14 @@ type Store interface {
 	PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error
 	ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error)
 
+	// The vendor REGISTER — the durable third-party inventory, upserted by id so re-posting the same
+	// inventory updates each row rather than accumulating copies of it. Distinct from the FINDINGS a
+	// vendor raises: a findings list names the suppliers that failed a check and omits every
+	// well-managed one, which is not an inventory and is not what an auditor asks for.
+	PutVendor(ctx context.Context, v platform.Vendor) error
+	ListVendors(ctx context.Context, tenantID string) ([]platform.Vendor, error)
+	DeleteVendor(ctx context.Context, tenantID, id string) error
+
 	// --- users & sessions (real account auth) ---
 	PutUser(ctx context.Context, u platform.User) error
 	GetUser(ctx context.Context, id string) (platform.User, error)

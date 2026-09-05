@@ -43,6 +43,7 @@ type Memory struct {
 	apps        map[string][]platform.ThirdPartyApp               // tenantID → third-party apps
 	employees   map[string][]platform.Employee                    // tenantID → HRIS employee roster
 	training    map[string]map[string]platform.TrainingCompletion // tenantID → completionID → record
+	vendors     map[string]map[string]platform.Vendor             // tenantID → vendorID → register row
 	users       map[string]platform.User                          // userID → user (email globally unique)
 	sessions    map[string]platform.Session                       // token → session
 	operators   map[string]platform.Operator                      // operatorID → operator (cross-tenant; global)
@@ -77,6 +78,7 @@ func NewMemory() *Memory {
 		apps:            map[string][]platform.ThirdPartyApp{},
 		employees:       map[string][]platform.Employee{},
 		training:        map[string]map[string]platform.TrainingCompletion{},
+		vendors:         map[string]map[string]platform.Vendor{},
 		users:           map[string]platform.User{},
 		sessions:        map[string]platform.Session{},
 		operators:       map[string]platform.Operator{},
@@ -799,6 +801,34 @@ func (m *Memory) PutTrainingCompletion(_ context.Context, c platform.TrainingCom
 	return nil
 }
 
+func (m *Memory) PutVendor(_ context.Context, v platform.Vendor) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.vendors[v.TenantID] == nil {
+		m.vendors[v.TenantID] = map[string]platform.Vendor{}
+	}
+	m.vendors[v.TenantID][v.ID] = v
+	return nil
+}
+
+func (m *Memory) ListVendors(_ context.Context, tenantID string) ([]platform.Vendor, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Vendor, 0, len(m.vendors[tenantID]))
+	for _, v := range m.vendors[tenantID] {
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func (m *Memory) DeleteVendor(_ context.Context, tenantID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.vendors[tenantID], id)
+	return nil
+}
+
 func (m *Memory) ListTrainingCompletions(_ context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -838,6 +868,7 @@ type Snapshot struct {
 	Apps            map[string][]platform.ThirdPartyApp               `json:"apps"`
 	Employees       map[string][]platform.Employee                    `json:"employees,omitempty"`
 	Training        map[string]map[string]platform.TrainingCompletion `json:"training,omitempty"`
+	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
 	Users           map[string]platform.User                          `json:"users"`
 	Sessions        map[string]platform.Session                       `json:"sessions"`
 	Operators       map[string]platform.Operator                      `json:"operators,omitempty"`
@@ -875,6 +906,7 @@ func (m *Memory) Export() Snapshot {
 		Apps:            m.apps,
 		Employees:       m.employees,
 		Training:        m.training,
+		Vendors:         m.vendors,
 		Users:           m.users,
 		Sessions:        m.sessions,
 		Operators:       m.operators,
@@ -911,6 +943,7 @@ func (m *Memory) load(s Snapshot) {
 	m.apps = orEmpty(s.Apps)
 	m.employees = orEmpty(s.Employees)
 	m.training = orEmptyTraining(s.Training)
+	m.vendors = orEmptyVendors(s.Vendors)
 	m.users = s.Users
 	if m.users == nil {
 		m.users = map[string]platform.User{}
@@ -1064,6 +1097,13 @@ func orEmptyEpisodes(m map[string]map[string]platform.EpisodeRecord) map[string]
 func orEmptyTraining(m map[string]map[string]platform.TrainingCompletion) map[string]map[string]platform.TrainingCompletion {
 	if m == nil {
 		return map[string]map[string]platform.TrainingCompletion{}
+	}
+	return m
+}
+
+func orEmptyVendors(m map[string]map[string]platform.Vendor) map[string]map[string]platform.Vendor {
+	if m == nil {
+		return map[string]map[string]platform.Vendor{}
 	}
 	return m
 }

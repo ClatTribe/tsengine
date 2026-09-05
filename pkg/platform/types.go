@@ -631,6 +631,58 @@ type Employee struct {
 	FetchedAt      time.Time `json:"fetched_at"`
 }
 
+// VendorDataAccess is what a third party can touch. It drives the severity of nearly every vendor
+// finding, which is why it is DECLARED by the customer rather than inferred: nothing in a vendor's
+// name or category says whether they hold personal data.
+type VendorDataAccess string
+
+const (
+	VendorDataNone      VendorDataAccess = "none"      // no access to our data
+	VendorDataMetadata  VendorDataAccess = "metadata"  // non-personal operational data
+	VendorDataPII       VendorDataAccess = "pii"       // personal data
+	VendorDataSensitive VendorDataAccess = "sensitive" // PHI / cardholder / secrets — the highest tier
+)
+
+// Vendor is one third party in the REGISTER — the durable inventory, not a transient scan input.
+//
+// The register had to become a stored entity because a findings list is not an inventory. Before
+// this the vendor set existed only inside the body of POST /v1/tprm/ingest: the findings persisted
+// and the portfolio did not, so the product could say which suppliers FAILED a check and could not
+// answer "who are our vendors" at all. That is the same defect the Trust Center's sub-processor note
+// describes — a derived list names the vendors that failed and omits every well-managed one — and a
+// vendor register is exactly the artifact an auditor asks for under SOC 2 CC9.2 and GDPR Art. 28.
+//
+// It lives here rather than in internal/tprm because internal/store may not import an internal
+// package; internal/tprm aliases it, so there is ONE type with two names rather than two that drift.
+type Vendor struct {
+	TenantID string `json:"tenant_id,omitempty"`
+	// ID is a slug of the name — stable, so re-ingesting the same inventory UPDATES each vendor
+	// rather than accumulating duplicates of it.
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Owner is the named human accountable for this relationship. Empty means UNOWNED and is
+	// rendered as such: defaulting to the workspace owner would manufacture accountability, naming
+	// somebody who never agreed to it — the same rule Asset.Owner follows (ADR 0028 G1).
+	Owner           string           `json:"owner,omitempty"`
+	Category        string           `json:"category,omitempty"`
+	DataAccess      VendorDataAccess `json:"data_access,omitempty"`
+	Subprocessor    bool             `json:"subprocessor,omitempty"`
+	HandlesCardData bool             `json:"handles_card_data,omitempty"`
+	Certifications  []string         `json:"certifications,omitempty"`
+	HasDPA          bool             `json:"has_dpa,omitempty"`
+	Breached        bool             `json:"breached,omitempty"`
+	BreachNote      string           `json:"breach_note,omitempty"`
+	Criticality     string           `json:"criticality,omitempty"`
+	// LastAssessed is when a human last reviewed this vendor. "" means NEVER, which is a different
+	// claim from "reviewed a long time ago" and is reported as itself.
+	LastAssessed string `json:"last_assessed,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+	// Source says where the row came from — a person typing it, or a posted inventory. An inventory
+	// a CI job posts and a register a human curates are different claims about completeness.
+	Source    string    `json:"source,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitzero"`
+}
+
 // TrainingTier is HOW we know a person was trained. The two values are not interchangeable and are
 // never summed into one figure — see internal/training for the reasoning. It lives here rather than
 // in internal/training because the completion record is a stored entity and the store may not import

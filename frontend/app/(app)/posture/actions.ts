@@ -17,3 +17,37 @@ export async function scanDatabase(dsn: string, sampleValues: boolean): Promise<
   revalidatePath("/dashboard");
   return res;
 }
+
+// Adding or updating one vendor. Note there is no "assess" action: the server re-assesses the whole
+// register on every write, because vendor risk is a property of the PORTFOLIO — assessing only the
+// edited row would leave findings standing for vendors that have since been fixed.
+export async function saveVendor(formData: FormData): Promise<void> {
+  const certs = String(formData.get("certifications") ?? "")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
+  await api.putVendor({
+    id: String(formData.get("id") ?? "") || undefined,
+    name: String(formData.get("name") ?? ""),
+    owner: String(formData.get("owner") ?? ""),
+    category: String(formData.get("category") ?? ""),
+    data_access: (String(formData.get("data_access") ?? "") || undefined) as never,
+    subprocessor: formData.get("subprocessor") === "on",
+    handles_card_data: formData.get("handles_card_data") === "on",
+    has_dpa: formData.get("has_dpa") === "on",
+    certifications: certs,
+    criticality: String(formData.get("criticality") ?? ""),
+    last_assessed: String(formData.get("last_assessed") ?? ""),
+  });
+  revalidatePath("/posture");
+}
+
+export async function removeVendor(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await api.deleteVendor(id);
+    revalidatePath("/posture");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not remove that vendor." };
+  }
+}

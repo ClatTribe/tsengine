@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (token TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS operators   (id TEXT PRIMARY KEY, email TEXT, data TEXT NOT NULL);
@@ -438,6 +439,25 @@ func (s *SQLite) PutTrainingCompletion(ctx context.Context, c platform.TrainingC
 }
 func (s *SQLite) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
 	return listJSON[platform.TrainingCompletion](ctx, s.db, `SELECT data FROM training WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+
+// --- vendor register (upsert by id; the durable inventory, not the findings it raises) ---
+
+func (s *SQLite) PutVendor(ctx context.Context, v platform.Vendor) error {
+	d, err := enc(v)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO vendors(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, v.TenantID, v.ID, d)
+	return err
+}
+func (s *SQLite) ListVendors(ctx context.Context, tenantID string) ([]platform.Vendor, error) {
+	return listJSON[platform.Vendor](ctx, s.db, `SELECT data FROM vendors WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+func (s *SQLite) DeleteVendor(ctx context.Context, tenantID, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM vendors WHERE tenant_id=? AND id=?`, tenantID, id)
+	return err
 }
 
 // --- users & sessions ---

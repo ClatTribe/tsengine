@@ -3,6 +3,8 @@ import { getSession, apiBase, type Session } from "./auth";
 import type {
   AccessReview,
   TrainingProgramme,
+  Vendor,
+  VendorsResponse,
   DetectionValidation,
   ExposureTrend,
   AttackCoverage,
@@ -485,6 +487,27 @@ export const api = {
     call<{ item: string }>(`/v1/readiness/attest/${id}`, {
       method: "POST", body: JSON.stringify({ in_place: inPlace, by }),
     }),
+
+  // The vendor REGISTER — the durable inventory. Distinct from the posture findings on /posture,
+  // which say what is WRONG with the vendors rather than who they are.
+  vendors: () =>
+    safe<VendorsResponse>("/v1/vendors", {
+      vendors: [],
+      summary: {
+        total: 0, subprocessors: 0, sensitive_data: 0, never_reviewed: 0, unowned: 0,
+        detail: "No vendors are recorded yet. This is an empty register, not a clean one.",
+      },
+    }),
+
+  // Upsert one row. The server re-assesses the WHOLE register afterwards, because vendor risk is a
+  // property of the portfolio rather than of the row just edited.
+  putVendor: (v: Partial<Vendor>) =>
+    call<{ vendor: Vendor; risks_detected: number }>("/v1/vendors", {
+      method: "POST", body: JSON.stringify(v),
+    }),
+
+  deleteVendor: (id: string) =>
+    call<VendorsResponse>(`/v1/vendors/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   // The security-awareness programme: curriculum, every person's status, and the honest summary.
   training: () =>
