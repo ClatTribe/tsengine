@@ -137,6 +137,16 @@ type Tenant struct {
 	// (KeyRef); the connection/resource ids are stored once EnsureConnection creates them, so a
 	// re-sync reuses the connection instead of making a new one each time.
 	Drata *DrataConfig `json:"drata,omitempty"`
+	// MDM is the tenant's device-management source (Kandji / Jamf Pro / Intune) — the FETCH half of
+	// device posture. internal/deviceposture could always assess a posted inventory; this is where the
+	// inventory now comes from on its own. Provider and base URL are plain identifiers; every credential
+	// is sealed (TokenRef / ClientSecretRef). Redacted() drops the whole block.
+	MDM *MDMConfig `json:"mdm,omitempty"`
+	// HRIS is the tenant's employment-records source (Merge.dev / Finch unified HRIS APIs) — the one
+	// surface the product had nothing for. An IdP shows ACCOUNTS; only HR shows EMPLOYMENT, and the
+	// join between the two is the finding an auditor asks for first (a leaver whose account is still
+	// active). Credentials sealed; Redacted() drops the block.
+	HRIS *HRISConfig `json:"hris,omitempty"`
 	// Escalation is the per-tenant incident escalation matrix (the MDR/SOC "who is alerted, how
 	// urgently" for a new incident). nil/disabled = today's behaviour (alert every configured
 	// channel). No secret material — channel names only.
@@ -530,6 +540,194 @@ func (j *JiraConfig) HasToken() bool {
 	return j != nil && j.BaseURL != "" && j.Email != "" && j.Project != "" && j.TokenRef != ""
 }
 
+// MDM providers the device-posture fetch understands.
+const (
+	MDMKandji = "kandji"
+	MDMJamf   = "jamf"
+	MDMIntune = "intune"
+)
+
+// MDMConfig is the per-tenant device-management source. Provider picks the fetcher; BaseURL is the
+// customer's own Kandji / Jamf tenant URL (Intune needs none — Graph is a fixed host). TokenRef is a
+// sealed API token (Kandji, Jamf bearer, or an Intune Graph token); ClientID + ClientSecretRef are the
+// Jamf Pro API-client alternative (a Jamf bearer token expires in thirty minutes, so a standing
+// integration mints one per sync). For Intune with no token of its own, the sync reuses the onboarded
+// Microsoft 365 connection's token — reuse a connection before adding one (CLAUDE.md §2.2.1 rule 3).
+type MDMConfig struct {
+	Provider        string `json:"provider"`
+	BaseURL         string `json:"base_url,omitempty"`
+	TokenRef        string `json:"token_ref,omitempty"`
+	ClientID        string `json:"client_id,omitempty"`
+	ClientSecretRef string `json:"client_secret_ref,omitempty"`
+}
+
+// HasCredential reports whether the config carries something a fetch could authenticate with.
+// Intune is the exception handled by the caller (it may borrow the M365 connection's token).
+func (m *MDMConfig) HasCredential() bool {
+	if m == nil {
+		return false
+	}
+	return m.TokenRef != "" || (m.ClientID != "" && m.ClientSecretRef != "")
+}
+
+// HRIS providers — unified APIs, deliberately: one integration each covers most of the market.
+const (
+	HRISMerge = "merge"
+	HRISFinch = "finch"
+)
+
+// HRISConfig is the per-tenant employment-records source. Merge needs the account's API key (KeyRef)
+// plus the linked-account token for THIS employer (AccountTokenRef); Finch needs only the employer's
+// access token (KeyRef). All sealed. BaseURL overrides the provider endpoint for tests and regional
+// deployments; empty means the provider's public API.
+type HRISConfig struct {
+	Provider        string `json:"provider"`
+	KeyRef          string `json:"key_ref,omitempty"`
+	AccountTokenRef string `json:"account_token_ref,omitempty"`
+	BaseURL         string `json:"base_url,omitempty"`
+}
+
+// HasCredential reports whether a fetch could authenticate.
+func (h *HRISConfig) HasCredential() bool {
+	if h == nil {
+		return false
+	}
+	switch h.Provider {
+	case HRISMerge:
+		return h.KeyRef != "" && h.AccountTokenRef != ""
+	case HRISFinch:
+		return h.KeyRef != ""
+	}
+	return false
+}
+
+// Employment statuses, normalised from whatever the HRIS calls them. Only EmploymentTerminated
+// drives a finding; the rest exist so a roster can be read back honestly.
+const (
+	EmploymentActive     = "active"
+	EmploymentPending    = "pending" // hired, not yet started
+	EmploymentTerminated = "terminated"
+	EmploymentUnknown    = "unknown" // the HRIS reported a status we do not recognise
+)
+
+// Employee is one employment record from the tenant's HRIS, as stored. It is the HR half of the
+// joiner/leaver join: the IdP knows an account exists; this knows whether the person still works
+// here. Every field is what the HRIS asserted — nothing is inferred from a name or an address.
+type Employee struct {
+	TenantID string `json:"tenant_id"`
+	Source   string `json:"source"` // HRISMerge | HRISFinch
+	ID       string `json:"id"`     // the HRIS's own id for the record
+	Name     string `json:"name,omitempty"`
+	// WorkEmail is the address the IdP account is expected to carry. PersonalEmails are the other
+	// addresses the HRIS asserts belong to the same person — an assertion by a system that knows,
+	// which is what makes matching on them a join rather than a guess (cf. estateingest/ghidentity).
+	WorkEmail      string    `json:"work_email,omitempty"`
+	PersonalEmails []string  `json:"personal_emails,omitempty"`
+	Status         string    `json:"status"`                    // EmploymentActive | EmploymentPending | EmploymentTerminated | EmploymentUnknown
+	EmploymentType string    `json:"employment_type,omitempty"` // employee | contractor | intern | … as the HRIS said
+	StartDate      string    `json:"start_date,omitempty"`      // YYYY-MM-DD
+	EndDate        string    `json:"end_date,omitempty"`        // YYYY-MM-DD — the termination / separation date
+	Department     string    `json:"department,omitempty"`
+	FetchedAt      time.Time `json:"fetched_at"`
+}
+
+// VendorDataAccess is what a third party can touch. It drives the severity of nearly every vendor
+// finding, which is why it is DECLARED by the customer rather than inferred: nothing in a vendor's
+// name or category says whether they hold personal data.
+type VendorDataAccess string
+
+const (
+	VendorDataNone      VendorDataAccess = "none"      // no access to our data
+	VendorDataMetadata  VendorDataAccess = "metadata"  // non-personal operational data
+	VendorDataPII       VendorDataAccess = "pii"       // personal data
+	VendorDataSensitive VendorDataAccess = "sensitive" // PHI / cardholder / secrets — the highest tier
+)
+
+// Vendor is one third party in the REGISTER — the durable inventory, not a transient scan input.
+//
+// The register had to become a stored entity because a findings list is not an inventory. Before
+// this the vendor set existed only inside the body of POST /v1/tprm/ingest: the findings persisted
+// and the portfolio did not, so the product could say which suppliers FAILED a check and could not
+// answer "who are our vendors" at all. That is the same defect the Trust Center's sub-processor note
+// describes — a derived list names the vendors that failed and omits every well-managed one — and a
+// vendor register is exactly the artifact an auditor asks for under SOC 2 CC9.2 and GDPR Art. 28.
+//
+// It lives here rather than in internal/tprm because internal/store may not import an internal
+// package; internal/tprm aliases it, so there is ONE type with two names rather than two that drift.
+type Vendor struct {
+	TenantID string `json:"tenant_id,omitempty"`
+	// ID is a slug of the name — stable, so re-ingesting the same inventory UPDATES each vendor
+	// rather than accumulating duplicates of it.
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Owner is the named human accountable for this relationship. Empty means UNOWNED and is
+	// rendered as such: defaulting to the workspace owner would manufacture accountability, naming
+	// somebody who never agreed to it — the same rule Asset.Owner follows (ADR 0028 G1).
+	Owner           string           `json:"owner,omitempty"`
+	Category        string           `json:"category,omitempty"`
+	DataAccess      VendorDataAccess `json:"data_access,omitempty"`
+	Subprocessor    bool             `json:"subprocessor,omitempty"`
+	HandlesCardData bool             `json:"handles_card_data,omitempty"`
+	Certifications  []string         `json:"certifications,omitempty"`
+	HasDPA          bool             `json:"has_dpa,omitempty"`
+	Breached        bool             `json:"breached,omitempty"`
+	BreachNote      string           `json:"breach_note,omitempty"`
+	Criticality     string           `json:"criticality,omitempty"`
+	// LastAssessed is when a human last reviewed this vendor. "" means NEVER, which is a different
+	// claim from "reviewed a long time ago" and is reported as itself.
+	LastAssessed string `json:"last_assessed,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+	// Source says where the row came from — a person typing it, or a posted inventory. An inventory
+	// a CI job posts and a register a human curates are different claims about completeness.
+	Source    string    `json:"source,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitzero"`
+}
+
+// TrainingTier is HOW we know a person was trained. The two values are not interchangeable and are
+// never summed into one figure — see internal/training for the reasoning. It lives here rather than
+// in internal/training because the completion record is a stored entity and the store may not import
+// internal packages; internal/training aliases both this and TrainingCompletion, so there is ONE
+// type with two names rather than two types that drift.
+type TrainingTier string
+
+const (
+	// TrainingDelivered — the content was rendered in THIS product and the person confirmed it at a
+	// recorded time. The strongest claim software can make without proctoring an exam.
+	TrainingDelivered TrainingTier = "delivered"
+	// TrainingAttested — completed elsewhere; a named human recorded it, naming the provider. A
+	// second-hand claim, and rendered as one.
+	TrainingAttested TrainingTier = "attested_external"
+)
+
+// TrainingCompletion is one person finishing one security-awareness module, once.
+//
+// Completions are APPEND-ONLY: a new one never replaces an older one. "Trained every year since
+// 2024" is the thing an auditor actually asks for, and it is unanswerable from current state alone.
+// Currency is decided at read time by internal/training.Evaluate, which takes the newest completion
+// per (person, module) and expires it against the module's recurrence.
+type TrainingCompletion struct {
+	TenantID string `json:"tenant_id"`
+	// ID is subject|module|date. Day-granular on purpose: clicking confirm twice in one sitting must
+	// not create two records, and nobody legitimately completes the same module twice in a day.
+	ID string `json:"id"`
+	// Subject is the person, lower-cased, by the address their identity provider knows them as — the
+	// same key the HRIS roster joins on, so a roster row and a training record name the same human.
+	Subject  string       `json:"subject"`
+	ModuleID string       `json:"module_id"`
+	Tier     TrainingTier `json:"tier"`
+	At       time.Time    `json:"at"`
+	// CurriculumVersion pins WHICH content this attests to. A completion is evidence about the text
+	// that was shown, and the text can change — the same reason a scan pins its corpus version (§10).
+	CurriculumVersion string `json:"curriculum_version,omitempty"`
+	// Provider names who delivered it. Required for the attested tier, because "trained externally"
+	// without naming the source is not a fact anybody can check.
+	Provider string `json:"provider,omitempty"`
+	// RecordedBy is the human who entered an external attestation. Empty for the delivered tier, where
+	// the subject confirmed it themselves and the product observed it.
+	RecordedBy string `json:"recorded_by,omitempty"`
+	Note       string `json:"note,omitempty"`
+}
+
 // PRBotPolicy is the per-tenant repository PR-review-bot policy: whether to post inline review
 // comments + a merge-gating check-run on a pull request, and the severity at/above which the
 // check-run FAILS (blocks merge). No secret material — safe to return to the client.
@@ -626,6 +824,9 @@ func (t Tenant) Redacted() Tenant {
 	t.LLMRoles = nil // per-role overrides carry sealed key refs too — same reason as LLM
 	t.SlackWebhookRef = ""
 	t.Jira = nil
+	t.Drata = nil
+	t.MDM = nil
+	t.HRIS = nil
 	return t
 }
 

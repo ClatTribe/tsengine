@@ -191,6 +191,27 @@ type Store interface {
 	ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error
 	ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error)
 
+	// --- employee roster (refreshed per HRIS sync, per source) ---
+	// The HR half of the joiner/leaver join: the IdP knows an account exists, only this knows
+	// whether the person still works here. Replaced wholesale per source so a record the HRIS
+	// deleted disappears rather than lingering as a phantom employee.
+	ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error
+	ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error)
+
+	// Training completions are APPEND-ONLY — Put upserts one record by its own id (person|module|day)
+	// and never removes an older one. "Trained every year since 2024" is what an auditor asks for and
+	// is unanswerable from current state; currency is decided at read time by training.Evaluate.
+	PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error
+	ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error)
+
+	// The vendor REGISTER — the durable third-party inventory, upserted by id so re-posting the same
+	// inventory updates each row rather than accumulating copies of it. Distinct from the FINDINGS a
+	// vendor raises: a findings list names the suppliers that failed a check and omits every
+	// well-managed one, which is not an inventory and is not what an auditor asks for.
+	PutVendor(ctx context.Context, v platform.Vendor) error
+	ListVendors(ctx context.Context, tenantID string) ([]platform.Vendor, error)
+	DeleteVendor(ctx context.Context, tenantID, id string) error
+
 	// --- users & sessions (real account auth) ---
 	PutUser(ctx context.Context, u platform.User) error
 	GetUser(ctx context.Context, id string) (platform.User, error)

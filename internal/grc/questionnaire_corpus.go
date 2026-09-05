@@ -157,15 +157,28 @@ var observedQuestions = []QQuestion{
 	// source on the page that can never turn from missing to present.
 	obs("DA-1", "Data Protection", "Is access to data stores and warehouses restricted and reviewed?",
 		[]string{"cloud"}, map[string][]string{"soc2": {"CC6.3"}, "pci": {"7.2.1"}}),
+
+	// --- Personnel (internal/training) ---
+	//
+	// PROMOTED from the attested tier. Its old reason for being attested — "training completion lives
+	// in an HR or LMS system we do not read" — stopped being true when the programme landed: the
+	// completions are ours, the curriculum is ours, and expiry against the annual requirement is
+	// computed rather than claimed. A question stays attested because no detector can answer it, not
+	// as a habit, and leaving it there would have understated evidence we hold.
+	//
+	// Safe to observe because both halves are grounded. The "training" source is stamped by the
+	// monitoring pass ONLY when a roster exists, so a company whose workforce we cannot see reads
+	// "Not assessed" rather than Yes; and anyone who owes training raises a finding citing CC1.4 and
+	// PCI 12.6.1, which turns this answer to "In progress" — so a roster that has done nothing can
+	// never answer Yes.
+	obs("HR-2", "Personnel", "Do employees receive security awareness training at least annually?",
+		[]string{"training"}, map[string][]string{"soc2": {"CC1.4"}, "pci": {"12.6.1"}}),
 }
 
 var attestedQuestions = []QQuestion{
 	att("HR-1", "Personnel", "Are background checks performed on employees with access to customer data?",
 		"Employment records are not something any scanner can see.",
 		map[string][]string{"soc2": {"CC1.4"}, "iso27001": {"A.7.1"}}),
-	att("HR-2", "Personnel", "Do employees receive security awareness training at least annually?",
-		"Training completion lives in an HR or LMS system we do not read.",
-		map[string][]string{"soc2": {"CC1.4"}, "pci": {"12.6.1"}}),
 	att("HR-3", "Personnel", "Are employees bound by confidentiality agreements?",
 		"A signed agreement is a legal artifact, not an observable system state.",
 		map[string][]string{"soc2": {"CC1.4"}, "iso27001": {"A.6.6"}}),

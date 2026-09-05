@@ -18,6 +18,8 @@ import { CloudRemediationControl } from "@/components/settings/cloud-remediation
 import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
 import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
 import { JiraControl } from "@/components/settings/jira-control";
+import { MDMControl } from "@/components/settings/mdm-control";
+import { HRISControl } from "@/components/settings/hris-control";
 import { DrataControl } from "@/components/settings/drata-control";
 import { EscalationControl } from "@/components/settings/escalation-control";
 import { SLAControl } from "@/components/settings/sla-control";
@@ -47,6 +49,7 @@ export default async function SettingsPage() {
   const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests()]);
   const branding = await api.brandingSettings();
   const drata = await api.drataSettings();
+  const [mdm, hris] = await Promise.all([api.mdmSettings(), api.hrisSettings()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -194,6 +197,21 @@ export default async function SettingsPage() {
               })}
             </ul>
           )}
+        </Card>
+      </div>
+
+      {/* People & devices — the two sources an auditor asks about first, fetched live once configured */}
+      <div>
+        <SectionTitle action={<span className="text-[11px] text-faint">read on every monitoring pass</span>}>
+          People &amp; devices
+        </SectionTitle>
+        <Card className="space-y-3 p-5">
+          <p className="text-xs text-muted">
+            Your MDM says whether laptops are encrypted; your HR system says who still works here. Connect both and the engine
+            checks each on every pass — a leaver whose account is still enabled, or a laptop whose disk is not, becomes a finding.
+          </p>
+          <MDMControl config={mdm} />
+          <HRISControl config={hris} />
         </Card>
       </div>
 

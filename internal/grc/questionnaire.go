@@ -360,6 +360,7 @@ func attestedOn(raw string) string {
 var knownSources = map[string]bool{
 	"repository": true, "container": true, "web": true, "api": true, "domain": true,
 	"ip": true, "cloud": true, "identity": true, "saas": true, "device": true, "vendor": true,
+	"training": true,
 }
 
 // assessedSources returns the evidence sources this tenant actually has — derived from
@@ -404,6 +405,12 @@ func (g *GRC) assessedSources(ctx context.Context, tenantID string) (map[string]
 				out["domain"] = true
 			case "clouddrift":
 				out["cloud"] = true
+			case "training":
+				// Stamped by the monitoring pass ONLY when a roster exists — an empty roster returns
+				// early, so this can never be set for a company whose workforce we cannot see. That is
+				// what makes the training question safe to answer from observation rather than from a
+				// person's word for it.
+				out["training"] = true
 			}
 		}
 	}

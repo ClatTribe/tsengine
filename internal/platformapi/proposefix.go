@@ -41,9 +41,20 @@ import (
 // Best-effort throughout: a proposal failure must never fail the ingest that produced the finding. The
 // finding is already stored and visible; a missing ticket is recoverable, a rejected ingest is not.
 func (d Deps) proposeForFindings(ctx context.Context, tenantID string, findings []types.Finding) int {
+	// Ingested posture findings have no asset record; remediate.Propose's default case turns
+	// those into a generic ticket, which is the right shape: a human reads it and acts.
+	return d.proposeForFindingsOn(ctx, tenantID, platform.Asset{TenantID: tenantID}, findings)
+}
+
+// proposeForFindingsOn is proposeForFindings against a KNOWN asset. It exists for the ingests that
+// do have one — the HRIS join runs per workspace asset — because remediate keys its identity
+// runbooks (and the live account-suspend promotion) on the asset's type and provider, and a leaver's
+// still-enabled account should reach the desk as a gated suspend, not as a generic ticket.
+func (d Deps) proposeForFindingsOn(ctx context.Context, tenantID string, asset platform.Asset, findings []types.Finding) int {
 	if d.ProposeFix == nil || d.Submitter == nil || len(findings) == 0 {
 		return 0
 	}
+	asset.TenantID = tenantID
 
 	// What is already covered. Keyed by detect.Key (rule|endpoint) — the same key the incident
 	// detector and the fix-verifier use, so all three agree on what "the same finding" means, and a
@@ -63,9 +74,7 @@ func (d Deps) proposeForFindings(ctx context.Context, tenantID string, findings 
 		if covered[key] {
 			continue // already has an action — re-posting posture must not re-file it
 		}
-		// Ingested posture findings have no asset record; remediate.Propose's default case turns
-		// those into a generic ticket, which is the right shape: a human reads it and acts.
-		act, ok := d.ProposeFix(f, platform.Asset{TenantID: tenantID})
+		act, ok := d.ProposeFix(f, asset)
 		if !ok {
 			continue
 		}

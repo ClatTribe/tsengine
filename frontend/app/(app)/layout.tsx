@@ -9,6 +9,7 @@ import { MobileNavProvider, MobileNavBackdrop } from "@/components/shell/mobile-
 import { TopBar } from "@/components/shell/topbar";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { hitlOwner } from "@/lib/service-model";
+import { EmployeeShell } from "@/components/shell/employee-shell";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -26,6 +27,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // An invited member with a temporary password is gated out of the app until they set their own
   // — send them to the rotation screen, which also lives outside (app) so this check can't loop.
   if (me.must_change_password) redirect("/change-password");
+
+  // An EMPLOYEE seat gets its own shell, before any estate call is made.
+  //
+  // Not the console with pages hidden: the API allowlist refuses this account every estate endpoint
+  // (internal/platformapi/employee_scope.go), so the seven fetches below would each 403 and fall back
+  // to their empty defaults — drawing a risk rating of zero, an empty findings badge and a nav of
+  // links that render blank. Blank reads as "my data vanished" rather than "this is not for you",
+  // which is the same confusion the stale-session redirect above exists to prevent. Returning early
+  // also means an employee's page load makes two API calls instead of nine.
+  // The workspace NAME comes from the session rather than GET /v1/tenant, which this account is also
+  // refused: asking for it would be a 403 to render a heading, and widening the allowlist to avoid
+  // that would trade the principle for a cosmetic.
+  if (me.role === "employee") {
+    return <EmployeeShell name={session.tenant}>{children}</EmployeeShell>;
+  }
 
   // Severity COUNTS, not every finding. The shell renders on every navigation and needs one number;
   // pulling the full list cost 27MB per page load for a workspace that imported a 50,000-finding

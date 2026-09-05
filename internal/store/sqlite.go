@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS runtimeevts (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS pentests    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
+CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
+CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (token TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS operators   (id TEXT PRIMARY KEY, email TEXT, data TEXT NOT NULL);
@@ -395,6 +398,66 @@ func (s *SQLite) ReplaceThirdPartyApps(ctx context.Context, tenantID, provider s
 }
 func (s *SQLite) ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error) {
 	return listJSON[platform.ThirdPartyApp](ctx, s.db, `SELECT data FROM apps WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+// --- employee roster (replace the whole (tenant,source) set atomically) ---
+
+func (s *SQLite) ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM employees WHERE tenant_id=? AND source=?`, tenantID, source); err != nil {
+		return err
+	}
+	for _, e := range emps {
+		d, err := enc(e)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO employees(tenant_id,source,emp_id,data) VALUES(?,?,?,?)`, tenantID, source, e.ID, d); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+func (s *SQLite) ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error) {
+	return listJSON[platform.Employee](ctx, s.db, `SELECT data FROM employees WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+// --- security-awareness training completions (append-only; upsert by the record's own id) ---
+
+func (s *SQLite) PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error {
+	d, err := enc(c)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO training(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, c.TenantID, c.ID, d)
+	return err
+}
+func (s *SQLite) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
+	return listJSON[platform.TrainingCompletion](ctx, s.db, `SELECT data FROM training WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+
+// --- vendor register (upsert by id; the durable inventory, not the findings it raises) ---
+
+func (s *SQLite) PutVendor(ctx context.Context, v platform.Vendor) error {
+	d, err := enc(v)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO vendors(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, v.TenantID, v.ID, d)
+	return err
+}
+func (s *SQLite) ListVendors(ctx context.Context, tenantID string) ([]platform.Vendor, error) {
+	return listJSON[platform.Vendor](ctx, s.db, `SELECT data FROM vendors WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+func (s *SQLite) DeleteVendor(ctx context.Context, tenantID, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM vendors WHERE tenant_id=? AND id=?`, tenantID, id)
+	return err
 }
 
 // --- users & sessions ---

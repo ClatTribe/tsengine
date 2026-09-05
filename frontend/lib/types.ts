@@ -844,6 +844,54 @@ export interface DrataSettings {
   base_url?: string;
 }
 
+// Device-management source (Kandji / Jamf Pro / Intune). Credentials are never returned — only
+// whether one is set. m365_connected tells the Intune case whether a sync can borrow the connected
+// Microsoft 365 tenant's token when no token of its own is configured.
+export interface MDMSettings {
+  provider: string; // "" = not configured
+  base_url: string;
+  has_token: boolean;
+  client_id: string;
+  has_client_secret: boolean;
+  m365_connected: boolean;
+  providers: string[];
+}
+
+// Result of a live device sync. checks_not_run carries what the fetch could NOT assess — the
+// provider's per-device limits and the devices it could not fully read — and must be rendered
+// beside the counts, or "0 issues" reads as a claim about settings the MDM never reported.
+export interface DeviceSyncResult {
+  provider: string;
+  source: string;
+  devices: number;
+  issues_detected: number;
+  findings: Finding[];
+  checks_not_run?: string[];
+}
+
+// HR-system source (Merge.dev / Finch). Credentials never returned; employees is the stored roster size.
+export interface HRISSettings {
+  provider: string; // "" = not configured
+  has_key: boolean;
+  has_account_token: boolean;
+  employees: number;
+  last_synced_at?: string;
+  providers: string[];
+}
+
+// Result of a live HRIS sync + join. joined is false when the roster was stored but no identity
+// provider was available to join against — a state checks_not_run explains and the page must show,
+// because a stored-but-unjoined roster is not "no leavers with access".
+export interface HRISSyncResult {
+  provider: string;
+  source: string;
+  employees: number;
+  issues_detected: number;
+  joined: boolean;
+  findings: Finding[];
+  checks_not_run?: string[];
+}
+
 export interface Tenant {
   id: string;
   name: string;
@@ -878,7 +926,7 @@ export interface User {
   tenant_id: string;
   email: string;
   name?: string;
-  role: string; // "owner" | "member"
+  role: string; // "owner" | "member" | "auditor" | "employee"
   created_at: string;
   must_change_password?: boolean; // invited member with a temp password; app is gated until they rotate it
 }
@@ -1595,3 +1643,126 @@ export interface DetectionValidation {
   missed_proven: number;
   caveat: string;
 }
+// ── Access review (SOC 2 CC6.2/CC6.3) ────────────────────────────────────────────────────────────
+// The attestation half of access control: a NAMED person answering "does this individual still need
+// this?" for every flagged account, on a date. `detail` is the server's own honest sentence about
+// what the numbers mean and is rendered verbatim — "0 of 0" and "12 of 12" both read as complete to
+// someone skimming, and only one of them is.
+
+export type AccessReviewIdentity = {
+  subject: string;
+  reasons: string[];
+  finding_ids: string[];
+  severity: string;
+  decision: "" | "keep" | "revoke";
+  decided_by?: string;
+  decided_at?: string;
+  note?: string;
+};
+
+export type AccessReviewProgress = {
+  total: number;
+  reviewed: number;
+  keep: number;
+  revoke: number;
+  pending: number;
+  /** True ONLY when every flagged account has a decision — never for an empty campaign. */
+  complete: boolean;
+};
+
+export type AccessReview = {
+  progress: AccessReviewProgress;
+  identities: AccessReviewIdentity[];
+  detail: string;
+  revocations?: AccessReviewIdentity[];
+};
+
+// ── Security-awareness training (SOC 2 CC1.4/CC2.2 · ISO A.6.3 · PCI 12.6 · HIPAA 164.308(a)(5)) ──
+// Two evidence tiers that are never merged, and NO combined completion rate: one figure spanning
+// "we showed them the content and they confirmed" and "somebody says it happened elsewhere" would
+// rise as a customer asserted more and evidenced less.
+
+export type TrainingTier = "delivered" | "attested_external";
+
+export type TrainingModule = {
+  id: string;
+  title: string;
+  why: string;
+  recur_every_days: number;
+  controls: Record<string, string[]>;
+  body: string[];
+};
+
+export type TrainingStatus = {
+  subject: string;
+  name?: string;
+  module_id: string;
+  title: string;
+  /** complete | expired | outstanding — expired and outstanding are different problems. */
+  state: "complete" | "expired" | "outstanding";
+  tier?: TrainingTier;
+  at?: string;
+  provider?: string;
+  expires_at?: string;
+};
+
+export type TrainingSummary = {
+  people: number;
+  modules: number;
+  assignments: number;
+  complete_delivered: number;
+  complete_attested: number;
+  expired: number;
+  outstanding: number;
+  /** True when nobody is on the roster: no denominator, NOT a trained workforce. */
+  no_roster: boolean;
+  roster_sources?: string[];
+  /** Completions recorded against people the roster does not know — they count towards nothing. */
+  off_roster?: string[];
+  detail: string;
+};
+
+export type TrainingProgramme = {
+  curriculum: { version: string; modules: TrainingModule[] };
+  summary: TrainingSummary;
+  statuses: TrainingStatus[];
+  me?: string;
+};
+
+// ── Vendor register (SOC 2 CC9.2 · GDPR Art. 28 · PCI 12.8) ──────────────────────────────────────
+// The durable third-party inventory — NOT the findings it raises. A list derived from findings names
+// the suppliers that failed a check and omits every well-managed one, which is not an inventory.
+
+export type Vendor = {
+  id: string;
+  name: string;
+  /** Empty means UNOWNED and renders as such — a default would name someone who never agreed to it. */
+  owner?: string;
+  category?: string;
+  data_access?: "" | "none" | "metadata" | "pii" | "sensitive";
+  subprocessor?: boolean;
+  handles_card_data?: boolean;
+  certifications?: string[];
+  has_dpa?: boolean;
+  breached?: boolean;
+  breach_note?: string;
+  criticality?: string;
+  /** "" means NEVER reviewed — a different claim from "reviewed a long time ago". */
+  last_assessed?: string;
+  notes?: string;
+  /** "register" (a person curated it) or "ingest" (a job posted it) — different completeness claims. */
+  source?: string;
+  updated_at?: string;
+};
+
+export type VendorsResponse = {
+  vendors: Vendor[];
+  summary: {
+    total: number;
+    subprocessors: number;
+    sensitive_data: number;
+    never_reviewed: number;
+    unowned: number;
+    detail: string;
+  };
+};

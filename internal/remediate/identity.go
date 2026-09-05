@@ -103,6 +103,15 @@ func identityRunbook(ruleID, target string) (runbook, bool) {
 	case "operate::excess-super-admins":
 		return runbook{"reduce super-admins", "reduce_admins",
 			"Reduce super-administrators to the minimum. Downgrade non-essential super-admins to scoped admin roles."}, true
+	// The HRIS join (internal/hris). A leaver's account is the SAME reversible lifecycle transition as
+	// a stale account — suspend — so it promotes to the live, HITL-gated suspend on Okta / Google
+	// Workspace / Microsoft 365 through liveIdentityMutation, and is a runbook ticket elsewhere.
+	case "hris::leaver-with-active-account":
+		return runbook{"suspend former employee's account " + target, "account_suspend",
+			"Suspend " + target + " now and revoke its sessions — your HR system records this person as no longer employed, and the account is still enabled. Then check what else it can reach (SaaS apps, cloud roles, shared drives) and complete the offboarding checklist."}, true
+	case "hris::account-without-hr-record":
+		return runbook{"record an owner for " + target, "record_owner",
+			"The account " + target + " matches no employee, contractor or leaver in your HR system. Confirm whether it is a service account, a shared mailbox, or a person HR never recorded; record its owner and purpose so the next access review has someone to ask, or suspend it if nobody claims it."}, true
 	default:
 		return runbook{}, false
 	}

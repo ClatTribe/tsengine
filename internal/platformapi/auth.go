@@ -288,10 +288,12 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 	case "", platform.RoleMember:
 	case platform.RoleAuditor:
 		role = platform.RoleAuditor
+	case platform.RoleEmployee:
+		role = platform.RoleEmployee
 	default:
 		// Owner is not an invitable role — a workspace has the one that created it — and an
 		// unknown role must not silently become a member seat.
-		writeJSON(w, http.StatusBadRequest, errBody("role must be member or auditor"))
+		writeJSON(w, http.StatusBadRequest, errBody("role must be member, auditor or employee"))
 		return
 	}
 	if _, err := d.Store.GetUserByEmail(r.Context(), email); err == nil {
