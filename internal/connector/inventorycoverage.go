@@ -7,7 +7,9 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudiam"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
+	"github.com/ClatTribe/tsengine/internal/connector/azinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
+	"github.com/ClatTribe/tsengine/internal/connector/k8sinventory"
 )
 
 // inventorycoverage.go states what a POSTED cloud inventory could not answer.
@@ -152,6 +154,149 @@ func CoverGCP(raw gcpinventory.RawGCP) InventoryCoverage {
 			"escalation through them is NOT reported (a role we cannot resolve is treated as proving " +
 			"nothing, never as granting everything): " + strings.Join(shown, ", ") +
 			". Populate `role_defs` with each role's permission list."
+	}
+	return c
+}
+
+// CoverK8s reports what a posted RawK8s cannot answer.
+//
+// Kubernetes was the fourth provider to reach this ingest and the only one that returned an EMPTY
+// coverage — so a manifest missing the very objects the analysis reads produced zero privesc edges,
+// zero internet reach, and no note saying why. On an attack-path page zero reads as "nobody can
+// become admin in this cluster", which is the single most reassuring thing this product can say and
+// the most damaging to say wrongly. It is the same defect CoverAWS and CoverGCP exist to prevent,
+// arriving through the door that had no guard.
+//
+// The gaps are named per CONCERN, and each names the FIELD to populate — the caller is usually a
+// script running `kubectl get`, and "something is missing" is not something a script author can act
+// on.
+//
+// Note what is NOT reported: an empty `secrets` or `pods` list. A cluster genuinely may have neither,
+// and a note there would fire on healthy clusters until people learned to ignore all of them.
+// Bindings and roles are different: without them RBAC cannot be evaluated AT ALL, so their absence
+// changes what the result MEANS rather than what it contains.
+func CoverK8s(raw k8sinventory.RawK8s) InventoryCoverage {
+	c := InventoryCoverage{Notes: map[string]string{}}
+
+	if len(raw.ServiceAccounts) == 0 {
+		c.Notes["identity"] = "no service accounts in the snapshot — a cluster runs its workloads as " +
+			"ServiceAccounts, so with none there is no principal an attack path can start from. " +
+			"Populate `service_accounts` (kubectl get serviceaccounts -A)."
+	}
+
+	// RBAC is TWO objects and either one alone decides nothing: a role carries the verbs, a binding
+	// says who holds them. Missing either yields no grant edge and therefore no escalation, and the
+	// two are reported separately because the fix differs.
+	if len(raw.Roles) == 0 {
+		c.Notes["rbac-roles"] = "no roles in the snapshot — escalating VERBS (bind, escalate, " +
+			"impersonate, create-pod) live on Roles and ClusterRoles, so with none present no " +
+			"privilege escalation can be computed and an empty result means UNREAD. Populate `roles` " +
+			"(kubectl get roles,clusterroles -A)."
+	}
+	if len(raw.Bindings) == 0 {
+		c.Notes["rbac-bindings"] = "no bindings in the snapshot — a Role grants nothing until a " +
+			"RoleBinding names who holds it, so no principal can be connected to any permission. " +
+			"Populate `bindings` (kubectl get rolebindings,clusterrolebindings -A)."
+	}
+
+	// A binding pointing at a role we do not have is the cluster twin of GCP's unresolvable custom
+	// role, and it fails the same way: the grant is real, the verbs are unknown, and no edge is
+	// built. Silence there under-reports exactly the principals somebody granted something to.
+	if missing := unresolvedRoleRefs(raw); len(missing) > 0 {
+		c.Notes["unresolved-roles"] = fmt.Sprintf(
+			"%d binding(s) reference a role that is not in the snapshot, so what they grant is unknown "+
+				"and no escalation was computed for their subjects — not absent, UNREAD: %s. Include "+
+				"ClusterRoles as well as namespaced Roles.", len(missing), strings.Join(missing, ", "))
+	}
+
+	// Exposure is the other half of a path. Without Services nothing is internet-reachable, which
+	// makes every workload look internal — a cluster with a LoadBalancer in front of it would render
+	// as unreachable from outside.
+	if len(raw.Services) == 0 {
+		c.Notes["exposure"] = "no services in the snapshot — internet reach is derived from " +
+			"LoadBalancer / NodePort / externally-addressed Services, so with none present every " +
+			"workload reads as internal whether or not it is. Populate `services` " +
+			"(kubectl get services -A)."
+	}
+	return c
+}
+
+// unresolvedRoleRefs names bindings whose roleRef matches no role in the snapshot.
+//
+// Matched on NAME alone, deliberately: a RoleBinding may reference a ClusterRole, which carries no
+// namespace, so requiring the namespaces to agree would report every legitimate cluster-role binding
+// as unresolved — a note that fires constantly is one nobody reads.
+func unresolvedRoleRefs(raw k8sinventory.RawK8s) []string {
+	known := make(map[string]bool, len(raw.Roles))
+	for _, r := range raw.Roles {
+		known[r.Name] = true
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, b := range raw.Bindings {
+		ref := strings.TrimSpace(b.RoleRef)
+		if ref == "" || known[ref] {
+			continue
+		}
+		if label := b.Name + "→" + ref; !seen[label] {
+			seen[label] = true
+			out = append(out, label)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// CoverAzure reports what a posted RawAzure cannot answer.
+//
+// Azure returned an empty coverage with a comment saying "no coverage analyser yet: Azure reports
+// nothing rather than claiming completeness it has not checked" — but an empty InventoryCoverage is
+// not silence. Summary() renders it as "This snapshot carries everything the engine knows how to
+// evaluate", so the honest intention produced the confident claim it was trying to avoid.
+//
+// AZURE HAS TWO AUTHORIZATION PLANES AND THEY ARE NEVER CONFLATED (§10). ARM RBAC decides what a
+// principal may do to SUBSCRIPTION RESOURCES; Entra (Azure AD) decides what it may do to the
+// DIRECTORY — and an attacker who owns the tenant through Entra never touches an ARM role assignment
+// at all. This ingest carries the ARM plane only, so the Entra gap is declared on every snapshot
+// rather than left to look like an absence of findings.
+func CoverAzure(raw azinventory.RawAzure) InventoryCoverage {
+	c := InventoryCoverage{Notes: map[string]string{}}
+
+	if len(raw.Principals) == 0 {
+		c.Notes["identity"] = "no principals in the snapshot — no managed identity, service principal " +
+			"or user can be evaluated, so no attack path can start from one. Populate `principals`."
+	}
+
+	if len(raw.RoleAssignments) == 0 {
+		c.Notes["privilege-escalation"] = "no role assignments in the snapshot, so no ARM escalation " +
+			"can be computed. The `admin` flag records who ALREADY is an administrator; it cannot " +
+			"answer who can BECOME one. Populate `role_assignments` (and `role_definitions` for custom " +
+			"roles, `deny_assignments` where they exist)."
+	} else if unknown := azinventory.UnknownRoles(raw); len(unknown) > 0 {
+		// The firm-allow rule means an escalation through a role we lack the definition for is NOT
+		// reported. That silence under-reports exactly the principals somebody granted a bespoke role
+		// to, which is where the interesting permissions usually live.
+		c.Notes["unresolved-roles"] = fmt.Sprintf(
+			"%d custom role(s) are assigned but their definitions were not supplied, so what they "+
+				"permit is unknown and no escalation was computed through them — not absent, UNREAD: %s. "+
+				"Populate `role_definitions` for these.", len(unknown), strings.Join(unknown, ", "))
+	}
+
+	// ALWAYS declared, because this ingest has no field for it at all. A gap that can never be closed
+	// by sending more of the same document has to be stated on every snapshot, or its absence reads
+	// as a clean directory.
+	c.Notes["entra-directory"] = "this snapshot carries the ARM plane only. Entra (Azure AD) is a " +
+		"SEPARATE authorization plane — Graph application permissions, privileged directory roles and " +
+		"service-principal ownership — and an attacker who takes the tenant through Entra never " +
+		"touches an ARM role assignment. Nothing here evaluates it, so an empty Entra result is not a " +
+		"finding about the directory."
+
+	// Reachability is the other half of a path: with no VMs or storage, nothing is exposed and every
+	// escalation leads nowhere in particular.
+	if len(raw.VMs)+len(raw.Storage) == 0 {
+		c.Notes["exposure"] = "no VMs or storage accounts in the snapshot — internet reachability and " +
+			"public-data exposure are derived from those, so with none present nothing reads as " +
+			"exposed whether or not it is. Populate `vms` and `storage`."
 	}
 	return c
 }

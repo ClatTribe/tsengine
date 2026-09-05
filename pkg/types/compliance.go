@@ -37,4 +37,15 @@ type Compliance struct {
 	CERTIn []string `json:"certin,omitempty"` // CERT-In Directions 2022 (Annexure I reportable incident categories)
 	RBI    []string `json:"rbi,omitempty"`    // RBI Cyber Security Framework — Annex I baseline controls
 	SEBI   []string `json:"sebi,omitempty"`   // SEBI CSCRF 2024 — CSF-structured categories
+
+	// DORA is the EU Digital Operational Resilience Act (Reg. 2022/2554). Mapped DELIBERATELY NARROW,
+	// to the ICT-risk articles with a per-finding nexus — Art. 8 identification, Art. 9 protection and
+	// prevention, Art. 10 detection, Art. 24/25 resilience testing. Its governance, incident-reporting
+	// and contractual articles are procedural duties no finding evidences, and mapping them would be
+	// the false-compliance §8 forbids (the same line CERT-In is drawn on).
+	DORA []string `json:"dora,omitempty"`
+	// CyberEssentials is the UK NCSC scheme's five technical controls. Coarse by design — the scheme
+	// has five — so many CWEs land on the same control, which is the scheme being what it is rather
+	// than the crosswalk being lazy.
+	CyberEssentials []string `json:"cyber_essentials,omitempty"`
 }

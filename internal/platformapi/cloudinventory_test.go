@@ -282,3 +282,86 @@ func TestIngestAWSInventory_StoresTheUnassessedFederation(t *testing.T) {
 		t.Errorf("the stored snapshot does not record the unassessed federation: %v", snap.CoverageGaps)
 	}
 }
+
+// The k8s ingest returned an EMPTY coverage while AWS and GCP computed real gaps, so a cluster
+// manifest missing the objects the analysis reads produced zero privesc edges and no note saying
+// why. Tested through the DISPATCH rather than CoverK8s directly: the package-level test passes with
+// the wiring removed, which is the built-but-not-wired gap reproduced inside the test meant to prove
+// wiring.
+func TestBuildCloudInventory_KubernetesReportsItsCoverageGaps(t *testing.T) {
+	body := []byte(`{"cluster":"prod","service_accounts":[{"namespace":"app","name":"api"}],
+	                 "pods":[{"namespace":"app","name":"api-1","service_account":"api"}]}`)
+	_, coverage, err := buildCloudInventory("kubernetes", body)
+	if err != nil {
+		t.Fatalf("kubernetes ingest: %v", err)
+	}
+	if coverage.Complete() {
+		t.Fatal("a cluster manifest with no roles, no bindings and no services came back as fully " +
+			"covered — an empty privesc result then reads as 'nobody can become admin in this cluster'")
+	}
+	for _, want := range []string{"rbac-roles", "rbac-bindings", "exposure"} {
+		if _, ok := coverage.Notes[want]; !ok {
+			t.Errorf("dispatch lost the %q gap: %v", want, coverage.Notes)
+		}
+	}
+}
+
+// The mirror: a complete manifest must still come back clean through the dispatch, or an honest gap
+// layer is traded for a permanent false alarm.
+func TestBuildCloudInventory_ACompleteClusterDeclaresNothing(t *testing.T) {
+	body := []byte(`{"cluster":"prod",
+	  "service_accounts":[{"namespace":"app","name":"api"}],
+	  "roles":[{"namespace":"app","name":"r","rules":[{"verbs":["get"],"resources":["pods"]}]}],
+	  "bindings":[{"namespace":"app","name":"rb","role_ref":"r",
+	               "subjects":[{"kind":"ServiceAccount","namespace":"app","name":"api"}]}],
+	  "services":[{"namespace":"app","name":"svc","type":"ClusterIP"}]}`)
+	_, coverage, err := buildCloudInventory("k8s", body)
+	if err != nil {
+		t.Fatalf("kubernetes ingest: %v", err)
+	}
+	if !coverage.Complete() {
+		t.Fatalf("a complete cluster manifest reported gaps: %v", coverage.Notes)
+	}
+}
+
+// Azure's branch returned an empty coverage, which Summary() renders as "carries everything the
+// engine knows how to evaluate" — so the comment claiming it "reports nothing rather than claiming
+// completeness" shipped as the opposite. Tested through the DISPATCH: the package-level CoverAzure
+// tests pass with the wiring removed, which is the built-but-not-wired gap reproduced inside the
+// tests meant to prove wiring.
+func TestBuildCloudInventory_AzureReportsItsCoverageGaps(t *testing.T) {
+	body := []byte(`{"subscription_id":"sub-1","principals":[{"id":"sp:a","admin":true}],
+	                 "vms":[{"id":"vm-1"}]}`)
+	_, coverage, err := buildCloudInventory("azure", body)
+	if err != nil {
+		t.Fatalf("azure ingest: %v", err)
+	}
+	if coverage.Complete() {
+		t.Fatal("an Azure snapshot with no role assignments came back fully covered — zero escalation " +
+			"edges then read as 'nobody can become an admin in this subscription'")
+	}
+	if _, ok := coverage.Notes["privilege-escalation"]; !ok {
+		t.Errorf("dispatch lost the escalation gap: %v", coverage.Notes)
+	}
+	// The Entra plane is declared on EVERY Azure snapshot, because this ingest has no field for it.
+	if _, ok := coverage.Notes["entra-directory"]; !ok {
+		t.Errorf("dispatch lost the Entra declaration: %v", coverage.Notes)
+	}
+}
+
+// The other half of the same wiring: role assignments in the posted body must actually reach the
+// evaluator and produce an escalation edge. Before RawAzure carried RBAC this was structurally
+// impossible, so the graph had no Azure privesc edges at all.
+func TestBuildCloudInventory_AzureRoleAssignmentsProduceEscalationEdges(t *testing.T) {
+	body := []byte(`{"subscription_id":"sub-1",
+	  "principals":[{"id":"sp:deployer","name":"deployer"}],
+	  "role_assignments":[{"role":"Owner","principals":["sp:deployer"]}]}`)
+	inv, _, err := buildCloudInventory("azure", body)
+	if err != nil {
+		t.Fatalf("azure ingest: %v", err)
+	}
+	if len(inv.Privescs) == 0 {
+		t.Fatal("an Owner role assignment in the posted body produced no escalation edge — the RBAC " +
+			"fields are not reaching azureiam")
+	}
+}

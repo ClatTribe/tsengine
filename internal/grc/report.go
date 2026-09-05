@@ -39,6 +39,8 @@ var frameworkTitle = map[string]string{
 	FrameworkCERTIn:     "CERT-In Directions 2022",
 	FrameworkRBI:        "RBI Cyber Security Framework",
 	FrameworkSEBI:       "SEBI CSCRF",
+	FrameworkDORA:       "EU DORA",
+	FrameworkCE:         "UK Cyber Essentials",
 }
 
 // FrameworkTitle returns the display name for a framework key (the key itself if unknown).
