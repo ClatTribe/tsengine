@@ -52,9 +52,10 @@ func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, co
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid Azure inventory body")
 		}
-		// No coverage analyser yet: Azure reports nothing rather than claiming completeness
-		// it has not checked.
-		return azinventory.Build(raw), connector.InventoryCoverage{}, nil
+		// An EMPTY coverage is not silence: Summary() renders it as "carries everything the engine
+		// knows how to evaluate", so the comment that used to sit here — "Azure reports nothing rather
+		// than claiming completeness it has not checked" — described the opposite of what shipped.
+		return azinventory.Build(raw), connector.CoverAzure(raw), nil
 	case "kubernetes", "k8s":
 		// The orchestrator is a cloud in its own right, and its security model is the SAME graph: a
 		// ServiceAccount is a principal, a RoleBinding a grant, a pod runs-as its SA, an exposed Service

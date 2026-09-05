@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudiam"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
+	"github.com/ClatTribe/tsengine/internal/connector/azinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpinventory"
 	"github.com/ClatTribe/tsengine/internal/connector/k8sinventory"
 )
@@ -244,4 +245,58 @@ func unresolvedRoleRefs(raw k8sinventory.RawK8s) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// CoverAzure reports what a posted RawAzure cannot answer.
+//
+// Azure returned an empty coverage with a comment saying "no coverage analyser yet: Azure reports
+// nothing rather than claiming completeness it has not checked" — but an empty InventoryCoverage is
+// not silence. Summary() renders it as "This snapshot carries everything the engine knows how to
+// evaluate", so the honest intention produced the confident claim it was trying to avoid.
+//
+// AZURE HAS TWO AUTHORIZATION PLANES AND THEY ARE NEVER CONFLATED (§10). ARM RBAC decides what a
+// principal may do to SUBSCRIPTION RESOURCES; Entra (Azure AD) decides what it may do to the
+// DIRECTORY — and an attacker who owns the tenant through Entra never touches an ARM role assignment
+// at all. This ingest carries the ARM plane only, so the Entra gap is declared on every snapshot
+// rather than left to look like an absence of findings.
+func CoverAzure(raw azinventory.RawAzure) InventoryCoverage {
+	c := InventoryCoverage{Notes: map[string]string{}}
+
+	if len(raw.Principals) == 0 {
+		c.Notes["identity"] = "no principals in the snapshot — no managed identity, service principal " +
+			"or user can be evaluated, so no attack path can start from one. Populate `principals`."
+	}
+
+	if len(raw.RoleAssignments) == 0 {
+		c.Notes["privilege-escalation"] = "no role assignments in the snapshot, so no ARM escalation " +
+			"can be computed. The `admin` flag records who ALREADY is an administrator; it cannot " +
+			"answer who can BECOME one. Populate `role_assignments` (and `role_definitions` for custom " +
+			"roles, `deny_assignments` where they exist)."
+	} else if unknown := azinventory.UnknownRoles(raw); len(unknown) > 0 {
+		// The firm-allow rule means an escalation through a role we lack the definition for is NOT
+		// reported. That silence under-reports exactly the principals somebody granted a bespoke role
+		// to, which is where the interesting permissions usually live.
+		c.Notes["unresolved-roles"] = fmt.Sprintf(
+			"%d custom role(s) are assigned but their definitions were not supplied, so what they "+
+				"permit is unknown and no escalation was computed through them — not absent, UNREAD: %s. "+
+				"Populate `role_definitions` for these.", len(unknown), strings.Join(unknown, ", "))
+	}
+
+	// ALWAYS declared, because this ingest has no field for it at all. A gap that can never be closed
+	// by sending more of the same document has to be stated on every snapshot, or its absence reads
+	// as a clean directory.
+	c.Notes["entra-directory"] = "this snapshot carries the ARM plane only. Entra (Azure AD) is a " +
+		"SEPARATE authorization plane — Graph application permissions, privileged directory roles and " +
+		"service-principal ownership — and an attacker who takes the tenant through Entra never " +
+		"touches an ARM role assignment. Nothing here evaluates it, so an empty Entra result is not a " +
+		"finding about the directory."
+
+	// Reachability is the other half of a path: with no VMs or storage, nothing is exposed and every
+	// escalation leads nowhere in particular.
+	if len(raw.VMs)+len(raw.Storage) == 0 {
+		c.Notes["exposure"] = "no VMs or storage accounts in the snapshot — internet reachability and " +
+			"public-data exposure are derived from those, so with none present nothing reads as " +
+			"exposed whether or not it is. Populate `vms` and `storage`."
+	}
+	return c
 }
