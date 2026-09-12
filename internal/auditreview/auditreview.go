@@ -34,57 +34,44 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
 // Verdict is what a reviewer decided about one finding's place in the signed report.
-type Verdict string
+//
+// ALIASES of the stored types in pkg/platform, not copies — the store may not import an internal
+// package, and a mirrored struct would be two types free to drift apart with the drift landing in a
+// certificate. One type, two names.
+type Verdict = platform.AuditVerdict
 
 const (
 	// VerdictPending is the zero value — nobody has looked at this finding yet.
-	VerdictPending Verdict = ""
-	// VerdictInclude puts the finding in the report as the engine reported it.
-	VerdictInclude Verdict = "include"
-	// VerdictExclude keeps it OUT of the report. It never deletes it: the finding stays in the audit
-	// trail with who excluded it and why, because if the application is later compromised through an
-	// excluded finding, that record is the only thing between the auditor and negligence.
-	VerdictExclude Verdict = "exclude"
-	// VerdictReclassify keeps the finding but at the REVIEWER's severity.
-	//
-	// Named for either direction on purpose. "Downgrade" would presume one, and a reviewer who knows
-	// the application is internet-facing and holds regulated data may legitimately raise a medium.
-	// The direction is recorded (Lowered) because lowering is the risky one — it is what makes a
-	// report look better, and what a later compromise exposes.
-	VerdictReclassify Verdict = "reclassify"
+	VerdictPending    Verdict = ""
+	VerdictInclude            = platform.AuditInclude
+	VerdictExclude            = platform.AuditExclude
+	VerdictReclassify         = platform.AuditReclassify
 )
 
-func (v Verdict) Valid() bool {
+// ValidVerdict reports whether v is one of the three decisions a reviewer may take. A function
+// rather than a method, since a method cannot be declared on an aliased type from another package.
+func ValidVerdict(v Verdict) bool {
 	return v == VerdictInclude || v == VerdictExclude || v == VerdictReclassify
 }
 
 // NeedsReason reports whether this verdict may not be recorded bare. An inclusion speaks for itself —
 // the engine's evidence is the reason. Removing a finding from a signed report, or changing the
-// severity it carries, is the reviewer's own claim and has to say why.
-func (v Verdict) NeedsReason() bool { return v == VerdictExclude || v == VerdictReclassify }
+// severity it carries, is the reviewer's OWN claim and has to say why.
+func NeedsReason(v Verdict) bool { return v == VerdictExclude || v == VerdictReclassify }
 
-// Disposition is one reviewer's decision about one finding, by name and on a date.
-type Disposition struct {
-	TenantID string  `json:"tenant_id"`
-	Target   string  `json:"target"` // the application under audit
-	Key      string  `json:"key"`    // the finding key (crossdetect.DedupKey), stable across re-scans
-	Verdict  Verdict `json:"verdict"`
-	// Severity is the reviewer's severity, for a reclassification only.
-	Severity string `json:"severity,omitempty"`
-	// Lowered records that the reclassification REDUCED severity — the direction that makes a report
-	// look better, surfaced so a reader can see it was a human judgement and not the scanner's.
-	Lowered bool      `json:"lowered,omitempty"`
-	Reason  string    `json:"reason,omitempty"`
-	By      string    `json:"by"`
-	At      time.Time `json:"at"`
+// Disposition is one reviewer's decision about one finding. An alias — see Verdict.
+type Disposition = platform.AuditDisposition
+
+// DispositionID is the storage key: one decision per finding per application. A function rather
+// than a method, since Disposition is an alias of a type in another package.
+func DispositionID(d Disposition) string {
+	return strings.ToLower(strings.TrimSpace(d.Target)) + "|" + d.Key
 }
-
-// ID is the storage key: one decision per finding per application.
-func (d Disposition) ID() string { return strings.ToLower(strings.TrimSpace(d.Target)) + "|" + d.Key }
 
 // Item is one finding as the reviewer sees it: the engine's evidence, and the decision so far.
 type Item struct {
@@ -280,7 +267,7 @@ func progressDetail(p Progress) string {
 // Decide records one reviewer's verdict. It returns the disposition to store, or an error naming what
 // is missing — the refusals are the product, so they are explicit rather than silent.
 func Decide(tenantID, target, key string, v Verdict, severity, reason, by string, now time.Time) (Disposition, error) {
-	if !v.Valid() {
+	if !ValidVerdict(v) {
 		return Disposition{}, ErrVerdict
 	}
 	if strings.TrimSpace(by) == "" {
@@ -288,7 +275,7 @@ func Decide(tenantID, target, key string, v Verdict, severity, reason, by string
 		// stood behind what went into the report.
 		return Disposition{}, ErrNoReviewer
 	}
-	if v.NeedsReason() && strings.TrimSpace(reason) == "" {
+	if NeedsReason(v) && strings.TrimSpace(reason) == "" {
 		// An exclusion with no reason is indistinguishable from an oversight.
 		return Disposition{}, ErrNoReason
 	}

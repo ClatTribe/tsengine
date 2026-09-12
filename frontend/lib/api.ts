@@ -2,6 +2,8 @@ import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
   AccessReview,
+  AuditReview,
+  AuditCertificate,
   TrainingProgramme,
   Vendor,
   VendorsResponse,
@@ -508,6 +510,31 @@ export const api = {
 
   deleteVendor: (id: string) =>
     call<VendorsResponse>(`/v1/vendors/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // The per-application audit review. Blockers ride on the READ as well as the issue attempt, so a
+  // reviewer sees what stands in the way while they work rather than discovering it at the button.
+  auditReview: (target: string) =>
+    safe<AuditReview>("/v1/audit-review?target=" + encodeURIComponent(target), {
+      target, items: [],
+      progress: {
+        total: 0, reviewed: 0, pending: 0, included: 0, excluded: 0, reclassified: 0,
+        complete: false, load: { proven: 0, unproven: 0, detail: "" },
+        detail: "No findings are in scope for this application. That is NOT a completed audit.",
+      },
+    }),
+
+  // One reviewer's decision about one finding. The server refuses an unattributed decision, and a
+  // bare exclusion or reclassification — each names what is missing.
+  decideAuditFinding: (target: string, key: string, verdict: string, severity: string, reason: string) =>
+    call<AuditReview>("/v1/audit-review/disposition", {
+      method: "POST", body: JSON.stringify({ target, key, verdict, severity, reason }),
+    }),
+
+  // Issue the certificate, or get back every reason it cannot be issued (409).
+  issueAuditCertificate: (target: string, notTested: string[]) =>
+    call<AuditCertificate>("/v1/audit-review/certificate", {
+      method: "POST", body: JSON.stringify({ target, not_tested: notTested }),
+    }),
 
   // The security-awareness programme: curriculum, every person's status, and the honest summary.
   training: () =>

@@ -29,6 +29,9 @@ export const COMPLIANCE_TABS: Tab[] = [
   // produces, filed beside the policy set an auditor reads in the same sitting. It is the only tab
   // on this row that most of the company will ever open.
   { href: "/training", label: "Training" },
+  // "Audit sign-off", not "Audit review" — /audits is the external SOC 2 engagement, and two tabs
+  // whose names differ by one word would be picked at random by anyone who did not build them.
+  { href: "/audit-signoff", label: "Audit sign-off" },
 ];
 
 // CONNECTIONS — what you have connected. Inventories, not finding-views: the risk these carry already

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no cgo → keeps the static binary)
 
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (token TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -439,6 +441,22 @@ func (s *SQLite) PutTrainingCompletion(ctx context.Context, c platform.TrainingC
 }
 func (s *SQLite) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
 	return listJSON[platform.TrainingCompletion](ctx, s.db, `SELECT data FROM training WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+
+// --- audit dispositions (upsert by target|key: re-deciding replaces, never accumulates) ---
+
+func (s *SQLite) PutAuditDisposition(ctx context.Context, d platform.AuditDisposition) error {
+	dd, err := enc(d)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO auditdisp(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`,
+		d.TenantID, strings.ToLower(strings.TrimSpace(d.Target))+"|"+d.Key, dd)
+	return err
+}
+func (s *SQLite) ListAuditDispositions(ctx context.Context, tenantID string) ([]platform.AuditDisposition, error) {
+	return listJSON[platform.AuditDisposition](ctx, s.db, `SELECT data FROM auditdisp WHERE tenant_id=? ORDER BY id`, tenantID)
 }
 
 // --- vendor register (upsert by id; the durable inventory, not the findings it raises) ---

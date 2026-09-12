@@ -204,6 +204,12 @@ type Store interface {
 	PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error
 	ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error)
 
+	// Audit dispositions are one reviewer's decision per finding per application, upserted by
+	// (target|key) so re-deciding replaces rather than accumulates — a signed report must not be
+	// built from two contradictory verdicts on the same finding.
+	PutAuditDisposition(ctx context.Context, d platform.AuditDisposition) error
+	ListAuditDispositions(ctx context.Context, tenantID string) ([]platform.AuditDisposition, error)
+
 	// The vendor REGISTER — the durable third-party inventory, upserted by id so re-posting the same
 	// inventory updates each row rather than accumulating copies of it. Distinct from the FINDINGS a
 	// vendor raises: a findings list names the suppliers that failed a check and omits every

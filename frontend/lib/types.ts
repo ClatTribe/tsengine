@@ -1766,3 +1766,78 @@ export type VendorsResponse = {
     detail: string;
   };
 };
+
+// ── Audit sign-off (the review that precedes a Safe-to-Host / web security audit certificate) ────
+// The reviewer decides, finding by finding, what goes into a document they put their name on. The
+// load split is the point: `proven` findings carry evidence a predicate produced, so the reviewer is
+// checking the engine's work; the rest they are signing on the scanner's word.
+
+export type AuditVerdict = "" | "include" | "exclude" | "reclassify";
+
+export type AuditItem = {
+  key: string;
+  finding_id: string;
+  title: string;
+  severity: string;
+  endpoint?: string;
+  rule_id?: string;
+  cwe?: string[];
+  owasp?: string[];
+  rung?: string;
+  confidence?: number;
+  /** A predicate RAN and held — exploited, or confirmed by the provider's own evaluator. */
+  proven: boolean;
+  effective_severity: string;
+  verdict: AuditVerdict;
+  reason?: string;
+  by?: string;
+  at?: string;
+  /** The reclassification REDUCED severity — the direction that makes a report look better. */
+  lowered?: boolean;
+};
+
+export type AuditLoad = {
+  proven: number;
+  unproven: number;
+  detail: string;
+};
+
+export type AuditProgress = {
+  total: number;
+  reviewed: number;
+  pending: number;
+  included: number;
+  excluded: number;
+  reclassified: number;
+  /** True only when EVERY finding has a decision — never for an empty review. */
+  complete: boolean;
+  load: AuditLoad;
+  detail: string;
+};
+
+/** One reason a certificate cannot be issued yet. */
+export type AuditBlocker = { kind: string; detail: string };
+
+export type AuditReview = {
+  target: string;
+  standard?: string;
+  items: AuditItem[];
+  progress: AuditProgress;
+  blockers?: AuditBlocker[];
+};
+
+export type AuditCertificate = {
+  target: string;
+  standard?: string;
+  auditor: string;
+  firm?: string;
+  capacity?: string;
+  issued_at: string;
+  findings_reviewed: number;
+  included: number;
+  excluded: number;
+  open_by_severity?: Record<string, number>;
+  not_tested?: string[];
+  statement: string;
+  engine?: string;
+};
