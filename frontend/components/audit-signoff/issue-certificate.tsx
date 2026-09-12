@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Stamp, Loader2, Ban } from "lucide-react";
+import { Stamp, Loader2, Ban, Download } from "lucide-react";
 import type { AuditBlocker } from "@/lib/types";
 import { issueCertificate } from "@/app/(app)/audit-signoff/actions";
 
@@ -93,6 +93,38 @@ export function IssueCertificate({
         </span>
       </div>
       {err && <p className="text-xs text-high">{err}</p>}
+
+      {/* The DOCUMENT — served signed by the platform key, never while a blocker stands. The links
+          are shown only once the audit is certifiable, because a download button that returns a
+          409 is the click-and-see loop the blockers list above exists to remove. */}
+      {!blocked && complete && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          <a
+            href={docHref("html")}
+            target="_blank"
+            rel="noreferrer"
+            title="Print-ready certificate (save as PDF), signed by the platform key on download"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted transition hover:border-border-strong hover:text-ink"
+          >
+            <Download className="h-3.5 w-3.5" /> Certificate (print)
+          </a>
+          <a
+            href={docHref("md")}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted transition hover:border-border-strong hover:text-ink"
+          >
+            <Download className="h-3.5 w-3.5" /> Markdown
+          </a>
+          <span className="text-[11px] text-faint">Each download is attested (SHA-256 + ed25519) and recorded in the ledger.</span>
+        </div>
+      )}
     </section>
   );
+
+  // The auditor's own coverage limits ride on the download too, so the document and the JSON
+  // issue carry the same "not covered" list.
+  function docHref(format: "html" | "md"): string {
+    const q = new URLSearchParams({ target, format });
+    for (const n of notTested.split("\n").map((s) => s.trim()).filter(Boolean)) q.append("not_tested", n);
+    return `/api/audit-certificate?${q.toString()}`;
+  }
 }

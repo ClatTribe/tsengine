@@ -216,6 +216,12 @@ func (d Deps) certifyOptions(r *http.Request, tenantID, target, auditor string) 
 	}
 	opt.NotTested = d.auditNotTested(r, tenantID, target)
 	opt.Resolved = d.auditResolved(r, tenantID, target)
+	// Scope coverage from the SAME helpers the VAPT report uses, so the certificate can never be
+	// issued for a target the report refuses to rate: no completed scan behind it, or a scan that
+	// lost a tool. A finding list says nothing about either.
+	opt.Untested = d.untestedScope(r.Context(), tenantID, []string{target})
+	opt.PartiallyAssessed = d.partiallyAssessedScope(r.Context(), tenantID, []string{target})
+	opt.Brand = d.tenantBrand(r, tenantID)
 	return opt
 }
 

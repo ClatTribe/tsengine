@@ -50,6 +50,19 @@ type Certificate struct {
 	// re-running a finding needs to know what produced it, and the firm's brand on the prose does
 	// not change what ran.
 	Engine string `json:"engine,omitempty"`
+	// Brand is the name the document's chrome carries — the white-label when the tenant has one.
+	// Prose only; Engine above is the provenance and is never replaced.
+	Brand string `json:"brand,omitempty"`
+
+	// ID is content-derived from the target, the auditor and the day of issue, so a re-download of
+	// the same audit on the same day is the same document and a re-issue on another day is another.
+	ID string `json:"id,omitempty"`
+	// ValidUntil is a CEILING, not a promise: the certificate describes the application on the date
+	// of issue, and a change to it voids the statement earlier than this date.
+	ValidUntil time.Time `json:"valid_until,omitzero"`
+	// Attestation is the platform key's signature over the body (certificate_render.go). Nil on the
+	// JSON preview; set only when the document is served.
+	Attestation *Attestation `json:"attestation,omitempty"`
 }
 
 // Blocker is one reason a certificate cannot be issued yet.
@@ -76,6 +89,15 @@ type CertifyOptions struct {
 	// Resolved marks finding keys a re-test proved closed. The tender flow is draft → remediate →
 	// re-test → final → certificate, so by issue time the serious ones should be here.
 	Resolved map[string]bool
+	// Untested / PartiallyAssessed are the scope-coverage facts the caller reads from the SAME
+	// helpers the VAPT report uses: the target has no completed scan behind it at all, or its last
+	// scan lost a tool. A finding list scoped to a target says nothing about either — findings can
+	// arrive by import, and a scan missing half its tools still lands what the survivors found — and
+	// a certificate is a stronger claim than the "Clear" rating the report already refuses on them.
+	Untested          []string
+	PartiallyAssessed []string
+	// Brand is the tenant's white-label for the document's chrome (never the Engine provenance).
+	Brand string
 }
 
 // Certify issues the certificate, or returns every reason it cannot.
@@ -126,6 +148,16 @@ func Certify(r Review, opt CertifyOptions, now time.Time) (*Certificate, []Block
 			plural(len(unresolved), "finding is", "findings are") + " open at or above " + floor +
 				" and no re-test has shown them closed: " + strings.Join(unresolved, "; ") + "."})
 	}
+	if n := len(opt.Untested); n > 0 {
+		blockers = append(blockers, Blocker{"scope_untested",
+			plural(n, "target has", "targets have") + " no completed scan behind them, so nothing can be certified about them: " +
+				strings.Join(opt.Untested, ", ") + ". Run a scan against the application first."})
+	}
+	if n := len(opt.PartiallyAssessed); n > 0 {
+		blockers = append(blockers, Blocker{"scope_partial",
+			plural(n, "target was", "targets were") + " scanned with tools missing, so the assessment is incomplete: " +
+				strings.Join(opt.PartiallyAssessed, ", ") + ". Re-run the scan cleanly before certifying."})
+	}
 
 	if len(blockers) > 0 {
 		return nil, blockers
@@ -139,7 +171,10 @@ func Certify(r Review, opt CertifyOptions, now time.Time) (*Certificate, []Block
 		Included:         r.Progress.Included + r.Progress.Reclassified,
 		Excluded:         r.Progress.Excluded,
 		NotTested:        append([]string(nil), opt.NotTested...),
+		Engine:           "tsengine (TensorShield)", Brand: strings.TrimSpace(opt.Brand),
+		ValidUntil: now.UTC().Add(certificateValidity),
 	}
+	c.ID = issueID(c.Target, c.Auditor, c.IssuedAt)
 	if len(open) > 0 {
 		c.OpenBySeverity = open
 	}
