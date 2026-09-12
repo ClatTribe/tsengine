@@ -69,6 +69,29 @@ func TestAuditSignoffShowsEveryBlockerBeforeTheButtonIsPressed(t *testing.T) {
 	}
 }
 
+// THE COMMERCIAL TERM ON SCREEN. Every tender this SKU serves pays 100% on acceptance and never in
+// advance, and the server computes the amount due from the order's status. A panel that derived a
+// figure of its own — price × "certificate issued" — would invoice work the buyer has not accepted,
+// on the one page an operator raises invoices from.
+func TestAuditSignoffOrderPanelStatesOnlyTheServersAmountDue(t *testing.T) {
+	panel := stripComments(frontendFile(t, "components", "audit-signoff", "order-panel.tsx"))
+
+	if !strings.Contains(panel, "amount_due_inr") {
+		t.Error("the order panel never renders the server's amount_due_inr — the one figure that " +
+			"encodes 'nothing is owed before acceptance'")
+	}
+	if !strings.Contains(panel, "no advance") {
+		t.Error("the panel does not state the no-advance term where the order is opened")
+	}
+	if strings.Contains(panel, "price_inr *") || strings.Contains(panel, "* order.price_inr") {
+		t.Error("the panel computes money from the price itself; the amount due is the server's to say")
+	}
+	page := stripComments(frontendFile(t, "app", "(app)", "audit-signoff", "page.tsx"))
+	if !strings.Contains(page, "OrderPanel") {
+		t.Error("the desk does not show the order, so the reviewer cannot see what this application is being charged")
+	}
+}
+
 // An exclusion is not a deletion, and a bulk control would turn the one decision that cannot be
 // automated into a single click.
 func TestAuditSignoffRefusesToMakeExclusionLookLikeTidyingUp(t *testing.T) {

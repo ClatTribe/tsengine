@@ -81,6 +81,8 @@ func (d Deps) handleAuditCertificateDocument(w http.ResponseWriter, r *http.Requ
 				"firm": cert.Firm, "capacity": cert.Capacity, "sha256": cert.Attestation.SHA256, "format": q.Get("format")},
 			"signed Safe-to-Host certificate served as a document")
 	}
+	// Same bookkeeping as the POST door: the order for this target advances to certified.
+	d.markAuditOrdersCertified(r.Context(), tenantID, cert.Target, cert.ID, now)
 	switch q.Get("format") {
 	case "md":
 		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")

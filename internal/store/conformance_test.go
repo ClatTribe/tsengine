@@ -95,6 +95,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.ReplaceEmployees(ctx, tid, "merge", []platform.Employee{{TenantID: tid, Source: "merge", ID: tid + "-emp", WorkEmail: tid + "@example.com"}}))
 	must(s.PutTrainingCompletion(ctx, platform.TrainingCompletion{TenantID: tid, ID: tid + "-tc", Subject: tid + "@example.com", ModuleID: "phishing", Tier: platform.TrainingDelivered}))
 	must(s.PutAuditDisposition(ctx, platform.AuditDisposition{TenantID: tid, Target: "https://" + tid + ".example", Key: "rule|ep", Verdict: platform.AuditInclude, By: "Ada"}))
+	must(s.PutAuditOrder(ctx, platform.AuditOrder{TenantID: tid, ID: tid + "-order", Target: "https://" + tid + ".example", PriceINR: 49999, Status: platform.AuditOrderOpen}))
 	must(s.PutVendor(ctx, platform.Vendor{TenantID: tid, ID: tid + "-vendor", Name: tid + " Supplier", DataAccess: platform.VendorDataPII}))
 }
 
@@ -233,6 +234,14 @@ func TestStoreConformance(t *testing.T) {
 				orFail(t, err)
 				if len(ads) != 1 || ads[0].TenantID != tid {
 					t.Errorf("ISOLATION audit dispositions[%s]: %+v", tid, ads)
+				}
+
+				// An audit order is what one firm charges one client. Leaked, it is a competitor's
+				// price list and pipeline.
+				aos, err := s.ListAuditOrders(ctx, tid)
+				orFail(t, err)
+				if len(aos) != 1 || aos[0].TenantID != tid {
+					t.Errorf("ISOLATION audit orders[%s]: %+v", tid, aos)
 				}
 
 				// GetAction is tenant-scoped: t1's action id is invisible to t2.

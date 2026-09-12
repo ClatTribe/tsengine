@@ -290,7 +290,7 @@ func (s *Service) applyAssetCap(ctx context.Context, tenantID string, discovered
 	if err != nil {
 		return discovered, nil
 	}
-	lim := platform.Entitlements(t.Plan)
+	lim := platform.EntitlementsFor(t) // through the tenant: the per-application tier's cap is a purchased count
 	if lim.MaxAssets < 0 {
 		return discovered, nil
 	}

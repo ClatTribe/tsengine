@@ -138,6 +138,7 @@ const FAQ = [
   ["Do I need a security engineer to use it?", "No — that's the point. TensorShield does the security engineer's and the compliance manager's work, and only pulls you in to approve anything consequential. Built for a non-technical founder or ops lead."],
   ["What does \"human in the loop\" mean?", "Low-risk fixes apply automatically. Anything consequential (a config change, an identity action) waits for one tap of your approval — and every decision, automated or human, is signed into a tamper-evident ledger."],
   ["What if I'd rather not run it at all?", "Have it fully managed. Our security expert — or your MSP / consultancy partner — operates TensorShield for you: they triage, approve, and sign off, and you get the outcome plus named accountability. Same engine and signed evidence, priced per engagement."],
+  ["Is there a per-application price for a government portal audit?", "Yes. The Safe-to-Host audit is ₹49,999 per application + GST: the full scan, exploitation proof from the AI Pentester, a reviewer's desk where a named auditor decides every finding, the re-test after remediation, and the signed certificate. It is invoiced only when the buyer accepts the certificate — no advance — which is the term public-sector tenders set. CERT-In empanelment is the auditing firm's credential, not the product's; empanelled firms run it per client and their auditor's name goes on the certificate."],
   ["Can auditors trust the evidence?", "Every finding cites the tool that proves it, and every compliance pack is cryptographically signed and pinned to the exact state it was assessed against — reproducible proof, not screenshots."],
 ];
 
@@ -357,6 +358,58 @@ export default function Pricing() {
           open-source scanners (no AI cost on our side), so we never have to take it away.</span> Annual billing
           on Core saves ~2 months. The signed decision ledger is on every plan.
         </p>
+      </section>
+
+      {/* THE PER-APPLICATION SKU. Not a subscription. Nine Indian public-sector VAPT tenders read in
+          2026-09 (ORGI, IIM Ranchi, C-DAC, NIACL, Zilla Bank…) all buy the same thing: a web-application
+          audit against OWASP Top 10 by a CERT-In-empanelled auditor, remediation support, a re-test, and
+          the Safe-to-Host certificate NIC needs before go-live — priced per application at roughly
+          ₹40–60k at the small end, paid 100% on acceptance, never in advance. This card is that offer,
+          in those terms. The price mirrors pkg/platform/plan.go AuditListPriceINR — change both.
+          What it does NOT claim: CERT-In empanelment. That is the auditing FIRM's credential; the
+          product is what the empanelled firm runs, and the certificate names their auditor. */}
+      <section className="mx-auto max-w-4xl px-5 pb-2 pt-12">
+        <Reveal className="rounded-2xl border border-border bg-surface px-6 py-7">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-xl">
+              <span className="inline-flex items-center rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-muted">
+                For audit firms &amp; government portal owners
+              </span>
+              <h2 className="mt-3 text-lg font-semibold tracking-tight">Per application — the Safe-to-Host audit</h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                One application, one price, one certificate. The full scan, the AI Pentester&rsquo;s exploitation
+                proof, a reviewer&rsquo;s desk where a named auditor decides every finding, the re-test after
+                remediation, and the signed Safe-to-Host certificate a data centre accepts before go-live.
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-ink">
+                {[
+                  "Assessed against OWASP Top 10 (2021), mapped to ISO 27001 and CERT-In",
+                  "Re-test included — the certificate issues only when nothing serious remains open",
+                  "Invoiced only when the buyer accepts the certificate. No advance.",
+                  "Your firm's name on the certificate; the engine named as provenance",
+                ].map((f) => (
+                  <li key={f} className="flex items-start gap-2.5">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-pulse" /> {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="shrink-0 rounded-xl border border-border bg-surface-2 p-5 text-center sm:w-56">
+              <div className="text-3xl font-semibold tracking-tight">₹49,999</div>
+              <div className="mt-1 text-xs text-muted">per application + GST</div>
+              <div className="mt-1 text-[11px] text-faint">payable on acceptance</div>
+              <Link
+                href="/demo?plan=audit"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover"
+              >
+                Order an audit <ArrowRight className="h-4 w-4" />
+              </Link>
+              <p className="mt-3 text-[11px] leading-relaxed text-faint">
+                CERT-In empanelment belongs to the auditing firm. Empanelled firms run this per client.
+              </p>
+            </div>
+          </div>
+        </Reveal>
       </section>
 
       {/* The three GTM models (§18.5) live canonically on /partners now. Pricing keeps a compact pointer:

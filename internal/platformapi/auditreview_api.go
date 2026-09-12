@@ -162,6 +162,8 @@ func (d Deps) handleAuditCertificate(w http.ResponseWriter, r *http.Request, ten
 				"findings_reviewed": cert.FindingsReviewed, "excluded": cert.Excluded},
 			"Safe-to-Host / web application security audit certificate")
 	}
+	// The per-application order for this target, if any, advances to certified — nothing is due yet.
+	d.markAuditOrdersCertified(r.Context(), tenantID, cert.Target, cert.ID, cert.IssuedAt)
 	writeJSON(w, http.StatusOK, cert)
 }
 

@@ -4,6 +4,8 @@ import type {
   AccessReview,
   AuditReview,
   AuditCertificate,
+  AuditOrder,
+  AuditOrdersResponse,
   TrainingProgramme,
   Vendor,
   VendorsResponse,
@@ -535,6 +537,14 @@ export const api = {
     call<AuditCertificate>("/v1/audit-review/certificate", {
       method: "POST", body: JSON.stringify({ target, not_tested: notTested }),
     }),
+
+  // The per-application SKU: orders, what is due NOW (zero until accepted), and the list price.
+  auditOrders: () =>
+    safe<AuditOrdersResponse>("/v1/audit-orders", { orders: [], list_price_inr: 0, amount_due_inr: 0 }),
+  createAuditOrder: (target: string, note?: string) =>
+    call<AuditOrder>("/v1/audit-orders", { method: "POST", body: JSON.stringify({ target, note: note ?? "" }) }),
+  acceptAuditOrder: (id: string, by: string) =>
+    call<AuditOrder>(`/v1/audit-orders/${encodeURIComponent(id)}/accept`, { method: "POST", body: JSON.stringify({ by }) }),
 
   // The security-awareness programme: curriculum, every person's status, and the honest summary.
   training: () =>

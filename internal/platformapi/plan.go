@@ -16,7 +16,8 @@ func (d Deps) planLimits(ctx context.Context, tenantID string) platform.PlanLimi
 	if err != nil {
 		return platform.Entitlements(platform.PlanFree)
 	}
-	return platform.Entitlements(t.Plan)
+	// Through the tenant, not the plan string: the per-application tier's cap is a purchased count.
+	return platform.EntitlementsFor(t)
 }
 
 // upgradeContactPath is where a plan-blocked customer is sent. Kept in one place so the API
@@ -47,6 +48,10 @@ func (d Deps) handleSetTenantPlan(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Plan string `json:"plan"`
 		Note string `json:"note,omitempty"` // order / invoice reference, for the audit trail
+		// AuditApplications is the number of applications purchased under the per-application
+		// tier — its asset cap. Ignored on every other tier. Absent means 0: an audit plan set
+		// without a count allows no targets, because "some" is not a number anybody paid for.
+		AuditApplications int `json:"audit_applications,omitempty"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil || body.Plan == "" {
 		writeJSON(w, http.StatusBadRequest, errBody(`a plan is required, e.g. {"plan":"growth"}`))
@@ -67,6 +72,17 @@ func (d Deps) handleSetTenantPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	before := t.Plan
 	t.Plan = canonical
+	if body.AuditApplications < 0 {
+		writeJSON(w, http.StatusBadRequest, errBody("audit_applications cannot be negative"))
+		return
+	}
+	// The purchased count belongs to the audit tier alone; on any other tier it is cleared so a
+	// later switch back to audit starts from what was actually bought then, not a stale figure.
+	if platform.NormalizePlan(canonical) == platform.PlanAudit {
+		t.AuditApplications = body.AuditApplications
+	} else {
+		t.AuditApplications = 0
+	}
 	if err := d.Store.PutTenant(r.Context(), t); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
@@ -76,11 +92,13 @@ func (d Deps) handleSetTenantPlan(w http.ResponseWriter, r *http.Request) {
 	if d.Recorder != nil {
 		d.Recorder.Record("tenant plan changed", "billing", map[string]any{
 			"tenant_id": id, "from": before, "to": canonical, "note": body.Note,
-			"at": time.Now().UTC().Format(time.RFC3339),
+			"audit_applications": t.AuditApplications,
+			"at":                 time.Now().UTC().Format(time.RFC3339),
 		}, "operator plan change")
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tenant_id": id, "plan": canonical, "previous_plan": before,
-		"entitlements": platform.Entitlements(canonical),
+		"audit_applications": t.AuditApplications,
+		"entitlements":       platform.EntitlementsFor(t),
 	})
 }

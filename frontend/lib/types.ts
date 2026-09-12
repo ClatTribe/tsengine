@@ -1818,6 +1818,27 @@ export type AuditProgress = {
 /** One reason a certificate cannot be issued yet. */
 export type AuditBlocker = { kind: string; detail: string };
 
+/** The per-application SKU's unit of sale. amount_due_inr is the SERVER's figure — zero until accepted. */
+export type AuditOrder = {
+  tenant_id: string;
+  id: string;
+  target: string;
+  price_inr: number;
+  status: "open" | "certified" | "accepted" | "invoiced";
+  note?: string;
+  created_at: string;
+  created_by?: string;
+  certificate_id?: string;
+  certified_at?: string;
+  accepted_by?: string;
+  accepted_at?: string;
+  invoice_ref?: string;
+  invoiced_at?: string;
+  amount_due_inr: number;
+};
+
+export type AuditOrdersResponse = { orders: AuditOrder[]; list_price_inr: number; amount_due_inr: number };
+
 export type AuditReview = {
   target: string;
   standard?: string;

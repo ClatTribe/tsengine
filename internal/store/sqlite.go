@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TE
 CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS auditorders (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (token TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -457,6 +458,16 @@ func (s *SQLite) PutAuditDisposition(ctx context.Context, d platform.AuditDispos
 }
 func (s *SQLite) ListAuditDispositions(ctx context.Context, tenantID string) ([]platform.AuditDisposition, error) {
 	return listJSON[platform.AuditDisposition](ctx, s.db, `SELECT data FROM auditdisp WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+
+// --- audit orders (the per-application SKU; upsert by id, status advances in place) ---
+
+func (s *SQLite) PutAuditOrder(ctx context.Context, o platform.AuditOrder) error {
+	return s.upsertTID(ctx, `INSERT INTO auditorders(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, o.TenantID, o.ID, o)
+}
+func (s *SQLite) ListAuditOrders(ctx context.Context, tenantID string) ([]platform.AuditOrder, error) {
+	return listJSON[platform.AuditOrder](ctx, s.db, `SELECT data FROM auditorders WHERE tenant_id=? ORDER BY rowid`, tenantID)
 }
 
 // --- vendor register (upsert by id; the durable inventory, not the findings it raises) ---

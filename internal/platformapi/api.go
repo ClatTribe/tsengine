@@ -413,13 +413,18 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/audit-review/disposition", d.auth(d.handleAuditDisposition))        // one reviewer's decision about one finding
 	mux.HandleFunc("POST /v1/audit-review/certificate", d.auth(d.handleAuditCertificate))        // issue the Safe-to-Host certificate, or return every blocker
 	mux.HandleFunc("GET /v1/audit-review/certificate", d.auth(d.handleAuditCertificateDocument)) // the certificate as a SIGNED document (html/md/json): 409 + blockers if not certifiable, 501 with no signing key
-	mux.HandleFunc("GET /v1/training", d.auth(d.handleTraining))                                 // security-awareness programme: curriculum, per-person status, honest summary
-	mux.HandleFunc("POST /v1/training/complete", d.auth(d.handleTrainingComplete))               // the SIGNED-IN person confirms they read a module we rendered
-	mux.HandleFunc("POST /v1/training/record", d.auth(d.handleTrainingRecord))                   // a named human records training completed ELSEWHERE
-	mux.HandleFunc("GET /v1/access-review", d.auth(d.handleRecertify))                           // SOC 2 CC6.2/6.3 periodic access review
-	mux.HandleFunc("POST /v1/access-review/decide", d.auth(d.handleRecertifyDecide))             // a NAMED human keeps or removes access
-	mux.HandleFunc("GET /v1/readiness/checklist", d.auth(d.handleReadinessChecklist))            // staged CTO practice checklist, resolved against real state
-	mux.HandleFunc("POST /v1/readiness/stage", d.auth(d.handleSetStage))                         // the one onboarding question: what stage are you
+	// The per-application SKU: one order per application, paid on acceptance of its certificate, never in advance.
+	mux.HandleFunc("GET /v1/audit-orders", d.auth(d.handleListAuditOrders))                                          // the tenant's orders + what is due NOW (zero until accepted)
+	mux.HandleFunc("POST /v1/audit-orders", d.auth(d.handleCreateAuditOrder))                                        // open an order for one application at the list or agreed price
+	mux.HandleFunc("POST /v1/audit-orders/{id}/accept", d.auth(d.handleAcceptAuditOrder))                            // the buyer's named acceptance of the certificate — the payment event
+	mux.HandleFunc("POST /v1/tenants/{tenant}/audit-orders/{id}/invoice", d.platformAuth(d.handleInvoiceAuditOrder)) // OPERATOR: record the invoice on an accepted order
+	mux.HandleFunc("GET /v1/training", d.auth(d.handleTraining))                                                     // security-awareness programme: curriculum, per-person status, honest summary
+	mux.HandleFunc("POST /v1/training/complete", d.auth(d.handleTrainingComplete))                                   // the SIGNED-IN person confirms they read a module we rendered
+	mux.HandleFunc("POST /v1/training/record", d.auth(d.handleTrainingRecord))                                       // a named human records training completed ELSEWHERE
+	mux.HandleFunc("GET /v1/access-review", d.auth(d.handleRecertify))                                               // SOC 2 CC6.2/6.3 periodic access review
+	mux.HandleFunc("POST /v1/access-review/decide", d.auth(d.handleRecertifyDecide))                                 // a NAMED human keeps or removes access
+	mux.HandleFunc("GET /v1/readiness/checklist", d.auth(d.handleReadinessChecklist))                                // staged CTO practice checklist, resolved against real state
+	mux.HandleFunc("POST /v1/readiness/stage", d.auth(d.handleSetStage))                                             // the one onboarding question: what stage are you
 	mux.HandleFunc("POST /v1/readiness/attest/{id}", d.auth(d.handleAttest))
 	mux.HandleFunc("POST /v1/readiness/fix/{id}", d.auth(d.handleReadinessFix)) // a gap row hands its findings to the proposer → the same approval desk          // a named human answers what no scan can see
 	mux.HandleFunc("POST /v1/import", d.auth(d.handleImportScan))               // a customer's EXISTING Snyk/Dependabot/SARIF backlog

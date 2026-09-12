@@ -321,6 +321,13 @@ func (f *File) PutAuditDisposition(ctx context.Context, d platform.AuditDisposit
 	return f.persist()
 }
 
+func (f *File) PutAuditOrder(ctx context.Context, o platform.AuditOrder) error {
+	if err := f.Memory.PutAuditOrder(ctx, o); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutVendor(ctx context.Context, v platform.Vendor) error {
 	if err := f.Memory.PutVendor(ctx, v); err != nil {
 		return err

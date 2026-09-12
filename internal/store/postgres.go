@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS apps        (seq BIGSERIAL, tenant_id TEXT, provider 
 CREATE TABLE IF NOT EXISTS employees   (seq BIGSERIAL, tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS auditorders (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (seq BIGSERIAL, id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (seq BIGSERIAL, token TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -431,6 +432,20 @@ func (p *Postgres) PutAuditDisposition(ctx context.Context, d platform.AuditDisp
 }
 func (p *Postgres) ListAuditDispositions(ctx context.Context, tenantID string) ([]platform.AuditDisposition, error) {
 	return listJSON[platform.AuditDisposition](ctx, p.db, pgRebind(`SELECT data FROM auditdisp WHERE tenant_id=? ORDER BY id`), tenantID)
+}
+
+// --- audit orders (the per-application SKU; upsert by id, status advances in place) ---
+
+func (p *Postgres) PutAuditOrder(ctx context.Context, o platform.AuditOrder) error {
+	d, err := enc(o)
+	if err != nil {
+		return err
+	}
+	return p.exec(ctx, `INSERT INTO auditorders(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=EXCLUDED.data`, o.TenantID, o.ID, d)
+}
+func (p *Postgres) ListAuditOrders(ctx context.Context, tenantID string) ([]platform.AuditOrder, error) {
+	return listJSON[platform.AuditOrder](ctx, p.db, pgRebind(`SELECT data FROM auditorders WHERE tenant_id=? ORDER BY seq`), tenantID)
 }
 
 // --- vendor register (upsert by id; the durable inventory, not the findings it raises) ---
