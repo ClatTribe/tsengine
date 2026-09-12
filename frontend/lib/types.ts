@@ -933,6 +933,9 @@ export interface User {
   role: string; // "owner" | "member" | "auditor" | "employee"
   created_at: string;
   must_change_password?: boolean; // invited member with a temp password; app is gated until they rotate it
+  /** The workspace's display name, carried on /v1/auth/me because every seat may read that endpoint
+   *  and an employee seat may read nothing else about the workspace. */
+  tenant_name?: string;
 }
 
 // Public Trust Center aggregate (safe projection — coverage only, never findings).

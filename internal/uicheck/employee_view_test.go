@@ -65,3 +65,14 @@ func TestProgramPageGivesAnEmployeeOnlyPublishedPoliciesToAcknowledge(t *testing
 		t.Error("PolicyRow renders PublishButton to a reader when a draft reaches it")
 	}
 }
+
+// The employee shell's heading is the workspace NAME, from /v1/auth/me — the one workspace fact
+// every seat may read. The session's tenant field is the ID; rendered as the heading it was a hex
+// string where the company name belongs, and it stays only as the fallback.
+func TestEmployeeShellIsHeadedByTheWorkspaceNameNotTheTenantID(t *testing.T) {
+	src := stripComments(frontendFile(t, "app", "(app)", "layout.tsx"))
+	if !strings.Contains(src, "<EmployeeShell name={me.tenant_name || session.tenant}>") {
+		t.Error("the employee shell is not headed by me.tenant_name (falling back to the session's id); " +
+			"an employee would see the tenant ID as their company")
+	}
+}

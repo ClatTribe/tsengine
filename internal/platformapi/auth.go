@@ -165,7 +165,23 @@ func (d Deps) handleMe(w http.ResponseWriter, r *http.Request, s platform.Sessio
 		return
 	}
 	u.PasswordHash = ""
-	writeJSON(w, http.StatusOK, u)
+	// The workspace NAME rides with the person. The employee seat is refused GET /v1/tenant
+	// (everything about the estate is), so its shell was rendering the tenant ID as the heading —
+	// a hex string where a company name belongs. The name is not estate data; it is the one fact
+	// about the workspace every seat is entitled to, and this is the endpoint every seat can read.
+	// Best-effort: a tenant that cannot be loaded leaves the field empty and the caller falls back.
+	name := ""
+	if t, terr := d.Store.GetTenant(r.Context(), s.TenantID); terr == nil {
+		name = t.Name
+	}
+	writeJSON(w, http.StatusOK, meResponse{User: u, TenantName: name})
+}
+
+// meResponse is the signed-in user plus the workspace name (flat JSON: the User fields at the top
+// level, unchanged for every existing reader, and tenant_name beside them).
+type meResponse struct {
+	platform.User
+	TenantName string `json:"tenant_name,omitempty"`
 }
 
 // handleTeam lists the tenant's members, oldest first, with password hashes redacted.

@@ -66,6 +66,18 @@ func TestAuth_SignupLoginSessionFlow(t *testing.T) {
 	if strings.Contains(rec.Body.String(), "pbkdf2") {
 		t.Errorf("/me leaked the password hash")
 	}
+	// --- /me carries the workspace NAME: the employee seat is refused /v1/tenant, and its shell
+	// was rendering the tenant ID as the heading for want of this field ---
+	var me struct {
+		Email      string `json:"email"`
+		TenantName string `json:"tenant_name"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &me); err != nil || me.Email != "ada@globex.io" {
+		t.Fatalf("/me shape changed (User fields must stay at the top level): %s", rec.Body.String())
+	}
+	if me.TenantName != "Globex" {
+		t.Errorf("/me tenant_name = %q, want the workspace name", me.TenantName)
+	}
 
 	// --- login: wrong password and unknown email both 401 with the same message ---
 	bad := postJSON(h, "/v1/auth/login", "", `{"email":"ada@globex.io","password":"nope"}`)
