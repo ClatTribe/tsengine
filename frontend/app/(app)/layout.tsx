@@ -36,11 +36,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // links that render blank. Blank reads as "my data vanished" rather than "this is not for you",
   // which is the same confusion the stale-session redirect above exists to prevent. Returning early
   // also means an employee's page load makes two API calls instead of nine.
-  // The workspace NAME comes from the session rather than GET /v1/tenant, which this account is also
-  // refused: asking for it would be a 403 to render a heading, and widening the allowlist to avoid
-  // that would trade the principle for a cosmetic.
+  // The workspace NAME rides on /v1/auth/me (tenant_name) rather than GET /v1/tenant, which this
+  // account is refused: asking for it would be a 403 to render a heading, and widening the
+  // allowlist to avoid that would trade the principle for a cosmetic. The session's tenant field is
+  // the ID and is only the fallback — rendered as the heading it read as a hex string where the
+  // company name belongs.
   if (me.role === "employee") {
-    return <EmployeeShell name={session.tenant}>{children}</EmployeeShell>;
+    return <EmployeeShell name={me.tenant_name || session.tenant}>{children}</EmployeeShell>;
   }
 
   // Severity COUNTS, not every finding. The shell renders on every navigation and needs one number;
