@@ -35,7 +35,17 @@ func (d Deps) handleListProgram(w http.ResponseWriter, r *http.Request, tenantID
 	if policies == nil {
 		policies = []platform.Policy{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"policies": policies, "summary": grc.SummarizeProgram(policies, teamSize)})
+	scope := trainingScopeEveryone
+	if u, ok := d.actingUser(r); ok && u.Role == platform.RoleEmployee {
+		// An employee is asked to READ AND ACCEPT the published policies. A draft is not yet asked of
+		// anyone — it is the owner's working copy — and the list of who else has acknowledged is the
+		// programme's evidence, not the employee's business. Cut here, at the server (the same rule
+		// as /v1/training): the page hiding a draft is cosmetic; the request that matters is the
+		// hand-crafted one.
+		scope = trainingScopeSelf
+		policies = policiesForEmployee(policies, d.actingEmail(r))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"policies": policies, "summary": grc.SummarizeProgram(policies, teamSize), "scope": scope})
 }
 
 // handleSeedProgram seeds the standard policy set as drafts. It upserts ONLY policies whose id does
@@ -157,4 +167,25 @@ func (d Deps) findPolicy(r *http.Request, tenantID, id string) (platform.Policy,
 		}
 	}
 	return platform.Policy{}, false
+}
+
+// policiesForEmployee is the register as an employee seat may see it: published policies only, each
+// carrying only that person's own acknowledgement. The acks list is kept (cut, not dropped) because
+// the page reads it to decide whether THIS reader has already accepted.
+func policiesForEmployee(policies []platform.Policy, email string) []platform.Policy {
+	out := []platform.Policy{}
+	for _, p := range policies {
+		if p.Status != platform.PolicyPublished {
+			continue
+		}
+		var mine []platform.PolicyAck
+		for _, a := range p.Acks {
+			if strings.EqualFold(strings.TrimSpace(a.User), email) {
+				mine = append(mine, a)
+			}
+		}
+		p.Acks = mine
+		out = append(out, p)
+	}
+	return out
 }

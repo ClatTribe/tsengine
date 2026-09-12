@@ -39,7 +39,17 @@ type trainingResponse struct {
 	// Me is the signed-in person's address, so the page can lead with what THEY owe rather than
 	// making them find their own row. Empty on the platform-token path, where there is no person.
 	Me string `json:"me,omitempty"`
+	// Scope says whose programme this is: "everyone" for a seat that administers it, "self" for an
+	// EMPLOYEE seat, which receives only its own rows. The page reads this rather than inferring it
+	// from a statuses list of length one — a company of one and a colleague's view look identical
+	// from the list alone, and only one of them should render the administration controls.
+	Scope string `json:"scope"`
 }
+
+const (
+	trainingScopeEveryone = "everyone"
+	trainingScopeSelf     = "self"
+)
 
 // handleTraining returns the curriculum, every person's status, and the honest summary.
 func (d Deps) handleTraining(w http.ResponseWriter, r *http.Request, tenantID string) {
@@ -54,13 +64,53 @@ func (d Deps) handleTraining(w http.ResponseWriter, r *http.Request, tenantID st
 		respond(w, nil, err)
 		return
 	}
+	me, scope := d.actingEmail(r), trainingScopeEveryone
+	if u, ok := d.actingUser(r); ok && u.Role == platform.RoleEmployee {
+		// An employee seat exists so a colleague can be asked to do THEIR training without being
+		// handed the security estate — and the roster's training status is part of that estate: who
+		// works here, who has not done their induction, who was recorded as trained by a vendor. The
+		// allowlist admits this endpoint because the employee needs their own rows from it; the rows
+		// are cut to that person HERE, at the server, because the page hiding them is cosmetic and
+		// the request that matters is the hand-crafted one. The roster shrinks to the one person and
+		// the completions to theirs, so the summary (and its off-roster naming) describes them alone.
+		scope = trainingScopeSelf
+		people = rosterOnly(people, me)
+		comps = completionsOf(comps, me)
+	}
 	sts := training.Evaluate(cur, people, comps, time.Now())
 	writeJSON(w, http.StatusOK, trainingResponse{
 		Curriculum: cur,
 		Summary:    training.Summarize(cur, people, sts, comps),
 		Statuses:   sts,
-		Me:         d.actingEmail(r),
+		Me:         me,
+		Scope:      scope,
 	})
+}
+
+// rosterOnly cuts the roster to one address. A person the roster does not carry (an employee seat
+// invited by hand before an HRIS was connected) is still on THEIR own roster: they were asked to do
+// the training, and a page telling them nobody is on the roster would send them to Settings they
+// cannot open.
+func rosterOnly(people []training.Person, email string) []training.Person {
+	for _, p := range people {
+		if strings.EqualFold(strings.TrimSpace(p.Email), email) {
+			return []training.Person{p}
+		}
+	}
+	if email == "" {
+		return nil
+	}
+	return []training.Person{{Email: email, Source: "users"}}
+}
+
+func completionsOf(comps []platform.TrainingCompletion, email string) []platform.TrainingCompletion {
+	var out []platform.TrainingCompletion
+	for _, c := range comps {
+		if strings.EqualFold(strings.TrimSpace(c.Subject), email) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // handleTrainingComplete records that the signed-in person read a module HERE.
@@ -156,15 +206,25 @@ func (d Deps) storeCompletion(w http.ResponseWriter, r *http.Request, tenantID s
 // actingEmail is the signed-in person's address, or "" when the request came in on the platform
 // token — which is a machine, not a person.
 func (d Deps) actingEmail(r *http.Request) string {
-	s, ok := d.resolveSession(r)
+	u, ok := d.actingUser(r)
 	if !ok {
 		return ""
 	}
+	return strings.ToLower(strings.TrimSpace(u.Email))
+}
+
+// actingUser is the signed-in person, when there is one. False on the platform-token path, which
+// is a machine.
+func (d Deps) actingUser(r *http.Request) (platform.User, bool) {
+	s, ok := d.resolveSession(r)
+	if !ok {
+		return platform.User{}, false
+	}
 	u, err := d.Store.GetUser(r.Context(), s.UserID)
 	if err != nil {
-		return ""
+		return platform.User{}, false
 	}
-	return strings.ToLower(strings.TrimSpace(u.Email))
+	return u, true
 }
 
 // trainingRoster is everyone expected to complete the curriculum. The assembly itself lives in
