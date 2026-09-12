@@ -196,9 +196,11 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/auth/me", d.sessionAuth(d.handleMe))
 	mux.HandleFunc("GET /v1/auth/team", d.sessionAuth(d.handleTeam))
 	mux.HandleFunc("POST /v1/auth/invite", d.sessionAuth(d.handleInvite))
-	mux.HandleFunc("POST /v1/auth/password", d.sessionAuth(d.handlePassword)) // change pw + clear MustChangePassword
-	mux.HandleFunc("POST /v1/auth/forgot", d.handleForgotPassword)            // start reset (public; emails a one-time link, no enumeration)
-	mux.HandleFunc("POST /v1/auth/reset", d.handleResetPassword)              // complete reset with the token
+	mux.HandleFunc("GET /v1/auth/invite-roster", d.sessionAuth(d.handleRosterInvitePreview)) // who the HRIS roster would seat, without seating anyone (owner)
+	mux.HandleFunc("POST /v1/auth/invite-roster", d.sessionAuth(d.handleRosterInvite))       // seat every active HRIS employee as an EMPLOYEE (owner; idempotent; bounded)
+	mux.HandleFunc("POST /v1/auth/password", d.sessionAuth(d.handlePassword))                // change pw + clear MustChangePassword
+	mux.HandleFunc("POST /v1/auth/forgot", d.handleForgotPassword)                           // start reset (public; emails a one-time link, no enumeration)
+	mux.HandleFunc("POST /v1/auth/reset", d.handleResetPassword)                             // complete reset with the token
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))
