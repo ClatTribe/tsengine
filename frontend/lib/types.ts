@@ -639,6 +639,10 @@ export interface ProgramSummary {
 export interface ProgramResponse {
   policies: Policy[];
   summary: ProgramSummary;
+  /** "self" for an employee seat: the server has already cut the register to published policies
+   *  carrying only this reader's own acknowledgement, and the page must not render the owner's
+   *  controls (seed, publish, the board summary) around it. "everyone" for every other seat. */
+  scope?: "self" | "everyone";
 }
 
 // Practitioner — the named human who provides the human-in-the-loop for a tenant. Capacity (who
@@ -1727,6 +1731,9 @@ export type TrainingProgramme = {
   summary: TrainingSummary;
   statuses: TrainingStatus[];
   me?: string;
+  /** "self" for an employee seat: the server returns only this person's rows, and the page renders
+   *  only their modules — no roster, no colleagues, no record-for-someone-else control. */
+  scope?: "self" | "everyone";
 };
 
 // ── Vendor register (SOC 2 CC9.2 · GDPR Art. 28 · PCI 12.8) ──────────────────────────────────────

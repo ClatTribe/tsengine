@@ -13,8 +13,41 @@ import { seedProgram } from "./actions";
 export const dynamic = "force-dynamic";
 
 export default async function ProgramPage() {
-  const [{ policies, summary }, me, practitioners] = await Promise.all([api.program(), api.me(), api.practitioners()]);
+  const [{ policies, summary, scope }, me, practitioners] = await Promise.all([api.program(), api.me(), api.practitioners()]);
   const myEmail = me?.email ?? "";
+
+  // THE EMPLOYEE'S VIEW. The server has already cut the register to published policies carrying only
+  // this reader's own acknowledgement (scope === "self"). What remains here is the frame: no seed
+  // button, no publish, no board summary of how the programme is going — each is an owner's act or
+  // an owner's number, and the API refuses this seat every one of them. Also no compliance tabs,
+  // which lead to pages this account cannot open.
+  if (scope === "self") {
+    const acked = policies.filter((p) => p.acks?.some((a) => a.user === myEmail)).length;
+    return (
+      <div className="space-y-6">
+        <PageIntro
+          icon={ScrollText}
+          title="Your policies"
+          description="The security policies everyone here is asked to read and accept. Acknowledging one records that you did, under your name and today's date — it is the read-and-accept evidence an auditor asks for."
+          right={
+            <div className="text-right text-sm">
+              <span className="text-xl font-semibold text-pulse">{acked}</span>
+              <span className="text-xs text-faint"> of {policies.length} acknowledged</span>
+            </div>
+          }
+        />
+        {policies.length === 0 ? (
+          <Empty>No policy has been published yet. There is nothing for you to acknowledge until one is.</Empty>
+        ) : (
+          <div className="space-y-2">
+            {policies.map((p) => (
+              <PolicyRow key={p.id} p={p} teamSize={0} acked={!!p.acks?.some((a) => a.user === myEmail)} reader />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
   // Service model: seeding + publishing policies is a vCISO HITL act. self_serve owns it; managed/msp =
   // the named expert publishes (your team only acknowledges), so the seed CTA + copy defer accordingly.
   const { selfOwned, actor } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);
@@ -95,7 +128,9 @@ export default async function ProgramPage() {
   );
 }
 
-function PolicyRow({ p, teamSize, acked }: { p: Policy; teamSize: number; acked: boolean }) {
+// `reader` is the employee's row: they may acknowledge, never publish, and the ack count they are
+// shown is their own (the server sent only theirs), so the programme-wide tally is not rendered.
+function PolicyRow({ p, teamSize, acked, reader = false }: { p: Policy; teamSize: number; acked: boolean; reader?: boolean }) {
   const published = p.status === "published";
   const ackCount = p.acks?.length ?? 0;
   return (
@@ -111,14 +146,14 @@ function PolicyRow({ p, teamSize, acked }: { p: Policy; teamSize: number; acked:
           <span className="text-[11px] text-faint">draft</span>
         )}
         <div className="ml-auto flex items-center gap-3">
-          {published ? <AckButton id={p.id} acked={acked} /> : <PublishButton id={p.id} />}
+          {published ? <AckButton id={p.id} acked={acked} /> : reader ? null : <PublishButton id={p.id} />}
         </div>
       </div>
       {p.summary && <p className="mt-1.5 text-xs text-muted">{p.summary}</p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-faint">
         {p.owner && <span>owner: {p.owner}</span>}
         <CapacityBadge capacity={p.capacity} firm={p.firm} />
-        {published && (
+        {published && !reader && (
           <span>
             {ackCount}
             {teamSize > 0 ? `/${teamSize}` : ""} acknowledged

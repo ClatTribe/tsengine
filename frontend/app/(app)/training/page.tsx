@@ -42,6 +42,37 @@ export default async function TrainingPage() {
   const byPerson = new Map<string, TrainingStatus[]>();
   for (const st of others) byPerson.set(st.subject, [...(byPerson.get(st.subject) ?? []), st]);
 
+  // THE EMPLOYEE'S VIEW. The server has already cut the response to this person (scope === "self"):
+  // no roster, no colleagues, no off-roster names. What is left to decide here is the frame — the
+  // compliance tabs lead to pages this seat is refused, the roster card would describe a company of
+  // one, and "Record training done elsewhere" is an administrative act about somebody else that the
+  // API refuses this account. Rendered anyway, each is a control that fails on click, and a page
+  // full of those reads as broken rather than as scoped.
+  if (data.scope === "self") {
+    const own = data.curriculum.modules.map((m) => mine.get(m.id));
+    const done = own.filter((st) => st?.state === "complete").length;
+    const due = own.filter((st) => st?.state === "expired").length;
+    return (
+      <div className="space-y-6">
+        <PageIntro
+          icon={GraduationCap}
+          title="Your security training"
+          description="Five short modules on how attacks actually reach people at work. Read each one here and confirm it — the record is made under your name, so it can only be made by you."
+        />
+        <div className="card flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
+          <Stat n={done} label="Completed" cls="text-pulse" />
+          <Stat n={due} label="Due again" cls="text-high" />
+          <Stat n={own.length - done - due} label="Not started" cls="text-accent" />
+        </div>
+        <section className="space-y-3">
+          {data.curriculum.modules.map((m) => (
+            <ModuleReader key={m.id} m={m} status={mine.get(m.id)} />
+          ))}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageTabs tabs={COMPLIANCE_TABS} />
