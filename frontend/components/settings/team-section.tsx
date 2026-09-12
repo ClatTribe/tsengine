@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus, Loader2, Copy, Check, Crown, User as UserIcon } from "lucide-react";
 import type { User } from "@/lib/types";
+import { InviteRoster } from "./invite-roster";
 
 // The Team section of Settings: lists members and (for owners) invites teammates. Invites
 // return a one-time temp password the owner shares out-of-band — shown once, copyable.
@@ -82,6 +83,10 @@ export function TeamSection({ members, currentEmail, canInvite }: { members: Use
           </div>
         </div>
       )}
+
+      {/* Seat the whole HRIS roster as employees in one act (owners only). Kept beside the single
+          invite because it is the same door at scale — one provisioning path server-side. */}
+      {canInvite && <InviteRoster />}
 
       {/* invite form (owners only) */}
       {canInvite && (

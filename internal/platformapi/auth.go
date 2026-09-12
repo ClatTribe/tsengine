@@ -3,7 +3,6 @@ package platformapi
 import (
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -296,62 +295,37 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 		writeJSON(w, http.StatusBadRequest, errBody("role must be member, auditor or employee"))
 		return
 	}
-	if _, err := d.Store.GetUserByEmail(r.Context(), email); err == nil {
-		writeJSON(w, http.StatusConflict, errBody("a user with that email already exists"))
-		return
-	} else if !errors.Is(err, store.ErrNotFound) {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+	// Provisioning is shared with the roster invite (invite_roster.go) so the two doors cannot
+	// drift on what a freshly invited account looks like.
+	u, temp, err := d.provisionSeat(r.Context(), s.TenantID, email, body.Name, role)
+	if errors.Is(err, errSeatExists) {
+		writeJSON(w, http.StatusConflict, errBody(err.Error()))
 		return
 	}
-	tok, err := authn.NewToken()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
-	temp := tok[:14] // a usable one-time password (≥8 chars)
-	hash, err := authn.HashPassword(temp)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
-	}
-	u := platform.User{
-		ID: d.newID("usr"), TenantID: s.TenantID, Email: email, Name: strings.TrimSpace(body.Name),
-		Role: role, PasswordHash: hash, CreatedAt: time.Now().UTC(),
-		MustChangePassword: true, // the temp password is the owner's; force the member to set their own
-	}
-	if err := d.Store.PutUser(r.Context(), u); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
-	}
-	u.PasswordHash = ""
 
 	// Deliver the credential. SMTP was wired for password reset but invites never used it, so
 	// every invite fell back to the owner relaying a password over chat — the weakest link in
 	// onboarding. When mail works we send it straight to the invitee and DO NOT return it, so
-	// the credential never transits the owner's browser or the API logs. With no mailer we keep
-	// the previous behaviour and say plainly that manual relay is required.
-	if d.mailerConfigured() {
-		if err := d.mailer().Send(r.Context(), email,
-			"You've been invited to TensorShield", inviteEmailHTML(d.PublicURL, email, temp)); err != nil {
-			// The account already exists, so failing the request would strand it. Fall back to
-			// returning the credential, and say delivery failed.
-			slog.Warn("[auth] invite email failed — returning the temp password for manual relay",
-				"email", email, "err", err)
-			writeJSON(w, http.StatusCreated, map[string]any{
-				"user": u, "temp_password": temp, "emailed": false,
-				"note": "invite email failed to send — share this one-time password securely; it must be changed at first login",
-			})
-			return
-		}
+	// the credential never transits the owner's browser or the API logs. With no mailer (or a
+	// failed send — the account exists, so failing the request would strand it) we return the
+	// credential and say plainly that manual relay is required.
+	if d.deliverInvite(r.Context(), email, temp) {
 		writeJSON(w, http.StatusCreated, map[string]any{
 			"user": u, "emailed": true,
 			"note": "an invite email with a one-time password was sent; it must be changed at first login",
 		})
 		return
 	}
+	note := "no SMTP configured — share this one-time password securely; it must be changed at first login"
+	if d.mailerConfigured() {
+		note = "invite email failed to send — share this one-time password securely; it must be changed at first login"
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"user": u, "temp_password": temp, "emailed": false,
-		"note": "no SMTP configured — share this one-time password securely; it must be changed at first login",
+		"user": u, "temp_password": temp, "emailed": false, "note": note,
 	})
 }
 
