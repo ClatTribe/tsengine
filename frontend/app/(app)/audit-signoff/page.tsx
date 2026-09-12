@@ -7,6 +7,7 @@ import { PageTabs } from "@/components/ui/page-tabs";
 import { COMPLIANCE_TABS } from "@/lib/tabs";
 import { DecideFinding } from "@/components/audit-signoff/decide-finding";
 import { IssueCertificate } from "@/components/audit-signoff/issue-certificate";
+import { OrderPanel } from "@/components/audit-signoff/order-panel";
 import type { AuditItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,11 @@ export default async function AuditSignoffPage({
 
   const review = await api.auditReview(active);
   const p = review.progress;
+  // The per-application order for THIS application: the newest one, whatever its status. An
+  // invoiced order from last year and an open one from today are both real; the newest is the one
+  // the desk is working.
+  const ordersRes = await api.auditOrders();
+  const order = [...ordersRes.orders].filter((o) => o.target.toLowerCase() === active.toLowerCase()).at(-1) ?? null;
   const pending = review.items.filter((i) => !i.verdict);
   const decided = review.items.filter((i) => i.verdict);
 
@@ -113,6 +119,11 @@ export default async function AuditSignoffPage({
       )}
 
       <IssueCertificate target={active} blockers={review.blockers ?? []} complete={p.complete} />
+
+      {/* The money, kept apart from the work: the certificate above is what the desk delivers, the
+          order below is what it charges, and the amount due is the server's figure (zero until the
+          buyer accepts) so the two can never be conflated on a page an operator invoices from. */}
+      <OrderPanel target={active} order={order} listPriceInr={ordersRes.list_price_inr} />
 
       {pending.length > 0 && (
         <section className="space-y-2">

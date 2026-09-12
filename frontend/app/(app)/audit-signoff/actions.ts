@@ -32,3 +32,25 @@ export async function issueCertificate(
     return { ok: false, error: e instanceof Error ? e.message : "Could not issue the certificate." };
   }
 }
+
+// The per-application SKU. Opening an order owes nothing; acceptance is the payment event, and the
+// server refuses it until a certificate exists for the application.
+export async function createAuditOrder(target: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await api.createAuditOrder(target);
+    revalidatePath("/audit-signoff");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not open the order." };
+  }
+}
+
+export async function acceptAuditOrder(id: string, by: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await api.acceptAuditOrder(id, by);
+    revalidatePath("/audit-signoff");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not record the acceptance." };
+  }
+}

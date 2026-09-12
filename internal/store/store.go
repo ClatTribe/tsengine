@@ -210,6 +210,11 @@ type Store interface {
 	PutAuditDisposition(ctx context.Context, d platform.AuditDisposition) error
 	ListAuditDispositions(ctx context.Context, tenantID string) ([]platform.AuditDisposition, error)
 
+	// Audit orders are the per-application SKU's unit of sale — one application, one price, paid
+	// on acceptance of its certificate. Upserted by id (the status advances in place).
+	PutAuditOrder(ctx context.Context, o platform.AuditOrder) error
+	ListAuditOrders(ctx context.Context, tenantID string) ([]platform.AuditOrder, error)
+
 	// The vendor REGISTER — the durable third-party inventory, upserted by id so re-posting the same
 	// inventory updates each row rather than accumulating copies of it. Distinct from the FINDINGS a
 	// vendor raises: a findings list names the suppliers that failed a check and omits every

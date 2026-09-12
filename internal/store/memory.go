@@ -44,6 +44,7 @@ type Memory struct {
 	employees   map[string][]platform.Employee                    // tenantID → HRIS employee roster
 	training    map[string]map[string]platform.TrainingCompletion // tenantID → completionID → record
 	auditDisp   map[string]map[string]platform.AuditDisposition   // tenantID → target|key → decision
+	auditOrders map[string]map[string]platform.AuditOrder         // tenantID → orderID → per-application order
 	vendors     map[string]map[string]platform.Vendor             // tenantID → vendorID → register row
 	users       map[string]platform.User                          // userID → user (email globally unique)
 	sessions    map[string]platform.Session                       // token → session
@@ -80,6 +81,7 @@ func NewMemory() *Memory {
 		employees:       map[string][]platform.Employee{},
 		training:        map[string]map[string]platform.TrainingCompletion{},
 		auditDisp:       map[string]map[string]platform.AuditDisposition{},
+		auditOrders:     map[string]map[string]platform.AuditOrder{},
 		vendors:         map[string]map[string]platform.Vendor{},
 		users:           map[string]platform.User{},
 		sessions:        map[string]platform.Session{},
@@ -844,6 +846,33 @@ func (m *Memory) PutAuditDisposition(_ context.Context, d platform.AuditDisposit
 	return nil
 }
 
+// PutAuditOrder upserts one per-application order by id — the status advances in place.
+func (m *Memory) PutAuditOrder(_ context.Context, o platform.AuditOrder) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.auditOrders[o.TenantID] == nil {
+		m.auditOrders[o.TenantID] = map[string]platform.AuditOrder{}
+	}
+	m.auditOrders[o.TenantID][o.ID] = o
+	return nil
+}
+
+func (m *Memory) ListAuditOrders(_ context.Context, tenantID string) ([]platform.AuditOrder, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.AuditOrder, 0, len(m.auditOrders[tenantID]))
+	for _, o := range m.auditOrders[tenantID] {
+		out = append(out, o)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
 func (m *Memory) ListAuditDispositions(_ context.Context, tenantID string) ([]platform.AuditDisposition, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -900,6 +929,7 @@ type Snapshot struct {
 	Employees       map[string][]platform.Employee                    `json:"employees,omitempty"`
 	Training        map[string]map[string]platform.TrainingCompletion `json:"training,omitempty"`
 	AuditDisp       map[string]map[string]platform.AuditDisposition   `json:"audit_dispositions,omitempty"`
+	AuditOrders     map[string]map[string]platform.AuditOrder         `json:"audit_orders,omitempty"`
 	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
 	Users           map[string]platform.User                          `json:"users"`
 	Sessions        map[string]platform.Session                       `json:"sessions"`
@@ -939,6 +969,7 @@ func (m *Memory) Export() Snapshot {
 		Employees:       m.employees,
 		Training:        m.training,
 		AuditDisp:       m.auditDisp,
+		AuditOrders:     m.auditOrders,
 		Vendors:         m.vendors,
 		Users:           m.users,
 		Sessions:        m.sessions,
@@ -977,6 +1008,7 @@ func (m *Memory) load(s Snapshot) {
 	m.employees = orEmpty(s.Employees)
 	m.training = orEmptyTraining(s.Training)
 	m.auditDisp = orEmptyAuditDisp(s.AuditDisp)
+	m.auditOrders = orEmptyAuditOrders(s.AuditOrders)
 	m.vendors = orEmptyVendors(s.Vendors)
 	m.users = s.Users
 	if m.users == nil {
@@ -1138,6 +1170,13 @@ func orEmptyTraining(m map[string]map[string]platform.TrainingCompletion) map[st
 func orEmptyAuditDisp(m map[string]map[string]platform.AuditDisposition) map[string]map[string]platform.AuditDisposition {
 	if m == nil {
 		return map[string]map[string]platform.AuditDisposition{}
+	}
+	return m
+}
+
+func orEmptyAuditOrders(m map[string]map[string]platform.AuditOrder) map[string]map[string]platform.AuditOrder {
+	if m == nil {
+		return map[string]map[string]platform.AuditOrder{}
 	}
 	return m
 }

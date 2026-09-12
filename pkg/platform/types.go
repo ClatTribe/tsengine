@@ -48,6 +48,10 @@ type Tenant struct {
 	Name      string    `json:"name"`
 	Plan      string    `json:"plan,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// AuditApplications is the number of applications purchased under the per-application SKU
+	// (PlanAudit). It is the plan's asset cap, read through EntitlementsFor, because a plan string
+	// cannot carry a count. Set by the operator with the plan; 0 on every other tier and ignored there.
+	AuditApplications int `json:"audit_applications,omitempty"`
 	// Source records where this workspace CAME FROM — the `?ref=` a signup arrived with (a partner
 	// listing, a VC perk page, an outbound sequence, an accelerator batch) or the operator-supplied
 	// source on POST /v1/tenants. Nothing could attribute a signup before this: every GTM motion that
@@ -715,6 +719,59 @@ type AuditDisposition struct {
 	Reason  string    `json:"reason,omitempty"`
 	By      string    `json:"by"`
 	At      time.Time `json:"at,omitzero"`
+}
+
+// AuditOrderStatus is where one per-application order stands. The sequence IS the commercial term
+// the tenders set: open → certified → accepted → invoiced, and nothing is owed before accepted.
+type AuditOrderStatus string
+
+const (
+	AuditOrderOpen      AuditOrderStatus = "open"      // ordered; the audit is in progress or not started
+	AuditOrderCertified AuditOrderStatus = "certified" // a Safe-to-Host certificate was issued for the target
+	AuditOrderAccepted  AuditOrderStatus = "accepted"  // the buyer accepted the certificate — the payment event
+	AuditOrderInvoiced  AuditOrderStatus = "invoiced"  // the operator raised the invoice
+)
+
+// AuditOrder is the unit of sale of the per-application SKU: one application, one price, paid on
+// acceptance of its certificate. It is the commercial twin of the audit review (internal/auditreview),
+// which is the WORK; this records the money, and only the money.
+//
+// The status machine encodes the tenders' own terms — "100% payment after acceptance of the final
+// report, no advance" — so AmountDueINR is zero until the buyer has accepted. A certificate issued
+// but not yet accepted is work delivered and money not yet owed, and the two must not be conflated
+// on a page an operator invoices from.
+type AuditOrder struct {
+	TenantID string `json:"tenant_id"`
+	ID       string `json:"id"`
+	Target   string `json:"target"` // the application, exactly as the audit review names it
+	// PriceINR is the agreed price for THIS application, exclusive of GST. Defaults to
+	// AuditListPriceINR; an operator may record a different agreed figure on the order.
+	PriceINR  int              `json:"price_inr"`
+	Status    AuditOrderStatus `json:"status"`
+	Note      string           `json:"note,omitempty"` // tender / PO / bid reference
+	CreatedAt time.Time        `json:"created_at"`
+	CreatedBy string           `json:"created_by,omitempty"`
+	// CertificateID / CertifiedAt are stamped when a certificate is issued for the target.
+	CertificateID string    `json:"certificate_id,omitempty"`
+	CertifiedAt   time.Time `json:"certified_at,omitzero"`
+	// AcceptedBy names the buyer's human who accepted the certificate — the act that makes the
+	// amount due. Recorded by name because it is the payment trigger and an unnamed acceptance is
+	// a date with nobody behind it.
+	AcceptedBy string    `json:"accepted_by,omitempty"`
+	AcceptedAt time.Time `json:"accepted_at,omitzero"`
+	InvoiceRef string    `json:"invoice_ref,omitempty"`
+	InvoicedAt time.Time `json:"invoiced_at,omitzero"`
+}
+
+// AmountDueINR is what the buyer owes on this order right now: the full price once they have
+// accepted the certificate, and nothing before — the no-advance term, computed rather than stored so
+// it can never disagree with the status.
+func (o AuditOrder) AmountDueINR() int {
+	switch o.Status {
+	case AuditOrderAccepted, AuditOrderInvoiced:
+		return o.PriceINR
+	}
+	return 0
 }
 
 // TrainingTier is HOW we know a person was trained. The two values are not interchangeable and are
