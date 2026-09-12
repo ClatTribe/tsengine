@@ -44,6 +44,16 @@ func arDeps(t *testing.T, fs ...types.Finding) (Deps, string) {
 			t.Fatal(err)
 		}
 	}
+	// The application exists as an asset with a completed, clean scan behind it. Without this the
+	// scope blockers (scope_untested / scope_partial) fire — correctly: findings alone do not prove
+	// a scan ran, and a certificate over an unscanned target is the overclaim they exist to stop.
+	if err := st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: arTenant, Type: "web_application", Target: arTarget}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutEngagement(ctx, platform.Engagement{ID: "e1", TenantID: arTenant, AssetID: "a1",
+		StartedAt: time.Now().Add(-time.Hour), CompletedAt: time.Now().Add(-30 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
 	return Deps{Store: st}, "sess"
 }
 

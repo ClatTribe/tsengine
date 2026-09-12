@@ -1840,4 +1840,9 @@ export type AuditCertificate = {
   not_tested?: string[];
   statement: string;
   engine?: string;
+  brand?: string;
+  // Set on the signed DOCUMENT forms (GET /v1/audit-review/certificate); absent on the JSON preview.
+  id?: string;
+  valid_until?: string;
+  attestation?: { sha256: string; signed_at: string; signer: string; signature: string };
 };

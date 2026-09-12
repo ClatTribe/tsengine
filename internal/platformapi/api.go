@@ -406,19 +406,20 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("GET /v1/identities", d.auth(d.handleNonHumanIdentities)) // non-human / AI-agent identity posture (ACSP agentic lens)
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
-	mux.HandleFunc("GET /v1/vendors", d.auth(d.handleListVendors))                        // the vendor REGISTER — the durable inventory, not the findings it raises
-	mux.HandleFunc("POST /v1/vendors", d.auth(d.handlePutVendor))                         // upsert one row; re-assesses the whole register
-	mux.HandleFunc("DELETE /v1/vendors/{id}", d.auth(d.handleDeleteVendor))               // remove a relationship that has ended, and its findings with it
-	mux.HandleFunc("GET /v1/audit-review", d.auth(d.handleAuditReview))                   // per-application audit review: findings, decisions, and why it cannot be certified yet
-	mux.HandleFunc("POST /v1/audit-review/disposition", d.auth(d.handleAuditDisposition)) // one reviewer's decision about one finding
-	mux.HandleFunc("POST /v1/audit-review/certificate", d.auth(d.handleAuditCertificate)) // issue the Safe-to-Host certificate, or return every blocker
-	mux.HandleFunc("GET /v1/training", d.auth(d.handleTraining))                          // security-awareness programme: curriculum, per-person status, honest summary
-	mux.HandleFunc("POST /v1/training/complete", d.auth(d.handleTrainingComplete))        // the SIGNED-IN person confirms they read a module we rendered
-	mux.HandleFunc("POST /v1/training/record", d.auth(d.handleTrainingRecord))            // a named human records training completed ELSEWHERE
-	mux.HandleFunc("GET /v1/access-review", d.auth(d.handleRecertify))                    // SOC 2 CC6.2/6.3 periodic access review
-	mux.HandleFunc("POST /v1/access-review/decide", d.auth(d.handleRecertifyDecide))      // a NAMED human keeps or removes access
-	mux.HandleFunc("GET /v1/readiness/checklist", d.auth(d.handleReadinessChecklist))     // staged CTO practice checklist, resolved against real state
-	mux.HandleFunc("POST /v1/readiness/stage", d.auth(d.handleSetStage))                  // the one onboarding question: what stage are you
+	mux.HandleFunc("GET /v1/vendors", d.auth(d.handleListVendors))                               // the vendor REGISTER — the durable inventory, not the findings it raises
+	mux.HandleFunc("POST /v1/vendors", d.auth(d.handlePutVendor))                                // upsert one row; re-assesses the whole register
+	mux.HandleFunc("DELETE /v1/vendors/{id}", d.auth(d.handleDeleteVendor))                      // remove a relationship that has ended, and its findings with it
+	mux.HandleFunc("GET /v1/audit-review", d.auth(d.handleAuditReview))                          // per-application audit review: findings, decisions, and why it cannot be certified yet
+	mux.HandleFunc("POST /v1/audit-review/disposition", d.auth(d.handleAuditDisposition))        // one reviewer's decision about one finding
+	mux.HandleFunc("POST /v1/audit-review/certificate", d.auth(d.handleAuditCertificate))        // issue the Safe-to-Host certificate, or return every blocker
+	mux.HandleFunc("GET /v1/audit-review/certificate", d.auth(d.handleAuditCertificateDocument)) // the certificate as a SIGNED document (html/md/json): 409 + blockers if not certifiable, 501 with no signing key
+	mux.HandleFunc("GET /v1/training", d.auth(d.handleTraining))                                 // security-awareness programme: curriculum, per-person status, honest summary
+	mux.HandleFunc("POST /v1/training/complete", d.auth(d.handleTrainingComplete))               // the SIGNED-IN person confirms they read a module we rendered
+	mux.HandleFunc("POST /v1/training/record", d.auth(d.handleTrainingRecord))                   // a named human records training completed ELSEWHERE
+	mux.HandleFunc("GET /v1/access-review", d.auth(d.handleRecertify))                           // SOC 2 CC6.2/6.3 periodic access review
+	mux.HandleFunc("POST /v1/access-review/decide", d.auth(d.handleRecertifyDecide))             // a NAMED human keeps or removes access
+	mux.HandleFunc("GET /v1/readiness/checklist", d.auth(d.handleReadinessChecklist))            // staged CTO practice checklist, resolved against real state
+	mux.HandleFunc("POST /v1/readiness/stage", d.auth(d.handleSetStage))                         // the one onboarding question: what stage are you
 	mux.HandleFunc("POST /v1/readiness/attest/{id}", d.auth(d.handleAttest))
 	mux.HandleFunc("POST /v1/readiness/fix/{id}", d.auth(d.handleReadinessFix)) // a gap row hands its findings to the proposer → the same approval desk          // a named human answers what no scan can see
 	mux.HandleFunc("POST /v1/import", d.auth(d.handleImportScan))               // a customer's EXISTING Snyk/Dependabot/SARIF backlog
