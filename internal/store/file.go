@@ -314,6 +314,13 @@ func (f *File) PutTrainingCompletion(ctx context.Context, c platform.TrainingCom
 	return f.persist()
 }
 
+func (f *File) PutAuditDisposition(ctx context.Context, d platform.AuditDisposition) error {
+	if err := f.Memory.PutAuditDisposition(ctx, d); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutVendor(ctx context.Context, v platform.Vendor) error {
 	if err := f.Memory.PutVendor(ctx, v); err != nil {
 		return err

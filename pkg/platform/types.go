@@ -683,6 +683,40 @@ type Vendor struct {
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
 }
 
+// AuditVerdict is a reviewer's decision about one finding's place in a SIGNED audit report.
+//
+// It lives here rather than in internal/auditreview because the disposition is a stored entity and
+// internal/store may not import an internal package; auditreview aliases both, so there is ONE type
+// with two names rather than two that drift — and drift here would land in a certificate.
+type AuditVerdict string
+
+const (
+	// AuditInclude puts the finding in the report as the engine reported it.
+	AuditInclude AuditVerdict = "include"
+	// AuditExclude keeps it OUT. It never deletes: the finding stays in the trail with who excluded
+	// it and why, because if the application is later compromised through an excluded finding, that
+	// record is the only thing between the auditor and negligence.
+	AuditExclude AuditVerdict = "exclude"
+	// AuditReclassify keeps the finding at the REVIEWER's severity, in either direction.
+	AuditReclassify AuditVerdict = "reclassify"
+)
+
+// AuditDisposition is one reviewer's decision about one finding, by name and on a date.
+type AuditDisposition struct {
+	TenantID string       `json:"tenant_id"`
+	Target   string       `json:"target"` // the application under audit
+	Key      string       `json:"key"`    // the stable finding key (crossdetect.DedupKey)
+	Verdict  AuditVerdict `json:"verdict"`
+	// Severity is the reviewer's severity, for a reclassification only.
+	Severity string `json:"severity,omitempty"`
+	// Lowered records that the reclassification REDUCED severity — the direction that makes a report
+	// look better, surfaced so a reader sees it was a human judgement and not the scanner's.
+	Lowered bool      `json:"lowered,omitempty"`
+	Reason  string    `json:"reason,omitempty"`
+	By      string    `json:"by"`
+	At      time.Time `json:"at,omitzero"`
+}
+
 // TrainingTier is HOW we know a person was trained. The two values are not interchangeable and are
 // never summed into one figure — see internal/training for the reasoning. It lives here rather than
 // in internal/training because the completion record is a stored entity and the store may not import

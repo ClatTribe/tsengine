@@ -94,6 +94,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.ReplaceThirdPartyApps(ctx, tid, "gworkspace", []platform.ThirdPartyApp{{TenantID: tid, Provider: "gworkspace", AppID: tid + "-app"}}))
 	must(s.ReplaceEmployees(ctx, tid, "merge", []platform.Employee{{TenantID: tid, Source: "merge", ID: tid + "-emp", WorkEmail: tid + "@example.com"}}))
 	must(s.PutTrainingCompletion(ctx, platform.TrainingCompletion{TenantID: tid, ID: tid + "-tc", Subject: tid + "@example.com", ModuleID: "phishing", Tier: platform.TrainingDelivered}))
+	must(s.PutAuditDisposition(ctx, platform.AuditDisposition{TenantID: tid, Target: "https://" + tid + ".example", Key: "rule|ep", Verdict: platform.AuditInclude, By: "Ada"}))
 	must(s.PutVendor(ctx, platform.Vendor{TenantID: tid, ID: tid + "-vendor", Name: tid + " Supplier", DataAccess: platform.VendorDataPII}))
 }
 
@@ -224,6 +225,14 @@ func TestStoreConformance(t *testing.T) {
 				orFail(t, err)
 				if len(vs) != 1 || vs[0].TenantID != tid {
 					t.Errorf("ISOLATION vendors[%s]: %+v", tid, vs)
+				}
+
+				// An audit disposition names a reviewer and says what they kept out of a signed report.
+				// Leaked, it is one firm's audit judgement about another firm's client.
+				ads, err := s.ListAuditDispositions(ctx, tid)
+				orFail(t, err)
+				if len(ads) != 1 || ads[0].TenantID != tid {
+					t.Errorf("ISOLATION audit dispositions[%s]: %+v", tid, ads)
 				}
 
 				// GetAction is tenant-scoped: t1's action id is invisible to t2.

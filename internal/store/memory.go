@@ -43,6 +43,7 @@ type Memory struct {
 	apps        map[string][]platform.ThirdPartyApp               // tenantID → third-party apps
 	employees   map[string][]platform.Employee                    // tenantID → HRIS employee roster
 	training    map[string]map[string]platform.TrainingCompletion // tenantID → completionID → record
+	auditDisp   map[string]map[string]platform.AuditDisposition   // tenantID → target|key → decision
 	vendors     map[string]map[string]platform.Vendor             // tenantID → vendorID → register row
 	users       map[string]platform.User                          // userID → user (email globally unique)
 	sessions    map[string]platform.Session                       // token → session
@@ -78,6 +79,7 @@ func NewMemory() *Memory {
 		apps:            map[string][]platform.ThirdPartyApp{},
 		employees:       map[string][]platform.Employee{},
 		training:        map[string]map[string]platform.TrainingCompletion{},
+		auditDisp:       map[string]map[string]platform.AuditDisposition{},
 		vendors:         map[string]map[string]platform.Vendor{},
 		users:           map[string]platform.User{},
 		sessions:        map[string]platform.Session{},
@@ -829,6 +831,35 @@ func (m *Memory) DeleteVendor(_ context.Context, tenantID, id string) error {
 	return nil
 }
 
+// PutAuditDisposition upserts one decision, keyed (target|key): a reviewer changing their mind
+// REPLACES their earlier verdict rather than adding a second one, because a report assembled from two
+// contradictory decisions about the same finding is not an audit record.
+func (m *Memory) PutAuditDisposition(_ context.Context, d platform.AuditDisposition) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.auditDisp[d.TenantID] == nil {
+		m.auditDisp[d.TenantID] = map[string]platform.AuditDisposition{}
+	}
+	m.auditDisp[d.TenantID][strings.ToLower(strings.TrimSpace(d.Target))+"|"+d.Key] = d
+	return nil
+}
+
+func (m *Memory) ListAuditDispositions(_ context.Context, tenantID string) ([]platform.AuditDisposition, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.AuditDisposition, 0, len(m.auditDisp[tenantID]))
+	for _, d := range m.auditDisp[tenantID] {
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Target != out[j].Target {
+			return out[i].Target < out[j].Target
+		}
+		return out[i].Key < out[j].Key
+	})
+	return out, nil
+}
+
 func (m *Memory) ListTrainingCompletions(_ context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -868,6 +899,7 @@ type Snapshot struct {
 	Apps            map[string][]platform.ThirdPartyApp               `json:"apps"`
 	Employees       map[string][]platform.Employee                    `json:"employees,omitempty"`
 	Training        map[string]map[string]platform.TrainingCompletion `json:"training,omitempty"`
+	AuditDisp       map[string]map[string]platform.AuditDisposition   `json:"audit_dispositions,omitempty"`
 	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
 	Users           map[string]platform.User                          `json:"users"`
 	Sessions        map[string]platform.Session                       `json:"sessions"`
@@ -906,6 +938,7 @@ func (m *Memory) Export() Snapshot {
 		Apps:            m.apps,
 		Employees:       m.employees,
 		Training:        m.training,
+		AuditDisp:       m.auditDisp,
 		Vendors:         m.vendors,
 		Users:           m.users,
 		Sessions:        m.sessions,
@@ -943,6 +976,7 @@ func (m *Memory) load(s Snapshot) {
 	m.apps = orEmpty(s.Apps)
 	m.employees = orEmpty(s.Employees)
 	m.training = orEmptyTraining(s.Training)
+	m.auditDisp = orEmptyAuditDisp(s.AuditDisp)
 	m.vendors = orEmptyVendors(s.Vendors)
 	m.users = s.Users
 	if m.users == nil {
@@ -1097,6 +1131,13 @@ func orEmptyEpisodes(m map[string]map[string]platform.EpisodeRecord) map[string]
 func orEmptyTraining(m map[string]map[string]platform.TrainingCompletion) map[string]map[string]platform.TrainingCompletion {
 	if m == nil {
 		return map[string]map[string]platform.TrainingCompletion{}
+	}
+	return m
+}
+
+func orEmptyAuditDisp(m map[string]map[string]platform.AuditDisposition) map[string]map[string]platform.AuditDisposition {
+	if m == nil {
+		return map[string]map[string]platform.AuditDisposition{}
 	}
 	return m
 }
