@@ -84,6 +84,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/identitylog"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/notify"
@@ -593,6 +594,13 @@ func main() {
 	// Settings "Sync now" button uses (sealed credential via the vault, Intune borrowing the M365
 	// connection), so the scheduled door and the on-demand door cannot authenticate differently.
 	svc.MDMFetcher = apiDeps.MDMFetcherFor
+	// Identity THREAT detection reads each connected IdP's audit log every pass through the
+	// onboarded token (read scopes: okta.logs.read / AuditLog.Read.All / admin.reports.audit.readonly).
+	svc.IdentityLogFetchers = map[string]identitylog.Fetcher{
+		platform.ConnOkta:       identitylog.NewOkta(os.Getenv("OKTA_ORG_URL")),
+		platform.ConnM365:       identitylog.NewM365(),
+		platform.ConnGWorkspace: identitylog.NewGWorkspace(),
+	}
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
 	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the
