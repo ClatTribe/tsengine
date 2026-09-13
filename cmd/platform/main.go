@@ -617,6 +617,11 @@ func main() {
 	svc.IdentityLinkOpts = &identitylinks.Options{OktaOrgURL: os.Getenv("OKTA_ORG_URL")}
 	// Okta CONFIGURATION posture (policies, API tokens, ThreatInsight) read each pass.
 	svc.OktaOrgURL = os.Getenv("OKTA_ORG_URL")
+	// A leaked AWS key in code earns a second, HITL-gated action: deactivate the key in IAM through
+	// the tenant's AWS connection (connector.AWS.Apply "aws_key_deactivate"), beside the scrub PR.
+	svc.KeyDeactivate = func(f types.Finding, c platform.Connection) (platform.Action, bool) {
+		return remediate.KeyDeactivateAction(f, c, newID)
+	}
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
 	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the

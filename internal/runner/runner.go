@@ -158,6 +158,12 @@ type Service struct {
 	OktaOrgURL string
 	OktaHTTP   *http.Client
 
+	// KeyDeactivate, when set, gives a leaked-AWS-key finding a SECOND action beside its repository
+	// PR: a tier-2, HITL-gated deactivation of the key through the tenant's AWS connection
+	// (sync_keydeactivate.go). Wired to remediate.KeyDeactivateAction; nil → the PR body's revoke
+	// instruction is all the customer gets, as before.
+	KeyDeactivate func(f types.Finding, aws platform.Connection) (platform.Action, bool)
+
 	// CloudSyncer, when set, makes the connected cloud account a CONTINUOUSLY-monitored surface:
 	// each pass re-reads the account through its read-only role and diffs it against the previous
 	// snapshot, so a bucket that became public or a principal that gained admin appears as a drift
@@ -1077,6 +1083,14 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 				return nil, nil, fmt.Errorf("runner: desk submit (bulk): %w", err)
 			}
 		}
+		// The bulk path skips processFinding's per-finding propose, so the leaked-key deactivation
+		// (a second, gated action beside the PR) must be proposed here too or it is lost exactly
+		// on the tenants large enough to have bulk fixes.
+		for _, f := range findings {
+			if err := s.proposeKeyDeactivation(ctx, a, f); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 	eng.CompletedAt = s.now()
 	if err := s.Store.PutEngagement(ctx, eng); err != nil {
@@ -1104,7 +1118,7 @@ func (s *Service) processFinding(ctx context.Context, a platform.Asset, f types.
 			}
 		}
 	}
-	return nil
+	return s.proposeKeyDeactivation(ctx, a, f)
 }
 
 // stampFindingKeys captures the STABLE finding keys (rule_id|endpoint) of the findings a proposed
