@@ -35,6 +35,12 @@ type Instance struct {
 	Region   string
 	PublicIP bool
 	SGIDs    []string
+	// ProfileARN is the instance profile attached to the box. It is NOT the role ARN — the two
+	// differ by one path segment and a profile may (in principle) carry a different name — so the
+	// fetcher resolves it through IAM's instance-profile listing rather than rewriting the string.
+	// Without it every live instance was a dead end in the graph: the runs_as edge, the step every
+	// host-to-data path runs through, was never created on the live path.
+	ProfileARN string
 }
 
 // SecurityGroup carries its ingress rules already in cloudgraph's shape.
@@ -98,6 +104,9 @@ func (l *EC2Lister) ListCompute(ctx context.Context) ([]Instance, []SecurityGrou
 					if id := aws.ToString(g.GroupId); id != "" {
 						inst.SGIDs = append(inst.SGIDs, id)
 					}
+				}
+				if in.IamInstanceProfile != nil {
+					inst.ProfileARN = aws.ToString(in.IamInstanceProfile.Arn)
 				}
 				instances = append(instances, inst)
 			}

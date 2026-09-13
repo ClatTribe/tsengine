@@ -37,6 +37,12 @@ type RawAWS struct {
 	SGs       []RawSecurityGroup `json:"security_groups,omitempty"`
 	Instances []RawInstance      `json:"instances,omitempty"`
 	Buckets   []RawBucket        `json:"buckets,omitempty"`
+	// Functions and Databases were absent from this shape entirely, so on a live account the graph
+	// carried no serverless compute and no relational data store: a public function running as an
+	// admin role and a public RDS instance holding customer data were both invisible unless a
+	// snapshot naming them was posted by hand.
+	Functions []RawFunction `json:"functions,omitempty"`
+	Databases []RawDatabase `json:"databases,omitempty"`
 	// Grants are principal -> resource access facts. Without them an inventory has identities and
 	// data but nothing connecting the two, so no path can ever run from a foothold to a crown
 	// jewel. They are asserted by the fetcher (policy evaluation), never inferred here: guessing
@@ -125,6 +131,31 @@ type RawInstance struct {
 	RoleARN string `json:"role_arn,omitempty"`
 }
 
+// RawFunction is one Lambda function: the role it executes with (the runs_as edge) and whether a
+// function URL exposes it to the internet without authentication.
+type RawFunction struct {
+	ARN       string `json:"arn"`
+	Name      string `json:"name,omitempty"`
+	Region    string `json:"region,omitempty"`
+	RoleARN   string `json:"role_arn,omitempty"`
+	PublicURL bool   `json:"public_url,omitempty"` // a function URL with AuthType NONE
+}
+
+// RawDatabase is one RDS instance. Public means a public endpoint exists; the internet edge is
+// still decided by the security groups on the listening port, exactly as for an instance.
+// Sensitive is the customer's own tag, never inferred from the engine or the name.
+type RawDatabase struct {
+	ARN       string   `json:"arn"`
+	ID        string   `json:"id,omitempty"`
+	Region    string   `json:"region,omitempty"`
+	Engine    string   `json:"engine,omitempty"`
+	Public    bool     `json:"public,omitempty"`
+	Encrypted bool     `json:"encrypted,omitempty"`
+	Port      int      `json:"port,omitempty"`
+	SGIDs     []string `json:"security_group_ids,omitempty"`
+	Sensitive bool     `json:"sensitive,omitempty"`
+}
+
 // RawBucket is an object store; Public + Sensitive are fetcher-resolved (public-access-block / tags).
 type RawBucket struct {
 	ARN       string `json:"arn,omitempty"`
@@ -211,6 +242,56 @@ func Build(raw RawAWS) cloudgraph.Inventory {
 		})
 		if b.Public {
 			inv.Reaches = append(inv.Reaches, cloudgraph.InvReach{From: cloudgraph.InternetID, To: id})
+		}
+	}
+
+	for _, fn := range raw.Functions {
+		if strings.TrimSpace(fn.ARN) == "" {
+			continue
+		}
+		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
+			ID: fn.ARN, Kind: cloudgraph.KindResource, Type: "lambda_function", Name: fn.Name, Region: fn.Region, Public: fn.PublicURL,
+		})
+		if r := strings.TrimSpace(fn.RoleARN); r != "" {
+			inv.RunsAs = append(inv.RunsAs, cloudgraph.InvRunsAs{Compute: fn.ARN, Principal: r})
+		}
+		// A function URL with no auth IS the internet edge — there is no security group in front of
+		// it to consult. A URL with IAM auth, or no URL, asserts nothing.
+		if fn.PublicURL {
+			inv.Reaches = append(inv.Reaches, cloudgraph.InvReach{From: cloudgraph.InternetID, To: fn.ARN})
+		}
+	}
+
+	for _, db := range raw.Databases {
+		if strings.TrimSpace(db.ARN) == "" {
+			continue
+		}
+		kind, sens := cloudgraph.KindResource, cloudgraph.SensNone
+		if db.Sensitive {
+			kind, sens = cloudgraph.KindData, cloudgraph.SensHigh
+		}
+		attrs := map[string]string{"engine": db.Engine, "encrypted": "false"}
+		if db.Encrypted {
+			attrs["encrypted"] = "true"
+		}
+		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
+			ID: db.ARN, Kind: kind, Type: "rds_instance", Name: db.ID, Region: db.Region, Public: db.Public, Sensitive: sens, Tags: attrs,
+		})
+		// Same rule as an instance: a public endpoint is not reachability. The security groups on the
+		// listening port decide, and an unknown port or unparseable rules assert nothing.
+		if !db.Public || db.Port == 0 {
+			continue
+		}
+		var rules []cloudgraph.SGRule
+		for _, id := range db.SGIDs {
+			rs, err := cloudgraph.ParseSGRules(sgByID[id].IngressJSON)
+			if err != nil {
+				continue
+			}
+			rules = append(rules, rs...)
+		}
+		if cloudgraph.InternetReachable(rules, db.Port, "tcp") {
+			inv.Reaches = append(inv.Reaches, cloudgraph.InvReach{From: cloudgraph.InternetID, To: db.ARN})
 		}
 	}
 
