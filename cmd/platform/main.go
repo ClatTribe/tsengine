@@ -746,7 +746,13 @@ func sandboxDispatcherWS(images sandbox.ScanImages, st store.Store, vault secret
 		var cloneDir string
 		switch types.AssetType(a.Type) {
 		case types.AssetCloudAccount:
-			opts.Env = cloudCredentialEnv()
+			// A connected account is scanned AS ITS ROLE (cloudcreds.go); an unassumable role
+			// fails the scan rather than falling back to the operator's environment.
+			env, err := cloudScanEnv(ctx, a, stsAssume)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("sandboxDispatcher: %w", err)
+			}
+			opts.Env = env
 			if gac := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); gac != "" {
 				opts.Mounts = append(opts.Mounts, sandbox.Mount{HostPath: gac, ContainerPath: gac})
 			}
