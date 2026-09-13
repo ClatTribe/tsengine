@@ -41,6 +41,16 @@ export async function syncOktaPosture(): Promise<{ findings: number; unread: num
   return { findings: r.count, unread: Object.keys(r.unread ?? {}).length };
 }
 
+// Live CloudTrail poll. Returns the threats stored AND the spans a truncated read left unexamined —
+// the second is what stops zero threats reading as a quiet account.
+export async function syncCloudEvents(): Promise<{ records: number; findings: number; unread: number }> {
+  const r = await api.syncCloudEvents();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  revalidatePath("/incidents");
+  return { records: r.records, findings: r.findings.length, unread: Object.keys(r.unread ?? {}).length };
+}
+
 // Set (or clear) the tenant's device-management source (Bucket B). Credentials are sealed
 // server-side and never returned; we get back the redacted view.
 export async function setMDM(cfg: {

@@ -18,6 +18,7 @@ import { CloudRemediationControl } from "@/components/settings/cloud-remediation
 import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
 import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
 import { OktaPostureSync } from "@/components/settings/okta-posture-sync";
+import { CloudTrailSync } from "@/components/settings/cloudtrail-sync";
 import { JiraControl } from "@/components/settings/jira-control";
 import { MDMControl } from "@/components/settings/mdm-control";
 import { HRISControl } from "@/components/settings/hris-control";
@@ -194,6 +195,7 @@ export default async function SettingsPage() {
                     )}
                     {c.kind === "github" && <GitHubPostureSync />}
                     {c.kind === "okta" && <OktaPostureSync />}
+                    {c.kind === "aws" && <CloudTrailSync />}
                   </li>
                 );
               })}
