@@ -321,3 +321,64 @@ resource "aws_iam_policy" "real" {
 		t.Error("the role TRUST policy leaked into the extracted identity policy")
 	}
 }
+
+// The three scenarios the first CloudGoat run MISSED now score as hits, offline.
+//
+// The live runner needs the corpus and is opt-in, so without this the closure of those three
+// misses would be checkable only on a machine that had downloaded Rhino's repository — and a
+// regression would surface as a number nobody re-measured. The policy text here is the shape each
+// scenario's own Terraform grants, reduced to the actions that decide it.
+func TestScoreCloudGoat_ScoresThePreviouslyMissedScenarios(t *testing.T) {
+	root := t.TempDir()
+	writeScenario(t, root, "ecs_privesc_evade_protection", "## Summary\nAn ECS privesc scenario.", map[string]string{
+		"iam.tf": `
+resource "aws_iam_policy" "web_developer" {
+  policy = jsonencode({ Statement = [{ Effect = "Allow", Action = ["ecs:RegisterTaskDefinition", "ecs:RunTask", "iam:PassRole"], Resource = "*" }] })
+}
+`}, nil)
+	writeScenario(t, root, "glue_privesc", "## Summary\nA Glue privesc scenario.", map[string]string{
+		"iam.tf": `
+resource "aws_iam_user_policy" "glue_management_policy" {
+  policy = jsonencode({ Statement = [{ Effect = "Allow", Action = ["glue:CreateJob", "glue:StartJobRun", "glue:UpdateJob", "iam:PassRole"], Resource = "*" }] })
+}
+`}, nil)
+	writeScenario(t, root, "iam_privesc_by_ec2", "## Summary\nAn EC2 privesc scenario.", map[string]string{
+		"iam.tf": `
+resource "aws_iam_role_policy" "ec2_manage_permissions" {
+  policy = jsonencode({ Statement = [{ Effect = "Allow", Action = ["ec2:StartInstances", "ec2:StopInstances", "ec2:ModifyInstanceAttribute"], Resource = "*" }] })
+}
+`}, nil)
+
+	res, err := ScoreCloudGoat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"ecs_privesc_evade_protection": "PassRoleToNewECSTask",
+		"glue_privesc":                 "PassRoleToNewGlueJob",
+		"iam_privesc_by_ec2":           "EC2UserDataModification",
+	}
+	for _, s := range res.Scenarios {
+		tech, tracked := want[s.Name]
+		if !tracked {
+			continue
+		}
+		if !s.IAMDecidable {
+			t.Errorf("%s must be IAM-decidable — it is named a privesc", s.Name)
+		}
+		if !s.Found {
+			t.Errorf("%s is still a MISS: these are the three scenarios the recorded 57.1%% named", s.Name)
+			continue
+		}
+		if !contains(s.Detected, tech) {
+			t.Errorf("%s should be found via %s, got %v", s.Name, tech, s.Detected)
+		}
+		delete(want, s.Name)
+	}
+	for name := range want {
+		t.Errorf("%s was not scored at all", name)
+	}
+	if res.Recall() != 1 {
+		t.Errorf("all three should now be hits, recall=%.2f", res.Recall())
+	}
+}
