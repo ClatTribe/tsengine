@@ -63,10 +63,28 @@ type RawAzDenyAssignment struct {
 
 // RawAzPrincipal is a managed identity / service principal / user; Admin = an Owner/Contributor or a
 // privileged built-in role (fetcher-resolved from role assignments).
+//
+// The three Entra (Azure AD) graph-plane fields are a DISTINCT authorization plane from the ARM RBAC
+// role assignments above (§10 — never conflated): an attacker can own the tenant through Entra —
+// self-assign Global Admin, add a secret to a privileged app, or OWN a privileged service principal
+// and authenticate as it — without ever touching an ARM role assignment. azureiam.DetectEntraPrivesc
+// and the two cloudgraph edge builders existed and were tested; RawAzure carried NO field to feed
+// them, so every Azure snapshot produced zero Entra escalation edges BY CONSTRUCTION (ADR 0031 D2a) —
+// the "tested evaluator with no data source" shape, the ARM half's twin one plane over.
 type RawAzPrincipal struct {
 	ID    string `json:"id"`
 	Name  string `json:"name,omitempty"`
 	Admin bool   `json:"admin,omitempty"`
+	// GraphPermissions are the Microsoft Graph application permissions granted to this principal
+	// (e.g. "Application.ReadWrite.All"); DirectoryRoles are the Entra directory roles it holds
+	// (e.g. "Global Administrator"). Either can enable a graph-plane escalation. Empty → nothing
+	// evaluated for this principal on the Entra plane (grounded: absence is not safety).
+	GraphPermissions []string `json:"graph_permissions,omitempty"`
+	DirectoryRoles   []string `json:"directory_roles,omitempty"`
+	// Owns are the principal ids (app registrations / service principals) this principal OWNS.
+	// Owning a privileged SP is itself an escalation — add a credential, act as it (the BloodHound
+	// "Owns → AZServicePrincipal" path). The ingest resolves these from the Entra `owners` lists.
+	Owns []string `json:"owns,omitempty"`
 }
 
 // RawAzVM is a virtual machine; PublicIP + the effective NSG ingress drive the grounded reachability eval.
@@ -137,6 +155,7 @@ func Build(raw RawAzure) cloudgraph.Inventory {
 		}
 	}
 	derivePrivesc(&inv, raw)
+	deriveEntraPrivesc(&inv, raw)
 	return inv
 }
 
@@ -251,10 +270,98 @@ func derivePrivesc(inv *cloudgraph.Inventory, raw RawAzure) {
 		any = true
 	}
 	if any {
-		inv.Resources = append(inv.Resources, cloudgraph.InvResource{
-			ID: cloudgraph.AdminID, Kind: cloudgraph.KindPrincipal, Type: "effective_admin",
-			Name: "effective-admin", Privileged: true,
+		ensureAdminNode(inv)
+	}
+}
+
+// ensureAdminNode appends the synthetic effective-admin principal once. Both the ARM and the Entra
+// privesc derivations reach admin, and without the guard each would append its own AdminID resource —
+// two nodes with the same id, which Ingest would then have to dedup. One append, whichever plane got
+// there first.
+func ensureAdminNode(inv *cloudgraph.Inventory) {
+	for _, r := range inv.Resources {
+		if r.ID == cloudgraph.AdminID {
+			return
+		}
+	}
+	inv.Resources = append(inv.Resources, cloudgraph.InvResource{
+		ID: cloudgraph.AdminID, Kind: cloudgraph.KindPrincipal, Type: "effective_admin",
+		Name: "effective-admin", Privileged: true,
+	})
+}
+
+// deriveEntraPrivesc turns a principal's Entra (Azure AD) graph holdings into privilege-escalation
+// edges — the identity-plane twin of derivePrivesc, closing ADR 0031 D2a's remaining half. It mirrors
+// the ARM path's shape exactly: it calls the SAME azureiam evaluator the tested Snapshot builder calls
+// (azureiam.DetectEntraPrivesc) and emits cloudgraph.InvPrivesc records that Ingest turns into
+// privesc → admin edges, so there is one detection implementation, not two that can drift.
+//
+// Two halves, run in order (§10, grounded throughout — a principal with no Entra holdings and no
+// ownership produces nothing):
+//   - PERMISSION: a principal effectively holding a Graph permission / directory role that escalates
+//     (self-assign Global Admin, add a secret to a privileged app, …). Entra app-role assignments and
+//     directory-role memberships carry no IAM condition, so these are unconditional — no config-gated
+//     tier, unlike the ARM plane.
+//   - RELATIONSHIP: owning a principal that is privileged OR that itself escalates (via ARM or the
+//     permission half just computed) inherits that escalation — the "Owns → AZServicePrincipal" path.
+//     Run after the permission half so an owned SP that escalates only by permission is still caught.
+func deriveEntraPrivesc(inv *cloudgraph.Inventory, raw RawAzure) {
+	// escalators: every principal already known to reach admin (from ARM derivePrivesc's records or an
+	// explicit Admin flag) — the ownership half inherits from these too.
+	escalates := map[string]bool{}
+	for _, pe := range inv.Privescs {
+		if pe.Target == cloudgraph.AdminID {
+			escalates[pe.Principal] = true
+		}
+	}
+	for _, p := range raw.Principals {
+		if p.Admin {
+			escalates[p.ID] = true
+		}
+	}
+
+	added := false
+	// Permission half — deterministic order.
+	for _, p := range raw.Principals {
+		if p.ID == "" || (len(p.GraphPermissions) == 0 && len(p.DirectoryRoles) == 0) {
+			continue
+		}
+		can := azureiam.EntraCanFromGrants(p.GraphPermissions, p.DirectoryRoles)
+		techs := azureiam.DetectEntraPrivesc(can)
+		if len(techs) == 0 {
+			continue
+		}
+		names := make([]string, 0, len(techs))
+		for _, t := range techs {
+			names = append(names, t.Name)
+		}
+		inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{
+			Principal: p.ID, Target: cloudgraph.AdminID, Detail: strings.Join(names, ", "),
 		})
+		escalates[p.ID] = true
+		added = true
+	}
+
+	// Relationship half — owning a privileged / escalating principal.
+	for _, p := range raw.Principals {
+		if p.ID == "" || len(p.Owns) == 0 {
+			continue
+		}
+		owned := append([]string(nil), p.Owns...)
+		sort.Strings(owned)
+		for _, sp := range owned {
+			if sp == "" || sp == p.ID || !escalates[sp] {
+				continue // self-ownership, or owning a non-escalating principal, escalates nothing
+			}
+			inv.Privescs = append(inv.Privescs, cloudgraph.InvPrivesc{
+				Principal: p.ID, Target: cloudgraph.AdminID,
+				Detail: "Entra:OwnerOfPrivilegedSP(" + sp + ")",
+			})
+			added = true
+		}
+	}
+	if added {
+		ensureAdminNode(inv)
 	}
 }
 
