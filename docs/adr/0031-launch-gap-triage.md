@@ -1,7 +1,7 @@
 # ADR 0031 — Launch-gap triage: the remaining gaps are ranked by the customer confidence they put at risk, not by the effort they cost
 
 **Status:** **ACCEPTED — D1, D2b, D2c IMPLEMENTED + the D5 hygiene batch landed** (branch
-`adr-0031/launch-gap-ga-blockers`). **Open:** D2a (Azure, M), D2d (dispatcher+image publish, M),
+`adr-0031/launch-gap-ga-blockers`). **Open:** D2a (Azure, M), D2d (dispatcher DONE; image publish open, M),
 D4.1–D4.5 (parity sequence), and the three DECISIONS D3a–c, which no code can make.
 
 **Post-merge amendments (2026-08-25, after ADR 0030's fleet landed on main):**
@@ -215,12 +215,17 @@ cloud pair proves the ledger alone is not enough if the ratchet never sees a wra
   (unknown = production, two consent acts to allow it — the built design), and the `datatier.go`
   comment is corrected to match whichever way this lands. Fail-closed is already the built semantics;
   wiring it changes no defaults, it makes the built safety real in the productized path.
-- **D2d — platform pentests reach the sandbox specialists.** `defaultWebDiscoverer` accepts a
-  `Dispatcher` (nil-safe, as the CLI path already is), `cmd/platform` supplies it behind the existing
-  sandbox env, and `images.yml` publishes `pentest-sandbox` with the same verify-tools discipline as
-  the other sandboxes. Note for RELEASE.md: this grows the twelve-artifact release matrix — the
-  partial-release risk it already warns about grows with it, so the same-tag verification check
-  covers the new image.
+- **D2d — platform pentests reach the sandbox specialists. DISPATCHER HALF DONE.**
+  `defaultWebDiscoverer` now resolves `Deps.OSSSandbox` (nil-safe, as the CLI path already is) and
+  `cmd/platform` supplies it behind the existing sandbox env (`sandboxImages.Pentest`), so a platform
+  engagement's discovery agent reaches sqlmap/wpscan/nuclei/ffuf/hydra/padbuster — no longer told
+  "unavailable". Per-engagement sandbox lifetime; honest nil-gate; mutation-verified that the dispatch
+  actually lands, not merely that a sandbox spawned. STILL OPEN: `images.yml` publishing a leaner
+  `pentest-sandbox` with the same verify-tools discipline — until then `sandboxImages.Pentest` falls
+  back to the scan image, which carries the tools, so this is a size optimisation, not a capability
+  gap. Note for RELEASE.md: publishing the new image grows the twelve-artifact release matrix — the
+  partial-release risk it already warns about grows with it, so the same-tag verification check must
+  cover it.
 
 **Deliberately NOT in D2: `post_emit_verifier`/L2.5.** It is inert-and-documented today, which §0's
 shallow-version clause prefers over a half-right verifier that upgrades findings on weak evidence.

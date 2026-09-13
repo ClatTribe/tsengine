@@ -1079,6 +1079,17 @@ ONE gateway back into the sandbox:
   (`web-investigate --oss-sandbox <image>`; `tsbench xbow --mode investigate` passes it through). When it
   is nil (standalone `web-investigate --target`), `dispatch_oss` degrades gracefully and SAYS the tools
   are unavailable -- it never pretends a tool ran.
+* **The PLATFORM wires it too now (ADR 0031 D2d).** For months only the CLI set the Dispatcher, so a
+  platform pentest engagement's discovery agent asked for sqlmap and got "unavailable" -- the
+  built-but-unwired shape. `platformapi.Deps.OSSSandbox` is the platform's seam: `defaultWebDiscoverer`
+  calls it to spawn the exploitation sandbox (`sandboxImages.Pentest`, which falls back to the scan
+  image -- both carry the six tools, all registered in `cmd/tool-server`), sets `opts.Dispatcher`, and
+  the returned cleanup tears the sandbox down when THAT discovery run ends (per-engagement lifetime, as
+  the CLI's `--oss-sandbox` has always been). Same honest gate: no image configured / no docker / a
+  spawn error -> nil Dispatcher -> `dispatch_oss` stays unavailable, never a pretend. Wired in
+  `cmd/platform` from `sandboxImages.Pentest`; a test drives the agent to call `dispatch_oss` and asserts
+  the executor is reached (spawn+cleanup alone would pass a dropped-wiring mutation, so it checks the
+  dispatch actually lands).
 
 **WIRING RULE for a new sandbox OSS tool** (learned the hard way): register it in **BOTH**
 `internal/toolsbundle` (the host dispatch view -- so `cmd/tsengine`/`cmd/platform` resolve it) **AND**
