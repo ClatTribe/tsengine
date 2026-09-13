@@ -1,7 +1,7 @@
 # ADR 0031 — Launch-gap triage: the remaining gaps are ranked by the customer confidence they put at risk, not by the effort they cost
 
 **Status:** **ACCEPTED — D1, D2b, D2c IMPLEMENTED + the D5 hygiene batch landed** (branch
-`adr-0031/launch-gap-ga-blockers`). **Open:** D2a (Azure, M), D2d (dispatcher DONE; image publish open, M),
+`adr-0031/launch-gap-ga-blockers`). **Open:** D2a (ARM + Entra plane + Entra coverage note all DONE), D2d (dispatcher DONE; image publish open, M),
 D4.1–D4.5 (parity sequence), and the three DECISIONS D3a–c, which no code can make.
 
 **Post-merge amendments (2026-08-25, after ADR 0030's fleet landed on main):**
@@ -215,11 +215,19 @@ cloud pair proves the ledger alone is not enough if the ratchet never sees a wra
 
 ### D2 — Wire the built cluster (GA-BLOCKER or near; one PR each, no new engines)
 
-- **D2a — Azure parity.** Call the three existing bridges from `azinventory.Build` (AWS and GCP show
-  the seam), and give Azure ingest a `CoverAzure` coverage analyzer mirroring `CoverAWS`/`CoverGCP`,
-  naming principals whose policies failed to parse and roles that could not be resolved — the
-  firm-allow rule's disclosures, not new inference. Until this lands, the product page and attack-path
-  copy must not imply uniform multi-cloud privesc coverage.
+- **D2a — Azure parity. ARM half done earlier; ENTRA half now DONE.** The ARM bridge
+  (`azinventory.derivePrivesc`) was wired first. The identity plane was the remaining hole: the two
+  Entra edge builders (`AddAzureEntraPrivescEdges`, `AddEntraOwnershipEdges`) and
+  `azureiam.DetectEntraPrivesc` all existed and were tested, but `RawAzure` carried no
+  Graph-permission / directory-role / ownership field, so an Azure tenant owned through Entra
+  produced ZERO edges — the "tested evaluator with no data source" shape, the ARM half's twin.
+  `RawAzPrincipal` now carries `graph_permissions` / `directory_roles` / `owns`, and
+  `azinventory.deriveEntraPrivesc` mirrors `derivePrivesc` exactly (same `azureiam` evaluator, emits
+  `InvPrivesc` records Ingest turns into edges — one detection implementation, not two): permission
+  half (self-assign Global Admin, add a secret to a privileged app) + relationship half (owning a
+  privileged/escalating SP inherits it). Mutation-verified that removing the `Build` call fails.
+  STILL OPEN: a `CoverAzure` note for the Entra plane (which app/SP ownerships or grants went unread),
+  mirroring the ARM firm-allow disclosures — a coverage-honesty gap, not a detection gap.
 - **D2b — serve the signed evidence pack.** One route (`GET /v1/compliance/{framework}/evidence-pack`)
   over the tested `Sign`/`Verify`, plus the guard that makes the pinning honest:
   `ComplianceCorpusVersion` (`internal/tracer/hooks/version.go:14`) must change whenever the embedded

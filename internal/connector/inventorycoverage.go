@@ -257,8 +257,22 @@ func unresolvedRoleRefs(raw k8sinventory.RawK8s) []string {
 // AZURE HAS TWO AUTHORIZATION PLANES AND THEY ARE NEVER CONFLATED (§10). ARM RBAC decides what a
 // principal may do to SUBSCRIPTION RESOURCES; Entra (Azure AD) decides what it may do to the
 // DIRECTORY — and an attacker who owns the tenant through Entra never touches an ARM role assignment
-// at all. This ingest carries the ARM plane only, so the Entra gap is declared on every snapshot
-// rather than left to look like an absence of findings.
+// at all. The ingest evaluates BOTH planes now (azinventory.deriveEntraPrivesc, ADR 0031 D2a), so the
+// Entra gap is declared only when the snapshot carried no Entra holdings — the plane went UNREAD —
+// rather than on every snapshot; a snapshot that supplied the fields was evaluated and gets no note.
+// hasEntraHoldings reports whether the snapshot carries ANY Entra graph-plane data — a Graph
+// permission, a directory role, or an ownership. It is the difference between "the Entra plane was
+// evaluated and found nothing" and "the Entra plane was never read", which CoverAzure must not
+// conflate (§10).
+func hasEntraHoldings(raw azinventory.RawAzure) bool {
+	for _, p := range raw.Principals {
+		if len(p.GraphPermissions) > 0 || len(p.DirectoryRoles) > 0 || len(p.Owns) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func CoverAzure(raw azinventory.RawAzure) InventoryCoverage {
 	c := InventoryCoverage{Notes: map[string]string{}}
 
@@ -282,14 +296,22 @@ func CoverAzure(raw azinventory.RawAzure) InventoryCoverage {
 				"Populate `role_definitions` for these.", len(unknown), strings.Join(unknown, ", "))
 	}
 
-	// ALWAYS declared, because this ingest has no field for it at all. A gap that can never be closed
-	// by sending more of the same document has to be stated on every snapshot, or its absence reads
-	// as a clean directory.
-	c.Notes["entra-directory"] = "this snapshot carries the ARM plane only. Entra (Azure AD) is a " +
-		"SEPARATE authorization plane — Graph application permissions, privileged directory roles and " +
-		"service-principal ownership — and an attacker who takes the tenant through Entra never " +
-		"touches an ARM role assignment. Nothing here evaluates it, so an empty Entra result is not a " +
-		"finding about the directory."
+	// Entra (Azure AD) is a SEPARATE authorization plane from ARM — Graph application permissions,
+	// privileged directory roles, service-principal ownership — and an attacker who takes the tenant
+	// through Entra never touches an ARM role assignment. The ingest NOW evaluates it (azinventory.
+	// deriveEntraPrivesc, ADR 0031 D2a) when the snapshot carries the fields, so the note is
+	// conditional: it fires ONLY when no principal carries any Entra holding, because then the plane
+	// went UNREAD and an empty Entra result must not read as a clean directory (§10 — not-evaluated is
+	// not clean). A snapshot that DID carry Entra fields evaluated the plane and gets no note. (This
+	// note was previously unconditional, asserting "nothing here evaluates it" — true before the plane
+	// was wired, and stale the moment it was.)
+	if !hasEntraHoldings(raw) {
+		c.Notes["entra-directory"] = "no Entra (Azure AD) holdings in the snapshot — no principal " +
+			"carries `graph_permissions`, `directory_roles` or `owns`. Entra is a separate authorization " +
+			"plane (self-assign Global Admin, add a secret to a privileged app, own a privileged service " +
+			"principal), and it was NOT evaluated here, so an empty Entra result is not a finding about " +
+			"the directory. Populate those fields to assess it."
+	}
 
 	// Reachability is the other half of a path: with no VMs or storage, nothing is exposed and every
 	// escalation leads nowhere in particular.
