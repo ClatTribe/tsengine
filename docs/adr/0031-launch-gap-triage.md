@@ -1,7 +1,7 @@
 # ADR 0031 — Launch-gap triage: the remaining gaps are ranked by the customer confidence they put at risk, not by the effort they cost
 
 **Status:** **ACCEPTED — D1, D2b, D2c IMPLEMENTED + the D5 hygiene batch landed** (branch
-`adr-0031/launch-gap-ga-blockers`). **Open:** D2a (ARM done; Entra plane DONE — coverage analyzer for Entra still open, M), D2d (dispatcher DONE; image publish open, M),
+`adr-0031/launch-gap-ga-blockers`). **Open:** D2a (ARM + Entra plane + Entra coverage note all DONE), D2d (dispatcher DONE; image publish open, M),
 D4.1–D4.5 (parity sequence), and the three DECISIONS D3a–c, which no code can make.
 
 **Post-merge amendments (2026-08-25, after ADR 0030's fleet landed on main):**
