@@ -84,6 +84,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/identitylinks"
 	"github.com/ClatTribe/tsengine/internal/identitylog"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/l2"
@@ -605,6 +606,9 @@ func main() {
 	// the autofix button runs proposes the file changes and the connector commits them to the PR's
 	// head branch. No model configured → the PR opens with its instructions and says why.
 	deliverer.Patcher = remediate.PatcherFunc(apiDeps.PatchForAction)
+	// The person → code join inputs (GitHub SAML identities, Okta SCIM assignments, org owners and
+	// repository collaborators) are fetched every pass so the estate can draw identity → code → cloud.
+	svc.IdentityLinkOpts = &identitylinks.Options{OktaOrgURL: os.Getenv("OKTA_ORG_URL")}
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
 	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the

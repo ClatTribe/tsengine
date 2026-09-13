@@ -38,6 +38,21 @@ type Snapshot struct {
 	// paths. Without this the caveat reached only the caller, and the reader — the one
 	// making a decision — got silence that looks exactly like a clean account.
 	CoverageGaps map[string]string `json:"coverage_gaps,omitempty"`
+	// GitHubTrusts are the repository → role transitions the account's trust policies state: which
+	// GitHub repository's workflows may assume which role via OIDC, with no stored credential. Derived
+	// at ingest from the raw trust documents (which the built inventory does not keep) and stored so
+	// the estate graph can draw code → cloud on every read, not only at the moment of ingest.
+	GitHubTrusts []GitHubTrust `json:"github_trusts,omitempty"`
+}
+
+// GitHubTrust mirrors estateingest.GitHubOIDCTrust without importing it (cloudsnap stays a leaf).
+type GitHubTrust struct {
+	Repository string   `json:"repository"` // "owner/name"
+	RoleARN    string   `json:"role_arn"`
+	RoleName   string   `json:"role_name,omitempty"`
+	Privileged bool     `json:"privileged"`
+	Evidence   []string `json:"evidence"`
+	Why        string   `json:"why,omitempty"`
 }
 
 // Store persists the latest cloud snapshot per tenant (latest-wins). Get returns ok=false when the

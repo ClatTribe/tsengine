@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -116,6 +117,7 @@ CREATE TABLE IF NOT EXISTS reviews     (seq BIGSERIAL, tenant_id TEXT, id TEXT, 
 CREATE TABLE IF NOT EXISTS apps        (seq BIGSERIAL, tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS employees   (seq BIGSERIAL, tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS identitylinks (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditorders (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -414,6 +416,27 @@ func (p *Postgres) PutTrainingCompletion(ctx context.Context, c platform.Trainin
 		ON CONFLICT(tenant_id,id) DO UPDATE SET data=EXCLUDED.data`), c.TenantID, c.ID, d)
 	return err
 }
+
+// --- identity links (one document per tenant: the person→GitHub join inputs) ---
+
+func (p *Postgres) PutIdentityLinks(ctx context.Context, set platform.IdentityLinkSet) error {
+	d, err := enc(set)
+	if err != nil {
+		return err
+	}
+	_, err = p.db.ExecContext(ctx, pgRebind(`INSERT INTO identitylinks(tenant_id,data) VALUES(?,?)
+		ON CONFLICT(tenant_id) DO UPDATE SET data=EXCLUDED.data`), set.TenantID, d)
+	return err
+}
+func (p *Postgres) GetIdentityLinks(ctx context.Context, tenantID string) (platform.IdentityLinkSet, bool, error) {
+	var set platform.IdentityLinkSet
+	err := getJSON(ctx, p.db, &set, pgRebind(`SELECT data FROM identitylinks WHERE tenant_id=?`), tenantID)
+	if errors.Is(err, ErrNotFound) {
+		return platform.IdentityLinkSet{}, false, nil
+	}
+	return set, err == nil, err
+}
+
 func (p *Postgres) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
 	return listJSON[platform.TrainingCompletion](ctx, p.db, pgRebind(`SELECT data FROM training WHERE tenant_id=? ORDER BY id`), tenantID)
 }

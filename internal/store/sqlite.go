@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS pentests    (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
+CREATE TABLE IF NOT EXISTS identitylinks (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditorders (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -427,6 +428,26 @@ func (s *SQLite) ReplaceEmployees(ctx context.Context, tenantID, source string, 
 }
 func (s *SQLite) ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error) {
 	return listJSON[platform.Employee](ctx, s.db, `SELECT data FROM employees WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+// --- identity links (one document per tenant: the person→GitHub join inputs) ---
+
+func (s *SQLite) PutIdentityLinks(ctx context.Context, set platform.IdentityLinkSet) error {
+	d, err := enc(set)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO identitylinks(tenant_id,data) VALUES(?,?)
+		ON CONFLICT(tenant_id) DO UPDATE SET data=excluded.data`, set.TenantID, d)
+	return err
+}
+func (s *SQLite) GetIdentityLinks(ctx context.Context, tenantID string) (platform.IdentityLinkSet, bool, error) {
+	var set platform.IdentityLinkSet
+	err := getJSON(ctx, s.db, &set, `SELECT data FROM identitylinks WHERE tenant_id=?`, tenantID)
+	if errors.Is(err, ErrNotFound) {
+		return platform.IdentityLinkSet{}, false, nil
+	}
+	return set, err == nil, err
 }
 
 // --- security-awareness training completions (append-only; upsert by the record's own id) ---

@@ -94,6 +94,10 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.ReplaceThirdPartyApps(ctx, tid, "gworkspace", []platform.ThirdPartyApp{{TenantID: tid, Provider: "gworkspace", AppID: tid + "-app"}}))
 	must(s.ReplaceEmployees(ctx, tid, "merge", []platform.Employee{{TenantID: tid, Source: "merge", ID: tid + "-emp", WorkEmail: tid + "@example.com"}}))
 	must(s.PutTrainingCompletion(ctx, platform.TrainingCompletion{TenantID: tid, ID: tid + "-tc", Subject: tid + "@example.com", ModuleID: "phishing", Tier: platform.TrainingDelivered}))
+	must(s.PutIdentityLinks(ctx, platform.IdentityLinkSet{TenantID: tid,
+		Links:    []platform.IdentityLink{{Email: tid + "@example.com", Login: tid + "-gh", Source: "github_saml"}},
+		Controls: []platform.GitHubControl{{Login: tid + "-gh", Org: tid + "-org", Admin: true, Evidence: []string{"orgs/" + tid + "-org/members?role=admin"}}},
+		Unread:   map[string]string{"okta_scim": "no Okta connection"}}))
 	must(s.PutAuditDisposition(ctx, platform.AuditDisposition{TenantID: tid, Target: "https://" + tid + ".example", Key: "rule|ep", Verdict: platform.AuditInclude, By: "Ada"}))
 	must(s.PutAuditOrder(ctx, platform.AuditOrder{TenantID: tid, ID: tid + "-order", Target: "https://" + tid + ".example", PriceINR: 49999, Status: platform.AuditOrderOpen}))
 	must(s.PutVendor(ctx, platform.Vendor{TenantID: tid, ID: tid + "-vendor", Name: tid + " Supplier", DataAccess: platform.VendorDataPII}))
@@ -217,6 +221,15 @@ func TestStoreConformance(t *testing.T) {
 				orFail(t, err)
 				if len(tcs) != 1 || tcs[0].TenantID != tid {
 					t.Errorf("ISOLATION training[%s]: %+v", tid, tcs)
+				}
+
+				// The identity-link set maps one company's people to their GitHub accounts and repository
+				// authority — leaked, it is a targeting list for the other tenant's engineers.
+				links, ok, err := s.GetIdentityLinks(ctx, tid)
+				orFail(t, err)
+				if !ok || links.TenantID != tid || len(links.Links) != 1 || links.Links[0].Login != tid+"-gh" ||
+					len(links.Controls) != 1 || links.Unread["okta_scim"] == "" {
+					t.Errorf("ISOLATION identity links[%s]: ok=%v %+v", tid, ok, links)
 				}
 
 				// The vendor register is one company's supplier list — who they buy from, what data each
