@@ -647,6 +647,14 @@ func main() {
 	// the autofix button runs proposes the file changes and the connector commits them to the PR's
 	// head branch. No model configured → the PR opens with its instructions and says why.
 	deliverer.Patcher = remediate.PatcherFunc(apiDeps.PatchForAction)
+	// ONE MERGED FIX → THE BRANCHES CUSTOMERS ACTUALLY RUN. remediate.PlanBackports was complete,
+	// tested and had ZERO non-test callers, so a fix shipped to the default branch while the release
+	// branches kept the bug, silently. These two wire it: Backporter assembles the hunk + each
+	// maintained branch's copy of the file through the GitHub connection, and Submit routes every
+	// per-branch proposal through the SAME human desk as any other remediation (§18.2 inv. 3 — this
+	// opens nothing by itself). Best-effort: a failure here never disturbs the fix that was delivered.
+	deliverer.Backporter = remediate.BackportFunc(apiDeps.BackportInputsFor)
+	deliverer.Submit = desk
 	// The person → code join inputs (GitHub SAML identities, Okta SCIM assignments, org owners and
 	// repository collaborators) are fetched every pass so the estate can draw identity → code → cloud.
 	svc.IdentityLinkOpts = &identitylinks.Options{OktaOrgURL: os.Getenv("OKTA_ORG_URL")}

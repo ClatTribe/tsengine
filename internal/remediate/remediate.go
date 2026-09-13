@@ -195,6 +195,14 @@ type Deliverer struct {
 	// whole-file replacements, and the connector commits them to the PR's head branch before
 	// opening it. nil → today's behaviour (a PR whose body carries the fix text). See Patcher.
 	Patcher Patcher
+	// Backporter + Submit turn one delivered fix into per-branch proposals for the OTHER maintained
+	// branches that still carry the bug (backport_wire.go). PlanBackports had no caller at all before
+	// these; both nil → exactly today's behaviour. Best-effort: never fails a delivery.
+	Backporter Backporter
+	Submit     Submitter
+
+	// backportSeq numbers the actions one delivery's backport planning produces.
+	backportSeq int
 }
 
 // Patcher proposes the file changes for a code-fix action. It is the seam between the delivery
@@ -330,7 +338,13 @@ func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
 			return fmt.Errorf("remediate: resolve token: %w", terr)
 		}
 		a = d.attachPatch(ctx, a, c, tok)
-		return conn.Apply(ctx, c, tok, a)
+		if aerr := conn.Apply(ctx, c, tok, a); aerr != nil {
+			return aerr
+		}
+		// The fix is shipped. Now ask the question the product could not ask before: which OTHER
+		// maintained branches still have this bug? Best-effort — see planBackports.
+		d.planBackports(ctx, a, c, tok)
+		return nil
 	}
 	return fmt.Errorf("remediate: no active connection to deliver action %s", a.ID)
 }
