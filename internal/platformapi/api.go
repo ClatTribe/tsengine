@@ -43,6 +43,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/scubaingest"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/internal/tool/patchverify"
+	"github.com/ClatTribe/tsengine/internal/webagent"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -183,6 +184,13 @@ type Deps struct {
 	// configured model simply skips discovery and runs the verify drivers (honest, never a crash).
 	// Injectable for tests (drive discovery deterministically without a live LLM loop).
 	WebDiscoverer WebDiscoverer
+	// OSSSandbox, when set, spawns the exploitation sandbox for the discovery agent's dispatch_oss
+	// gateway (sqlmap / wpscan / nuclei / ffuf / hydra / padbuster) and returns a live
+	// webagent.Dispatcher plus a cleanup that tears the sandbox down at the end of the run. The CLI
+	// wires this from --oss-sandbox; the platform did not, so dispatch_oss was silently unavailable
+	// on every platform engagement (ADR 0031 D2d). Nil (no image / no docker) → dispatch_oss reports
+	// each tool unavailable rather than pretending (§10). Wired in cmd/platform to the pentest image.
+	OSSSandbox func(ctx context.Context) (webagent.Dispatcher, func(), error)
 	// Detector, when set, reconciles a pentest run's findings into incidents IMMEDIATELY (the
 	// detect-&-respond "respond" half) — so a pentest that PROVES a high+/critical exploit opens
 	// an incident right away instead of waiting for the next scheduled monitoring pass. The same

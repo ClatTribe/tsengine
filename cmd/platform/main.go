@@ -105,6 +105,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/store"
 	_ "github.com/ClatTribe/tsengine/internal/toolsbundle" // register OSS tools so host-side PlanAnchors resolves anchors (else 0 findings)
 	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
+	"github.com/ClatTribe/tsengine/internal/webagent"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -605,6 +606,24 @@ func main() {
 	} else if app != nil {
 		apiDeps.GitHubApp = app
 		log.Printf("[platform] GitHub App %s configured — PR reviews will be posted for workspaces that record their installation id", app.ID)
+	}
+	// dispatch_oss on the PLATFORM: spawn the exploitation sandbox so the pentest discovery agent
+	// can hand a specialized job (sqlmap extraction, wpscan/nuclei CVEs, ffuf, hydra, padbuster) to
+	// the real tool-server — the CLI has done this from --oss-sandbox all along, the platform never
+	// did (ADR 0031 D2d). One sandbox per discovery run, torn down by the returned cleanup, matching
+	// the CLI's per-engagement lifetime. Honest gate: no image configured → nil factory → dispatch_oss
+	// keeps reporting the tools unavailable rather than pretending. The pentest image carries these
+	// tools (it falls back to the scan image until the split image is built), and the tools are all
+	// registered in cmd/tool-server, so a dispatch reaches a real binary, not a 404.
+	if img := sandboxImages.Pentest; img != "" {
+		apiDeps.OSSSandbox = func(ctx context.Context) (webagent.Dispatcher, func(), error) {
+			info, serr := sandbox.Spawn(ctx, sandbox.SpawnOptions{Image: img})
+			if serr != nil {
+				return nil, nil, serr
+			}
+			cleanup := func() { _ = sandbox.Destroy(context.Background(), info) }
+			return webagent.SandboxDispatcher(sandbox.NewClient(info)), cleanup, nil
+		}
 	}
 	svc.AttributeCWEs = apiDeps.CWEAttributor()
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
