@@ -99,6 +99,12 @@ type Fetcher struct {
 	// Compute reads instances + security groups. Without it cloudgraph cannot evaluate whether an
 	// exposed-looking resource is ACTUALLY reachable from the internet — see the ec2.go comment.
 	Compute ComputeReader
+	// Functions reads Lambda (execution role + public function URLs); Databases reads RDS
+	// (public endpoint, port, security groups, encryption, declared sensitivity). Each is its own
+	// surface in Sources/Skipped, so a role that may list buckets but not functions produces an
+	// inventory that SAYS its serverless compute is unread rather than one with none.
+	Functions FunctionReader
+	Databases DatabaseReader
 }
 
 // Fetch reads what it can and reports exactly that.
@@ -179,12 +185,53 @@ func (f Fetcher) Fetch(ctx context.Context) (Result, error) {
 				ID: sg.ID, IngressJSON: marshalRules(sg.Rules),
 			})
 		}
+		// The instance profile → role join. Resolved through IAM's own listing, never by rewriting
+		// the profile ARN into a role ARN (they differ by a path segment and need not share a name).
+		// Unresolvable → the instance is stored without a role and the gap is NAMED: a compute node
+		// with no runs_as edge otherwise reads as a box that inherits nothing.
+		profiles := map[string]string{}
+		if ipr, ok := f.Principals.(InstanceProfileReader); ok {
+			if m, perr := ipr.ListInstanceProfiles(ctx); perr != nil {
+				res.Skipped["instance-profiles"] = "instance profiles were not resolved to roles, so no instance carries a runs_as edge: " + perr.Error()
+			} else {
+				profiles = m
+			}
+		} else if f.Principals != nil {
+			res.Skipped["instance-profiles"] = "the identity reader cannot resolve instance profiles, so no instance carries a runs_as edge"
+		}
 		for _, in := range ins {
 			res.Raw.Instances = append(res.Raw.Instances, awsinventory.RawInstance{
-				ID: in.ID, Region: in.Region, PublicIP: in.PublicIP, SGIDs: in.SGIDs,
+				ID: in.ID, Region: in.Region, PublicIP: in.PublicIP, SGIDs: in.SGIDs, RoleARN: profiles[in.ProfileARN],
 			})
 		}
 		res.Sources = append(res.Sources, "ec2")
+	}
+
+	if f.Functions == nil {
+		res.Skipped["lambda"] = "no function reader configured — serverless compute and its execution roles are unread"
+	} else if fns, ferr := f.Functions.ListFunctions(ctx); ferr != nil {
+		res.Skipped["lambda"] = ferr.Error()
+	} else {
+		for _, fn := range fns {
+			res.Raw.Functions = append(res.Raw.Functions, awsinventory.RawFunction{
+				ARN: fn.ARN, Name: fn.Name, Region: fn.Region, RoleARN: fn.RoleARN, PublicURL: fn.PublicURL,
+			})
+		}
+		res.Sources = append(res.Sources, "lambda")
+	}
+
+	if f.Databases == nil {
+		res.Skipped["rds"] = "no database reader configured — relational data stores are unread"
+	} else if dbs, derr := f.Databases.ListDatabases(ctx); derr != nil {
+		res.Skipped["rds"] = derr.Error()
+	} else {
+		for _, db := range dbs {
+			res.Raw.Databases = append(res.Raw.Databases, awsinventory.RawDatabase{
+				ARN: db.ARN, ID: db.ID, Region: db.Region, Engine: db.Engine, Public: db.Public, Encrypted: db.Encrypted,
+				Port: db.Port, SGIDs: db.SGIDs, Sensitive: db.Sensitive,
+			})
+		}
+		res.Sources = append(res.Sources, "rds")
 	}
 
 	if len(res.Sources) == 0 {

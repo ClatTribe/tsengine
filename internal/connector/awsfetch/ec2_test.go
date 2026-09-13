@@ -27,33 +27,37 @@ func TestFetch_AllThreeSurfacesProduceAUsableGraph(t *testing.T) {
 	res, err := Fetcher{
 		AccountID: "123456789012",
 		Buckets:   fakeLister{out: []Bucket{{Name: "customer-data", Public: true}}},
-		Principals: fakeIAM{out: []Principal{
+		// A COMPLETE identity read also resolves instance profiles; the plain fakeIAM cannot, and
+		// the fetcher would (correctly) name that as unread.
+		Principals: fakeIAMProfiles{fakeIAM: fakeIAM{out: []Principal{
 			{ARN: "arn:aws:iam::123456789012:role/app", Name: "app", Role: true,
 				Trust: `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam::123456789012:root"},"Action":"sts:AssumeRole"}]}`,
 				// A COMPLETE read includes the policy documents. Without them the fetcher
 				// correctly reports iam-policies as unread, because no escalation path can
 				// be computed — and this test claims every surface was read.
 				Policies: []string{`{"Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":"*"}]}`}},
-		}},
+		}}},
 		Compute: fakeCompute{
 			ins: []Instance{{ID: "i-1", PublicIP: true, SGIDs: []string{"sg-1"}}},
 			sgs: []SecurityGroup{{ID: "sg-1", Rules: []cloudgraph.SGRule{
 				{Proto: "tcp", CIDR: "0.0.0.0/0", PortFrom: 443, PortTo: 443},
 			}}},
 		},
+		Functions: fakeFunctions{},
+		Databases: fakeDatabases{},
 	}.Fetch(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Every surface read, nothing left unread.
-	for _, s := range []string{"s3", "iam", "ec2"} {
+	for _, s := range []string{"s3", "iam", "ec2", "lambda", "rds"} {
 		if !res.Covers(s) {
 			t.Errorf("%q was read but not reported as covered", s)
 		}
 	}
 	if len(res.Skipped) != 0 {
-		t.Errorf("surfaces reported as skipped when all three were read: %v", res.Skipped)
+		t.Errorf("surfaces reported as skipped when every surface was read: %v", res.Skipped)
 	}
 
 	// And the inventory must actually build into a graph with the pieces a path needs.

@@ -550,6 +550,8 @@ func main() {
 				Buckets:    awsfetch.NewS3Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Principals: awsfetch.NewIAMLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Compute:    awsfetch.NewEC2Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				Functions:  awsfetch.NewLambdaLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				Databases:  awsfetch.NewRDSLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 			}
 		},
 		// LIVE provider dry-run (ADR 0024 P1a's remaining half): ask AWS's own policy simulator whether
