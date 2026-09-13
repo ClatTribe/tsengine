@@ -1184,8 +1184,18 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
   regression test riding along as a second file) and the connector commits the files to the head branch
   before opening the PR. Refusals are QUOTED in the PR body (no model configured, a location that is not a
   file, an unreadable file, an empty proposal) rather than producing a silent instruction-only PR, and a
-  patch failure never blocks the PR. Execution-verifying the patch in the product (the bench oracle) is the
-  documented follow-on. **cloud** â `connector.AWS.Apply` S3 block-public-access is now a
+  patch failure never blocks the PR. **The patch is EXECUTION-VERIFIED in the product too** (`internal/tool/
+  patchverify`, a sandbox tool driving the runtimes the image already carries — go, python3; `cmd/platform/
+  patchverify.go` clones and spawns exactly as a scan does, `Deps.PatchVerifier`): the repository's own suite
+  and the engineer's regression test run BEFORE and AFTER the patch, and the verdict is `verified` ONLY when
+  the regression fails before, passes after, and the existing suite still passes. `vacuous` (the regression
+  passes on the unpatched tree — it pins nothing), `not_fixed` and `broke_suite` (closing the bug by breaking
+  the app is not a fix) WITHHOLD the diff and the PR body quotes the verdict above the instructions;
+  `unverifiable` — no runner, no regression, a JS/TS project (the sandbox has no node), a timeout — ships the
+  diff and says in the body that it was NOT executed, never that it passed. The suite-before run happens on
+  the pristine tree BEFORE the regression test lands, or its expected failure would count against the suite
+  (the first version made exactly that mistake). This is what turns "2/2 real CVEs fixed in tsbench cvepatch"
+  from a harness number into a sentence in the customer's PR. **cloud** â `connector.AWS.Apply` S3 block-public-access is now a
   **live, SDK-backed write path**: `internal/connector/awsremediate.S3Writer` (aws-sdk-go-v2 â the project's
   one cloud SDK, isolated in its own package so the core `connector` stays SDK-free) assumes a scoped
   cross-account WRITE role via STS and calls `PutPublicAccessBlock` (all four flags). Wired in `cmd/platform`

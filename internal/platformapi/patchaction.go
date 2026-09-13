@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/codeagent"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/tool/patchverify"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -83,13 +84,39 @@ func (d Deps) PatchForAction(ctx context.Context, a platform.Action, c platform.
 		files[pf.Path] = pf.Content
 	}
 	note := "The patch is proposed by the AI engineer (codeagent.ProposePatch, the engine measured in tsbench cvepatch) from the file the finding cites."
+	regressionPath := ""
 	if reg, err := codeagent.ProposeRegressionTest(ctx, llm, cf, patch, sources); err == nil && !reg.Empty() {
 		if _, clash := files[reg.File.Path]; !clash {
 			files[reg.File.Path] = reg.File.Content
-			note += " A regression test rides along in `" + reg.File.Path + "`; run it before and after to see the finding close."
+			regressionPath = reg.File.Path
+			note += " A regression test rides along in `" + reg.File.Path + "`."
 		}
 	} else {
-		note += " No regression test could be written for it, so verification is your re-scan."
+		note += " No regression test could be written for it."
+	}
+
+	// EXECUTION VERIFICATION, when the deployment can run it. The verdict is stated in the PR body
+	// either way, and a patch the customer's own tests reject is NOT attached: a PR carrying a diff
+	// that breaks the suite, or one whose regression test still fails, is the "AI fix" that costs a
+	// reviewer more than no patch. Unverifiable is not a failure — it is said as itself.
+	switch {
+	case d.PatchVerifier == nil:
+		note += " It was NOT executed against your tests (this deployment has no sandbox verifier); your re-scan is the verification."
+	case regressionPath == "":
+		note += " It was NOT executed against your tests: without a regression test nothing can fail before and pass after."
+	default:
+		v, verr := d.PatchVerifier(ctx, a.TenantID, full, files, regressionPath)
+		switch {
+		case verr != nil:
+			note += " It was NOT executed against your tests: " + verr.Error() + "."
+		case v.Status == patchverify.Verified:
+			note += " EXECUTED against your repository in the scan sandbox: " + v.Reason + " (runner: " + v.Runner + ")."
+		case v.Status == patchverify.Unverifiable:
+			note += " It could NOT be executed against your tests: " + v.Reason + "."
+		default:
+			// not_fixed / broke_suite / vacuous — the tests said no, so the diff does not ship.
+			return nil, "", fmt.Errorf("the patch was executed against your repository's tests and rejected (%s: %s); the engineer's diff is withheld and the instructions below stand", v.Status, v.Reason)
+		}
 	}
 	if d.Recorder != nil {
 		d.Recorder.Record("patch attached to remediation PR", "l2-autofix",

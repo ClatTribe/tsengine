@@ -528,6 +528,9 @@ func main() {
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
 		OktaOrgURL: os.Getenv("OKTA_ORG_URL"),
+		// A delivery-time patch is EXECUTED against the repository's own tests in the scan sandbox
+		// before it is attached to the PR; a patch the tests reject is withheld (patchverify.go).
+		PatchVerifier: patchVerifier(scanImages, st, vault),
 		// SIGNED compliance evidence pack (ADR 0031 D2b): the auditor-facing artifact is ed25519-
 		// attested with the platform's key. Nil-safe downstream — without a key the endpoint
 		// returns 501 rather than serving an unsigned artifact from a signed route.

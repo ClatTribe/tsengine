@@ -47,6 +47,7 @@ func TestSandboxImageProvidesEveryToolBinary(t *testing.T) {
 		"api_response_sample": true, // unauthenticated GET + classify via internal/dataclass
 		"openapi_spec_ingest": true, // spec fetch + parse
 		"seed_auth":           true, // form/passthrough login via net/http
+		"patchverify":         true, // drives the runtimes the image already carries (go, python3); ships no binary of its own
 	}
 
 	for _, tl := range tool.All() {

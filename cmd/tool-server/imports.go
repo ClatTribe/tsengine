@@ -37,6 +37,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/openapi"
 	_ "github.com/ClatTribe/tsengine/internal/tool/osvscanner"
 	_ "github.com/ClatTribe/tsengine/internal/tool/padbuster"
+	_ "github.com/ClatTribe/tsengine/internal/tool/patchverify"
 	_ "github.com/ClatTribe/tsengine/internal/tool/prowler"
 	_ "github.com/ClatTribe/tsengine/internal/tool/schemathesis"
 	_ "github.com/ClatTribe/tsengine/internal/tool/scoutsuite"

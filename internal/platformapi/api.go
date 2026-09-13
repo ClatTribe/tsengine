@@ -41,6 +41,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/scubaingest"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/tool/patchverify"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -89,6 +90,11 @@ type Deps struct {
 	// OktaOrgURL is the deployment's Okta org base (OKTA_ORG_URL) — every Okta endpoint is relative
 	// to it. Used by the live Okta posture sync; empty → that sync says the org URL is not set.
 	OktaOrgURL string
+	// PatchVerifier execution-verifies a proposed code patch against the repository's own tests in
+	// the scan sandbox (cmd/platform wires it over the same clone+spawn a scan uses). nil → patches
+	// are attached unverified and the PR body says so; a deployment without the sandbox never
+	// claims a test ran.
+	PatchVerifier func(ctx context.Context, tenantID, fullName string, files map[string]string, regression string) (patchverify.Verdict, error)
 	// MDMHTTP overrides the client the live device-posture sync uses to reach the tenant's Kandji /
 	// Jamf (default: the SSRF-guarded client, since the base URL is tenant-controlled). Tests only.
 	MDMHTTP *http.Client
