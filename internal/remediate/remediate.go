@@ -72,7 +72,10 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		payload := map[string]any{"target": asset.Target, "remediation": fixBody(f), "owner": ownerLine(asset)}
 		if rt, tgt := liveCloudMutation(f, asset.Meta["provider"]); rt != "" {
 			payload["remediation_type"] = rt
-			payload["target"] = tgt // the specific bucket, not the whole account
+			payload["target"] = tgt // the specific bucket / group, not the whole account
+			if rt == rtypeSGRevoke {
+				sgRevokePayload(f, tgt, payload)
+			}
 		} else if rt, runbook, ok := cloudFixCatalog(f, asset.Meta["provider"]); ok {
 			// Respond breadth: a class-correct fix for the common non-storage cloud-misconfig classes
 			// (IAM privesc, open SG, unencrypted-at-rest, public snapshot/DB, missing MFA, disabled

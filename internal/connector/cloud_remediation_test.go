@@ -11,6 +11,8 @@ type recordingAWSWriter struct{ blocked string }
 
 func (r *recordingAWSWriter) DeactivateAccessKey(context.Context, string) error { return nil }
 
+func (r *recordingAWSWriter) RevokeOpenIngress(context.Context, string, int) error { return nil }
+
 func (r *recordingAWSWriter) BlockS3PublicAccess(_ context.Context, bucket string) error {
 	r.blocked = bucket
 	return nil
