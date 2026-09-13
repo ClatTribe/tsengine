@@ -689,10 +689,14 @@ export const api = {
       "/v1/episodes" + (scope ? `?scope=${encodeURIComponent(scope)}` : ""),
     ),
 
-  setPRBotSettings: (enabled: boolean, blockSeverity: string) =>
+  setPRBotSettings: (enabled: boolean, blockSeverity: string, installationId?: string) =>
     call<{ enabled: boolean; block_severity: string; saved: boolean }>("/v1/settings/pr-bot", {
       method: "PUT",
-      body: JSON.stringify({ enabled, block_severity: blockSeverity }),
+      body: JSON.stringify(
+        installationId === undefined
+          ? { enabled, block_severity: blockSeverity }
+          : { enabled, block_severity: blockSeverity, installation_id: installationId },
+      ),
     }),
 
   // Live GitHub-org SaaS-posture sync — runs the SSPM checks via the onboarded GitHub token (no

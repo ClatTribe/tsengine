@@ -28,6 +28,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/connector/ghapp"
 	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/detectionvalidation"
@@ -84,6 +85,11 @@ type Deps struct {
 	// GitHubAPIBase overrides the GitHub REST base for the live SaaS-posture sync (default
 	// https://api.github.com). Set only in tests (a fake API server).
 	GitHubAPIBase string
+	// GitHubApp, when set, lets the PR-review bot POST: the merge-gating check-run and the inline
+	// review comments are posted with an installation token minted by the App (internal/connector/
+	// ghapp). Only an App can own a check-run, so the OAuth connection cannot stand in. nil → the
+	// pr-check computes its verdict and says the review was not posted, and why.
+	GitHubApp ghapp.TokenSource
 	// GraphAPIBase overrides the Microsoft Graph base for the live M365 SaaS-posture
 	// sync (default https://graph.microsoft.com). Test/staging override only.
 	GraphAPIBase string

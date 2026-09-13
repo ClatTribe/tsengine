@@ -1319,6 +1319,13 @@ export interface PRBotSettings {
   enabled: boolean;
   block_severity: string;
   github_connected: boolean;
+  // Whether a review actually lands in the PR: the operator's App, this workspace's installation
+  // id, and the GitHub connection — posting_live is their conjunction; not_posting_reason names
+  // the first missing one so the reader is sent to the right fix.
+  app_configured?: boolean;
+  installation_id?: string;
+  posting_live?: boolean;
+  not_posting_reason?: string;
 }
 
 // Non-human / AI-agent identity posture (GET /v1/identities) — the ACSP agentic identity lens.

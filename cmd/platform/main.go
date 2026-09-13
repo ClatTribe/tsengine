@@ -40,6 +40,7 @@
 //	PAGERDUTY_ROUTING_KEY      PagerDuty Events API v2 key — pages on-call for new high/critical incidents
 //	TSENGINE_TEAMS_WEBHOOK     Microsoft Teams Incoming Webhook — posts new high/critical incidents
 //	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
+//	GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY(_FILE)  GitHub App — lets the PR-review bot POST check-runs + inline comments
 package main
 
 import (
@@ -77,6 +78,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/cloudprobe"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
+	"github.com/ClatTribe/tsengine/internal/connector/ghapp"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/detect"
@@ -595,6 +597,15 @@ func main() {
 	// Fill a missing CWE on a scanner finding before the L1.5 chain runs, so compliance.map can map
 	// it to controls (§8). No tenant model → a no-op, which is also how the Free plan's AI gate
 	// reaches it.
+	// The PR-review bot's WRITE identity. Only a GitHub App can own a check-run, so the OAuth
+	// connection cannot post the merge gate; a misconfigured App fails boot rather than reporting
+	// every review as "not posted" for the wrong reason. Unset → the bot computes and does not post.
+	if app, err := ghapp.FromEnv(); err != nil {
+		log.Fatalf("github app: %v", err)
+	} else if app != nil {
+		apiDeps.GitHubApp = app
+		log.Printf("[platform] GitHub App %s configured — PR reviews will be posted for workspaces that record their installation id", app.ID)
+	}
 	svc.AttributeCWEs = apiDeps.CWEAttributor()
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
 	// Device posture becomes a continuously-monitored surface: the SAME fetcher construction the
