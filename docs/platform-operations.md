@@ -77,6 +77,7 @@ provider (§5–§6).
 | Var | Provider |
 |---|---|
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub |
+| `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY` (PEM, `\n`-escaped ok) or `GITHUB_APP_PRIVATE_KEY_FILE` | **GitHub App — the PR-review bot's write identity.** Permissions: `checks: write`, `pull_requests: write`. Each workspace records where the App is installed (installation id) in Settings → Pull-request review; `POST /v1/ci/pr-check` then posts the merge-gating check-run + inline comments and reports `posted` / `not_posted_reason`. Unset → the gate still works from the CI exit code, nothing is posted, and the reason is returned. |
 | `GITLAB_CLIENT_ID` / `GITLAB_CLIENT_SECRET` | GitLab |
 | `BITBUCKET_CLIENT_ID` / `BITBUCKET_CLIENT_SECRET` | Bitbucket Cloud (OAuth consumer key/secret; grant repository + pullrequest scopes) |
 | `AZURE_DEVOPS_CLIENT_ID` / `AZURE_DEVOPS_CLIENT_SECRET` / `AZURE_DEVOPS_ORG` | Azure DevOps (App ID + client secret; `vso.code`/`vso.code_write` scopes). `ORG` is the organization (`dev.azure.com/{ORG}`) — required, since the org isn't carried in the OAuth flow. |

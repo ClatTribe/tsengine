@@ -191,8 +191,9 @@ export async function setTrainingConsent(consented: boolean, by: string): Promis
 export async function setPRBotPolicy(
   enabled: boolean,
   blockSeverity: string,
+  installationId?: string,
 ): Promise<{ enabled: boolean; block_severity: string }> {
-  const r = await api.setPRBotSettings(enabled, blockSeverity);
+  const r = await api.setPRBotSettings(enabled, blockSeverity, installationId);
   revalidatePath("/settings");
   return { enabled: r.enabled, block_severity: r.block_severity };
 }
