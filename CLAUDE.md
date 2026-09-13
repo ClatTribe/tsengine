@@ -1175,7 +1175,17 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
 - **container** â `POST /v1/registry/reconcile`: a connector posts current images + last-seen digests â
   `registrywatch.Reconcile` â the scan-on-push plan (stateless; the connector runs the sandbox scan).
 - **repository** â `prbot.Submit` builds the GitHub PR-review + merge-gating check-run; the live POST is
-  gated on the GitHub App PR-write scope. **cloud** â `connector.AWS.Apply` S3 block-public-access is now a
+  gated on the GitHub App PR-write scope. **The automated code-fix PR now carries the engineer's DIFF.**
+  `remediate.Propose` built an `ActOpenPR` with `full_name/base/head/body` and NO files while
+  `connector.GitHub.Apply` commits only when `files` is present, so the pipeline's PR told the customer
+  what to do and the only real diff was the manual `/v1/findings/{id}/autofix` JSON a human had to paste.
+  `remediate.Deliverer.Patcher` (wired to `platformapi.PatchForAction`) runs the SAME engine as the button
+  at delivery time (read the cited file through the connection's token, `codeagent.ProposePatch`, the
+  regression test riding along as a second file) and the connector commits the files to the head branch
+  before opening the PR. Refusals are QUOTED in the PR body (no model configured, a location that is not a
+  file, an unreadable file, an empty proposal) rather than producing a silent instruction-only PR, and a
+  patch failure never blocks the PR. Execution-verifying the patch in the product (the bench oracle) is the
+  documented follow-on. **cloud** â `connector.AWS.Apply` S3 block-public-access is now a
   **live, SDK-backed write path**: `internal/connector/awsremediate.S3Writer` (aws-sdk-go-v2 â the project's
   one cloud SDK, isolated in its own package so the core `connector` stays SDK-free) assumes a scoped
   cross-account WRITE role via STS and calls `PutPublicAccessBlock` (all four flags). Wired in `cmd/platform`

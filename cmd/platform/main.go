@@ -601,6 +601,10 @@ func main() {
 		platform.ConnM365:       identitylog.NewM365(),
 		platform.ConnGWorkspace: identitylog.NewGWorkspace(),
 	}
+	// A code-fix PR carries the engineer's DIFF, not only instructions: at delivery the same engine
+	// the autofix button runs proposes the file changes and the connector commits them to the PR's
+	// head branch. No model configured → the PR opens with its instructions and says why.
+	deliverer.Patcher = remediate.PatcherFunc(apiDeps.PatchForAction)
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
 	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the
