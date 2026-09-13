@@ -603,6 +603,11 @@ func main() {
 	svc.MDMFetcher = apiDeps.MDMFetcherFor
 	// Identity THREAT detection reads each connected IdP's audit log every pass through the
 	// onboarded token (read scopes: okta.logs.read / AuditLog.Read.All / admin.reports.audit.readonly).
+	// Cloud control-plane THREAT detection polls CloudTrail's event history each pass through the
+	// same read-only role the inventory fetch uses (cloudtrail:LookupEvents is in ReadOnlyAccess).
+	svc.CloudEventReader = func(c platform.Connection) awsfetch.EventReader {
+		return awsfetch.NewCloudTrailLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID)
+	}
 	svc.IdentityLogFetchers = map[string]identitylog.Fetcher{
 		platform.ConnOkta:       identitylog.NewOkta(os.Getenv("OKTA_ORG_URL")),
 		platform.ConnM365:       identitylog.NewM365(),

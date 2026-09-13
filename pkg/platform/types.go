@@ -131,6 +131,10 @@ type Tenant struct {
 	// the ITDR sync has read (internal/identitylog). The next pass reads from just before it; a
 	// failed or empty read never advances it, so no event is skipped past.
 	IdentityLogCursors map[string]time.Time `json:"identity_log_cursors,omitempty"`
+	// CloudEventCursors is, per cloud connection id, the newest CloudTrail event time the CDR poller
+	// has read (runner.SyncCloudEvents). Same rule as IdentityLogCursors: a failed read never
+	// advances it; a truncated read does, and the unread older span is reported, not skipped silently.
+	CloudEventCursors map[string]time.Time `json:"cloud_event_cursors,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,

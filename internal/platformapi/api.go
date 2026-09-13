@@ -357,45 +357,46 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents))                                             // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
 	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents))                                           // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
 	mux.HandleFunc("POST /v1/identity/sync", d.auth(d.handleIdentitySync))                                                     // read the connected IdPs' audit logs now and run ITDR over them (the pass's on-demand twin)
-	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))                                                 // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
-	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile))                                           // container scan-on-push decision (ADR 0010 Phase 4)
-	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))                                                   // api: Postman collection → endpoint inventory
-	mux.HandleFunc("POST /v1/osint/ingest", d.auth(d.handleIngestOSINT))                                                       // OSINT external-exposure snapshot → findings (ADR 0011)
-	mux.HandleFunc("POST /v1/osint/scan", d.auth(d.handleOSINTScan))                                                           // LIVE keyless OSINT (crt.sh CT) over the tenant's domains
-	mux.HandleFunc("POST /v1/cloud/inventory", d.auth(d.handleIngestAWSInventory))                                             // live collector: posted raw AWS state → attack-path Inventory → stored (wedge gap #1)
-	mux.HandleFunc("POST /v1/cloud/sync", d.auth(d.handleCloudSync))                                                           // LIVE read of the connected AWS account (read-only role); reports coverage
-	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))                                             // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
-	mux.HandleFunc("POST /v1/code/investigate", d.auth(d.handleCodeInvestigate))                                               // AI Code Engineer (codeagent) — depth over code findings + source (LLM-gated)
-	mux.HandleFunc("POST /v1/code/sweep", d.auth(d.handleCodeSweep))                                                           // PROACTIVE code vuln discovery (codesweep) — finds what no scanner reported (LLM-gated)
-	mux.HandleFunc("GET /v1/code/investigate", d.auth(d.handleCodeInvestigationView))                                          // stored code-agent confirmed-exploitable assessments
-	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))                                        // stored cloud-agent attack paths
-	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                                                       // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
-	mux.HandleFunc("GET /v1/findings/{id}/localize", d.auth(d.handleLocalize))                                                 // T2 "where is the fix?" — the SAME localizer the agent uses, exposed to a human
-	mux.HandleFunc("POST /v1/findings/{id}/autofix", d.auth(d.handleAutofix))                                                  // AI autofix — LLM-generated code patch for a finding (LLM-gated)
-	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))                                            // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
-	mux.HandleFunc("GET /v1/ai-analyses", d.auth(d.handleListAIAnalyses))                                                      // persisted AI Security Engineer analyses (Triage/Investigate) — a run survives navigation; ?kind= filter
-	mux.HandleFunc("POST /v1/apiauthz/discover", d.auth(d.handleAuthzDiscover))                                                // API BOLA/BFLA discovery — LLM proposes candidate authz tests (LLM-gated)
-	mux.HandleFunc("POST /v1/tls/scan", d.auth(d.handleTLSScan))                                                               // TLS/SSL posture — host-side handshake assessment (no sandbox, SSRF-screened)
-	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                                                                 // OSINT "External exposure" view + summary
-	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
-	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
-	mux.HandleFunc("POST /v1/saas/m365/sync", d.auth(d.handleSyncSaaSM365))                                                    // LIVE M365 SSPM via the onboarded Graph token (SCuBA fetch half)
-	mux.HandleFunc("POST /v1/saas/okta/sync", d.auth(d.handleSyncSaaSOkta))                                                    // LIVE Okta CONFIGURATION posture (sign-on/password/MFA-enroll policies, API tokens, ThreatInsight)
-	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                                                         // continuous config-snapshot drift: prev+cur inventory → change-control findings
-	mux.HandleFunc("GET /v1/estate", d.auth(d.handleEstateGraph))                                                              // the composed cross-surface estate graph (the agents' substrate)
-	mux.HandleFunc("POST /v1/estate/detect", d.auth(d.handleEstateDetect))                                                     // cross-surface detections no single scanner can make
-	mux.HandleFunc("GET /v1/ask", d.auth(d.handleAsk))                                                                         // T6 "ask your estate" — the SAME search the agent uses, exposed to a human
-	mux.HandleFunc("GET /v1/cloud/history", d.auth(d.handleCloudHistory))                                                      // "when did this become public?" — the estate timeline (append-only, change-detected)
-	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                                                       // "search your cloud like a database" — query the inventory + relationships
-	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                                                         // third-party / vendor risk (TPRM) inventory → findings
-	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))                                             // endpoint/device posture (MDM-lite) inventory → findings
-	mux.HandleFunc("POST /v1/devices/sync", d.auth(d.handleSyncDevices))                                                       // LIVE device posture fetched from the configured MDM (Bucket A)
-	mux.HandleFunc("POST /v1/hris/sync", d.auth(d.handleSyncHRIS))                                                             // LIVE HR roster fetch + joiner/leaver join against the IdP
-	mux.HandleFunc("GET /v1/settings/ai-mode", d.auth(d.handleGetAIMode))                                                      // what AI is running, why, and this month's spend
-	mux.HandleFunc("PUT /v1/settings/ai-mode", d.auth(d.handleSetAIMode))                                                      // deterministic-only | +engineer | +pentester
-	mux.HandleFunc("POST /v1/database/scan", d.auth(d.handleDatabaseScan))                                                     // connect Postgres (Supabase/Neon/RDS) — DSN used once, never stored
-	mux.HandleFunc("POST /v1/vercel/ingest", d.auth(d.handleVercelIngest))                                                     // deployment-platform posture (preview exposure, prod secrets in preview)
-	mux.HandleFunc("POST /v1/dataplatform/ingest", d.auth(d.handleDataPlatformIngest))                                         // warehouse grants (snowflake/bigquery/postgres) → who can read which table
+	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))
+	mux.HandleFunc("POST /v1/cloud/events/sync", d.auth(d.handleCloudEventsSync))           // poll the connected AWS account's CloudTrail now and run CDR over it (the pass's on-demand twin)                                                 // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
+	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile))        // container scan-on-push decision (ADR 0010 Phase 4)
+	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))                // api: Postman collection → endpoint inventory
+	mux.HandleFunc("POST /v1/osint/ingest", d.auth(d.handleIngestOSINT))                    // OSINT external-exposure snapshot → findings (ADR 0011)
+	mux.HandleFunc("POST /v1/osint/scan", d.auth(d.handleOSINTScan))                        // LIVE keyless OSINT (crt.sh CT) over the tenant's domains
+	mux.HandleFunc("POST /v1/cloud/inventory", d.auth(d.handleIngestAWSInventory))          // live collector: posted raw AWS state → attack-path Inventory → stored (wedge gap #1)
+	mux.HandleFunc("POST /v1/cloud/sync", d.auth(d.handleCloudSync))                        // LIVE read of the connected AWS account (read-only role); reports coverage
+	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))          // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
+	mux.HandleFunc("POST /v1/code/investigate", d.auth(d.handleCodeInvestigate))            // AI Code Engineer (codeagent) — depth over code findings + source (LLM-gated)
+	mux.HandleFunc("POST /v1/code/sweep", d.auth(d.handleCodeSweep))                        // PROACTIVE code vuln discovery (codesweep) — finds what no scanner reported (LLM-gated)
+	mux.HandleFunc("GET /v1/code/investigate", d.auth(d.handleCodeInvestigationView))       // stored code-agent confirmed-exploitable assessments
+	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))     // stored cloud-agent attack paths
+	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                    // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
+	mux.HandleFunc("GET /v1/findings/{id}/localize", d.auth(d.handleLocalize))              // T2 "where is the fix?" — the SAME localizer the agent uses, exposed to a human
+	mux.HandleFunc("POST /v1/findings/{id}/autofix", d.auth(d.handleAutofix))               // AI autofix — LLM-generated code patch for a finding (LLM-gated)
+	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))         // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
+	mux.HandleFunc("GET /v1/ai-analyses", d.auth(d.handleListAIAnalyses))                   // persisted AI Security Engineer analyses (Triage/Investigate) — a run survives navigation; ?kind= filter
+	mux.HandleFunc("POST /v1/apiauthz/discover", d.auth(d.handleAuthzDiscover))             // API BOLA/BFLA discovery — LLM proposes candidate authz tests (LLM-gated)
+	mux.HandleFunc("POST /v1/tls/scan", d.auth(d.handleTLSScan))                            // TLS/SSL posture — host-side handshake assessment (no sandbox, SSRF-screened)
+	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                              // OSINT "External exposure" view + summary
+	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot)) // SaaS posture (SSPM) snapshot → findings
+	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))         // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
+	mux.HandleFunc("POST /v1/saas/m365/sync", d.auth(d.handleSyncSaaSM365))                 // LIVE M365 SSPM via the onboarded Graph token (SCuBA fetch half)
+	mux.HandleFunc("POST /v1/saas/okta/sync", d.auth(d.handleSyncSaaSOkta))                 // LIVE Okta CONFIGURATION posture (sign-on/password/MFA-enroll policies, API tokens, ThreatInsight)
+	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                      // continuous config-snapshot drift: prev+cur inventory → change-control findings
+	mux.HandleFunc("GET /v1/estate", d.auth(d.handleEstateGraph))                           // the composed cross-surface estate graph (the agents' substrate)
+	mux.HandleFunc("POST /v1/estate/detect", d.auth(d.handleEstateDetect))                  // cross-surface detections no single scanner can make
+	mux.HandleFunc("GET /v1/ask", d.auth(d.handleAsk))                                      // T6 "ask your estate" — the SAME search the agent uses, exposed to a human
+	mux.HandleFunc("GET /v1/cloud/history", d.auth(d.handleCloudHistory))                   // "when did this become public?" — the estate timeline (append-only, change-detected)
+	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                    // "search your cloud like a database" — query the inventory + relationships
+	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                      // third-party / vendor risk (TPRM) inventory → findings
+	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))          // endpoint/device posture (MDM-lite) inventory → findings
+	mux.HandleFunc("POST /v1/devices/sync", d.auth(d.handleSyncDevices))                    // LIVE device posture fetched from the configured MDM (Bucket A)
+	mux.HandleFunc("POST /v1/hris/sync", d.auth(d.handleSyncHRIS))                          // LIVE HR roster fetch + joiner/leaver join against the IdP
+	mux.HandleFunc("GET /v1/settings/ai-mode", d.auth(d.handleGetAIMode))                   // what AI is running, why, and this month's spend
+	mux.HandleFunc("PUT /v1/settings/ai-mode", d.auth(d.handleSetAIMode))                   // deterministic-only | +engineer | +pentester
+	mux.HandleFunc("POST /v1/database/scan", d.auth(d.handleDatabaseScan))                  // connect Postgres (Supabase/Neon/RDS) — DSN used once, never stored
+	mux.HandleFunc("POST /v1/vercel/ingest", d.auth(d.handleVercelIngest))                  // deployment-platform posture (preview exposure, prod secrets in preview)
+	mux.HandleFunc("POST /v1/dataplatform/ingest", d.auth(d.handleDataPlatformIngest))      // warehouse grants (snowflake/bigquery/postgres) → who can read which table
 	mux.HandleFunc("POST /v1/agents/ingest", d.auth(d.handleAgentPostureIngest))
 	// Live collector path: Uber ADR Sensor JSONL straight in (github.com/uber/ADR, Apache-2.0).
 	mux.HandleFunc("POST /v1/agents/telemetry", d.auth(d.handleAgentTelemetry))                // AI-agent estate posture (shadow AI + MCP supply chain) → findings

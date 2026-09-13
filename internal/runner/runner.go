@@ -29,6 +29,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/hitl"
 	"net/http"
 
+	"github.com/ClatTribe/tsengine/internal/connector/awsfetch"
 	"github.com/ClatTribe/tsengine/internal/identitylinks"
 	"github.com/ClatTribe/tsengine/internal/identitylog"
 	"github.com/ClatTribe/tsengine/internal/mdm"
@@ -145,6 +146,12 @@ type Service struct {
 	// audit log through the onboarded connection's token and runs internal/identitythreat over the
 	// window (sync_identitylog.go). nil/empty → ITDR runs only on events a customer POSTs.
 	IdentityLogFetchers map[string]identitylog.Fetcher
+
+	// CloudEventReader, when set, makes cloud DETECTION-AND-RESPONSE a CONTINUOUSLY-monitored
+	// surface: each pass polls the connected AWS account's CloudTrail event history through its
+	// read-only role and runs internal/cloudcdr over the window (sync_cloudevents.go). nil → CDR
+	// runs only on events a customer POSTs to /v1/cloud/events.
+	CloudEventReader func(c platform.Connection) awsfetch.EventReader
 
 	// IdentityLinkOpts, when set, makes the person → GitHub join inputs a per-pass fetch
 	// (internal/identitylinks: GitHub SAML external identities, Okta SCIM assignments joined on
@@ -520,6 +527,15 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	current = append(current, idRes.Findings...)
 	if idRan {
 		cov = cov.With("identitythreat")
+	}
+	// Cloud control-plane THREATS: poll CloudTrail since the last pass and run the CDR rules, so a
+	// root console login or a trail being stopped opens an incident within a monitoring interval
+	// rather than only when a customer-built forwarder posts it. Same honesty as the identity log:
+	// no reader / no active AWS connection / a failed read → not observed, "cloudcdr" not covered.
+	cdrRes, cdrRan := s.SyncCloudEvents(ctx, tenantID)
+	current = append(current, cdrRes.Findings...)
+	if cdrRan {
+		cov = cov.With("cloudcdr")
 	}
 	// The person → code join inputs, refreshed each pass so the estate graph can draw the chain
 	// from a workforce identity to a repository to the cloud role its workflows assume. Produces no

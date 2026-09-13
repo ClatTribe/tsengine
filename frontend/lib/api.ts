@@ -710,6 +710,15 @@ export const api = {
       "/v1/saas/okta/sync", { method: "POST" },
     ),
 
+  // Live CloudTrail poll — the connected AWS account's control-plane events since the last read,
+  // run through the CDR rules. `unread` names a truncated window's unexamined span and `failed`
+  // names an account that could not be read, so zero threats is never mistaken for a quiet account.
+  syncCloudEvents: () =>
+    call<{ connections: string[]; records: number; events: number; threats: unknown[]; findings: unknown[];
+      failed?: Record<string, string>; unread?: Record<string, string> }>(
+      "/v1/cloud/events/sync", { method: "POST" },
+    ),
+
   // Per-tenant Jira ticketing destination (Bucket B). GET reports base/email/project + has_token
   // (never the token); PUT seals the token server-side. An empty base_url clears it.
   // Push-to-Drata: the engine's control posture as records the customer's Drata tests evaluate.
