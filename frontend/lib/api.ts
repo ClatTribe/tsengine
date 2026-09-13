@@ -702,6 +702,14 @@ export const api = {
       "/v1/saas/github_org/sync", { method: "POST" },
     ),
 
+  // Live Okta CONFIGURATION posture — the org's sign-on/password/MFA-enrollment policies, API tokens
+  // and ThreatInsight through the onboarded Okta token. `unread` names every setting the token could
+  // not read, so a count of zero is never mistaken for a hardened org.
+  syncOktaPosture: () =>
+    call<{ provider: string; source: string; org: string; count: number; unread?: Record<string, string> }>(
+      "/v1/saas/okta/sync", { method: "POST" },
+    ),
+
   // Per-tenant Jira ticketing destination (Bucket B). GET reports base/email/project + has_token
   // (never the token); PUT seals the token server-side. An empty base_url clears it.
   // Push-to-Drata: the engine's control posture as records the customer's Drata tests evaluate.

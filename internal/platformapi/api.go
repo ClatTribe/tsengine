@@ -86,6 +86,9 @@ type Deps struct {
 	// GraphAPIBase overrides the Microsoft Graph base for the live M365 SaaS-posture
 	// sync (default https://graph.microsoft.com). Test/staging override only.
 	GraphAPIBase string
+	// OktaOrgURL is the deployment's Okta org base (OKTA_ORG_URL) — every Okta endpoint is relative
+	// to it. Used by the live Okta posture sync; empty → that sync says the org URL is not set.
+	OktaOrgURL string
 	// MDMHTTP overrides the client the live device-posture sync uses to reach the tenant's Kandji /
 	// Jamf (default: the SSRF-guarded client, since the base URL is tenant-controlled). Tests only.
 	MDMHTTP *http.Client
@@ -371,6 +374,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
 	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
 	mux.HandleFunc("POST /v1/saas/m365/sync", d.auth(d.handleSyncSaaSM365))                                                    // LIVE M365 SSPM via the onboarded Graph token (SCuBA fetch half)
+	mux.HandleFunc("POST /v1/saas/okta/sync", d.auth(d.handleSyncSaaSOkta))                                                    // LIVE Okta CONFIGURATION posture (sign-on/password/MFA-enroll policies, API tokens, ThreatInsight)
 	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                                                         // continuous config-snapshot drift: prev+cur inventory → change-control findings
 	mux.HandleFunc("GET /v1/estate", d.auth(d.handleEstateGraph))                                                              // the composed cross-surface estate graph (the agents' substrate)
 	mux.HandleFunc("POST /v1/estate/detect", d.auth(d.handleEstateDetect))                                                     // cross-surface detections no single scanner can make
