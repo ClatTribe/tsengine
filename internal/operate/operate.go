@@ -12,6 +12,7 @@ package operate
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -112,6 +113,26 @@ type OAuthGrant struct {
 	Users      int      `json:"users"`       // how many users granted it
 	AdminScope bool     `json:"admin_scope"` // holds an admin/directory-wide scope
 	Verified   bool     `json:"verified"`    // publisher-verified by the provider
+	// ClientID and UserIDs are the provider's OWN identifiers for the grant — what a live revoke
+	// needs (Okta revokes grants per user × client). Optional: a provider that reports only a label
+	// leaves them empty and the finding stays a runbook, never a guess at which grant to pull.
+	ClientID string   `json:"client_id,omitempty"`
+	UserIDs  []string `json:"user_ids,omitempty"`
+}
+
+// stampGrantIDs carries the provider's own identifiers for a grant on the finding, so a live revoke
+// can name exactly the user × client pairs to pull. A grant with no ids stamps nothing and the
+// remediation stays a runbook.
+func stampGrantIDs(g OAuthGrant, f types.Finding) types.Finding {
+	if g.ClientID == "" || len(g.UserIDs) == 0 {
+		return f
+	}
+	if f.ToolArgs == nil {
+		f.ToolArgs = map[string]string{}
+	}
+	f.ToolArgs["client_id"] = g.ClientID
+	f.ToolArgs["user_ids"] = strings.Join(g.UserIDs, ",")
+	return f
 }
 
 // Options bound the assessment.
@@ -334,13 +355,13 @@ func checkOAuthGrants(ws Workspace, now time.Time, id func() string) []types.Fin
 	for _, g := range ws.OAuthGrants {
 		switch {
 		case g.AdminScope:
-			out = append(out, finding(id(), "operate::oauth-admin-scope", types.SeverityCritical,
+			out = append(out, stampGrantIDs(g, finding(id(), "operate::oauth-admin-scope", types.SeverityCritical,
 				"Third-party app with admin scope: "+g.App, g.App,
 				fmt.Sprintf("App %q holds a directory/admin scope (%v) across %d users — effectively shadow-admin. Review and revoke if unneeded.", g.App, g.Scopes, g.Users),
 				now, comp(types.Compliance{SOC2: []string{"CC6.3"}, CISv8: []string{"6.8"},
 					GDPR: []string{"Art. 32", "Art. 28"}, ISO27701: []string{"6.12"}, NIST80053: []string{"AC-6", "AC-3"},
 					NIST800171: []string{"3.1.5"}, CCPA: []string{"1798.140"}, FedRAMP: []string{"AC-6"}, DPDP: []string{"Sec. 8(5)"},
-					HIPAA: []string{"164.312(a)(1)"}, ISO27001: []string{"A.5.15"}, SOX: []string{"ITGC: Access to Programs & Data"}})))
+					HIPAA: []string{"164.312(a)(1)"}, ISO27001: []string{"A.5.15"}, SOX: []string{"ITGC: Access to Programs & Data"}}))))
 		case !g.Verified && g.Users > 0:
 			out = append(out, finding(id(), "operate::oauth-unverified-app", types.SeverityMedium,
 				"Unverified third-party app granted access: "+g.App, g.App,

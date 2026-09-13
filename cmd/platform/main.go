@@ -622,6 +622,11 @@ func main() {
 	svc.KeyDeactivate = func(f types.Finding, c platform.Connection) (platform.Action, bool) {
 		return remediate.KeyDeactivateAction(f, c, newID)
 	}
+	// An identity incident's containment becomes a live, gated Okta session revoke when the tenant
+	// has an Okta connection; every other incident keeps the runbook ticket + T3 draft.
+	svc.ProposeIncidentResponseWith = func(inc platform.Incident, conns []platform.Connection) ([]platform.Action, bool) {
+		return remediate.ProposeIncidentResponseWith(inc, conns, newID)
+	}
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
 	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the

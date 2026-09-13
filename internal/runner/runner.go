@@ -164,6 +164,11 @@ type Service struct {
 	// instruction is all the customer gets, as before.
 	KeyDeactivate func(f types.Finding, aws platform.Connection) (platform.Action, bool)
 
+	// ProposeIncidentResponseWith supersedes ProposeIncidentResponse when set: the same proposal
+	// with the tenant's connections in hand, so an identity incident's containment can be a live,
+	// gated Okta session revoke rather than a ticket. Wired to remediate.ProposeIncidentResponseWith.
+	ProposeIncidentResponseWith func(inc platform.Incident, conns []platform.Connection) ([]platform.Action, bool)
+
 	// CloudSyncer, when set, makes the connected cloud account a CONTINUOUSLY-monitored surface:
 	// each pass re-reads the account through its read-only role and diffs it against the previous
 	// snapshot, so a bucket that became public or a principal that gained admin appears as a drift
@@ -616,9 +621,20 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		// response. A critical incident yields a T3 breach-disclosure DRAFT that queues for
 		// a human signature (it can never auto-apply). Best-effort + optional — omit the
 		// proposer and incidents just open + alert as before.
-		if s.ProposeIncidentResponse != nil && s.Desk != nil {
+		if (s.ProposeIncidentResponse != nil || s.ProposeIncidentResponseWith != nil) && s.Desk != nil {
+			var conns []platform.Connection
+			if s.ProposeIncidentResponseWith != nil {
+				conns, _ = s.Store.ListConnections(ctx, tenantID) // best-effort: nil → no live containment, the ticket stands
+			}
 			for _, inc := range res.Opened {
-				if acts, ok := s.ProposeIncidentResponse(inc); ok {
+				var acts []platform.Action
+				var ok bool
+				if s.ProposeIncidentResponseWith != nil {
+					acts, ok = s.ProposeIncidentResponseWith(inc, conns)
+				} else {
+					acts, ok = s.ProposeIncidentResponse(inc)
+				}
+				if ok {
 					for _, act := range acts {
 						if _, err := s.Desk.Submit(ctx, act); err != nil && firstErr == nil {
 							firstErr = err

@@ -39,7 +39,16 @@ func proposeIdentity(f types.Finding, asset platform.Asset, idgen func() string)
 		ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 		Status: platform.ActProposed, Title: "tsengine: " + r.title, Payload: payload,
 	}
-	if liveIdentityMutation(r.kind, asset.Meta["provider"]) {
+	// The provider's own identifiers for an OAuth grant ride along when the detector stamped them
+	// (operate stamps Okta's client id and the granting user ids): they are what a live revoke
+	// names, and their absence is what keeps the action a runbook.
+	if cid := f.ToolArgs["client_id"]; cid != "" {
+		payload["client_id"] = cid
+	}
+	if uids := f.ToolArgs["user_ids"]; uids != "" {
+		payload["user_ids"] = uids
+	}
+	if liveIdentityMutation(r.kind, asset.Meta["provider"], f) {
 		act.Kind, act.Tier = platform.ActApplyConfig, tierApplyConfig // gated mutation
 	} else {
 		act.Kind, act.Tier = platform.ActFileTicket, 1 // runbook ticket
@@ -55,7 +64,12 @@ func proposeIdentity(f types.Finding, asset platform.Asset, idgen func() string)
 // Microsoft 365 (disable sign-in). Every other (type, provider) stays a ticket until its
 // connector Apply lands. Each live path still needs the IdP's write scope (read-only by
 // onboarding default); without it the Apply returns the provider's 403 honestly.
-func liveIdentityMutation(remediationType, provider string) bool {
+func liveIdentityMutation(remediationType, provider string, f types.Finding) bool {
+	if remediationType == "oauth_revoke" {
+		// Okta revokes grants per user × client, so only a finding that names both is promotable —
+		// a label alone would have the connector guessing which grant to pull.
+		return provider == platform.ConnOkta && f.ToolArgs["client_id"] != "" && f.ToolArgs["user_ids"] != ""
+	}
 	if remediationType != "account_suspend" {
 		return false
 	}
