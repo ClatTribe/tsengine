@@ -3,6 +3,7 @@ package remediate
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -44,6 +45,9 @@ func liveCloudMutation(f types.Finding, provider string) (rtype, target string) 
 	case provider == "" || strings.EqualFold(provider, "aws"):
 		if isPublicStorageFinding(f) {
 			return rtypeS3Block, f.Endpoint
+		}
+		if sg := openSecurityGroupID(f); sg != "" {
+			return rtypeSGRevoke, sg
 		}
 	case strings.EqualFold(provider, "gcp"):
 		if isPublicStorageFinding(f) {
@@ -151,4 +155,61 @@ func keyRevokeBody(f types.Finding) string {
   2. confirm nothing breaks, then: aws iam delete-access-key --access-key-id %s
   3. rotate any credential that depended on it
 Then this PR scrubs the secret from the codebase.`, named, placeholder, placeholder)
+}
+
+// rtypeSGRevoke is the LIVE half of the open-security-group runbook (rtypeSGRestrict): a tier-2,
+// HITL-gated action against the tenant's AWS connection that removes the 0.0.0.0/0 and ::/0 source
+// ranges from the group's ingress rules through connector.AWS.Apply. A DISTINCT remediation_type
+// from the runbook so cloudRunbookRemediations (which routes runbooks to a ticket) is untouched and
+// the two cannot be confused: the runbook remains the answer for GCP/Azure and for an AWS finding
+// that names no group.
+const rtypeSGRevoke = "sg_revoke_open_ingress"
+
+// sgIDRe matches a security group id in a finding's text — the grounded extractor.
+var sgIDRe = regexp.MustCompile(`\bsg-[0-9a-f]{8,17}\b`)
+
+// sgPortRe pulls the port a finding names ("port 22", "tcp_port_3389", "port: 5432").
+var sgPortRe = regexp.MustCompile(`(?i)(?:port[_:\s]+)(\d{1,5})\b`)
+
+// openSecurityGroupID returns the security group id when the finding is an open-to-the-internet
+// ingress rule on a group it NAMES — the two facts a revoke needs. Grounded (§10): the class match is
+// the catalog's own (an SG keyword + a world-open keyword), and the id comes from the finding's text;
+// a finding that describes an open group without naming it stays a runbook, because revoking rules
+// on a group the finding did not name would be a guess with a blast radius.
+func openSecurityGroupID(f types.Finding) string {
+	hay := strings.ToLower(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
+	if !(anyOf(hay, "security group", "security-group", "securitygroup", "sg-", "ingress", "inbound") &&
+		anyOf(hay, "0.0.0.0/0", "::/0", "open to", "internet", "any source", "world", "unrestricted", "wide open")) {
+		return ""
+	}
+	return sgIDRe.FindString(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
+}
+
+// openSecurityGroupPort returns the port the finding names, or 0 when it names none (then every
+// world-open rule on the group is in scope, and the action's text says so).
+func openSecurityGroupPort(f types.Finding) int {
+	m := sgPortRe.FindStringSubmatch(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
+	if len(m) < 2 {
+		return 0
+	}
+	n, _ := strconv.Atoi(m[1])
+	if n <= 0 || n > 65535 {
+		return 0
+	}
+	return n
+}
+
+// sgRevokePayload completes the payload for a live SG revoke: the port (when named) and a
+// remediation text that says exactly what approving does and does not do.
+func sgRevokePayload(f types.Finding, group string, payload map[string]any) {
+	port := openSecurityGroupPort(f)
+	scope := "every ingress rule on " + group + " whose source is 0.0.0.0/0 or ::/0"
+	if port > 0 {
+		payload["port"] = port
+		scope = fmt.Sprintf("the ingress rule(s) on %s covering port %d whose source is 0.0.0.0/0 or ::/0", group, port)
+	}
+	payload["remediation"] = "Approving this removes " + scope + ". The group is read first and ONLY the world-open " +
+		"source ranges are removed — a narrower range sharing the same rule is kept, and no other rule is touched. " +
+		"Reversible: re-add the range if a client you expected to reach the service can no longer. If the group has " +
+		"nothing world-open when this runs, the apply FAILS rather than reporting a change it did not make.\n\n" + fixBody(f)
 }

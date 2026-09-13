@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,6 +69,11 @@ type AWSWriter interface {
 	// credential the same instant. The live half of the code → cloud "fixes it"; a leaked key was
 	// a PR body telling the customer to revoke it until this existed.
 	DeactivateAccessKey(ctx context.Context, keyID string) error
+	// RevokeOpenIngress removes the 0.0.0.0/0 and ::/0 source ranges from the security group's
+	// ingress rules covering `port` (0 → every world-open rule) — reversible, and it reads the group
+	// first so a narrower range sharing a rule is never touched. The live half of the open-SG
+	// runbook; a group with nothing world-open is an error, never a no-op "applied".
+	RevokeOpenIngress(ctx context.Context, groupID string, port int) error
 }
 
 // NewAWS builds the connector. Region defaults to us-east-1.
@@ -165,6 +172,8 @@ func (a *AWS) Apply(ctx context.Context, conn platform.Connection, _ string, act
 		return w.BlockS3PublicAccess(ctx, bucketFromTarget(target))
 	case "aws_key_deactivate":
 		return w.DeactivateAccessKey(ctx, strings.TrimSpace(target))
+	case "sg_revoke_open_ingress":
+		return w.RevokeOpenIngress(ctx, strings.TrimSpace(target), portFromPayload(act.Payload["port"]))
 	default:
 		// Unreachable — Preflight rejects every remediation_type with no live path.
 		return fmt.Errorf("aws apply: remediation_type %q has no live AWS write path yet (target %s)", rt, target)
@@ -198,6 +207,15 @@ func (a *AWS) preflightWith(act platform.Action, w AWSWriter) error {
 				"role, or the operator default), so access key %s cannot be deactivated", target)
 		}
 		return nil
+	case "sg_revoke_open_ingress":
+		if !sgIDRe.MatchString(strings.TrimSpace(target)) {
+			return fmt.Errorf("sg_revoke_open_ingress action %s names no security group id (target %q)", act.ID, target)
+		}
+		if w == nil {
+			return fmt.Errorf("no live AWS write path is configured (set this connection's remediation "+
+				"role, or the operator default), so the open ingress on %s cannot be revoked", target)
+		}
+		return nil
 	case "s3_block_public_access":
 		bucket := bucketFromTarget(target)
 		if bucket == "" {
@@ -213,6 +231,26 @@ func (a *AWS) preflightWith(act platform.Action, w AWSWriter) error {
 	default:
 		return fmt.Errorf("remediation_type %q has no live AWS write path yet (target %s)", rt, target)
 	}
+}
+
+// sgIDRe is the shape of a security group id; Preflight refuses anything else before a write.
+var sgIDRe = regexp.MustCompile(`^sg-[0-9a-f]{8,17}$`)
+
+// portFromPayload reads the optional port an SG action carries. It arrives as an int when built in
+// process and as a float64 after a JSON round trip through the store; a string is tolerated. 0 = unset.
+func portFromPayload(v any) int {
+	switch p := v.(type) {
+	case int:
+		return p
+	case int64:
+		return int(p)
+	case float64:
+		return int(p)
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(p))
+		return n
+	}
+	return 0
 }
 
 // bucketFromTarget extracts the bucket name from an S3 ARN ("arn:aws:s3:::name/key") or a bare
