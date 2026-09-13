@@ -67,3 +67,26 @@ func TestScoreGCPPrivesc_Live(t *testing.T) {
 		t.Fatal("no methods parsed — the catalogue's shape changed and the extractor stopped matching")
 	}
 }
+
+// TestScoreCloudGoat_Live scores the IAM evaluator against Rhino's CloudGoat as PUBLISHED — every
+// scenario's own Terraform, not the two scenarios `tsbench cloud-engine --cloudgoat` transcribes by
+// hand. The two are different instruments and must not be conflated: that one replays our reading of
+// a lab, this one reads the corpus.
+//
+//	CLOUDGOAT_DIR=/path/to/cloudgoat/cloudgoat/scenarios/aws \
+//	  go test ./internal/bench/ -run CloudGoat_Live -v
+func TestScoreCloudGoat_Live(t *testing.T) {
+	dir := os.Getenv("CLOUDGOAT_DIR")
+	if dir == "" {
+		t.Skip("set CLOUDGOAT_DIR to cloudgoat/scenarios/aws")
+	}
+	res, err := ScoreCloudGoat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("\n" + RenderCloudGoat(res))
+	if res.Total == 0 {
+		t.Fatal("no scenarios scored — the corpus shape changed and the extractor stopped matching, " +
+			"which is exactly the failure this is meant to make visible")
+	}
+}
