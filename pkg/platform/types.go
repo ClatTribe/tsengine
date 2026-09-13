@@ -127,6 +127,10 @@ type Tenant struct {
 	// has a stamping door, asserted by a test, because a source shown with nothing stamping it can
 	// only ever read "not tested" — including for the customer who ran it.
 	PostureAssessed map[string]time.Time `json:"posture_assessed,omitempty"`
+	// IdentityLogCursors is, per identity-provider connection kind, the newest audit-log event time
+	// the ITDR sync has read (internal/identitylog). The next pass reads from just before it; a
+	// failed or empty read never advances it, so no event is skipped past.
+	IdentityLogCursors map[string]time.Time `json:"identity_log_cursors,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,

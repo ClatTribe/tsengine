@@ -27,6 +27,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/fieldevidence"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/identitylog"
 	"github.com/ClatTribe/tsengine/internal/mdm"
 	"github.com/ClatTribe/tsengine/internal/osint"
 	"github.com/ClatTribe/tsengine/internal/retest"
@@ -135,6 +136,12 @@ type Service struct {
 	// incident on its own. Given the tenant so the factory can open its sealed credential; an error
 	// (no source configured, credential unreadable) means the fleet was NOT observed this pass.
 	MDMFetcher func(ctx context.Context, t platform.Tenant) (mdm.Fetcher, error)
+
+	// IdentityLogFetchers, keyed by connection kind (platform.ConnOkta / ConnM365 / ConnGWorkspace),
+	// make identity THREAT detection a CONTINUOUSLY-monitored surface: each pass reads the provider's
+	// audit log through the onboarded connection's token and runs internal/identitythreat over the
+	// window (sync_identitylog.go). nil/empty → ITDR runs only on events a customer POSTs.
+	IdentityLogFetchers map[string]identitylog.Fetcher
 
 	// CloudSyncer, when set, makes the connected cloud account a CONTINUOUSLY-monitored surface:
 	// each pass re-reads the account through its read-only role and diffs it against the previous
@@ -471,6 +478,15 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	current = append(current, deviceFindings...)
 	if devicesRan {
 		cov = cov.With("deviceposture")
+	}
+	// Identity THREATS: read each connected IdP's audit log since the last pass and run the ITDR
+	// detector over it, so a password spray or an MFA-removed-then-login opens an incident within a
+	// monitoring interval of the log recording it. Best-effort + grounded: no fetcher / no active
+	// IdP connection / a failed read → the log was NOT observed and "identitythreat" is not covered.
+	idRes, idRan := s.SyncIdentityLogs(ctx, tenantID)
+	current = append(current, idRes.Findings...)
+	if idRan {
+		cov = cov.With("identitythreat")
 	}
 	cloudFindings, cloudRan := s.syncCloud(ctx, tenantID)
 	current = append(current, cloudFindings...)
