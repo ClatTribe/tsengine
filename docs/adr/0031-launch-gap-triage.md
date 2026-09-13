@@ -142,12 +142,27 @@ the cheapest to fix — which is exactly the §0 inversion the ranking exists to
    - domain/ip: **zero measured numbers** (fixture stubs); their registry tiers are comment-only;
    - cloud offline bench: recall 1.00 against ground truth seeded at **19 of CIS's ~60 controls**;
    - api: VAmPI recall 1.000 but **one vuln class**, and — see C4 — unauthenticated by construction.
-4. **Stale documentation asserting superseded numbers**: `benchmark.md` carries 47.86% SAST and a
-   +0.17 cloud lift superseded by `SCOREBOARD.md`'s reproduced 46.54%/+0.05;
-   `docs/neutral-benchmarks.md` and `bench/scoreboard.results.json` still carry 0.387; root
-   `roadmap.md` describes the pre-platform engine (multi-tenancy 🔴, HITL 🔴 — all built);
-   `docs/pricing-model.md` disagrees with the live pricing page and `plan.go`. Each is small; summed,
-   they mean anyone auditing us reads two contradictory trees.
+4. **Stale documentation asserting superseded numbers** — **CLOSED**. Each part is now either
+   corrected or explicitly marked stale, and the one that mattered most is machine-guarded.
+   - `benchmark.md`, `docs/neutral-benchmarks.md`: corrected, and both now NAME the superseded
+     figure as superseded rather than silently swapping it.
+   - root `roadmap.md`: carries a banner saying it described the pre-platform engine and that
+     multi-tenancy / HITL / continuous monitoring all shipped.
+   - `docs/pricing-model.md`: marked **STALE ON PURPOSE (D5)** with the live tiers stated inline —
+     the honest form, since inventing fresh economics would be worse than dated ones.
+   - **The competitive collateral was the last live instance, and it was the worst.**
+     `docs/competitive-proof-sheet.md` (twice) and `docs/personas-and-workflows.md` went on
+     asserting **47.86% Youden ≈ Checkmarx (47)** after the neutral 2,740-case run measured 46.54%.
+     That is not an aged number: Checkmarx scores 47, so at the stale figure we read as AT parity
+     and at the measured one we are BELOW it. A superseded number INVERTED a competitive claim, in
+     the document written to be quoted at buyers.
+   - **Guarded so it cannot recur**: `internal/archcheck.TestPublishedSASTNumberMatchesTheScoreboard`
+     reads the figure FROM `SCOREBOARD.md` (never a hard-coded copy, which would be the next thing
+     to go stale) and fails any published `.md` under the repo root or `docs/` that asserts a
+     different SAST Youden. It accepts full precision or a correct 1-decimal rounding, scopes
+     matches to SAST context so WAVSEP's DAST per-class figure is not dragged in, and carries a
+     count floor so a reword that stops quoting the number fails loudly instead of passing
+     vacuously (§14.2 rule 6). Both halves are mutation-verified.
 
 ### C4 — Parity gaps that are genuine engineering (ranked by buyer-feel)
 

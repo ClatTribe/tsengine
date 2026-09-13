@@ -211,8 +211,8 @@ write scopes.
   connect-URL, scan-as-job, findings, the HITL approve path, compliance report, incidents,
   Trust Center, `/metrics` — and at the **UI level** (founder + invited-member click-paths,
   the forced-rotation redirect, the kill-switch banner/control).
-- **Detection accuracy vs competitors** (the FP/FN bar): SAST **47.86% Youden ≈ Checkmarx
-  (47)**, container **100% recall / 0 FP** (live host trivy), web-agent range **100% recall
+- **Detection accuracy vs competitors** (the FP/FN bar): SAST **46.54% Youden** (third on the published
+  cohort — just below Checkmarx 47, above Fortify 35), container **100% recall / 0 FP** (live host trivy), web-agent range **100% recall
   / 0 decoys flagged** (7 seeds), LLM red-team **100% recall (61/61) / 0 false breaches**
   (7 seeds). Remaining asset benches are sandbox-image-gated (DAST/WAVSEP, cloud, api, ip)
   and run in the build pipeline, not on a laptop with restricted egress.
