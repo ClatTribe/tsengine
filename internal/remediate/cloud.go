@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -72,6 +73,43 @@ func isPublicStorageFinding(f types.Finding) bool {
 // a live IAM mutation (today gated, like rtypeIAMRestrict). This is "fixes it across all three" for the
 // finding that bridges code → cloud root.
 const rtypeKeyRevoke = "aws_key_revoke"
+
+// rtypeKeyDeactivate is the LIVE half of rtypeKeyRevoke: a tier-2, HITL-gated action against the
+// tenant's AWS connection that sets the leaked key Inactive through connector.AWS.Apply.
+const rtypeKeyDeactivate = "aws_key_deactivate"
+
+// IsLeakedAWSKey reports whether a finding is a leaked AWS access key (exported for the runner,
+// which proposes the gated deactivation beside the repository PR).
+func IsLeakedAWSKey(f types.Finding) bool { return isLeakedAWSKeyFinding(f) }
+
+// KeyDeactivateAction is the second action a leaked-key finding earns: the repository PR (tier 1,
+// scrub the file) says the key must be revoked; this one DOES it, in the cloud, after a human
+// approves. It is separate from the PR because the two have different consequences and different
+// gates — a PR is reversible by not merging it, a deactivated key stops a workload the moment it is
+// applied — and because they are delivered through different connections (GitHub, AWS).
+//
+// Grounded (§10): only a key id the finding itself carries (the AKIA/ASIA token in its text) is
+// targeted; a leaked-key finding that names no id gets no action here, because deactivating a key
+// the finding did not name would be a guess with a blast radius.
+func KeyDeactivateAction(f types.Finding, aws platform.Connection, idgen func() string) (platform.Action, bool) {
+	kid := awsKeyID(f)
+	if kid == "" || aws.Kind != platform.ConnAWS {
+		return platform.Action{}, false
+	}
+	return platform.Action{
+		ID: id("act", idgen), TenantID: aws.TenantID, FindingID: f.ID, ConnectionID: aws.ID,
+		Kind: platform.ActApplyConfig, Tier: tierApplyConfig, Status: platform.ActProposed,
+		Title: "tsengine: deactivate leaked AWS access key " + kid,
+		Payload: map[string]any{
+			"remediation_type": rtypeKeyDeactivate,
+			"target":           kid,
+			"remediation": "Access key " + kid + " appears in " + nz(f.Endpoint, "the repository") + " and must be treated as compromised. " +
+				"Approving this sets the key INACTIVE in IAM (reversible — re-activate it if something undocumented still depends on it, " +
+				"then rotate); it does not delete the key. Scrubbing the file is a separate pull request and does not by itself close this finding.",
+			"owner": "",
+		},
+	}, true
+}
 
 // akiaRe matches an AWS access key id (AKIA/ASIA + 16 base32 chars) — the grounded extractor.
 var akiaRe = regexp.MustCompile(`(?:AKIA|ASIA)[A-Z0-9]{16}`)

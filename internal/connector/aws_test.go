@@ -78,8 +78,14 @@ func TestAWS_Discover_YieldsCloudAccountAsset(t *testing.T) {
 // fakeS3Writer records BlockS3PublicAccess calls (ADR 0009 Phase 5 — the injectable write
 // path, tested without live AWS creds, mirroring the Okta fake-org pattern).
 type fakeS3Writer struct {
-	blocked []string
-	err     error
+	blocked     []string
+	deactivated []string
+	err         error
+}
+
+func (f *fakeS3Writer) DeactivateAccessKey(_ context.Context, keyID string) error {
+	f.deactivated = append(f.deactivated, keyID)
+	return f.err
 }
 
 func (f *fakeS3Writer) BlockS3PublicAccess(_ context.Context, bucket string) error {

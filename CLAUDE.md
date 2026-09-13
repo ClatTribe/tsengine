@@ -1222,8 +1222,16 @@ machinery; the per-asset live wiring + UX surfaces are the in-progress follow-on
   live `describe-*` = gated half) feeds `POST /v1/cloud/inventory` (posted raw AWS state -> stored cloudsnap -> the
   AI cloud engineer/drift/search reason over the REAL account, mirroring `/v1/osint/ingest`). (2) **cloud "fixes
   it"** -- a leaked AWS key (the code->cloud entry point) gets `remediate`'s `aws_key_revoke` directive (revoke in
-  cloud, then scrub code; key id via AKIA regex, grounded), gated like `iam_restrict` until a live IAM-write
-  connector lands. (3) **the check in the PR** -- `POST /v1/ci/pr-check` + `docs/ci/github-action.yml` run
+  cloud, then scrub code; key id via AKIA regex, grounded) **and now a LIVE second action**: `runner.
+  proposeKeyDeactivation` (per-finding AND bulk paths — the bulk path skips per-finding propose, so without it
+  the deactivation vanished on exactly the tenants large enough to have bulk fixes) submits a tier-2
+  `aws_key_deactivate` `ActApplyConfig` bound to the tenant's AWS connection (`remediate.KeyDeactivateAction`,
+  only for a key id the finding itself names — a leaked-key finding naming none gets no action, because
+  stopping a key the finding did not name is a guess with a blast radius). After the desk approves,
+  `connector.AWS.Apply` → `awsremediate.S3Writer.DeactivateAccessKey`: owner resolved through IAM's own
+  `GetAccessKeyLastUsed`, key set INACTIVE (reversible; never deleted), a root key refused, a denied write
+  surfaced as itself. Two actions rather than one because not merging a PR reverses it and a deactivated key
+  stops a workload the moment it lands, and they travel through different connections. (3) **the check in the PR** -- `POST /v1/ci/pr-check` + `docs/ci/github-action.yml` run
   `prbot.Build`'s merge-gate in CI (high+ finding on a changed line -> non-zero exit blocks the merge; disabled
   policy -> neutral), surfaced as a copy-paste snippet in the PR-bot settings panel; the live GitHub inline-post
   is the gated half. All three offline-tested cores ship; live AWS SDK fetch + live IAM/key write + live GitHub

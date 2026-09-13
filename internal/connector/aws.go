@@ -63,6 +63,10 @@ type AWSWriter interface {
 	// BlockS3PublicAccess enables S3 Block Public Access on the bucket — the reversible
 	// remediation for a publicly-exposed bucket (PutPublicAccessBlock, all four flags on).
 	BlockS3PublicAccess(ctx context.Context, bucket string) error
+	// DeactivateAccessKey sets a leaked IAM access key Inactive — reversible, and it stops the
+	// credential the same instant. The live half of the code → cloud "fixes it"; a leaked key was
+	// a PR body telling the customer to revoke it until this existed.
+	DeactivateAccessKey(ctx context.Context, keyID string) error
 }
 
 // NewAWS builds the connector. Region defaults to us-east-1.
@@ -159,6 +163,8 @@ func (a *AWS) Apply(ctx context.Context, conn platform.Connection, _ string, act
 	switch rt {
 	case "s3_block_public_access":
 		return w.BlockS3PublicAccess(ctx, bucketFromTarget(target))
+	case "aws_key_deactivate":
+		return w.DeactivateAccessKey(ctx, strings.TrimSpace(target))
 	default:
 		// Unreachable — Preflight rejects every remediation_type with no live path.
 		return fmt.Errorf("aws apply: remediation_type %q has no live AWS write path yet (target %s)", rt, target)
@@ -183,6 +189,15 @@ func (a *AWS) preflightWith(act platform.Action, w AWSWriter) error {
 	rt, _ := act.Payload["remediation_type"].(string)
 	target, _ := act.Payload["target"].(string)
 	switch rt {
+	case "aws_key_deactivate":
+		if strings.TrimSpace(target) == "" {
+			return fmt.Errorf("aws_key_deactivate action %s names no access key id", act.ID)
+		}
+		if w == nil {
+			return fmt.Errorf("no live AWS write path is configured (set this connection's remediation "+
+				"role, or the operator default), so access key %s cannot be deactivated", target)
+		}
+		return nil
 	case "s3_block_public_access":
 		bucket := bucketFromTarget(target)
 		if bucket == "" {
