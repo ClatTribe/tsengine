@@ -1667,8 +1667,19 @@ suspends a stale account (Admin SDK `PUT /admin/directory/v1/users/{key}` â
 reached only after the HITL gate and tested against a fake server (injectable `HTTP`). Each needs
 its IdP's write scope (`admin.directory.user` / `User.ReadWrite.All`) â read-only by onboarding
 default â so a real mutation requires an admin to grant it; until then the provider answers 403 and
-`Apply` surfaces it honestly. The other Okta/GW/M365 `remediation_type`s (oauth_revoke, etc.) remain
-honest stubs pending their write path. **The operateâtier-2 wiring closes the loop end to
+`Apply` surfaces it honestly. **Okta now has two more live writes.** `oauth_revoke` (`DELETE /api/v1/users/{uid}/clients/{cid}/grants`,
+per user × client — exactly what Okta's API grants) is promoted to a gated mutation ONLY when the finding
+carries the client id and the user ids: `operate` now stamps them on `operate::oauth-admin-scope` findings
+(`OAuthGrant.ClientID/UserIDs` → `ToolArgs`), because a label alone would have the connector guessing which
+grant to pull, and a finding without them stays a runbook. `session_revoke` (`DELETE /api/v1/users/{id}/
+sessions`) is the CONTAINMENT for an identity incident: `remediate.ProposeIncidentResponseWith` (the
+runner hands it the tenant's connections; `ProposeIncidentResponse` is unchanged for callers without them)
+turns the containment ticket into a tier-2 `session_revoke` bound to the Okta connection when the incident is
+an identity rule (`identitythreat::`/`operate::`/`hris::`) and its entity is an account — the account stays
+enabled, every session the attacker may hold ends; a cloud incident, a non-account entity or a tenant without
+Okta keeps the ticket. A partial grant revoke (one user 404s) is reported with the count revoked and the user
+that failed, never silently skipped. Google/M365 oauth_revoke, mfa_enforce and the rest remain honest stubs
+pending their write path. **The operateâtier-2 wiring closes the loop end to
 end** (`remediate.proposeIdentity` + `liveIdentityMutation`): when a remediation has a live,
 reversible connector write path for the asset's provider â `account_suspend` on **Okta, Google
 Workspace, or Microsoft 365** today â the proposer emits a **tier-2 `ActApplyConfig`** (gated)

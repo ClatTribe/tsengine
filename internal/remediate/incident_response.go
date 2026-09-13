@@ -23,6 +23,47 @@ import (
 // remediation path. Both responses are grounded in the real incident (its rule + the
 // finding that opened it + the entity in its key) — no hallucinated facts; containment is a
 // recommendation a human gates, disclosure is explicitly unverified until a human confirms.
+// ProposeIncidentResponseWith is ProposeIncidentResponse with the tenant's connections in hand: for
+// an IDENTITY incident (an ITDR rule, an operate posture rule, an HRIS leaver) whose entity is an
+// account, and a tenant with an active Okta connection, the containment is no longer a ticket
+// telling someone to revoke the sessions — it is a tier-2, HITL-gated `session_revoke` through the
+// Okta connection that does it. The account stays enabled (that is `account_suspend`, its own act);
+// what ends is every session the attacker may be holding. Any other incident, or a tenant without
+// Okta, gets exactly what ProposeIncidentResponse gave: the runbook ticket and the T3 draft.
+func ProposeIncidentResponseWith(inc platform.Incident, conns []platform.Connection, idgen func() string) ([]platform.Action, bool) {
+	acts, ok := ProposeIncidentResponse(inc, idgen)
+	if !ok || !identityIncident(inc.RuleID) {
+		return acts, ok
+	}
+	var okta *platform.Connection
+	for i := range conns {
+		if conns[i].Kind == platform.ConnOkta && conns[i].Status == platform.ConnActive {
+			okta = &conns[i]
+			break
+		}
+	}
+	target := entityFromKey(inc.Key)
+	if okta == nil || !strings.Contains(target, "@") {
+		return acts, ok // no live path, or an entity that is not an account: the runbook stands
+	}
+	for i := range acts {
+		if rt, _ := acts[i].Payload["remediation_type"].(string); rt != "containment" {
+			continue
+		}
+		acts[i].Kind, acts[i].Tier, acts[i].ConnectionID = platform.ActApplyConfig, tierApplyConfig, okta.ID
+		acts[i].Title = "Contain: revoke Okta sessions of " + target
+		acts[i].Payload["remediation_type"] = "session_revoke"
+		acts[i].Payload["remediation"] = "Approving this ends every active Okta session of " + target + " (they sign in again; the account is not suspended). " +
+			"Incident: " + inc.Title + ". Follow with a password reset and MFA re-enrolment if the credential itself is suspected."
+	}
+	return acts, ok
+}
+
+func identityIncident(ruleID string) bool {
+	r := strings.ToLower(ruleID)
+	return strings.HasPrefix(r, "identitythreat::") || strings.HasPrefix(r, "operate::") || strings.HasPrefix(r, "hris::")
+}
+
 func ProposeIncidentResponse(inc platform.Incident, idgen func() string) ([]platform.Action, bool) {
 	if !strings.EqualFold(inc.Severity, string(types.SeverityCritical)) {
 		return nil, false
