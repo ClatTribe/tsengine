@@ -43,6 +43,7 @@ type Memory struct {
 	apps        map[string][]platform.ThirdPartyApp               // tenantID → third-party apps
 	employees   map[string][]platform.Employee                    // tenantID → HRIS employee roster
 	training    map[string]map[string]platform.TrainingCompletion // tenantID → completionID → record
+	idLinks     map[string]platform.IdentityLinkSet               // tenantID → person→GitHub join inputs
 	auditDisp   map[string]map[string]platform.AuditDisposition   // tenantID → target|key → decision
 	auditOrders map[string]map[string]platform.AuditOrder         // tenantID → orderID → per-application order
 	vendors     map[string]map[string]platform.Vendor             // tenantID → vendorID → register row
@@ -80,6 +81,7 @@ func NewMemory() *Memory {
 		apps:            map[string][]platform.ThirdPartyApp{},
 		employees:       map[string][]platform.Employee{},
 		training:        map[string]map[string]platform.TrainingCompletion{},
+		idLinks:         map[string]platform.IdentityLinkSet{},
 		auditDisp:       map[string]map[string]platform.AuditDisposition{},
 		auditOrders:     map[string]map[string]platform.AuditOrder{},
 		vendors:         map[string]map[string]platform.Vendor{},
@@ -793,6 +795,21 @@ func (m *Memory) ListEmployees(_ context.Context, tenantID string) ([]platform.E
 	return clone(m.employees[tenantID]), nil
 }
 
+// PutIdentityLinks replaces the tenant's person→GitHub join inputs (one document per tenant).
+func (m *Memory) PutIdentityLinks(_ context.Context, set platform.IdentityLinkSet) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.idLinks[set.TenantID] = set
+	return nil
+}
+
+func (m *Memory) GetIdentityLinks(_ context.Context, tenantID string) (platform.IdentityLinkSet, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	set, ok := m.idLinks[tenantID]
+	return set, ok, nil
+}
+
 // PutTrainingCompletion upserts one completion by its id. Keyed rather than appended so confirming
 // the same module twice in one day is idempotent, while last year's completion stays on record.
 func (m *Memory) PutTrainingCompletion(_ context.Context, c platform.TrainingCompletion) error {
@@ -928,6 +945,7 @@ type Snapshot struct {
 	Apps            map[string][]platform.ThirdPartyApp               `json:"apps"`
 	Employees       map[string][]platform.Employee                    `json:"employees,omitempty"`
 	Training        map[string]map[string]platform.TrainingCompletion `json:"training,omitempty"`
+	IdLinks         map[string]platform.IdentityLinkSet               `json:"identity_links,omitempty"`
 	AuditDisp       map[string]map[string]platform.AuditDisposition   `json:"audit_dispositions,omitempty"`
 	AuditOrders     map[string]map[string]platform.AuditOrder         `json:"audit_orders,omitempty"`
 	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
@@ -968,6 +986,7 @@ func (m *Memory) Export() Snapshot {
 		Apps:            m.apps,
 		Employees:       m.employees,
 		Training:        m.training,
+		IdLinks:         m.idLinks,
 		AuditDisp:       m.auditDisp,
 		AuditOrders:     m.auditOrders,
 		Vendors:         m.vendors,
@@ -1007,6 +1026,10 @@ func (m *Memory) load(s Snapshot) {
 	m.apps = orEmpty(s.Apps)
 	m.employees = orEmpty(s.Employees)
 	m.training = orEmptyTraining(s.Training)
+	m.idLinks = s.IdLinks
+	if m.idLinks == nil {
+		m.idLinks = map[string]platform.IdentityLinkSet{}
+	}
 	m.auditDisp = orEmptyAuditDisp(s.AuditDisp)
 	m.auditOrders = orEmptyAuditOrders(s.AuditOrders)
 	m.vendors = orEmptyVendors(s.Vendors)

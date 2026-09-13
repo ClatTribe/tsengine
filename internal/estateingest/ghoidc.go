@@ -1,6 +1,7 @@
 package estateingest
 
 import (
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/estategraph"
@@ -98,11 +99,14 @@ func TrustsFrom(an ghoidc.Analysis, roleARN, roleName string, privileged bool, e
 	var out []GitHubOIDCTrust
 	for _, st := range an.Statements {
 		for _, c := range st.Subjects {
-			if c.Wildcard() {
-				continue
-			}
+			// A subject names a repository when its owner/name part is literal. `repo:acme/shop:*`
+			// — the standard pinning, any branch of ONE repository — still names acme/shop, and the
+			// first version of this loop dropped it because the trailing `*` made the whole subject
+			// read as a wildcard: the most common correct trust produced no edge, so the code → cloud
+			// chain was never drawn on a well-configured account. Only a wildcard IN the owner or
+			// name (`repo:acme/*`, `repo:*`) names no single repository.
 			repo := ghoidc.RepositoryOfSubject(c.Value)
-			if repo == "" || seen[repo] {
+			if repo == "" || strings.ContainsAny(repo, "*?") || seen[repo] {
 				continue
 			}
 			seen[repo] = true

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/estategraph"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
 // ghidentity.go closes the last hop of the cross-surface chain: the HUMAN who controls
@@ -36,16 +37,12 @@ import (
 // customer is told exactly which integration closes it. A broken chain we can name beats
 // a complete-looking chain built on a guess — and unlike a guess, it is fixable.
 
-// IdentityLink is one authoritatively-asserted person↔GitHub-account mapping.
-type IdentityLink struct {
-	// Email is the workforce identity (Okta / Workspace / M365).
-	Email string
-	// Login is the GitHub account.
-	Login string
-	// Source names WHO asserted this mapping, so a reader can weigh it. An empty source
-	// is refused: an unattributed link is indistinguishable from a guess.
-	Source string
-}
+// IdentityLink is one authoritatively-asserted person↔GitHub-account mapping. It is an ALIAS of
+// the stored platform type (one type, two names): the monitoring pass fetches these
+// (internal/identitylinks), the store keeps them, and this converter consumes them — a mirrored
+// struct would drift the day one side grew a field. An empty Source is refused below: an
+// unattributed link is indistinguishable from a guess.
+type IdentityLink = platform.IdentityLink
 
 // LinkSources are the assertions we accept. Anything else is refused rather than
 // silently trusted — the set is small on purpose.
@@ -54,20 +51,11 @@ const (
 	LinkSourceGitHubSAML = "github_saml" // GitHub's SAML external identity (nameId)
 )
 
-// GitHubControl is one person's authority over a repository or organisation, as observed
-// by GitHub itself.
-type GitHubControl struct {
-	Login string
-	// Org is the organisation; Repo is optional. An org owner controls every repository
-	// in it, which is why an org-level control is worth an edge of its own.
-	Org  string
-	Repo string
-	// Admin reports org-owner or repo-admin authority.
-	Admin bool
-	// Evidence proves this control was observed (a finding id, or the SaaS-posture
-	// snapshot reference).
-	Evidence []string
-}
+// GitHubControl is one person's authority over a repository or organisation, as observed by
+// GitHub itself — an alias of the stored platform type for the same reason as IdentityLink. An
+// org owner controls every repository in it, which is why an org-level control (empty Repo) is
+// worth an edge of its own; Evidence proves the control was observed (the API endpoint and field).
+type GitHubControl = platform.GitHubControl
 
 // JoinResult is what could be linked, and — just as importantly — what could not.
 type JoinResult struct {

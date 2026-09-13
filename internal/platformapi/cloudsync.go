@@ -100,7 +100,7 @@ func (d Deps) SyncCloudInventory(ctx context.Context, tenantID string) ([]types.
 		}
 	}
 	drift, _, aerr := d.applyCloudInventoryWithCoverage(ctx, tenantID, inv, invJSON,
-		"live AWS read via the connected read-only role → stored for the AI cloud engineer", coverage)
+		"live AWS read via the connected read-only role → stored for the AI cloud engineer", coverage, githubTrustsFrom(res.Raw))
 	if aerr != nil {
 		return nil, res, aerr
 	}

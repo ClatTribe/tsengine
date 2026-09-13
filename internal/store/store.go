@@ -197,6 +197,10 @@ type Store interface {
 	// deleted disappears rather than lingering as a phantom employee.
 	ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error
 	ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error)
+	// Identity links: the tenant's person→GitHub join inputs (one document per tenant, replaced each
+	// pass). Another company's workforce-to-code mapping, so tenant-isolated like the roster.
+	PutIdentityLinks(ctx context.Context, set platform.IdentityLinkSet) error
+	GetIdentityLinks(ctx context.Context, tenantID string) (platform.IdentityLinkSet, bool, error)
 
 	// Training completions are APPEND-ONLY — Put upserts one record by its own id (person|module|day)
 	// and never removes an older one. "Trained every year since 2024" is what an auditor asks for and

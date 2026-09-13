@@ -639,6 +639,40 @@ type Employee struct {
 	FetchedAt      time.Time `json:"fetched_at"`
 }
 
+// IdentityLink is one ASSERTED mapping between a workforce identity (the email an IdP names a person
+// by) and a GitHub login. Only a system that knows may assert it: GitHub's SAML external identity
+// (the nameId the IdP sent), or Okta's SCIM assignment joined to GitHub's own numeric user id. A
+// resemblance between a name and a login is never a link — a wrong merge sends someone to revoke the
+// access of a person who never had it.
+type IdentityLink struct {
+	Email  string `json:"email"`
+	Login  string `json:"login"`
+	Source string `json:"source"` // "github_saml" | "okta_scim"
+}
+
+// GitHubControl is one login's authority over an organisation or a repository, with the evidence
+// (the API endpoint and field) that states it.
+type GitHubControl struct {
+	Login    string   `json:"login"`
+	Org      string   `json:"org"`
+	Repo     string   `json:"repo,omitempty"` // empty → organisation-level authority
+	Admin    bool     `json:"admin"`
+	Evidence []string `json:"evidence"`
+}
+
+// IdentityLinkSet is the tenant's person→code join inputs, fetched every monitoring pass and stored
+// so the estate graph can draw the chain from a person to a repository to the cloud role its
+// workflows assume. Unread names every source that could not be read and why (a SAML query refused
+// for want of admin:org, an org with no SAML), because an empty link list and an unreadable one must
+// not render the same.
+type IdentityLinkSet struct {
+	TenantID  string            `json:"tenant_id"`
+	Links     []IdentityLink    `json:"links"`
+	Controls  []GitHubControl   `json:"controls"`
+	FetchedAt time.Time         `json:"fetched_at"`
+	Unread    map[string]string `json:"unread,omitempty"`
+}
+
 // VendorDataAccess is what a third party can touch. It drives the severity of nearly every vendor
 // finding, which is why it is DECLARED by the customer rather than inferred: nothing in a vendor's
 // name or category says whether they hold personal data.

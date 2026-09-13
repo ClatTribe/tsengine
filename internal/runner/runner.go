@@ -27,6 +27,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/fieldevidence"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/identitylinks"
 	"github.com/ClatTribe/tsengine/internal/identitylog"
 	"github.com/ClatTribe/tsengine/internal/mdm"
 	"github.com/ClatTribe/tsengine/internal/osint"
@@ -142,6 +143,12 @@ type Service struct {
 	// audit log through the onboarded connection's token and runs internal/identitythreat over the
 	// window (sync_identitylog.go). nil/empty → ITDR runs only on events a customer POSTs.
 	IdentityLogFetchers map[string]identitylog.Fetcher
+
+	// IdentityLinkOpts, when set, makes the person → GitHub join inputs a per-pass fetch
+	// (internal/identitylinks: GitHub SAML external identities, Okta SCIM assignments joined on
+	// GitHub ids, organisation owners and repository collaborators), stored so the estate graph can
+	// draw identity → code → cloud on every read. nil → the chain is never drawn and the estate says so.
+	IdentityLinkOpts *identitylinks.Options
 
 	// CloudSyncer, when set, makes the connected cloud account a CONTINUOUSLY-monitored surface:
 	// each pass re-reads the account through its read-only role and diffs it against the previous
@@ -488,6 +495,10 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	if idRan {
 		cov = cov.With("identitythreat")
 	}
+	// The person → code join inputs, refreshed each pass so the estate graph can draw the chain
+	// from a workforce identity to a repository to the cloud role its workflows assume. Produces no
+	// findings of its own; the estate detections read what it stores.
+	s.syncIdentityLinks(ctx, tenantID)
 	cloudFindings, cloudRan := s.syncCloud(ctx, tenantID)
 	current = append(current, cloudFindings...)
 	if cloudRan {
