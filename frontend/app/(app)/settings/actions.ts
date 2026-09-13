@@ -32,6 +32,15 @@ export async function syncGitHubPosture(): Promise<{ findings: number }> {
   return { findings: r.findings_detected };
 }
 
+// Live Okta configuration posture. Returns the findings stored AND how many settings the token
+// could not read — the second number is what stops zero findings reading as a hardened org.
+export async function syncOktaPosture(): Promise<{ findings: number; unread: number }> {
+  const r = await api.syncOktaPosture();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  return { findings: r.count, unread: Object.keys(r.unread ?? {}).length };
+}
+
 // Set (or clear) the tenant's device-management source (Bucket B). Credentials are sealed
 // server-side and never returned; we get back the redacted view.
 export async function setMDM(cfg: {

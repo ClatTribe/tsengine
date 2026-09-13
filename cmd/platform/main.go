@@ -527,6 +527,7 @@ func main() {
 	}
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
+		OktaOrgURL: os.Getenv("OKTA_ORG_URL"),
 		// SIGNED compliance evidence pack (ADR 0031 D2b): the auditor-facing artifact is ed25519-
 		// attested with the platform's key. Nil-safe downstream — without a key the endpoint
 		// returns 501 rather than serving an unsigned artifact from a signed route.
@@ -611,6 +612,8 @@ func main() {
 	// The person → code join inputs (GitHub SAML identities, Okta SCIM assignments, org owners and
 	// repository collaborators) are fetched every pass so the estate can draw identity → code → cloud.
 	svc.IdentityLinkOpts = &identitylinks.Options{OktaOrgURL: os.Getenv("OKTA_ORG_URL")}
+	// Okta CONFIGURATION posture (policies, API tokens, ThreatInsight) read each pass.
+	svc.OktaOrgURL = os.Getenv("OKTA_ORG_URL")
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
 	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the

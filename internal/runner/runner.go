@@ -27,6 +27,8 @@ import (
 	"github.com/ClatTribe/tsengine/internal/fieldevidence"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"net/http"
+
 	"github.com/ClatTribe/tsengine/internal/identitylinks"
 	"github.com/ClatTribe/tsengine/internal/identitylog"
 	"github.com/ClatTribe/tsengine/internal/mdm"
@@ -149,6 +151,12 @@ type Service struct {
 	// GitHub ids, organisation owners and repository collaborators), stored so the estate graph can
 	// draw identity → code → cloud on every read. nil → the chain is never drawn and the estate says so.
 	IdentityLinkOpts *identitylinks.Options
+
+	// OktaOrgURL, when set, makes Okta CONFIGURATION posture a per-pass read (sync_okta.go): the
+	// org's sign-on/password/MFA-enrollment policies, API tokens and ThreatInsight through the
+	// onboarded token — the same fetch as POST /v1/saas/okta/sync. OktaHTTP is injected by tests.
+	OktaOrgURL string
+	OktaHTTP   *http.Client
 
 	// CloudSyncer, when set, makes the connected cloud account a CONTINUOUSLY-monitored surface:
 	// each pass re-reads the account through its read-only role and diffs it against the previous
@@ -463,6 +471,13 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	saasFindings, saasRan := s.syncSaaSPosture(ctx, tenantID)
 	current = append(current, saasFindings...)
 	if saasRan {
+		cov = cov.With("sspm")
+	}
+	// Okta CONFIGURATION posture (the org's policies — operate covers its accounts), read through the
+	// onboarded token each pass so a sign-on rule that stops requiring a factor opens an incident.
+	oktaFindings, oktaRan := s.syncOktaPosture(ctx, tenantID)
+	current = append(current, oktaFindings...)
+	if oktaRan {
 		cov = cov.With("sspm")
 	}
 	// Autonomous external-exposure (OSINT): each pass, run the keyless Certificate-Transparency

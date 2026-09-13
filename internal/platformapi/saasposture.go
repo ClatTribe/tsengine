@@ -135,7 +135,13 @@ func assessSaaSSnapshot(provider string, raw []byte) ([]types.Finding, any, erro
 			return nil, nil, fmt.Errorf("invalid google_workspace snapshot: %v", err)
 		}
 		return sspm.AssessGoogleWorkspace(s, sspm.Options{}), s, nil
+	case "okta":
+		var s sspm.OktaOrg
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return nil, nil, fmt.Errorf("invalid okta snapshot: %v", err)
+		}
+		return sspm.AssessOkta(s, sspm.Options{}), s, nil
 	default:
-		return nil, nil, fmt.Errorf("unknown SaaS provider %q (want: github_org | slack | zoom | atlassian | salesforce | m365 | google_workspace)", provider)
+		return nil, nil, fmt.Errorf("unknown SaaS provider %q (want: github_org | slack | zoom | atlassian | salesforce | m365 | google_workspace | okta)", provider)
 	}
 }
