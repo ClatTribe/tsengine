@@ -26,13 +26,12 @@ type stateEvent struct {
 // tenantSnapshot reads the tenant's current state from the store (grounded — never
 // invented). Tenant-scoped like every other store call.
 func tenantSnapshot(ctx context.Context, st store.Store, tenantID string) (stateEvent, error) {
-	findings, err := st.ListFindings(ctx, tenantID, store.FindingFilter{})
+	// DB-side aggregate — never transmits the full finding blobs. This snapshot polls on a
+	// short cadence per open browser tab, so reading every finding's JSON here (the old
+	// ListFindings call) generated GBs/day of DB egress for a handful of assets.
+	sev, total, err := st.FindingSeverityCounts(ctx, tenantID)
 	if err != nil {
 		return stateEvent{}, err
-	}
-	sev := map[string]int{}
-	for _, f := range findings {
-		sev[string(f.Severity)]++
 	}
 	approvals, err := st.PendingApprovals(ctx, tenantID)
 	if err != nil {
@@ -51,7 +50,7 @@ func tenantSnapshot(ctx context.Context, st store.Store, tenantID string) (state
 	return stateEvent{
 		PendingApprovals: len(approvals),
 		OpenIncidents:    open,
-		Findings:         len(findings),
+		Findings:         total,
 		Severity:         sev,
 	}, nil
 }
@@ -109,12 +108,12 @@ func (d Deps) handleEvents(w http.ResponseWriter, r *http.Request, tenantID stri
 }
 
 // sseInterval is the server-side re-read cadence for the live feed. Opt-in override via
-// TSENGINE_SSE_INTERVAL (a Go duration, e.g. "2s"); default 5s.
+// TSENGINE_SSE_INTERVAL (a Go duration, e.g. "2s"); default 15s.
 func sseInterval() time.Duration {
 	if v := os.Getenv("TSENGINE_SSE_INTERVAL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {
 			return d
 		}
 	}
-	return 5 * time.Second
+	return 15 * time.Second
 }

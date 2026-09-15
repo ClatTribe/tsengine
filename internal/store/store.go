@@ -103,6 +103,12 @@ type Store interface {
 	// --- findings (the engine's output, persisted per tenant) ---
 	PutFinding(ctx context.Context, tenantID string, f types.Finding) error
 	ListFindings(ctx context.Context, tenantID string, filter FindingFilter) ([]types.Finding, error)
+	// FindingSeverityCounts returns per-severity finding counts + the total for a tenant
+	// WITHOUT transmitting the full finding blobs — a DB-side aggregate. The live SSE
+	// snapshot (internal/platformapi/events.go) polls the tenant's state every few seconds;
+	// it used ListFindings, which transmitted every finding's full JSON on every tick and
+	// generated GBs/day of DB egress for a handful of assets. Tenant-scoped like every read.
+	FindingSeverityCounts(ctx context.Context, tenantID string) (map[string]int, int, error)
 
 	// --- remediation actions + the HITL queue ---
 	PutAction(ctx context.Context, a platform.Action) error

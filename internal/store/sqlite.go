@@ -219,6 +219,27 @@ func (s *SQLite) ListFindings(ctx context.Context, tenantID string, filter Findi
 	return Page(out, filter), nil
 }
 
+func (s *SQLite) FindingSeverityCounts(ctx context.Context, tenantID string) (map[string]int, int, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT COALESCE(json_extract(data,'$.severity'),'') AS sev, COUNT(*) FROM findings WHERE tenant_id=? GROUP BY sev`, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	sev := map[string]int{}
+	total := 0
+	for rows.Next() {
+		var s string
+		var n int
+		if err := rows.Scan(&s, &n); err != nil {
+			return nil, 0, err
+		}
+		sev[s] = n
+		total += n
+	}
+	return sev, total, rows.Err()
+}
+
 func (s *SQLite) PutAction(ctx context.Context, a platform.Action) error {
 	return s.upsertTID(ctx, `INSERT INTO actions(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, a.TenantID, a.ID, a)
 }

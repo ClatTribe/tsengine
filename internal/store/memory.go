@@ -333,6 +333,18 @@ func (m *Memory) ListFindings(_ context.Context, tenantID string, filter Finding
 	return Page(out, filter), nil
 }
 
+func (m *Memory) FindingSeverityCounts(_ context.Context, tenantID string) (map[string]int, int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	sev := map[string]int{}
+	total := 0
+	for _, f := range m.findings[tenantID] {
+		sev[string(f.Severity)]++
+		total++
+	}
+	return sev, total, nil
+}
+
 func (m *Memory) PutAction(_ context.Context, a platform.Action) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
