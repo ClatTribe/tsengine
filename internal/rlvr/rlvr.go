@@ -88,10 +88,14 @@ const (
 // offline in CI and online against a container.
 type Episode struct {
 	ID      string           `json:"id"`
-	Target  string           `json:"target"`          // human ref: image tag / URL / CTF id
-	Finding types.Finding    `json:"finding"`         // what was proposed exploitable (provenance)
-	Spec    pentest.DemoSpec `json:"spec"`            // the model's proposed predicate (UNDER GRADE)
-	Truth   Truth            `json:"truth,omitempty"` // eval label; TruthUnknown for train-only
+	Target  string           `json:"target"`           // human ref: image tag / URL / CTF id
+	Finding types.Finding    `json:"finding"`          // what was proposed exploitable (provenance)
+	Spec    pentest.DemoSpec `json:"spec"`             // the model's proposed predicate (UNDER GRADE)
+	Truth   Truth            `json:"truth,omitempty"`  // eval label; TruthUnknown for train-only
+	Canary  string           `json:"canary,omitempty"` // the benign token the Spec was seeded with
+	// Canary is stored so an episode can be RE-SEEDED reproducibly: a canary-bound spec's probe
+	// URLs embed the token, so re-proposing with a different arm (the substrate-vs-model ablation)
+	// must reuse the SAME canary or the probes diverge and a recorded cassette stops matching.
 }
 
 // Graded is an episode plus what grading it observed — the verdict, the responses the

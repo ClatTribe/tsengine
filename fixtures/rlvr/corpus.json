@@ -29,7 +29,8 @@
       },
       "proof": "an injected arithmetic template expression was evaluated server-side (the computed product appeared, the literal expression did not) - server-side template injection"
     },
-    "truth": 1
+    "truth": 1,
+    "canary": "cx-ssti-vuln"
   },
   {
     "id": "ssti-patched",
@@ -61,6 +62,7 @@
       },
       "proof": "an injected arithmetic template expression was evaluated server-side (the computed product appeared, the literal expression did not) - server-side template injection"
     },
-    "truth": 2
+    "truth": 2,
+    "canary": "cx-ssti-patched"
   }
 ]

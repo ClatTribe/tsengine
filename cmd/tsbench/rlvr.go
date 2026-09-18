@@ -9,10 +9,33 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/rlvr"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
+
+// armSpecGen resolves the --arm flag to a proposer. substrate = the deterministic HeuristicSpecGen
+// (no model, the ablation control); model = the pentester's own D-agent (pentest.SpecGenFor over a
+// live LLM from cloudengine.LLMFromEnv — a cloud key, an OpenAI-compat endpoint, or a local/served
+// tuned model). The model arm fails LOUD when no model is configured, rather than silently falling
+// back to the substrate — a silent fallback would report the substrate's number under the model's
+// name, the exact false-attribution the ablation exists to prevent.
+func armSpecGen(ctx context.Context, arm string) (rlvr.SpecGen, error) {
+	switch arm {
+	case "", "substrate":
+		return rlvr.SubstrateSpecGen(), nil
+	case "model":
+		llm, ok := cloudengine.LLMFromEnv()
+		if !ok {
+			return nil, fmt.Errorf("--arm model needs a model configured (LLM_API_KEY, an OpenAI-compat endpoint, or a local Ollama) — none found; set one or use --arm substrate")
+		}
+		fmt.Fprintln(os.Stderr, "rlvr: model arm — proposing with the live D-agent (pentest.LLMSpecGen, no heuristic fallback)")
+		return rlvr.AgentSpecGen(ctx, llm), nil
+	default:
+		return nil, fmt.Errorf("unknown --arm %q (want substrate|model)", arm)
+	}
+}
 
 // rlvr.go is the `tsbench rlvr` subcommand — the reward-predicate harness for RL-with-verifiable-
 // rewards over exploit-verification (does a model-proposed exploitation predicate actually hold
@@ -93,14 +116,22 @@ func (referenceProber) Send(_ context.Context, p pentest.Probe) (pentest.ProbeRe
 func rlvrSelftest(argv []string) error {
 	fs := flag.NewFlagSet("rlvr selftest", flag.ContinueOnError)
 	writeFixture := fs.String("write-fixture", "", "capture this run to <dir>/corpus.json + <dir>/cassette.json")
+	arm := fs.String("arm", "substrate", "proposer arm: substrate (heuristic, no model) | model (the D-agent over LLM_API_KEY)")
 	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	gen, err := armSpecGen(ctx, *arm)
+	if err != nil {
 		return err
 	}
 	eps := demoCorpus()
 
-	// Grade through a Recorder so the same run can be dumped as a replayable cassette.
+	// Grade through a Recorder so the same run can be dumped as a replayable cassette. RunArm
+	// re-proposes each episode's spec with the chosen arm against the reference target — which
+	// answers any probe to the demo hosts, so the model arm is fully gradeable here with just a key.
 	rec := rlvr.NewRecorder(referenceProber{})
-	graded, conf := rlvr.Run(context.Background(), rec, nil, nil, eps)
+	graded, conf := rlvr.RunArm(ctx, rec, nil, nil, eps, gen)
 	printScorecard(graded, conf)
 
 	if *writeFixture != "" {
@@ -123,7 +154,13 @@ func rlvrScore(argv []string) error {
 	corpus := fs.String("corpus", "fixtures/rlvr/corpus.json", "episode corpus (JSON array of rlvr.Episode)")
 	cassette := fs.String("cassette", "fixtures/rlvr/cassette.json", "recorded responses (rlvr.Cassette JSON)")
 	outJSONL := fs.String("out", "", "also write the graded episodes as JSONL to this path")
+	arm := fs.String("arm", "substrate", "proposer arm: substrate (matches the recorded cassette) | model (the D-agent; probes it proposes that are absent from the cassette grade Ungradeable — capture against a live target for full model-arm numbers)")
 	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	gen, err := armSpecGen(ctx, *arm)
+	if err != nil {
 		return err
 	}
 	var eps []rlvr.Episode
@@ -134,7 +171,7 @@ func rlvrScore(argv []string) error {
 	if err := readJSON(*cassette, &cas); err != nil {
 		return fmt.Errorf("read cassette: %w", err)
 	}
-	graded, conf := rlvr.Run(context.Background(), rlvr.NewReplayer(cas), nil, nil, eps)
+	graded, conf := rlvr.RunArm(ctx, rlvr.NewReplayer(cas), nil, nil, eps, gen)
 	printScorecard(graded, conf)
 	if *outJSONL != "" {
 		f, err := os.Create(*outJSONL)

@@ -227,7 +227,7 @@ Usage:
   tsbench localize [--agent] [--out <scoreboard.md>] | --repo <dir> --cwe CWE-89 [--desc <text>]
   tsbench defense-ledger [--ledger <path>] [--out <file>]
   tsbench scoreboard [--results <json>] [--out <file>]
-  tsbench rlvr     [selftest [--write-fixture <dir>] | score [--corpus <f>] [--cassette <f>] | capture --corpus <f> --out-cassette <f>]
+  tsbench rlvr     [selftest [--arm substrate|model] [--write-fixture <dir>] | score [--arm substrate|model] [--corpus <f>] [--cassette <f>] | capture --corpus <f> --out-cassette <f>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
