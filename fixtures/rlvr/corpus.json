@@ -1,0 +1,66 @@
+[
+  {
+    "id": "ssti-vuln",
+    "target": "vuln.demo",
+    "finding": {
+      "id": "",
+      "rule_id": "",
+      "tool": "",
+      "severity": "",
+      "cwe": [
+        "CWE-1336"
+      ],
+      "endpoint": "http://vuln.demo/render?tpl=x",
+      "title": "Server-Side Template Injection",
+      "discovered_at": "0001-01-01T00:00:00Z"
+    },
+    "spec": {
+      "class": "template-injection",
+      "probes": [
+        {
+          "method": "GET",
+          "url": "http://vuln.demo/render?tpl=x\u0026tpl={{1009*1013}}"
+        }
+      ],
+      "predicate": "eval_arithmetic",
+      "args": {
+        "expr": "{{1009*1013}}",
+        "product": "1022117"
+      },
+      "proof": "an injected arithmetic template expression was evaluated server-side (the computed product appeared, the literal expression did not) - server-side template injection"
+    },
+    "truth": 1
+  },
+  {
+    "id": "ssti-patched",
+    "target": "patched.demo",
+    "finding": {
+      "id": "",
+      "rule_id": "",
+      "tool": "",
+      "severity": "",
+      "cwe": [
+        "CWE-1336"
+      ],
+      "endpoint": "http://patched.demo/render?tpl=x",
+      "title": "Server-Side Template Injection",
+      "discovered_at": "0001-01-01T00:00:00Z"
+    },
+    "spec": {
+      "class": "template-injection",
+      "probes": [
+        {
+          "method": "GET",
+          "url": "http://patched.demo/render?tpl=x\u0026tpl={{1009*1013}}"
+        }
+      ],
+      "predicate": "eval_arithmetic",
+      "args": {
+        "expr": "{{1009*1013}}",
+        "product": "1022117"
+      },
+      "proof": "an injected arithmetic template expression was evaluated server-side (the computed product appeared, the literal expression did not) - server-side template injection"
+    },
+    "truth": 2
+  }
+]

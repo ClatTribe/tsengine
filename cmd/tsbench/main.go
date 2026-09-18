@@ -192,6 +192,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench crosssurface-agent: %v\n", err)
 			os.Exit(1)
 		}
+	case "rlvr":
+		if err := rlvrCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench rlvr: %v\n", err)
+			os.Exit(1)
+		}
 	case "cwemap":
 		if err := cwemapCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench cwemap: %v\n", err)
@@ -222,6 +227,7 @@ Usage:
   tsbench localize [--agent] [--out <scoreboard.md>] | --repo <dir> --cwe CWE-89 [--desc <text>]
   tsbench defense-ledger [--ledger <path>] [--out <file>]
   tsbench scoreboard [--results <json>] [--out <file>]
+  tsbench rlvr     [selftest [--write-fixture <dir>] | score [--corpus <f>] [--cassette <f>] | capture --corpus <f> --out-cassette <f>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).

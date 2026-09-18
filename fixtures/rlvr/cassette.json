@@ -1,0 +1,18 @@
+{
+  "entries": [
+    {
+      "key": "{\"m\":\"GET\",\"u\":\"http://vuln.demo/render?tpl=x\\u0026tpl={{1009*1013}}\",\"b\":\"\",\"h\":[]}",
+      "result": {
+        "status": 200,
+        "body": "rendered: 1022117"
+      }
+    },
+    {
+      "key": "{\"m\":\"GET\",\"u\":\"http://patched.demo/render?tpl=x\\u0026tpl={{1009*1013}}\",\"b\":\"\",\"h\":[]}",
+      "result": {
+        "status": 200,
+        "body": "rendered: {{1009*1013}}"
+      }
+    }
+  ]
+}
