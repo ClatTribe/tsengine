@@ -376,8 +376,10 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/pentest/{id}/run", d.auth(d.handleRunPentest))                    // run/retest the engagement (passive, RoE-gated)
 	mux.HandleFunc("POST /v1/pentest/{id}/probe", d.auth(d.handlePentestProbe))                // §9 dig-deeper for the pentester: a human proposes one probe, gated + judged exactly as the agent is
 	mux.HandleFunc("GET /v1/pentest/{id}/report", d.auth(d.handlePentestReport))               // the engagement's VAPT report (md/json)
+	mux.HandleFunc("GET /v1/pentest/{id}/evidence", d.auth(d.handlePentestEvidence))           // the replayable evidence cassette recorded during the live run (rlvr.NewReplayer re-runs the proof)
 	mux.HandleFunc("POST /v1/pentest/{id}/signoff", d.auth(d.handleSignoffPentest))            // HITL: named human signs the report → signed ledger
 	mux.HandleFunc("POST /v1/pentest/{id}/schedule", d.auth(d.handleSetPentestSchedule))       // set a recurring re-test cadence (safe passive re-verify)
+	mux.HandleFunc("POST /v1/pentest/{id}/retest", d.auth(d.handleRetestPentest))              // fix-verification: re-run the engagement's proven exploits → did the fix hold? (gated active re-attack)
 	mux.HandleFunc("GET /v1/events", d.auth(d.handleEvents))                                   // SSE live state feed
 	mux.HandleFunc("GET /v1/apps", d.auth(d.handleApps))
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
