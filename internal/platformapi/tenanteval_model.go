@@ -129,11 +129,11 @@ func (d Deps) handleTenantEvalModel(w http.ResponseWriter, r *http.Request, tena
 	out := map[string]any{
 		"trend": trend, "model_name": modelName, "starter": starterOut,
 		"ran": true, "cases": mod.Cases, "suite_hash": hash,
-		"substrate": map[string]any{"passed": sub.Passed, "cases": sub.Cases},
+		"substrate": map[string]any{"passed": sub.Passed, "cases": sub.Cases, "confusion": sub.Confusion},
 		"model": map[string]any{
 			"passed": mod.Passed, "unanswered": mod.Unanswered,
 			"failures": mod.Failures, "by_source": mod.BySource, "note": mod.Note,
-			"unanswered_reason": mod.UnansweredReason,
+			"unanswered_reason": mod.UnansweredReason, "confusion": mod.Confusion,
 		},
 		"ablation": ab,
 	}
@@ -142,6 +142,15 @@ func (d Deps) handleTenantEvalModel(w http.ResponseWriter, r *http.Request, tena
 	}
 	if agree, ok := sub.Agreement(); ok {
 		out["substrate_agreement"] = agree
+	}
+	// FP-rejection per arm — the trust number, and the one a BYOK customer weighs when choosing a
+	// model: does it reject more of MY false positives than the filter does. Only when each arm has
+	// suppress cases to reject (else the vacuous pass; saying nothing is honest).
+	if spec, ok := mod.Confusion.Specificity(); ok {
+		out["model_fp_rejection"] = spec
+	}
+	if spec, ok := sub.Confusion.Specificity(); ok {
+		out["substrate_fp_rejection"] = spec
 	}
 	respond(w, out, nil)
 }

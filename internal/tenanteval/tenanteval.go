@@ -115,11 +115,74 @@ type Failure struct {
 	Got Verdict `json:"got"`
 }
 
+// Confusion isolates FALSE-POSITIVE REJECTION from recall over the tenant's own graded cases —
+// the same specificity-first discipline rlvr.Confusion applies to exploit verification (§14.2 rule
+// 5). One blended Agreement number hides the distinction a buyer actually cares about: "of the
+// findings I called false positives, how many did you correctly drop?" is a different, and for a
+// trust claim more important, question than "of the real findings, how many did you keep?".
+//
+// It is built ONLY from cases with a verdict (Keep/Suppress). A model arm's unanswered case has no
+// verdict to place, so it is excluded here and reported separately by ModelResult.Unanswered — a
+// judge that did not answer neither rejected a fake nor kept one, and counting silence either way
+// would be a false number (the rlvr Ungradeable-exclusion, applied here).
+type Confusion struct {
+	// Over Expect==Keep cases (the human said this finding is REAL):
+	KeptRight int `json:"kept_right"` // got Keep     — correctly kept (recall numerator)
+	KeptWrong int `json:"kept_wrong"` // got Suppress — DROPPED a real finding (the recall failure)
+	// Over Expect==Suppress cases (the human called this a FALSE POSITIVE):
+	RejectedRight int `json:"rejected_right"` // got Suppress — correctly rejected the fake (specificity numerator)
+	RejectedWrong int `json:"rejected_wrong"` // got Keep     — kept a finding the human called false (the FP)
+}
+
+// observe places one graded case in the matrix. got must be Keep or Suppress (an unanswered case
+// is excluded by the caller).
+func (c *Confusion) observe(expect, got Verdict) {
+	switch expect {
+	case Keep:
+		if got == Keep {
+			c.KeptRight++
+		} else {
+			c.KeptWrong++
+		}
+	case Suppress:
+		if got == Suppress {
+			c.RejectedRight++
+		} else {
+			c.RejectedWrong++
+		}
+	}
+}
+
+// Specificity is the FP-REJECTION rate: RejectedRight / (RejectedRight + RejectedWrong) — of the
+// findings the tenant called false positives, the share the pipeline correctly dropped. Undefined
+// (0, false) with no suppress cases, because a specificity over zero fakes is the vacuous pass — no
+// false positives to reject means a perfect score means nothing.
+func (c Confusion) Specificity() (float64, bool) {
+	n := c.RejectedRight + c.RejectedWrong
+	if n == 0 {
+		return 0, false
+	}
+	return float64(c.RejectedRight) / float64(n), true
+}
+
+// Recall is KeptRight / (KeptRight + KeptWrong) — of the findings the tenant reinstated/confirmed
+// real, the share the pipeline kept. Reported beside specificity, never as the headline.
+func (c Confusion) Recall() (float64, bool) {
+	n := c.KeptRight + c.KeptWrong
+	if n == 0 {
+		return 0, false
+	}
+	return float64(c.KeptRight) / float64(n), true
+}
+
 // Result is the tenant's score against their own suite.
 type Result struct {
 	Cases    int       `json:"cases"`
 	Passed   int       `json:"passed"`
 	Failures []Failure `json:"failures"`
+	// Confusion splits Passed into FP-rejection (specificity) vs recall — the trust number a buyer
+	// asks for, separated from the recall number, over the tenant's own graded cases.
+	Confusion Confusion `json:"confusion"`
 	// BySource lets a reader see WHICH kind of judgement the configuration is failing — disagreeing
 	// with reinstatements (dropping findings experts called real) is a different and worse problem
 	// than disagreeing with suppressions.
@@ -348,6 +411,7 @@ func Score(cases []Case) Result {
 		if out := l15.Enrich([]types.Finding{c.finding}); len(out) > 0 {
 			got = Keep
 		}
+		res.Confusion.observe(c.Expect, got)
 		if got == c.Expect {
 			res.Passed++
 			continue

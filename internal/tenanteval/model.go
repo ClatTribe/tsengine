@@ -57,6 +57,11 @@ type ModelResult struct {
 	Failures         []Failure      `json:"failures"`
 	BySource         map[Source]int `json:"by_source"`
 	Note             string         `json:"note,omitempty"`
+	// Confusion isolates FP-rejection (specificity) from recall — same as Result.Confusion, so a
+	// BYOK customer can see whether the model they chose reduces false positives ON THEIR ESTATE.
+	// Built over ANSWERED cases only; the unanswered ones are counted by Unanswered above, not here
+	// (a model that did not answer neither rejected a fake nor kept one).
+	Confusion Confusion `json:"confusion"`
 }
 
 // Agreement mirrors Result.Agreement: the ratio, and whether it means anything yet.
@@ -93,6 +98,7 @@ func ScoreModel(ctx context.Context, cases []Case, judge ModelJudge) (ModelResul
 			res.Failures = append(res.Failures, Failure{Case: c, Got: ""})
 			continue
 		}
+		res.Confusion.observe(c.Expect, got) // answered case (got ∈ {Keep, Suppress})
 		if got == c.Expect {
 			res.Passed++
 			continue
