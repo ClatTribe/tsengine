@@ -1,7 +1,7 @@
 # ADR 0031 — Launch-gap triage: the remaining gaps are ranked by the customer confidence they put at risk, not by the effort they cost
 
 **Status:** **ACCEPTED — D1, D2b, D2c IMPLEMENTED + the D5 hygiene batch landed** (branch
-`adr-0031/launch-gap-ga-blockers`). **Open:** D2a (Azure, M), D2d (dispatcher+image publish, M),
+`adr-0031/launch-gap-ga-blockers`). **Open:** D2a (ARM + Entra plane + Entra coverage note all DONE), D2d (dispatcher DONE; image publish open, M),
 D4.1–D4.5 (parity sequence), and the three DECISIONS D3a–c, which no code can make.
 
 **Post-merge amendments (2026-08-25, after ADR 0030's fleet landed on main):**
@@ -142,12 +142,27 @@ the cheapest to fix — which is exactly the §0 inversion the ranking exists to
    - domain/ip: **zero measured numbers** (fixture stubs); their registry tiers are comment-only;
    - cloud offline bench: recall 1.00 against ground truth seeded at **19 of CIS's ~60 controls**;
    - api: VAmPI recall 1.000 but **one vuln class**, and — see C4 — unauthenticated by construction.
-4. **Stale documentation asserting superseded numbers**: `benchmark.md` carries 47.86% SAST and a
-   +0.17 cloud lift superseded by `SCOREBOARD.md`'s reproduced 46.54%/+0.05;
-   `docs/neutral-benchmarks.md` and `bench/scoreboard.results.json` still carry 0.387; root
-   `roadmap.md` describes the pre-platform engine (multi-tenancy 🔴, HITL 🔴 — all built);
-   `docs/pricing-model.md` disagrees with the live pricing page and `plan.go`. Each is small; summed,
-   they mean anyone auditing us reads two contradictory trees.
+4. **Stale documentation asserting superseded numbers** — **CLOSED**. Each part is now either
+   corrected or explicitly marked stale, and the one that mattered most is machine-guarded.
+   - `benchmark.md`, `docs/neutral-benchmarks.md`: corrected, and both now NAME the superseded
+     figure as superseded rather than silently swapping it.
+   - root `roadmap.md`: carries a banner saying it described the pre-platform engine and that
+     multi-tenancy / HITL / continuous monitoring all shipped.
+   - `docs/pricing-model.md`: marked **STALE ON PURPOSE (D5)** with the live tiers stated inline —
+     the honest form, since inventing fresh economics would be worse than dated ones.
+   - **The competitive collateral was the last live instance, and it was the worst.**
+     `docs/competitive-proof-sheet.md` (twice) and `docs/personas-and-workflows.md` went on
+     asserting **47.86% Youden ≈ Checkmarx (47)** after the neutral 2,740-case run measured 46.54%.
+     That is not an aged number: Checkmarx scores 47, so at the stale figure we read as AT parity
+     and at the measured one we are BELOW it. A superseded number INVERTED a competitive claim, in
+     the document written to be quoted at buyers.
+   - **Guarded so it cannot recur**: `internal/archcheck.TestPublishedSASTNumberMatchesTheScoreboard`
+     reads the figure FROM `SCOREBOARD.md` (never a hard-coded copy, which would be the next thing
+     to go stale) and fails any published `.md` under the repo root or `docs/` that asserts a
+     different SAST Youden. It accepts full precision or a correct 1-decimal rounding, scopes
+     matches to SAST context so WAVSEP's DAST per-class figure is not dragged in, and carries a
+     count floor so a reword that stops quoting the number fails loudly instead of passing
+     vacuously (§14.2 rule 6). Both halves are mutation-verified.
 
 ### C4 — Parity gaps that are genuine engineering (ranked by buyer-feel)
 
@@ -200,11 +215,19 @@ cloud pair proves the ledger alone is not enough if the ratchet never sees a wra
 
 ### D2 — Wire the built cluster (GA-BLOCKER or near; one PR each, no new engines)
 
-- **D2a — Azure parity.** Call the three existing bridges from `azinventory.Build` (AWS and GCP show
-  the seam), and give Azure ingest a `CoverAzure` coverage analyzer mirroring `CoverAWS`/`CoverGCP`,
-  naming principals whose policies failed to parse and roles that could not be resolved — the
-  firm-allow rule's disclosures, not new inference. Until this lands, the product page and attack-path
-  copy must not imply uniform multi-cloud privesc coverage.
+- **D2a — Azure parity. ARM half done earlier; ENTRA half now DONE.** The ARM bridge
+  (`azinventory.derivePrivesc`) was wired first. The identity plane was the remaining hole: the two
+  Entra edge builders (`AddAzureEntraPrivescEdges`, `AddEntraOwnershipEdges`) and
+  `azureiam.DetectEntraPrivesc` all existed and were tested, but `RawAzure` carried no
+  Graph-permission / directory-role / ownership field, so an Azure tenant owned through Entra
+  produced ZERO edges — the "tested evaluator with no data source" shape, the ARM half's twin.
+  `RawAzPrincipal` now carries `graph_permissions` / `directory_roles` / `owns`, and
+  `azinventory.deriveEntraPrivesc` mirrors `derivePrivesc` exactly (same `azureiam` evaluator, emits
+  `InvPrivesc` records Ingest turns into edges — one detection implementation, not two): permission
+  half (self-assign Global Admin, add a secret to a privileged app) + relationship half (owning a
+  privileged/escalating SP inherits it). Mutation-verified that removing the `Build` call fails.
+  STILL OPEN: a `CoverAzure` note for the Entra plane (which app/SP ownerships or grants went unread),
+  mirroring the ARM firm-allow disclosures — a coverage-honesty gap, not a detection gap.
 - **D2b — serve the signed evidence pack.** One route (`GET /v1/compliance/{framework}/evidence-pack`)
   over the tested `Sign`/`Verify`, plus the guard that makes the pinning honest:
   `ComplianceCorpusVersion` (`internal/tracer/hooks/version.go:14`) must change whenever the embedded
@@ -215,12 +238,17 @@ cloud pair proves the ledger alone is not enough if the ratchet never sees a wra
   (unknown = production, two consent acts to allow it — the built design), and the `datatier.go`
   comment is corrected to match whichever way this lands. Fail-closed is already the built semantics;
   wiring it changes no defaults, it makes the built safety real in the productized path.
-- **D2d — platform pentests reach the sandbox specialists.** `defaultWebDiscoverer` accepts a
-  `Dispatcher` (nil-safe, as the CLI path already is), `cmd/platform` supplies it behind the existing
-  sandbox env, and `images.yml` publishes `pentest-sandbox` with the same verify-tools discipline as
-  the other sandboxes. Note for RELEASE.md: this grows the twelve-artifact release matrix — the
-  partial-release risk it already warns about grows with it, so the same-tag verification check
-  covers the new image.
+- **D2d — platform pentests reach the sandbox specialists. DISPATCHER HALF DONE.**
+  `defaultWebDiscoverer` now resolves `Deps.OSSSandbox` (nil-safe, as the CLI path already is) and
+  `cmd/platform` supplies it behind the existing sandbox env (`sandboxImages.Pentest`), so a platform
+  engagement's discovery agent reaches sqlmap/wpscan/nuclei/ffuf/hydra/padbuster — no longer told
+  "unavailable". Per-engagement sandbox lifetime; honest nil-gate; mutation-verified that the dispatch
+  actually lands, not merely that a sandbox spawned. STILL OPEN: `images.yml` publishing a leaner
+  `pentest-sandbox` with the same verify-tools discipline — until then `sandboxImages.Pentest` falls
+  back to the scan image, which carries the tools, so this is a size optimisation, not a capability
+  gap. Note for RELEASE.md: publishing the new image grows the twelve-artifact release matrix — the
+  partial-release risk it already warns about grows with it, so the same-tag verification check must
+  cover it.
 
 **Deliberately NOT in D2: `post_emit_verifier`/L2.5.** It is inert-and-documented today, which §0's
 shallow-version clause prefers over a half-right verifier that upgrades findings on weak evidence.

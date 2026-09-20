@@ -19,7 +19,7 @@ import (
 func TestComplianceCorpusVersionPinsTheData(t *testing.T) {
 	sum := sha256.Sum256(complianceCorpus)
 	got := hex.EncodeToString(sum[:])
-	const recorded = "1f5a850e0b47b5ef" // first 16 bytes of data/compliance.json @ soc2-1.0+pci-4.0+hipaa-2024+cis-v8+nist-csf-2.0
+	const recorded = "0c5d8c06f68e9076" // first 16 bytes of data/compliance.json @ soc2-1.0+pci-4.0+hipaa-2024+cis-v8+nist-csf-2.0+dora-2022-2554+uk-ce
 	if !strings.HasPrefix(got, recorded) {
 		t.Fatalf("embedded compliance.json changed (sha256 now %s…) but ComplianceCorpusVersion was "+
 			"not bumped — two different corpora would be indistinguishable in a pinned evidence pack.\n"+

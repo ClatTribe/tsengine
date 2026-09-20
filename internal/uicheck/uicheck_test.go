@@ -324,6 +324,40 @@ var required = []struct {
 		wouldOtherwiseClaim: "a clean bill of health over findings we are holding but could not " +
 			"tie back to this asset",
 	},
+	{
+		page:  "frontend/app/(app)/access-review/page.tsx",
+		field: "detail",
+		wouldOtherwiseClaim: "that a campaign with nobody in it is a COMPLETED access review. The " +
+			"server writes the sentence that separates the two (\"this is not a completed access " +
+			"review\") because \"0 of 0\" and \"12 of 12\" read the same to someone skimming, and this " +
+			"page's output is filed as SOC 2 CC6.2/CC6.3 evidence",
+	},
+	{
+		page:  "frontend/app/(app)/access-review/page.tsx",
+		field: "pending",
+		wouldOtherwiseClaim: "that a part-answered review is finished — the count of accounts still " +
+			"awaiting a decision is the difference between an access review and a list of accounts",
+	},
+	{
+		page:  "frontend/components/settings/mdm-control.tsx",
+		field: "checks_not_run",
+		wouldOtherwiseClaim: "that a fleet fetched live from Intune with zero findings has encrypted disks " +
+			"AND locked screens AND firewalls on, when Intune's device record cannot report the last " +
+			"three at all — the provider's limits and the devices it could not read travel in this " +
+			"field, and rendering only the count turns 'not assessed' into 'compliant'",
+	},
+	{
+		page:  "frontend/components/settings/hris-control.tsx",
+		field: "checks_not_run",
+		wouldOtherwiseClaim: "that zero leavers with access means offboarding works, when the roster may " +
+			"have been stored with no identity provider to join against — the reason the join could " +
+			"not conclude is in this field, and without it a stored-but-unjoined roster reads as clean",
+	},
+	{
+		page:                "frontend/components/settings/hris-control.tsx",
+		field:               "joined",
+		wouldOtherwiseClaim: "a completed check when the sync only stored the roster",
+	},
 }
 
 func TestCoverageClaimsRenderTheFieldsThatQualifyThem(t *testing.T) {

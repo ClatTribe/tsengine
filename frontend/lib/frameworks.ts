@@ -27,6 +27,8 @@ export const FRAMEWORKS = [
   "certin",
   "rbi",
   "sebi",
+  "dora",
+  "cyber_essentials",
 ] as const;
 
 // THE display order for framework category groups — and the ONLY list any page should map over.
@@ -97,6 +99,8 @@ export const FRAMEWORK_LABEL: Record<string, string> = {
   certin: "CERT-In",
   rbi: "RBI CSF",
   sebi: "SEBI CSCRF",
+  dora: "EU DORA",
+  cyber_essentials: "UK Cyber Essentials",
 };
 
 // FRAMEWORK_DESC — one-line plain-English descriptions, shown on the per-framework drill so
@@ -127,6 +131,8 @@ export const FRAMEWORK_DESC: Record<string, string> = {
   certin: "CERT-In Directions 2022 — India's mandatory six-hour cyber-incident reporting and log-retention duties.",
   rbi: "RBI Cyber Security Framework — the Reserve Bank of India's Annex I baseline controls for regulated entities.",
   sebi: "SEBI CSCRF — the Cybersecurity and Cyber Resilience Framework for SEBI-regulated entities.",
+  dora: "EU DORA (Reg. 2022/2554) — ICT operational resilience for financial entities. Mapped to the ICT-risk articles a finding can actually evidence (identification, protection and prevention, detection, resilience testing); its governance, incident-reporting and contractual duties are procedural and are not claimed.",
+  cyber_essentials: "UK Cyber Essentials — the NCSC scheme's five technical controls. Coarse by design, so many findings land on the same control.",
 };
 
 // FRAMEWORK_CATEGORY groups frameworks for the compliance grid's section headers, so a
@@ -154,6 +160,8 @@ export const FRAMEWORK_CATEGORY: Record<string, string> = {
   certin: "India regulatory",
   rbi: "India regulatory",
   sebi: "India regulatory",
+  dora: "Sector & payments",
+  cyber_essentials: "Security & trust",
   nist_800_53: "Government",
   nist_800_171: "Government",
   fedramp: "Government",

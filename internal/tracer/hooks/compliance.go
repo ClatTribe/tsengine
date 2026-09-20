@@ -79,6 +79,8 @@ type controlSet struct {
 	CERTIn     []string `json:"certin"`
 	RBI        []string `json:"rbi"`
 	SEBI       []string `json:"sebi"`
+	DORA       []string `json:"dora"`
+	CE         []string `json:"cyber_essentials"`
 }
 
 // NewCompliance loads the embedded corpus. Panics on malformed data.
@@ -181,6 +183,10 @@ func (cs controlSet) forFramework(framework string) []string {
 		return cs.RBI
 	case "sebi":
 		return cs.SEBI
+	case "dora":
+		return cs.DORA
+	case "cyber_essentials":
+		return cs.CE
 	}
 	return nil
 }
@@ -223,6 +229,8 @@ func (h *Compliance) Lookup(cwes []string) (*types.Compliance, bool) {
 		agg.CERTIn = mergeUnique(agg.CERTIn, cs.CERTIn)
 		agg.RBI = mergeUnique(agg.RBI, cs.RBI)
 		agg.SEBI = mergeUnique(agg.SEBI, cs.SEBI)
+		agg.DORA = mergeUnique(agg.DORA, cs.DORA)
+		agg.CyberEssentials = mergeUnique(agg.CyberEssentials, cs.CE)
 	}
 	if !matched {
 		return nil, false

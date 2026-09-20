@@ -3,7 +3,6 @@ package platformapi
 import (
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -71,6 +70,7 @@ func (d Deps) handleSignup(w http.ResponseWriter, r *http.Request) {
 		Email     string `json:"email"`
 		Password  string `json:"password"`
 		Name      string `json:"name"`
+		Source    string `json:"source"` // optional attribution: the ?ref= the signup arrived with
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
@@ -95,7 +95,7 @@ func (d Deps) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenant := platform.Tenant{ID: d.newID("ten"), Name: ws, Plan: "free", CreatedAt: time.Now().UTC()}
+	tenant := platform.Tenant{ID: d.newID("ten"), Name: ws, Plan: "free", CreatedAt: time.Now().UTC(), Source: normalizeSource(body.Source)}
 	if err := d.Store.PutTenant(r.Context(), tenant); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
@@ -113,6 +113,16 @@ func (d Deps) handleSignup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
+	// A signup is the warmest lead the site produces and it reached nobody: the demo form, the scan
+	// page and the SOC 2 assessment all notify sales, while the person who went one step further
+	// and created a workspace was visible only to whoever queried the store. Same delivery path,
+	// same gate (TSENGINE_SALES_EMAIL + a configured Mailer, else a log line), source tagged so the
+	// nurture sequence can be keyed to the trigger — and to the door they came through.
+	leadSource := "signup"
+	if tenant.Source != "" {
+		leadSource += ":" + tenant.Source
+	}
+	d.notifySalesLead(r.Context(), user.Name, email, ws, leadSource, "")
 	writeJSON(w, http.StatusCreated, out)
 }
 
@@ -155,7 +165,23 @@ func (d Deps) handleMe(w http.ResponseWriter, r *http.Request, s platform.Sessio
 		return
 	}
 	u.PasswordHash = ""
-	writeJSON(w, http.StatusOK, u)
+	// The workspace NAME rides with the person. The employee seat is refused GET /v1/tenant
+	// (everything about the estate is), so its shell was rendering the tenant ID as the heading —
+	// a hex string where a company name belongs. The name is not estate data; it is the one fact
+	// about the workspace every seat is entitled to, and this is the endpoint every seat can read.
+	// Best-effort: a tenant that cannot be loaded leaves the field empty and the caller falls back.
+	name := ""
+	if t, terr := d.Store.GetTenant(r.Context(), s.TenantID); terr == nil {
+		name = t.Name
+	}
+	writeJSON(w, http.StatusOK, meResponse{User: u, TenantName: name})
+}
+
+// meResponse is the signed-in user plus the workspace name (flat JSON: the User fields at the top
+// level, unchanged for every existing reader, and tenant_name beside them).
+type meResponse struct {
+	platform.User
+	TenantName string `json:"tenant_name,omitempty"`
 }
 
 // handleTeam lists the tenant's members, oldest first, with password hashes redacted.
@@ -261,6 +287,7 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 	var body struct {
 		Email string `json:"email"`
 		Name  string `json:"name"`
+		Role  string `json:"role"` // "" | member | auditor — never owner
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
@@ -271,62 +298,50 @@ func (d Deps) handleInvite(w http.ResponseWriter, r *http.Request, s platform.Se
 		writeJSON(w, http.StatusBadRequest, errBody("a valid email is required"))
 		return
 	}
-	if _, err := d.Store.GetUserByEmail(r.Context(), email); err == nil {
-		writeJSON(w, http.StatusConflict, errBody("a user with that email already exists"))
-		return
-	} else if !errors.Is(err, store.ErrNotFound) {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+	role := platform.RoleMember
+	switch strings.ToLower(strings.TrimSpace(body.Role)) {
+	case "", platform.RoleMember:
+	case platform.RoleAuditor:
+		role = platform.RoleAuditor
+	case platform.RoleEmployee:
+		role = platform.RoleEmployee
+	default:
+		// Owner is not an invitable role — a workspace has the one that created it — and an
+		// unknown role must not silently become a member seat.
+		writeJSON(w, http.StatusBadRequest, errBody("role must be member, auditor or employee"))
 		return
 	}
-	tok, err := authn.NewToken()
+	// Provisioning is shared with the roster invite (invite_roster.go) so the two doors cannot
+	// drift on what a freshly invited account looks like.
+	u, temp, err := d.provisionSeat(r.Context(), s.TenantID, email, body.Name, role)
+	if errors.Is(err, errSeatExists) {
+		writeJSON(w, http.StatusConflict, errBody(err.Error()))
+		return
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
-	temp := tok[:14] // a usable one-time password (≥8 chars)
-	hash, err := authn.HashPassword(temp)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
-	}
-	u := platform.User{
-		ID: d.newID("usr"), TenantID: s.TenantID, Email: email, Name: strings.TrimSpace(body.Name),
-		Role: platform.RoleMember, PasswordHash: hash, CreatedAt: time.Now().UTC(),
-		MustChangePassword: true, // the temp password is the owner's; force the member to set their own
-	}
-	if err := d.Store.PutUser(r.Context(), u); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
-		return
-	}
-	u.PasswordHash = ""
 
 	// Deliver the credential. SMTP was wired for password reset but invites never used it, so
 	// every invite fell back to the owner relaying a password over chat — the weakest link in
 	// onboarding. When mail works we send it straight to the invitee and DO NOT return it, so
-	// the credential never transits the owner's browser or the API logs. With no mailer we keep
-	// the previous behaviour and say plainly that manual relay is required.
-	if d.mailerConfigured() {
-		if err := d.mailer().Send(r.Context(), email,
-			"You've been invited to TensorShield", inviteEmailHTML(d.PublicURL, email, temp)); err != nil {
-			// The account already exists, so failing the request would strand it. Fall back to
-			// returning the credential, and say delivery failed.
-			slog.Warn("[auth] invite email failed — returning the temp password for manual relay",
-				"email", email, "err", err)
-			writeJSON(w, http.StatusCreated, map[string]any{
-				"user": u, "temp_password": temp, "emailed": false,
-				"note": "invite email failed to send — share this one-time password securely; it must be changed at first login",
-			})
-			return
-		}
+	// the credential never transits the owner's browser or the API logs. With no mailer (or a
+	// failed send — the account exists, so failing the request would strand it) we return the
+	// credential and say plainly that manual relay is required.
+	if d.deliverInvite(r.Context(), email, temp) {
 		writeJSON(w, http.StatusCreated, map[string]any{
 			"user": u, "emailed": true,
 			"note": "an invite email with a one-time password was sent; it must be changed at first login",
 		})
 		return
 	}
+	note := "no SMTP configured — share this one-time password securely; it must be changed at first login"
+	if d.mailerConfigured() {
+		note = "invite email failed to send — share this one-time password securely; it must be changed at first login"
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"user": u, "temp_password": temp, "emailed": false,
-		"note": "no SMTP configured — share this one-time password securely; it must be changed at first login",
+		"user": u, "temp_password": temp, "emailed": false, "note": note,
 	})
 }
 
@@ -339,4 +354,21 @@ func inviteEmailHTML(publicURL, addr, temp string) string {
 		`<p><b>Email:</b> ` + addr + `<br><b>One-time password:</b> <code>` + temp + `</code></p>` +
 		`<p>You'll be asked to set your own password immediately after signing in.</p>` +
 		`<p>If you weren't expecting this invitation, you can ignore this email.</p>`
+}
+
+// normalizeSource bounds an attribution tag so it can be COUNTED: lower-case, trimmed, only
+// [a-z0-9._-], at most 64 characters. Anything else is dropped to "" (direct/unknown) rather than
+// stored raw — a free-text field that accepts anything is one nobody can group by, and an
+// attacker-controlled query string is not something to persist verbatim on every tenant record.
+func normalizeSource(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if len(raw) > 64 {
+		raw = raw[:64]
+	}
+	for _, r := range raw {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+			return ""
+		}
+	}
+	return raw
 }

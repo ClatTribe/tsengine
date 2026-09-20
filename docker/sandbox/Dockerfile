@@ -190,7 +190,7 @@ RUN . /usr/local/bin/ts_want.sh \
     && { ts_want domain && PKGS="$PKGS checkdmarc dnstwist"; } || true \
     && { ts_want_any "api web" && PKGS="$PKGS schemathesis"; } || true \
     && { ts_want api && PKGS="$PKGS inql"; } || true \
-    && { ts_want cloud && PKGS="$PKGS prowler==4.6.0 scoutsuite"; } || true \
+    && { ts_want cloud && PKGS="$PKGS scoutsuite"; } || true \
     && { ts_want_any "repository cloud" && PKGS="$PKGS checkov"; } || true \
     && { ts_want repository && PKGS="$PKGS modelscan"; } || true \
     && echo "python toolset: ${PKGS:-<none>}" \
@@ -208,7 +208,16 @@ RUN . /usr/local/bin/ts_want.sh \
         || echo "WARN: pip install $p failed (tool will be unavailable)"; \
     done \
     && rm -f /tmp/pip-constraints.txt
-
+    # prowler pins pydantic 1.x which clashes with checkov/modelscan/semgrep's pydantic 2.x in the shared
+# interpreter, so it crashes at runtime. Install it in its OWN venv and expose the binary on $PATH.
+RUN . /usr/local/bin/ts_want.sh \
+    && if ts_want cloud; then \
+         python3 -m venv /opt/prowler-venv \
+         && /opt/prowler-venv/bin/pip install --no-cache-dir "prowler==4.6.0" \
+         && ln -sf /opt/prowler-venv/bin/prowler /usr/local/bin/prowler \
+         && /usr/local/bin/prowler --version \
+         || echo "WARN: prowler venv install failed (cloud scanning unavailable)"; \
+       fi
 # wpscan (WordPress CMS-specialist DAST — web registry/escalation tool).
 # Ruby gem; best-effort so a build-time failure degrades to "unavailable"
 # at runtime rather than failing the whole image.

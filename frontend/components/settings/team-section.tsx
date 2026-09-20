@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus, Loader2, Copy, Check, Crown, User as UserIcon } from "lucide-react";
 import type { User } from "@/lib/types";
+import { InviteRoster } from "./invite-roster";
 
 // The Team section of Settings: lists members and (for owners) invites teammates. Invites
 // return a one-time temp password the owner shares out-of-band — shown once, copyable.
@@ -12,6 +13,7 @@ export function TeamSection({ members, currentEmail, canInvite }: { members: Use
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [role, setRole] = useState<"member" | "auditor" | "employee">("member");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [invited, setInvited] = useState<{ email: string; temp: string } | null>(null);
@@ -24,7 +26,7 @@ export function TeamSection({ members, currentEmail, canInvite }: { members: Use
     const res = await fetch("/api/team/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name }),
+      body: JSON.stringify({ email, name, role }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
@@ -44,6 +46,7 @@ export function TeamSection({ members, currentEmail, canInvite }: { members: Use
       <ul className="divide-y divide-border">
         {members.map((m) => {
           const isOwner = m.role === "owner";
+          const isAuditor = m.role === "auditor";
           const isYou = m.email === currentEmail;
           return (
             <li key={m.id} className="flex items-center gap-3 px-5 py-3">
@@ -57,7 +60,7 @@ export function TeamSection({ members, currentEmail, canInvite }: { members: Use
                 </div>
                 {m.name && <div className="truncate text-xs text-faint">{m.email}</div>}
               </div>
-              <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-medium capitalize text-muted">{m.role}</span>
+              <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-medium capitalize text-muted">{isAuditor ? "auditor · read-only" : m.role === "employee" ? "employee · training only" : m.role}</span>
             </li>
           );
         })}
@@ -81,6 +84,10 @@ export function TeamSection({ members, currentEmail, canInvite }: { members: Use
         </div>
       )}
 
+      {/* Seat the whole HRIS roster as employees in one act (owners only). Kept beside the single
+          invite because it is the same door at scale — one provisioning path server-side. */}
+      {canInvite && <InviteRoster />}
+
       {/* invite form (owners only) */}
       {canInvite && (
         <div className="px-5 py-4">
@@ -97,7 +104,32 @@ export function TeamSection({ members, currentEmail, canInvite }: { members: Use
                   placeholder="Name (optional)"
                   className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent"
                 />
+                {/* Auditor = read-only. The refusal is server-side (every non-GET is 403 read_only_role), so
+                    this is the honest label for what they get, not the thing that enforces it. */}
+                <select
+                  value={role} onChange={(e) => setRole(e.target.value as "member" | "auditor" | "employee")}
+                  aria-label="Role"
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent"
+                >
+                  <option value="member">Member — full access</option>
+                  <option value="auditor">Auditor — read-only</option>
+                  <option value="employee">Employee — training and policies only</option>
+                </select>
               </div>
+              {role === "employee" && (
+                <p className="text-xs text-muted">
+                  An employee sees their own security training and the policies they are asked to
+                  acknowledge — and nothing else: no findings, no attack paths, no pentest reports,
+                  no settings. This is the seat for the rest of the company, so asking everyone to
+                  complete their training does not mean handing everyone your security estate.
+                </p>
+              )}
+              {role === "auditor" && (
+                <p className="text-xs text-muted">
+                  An auditor can read everything — findings, control posture, reports, the evidence pack — and change nothing:
+                  no scans, no approvals, no settings, no invites. For your SOC 2 / ISO auditor or a customer&apos;s security reviewer.
+                </p>
+              )}
               {err && <p className="text-xs text-critical">{err}</p>}
               <div className="flex items-center gap-2">
                 <button

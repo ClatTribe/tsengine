@@ -10,6 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+
+	"github.com/ClatTribe/tsengine/internal/cloudsafety"
 )
 
 // s3.go is the live object-store read, through the customer's scoped read-only role.
@@ -142,13 +144,32 @@ func assumeRoleConfig(ctx context.Context, region, roleARN, externalID string) (
 		return aws.Config{}, fmt.Errorf("awsfetch: load aws config: %w", err)
 	}
 	if roleARN != "" {
-		provider := stscreds.NewAssumeRoleProvider(sts.NewFromConfig(cfg), roleARN,
-			func(o *stscreds.AssumeRoleOptions) {
-				if externalID != "" {
-					o.ExternalID = aws.String(externalID)
-				}
-			})
+		// Assume the customer's role WITH the read-only session policy (ADR 0002, cloudsafety.
+		// SessionPolicy) as an inline STS scope-down. Every doc that describes this engine says the
+		// role is "assumed WITH cloudsafety.SessionPolicy()" -- and until now the LIVE fetch path did
+		// not apply it, so the claim held only for the agent's own live-validation calls and was false
+		// for the inventory read a connected customer actually runs. An STS session policy is the
+		// INTERSECTION of the role's permissions and this document, so even a broadly-scoped read role
+		// (or one a customer over-granted) cannot mutate or read data CONTENTS through this config: the
+		// deny side is structural, independent of what the role itself allows. The listers here perform
+		// metadata reads only (Describe/List/Get-policy), which the policy explicitly does not deny, so
+		// the scope-down is invisible to correct behaviour and a barrier to everything else -- defense
+		// in depth alongside the application-layer Guard, not a replacement for it.
+		provider := stscreds.NewAssumeRoleProvider(sts.NewFromConfig(cfg), roleARN, scopeDownOptions(externalID))
 		cfg.Credentials = aws.NewCredentialsCache(provider)
 	}
 	return cfg, nil
+}
+
+// scopeDownOptions is the assume-role option mutator every live read uses: the external-id
+// confused-deputy guard AND the read-only session policy. Extracted so a test can assert the
+// scope-down is present -- a guard that cannot observe its subject is no guard (CLAUDE.md 14.2).
+func scopeDownOptions(externalID string) func(*stscreds.AssumeRoleOptions) {
+	sessionPolicy := cloudsafety.SessionPolicy()
+	return func(o *stscreds.AssumeRoleOptions) {
+		if externalID != "" {
+			o.ExternalID = aws.String(externalID)
+		}
+		o.Policy = aws.String(sessionPolicy)
+	}
 }

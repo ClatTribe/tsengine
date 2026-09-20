@@ -22,11 +22,51 @@ import (
 
 // Tenant is one customer organization. Every other entity is scoped to a TenantID;
 // the store enforces isolation on that key.
+// DefaultBrand is the product's own name, used wherever a tenant has no Branding.
+const DefaultBrand = "TensorShield"
+
+// Branding is a tenant's white-label identity for outward-facing artifacts. See Tenant.Branding.
+type Branding struct {
+	Name         string `json:"name"`                    // shown in place of the product name; required when set
+	LogoURL      string `json:"logo_url,omitempty"`      // https only; rendered on the public Trust Center
+	SupportEmail string `json:"support_email,omitempty"` // where the reader of a branded artifact is told to write
+}
+
+// Brand returns the name to render for this tenant: its white-label name, else the product's.
+func (t Tenant) Brand() string {
+	if t.Branding != nil && strings.TrimSpace(t.Branding.Name) != "" {
+		return strings.TrimSpace(t.Branding.Name)
+	}
+	return DefaultBrand
+}
+
+// WhiteLabelled reports whether outward artifacts carry a brand other than the product's.
+func (t Tenant) WhiteLabelled() bool { return t.Brand() != DefaultBrand }
+
 type Tenant struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Plan      string    `json:"plan,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// AuditApplications is the number of applications purchased under the per-application SKU
+	// (PlanAudit). It is the plan's asset cap, read through EntitlementsFor, because a plan string
+	// cannot carry a count. Set by the operator with the plan; 0 on every other tier and ignored there.
+	AuditApplications int `json:"audit_applications,omitempty"`
+	// Source records where this workspace CAME FROM — the `?ref=` a signup arrived with (a partner
+	// listing, a VC perk page, an outbound sequence, an accelerator batch) or the operator-supplied
+	// source on POST /v1/tenants. Nothing could attribute a signup before this: every GTM motion that
+	// pays a partner, measures a channel, or watches a segment depends on exactly this field, and
+	// the funnel could count signups but not say which door they used. Free-form but bounded and
+	// lower-cased at capture; empty means "direct / unknown" and is reported as that, never guessed.
+	Source string `json:"source,omitempty"`
+	// Branding is the WHITE-LABEL: the name, logo and support address that appear on the artifacts
+	// this workspace hands to OTHER people — the VAPT report a customer's security team reads, the
+	// public Trust Center a buyer opens. An MSP or consultancy reselling the managed tier puts its
+	// own name here so those artifacts carry the firm the customer actually bought from. Nil means
+	// the product's own brand. It rebrands PROSE and CHROME only: the engine identifier in a
+	// report's provenance block is evidence about how the assessment was produced (§10 pinned
+	// context) and is never replaced — an auditor re-running a finding needs to know what ran.
+	Branding *Branding `json:"branding,omitempty"`
 	// AgentsHalted is the global kill-switch (agentic-SMB spec OM-3 / TS-5): when true,
 	// the platform performs NO autonomous agent action for this tenant — no new scans and
 	// no remediation writes (auto-applied or human-approved alike). It fails closed: a
@@ -87,6 +127,14 @@ type Tenant struct {
 	// has a stamping door, asserted by a test, because a source shown with nothing stamping it can
 	// only ever read "not tested" — including for the customer who ran it.
 	PostureAssessed map[string]time.Time `json:"posture_assessed,omitempty"`
+	// IdentityLogCursors is, per identity-provider connection kind, the newest audit-log event time
+	// the ITDR sync has read (internal/identitylog). The next pass reads from just before it; a
+	// failed or empty read never advances it, so no event is skipped past.
+	IdentityLogCursors map[string]time.Time `json:"identity_log_cursors,omitempty"`
+	// CloudEventCursors is, per cloud connection id, the newest CloudTrail event time the CDR poller
+	// has read (runner.SyncCloudEvents). Same rule as IdentityLogCursors: a failed read never
+	// advances it; a truncated read does, and the unread older span is reported, not skipped silently.
+	CloudEventCursors map[string]time.Time `json:"cloud_event_cursors,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
@@ -96,6 +144,21 @@ type Tenant struct {
 	// operator-env Jira is the fallback). BaseURL/Email/Project are plain identifiers; the API token
 	// is sealed (TokenRef). Redacted() drops the whole block.
 	Jira *JiraConfig `json:"jira,omitempty"`
+	// Drata is the per-tenant push-to-Drata config: the customer's Drata Custom Connection that the
+	// engine writes control-posture records into (their tests evaluate them). The API key is sealed
+	// (KeyRef); the connection/resource ids are stored once EnsureConnection creates them, so a
+	// re-sync reuses the connection instead of making a new one each time.
+	Drata *DrataConfig `json:"drata,omitempty"`
+	// MDM is the tenant's device-management source (Kandji / Jamf Pro / Intune) — the FETCH half of
+	// device posture. internal/deviceposture could always assess a posted inventory; this is where the
+	// inventory now comes from on its own. Provider and base URL are plain identifiers; every credential
+	// is sealed (TokenRef / ClientSecretRef). Redacted() drops the whole block.
+	MDM *MDMConfig `json:"mdm,omitempty"`
+	// HRIS is the tenant's employment-records source (Merge.dev / Finch unified HRIS APIs) — the one
+	// surface the product had nothing for. An IdP shows ACCOUNTS; only HR shows EMPLOYMENT, and the
+	// join between the two is the finding an auditor asks for first (a leaver whose account is still
+	// active). Credentials sealed; Redacted() drops the block.
+	HRIS *HRISConfig `json:"hris,omitempty"`
 	// Escalation is the per-tenant incident escalation matrix (the MDR/SOC "who is alerted, how
 	// urgently" for a new incident). nil/disabled = today's behaviour (alert every configured
 	// channel). No secret material — channel names only.
@@ -472,9 +535,330 @@ type JiraConfig struct {
 	TokenRef string `json:"token_ref,omitempty"`
 }
 
+// DrataConfig is a tenant's push-to-Drata destination. See Tenant.Drata.
+type DrataConfig struct {
+	KeyRef       string `json:"key_ref,omitempty"` // sealed API key
+	WorkspaceID  int    `json:"workspace_id,omitempty"`
+	ConnectionID int    `json:"connection_id,omitempty"` // set once the connection is created
+	ResourceID   int    `json:"resource_id,omitempty"`
+	BaseURL      string `json:"base_url,omitempty"` // override the public endpoint (testing / gov)
+}
+
+// HasKey reports whether a Drata API key is configured (without exposing it).
+func (d *DrataConfig) HasKey() bool { return d != nil && d.KeyRef != "" }
+
 // HasToken reports whether a usable Jira destination is configured (without exposing the token).
 func (j *JiraConfig) HasToken() bool {
 	return j != nil && j.BaseURL != "" && j.Email != "" && j.Project != "" && j.TokenRef != ""
+}
+
+// MDM providers the device-posture fetch understands.
+const (
+	MDMKandji = "kandji"
+	MDMJamf   = "jamf"
+	MDMIntune = "intune"
+)
+
+// MDMConfig is the per-tenant device-management source. Provider picks the fetcher; BaseURL is the
+// customer's own Kandji / Jamf tenant URL (Intune needs none — Graph is a fixed host). TokenRef is a
+// sealed API token (Kandji, Jamf bearer, or an Intune Graph token); ClientID + ClientSecretRef are the
+// Jamf Pro API-client alternative (a Jamf bearer token expires in thirty minutes, so a standing
+// integration mints one per sync). For Intune with no token of its own, the sync reuses the onboarded
+// Microsoft 365 connection's token — reuse a connection before adding one (CLAUDE.md §2.2.1 rule 3).
+type MDMConfig struct {
+	Provider        string `json:"provider"`
+	BaseURL         string `json:"base_url,omitempty"`
+	TokenRef        string `json:"token_ref,omitempty"`
+	ClientID        string `json:"client_id,omitempty"`
+	ClientSecretRef string `json:"client_secret_ref,omitempty"`
+}
+
+// HasCredential reports whether the config carries something a fetch could authenticate with.
+// Intune is the exception handled by the caller (it may borrow the M365 connection's token).
+func (m *MDMConfig) HasCredential() bool {
+	if m == nil {
+		return false
+	}
+	return m.TokenRef != "" || (m.ClientID != "" && m.ClientSecretRef != "")
+}
+
+// HRIS providers — unified APIs, deliberately: one integration each covers most of the market.
+const (
+	HRISMerge = "merge"
+	HRISFinch = "finch"
+)
+
+// HRISConfig is the per-tenant employment-records source. Merge needs the account's API key (KeyRef)
+// plus the linked-account token for THIS employer (AccountTokenRef); Finch needs only the employer's
+// access token (KeyRef). All sealed. BaseURL overrides the provider endpoint for tests and regional
+// deployments; empty means the provider's public API.
+type HRISConfig struct {
+	Provider        string `json:"provider"`
+	KeyRef          string `json:"key_ref,omitempty"`
+	AccountTokenRef string `json:"account_token_ref,omitempty"`
+	BaseURL         string `json:"base_url,omitempty"`
+}
+
+// HasCredential reports whether a fetch could authenticate.
+func (h *HRISConfig) HasCredential() bool {
+	if h == nil {
+		return false
+	}
+	switch h.Provider {
+	case HRISMerge:
+		return h.KeyRef != "" && h.AccountTokenRef != ""
+	case HRISFinch:
+		return h.KeyRef != ""
+	}
+	return false
+}
+
+// Employment statuses, normalised from whatever the HRIS calls them. Only EmploymentTerminated
+// drives a finding; the rest exist so a roster can be read back honestly.
+const (
+	EmploymentActive     = "active"
+	EmploymentPending    = "pending" // hired, not yet started
+	EmploymentTerminated = "terminated"
+	EmploymentUnknown    = "unknown" // the HRIS reported a status we do not recognise
+)
+
+// Employee is one employment record from the tenant's HRIS, as stored. It is the HR half of the
+// joiner/leaver join: the IdP knows an account exists; this knows whether the person still works
+// here. Every field is what the HRIS asserted — nothing is inferred from a name or an address.
+type Employee struct {
+	TenantID string `json:"tenant_id"`
+	Source   string `json:"source"` // HRISMerge | HRISFinch
+	ID       string `json:"id"`     // the HRIS's own id for the record
+	Name     string `json:"name,omitempty"`
+	// WorkEmail is the address the IdP account is expected to carry. PersonalEmails are the other
+	// addresses the HRIS asserts belong to the same person — an assertion by a system that knows,
+	// which is what makes matching on them a join rather than a guess (cf. estateingest/ghidentity).
+	WorkEmail      string    `json:"work_email,omitempty"`
+	PersonalEmails []string  `json:"personal_emails,omitempty"`
+	Status         string    `json:"status"`                    // EmploymentActive | EmploymentPending | EmploymentTerminated | EmploymentUnknown
+	EmploymentType string    `json:"employment_type,omitempty"` // employee | contractor | intern | … as the HRIS said
+	StartDate      string    `json:"start_date,omitempty"`      // YYYY-MM-DD
+	EndDate        string    `json:"end_date,omitempty"`        // YYYY-MM-DD — the termination / separation date
+	Department     string    `json:"department,omitempty"`
+	FetchedAt      time.Time `json:"fetched_at"`
+}
+
+// IdentityLink is one ASSERTED mapping between a workforce identity (the email an IdP names a person
+// by) and a GitHub login. Only a system that knows may assert it: GitHub's SAML external identity
+// (the nameId the IdP sent), or Okta's SCIM assignment joined to GitHub's own numeric user id. A
+// resemblance between a name and a login is never a link — a wrong merge sends someone to revoke the
+// access of a person who never had it.
+type IdentityLink struct {
+	Email  string `json:"email"`
+	Login  string `json:"login"`
+	Source string `json:"source"` // "github_saml" | "okta_scim"
+}
+
+// GitHubControl is one login's authority over an organisation or a repository, with the evidence
+// (the API endpoint and field) that states it.
+type GitHubControl struct {
+	Login    string   `json:"login"`
+	Org      string   `json:"org"`
+	Repo     string   `json:"repo,omitempty"` // empty → organisation-level authority
+	Admin    bool     `json:"admin"`
+	Evidence []string `json:"evidence"`
+}
+
+// IdentityLinkSet is the tenant's person→code join inputs, fetched every monitoring pass and stored
+// so the estate graph can draw the chain from a person to a repository to the cloud role its
+// workflows assume. Unread names every source that could not be read and why (a SAML query refused
+// for want of admin:org, an org with no SAML), because an empty link list and an unreadable one must
+// not render the same.
+type IdentityLinkSet struct {
+	TenantID  string            `json:"tenant_id"`
+	Links     []IdentityLink    `json:"links"`
+	Controls  []GitHubControl   `json:"controls"`
+	FetchedAt time.Time         `json:"fetched_at"`
+	Unread    map[string]string `json:"unread,omitempty"`
+}
+
+// VendorDataAccess is what a third party can touch. It drives the severity of nearly every vendor
+// finding, which is why it is DECLARED by the customer rather than inferred: nothing in a vendor's
+// name or category says whether they hold personal data.
+type VendorDataAccess string
+
+const (
+	VendorDataNone      VendorDataAccess = "none"      // no access to our data
+	VendorDataMetadata  VendorDataAccess = "metadata"  // non-personal operational data
+	VendorDataPII       VendorDataAccess = "pii"       // personal data
+	VendorDataSensitive VendorDataAccess = "sensitive" // PHI / cardholder / secrets — the highest tier
+)
+
+// Vendor is one third party in the REGISTER — the durable inventory, not a transient scan input.
+//
+// The register had to become a stored entity because a findings list is not an inventory. Before
+// this the vendor set existed only inside the body of POST /v1/tprm/ingest: the findings persisted
+// and the portfolio did not, so the product could say which suppliers FAILED a check and could not
+// answer "who are our vendors" at all. That is the same defect the Trust Center's sub-processor note
+// describes — a derived list names the vendors that failed and omits every well-managed one — and a
+// vendor register is exactly the artifact an auditor asks for under SOC 2 CC9.2 and GDPR Art. 28.
+//
+// It lives here rather than in internal/tprm because internal/store may not import an internal
+// package; internal/tprm aliases it, so there is ONE type with two names rather than two that drift.
+type Vendor struct {
+	TenantID string `json:"tenant_id,omitempty"`
+	// ID is a slug of the name — stable, so re-ingesting the same inventory UPDATES each vendor
+	// rather than accumulating duplicates of it.
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Owner is the named human accountable for this relationship. Empty means UNOWNED and is
+	// rendered as such: defaulting to the workspace owner would manufacture accountability, naming
+	// somebody who never agreed to it — the same rule Asset.Owner follows (ADR 0028 G1).
+	Owner           string           `json:"owner,omitempty"`
+	Category        string           `json:"category,omitempty"`
+	DataAccess      VendorDataAccess `json:"data_access,omitempty"`
+	Subprocessor    bool             `json:"subprocessor,omitempty"`
+	HandlesCardData bool             `json:"handles_card_data,omitempty"`
+	Certifications  []string         `json:"certifications,omitempty"`
+	HasDPA          bool             `json:"has_dpa,omitempty"`
+	Breached        bool             `json:"breached,omitempty"`
+	BreachNote      string           `json:"breach_note,omitempty"`
+	Criticality     string           `json:"criticality,omitempty"`
+	// LastAssessed is when a human last reviewed this vendor. "" means NEVER, which is a different
+	// claim from "reviewed a long time ago" and is reported as itself.
+	LastAssessed string `json:"last_assessed,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+	// Source says where the row came from — a person typing it, or a posted inventory. An inventory
+	// a CI job posts and a register a human curates are different claims about completeness.
+	Source    string    `json:"source,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitzero"`
+}
+
+// AuditVerdict is a reviewer's decision about one finding's place in a SIGNED audit report.
+//
+// It lives here rather than in internal/auditreview because the disposition is a stored entity and
+// internal/store may not import an internal package; auditreview aliases both, so there is ONE type
+// with two names rather than two that drift — and drift here would land in a certificate.
+type AuditVerdict string
+
+const (
+	// AuditInclude puts the finding in the report as the engine reported it.
+	AuditInclude AuditVerdict = "include"
+	// AuditExclude keeps it OUT. It never deletes: the finding stays in the trail with who excluded
+	// it and why, because if the application is later compromised through an excluded finding, that
+	// record is the only thing between the auditor and negligence.
+	AuditExclude AuditVerdict = "exclude"
+	// AuditReclassify keeps the finding at the REVIEWER's severity, in either direction.
+	AuditReclassify AuditVerdict = "reclassify"
+)
+
+// AuditDisposition is one reviewer's decision about one finding, by name and on a date.
+type AuditDisposition struct {
+	TenantID string       `json:"tenant_id"`
+	Target   string       `json:"target"` // the application under audit
+	Key      string       `json:"key"`    // the stable finding key (crossdetect.DedupKey)
+	Verdict  AuditVerdict `json:"verdict"`
+	// Severity is the reviewer's severity, for a reclassification only.
+	Severity string `json:"severity,omitempty"`
+	// Lowered records that the reclassification REDUCED severity — the direction that makes a report
+	// look better, surfaced so a reader sees it was a human judgement and not the scanner's.
+	Lowered bool      `json:"lowered,omitempty"`
+	Reason  string    `json:"reason,omitempty"`
+	By      string    `json:"by"`
+	At      time.Time `json:"at,omitzero"`
+}
+
+// AuditOrderStatus is where one per-application order stands. The sequence IS the commercial term
+// the tenders set: open → certified → accepted → invoiced, and nothing is owed before accepted.
+type AuditOrderStatus string
+
+const (
+	AuditOrderOpen      AuditOrderStatus = "open"      // ordered; the audit is in progress or not started
+	AuditOrderCertified AuditOrderStatus = "certified" // a Safe-to-Host certificate was issued for the target
+	AuditOrderAccepted  AuditOrderStatus = "accepted"  // the buyer accepted the certificate — the payment event
+	AuditOrderInvoiced  AuditOrderStatus = "invoiced"  // the operator raised the invoice
+)
+
+// AuditOrder is the unit of sale of the per-application SKU: one application, one price, paid on
+// acceptance of its certificate. It is the commercial twin of the audit review (internal/auditreview),
+// which is the WORK; this records the money, and only the money.
+//
+// The status machine encodes the tenders' own terms — "100% payment after acceptance of the final
+// report, no advance" — so AmountDueINR is zero until the buyer has accepted. A certificate issued
+// but not yet accepted is work delivered and money not yet owed, and the two must not be conflated
+// on a page an operator invoices from.
+type AuditOrder struct {
+	TenantID string `json:"tenant_id"`
+	ID       string `json:"id"`
+	Target   string `json:"target"` // the application, exactly as the audit review names it
+	// PriceINR is the agreed price for THIS application, exclusive of GST. Defaults to
+	// AuditListPriceINR; an operator may record a different agreed figure on the order.
+	PriceINR  int              `json:"price_inr"`
+	Status    AuditOrderStatus `json:"status"`
+	Note      string           `json:"note,omitempty"` // tender / PO / bid reference
+	CreatedAt time.Time        `json:"created_at"`
+	CreatedBy string           `json:"created_by,omitempty"`
+	// CertificateID / CertifiedAt are stamped when a certificate is issued for the target.
+	CertificateID string    `json:"certificate_id,omitempty"`
+	CertifiedAt   time.Time `json:"certified_at,omitzero"`
+	// AcceptedBy names the buyer's human who accepted the certificate — the act that makes the
+	// amount due. Recorded by name because it is the payment trigger and an unnamed acceptance is
+	// a date with nobody behind it.
+	AcceptedBy string    `json:"accepted_by,omitempty"`
+	AcceptedAt time.Time `json:"accepted_at,omitzero"`
+	InvoiceRef string    `json:"invoice_ref,omitempty"`
+	InvoicedAt time.Time `json:"invoiced_at,omitzero"`
+}
+
+// AmountDueINR is what the buyer owes on this order right now: the full price once they have
+// accepted the certificate, and nothing before — the no-advance term, computed rather than stored so
+// it can never disagree with the status.
+func (o AuditOrder) AmountDueINR() int {
+	switch o.Status {
+	case AuditOrderAccepted, AuditOrderInvoiced:
+		return o.PriceINR
+	}
+	return 0
+}
+
+// TrainingTier is HOW we know a person was trained. The two values are not interchangeable and are
+// never summed into one figure — see internal/training for the reasoning. It lives here rather than
+// in internal/training because the completion record is a stored entity and the store may not import
+// internal packages; internal/training aliases both this and TrainingCompletion, so there is ONE
+// type with two names rather than two types that drift.
+type TrainingTier string
+
+const (
+	// TrainingDelivered — the content was rendered in THIS product and the person confirmed it at a
+	// recorded time. The strongest claim software can make without proctoring an exam.
+	TrainingDelivered TrainingTier = "delivered"
+	// TrainingAttested — completed elsewhere; a named human recorded it, naming the provider. A
+	// second-hand claim, and rendered as one.
+	TrainingAttested TrainingTier = "attested_external"
+)
+
+// TrainingCompletion is one person finishing one security-awareness module, once.
+//
+// Completions are APPEND-ONLY: a new one never replaces an older one. "Trained every year since
+// 2024" is the thing an auditor actually asks for, and it is unanswerable from current state alone.
+// Currency is decided at read time by internal/training.Evaluate, which takes the newest completion
+// per (person, module) and expires it against the module's recurrence.
+type TrainingCompletion struct {
+	TenantID string `json:"tenant_id"`
+	// ID is subject|module|date. Day-granular on purpose: clicking confirm twice in one sitting must
+	// not create two records, and nobody legitimately completes the same module twice in a day.
+	ID string `json:"id"`
+	// Subject is the person, lower-cased, by the address their identity provider knows them as — the
+	// same key the HRIS roster joins on, so a roster row and a training record name the same human.
+	Subject  string       `json:"subject"`
+	ModuleID string       `json:"module_id"`
+	Tier     TrainingTier `json:"tier"`
+	At       time.Time    `json:"at"`
+	// CurriculumVersion pins WHICH content this attests to. A completion is evidence about the text
+	// that was shown, and the text can change — the same reason a scan pins its corpus version (§10).
+	CurriculumVersion string `json:"curriculum_version,omitempty"`
+	// Provider names who delivered it. Required for the attested tier, because "trained externally"
+	// without naming the source is not a fact anybody can check.
+	Provider string `json:"provider,omitempty"`
+	// RecordedBy is the human who entered an external attestation. Empty for the delivered tier, where
+	// the subject confirmed it themselves and the product observed it.
+	RecordedBy string `json:"recorded_by,omitempty"`
+	Note       string `json:"note,omitempty"`
 }
 
 // PRBotPolicy is the per-tenant repository PR-review-bot policy: whether to post inline review
@@ -573,6 +957,9 @@ func (t Tenant) Redacted() Tenant {
 	t.LLMRoles = nil // per-role overrides carry sealed key refs too — same reason as LLM
 	t.SlackWebhookRef = ""
 	t.Jira = nil
+	t.Drata = nil
+	t.MDM = nil
+	t.HRIS = nil
 	return t
 }
 

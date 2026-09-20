@@ -5,6 +5,7 @@ import { PageIntro } from "@/components/ui/page-intro";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { CONNECTION_TABS } from "@/lib/tabs";
 import { DatabaseScanPanel } from "@/components/posture/database-scan";
+import { VendorRegister } from "@/components/posture/vendor-register";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ const SOURCE_ICON: Record<string, typeof Building2> = {
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
 
 export default async function PosturePage() {
-  const { total, sources } = await api.postureSources();
+  const [{ total, sources }, vendors] = await Promise.all([api.postureSources(), api.vendors()]);
 
   return (
     <div className="space-y-8">
@@ -29,6 +30,11 @@ export default async function PosturePage() {
         description="Risk across the asset classes a pure scanner misses — your vendors, your employee devices, and changes to your cloud since the last baseline. Each is assessed against SOC 2 / CIS / NIST / GDPR controls and flows into the same issues and compliance posture as every other finding."
       />
 
+
+      {/* WHO your vendors are, before what is wrong with them. The findings below name the suppliers
+          that failed a check; a reader who only ever sees those cannot answer the first question an
+          auditor asks, which is for the register itself. */}
+      <VendorRegister data={vendors} />
 
       {/* The one integration in this stack that needs no OAuth app and no connector build — the
           customer already holds the connection string. It was reachable only by curl. */}

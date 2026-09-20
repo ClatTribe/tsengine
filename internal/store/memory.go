@@ -34,17 +34,23 @@ type Memory struct {
 	policies        map[string]map[string]platform.Policy             // tenantID → policyID → policy
 	trustReqs       map[string]map[string]platform.TrustAccessRequest // tenantID → requestID → Trust Center access request
 
-	ignores     map[string]map[string]platform.IgnoreRule    // tenantID → issueKey → ignore rule
-	feedback    map[string]map[string]platform.Feedback      // tenantID → issueKey → latest human judgement
-	exclusions  map[string]map[string]platform.ExclusionRule // tenantID → ruleID → exclusion rule
-	runtimeEvts map[string][]platform.RuntimeEvent           // tenantID → runtime-protection events (append-only)
-	pentests    map[string]map[string]pentest.Engagement     // tenantID → engagementID → pentest
-	reviews     map[string]map[string]platform.ReviewRequest // tenantID → reviewID → review
-	apps        map[string][]platform.ThirdPartyApp          // tenantID → third-party apps
-	users       map[string]platform.User                     // userID → user (email globally unique)
-	sessions    map[string]platform.Session                  // token → session
-	operators   map[string]platform.Operator                 // operatorID → operator (cross-tenant; global)
-	opSessions  map[string]platform.OperatorSession          // token → operator session
+	ignores     map[string]map[string]platform.IgnoreRule         // tenantID → issueKey → ignore rule
+	feedback    map[string]map[string]platform.Feedback           // tenantID → issueKey → latest human judgement
+	exclusions  map[string]map[string]platform.ExclusionRule      // tenantID → ruleID → exclusion rule
+	runtimeEvts map[string][]platform.RuntimeEvent                // tenantID → runtime-protection events (append-only)
+	pentests    map[string]map[string]pentest.Engagement          // tenantID → engagementID → pentest
+	reviews     map[string]map[string]platform.ReviewRequest      // tenantID → reviewID → review
+	apps        map[string][]platform.ThirdPartyApp               // tenantID → third-party apps
+	employees   map[string][]platform.Employee                    // tenantID → HRIS employee roster
+	training    map[string]map[string]platform.TrainingCompletion // tenantID → completionID → record
+	idLinks     map[string]platform.IdentityLinkSet               // tenantID → person→GitHub join inputs
+	auditDisp   map[string]map[string]platform.AuditDisposition   // tenantID → target|key → decision
+	auditOrders map[string]map[string]platform.AuditOrder         // tenantID → orderID → per-application order
+	vendors     map[string]map[string]platform.Vendor             // tenantID → vendorID → register row
+	users       map[string]platform.User                          // userID → user (email globally unique)
+	sessions    map[string]platform.Session                       // token → session
+	operators   map[string]platform.Operator                      // operatorID → operator (cross-tenant; global)
+	opSessions  map[string]platform.OperatorSession               // token → operator session
 }
 
 // NewMemory returns an empty in-memory store.
@@ -73,6 +79,12 @@ func NewMemory() *Memory {
 		pentests:        map[string]map[string]pentest.Engagement{},
 		reviews:         map[string]map[string]platform.ReviewRequest{},
 		apps:            map[string][]platform.ThirdPartyApp{},
+		employees:       map[string][]platform.Employee{},
+		training:        map[string]map[string]platform.TrainingCompletion{},
+		idLinks:         map[string]platform.IdentityLinkSet{},
+		auditDisp:       map[string]map[string]platform.AuditDisposition{},
+		auditOrders:     map[string]map[string]platform.AuditOrder{},
+		vendors:         map[string]map[string]platform.Vendor{},
 		users:           map[string]platform.User{},
 		sessions:        map[string]platform.Session{},
 		operators:       map[string]platform.Operator{},
@@ -319,6 +331,18 @@ func (m *Memory) ListFindings(_ context.Context, tenantID string, filter Finding
 		out = append(out, f)
 	}
 	return Page(out, filter), nil
+}
+
+func (m *Memory) FindingSeverityCounts(_ context.Context, tenantID string) (map[string]int, int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	sev := map[string]int{}
+	total := 0
+	for _, f := range m.findings[tenantID] {
+		sev[string(f.Severity)]++
+		total++
+	}
+	return sev, total, nil
 }
 
 func (m *Memory) PutAction(_ context.Context, a platform.Action) error {
@@ -762,6 +786,149 @@ func (m *Memory) ListThirdPartyApps(_ context.Context, tenantID string) ([]platf
 	return clone(m.apps[tenantID]), nil
 }
 
+// ReplaceEmployees swaps the tenant's roster for one HRIS source with the freshly-fetched set,
+// leaving other sources untouched — the same shape as ReplaceThirdPartyApps.
+func (m *Memory) ReplaceEmployees(_ context.Context, tenantID, source string, emps []platform.Employee) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	kept := make([]platform.Employee, 0, len(m.employees[tenantID]))
+	for _, e := range m.employees[tenantID] {
+		if e.Source != source {
+			kept = append(kept, e)
+		}
+	}
+	m.employees[tenantID] = append(kept, emps...)
+	return nil
+}
+
+func (m *Memory) ListEmployees(_ context.Context, tenantID string) ([]platform.Employee, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return clone(m.employees[tenantID]), nil
+}
+
+// PutIdentityLinks replaces the tenant's person→GitHub join inputs (one document per tenant).
+func (m *Memory) PutIdentityLinks(_ context.Context, set platform.IdentityLinkSet) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.idLinks[set.TenantID] = set
+	return nil
+}
+
+func (m *Memory) GetIdentityLinks(_ context.Context, tenantID string) (platform.IdentityLinkSet, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	set, ok := m.idLinks[tenantID]
+	return set, ok, nil
+}
+
+// PutTrainingCompletion upserts one completion by its id. Keyed rather than appended so confirming
+// the same module twice in one day is idempotent, while last year's completion stays on record.
+func (m *Memory) PutTrainingCompletion(_ context.Context, c platform.TrainingCompletion) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.training[c.TenantID] == nil {
+		m.training[c.TenantID] = map[string]platform.TrainingCompletion{}
+	}
+	m.training[c.TenantID][c.ID] = c
+	return nil
+}
+
+func (m *Memory) PutVendor(_ context.Context, v platform.Vendor) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.vendors[v.TenantID] == nil {
+		m.vendors[v.TenantID] = map[string]platform.Vendor{}
+	}
+	m.vendors[v.TenantID][v.ID] = v
+	return nil
+}
+
+func (m *Memory) ListVendors(_ context.Context, tenantID string) ([]platform.Vendor, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.Vendor, 0, len(m.vendors[tenantID]))
+	for _, v := range m.vendors[tenantID] {
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func (m *Memory) DeleteVendor(_ context.Context, tenantID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.vendors[tenantID], id)
+	return nil
+}
+
+// PutAuditDisposition upserts one decision, keyed (target|key): a reviewer changing their mind
+// REPLACES their earlier verdict rather than adding a second one, because a report assembled from two
+// contradictory decisions about the same finding is not an audit record.
+func (m *Memory) PutAuditDisposition(_ context.Context, d platform.AuditDisposition) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.auditDisp[d.TenantID] == nil {
+		m.auditDisp[d.TenantID] = map[string]platform.AuditDisposition{}
+	}
+	m.auditDisp[d.TenantID][strings.ToLower(strings.TrimSpace(d.Target))+"|"+d.Key] = d
+	return nil
+}
+
+// PutAuditOrder upserts one per-application order by id — the status advances in place.
+func (m *Memory) PutAuditOrder(_ context.Context, o platform.AuditOrder) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.auditOrders[o.TenantID] == nil {
+		m.auditOrders[o.TenantID] = map[string]platform.AuditOrder{}
+	}
+	m.auditOrders[o.TenantID][o.ID] = o
+	return nil
+}
+
+func (m *Memory) ListAuditOrders(_ context.Context, tenantID string) ([]platform.AuditOrder, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.AuditOrder, 0, len(m.auditOrders[tenantID]))
+	for _, o := range m.auditOrders[tenantID] {
+		out = append(out, o)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+func (m *Memory) ListAuditDispositions(_ context.Context, tenantID string) ([]platform.AuditDisposition, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.AuditDisposition, 0, len(m.auditDisp[tenantID]))
+	for _, d := range m.auditDisp[tenantID] {
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Target != out[j].Target {
+			return out[i].Target < out[j].Target
+		}
+		return out[i].Key < out[j].Key
+	})
+	return out, nil
+}
+
+func (m *Memory) ListTrainingCompletions(_ context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.TrainingCompletion, 0, len(m.training[tenantID]))
+	for _, c := range m.training[tenantID] {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
 // Snapshot is the serializable form of a Memory store — what the file-backed store
 // persists. Fields are exported so encoding/json can round-trip them.
 type Snapshot struct {
@@ -788,6 +955,12 @@ type Snapshot struct {
 	Pentests        map[string]map[string]pentest.Engagement          `json:"pentests,omitempty"`
 	Reviews         map[string]map[string]platform.ReviewRequest      `json:"reviews"`
 	Apps            map[string][]platform.ThirdPartyApp               `json:"apps"`
+	Employees       map[string][]platform.Employee                    `json:"employees,omitempty"`
+	Training        map[string]map[string]platform.TrainingCompletion `json:"training,omitempty"`
+	IdLinks         map[string]platform.IdentityLinkSet               `json:"identity_links,omitempty"`
+	AuditDisp       map[string]map[string]platform.AuditDisposition   `json:"audit_dispositions,omitempty"`
+	AuditOrders     map[string]map[string]platform.AuditOrder         `json:"audit_orders,omitempty"`
+	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
 	Users           map[string]platform.User                          `json:"users"`
 	Sessions        map[string]platform.Session                       `json:"sessions"`
 	Operators       map[string]platform.Operator                      `json:"operators,omitempty"`
@@ -823,6 +996,12 @@ func (m *Memory) Export() Snapshot {
 		Pentests:        m.pentests,
 		Reviews:         m.reviews,
 		Apps:            m.apps,
+		Employees:       m.employees,
+		Training:        m.training,
+		IdLinks:         m.idLinks,
+		AuditDisp:       m.auditDisp,
+		AuditOrders:     m.auditOrders,
+		Vendors:         m.vendors,
 		Users:           m.users,
 		Sessions:        m.sessions,
 		Operators:       m.operators,
@@ -857,6 +1036,15 @@ func (m *Memory) load(s Snapshot) {
 	m.pentests = orEmptyPentests(s.Pentests)
 	m.reviews = orEmptyReviews(s.Reviews)
 	m.apps = orEmpty(s.Apps)
+	m.employees = orEmpty(s.Employees)
+	m.training = orEmptyTraining(s.Training)
+	m.idLinks = s.IdLinks
+	if m.idLinks == nil {
+		m.idLinks = map[string]platform.IdentityLinkSet{}
+	}
+	m.auditDisp = orEmptyAuditDisp(s.AuditDisp)
+	m.auditOrders = orEmptyAuditOrders(s.AuditOrders)
+	m.vendors = orEmptyVendors(s.Vendors)
 	m.users = s.Users
 	if m.users == nil {
 		m.users = map[string]platform.User{}
@@ -1003,6 +1191,34 @@ func orEmptyEvalRuns(m map[string]map[string]platform.EvalRun) map[string]map[st
 func orEmptyEpisodes(m map[string]map[string]platform.EpisodeRecord) map[string]map[string]platform.EpisodeRecord {
 	if m == nil {
 		return map[string]map[string]platform.EpisodeRecord{}
+	}
+	return m
+}
+
+func orEmptyTraining(m map[string]map[string]platform.TrainingCompletion) map[string]map[string]platform.TrainingCompletion {
+	if m == nil {
+		return map[string]map[string]platform.TrainingCompletion{}
+	}
+	return m
+}
+
+func orEmptyAuditDisp(m map[string]map[string]platform.AuditDisposition) map[string]map[string]platform.AuditDisposition {
+	if m == nil {
+		return map[string]map[string]platform.AuditDisposition{}
+	}
+	return m
+}
+
+func orEmptyAuditOrders(m map[string]map[string]platform.AuditOrder) map[string]map[string]platform.AuditOrder {
+	if m == nil {
+		return map[string]map[string]platform.AuditOrder{}
+	}
+	return m
+}
+
+func orEmptyVendors(m map[string]map[string]platform.Vendor) map[string]map[string]platform.Vendor {
+	if m == nil {
+		return map[string]map[string]platform.Vendor{}
 	}
 	return m
 }

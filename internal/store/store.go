@@ -103,6 +103,12 @@ type Store interface {
 	// --- findings (the engine's output, persisted per tenant) ---
 	PutFinding(ctx context.Context, tenantID string, f types.Finding) error
 	ListFindings(ctx context.Context, tenantID string, filter FindingFilter) ([]types.Finding, error)
+	// FindingSeverityCounts returns per-severity finding counts + the total for a tenant
+	// WITHOUT transmitting the full finding blobs — a DB-side aggregate. The live SSE
+	// snapshot (internal/platformapi/events.go) polls the tenant's state every few seconds;
+	// it used ListFindings, which transmitted every finding's full JSON on every tick and
+	// generated GBs/day of DB egress for a handful of assets. Tenant-scoped like every read.
+	FindingSeverityCounts(ctx context.Context, tenantID string) (map[string]int, int, error)
 
 	// --- remediation actions + the HITL queue ---
 	PutAction(ctx context.Context, a platform.Action) error
@@ -190,6 +196,42 @@ type Store interface {
 	// --- third-party app inventory (refreshed per operate scan, per provider) ---
 	ReplaceThirdPartyApps(ctx context.Context, tenantID, provider string, apps []platform.ThirdPartyApp) error
 	ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error)
+
+	// --- employee roster (refreshed per HRIS sync, per source) ---
+	// The HR half of the joiner/leaver join: the IdP knows an account exists, only this knows
+	// whether the person still works here. Replaced wholesale per source so a record the HRIS
+	// deleted disappears rather than lingering as a phantom employee.
+	ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error
+	ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error)
+	// Identity links: the tenant's person→GitHub join inputs (one document per tenant, replaced each
+	// pass). Another company's workforce-to-code mapping, so tenant-isolated like the roster.
+	PutIdentityLinks(ctx context.Context, set platform.IdentityLinkSet) error
+	GetIdentityLinks(ctx context.Context, tenantID string) (platform.IdentityLinkSet, bool, error)
+
+	// Training completions are APPEND-ONLY — Put upserts one record by its own id (person|module|day)
+	// and never removes an older one. "Trained every year since 2024" is what an auditor asks for and
+	// is unanswerable from current state; currency is decided at read time by training.Evaluate.
+	PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error
+	ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error)
+
+	// Audit dispositions are one reviewer's decision per finding per application, upserted by
+	// (target|key) so re-deciding replaces rather than accumulates — a signed report must not be
+	// built from two contradictory verdicts on the same finding.
+	PutAuditDisposition(ctx context.Context, d platform.AuditDisposition) error
+	ListAuditDispositions(ctx context.Context, tenantID string) ([]platform.AuditDisposition, error)
+
+	// Audit orders are the per-application SKU's unit of sale — one application, one price, paid
+	// on acceptance of its certificate. Upserted by id (the status advances in place).
+	PutAuditOrder(ctx context.Context, o platform.AuditOrder) error
+	ListAuditOrders(ctx context.Context, tenantID string) ([]platform.AuditOrder, error)
+
+	// The vendor REGISTER — the durable third-party inventory, upserted by id so re-posting the same
+	// inventory updates each row rather than accumulating copies of it. Distinct from the FINDINGS a
+	// vendor raises: a findings list names the suppliers that failed a check and omits every
+	// well-managed one, which is not an inventory and is not what an auditor asks for.
+	PutVendor(ctx context.Context, v platform.Vendor) error
+	ListVendors(ctx context.Context, tenantID string) ([]platform.Vendor, error)
+	DeleteVendor(ctx context.Context, tenantID, id string) error
 
 	// --- users & sessions (real account auth) ---
 	PutUser(ctx context.Context, u platform.User) error

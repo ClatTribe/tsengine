@@ -73,12 +73,28 @@ export default async function TrustCenter({
       {/* top bar */}
       <header className="border-b border-border/70">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
-              <ShieldCheck className="h-4 w-4" />
+          {/* White-label chrome: a partner-branded page shows the partner's name and logo and does NOT
+              link to our marketing site — that link would name a company the buyer has never heard of. */}
+          {data.white_labelled ? (
+            <span className="flex items-center gap-2.5">
+              {data.brand_logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={data.brand_logo_url} alt="" className="h-8 w-8 rounded-lg object-contain" />
+              ) : (
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+              )}
+              <span className="text-sm font-semibold tracking-tight">{data.brand}</span>
             </span>
-            <span className="text-sm font-semibold tracking-tight">TensorShield</span>
-          </Link>
+          ) : (
+            <Link href="/" className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-white shadow-sm">
+                <ShieldCheck className="h-4 w-4" />
+              </span>
+              <span className="text-sm font-semibold tracking-tight">{data.brand}</span>
+            </Link>
+          )}
           <span className="text-xs font-medium uppercase tracking-wider text-faint">Trust Center</span>
         </div>
       </header>
@@ -159,9 +175,16 @@ export default async function TrustCenter({
               <CheckCircle2 className="h-3.5 w-3.5 text-pulse" />
               Generated live from {data.org}&apos;s security posture on {generated}.
             </p>
-            <Link href="/" className="mt-3 inline-block text-xs font-semibold text-accent hover:underline">
-              Secured by TensorShield — see how it works →
-            </Link>
+            {data.white_labelled ? (
+              <p className="mt-3 text-xs text-muted">
+                Provided by {data.brand}
+                {data.brand_support_email ? <> · <a href={`mailto:${data.brand_support_email}`} className="font-medium text-accent hover:underline">{data.brand_support_email}</a></> : null}
+              </p>
+            ) : (
+              <Link href="/" className="mt-3 inline-block text-xs font-semibold text-accent hover:underline">
+                Secured by {data.brand} — see how it works →
+              </Link>
+            )}
           </div>
         </div>
       </div>

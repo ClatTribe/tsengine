@@ -7,7 +7,7 @@ import type { PRBotSettings } from "@/lib/types";
 
 // The copy-paste CI gate: post the PR's changed lines + the scan findings to /v1/ci/pr-check; the call
 // exits non-zero (fails the build) when a high+ finding lands on a changed line. Works in any CI today —
-// the GitHub-App inline-comment post is the only gated half. Full GitHub Action: docs/ci/github-action.yml.
+// with a GitHub App configured the same call also posts the review to the PR. Full GitHub Action: docs/ci/github-action.yml.
 const CI_SNIPPET = `# Fail the PR when a high+ finding lands on a changed line (any CI).
 curl -sS -X POST "$TENSORSHIELD_URL/v1/ci/pr-check" \\
   -H "Authorization: Bearer $TENSORSHIELD_TOKEN" \\
@@ -16,8 +16,8 @@ curl -sS -X POST "$TENSORSHIELD_URL/v1/ci/pr-check" \\
   | jq -e '.blocked == false'   # non-zero exit blocks the merge`;
 
 // PRBotSettingsPanel configures the repository PR-review bot: post inline review comments on
-// PR-changed lines + a merge-gating check-run that fails at/above a severity floor. The live
-// GitHub post is gated on a connected GitHub App with the PR scope (surfaced honestly).
+// PR-changed lines + a merge-gating check-run that fails at/above a severity floor. Whether the
+// review actually lands in the PR is the SERVER's answer (posting_live + not_posting_reason), rendered verbatim.
 const SEVERITIES = [
   { id: "off", label: "Comment only (never block)" },
   { id: "critical", label: "Block at Critical" },
@@ -29,6 +29,7 @@ const SEVERITIES = [
 export function PRBotSettingsPanel({ initial }: { initial: PRBotSettings }) {
   const [enabled, setEnabled] = useState(initial.enabled);
   const [blockSeverity, setBlockSeverity] = useState(initial.block_severity || "off");
+  const [installationId, setInstallationId] = useState(initial.installation_id ?? "");
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
@@ -46,7 +47,7 @@ export function PRBotSettingsPanel({ initial }: { initial: PRBotSettings }) {
     setSaved(false);
     start(async () => {
       try {
-        await setPRBotPolicy(enabled, blockSeverity);
+        await setPRBotPolicy(enabled, blockSeverity, installationId.trim());
         setSaved(true);
       } catch (e) {
         setErr(e instanceof Error ? e.message : "could not save the PR-bot policy");
@@ -95,10 +96,32 @@ export function PRBotSettingsPanel({ initial }: { initial: PRBotSettings }) {
         </button>
       </div>
 
-      {!initial.github_connected && (
+      {/* Where the App is installed. The id is what GitHub shows on the installation page
+          (github.com/organizations/ORG/settings/installations/ID). Without it the gate still
+          runs from the CI exit code; with it the check-run and comments land in the PR. */}
+      <label className="block text-xs text-muted">
+        GitHub App installation id
+        <input
+          value={installationId}
+          onChange={(e) => setInstallationId(e.target.value)}
+          inputMode="numeric"
+          placeholder="e.g. 12345678"
+          disabled={!initial.github_connected}
+          className="mt-1 block w-48 rounded-lg border border-border bg-surface px-2.5 py-1.5 font-mono text-sm outline-none focus:border-accent disabled:opacity-50"
+        />
+      </label>
+
+      {/* The posting status is the SERVER's — three facts with three owners, and the reason names
+          the first missing one. Re-deriving it here would let the page disagree with the gate. */}
+      {initial.posting_live ? (
+        <div className="rounded-lg bg-accent/10 px-3 py-2 text-xs text-accent">
+          Reviews are posted to your pull requests as the GitHub App: a merge-gating check-run plus
+          inline comments on the changed lines.
+        </div>
+      ) : (
         <div className="rounded-lg bg-medium/10 px-3 py-2 text-xs text-medium">
-          Connect a GitHub repository (with the PR scope) to let the bot post on pull requests.
-          The policy saves now and takes effect once GitHub is connected.
+          Not posting to pull requests yet: {initial.not_posting_reason || "the GitHub App is not set up."}{" "}
+          The merge gate still works from the CI step&apos;s exit code.
         </div>
       )}
       {err && <div className="rounded-lg bg-critical/10 px-3 py-2 text-xs text-critical">{err}</div>}

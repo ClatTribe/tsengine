@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -114,6 +115,12 @@ CREATE TABLE IF NOT EXISTS runtimeevts (seq BIGSERIAL, tenant_id TEXT, id TEXT, 
 CREATE TABLE IF NOT EXISTS pentests    (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS reviews     (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (seq BIGSERIAL, tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
+CREATE TABLE IF NOT EXISTS employees   (seq BIGSERIAL, tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
+CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS identitylinks (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS auditorders (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (seq BIGSERIAL, id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (seq BIGSERIAL, token TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS operators   (seq BIGSERIAL, id TEXT PRIMARY KEY, email TEXT, data TEXT NOT NULL);
@@ -190,6 +197,27 @@ func (p *Postgres) ListFindings(ctx context.Context, tenantID string, filter Fin
 		out = append(out, f)
 	}
 	return Page(out, filter), nil
+}
+
+func (p *Postgres) FindingSeverityCounts(ctx context.Context, tenantID string) (map[string]int, int, error) {
+	rows, err := p.db.QueryContext(ctx,
+		pgRebind(`SELECT COALESCE(data::jsonb->>'severity','') AS sev, COUNT(*) FROM findings WHERE tenant_id=? GROUP BY sev`), tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	sev := map[string]int{}
+	total := 0
+	for rows.Next() {
+		var s string
+		var n int
+		if err := rows.Scan(&s, &n); err != nil {
+			return nil, 0, err
+		}
+		sev[s] = n
+		total += n
+	}
+	return sev, total, rows.Err()
 }
 
 func (p *Postgres) PutAction(ctx context.Context, a platform.Action) error {
@@ -370,6 +398,117 @@ func (p *Postgres) ReplaceThirdPartyApps(ctx context.Context, tenantID, provider
 }
 func (p *Postgres) ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error) {
 	return listJSON[platform.ThirdPartyApp](ctx, p.db, pgRebind(`SELECT data FROM apps WHERE tenant_id=? ORDER BY rowid`), tenantID)
+}
+
+// --- employee roster (replace the whole (tenant,source) set atomically) ---
+
+func (p *Postgres) ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error {
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, pgRebind(`DELETE FROM employees WHERE tenant_id=? AND source=?`), tenantID, source); err != nil {
+		return err
+	}
+	for _, e := range emps {
+		d, err := enc(e)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, pgRebind(`INSERT INTO employees(tenant_id,source,emp_id,data) VALUES(?,?,?,?)`), tenantID, source, e.ID, d); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+func (p *Postgres) ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error) {
+	return listJSON[platform.Employee](ctx, p.db, pgRebind(`SELECT data FROM employees WHERE tenant_id=? ORDER BY rowid`), tenantID)
+}
+
+// --- security-awareness training completions (append-only; upsert by the record's own id) ---
+
+func (p *Postgres) PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error {
+	d, err := enc(c)
+	if err != nil {
+		return err
+	}
+	_, err = p.db.ExecContext(ctx, pgRebind(`INSERT INTO training(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=EXCLUDED.data`), c.TenantID, c.ID, d)
+	return err
+}
+
+// --- identity links (one document per tenant: the person→GitHub join inputs) ---
+
+func (p *Postgres) PutIdentityLinks(ctx context.Context, set platform.IdentityLinkSet) error {
+	d, err := enc(set)
+	if err != nil {
+		return err
+	}
+	_, err = p.db.ExecContext(ctx, pgRebind(`INSERT INTO identitylinks(tenant_id,data) VALUES(?,?)
+		ON CONFLICT(tenant_id) DO UPDATE SET data=EXCLUDED.data`), set.TenantID, d)
+	return err
+}
+func (p *Postgres) GetIdentityLinks(ctx context.Context, tenantID string) (platform.IdentityLinkSet, bool, error) {
+	var set platform.IdentityLinkSet
+	err := getJSON(ctx, p.db, &set, pgRebind(`SELECT data FROM identitylinks WHERE tenant_id=?`), tenantID)
+	if errors.Is(err, ErrNotFound) {
+		return platform.IdentityLinkSet{}, false, nil
+	}
+	return set, err == nil, err
+}
+
+func (p *Postgres) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
+	return listJSON[platform.TrainingCompletion](ctx, p.db, pgRebind(`SELECT data FROM training WHERE tenant_id=? ORDER BY id`), tenantID)
+}
+
+// --- audit dispositions (upsert by target|key: re-deciding replaces, never accumulates) ---
+
+func (p *Postgres) PutAuditDisposition(ctx context.Context, d platform.AuditDisposition) error {
+	dd, err := enc(d)
+	if err != nil {
+		return err
+	}
+	_, err = p.db.ExecContext(ctx, pgRebind(`INSERT INTO auditdisp(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=EXCLUDED.data`),
+		d.TenantID, strings.ToLower(strings.TrimSpace(d.Target))+"|"+d.Key, dd)
+	return err
+}
+func (p *Postgres) ListAuditDispositions(ctx context.Context, tenantID string) ([]platform.AuditDisposition, error) {
+	return listJSON[platform.AuditDisposition](ctx, p.db, pgRebind(`SELECT data FROM auditdisp WHERE tenant_id=? ORDER BY id`), tenantID)
+}
+
+// --- audit orders (the per-application SKU; upsert by id, status advances in place) ---
+
+func (p *Postgres) PutAuditOrder(ctx context.Context, o platform.AuditOrder) error {
+	d, err := enc(o)
+	if err != nil {
+		return err
+	}
+	return p.exec(ctx, `INSERT INTO auditorders(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=EXCLUDED.data`, o.TenantID, o.ID, d)
+}
+func (p *Postgres) ListAuditOrders(ctx context.Context, tenantID string) ([]platform.AuditOrder, error) {
+	return listJSON[platform.AuditOrder](ctx, p.db, pgRebind(`SELECT data FROM auditorders WHERE tenant_id=? ORDER BY seq`), tenantID)
+}
+
+// --- vendor register (upsert by id; the durable inventory, not the findings it raises) ---
+
+func (p *Postgres) PutVendor(ctx context.Context, v platform.Vendor) error {
+	d, err := enc(v)
+	if err != nil {
+		return err
+	}
+	_, err = p.db.ExecContext(ctx, pgRebind(`INSERT INTO vendors(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=EXCLUDED.data`), v.TenantID, v.ID, d)
+	return err
+}
+func (p *Postgres) ListVendors(ctx context.Context, tenantID string) ([]platform.Vendor, error) {
+	return listJSON[platform.Vendor](ctx, p.db, pgRebind(`SELECT data FROM vendors WHERE tenant_id=? ORDER BY id`), tenantID)
+}
+func (p *Postgres) DeleteVendor(ctx context.Context, tenantID, id string) error {
+	_, err := p.db.ExecContext(ctx, pgRebind(`DELETE FROM vendors WHERE tenant_id=? AND id=?`), tenantID, id)
+	return err
 }
 
 // --- users & sessions ---

@@ -1,11 +1,19 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
+  AccessReview,
+  AuditReview,
+  AuditCertificate,
+  AuditOrder,
+  AuditOrdersResponse,
+  TrainingProgramme,
+  Vendor,
+  VendorsResponse,
   DetectionValidation,
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
+  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -484,6 +492,106 @@ export const api = {
       method: "POST", body: JSON.stringify({ in_place: inPlace, by }),
     }),
 
+  // The vendor REGISTER — the durable inventory. Distinct from the posture findings on /posture,
+  // which say what is WRONG with the vendors rather than who they are.
+  vendors: () =>
+    safe<VendorsResponse>("/v1/vendors", {
+      vendors: [],
+      summary: {
+        total: 0, subprocessors: 0, sensitive_data: 0, never_reviewed: 0, unowned: 0,
+        detail: "No vendors are recorded yet. This is an empty register, not a clean one.",
+      },
+    }),
+
+  // Upsert one row. The server re-assesses the WHOLE register afterwards, because vendor risk is a
+  // property of the portfolio rather than of the row just edited.
+  putVendor: (v: Partial<Vendor>) =>
+    call<{ vendor: Vendor; risks_detected: number }>("/v1/vendors", {
+      method: "POST", body: JSON.stringify(v),
+    }),
+
+  deleteVendor: (id: string) =>
+    call<VendorsResponse>(`/v1/vendors/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // The per-application audit review. Blockers ride on the READ as well as the issue attempt, so a
+  // reviewer sees what stands in the way while they work rather than discovering it at the button.
+  auditReview: (target: string) =>
+    safe<AuditReview>("/v1/audit-review?target=" + encodeURIComponent(target), {
+      target, items: [],
+      progress: {
+        total: 0, reviewed: 0, pending: 0, included: 0, excluded: 0, reclassified: 0,
+        complete: false, load: { proven: 0, unproven: 0, detail: "" },
+        detail: "No findings are in scope for this application. That is NOT a completed audit.",
+      },
+    }),
+
+  // One reviewer's decision about one finding. The server refuses an unattributed decision, and a
+  // bare exclusion or reclassification — each names what is missing.
+  decideAuditFinding: (target: string, key: string, verdict: string, severity: string, reason: string) =>
+    call<AuditReview>("/v1/audit-review/disposition", {
+      method: "POST", body: JSON.stringify({ target, key, verdict, severity, reason }),
+    }),
+
+  // Issue the certificate, or get back every reason it cannot be issued (409).
+  issueAuditCertificate: (target: string, notTested: string[]) =>
+    call<AuditCertificate>("/v1/audit-review/certificate", {
+      method: "POST", body: JSON.stringify({ target, not_tested: notTested }),
+    }),
+
+  // The per-application SKU: orders, what is due NOW (zero until accepted), and the list price.
+  auditOrders: () =>
+    safe<AuditOrdersResponse>("/v1/audit-orders", { orders: [], list_price_inr: 0, amount_due_inr: 0 }),
+  createAuditOrder: (target: string, note?: string) =>
+    call<AuditOrder>("/v1/audit-orders", { method: "POST", body: JSON.stringify({ target, note: note ?? "" }) }),
+  acceptAuditOrder: (id: string, by: string) =>
+    call<AuditOrder>(`/v1/audit-orders/${encodeURIComponent(id)}/accept`, { method: "POST", body: JSON.stringify({ by }) }),
+
+  // The security-awareness programme: curriculum, every person's status, and the honest summary.
+  training: () =>
+    safe<TrainingProgramme>("/v1/training", {
+      curriculum: { version: "", modules: [] },
+      summary: {
+        people: 0, modules: 0, assignments: 0, complete_delivered: 0, complete_attested: 0,
+        expired: 0, outstanding: 0, no_roster: true,
+        detail: "Nobody is on the roster yet, so there is no training programme to report on — this is not a trained workforce.",
+      },
+      statuses: [],
+    }),
+
+  // The SIGNED-IN person confirms they read a module. The subject comes from the session server-side
+  // and cannot be supplied here — "delivered" asserts we showed it to THAT person.
+  completeTraining: (moduleID: string) =>
+    call<TrainingProgramme>("/v1/training/complete", {
+      method: "POST", body: JSON.stringify({ module_id: moduleID }),
+    }),
+
+  // Records training somebody completed ELSEWHERE. Always lands as the attested tier, naming the
+  // provider and whoever entered it.
+  recordTraining: (subject: string, moduleID: string, provider: string, on: string, note: string) =>
+    call<TrainingProgramme>("/v1/training/record", {
+      method: "POST", body: JSON.stringify({ subject, module_id: moduleID, provider, on, note }),
+    }),
+
+  // The periodic access review (SOC 2 CC6.2/CC6.3). Rebuilt from CURRENT identity findings on every
+  // read, with stored decisions merged back on — so the reviewer is always answering about who has
+  // access now, not a list frozen when the campaign opened.
+  accessReview: () =>
+    safe<AccessReview>("/v1/access-review", {
+      progress: { total: 0, reviewed: 0, keep: 0, revoke: 0, pending: 0, complete: false },
+      identities: [],
+      detail:
+        "No accounts are currently flagged for review. This is not a completed access review — " +
+        "connect an identity provider so we can see who has access.",
+    }),
+
+  // One reviewer's verdict on one account. `by` is required by the server: an unattributed decision
+  // is a log line, not audit evidence. Recording "revoke" does not revoke anything.
+  decideAccessReview: (subject: string, decision: "keep" | "revoke", by: string, note: string) =>
+    call<AccessReview>("/v1/access-review/decide", {
+      method: "POST",
+      body: JSON.stringify({ subject, decision, by, note }),
+    }),
+
   // Change the signed-in user's password (also clears the forced-rotation flag for an
   // invited member). The session stays valid afterward.
   changePassword: (current: string, next: string) =>
@@ -581,10 +689,14 @@ export const api = {
       "/v1/episodes" + (scope ? `?scope=${encodeURIComponent(scope)}` : ""),
     ),
 
-  setPRBotSettings: (enabled: boolean, blockSeverity: string) =>
+  setPRBotSettings: (enabled: boolean, blockSeverity: string, installationId?: string) =>
     call<{ enabled: boolean; block_severity: string; saved: boolean }>("/v1/settings/pr-bot", {
       method: "PUT",
-      body: JSON.stringify({ enabled, block_severity: blockSeverity }),
+      body: JSON.stringify(
+        installationId === undefined
+          ? { enabled, block_severity: blockSeverity }
+          : { enabled, block_severity: blockSeverity, installation_id: installationId },
+      ),
     }),
 
   // Live GitHub-org SaaS-posture sync — runs the SSPM checks via the onboarded GitHub token (no
@@ -594,8 +706,31 @@ export const api = {
       "/v1/saas/github_org/sync", { method: "POST" },
     ),
 
+  // Live Okta CONFIGURATION posture — the org's sign-on/password/MFA-enrollment policies, API tokens
+  // and ThreatInsight through the onboarded Okta token. `unread` names every setting the token could
+  // not read, so a count of zero is never mistaken for a hardened org.
+  syncOktaPosture: () =>
+    call<{ provider: string; source: string; org: string; count: number; unread?: Record<string, string> }>(
+      "/v1/saas/okta/sync", { method: "POST" },
+    ),
+
+  // Live CloudTrail poll — the connected AWS account's control-plane events since the last read,
+  // run through the CDR rules. `unread` names a truncated window's unexamined span and `failed`
+  // names an account that could not be read, so zero threats is never mistaken for a quiet account.
+  syncCloudEvents: () =>
+    call<{ connections: string[]; records: number; events: number; threats: unknown[]; findings: unknown[];
+      failed?: Record<string, string>; unread?: Record<string, string> }>(
+      "/v1/cloud/events/sync", { method: "POST" },
+    ),
+
   // Per-tenant Jira ticketing destination (Bucket B). GET reports base/email/project + has_token
   // (never the token); PUT seals the token server-side. An empty base_url clears it.
+  // Push-to-Drata: the engine's control posture as records the customer's Drata tests evaluate.
+  drataSettings: () =>
+    safe<DrataSettings>("/v1/settings/drata", { configured: false, has_key: false, connected: false }),
+  setDrataSettings: (cfg: { api_key: string; workspace_id: number; base_url?: string }) =>
+    call<DrataSettings>("/v1/settings/drata", { method: "PUT", body: JSON.stringify(cfg) }),
+  syncDrata: () => call<{ pushed: number; session_id: string; replaced: boolean; connection_id: number }>("/v1/settings/drata/sync", { method: "POST" }),
   jiraSettings: () =>
     safe<{ base_url: string; email: string; project: string; has_token: boolean }>(
       "/v1/settings/jira", { base_url: "", email: "", project: "", has_token: false },
@@ -605,6 +740,22 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(cfg),
     }),
+  // Device-management source (Kandji / Jamf / Intune). GET never returns a credential; PUT seals
+  // them. POST /v1/devices/sync reads the fleet live and runs the same ingest as a posted snapshot.
+  mdmSettings: () =>
+    safe<MDMSettings>("/v1/settings/mdm", {
+      provider: "", base_url: "", has_token: false, client_id: "", has_client_secret: false, m365_connected: false, providers: ["kandji", "jamf", "intune"],
+    }),
+  setMDMSettings: (cfg: { provider: string; base_url: string; api_token: string; client_id: string; client_secret: string }) =>
+    call<MDMSettings>("/v1/settings/mdm", { method: "PUT", body: JSON.stringify(cfg) }),
+  syncDevices: () => call<DeviceSyncResult>("/v1/devices/sync", { method: "POST" }),
+  // HR-system source (Merge / Finch). POST /v1/hris/sync fetches the roster and joins it against
+  // every connected identity provider.
+  hrisSettings: () =>
+    safe<HRISSettings>("/v1/settings/hris", { provider: "", has_key: false, has_account_token: false, employees: 0, providers: ["merge", "finch"] }),
+  setHRISSettings: (cfg: { provider: string; api_key: string; account_token: string }) =>
+    call<HRISSettings>("/v1/settings/hris", { method: "PUT", body: JSON.stringify(cfg) }),
+  syncHRIS: () => call<HRISSyncResult>("/v1/hris/sync", { method: "POST" }),
 
   // Per-tenant incident escalation matrix (MDR/SOC): severity-tiered routing to alert channels.
   escalationSettings: () =>
@@ -625,6 +776,10 @@ export const api = {
   // `unavailable` alongside the config, because what a buyer is actually shown differs from what
   // the owner configured — a document nothing can produce is silently absent from the public
   // page, and the owner needs to be told that rather than left to notice.
+  // White-label: the name/logo/support address on outward artifacts. Empty name = the product's brand.
+  brandingSettings: () =>
+    safe<BrandingSettings>("/v1/settings/branding", { branding: { name: "" }, effective_name: "TensorShield", white_labelled: false, default_brand: "TensorShield" }),
+  setBranding: (b: Branding) => call<BrandingSettings>("/v1/settings/branding", { method: "PUT", body: JSON.stringify(b) }),
   trustSettings: () =>
     safe<TrustSettings>("/v1/settings/trust-center", {
       config: { enabled: false }, link: "", available: {}, unavailable: [], pending_requests: 0,

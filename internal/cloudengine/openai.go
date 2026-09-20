@@ -19,7 +19,7 @@ import (
 // SECRET HANDLING mirrors Gemini: the key (if any) rides only in the Authorization header, never a URL
 // or log. A local Ollama needs no key.
 type OpenAICompat struct {
-	usage   usageCounter
+	usage   *usageCounter // shared with WithModel copies (pointer: an atomic must not be copied)
 	apiKey  string
 	model   string
 	baseURL string
@@ -51,6 +51,7 @@ func OpenAICompatFromEnv() (*OpenAICompat, bool) {
 	low := strings.ToLower(base)
 	local := strings.Contains(low, "localhost") || strings.Contains(low, "127.0.0.1") || strings.Contains(low, "host.docker.internal") || strings.Contains(low, ":11434")
 	return &OpenAICompat{
+		usage:   &usageCounter{},
 		apiKey:  os.Getenv("LLM_API_KEY"),
 		model:   model,
 		baseURL: base,
@@ -71,7 +72,7 @@ func NewOpenAICompat(apiKey, model, baseURL string) *OpenAICompat {
 	}
 	low := strings.ToLower(baseURL)
 	local := strings.Contains(low, "localhost") || strings.Contains(low, "127.0.0.1") || strings.Contains(low, "host.docker.internal") || strings.Contains(low, ":11434")
-	return &OpenAICompat{apiKey: apiKey, model: model, baseURL: baseURL, local: local, http: &http.Client{Timeout: 300 * time.Second}}
+	return &OpenAICompat{usage: &usageCounter{}, apiKey: apiKey, model: model, baseURL: baseURL, local: local, http: &http.Client{Timeout: 300 * time.Second}}
 }
 
 // ClientFor builds a text LLM from a per-tenant provider/model/key (the §18.5 "bring your own brain" —
@@ -196,7 +197,6 @@ func (o *OpenAICompat) WithModel(model string) (LLM, bool) {
 	if strings.TrimSpace(model) == "" {
 		return nil, false
 	}
-	c := *o
-	c.model = model
-	return &c, true
+	c := &OpenAICompat{usage: o.usage, apiKey: o.apiKey, model: model, baseURL: o.baseURL, local: o.local, http: o.http}
+	return c, true
 }

@@ -10,13 +10,19 @@ import { Card, SectionTitle } from "@/components/ui/primitives";
 import { SignOutButton } from "@/components/settings/sign-out-button";
 import { TrustShare } from "@/components/settings/trust-share";
 import { TrustCenterControl } from "@/components/settings/trust-center-control";
+import { BrandingControl } from "@/components/settings/branding-control";
 import { TrustRequestsDesk } from "@/components/settings/trust-requests-desk";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
 import { CloudRemediationControl } from "@/components/settings/cloud-remediation-control";
 import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
 import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
+import { OktaPostureSync } from "@/components/settings/okta-posture-sync";
+import { CloudTrailSync } from "@/components/settings/cloudtrail-sync";
 import { JiraControl } from "@/components/settings/jira-control";
+import { MDMControl } from "@/components/settings/mdm-control";
+import { HRISControl } from "@/components/settings/hris-control";
+import { DrataControl } from "@/components/settings/drata-control";
 import { EscalationControl } from "@/components/settings/escalation-control";
 import { SLAControl } from "@/components/settings/sla-control";
 import { MaintenanceControl } from "@/components/settings/maintenance-control";
@@ -43,6 +49,9 @@ export default async function SettingsPage() {
     api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(), api.aiMode(),
   ]);
   const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests()]);
+  const branding = await api.brandingSettings();
+  const drata = await api.drataSettings();
+  const [mdm, hris] = await Promise.all([api.mdmSettings(), api.hrisSettings()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
 
@@ -64,6 +73,14 @@ export default async function SettingsPage() {
           {tenant?.created_at && (
             <Row icon={CheckCircle2} label="Member since" value={<span className="text-sm text-muted">{new Date(tenant.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>} />
           )}
+        </Card>
+      </div>
+
+      {/* White-label — what the workspace's outward artifacts are branded as. */}
+      <div>
+        <SectionTitle action={<span className="text-[11px] text-faint">VAPT report · Trust Center</span>}>Branding</SectionTitle>
+        <Card className="p-5">
+          <BrandingControl initial={branding} />
         </Card>
       </div>
 
@@ -177,11 +194,28 @@ export default async function SettingsPage() {
                       </div>
                     )}
                     {c.kind === "github" && <GitHubPostureSync />}
+                    {c.kind === "okta" && <OktaPostureSync />}
+                    {c.kind === "aws" && <CloudTrailSync />}
                   </li>
                 );
               })}
             </ul>
           )}
+        </Card>
+      </div>
+
+      {/* People & devices — the two sources an auditor asks about first, fetched live once configured */}
+      <div>
+        <SectionTitle action={<span className="text-[11px] text-faint">read on every monitoring pass</span>}>
+          People &amp; devices
+        </SectionTitle>
+        <Card className="space-y-3 p-5">
+          <p className="text-xs text-muted">
+            Your MDM says whether laptops are encrypted; your HR system says who still works here. Connect both and the engine
+            checks each on every pass — a leaver whose account is still enabled, or a laptop whose disk is not, becomes a finding.
+          </p>
+          <MDMControl config={mdm} />
+          <HRISControl config={hris} />
         </Card>
       </div>
 
@@ -215,6 +249,7 @@ export default async function SettingsPage() {
           <p className="text-xs text-muted">Where the agent reaches a human. Connect your own Slack below; other channels are provisioned by your administrator.</p>
           <SlackWebhookControl configured={notify.has_slack_webhook} />
           <JiraControl config={jira} />
+          <DrataControl initial={drata} />
           <EscalationControl policy={escalation} />
           <ContactsControl contacts={contacts} />
           <SLAControl policy={sla} />

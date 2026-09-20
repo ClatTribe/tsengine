@@ -212,6 +212,7 @@ export interface Issue {
   cvss?: number; // worst CVSS base score across the group
   cvss_vector?: string; // CVSS base vector (NVD) — attack-vector detail
   public_exploit?: boolean; // a public exploit/PoC exists (ExploitDB/Metasploit)
+  platform?: string; // source connector kind (github|aws|gcp|gworkspace|okta)
 }
 
 // Explanation is the plain-English answer for a reader with no security background: what broke, why it
@@ -638,6 +639,10 @@ export interface ProgramSummary {
 export interface ProgramResponse {
   policies: Policy[];
   summary: ProgramSummary;
+  /** "self" for an employee seat: the server has already cut the register to published policies
+   *  carrying only this reader's own acknowledgement, and the page must not render the owner's
+   *  controls (seed, publish, the board summary) around it. "everyone" for every other seat. */
+  scope?: "self" | "everyone";
 }
 
 // Practitioner — the named human who provides the human-in-the-loop for a tenant. Capacity (who
@@ -823,11 +828,80 @@ export interface PlanLimits {
   human_in_loop_apply: boolean;
 }
 
+/** White-label identity for outward artifacts (VAPT report, public Trust Center). */
+export interface Branding {
+  name: string;
+  logo_url?: string;
+  support_email?: string;
+}
+export interface BrandingSettings {
+  branding: Branding;
+  effective_name: string;
+  white_labelled: boolean;
+  default_brand: string;
+}
+export interface DrataSettings {
+  configured: boolean;
+  has_key: boolean;
+  connected: boolean;
+  workspace_id?: number;
+  base_url?: string;
+}
+
+// Device-management source (Kandji / Jamf Pro / Intune). Credentials are never returned — only
+// whether one is set. m365_connected tells the Intune case whether a sync can borrow the connected
+// Microsoft 365 tenant's token when no token of its own is configured.
+export interface MDMSettings {
+  provider: string; // "" = not configured
+  base_url: string;
+  has_token: boolean;
+  client_id: string;
+  has_client_secret: boolean;
+  m365_connected: boolean;
+  providers: string[];
+}
+
+// Result of a live device sync. checks_not_run carries what the fetch could NOT assess — the
+// provider's per-device limits and the devices it could not fully read — and must be rendered
+// beside the counts, or "0 issues" reads as a claim about settings the MDM never reported.
+export interface DeviceSyncResult {
+  provider: string;
+  source: string;
+  devices: number;
+  issues_detected: number;
+  findings: Finding[];
+  checks_not_run?: string[];
+}
+
+// HR-system source (Merge.dev / Finch). Credentials never returned; employees is the stored roster size.
+export interface HRISSettings {
+  provider: string; // "" = not configured
+  has_key: boolean;
+  has_account_token: boolean;
+  employees: number;
+  last_synced_at?: string;
+  providers: string[];
+}
+
+// Result of a live HRIS sync + join. joined is false when the roster was stored but no identity
+// provider was available to join against — a state checks_not_run explains and the page must show,
+// because a stored-but-unjoined roster is not "no leavers with access".
+export interface HRISSyncResult {
+  provider: string;
+  source: string;
+  employees: number;
+  issues_detected: number;
+  joined: boolean;
+  findings: Finding[];
+  checks_not_run?: string[];
+}
+
 export interface Tenant {
   id: string;
   name: string;
   plan?: string;
   created_at?: string;
+  branding?: Branding;
   agents_halted?: boolean; // global kill-switch: when true, no autonomous agent action runs
   // The resolved entitlements, so a surface never has to infer them from the plan string — which is
   // exactly how the pricing page and the backend drifted apart.
@@ -856,9 +930,12 @@ export interface User {
   tenant_id: string;
   email: string;
   name?: string;
-  role: string; // "owner" | "member"
+  role: string; // "owner" | "member" | "auditor" | "employee"
   created_at: string;
   must_change_password?: boolean; // invited member with a temp password; app is gated until they rotate it
+  /** The workspace's display name, carried on /v1/auth/me because every seat may read that endpoint
+   *  and an employee seat may read nothing else about the workspace. */
+  tenant_name?: string;
 }
 
 // Public Trust Center aggregate (safe projection — coverage only, never findings).
@@ -878,6 +955,11 @@ export interface TrustDocEntry {
 
 export interface TrustView {
   org: string;
+  /** White-label chrome (platform.Tenant.Branding). `white_labelled` false = the product's own brand. */
+  brand: string;
+  brand_logo_url?: string;
+  brand_support_email?: string;
+  white_labelled: boolean;
   headline?: string;
   monitored: boolean;
   signed: boolean;
@@ -1237,6 +1319,13 @@ export interface PRBotSettings {
   enabled: boolean;
   block_severity: string;
   github_connected: boolean;
+  // Whether a review actually lands in the PR: the operator's App, this workspace's installation
+  // id, and the GitHub connection — posting_live is their conjunction; not_posting_reason names
+  // the first missing one so the reader is sent to the right fix.
+  app_configured?: boolean;
+  installation_id?: string;
+  posting_live?: boolean;
+  not_posting_reason?: string;
 }
 
 // Non-human / AI-agent identity posture (GET /v1/identities) — the ACSP agentic identity lens.
@@ -1339,6 +1428,9 @@ export interface Job {
   kind: string;
   status: string; // queued | running | done | failed
   error?: string;
+  /** What the job produced. For "rescan" and "connect" jobs: how many assets scanned, plus a
+   *  warning when a partial pass had a per-asset error (the job still counts as done). */
+  result?: { assets_scanned?: number; warning?: string; kind?: string };
   created_at: string;
   started_at?: string;
   finished_at?: string;
@@ -1565,3 +1657,230 @@ export interface DetectionValidation {
   missed_proven: number;
   caveat: string;
 }
+// ── Access review (SOC 2 CC6.2/CC6.3) ────────────────────────────────────────────────────────────
+// The attestation half of access control: a NAMED person answering "does this individual still need
+// this?" for every flagged account, on a date. `detail` is the server's own honest sentence about
+// what the numbers mean and is rendered verbatim — "0 of 0" and "12 of 12" both read as complete to
+// someone skimming, and only one of them is.
+
+export type AccessReviewIdentity = {
+  subject: string;
+  reasons: string[];
+  finding_ids: string[];
+  severity: string;
+  decision: "" | "keep" | "revoke";
+  decided_by?: string;
+  decided_at?: string;
+  note?: string;
+};
+
+export type AccessReviewProgress = {
+  total: number;
+  reviewed: number;
+  keep: number;
+  revoke: number;
+  pending: number;
+  /** True ONLY when every flagged account has a decision — never for an empty campaign. */
+  complete: boolean;
+};
+
+export type AccessReview = {
+  progress: AccessReviewProgress;
+  identities: AccessReviewIdentity[];
+  detail: string;
+  revocations?: AccessReviewIdentity[];
+};
+
+// ── Security-awareness training (SOC 2 CC1.4/CC2.2 · ISO A.6.3 · PCI 12.6 · HIPAA 164.308(a)(5)) ──
+// Two evidence tiers that are never merged, and NO combined completion rate: one figure spanning
+// "we showed them the content and they confirmed" and "somebody says it happened elsewhere" would
+// rise as a customer asserted more and evidenced less.
+
+export type TrainingTier = "delivered" | "attested_external";
+
+export type TrainingModule = {
+  id: string;
+  title: string;
+  why: string;
+  recur_every_days: number;
+  controls: Record<string, string[]>;
+  body: string[];
+};
+
+export type TrainingStatus = {
+  subject: string;
+  name?: string;
+  module_id: string;
+  title: string;
+  /** complete | expired | outstanding — expired and outstanding are different problems. */
+  state: "complete" | "expired" | "outstanding";
+  tier?: TrainingTier;
+  at?: string;
+  provider?: string;
+  expires_at?: string;
+};
+
+export type TrainingSummary = {
+  people: number;
+  modules: number;
+  assignments: number;
+  complete_delivered: number;
+  complete_attested: number;
+  expired: number;
+  outstanding: number;
+  /** True when nobody is on the roster: no denominator, NOT a trained workforce. */
+  no_roster: boolean;
+  roster_sources?: string[];
+  /** Completions recorded against people the roster does not know — they count towards nothing. */
+  off_roster?: string[];
+  detail: string;
+};
+
+export type TrainingProgramme = {
+  curriculum: { version: string; modules: TrainingModule[] };
+  summary: TrainingSummary;
+  statuses: TrainingStatus[];
+  me?: string;
+  /** "self" for an employee seat: the server returns only this person's rows, and the page renders
+   *  only their modules — no roster, no colleagues, no record-for-someone-else control. */
+  scope?: "self" | "everyone";
+};
+
+// ── Vendor register (SOC 2 CC9.2 · GDPR Art. 28 · PCI 12.8) ──────────────────────────────────────
+// The durable third-party inventory — NOT the findings it raises. A list derived from findings names
+// the suppliers that failed a check and omits every well-managed one, which is not an inventory.
+
+export type Vendor = {
+  id: string;
+  name: string;
+  /** Empty means UNOWNED and renders as such — a default would name someone who never agreed to it. */
+  owner?: string;
+  category?: string;
+  data_access?: "" | "none" | "metadata" | "pii" | "sensitive";
+  subprocessor?: boolean;
+  handles_card_data?: boolean;
+  certifications?: string[];
+  has_dpa?: boolean;
+  breached?: boolean;
+  breach_note?: string;
+  criticality?: string;
+  /** "" means NEVER reviewed — a different claim from "reviewed a long time ago". */
+  last_assessed?: string;
+  notes?: string;
+  /** "register" (a person curated it) or "ingest" (a job posted it) — different completeness claims. */
+  source?: string;
+  updated_at?: string;
+};
+
+export type VendorsResponse = {
+  vendors: Vendor[];
+  summary: {
+    total: number;
+    subprocessors: number;
+    sensitive_data: number;
+    never_reviewed: number;
+    unowned: number;
+    detail: string;
+  };
+};
+
+// ── Audit sign-off (the review that precedes a Safe-to-Host / web security audit certificate) ────
+// The reviewer decides, finding by finding, what goes into a document they put their name on. The
+// load split is the point: `proven` findings carry evidence a predicate produced, so the reviewer is
+// checking the engine's work; the rest they are signing on the scanner's word.
+
+export type AuditVerdict = "" | "include" | "exclude" | "reclassify";
+
+export type AuditItem = {
+  key: string;
+  finding_id: string;
+  title: string;
+  severity: string;
+  endpoint?: string;
+  rule_id?: string;
+  cwe?: string[];
+  owasp?: string[];
+  rung?: string;
+  confidence?: number;
+  /** A predicate RAN and held — exploited, or confirmed by the provider's own evaluator. */
+  proven: boolean;
+  effective_severity: string;
+  verdict: AuditVerdict;
+  reason?: string;
+  by?: string;
+  at?: string;
+  /** The reclassification REDUCED severity — the direction that makes a report look better. */
+  lowered?: boolean;
+};
+
+export type AuditLoad = {
+  proven: number;
+  unproven: number;
+  detail: string;
+};
+
+export type AuditProgress = {
+  total: number;
+  reviewed: number;
+  pending: number;
+  included: number;
+  excluded: number;
+  reclassified: number;
+  /** True only when EVERY finding has a decision — never for an empty review. */
+  complete: boolean;
+  load: AuditLoad;
+  detail: string;
+};
+
+/** One reason a certificate cannot be issued yet. */
+export type AuditBlocker = { kind: string; detail: string };
+
+/** The per-application SKU's unit of sale. amount_due_inr is the SERVER's figure — zero until accepted. */
+export type AuditOrder = {
+  tenant_id: string;
+  id: string;
+  target: string;
+  price_inr: number;
+  status: "open" | "certified" | "accepted" | "invoiced";
+  note?: string;
+  created_at: string;
+  created_by?: string;
+  certificate_id?: string;
+  certified_at?: string;
+  accepted_by?: string;
+  accepted_at?: string;
+  invoice_ref?: string;
+  invoiced_at?: string;
+  amount_due_inr: number;
+};
+
+export type AuditOrdersResponse = { orders: AuditOrder[]; list_price_inr: number; amount_due_inr: number };
+
+export type AuditReview = {
+  target: string;
+  standard?: string;
+  items: AuditItem[];
+  progress: AuditProgress;
+  blockers?: AuditBlocker[];
+};
+
+export type AuditCertificate = {
+  target: string;
+  standard?: string;
+  auditor: string;
+  firm?: string;
+  capacity?: string;
+  issued_at: string;
+  findings_reviewed: number;
+  included: number;
+  excluded: number;
+  open_by_severity?: Record<string, number>;
+  not_tested?: string[];
+  statement: string;
+  engine?: string;
+  brand?: string;
+  // Set on the signed DOCUMENT forms (GET /v1/audit-review/certificate); absent on the JSON preview.
+  id?: string;
+  valid_until?: string;
+  attestation?: { sha256: string; signed_at: string; signer: string; signature: string };
+};

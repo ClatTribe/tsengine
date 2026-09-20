@@ -32,6 +32,7 @@ func (d Deps) markPostureAssessed(ctx context.Context, tenantID, source string, 
 var postureSources = []struct{ Tool, Label, About string }{
 	{"tprm", "Vendor risk", "Third-party / subprocessor risk: vendors handling your data without SOC 2 / a DPA / PCI, breach history, or overdue reviews."},
 	{"deviceposture", "Device posture", "Employee endpoint risk: unencrypted disks, end-of-life OS, missing screen lock / firewall / EDR, tampered devices."},
+	{"hris", "Joiners & leavers", "Employment vs access: former employees whose accounts are still enabled, and active accounts nobody in HR can account for."},
 	{"clouddrift", "Cloud drift", "Change-control: security-relevant cloud config changes since the last baseline (a resource became public, a new privileged principal, a new exposure path)."},
 	{"sspm", "SaaS posture", "Configuration risk in the SaaS apps you run: org-wide 2FA, repo and file sharing, third-party app grants, guest and admin sprawl."},
 	{"osint", "External exposure", "Your attacker's-eye footprint from open sources: leaked credentials and secrets, exposed hosts, typosquats, dangling DNS, certificate issues."},

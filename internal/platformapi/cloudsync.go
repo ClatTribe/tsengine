@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/connector/awsfetch"
 	"github.com/ClatTribe/tsengine/internal/connector/awsinventory"
 	"github.com/ClatTribe/tsengine/internal/runner"
@@ -76,8 +77,30 @@ func (d Deps) SyncCloudInventory(ctx context.Context, tenantID string) ([]types.
 	if merr != nil {
 		return nil, res, merr
 	}
-	drift, _, aerr := d.applyCloudInventory(ctx, tenantID, inv, invJSON,
-		"live AWS read via the connected read-only role → stored for the AI cloud engineer")
+	// THE LIVE PATH RUNS THE SAME ASSESSMENTS AS THE POSTED ONE. The CI/federated-identity analysers
+	// (ghoidc, samltrust) and the escalation-coverage notes ran only in handleIngestAWSInventory, so
+	// an account read through the connected role — the path a customer actually uses — never got a
+	// finding for a role any GitHub repository can assume, and never had its coverage gaps stored.
+	// Two doors, one assessment: this is the fourth time this tree has found the two-doors-disagree
+	// shape (SaaS posture, device posture, the vendor register, and now this).
+	rawJSON, rerr := json.Marshal(res.Raw)
+	if rerr != nil {
+		return nil, res, rerr
+	}
+	ciFindings, ciNotAssessed := ciIdentityAssess("aws", rawJSON)
+	ciFindings = annotateCIReach(ctx, res.Raw, ciFindings, d.proberOrNil(ctx, tenantID))
+	d.persistCIIdentityFindings(ctx, tenantID, ciFindings)
+	coverage := connector.CoverAWS(res.Raw)
+	if len(ciNotAssessed) > 0 {
+		if coverage.Notes == nil {
+			coverage.Notes = map[string]string{}
+		}
+		for k, v := range ciNotAssessed {
+			coverage.Notes[k] = v
+		}
+	}
+	drift, _, aerr := d.applyCloudInventoryWithCoverage(ctx, tenantID, inv, invJSON,
+		"live AWS read via the connected read-only role → stored for the AI cloud engineer", coverage, githubTrustsFrom(res.Raw))
 	if aerr != nil {
 		return nil, res, aerr
 	}

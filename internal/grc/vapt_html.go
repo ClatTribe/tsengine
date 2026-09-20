@@ -157,7 +157,7 @@ const vaptHTMLSource = `<!doctype html>
 {{if .IntelCaveat}}<div class="caveat">{{inline .IntelCaveat}}</div>{{end}}
 
 <h2>Methodology &amp; confidence</h2>
-<p>Assessment is performed by the TensorShield engine, which wraps best-in-class open-source scanners
+<p>Assessment is performed by the {{.Brand}} engine, which wraps best-in-class open-source scanners
 across every asset class (web, API, code, containers, cloud, identity) and verifies exploitable findings
 through an evidence-grounded agent. <b>Every finding below cites the tool and rule that proves it</b> — no
 result is asserted that a tool did not demonstrate (anti-hallucination grounding). The assessment is
@@ -264,6 +264,7 @@ type vaptHTMLView struct {
 	SCATotal    int
 	HasRetest   bool
 	Narrative   string
+	Brand       string // the prose brand (white-label or the product's); Engine in the meta lines is provenance and stays
 	EmptyNote   string
 	RatingClass string
 	// IntelCaveat / IntelLine mirror the Markdown renderer's intel-provenance disclosure, so the
@@ -301,6 +302,7 @@ func RenderVAPTHTML(r *VAPTReport) string {
 		SCATotal:    r.Summary.PatchAvailable + r.Summary.PatchUnavailable,
 		HasRetest:   r.Summary.RetestConfirmed > 0 || r.Summary.RetestStillPresent > 0 || r.Summary.RetestAwaitingProof > 0,
 		Narrative:   narrativeSummary(r),
+		Brand:       r.brand(),
 		RatingClass: ratingClass(r.Summary.RiskRating),
 		IntelCaveat: r.Intel.IntelCaveat(),
 		IntelLine:   RenderIntelProvenance(r.Intel),

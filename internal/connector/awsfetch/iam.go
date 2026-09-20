@@ -234,3 +234,45 @@ func (l *IAMLister) client(ctx context.Context) (iamAPI, error) {
 	}
 	return iam.NewFromConfig(cfg), nil
 }
+
+// InstanceProfileReader resolves instance-profile ARNs to the role ARNs they carry — the join that
+// turns an EC2 instance's profile into the graph's runs_as edge. Optional on an IAMReader: the
+// fetcher type-asserts for it, so a reader that lacks it simply leaves instances without a role
+// and the fetcher says so.
+type InstanceProfileReader interface {
+	ListInstanceProfiles(ctx context.Context) (map[string]string, error)
+}
+
+type instanceProfileAPI interface {
+	ListInstanceProfiles(ctx context.Context, in *iam.ListInstanceProfilesInput, opts ...func(*iam.Options)) (*iam.ListInstanceProfilesOutput, error)
+}
+
+// ListInstanceProfiles maps profile ARN → role ARN (the first role; a profile carries at most one).
+func (l *IAMLister) ListInstanceProfiles(ctx context.Context) (map[string]string, error) {
+	api, err := l.client(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ipa, ok := api.(instanceProfileAPI)
+	if !ok {
+		return nil, fmt.Errorf("awsfetch: the IAM client cannot list instance profiles")
+	}
+	out := map[string]string{}
+	var marker *string
+	for {
+		res, err := ipa.ListInstanceProfiles(ctx, &iam.ListInstanceProfilesInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("awsfetch: list instance profiles: %w", err)
+		}
+		for _, p := range res.InstanceProfiles {
+			if len(p.Roles) > 0 {
+				out[aws.ToString(p.Arn)] = aws.ToString(p.Roles[0].Arn)
+			}
+		}
+		if !res.IsTruncated {
+			break
+		}
+		marker = res.Marker
+	}
+	return out, nil
+}

@@ -41,12 +41,18 @@ type usageCounter struct {
 }
 
 func (c *usageCounter) add(u Usage) {
+	if c == nil {
+		return
+	}
 	c.in.Add(u.InputTokens)
 	c.out.Add(u.OutputTokens)
 	c.cache.Add(u.CacheReadTokens)
 }
 
 func (c *usageCounter) total() Usage {
+	if c == nil {
+		return Usage{}
+	}
 	return Usage{InputTokens: c.in.Load(), OutputTokens: c.out.Load(), CacheReadTokens: c.cache.Load()}
 }
 

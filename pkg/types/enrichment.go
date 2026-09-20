@@ -123,6 +123,7 @@ func (f Finding) ComplianceSummary() string {
 		{"soc2", c.SOC2}, {"pci", c.PCI}, {"hipaa", c.HIPAA}, {"cis_v8", c.CISv8},
 		{"nist_csf", c.NISTCSF}, {"iso27001", c.ISO27001}, {"gdpr", c.GDPR}, {"iso27701", c.ISO27701},
 		{"nist_800_53", c.NIST80053}, {"nist_800_171", c.NIST800171}, {"ccpa", c.CCPA}, {"sox", c.SOX},
+		{"dora", c.DORA}, {"cyber_essentials", c.CyberEssentials},
 	} {
 		if len(kv.ctrl) > 0 {
 			fw = append(fw, kv.name)

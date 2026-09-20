@@ -208,5 +208,7 @@ func complianceControls(c *types.Compliance) map[string][]string {
 	add("certin", c.CERTIn)
 	add("rbi", c.RBI)
 	add("sebi", c.SEBI)
+	add("dora", c.DORA)
+	add("cyber_essentials", c.CyberEssentials)
 	return m
 }

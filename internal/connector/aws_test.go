@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -78,8 +79,20 @@ func TestAWS_Discover_YieldsCloudAccountAsset(t *testing.T) {
 // fakeS3Writer records BlockS3PublicAccess calls (ADR 0009 Phase 5 — the injectable write
 // path, tested without live AWS creds, mirroring the Okta fake-org pattern).
 type fakeS3Writer struct {
-	blocked []string
-	err     error
+	blocked     []string
+	deactivated []string
+	revoked     []string
+	err         error
+}
+
+func (f *fakeS3Writer) DeactivateAccessKey(_ context.Context, keyID string) error {
+	f.deactivated = append(f.deactivated, keyID)
+	return f.err
+}
+
+func (f *fakeS3Writer) RevokeOpenIngress(_ context.Context, groupID string, port int) error {
+	f.revoked = append(f.revoked, fmt.Sprintf("%s:%d", groupID, port))
+	return f.err
 }
 
 func (f *fakeS3Writer) BlockS3PublicAccess(_ context.Context, bucket string) error {

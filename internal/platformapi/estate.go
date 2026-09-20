@@ -13,6 +13,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/estategraph"
 	"github.com/ClatTribe/tsengine/internal/estateingest"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -66,7 +67,37 @@ func (d Deps) composeEstateWith(ctx context.Context, tenantID string, wh *datapl
 		}
 		findings = fs
 	}
-	return estateingest.Compose(cloud, wh, whRef, findings, time.Now().UTC()), nil
+	now := time.Now().UTC()
+	g := estateingest.Compose(cloud, wh, whRef, findings, now)
+	// THE PERSON → CODE → CLOUD CHAIN. Both converters existed with no caller: the identity join
+	// (`GitHubIdentity`) had nothing fetched to join over, and the OIDC converter (`GitHubOIDC`) had
+	// its trusts computed at ingest and discarded. The monitoring pass now stores the link set
+	// (internal/identitylinks) and the cloud snapshot keeps the trusts, so every read of the estate
+	// draws the chain — or names, in the response, exactly why it cannot.
+	join, _ := d.identityJoin(ctx, tenantID, now)
+	if join.Graph != nil {
+		g.Merge(join.Graph)
+	}
+	if d.CloudSnapshots != nil {
+		if snap, ok, err := d.CloudSnapshots.Get(ctx, tenantID); err == nil && ok && len(snap.GitHubTrusts) > 0 {
+			g.Merge(estateingest.GitHubOIDC(oidcTrusts(snap.GitHubTrusts), now))
+		}
+	}
+	return g, nil
+}
+
+// identityJoin runs the stored link set through the estate join. The second return says whether a
+// link set exists at all: no set (the pass has not run, or nothing is wired) is a different fact
+// from a set with zero links, and the response carries the difference.
+func (d Deps) identityJoin(ctx context.Context, tenantID string, now time.Time) (estateingest.JoinResult, *platform.IdentityLinkSet) {
+	if d.Store == nil {
+		return estateingest.JoinResult{}, nil
+	}
+	set, ok, err := d.Store.GetIdentityLinks(ctx, tenantID)
+	if err != nil || !ok {
+		return estateingest.JoinResult{}, nil
+	}
+	return estateingest.GitHubIdentity(set.Links, set.Controls, now), &set
 }
 
 // handleEstateGraph (GET /v1/estate) returns the composed graph — the substrate itself, so an
@@ -87,6 +118,19 @@ func (d Deps) handleEstateGraph(w http.ResponseWriter, r *http.Request, tenantID
 			bridges++ // a node two surfaces both assert — the join itself
 		}
 	}
+	// The identity join's own account of itself rides with the graph: how many people were linked to
+	// code, which GitHub accounts with authority nobody asserts a person for (the chain breaks there,
+	// and the sentence says which integration mends it), and what could not be read. `identity_links`
+	// is null when no link set exists yet — a different fact from an empty one.
+	join, set := d.identityJoin(r.Context(), tenantID, time.Now().UTC())
+	var linksView any // nil → JSON null: "no link set" is not "an empty one"
+	if set != nil {
+		linksView = map[string]any{
+			"fetched_at": set.FetchedAt, "links": len(set.Links), "controls": len(set.Controls),
+			"linked": join.Linked, "unlinked_logins": orEmptyStrings(join.UnlinkedLogins),
+			"chain_broken": join.ChainBroken, "unread": set.Unread,
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"nodes": g.Nodes, "edges": g.Edges,
 		"node_count": len(g.Nodes), "edge_count": len(g.Edges),
@@ -95,7 +139,15 @@ func (d Deps) handleEstateGraph(w http.ResponseWriter, r *http.Request, tenantID
 		// reader should see that rather than wonder why no cross-surface findings appeared.
 		"cross_surface_nodes": bridges,
 		"joinable":            len(surfaces) >= 2,
+		"identity_links":      linksView,
 	})
+}
+
+func orEmptyStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // handleEstateDetect (POST /v1/estate/detect) composes the graph, runs the cross-surface

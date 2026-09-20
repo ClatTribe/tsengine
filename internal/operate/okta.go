@@ -125,8 +125,9 @@ func (o *Okta) Fetch(ctx context.Context, token string, now time.Time) (Workspac
 
 // oktaGrantAgg accumulates one app's grant across the users who consented to it.
 type oktaGrantAgg struct {
-	scopes map[string]bool
-	users  map[string]bool
+	scopes  map[string]bool
+	users   map[string]bool // emails, for the count
+	userIDs map[string]bool // Okta user ids, for a live per-user revoke
 }
 
 // accumulateGrants folds a user's OAuth2 grants into the per-app map. expand=scope inlines
@@ -149,10 +150,11 @@ func (o *Okta) accumulateGrants(ctx context.Context, token, userID, email string
 	for _, g := range gs {
 		a := into[g.ClientID]
 		if a == nil {
-			a = &oktaGrantAgg{scopes: map[string]bool{}, users: map[string]bool{}}
+			a = &oktaGrantAgg{scopes: map[string]bool{}, users: map[string]bool{}, userIDs: map[string]bool{}}
 			into[g.ClientID] = a
 		}
 		a.users[email] = true
+		a.userIDs[userID] = true
 		if g.Embedded.Scope.Name != "" {
 			a.scopes[g.Embedded.Scope.Name] = true
 		}
@@ -178,9 +180,14 @@ func (o *Okta) buildGrants(ctx context.Context, token string, agg map[string]*ok
 			}
 		}
 		sort.Strings(scopes)
+		var userIDs []string
+		for uid := range a.userIDs {
+			userIDs = append(userIDs, uid)
+		}
+		sort.Strings(userIDs)
 		out = append(out, OAuthGrant{
 			App: nz(labels[clientID], clientID), Scopes: scopes, Users: len(a.users),
-			AdminScope: admin, Verified: true,
+			AdminScope: admin, Verified: true, ClientID: clientID, UserIDs: userIDs,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].App < out[j].App })

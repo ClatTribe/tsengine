@@ -17,6 +17,15 @@ import (
 //     "Growth" tier on the pricing page; it needs no new plan key.
 //   - Enterprise — "talk to us" for what genuinely needs a conversation: unlimited assets, MSP/managed
 //     delivery, SSO. NOT a gate on the AI agents — those are self-serve above.
+//   - Audit      — THE PER-APPLICATION SKU. Not a subscription: a fixed price per application, for the
+//     buyer who purchases a Safe-to-Host certificate (Indian public-sector VAPT tenders, and the
+//     CERT-In-empanelled firms that win them). Those tenders pay 100% on acceptance of the final
+//     report and never in advance, so the unit of sale is an AuditOrder per application (types.go) and
+//     the money is due only once the buyer ACCEPTS the certificate. The plan's asset cap is the number
+//     of applications purchased (Tenant.AuditApplications) — read through EntitlementsFor, since a plan
+//     string cannot carry a count. AI is on (the price covers it: the review needs the engine's
+//     triage and the pentester's proof); continuous monitoring is off (an audit is a point-in-time
+//     engagement with a re-test, not a heartbeat).
 //
 // The economic invariant is unchanged: a tenant whose plan is not AI-enabled must never consume the
 // OPERATOR's LLM budget. Free is that tenant. What changed is only WHERE the line sits — a paying
@@ -27,7 +36,17 @@ const (
 	PlanFree       = "free"
 	PlanGrowth     = "growth"
 	PlanEnterprise = "enterprise"
+	PlanAudit      = "audit"
 )
+
+// AuditListPriceINR is the list price of ONE application under the per-application SKU, in rupees,
+// exclusive of GST. It is the default an AuditOrder is created at; an operator may set a different
+// agreed price per order. Mirrored on the pricing page — change both.
+//
+// Where the number comes from: nine public-sector VAPT bids read in 2026-09 priced a web-application
+// audit with re-test and certificate at roughly ₹40–60k per application at the small end. This sits in
+// that band, because a buyer on GeM compares it against exactly those.
+const AuditListPriceINR = 49999
 
 // PlanLimits is the entitlement set for a plan — what a tenant on it may do. -1 means
 // unlimited. AIEnabled is the load-bearing one: it gates the operator-funded L2/LLM work
@@ -63,9 +82,30 @@ func NormalizePlan(plan string) string {
 	// accepted alias, so the one word a customer or operator actually reads did not resolve.
 	case p == PlanGrowth || p == "core" || p == "starter" || p == "team" || p == "pro":
 		return PlanGrowth
+	case p == PlanAudit || p == "per-application" || p == "per-app":
+		return PlanAudit
 	default:
 		return PlanFree
 	}
+}
+
+// EntitlementsFor is Entitlements read through the TENANT rather than the plan string alone. It
+// exists for the one tier whose limit is a purchased COUNT: on the per-application SKU the asset cap
+// is the number of applications bought, which a plan string cannot carry. Every other tier is
+// unchanged. Callers that gate on a cap (asset creation, discovery) read this; a caller that only
+// needs a capability flag may still read Entitlements.
+//
+// Zero applications purchased → zero targets allowed. A buyer who has ordered nothing has no
+// application under audit, and a cap that defaulted to "some" would let an unpaid engagement scan.
+func EntitlementsFor(t Tenant) PlanLimits {
+	lim := Entitlements(t.Plan)
+	if lim.Plan == PlanAudit {
+		lim.MaxAssets = t.AuditApplications
+		if lim.MaxAssets < 0 {
+			lim.MaxAssets = 0
+		}
+	}
+	return lim
 }
 
 // knownAddOns are the "+"-joined add-on tokens a plan string may carry.
@@ -93,10 +133,12 @@ func ValidatePlan(plan string) (string, error) {
 		canonical = PlanEnterprise
 	case PlanGrowth, "core", "starter", "team", "pro":
 		canonical = PlanGrowth
+	case PlanAudit, "per-application", "per-app":
+		canonical = PlanAudit
 	case PlanFree, "":
 		canonical = PlanFree
 	default:
-		return "", fmt.Errorf("unknown plan tier %q (want free, core, growth, or enterprise)", base)
+		return "", fmt.Errorf("unknown plan tier %q (want free, core, growth, audit, or enterprise)", base)
 	}
 	for _, add := range parts[1:] {
 		add = strings.TrimSpace(add)
@@ -146,6 +188,18 @@ func baseEntitlements(plan string) PlanLimits {
 			AIEnabled: true, AutonomousPentest: true, AllFrameworks: true,
 			ContinuousMonitoring: true, HumanInLoopApply: true,
 			APIRatePerMin: 0, // unmetered
+		}
+	case PlanAudit:
+		// The per-application SKU. MaxAssets is a PLACEHOLDER here — EntitlementsFor replaces it with
+		// the tenant's purchased count — and it is 0 rather than a friendly default so a caller that
+		// forgot to go through EntitlementsFor fails closed (no targets) instead of scanning unpaid.
+		// AutonomousPentest is on because a Safe-to-Host audit that never tried to exploit anything
+		// is a scanner printout; the fee covers the operator's model cost for that application.
+		return PlanLimits{
+			Plan: PlanAudit, Label: "Per-application audit", MaxAssets: 0,
+			AIEnabled: true, AutonomousPentest: true, AllFrameworks: true,
+			ContinuousMonitoring: false, HumanInLoopApply: true,
+			APIRatePerMin: 600,
 		}
 	case PlanGrowth:
 		// The "Core" tier: the full deterministic engine PLUS the AI Security Engineer.

@@ -51,6 +51,12 @@ const (
 	FrameworkCERTIn     = "certin"
 	FrameworkRBI        = "rbi"
 	FrameworkSEBI       = "sebi"
+	// DORA (EU Reg. 2022/2554) and UK Cyber Essentials. Both are NAMED by buyers in their regions and
+	// both are cheap here for the same reason: their technical requirements derive from control
+	// families the crosswalk already curates, so every ref traces to an existing nexus rather than a
+	// fresh guess (the derivation rule the India frameworks follow).
+	FrameworkDORA = "dora"
+	FrameworkCE   = "cyber_essentials"
 )
 
 // Frameworks is the ordered set of frameworks the GRC layer tracks — the single source
@@ -62,6 +68,7 @@ var Frameworks = []string{
 	FrameworkCMMC, FrameworkISO42001, FrameworkNISTAIRMF,
 	FrameworkISO27018, FrameworkISO22301, FrameworkPIPEDA, FrameworkGLBA, FrameworkEUAIAct,
 	FrameworkCERTIn, FrameworkRBI, FrameworkSEBI,
+	FrameworkDORA, FrameworkCE,
 }
 
 // IsFramework reports whether key is one of the tracked frameworks. Callers (the report API)
@@ -249,5 +256,7 @@ func frameworkControls(c *types.Compliance) map[string][]string {
 	add(FrameworkCERTIn, c.CERTIn)
 	add(FrameworkRBI, c.RBI)
 	add(FrameworkSEBI, c.SEBI)
+	add(FrameworkDORA, c.DORA)
+	add(FrameworkCE, c.CyberEssentials)
 	return out
 }

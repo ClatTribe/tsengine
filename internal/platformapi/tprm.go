@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/ClatTribe/tsengine/internal/tprm"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -38,36 +36,24 @@ func (d Deps) handleTPRMIngest(w http.ResponseWriter, r *http.Request, tenantID 
 		return
 	}
 
-	findings := tprm.Assess(req.Vendors, tprm.Options{})
-	findings = enrichFindings(findings) // L1.5 parity (§11)
-	// Record that vendor risk was assessed — even (especially) when it came back clean, which is
-	// otherwise indistinguishable from never having run.
-	d.markPostureAssessed(r.Context(), tenantID, "tprm", time.Now().UTC())
-	stored := 0
-	saved := make([]types.Finding, 0, len(findings))
-	for i, f := range findings {
-		f.ID = d.newID("tprm") + "-" + strconv.Itoa(i)
-		if err := d.Store.PutFinding(r.Context(), tenantID, f); err != nil {
-			continue
-		}
-		d.foldIntoPosture(r.Context(), tenantID, []types.Finding{f})
-		saved = append(saved, f)
-		stored++
+	// The posted inventory WRITES THROUGH THE REGISTER rather than being assessed and discarded.
+	// Before this the findings persisted and the portfolio did not, so a CI job could post twelve
+	// vendors every night and nobody could answer "who are our vendors" the next morning. Both doors
+	// now share saveVendors → assessRegister, so an inventory a job posts and a row a person adds
+	// produce the same register and the same findings.
+	for i := range req.Vendors {
+		req.Vendors[i].Source = "ingest"
 	}
-	// Findings that arrive by ingest reach the approval desk too — the same remediate.Propose
-	// the runner uses for engine-scanned findings. Nil ProposeFix/Submitter → no-op.
-	d.proposeForFindings(r.Context(), tenantID, saved)
-	if d.IncidentOpener != nil && stored > 0 {
-		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
-	}
-	if d.Recorder != nil && stored > 0 {
-		d.Recorder.Record("vendor risk assessed", "tprm",
-			map[string]any{"tenant_id": tenantID, "vendors": len(req.Vendors), "findings": stored}, "TPRM vendor-inventory ingest")
+	_, findings, serr := d.saveVendors(r.Context(), tenantID, req.Vendors, "TPRM vendor-inventory ingest")
+	if serr != nil {
+		respond(w, nil, serr)
+		return
 	}
 	if findings == nil {
 		findings = []types.Finding{}
 	}
-	resp := map[string]any{"vendors": len(req.Vendors), "risks_detected": stored, "findings": findings}
+
+	resp := map[string]any{"vendors": len(req.Vendors), "risks_detected": len(findings), "findings": findings}
 	// Same honesty as the device ingest: an unnamed vendor is skipped, and a skipped vendor must not be
 	// counted as a reviewed one. "0 risks across 12 vendors" is what someone puts in front of an auditor.
 	names := make([]string, 0, len(req.Vendors))

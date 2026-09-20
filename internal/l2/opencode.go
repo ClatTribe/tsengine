@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -41,7 +40,6 @@ type OpenCodeClient struct {
 	model     string
 	ctxWindow int
 	http      *http.Client
-	mu        sync.Mutex
 }
 
 // NewOpenCodeClient builds the bridge. ctxWindow <= 0 defaults to 128_000 — a

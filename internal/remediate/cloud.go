@@ -3,8 +3,10 @@ package remediate
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -44,6 +46,9 @@ func liveCloudMutation(f types.Finding, provider string) (rtype, target string) 
 		if isPublicStorageFinding(f) {
 			return rtypeS3Block, f.Endpoint
 		}
+		if sg := openSecurityGroupID(f); sg != "" {
+			return rtypeSGRevoke, sg
+		}
 	case strings.EqualFold(provider, "gcp"):
 		if isPublicStorageFinding(f) {
 			return rtypeGCSPrevent, f.Endpoint
@@ -72,6 +77,43 @@ func isPublicStorageFinding(f types.Finding) bool {
 // a live IAM mutation (today gated, like rtypeIAMRestrict). This is "fixes it across all three" for the
 // finding that bridges code → cloud root.
 const rtypeKeyRevoke = "aws_key_revoke"
+
+// rtypeKeyDeactivate is the LIVE half of rtypeKeyRevoke: a tier-2, HITL-gated action against the
+// tenant's AWS connection that sets the leaked key Inactive through connector.AWS.Apply.
+const rtypeKeyDeactivate = "aws_key_deactivate"
+
+// IsLeakedAWSKey reports whether a finding is a leaked AWS access key (exported for the runner,
+// which proposes the gated deactivation beside the repository PR).
+func IsLeakedAWSKey(f types.Finding) bool { return isLeakedAWSKeyFinding(f) }
+
+// KeyDeactivateAction is the second action a leaked-key finding earns: the repository PR (tier 1,
+// scrub the file) says the key must be revoked; this one DOES it, in the cloud, after a human
+// approves. It is separate from the PR because the two have different consequences and different
+// gates — a PR is reversible by not merging it, a deactivated key stops a workload the moment it is
+// applied — and because they are delivered through different connections (GitHub, AWS).
+//
+// Grounded (§10): only a key id the finding itself carries (the AKIA/ASIA token in its text) is
+// targeted; a leaked-key finding that names no id gets no action here, because deactivating a key
+// the finding did not name would be a guess with a blast radius.
+func KeyDeactivateAction(f types.Finding, aws platform.Connection, idgen func() string) (platform.Action, bool) {
+	kid := awsKeyID(f)
+	if kid == "" || aws.Kind != platform.ConnAWS {
+		return platform.Action{}, false
+	}
+	return platform.Action{
+		ID: id("act", idgen), TenantID: aws.TenantID, FindingID: f.ID, ConnectionID: aws.ID,
+		Kind: platform.ActApplyConfig, Tier: tierApplyConfig, Status: platform.ActProposed,
+		Title: "tsengine: deactivate leaked AWS access key " + kid,
+		Payload: map[string]any{
+			"remediation_type": rtypeKeyDeactivate,
+			"target":           kid,
+			"remediation": "Access key " + kid + " appears in " + nz(f.Endpoint, "the repository") + " and must be treated as compromised. " +
+				"Approving this sets the key INACTIVE in IAM (reversible — re-activate it if something undocumented still depends on it, " +
+				"then rotate); it does not delete the key. Scrubbing the file is a separate pull request and does not by itself close this finding.",
+			"owner": "",
+		},
+	}, true
+}
 
 // akiaRe matches an AWS access key id (AKIA/ASIA + 16 base32 chars) — the grounded extractor.
 var akiaRe = regexp.MustCompile(`(?:AKIA|ASIA)[A-Z0-9]{16}`)
@@ -113,4 +155,61 @@ func keyRevokeBody(f types.Finding) string {
   2. confirm nothing breaks, then: aws iam delete-access-key --access-key-id %s
   3. rotate any credential that depended on it
 Then this PR scrubs the secret from the codebase.`, named, placeholder, placeholder)
+}
+
+// rtypeSGRevoke is the LIVE half of the open-security-group runbook (rtypeSGRestrict): a tier-2,
+// HITL-gated action against the tenant's AWS connection that removes the 0.0.0.0/0 and ::/0 source
+// ranges from the group's ingress rules through connector.AWS.Apply. A DISTINCT remediation_type
+// from the runbook so cloudRunbookRemediations (which routes runbooks to a ticket) is untouched and
+// the two cannot be confused: the runbook remains the answer for GCP/Azure and for an AWS finding
+// that names no group.
+const rtypeSGRevoke = "sg_revoke_open_ingress"
+
+// sgIDRe matches a security group id in a finding's text — the grounded extractor.
+var sgIDRe = regexp.MustCompile(`\bsg-[0-9a-f]{8,17}\b`)
+
+// sgPortRe pulls the port a finding names ("port 22", "tcp_port_3389", "port: 5432").
+var sgPortRe = regexp.MustCompile(`(?i)(?:port[_:\s]+)(\d{1,5})\b`)
+
+// openSecurityGroupID returns the security group id when the finding is an open-to-the-internet
+// ingress rule on a group it NAMES — the two facts a revoke needs. Grounded (§10): the class match is
+// the catalog's own (an SG keyword + a world-open keyword), and the id comes from the finding's text;
+// a finding that describes an open group without naming it stays a runbook, because revoking rules
+// on a group the finding did not name would be a guess with a blast radius.
+func openSecurityGroupID(f types.Finding) string {
+	hay := strings.ToLower(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
+	if !(anyOf(hay, "security group", "security-group", "securitygroup", "sg-", "ingress", "inbound") &&
+		anyOf(hay, "0.0.0.0/0", "::/0", "open to", "internet", "any source", "world", "unrestricted", "wide open")) {
+		return ""
+	}
+	return sgIDRe.FindString(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
+}
+
+// openSecurityGroupPort returns the port the finding names, or 0 when it names none (then every
+// world-open rule on the group is in scope, and the action's text says so).
+func openSecurityGroupPort(f types.Finding) int {
+	m := sgPortRe.FindStringSubmatch(f.RuleID + " " + f.Title + " " + f.Description + " " + f.Endpoint)
+	if len(m) < 2 {
+		return 0
+	}
+	n, _ := strconv.Atoi(m[1])
+	if n <= 0 || n > 65535 {
+		return 0
+	}
+	return n
+}
+
+// sgRevokePayload completes the payload for a live SG revoke: the port (when named) and a
+// remediation text that says exactly what approving does and does not do.
+func sgRevokePayload(f types.Finding, group string, payload map[string]any) {
+	port := openSecurityGroupPort(f)
+	scope := "every ingress rule on " + group + " whose source is 0.0.0.0/0 or ::/0"
+	if port > 0 {
+		payload["port"] = port
+		scope = fmt.Sprintf("the ingress rule(s) on %s covering port %d whose source is 0.0.0.0/0 or ::/0", group, port)
+	}
+	payload["remediation"] = "Approving this removes " + scope + ". The group is read first and ONLY the world-open " +
+		"source ranges are removed — a narrower range sharing the same rule is kept, and no other rule is touched. " +
+		"Reversible: re-add the range if a client you expected to reach the service can no longer. If the group has " +
+		"nothing world-open when this runs, the apply FAILS rather than reporting a change it did not make.\n\n" + fixBody(f)
 }

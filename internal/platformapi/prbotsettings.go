@@ -36,6 +36,18 @@ func (d Deps) handleGetPRBotSettings(w http.ResponseWriter, r *http.Request, ten
 	// Whether the live GitHub post is reachable is gated on a connected GitHub App with the PR
 	// scope; surface that honestly so the UX can say "policy saved, posting needs GitHub".
 	resp["github_connected"] = d.hasConnectionKind(r.Context(), tenantID, platform.ConnGitHub)
+	// The three facts that decide whether a review actually lands in the PR, stated separately
+	// because each has a different owner: the operator configures the App, the customer installs it
+	// (the installation id), the customer connects GitHub. `posting_live` is their conjunction and
+	// `not_posting_reason` names the first missing one.
+	resp["app_configured"] = d.GitHubApp != nil
+	resp["installation_id"] = ""
+	if conn, ok := d.githubConnection(r.Context(), tenantID); ok {
+		resp["installation_id"] = conn.Config[GitHubInstallationKey]
+	}
+	poster, reason := d.prPosterFor(r.Context(), tenantID)
+	resp["posting_live"] = poster != nil
+	resp["not_posting_reason"] = reason
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -44,6 +56,9 @@ func (d Deps) handlePutPRBotSettings(w http.ResponseWriter, r *http.Request, ten
 	var body struct {
 		Enabled       bool   `json:"enabled"`
 		BlockSeverity string `json:"block_severity"`
+		// InstallationID records where the GitHub App is installed (the numeric id GitHub shows
+		// on the installation page). nil leaves it as it is; "" clears it.
+		InstallationID *string `json:"installation_id,omitempty"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
@@ -67,6 +82,30 @@ func (d Deps) handlePutPRBotSettings(w http.ResponseWriter, r *http.Request, ten
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
 	}
+	if body.InstallationID != nil {
+		inst := strings.TrimSpace(*body.InstallationID)
+		if inst != "" && !allDigits(inst) {
+			writeJSON(w, http.StatusBadRequest, errBody("installation_id must be the numeric id GitHub shows on the App's installation page"))
+			return
+		}
+		conn, ok := d.githubConnection(r.Context(), tenantID)
+		if !ok {
+			writeJSON(w, http.StatusBadRequest, errBody("connect GitHub before recording where the App is installed"))
+			return
+		}
+		if conn.Config == nil {
+			conn.Config = map[string]string{}
+		}
+		if inst == "" {
+			delete(conn.Config, GitHubInstallationKey)
+		} else {
+			conn.Config[GitHubInstallationKey] = inst
+		}
+		if err := d.Store.PutConnection(r.Context(), conn); err != nil {
+			writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+			return
+		}
+	}
 	if d.Recorder != nil {
 		d.Recorder.Record("PR-bot policy updated", "pr_bot_policy",
 			map[string]any{"tenant_id": tenantID, "enabled": body.Enabled, "block_severity": bs},
@@ -77,6 +116,15 @@ func (d Deps) handlePutPRBotSettings(w http.ResponseWriter, r *http.Request, ten
 		out = "off"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled, "block_severity": out, "saved": true})
+}
+
+func allDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // hasConnectionKind reports whether the tenant has a connection of the given kind (best-effort; a

@@ -1,3 +1,4 @@
+import { RefCapture } from "@/components/marketing/ref-capture";
 import { MarketingNav } from "@/components/marketing/nav";
 import { MarketingFooter } from "@/components/marketing/footer";
 import { MarketingJsonLd } from "@/components/marketing/json-ld";
@@ -16,6 +17,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       {/* schema.org structured data — emitted on every public page for rich results. */}
       <MarketingJsonLd />
       <MarketingNav />
+      <RefCapture />
       <main className="flex-1">{children}</main>
       <MarketingFooter />
     </div>

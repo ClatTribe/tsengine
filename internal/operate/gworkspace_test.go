@@ -67,7 +67,15 @@ func TestGWorkspace_FetchFeedsAssessGrounded(t *testing.T) {
 	defer srv.Close()
 	g := NewGWorkspace()
 	g.APIBase = srv.URL
-	ws, _ := g.Fetch(context.Background(), "t", time.Now())
+	// A FIXED clock, matching the fixture's login date — not time.Now().
+	//
+	// This test asserted exactly one finding while pinning the login to a literal date and reading
+	// the real wall clock, so the account silently crossed the 90-day stale threshold on 8 September
+	// 2026 and started producing a SECOND finding (operate::stale-account). The test had been
+	// correct for three months and then broke with no commit, which is the worst way for a suite to
+	// fail: nothing in the diff explains it. The same fixed clock the sibling tests already use
+	// keeps the account one day old forever.
+	ws, _ := g.Fetch(context.Background(), "t", time.Date(2026, 6, 11, 0, 0, 0, 0, time.UTC))
 
 	// the live snapshot flows straight into the grounded posture engine
 	fs := Assess(ws, Options{})

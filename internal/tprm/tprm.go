@@ -18,38 +18,31 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
-// DataAccess is how sensitive the data a vendor can touch is.
-type DataAccess string
+// DataAccess and Vendor are ALIASES of the stored register types in pkg/platform, not copies. The
+// register is a store entity (internal/store may not import an internal package), and a mirrored
+// struct here would be two types free to drift apart — with the drift landing in an audit artifact.
+type DataAccess = platform.VendorDataAccess
 
 const (
-	DataNone      DataAccess = "none"      // no access to our data
-	DataMetadata  DataAccess = "metadata"  // non-personal operational data
-	DataPII       DataAccess = "pii"       // personal data
-	DataSensitive DataAccess = "sensitive" // PHI / cardholder / secrets — the highest tier
+	DataNone      = platform.VendorDataNone
+	DataMetadata  = platform.VendorDataMetadata
+	DataPII       = platform.VendorDataPII
+	DataSensitive = platform.VendorDataSensitive
 )
 
-func (d DataAccess) handlesPersonalData() bool { return d == DataPII || d == DataSensitive }
+// handlesPersonalData is a function rather than a method: DataAccess is an alias of a type in
+// another package, and Go does not allow methods on those.
+func handlesPersonalData(d DataAccess) bool { return d == DataPII || d == DataSensitive }
 
 // Vendor is one third party in the inventory — its security/compliance attributes as recorded by the team
 // or pulled from a TPRM connector. Every field is a stated fact, never inferred.
-type Vendor struct {
-	Name            string     `json:"name"`
-	Category        string     `json:"category,omitempty"`          // e.g. "cloud infra", "analytics", "payments"
-	DataAccess      DataAccess `json:"data_access,omitempty"`       // what data they can touch
-	Subprocessor    bool       `json:"subprocessor,omitempty"`      // processes our customers' data on our behalf (GDPR Art. 28)
-	HandlesCardData bool       `json:"handles_card_data,omitempty"` // touches cardholder data (PCI scope)
-	Certifications  []string   `json:"certifications,omitempty"`    // e.g. ["SOC2","ISO27001","PCI"]
-	HasDPA          bool       `json:"has_dpa,omitempty"`           // a data-processing agreement is signed
-	Breached        bool       `json:"breached,omitempty"`          // a known security breach on record
-	BreachNote      string     `json:"breach_note,omitempty"`
-	Criticality     string     `json:"criticality,omitempty"`   // critical | high | medium | low (business dependency)
-	LastAssessed    string     `json:"last_assessed,omitempty"` // RFC3339 / "2006-01-02"; "" = never reviewed
-}
+type Vendor = platform.Vendor
 
-func (v Vendor) hasCert(names ...string) bool {
+func hasCert(v Vendor, names ...string) bool {
 	for _, c := range v.Certifications {
 		for _, want := range names {
 			if strings.EqualFold(strings.TrimSpace(c), want) {
@@ -97,7 +90,7 @@ func Assess(vendors []Vendor, opts Options) []types.Finding {
 
 		// 1. A vendor that touches personal/sensitive data with NO SOC 2 or ISO 27001 attestation — the core
 		// vendor-management gap (you can't rely on an unattested vendor with your data).
-		if v.DataAccess.handlesPersonalData() && !v.hasCert("SOC2", "SOC 2", "ISO27001", "ISO 27001") {
+		if handlesPersonalData(v.DataAccess) && !hasCert(v, "SOC2", "SOC 2", "ISO27001", "ISO 27001") {
 			out = append(out, finding(id(), "tprm::vendor-uncertified", types.SeverityHigh,
 				"Vendor with data access has no SOC 2 / ISO 27001: "+name, name,
 				fmt.Sprintf("%s can access %s data but holds no SOC 2 or ISO 27001 attestation — you have no independent assurance of its controls. Request its attestation report or replace it.", name, v.DataAccess),
@@ -121,7 +114,7 @@ func Assess(vendors []Vendor, opts Options) []types.Finding {
 		}
 
 		// 4. A payments/card-handling vendor without PCI DSS — a PCI 12.8 service-provider gap.
-		if v.HandlesCardData && !v.hasCert("PCI", "PCI-DSS", "PCI DSS") {
+		if v.HandlesCardData && !hasCert(v, "PCI", "PCI-DSS", "PCI DSS") {
 			out = append(out, finding(id(), "tprm::card-vendor-no-pci", types.SeverityHigh,
 				"Card-data vendor without PCI DSS: "+name, name,
 				fmt.Sprintf("%s handles cardholder data but holds no PCI DSS attestation — PCI 12.8 requires you to manage service providers' PCI compliance. Obtain its Attestation of Compliance.", name),

@@ -65,13 +65,41 @@ export async function generateMetadata({ params }: { params: Promise<{ framework
   const { framework } = await params;
   const i = info(framework);
   if (!i) return {};
-  const title = `${i.label} Compliance Automation for SMBs`;
+  // ADAPTIVE, because the label is a variable and the budget is not. A fixed template overflows
+  // the moment a framework arrives with a longer name than the ones that happened to exist when
+  // it was written — UK Cyber Essentials (19 chars) pushed the title to 65 against a 60 limit,
+  // and check:seo caught it. Dropping words in order of what a search result can most afford to
+  // lose keeps every existing page's title byte-identical while making the next long name a
+  // non-event rather than a red build.
+  const title = frameworkTitle(i.label);
   // Kept under ~160 characters, which is all a search result shows. It used to append i.desc,
   // whose length varies per framework and pushed all 25 pages to 238-286 chars — so a third of
   // every one of them was written for nobody. i.desc still opens the page itself, where there
   // is no limit. ADR 0023 decision 7 gates this.
-  const description = `Get ${i.label}-ready without a compliance consultant: your findings mapped to ${i.label} controls, fixes prepared, and signed auditor-ready evidence.`;
+  const description = frameworkDescription(i.label);
   return pageMeta({ title, description, path: `/frameworks/${framework}` });
+}
+
+// The title budget is 60 characters INCLUDING the " | TensorShield" the root layout appends, so a
+// bare title has 45. The forms drop the least load-bearing words first: "for SMBs" is audience,
+// "Automation" is the mechanism, and the framework name plus "Compliance" is the search intent
+// nobody can lose. Verified against every framework — only cyber_essentials takes the second form.
+function frameworkTitle(label: string): string {
+  const withSuffix = (t: string) => `${t} | TensorShield`.length <= 60;
+  const long = `${label} Compliance Automation for SMBs`;
+  if (withSuffix(long)) return long;
+  const medium = `${label} Compliance Automation`;
+  if (withSuffix(medium)) return medium;
+  return `${label} Compliance`;
+}
+
+// Same idea for the 160-char description: the long form names the framework TWICE, which reads well
+// and costs double for a long label. The short form names it once rather than truncating mid-word,
+// because a description cut off by the search engine is worse than one written to fit.
+function frameworkDescription(label: string): string {
+  const long = `Get ${label}-ready without a compliance consultant: your findings mapped to ${label} controls, fixes prepared, and signed auditor-ready evidence.`;
+  if (long.length <= 160) return long;
+  return `Get ${label}-ready without a compliance consultant: findings mapped to controls, fixes prepared, and signed auditor-ready evidence.`;
 }
 
 export default async function FrameworkLanding({ params }: { params: Promise<{ framework: string }> }) {

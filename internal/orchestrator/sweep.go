@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -63,8 +62,6 @@ type RunOption func(*runOptions)
 func WithRepositorySweep(cfg SweepConfig) RunOption {
 	return func(ro *runOptions) { ro.sweep = &cfg }
 }
-
-const sweepSourceExtensions = ".go.js.jsx.ts.tsx.mjs.cjs.py.rb.php.java.kt.scala.cs.c.cc.cpp.h.hpp.rs.swift."
 
 // runRepositorySweep executes the hypothesis sweep and appends its findings to
 // the final set. Every skip/halt path emits an asset.CoverageRulePrefix finding
@@ -178,29 +175,4 @@ func sweepSkipFinding(now time.Time, reason string) types.Finding {
 		DiscoveredAt: now,
 		ToolArgs:     map[string]string{"reason": reason},
 	}
-}
-
-// collectWorkspaceFiles counts source files under dir using the same extension /
-// skip rules as codelocalize.LoadRepo — the size signal the quote derives from.
-func collectWorkspaceFiles(dir string) int {
-	n := 0
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			name := filepath.Base(path)
-			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" ||
-				name == "dist" || name == "build" || name == "__pycache__" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(d.Name()))
-		if strings.Contains(sweepSourceExtensions, ext+".") {
-			n++
-		}
-		return nil
-	})
-	return n
 }

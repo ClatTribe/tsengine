@@ -29,6 +29,7 @@ set -uo pipefail
 URL="${1:-${URL:-}}"
 if [ -z "$URL" ]; then
   echo "usage: launch-check.sh <base-url>   (e.g. https://tensorshield.in)" >&2
+  echo "       export TSENGINE_PLATFORM_TOKEN=... to also verify the in-process configuration" >&2
   exit 2
 fi
 URL="${URL%/}"
@@ -177,6 +178,42 @@ case "$FUNNEL_CODE" in
   # the distinction that makes the other lines worth reading.
   *)   printf '  \033[33m–\033[0m /v1/funnel not reachable on this host (%s) — gate NOT verified\n' "${FUNNEL_CODE:-no response}" ;;
 esac
+echo
+
+# ── 6. what nobody set INSIDE the process ─────────────────────────────────────────────────
+# Everything above reads the site. The failures that cost the most are invisible from there: a
+# lead form whose delivery is a log line, a Connect button whose OAuth app was never registered,
+# reset mail with no SMTP behind it. GET /v1/launch-readiness reports each as a fact read from the
+# running configuration, with the variable that fixes it. It is operator-token gated, so this
+# section runs only when TSENGINE_PLATFORM_TOKEN is exported — and SAYS SO when it is not, because
+# a check that silently skips is indistinguishable from one that passed.
+echo "deployment configuration (in-process)"
+if [ -n "${TSENGINE_PLATFORM_TOKEN:-}" ]; then
+  READY_JSON="$(curl -fsS -m 20 -H "Authorization: Bearer $TSENGINE_PLATFORM_TOKEN" "$URL/v1/launch-readiness" 2>/dev/null || true)"
+  if [ -z "$READY_JSON" ]; then
+    printf '  \033[33m–\033[0m /v1/launch-readiness not reachable on this host — in-process config NOT verified\n'
+  elif command -v jq >/dev/null 2>&1; then
+    # each item on its own line; a failing BLOCKING item fails the verdict, a non-blocking one is shown
+    while IFS=$'\t' read -r key ok blocking detail fix; do
+      if [ "$ok" = "true" ]; then
+        pass "$key — $detail"
+      elif [ "$blocking" = "true" ]; then
+        fail "$key — $detail  →  $fix"
+      else
+        printf '  \033[33m–\033[0m %s — %s  →  %s\n' "$key" "$detail" "$fix"
+      fi
+    done < <(printf '%s' "$READY_JSON" | jq -r '.items[] | [.key, (.ok|tostring), (.blocking|tostring), .detail, (.fix // "")] | @tsv')
+  else
+    # no jq: still fail on the server's own verdict rather than pretending the section ran clean
+    if printf '%s' "$READY_JSON" | grep -q '"ready":true'; then
+      pass "/v1/launch-readiness reports ready (install jq to see each item)"
+    else
+      fail "/v1/launch-readiness reports NOT ready — install jq to see which items, or open the endpoint"
+    fi
+  fi
+else
+  printf '  \033[33m–\033[0m TSENGINE_PLATFORM_TOKEN not set — in-process config (mail, lead delivery, OAuth apps, URLs) NOT verified\n'
+fi
 echo
 
 if [ "$LOCAL" -eq 1 ]; then

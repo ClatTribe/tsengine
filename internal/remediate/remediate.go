@@ -11,6 +11,7 @@ package remediate
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
@@ -71,7 +72,10 @@ func Propose(f types.Finding, asset platform.Asset, idgen func() string) (platfo
 		payload := map[string]any{"target": asset.Target, "remediation": fixBody(f), "owner": ownerLine(asset)}
 		if rt, tgt := liveCloudMutation(f, asset.Meta["provider"]); rt != "" {
 			payload["remediation_type"] = rt
-			payload["target"] = tgt // the specific bucket, not the whole account
+			payload["target"] = tgt // the specific bucket / group, not the whole account
+			if rt == rtypeSGRevoke {
+				sgRevokePayload(f, tgt, payload)
+			}
 		} else if rt, runbook, ok := cloudFixCatalog(f, asset.Meta["provider"]); ok {
 			// Respond breadth: a class-correct fix for the common non-storage cloud-misconfig classes
 			// (IAM privesc, open SG, unencrypted-at-rest, public snapshot/DB, missing MFA, disabled
@@ -186,6 +190,87 @@ type Deliverer struct {
 	Connectors *connector.Registry
 	Tokens     runner.Tokens
 	Ticket     Filer // optional: files file_ticket actions (e.g. Jira)
+	// Patcher, when set, turns a code-fix PR from INSTRUCTIONS into a DIFF at delivery time: the
+	// AI engineer reads the file the finding cites through the connection's token, proposes
+	// whole-file replacements, and the connector commits them to the PR's head branch before
+	// opening it. nil → today's behaviour (a PR whose body carries the fix text). See Patcher.
+	Patcher Patcher
+	// Backporter + Submit turn one delivered fix into per-branch proposals for the OTHER maintained
+	// branches that still carry the bug (backport_wire.go). PlanBackports had no caller at all before
+	// these; both nil → exactly today's behaviour. Best-effort: never fails a delivery.
+	Backporter Backporter
+	Submit     Submitter
+
+	// backportSeq numbers the actions one delivery's backport planning produces.
+	backportSeq int
+}
+
+// Patcher proposes the file changes for a code-fix action. It is the seam between the delivery
+// path (this package, which cannot import the L2 model resolution) and the AI engineer (wired from
+// platformapi). Returned files are whole-file contents keyed by repository path — the shape
+// connector.GitHub.CommitFiles takes. `note` is a sentence for the PR body saying what the patch
+// rests on (which engine, whether a regression test rides along); on error the PR is still opened
+// with its instructions and the body says why no patch is attached.
+//
+// THE DEFECT THIS CLOSES: the automated pipeline (finding → Propose → desk → Deliverer → Apply)
+// built an ActOpenPR with `full_name/base/head/body` and NO files, while connector.GitHub.Apply
+// commits only when `files` is present. The one producer of a real diff was the manual
+// /v1/findings/{id}/autofix JSON response, which a human had to paste. So the product's "finds it
+// and fixes it" opened a PR that told the customer what to do.
+type Patcher interface {
+	Patch(ctx context.Context, a platform.Action, c platform.Connection, token string) (files map[string]string, note string, err error)
+}
+
+// PatcherFunc adapts a function to Patcher.
+type PatcherFunc func(ctx context.Context, a platform.Action, c platform.Connection, token string) (map[string]string, string, error)
+
+func (f PatcherFunc) Patch(ctx context.Context, a platform.Action, c platform.Connection, token string) (map[string]string, string, error) {
+	return f(ctx, a, c, token)
+}
+
+// attachPatch runs the Patcher for a repository PR that carries no files yet and rewrites the
+// action's payload with the result. Never fails the delivery: a PR with instructions and an honest
+// line about why there is no diff is strictly better than no PR.
+func (d *Deliverer) attachPatch(ctx context.Context, a platform.Action, c platform.Connection, token string) platform.Action {
+	if d.Patcher == nil || a.Kind != platform.ActOpenPR || c.Kind != platform.ConnGitHub {
+		return a
+	}
+	if existing, ok := a.Payload["files"].(map[string]string); ok && len(existing) > 0 {
+		return a
+	}
+	if existing, ok := a.Payload["files"].(map[string]any); ok && len(existing) > 0 {
+		return a
+	}
+	payload := map[string]any{}
+	for k, v := range a.Payload {
+		payload[k] = v
+	}
+	body, _ := payload["body"].(string)
+	files, note, err := d.Patcher.Patch(ctx, a, c, token)
+	switch {
+	case err != nil:
+		payload["patch_status"] = "not_attached"
+		payload["patch_note"] = err.Error()
+		payload["body"] = "> **No patch is attached.** " + err.Error() + " — this pull request carries the fix instructions; apply them and re-scan.\n\n" + body
+	case len(files) == 0:
+		payload["patch_status"] = "not_attached"
+		payload["patch_note"] = "the engineer proposed no file change"
+		payload["body"] = "> **No patch is attached.** The AI engineer proposed no file change for this finding — this pull request carries the fix instructions; apply them and re-scan.\n\n" + body
+	default:
+		payload["files"] = files
+		payload["patch_status"] = "attached"
+		payload["patch_note"] = note
+		payload["commit_message"] = nz(a.Title, "tsengine: security fix")
+		var paths []string
+		for p := range files {
+			paths = append(paths, p)
+		}
+		sort.Strings(paths)
+		payload["body"] = "> **This pull request carries a patch** to `" + strings.Join(paths, "`, `") + "`. " + note +
+			" Review it as you would any change: it is proposed by the AI engineer and grounded in the finding below, and merging it is your decision.\n\n" + body
+	}
+	a.Payload = payload
+	return a
 }
 
 // Apply executes the action. It routes to the action's own Connection when set
@@ -252,7 +337,14 @@ func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
 		if terr != nil {
 			return fmt.Errorf("remediate: resolve token: %w", terr)
 		}
-		return conn.Apply(ctx, c, tok, a)
+		a = d.attachPatch(ctx, a, c, tok)
+		if aerr := conn.Apply(ctx, c, tok, a); aerr != nil {
+			return aerr
+		}
+		// The fix is shipped. Now ask the question the product could not ask before: which OTHER
+		// maintained branches still have this bug? Best-effort — see planBackports.
+		d.planBackports(ctx, a, c, tok)
+		return nil
 	}
 	return fmt.Errorf("remediate: no active connection to deliver action %s", a.ID)
 }

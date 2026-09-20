@@ -28,6 +28,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudhistory"
 	"github.com/ClatTribe/tsengine/internal/cloudsnap"
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/connector/ghapp"
 	"github.com/ClatTribe/tsengine/internal/coverage"
 	"github.com/ClatTribe/tsengine/internal/detect"
 	"github.com/ClatTribe/tsengine/internal/detectionvalidation"
@@ -41,6 +42,8 @@ import (
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/scubaingest"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/tool/patchverify"
+	"github.com/ClatTribe/tsengine/internal/webagent"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -83,9 +86,33 @@ type Deps struct {
 	// GitHubAPIBase overrides the GitHub REST base for the live SaaS-posture sync (default
 	// https://api.github.com). Set only in tests (a fake API server).
 	GitHubAPIBase string
+	// GitHubApp, when set, lets the PR-review bot POST: the merge-gating check-run and the inline
+	// review comments are posted with an installation token minted by the App (internal/connector/
+	// ghapp). Only an App can own a check-run, so the OAuth connection cannot stand in. nil → the
+	// pr-check computes its verdict and says the review was not posted, and why.
+	GitHubApp ghapp.TokenSource
 	// GraphAPIBase overrides the Microsoft Graph base for the live M365 SaaS-posture
 	// sync (default https://graph.microsoft.com). Test/staging override only.
 	GraphAPIBase string
+	// OktaOrgURL is the deployment's Okta org base (OKTA_ORG_URL) — every Okta endpoint is relative
+	// to it. Used by the live Okta posture sync; empty → that sync says the org URL is not set.
+	OktaOrgURL string
+	// PatchVerifier execution-verifies a proposed code patch against the repository's own tests in
+	// the scan sandbox (cmd/platform wires it over the same clone+spawn a scan uses). nil → patches
+	// are attached unverified and the PR body says so; a deployment without the sandbox never
+	// claims a test ran.
+	PatchVerifier func(ctx context.Context, tenantID, fullName string, files map[string]string, regression string) (patchverify.Verdict, error)
+	// MDMHTTP overrides the client the live device-posture sync uses to reach the tenant's Kandji /
+	// Jamf (default: the SSRF-guarded client, since the base URL is tenant-controlled). Tests only.
+	MDMHTTP *http.Client
+	// HRISHTTP / MergeAPIBase / FinchAPIBase override the HRIS fetch (fixed provider hosts). Tests only.
+	HRISHTTP     *http.Client
+	MergeAPIBase string
+	FinchAPIBase string
+	// WorkspaceSource yields the identity provider's accounts for a workspace asset — the same source
+	// the runner's OperateRunner uses. The HRIS sync joins the fetched roster against it on demand.
+	// Nil → the sync stores the roster and says the join did not run.
+	WorkspaceSource runner.WorkspaceSource
 	// Prober drives live active-exploitation probes (the Phase-1 ActiveDriver). Nil →
 	// active engagements fall back to the passive driver (no live exploitation). Set
 	// only when the operator has enabled live active exploitation; per-engagement
@@ -157,6 +184,13 @@ type Deps struct {
 	// configured model simply skips discovery and runs the verify drivers (honest, never a crash).
 	// Injectable for tests (drive discovery deterministically without a live LLM loop).
 	WebDiscoverer WebDiscoverer
+	// OSSSandbox, when set, spawns the exploitation sandbox for the discovery agent's dispatch_oss
+	// gateway (sqlmap / wpscan / nuclei / ffuf / hydra / padbuster) and returns a live
+	// webagent.Dispatcher plus a cleanup that tears the sandbox down at the end of the run. The CLI
+	// wires this from --oss-sandbox; the platform did not, so dispatch_oss was silently unavailable
+	// on every platform engagement (ADR 0031 D2d). Nil (no image / no docker) → dispatch_oss reports
+	// each tool unavailable rather than pretending (§10). Wired in cmd/platform to the pentest image.
+	OSSSandbox func(ctx context.Context) (webagent.Dispatcher, func(), error)
 	// Detector, when set, reconciles a pentest run's findings into incidents IMMEDIATELY (the
 	// detect-&-respond "respond" half) — so a pentest that PROVES a high+/critical exploit opens
 	// an incident right away instead of waiting for the next scheduled monitoring pass. The same
@@ -185,9 +219,11 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/auth/me", d.sessionAuth(d.handleMe))
 	mux.HandleFunc("GET /v1/auth/team", d.sessionAuth(d.handleTeam))
 	mux.HandleFunc("POST /v1/auth/invite", d.sessionAuth(d.handleInvite))
-	mux.HandleFunc("POST /v1/auth/password", d.sessionAuth(d.handlePassword)) // change pw + clear MustChangePassword
-	mux.HandleFunc("POST /v1/auth/forgot", d.handleForgotPassword)            // start reset (public; emails a one-time link, no enumeration)
-	mux.HandleFunc("POST /v1/auth/reset", d.handleResetPassword)              // complete reset with the token
+	mux.HandleFunc("GET /v1/auth/invite-roster", d.sessionAuth(d.handleRosterInvitePreview)) // who the HRIS roster would seat, without seating anyone (owner)
+	mux.HandleFunc("POST /v1/auth/invite-roster", d.sessionAuth(d.handleRosterInvite))       // seat every active HRIS employee as an EMPLOYEE (owner; idempotent; bounded)
+	mux.HandleFunc("POST /v1/auth/password", d.sessionAuth(d.handlePassword))                // change pw + clear MustChangePassword
+	mux.HandleFunc("POST /v1/auth/forgot", d.handleForgotPassword)                           // start reset (public; emails a one-time link, no enumeration)
+	mux.HandleFunc("POST /v1/auth/reset", d.handleResetPassword)                             // complete reset with the token
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))
 	mux.HandleFunc("GET /v1/findings", d.auth(d.handleFindings))
 	mux.HandleFunc("GET /v1/findings/export", d.auth(d.handleFindingsExport))
@@ -222,12 +258,22 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                  // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
 	mux.HandleFunc("GET /v1/settings/training", d.auth(d.handleGetTrainingSettings))                   // may our agent runs improve the product (ADR 0018 §4)
 	mux.HandleFunc("PUT /v1/settings/training", d.auth(d.handlePutTrainingSettings))
-	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))                           // repository PR-review-bot policy (ADR 0010)
-	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))                           // set enable + merge-gating block severity
+	mux.HandleFunc("GET /v1/settings/pr-bot", d.auth(d.handleGetPRBotSettings))         // repository PR-review-bot policy (ADR 0010)
+	mux.HandleFunc("PUT /v1/settings/pr-bot", d.auth(d.handlePutPRBotSettings))         // set enable + merge-gating block severity
+	mux.HandleFunc("GET /v1/launch-readiness", d.platformAuth(d.handleLaunchReadiness)) // operator: what nobody set (mail, leads, OAuth apps, model, corpus, URLs)
+	mux.HandleFunc("GET /v1/settings/branding", d.auth(d.handleGetBranding))            // white-label: name/logo/support on outward artifacts
+	mux.HandleFunc("PUT /v1/settings/branding", d.auth(d.handlePutBranding))
 	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // per-tenant Slack incident webhook (has_slack_webhook)
 	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's Slack incident webhook (Bucket B)
+	mux.HandleFunc("GET /v1/settings/drata", d.auth(d.handleGetDrata))                                    // push-to-Drata config (has_key/connected)
+	mux.HandleFunc("PUT /v1/settings/drata", d.auth(d.handlePutDrata))                                    // set + seal the Drata API key + workspace
+	mux.HandleFunc("POST /v1/settings/drata/sync", d.auth(d.handleSyncDrata))                             // push control posture as Drata records
 	mux.HandleFunc("GET /v1/settings/jira", d.auth(d.handleGetJiraSettings))                              // per-tenant Jira ticketing destination (base/email/project + has_token)
 	mux.HandleFunc("PUT /v1/settings/jira", d.auth(d.handlePutJiraSettings))                              // set + seal the tenant's Jira API token (Bucket B)
+	mux.HandleFunc("GET /v1/settings/mdm", d.auth(d.handleGetMDMSettings))                                // per-tenant device-management source (Kandji / Jamf / Intune), credentials never returned
+	mux.HandleFunc("PUT /v1/settings/mdm", d.auth(d.handlePutMDMSettings))                                // set + seal the MDM credential (Bucket B)
+	mux.HandleFunc("GET /v1/settings/hris", d.auth(d.handleGetHRISSettings))                              // per-tenant HR-system source (Merge / Finch) + roster size
+	mux.HandleFunc("PUT /v1/settings/hris", d.auth(d.handlePutHRISSettings))                              // set + seal the HRIS credentials (Bucket B)
 	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))                  // per-tenant incident escalation matrix (MDR/SOC)
 	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))                  // set the escalation tiers (severity → channels)
 	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                                // per-tenant remediation SLA policy (ack/resolve targets)
@@ -324,42 +370,47 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/exclusions/delete", d.auth(d.handleDeleteExclusion))                                              // remove an exclusion rule
 	mux.HandleFunc("POST /v1/runtime/events", d.auth(d.handleIngestRuntimeEvents))                                             // in-app firewall / RASP signal ingest (ADR-0007 Phase 0)
 	mux.HandleFunc("POST /v1/identity/events", d.auth(d.handleIngestIdentityEvents))                                           // real-time identity-threat (ITDR) ingest (ADR 0010 Phase 5)
-	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))                                                 // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
-	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile))                                           // container scan-on-push decision (ADR 0010 Phase 4)
-	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))                                                   // api: Postman collection → endpoint inventory
-	mux.HandleFunc("POST /v1/osint/ingest", d.auth(d.handleIngestOSINT))                                                       // OSINT external-exposure snapshot → findings (ADR 0011)
-	mux.HandleFunc("POST /v1/osint/scan", d.auth(d.handleOSINTScan))                                                           // LIVE keyless OSINT (crt.sh CT) over the tenant's domains
-	mux.HandleFunc("POST /v1/cloud/inventory", d.auth(d.handleIngestAWSInventory))                                             // live collector: posted raw AWS state → attack-path Inventory → stored (wedge gap #1)
-	mux.HandleFunc("POST /v1/cloud/sync", d.auth(d.handleCloudSync))                                                           // LIVE read of the connected AWS account (read-only role); reports coverage
-	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))                                             // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
-	mux.HandleFunc("POST /v1/code/investigate", d.auth(d.handleCodeInvestigate))                                               // AI Code Engineer (codeagent) — depth over code findings + source (LLM-gated)
-	mux.HandleFunc("POST /v1/code/sweep", d.auth(d.handleCodeSweep))                                                           // PROACTIVE code vuln discovery (codesweep) — finds what no scanner reported (LLM-gated)
-	mux.HandleFunc("GET /v1/code/investigate", d.auth(d.handleCodeInvestigationView))                                          // stored code-agent confirmed-exploitable assessments
-	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))                                        // stored cloud-agent attack paths
-	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                                                       // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
-	mux.HandleFunc("GET /v1/findings/{id}/localize", d.auth(d.handleLocalize))                                                 // T2 "where is the fix?" — the SAME localizer the agent uses, exposed to a human
-	mux.HandleFunc("POST /v1/findings/{id}/autofix", d.auth(d.handleAutofix))                                                  // AI autofix — LLM-generated code patch for a finding (LLM-gated)
-	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))                                            // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
-	mux.HandleFunc("GET /v1/ai-analyses", d.auth(d.handleListAIAnalyses))                                                      // persisted AI Security Engineer analyses (Triage/Investigate) — a run survives navigation; ?kind= filter
-	mux.HandleFunc("POST /v1/apiauthz/discover", d.auth(d.handleAuthzDiscover))                                                // API BOLA/BFLA discovery — LLM proposes candidate authz tests (LLM-gated)
-	mux.HandleFunc("POST /v1/tls/scan", d.auth(d.handleTLSScan))                                                               // TLS/SSL posture — host-side handshake assessment (no sandbox, SSRF-screened)
-	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                                                                 // OSINT "External exposure" view + summary
-	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot))                                    // SaaS posture (SSPM) snapshot → findings
-	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))                                            // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
-	mux.HandleFunc("POST /v1/saas/m365/sync", d.auth(d.handleSyncSaaSM365))                                                    // LIVE M365 SSPM via the onboarded Graph token (SCuBA fetch half)
-	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                                                         // continuous config-snapshot drift: prev+cur inventory → change-control findings
-	mux.HandleFunc("GET /v1/estate", d.auth(d.handleEstateGraph))                                                              // the composed cross-surface estate graph (the agents' substrate)
-	mux.HandleFunc("POST /v1/estate/detect", d.auth(d.handleEstateDetect))                                                     // cross-surface detections no single scanner can make
-	mux.HandleFunc("GET /v1/ask", d.auth(d.handleAsk))                                                                         // T6 "ask your estate" — the SAME search the agent uses, exposed to a human
-	mux.HandleFunc("GET /v1/cloud/history", d.auth(d.handleCloudHistory))                                                      // "when did this become public?" — the estate timeline (append-only, change-detected)
-	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                                                       // "search your cloud like a database" — query the inventory + relationships
-	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                                                         // third-party / vendor risk (TPRM) inventory → findings
-	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))                                             // endpoint/device posture (MDM-lite) inventory → findings
-	mux.HandleFunc("GET /v1/settings/ai-mode", d.auth(d.handleGetAIMode))                                                      // what AI is running, why, and this month's spend
-	mux.HandleFunc("PUT /v1/settings/ai-mode", d.auth(d.handleSetAIMode))                                                      // deterministic-only | +engineer | +pentester
-	mux.HandleFunc("POST /v1/database/scan", d.auth(d.handleDatabaseScan))                                                     // connect Postgres (Supabase/Neon/RDS) — DSN used once, never stored
-	mux.HandleFunc("POST /v1/vercel/ingest", d.auth(d.handleVercelIngest))                                                     // deployment-platform posture (preview exposure, prod secrets in preview)
-	mux.HandleFunc("POST /v1/dataplatform/ingest", d.auth(d.handleDataPlatformIngest))                                         // warehouse grants (snowflake/bigquery/postgres) → who can read which table
+	mux.HandleFunc("POST /v1/identity/sync", d.auth(d.handleIdentitySync))                                                     // read the connected IdPs' audit logs now and run ITDR over them (the pass's on-demand twin)
+	mux.HandleFunc("POST /v1/cloud/events", d.auth(d.handleIngestCloudEvents))
+	mux.HandleFunc("POST /v1/cloud/events/sync", d.auth(d.handleCloudEventsSync))           // poll the connected AWS account's CloudTrail now and run CDR over it (the pass's on-demand twin)                                                 // cloud control-plane CDR ingest (CloudTrail/GCP/Azure → live-action detection)
+	mux.HandleFunc("POST /v1/registry/reconcile", d.auth(d.handleRegistryReconcile))        // container scan-on-push decision (ADR 0010 Phase 4)
+	mux.HandleFunc("POST /v1/import/postman", d.auth(d.handlePostmanImport))                // api: Postman collection → endpoint inventory
+	mux.HandleFunc("POST /v1/osint/ingest", d.auth(d.handleIngestOSINT))                    // OSINT external-exposure snapshot → findings (ADR 0011)
+	mux.HandleFunc("POST /v1/osint/scan", d.auth(d.handleOSINTScan))                        // LIVE keyless OSINT (crt.sh CT) over the tenant's domains
+	mux.HandleFunc("POST /v1/cloud/inventory", d.auth(d.handleIngestAWSInventory))          // live collector: posted raw AWS state → attack-path Inventory → stored (wedge gap #1)
+	mux.HandleFunc("POST /v1/cloud/sync", d.auth(d.handleCloudSync))                        // LIVE read of the connected AWS account (read-only role); reports coverage
+	mux.HandleFunc("POST /v1/cloud/investigate", d.auth(d.handleCloudInvestigate))          // AI Cloud Engineer (cloudagent) over a posted inventory (LLM-gated)
+	mux.HandleFunc("POST /v1/code/investigate", d.auth(d.handleCodeInvestigate))            // AI Code Engineer (codeagent) — depth over code findings + source (LLM-gated)
+	mux.HandleFunc("POST /v1/code/sweep", d.auth(d.handleCodeSweep))                        // PROACTIVE code vuln discovery (codesweep) — finds what no scanner reported (LLM-gated)
+	mux.HandleFunc("GET /v1/code/investigate", d.auth(d.handleCodeInvestigationView))       // stored code-agent confirmed-exploitable assessments
+	mux.HandleFunc("GET /v1/cloud/investigate", d.auth(d.handleCloudInvestigationView))     // stored cloud-agent attack paths
+	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                    // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
+	mux.HandleFunc("GET /v1/findings/{id}/localize", d.auth(d.handleLocalize))              // T2 "where is the fix?" — the SAME localizer the agent uses, exposed to a human
+	mux.HandleFunc("POST /v1/findings/{id}/autofix", d.auth(d.handleAutofix))               // AI autofix — LLM-generated code patch for a finding (LLM-gated)
+	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))         // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
+	mux.HandleFunc("GET /v1/ai-analyses", d.auth(d.handleListAIAnalyses))                   // persisted AI Security Engineer analyses (Triage/Investigate) — a run survives navigation; ?kind= filter
+	mux.HandleFunc("POST /v1/apiauthz/discover", d.auth(d.handleAuthzDiscover))             // API BOLA/BFLA discovery — LLM proposes candidate authz tests (LLM-gated)
+	mux.HandleFunc("POST /v1/tls/scan", d.auth(d.handleTLSScan))                            // TLS/SSL posture — host-side handshake assessment (no sandbox, SSRF-screened)
+	mux.HandleFunc("GET /v1/osint", d.auth(d.handleOSINTView))                              // OSINT "External exposure" view + summary
+	mux.HandleFunc("POST /v1/saas/{provider}/snapshot", d.auth(d.handleIngestSaaSSnapshot)) // SaaS posture (SSPM) snapshot → findings
+	mux.HandleFunc("POST /v1/saas/github_org/sync", d.auth(d.handleSyncSaaSGitHub))         // LIVE GitHub-org SSPM via the onboarded token (Bucket A)
+	mux.HandleFunc("POST /v1/saas/m365/sync", d.auth(d.handleSyncSaaSM365))                 // LIVE M365 SSPM via the onboarded Graph token (SCuBA fetch half)
+	mux.HandleFunc("POST /v1/saas/okta/sync", d.auth(d.handleSyncSaaSOkta))                 // LIVE Okta CONFIGURATION posture (sign-on/password/MFA-enroll policies, API tokens, ThreatInsight)
+	mux.HandleFunc("POST /v1/cloud/drift", d.auth(d.handleCloudDrift))                      // continuous config-snapshot drift: prev+cur inventory → change-control findings
+	mux.HandleFunc("GET /v1/estate", d.auth(d.handleEstateGraph))                           // the composed cross-surface estate graph (the agents' substrate)
+	mux.HandleFunc("POST /v1/estate/detect", d.auth(d.handleEstateDetect))                  // cross-surface detections no single scanner can make
+	mux.HandleFunc("GET /v1/ask", d.auth(d.handleAsk))                                      // T6 "ask your estate" — the SAME search the agent uses, exposed to a human
+	mux.HandleFunc("GET /v1/cloud/history", d.auth(d.handleCloudHistory))                   // "when did this become public?" — the estate timeline (append-only, change-detected)
+	mux.HandleFunc("POST /v1/cloud/search", d.auth(d.handleCloudSearch))                    // "search your cloud like a database" — query the inventory + relationships
+	mux.HandleFunc("POST /v1/tprm/ingest", d.auth(d.handleTPRMIngest))                      // third-party / vendor risk (TPRM) inventory → findings
+	mux.HandleFunc("POST /v1/devices/ingest", d.auth(d.handleDevicePostureIngest))          // endpoint/device posture (MDM-lite) inventory → findings
+	mux.HandleFunc("POST /v1/devices/sync", d.auth(d.handleSyncDevices))                    // LIVE device posture fetched from the configured MDM (Bucket A)
+	mux.HandleFunc("POST /v1/hris/sync", d.auth(d.handleSyncHRIS))                          // LIVE HR roster fetch + joiner/leaver join against the IdP
+	mux.HandleFunc("GET /v1/settings/ai-mode", d.auth(d.handleGetAIMode))                   // what AI is running, why, and this month's spend
+	mux.HandleFunc("PUT /v1/settings/ai-mode", d.auth(d.handleSetAIMode))                   // deterministic-only | +engineer | +pentester
+	mux.HandleFunc("POST /v1/database/scan", d.auth(d.handleDatabaseScan))                  // connect Postgres (Supabase/Neon/RDS) — DSN used once, never stored
+	mux.HandleFunc("POST /v1/vercel/ingest", d.auth(d.handleVercelIngest))                  // deployment-platform posture (preview exposure, prod secrets in preview)
+	mux.HandleFunc("POST /v1/dataplatform/ingest", d.auth(d.handleDataPlatformIngest))      // warehouse grants (snowflake/bigquery/postgres) → who can read which table
 	mux.HandleFunc("POST /v1/agents/ingest", d.auth(d.handleAgentPostureIngest))
 	// Live collector path: Uber ADR Sensor JSONL straight in (github.com/uber/ADR, Apache-2.0).
 	mux.HandleFunc("POST /v1/agents/telemetry", d.auth(d.handleAgentTelemetry))                // AI-agent estate posture (shadow AI + MCP supply chain) → findings
@@ -385,10 +436,25 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/saas-apps", d.auth(d.handleSaaSApps))            // SaaS-app discovery view (inventory + portfolio summary)
 	mux.HandleFunc("GET /v1/identities", d.auth(d.handleNonHumanIdentities)) // non-human / AI-agent identity posture (ACSP agentic lens)
 	mux.HandleFunc("POST /v1/rescan", d.auth(d.handleRescan))
-	mux.HandleFunc("GET /v1/access-review", d.auth(d.handleRecertify))                // SOC 2 CC6.2/6.3 periodic access review
-	mux.HandleFunc("POST /v1/access-review/decide", d.auth(d.handleRecertifyDecide))  // a NAMED human keeps or removes access
-	mux.HandleFunc("GET /v1/readiness/checklist", d.auth(d.handleReadinessChecklist)) // staged CTO practice checklist, resolved against real state
-	mux.HandleFunc("POST /v1/readiness/stage", d.auth(d.handleSetStage))              // the one onboarding question: what stage are you
+	mux.HandleFunc("GET /v1/vendors", d.auth(d.handleListVendors))                               // the vendor REGISTER — the durable inventory, not the findings it raises
+	mux.HandleFunc("POST /v1/vendors", d.auth(d.handlePutVendor))                                // upsert one row; re-assesses the whole register
+	mux.HandleFunc("DELETE /v1/vendors/{id}", d.auth(d.handleDeleteVendor))                      // remove a relationship that has ended, and its findings with it
+	mux.HandleFunc("GET /v1/audit-review", d.auth(d.handleAuditReview))                          // per-application audit review: findings, decisions, and why it cannot be certified yet
+	mux.HandleFunc("POST /v1/audit-review/disposition", d.auth(d.handleAuditDisposition))        // one reviewer's decision about one finding
+	mux.HandleFunc("POST /v1/audit-review/certificate", d.auth(d.handleAuditCertificate))        // issue the Safe-to-Host certificate, or return every blocker
+	mux.HandleFunc("GET /v1/audit-review/certificate", d.auth(d.handleAuditCertificateDocument)) // the certificate as a SIGNED document (html/md/json): 409 + blockers if not certifiable, 501 with no signing key
+	// The per-application SKU: one order per application, paid on acceptance of its certificate, never in advance.
+	mux.HandleFunc("GET /v1/audit-orders", d.auth(d.handleListAuditOrders))                                          // the tenant's orders + what is due NOW (zero until accepted)
+	mux.HandleFunc("POST /v1/audit-orders", d.auth(d.handleCreateAuditOrder))                                        // open an order for one application at the list or agreed price
+	mux.HandleFunc("POST /v1/audit-orders/{id}/accept", d.auth(d.handleAcceptAuditOrder))                            // the buyer's named acceptance of the certificate — the payment event
+	mux.HandleFunc("POST /v1/tenants/{tenant}/audit-orders/{id}/invoice", d.platformAuth(d.handleInvoiceAuditOrder)) // OPERATOR: record the invoice on an accepted order
+	mux.HandleFunc("GET /v1/training", d.auth(d.handleTraining))                                                     // security-awareness programme: curriculum, per-person status, honest summary
+	mux.HandleFunc("POST /v1/training/complete", d.auth(d.handleTrainingComplete))                                   // the SIGNED-IN person confirms they read a module we rendered
+	mux.HandleFunc("POST /v1/training/record", d.auth(d.handleTrainingRecord))                                       // a named human records training completed ELSEWHERE
+	mux.HandleFunc("GET /v1/access-review", d.auth(d.handleRecertify))                                               // SOC 2 CC6.2/6.3 periodic access review
+	mux.HandleFunc("POST /v1/access-review/decide", d.auth(d.handleRecertifyDecide))                                 // a NAMED human keeps or removes access
+	mux.HandleFunc("GET /v1/readiness/checklist", d.auth(d.handleReadinessChecklist))                                // staged CTO practice checklist, resolved against real state
+	mux.HandleFunc("POST /v1/readiness/stage", d.auth(d.handleSetStage))                                             // the one onboarding question: what stage are you
 	mux.HandleFunc("POST /v1/readiness/attest/{id}", d.auth(d.handleAttest))
 	mux.HandleFunc("POST /v1/readiness/fix/{id}", d.auth(d.handleReadinessFix)) // a gap row hands its findings to the proposer → the same approval desk          // a named human answers what no scan can see
 	mux.HandleFunc("POST /v1/import", d.auth(d.handleImportScan))               // a customer's EXISTING Snyk/Dependabot/SARIF backlog
@@ -452,8 +518,25 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 			// app unlocks (the owner who issued the temp password knows it). The auth-
 			// management endpoints (me/logout/password) use sessionAuth, not this gate, so
 			// the user can still see who they are and rotate the password.
-			if u, err := d.Store.GetUser(r.Context(), s.UserID); err == nil && u.MustChangePassword {
+			u, uerr := d.Store.GetUser(r.Context(), s.UserID)
+			if uerr == nil && u.MustChangePassword {
 				writeJSON(w, http.StatusForbidden, errCode("set a new password to continue", "password_change_required"))
+				return
+			}
+			// An auditor reads. Every request that could change state — start a scan, approve a
+			// fix, change a setting, spend a model call — is refused here, at the one gate all app
+			// endpoints share, so the refusal does not depend on any handler remembering to check.
+			if uerr == nil && u.Role == platform.RoleAuditor && !readOnlyMethod(r.Method) {
+				writeJSON(w, http.StatusForbidden, errCode("auditor access is read-only", "read_only_role"))
+				return
+			}
+			// An employee seat reaches ONLY their own training and policy acknowledgements. Refused
+			// at the same gate, for the same reason: hiding the nav is cosmetic, and the request
+			// that matters is the hand-crafted one. Closed by default — an endpoint added later is
+			// out of scope for an employee until somebody deliberately adds it (employee_scope.go).
+			if uerr == nil && u.Role == platform.RoleEmployee && !employeeMayReach(r.Method, r.URL.Path) {
+				writeJSON(w, http.StatusForbidden, errCode(
+					"this account can complete security training and acknowledge policies", "employee_scope"))
 				return
 			}
 			if !d.rateOK(r, w, s.TenantID) {
@@ -464,6 +547,11 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 		}
 		writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
 	}
+}
+
+// readOnlyMethod is the set of HTTP methods an auditor may use: reads only.
+func readOnlyMethod(m string) bool {
+	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
 }
 
 // rateOK enforces the per-tenant fair-use ceiling (plan.APIRatePerMin). Limiting is
@@ -521,8 +609,9 @@ func (d Deps) platformAuth(h http.HandlerFunc) http.HandlerFunc {
 // tenant with its generated id, which the caller then uses as X-Tenant-ID.
 func (d Deps) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
-		Plan string `json:"plan,omitempty"`
+		Name   string `json:"name"`
+		Plan   string `json:"plan,omitempty"`
+		Source string `json:"source,omitempty"` // attribution (partner / perk / outbound) — see platform.Tenant.Source
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil || body.Name == "" {
 		writeJSON(w, http.StatusBadRequest, errBody("a tenant needs a name"))
@@ -541,7 +630,7 @@ func (d Deps) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		}
 		plan = canonical
 	}
-	t := platform.Tenant{ID: d.newID("ten"), Name: body.Name, Plan: plan}
+	t := platform.Tenant{ID: d.newID("ten"), Name: body.Name, Plan: plan, Source: normalizeSource(body.Source)}
 	if err := d.Store.PutTenant(r.Context(), t); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return

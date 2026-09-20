@@ -14,6 +14,7 @@ import { PageIntro } from "@/components/ui/page-intro";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { SECURITY_TABS } from "@/lib/tabs";
 import { cn } from "@/lib/utils";
+import { kindLabel } from "@/lib/connectors";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +46,10 @@ function DataTierChip({ tier }: { tier?: number }) {
   );
 }
 
-export default async function IssuesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
-  const show = (await searchParams).show;
+export default async function IssuesPage({ searchParams }: { searchParams: Promise<{ show?: string; platform?: string }> }) {
+  const sp = await searchParams;
+  const show = sp.show;
+  const platformFilter = sp.platform;
   const showingIgnored = show === "ignored";
   const showingLive = show === "live";
   const showingExternal = show === "external";
@@ -69,7 +72,10 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   // and already flow into Issues, so here they're just a source filter, not a destination).
   const isExternal = (i: (typeof issues)[number]) => i.tools?.includes("osint");
   const externalCount = issues.filter(isExternal).length;
-  const visible = showingExternal ? issues.filter(isExternal) : showingLive ? issues.filter((i) => i.live) : issues;
+  let visible = showingExternal ? issues.filter(isExternal) : showingLive ? issues.filter((i) => i.live) : issues;
+  const platformCounts = new Map<string, number>();
+  for (const i of visible) if (i.platform) platformCounts.set(i.platform, (platformCounts.get(i.platform) ?? 0) + 1);
+  if (platformFilter) visible = visible.filter((i) => i.platform === platformFilter);
   const mainView = !showingIgnored && !showingLive && !showingExternal;
   const collapsed = Math.max(0, raw_findings - count);
 
@@ -100,19 +106,32 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
       {/* View filters over the one list — no separate pages. Live = exploitable subset; External = the
           internet/attacker-eye (old OSINT) slice; raw per-tool detail is the "All findings" tab above. */}
       <div className="flex items-center rounded-lg border border-border bg-surface p-0.5 text-sm w-fit">
-        <Tab href="/issues" active={mainView}>Active</Tab>
-        <Tab href="/issues?show=live" active={showingLive}>
+        <Tab href={platHref(undefined, platformFilter)} active={mainView}>Active</Tab>
+        <Tab href={platHref("live", platformFilter)} active={showingLive}>
           <span className="inline-flex items-center gap-1"><Zap className="h-3 w-3" /> Live{(live ?? 0) > 0 ? ` (${live})` : ""}</span>
         </Tab>
         {externalCount > 0 && (
-          <Tab href="/issues?show=external" active={showingExternal}>
+          <Tab href={platHref("external", platformFilter)} active={showingExternal}>
             <span className="inline-flex items-center gap-1"><Globe className="h-3 w-3" /> External ({externalCount})</span>
           </Tab>
         )}
-        <Tab href="/issues?show=ignored" active={showingIgnored}>
+        <Tab href={platHref("ignored", platformFilter)} active={showingIgnored}>
           Ignored{typeof ignored === "number" && ignored > 0 ? ` (${ignored})` : ""}
         </Tab>
       </div>
+
+      {/* Platform filter — badge + tab per source (GitHub / AWS / GCP / Workspace / Okta). */}
+      {platformCounts.size > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] uppercase tracking-wide text-faint">Platform</span>
+          <PlatTab href={platHref(show, undefined)} active={!platformFilter}>All</PlatTab>
+          {[...platformCounts.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => (
+            <PlatTab key={k} href={platHref(show, k)} active={platformFilter === k}>
+              {kindLabel(k)} ({n})
+            </PlatTab>
+          ))}
+        </div>
+      )}
 
       {showingLive && (
         <p className="text-sm text-muted">
@@ -235,6 +254,29 @@ function Tab({ href, active, children }: { href: string; active: boolean; childr
   );
 }
 
+// platHref builds an /issues URL preserving both the view filter (show) and the platform filter.
+function platHref(show?: string, platform?: string) {
+  const p = new URLSearchParams();
+  if (show) p.set("show", show);
+  if (platform) p.set("platform", platform);
+  const s = p.toString();
+  return s ? `/issues?${s}` : "/issues";
+}
+
+function PlatTab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "rounded-full border px-2.5 py-0.5 text-xs transition",
+        active ? "border-accent bg-accent-soft text-accent" : "border-border text-muted hover:text-ink",
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
 // LeadCard — "Start here": the single highest-priority issue (the list is already risk-ranked), made
 // prominent with its plain-English impact reason + the two agentic verbs (Investigate, AI Fix). This is
 // outcome #1 of the AI Security Engineer — "figure out the issue to work on" — without making a founder
@@ -279,6 +321,7 @@ function LeadCard({ issue, prior, explain }: { issue: Issue; prior?: PriorInv; e
             <span className="truncate text-sm font-medium text-ink">{explain?.headline || issue.title}</span>
             {explain && <UrgencyChip urgency={explain.urgency} label={explain.urgency_label} />}
             <DataTierChip tier={issue.data_tier} />
+            {issue.platform && <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">{kindLabel(issue.platform)}</span>}
           </div>
           <p className="mt-1.5 text-sm leading-relaxed text-muted">{reason}</p>
           {explain?.fix && <p className="mt-1.5 text-sm leading-relaxed text-ink"><span className="font-medium">Fix:</span> {explain.fix}</p>}
@@ -322,6 +365,7 @@ function IssueRow({ issue, ignored, prior, explain }: { issue: Issue; ignored: b
           title
         )}
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          {issue.platform && <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">{kindLabel(issue.platform)}</span>}
           {issue.cve && <span className="mono rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted">{issue.cve}</span>}
           {issue.endpoint && <span className="mono truncate text-[11px] text-faint">{issue.endpoint}</span>}
           {issue.count > 1 && (

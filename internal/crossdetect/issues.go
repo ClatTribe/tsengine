@@ -54,6 +54,10 @@ type Issue struct {
 	CVSS          float64 `json:"cvss,omitempty"`
 	CVSSVector    string  `json:"cvss_vector,omitempty"`
 	PublicExploit bool    `json:"public_exploit,omitempty"`
+	// Platform is the source connector kind (github|aws|gcp|gworkspace|okta) this issue's findings
+	// came from, traced Finding.AssetID -> Asset.ConnectionID -> Connection.Kind by AnnotatePlatform.
+	// Empty when the chain does not resolve. Labelling / filtering only (never affects ranking).
+	Platform string `json:"platform,omitempty"`
 }
 
 var cveRe = regexp.MustCompile(`CVE-\d{4}-\d{4,7}`)

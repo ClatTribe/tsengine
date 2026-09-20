@@ -60,6 +60,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
     links: [
       { href: "/scan", label: "Questionnaire scan" },
       { href: "/soc2-readiness", label: "SOC 2 self-assessment" },
+      { href: "/security-questionnaire", label: "Answering questionnaires" },
       { href: "/resources", label: "Free resources" },
       { href: "/sample-report", label: "Sample report" },
       { href: "/docs", label: "Docs" },

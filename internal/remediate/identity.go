@@ -39,7 +39,16 @@ func proposeIdentity(f types.Finding, asset platform.Asset, idgen func() string)
 		ID: id("act", idgen), TenantID: asset.TenantID, FindingID: f.ID, ConnectionID: asset.ConnectionID,
 		Status: platform.ActProposed, Title: "tsengine: " + r.title, Payload: payload,
 	}
-	if liveIdentityMutation(r.kind, asset.Meta["provider"]) {
+	// The provider's own identifiers for an OAuth grant ride along when the detector stamped them
+	// (operate stamps Okta's client id and the granting user ids): they are what a live revoke
+	// names, and their absence is what keeps the action a runbook.
+	if cid := f.ToolArgs["client_id"]; cid != "" {
+		payload["client_id"] = cid
+	}
+	if uids := f.ToolArgs["user_ids"]; uids != "" {
+		payload["user_ids"] = uids
+	}
+	if liveIdentityMutation(r.kind, asset.Meta["provider"], f) {
 		act.Kind, act.Tier = platform.ActApplyConfig, tierApplyConfig // gated mutation
 	} else {
 		act.Kind, act.Tier = platform.ActFileTicket, 1 // runbook ticket
@@ -55,7 +64,12 @@ func proposeIdentity(f types.Finding, asset platform.Asset, idgen func() string)
 // Microsoft 365 (disable sign-in). Every other (type, provider) stays a ticket until its
 // connector Apply lands. Each live path still needs the IdP's write scope (read-only by
 // onboarding default); without it the Apply returns the provider's 403 honestly.
-func liveIdentityMutation(remediationType, provider string) bool {
+func liveIdentityMutation(remediationType, provider string, f types.Finding) bool {
+	if remediationType == "oauth_revoke" {
+		// Okta revokes grants per user × client, so only a finding that names both is promotable —
+		// a label alone would have the connector guessing which grant to pull.
+		return provider == platform.ConnOkta && f.ToolArgs["client_id"] != "" && f.ToolArgs["user_ids"] != ""
+	}
 	if remediationType != "account_suspend" {
 		return false
 	}
@@ -103,6 +117,15 @@ func identityRunbook(ruleID, target string) (runbook, bool) {
 	case "operate::excess-super-admins":
 		return runbook{"reduce super-admins", "reduce_admins",
 			"Reduce super-administrators to the minimum. Downgrade non-essential super-admins to scoped admin roles."}, true
+	// The HRIS join (internal/hris). A leaver's account is the SAME reversible lifecycle transition as
+	// a stale account — suspend — so it promotes to the live, HITL-gated suspend on Okta / Google
+	// Workspace / Microsoft 365 through liveIdentityMutation, and is a runbook ticket elsewhere.
+	case "hris::leaver-with-active-account":
+		return runbook{"suspend former employee's account " + target, "account_suspend",
+			"Suspend " + target + " now and revoke its sessions — your HR system records this person as no longer employed, and the account is still enabled. Then check what else it can reach (SaaS apps, cloud roles, shared drives) and complete the offboarding checklist."}, true
+	case "hris::account-without-hr-record":
+		return runbook{"record an owner for " + target, "record_owner",
+			"The account " + target + " matches no employee, contractor or leaver in your HR system. Confirm whether it is a service account, a shared mailbox, or a person HR never recorded; record its owner and purpose so the next access review has someone to ask, or suspend it if nobody claims it."}, true
 	default:
 		return runbook{}, false
 	}

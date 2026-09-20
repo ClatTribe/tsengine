@@ -37,6 +37,8 @@ type S3Writer struct {
 	ExternalID string // the assume-role ExternalId (tenant binding), if the role requires one
 	// newClient builds the S3 client. Set by NewS3Writer to the real SDK path; a test overrides it.
 	newClient func(ctx context.Context) (s3PublicAccessBlockAPI, error)
+	newIAM    func(ctx context.Context) (iamAccessKeyAPI, error)     // injected in tests; nil → the real client (iam.go)
+	newEC2    func(ctx context.Context) (ec2SecurityGroupAPI, error) // injected in tests; nil → the real client (sg.go)
 }
 
 // NewS3Writer builds the live writer. roleARN is the cross-account WRITE role to assume (empty →

@@ -52,9 +52,10 @@ func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, co
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid Azure inventory body")
 		}
-		// No coverage analyser yet: Azure reports nothing rather than claiming completeness
-		// it has not checked.
-		return azinventory.Build(raw), connector.InventoryCoverage{}, nil
+		// An EMPTY coverage is not silence: Summary() renders it as "carries everything the engine
+		// knows how to evaluate", so the comment that used to sit here — "Azure reports nothing rather
+		// than claiming completeness it has not checked" — described the opposite of what shipped.
+		return azinventory.Build(raw), connector.CoverAzure(raw), nil
 	case "kubernetes", "k8s":
 		// The orchestrator is a cloud in its own right, and its security model is the SAME graph: a
 		// ServiceAccount is a principal, a RoleBinding a grant, a pod runs-as its SA, an exposed Service
@@ -65,7 +66,7 @@ func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, co
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid Kubernetes inventory body")
 		}
-		return k8sinventory.Build(raw), connector.InventoryCoverage{}, nil
+		return k8sinventory.Build(raw), connector.CoverK8s(raw), nil
 	default:
 		return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("unknown provider %q (expected aws|gcp|azure|kubernetes)", provider)
 	}
@@ -143,7 +144,7 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		}
 	}
 	_, summary, aerr := d.applyCloudInventoryWithCoverage(r.Context(), tenantID, inv, invJSON,
-		"live AWS inventory collected → stored for the AI cloud engineer", coverage)
+		"live AWS inventory collected → stored for the AI cloud engineer", coverage, githubTrustsFrom(rawAWSOrEmpty(body)))
 	if aerr != nil {
 		respond(w, nil, aerr)
 		return
@@ -181,14 +182,14 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 // that view, so drift findings which were stored but not handed back would be opened by
 // persistDriftFindings and then immediately resolved by the same pass.
 func (d Deps) applyCloudInventory(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string) ([]types.Finding, map[string]any, error) {
-	return d.applyCloudInventoryWithCoverage(ctx, tenantID, inv, invJSON, ledgerNote, connector.InventoryCoverage{})
+	return d.applyCloudInventoryWithCoverage(ctx, tenantID, inv, invJSON, ledgerNote, connector.InventoryCoverage{}, nil)
 }
 
 // applyCloudInventoryWithCoverage is applyCloudInventory carrying what the snapshot could
 // not answer, so the gap is STORED alongside it rather than only returned to whoever
 // posted it. The reader of the attack-path page is rarely the CI job that posted the
 // inventory, and they are the one who needs to know the escalation analysis was partial.
-func (d Deps) applyCloudInventoryWithCoverage(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string, coverage connector.InventoryCoverage) ([]types.Finding, map[string]any, error) {
+func (d Deps) applyCloudInventoryWithCoverage(ctx context.Context, tenantID string, inv cloudgraph.Inventory, invJSON []byte, ledgerNote string, coverage connector.InventoryCoverage, trusts []cloudsnap.GitHubTrust) ([]types.Finding, map[string]any, error) {
 	// Diff-on-ingest (continuous Detect): if a prior snapshot exists, diff it against this fresh one BEFORE
 	// overwriting → automatic cloud config-drift findings (a resource became public, a new privileged
 	// principal, a new internet/privesc/lateral path). This makes cloud change-control CONTINUOUS on every
@@ -206,7 +207,7 @@ func (d Deps) applyCloudInventoryWithCoverage(ctx context.Context, tenantID stri
 	}
 	if err := d.CloudSnapshots.Put(ctx, cloudsnap.Snapshot{
 		TenantID: tenantID, Inventory: invJSON, CapturedAt: time.Now().UTC(),
-		CoverageGaps: coverage.Notes,
+		CoverageGaps: coverage.Notes, GitHubTrusts: trusts,
 	}); err != nil {
 		return nil, nil, err
 	}

@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-func timeNow() time.Time { return time.Now() }
-
 // D5 acceptance: sign → tamper → verify fails; verify → clean passes.
 func TestSignTraceFile_VerifyRoundtripAndTamper(t *testing.T) {
 	dir := t.TempDir()

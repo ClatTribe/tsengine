@@ -65,11 +65,18 @@ type trustFramework struct {
 }
 
 type trustView struct {
-	Org        string           `json:"org"`
-	Headline   string           `json:"headline,omitempty"`
-	Monitored  bool             `json:"monitored"`
-	Signed     bool             `json:"signed"`
-	Frameworks []trustFramework `json:"frameworks"`
+	Org string `json:"org"`
+	// Brand / BrandLogoURL / BrandSupportEmail are the white-label chrome (platform.Tenant.Branding).
+	// WhiteLabelled tells the page whether to show the product's own "see how it works" link: on a
+	// partner-branded page that link would name a company the buyer has never heard of.
+	Brand             string           `json:"brand"`
+	BrandLogoURL      string           `json:"brand_logo_url,omitempty"`
+	BrandSupportEmail string           `json:"brand_support_email,omitempty"`
+	WhiteLabelled     bool             `json:"white_labelled"`
+	Headline          string           `json:"headline,omitempty"`
+	Monitored         bool             `json:"monitored"`
+	Signed            bool             `json:"signed"`
+	Frameworks        []trustFramework `json:"frameworks"`
 	// Documents is what THIS visitor sees: public rows readable, gated rows listed but locked,
 	// anything the tenant cannot actually produce absent entirely. Non-nil empty so it
 	// serialises as [] — a null would crash the public page's .map, on the one URL a customer
@@ -129,10 +136,12 @@ func (d Deps) handleTrust(w http.ResponseWriter, r *http.Request) {
 	// for this tenant — every Action is recorded into the ledger, so an action existing is the
 	// evidence. Both understate on a read error: a page that cannot prove a claim must not make it.
 	view := trustView{
-		Org:       t.Name,
-		Headline:  cfg.Headline,
-		Monitored: d.tenantHasCompletedScan(r.Context(), tenant),
-		Signed:    d.tenantHasSignedDecisions(r.Context(), tenant),
+		Org:           t.Name,
+		Brand:         t.Brand(),
+		WhiteLabelled: t.WhiteLabelled(),
+		Headline:      cfg.Headline,
+		Monitored:     d.tenantHasCompletedScan(r.Context(), tenant),
+		Signed:        d.tenantHasSignedDecisions(r.Context(), tenant),
 		// Non-nil empty slice so it serializes as [] not null on a tenant with no posture yet — a
 		// null would crash the PUBLIC page's .map (the Go nil-slice → JSON-null footgun, on a URL
 		// the customer shares with their own customers).
@@ -146,6 +155,9 @@ func (d Deps) handleTrust(w http.ResponseWriter, r *http.Request) {
 		NDAPending:   ndaRequired && req.Status == platform.TrustReqApproved && !req.Revoked && req.NDAAcceptedAt.IsZero(),
 		ContactEmail: cfg.ContactEmail,
 		GeneratedAt:  time.Now().UTC().Format(time.RFC3339),
+	}
+	if t.Branding != nil {
+		view.BrandLogoURL, view.BrandSupportEmail = t.Branding.LogoURL, t.Branding.SupportEmail
 	}
 	// The agreement text is served only to the buyer who has to accept it. A visitor with no
 	// approved request has nothing to agree to, and publishing the terms to anyone who opens the

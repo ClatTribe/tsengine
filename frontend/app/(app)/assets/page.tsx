@@ -8,6 +8,7 @@ import { ASSET_SURFACES } from "@/lib/assets";
 import { AddTarget } from "@/components/assets/add-target";
 import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
+import { ConnectScanStatus } from "@/components/assets/connect-scan-status";
 import { DataTierSelect } from "@/components/assets/data-tier-select";
 import { DisconnectButton } from "@/components/assets/disconnect-button";
 import { LoginFlowConfig } from "@/components/assets/login-flow-config";
@@ -35,14 +36,15 @@ function coverageNote(type: string): string {
   return `Covered by ${c.tools.join(", ")} — ${c.scans}`;
 }
 
-export default async function AssetsPage({ searchParams }: { searchParams: Promise<{ connect_error?: string; connected?: string; scanned?: string }> }) {
-  const { connect_error, connected, scanned } = await searchParams;
+export default async function AssetsPage({ searchParams }: { searchParams: Promise<{ connect_error?: string; connected?: string; scanned?: string; job?: string }> }) {
+  const { connect_error, connected, scanned, job } = await searchParams;
   const [connections, assets, engagements, byAsset, secByAsset, jobs] = await Promise.all([api.connections(), api.assets(), api.engagements(), api.complianceByAsset(), api.securityByAsset(), api.jobs()]);
   // The most recent scan run, and whether it FAILED. The platform records the real cause (an
   // unreachable Docker daemon, a missing sandbox image) but nothing read it, so a scan that never
   // ran left an empty findings list and no explanation — which on a security product reads as
   // "you have no vulnerabilities". That is the one misreading worth going out of our way to prevent.
-  const lastScanJob = jobs.filter((j) => j.kind === "rescan")[0];
+  // "connect" is the first scan the OAuth callback queues; it fails for the same reasons a rescan does.
+  const lastScanJob = jobs.filter((j) => j.kind === "rescan" || j.kind === "connect")[0];
   const scanFailed = lastScanJob?.status === "failed" ? lastScanJob : undefined;
   // per-asset compliance signal (grounded: only assets a finding ties to) — shown inline so "is this asset
   // compliant?" is answered right where assets are managed (#554).
@@ -92,7 +94,8 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
           <CircleAlert className="h-4 w-4" /> Couldn&apos;t start the {kindLabel(connect_error)} connection — it may not be configured on this deployment.
         </div>
       )}
-      {connected && (
+      {connected && job && <ConnectScanStatus jobId={job} kindLabel={kindLabel(connected)} />}
+      {connected && !job && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border border-pulse/30 bg-pulse/10 px-3 py-2 text-sm text-pulse">
           <span className="inline-flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -157,7 +160,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
       {/* Complete your coverage — the readiness categories that aren't a one-click OAuth card. /compliance tells
           the founder they need SaaS / email / web-API coverage; this bridges them to the real path for each
           (honest §10: SaaS posture is sync/snapshot, not OAuth; email/web are add-a-target). */}
-      <section>
+      {/* <section>
         <SectionTitle>Complete your coverage</SectionTitle>
         <p className="mb-3 -mt-1 text-xs text-muted">
           Your compliance posture needs more than code, cloud, and identity. Here&apos;s how to cover the rest —
@@ -197,7 +200,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
           <Link href="/compliance" className="text-accent hover:underline">compliance page</Link>; your team, our managed
           expert, or your MSP signs them off.
         </p>
-      </section>
+      </section> */}
 
       {/* Connected systems */}
       <section>

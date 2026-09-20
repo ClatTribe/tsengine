@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no cgo → keeps the static binary)
 
@@ -72,6 +73,12 @@ CREATE TABLE IF NOT EXISTS runtimeevts (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS pentests    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
+CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
+CREATE TABLE IF NOT EXISTS identitylinks (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS auditorders (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS users       (id TEXT PRIMARY KEY, tenant_id TEXT, email TEXT, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions    (token TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS operators   (id TEXT PRIMARY KEY, email TEXT, data TEXT NOT NULL);
@@ -210,6 +217,27 @@ func (s *SQLite) ListFindings(ctx context.Context, tenantID string, filter Findi
 		out = append(out, f)
 	}
 	return Page(out, filter), nil
+}
+
+func (s *SQLite) FindingSeverityCounts(ctx context.Context, tenantID string) (map[string]int, int, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT COALESCE(json_extract(data,'$.severity'),'') AS sev, COUNT(*) FROM findings WHERE tenant_id=? GROUP BY sev`, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	sev := map[string]int{}
+	total := 0
+	for rows.Next() {
+		var s string
+		var n int
+		if err := rows.Scan(&s, &n); err != nil {
+			return nil, 0, err
+		}
+		sev[s] = n
+		total += n
+	}
+	return sev, total, rows.Err()
 }
 
 func (s *SQLite) PutAction(ctx context.Context, a platform.Action) error {
@@ -395,6 +423,112 @@ func (s *SQLite) ReplaceThirdPartyApps(ctx context.Context, tenantID, provider s
 }
 func (s *SQLite) ListThirdPartyApps(ctx context.Context, tenantID string) ([]platform.ThirdPartyApp, error) {
 	return listJSON[platform.ThirdPartyApp](ctx, s.db, `SELECT data FROM apps WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+// --- employee roster (replace the whole (tenant,source) set atomically) ---
+
+func (s *SQLite) ReplaceEmployees(ctx context.Context, tenantID, source string, emps []platform.Employee) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM employees WHERE tenant_id=? AND source=?`, tenantID, source); err != nil {
+		return err
+	}
+	for _, e := range emps {
+		d, err := enc(e)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO employees(tenant_id,source,emp_id,data) VALUES(?,?,?,?)`, tenantID, source, e.ID, d); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+func (s *SQLite) ListEmployees(ctx context.Context, tenantID string) ([]platform.Employee, error) {
+	return listJSON[platform.Employee](ctx, s.db, `SELECT data FROM employees WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+// --- identity links (one document per tenant: the person→GitHub join inputs) ---
+
+func (s *SQLite) PutIdentityLinks(ctx context.Context, set platform.IdentityLinkSet) error {
+	d, err := enc(set)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO identitylinks(tenant_id,data) VALUES(?,?)
+		ON CONFLICT(tenant_id) DO UPDATE SET data=excluded.data`, set.TenantID, d)
+	return err
+}
+func (s *SQLite) GetIdentityLinks(ctx context.Context, tenantID string) (platform.IdentityLinkSet, bool, error) {
+	var set platform.IdentityLinkSet
+	err := getJSON(ctx, s.db, &set, `SELECT data FROM identitylinks WHERE tenant_id=?`, tenantID)
+	if errors.Is(err, ErrNotFound) {
+		return platform.IdentityLinkSet{}, false, nil
+	}
+	return set, err == nil, err
+}
+
+// --- security-awareness training completions (append-only; upsert by the record's own id) ---
+
+func (s *SQLite) PutTrainingCompletion(ctx context.Context, c platform.TrainingCompletion) error {
+	d, err := enc(c)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO training(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, c.TenantID, c.ID, d)
+	return err
+}
+func (s *SQLite) ListTrainingCompletions(ctx context.Context, tenantID string) ([]platform.TrainingCompletion, error) {
+	return listJSON[platform.TrainingCompletion](ctx, s.db, `SELECT data FROM training WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+
+// --- audit dispositions (upsert by target|key: re-deciding replaces, never accumulates) ---
+
+func (s *SQLite) PutAuditDisposition(ctx context.Context, d platform.AuditDisposition) error {
+	dd, err := enc(d)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO auditdisp(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`,
+		d.TenantID, strings.ToLower(strings.TrimSpace(d.Target))+"|"+d.Key, dd)
+	return err
+}
+func (s *SQLite) ListAuditDispositions(ctx context.Context, tenantID string) ([]platform.AuditDisposition, error) {
+	return listJSON[platform.AuditDisposition](ctx, s.db, `SELECT data FROM auditdisp WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+
+// --- audit orders (the per-application SKU; upsert by id, status advances in place) ---
+
+func (s *SQLite) PutAuditOrder(ctx context.Context, o platform.AuditOrder) error {
+	return s.upsertTID(ctx, `INSERT INTO auditorders(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, o.TenantID, o.ID, o)
+}
+func (s *SQLite) ListAuditOrders(ctx context.Context, tenantID string) ([]platform.AuditOrder, error) {
+	return listJSON[platform.AuditOrder](ctx, s.db, `SELECT data FROM auditorders WHERE tenant_id=? ORDER BY rowid`, tenantID)
+}
+
+// --- vendor register (upsert by id; the durable inventory, not the findings it raises) ---
+
+func (s *SQLite) PutVendor(ctx context.Context, v platform.Vendor) error {
+	d, err := enc(v)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO vendors(tenant_id,id,data) VALUES(?,?,?)
+		ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, v.TenantID, v.ID, d)
+	return err
+}
+func (s *SQLite) ListVendors(ctx context.Context, tenantID string) ([]platform.Vendor, error) {
+	return listJSON[platform.Vendor](ctx, s.db, `SELECT data FROM vendors WHERE tenant_id=? ORDER BY id`, tenantID)
+}
+func (s *SQLite) DeleteVendor(ctx context.Context, tenantID, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM vendors WHERE tenant_id=? AND id=?`, tenantID, id)
+	return err
 }
 
 // --- users & sessions ---

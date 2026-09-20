@@ -40,6 +40,7 @@
 //	PAGERDUTY_ROUTING_KEY      PagerDuty Events API v2 key — pages on-call for new high/critical incidents
 //	TSENGINE_TEAMS_WEBHOOK     Microsoft Teams Incoming Webhook — posts new high/critical incidents
 //	GITHUB_CLIENT_ID/SECRET     GitHub OAuth app credentials
+//	GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY(_FILE)  GitHub App — lets the PR-review bot POST check-runs + inline comments
 package main
 
 import (
@@ -77,6 +78,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/connector/azremediate"
 	"github.com/ClatTribe/tsengine/internal/connector/cloudprobe"
 	"github.com/ClatTribe/tsengine/internal/connector/gcpremediate"
+	"github.com/ClatTribe/tsengine/internal/connector/ghapp"
 	"github.com/ClatTribe/tsengine/internal/console"
 	"github.com/ClatTribe/tsengine/internal/corpus/threatintel"
 	"github.com/ClatTribe/tsengine/internal/detect"
@@ -84,6 +86,8 @@ import (
 	"github.com/ClatTribe/tsengine/internal/email"
 	"github.com/ClatTribe/tsengine/internal/grc"
 	"github.com/ClatTribe/tsengine/internal/hitl"
+	"github.com/ClatTribe/tsengine/internal/identitylinks"
+	"github.com/ClatTribe/tsengine/internal/identitylog"
 	"github.com/ClatTribe/tsengine/internal/jobs"
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/notify"
@@ -101,6 +105,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/store"
 	_ "github.com/ClatTribe/tsengine/internal/toolsbundle" // register OSS tools so host-side PlanAnchors resolves anchors (else 0 findings)
 	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
+	"github.com/ClatTribe/tsengine/internal/webagent"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -414,7 +419,10 @@ func main() {
 			platform.ConnOkta:       operate.NewOkta(os.Getenv("OKTA_ORG_URL")),
 		}, EmailAuth: operate.NewEmailAuth()},
 	}
-	workspaceRunner := &runner.OperateRunner{Source: workspaceSource, Apps: st}
+	// Employees: the stored HRIS roster (Settings → HR system, POST /v1/hris/sync) is joined against the
+	// identity provider's accounts on EVERY monitoring pass, so a leaver whose account is still enabled
+	// is an incident the next pass after HR records the departure — not the next time someone clicks.
+	workspaceRunner := &runner.OperateRunner{Source: workspaceSource, Apps: st, Employees: st}
 	if os.Getenv("TSENGINE_PLATFORM_NO_ENGINE") != "1" {
 		engine := &runner.EngineRunner{
 			Resolve:       assetregistry.HandlerFor,
@@ -522,6 +530,10 @@ func main() {
 	}
 	apiDeps := platformapi.Deps{
 		Store: st, Connectors: reg, Runner: svc, Desk: desk, Submitter: desk, GRC: g, Vault: vault, Jobs: scanJobs,
+		OktaOrgURL: os.Getenv("OKTA_ORG_URL"),
+		// A delivery-time patch is EXECUTED against the repository's own tests in the scan sandbox
+		// before it is attached to the PR; a patch the tests reject is withheld (patchverify.go).
+		PatchVerifier: patchVerifier(scanImages, st, vault),
 		// SIGNED compliance evidence pack (ADR 0031 D2b): the auditor-facing artifact is ed25519-
 		// attested with the platform's key. Nil-safe downstream — without a key the endpoint
 		// returns 501 rather than serving an unsigned artifact from a signed route.
@@ -545,6 +557,8 @@ func main() {
 				Buckets:    awsfetch.NewS3Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Principals: awsfetch.NewIAMLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Compute:    awsfetch.NewEC2Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				Functions:  awsfetch.NewLambdaLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				Databases:  awsfetch.NewRDSLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 			}
 		},
 		// LIVE provider dry-run (ADR 0024 P1a's remaining half): ask AWS's own policy simulator whether
@@ -563,10 +577,13 @@ func main() {
 		},
 		CloudSnapshots: cloudSnaps,
 		CloudHistory:   cloudHist,
-		Recorder:       rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
-		IncidentOpener: detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
-		Detector:       detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)
-		Token:          token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
+		// The HRIS sync joins the fetched roster against the SAME identity source the runner scans
+		// with, so the on-demand join and the scheduled one see the same accounts.
+		WorkspaceSource: workspaceSource,
+		Recorder:        rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
+		IncidentOpener:  detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
+		Detector:        detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)
+		Token:           token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// AppURL lands the user back in the app after OAuth (else they'd see a raw JSON blob).
 		// Defaults to the public base (same-origin behind the TLS edge), override with TSENGINE_APP_URL.
 		AppURL:             envOr("TSENGINE_APP_URL", os.Getenv("TSENGINE_PLATFORM_PUBLIC")),
@@ -581,8 +598,78 @@ func main() {
 	// Fill a missing CWE on a scanner finding before the L1.5 chain runs, so compliance.map can map
 	// it to controls (§8). No tenant model → a no-op, which is also how the Free plan's AI gate
 	// reaches it.
+	// The PR-review bot's WRITE identity. Only a GitHub App can own a check-run, so the OAuth
+	// connection cannot post the merge gate; a misconfigured App fails boot rather than reporting
+	// every review as "not posted" for the wrong reason. Unset → the bot computes and does not post.
+	if app, err := ghapp.FromEnv(); err != nil {
+		log.Fatalf("github app: %v", err)
+	} else if app != nil {
+		apiDeps.GitHubApp = app
+		log.Printf("[platform] GitHub App %s configured — PR reviews will be posted for workspaces that record their installation id", app.ID)
+	}
+	// dispatch_oss on the PLATFORM: spawn the exploitation sandbox so the pentest discovery agent
+	// can hand a specialized job (sqlmap extraction, wpscan/nuclei CVEs, ffuf, hydra, padbuster) to
+	// the real tool-server — the CLI has done this from --oss-sandbox all along, the platform never
+	// did (ADR 0031 D2d). One sandbox per discovery run, torn down by the returned cleanup, matching
+	// the CLI's per-engagement lifetime. Honest gate: no image configured → nil factory → dispatch_oss
+	// keeps reporting the tools unavailable rather than pretending. The pentest image carries these
+	// tools (it falls back to the scan image until the split image is built), and the tools are all
+	// registered in cmd/tool-server, so a dispatch reaches a real binary, not a 404.
+	if img := sandboxImages.Pentest; img != "" {
+		apiDeps.OSSSandbox = func(ctx context.Context) (webagent.Dispatcher, func(), error) {
+			info, serr := sandbox.Spawn(ctx, sandbox.SpawnOptions{Image: img})
+			if serr != nil {
+				return nil, nil, serr
+			}
+			cleanup := func() { _ = sandbox.Destroy(context.Background(), info) }
+			return webagent.SandboxDispatcher(sandbox.NewClient(info)), cleanup, nil
+		}
+	}
 	svc.AttributeCWEs = apiDeps.CWEAttributor()
 	svc.AfterScan = apiDeps.AutoReviewAfterScan
+	// Device posture becomes a continuously-monitored surface: the SAME fetcher construction the
+	// Settings "Sync now" button uses (sealed credential via the vault, Intune borrowing the M365
+	// connection), so the scheduled door and the on-demand door cannot authenticate differently.
+	svc.MDMFetcher = apiDeps.MDMFetcherFor
+	// Identity THREAT detection reads each connected IdP's audit log every pass through the
+	// onboarded token (read scopes: okta.logs.read / AuditLog.Read.All / admin.reports.audit.readonly).
+	// Cloud control-plane THREAT detection polls CloudTrail's event history each pass through the
+	// same read-only role the inventory fetch uses (cloudtrail:LookupEvents is in ReadOnlyAccess).
+	svc.CloudEventReader = func(c platform.Connection) awsfetch.EventReader {
+		return awsfetch.NewCloudTrailLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID)
+	}
+	svc.IdentityLogFetchers = map[string]identitylog.Fetcher{
+		platform.ConnOkta:       identitylog.NewOkta(os.Getenv("OKTA_ORG_URL")),
+		platform.ConnM365:       identitylog.NewM365(),
+		platform.ConnGWorkspace: identitylog.NewGWorkspace(),
+	}
+	// A code-fix PR carries the engineer's DIFF, not only instructions: at delivery the same engine
+	// the autofix button runs proposes the file changes and the connector commits them to the PR's
+	// head branch. No model configured → the PR opens with its instructions and says why.
+	deliverer.Patcher = remediate.PatcherFunc(apiDeps.PatchForAction)
+	// ONE MERGED FIX → THE BRANCHES CUSTOMERS ACTUALLY RUN. remediate.PlanBackports was complete,
+	// tested and had ZERO non-test callers, so a fix shipped to the default branch while the release
+	// branches kept the bug, silently. These two wire it: Backporter assembles the hunk + each
+	// maintained branch's copy of the file through the GitHub connection, and Submit routes every
+	// per-branch proposal through the SAME human desk as any other remediation (§18.2 inv. 3 — this
+	// opens nothing by itself). Best-effort: a failure here never disturbs the fix that was delivered.
+	deliverer.Backporter = remediate.BackportFunc(apiDeps.BackportInputsFor)
+	deliverer.Submit = desk
+	// The person → code join inputs (GitHub SAML identities, Okta SCIM assignments, org owners and
+	// repository collaborators) are fetched every pass so the estate can draw identity → code → cloud.
+	svc.IdentityLinkOpts = &identitylinks.Options{OktaOrgURL: os.Getenv("OKTA_ORG_URL")}
+	// Okta CONFIGURATION posture (policies, API tokens, ThreatInsight) read each pass.
+	svc.OktaOrgURL = os.Getenv("OKTA_ORG_URL")
+	// A leaked AWS key in code earns a second, HITL-gated action: deactivate the key in IAM through
+	// the tenant's AWS connection (connector.AWS.Apply "aws_key_deactivate"), beside the scrub PR.
+	svc.KeyDeactivate = func(f types.Finding, c platform.Connection) (platform.Action, bool) {
+		return remediate.KeyDeactivateAction(f, c, newID)
+	}
+	// An identity incident's containment becomes a live, gated Okta session revoke when the tenant
+	// has an Okta connection; every other incident keeps the runbook ticket + T3 draft.
+	svc.ProposeIncidentResponseWith = func(inc platform.Incident, conns []platform.Connection) ([]platform.Action, bool) {
+		return remediate.ProposeIncidentResponseWith(inc, conns, newID)
+	}
 	// Close the find → fix → prove-it-is-dead loop: each monitoring pass re-runs the exploit for
 	// findings an APPLIED fix claimed to close, so a verification can be upgraded from absence to
 	// closure — or downgraded when the exploit still works. Doubly gated inside the adapter: the
@@ -736,7 +823,19 @@ func sandboxDispatcherWS(images sandbox.ScanImages, st store.Store, vault secret
 		var cloneDir string
 		switch types.AssetType(a.Type) {
 		case types.AssetCloudAccount:
-			opts.Env = cloudCredentialEnv()
+			// A connected account is scanned AS ITS ROLE (cloudcreds.go); an unassumable role
+			// fails the scan rather than falling back to the operator's environment.
+			env, err := cloudScanEnv(ctx, a, stsAssume)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("sandboxDispatcher: %w", err)
+			}
+			opts.Env = env
+			if gac := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); gac != "" {
+				opts.Mounts = append(opts.Mounts, sandbox.Mount{HostPath: gac, ContainerPath: gac})
+			}
+			if pid := a.Meta["project_id"]; pid != "" {
+				opts.Env = append(opts.Env, "TSENGINE_GCP_PROJECT="+pid)
+			}
 		case types.AssetRepository:
 			dir, err := os.MkdirTemp(repoScratchDir(), "tsengine-repo-*")
 			if err != nil {

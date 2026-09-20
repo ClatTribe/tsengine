@@ -140,6 +140,12 @@ func (o *Okta) Apply(ctx context.Context, c platform.Connection, token string, a
 	switch rt {
 	case "account_suspend":
 		return o.lifecycle(ctx, token, target, "suspend")
+	case "session_revoke":
+		return o.revokeSessions(ctx, token, target)
+	case "oauth_revoke":
+		cid, _ := a.Payload["client_id"].(string)
+		uids, _ := a.Payload["user_ids"].(string)
+		return o.revokeGrants(ctx, token, cid, strings.Split(uids, ","))
 	default:
 		// Unreachable — Preflight rejects every remediation_type with no live path.
 		return fmt.Errorf("okta apply: remediation_type %q has no live write path yet (target %s)", rt, target)
@@ -158,6 +164,15 @@ func (o *Okta) Preflight(c platform.Connection, a platform.Action) error {
 	switch rt {
 	case "account_suspend":
 		return missingWriteScope(c, oktaWriteScope, "suspending "+target)
+	case "session_revoke":
+		return missingWriteScope(c, oktaWriteScope, "revoking the sessions of "+target)
+	case "oauth_revoke":
+		cid, _ := a.Payload["client_id"].(string)
+		uids, _ := a.Payload["user_ids"].(string)
+		if strings.TrimSpace(cid) == "" || strings.TrimSpace(uids) == "" {
+			return fmt.Errorf("action %s names no client id / user ids to revoke — Okta revokes grants per user × client, and the finding did not carry them", a.ID)
+		}
+		return missingWriteScope(c, oktaWriteScope, "revoking the grants of "+target)
 	default:
 		return fmt.Errorf("remediation_type %q has no live write path yet (target %s)", rt, target)
 	}
@@ -189,4 +204,60 @@ func (o *Okta) lifecycle(ctx context.Context, token, idOrLogin, action string) e
 // connector needs. Without them the authorize URL would be built with an empty
 // client_id and dead-end the customer on the provider's error page.
 // OrgURL is required too: every Okta endpoint is relative to the org's own domain.
+// revokeSessions ends every session of the user (DELETE /api/v1/users/{id}/sessions) — the
+// containment for an identity-threat incident. The account stays enabled; the next request
+// re-authenticates, and an attacker holding a stolen session token holds nothing.
+func (o *Okta) revokeSessions(ctx context.Context, token, idOrLogin string) error {
+	return o.del(ctx, token, o.OrgURL+"/api/v1/users/"+url.PathEscape(idOrLogin)+"/sessions", "revoke sessions of "+idOrLogin)
+}
+
+// revokeGrants pulls the app's OAuth grants for each named user (DELETE /api/v1/users/{uid}/
+// clients/{cid}/grants). Per user × client, exactly what Okta's API grants, so the write names the
+// grants the finding cited and nothing wider; one user failing does not silently skip the rest —
+// every failure is collected and returned.
+func (o *Okta) revokeGrants(ctx context.Context, token, clientID string, userIDs []string) error {
+	if strings.TrimSpace(clientID) == "" {
+		return fmt.Errorf("okta: oauth_revoke names no client id")
+	}
+	var failed []string
+	revoked := 0
+	for _, uid := range userIDs {
+		uid = strings.TrimSpace(uid)
+		if uid == "" {
+			continue
+		}
+		if err := o.del(ctx, token, o.OrgURL+"/api/v1/users/"+url.PathEscape(uid)+"/clients/"+url.PathEscape(clientID)+"/grants", "revoke grants of "+uid); err != nil {
+			failed = append(failed, uid+": "+err.Error())
+			continue
+		}
+		revoked++
+	}
+	if revoked == 0 && len(failed) == 0 {
+		return fmt.Errorf("okta: oauth_revoke names no user ids")
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("okta: revoked grants for %d user(s); failed for %d: %s", revoked, len(failed), strings.Join(failed, "; "))
+	}
+	return nil
+}
+
+func (o *Okta) del(ctx context.Context, token, endpoint, what string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := o.client().Do(req)
+	if err != nil {
+		return fmt.Errorf("okta %s: %w", what, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+		return fmt.Errorf("okta %s: http %d: %s", what, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return nil
+}
+
 func (o *Okta) Configured() bool { return o.OrgURL != "" && o.ClientID != "" && o.ClientSecret != "" }

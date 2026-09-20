@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { api } from "@/lib/api";
-import type { EscalationPolicy, SLAPolicy, TrustCenterConfig } from "@/lib/types";
+import type {
+  Branding, BrandingSettings, DeviceSyncResult, EscalationPolicy, HRISSettings, HRISSyncResult, MDMSettings, SLAPolicy, TrustCenterConfig,
+} from "@/lib/types";
 
 // Engage/disengage the global kill-switch (agentic-SMB spec OM-3 / TS-5). When engaged the
 // platform takes no autonomous agent action — no scans, no remediation writes — until a
@@ -28,6 +30,61 @@ export async function syncGitHubPosture(): Promise<{ findings: number }> {
   revalidatePath("/settings");
   revalidatePath("/issues");
   return { findings: r.findings_detected };
+}
+
+// Live Okta configuration posture. Returns the findings stored AND how many settings the token
+// could not read — the second number is what stops zero findings reading as a hardened org.
+export async function syncOktaPosture(): Promise<{ findings: number; unread: number }> {
+  const r = await api.syncOktaPosture();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  return { findings: r.count, unread: Object.keys(r.unread ?? {}).length };
+}
+
+// Live CloudTrail poll. Returns the threats stored AND the spans a truncated read left unexamined —
+// the second is what stops zero threats reading as a quiet account.
+export async function syncCloudEvents(): Promise<{ records: number; findings: number; unread: number }> {
+  const r = await api.syncCloudEvents();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  revalidatePath("/incidents");
+  return { records: r.records, findings: r.findings.length, unread: Object.keys(r.unread ?? {}).length };
+}
+
+// Set (or clear) the tenant's device-management source (Bucket B). Credentials are sealed
+// server-side and never returned; we get back the redacted view.
+export async function setMDM(cfg: {
+  provider: string; base_url: string; api_token: string; client_id: string; client_secret: string;
+}): Promise<MDMSettings> {
+  const r = await api.setMDMSettings(cfg);
+  revalidatePath("/settings");
+  return r;
+}
+
+// Read the fleet from the configured MDM now and assess it. The result carries what the sync could
+// NOT assess (provider limits, unread devices) beside the count, so the caller can show both.
+export async function syncDevices(): Promise<DeviceSyncResult> {
+  const r = await api.syncDevices();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  revalidatePath("/posture");
+  return r;
+}
+
+// Set (or clear) the tenant's HR-system source (Bucket B). Credentials sealed, never returned.
+export async function setHRIS(cfg: { provider: string; api_key: string; account_token: string }): Promise<HRISSettings> {
+  const r = await api.setHRISSettings(cfg);
+  revalidatePath("/settings");
+  return r;
+}
+
+// Fetch the roster now and join it against every connected identity provider.
+export async function syncHRIS(): Promise<HRISSyncResult> {
+  const r = await api.syncHRIS();
+  revalidatePath("/settings");
+  revalidatePath("/issues");
+  revalidatePath("/posture");
+  return r;
 }
 
 // Set the tenant's incident escalation matrix (severity-tiered routing to alert channels).
@@ -134,8 +191,9 @@ export async function setTrainingConsent(consented: boolean, by: string): Promis
 export async function setPRBotPolicy(
   enabled: boolean,
   blockSeverity: string,
+  installationId?: string,
 ): Promise<{ enabled: boolean; block_severity: string }> {
-  const r = await api.setPRBotSettings(enabled, blockSeverity);
+  const r = await api.setPRBotSettings(enabled, blockSeverity, installationId);
   revalidatePath("/settings");
   return { enabled: r.enabled, block_severity: r.block_severity };
 }
@@ -200,4 +258,22 @@ export async function decideTrustRequest(
   const r = await api.decideTrustRequest(id, decision, by);
   revalidatePath("/settings");
   return { access_token: r.access_token, access_link: r.access_link };
+}
+
+// White-label branding for outward artifacts (VAPT report, public Trust Center). An empty name
+// clears it — back to the product's own brand.
+export async function setBranding(b: Branding): Promise<BrandingSettings> {
+  const r = await api.setBranding(b);
+  revalidatePath("/settings");
+  return r;
+}
+
+// Push-to-Drata: configure the destination, and run the posture sync.
+export async function setDrata(cfg: { api_key: string; workspace_id: number }) {
+  const r = await api.setDrataSettings(cfg);
+  revalidatePath("/settings");
+  return r;
+}
+export async function syncDrata() {
+  return api.syncDrata();
 }

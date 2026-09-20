@@ -92,6 +92,40 @@ var Techniques = []Technique{
 	// escalation, and the catalogue only knew the direct-invoke form.
 	{Name: "PassRoleToNewLambdaThenEventSource", All: [][]string{
 		{"iam:PassRole"}, {"lambda:CreateFunction"}, {"lambda:CreateEventSourceMapping"}}},
+
+	// Added after the CloudGoat (Rhino) run scored 57.1%: each of the three scenarios that
+	// corpus missed was missed for the same reason as the BishopFox additions above — the
+	// primitive is published and real, and this catalogue did not contain it. Rhino built a
+	// lab around each one, which is as strong a statement as a corpus can make that it matters.
+
+	// A container task runs AS the task role named in its definition, so registering a
+	// definition and running it is the ECS twin of PassRoleToNewLambda. This is the route
+	// CloudGoat's ecs_privesc_evade_protection documents: register a task definition carrying
+	// the web-developer role, run it, come back as that role.
+	{Name: "PassRoleToNewECSTask", All: [][]string{
+		{"iam:PassRole"}, {"ecs:RegisterTaskDefinition"}, {"ecs:RunTask", "ecs:StartTask"}},
+		Note: "requires a cluster with capacity to place the task on"},
+
+	// Glue JOBS, not only dev endpoints. The catalogue knew glue:CreateDevEndpoint — the
+	// method Rhino's original catalogue names — while dev endpoints are now deprecated and
+	// jobs are the ordinary way to run Glue code. A job executes as the role passed to it, so
+	// the escalation is identical and the door we were watching is the one that is closing.
+	{Name: "PassRoleToNewGlueJob", All: [][]string{
+		{"iam:PassRole"}, {"glue:CreateJob"}, {"glue:StartJobRun", "glue:CreateTrigger"}}},
+	// An EXISTING job already carries its role, so rewriting its script needs no PassRole —
+	// the Glue analogue of UpdateLambdaCode, and the same reason that one takes a single action.
+	{Name: "UpdateExistingGlueJob", All: [][]string{
+		{"glue:UpdateJob"}, {"glue:StartJobRun", "glue:CreateTrigger"}},
+		Note: "escalates to the existing job's role; requires a job with a more privileged role"},
+
+	// EC2 user data runs at boot as the instance's own profile role. StopInstances and
+	// StartInstances are NOT padding: AWS refuses ModifyInstanceAttribute on userData while the
+	// instance is running, so the escalation IS the stop-modify-start cycle, and requiring only
+	// the modify would report a path that cannot be walked. CloudGoat's iam_privesc_by_ec2
+	// grants exactly these three.
+	{Name: "EC2UserDataModification", All: [][]string{
+		{"ec2:ModifyInstanceAttribute"}, {"ec2:StopInstances"}, {"ec2:StartInstances"}},
+		Note: "escalates to the target instance's profile role; requires an instance with a more privileged profile"},
 }
 
 // CanDo reports whether the principal (its combined policy docs) is permitted an
