@@ -24,6 +24,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/internal/cloudquery"
+	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -186,6 +187,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench triage: %v\n", err)
 			os.Exit(1)
 		}
+	case "crosssurface-agent":
+		if err := crossSurfaceAgentCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench crosssurface-agent: %v\n", err)
+			os.Exit(1)
+		}
+	case "rlvr":
+		if err := rlvrCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench rlvr: %v\n", err)
+			os.Exit(1)
+		}
 	case "cwemap":
 		if err := cwemapCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench cwemap: %v\n", err)
@@ -216,6 +227,7 @@ Usage:
   tsbench localize [--agent] [--out <scoreboard.md>] | --repo <dir> --cwe CWE-89 [--desc <text>]
   tsbench defense-ledger [--ledger <path>] [--out <file>]
   tsbench scoreboard [--results <json>] [--out <file>]
+  tsbench rlvr     [selftest [--arm substrate|model] [--write-fixture <dir>] | score [--arm substrate|model] [--corpus <f>] [--cassette <f>] | capture --corpus <f> --out-cassette <f>]
 
 Fixtures live under fixtures/. Stub fixtures (runnable:false) need their
 corpus deployed out-of-band (WAVSEP webapp, OWASP BenchmarkJava tree).
@@ -520,6 +532,18 @@ func scoreboardCmd(argv []string) error {
 // inert decoys, deterministically verify each, run the engine, and score
 // attack-path recall + FP-reduction. No cloud/infra — the engineer reasons over
 // the synthetic snapshot (docs/design/ai-cloud-engineer.md §6).
+// resolveAgentModelName reports which model the agent LLM is configured to use, in the
+// SAME precedence cloudengine.LLMFromEnv resolves it (opencode proxy first), so the ledger
+// records real provenance instead of an empty field when the run is driven via the proxy.
+func resolveAgentModelName() string {
+	for _, k := range []string{"TSENGINE_LLM_OPENCODE_MODEL", "ANTHROPIC_MODEL", "LLM_MODEL", "GEMINI_MODEL"} {
+		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func cloudEngineCmd(argv []string) error {
 	fs := flag.NewFlagSet("cloud-engine", flag.ContinueOnError)
 	scenarios := fs.Int("scenarios", 50, "number of synthetic scenarios")
@@ -544,6 +568,7 @@ func cloudEngineCmd(argv []string) error {
 	cqDiscrim := fs.Bool("discrimination", false, "report the AGENT's measurable headroom on this account (substrate @ production budget vs @ a realistic-scale budget) — does the scenario actually separate a good agent from the substrate? LLM-free")
 	cqSweep := fs.Int("discrimination-sweep", 0, "sweep the discrimination metric over N seeded accounts (seed..seed+N-1) and report which give the agent measurable headroom — the curated tuning corpus. LLM-free")
 	cqLedger := fs.String("ledger", "", "with --agent: append the head-to-head's L2 score (accuracy/lift/remediation) to this durable JSONL ledger — the tuning-progress record")
+	cqSteps := fs.String("agent-transcript", "", "with --agent: write the agent's per-turn ReAct steps (thought/tool/args/observation) to this JSON file — the evaluation interface a harness autopsy needs to answer WHY a run stopped short, not just that it did")
 	cloudgoat := fs.Bool("cloudgoat", false, "Tier-1 calibration: run the engineer over transcribed CloudGoat scenarios and score vs their PUBLISHED pentest solutions (ground truth ≠ cloudiam), and exit")
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -568,7 +593,7 @@ func cloudEngineCmd(argv []string) error {
 	// perms) and is scored against that independent key.
 	if *cqRun || *cqEmit != "" || *cqEmitInv != "" || *cqLarge || *cqDiscrim {
 		return runCloudQuery(cqOpts{loadDir: *cqDir, emitDir: *cqEmit, emitInv: *cqEmitInv, maxHyp: *maxHyp,
-			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed, agent: *cqAgent, discrimination: *cqDiscrim, ledger: *cqLedger})
+			advanced: *cqAdvanced, large: *cqLarge, size: *cqSize, seed: *seed, agent: *cqAgent, discrimination: *cqDiscrim, ledger: *cqLedger, steps: *cqSteps})
 	}
 
 	// Independent-generator check: an external model authors the account AND its
@@ -660,6 +685,7 @@ type cqOpts struct {
 	discrimination            bool
 	seed                      int64
 	ledger                    string // append each --agent head-to-head's L2 score to this durable JSONL
+	steps                     string // write the agent's per-turn ReAct steps here (the evaluation interface)
 }
 
 func runCloudQuery(o cqOpts) error {
@@ -764,7 +790,42 @@ func runCloudQuery(o cqOpts) error {
 			return fmt.Errorf("--agent needs an LLM: set ANTHROPIC_API_KEY, or LLM_BASE_URL+LLM_MODEL (OpenAI-compat/proxy/Ollama), or LLM_API_KEY (Gemini)")
 		}
 		cc := &cloudagent.Context{Snap: snap, Prowler: findings}
-		rep, aerr := cloudagent.Investigate(context.Background(), llm, cc, cloudagent.Options{MaxIters: 4*len(ds.AnswerKey.RealTargets) + 12, MaxHyp: maxHyp})
+		// EVALUATION INTERFACE (V-component). The CLI records the agent's ReAct steps but the
+		// BENCHMARK did not, so a run that stopped short left no evidence of WHY — which is the
+		// one question a harness autopsy exists to answer. Opt-in, so a plain scoring run is
+		// byte-identical to before.
+		var steps *ledger.Recorder
+		if o.steps != "" {
+			steps = ledger.NewRecorder()
+			// THE TRANSCRIPT MUST SURVIVE A KILL. Written only on the return path, it is absent
+			// for exactly the run that needs explaining: a 1800s timeout produced no ledger line
+			// AND no transcript, so "why did it not finish" stayed unanswerable and the next
+			// attempt was another blind half hour. `timeout` sends SIGTERM, so catch it (and
+			// SIGINT) and flush whatever the recorder holds before exiting — a partial transcript
+			// ending mid-investigation is the whole point, since where it stops IS the finding.
+			sig := make(chan os.Signal, 1)
+			signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+			go func() {
+				<-sig
+				if b, merr := json.MarshalIndent(steps.Steps(), "", "  "); merr == nil {
+					_ = os.WriteFile(o.steps, b, 0o600)
+					fmt.Fprintf(os.Stderr, "[cloud-engine] terminated — flushed %d step(s) → %s\n", steps.Len(), o.steps)
+				}
+				os.Exit(124) // match `timeout`'s own exit code
+			}()
+		}
+		agentStart := time.Now()
+		rep, aerr := cloudagent.Investigate(context.Background(), llm, cc, cloudagent.Options{MaxIters: 4*len(ds.AnswerKey.RealTargets) + 12, MaxHyp: maxHyp, Ledger: steps})
+		agentElapsed := time.Since(agentStart)
+		if steps != nil {
+			if b, merr := json.MarshalIndent(steps.Steps(), "", "  "); merr == nil {
+				if werr := os.WriteFile(o.steps, b, 0o600); werr != nil {
+					fmt.Fprintf(os.Stderr, "[cloud-engine] agent-transcript write failed: %v\n", werr)
+				} else {
+					fmt.Printf("agent transcript: %d step(s) → %s\n", steps.Len(), o.steps)
+				}
+			}
+		}
 		if aerr != nil {
 			return aerr
 		}
@@ -804,8 +865,12 @@ func runCloudQuery(o cqOpts) error {
 			}
 			sc := bench.ComputeL2Scorecard(s.RealTotal, s.RealFound, as.RealFound, as.FalseIssues)
 			rem := bench.ComputeRemediationScore(len(rep.Issues), proposed, verified)
-			entry := bench.CloudEngineEntry(o.seed, scaleBudget, os.Getenv("LLM_MODEL"), sc, rem)
+			entry := bench.CloudEngineEntry(o.seed, scaleBudget, resolveAgentModelName(), sc, rem)
 			entry.TS = time.Now().UTC().Format(time.RFC3339)
+			// Cost axis: what the score COST, so a later reader can separate a thorough run from
+			// a stalled one without re-running it.
+			entry.Turns = rep.Calls
+			entry.ElapsedSec = agentElapsed.Seconds()
 			if lerr := bench.AppendCloudEngineLedger(o.ledger, entry); lerr != nil {
 				fmt.Fprintf(os.Stderr, "[cloud-engine] ledger append failed: %v\n", lerr)
 			} else {

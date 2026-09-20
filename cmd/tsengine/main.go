@@ -1282,13 +1282,19 @@ func runWebInvestigate(argv []string) error {
 		fmt.Fprintf(os.Stderr, "[web-investigate] spawning OSS sandbox %s for dispatch_oss\n", *ossSandbox)
 		info, serr := sandbox.Spawn(agentCtx, sandbox.SpawnOptions{Image: *ossSandbox})
 		if serr != nil {
-			return fmt.Errorf("--oss-sandbox: spawn %s: %w", *ossSandbox, serr)
+			// DEGRADE, don't die (§12.7): a spawn failure (transient docker pressure, an image
+			// pull hiccup) must NOT zero the whole engagement. dispatch_oss is one OPTIONAL tool;
+			// with a nil Dispatcher it reports itself unavailable and the agent proceeds HTTP-only,
+			// which still captures the many web flags that never needed an OSS specialist. Killing
+			// the run here turned a recoverable blip into a 0-turn miss (found in batch-v10/XBEN-062).
+			fmt.Fprintf(os.Stderr, "[web-investigate] WARNING: OSS sandbox spawn failed (%v) — continuing HTTP-only; dispatch_oss will report unavailable\n", serr)
+		} else {
+			defer func() {
+				fmt.Fprintf(os.Stderr, "[web-investigate] tearing down OSS sandbox %s\n", shortID(info.ContainerID))
+				_ = sandbox.Destroy(context.Background(), info)
+			}()
+			opts.Dispatcher = webagent.SandboxDispatcher(sandbox.NewClient(info))
 		}
-		defer func() {
-			fmt.Fprintf(os.Stderr, "[web-investigate] tearing down OSS sandbox %s\n", shortID(info.ContainerID))
-			_ = sandbox.Destroy(context.Background(), info)
-		}()
-		opts.Dispatcher = webagent.SandboxDispatcher(sandbox.NewClient(info))
 	}
 
 	// ADR-0030 fleet path: --workers > 1 (or the env twin) runs a bounded-parallel fleet over an

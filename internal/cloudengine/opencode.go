@@ -161,9 +161,40 @@ func (o *OpenCode) Generate(ctx context.Context, prompt string) (string, error) 
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"parts"`
+		// Info carries a per-message assistant envelope. A provider/model failure (retired model,
+		// upstream rate-limit, provider outage) arrives HERE as a 200 with an embedded error and
+		// ZERO text parts — NOT as a non-200. Surfacing it turns the opaque "empty response" (which
+		// read as a capability/throttle miss in the bench autopsy) into the real, actionable cause.
+		Info struct {
+			Error struct {
+				Name string `json:"name"`
+				Data struct {
+					Message     string `json:"message"`
+					StatusCode  int    `json:"statusCode"`
+					IsRetryable bool   `json:"isRetryable"`
+				} `json:"data"`
+			} `json:"error"`
+		} `json:"info"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", fmt.Errorf("opencode: decode: %w", err)
+	}
+	// An embedded provider error beats "empty response": report the real message + status, and mirror
+	// the upstream's own isRetryable into a substring llmretry already treats as transient ("HTTP
+	// <code>" when retryable) so a transient provider fault is retried and a permanent one (a retired
+	// model, a bad key) fails fast + loud instead of masquerading as an empty completion.
+	if e := out.Info.Error.Data; e.Message != "" || out.Info.Error.Name != "" {
+		msg := e.Message
+		if msg == "" {
+			msg = out.Info.Error.Name
+		}
+		if e.IsRetryable && e.StatusCode != 0 {
+			return "", fmt.Errorf("opencode: provider error: %s (HTTP %d, retryable)", msg, e.StatusCode)
+		}
+		if e.StatusCode != 0 {
+			return "", fmt.Errorf("opencode: provider error: %s (HTTP %d)", msg, e.StatusCode)
+		}
+		return "", fmt.Errorf("opencode: provider error: %s", msg)
 	}
 	// Last text part wins: earlier parts may be reasoning/tool traces depending on model config.
 	text := ""
@@ -173,7 +204,7 @@ func (o *OpenCode) Generate(ctx context.Context, prompt string) (string, error) 
 		}
 	}
 	if strings.TrimSpace(text) == "" {
-		return "", fmt.Errorf("opencode: empty response")
+		return "", fmt.Errorf("opencode: empty response (200, no text part and no embedded error — model returned only non-text parts)")
 	}
 	return text, nil
 }

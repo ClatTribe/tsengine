@@ -36,6 +36,18 @@ const (
 	// is an EXACT shared secret (grounded §10) — only well-formed provider tokens match (specific prefixes +
 	// length), never a generic substring, so a shared common word can't invent a chain.
 	EntSecret EntityKind = "secret"
+	// EntIAMRole bridges a web SSRF that reached the instance metadata service (IMDS) to the CLOUD
+	// principal it compromises. Found missing by AWSGoat (INE), whose documented module-1 chain is
+	// XSS -> SQLi -> IDOR -> SSRF -> IMDS -> stolen instance credentials -> IAM privilege escalation:
+	// we detected every step and bridged none of them, reporting the web finding and the cloud
+	// privesc as two unrelated issues — missing the cross-surface hop that IS the attack.
+	//
+	// Nothing else could bridge it. Credentials obtained through IMDS never appear as an AKIA string
+	// (EntAWSKey) and the web finding carries no ARN. What both sides DO share is the ROLE NAME: the
+	// IMDS path ends /latest/meta-data/iam/security-credentials/<RoleName>, and the cloud side names
+	// arn:aws:iam::<acct>:role/<RoleName>. That shared name is a real, grounded identifier — the same
+	// shape of join as EntBucket — not a guess.
+	EntIAMRole EntityKind = "iam_role"
 )
 
 // Entity is a shared identifier that can bridge two assets.
@@ -225,8 +237,12 @@ var (
 	// character is therefore restricted to [\w*].
 	arnRe    = regexp.MustCompile(`arn:aws:[a-z0-9-]*:[a-z0-9-]*:\d{12}:[\w./:*-]*[\w*]`)
 	bucketRe = regexp.MustCompile(`(?:s3://|arn:aws:s3:::)([a-z0-9.-]{3,63})`)
-	ipRe     = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
-	emailRe  = regexp.MustCompile(`[\w.+-]+@[\w-]+\.[\w.-]+`)
+	// The IMDS credential path names the role the instance runs as — the web side of the bridge.
+	imdsRoleRe = regexp.MustCompile(`/latest/meta-data/iam/security-credentials/([A-Za-z0-9+=,.@_-]{2,64})`)
+	// A role ARN names the same role — the cloud side. Extracted so the two can meet.
+	roleARNRe = regexp.MustCompile(`arn:aws:iam::\d{12}:role/(?:[\w+=,.@-]+/)*([\w+=,.@-]{2,64})`)
+	ipRe      = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
+	emailRe   = regexp.MustCompile(`[\w.+-]+@[\w-]+\.[\w.-]+`)
 	// Well-formed NON-AWS provider secrets — specific prefixes + length, so only a real token matches (an
 	// EXACT shared value bridges, never a generic substring). Mirrors the secret classes gitleaks/
 	// trufflehog/OSINT surface (GitHub, Slack, Google, Stripe).
@@ -249,6 +265,16 @@ var genericEmailLocal = map[string]bool{
 	"root": true, "postmaster": true, "mailer-daemon": true, "example": true, "test": true,
 }
 
+// genericRoleName: role names too common to be evidence of a shared principal. The EntIAMRole
+// bridge joins on a NAME rather than a full ARN (the IMDS path carries no account id), so a
+// ubiquitous name would link findings from different accounts that merely follow the same naming
+// convention. Same reasoning as genericEmailLocal, one surface over.
+var genericRoleName = map[string]bool{
+	"admin": true, "administrator": true, "root": true, "default": true, "ec2": true,
+	"lambda": true, "ecs": true, "service": true, "app": true, "web": true, "api": true,
+	"test": true, "dev": true, "prod": true, "role": true, "instance": true,
+}
+
 func extractEntities(f Finding) []Entity {
 	blob := f.Title + " " + f.Description + " " + f.Endpoint
 	var out []Entity
@@ -268,6 +294,19 @@ func extractEntities(f Finding) []Entity {
 	}
 	for _, m := range bucketRe.FindAllStringSubmatch(blob, -1) {
 		out = append(out, Entity{EntBucket, m[1]})
+	}
+	// IMDS role bridge (see EntIAMRole). Both sides are extracted so a web SSRF that read the
+	// metadata service meets the cloud finding on the same role. Generic names are skipped for the
+	// reason genericEmailLocal exists: two unrelated findings that both say "admin" are not a chain.
+	for _, m := range imdsRoleRe.FindAllStringSubmatch(blob, -1) {
+		if name := m[1]; !genericRoleName[strings.ToLower(name)] {
+			out = append(out, Entity{EntIAMRole, name})
+		}
+	}
+	for _, m := range roleARNRe.FindAllStringSubmatch(blob, -1) {
+		if name := m[1]; !genericRoleName[strings.ToLower(name)] {
+			out = append(out, Entity{EntIAMRole, name})
+		}
 	}
 	if h := hostOf(f.Endpoint); h != "" {
 		out = append(out, Entity{EntHost, h})

@@ -35,16 +35,22 @@ import (
 
 // CVEPatchInstance is one real app-sec CVE the engineer must fix.
 type CVEPatchInstance struct {
-	ID        string      `json:"id"`               // e.g. "flask-CVE-2019-1010083"
-	CVE       string      `json:"cve"`              // the real CVE id (external provenance)
-	FixCommit string      `json:"fix_commit"`       // URL/sha of the real fixing commit (external provenance)
-	Lang      string      `json:"lang"`             // js|ts|python|go|java|php|ruby …
-	Class     string      `json:"class"`            // sqli|xss|idor|ssti|lfi|rce|… (codeagent.Finding.Class)
-	Endpoint  string      `json:"endpoint"`         // the vulnerable route/location
-	Detail    string      `json:"detail"`           // the confirmed-vuln rationale (grounds the fix; from the advisory)
-	VulnFiles []VFile     `json:"vuln_files"`       // the offending file(s) at the pre-fix commit (the build context)
-	GoldFiles []string    `json:"gold_files"`       // the file paths the REAL fixing commit modified (localization oracle)
-	Verify    *VerifySpec `json:"verify,omitempty"` // optional execution oracle (real PoC + regression) → auto-scores `fixed`
+	ID        string   `json:"id"`         // e.g. "flask-CVE-2019-1010083"
+	CVE       string   `json:"cve"`        // the real CVE id (external provenance)
+	FixCommit string   `json:"fix_commit"` // URL/sha of the real fixing commit (external provenance)
+	Lang      string   `json:"lang"`       // js|ts|python|go|java|php|ruby …
+	Class     string   `json:"class"`      // sqli|xss|idor|ssti|lfi|rce|… (codeagent.Finding.Class)
+	Endpoint  string   `json:"endpoint"`   // the vulnerable route/location
+	Detail    string   `json:"detail"`     // the confirmed-vuln rationale (grounds the fix; from the advisory)
+	VulnFiles []VFile  `json:"vuln_files"` // the offending file(s) at the pre-fix commit (the build context)
+	GoldFiles []string `json:"gold_files"` // the file paths the REAL fixing commit modified (localization oracle)
+	// GoldAnchors are the distinctive lines the REAL fix DELETED, per gold file — the vulnerable
+	// code itself. File-level localization is coarse (on a large file, "touched the right file" is
+	// nearly free); an anchor still PRESENT in the engineer's output proves the vulnerable line was
+	// left exactly where it was. SCORER-ONLY: these are the answer, so they must never be shown to
+	// the engineer — TestGoldAnchorsNeverReachThePrompt asserts it.
+	GoldAnchors map[string][]string `json:"gold_anchors,omitempty"`
+	Verify      *VerifySpec         `json:"verify,omitempty"` // optional execution oracle (real PoC + regression) → auto-scores `fixed`
 }
 
 // VFile is one source file the engineer may rewrite (pre-fix content).
@@ -69,15 +75,31 @@ func LoadCVEPatch(path string) ([]CVEPatchInstance, error) {
 
 // CVEPatchResult is the per-instance scorecard.
 type CVEPatchResult struct {
-	ID        string          `json:"id"`
-	CVE       string          `json:"cve"`
-	Class     string          `json:"class"`
-	Produced  bool            `json:"produced"`  // engineer returned an applicable rewrite
-	Localized bool            `json:"localized"` // rewrite touches a gold-patched file
-	Fixed     Judged          `json:"fixed"`     // JUDGED: does it close the vuln equivalently to gold
-	OurFiles  []string        `json:"our_files"` // files the engineer rewrote (for the judge/evidence)
-	Err       string          `json:"err,omitempty"`
-	patch     codeagent.Patch // retained in-process for the judge; not serialized
+	ID        string `json:"id"`
+	CVE       string `json:"cve"`
+	Class     string `json:"class"`
+	Produced  bool   `json:"produced"`  // engineer returned an applicable rewrite
+	Localized bool   `json:"localized"` // rewrite touches a gold-patched file
+	// AnchorsCleared / AnchorsTotal: how many of the real fix's deleted lines the engineer's
+	// rewrite actually removed. Stricter than Localized, and it can go DOWN — a patch that edits
+	// the right file while leaving the vulnerable lines intact scores 0 here and 1 there.
+	// Counts, never a pass: clearing an anchor shows the code CHANGED, not that the change is
+	// correct — that verdict still needs the execution oracle (§10).
+	//
+	// KNOWN BIAS, and it must be stated wherever the number is: this measures AGREEMENT WITH THE
+	// GOLD PATCH'S EDIT SITES, not correctness. A narrower fix that closes the same vulnerability
+	// at one line scores low against a gold commit that refactored twenty, and a fix that ADDS a
+	// guard (a new validation method) rather than rewriting the offending line clears nothing at
+	// all while being perfectly valid. Measured on CVE-Bench: 19/19 localized against 31/123
+	// anchors, where several 0/N instances were minimal, targeted fixes of the named vulnerability.
+	// So read a LOW score as "diverged from gold's approach — worth a look", never as "wrong", and
+	// read a HIGH score as strong evidence the engineer edited the actual vulnerable code.
+	AnchorsCleared int             `json:"anchors_cleared"`
+	AnchorsTotal   int             `json:"anchors_total"`
+	Fixed          Judged          `json:"fixed"`     // JUDGED: does it close the vuln equivalently to gold
+	OurFiles       []string        `json:"our_files"` // files the engineer rewrote (for the judge/evidence)
+	Err            string          `json:"err,omitempty"`
+	patch          codeagent.Patch // retained in-process for the judge; not serialized
 }
 
 // Judged is a tri-state so the harness never fabricates a fix verdict (no LLM false positives, §10):
@@ -118,10 +140,24 @@ func RunCVEPatchBench(ctx context.Context, instances []CVEPatchInstance, llm cod
 		for _, g := range in.GoldFiles {
 			gold[g] = true
 		}
+		patched := map[string]string{}
 		for _, pf := range p.Files {
 			r.OurFiles = append(r.OurFiles, pf.Path)
+			patched[pf.Path] = pf.Content
 			if gold[pf.Path] {
 				r.Localized = true
+			}
+		}
+		// Anchor check: for each gold file, count the real fix's deleted lines that are GONE from
+		// the engineer's rewrite. A gold file the engineer never touched contributes its anchors to
+		// the total and none to the cleared count — not touching it is not clearing it.
+		for path, anchors := range in.GoldAnchors {
+			content, rewrote := patched[path]
+			for _, a := range anchors {
+				r.AnchorsTotal++
+				if rewrote && !strings.Contains(content, a) {
+					r.AnchorsCleared++
+				}
 			}
 		}
 		// EXECUTION ORACLE disposes the fix verdict (never the model's own claim, §10). No spec/runtime
@@ -139,8 +175,12 @@ type CVEPatchStats struct {
 	Total     int `json:"total"`
 	Produced  int `json:"produced"`
 	Localized int `json:"localized"`
-	Fixed     int `json:"fixed"`  // JudgeFixed count (0 until a judge/oracle runs)
-	Judged    int `json:"judged"` // instances with a non-unknown verdict
+	// Anchor totals across the set. Reported WITH their bias caveat in the rendered report —
+	// a number a reader meets without its limitation attached will be read as correctness.
+	AnchorsCleared int `json:"anchors_cleared"`
+	AnchorsTotal   int `json:"anchors_total"`
+	Fixed          int `json:"fixed"`  // JudgeFixed count (0 until a judge/oracle runs)
+	Judged         int `json:"judged"` // instances with a non-unknown verdict
 }
 
 func ComputeCVEPatchStats(rs []CVEPatchResult) CVEPatchStats {
@@ -149,6 +189,8 @@ func ComputeCVEPatchStats(rs []CVEPatchResult) CVEPatchStats {
 		if r.Produced {
 			s.Produced++
 		}
+		s.AnchorsCleared += r.AnchorsCleared
+		s.AnchorsTotal += r.AnchorsTotal
 		if r.Localized {
 			s.Localized++
 		}
@@ -171,6 +213,15 @@ func RenderCVEPatchMarkdown(rs []CVEPatchResult) string {
 	b.WriteString("library app-sec), disk-light. Engine: codeagent.ProposePatch (model proposes, verifier disposes, §10)._\n\n")
 	fmt.Fprintf(&b, "- **produced a fix**: %d/%d · **localized to gold file**: %d/%d · **judged FIXED**: %d/%d judged\n",
 		s.Produced, s.Total, s.Localized, s.Total, s.Fixed, s.Judged)
+
+	if s.AnchorsTotal > 0 {
+		fmt.Fprintf(&b, "- **changed the real fix's own lines**: %d/%d anchor(s) cleared — the lines the "+
+			"upstream fixing commit DELETED that the engineer's rewrite also removed.\n", s.AnchorsCleared, s.AnchorsTotal)
+		b.WriteString("  ⚠️ This measures AGREEMENT WITH GOLD'S EDIT SITES, not correctness: a minimal fix that " +
+			"closes the vulnerability at one line, or one that ADDS a guard instead of rewriting the offending " +
+			"line, scores low while being valid. Read a low score as \"diverged from gold — worth a look\", " +
+			"never as \"wrong\".\n")
+	}
 	b.WriteString("- SEC-bench published patch SOTA **34%** (native C++ domain) — a methodological reference bar, NOT a head-to-head number.\n")
 	if s.Judged < s.Total {
 		fmt.Fprintf(&b, "- ⚠️ %d/%d instances UN-judged (`fixed=unknown`): produced+localized are automatic; the fix verdict needs an execution oracle or a frontier judge — never the model's own claim (§10).\n", s.Total-s.Judged, s.Total)

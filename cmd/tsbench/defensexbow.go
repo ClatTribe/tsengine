@@ -112,6 +112,15 @@ func resolvePatcher(patchFile string) (patcherFn, string, error) {
 // runOneXBOWDefense executes the full defense flow for one challenge in an isolated temp copy.
 func runOneXBOWDefense(ctx context.Context, b bench.XBOWBenchmark, binary, timeout, targetPort, exploitsDir string, patch patcherFn) bench.XBOWDefenseResult {
 	res := bench.XBOWDefenseResult{BenchmarkID: b.ID, Level: b.Config.Level}
+	// PHASE PROGRESS to stderr. Each benchmark passes through build -> up -> attack -> patch ->
+	// rebuild -> replay, some phases minutes long; the scoreboard prints only on COMPLETION, so a
+	// run stuck mid-phase produced an empty log and a bare timeout — the same silent-signal defect
+	// the cloud agent's transcript flush (fix #8) fixed. Naming the phase as it starts turns "it
+	// hung" into "it hung in <phase> on <id>".
+	phaseStart := time.Now()
+	phase := func(name string) {
+		fmt.Fprintf(os.Stderr, "[defense-xbow] %-14s %-22s (+%.0fs)\n", b.ID, name, time.Since(phaseStart).Seconds())
+	}
 	if len(b.Config.Tags) > 0 {
 		res.Class = b.Config.Tags[0]
 	}
@@ -132,9 +141,11 @@ func runOneXBOWDefense(ctx context.Context, b bench.XBOWBenchmark, binary, timeo
 	// 2. Build + up the VULN app (unique flag) and confirm exploitability by capturing the flag, recording
 	//    the winning exploit for deterministic replay.
 	flagStr, _ := bench.GenerateFlag()
+	phase("build-vuln")
 	if o, e := compose_(ctx, compose, "build", "--build-arg", "FLAG="+flagStr, "--build-arg", "flag="+flagStr); e != nil {
 		return errored("vuln build failed: " + tail(o))
 	}
+	phase("up-vuln")
 	if o, e := compose_(ctx, compose, "up", "-d", "--wait"); e != nil {
 		_, _ = composeDown(ctx, compose, true)
 		return errored("vuln up failed: " + tail(o))
@@ -146,6 +157,7 @@ func runOneXBOWDefense(ctx context.Context, b bench.XBOWBenchmark, binary, timeo
 		return errored("could not determine target URL")
 	}
 
+	phase("attack-capture")
 	exploit, captured, note := attackAndRecordExploit(ctx, binary, timeout, target, flagStr, b, exploitsDir)
 	if !captured {
 		res.Verdict = bench.DefNotVulnerable
@@ -155,6 +167,7 @@ func runOneXBOWDefense(ctx context.Context, b bench.XBOWBenchmark, binary, timeo
 	res.VulnConfirmed = true
 
 	// 3. Engineer patches: hand it the finding + source, get whole-file replacements.
+	phase("patch")
 	sources := gatherSource(work)
 	finding := codeagent.Finding{Class: res.Class, Endpoint: exploit.Steps[0].Path,
 		Detail: fmt.Sprintf("the pentest captured the flag via: %s %s %s", exploit.Steps[0].Method, exploit.Steps[0].Path, exploit.Steps[0].Body)}
@@ -173,6 +186,7 @@ func runOneXBOWDefense(ctx context.Context, b bench.XBOWBenchmark, binary, timeo
 	if aerr := applyPatch(work, proposed.Files); aerr != nil {
 		return errored("apply patch: " + aerr.Error())
 	}
+	phase("rebuild-patched")
 	if o, e := compose_(ctx, compose, "build", "--build-arg", "FLAG="+flagStr, "--build-arg", "flag="+flagStr); e != nil {
 		res.Verdict = bench.DefBrokeApp
 		res.Note = "patched build failed (the fix doesn't compile/build): " + tail(o)
@@ -186,6 +200,7 @@ func runOneXBOWDefense(ctx context.Context, b bench.XBOWBenchmark, binary, timeo
 	target = targetURL(ctx, compose, targetPort)
 
 	// 5. Verify: replay the recorded exploit (still capturable?) + the regression guard (app still works?).
+	phase("replay-verify")
 	rctx, rcancel := context.WithTimeout(ctx, 90*time.Second)
 	defer rcancel()
 	flagSeen, replayErr := bench.ReplayExploit(rctx, httpClient(), target, exploit, flagStr)

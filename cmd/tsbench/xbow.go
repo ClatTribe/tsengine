@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/bench"
+	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/llmretry"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -65,18 +67,39 @@ func xbowCmd(argv []string) error {
 	if err != nil {
 		return err
 	}
+	// Holdout is computed on the LEVEL-filtered, sorted set BEFORE --only, so `--holdout 20 --level 1`
+	// reserves 20 held-out level-1s (not the 20 highest IDs across all levels). The reserved IDs are
+	// then EXCLUDED from whatever --only selects, so a holdout member can never be run during tuning —
+	// running the holdout after tuning would measure memory, not capability.
+	holdoutIDs := map[string]bool{}
 	if *holdout > 0 {
-		if len(benches) > *holdout {
-			hold := benches[len(benches)-*holdout:]
+		pool := filterXBOW(benches, "", *level) // level-only view, already ID-sorted by LoadXBOWSuite
+		if len(pool) > *holdout {
+			hold := pool[len(pool)-*holdout:]
 			fmt.Fprintf(os.Stderr, "[xbow] holdout: reserving %d benchmark(s) untouched for final measurement:", *holdout)
 			for _, b := range hold {
+				holdoutIDs[b.ID] = true
 				fmt.Fprintf(os.Stderr, " %s", b.ID)
 			}
 			fmt.Fprintln(os.Stderr)
-			benches = benches[:len(benches)-*holdout]
+		} else {
+			fmt.Fprintf(os.Stderr, "[xbow] holdout: pool of %d ≤ requested %d — refusing to reserve (would leave nothing to run)\n", len(pool), *holdout)
 		}
 	}
 	benches = filterXBOW(benches, *only, *level)
+	if len(holdoutIDs) > 0 {
+		kept := benches[:0]
+		for _, b := range benches {
+			if holdoutIDs[b.ID] {
+				if strings.TrimSpace(*only) != "" {
+					fmt.Fprintf(os.Stderr, "[xbow] holdout: --only named %s but it is RESERVED — skipping it (measure the holdout separately, on the frozen harness)\n", b.ID)
+				}
+				continue
+			}
+			kept = append(kept, b)
+		}
+		benches = kept
+	}
 	if len(benches) == 0 {
 		return fmt.Errorf("no benchmarks matched --only/--level")
 	}
@@ -109,6 +132,36 @@ func xbowCmd(argv []string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// PRE-FLIGHT BRAIN CHECK (harness-improvement 2026-08-26): a 104-benchmark investigate run is
+	// hours of Docker build/up/teardown, and a DEAD BRAIN turns every one of them into a 0-turn miss.
+	// This session lost 22 runs to a RETIRED model (x-preview-f-free → "not supported") before anyone
+	// noticed, because the failure was silent per-benchmark. One cheap probe up front converts that
+	// into an immediate, actionable abort. Investigate-mode only (scan mode needs no LLM); skipped if
+	// no LLM is configured at all (the runOneXBOW path already reports "needs an LLM" per benchmark),
+	// and NON-FATAL on a transient probe error so a momentary blip doesn't block a real run.
+	if *mode == "investigate" {
+		if llm, ok := cloudengine.LLMFromEnv(); ok {
+			modelName := "configured LLM"
+			if n, hasName := llm.(interface{ ModelName() string }); hasName && n.ModelName() != "" {
+				modelName = n.ModelName()
+			}
+			pctx, pcancel := context.WithTimeout(ctx, 45*time.Second)
+			_, perr := llm.Generate(pctx, "Reply with exactly: OK")
+			pcancel()
+			if perr != nil && !llmretry.IsTransient(perr) {
+				return fmt.Errorf("pre-flight brain check failed for model %q: %w\n"+
+					"the configured LLM answered with a PERMANENT error — a retired/unauthorized model, a bad key, or a wrong base URL.\n"+
+					"every benchmark would BRAIN-STALL at 0 turns. Fix the model/key and re-run (list opencode models: curl -u opencode:<pass> $TSENGINE_LLM_OPENCODE/config/providers).",
+					modelName, perr)
+			}
+			if perr != nil {
+				fmt.Fprintf(os.Stderr, "[xbow] pre-flight brain check hit a transient error (%v) — proceeding; the run's own retries will absorb it.\n", perr)
+			} else {
+				fmt.Fprintf(os.Stderr, "[xbow] pre-flight brain check OK (model=%s)\n", modelName)
+			}
+		}
+	}
 
 	// Resume: carry forward results already checkpointed in <out>.json and skip those benchmarks. A
 	// 104-benchmark run is 12–28h on a laptop, so it MUST survive a crash/throttle/sleep/Ctrl-C.

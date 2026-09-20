@@ -181,7 +181,23 @@ func TestRescanSaidFixedHasOneWriter(t *testing.T) {
 	root = filepath.Dir(filepath.Dir(root)) // internal/fieldevidence -> repo root
 	var writers []string
 	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if err != nil {
+			return nil
+		}
+		// Skip directories that are not part of THIS checkout's source. `.claude/worktrees`
+		// holds git worktrees — separate checkouts of this same repository — so walking into
+		// them counted a COPY of internal/retest/reattack.go as a second, independent writer
+		// and failed the guard whenever a parallel session had a worktree open. The subject of
+		// this guard is the writers in this tree; a duplicate checkout is not a new writer.
+		// (The len(writers) == 0 floor below still catches an exclusion that hides the real one.)
+		if info.IsDir() {
+			switch info.Name() {
+			case ".claude", ".git", "vendor", "node_modules", "testdata":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		b, rerr := os.ReadFile(path)

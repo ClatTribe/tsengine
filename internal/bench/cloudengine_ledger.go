@@ -34,6 +34,14 @@ type CloudEngineLedgerEntry struct {
 	Discriminating bool    `json:"discriminating"` // did the run actually evaluate the agent?
 	LiftPaths      int     `json:"lift_paths"`
 	VerifiedRate   float64 `json:"verified_rate"` // remediation: verified fixes / confirmed
+	// COST AXIS. A recall number alone cannot tell "the agent did more work" from "the brain
+	// stalled" — and that ambiguity cost a whole measurement round: three seeds timed out and
+	// the ledger recorded nothing at all, so a harness change and a degraded model were
+	// indistinguishable after the fact. Turns is the agent's own tool-call count; ElapsedSec is
+	// wall clock. Both are OPTIONAL (omitempty): an older entry simply has no cost recorded,
+	// which must read as UNKNOWN rather than as zero cost.
+	Turns      int     `json:"turns,omitempty"`
+	ElapsedSec float64 `json:"elapsed_sec,omitempty"`
 }
 
 // CloudEngineEntry builds a ledger entry from the graded L2 scorecard + remediation of one run. TS is

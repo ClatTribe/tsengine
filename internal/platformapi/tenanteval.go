@@ -51,9 +51,19 @@ func (d Deps) handleTenantEval(w http.ResponseWriter, r *http.Request, tenantID 
 	}
 
 	out := map[string]any{"cases": res.Cases, "passed": res.Passed, "failures": res.Failures,
-		"by_source": res.BySource, "note": res.Note, "suite_hash": hash, "trend": trend}
+		"by_source": res.BySource, "note": res.Note, "suite_hash": hash, "trend": trend,
+		"confusion": res.Confusion}
 	if agree, ok := res.Agreement(); ok {
 		out["agreement"] = agree
+	}
+	// The FP-rejection rate is the trust number a buyer asks for — surfaced separately from the
+	// blended agreement, and only when there are false positives to reject (else it is the vacuous
+	// pass, and saying nothing is the honest answer).
+	if spec, ok := res.Confusion.Specificity(); ok {
+		out["fp_rejection"] = spec
+	}
+	if rec, ok := res.Confusion.Recall(); ok {
+		out["recall"] = rec
 	}
 	respond(w, out, nil)
 }

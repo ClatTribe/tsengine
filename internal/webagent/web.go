@@ -11,6 +11,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/breaker"
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
+	"github.com/ClatTribe/tsengine/internal/llmretry"
 	"github.com/ClatTribe/tsengine/pkg/ledger"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -97,8 +98,9 @@ type Report struct {
 // out of budget before we finished".
 type Coverage struct {
 	// StopReason is WHY the loop ended: "completed" (the agent called finish),
-	// "iteration_cap", "request_budget", or "model_error". Anything but
-	// "completed" means the surface was not fully worked.
+	// "iteration_cap", "request_budget", "timeout" (outer per-benchmark deadline),
+	// "model_throttled" (provider throttled past the retry cap), or "model_error".
+	// Anything but "completed" means the surface was not fully worked.
 	StopReason string `json:"stop_reason"`
 	// RoutesKnown is the in-scope surface the agent was aware of; RoutesProbed
 	// is how many of them it actually sent a request to. Probed < Known means
@@ -287,21 +289,39 @@ func Investigate(ctx context.Context, llm cloudengine.LLM, cc *Context, opts Opt
 	var transcript []string
 	stopReason := "iteration_cap" // default: the loop ran out of iterations without the agent finishing
 	iters := 0
-	for i := 0; i < opts.MaxIters && !cc.Done; i++ {
-		iters = i + 1
+	// throttled counts turns spent ONLY waiting out a transient provider throttle. They are given
+	// back to the iteration budget (a throttle is an orchestration artifact, not a capability turn)
+	// but capped by maxThrottleSkips so a permanently-unavailable brain can't spin forever.
+	throttled := 0
+	const maxThrottleSkips = 20
+	for i := 0; i-throttled < opts.MaxIters && !cc.Done; i++ {
+		iters = i + 1 - throttled // report REAL (non-throttled) turns used
 		out, err := generateWithRetry(ctx, llm, buildPrompt(cc, transcript), 3)
 		if err != nil {
-			if !isRetryable(err) {
+			// The outer per-benchmark deadline fires as a ctx error that also looks transient
+			// ("deadline exceeded"); it is terminal, not retryable — stop, don't spin.
+			if ctx.Err() != nil {
+				stopReason = "timeout"
+				break
+			}
+			if !llmretry.IsTransient(err) {
 				stopReason = "model_error"
 				if cc.Summary == "" {
 					cc.Summary = fmt.Sprintf("engagement stopped early after a model failure (%v); %d finding(s) recorded so far", err, len(cc.Findings))
 				}
 				break
 			}
-			// Transient throttle window: record it, nudge the turn, and continue
-			// rather than killing the whole engagement. The throttle is an
-			// orchestration artifact, not a capability miss, and the autopsy
-			// must see it as such (Finding 1).
+			// Transient throttle window: record it, nudge the turn, and continue rather than
+			// killing the whole engagement. The throttle is an orchestration artifact, not a
+			// capability miss, and the autopsy must see it as such (Finding 1).
+			throttled++
+			if throttled > maxThrottleSkips {
+				stopReason = "model_throttled"
+				if cc.Summary == "" {
+					cc.Summary = fmt.Sprintf("engagement stopped: provider throttled past %d retries (%v); %d finding(s) so far", maxThrottleSkips, err, len(cc.Findings))
+				}
+				break
+			}
 			opts.Ledger.Note(fmt.Sprintf("transient model error (retryable, continuing): %v", err))
 			transcript = appendCapped(transcript, fmt.Sprintf("OBSERVATION: model temporarily unavailable (%v) — retrying next turn; engagement continues.", err))
 			continue
@@ -454,7 +474,7 @@ func generateWithRetry(ctx context.Context, llm cloudengine.LLM, prompt string, 
 	var err error
 	for a := 0; a < attempts; a++ {
 		if a > 0 {
-			if err != nil && !isRetryable(err) {
+			if err != nil && !llmretry.IsTransient(err) {
 				return "", err // permanent — fail fast, don't burn the batch
 			}
 			backoff := retryBackoff(a, err)
@@ -472,35 +492,13 @@ func generateWithRetry(ctx context.Context, llm cloudengine.LLM, prompt string, 
 	return "", err
 }
 
-// isRetryable reports whether err is worth a retry. Delegates to the shared
-// classifier so webagent's throttle behaviour matches every other agent loop.
-func isRetryable(err error) bool {
-	if err == nil {
-		return false
-	}
-	// Import avoidance: llmretry lives outside webagent's import graph; inline
-	// the classifier's transient-signal set here and keep it in sync via a
-	// vet-time assertion (see TestRetryable_MirrorsLlmretry). The alternative —
-	// importing llmretry — would add a cross-package dependency for a string test.
-	return isTransientLLMError(err)
-}
+// retryBackoffUnit is the exponential-backoff base; a package var only so tests can shrink it (real
+// runs keep the second-scale default — a throttle window is tens of seconds).
+var retryBackoffUnit = time.Second
 
-func isTransientLLMError(err error) bool {
-	s := strings.ToLower(err.Error())
-	for _, sig := range []string{
-		"429", "rate limit", "overloaded", "status 500", "status 502", "status 503", "status 504", "status 529",
-		"timeout", "i/o timeout", "deadline exceeded", "connection reset", "connection refused", "eof", "temporarily",
-	} {
-		if strings.Contains(s, sig) {
-			return true
-		}
-	}
-	return false
-}
-
-// retryBackoff computes exponential backoff honoring Retry-After when present.
-// Caps at 90s so a single turn cannot consume the whole outer timeout, and that
-// wait is charged against ctx (the caller's per-benchmark deadline), not free.
+// retryBackoff computes exponential backoff honoring Retry-After when the client surfaces it in the
+// error string. Caps at 90s so a single turn cannot consume the whole outer timeout, and that wait
+// is charged against ctx (the caller's per-benchmark deadline), not free.
 func retryBackoff(attempt int, err error) time.Duration {
 	// Honor Retry-After: "retry after 42" or "Retry-After: 30"
 	if err != nil {
@@ -529,10 +527,13 @@ func retryBackoff(attempt int, err error) time.Duration {
 	}
 	// Exponential: 4s, 8s, 16s … capped at 90s (attempt 1 already waited before, so attempt=1 → 4s)
 	shift := attempt + 1
-	if shift > 7 { // 2^7 s = 128 s > the 90 s cap; bounding the shift keeps gosec's int→uint check quiet and the arithmetic in range
+	if shift > 7 { // 2^7 = 128 units > the 90 s cap; bounding the shift keeps gosec's int→uint check quiet and the arithmetic in range
 		shift = 7
 	}
-	d := time.Duration(1<<shift) * time.Second
+	// The UNIT stays retryBackoffUnit (not a hardcoded time.Second): it is a package var precisely so
+	// the retry tests can shrink it to a millisecond. Hardcoding the second here would make them wait
+	// out real 2–128 s backoffs.
+	d := time.Duration(1<<shift) * retryBackoffUnit
 	if d > 90*time.Second {
 		d = 90 * time.Second
 	}

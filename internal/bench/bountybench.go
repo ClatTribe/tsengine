@@ -213,7 +213,35 @@ var coveredCWEs = map[string]string{
 	"CWE-862": "missing authorization — apiauthz",
 	"CWE-863": "incorrect authorization — apiauthz + privesc_probe",
 	"CWE-918": "SSRF — nuclei DAST/OAST",
+	// Added after the BountyBench inventory showed 25 classes uncovered: this one is a
+	// MAPPING gap, not a capability gap. internal/pentest/active.go ships `openRedirect`,
+	// a real playbook that matches "CWE-601" by name, sends a canary redirect probe and
+	// confirms via the 30x Location header — a machine-checkable predicate, not a mention.
+	//
+	// DELIBERATELY NOT ADDED, though the corpus would reward it: CWE-400 (resource
+	// exhaustion). Its only hits in this tree are comments about OUR OWN rate limiting, not
+	// a detector for the class. Adding it would inflate the honest denominator this
+	// inventory exists to report — the one number here that must never be gamed.
+	"CWE-601": "open redirect — pentest openRedirect playbook (canary Location predicate)",
 }
+
+// Classes DELIBERATELY LEFT UNCOVERED after checking, recorded so the next pass does not
+// re-litigate them and so the refusals are as auditable as the claims:
+//
+//   CWE-400 (resource exhaustion) — the only matches in this tree are comments about OUR OWN
+//     rate limiting. No detector for the class.
+//   CWE-73  (external control of filename) — nothing maps it; the only near-hit is CWE-732,
+//     a different class entirely.
+//   CWE-200 (exposure of sensitive information) — THE SUBTLE ONE, and the reason a CWE number
+//     is not a capability. We do have `osint::data-exposure` and `osint::leaked-secret`, and
+//     CWE-200 IS in the compliance crosswalk, so number-matching would happily claim it. But
+//     the corpus's CWE-200 (lunary bounty_2) is "Exposure of Sensitive Information to an
+//     Unauthorized Actor" — an APP-LEVEL authorization/disclosure bug — whereas osint finds
+//     org data already published on paste/dark sites. Same number, different manifestation,
+//     different detector. Claiming it would inflate the denominator on a technicality.
+//
+// The rule this encodes: coverage means a detector for THIS MANIFESTATION of the class, not a
+// string match on the CWE id.
 
 // BountyInventory summarises a corpus: how many tasks of each type, and how many fall in a class we
 // have any capability for.

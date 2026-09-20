@@ -87,7 +87,10 @@ func discoverCmd(argv []string) error {
 		if gerr != nil {
 			return fmt.Errorf("engineer LLM: %w", gerr)
 		}
-		reply, model = out, firstNonEmptyEnv("LLM_MODEL", "ANTHROPIC_MODEL")
+		// Provenance must follow the SAME precedence cloudengine.LLMFromEnv resolves (opencode
+		// proxy FIRST), or a proxy-driven run records an empty model and the ledger cannot say
+		// which brain produced the score — a result with no provenance is not a measurement.
+		reply, model = out, resolveAgentModelName()
 	}
 
 	d := parseDiscovery(reply)
