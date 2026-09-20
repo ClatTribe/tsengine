@@ -237,7 +237,9 @@ func writeJSON(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	// 0o600: a cassette/episode file can carry probe responses from a live target, so it is owner-only
+	// (and gosec G306 requires <= 0o600 regardless).
+	return os.WriteFile(path, append(b, '\n'), 0o600)
 }
 
 func readJSON(path string, v any) error {
