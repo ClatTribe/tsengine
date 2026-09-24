@@ -299,6 +299,24 @@ export interface PentestEngagement {
   // that test did not happen, however clean the report looks.
   attempts?: PentestAttempt[] | null;
   attempts_truncated?: number;
+  // Fix re-verification: the result of re-running each proven exploit against the live target
+  // (POST /v1/pentest/{id}/retest). Latest snapshot — the current fix state, not a growing log.
+  retests?: PentestRetest[] | null;
+  retested_at?: string;
+  // The engagement carries a replayable evidence cassette (recorded during an active run) that the
+  // customer/auditor can download and re-run. Presence is inferred from the run, not a stored bool;
+  // the download endpoint 404s when there is nothing to replay.
+  evidence?: unknown;
+}
+
+// PentestRetest is one proven exploit's re-attack verdict after a fix.
+export interface PentestRetest {
+  finding_key: string;
+  endpoint?: string;
+  title?: string;
+  status: "closed_with_proof" | "still_exploitable" | "unverifiable";
+  evidence?: string;
+  at?: string;
 }
 
 export interface PentestAttempt {
@@ -1565,7 +1583,23 @@ export interface TenantEval {
   // Absent when there are no cases — an empty suite has NO score, because a vacuous 100% would
   // rise as a customer does less.
   agreement?: number;
+  // fp_rejection isolates the FALSE-POSITIVE-rejection rate from the blended agreement — of the
+  // findings you marked false positives, the share the pipeline correctly dropped. The trust
+  // number a buyer asks for. Absent when there are no suppress cases (a rate over zero fakes is
+  // undefined, never a vacuous 100%). `recall` is the other half (of the findings you reinstated
+  // as real, the share kept), also absent when there are none.
+  fp_rejection?: number;
+  recall?: number;
+  confusion?: EvalConfusion;
   note?: string;
+}
+
+// EvalConfusion is the keep/suppress breakdown behind fp_rejection + recall.
+export interface EvalConfusion {
+  kept_right: number;
+  kept_wrong: number;
+  rejected_right: number;
+  rejected_wrong: number;
 }
 
 // FixEfficacy — the measured track record of one kind of remediation against one kind of finding.

@@ -201,6 +201,43 @@ export const COMPETITORS: Record<string, CompetitorPage> = {
     seoTitle: "vs. Aikido — Dev Security + Compliance",
     seoDesc: `Aikido is strong developer-first app and cloud security. TensorShield shares that and adds ${FRAMEWORK_COUNT} compliance frameworks, a built-in pentest, and an expert.`,
   },
+  oneleet: {
+    slug: "vs-oneleet",
+    name: "Oneleet",
+    category: "vs. Oneleet · security-first compliance",
+    h1: "TensorShield vs. Oneleet",
+    sub: "Oneleet is the rare compliance vendor that takes real security seriously — it bundles a human pentest, a device agent, and a dedicated program manager. We share that security-first belief, then deliver it a different way: an autonomous AI engineer, a continuous exploitation-proven pentest, and transparent self-serve pricing.",
+    theirStrengths: [
+      "A genuine security-first bundle — real security work, not just an evidence trail",
+      "In-house human penetration testing by OSCE/OSWE-certified testers, included",
+      "A device agent + MDM for laptops (macOS, Windows, Linux)",
+      "A dedicated security program manager and coordinated partner-CPA audits",
+    ],
+    rows: [
+      { dim: "Penetration testing", us: "AI, exploitation-proven, continuous — re-tests after every fix + VAPT", them: "Human OSCE/OSWE, point-in-time (their strength)" },
+      { dim: "Pricing & onboarding", us: "Self-serve, public tiers, free to start, bring-your-own-LLM", them: "Quote-only, human-led onboarding (their strength)" },
+      { dim: "Device / MDM agent", us: "Device posture from your MDM export — no agent of our own yet", them: "Ships a laptop agent + MDM (their strength)" },
+      { dim: "Compliance frameworks", us: `${FRAMEWORK_COUNT}, mapped in parallel from real findings`, them: "16+, typically one framework at a time" },
+      { dim: "Security scanning", us: "Built-in across 8 asset types + cross-surface attack paths", them: "Built-in too (code, DAST, attack surface)" },
+      { dim: "Detection transparency", us: "OSS-transparent, reproducible, signed evidence", them: "Proprietary scanners" },
+      { dim: "Delivery model", us: "Self-serve, managed, or deliver to clients as an MSP", them: "Managed-service model" },
+    ],
+    edges: [
+      { t: "A continuous pentest, not a point-in-time one", d: "Oneleet's human testers are excellent, but a human pentest is a snapshot you buy once or twice a year. Ours runs continuously, proves each finding by exploiting it, and re-tests automatically after every fix — then produces the VAPT report your customer's security review asks for." },
+      { t: "Self-serve and transparent, not quote-only", d: "Oneleet is a managed, quote-based engagement. You can start here free, see your real posture from the scanning engine, and even run both AI agents on your own LLM key — no demo call to find out the price." },
+      OSS_EDGE,
+      { t: "Yours, managed, or an MSP's", d: "Oneleet gives you their program manager. We give you the choice: run it yourself, have our named expert run it (managed), or deliver it to your own clients as an MSP — the same engine, three go-to-market shapes." },
+    ],
+    chooseThem: "You want a hands-on managed engagement with bundled human OSCE/OSWE pentesters, a laptop agent that enforces device policy, and a program manager on Slack — and quote-based pricing is fine.",
+    chooseUs: "You want the same security-first bundle but self-serve and transparent, with an AI engineer and a continuous exploitation-proven pentest that re-tests every fix, broader parallel framework coverage, and the option to run it yourself or as an MSP.",
+    faq: [
+      ["Is TensorShield a Oneleet alternative?", "Yes — for teams that want security-first compliance but prefer a self-serve, transparent product with an autonomous AI engineer and a continuous pentest. Oneleet is a great fit if you specifically want a bundled human pentest, a device agent, and a hands-on managed engagement."],
+      ["Human pentest (Oneleet) or AI pentest (TensorShield)?", "Oneleet's OSCE/OSWE humans deliver a deep point-in-time report. Our AI pentester is exploitation-proven and continuous — it proves each finding, re-tests after every fix, and issues a VAPT report — so exposure is validated year-round rather than at a single audit-time engagement."],
+      ["Does TensorShield include a device agent like Oneleet?", "Not today — we assess device posture (disk encryption, screen lock, OS support, EDR) from your MDM's export rather than shipping our own laptop agent. If a managed laptop agent is a hard requirement, Oneleet leads there."],
+    ],
+    seoTitle: "vs. Oneleet — Security-First Compliance",
+    seoDesc: `Oneleet bundles a human pentest and device agent. TensorShield is self-serve: an AI engineer, a continuous exploitation-proven pentest, and ${FRAMEWORK_COUNT} frameworks.`,
+  },
 };
 
 export const COMPETITOR_LIST = Object.values(COMPETITORS);

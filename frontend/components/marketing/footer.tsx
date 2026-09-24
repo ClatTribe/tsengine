@@ -40,6 +40,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/vs-sprinto", label: "vs. Sprinto" },
       { href: "/vs-secureframe", label: "vs. Secureframe" },
       { href: "/vs-aikido", label: "vs. Aikido" },
+      { href: "/vs-oneleet", label: "vs. Oneleet" },
       { href: "/vs-consulting", label: "vs. a consultant" },
     ],
   },
@@ -60,7 +61,6 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
     links: [
       { href: "/scan", label: "Questionnaire scan" },
       { href: "/soc2-readiness", label: "SOC 2 self-assessment" },
-      { href: "/security-questionnaire", label: "Answering questionnaires" },
       { href: "/resources", label: "Free resources" },
       { href: "/sample-report", label: "Sample report" },
       { href: "/docs", label: "Docs" },

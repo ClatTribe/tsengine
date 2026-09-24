@@ -89,6 +89,16 @@ type VAPTSummary struct {
 	// would overstate, rolled into still-present it would claim the fix failed, and omitted entirely
 	// it would silently shrink the totals — the reader would see a smaller report and no reason why.
 	RetestAwaitingProof int `json:"retest_awaiting_proof,omitempty"`
+	// ExploitRetest* is the RE-ATTACK roll-up for this engagement's proven exploits (POST
+	// /v1/pentest/{id}/retest): the exploit itself was re-run after the fix. Deliberately NOT folded
+	// into RetestConfirmed/RetestStillPresent above, which are RE-SCAN evidence (the finding stopped
+	// appearing) — a weaker claim, and ADR 0025 F1 exists because the two have disagreed. Merged, a
+	// reader could not tell "a scanner went quiet" from "we re-ran the exploit and it failed".
+	// Unverifiable is its own count, never a synonym for closed. All zero when never re-tested.
+	ExploitRetestClosed           int       `json:"exploit_retest_closed,omitempty"`
+	ExploitRetestStillExploitable int       `json:"exploit_retest_still_exploitable,omitempty"`
+	ExploitRetestUnverifiable     int       `json:"exploit_retest_unverifiable,omitempty"`
+	ExploitRetestedAt             time.Time `json:"exploit_retested_at,omitzero"`
 	// PatchAvailable / PatchUnavailable: of the dependency (SCA) findings, how many have an upstream
 	// patched version the customer can upgrade to right now vs. none available yet — the competitor
 	// "fixable vs no-fix" executive signal. Only SCA findings (grype/trivy/osv-scanner) carry it.
@@ -116,6 +126,10 @@ type VAPTFinding struct {
 	OWASP         []string `json:"owasp,omitempty"`        // OWASP Top 10 (2021) category mapping
 	Remediation   string   `json:"remediation,omitempty"`  // the recommended fix (CWE-class standard)
 	Verification  string   `json:"verification,omitempty"` // verified | corroborated | pattern_match
+	// ExploitRetest is this finding's re-attack outcome after a fix — closed_with_proof |
+	// still_exploitable | unverifiable — with the evidence line. Empty when never re-tested.
+	ExploitRetest         string `json:"exploit_retest,omitempty"`
+	ExploitRetestEvidence string `json:"exploit_retest_evidence,omitempty"`
 	// Rung is HOW this was established — exploited | provider_confirmed | reachability_confirmed |
 	// corroborated | scanner_reported (ADR 0029 D2d).
 	//
@@ -318,6 +332,53 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 	return r
 }
 
+// RetestOutcome is one proven exploit's re-attack result (POST /v1/pentest/{id}/retest), in a shape
+// grc can consume WITHOUT importing pentest — pentest imports grc for the report, so the reverse
+// would cycle. The caller (platformapi, which imports both) converts pentest.RetestVerdict → this.
+type RetestOutcome struct {
+	Key      string    // detect.Key: "rule_id|endpoint"
+	Status   string    // closed_with_proof | still_exploitable | unverifiable
+	Evidence string    // the re-attack evidence line
+	At       time.Time // when the re-test ran
+}
+
+// ApplyRetests stamps a per-engagement report with the results of re-running its proven exploits
+// after a fix — the "did the fix hold?" answer, on the document the customer forwards. It is a
+// post-step on an already-built report (keeping ReportFromFindings pure): summary counts come from
+// the outcomes themselves (the authoritative re-test record), and each outcome is matched to its
+// finding by key (rule_id|endpoint) so the finding row can show its own verdict.
+//
+// Grounded (§10): "unverifiable" is counted as itself and NEVER as closed — a re-test we could not
+// run is not a fix confirmed. The exploit re-attack is kept DISTINCT from the re-scan roll-up
+// (RetestConfirmed/…): those say a scanner stopped seeing it; this says the exploit itself was re-run
+// and failed — a stronger claim the two must never be conflated into (ADR 0025 F1).
+func ApplyRetests(r *VAPTReport, outs []RetestOutcome) {
+	if r == nil || len(outs) == 0 {
+		return
+	}
+	byKey := make(map[string]RetestOutcome, len(outs))
+	for _, o := range outs {
+		byKey[o.Key] = o
+		switch o.Status {
+		case "closed_with_proof":
+			r.Summary.ExploitRetestClosed++
+		case "still_exploitable":
+			r.Summary.ExploitRetestStillExploitable++
+		default: // "unverifiable" or any unknown value — never counted as closed
+			r.Summary.ExploitRetestUnverifiable++
+		}
+		if o.At.After(r.Summary.ExploitRetestedAt) {
+			r.Summary.ExploitRetestedAt = o.At
+		}
+	}
+	for i := range r.Findings {
+		if o, ok := byKey[r.Findings[i].RuleID+"|"+r.Findings[i].Endpoint]; ok {
+			r.Findings[i].ExploitRetest = o.Status
+			r.Findings[i].ExploitRetestEvidence = o.Evidence
+		}
+	}
+}
+
 func isVerified(f types.Finding) bool {
 	return f.VerificationStatus == "verified" || f.VerificationStatus == "corroborated"
 }
@@ -369,6 +430,24 @@ func writeSignalLines(b *strings.Builder, s VAPTSummary) {
 	if s.RetestConfirmed > 0 || s.RetestStillPresent > 0 {
 		fmt.Fprintf(b, "- **Fix verification:** %s re-tested and confirmed closed on re-scan; %d still present after the fix\n",
 			countNoun(s.RetestConfirmed, "applied fix", "applied fixes"), s.RetestStillPresent)
+	}
+	// Exploit re-attack — the STRONGER fix-verification claim, kept on its own line: the exploit was
+	// re-run, not merely re-scanned. Each clause is emitted ONLY when its count is non-zero, so the
+	// reassuring "fix proven closed" phrase never appears over zero closed exploits; unverifiable is
+	// stated, never dropped (a re-test we could not run is not a fix confirmed).
+	if s.ExploitRetestClosed > 0 || s.ExploitRetestStillExploitable > 0 || s.ExploitRetestUnverifiable > 0 {
+		var cl []string
+		if s.ExploitRetestClosed > 0 {
+			cl = append(cl, fmt.Sprintf("%s re-run against the live target and no longer succeeds — fix proven closed",
+				countNoun(s.ExploitRetestClosed, "proven exploit was", "proven exploits were")))
+		}
+		if s.ExploitRetestStillExploitable > 0 {
+			cl = append(cl, fmt.Sprintf("%d still exploitable after the fix", s.ExploitRetestStillExploitable))
+		}
+		if s.ExploitRetestUnverifiable > 0 {
+			cl = append(cl, fmt.Sprintf("%d could not be re-run (not a confirmation)", s.ExploitRetestUnverifiable))
+		}
+		fmt.Fprintf(b, "- **Exploit re-test:** %s\n", strings.Join(cl, "; "))
 	}
 }
 
@@ -569,6 +648,20 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 				b.WriteString(" _(" + r.brand() + " has already prepared this fix — it's awaiting your approval.)_")
 			}
 			b.WriteString("\n")
+		}
+		// Fix re-test: the exploit was re-run against the live target after a fix. Each verdict states
+		// itself plainly — a closed exploit is the strongest good news in the report, a still-exploitable
+		// one is a reopen, and an unverifiable one says so rather than passing for either.
+		switch f.ExploitRetest {
+		case "closed_with_proof":
+			b.WriteString("\n**✓ Fix re-tested:** the exploit was re-run against the live target and no longer succeeds — closure proven, not merely absence from a re-scan.\n")
+		case "still_exploitable":
+			b.WriteString("\n**⚠ Fix re-tested:** the exploit was re-run after the fix and STILL succeeds — this is not closed.\n")
+		case "unverifiable":
+			b.WriteString("\n**Fix re-test:** the exploit could not be re-run, so closure is unconfirmed (not a confirmation that it is fixed).\n")
+		}
+		if f.ExploitRetestEvidence != "" && f.ExploitRetest != "" {
+			fmt.Fprintf(&b, "> %s\n", f.ExploitRetestEvidence)
 		}
 		b.WriteString("\n")
 	}
