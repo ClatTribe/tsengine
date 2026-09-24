@@ -54,3 +54,8 @@ scratchpad/
 
 # CVE-Bench-derived dataset: embeds third-party source at pinned SHAs; regenerate with scripts/cvebench_to_cvepatch.py
 fixtures/cvepatch/cvebench.json
+
+# Python bytecode + local scratch artifacts (never commit)
+__pycache__/
+*.pyc
+/llmproxy/

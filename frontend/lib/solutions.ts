@@ -88,6 +88,7 @@ export const ALTERNATIVES: SolutionLink[] = [
   { href: "/vs-sprinto", label: "vs Sprinto", prompt: "Built for the same SMB buyer." },
   { href: "/vs-secureframe", label: "vs Secureframe", prompt: "Evidence collection vs evidence generation." },
   { href: "/vs-aikido", label: "vs Aikido", prompt: "Scanner coverage — and what happens after a finding." },
+  { href: "/vs-oneleet", label: "vs Oneleet", prompt: "Security-first compliance — human bundle vs autonomous engine." },
   { href: "/vs-consulting", label: "vs a consultant or vCISO", prompt: "What a person does, and what a system should." },
 ];
 

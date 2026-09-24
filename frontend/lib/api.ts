@@ -851,6 +851,11 @@ export const api = {
   pentestFromAsset: (assetId: string, body: { name?: string; mode: string; max_requests?: number; out_of_scope?: string[]; allow_active?: boolean; authorized_by?: string; consent?: string }) =>
     call<PentestEngagement>(`/v1/assets/${assetId}/pentest`, { method: "POST", body: JSON.stringify(body) }),
   runPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/run`, { method: "POST" }),
+  // Re-run the engagement's proven exploits against the live target — the "did the fix hold?" check.
+  // Returns the engagement with its updated `retests` snapshot. Gated like any active exploitation
+  // (pentester entitlement + live prober + ownership); a finding it cannot re-run comes back
+  // unverifiable, never "fixed".
+  retestPentest: (id: string) => call<PentestEngagement>(`/v1/pentest/${id}/retest`, { method: "POST" }),
   // Set a recurring re-test cadence (off|daily|weekly|monthly). Scheduled runs are always a safe
   // passive re-verify — never auto active exploitation.
   setPentestSchedule: (id: string, cadence: string) =>

@@ -38,6 +38,8 @@ const SOURCE_LABEL: Record<string, string> = {
 export default async function EvalPage() {
   const [ev, eps] = await Promise.all([api.tenantEval(), api.episodes()]);
   const pct = ev.agreement != null ? Math.round(ev.agreement * 100) : null;
+  const fpPct = ev.fp_rejection != null ? Math.round(ev.fp_rejection * 100) : null;
+  const rejectedTotal = ev.confusion ? ev.confusion.rejected_right + ev.confusion.rejected_wrong : 0;
   const reinstatedFailures = ev.by_source?.reinstated ?? 0;
 
   return (
@@ -61,6 +63,25 @@ export default async function EvalPage() {
         <Empty>{ev.note ?? "No graded cases yet."}</Empty>
       ) : (
         <>
+          {/* FP-rejection — the trust number a buyer asks for, isolated from the blended agreement:
+              of the findings you called false positives, the share the pipeline correctly dropped.
+              Rendered only when there are false positives to reject — a rate over zero fakes is
+              undefined, never a vacuous 100%. */}
+          {fpPct != null && (
+            <div className="rounded-xl border border-accent/30 bg-accent-soft/40 px-5 py-4">
+              <div className="flex items-baseline gap-3">
+                <div className="text-3xl font-semibold text-accent">{fpPct}%</div>
+                <div>
+                  <div className="text-sm font-medium">False-positive rejection</div>
+                  <div className="mt-0.5 text-xs text-muted">
+                    of the {rejectedTotal} finding{rejectedTotal === 1 ? "" : "s"} you marked a false
+                    positive, the share the current setup correctly dropped — the trust number,
+                    measured on your own estate
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-border bg-surface px-4 py-3">
               <div className="text-2xl font-semibold text-ink">{pct}%</div>

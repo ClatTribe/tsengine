@@ -152,6 +152,7 @@ const vaptHTMLSource = `<!doctype html>
   {{if .S.Ransomware}}<li><b>{{.S.Ransomware}} ransomware-linked</b> — CISA marks the CVE used in ransomware campaigns, a stronger signal than KEV listing</li>{{end}}
   {{if .S.Automatable}}<li><b>{{.S.Automatable}} automatable</b> — CISA assesses an attacker can automate exploitation, so these scale across an estate rather than costing effort per target</li>{{end}}
   {{if .HasRetest}}<li><b>Fix verification:</b> {{.S.RetestConfirmed}} applied {{if eq .S.RetestConfirmed 1}}fix{{else}}fixes{{end}} re-tested and confirmed closed on re-scan; {{.S.RetestStillPresent}} still present after the fix{{if .S.RetestAwaitingProof}}; {{.S.RetestAwaitingProof}} found gone on re-scan but awaiting re-attack, because a clean re-scan for that class has been contradicted by a live exploit before{{end}}</li>{{end}}
+  {{if .HasExploitRetest}}<li><b>Exploit re-test:</b>{{if .S.ExploitRetestClosed}} {{.S.ExploitRetestClosed}} proven {{if eq .S.ExploitRetestClosed 1}}exploit was{{else}}exploits were{{end}} re-run against the live target and no longer {{if eq .S.ExploitRetestClosed 1}}succeeds{{else}}succeed{{end}} — fix proven closed.{{end}}{{if .S.ExploitRetestStillExploitable}} {{.S.ExploitRetestStillExploitable}} still exploitable after the fix.{{end}}{{if .S.ExploitRetestUnverifiable}} {{.S.ExploitRetestUnverifiable}} could not be re-run (not a confirmation).{{end}}</li>{{end}}
 </ul>
 <p>{{inline .Narrative}}</p>
 {{if .IntelCaveat}}<div class="caveat">{{inline .IntelCaveat}}</div>{{end}}
@@ -257,16 +258,17 @@ type vaptHTMLScopeRow struct {
 // vaptHTMLView is the template's data — a thin view-model so the template holds no logic that
 // belongs in Go (and so the honesty rules stay in one place, shared with the Markdown renderer).
 type vaptHTMLView struct {
-	Report      *VAPTReport
-	S           VAPTSummary
-	Sev         map[string]int
-	Scope       []vaptHTMLScopeRow
-	SCATotal    int
-	HasRetest   bool
-	Narrative   string
-	Brand       string // the prose brand (white-label or the product's); Engine in the meta lines is provenance and stays
-	EmptyNote   string
-	RatingClass string
+	Report           *VAPTReport
+	S                VAPTSummary
+	Sev              map[string]int
+	Scope            []vaptHTMLScopeRow
+	SCATotal         int
+	HasRetest        bool
+	HasExploitRetest bool
+	Narrative        string
+	Brand            string // the prose brand (white-label or the product's); Engine in the meta lines is provenance and stays
+	EmptyNote        string
+	RatingClass      string
 	// IntelCaveat / IntelLine mirror the Markdown renderer's intel-provenance disclosure, so the
 	// print deliverable cannot quietly drop the caveat the other medium carries.
 	IntelCaveat string
@@ -299,13 +301,14 @@ func RenderVAPTHTML(r *VAPTReport) string {
 	}
 	v := vaptHTMLView{
 		Report: r, S: r.Summary, Sev: sev, Scope: rows,
-		SCATotal:    r.Summary.PatchAvailable + r.Summary.PatchUnavailable,
-		HasRetest:   r.Summary.RetestConfirmed > 0 || r.Summary.RetestStillPresent > 0 || r.Summary.RetestAwaitingProof > 0,
-		Narrative:   narrativeSummary(r),
-		Brand:       r.brand(),
-		RatingClass: ratingClass(r.Summary.RiskRating),
-		IntelCaveat: r.Intel.IntelCaveat(),
-		IntelLine:   RenderIntelProvenance(r.Intel),
+		SCATotal:         r.Summary.PatchAvailable + r.Summary.PatchUnavailable,
+		HasRetest:        r.Summary.RetestConfirmed > 0 || r.Summary.RetestStillPresent > 0 || r.Summary.RetestAwaitingProof > 0,
+		HasExploitRetest: r.Summary.ExploitRetestClosed > 0 || r.Summary.ExploitRetestStillExploitable > 0 || r.Summary.ExploitRetestUnverifiable > 0,
+		Narrative:        narrativeSummary(r),
+		Brand:            r.brand(),
+		RatingClass:      ratingClass(r.Summary.RiskRating),
+		IntelCaveat:      r.Intel.IntelCaveat(),
+		IntelLine:        RenderIntelProvenance(r.Intel),
 	}
 	if len(r.Findings) == 0 {
 		v.EmptyNote = emptyFindingsNote(r)
