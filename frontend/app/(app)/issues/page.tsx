@@ -391,6 +391,14 @@ function IssueRow({ issue, ignored, prior, explain }: { issue: Issue; ignored: b
               <Flame className="h-3 w-3" /> under attack
             </span>
           )}
+          {issue.waf_shielded && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold text-muted"
+              title={issue.waf_shield_reason || "A WAF/RASP blocked this attack in testing — a compensating control. Not a fix: the code is still vulnerable."}
+            >
+              <ShieldCheck className="h-3 w-3" /> WAF-shielded
+            </span>
+          )}
           {issue.live && !issue.attacked && (
             <span
               className="inline-flex items-center gap-0.5 rounded-full bg-high/10 px-1.5 py-0.5 text-[10px] font-semibold text-high"

@@ -568,8 +568,26 @@ func main() {
 		// above. Nil connection → proberOrNil returns nil → check_reachable says the provider was not
 		// asked, rather than reporting a path proven or unproven.
 		CloudProber: func(c platform.Connection) cloudagent.ExploitProber {
+			// Provider-aware: an AWS connection gets AWS's simulator, a GCP connection gets the Policy
+			// Troubleshooter (gcp.go), and anything else returns nil so check_reachable says the
+			// provider was not asked rather than reporting a proof. Building an AWS simulator against a
+			// GCP connection's credential — the old unconditional behaviour — would answer with a role
+			// ARN that GCP does not have, i.e. never, silently downgrading every GCP path to unproven.
+			var sim cloudprobe.Simulator
+			switch c.Kind {
+			case platform.ConnAWS:
+				sim = cloudprobe.NewAWSSimulator(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID)
+			case platform.ConnGCP:
+				// The dry-run needs a GCP identity to impersonate; the only one stored per GCP
+				// connection is the remediation SA (a READ troubleshoot fits inside a write-capable
+				// SA). Absent → "" → ADC, whose troubleshoot call simply fails to UNKNOWN, never a
+				// wrong verdict. So GCP dry-run follows that config, documented as such.
+				sim = cloudprobe.NewGCPSimulator(c.Config[platform.CfgRemediationSA])
+			default:
+				return nil
+			}
 			return &cloudprobe.Prober{
-				Sim: cloudprobe.NewAWSSimulator(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				Sim: sim,
 				// The stamp layout is load-bearing: ADR 0024 P1c parses it to age a proof, and a
 				// differently-formatted one would make every proof unreadable and so StandingUnknown.
 				Now: platformapi.ProbeStamp,

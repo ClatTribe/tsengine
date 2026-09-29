@@ -572,6 +572,11 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 		// being attacked in production opens an incident regardless of severity floor.
 		var attacked map[string]bool
 		if evs, err := s.Store.ListRuntimeEvents(ctx, tenantID); err == nil {
+			// Exclude our OWN exposure-validation probes before deriving the under-attack set: a WAF/RASP
+			// event carrying one of this tenant's probe canaries is us, not an attacker (controltest folds
+			// WAF logs into this stream), and must not open a severity-floor-bypassing incident on our own
+			// traffic. Best-effort — a lookup error leaves the events unfiltered.
+			evs = crossdetect.WithoutOwnProbes(evs, s.tenantProbeMarkers(ctx, tenantID))
 			attacked = crossdetect.AttackedKeys(current, evs)
 		}
 		// A degraded pass is not authoritative about absence, so route to the OPEN-ONLY path — the
@@ -1208,4 +1213,23 @@ func producersForAssetType(assetType string) []string {
 	default:
 		return nil
 	}
+}
+
+// tenantProbeMarkers collects the tenant's own probe canaries as a set, so our exposure-validation
+// traffic is not mistaken for a production attack (crossdetect.WithoutOwnProbes). Best-effort: any
+// error yields a nil set, which leaves the runtime events unfiltered rather than dropping the signal.
+func (s *Service) tenantProbeMarkers(ctx context.Context, tenantID string) map[string]bool {
+	engs, err := s.Store.ListPentests(ctx, tenantID)
+	if err != nil {
+		return nil
+	}
+	m := map[string]bool{}
+	for _, e := range engs {
+		for _, a := range e.Attempts {
+			if a.Canary != "" {
+				m[a.Canary] = true
+			}
+		}
+	}
+	return m
 }

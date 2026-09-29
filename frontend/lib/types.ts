@@ -190,6 +190,8 @@ export interface Issue {
   confirmed: boolean; // ≥2 independent scanners agree
   finding_ids: string[];
   attacked?: boolean; // endpoint observed under attack in production (runtime signal)
+  waf_shielded?: boolean; // a WAF/RASP blocked our exploit probe here — a compensating control, NOT a fix
+  waf_shield_reason?: string;
   // Data-tier prioritisation: the list is RE-SORTED by risk_rank (severity x tier), so a Medium on a
   // customer-data asset can outrank a Medium on a low-sensitivity one. Without showing the tier, that
   // reordering is invisible reasoning — two Mediums appear in an order the reader cannot account for,

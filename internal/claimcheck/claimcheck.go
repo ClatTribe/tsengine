@@ -90,7 +90,7 @@ func Registry() []Claim {
 		{
 			Name:   "xbow_flag_capture",
 			Value:  "85.6",
-			Source: "tsbench xbow over XBOW's own 104-benchmark suite (89/104); NOT recomputable in CI — needs a capable LLM and the deployed benchmark targets",
+			Source: "tsbench xbow over XBOW's own 104-benchmark suite (89/104). MEASURED WITH A FRONTIER LLM DRIVING THE AGENT THROUGH A FILE-RELAY RESEARCH HARNESS (the Max-plan proxy), NOT the production self-serve path where the customer brings their own model — so the figure is model-dependent and is an upper bound, not a floor. NOT recomputable in CI — needs a capable LLM and the deployed benchmark targets. Distinct from the bench/agent verified_rate (WebGoat/Juice Shop), which is a separate live measurement still pending a run.",
 			Home:   "docs/adr/0024-best-in-breed-coverage-gaps.md",
 		},
 		{
