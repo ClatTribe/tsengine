@@ -5,14 +5,26 @@
 //
 // The dry-run is READ-ONLY and benign by construction — it asks the provider's own policy engine
 // "would this be allowed?" and performs nothing:
-//   - AWS   iam.SimulatePrincipalPolicy(PolicySourceArn=principal, ActionNames=[action], ResourceArns=[resource])
-//   - GCP   iam.testIamPermissions / resourcemanager Projects.TestIamPermissions
-//   - Azure authorization CheckAccess (Microsoft.Authorization/checkAccess)
+//   - AWS   iam.SimulatePrincipalPolicy(PolicySourceArn=principal, ActionNames=[action], ResourceArns=[resource])  [aws.go]
+//   - GCP   IAM Policy Troubleshooter troubleshootIamPolicy(AccessTuple{principal, permission, fullResourceName})  [gcp.go]
+//   - Azure — DEFERRED, and NOT via Microsoft.Authorization/checkAccess.
+//
+// # A CORRECTION THAT MATTERS (§10): the naive GCP/Azure calls answer a DIFFERENT question
+//
+// The obvious GCP call (resourcemanager.TestIamPermissions) and the obvious Azure call
+// (Microsoft.Authorization/checkAccess) both answer "what can the AUTHENTICATED CALLER do?" — about US,
+// not about the arbitrary principal on the attack-path edge that Simulate(principal, ...) asks about.
+// Building on them would report our own service principal's access wearing a provider's authority — a
+// confident wrong verdict, the exact failure this ladder exists to avoid. So GCP uses the Policy
+// Troubleshooter, which takes a full (principal, permission, resource) tuple and decides for THAT
+// principal. Azure has no equivalent arbitrary-principal RBAC simulator in a stable Go SDK today
+// (checkAccess is caller-scoped), so it is DEFERRED with this reason recorded rather than built on the
+// wrong API; until it lands, "provider-confirmed" is an AWS+GCP claim and is written as one.
 //
 // This file ships the SHAPE and a deterministic fake so the wiring, the tool, and the grounding can be
-// tested offline. The three live SDK adapters are the follow-on (each gated on the read-only session
-// already assumed with cloudsafety.SessionPolicy — SimulatePrincipalPolicy needs iam:SimulatePrincipalPolicy,
-// which is a READ permission, so it fits inside the existing read-only cross-account role).
+// tested offline. AWS and GCP have live adapters (aws.go, gcp.go); each is gated on a read-only
+// session (SimulatePrincipalPolicy and policytroubleshooter.iam.troubleshoot are both READ permissions,
+// so each fits inside the existing read-only cross-account / impersonated role).
 package cloudprobe
 
 import (
