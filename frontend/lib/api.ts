@@ -13,7 +13,7 @@ import type {
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User } from "./types";
+  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User, ProductsView } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -571,6 +571,22 @@ export const api = {
     call<TrainingProgramme>("/v1/training/record", {
       method: "POST", body: JSON.stringify({ subject, module_id: moduleID, provider, on, note }),
     }),
+
+  // Products — the scoping unit (ADR 0028 G2). Proposals are recomputed on every read; only a product a
+  // named person confirmed is stored. The fallback is an EMPTY picture, never an invented product.
+  products: () =>
+    safe<ProductsView>("/v1/products", {
+      products: [], proposals: [], unassigned: [], out_of_scope: [],
+      links_note: "", deploy_links_unavailable: true,
+    }),
+  createProduct: (body: { name: string; asset_ids: string[]; confirmed_by: string; owner?: string }) =>
+    call<{ id: string }>("/v1/products", { method: "POST", body: JSON.stringify(body) }),
+  updateProduct: (id: string, body: { name?: string; owner?: string; asset_ids?: string[]; confirmed_by: string }) =>
+    call<{ id: string }>(`/v1/products/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteProduct: (id: string) =>
+    call<{ deleted: string }>(`/v1/products/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  setAssetScope: (body: { asset_id: string; out_of_scope: boolean; by: string; reason?: string }) =>
+    call<{ asset_id: string }>("/v1/products/scope", { method: "POST", body: JSON.stringify(body) }),
 
   // The periodic access review (SOC 2 CC6.2/CC6.3). Rebuilt from CURRENT identity findings on every
   // read, with stored decisions merged back on — so the reviewer is always answering about who has
