@@ -172,6 +172,8 @@ continuous, so this report reflects the current state, not a point-in-time snaps
 {{if .IntelLine}}<p>{{inline .IntelLine}}</p>{{end}}
 
 <h2>Scope</h2>
+{{if .Report.ScopeStatement}}<p><b>{{.Report.ScopeStatement}}</b></p>{{end}}
+{{if .Report.UnattributedExcluded}}<p class="muted"><i>{{.Report.UnattributedExcluded}} finding(s) in this workspace could not be attributed to any asset and are not included in this product's report.</i></p>{{end}}
 {{if not .Report.Scope}}<p class="muted"><i>No assets in scope yet — connect a system to begin the assessment.</i></p>
 {{else}}<ul>
 {{range .Scope}}<li><code>{{.Target}}</code>{{if .Untested}} — <b>not assessed</b> (no scan has run against this target){{else if .Partial}} — <b>partially assessed</b> (the last scan lost one or more tools; what they would have found is not represented here){{end}}</li>
