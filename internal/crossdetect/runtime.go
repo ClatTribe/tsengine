@@ -46,6 +46,51 @@ func AnnotateRuntime(issues []Issue, events []platform.RuntimeEvent) int {
 	return flagged
 }
 
+// AnnotateCompensatingControls marks each issue whose endpoint had our OWN exploitation probe BLOCKED
+// by a security control (a WAF/RASP event with Blocked:true carrying one of our probe canaries). That
+// is grounded evidence of a compensating control: we tried the exploit through the customer's own
+// perimeter and it was stopped, so an external attacker using the same technique is stopped by that
+// rule today.
+//
+// It is DELIBERATELY the mirror of WithoutOwnProbes: that filter removes our own probes so they cannot
+// read as a production ATTACK; this consumer WANTS them, because a control blocking OUR probe is the
+// signal. So this must run on the RAW event stream (with own markers intact), not the filtered one.
+//
+// The refusal that keeps it honest (ADR 0027's rung-skipping warning, §10): it NEVER lowers Severity
+// and NEVER marks the issue fixed. A WAF rule is not a code fix — it can be changed, bypassed, or fail
+// to cover a variant — so this is breathing room for triage, stated as such, not closure. Returns the
+// number of issues annotated.
+func AnnotateCompensatingControls(issues []Issue, events []platform.RuntimeEvent, ownMarkers map[string]bool) int {
+	if len(events) == 0 || len(ownMarkers) == 0 {
+		return 0
+	}
+	// Endpoint paths where our OWN probe was blocked by a control.
+	blockedOwn := map[string]bool{}
+	for _, e := range events {
+		if !e.Blocked || e.Marker == "" || !ownMarkers[e.Marker] {
+			continue // must be OUR probe (marker is ours) AND actually blocked
+		}
+		if p := httpPath(e.Endpoint); p != "" {
+			blockedOwn[p] = true
+		}
+	}
+	n := 0
+	for i := range issues {
+		p := httpPath(issues[i].Endpoint)
+		if p == "" || !blockedOwn[p] {
+			continue
+		}
+		issues[i].WAFShielded = true
+		issues[i].WAFShieldReason = "A security control (WAF/RASP) blocked this exact attack during " +
+			"testing, so an attacker using the same technique is stopped by that rule today. This is " +
+			"NOT a fix: the underlying code is still vulnerable, and a rule change, a bypass, or an " +
+			"untested variant removes the mitigation. Prioritise the code fix; treat the block as " +
+			"breathing room, not closure."
+		n++
+	}
+	return n
+}
+
 // WithoutOwnProbes drops runtime events that are our OWN exposure-validation traffic — an event
 // whose Marker is one of the tenant's probe canaries. A real-world attacker does not carry our
 // canary, so a marker match is definitionally us. This matters because control-plane WAF logs

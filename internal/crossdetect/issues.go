@@ -29,6 +29,14 @@ type Issue struct {
 	// the strongest exploitability evidence. Set by AnnotateRuntime.
 	Attacked    bool `json:"attacked,omitempty"`
 	AttackCount int  `json:"attack_count,omitempty"`
+	// Compensating control (ADR 0027 S3, the "config_possible" rung — set by
+	// AnnotateCompensatingControls). WAFShielded means a security control (WAF/RASP) was observed
+	// BLOCKING our own exploitation probe of this endpoint, so an external attacker using the same
+	// technique is also blocked by that rule TODAY. It is a triage signal ONLY: it never lowers
+	// Severity and never marks the issue fixed, because the underlying code is still vulnerable and a
+	// rule change / bypass / untested variant removes the mitigation. The reason states exactly that.
+	WAFShielded     bool   `json:"waf_shielded,omitempty"`
+	WAFShieldReason string `json:"waf_shield_reason,omitempty"`
 	// Data-tier prioritization (PrioritizeByDataTier): DataTier is the customer-data
 	// sensitivity of the asset this issue was attributed to (1 = customer data … 3 = low);
 	// RiskRank is the tier-adjusted priority (severity × tier) the issue list is sorted by.

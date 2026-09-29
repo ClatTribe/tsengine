@@ -142,14 +142,16 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 		respond(w, nil, err)
 		return
 	}
-	// Exclude our OWN exposure-validation probes: a WAF/RASP event carrying one of this tenant's probe
-	// canaries is us, not a production attacker, and must not flag an issue "under active attack in the
-	// wild" (controltest folds WAF logs into this same stream). Best-effort — a canary-lookup error
-	// leaves the events unfiltered rather than dropping the runtime signal entirely.
-	if markers, merr := d.tenantProbeMarkers(ctx, tenantID); merr == nil {
-		events = crossdetect.WithoutOwnProbes(events, markers)
-	}
-	attacked := crossdetect.AnnotateRuntime(issues, events)
+	// Two consumers of the same runtime stream with OPPOSITE needs w.r.t. our own probes:
+	//   - AnnotateCompensatingControls WANTS our own blocked probes (a control blocking OUR exploit is
+	//     the compensating-control signal), so it reads the RAW events.
+	//   - AnnotateRuntime must NOT see our own probes (they would read as a production attack), so it
+	//     reads the stream with our probes filtered out.
+	// Best-effort — a canary-lookup error leaves the events unfiltered rather than dropping the signal.
+	markers, _ := d.tenantProbeMarkers(ctx, tenantID)
+	shielded := crossdetect.AnnotateCompensatingControls(issues, events, markers)
+	filtered := crossdetect.WithoutOwnProbes(events, markers)
+	attacked := crossdetect.AnnotateRuntime(issues, filtered)
 
 	// Live-exploitable fusion (the ACSP "active / reachable / exploitable" lens): combine the
 	// runtime-attacked signal with internet-exposure + cross-surface attack-path reachability so the
@@ -181,7 +183,7 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 		"issues": issues, "count": len(issues), "raw_findings": rawCount,
 		"explanations": explanations,
 		"confirmed":    confirmed, "ignored": len(ignored), "excluded": excludedCount,
-		"attacked": attacked, "live": live,
+		"attacked": attacked, "waf_shielded": shielded, "live": live,
 	}, nil)
 }
 
