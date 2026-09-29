@@ -286,10 +286,7 @@ func Propose(assets []platform.Asset, links []Link, products []platform.Product,
 			continue
 		}
 
-		freeLinks := []Link{}
-		for _, l := range compLinks {
-			freeLinks = append(freeLinks, l)
-		}
+		freeLinks := append([]Link{}, compLinks...)
 		// A product is identified by what a customer reaches. Infrastructure with no customer-facing
 		// member — however well linked internally — is left for a human to place, never guessed.
 		if !facing {
