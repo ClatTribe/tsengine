@@ -195,6 +195,17 @@ type Tenant struct {
 	// attestations, sign-offs, policy publishing) for this tenant. Each carries a Capacity matching
 	// the service model. No bearer secret → stored plain (like Contacts).
 	Practitioners []Practitioner `json:"practitioners,omitempty"`
+	// Products are the things this tenant's customers buy and review — the scoping unit (ADR 0028 G2).
+	// For a company without a security team, CTEM's "business service" is the same act as the scope of a
+	// customer's security review: the system a pentest report covers, the boundary of the trust centre,
+	// the system description in SOC 2. Only CONFIRMED products are stored — proposals are computed at
+	// read time from the links internal/productscope can prove, so a proposal cannot go stale on disk.
+	// A handful per tenant, no secret → stored on the Tenant (like Contacts).
+	Products []Product `json:"products,omitempty"`
+	// OutOfScope marks assets a named human deliberately excluded from every product (the marketing
+	// site, an internal tool), keyed by asset id. Recorded rather than deleted, because "we decided
+	// this is not what customers review" is itself part of the scope a reviewer reads.
+	OutOfScope map[string]ScopeExclusion `json:"out_of_scope,omitempty"`
 	// TargetFrameworks is the compliance scope the customer is actually pursuing (e.g. ["soc2","hipaa"]).
 	// Captured BEFORE analysis so the posture, coverage, and "what to connect" readiness focus on what
 	// the customer needs — not all 14. Empty = no declared scope (the UI shows the full catalog). Keys
@@ -291,6 +302,36 @@ type Practitioner struct {
 	Capacity   string   `json:"capacity"`             // internal | msp | managed
 	Email      string   `json:"email,omitempty"`
 	Scope      []string `json:"scope,omitempty"` // deliverables they cover: vciso|audit|pentest|risk (empty = all)
+}
+
+// Product is one thing a tenant's customers buy and review (ADR 0028 G2).
+//
+// It exists only once a NAMED HUMAN confirms it. The platform proposes groupings from links it can
+// prove (internal/productscope) and never stores a proposal, because a scope nobody agreed to is the
+// same overclaim as a report signed by nobody: it tells a customer's reviewer "this is what the
+// product consists of" on the strength of an inference.
+type Product struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Owner is who answers for the product's exposure. Contact metadata, never an authorization input.
+	Owner string `json:"owner,omitempty"`
+	// AssetIDs are the member assets. An asset MAY belong to more than one product — shared
+	// infrastructure is real (one cloud account running two products) — and the API says so rather
+	// than forcing a false partition.
+	AssetIDs []string `json:"asset_ids"`
+	// ConfirmedBy is the named human who agreed this is the product's scope; ConfirmedAt is when. Both
+	// are refreshed on every membership change, because a scope edited by one person and "confirmed" by
+	// another is not a confirmation of what it now contains.
+	ConfirmedBy string    `json:"confirmed_by"`
+	ConfirmedAt time.Time `json:"confirmed_at"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// ScopeExclusion records that a named human took an asset out of scope, and why.
+type ScopeExclusion struct {
+	By     string    `json:"by"`
+	Reason string    `json:"reason,omitempty"`
+	At     time.Time `json:"at"`
 }
 
 // Contact is one entry in the on-call escalation roster — who to reach, in what order. Phone is the
