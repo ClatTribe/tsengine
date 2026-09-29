@@ -119,3 +119,20 @@ func (d Deps) tenantProbeCanaries(ctx context.Context, tenantID string) ([]strin
 	}
 	return out, nil
 }
+
+// tenantProbeMarkers is tenantProbeCanaries as a set, for excluding our own probes from the
+// production-attack signal (crossdetect.WithoutOwnProbes).
+func (d Deps) tenantProbeMarkers(ctx context.Context, tenantID string) (map[string]bool, error) {
+	cs, err := d.tenantProbeCanaries(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if len(cs) == 0 {
+		return nil, nil
+	}
+	m := make(map[string]bool, len(cs))
+	for _, c := range cs {
+		m[c] = true
+	}
+	return m, nil
+}

@@ -142,6 +142,13 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 		respond(w, nil, err)
 		return
 	}
+	// Exclude our OWN exposure-validation probes: a WAF/RASP event carrying one of this tenant's probe
+	// canaries is us, not a production attacker, and must not flag an issue "under active attack in the
+	// wild" (controltest folds WAF logs into this same stream). Best-effort — a canary-lookup error
+	// leaves the events unfiltered rather than dropping the runtime signal entirely.
+	if markers, merr := d.tenantProbeMarkers(ctx, tenantID); merr == nil {
+		events = crossdetect.WithoutOwnProbes(events, markers)
+	}
 	attacked := crossdetect.AnnotateRuntime(issues, events)
 
 	// Live-exploitable fusion (the ACSP "active / reachable / exploitable" lens): combine the

@@ -46,6 +46,28 @@ func AnnotateRuntime(issues []Issue, events []platform.RuntimeEvent) int {
 	return flagged
 }
 
+// WithoutOwnProbes drops runtime events that are our OWN exposure-validation traffic — an event
+// whose Marker is one of the tenant's probe canaries. A real-world attacker does not carry our
+// canary, so a marker match is definitionally us. This matters because control-plane WAF logs
+// (internal/controltest) land in the SAME RuntimeEvent stream these functions read: without this
+// filter, our own pentest SQLi reflected in the customer's WAF log would be counted as an
+// in-the-wild attack and open a severity-floor-bypassing incident (ADR-0007 Phase 0b) — the product
+// reporting its own probe as someone attacking the customer. Events with no marker, or a marker that
+// is not ours, are kept unchanged (a genuine attack carries no canary of ours).
+func WithoutOwnProbes(events []platform.RuntimeEvent, ownMarkers map[string]bool) []platform.RuntimeEvent {
+	if len(ownMarkers) == 0 || len(events) == 0 {
+		return events
+	}
+	out := make([]platform.RuntimeEvent, 0, len(events))
+	for _, e := range events {
+		if e.Marker != "" && ownMarkers[e.Marker] {
+			continue // our own probe, not a production attack
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // AttackedKeys returns the set of finding identities (rule_id|endpoint — the same key
 // the incident detector uses) whose endpoint is being attacked in production per a
 // runtime event. The platform escalates these into incidents regardless of the
