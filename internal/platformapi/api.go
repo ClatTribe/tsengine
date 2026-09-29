@@ -321,6 +321,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))                     // is exposure going down?
 	mux.HandleFunc("PUT /v1/settings/exposure-objective", d.auth(d.handleSetExposureObjective)) // …and is that good? (ADR 0028 G3)
 	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation))         // did their controls catch our probes?
+	mux.HandleFunc("POST /v1/control-plane/detections", d.auth(d.handleIngestControlDetections)) // WAF logs as the control under test (ADR 0027)
 	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                        // correlate a customer ScubaGear run against ours
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation

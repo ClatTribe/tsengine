@@ -1,6 +1,6 @@
 # ADR 0027 — The control plane: did their defences catch us, would they have stopped this, and can we use them today
 
-**Status:** Proposed — **design only, no code.** Scopes the one integration that unlocks the three
+**Status:** S1 IMPLEMENTED (`internal/detectionvalidation`, `/v1/detection-validation`). S2 first door IMPLEMENTED for the WAF as the control under test (`internal/controltest`, `POST /v1/control-plane/detections`) — posted-snapshot only; the live pull and the read-only inventory beyond it remain proposed. Scopes the one integration that unlocks the three
 remaining CTEM gaps at once. Written because the temptation here is to build the flattering half
 (read a WAF policy, declare the exposure mitigated) and skip the half that makes it true.
 
@@ -179,8 +179,9 @@ quietly worked around.
 | Item | Effort | Risk | Status |
 |---|---|---|---|
 | **S0** run-unique re-attack canary | XS | none | Proposed — prerequisite |
-| **S1** canary ↔ RuntimeEvent correlation | S | low (no new credential) | Proposed — **start here** |
-| **S2** read-only control inventory | M | credential surface | Proposed — needs the plane decision |
+| **S1** canary ↔ RuntimeEvent correlation | S | low (no new credential) | **Implemented** — `internal/detectionvalidation` |
+| **S2** WAF logs as the control under test | S | none (posted) / credential (live pull) | **First door implemented** — `internal/controltest` (AWS WAF + Cloudflare → the RuntimeEvent stream, canary-joined, BLOCK read from the control's own verdict). Live pull + GuardDuty are the gated follow-ons |
+| **S2b** read-only control inventory | M | credential surface | Proposed — needs the plane decision |
 | **S3** compensating annotation (config_possible) | M | **medium** — the rung-skipping temptation | Proposed |
 | **S4** probe-through-control (confirmed_blocked) | M | active testing, RoE-gated | Proposed |
 | **S5** mitigate-now filtering | S | none | Proposed — falls out of S2 |
