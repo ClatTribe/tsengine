@@ -7,7 +7,9 @@ import (
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
-func web(id, t string) platform.Asset  { return platform.Asset{ID: id, Type: "web_application", Target: t} }
+func web(id, t string) platform.Asset {
+	return platform.Asset{ID: id, Type: "web_application", Target: t}
+}
 func api(id, t string) platform.Asset  { return platform.Asset{ID: id, Type: "api", Target: t} }
 func repo(id, t string) platform.Asset { return platform.Asset{ID: id, Type: "repository", Target: t} }
 func aws(id, acct string) platform.Asset {
@@ -194,5 +196,33 @@ func TestAccountOfPrincipalAndRepoNode(t *testing.T) {
 	}
 	if got := GitHubRepoNode("https://github.com/Acme/API.git"); got != "code:acme/api" {
 		t.Fatalf("repo node: %q", got)
+	}
+}
+
+// Regression: domain links form a star around the group's first id, so a product member may be one hop
+// from another host under the SAME registered domain. That host must be SUGGESTED for the product, never
+// proposed as a second product carrying the same domain.
+func TestPropose_SameDomainIsSuggestedEvenWhenNotDirectlyLinkedToTheMember(t *testing.T) {
+	assets := []platform.Asset{api("api", "https://api.acme.com"), web("mkt", "https://www.acme.com"), web("web", "https://app.acme.com")}
+	// Links built EXPLICITLY as a star around api, so mkt is always one hop from the member web — the
+	// transitive path is exercised whatever topology Links() happens to emit.
+	ls := []Link{
+		newLink("api", "mkt", LinkSharedDomain, "api.acme.com and www.acme.com share acme.com", []string{"registered-domain:acme.com"}),
+		newLink("api", "web", LinkSharedDomain, "api.acme.com and app.acme.com share acme.com", []string{"registered-domain:acme.com"}),
+	}
+	products := []platform.Product{{ID: "p1", Name: "Acme", AssetIDs: []string{"web"}}}
+	res := Propose(assets, ls, products, nil)
+	if len(res.Proposals) != 0 {
+		t.Fatalf("no second product may be proposed under the confirmed product's own domain: %+v", res.Proposals)
+	}
+	got := map[string]bool{}
+	for _, s := range res.Suggestions {
+		got[s.AssetID] = true
+		if s.Link.Kind == "" {
+			t.Fatalf("every suggestion must carry the link that explains it: %+v", s)
+		}
+	}
+	if !got["api"] || !got["mkt"] {
+		t.Fatalf("both same-domain hosts must be suggested: %+v", res.Suggestions)
 	}
 }

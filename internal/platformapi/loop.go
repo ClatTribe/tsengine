@@ -44,6 +44,7 @@ type Posturer interface {
 	EvidencePack(ctx context.Context, tenantID, framework string) (*grc.EvidencePack, error)
 	Questionnaire(ctx context.Context, tenantID string) (*grc.Questionnaire, error)
 	VAPTReport(ctx context.Context, tenantID string) (*grc.VAPTReport, error)
+	VAPTReportFor(ctx context.Context, tenantID string, ps *grc.ProductScope) (*grc.VAPTReport, error)
 	// OSCAL emits the crosswalk's control coverage as a NIST OSCAL component-definition (GRC-tool-ingestible).
 	OSCAL(ctx context.Context) ([]byte, error)
 	// OSCALAssessmentResults emits the PER-TENANT findings-as-evidence OSCAL assessment-results (each control
@@ -380,7 +381,23 @@ func (d Deps) handleVAPTReport(w http.ResponseWriter, r *http.Request, tenantID 
 		writeJSON(w, http.StatusNotImplemented, errBody("grc not configured"))
 		return
 	}
-	rep, err := d.GRC.VAPTReport(r.Context(), tenantID)
+	// ?product=<id> narrows the deliverable to one CONFIRMED product and states who confirmed that
+	// scope — the answer to a customer reviewer's "does this cover what we are buying?" (ADR 0028 G2).
+	var scope *grc.ProductScope
+	if pid := strings.TrimSpace(r.URL.Query().Get("product")); pid != "" {
+		t, terr := d.Store.GetTenant(r.Context(), tenantID)
+		if terr != nil {
+			writeJSON(w, http.StatusNotFound, errBody("tenant not found"))
+			return
+		}
+		ps, ok := productScopeFor(t, pid)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, errBody("product not found"))
+			return
+		}
+		scope = ps
+	}
+	rep, err := d.GRC.VAPTReportFor(r.Context(), tenantID, scope)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return

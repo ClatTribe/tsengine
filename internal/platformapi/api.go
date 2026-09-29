@@ -320,6 +320,11 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("PUT /v1/settings/business-services", d.auth(d.handleSetBusinessServices))
 	mux.HandleFunc("GET /v1/exposure-trend", d.auth(d.handleExposureTrend))                      // is exposure going down?
 	mux.HandleFunc("PUT /v1/settings/exposure-objective", d.auth(d.handleSetExposureObjective))  // …and is that good? (ADR 0028 G3)
+	mux.HandleFunc("GET /v1/products", d.auth(d.handleListProducts))                             // the products customers review: confirmed + proposed + unassigned (ADR 0028 G2)
+	mux.HandleFunc("POST /v1/products", d.auth(d.handleCreateProduct))                           // a named human confirms a product's scope
+	mux.HandleFunc("PUT /v1/products/{id}", d.auth(d.handleUpdateProduct))                       // change + re-confirm a product's scope
+	mux.HandleFunc("DELETE /v1/products/{id}", d.auth(d.handleDeleteProduct))                    // remove a product
+	mux.HandleFunc("POST /v1/products/scope", d.auth(d.handleSetScope))                          // mark an asset out of scope (who + why) or back in
 	mux.HandleFunc("GET /v1/detection-validation", d.auth(d.handleDetectionValidation))          // did their controls catch our probes?
 	mux.HandleFunc("POST /v1/control-plane/detections", d.auth(d.handleIngestControlDetections)) // WAF logs as the control under test (ADR 0027)
 	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                         // correlate a customer ScubaGear run against ours

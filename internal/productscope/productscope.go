@@ -181,6 +181,14 @@ func Links(assets []platform.Asset, g *estategraph.Graph) []Link {
 
 // Propose turns links into proposals, suggestions and the unassigned remainder, given what a human
 // has already confirmed and excluded.
+//
+// "Belongs with" is TRANSITIVE over proven links — sharing a registered domain is an equivalence, and a
+// repo that deploys into an account is with whatever that account is with. So groups are built over ALL
+// in-scope assets, confirmed members included. A group that touches a confirmed product turns every
+// free asset in it into a SUGGESTION for that product; only a group touching no product becomes a
+// proposal. Checking direct links alone was a real bug: with a product holding app.acme.com, the star
+// of domain links could leave www.acme.com one hop away, and it was then proposed as a SECOND product
+// named after the same domain the first one already carries.
 func Propose(assets []platform.Asset, links []Link, products []platform.Product, out map[string]platform.ScopeExclusion) Result {
 	res := Result{Proposals: []Proposal{}, Suggestions: []Suggestion{}, Unassigned: []Group{}}
 
@@ -189,7 +197,7 @@ func Propose(assets []platform.Asset, links []Link, products []platform.Product,
 		byID[a.ID] = a
 	}
 	inScope := func(id string) bool { _, ex := out[id]; _, ok := byID[id]; return ok && !ex }
-	memberOf := map[string][]string{} // asset id → product ids
+	memberOf := map[string][]string{} // asset id → product ids (existing assets only)
 	for _, p := range products {
 		for _, id := range p.AssetIDs {
 			if _, ok := byID[id]; ok {
@@ -198,94 +206,97 @@ func Propose(assets []platform.Asset, links []Link, products []platform.Product,
 		}
 	}
 
-	// Suggestions: a proven link from a product member to an in-scope asset in no product.
-	suggested := map[string]bool{}
-	seen := map[string]bool{}
-	for _, l := range links {
-		for _, pair := range [][2]string{{l.A, l.B}, {l.B, l.A}} {
-			member, other := pair[0], pair[1]
-			if len(memberOf[member]) == 0 || len(memberOf[other]) > 0 || !inScope(other) {
-				continue
-			}
-			for _, pid := range memberOf[member] {
-				key := pid + "|" + other
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-				suggested[other] = true
-				res.Suggestions = append(res.Suggestions, Suggestion{ProductID: pid, AssetID: other, Link: l})
-			}
-		}
-	}
-
-	// Free assets: in scope, in no product, not already suggested somewhere.
-	free := map[string]bool{}
-	for _, a := range assets {
-		if inScope(a.ID) && len(memberOf[a.ID]) == 0 && !suggested[a.ID] {
-			free[a.ID] = true
-		}
-	}
-
-	// Union-find over links whose both ends are free.
+	// Union-find over every in-scope asset and every link whose ends are both in scope.
 	parent := map[string]string{}
 	var find func(string) string
 	find = func(x string) string {
-		if parent[x] == "" || parent[x] == x {
-			parent[x] = x
+		if parent[x] == x {
 			return x
 		}
 		parent[x] = find(parent[x])
 		return parent[x]
 	}
-	for id := range free {
-		parent[id] = id
+	for _, a := range assets {
+		if inScope(a.ID) {
+			parent[a.ID] = a.ID
+		}
 	}
-	var freeLinks []Link
+	var scoped []Link
 	for _, l := range links {
-		if free[l.A] && free[l.B] {
-			freeLinks = append(freeLinks, l)
-			ra, rb := find(l.A), find(l.B)
-			if ra != rb {
-				if ra < rb {
-					parent[rb] = ra
-				} else {
-					parent[ra] = rb
-				}
+		if !inScope(l.A) || !inScope(l.B) {
+			continue
+		}
+		scoped = append(scoped, l)
+		ra, rb := find(l.A), find(l.B)
+		if ra != rb {
+			if ra < rb {
+				parent[rb] = ra
+			} else {
+				parent[ra] = rb
 			}
 		}
 	}
 	comps := map[string][]string{}
-	for id := range free {
+	for id := range parent {
 		r := find(id)
 		comps[r] = append(comps[r], id)
 	}
 
 	for _, members := range comps {
 		sort.Strings(members)
+		in := map[string]bool{}
+		products := map[string]bool{}
+		var free []string
 		facing := false
 		for _, id := range members {
-			if customerFacing(byID[id]) {
-				facing = true
-			}
-		}
-		in := map[string]bool{}
-		for _, id := range members {
 			in[id] = true
-		}
-		pl := []Link{}
-		for _, l := range freeLinks {
-			if in[l.A] && in[l.B] {
-				pl = append(pl, l)
+			for _, pid := range memberOf[id] {
+				products[pid] = true
 			}
+			if len(memberOf[id]) == 0 {
+				free = append(free, id)
+				if customerFacing(byID[id]) {
+					facing = true
+				}
+			}
+		}
+		if len(free) == 0 {
+			continue // every asset here is already in a product
+		}
+		var compLinks []Link
+		for _, l := range scoped {
+			if in[l.A] && in[l.B] {
+				compLinks = append(compLinks, l)
+			}
+		}
+
+		if len(products) > 0 {
+			// Linked into a confirmed product: suggest, never add.
+			pids := make([]string, 0, len(products))
+			for pid := range products {
+				pids = append(pids, pid)
+			}
+			sort.Strings(pids)
+			for _, id := range free {
+				why := incident(compLinks, id)
+				for _, pid := range pids {
+					res.Suggestions = append(res.Suggestions, Suggestion{ProductID: pid, AssetID: id, Link: why})
+				}
+			}
+			continue
+		}
+
+		freeLinks := []Link{}
+		for _, l := range compLinks {
+			freeLinks = append(freeLinks, l)
 		}
 		// A product is identified by what a customer reaches. Infrastructure with no customer-facing
 		// member — however well linked internally — is left for a human to place, never guessed.
 		if !facing {
-			res.Unassigned = append(res.Unassigned, Group{AssetIDs: members, Links: pl})
+			res.Unassigned = append(res.Unassigned, Group{AssetIDs: free, Links: freeLinks})
 			continue
 		}
-		res.Proposals = append(res.Proposals, Proposal{Name: proposedName(members, byID), AssetIDs: members, Links: pl})
+		res.Proposals = append(res.Proposals, Proposal{Name: proposedName(free, byID), AssetIDs: free, Links: freeLinks})
 	}
 
 	sort.Slice(res.Unassigned, func(i, j int) bool { return res.Unassigned[i].AssetIDs[0] < res.Unassigned[j].AssetIDs[0] })
@@ -302,6 +313,17 @@ func Propose(assets []platform.Asset, links []Link, products []platform.Product,
 		return res.Suggestions[i].AssetID < res.Suggestions[j].AssetID
 	})
 	return res
+}
+
+// incident returns the first link touching id — the reason shown beside a suggestion. Links are
+// already sorted, so the choice is deterministic.
+func incident(links []Link, id string) Link {
+	for _, l := range links {
+		if l.A == id || l.B == id {
+			return l
+		}
+	}
+	return Link{}
 }
 
 // proposedName is a starting name the human will usually keep: the registered domain customers
