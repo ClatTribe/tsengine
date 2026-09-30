@@ -490,3 +490,24 @@ func priv(p string) string {
 	}
 	return strings.ToUpper(p)
 }
+
+// WithoutSamples returns a copy of the estate with every column's sampled VALUES removed, keeping the
+// column names. It is what gets PERSISTED: the samples exist only to classify, they are the customer's
+// own data, and a stored posture record must never become a copy of their PII. Classification has
+// already folded what the samples proved into Sensitive/DataClasses, so nothing the assessment needs
+// is lost.
+func WithoutSamples(est Estate) Estate {
+	out := est
+	out.Objects = make([]Object, len(est.Objects))
+	for i, o := range est.Objects {
+		cp := o
+		if len(o.Columns) > 0 {
+			cp.Columns = make([]dataclass.Column, len(o.Columns))
+			for j, c := range o.Columns {
+				cp.Columns[j] = dataclass.Column{Name: c.Name}
+			}
+		}
+		out.Objects[i] = cp
+	}
+	return out
+}

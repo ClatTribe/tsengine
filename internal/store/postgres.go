@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS apps        (seq BIGSERIAL, tenant_id TEXT, provider 
 CREATE TABLE IF NOT EXISTS employees   (seq BIGSERIAL, tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS identitylinks (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS warehouse (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditorders (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS vendors     (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -605,4 +606,24 @@ func (p *Postgres) GetOperatorSession(ctx context.Context, token string) (platfo
 }
 func (p *Postgres) DeleteOperatorSession(ctx context.Context, token string) error {
 	return p.exec(ctx, `DELETE FROM opsessions WHERE token=?`, token)
+}
+
+// --- warehouse access snapshot (one per tenant, sample values stripped) ---
+
+func (p *Postgres) PutWarehouseSnapshot(ctx context.Context, w platform.WarehouseSnapshot) error {
+	d, err := enc(w)
+	if err != nil {
+		return err
+	}
+	_, err = p.db.ExecContext(ctx, pgRebind(`INSERT INTO warehouse(tenant_id,data) VALUES(?,?)
+		ON CONFLICT(tenant_id) DO UPDATE SET data=EXCLUDED.data`), w.TenantID, d)
+	return err
+}
+func (p *Postgres) GetWarehouseSnapshot(ctx context.Context, tenantID string) (platform.WarehouseSnapshot, bool, error) {
+	var w platform.WarehouseSnapshot
+	err := getJSON(ctx, p.db, &w, pgRebind(`SELECT data FROM warehouse WHERE tenant_id=?`), tenantID)
+	if errors.Is(err, ErrNotFound) {
+		return platform.WarehouseSnapshot{}, false, nil
+	}
+	return w, err == nil, err
 }

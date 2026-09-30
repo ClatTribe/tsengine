@@ -37,13 +37,16 @@ func (d Deps) composeEstate(ctx context.Context, tenantID string) (*estategraph.
 
 // composeEstateWith is the general form, taking a warehouse estate the caller already holds.
 //
-// The warehouse is passed in rather than read back because nothing persists it: a grant snapshot
-// arrives at its ingest, is assessed, and is gone. So the warehouse can only join the estate at the
-// moment it is posted. That is a REAL limit, not a hedge — an agent composing the estate later will
-// not see it — and it is stated here rather than papered over, because the alternative is a caller
-// assuming warehouse context is always present. Persisting the snapshot is the follow-on that
-// removes the caveat.
+// The warehouse is passed in by its ingest (which holds the fresh snapshot) and otherwise read back
+// from the store — the latest posted snapshot, sample values stripped. It used to exist only for the
+// length of the ingest request, so an agent composing the estate later never saw the warehouse or the
+// crown jewels its classification proved.
 func (d Deps) composeEstateWith(ctx context.Context, tenantID string, wh *dataplatform.Estate, whRef string) (*estategraph.Graph, error) {
+	// No warehouse in hand → the last one posted. Every read of the estate (each monitoring pass, the
+	// agents, GET /v1/estate) now sees it, not only the ingest request that carried it.
+	if wh == nil {
+		wh, whRef = d.storedWarehouse(ctx, tenantID)
+	}
 	var cloud *cloudgraph.Snapshot
 	if d.CloudSnapshots != nil {
 		if snap, ok, err := d.CloudSnapshots.Get(ctx, tenantID); err == nil && ok && len(snap.Inventory) > 0 {

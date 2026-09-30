@@ -44,6 +44,7 @@ type Memory struct {
 	employees   map[string][]platform.Employee                    // tenantID → HRIS employee roster
 	training    map[string]map[string]platform.TrainingCompletion // tenantID → completionID → record
 	idLinks     map[string]platform.IdentityLinkSet               // tenantID → person→GitHub join inputs
+	warehouse   map[string]platform.WarehouseSnapshot             // tenantID → latest warehouse access snapshot
 	auditDisp   map[string]map[string]platform.AuditDisposition   // tenantID → target|key → decision
 	auditOrders map[string]map[string]platform.AuditOrder         // tenantID → orderID → per-application order
 	vendors     map[string]map[string]platform.Vendor             // tenantID → vendorID → register row
@@ -82,6 +83,7 @@ func NewMemory() *Memory {
 		employees:       map[string][]platform.Employee{},
 		training:        map[string]map[string]platform.TrainingCompletion{},
 		idLinks:         map[string]platform.IdentityLinkSet{},
+		warehouse:       map[string]platform.WarehouseSnapshot{},
 		auditDisp:       map[string]map[string]platform.AuditDisposition{},
 		auditOrders:     map[string]map[string]platform.AuditOrder{},
 		vendors:         map[string]map[string]platform.Vendor{},
@@ -822,6 +824,21 @@ func (m *Memory) GetIdentityLinks(_ context.Context, tenantID string) (platform.
 	return set, ok, nil
 }
 
+// PutWarehouseSnapshot replaces the tenant's latest warehouse access snapshot.
+func (m *Memory) PutWarehouseSnapshot(_ context.Context, s platform.WarehouseSnapshot) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.warehouse[s.TenantID] = s
+	return nil
+}
+
+func (m *Memory) GetWarehouseSnapshot(_ context.Context, tenantID string) (platform.WarehouseSnapshot, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, ok := m.warehouse[tenantID]
+	return s, ok, nil
+}
+
 // PutTrainingCompletion upserts one completion by its id. Keyed rather than appended so confirming
 // the same module twice in one day is idempotent, while last year's completion stays on record.
 func (m *Memory) PutTrainingCompletion(_ context.Context, c platform.TrainingCompletion) error {
@@ -958,6 +975,7 @@ type Snapshot struct {
 	Employees       map[string][]platform.Employee                    `json:"employees,omitempty"`
 	Training        map[string]map[string]platform.TrainingCompletion `json:"training,omitempty"`
 	IdLinks         map[string]platform.IdentityLinkSet               `json:"identity_links,omitempty"`
+	Warehouse       map[string]platform.WarehouseSnapshot             `json:"warehouse,omitempty"`
 	AuditDisp       map[string]map[string]platform.AuditDisposition   `json:"audit_dispositions,omitempty"`
 	AuditOrders     map[string]map[string]platform.AuditOrder         `json:"audit_orders,omitempty"`
 	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
@@ -999,6 +1017,7 @@ func (m *Memory) Export() Snapshot {
 		Employees:       m.employees,
 		Training:        m.training,
 		IdLinks:         m.idLinks,
+		Warehouse:       m.warehouse,
 		AuditDisp:       m.auditDisp,
 		AuditOrders:     m.auditOrders,
 		Vendors:         m.vendors,
@@ -1041,6 +1060,10 @@ func (m *Memory) load(s Snapshot) {
 	m.idLinks = s.IdLinks
 	if m.idLinks == nil {
 		m.idLinks = map[string]platform.IdentityLinkSet{}
+	}
+	m.warehouse = s.Warehouse
+	if m.warehouse == nil {
+		m.warehouse = map[string]platform.WarehouseSnapshot{}
 	}
 	m.auditDisp = orEmptyAuditDisp(s.AuditDisp)
 	m.auditOrders = orEmptyAuditOrders(s.AuditOrders)

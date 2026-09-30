@@ -169,11 +169,13 @@ the very node the cloud inventory created, so *"this Snowflake table is read by 
 can reach through cloud IAM"* becomes derivable. Neither side can say it alone: the warehouse assessment
 has no view of cloud IAM, and a warehouse table is not a cloud resource at all.
 
-**Honest limit, pinned as a test.** Nothing persists a grant snapshot, so the warehouse joins only at
-the moment it is posted; an estate composed later has no warehouse in it. Detection therefore runs at
-ingest, while the snapshot is in hand. `TestEstate_WarehouseIsNotInALaterComposedEstate` asserts the
-gap and says to update the caveat and the roadmap together when persistence lands — so closing it is a
-deliberate act rather than something a future reader assumes already happened.
+**The limit is closed (2026-09-30).** The warehouse snapshot is now STORED per tenant
+(`platform.WarehouseSnapshot`, latest only), so every later composition of the estate — each monitoring
+pass, the agents, `GET /v1/estate` — sees the warehouse and the crown jewels its classification proved,
+not only the ingest request that carried it. Column sample VALUES are stripped before anything is stored
+(`dataplatform.WithoutSamples`): they exist only to classify, and a posture record must never become a
+copy of the customer's PII; the discovery evidence is kept instead, and it never echoes a value.
+`TestEstate_WarehouseSurvivesIntoALaterComposedEstate` asserts both halves.
 
 **Making the joins reachable (2026-08-18).** Auditing my own work found the identity join was
 effectively unreachable: cross-surface detection fired from only **two** ingest doors (cloud

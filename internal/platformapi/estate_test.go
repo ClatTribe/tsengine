@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -187,24 +188,34 @@ func TestEstate_WarehouseGranteeJoinsTheCloudIdentity(t *testing.T) {
 	}
 }
 
-// THE LIMITATION, pinned deliberately. Nothing persists a grant snapshot, so the warehouse joins the
-// estate only at the moment it is posted; an estate composed later has no warehouse in it. That is a
-// real gap, and this test exists so that persisting the snapshot is a deliberate change rather than
-// something a future reader assumes already happened.
-func TestEstate_WarehouseIsNotInALaterComposedEstate(t *testing.T) {
+// The warehouse SURVIVES its ingest: an estate composed later (each monitoring pass, the agents,
+// GET /v1/estate) still carries the table — and the stored snapshot carries NO sampled value, because
+// the samples exist only to classify and are the customer's own data.
+func TestEstate_WarehouseSurvivesIntoALaterComposedEstate(t *testing.T) {
 	st := store.NewMemory()
 	h := NewHandler(Deps{Store: st, CloudSnapshots: cloudsnap.NewMemStore(),
 		Connectors: connector.NewRegistry(), Token: "platform-tok"})
 
-	wh := `{"objects":[{"platform":"snowflake","name":"analytics.customers","type":"table","sensitive":true,
+	wh := `{"objects":[{"platform":"snowflake","name":"analytics.customers","type":"table",
+		"columns":[{"name":"ssn","values":["123-45-6789","219-09-9999","078-05-1120"]}],
 		"grants":[{"grantee":"etl@proj.iam.gserviceaccount.com","privilege":"SELECT"}]}]}`
 	if rec := do(h, "POST", "/v1/dataplatform/ingest", "t1", wh); rec.Code != 200 {
 		t.Fatalf("dataplatform ingest: %d %s", rec.Code, rec.Body.String())
 	}
 
-	g := do(h, "GET", "/v1/estate", "t1", "")
-	if strings.Contains(g.Body.String(), "analytics.customers") {
-		t.Errorf("the warehouse now survives into a later-composed estate — good, but the caveat in " +
-			"composeEstateWith and the roadmap both still say it does not; update them together")
+	if g := do(h, "GET", "/v1/estate", "t1", ""); !strings.Contains(g.Body.String(), "analytics.customers") {
+		t.Fatalf("a later-composed estate must still carry the warehouse table: %s", g.Body.String())
+	}
+	snap, ok, err := st.GetWarehouseSnapshot(context.Background(), "t1")
+	if err != nil || !ok {
+		t.Fatalf("the snapshot was not stored: ok=%v err=%v", ok, err)
+	}
+	for _, v := range []string{"123-45-6789", "219-09-9999", "078-05-1120"} {
+		if strings.Contains(string(snap.Estate), v) || strings.Contains(string(snap.Discoveries), v) {
+			t.Fatalf("a sampled VALUE was persisted (%s) — the stored snapshot must never become a copy of the customer's data", v)
+		}
+	}
+	if !strings.Contains(string(snap.Estate), `"sensitive":true`) || !strings.Contains(string(snap.Estate), `"ssn"`) {
+		t.Fatalf("what the samples PROVED (sensitivity, column name) must survive the stripping: %s", snap.Estate)
 	}
 }
