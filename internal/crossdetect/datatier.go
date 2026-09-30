@@ -101,10 +101,3 @@ func assetForEndpoint(endpoint string, assets []platform.Asset) (platform.Asset,
 	return best, bestLen > 0
 }
 
-// tierForEndpoint returns the data tier of the best-matching asset, or Standard when none does.
-func tierForEndpoint(endpoint string, assets []platform.Asset) int {
-	if a, ok := assetForEndpoint(endpoint, assets); ok {
-		return a.DataTier()
-	}
-	return platform.DataTierStandard
-}
