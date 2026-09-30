@@ -333,6 +333,7 @@ function LeadCard({ issue, prior, explain }: { issue: Issue; prior?: PriorInv; e
               {explain.because.map((b) => <li key={b}>{b}</li>)}
             </ul>
           )}
+          <RankWhy factors={issue.rank_factors} />
           {explain && <p className="mt-1.5 truncate text-xs text-muted/70">Detected as: {issue.title}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -372,6 +373,7 @@ function IssueRow({ issue, ignored, prior, explain }: { issue: Issue; ignored: b
             <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-faint">{issue.count} findings merged</span>
           )}
         </div>
+        <RankWhy factors={issue.rank_factors} />
       </td>
       <td className="px-2 py-3 align-top">
         <div className="flex flex-wrap items-center gap-1">
@@ -469,5 +471,31 @@ function Stat({ n, label, tone }: { n: number | string; label: string; tone: str
     <div className="text-right">
       <span className={`text-xl font-semibold ${tone}`}>{n}</span> <span className="text-xs text-faint">{label}</span>
     </div>
+  );
+}
+// RankWhy says why an issue sits where it does in the list — the evidence factors that moved it, read
+// from the server's own rank_factors (crossdetect.RankIssue), never recomputed here. Severity and data
+// tier are omitted because the badges beside it already show them. A factor that LOWERED the rank (a WAF
+// observed blocking the attack) is shown as such, so a reader never mistakes a mitigation for a fix.
+// Nothing renders when there is no evidence beyond severity: an empty "why" line would imply a reason.
+function RankWhy({ factors }: { factors?: { factor: string; points: number; why: string }[] }) {
+  const moved = (factors ?? []).filter((f) => f.factor !== "severity" && f.factor !== "data_tier" && f.factor !== "evidence_cap");
+  if (moved.length === 0) return null;
+  const up = moved.filter((f) => f.points > 0);
+  const down = moved.filter((f) => f.points < 0);
+  return (
+    <p className="mt-1 text-[11px] leading-relaxed text-muted">
+      <span className="font-medium text-ink/80">Why here:</span>{" "}
+      {up.map((f, i) => (
+        <span key={f.factor} title={`+${f.points} priority`}>
+          {i > 0 ? " · " : ""}{f.why}
+        </span>
+      ))}
+      {down.map((f) => (
+        <span key={f.factor} title={`${f.points} priority`} className="text-muted/80">
+          {up.length > 0 ? " · " : ""}lowered: {f.why}
+        </span>
+      ))}
+    </p>
   );
 }

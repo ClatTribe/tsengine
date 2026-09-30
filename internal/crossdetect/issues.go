@@ -62,6 +62,20 @@ type Issue struct {
 	CVSS          float64 `json:"cvss,omitempty"`
 	CVSSVector    string  `json:"cvss_vector,omitempty"`
 	PublicExploit bool    `json:"public_exploit,omitempty"`
+	// Ransomware: CISA's KEV entry says ransomware crews use it (knownRansomwareCampaignUse=="Known").
+	// SSVCActive / SSVCAutomatable: CISA's own SSVC decision points (exploitation "active"; automatable
+	// "yes"). All grounded — set only from a finding's actual ThreatIntel.
+	Ransomware      bool `json:"ransomware,omitempty"`
+	SSVCActive      bool `json:"ssvc_active,omitempty"`
+	SSVCAutomatable bool `json:"ssvc_automatable,omitempty"`
+	// EvidenceRung is the STRONGEST rung across the group's findings (types.DeriveRung) — WHAT WAS DONE
+	// to establish it. Read through the ladder, never from VerificationStatus, because "verified" means
+	// "we exploited it" from the offensive agent and "the policy evaluator allowed it" from the cloud
+	// agent, and only the first claims exploitability.
+	EvidenceRung string `json:"evidence_rung,omitempty"`
+	// RankFactors are the named, explained contributions that sum to RiskRank — so the order of the
+	// list is something a reader can check rather than trust. Set by PrioritizeByDataTier.
+	RankFactors []RankFactor `json:"rank_factors,omitempty"`
 	// Platform is the source connector kind (github|aws|gcp|gworkspace|okta) this issue's findings
 	// came from, traced Finding.AssetID -> Asset.ConnectionID -> Connection.Kind by AnnotatePlatform.
 	// Empty when the chain does not resolve. Labelling / filtering only (never affects ranking).
@@ -131,6 +145,20 @@ func UnifiedIssues(findings []types.Finding) []Issue {
 			if len(ti.Exploits) > 0 {
 				g.PublicExploit = true
 			}
+			if ti.KEV != nil && ti.KEV.Listed && ti.KEV.Ransomware {
+				g.Ransomware = true
+			}
+			if ti.SSVC != nil {
+				if strings.EqualFold(strings.TrimSpace(ti.SSVC.Exploitation), "active") {
+					g.SSVCActive = true
+				}
+				if strings.EqualFold(strings.TrimSpace(ti.SSVC.Automatable), "yes") {
+					g.SSVCAutomatable = true
+				}
+			}
+		}
+		if r := f.DeriveRung(); rungStrength(r) > rungStrength(types.EvidenceRung(g.EvidenceRung)) {
+			g.EvidenceRung = string(r)
 		}
 	}
 

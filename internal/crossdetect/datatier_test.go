@@ -135,13 +135,24 @@ func TestPrioritize_ExploitabilityTiebreaker(t *testing.T) {
 		}
 	}
 
-	// The tiebreaker is within-severity: a critical (even unproven) still leads an attacked high
-	// (the boost is < the severity gap, so it never inflates a lesser issue past a worse one).
+	// POLICY (priority.go): evidence of real exploitation now moves an issue ACROSS severity bands —
+	// a High seen under attack in production leads an unproven Critical. This reverses the previous
+	// "the boost is < the severity gap" rule deliberately; see priority.go for why.
 	mixed := PrioritizeByDataTier([]Issue{
+		{Key: "plain-critical", Severity: "critical"},
 		{Key: "attacked-high", Severity: "high", Attacked: true},
+	}, nil)
+	if mixed[0].Key != "attacked-high" {
+		t.Errorf("an attacked high must now lead an unproven critical, got %s first", mixed[0].Key)
+	}
+	// ...but bounded: no amount of evidence lifts a LOW above an unproven Critical.
+	capped := PrioritizeByDataTier([]Issue{
+		{Key: "loaded-low", Severity: "low", Attacked: true, KEV: true, Ransomware: true,
+			InAttackPath: true, Exposed: true, SSVCAutomatable: true},
 		{Key: "plain-critical", Severity: "critical"},
 	}, nil)
-	if mixed[0].Key != "plain-critical" {
-		t.Errorf("a critical must still outrank an attacked high, got %s first", mixed[0].Key)
+	if capped[0].Key != "plain-critical" {
+		t.Errorf("evidence must never lift a low above an unproven critical, got %s first (ranks %d vs %d)",
+			capped[0].Key, capped[0].RiskRank, capped[1].RiskRank)
 	}
 }
