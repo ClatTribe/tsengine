@@ -8,7 +8,7 @@ import { QuarantineButton } from "@/components/settings/quarantine-button";
 // classification of its granted scopes. Write-capable connections are the higher-risk
 // surface a hijacked agent could mutate. An owner can quarantine any one connection
 // (WRD-4). Server-rendered; the quarantine control is a client child.
-export function AIBomPanel({ bom, canQuarantine }: { bom: AIBom | null; canQuarantine?: boolean }) {
+export function AIBomPanel({ bom, canQuarantine, canRestore }: { bom: AIBom | null; canQuarantine?: boolean; canRestore?: boolean }) {
   const conns = bom?.connections ?? []; // Go marshals an empty slice as null — guard before .length/.map
   if (!bom || conns.length === 0) {
     return (
@@ -51,7 +51,7 @@ export function AIBomPanel({ bom, canQuarantine }: { bom: AIBom | null; canQuara
                     {write ? "read-write" : "read-only"}
                   </span>
                 )}
-                {canQuarantine && c.id && <QuarantineButton id={c.id} status={c.status} />}
+                {canQuarantine && c.id && <QuarantineButton id={c.id} status={c.status} canRestore={!!canRestore} />}
               </div>
             </li>
           );

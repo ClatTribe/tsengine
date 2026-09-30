@@ -27,13 +27,18 @@ func riskDeps(t *testing.T) (Deps, *ledger.Recorder) {
 	_ = st.PutFinding(ctx, "ten-1", types.Finding{ID: "f2", Tool: "nuclei", Severity: types.SeverityHigh, CWE: []string{"CWE-79"}})
 	n := 0
 	rec := ledger.NewRecorder()
-	return Deps{Store: st, Recorder: rec, NewID: func() string { n++; return fmt.Sprintf("r%d", n) }}, rec
+	return Deps{Store: st, Recorder: rec, Token: "tok", NewID: func() string { n++; return fmt.Sprintf("r%d", n) }}, rec
 }
 
 func call(d Deps, h func(http.ResponseWriter, *http.Request, string), method, path, body, id string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	if id != "" {
 		req.SetPathValue("id", id)
+	}
+	// These call the handler directly, past the auth middleware, so they carry the credential a real
+	// request would: the platform bearer (owner-equivalent). Member refusals are owner_scope_test.go's.
+	if d.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+d.Token)
 	}
 	rec := httptest.NewRecorder()
 	h(rec, req, "ten-1")

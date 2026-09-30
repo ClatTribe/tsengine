@@ -38,6 +38,12 @@ func (d Deps) handleQuarantineConnection(w http.ResponseWriter, r *http.Request,
 		writeJSON(w, http.StatusNotFound, errBody("connection not found"))
 		return
 	}
+	// Quarantining is the cautious direction and any member may do it; restoring hands the connection
+	// back to the automation, which is the owner's call (owner_scope.go).
+	if !body.Quarantined && conn.Status == platform.ConnQuarantined && !d.callerIsOwner(r) {
+		refuseOwnerOnly(w, "only the workspace owner can restore a quarantined connection")
+		return
+	}
 	// Restoring sets active; only a deliberate quarantine flips the status. (We don't
 	// resurrect a genuinely revoked/degraded connection — that's an OAuth-health concern.)
 	if body.Quarantined {

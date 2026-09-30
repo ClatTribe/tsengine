@@ -16,7 +16,9 @@ const FIELDS = [
 // ExclusionRules is the "custom rules" noise-filter manager: list the tenant's
 // pattern exclusions and add/remove them. A matching finding is dropped before it's
 // unified into an issue — so the noise never appears.
-export function ExclusionRules({ rules, excluded }: { rules: ExclusionRule[]; excluded: number }) {
+// canAdd: a rule hides a whole class of findings from everyone, so adding one is the owner's act and the
+// server refuses it from a member (owner_scope.go). Removing one restores visibility and stays open.
+export function ExclusionRules({ rules, excluded, canAdd = true }: { rules: ExclusionRule[]; excluded: number; canAdd?: boolean }) {
   const [open, setOpen] = useState(false);
   const [field, setField] = useState("package");
   const [pattern, setPattern] = useState("");
@@ -74,6 +76,12 @@ export function ExclusionRules({ rules, excluded }: { rules: ExclusionRule[]; ex
           )}
 
           {/* Add form */}
+          {!canAdd ? (
+            <p className="text-xs text-faint">
+              Only the workspace owner can add an exclusion rule — a rule hides a class of findings from everyone. You can
+              remove one.
+            </p>
+          ) : (
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={field}
@@ -99,6 +107,7 @@ export function ExclusionRules({ rules, excluded }: { rules: ExclusionRule[]; ex
               {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
             </button>
           </div>
+          )}
           {err && <div className="text-xs text-critical">{err}</div>}
         </div>
       )}

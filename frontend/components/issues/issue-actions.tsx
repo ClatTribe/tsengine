@@ -25,9 +25,14 @@ const REASONS = [
 // IssueActions is the issue-lifecycle control on a row: Ignore (with a reason)
 // for an active issue, or Restore for a suppressed one. Drives the ledger-recorded
 // /v1/issues/ignore|unignore endpoints via a server action.
-export function IssueActions({ issueKey, ignored }: { issueKey: string; ignored?: boolean }) {
+//
+// canDecideRisk: accepting a risk (or won't-fix) is the workspace owner's decision and the server
+// refuses it from anyone else (owner_scope.go), so a member is offered only "false positive" — the
+// triage call they may make. Offering the others would fail silently behind useAction's refresh.
+export function IssueActions({ issueKey, ignored, canDecideRisk = true }: { issueKey: string; ignored?: boolean; canDecideRisk?: boolean }) {
+  const reasons = canDecideRisk ? REASONS : REASONS.filter((r) => r.value === "false_positive");
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState(REASONS[0].value);
+  const [reason, setReason] = useState(reasons[0].value);
   const [reviewDays, setReviewDays] = useState(90);
   const needsReview = reason !== "false_positive";
   const [pending, run] = useAction();
@@ -62,7 +67,7 @@ export function IssueActions({ issueKey, ignored }: { issueKey: string; ignored?
         onChange={(e) => setReason(e.target.value)}
         className="rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent"
       >
-        {REASONS.map((r) => (
+        {reasons.map((r) => (
           <option key={r.value} value={r.value}>{r.label}</option>
         ))}
       </select>
@@ -87,6 +92,7 @@ export function IssueActions({ issueKey, ignored }: { issueKey: string; ignored?
       >
         {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <EyeOff className="h-3.5 w-3.5" />} Confirm
       </button>
+      {!canDecideRisk && <span className="text-[11px] text-faint">accepting a risk is the owner&apos;s call</span>}
       <button onClick={() => setOpen(false)} className="text-xs text-faint hover:text-muted">Cancel</button>
     </div>
   );

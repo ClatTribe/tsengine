@@ -554,6 +554,12 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 					"this account can complete security training and acknowledge policies", "employee_scope"))
 				return
 			}
+			// A member may do the work; only the owner may change how the workspace governs itself
+			// (owner_scope.go). Refused on doubt: an unreadable user is not the owner.
+			if ownerOnlyRoute(r.Method, r.URL.Path) && (uerr != nil || u.Role != platform.RoleOwner) {
+				refuseOwnerOnly(w, "only the workspace owner can change this")
+				return
+			}
 			if !d.rateOK(r, w, s.TenantID) {
 				return
 			}
@@ -776,6 +782,12 @@ func (d Deps) handleKillSwitch(w http.ResponseWriter, r *http.Request, tenantID 
 	t, err := d.Store.GetTenant(r.Context(), tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, errBody("tenant not found"))
+		return
+	}
+	// Anyone may pull the brake; only the owner may release it. A halt someone else can quietly undo
+	// is not a halt, and the person who pulled it usually had a reason nobody else has read yet.
+	if t.AgentsHalted && !body.Halted && !d.callerIsOwner(r) {
+		refuseOwnerOnly(w, "only the workspace owner can resume halted automation")
 		return
 	}
 	t.AgentsHalted = body.Halted

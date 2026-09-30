@@ -140,6 +140,13 @@ func (d Deps) handleDecideRisk(w http.ResponseWriter, r *http.Request, tenantID 
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
 		return
 	}
+	// Accepting a risk is the one treatment that decides to do nothing about it, and it is the owner's.
+	// Mitigate/transfer/avoid commit the team to act, which a member may record. (The operator
+	// act-on-behalf path is gated by the practitioner roster instead — operator_act.go.)
+	if strings.EqualFold(strings.TrimSpace(body.Treatment), "accept") && !d.callerIsOwner(r) {
+		refuseOwnerOnly(w, "only the workspace owner can accept a risk")
+		return
+	}
 	// the tenant path resolves the decider's capacity from the roster by their typed name
 	cap, firm := d.practitionerCapacity(r, tenantID, strings.TrimSpace(body.Owner))
 	rk, status, err := d.applyRiskDecision(r, tenantID, id, body.Treatment, body.Owner, body.Rationale, cap, firm, body.Likelihood, body.Impact)
