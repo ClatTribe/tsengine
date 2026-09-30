@@ -159,6 +159,10 @@ type Deps struct {
 	// behaviour (ingest stores the finding and stops). The desk still decides: this proposes and
 	// submits, it never applies (§18.2 inv. 3).
 	ProposeFix func(types.Finding, platform.Asset) (platform.Action, bool)
+	// ProposeBatch is the BULK proposer (remediate.ProposeBulk): several findings in one repository fixed
+	// by the same change become ONE pull request. Used by the fix plan so preparing a step opens one PR
+	// per repository rather than one per CVE. Optional — nil falls back to ProposeFix per finding.
+	ProposeBatch func([]types.Finding, platform.Asset) []platform.Action
 	// AWSFetcher builds a LIVE read-only fetcher for a connected AWS account. Nil → POST
 	// /v1/cloud/sync reports that live read is unavailable rather than returning an empty account.
 	AWSFetcher AWSFetcherFor
@@ -369,6 +373,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))                                                      // auto-triage funnel: % of raw findings the engine handled automatically
 	mux.HandleFunc("POST /v1/issues/feedback", d.auth(d.handleFeedback))                                                       // record a human judgement (changes nothing — opinion only)
 	mux.HandleFunc("GET /v1/issues/feedback", d.auth(d.handleListFeedback))                                                    // this tenant's judgements
+	mux.HandleFunc("GET /v1/fix-plan", d.auth(d.handleFixPlan))                                                                // the ordered remediation plan in-app — the VAPT roadmap's grouping + order, over the issues list's findings
+	mux.HandleFunc("POST /v1/fix-plan/prepare", d.auth(d.handleFixPlanPrepare))                                                // propose ONE step's fixes across every asset it touches, through the same desk
 	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))                                                      // suppress an issue (false-positive / accepted-risk)
 	mux.HandleFunc("POST /v1/issues/unignore", d.auth(d.handleUnignoreIssue))                                                  // restore a suppressed issue
 	mux.HandleFunc("GET /v1/exclusions", d.auth(d.handleListExclusions))                                                       // custom noise-filter rules (path/package/rule globs)

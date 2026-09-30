@@ -548,6 +548,11 @@ func main() {
 		RateLimiter: ratelimit.New(),
 		// Ingested findings reach the approval desk with the SAME proposer the runner uses.
 		ProposeFix: func(f types.Finding, a platform.Asset) (platform.Action, bool) { return remediate.Propose(f, a, newID) },
+		// The fix plan prepares a step with the SAME bulk grouping the runner uses, so one package upgrade
+		// in a repository is one PR whichever path proposed it.
+		ProposeBatch: func(fs []types.Finding, a platform.Asset) []platform.Action {
+			return remediate.ProposeBulk(fs, a, newID)
+		},
 		// LIVE cloud read: assume the customer's read-only role recorded at connect time. The role ARN
 		// IS the credential (connector.AWS.Exchange), and the tenant id is the external-id guard issued
 		// on the connect link (confused-deputy protection).
