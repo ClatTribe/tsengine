@@ -100,4 +100,3 @@ func assetForEndpoint(endpoint string, assets []platform.Asset) (platform.Asset,
 	}
 	return best, bestLen > 0
 }
-
