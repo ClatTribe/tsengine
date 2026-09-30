@@ -34,11 +34,21 @@ import (
 //
 // buildCloudInventory dispatches the posted raw cloud state to the right grounded collector by provider.
 func buildCloudInventory(provider string, body []byte) (cloudgraph.Inventory, connector.InventoryCoverage, error) {
+	return buildCloudInventoryWith(provider, body, nil)
+}
+
+// buildCloudInventoryWith is buildCloudInventory with a hook that may enrich the raw AWS state before
+// it is mapped — the web→cloud hostname join, which needs the tenant's assets and so cannot live in a
+// pure dispatcher.
+func buildCloudInventoryWith(provider string, body []byte, enrichAWS func(*awsinventory.RawAWS)) (cloudgraph.Inventory, connector.InventoryCoverage, error) {
 	switch provider {
 	case "", "aws":
 		var raw awsinventory.RawAWS
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return cloudgraph.Inventory{}, connector.InventoryCoverage{}, fmt.Errorf("invalid AWS inventory body")
+		}
+		if enrichAWS != nil {
+			enrichAWS(&raw)
 		}
 		return awsinventory.Build(raw), connector.CoverAWS(raw), nil
 	case "gcp":
@@ -82,7 +92,10 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 		respond(w, nil, err)
 		return
 	}
-	inv, coverage, perr := buildCloudInventory(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body)
+	var hostJoin awsinventory.HostnameJoin
+	var hostNote string
+	inv, coverage, perr := buildCloudInventoryWith(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider"))), body,
+		func(raw *awsinventory.RawAWS) { hostJoin, hostNote = d.linkTenantHostnames(r.Context(), tenantID, raw) })
 	if perr != nil {
 		writeJSON(w, http.StatusBadRequest, errBody(perr.Error()))
 		return
@@ -162,6 +175,9 @@ func (d Deps) handleIngestAWSInventory(w http.ResponseWriter, r *http.Request, t
 	// here — most roles are not federated — and it is reported as a count rather than omitted, so
 	// "assessed, nothing wrong" is distinguishable from "never ran".
 	summary["ci_identity_findings"] = ciStored
+	if hj := hostnameReport(hostJoin, hostNote); hj != nil {
+		summary["hostname_join"] = hj
+	}
 	if !coverage.Complete() {
 		summary["coverage_gaps"] = coverage.Notes
 	}

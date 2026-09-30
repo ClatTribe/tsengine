@@ -163,6 +163,8 @@ type Deps struct {
 	// by the same change become ONE pull request. Used by the fix plan so preparing a step opens one PR
 	// per repository rather than one per CVE. Optional — nil falls back to ProposeFix per finding.
 	ProposeBatch func([]types.Finding, platform.Asset) []platform.Action
+	// LookupHost resolves a hostname for the web→cloud join (hostlink.go). nil → the system resolver.
+	LookupHost func(ctx context.Context, host string) ([]string, error)
 	// AWSFetcher builds a LIVE read-only fetcher for a connected AWS account. Nil → POST
 	// /v1/cloud/sync reports that live read is unavailable rather than returning an empty account.
 	AWSFetcher AWSFetcherFor

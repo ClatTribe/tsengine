@@ -201,7 +201,8 @@ func (f Fetcher) Fetch(ctx context.Context) (Result, error) {
 		}
 		for _, in := range ins {
 			res.Raw.Instances = append(res.Raw.Instances, awsinventory.RawInstance{
-				ID: in.ID, Region: in.Region, PublicIP: in.PublicIP, SGIDs: in.SGIDs, RoleARN: profiles[in.ProfileARN],
+				ID: in.ID, Region: in.Region, PublicIP: in.PublicIP, PublicIPAddress: in.PublicIPAddress,
+				SGIDs: in.SGIDs, RoleARN: profiles[in.ProfileARN], DNSNames: nonEmpty(in.PublicDNSName),
 			})
 		}
 		res.Sources = append(res.Sources, "ec2")
@@ -238,4 +239,13 @@ func (f Fetcher) Fetch(ctx context.Context) (Result, error) {
 		return res, fmt.Errorf("awsfetch: every surface failed: %v", res.Skipped)
 	}
 	return res, nil
+}
+
+// nonEmpty returns a one-element list, or nil for an empty string — so an instance without a public
+// DNS name carries no hostname at all rather than an empty one.
+func nonEmpty(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return []string{s}
 }
