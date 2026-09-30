@@ -10,6 +10,7 @@ import type {
   Vendor,
   VendorsResponse,
   DetectionValidation,
+  FixPlan,
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
@@ -387,6 +388,7 @@ export const api = {
     }),
 
   coverage: () => safe<CoverageSummary>("/v1/coverage", { assets: [], total_assets: 0, scanned_assets: 0 }),
+  fixPlan: () => safe<FixPlan>("/v1/fix-plan", { steps: [], open_findings: 0, ignored: 0, note: "" }),
   detectionValidation: () =>
     safe<DetectionValidation>("/v1/detection-validation", { results: [], detected: 0, not_detected: 0, undetermined: 0, blocked: 0, missed_proven: 0, caveat: "" }),
   exposureTrend: () =>
@@ -888,6 +890,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ key, reason, note: note ?? "", ...(reviewInDays ? { review_in_days: reviewInDays } : {}) }),
     }),
+  // Propose ONE plan step's fixes across every asset it touches — through the approval desk, never applied.
+  prepareFixStep: (key: string) =>
+    call<{ findings: number; assets: number; queued: number; pending: number; applied: number; detail: string }>(
+      "/v1/fix-plan/prepare", { method: "POST", body: JSON.stringify({ key }) }),
   unignoreIssue: (key: string) =>
     call<unknown>("/v1/issues/unignore", { method: "POST", body: JSON.stringify({ key }) }),
 

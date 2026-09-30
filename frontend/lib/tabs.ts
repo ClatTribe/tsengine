@@ -56,6 +56,9 @@ export const CONNECTION_TABS: Tab[] = [
 // flat nav rows — same principle as COMPLIANCE_TABS / CONNECTION_TABS.)
 export const SECURITY_TABS: Tab[] = [
   { href: "/issues", label: "Issues" },
+  // Top fixes is the same issues, turned into the ORDERED WORK that closes them — one change per step,
+  // across every asset it touches. Issues answers "what is wrong"; this answers "what do we do first".
+  { href: "/fixes", label: "Top fixes" },
   { href: "/findings", label: "All findings" },
   { href: "/attack-paths", label: "Attack paths" },
   { href: "/coverage", label: "Coverage" },

@@ -2002,3 +2002,42 @@ export interface ProductsView {
   links_note: string; // the grouping basis, rendered VERBATIM beside the proposals
   deploy_links_unavailable?: boolean;
 }
+
+// GET /v1/fix-plan — the ordered remediation plan (the VAPT roadmap's grouping + order) over the
+// issues list's findings. One step is one change; it closes every finding it lists, on every asset.
+export interface FixPlanAsset {
+  id: string;
+  target: string;
+  type: string;
+  owner?: string; // empty means UNOWNED — never defaulted to anyone
+  findings: number;
+}
+export interface FixPlanState {
+  not_proposed: number;
+  awaiting_approval: number;
+  delivered: number;
+  fix_did_not_hold: number;
+  declined: number;
+}
+export interface FixPlanStep {
+  key: string;
+  order: number;
+  title: string;
+  action: string;
+  severity: string;
+  closes: number;
+  findings: string[];
+  why?: string[];
+  where?: string[];
+  fix_ready: boolean;
+  validate: boolean;
+  assets: FixPlanAsset[];
+  unattributed: number;
+  state: FixPlanState;
+}
+export interface FixPlan {
+  steps: FixPlanStep[];
+  open_findings: number;
+  ignored: number;
+  note: string;
+}

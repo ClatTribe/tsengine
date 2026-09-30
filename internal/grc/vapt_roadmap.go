@@ -33,6 +33,9 @@ import (
 // RemediationStep is one unit of work in the plan: a single change, the findings it closes, and
 // the grounded reason it sits where it does.
 type RemediationStep struct {
+	// Key is the fixunit key this step groups on — the stable handle that lets a caller act on "this
+	// step" across reads (the Order moves as other work closes; the key does not).
+	Key      string   `json:"key"`
 	Order    int      `json:"order"`
 	Title    string   `json:"title"`           // what to do
 	Action   string   `json:"action"`          // the standard fix for the class
@@ -59,7 +62,7 @@ func BuildRoadmap(findings []types.Finding, fixReady map[string]bool) []Remediat
 		if len(g.Findings) == 0 {
 			continue
 		}
-		st := RemediationStep{Validate: true}
+		st := RemediationStep{Key: g.Key, Validate: true}
 		worstRank, bestSig := -1, 0
 		var worst types.Finding
 		seen := map[string]bool{}
