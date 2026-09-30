@@ -38,6 +38,10 @@ export const COMPLIANCE_TABS: Tab[] = [
 // shows up under the AI Security Engineer, so here you see WHAT you have, not what is wrong with it.
 export const CONNECTION_TABS: Tab[] = [
   { href: "/assets", label: "Assets" },
+  // Products group the assets above into what customers actually buy and review (ADR 0028 G2). A tab
+  // beside Assets rather than its own nav row, because a product is a grouping of what you connected —
+  // and it is the scope a VAPT report can be narrowed to.
+  { href: "/products", label: "Products" },
   { href: "/posture", label: "Vendors & devices" },
   { href: "/saas-apps", label: "Connected apps" },
 ];

@@ -1,6 +1,6 @@
 # ADR 0028 — Scoping and Mobilization: the two CTEM phases this campaign under-built
 
-**Status:** Proposed — G1 implemented in the same PR; G2 and G3 scoped, not built.
+**Status:** G1 implemented; **G2 implemented** as "products" (see the G2 decision below); G3 scoped, not built.
 
 **Date:** 2026-08-23
 **Depends on / reconciles:** CLAUDE.md §0 (rank by customer value), §10 (grounding), §18.2 inv. 2
@@ -61,6 +61,44 @@ Deliberately not built here. It is a data-model change with real product surface
 service, how assets join one, what happens when they overlap), and doing it badly — a free-text tag
 nobody maintains — is worse than the honest absence, because a stale service map reads as scope.
 
+#### G2 — the decision, and what was built (2026-09-30)
+
+**A "service" is the product the tenant's customers buy and review.** For this ICP (10–150 people, no
+security team, security triggered by a customer's review), CTEM's business service is the SAME act as
+the scope of that review: what a pentest report covers, the trust-centre boundary, the SOC 2 system
+description. Most tenants have one. So the unit is named in the buyer's words — "your product" — not
+CTEM's.
+
+The three options considered and why each lost as the PRIMARY mechanism: **tag-based** (the failure
+this section already named — a map nobody maintains reads as scope); **connection-derived** (wrong
+grain — one product spans a GitHub org, an AWS account and a domain); **attack-path-derived** (unstable
+as findings change and unexplainable to a customer — a prioritisation signal, not a scope).
+
+**Built: proposed from links we can prove, confirmed by a named human.** `internal/productscope`
+groups assets by exactly two links — a shared REGISTERED domain (public-suffix eTLD+1, whose private
+section keeps strangers on vercel.app/herokuapp.com apart) and GitHub CI deploy trust (the estate
+graph's ghoidc `assumes` edge, github.com URLs only so a GitLab path collision cannot fabricate a
+deploy). Never used, each deliberately: humans (a CTO reaching every repo would merge the estate), the
+internet pseudo-node, leaked keys, and name similarity. Only groups containing something customers
+reach are PROPOSED; proven-but-unplaceable infrastructure is an unassigned GROUP with its reason, never
+a phantom second product. Grouping is transitive over all in-scope assets, so a host one hop from a
+confirmed member is SUGGESTED for that product rather than proposed as another under the same domain
+(a bug the HTTP-door test caught). Only confirmed products are stored (`Tenant.Products`, with
+`ConfirmedBy`/`ConfirmedAt` re-stamped on every membership change); proposals are recomputed per read,
+so the map cannot rot on disk. Exclusions record who and why (`Tenant.OutOfScope`).
+
+**The payoff is the deliverable, not a dashboard:** `GET /v1/vapt/report?product=<id>` states "covers
+<product> — N assets, confirmed as the product's scope by <name> on <date>" — the answer to a customer
+reviewer's "does this cover what we are buying?". Findings are attributed against ALL assets before
+filtering (longest-match), unattributable ones are DISCLOSED as a count, and the retest roll-up counts
+only this product's fixes.
+
+**Stated limits.** Proposal quality tracks what is connected: with one repo and nothing else, the answer
+is one proposal and a list of unassigned assets. No DNS→cloud link yet (a web app is not tied to the
+account serving it), so infrastructure is placed by a human. The trust centre and pentest engagements
+are not yet product-scoped; exposure is shown as a current count per product, not yet a per-product
+trend — which is what unblocks G3.
+
 ### G3 — Program-level exposure objective (Scoping) — scoped, not built
 
 Scoping asks how success is measured. We have per-severity SLA targets and, since the exposure-trend
@@ -96,6 +134,6 @@ service (so it depends on G2), or estate-wide.
 | Item | Effort | Status |
 |---|---|---|
 | **G1** asset ownership | S | **Implemented here** |
-| **G2** business-service grouping | M | Proposed — needs a product decision on service definition |
+| **G2** business-service grouping | M | **Implemented** — as the *product* customers review (`internal/productscope`, `/v1/products`, `/products`, `GET /v1/vapt/report?product=`) |
 | **G3** program exposure objective | S–M | Proposed — depends on G2 if per-service |
 | compensating controls | M | **ADR 0027**, blocked on the control-plane choice |

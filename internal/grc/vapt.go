@@ -29,6 +29,16 @@ type VAPTReport struct {
 	// that predates the field is unchanged.
 	Brand string   `json:"brand,omitempty"`
 	Scope []string `json:"scope"` // the monitored asset targets assessed
+	// Product and ScopeStatement are set when the report is narrowed to one CONFIRMED product (ADR 0028
+	// G2). The statement names who agreed that scope and when, because the question a customer's
+	// reviewer asks of a vendor report is "does this cover what we are buying?" — and "a named person
+	// on your side confirmed these N assets are the product" is the answer, where a bare list is not.
+	Product        string `json:"product,omitempty"`
+	ScopeStatement string `json:"scope_statement,omitempty"`
+	// UnattributedExcluded counts workspace findings that could not be attributed to ANY asset and so
+	// are not in a product-scoped report. Disclosed rather than silently dropped: a scoped report that
+	// quietly omitted them would read as a cleaner product than the evidence supports.
+	UnattributedExcluded int `json:"unattributed_excluded,omitempty"`
 	// Untested names scope targets that NOTHING has assessed yet. Zero findings across a scope
 	// nobody scanned is not a clean result, and this report is the document a customer hands an
 	// auditor or a prospect — it is the last place a silence should read as an all-clear.
@@ -163,6 +173,24 @@ type VAPTFinding struct {
 
 // VAPTReport assembles the report for a tenant from its current findings + monitored assets.
 func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, error) {
+	return g.VAPTReportFor(ctx, tenantID, nil)
+}
+
+// ProductScope narrows a VAPT report to one confirmed product.
+type ProductScope struct {
+	Name        string
+	AssetIDs    []string
+	ConfirmedBy string
+	ConfirmedAt time.Time
+}
+
+// VAPTReportFor builds the report for the whole workspace (ps == nil) or for one confirmed product.
+//
+// Scoping attributes each finding against ALL of the tenant's assets first and keeps it only when its
+// best match is a product member. Attributing against the product's assets alone would pull in a
+// finding whose endpoint merely CONTAINS a member's target while belonging to a more specific asset
+// outside the product — the longest-match rule exists to prevent exactly that.
+func (g *GRC) VAPTReportFor(ctx context.Context, tenantID string, ps *ProductScope) (*VAPTReport, error) {
 	findings, err := g.Store.ListFindings(ctx, tenantID, store.FindingFilter{})
 	if err != nil {
 		return nil, err
@@ -170,6 +198,24 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 	assets, err := g.Store.ListAssets(ctx, tenantID)
 	if err != nil {
 		return nil, err
+	}
+	var member map[string]bool
+	unattributed := 0
+	if ps != nil {
+		member = make(map[string]bool, len(ps.AssetIDs))
+		for _, id := range ps.AssetIDs {
+			member[id] = true
+		}
+		kept := findings[:0:0]
+		for _, f := range findings {
+			switch id := assetForFinding(f, assets); {
+			case id == "":
+				unattributed++
+			case member[id]:
+				kept = append(kept, f)
+			}
+		}
+		findings = kept
 	}
 	pending, _ := g.Store.PendingApprovals(ctx, tenantID) // best-effort: fixes-ready signal
 	fixReady := make(map[string]bool, len(pending))
@@ -185,11 +231,17 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 	}
 	var scope []string
 	for _, a := range assets {
-		if a.Target != "" {
+		if a.Target != "" && (member == nil || member[a.ID]) {
 			scope = append(scope, a.Target)
 		}
 	}
 	rep := ReportFromFindings(findings, scope, name, g.now(), fixReady)
+	if ps != nil {
+		rep.Product = ps.Name
+		rep.UnattributedExcluded = unattributed
+		rep.ScopeStatement = fmt.Sprintf("This report covers %s — %d asset%s, confirmed as the product's scope by %s on %s.",
+			ps.Name, len(scope), pluralS(len(scope)), ps.ConfirmedBy, ps.ConfirmedAt.UTC().Format("2 January 2006"))
+	}
 	if t, terr := g.Store.GetTenant(ctx, tenantID); terr == nil {
 		rep.Brand = t.Brand()
 	}
@@ -199,9 +251,18 @@ func (g *GRC) VAPTReport(ctx context.Context, tenantID string) (*VAPTReport, err
 	// "we filed a fix and hoped". Computed here (not in the pure core) because it needs the action
 	// store; a per-engagement report has no such history and simply carries zeros. Grounded (§10):
 	// counts come only from a real FixVerification the retester wrote, never inferred.
+	inReport := make(map[string]bool, len(findings))
+	for _, f := range findings {
+		inReport[f.ID] = true
+	}
 	if actions, aerr := g.Store.ListActions(ctx, tenantID); aerr == nil {
 		for _, a := range actions {
 			if a.Verification == nil {
+				continue
+			}
+			// A product-scoped report counts only fixes to ITS findings; another product's confirmed
+			// fix is not evidence about this one.
+			if ps != nil && !actionTouches(a, inReport) {
 				continue
 			}
 			switch a.Verification.Status {
@@ -505,6 +566,13 @@ func RenderVAPTMarkdown(r *VAPTReport) string {
 	}
 
 	b.WriteString("## Scope\n\n")
+	if r.ScopeStatement != "" {
+		fmt.Fprintf(&b, "**%s**\n\n", r.ScopeStatement)
+	}
+	if r.UnattributedExcluded > 0 {
+		fmt.Fprintf(&b, "_%d finding%s in this workspace could not be attributed to any asset and %s not included in this product's report._\n\n",
+			r.UnattributedExcluded, pluralS(r.UnattributedExcluded), map[bool]string{true: "is", false: "are"}[r.UnattributedExcluded == 1])
+	}
 	if len(r.Scope) == 0 {
 		b.WriteString("_No assets in scope yet — connect a system to begin the assessment._\n\n")
 	} else {
@@ -747,4 +815,30 @@ func Reassess(r *VAPTReport) {
 	if len(r.Untested) > 0 && len(r.Untested) == len(r.Scope) && r.Summary.Total == 0 {
 		r.Summary.RiskRating = "Not assessed"
 	}
+}
+
+// actionTouches reports whether a remediation action resolves any finding in the set.
+func actionTouches(a platform.Action, ids map[string]bool) bool {
+	if ids[a.FindingID] {
+		return true
+	}
+	for _, id := range a.FindingIDs {
+		if ids[id] {
+			return true
+		}
+	}
+	return false
+}
+
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// AssetForFinding attributes a finding to one of the tenant's assets (its AssetID when valid, else
+// the longest asset Target contained in its endpoint), or "" when none matches — never a guess.
+func AssetForFinding(f types.Finding, assets []platform.Asset) string {
+	return assetForFinding(f, assets)
 }

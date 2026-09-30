@@ -1920,3 +1920,53 @@ export type AuditCertificate = {
   valid_until?: string;
   attestation?: { sha256: string; signed_at: string; signer: string; signature: string };
 };
+
+// ── Products — the scoping unit (ADR 0028 G2) ─────────────────────────────────────────────────────
+// A product is what the tenant's customers buy and review. The platform PROPOSES groupings from links
+// it can prove; only a product a named person CONFIRMED is stored. See internal/productscope.
+export type ProductLinkKind = "shared_domain" | "ci_deploys_to";
+
+export interface ProductLink {
+  a: string;
+  b: string;
+  kind: ProductLinkKind;
+  why: string;
+  evidence: string[];
+}
+
+export interface ProductAsset {
+  id: string;
+  type: string;
+  target: string;
+  shared?: boolean; // in more than one confirmed product (shared infrastructure)
+}
+
+export interface ProductExposure {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+  total: number;
+}
+
+export interface ConfirmedProduct {
+  id: string;
+  name: string;
+  owner?: string;
+  confirmed_by: string;
+  confirmed_at: string;
+  assets: ProductAsset[];
+  missing_asset_ids?: string[]; // members that no longer exist — a scope that shrank on its own
+  exposure: ProductExposure;
+  suggestions: { asset: ProductAsset; kind: ProductLinkKind; why: string }[];
+}
+
+export interface ProductsView {
+  products: ConfirmedProduct[];
+  proposals: { name: string; assets: ProductAsset[]; links: ProductLink[] }[];
+  unassigned: { assets: ProductAsset[]; links: ProductLink[] }[];
+  out_of_scope: { asset: ProductAsset; by: string; reason?: string; at: string }[];
+  links_note: string; // the grouping basis, rendered VERBATIM beside the proposals
+  deploy_links_unavailable?: boolean;
+}
