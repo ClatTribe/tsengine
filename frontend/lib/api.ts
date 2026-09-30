@@ -645,6 +645,8 @@ export const api = {
 
   // Tier an asset by customer-data exposure (1 = customer data, 2 = standard, 3 = low). The
   // tier raises/lowers the risk-adjusted ranking of that asset's findings.
+  setAssetEnvironment: (id: string, environment: string) =>
+    call<unknown>(`/v1/assets/${id}/environment`, { method: "POST", body: JSON.stringify({ environment }) }),
   setAssetDataTier: (id: string, tier: number) =>
     call<Asset>(`/v1/assets/${id}/data-tier`, { method: "POST", body: JSON.stringify({ tier }) }),
 

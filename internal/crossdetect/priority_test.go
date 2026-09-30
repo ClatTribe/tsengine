@@ -137,3 +137,38 @@ func TestUnifiedIssues_AggregatesStrongestRungAndCISASignals(t *testing.T) {
 		t.Fatalf("CISA signals must aggregate onto the issue: %+v", got)
 	}
 }
+
+// A DECLARED environment moves rank, never severity; an undeclared one moves nothing.
+func TestRank_DeclaredEnvironmentMovesRankNotSeverity(t *testing.T) {
+	prod, _ := rank(Issue{Severity: "high", Environment: "production"})
+	unknown, fs := rank(Issue{Severity: "high"})
+	staging, _ := rank(Issue{Severity: "high", Environment: "staging"})
+	dev, _ := rank(Issue{Severity: "high", Environment: "development"})
+	if !(prod > unknown && unknown > staging && staging > dev) {
+		t.Fatalf("want production > unknown > staging > development: %d %d %d %d", prod, unknown, staging, dev)
+	}
+	if _, ok := factor(fs, "environment"); ok {
+		t.Fatal("an undeclared environment is silence, not evidence — it must add no factor")
+	}
+	out := PrioritizeByDataTier([]Issue{{Key: "k", Severity: "critical", Endpoint: "https://staging.acme.com/x"}},
+		[]platform.Asset{{ID: "a", Target: "https://staging.acme.com", Meta: map[string]string{platform.EnvironmentMetaKey: "staging"}}})
+	if out[0].Environment != "staging" || out[0].Severity != "critical" {
+		t.Fatalf("attribution must carry the declared environment and leave severity alone: %+v", out[0])
+	}
+	// A staging critical still outranks a plain production low — lowered, not dismissed.
+	low, _ := rank(Issue{Severity: "low", Environment: "production"})
+	crit, _ := rank(Issue{Severity: "critical", Environment: "staging"})
+	if crit <= low {
+		t.Fatalf("a staging critical (%d) must still outrank a production low (%d)", crit, low)
+	}
+}
+
+// The environment is read from the same Meta key the pentest gate writes; nothing else counts.
+func TestDeclaredEnvironment_OnlyHumanValues(t *testing.T) {
+	for v, want := range map[string]string{"staging": "staging", " production ": "production", "": "", "prod": "", "unknown": ""} {
+		a := platform.Asset{Meta: map[string]string{platform.EnvironmentMetaKey: v}}
+		if got := a.DeclaredEnvironment(); got != want {
+			t.Errorf("%q → %q, want %q", v, got, want)
+		}
+	}
+}

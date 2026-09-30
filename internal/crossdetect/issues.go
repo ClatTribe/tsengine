@@ -42,7 +42,10 @@ type Issue struct {
 	// RiskRank is the tier-adjusted priority (severity × tier) the issue list is sorted by.
 	// Both omitempty — zero until an owner tiers the asset and the issue is attributable.
 	DataTier int `json:"data_tier,omitempty"`
-	RiskRank int `json:"risk_rank,omitempty"`
+	// Environment is the DECLARED environment of the asset this issue was attributed to
+	// (production | staging | development), or "" when nobody said. Ranking only — never severity.
+	Environment string `json:"environment,omitempty"`
+	RiskRank    int    `json:"risk_rank,omitempty"`
 	// Live-exploitable fusion (the ACSP "distinguish theoretical from active/reachable/exploitable"
 	// lens — set by AnnotateLiveRisk). Live = this issue is genuinely live, not just present:
 	// observed under attack, OR internet-exposed AND on an attack path to a crown jewel, OR

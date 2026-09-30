@@ -55,6 +55,15 @@ export async function disconnectConnection(id: string): Promise<{ ok: boolean; e
   }
 }
 
+// Records whether an asset is production, staging or development. It gates what the pentester may do
+// (unset is treated as production) and moves the ranking of the asset's issues — never their severity.
+export async function setAssetEnvironment(id: string, environment: string): Promise<void> {
+  await api.setAssetEnvironment(id, environment);
+  revalidatePath("/assets");
+  revalidatePath("/issues");
+  revalidatePath("/fixes");
+}
+
 // Sets an asset's customer-data-sensitivity tier (1 = customer data, 2 = standard, 3 = low).
 // The tier feeds the platform's risk-adjusted ranking so a finding on a customer-data repo is
 // prioritized over the same finding on a low-sensitivity one (the Synthesia repo-tiering idea).

@@ -69,7 +69,12 @@ func RiskWeight(sev types.Severity, tier int) int {
 // worth is the follow-up; until then this stays honestly Standard.
 func PrioritizeByDataTier(issues []Issue, assets []platform.Asset) []Issue {
 	for i := range issues {
-		tier := tierForEndpoint(issues[i].Endpoint, assets)
+		a, ok := assetForEndpoint(issues[i].Endpoint, assets)
+		tier := platform.DataTierStandard
+		if ok {
+			tier = a.DataTier()
+			issues[i].Environment = a.DeclaredEnvironment()
+		}
 		issues[i].DataTier = tier
 		issues[i].RiskRank, issues[i].RankFactors = RankIssue(issues[i], tier)
 	}
@@ -77,21 +82,29 @@ func PrioritizeByDataTier(issues []Issue, assets []platform.Asset) []Issue {
 	return issues
 }
 
-// tierForEndpoint returns the data tier of the asset whose Target best matches the endpoint,
-// or Standard when none does. Longest matching Target wins (so a specific path-asset beats a
-// broad host-asset).
-func tierForEndpoint(endpoint string, assets []platform.Asset) int {
+// assetForEndpoint returns the asset whose Target best matches the endpoint. Longest matching
+// Target wins (so a specific path-asset beats a broad host-asset); ok=false when none matches.
+func assetForEndpoint(endpoint string, assets []platform.Asset) (platform.Asset, bool) {
+	var best platform.Asset
+	bestLen := 0
 	if endpoint == "" {
-		return platform.DataTierStandard
+		return best, false
 	}
-	best, bestLen := platform.DataTierStandard, 0
 	for _, a := range assets {
 		if a.Target == "" || len(a.Target) <= bestLen {
 			continue
 		}
 		if strings.Contains(endpoint, a.Target) {
-			best, bestLen = a.DataTier(), len(a.Target)
+			best, bestLen = a, len(a.Target)
 		}
 	}
-	return best
+	return best, bestLen > 0
+}
+
+// tierForEndpoint returns the data tier of the best-matching asset, or Standard when none does.
+func tierForEndpoint(endpoint string, assets []platform.Asset) int {
+	if a, ok := assetForEndpoint(endpoint, assets); ok {
+		return a.DataTier()
+	}
+	return platform.DataTierStandard
 }
