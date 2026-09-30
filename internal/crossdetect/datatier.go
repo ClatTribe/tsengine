@@ -71,28 +71,10 @@ func PrioritizeByDataTier(issues []Issue, assets []platform.Asset) []Issue {
 	for i := range issues {
 		tier := tierForEndpoint(issues[i].Endpoint, assets)
 		issues[i].DataTier = tier
-		issues[i].RiskRank = RiskWeight(types.Severity(issues[i].Severity), tier) + exploitabilityBoost(issues[i])
+		issues[i].RiskRank, issues[i].RankFactors = RankIssue(issues[i], tier)
 	}
 	sort.SliceStable(issues, func(a, b int) bool { return issues[a].RiskRank > issues[b].RiskRank })
 	return issues
-}
-
-// exploitabilityBoost is the within-severity tiebreaker for how PROVEN an issue is — the
-// "prioritize by real exploitability" lens (Wiz/Synthesia). Additive + modest (< the 100-point
-// severity gap), so it orders issues inside a severity band without inflating a lesser issue past
-// a worse one: an Attacked issue (observed exploited in the wild — the strongest fix-first signal)
-// leads a Confirmed one (≥2 independent tools agree → more likely a true positive), which leads an
-// unproven one. Attacked supersedes Confirmed (it's the stronger evidence), so they don't stack.
-func exploitabilityBoost(i Issue) int {
-	switch {
-	case i.Live: // genuinely live-exploitable (ACSP fusion) — the strongest fix-first signal
-		return 80
-	case i.Attacked:
-		return 60
-	case i.Confirmed:
-		return 20
-	}
-	return 0
 }
 
 // tierForEndpoint returns the data tier of the asset whose Target best matches the endpoint,
