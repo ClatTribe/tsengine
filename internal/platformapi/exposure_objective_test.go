@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -92,5 +93,26 @@ func TestExposureObjectiveMirror_StaysInStep(t *testing.T) {
 	if got := countJSONFields(p); got != wantFields {
 		t.Errorf("platform.ExposureObjective has %d fields, expected %d — if a field was added, convert "+
 			"it in handleExposureTrend too, or the objective is graded without it", got, wantFields)
+	}
+}
+
+// The page edits what was set, so the trend must carry the stored values beside the verdict — and
+// carry NOTHING when no objective was declared, since a zeroed struct would read as "hold the line".
+func TestExposureTrend_CarriesTheObjectiveSettingsForEditing(t *testing.T) {
+	st := store.NewMemory()
+	if err := st.PutTenant(t.Context(), platform.Tenant{ID: "t1"}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler(Deps{Store: st, Token: "platform-tok"})
+	if strings.Contains(do(h, "GET", "/v1/exposure-trend", "t1", "").Body.String(), "objective_settings") {
+		t.Fatal("no objective was declared, so no settings may be returned — a zero value reads as a real target")
+	}
+	do(h, "PUT", "/v1/settings/exposure-objective", "t1", `{"window_days":30,"net_per_window":2,"min_confirmed_fixed":1}`)
+	var got struct {
+		Settings *platform.ExposureObjective `json:"objective_settings"`
+	}
+	_ = json.Unmarshal(do(h, "GET", "/v1/exposure-trend", "t1", "").Body.Bytes(), &got)
+	if got.Settings == nil || got.Settings.WindowDays != 30 || got.Settings.NetPerWindow != 2 || got.Settings.MinConfirmedFixed != 1 || !got.Settings.Declared {
+		t.Fatalf("the stored objective must ride along for editing: %+v", got.Settings)
 	}
 }

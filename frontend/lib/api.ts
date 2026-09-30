@@ -391,6 +391,9 @@ export const api = {
   fixPlan: () => safe<FixPlan>("/v1/fix-plan", { steps: [], open_findings: 0, ignored: 0, note: "" }),
   detectionValidation: () =>
     safe<DetectionValidation>("/v1/detection-validation", { results: [], detected: 0, not_detected: 0, undetermined: 0, blocked: 0, missed_proven: 0, caveat: "" }),
+  // Declare the programme's exposure target. One value per workspace, replaced wholesale.
+  setExposureObjective: (o: { window_days: number; net_per_window: number; min_confirmed_fixed: number }) =>
+    call<unknown>("/v1/settings/exposure-objective", { method: "PUT", body: JSON.stringify(o) }),
   exposureTrend: () =>
     safe<ExposureTrend>("/v1/exposure-trend", { points: [], confirmed_fixed: 0, unscored: 0, caveat: "" }),
   attackCoverage: () =>

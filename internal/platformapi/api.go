@@ -1102,17 +1102,22 @@ func (d Deps) handleExposureTrend(w http.ResponseWriter, r *http.Request, tenant
 	// A tenant read failure does not fail the request: the series is still the truth, and Evaluate
 	// with no objective reports honestly that none is set.
 	var obj exposuretrend.Objective
+	var settings *platform.ExposureObjective
 	if t, terr := d.Store.GetTenant(ctx, tenantID); terr == nil && t.ExposureObjective != nil {
 		o := t.ExposureObjective
+		settings = o
 		obj = exposuretrend.Objective{
 			Declared: o.Declared, WindowDays: o.WindowDays,
 			NetPerWindow: o.NetPerWindow, MinConfirmedFixed: o.MinConfirmedFixed,
 		}
 	}
+	// The stored values ride along beside the verdict so the page can show (and edit) what was set
+	// without a second call; the verdict's Target is the same thing as prose, for reading.
 	respond(w, struct {
 		exposuretrend.Trend
-		Objective exposuretrend.Verdict `json:"objective"`
-	}{Trend: trend, Objective: exposuretrend.Evaluate(trend, obj)}, nil)
+		Objective         exposuretrend.Verdict       `json:"objective"`
+		ObjectiveSettings *platform.ExposureObjective `json:"objective_settings,omitempty"`
+	}{Trend: trend, Objective: exposuretrend.Evaluate(trend, obj), ObjectiveSettings: settings}, nil)
 }
 
 // handleSetExposureObjective declares the programme's exposure target (ADR 0028 G3).

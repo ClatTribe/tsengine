@@ -1696,6 +1696,28 @@ export interface ExposureTrend {
   scopes_included?: string[];
   mixed?: boolean;
   caveat: string;
+  /** The graded answer to "is this good?" — or an explained refusal. Absent on an old server. */
+  objective?: ExposureVerdict;
+  /** What was set, for editing. Absent means no objective was ever declared. */
+  objective_settings?: ExposureObjectiveSettings;
+}
+
+// Graded against the programme's stated target (ADR 0028 G3). gradeable=false is NOT a miss: the
+// series is too short, too mixed or too unmeasured to support a verdict, and `reason` says which.
+export interface ExposureVerdict {
+  gradeable: boolean;
+  met?: boolean;
+  net: number;
+  confirmed_fixed: number;
+  days_measured: number;
+  reason: string;
+  target: string;
+}
+export interface ExposureObjectiveSettings {
+  declared: boolean;
+  window_days?: number;
+  net_per_window: number;
+  min_confirmed_fixed?: number;
 }
 
 // DetectionValidation — when we proved an attack works, did the customer's own defences notice?
