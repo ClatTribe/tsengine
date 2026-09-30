@@ -169,6 +169,7 @@ export default async function ActivityPage() {
           <div className="flex items-center gap-2">
             <TrendingDown className="h-4 w-4 shrink-0 text-muted" />
             <span className="font-medium text-ink">Is exposure going down?</span>
+            <a href="/board" className="ml-auto text-xs text-faint hover:text-accent">Board report →</a>
           </div>
           <div className="mt-2 space-y-1 text-xs">
             {trend.points.slice(-8).map((p) => (

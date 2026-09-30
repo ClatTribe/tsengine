@@ -375,6 +375,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/triage-funnel", d.auth(d.handleTriageFunnel))                                                      // auto-triage funnel: % of raw findings the engine handled automatically
 	mux.HandleFunc("POST /v1/issues/feedback", d.auth(d.handleFeedback))                                                       // record a human judgement (changes nothing — opinion only)
 	mux.HandleFunc("GET /v1/issues/feedback", d.auth(d.handleListFeedback))                                                    // this tenant's judgements
+	mux.HandleFunc("GET /v1/board-report", d.auth(d.handleBoardReport))                                                        // the one page for a board: proven issues, exposure vs objective, top fixes, risk decisions, coverage — ?format=md to download
 	mux.HandleFunc("GET /v1/fix-plan", d.auth(d.handleFixPlan))                                                                // the ordered remediation plan in-app — the VAPT roadmap's grouping + order, over the issues list's findings
 	mux.HandleFunc("POST /v1/fix-plan/prepare", d.auth(d.handleFixPlanPrepare))                                                // propose ONE step's fixes across every asset it touches, through the same desk
 	mux.HandleFunc("POST /v1/issues/ignore", d.auth(d.handleIgnoreIssue))                                                      // suppress an issue (false-positive / accepted-risk)

@@ -2068,3 +2068,29 @@ export interface FixPlan {
   ignored: number;
   note: string;
 }
+
+// GET /v1/board-report — the one page for a board. Every figure is one the product computes elsewhere,
+// and each travels with the caveat that bounds it; there is deliberately no single score.
+export interface BoardReport {
+  generated_at: string;
+  headline: string;
+  proven: {
+    open_issues: number;
+    by_severity: Record<string, number>;
+    exploited: number;
+    kev: number;
+    ransomware: number;
+    held_by_decision: number;
+  };
+  exposure: {
+    objective: ExposureVerdict;
+    opened_30d: number;
+    closed_30d: number;
+    confirmed_fixed: number;
+    caveat: string;
+  };
+  top_fixes: FixPlanStep[];
+  decisions: { in_force: number; lapsed: number; undated: number };
+  coverage: { total_assets: number; scanned_assets: number; never_scanned?: string[] };
+  caveats: string[];
+}
