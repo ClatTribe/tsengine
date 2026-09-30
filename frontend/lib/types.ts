@@ -265,6 +265,19 @@ export interface IssuesResponse {
   // explanations is keyed by issue key. Optional so an older server (or an empty estate) renders the
   // raw title rather than a blank row.
   explanations?: Record<string, Explanation>;
+  // The risk decision behind each listed issue that has one (keyed by issue key): the in-force rule in
+  // the ignored view, the LAPSED rule in the active view. lapsed counts issues whose acceptance ran out.
+  acceptances?: Record<string, IgnoreDecision>;
+  lapsed?: number;
+}
+
+export interface IgnoreDecision {
+  issue_key: string;
+  reason: string;
+  note?: string;
+  by?: string;
+  at: string;
+  expires_at?: string; // absent = no review date (a false positive, or a legacy acceptance)
 }
 
 // A custom noise-filter rule (Aikido "custom rules": exclude paths/packages/conditions).

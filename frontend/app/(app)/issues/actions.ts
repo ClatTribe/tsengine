@@ -19,8 +19,8 @@ export async function investigateIssue(key: string): Promise<InvestigateResult> 
 
 // Suppress a unified issue (false-positive / accepted-risk). Routes through the
 // ledger-recorded /v1/issues/ignore path; the issue drops off the active list.
-export async function ignoreIssue(key: string, reason: string, note: string) {
-  await api.ignoreIssue(key, reason, note);
+export async function ignoreIssue(key: string, reason: string, note: string, reviewInDays?: number) {
+  await api.ignoreIssue(key, reason, note, reviewInDays);
   revalidatePath("/issues");
   revalidatePath("/dashboard");
 }

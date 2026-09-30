@@ -6,6 +6,16 @@ import { ignoreIssue, unignoreIssue } from "@/app/(app)/issues/actions";
 import { useAction } from "@/lib/use-action";
 import { cn } from "@/lib/utils";
 
+// A risk decision (anything but a false positive) is reviewed again after this many days. Shown as a
+// visible choice with 90 pre-selected — never a silent default — and capped at a year server-side,
+// because "accepted forever" is not a risk decision.
+const REVIEW_DAYS = [
+  { value: 30, label: "Review in 30 days" },
+  { value: 90, label: "Review in 90 days" },
+  { value: 180, label: "Review in 6 months" },
+  { value: 365, label: "Review in 1 year" },
+];
+
 const REASONS = [
   { value: "accepted_risk", label: "Accepted risk" },
   { value: "false_positive", label: "False positive" },
@@ -18,6 +28,8 @@ const REASONS = [
 export function IssueActions({ issueKey, ignored }: { issueKey: string; ignored?: boolean }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState(REASONS[0].value);
+  const [reviewDays, setReviewDays] = useState(90);
+  const needsReview = reason !== "false_positive";
   const [pending, run] = useAction();
 
   if (ignored) {
@@ -54,8 +66,20 @@ export function IssueActions({ issueKey, ignored }: { issueKey: string; ignored?
           <option key={r.value} value={r.value}>{r.label}</option>
         ))}
       </select>
+      {needsReview && (
+        <select
+          value={reviewDays}
+          onChange={(e) => setReviewDays(Number(e.target.value))}
+          aria-label="Review date"
+          className="rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent"
+        >
+          {REVIEW_DAYS.map((d) => (
+            <option key={d.value} value={d.value}>{d.label}</option>
+          ))}
+        </select>
+      )}
       <button
-        onClick={() => run(() => ignoreIssue(issueKey, reason, ""), issueKey)}
+        onClick={() => run(() => ignoreIssue(issueKey, reason, "", needsReview ? reviewDays : undefined), issueKey)}
         disabled={pending}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition hover:border-accent disabled:opacity-50",

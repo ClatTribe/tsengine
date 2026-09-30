@@ -881,8 +881,13 @@ export const api = {
     call<PentestEngagement>(`/v1/pentest/${id}/signoff`, { method: "POST", body: JSON.stringify(body) }),
 
   // Suppress (ignore / accept-risk) a unified issue, or restore a suppressed one.
-  ignoreIssue: (key: string, reason: string, note?: string) =>
-    call<unknown>("/v1/issues/ignore", { method: "POST", body: JSON.stringify({ key, reason, note: note ?? "" }) }),
+  // review_in_days sets when an accepted risk must be looked at again (server caps it at a year and
+  // applies a VISIBLE 90-day default for a risk decision sent without one). Omitted for a false positive.
+  ignoreIssue: (key: string, reason: string, note?: string, reviewInDays?: number) =>
+    call<unknown>("/v1/issues/ignore", {
+      method: "POST",
+      body: JSON.stringify({ key, reason, note: note ?? "", ...(reviewInDays ? { review_in_days: reviewInDays } : {}) }),
+    }),
   unignoreIssue: (key: string) =>
     call<unknown>("/v1/issues/unignore", { method: "POST", body: JSON.stringify({ key }) }),
 
