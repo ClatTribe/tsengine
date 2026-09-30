@@ -10,6 +10,7 @@ import { SectionTitle, Empty, Tag } from "@/components/ui/primitives";
 import { ScanNow } from "@/components/assets/scan-now";
 import { ConnectScanStatus } from "@/components/assets/connect-scan-status";
 import { DataTierSelect } from "@/components/assets/data-tier-select";
+import { EnvironmentSelect } from "@/components/assets/environment-select";
 import { DisconnectButton } from "@/components/assets/disconnect-button";
 import { LoginFlowConfig } from "@/components/assets/login-flow-config";
 import { AuthzTestConfig } from "@/components/assets/authz-test-config";
@@ -267,7 +268,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="py-2.5 pl-5 pr-2 font-medium">Asset</th>
                   <th className="px-2 py-2.5 font-medium">Type</th>
-                  <th className="px-2 py-2.5 font-medium">Data tier</th>
+                  <th className="px-2 py-2.5 font-medium">Data · environment</th>
                   <th className="px-2 py-2.5 font-medium">Via</th>
                   <th className="px-2 py-2.5 font-medium">Security</th>
                   <th className="px-2 py-2.5 font-medium">Compliance</th>
@@ -344,7 +345,10 @@ function AssetRow({ asset: a, connections, last, posture, security }: { asset: A
         <span title={coverageNote(a.type)}><Tag>{ASSET_TYPE_LABEL[a.type] ?? a.type}</Tag></span>
       </td>
       <td className="px-2 py-2.5 align-middle">
-        <DataTierSelect assetId={a.id} tier={a.data_tier ?? 2} />
+        <div className="flex flex-col items-start gap-1">
+          <DataTierSelect assetId={a.id} tier={a.data_tier ?? 2} />
+          <EnvironmentSelect assetId={a.id} environment={a.environment ?? ""} label={a.environment_label} suggested={a.environment_suggested} />
+        </div>
       </td>
       <td className="px-2 py-2.5 align-middle text-xs text-muted">{via ? kindLabel(via.kind) : "—"}</td>
       <td className="px-2 py-2.5 align-middle text-xs" title={security?.verdict ? `${security.verdict}${coverageNote(a.type) ? `\n${coverageNote(a.type)}` : ""}` : coverageNote(a.type)}>

@@ -60,10 +60,19 @@ const (
 	ptsPublicExploit = 40
 	ptsEPSSMax       = 80
 
-	ptsAutomatable  = 15
-	ptsAttackPath   = 50
-	ptsExposed      = 30
-	ptsWAFShielded  = -60
+	ptsAutomatable = 15
+	ptsAttackPath  = 50
+	ptsExposed     = 30
+	ptsWAFShielded = -60
+	// A DECLARED environment moves rank, never severity. Staging and development are lowered, not
+	// dropped: a staging copy often shares credentials, code and sometimes data with production, so the
+	// finding is still real — it is simply not the first thing to fix. Production is raised a little,
+	// because someone confirmed the blast radius is real customers. Unknown moves nothing: silence is
+	// not evidence either way (the pentest gate reads it as production for SAFETY; ranking must not
+	// read it as anything).
+	ptsProduction   = 25
+	ptsStaging      = -40
+	ptsDevelopment  = -60
 	evidenceCeiling = 280 // the most the evidence axes together may add — keeps a Low below any Critical
 )
 
@@ -140,6 +149,15 @@ func RankIssue(i Issue, tier int) (int, []RankFactor) {
 	factors = append(factors, evidence...)
 	if sum > evidenceCeiling {
 		factors = append(factors, RankFactor{"evidence_cap", evidenceCeiling - sum, "evidence is capped so it never outweighs severity entirely"})
+	}
+
+	switch i.Environment {
+	case "production":
+		factors = append(factors, RankFactor{"environment", ptsProduction, "on an asset you marked production"})
+	case "staging":
+		factors = append(factors, RankFactor{"environment", ptsStaging, "on an asset you marked staging — lowered, not dismissed: staging often shares credentials with production"})
+	case "development":
+		factors = append(factors, RankFactor{"environment", ptsDevelopment, "on an asset you marked development — lowered, not dismissed"})
 	}
 
 	if i.WAFShielded {

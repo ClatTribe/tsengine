@@ -1157,6 +1157,11 @@ export interface Asset {
   discovered_at?: string;
   data_tier?: number; // 1 = customer data, 2 = standard, 3 = low sensitivity
   data_tier_label?: string;
+  /** production | staging | development, or "" when nobody said (gated as production for the pentester). */
+  environment?: string;
+  environment_label?: string;
+  /** A guess from the target's NAME, only when unset — pre-fills the control, never applies itself. */
+  environment_suggested?: string;
 }
 
 export interface ControlState {

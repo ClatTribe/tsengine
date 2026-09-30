@@ -23,7 +23,7 @@ import (
 // the label says so out loud rather than showing a blank that reads as "fine".
 
 // envKey is where the environment lives on the asset.
-const envKey = "environment"
+const envKey = platform.EnvironmentMetaKey
 
 // AssetEnvironment reads an asset's recorded environment. Absent → EnvUnknown, which the pentest
 // gate treats as production.
