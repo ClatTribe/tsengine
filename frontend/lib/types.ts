@@ -190,6 +190,13 @@ export interface Issue {
   confirmed: boolean; // ≥2 independent scanners agree
   finding_ids: string[];
   attacked?: boolean; // endpoint observed under attack in production (runtime signal)
+  // Why this issue sits where it does: named, explained contributions that SUM to risk_rank
+  // (crossdetect.RankIssue). Rendered so the order is checkable rather than trusted.
+  rank_factors?: { factor: string; points: number; why: string }[];
+  evidence_rung?: string; // strongest evidence rung across the group (exploited, provider_confirmed, ...)
+  ransomware?: boolean;
+  ssvc_active?: boolean;
+  ssvc_automatable?: boolean;
   waf_shielded?: boolean; // a WAF/RASP blocked our exploit probe here — a compensating control, NOT a fix
   waf_shield_reason?: string;
   // Data-tier prioritisation: the list is RE-SORTED by risk_rank (severity x tier), so a Medium on a
