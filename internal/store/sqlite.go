@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS reviews     (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,provider,app_id));
 CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS identitylinks (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS warehouse (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditorders (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -629,4 +630,24 @@ func (s *SQLite) GetOperatorSession(ctx context.Context, token string) (platform
 func (s *SQLite) DeleteOperatorSession(ctx context.Context, token string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM opsessions WHERE token=?`, token)
 	return err
+}
+
+// --- warehouse access snapshot (one per tenant, sample values stripped) ---
+
+func (s *SQLite) PutWarehouseSnapshot(ctx context.Context, w platform.WarehouseSnapshot) error {
+	d, err := enc(w)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO warehouse(tenant_id,data) VALUES(?,?)
+		ON CONFLICT(tenant_id) DO UPDATE SET data=excluded.data`, w.TenantID, d)
+	return err
+}
+func (s *SQLite) GetWarehouseSnapshot(ctx context.Context, tenantID string) (platform.WarehouseSnapshot, bool, error) {
+	var w platform.WarehouseSnapshot
+	err := getJSON(ctx, s.db, &w, `SELECT data FROM warehouse WHERE tenant_id=?`, tenantID)
+	if errors.Is(err, ErrNotFound) {
+		return platform.WarehouseSnapshot{}, false, nil
+	}
+	return w, err == nil, err
 }

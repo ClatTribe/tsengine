@@ -13,6 +13,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -710,6 +711,24 @@ type GitHubControl struct {
 // workflows assume. Unread names every source that could not be read and why (a SAML query refused
 // for want of admin:org, an org with no SAML), because an empty link list and an unreadable one must
 // not render the same.
+// WarehouseSnapshot is the tenant's latest data-warehouse access snapshot, kept so the estate composed
+// LATER — every monitoring pass, the agents, GET /v1/estate — still sees the warehouse and the crown
+// jewels its classification PROVED. Before this the snapshot existed only for the length of the ingest
+// request, so a table proven to hold PII was a crown jewel for one response and then forgotten.
+//
+// Estate is the classified snapshot with every column's sampled VALUES REMOVED before it is stored: the
+// samples exist to classify, they are the customer's own data, and keeping them would turn a posture
+// record into a copy of their PII. Discoveries carries the evidence instead, which by construction
+// names the column and signal and never echoes a value (internal/dataclass). Both are opaque JSON so
+// this domain model does not import the internal analysis packages that define their shape.
+type WarehouseSnapshot struct {
+	TenantID    string          `json:"tenant_id"`
+	Estate      json.RawMessage `json:"estate"`
+	Discoveries json.RawMessage `json:"discoveries,omitempty"`
+	Ref         string          `json:"ref,omitempty"` // content digest of what was posted, for provenance
+	PostedAt    time.Time       `json:"posted_at"`
+}
+
 type IdentityLinkSet struct {
 	TenantID  string            `json:"tenant_id"`
 	Links     []IdentityLink    `json:"links"`

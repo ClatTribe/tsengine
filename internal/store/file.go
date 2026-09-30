@@ -314,6 +314,13 @@ func (f *File) PutTrainingCompletion(ctx context.Context, c platform.TrainingCom
 	return f.persist()
 }
 
+func (f *File) PutWarehouseSnapshot(ctx context.Context, s platform.WarehouseSnapshot) error {
+	if err := f.Memory.PutWarehouseSnapshot(ctx, s); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutIdentityLinks(ctx context.Context, set platform.IdentityLinkSet) error {
 	if err := f.Memory.PutIdentityLinks(ctx, set); err != nil {
 		return err

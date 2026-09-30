@@ -1,14 +1,17 @@
 package platformapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/dataplatform"
+	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -42,6 +45,10 @@ func (d Deps) handleDataPlatformIngest(w http.ResponseWriter, r *http.Request, t
 	// the data proves rather than only one the customer declared. Purely additive: an estate with no
 	// sampled columns is unchanged.
 	est, discoveries := dataplatform.Classify(est)
+	// KEEP IT, samples stripped, so every later read of the estate still sees the warehouse and the crown
+	// jewels this classification proved. Best-effort: a failed save must not fail an assessment that
+	// has already run, and the response still carries everything this ingest found.
+	d.saveWarehouse(r.Context(), tenantID, est, discoveries, warehouseRef(raw))
 	findings := dataplatform.Assess(est, dataplatform.Options{})
 	findings = enrichFindings(findings) // L1.5 parity (§11)
 	stored := 0
@@ -60,8 +67,9 @@ func (d Deps) handleDataPlatformIngest(w http.ResponseWriter, r *http.Request, t
 	// by an identity an attacker can reach through cloud IAM" becomes derivable — a sentence neither
 	// the warehouse assessment nor the cloud graph can produce alone.
 	//
-	// It happens here because nothing persists the snapshot: this is the only moment the warehouse is
-	// in hand. Best-effort — a compose failure must not fail the ingest that already succeeded.
+	// Detected inline for immediate feedback; the snapshot is also stored above, so the pass-level
+	// detection finds the same join on later passes. Best-effort — a compose failure must not fail the
+	// ingest that already succeeded.
 	crossFindings := d.detectEstateOnIngestWith(r.Context(), tenantID, &est, warehouseRef(raw))
 	saved = append(saved, crossFindings...)
 	stored += len(crossFindings)
@@ -142,4 +150,38 @@ func anySensitive(est dataplatform.Estate) bool {
 func warehouseRef(raw []byte) string {
 	sum := sha256.Sum256(raw)
 	return "dataplatform:" + hex.EncodeToString(sum[:8])
+}
+
+// saveWarehouse persists the classified snapshot with sample values removed (dataplatform.WithoutSamples).
+func (d Deps) saveWarehouse(ctx context.Context, tenantID string, est dataplatform.Estate, discoveries []dataplatform.Discovery, ref string) {
+	if d.Store == nil {
+		return
+	}
+	body, err := json.Marshal(dataplatform.WithoutSamples(est))
+	if err != nil {
+		return
+	}
+	var disc json.RawMessage
+	if len(discoveries) > 0 {
+		disc, _ = json.Marshal(discoveries)
+	}
+	_ = d.Store.PutWarehouseSnapshot(ctx, platform.WarehouseSnapshot{
+		TenantID: tenantID, Estate: body, Discoveries: disc, Ref: ref, PostedAt: time.Now().UTC(),
+	})
+}
+
+// storedWarehouse reads back the latest warehouse snapshot, or nil when none was ever posted.
+func (d Deps) storedWarehouse(ctx context.Context, tenantID string) (*dataplatform.Estate, string) {
+	if d.Store == nil {
+		return nil, ""
+	}
+	snap, ok, err := d.Store.GetWarehouseSnapshot(ctx, tenantID)
+	if err != nil || !ok || len(snap.Estate) == 0 {
+		return nil, ""
+	}
+	var est dataplatform.Estate
+	if json.Unmarshal(snap.Estate, &est) != nil {
+		return nil, ""
+	}
+	return &est, snap.Ref
 }

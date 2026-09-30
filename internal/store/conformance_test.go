@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -94,6 +95,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.ReplaceThirdPartyApps(ctx, tid, "gworkspace", []platform.ThirdPartyApp{{TenantID: tid, Provider: "gworkspace", AppID: tid + "-app"}}))
 	must(s.ReplaceEmployees(ctx, tid, "merge", []platform.Employee{{TenantID: tid, Source: "merge", ID: tid + "-emp", WorkEmail: tid + "@example.com"}}))
 	must(s.PutTrainingCompletion(ctx, platform.TrainingCompletion{TenantID: tid, ID: tid + "-tc", Subject: tid + "@example.com", ModuleID: "phishing", Tier: platform.TrainingDelivered}))
+	must(s.PutWarehouseSnapshot(ctx, platform.WarehouseSnapshot{TenantID: tid, Ref: tid + "-wh", Estate: []byte(`{"objects":[{"name":"` + tid + `.customers"}]}`)}))
 	must(s.PutIdentityLinks(ctx, platform.IdentityLinkSet{TenantID: tid,
 		Links:    []platform.IdentityLink{{Email: tid + "@example.com", Login: tid + "-gh", Source: "github_saml"}},
 		Controls: []platform.GitHubControl{{Login: tid + "-gh", Org: tid + "-org", Admin: true, Evidence: []string{"orgs/" + tid + "-org/members?role=admin"}}},
@@ -221,6 +223,13 @@ func TestStoreConformance(t *testing.T) {
 				orFail(t, err)
 				if len(tcs) != 1 || tcs[0].TenantID != tid {
 					t.Errorf("ISOLATION training[%s]: %+v", tid, tcs)
+				}
+
+				// The warehouse snapshot names one company's tables and who can read them — its data map.
+				wh, ok, err := s.GetWarehouseSnapshot(ctx, tid)
+				orFail(t, err)
+				if !ok || wh.TenantID != tid || wh.Ref != tid+"-wh" || !strings.Contains(string(wh.Estate), tid+".customers") {
+					t.Errorf("ISOLATION warehouse[%s]: ok=%v %+v", tid, ok, wh)
 				}
 
 				// The identity-link set maps one company's people to their GitHub accounts and repository
