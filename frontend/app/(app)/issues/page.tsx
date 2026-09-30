@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ShieldCheck, ArrowRight, Flame, Layers, Zap, Crosshair, Bug, Globe, Spline, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Issue, Explanation } from "@/lib/types";
+import type { Issue, Explanation, IgnoreDecision } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { IssueActions } from "@/components/issues/issue-actions";
 import { IssueFeedback } from "@/components/issues/issue-feedback";
@@ -53,7 +53,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const showingIgnored = show === "ignored";
   const showingLive = show === "live";
   const showingExternal = show === "external";
-  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live, explanations }, exclResp, funnel, llm, priorInv, fbResp] = await Promise.all([
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live, explanations, acceptances }, exclResp, funnel, llm, priorInv, fbResp] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
     api.triageFunnel(),
@@ -233,7 +233,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
             </thead>
             <tbody>
               {visible.map((it) => (
-                <IssueRow key={it.key} issue={it} ignored={showingIgnored} prior={priorByIssue.get(it.key)} explain={explanations?.[it.key]} />
+                <IssueRow key={it.key} issue={it} ignored={showingIgnored} prior={priorByIssue.get(it.key)} explain={explanations?.[it.key]} decision={acceptances?.[it.key]} />
               ))}
             </tbody>
           </table>
@@ -345,7 +345,7 @@ function LeadCard({ issue, prior, explain }: { issue: Issue; prior?: PriorInv; e
   );
 }
 
-function IssueRow({ issue, ignored, prior, explain }: { issue: Issue; ignored: boolean; prior?: PriorInv; explain?: Explanation }) {
+function IssueRow({ issue, ignored, prior, explain, decision }: { issue: Issue; ignored: boolean; prior?: PriorInv; explain?: Explanation; decision?: IgnoreDecision }) {
   // The issue links to one of its underlying findings (the evidence).
   const href = issue.finding_ids[0] ? `/findings/${issue.finding_ids[0]}` : undefined;
   const title = (
@@ -374,6 +374,7 @@ function IssueRow({ issue, ignored, prior, explain }: { issue: Issue; ignored: b
           )}
         </div>
         <RankWhy factors={issue.rank_factors} />
+        <AcceptanceNote decision={decision} ignored={ignored} />
       </td>
       <td className="px-2 py-3 align-top">
         <div className="flex flex-wrap items-center gap-1">
@@ -498,4 +499,34 @@ function RankWhy({ factors }: { factors?: { factor: string; points: number; why:
       ))}
     </p>
   );
+}
+
+// AcceptanceNote states the risk decision behind a row, from the server's own record. Three cases, and
+// the third is why this exists: an ACCEPTED risk whose review date has passed returns to the active list
+// and says who accepted it and when that ran out — an acceptance nobody re-reads is how a known risk
+// becomes a breach nobody decided to take. In the ignored view it shows when the decision is due, or
+// that an older acceptance has no review date at all.
+function AcceptanceNote({ decision, ignored }: { decision?: IgnoreDecision; ignored: boolean }) {
+  if (!decision) return null;
+  const by = decision.by ? ` by ${decision.by}` : "";
+  const due = decision.expires_at ? new Date(decision.expires_at) : null;
+  const day = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  if (!ignored && due) {
+    return (
+      <p className="mt-1 text-[11px] font-medium text-high">
+        Risk acceptance lapsed on {day(due)} (accepted{by}). Decide again: fix it, or accept it with a new review date.
+      </p>
+    );
+  }
+  if (ignored && due) {
+    return <p className="mt-1 text-[11px] text-muted">Accepted{by} · review due {day(due)}</p>;
+  }
+  if (ignored && decision.reason !== "false_positive") {
+    return (
+      <p className="mt-1 text-[11px] text-high">
+        Accepted{by} with no review date. Restore it and accept it again to set one.
+      </p>
+    );
+  }
+  return null;
 }

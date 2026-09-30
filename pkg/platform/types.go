@@ -1793,7 +1793,37 @@ type IgnoreRule struct {
 	Note     string    `json:"note,omitempty"` // optional human explanation
 	By       string    `json:"by,omitempty"`   // who suppressed it
 	At       time.Time `json:"at"`
+	// ExpiresAt is when the decision must be looked at again. A risk ACCEPTED forever is not a risk
+	// decision — ISO 27001 and a SOC 2 auditor both ask when it was last reviewed — so every reason
+	// except a false positive gets one (NeedsReview). At the date the rule stops suppressing and the
+	// issue returns to the active list marked as a lapsed acceptance; the rule itself is KEPT, because
+	// "who accepted this, why, and when it ran out" is the audit trail. Zero means no review date: a
+	// false positive, or an acceptance recorded before this field existed — the latter is SURFACED as
+	// "no review date", never silently expired.
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
 }
+
+// Risk-acceptance review windows. The default is applied VISIBLY (returned to the caller and shown on
+// the page), never silently; the cap exists because a year is the longest any framework tolerates
+// between reviews of an accepted risk.
+const (
+	DefaultRiskReviewDays = 90
+	MaxRiskReviewDays     = 365
+)
+
+// NeedsReview reports whether this suppression is a decision to live with a real risk, and so needs a
+// review date. A false positive is a claim that the finding is WRONG — there is nothing to re-accept.
+func (r IgnoreRule) NeedsReview() bool { return r.Reason != "false_positive" }
+
+// Lapsed reports whether the review date has passed.
+func (r IgnoreRule) Lapsed(now time.Time) bool {
+	return !r.ExpiresAt.IsZero() && !now.Before(r.ExpiresAt)
+}
+
+// Suppresses reports whether the rule still hides its issue. The ONE decision every consumer (the issue
+// list, the triage stats, per-product exposure) must use, or they would disagree about whether an issue
+// is suppressed.
+func (r IgnoreRule) Suppresses(now time.Time) bool { return !r.Lapsed(now) }
 
 // Feedback is a person's JUDGEMENT about an issue, and it is deliberately not an
 // IgnoreRule.

@@ -79,9 +79,12 @@ func (d Deps) handleTriageFunnel(w http.ResponseWriter, r *http.Request, tenantI
 		respond(w, nil, err)
 		return
 	}
+	now := time.Now().UTC()
 	ignored := make(map[string]bool, len(rules))
 	for _, ir := range rules {
-		ignored[ir.IssueKey] = true
+		if ir.Suppresses(now) { // a lapsed acceptance no longer hides its issue
+			ignored[ir.IssueKey] = true
+		}
 	}
 	respond(w, crossdetect.TriageStats(findings, excl, ignored), nil)
 }
@@ -102,9 +105,17 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 		respond(w, nil, err)
 		return
 	}
+	// A rule past its review date no longer suppresses: the issue returns to the active list, and the
+	// lapsed rule rides along so the page can say WHO accepted it, why, and when that ran out.
+	now := time.Now().UTC()
 	ignored := map[string]platform.IgnoreRule{}
+	lapsed := map[string]platform.IgnoreRule{}
 	for _, ir := range rules {
-		ignored[ir.IssueKey] = ir
+		if ir.Suppresses(now) {
+			ignored[ir.IssueKey] = ir
+		} else {
+			lapsed[ir.IssueKey] = ir
+		}
 	}
 
 	// Custom exclusion rules (path/package/rule-id globs) drop matching findings BEFORE
@@ -179,11 +190,26 @@ func (d Deps) handleIssues(w http.ResponseWriter, r *http.Request, tenantID stri
 		explanations = map[string]explain.Explanation{}
 	}
 
+	// The decision behind each listed issue that has one: the in-force rule in the ignored view (so the
+	// page can show its review date, or that it has none), the lapsed rule in the active view.
+	acceptances := map[string]platform.IgnoreRule{}
+	lapsedShown := 0
+	for _, i := range issues {
+		if ir, ok := ignored[i.Key]; ok {
+			acceptances[i.Key] = ir
+		}
+		if ir, ok := lapsed[i.Key]; ok {
+			acceptances[i.Key] = ir
+			lapsedShown++
+		}
+	}
+
 	respond(w, map[string]any{
 		"issues": issues, "count": len(issues), "raw_findings": rawCount,
 		"explanations": explanations,
 		"confirmed":    confirmed, "ignored": len(ignored), "excluded": excludedCount,
 		"attacked": attacked, "waf_shielded": shielded, "live": live,
+		"acceptances": acceptances, "lapsed": lapsedShown,
 	}, nil)
 }
 
@@ -339,10 +365,12 @@ func (d Deps) handleDeleteExclusion(w http.ResponseWriter, r *http.Request, tena
 // reversible via unignore. Tenant-scoped.
 func (d Deps) handleIgnoreIssue(w http.ResponseWriter, r *http.Request, tenantID string) {
 	var body struct {
-		Key    string `json:"key"`
-		Reason string `json:"reason"`
-		Note   string `json:"note"`
-		By     string `json:"by"`
+		Key          string `json:"key"`
+		Reason       string `json:"reason"`
+		Note         string `json:"note"`
+		By           string `json:"by"`
+		ReviewInDays int    `json:"review_in_days"`
+		ExpiresAt    string `json:"expires_at"` // RFC 3339 or YYYY-MM-DD; alternative to review_in_days
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil || strings.TrimSpace(body.Key) == "" {
 		writeJSON(w, http.StatusBadRequest, errBody("a non-empty issue 'key' is required"))
@@ -352,16 +380,61 @@ func (d Deps) handleIgnoreIssue(w http.ResponseWriter, r *http.Request, tenantID
 	if reason == "" {
 		reason = "accepted_risk"
 	}
-	ir := platform.IgnoreRule{TenantID: tenantID, IssueKey: body.Key, Reason: reason, Note: body.Note, By: body.By, At: time.Now().UTC()}
+	now := time.Now().UTC()
+	ir := platform.IgnoreRule{TenantID: tenantID, IssueKey: body.Key, Reason: reason, Note: body.Note, By: body.By, At: now}
+	expires, defaulted, msg := reviewDate(body.ReviewInDays, body.ExpiresAt, ir.NeedsReview(), now)
+	if msg != "" {
+		writeJSON(w, http.StatusBadRequest, errBody(msg))
+		return
+	}
+	ir.ExpiresAt = expires
 	if err := d.Store.PutIgnoreRule(r.Context(), ir); err != nil {
 		respond(w, nil, err)
 		return
 	}
 	if d.Recorder != nil {
 		d.Recorder.Record("issue ignored", "issue_ignore",
-			map[string]any{"tenant_id": tenantID, "issue_key": body.Key, "reason": reason, "by": body.By}, "issue suppressed")
+			map[string]any{"tenant_id": tenantID, "issue_key": body.Key, "reason": reason, "by": body.By,
+				"expires_at": ir.ExpiresAt}, "issue suppressed")
 	}
-	writeJSON(w, http.StatusOK, ir)
+	// review_default_applied tells the caller the date was OURS, not theirs — a default applied
+	// silently is a setting the person believes says something it does not.
+	writeJSON(w, http.StatusOK, map[string]any{"rule": ir, "review_default_applied": defaulted})
+}
+
+// reviewDate resolves when a suppression must be looked at again. A risk decision (needsReview) gets the
+// requested date, or the visible default; a false positive gets one only if asked. Every date must lie
+// in the future and within the maximum window — a year is the longest any framework tolerates between
+// reviews of an accepted risk, and "forever" is not a review.
+func reviewDate(days int, at string, needsReview bool, now time.Time) (time.Time, bool, string) {
+	var t time.Time
+	switch {
+	case strings.TrimSpace(at) != "":
+		v := strings.TrimSpace(at)
+		parsed, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			if parsed, err = time.Parse("2006-01-02", v); err != nil {
+				return time.Time{}, false, "expires_at must be an RFC 3339 time or a YYYY-MM-DD date"
+			}
+		}
+		t = parsed.UTC()
+	case days != 0:
+		if days < 0 {
+			return time.Time{}, false, "review_in_days must be positive"
+		}
+		t = now.AddDate(0, 0, days)
+	case needsReview:
+		return now.AddDate(0, 0, platform.DefaultRiskReviewDays), true, ""
+	default:
+		return time.Time{}, false, "" // a false positive with no date asked for: nothing to review
+	}
+	if !t.After(now) {
+		return time.Time{}, false, "the review date must be in the future"
+	}
+	if t.After(now.AddDate(0, 0, platform.MaxRiskReviewDays)) {
+		return time.Time{}, false, "an accepted risk must be reviewed within a year — choose a date no more than 365 days away"
+	}
+	return t, false, ""
 }
 
 // handleUnignoreIssue restores a previously-suppressed issue to the active list.

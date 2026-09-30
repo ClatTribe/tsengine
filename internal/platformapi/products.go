@@ -203,8 +203,11 @@ func (d Deps) productExposure(ctx context.Context, tenantID string, assets []pla
 	}
 	ignored := map[string]bool{}
 	if rules, rerr := d.Store.ListIgnoreRules(ctx, tenantID); rerr == nil {
+		now := time.Now().UTC()
 		for _, rl := range rules {
-			ignored[rl.IssueKey] = true
+			if rl.Suppresses(now) { // a lapsed acceptance counts toward exposure again
+				ignored[rl.IssueKey] = true
+			}
 		}
 	}
 	// asset id → worst severity per issue key
