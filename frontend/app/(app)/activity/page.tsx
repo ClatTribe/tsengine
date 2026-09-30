@@ -2,6 +2,7 @@ import { Radio, CheckCircle2, XCircle, ShieldQuestion, Wrench, TrendingDown } fr
 import { api } from "@/lib/api";
 import { ActivityTimeline, type ActivityEvent } from "@/components/activity/activity-timeline";
 import { PageIntro } from "@/components/ui/page-intro";
+import { ExposureObjective } from "@/components/activity/exposure-objective";
 
 export const dynamic = "force-dynamic";
 
@@ -193,6 +194,7 @@ export default async function ActivityPage() {
             )}
             <span className="mt-1 block text-subtle">{trend.caveat}</span>
           </p>
+          <ExposureObjective verdict={trend.objective} settings={trend.objective_settings} />
         </div>
       )}
       <ActivityTimeline events={events} />
