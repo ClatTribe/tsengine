@@ -114,12 +114,15 @@ type RawSecurityGroup struct {
 
 // RawInstance is a compute resource; PublicIP + SGIDs + ServicePort drive the grounded reachability eval.
 type RawInstance struct {
-	ID           string   `json:"id"`
-	Region       string   `json:"region,omitempty"`
-	PublicIP     bool     `json:"public_ip,omitempty"`
-	SGIDs        []string `json:"security_group_ids,omitempty"`
-	ServicePort  int      `json:"service_port,omitempty"`  // primary listening port; 0 = unknown → no internet edge
-	ServiceProto string   `json:"service_proto,omitempty"` // "tcp" (default) | "udp"
+	ID       string `json:"id"`
+	Region   string `json:"region,omitempty"`
+	PublicIP bool   `json:"public_ip,omitempty"`
+	// PublicIPAddress is the address itself — the join key AttachHostnames matches a resolved
+	// hostname against. Optional; without it no hostname can be tied to this instance.
+	PublicIPAddress string   `json:"public_ip_address,omitempty"`
+	SGIDs           []string `json:"security_group_ids,omitempty"`
+	ServicePort     int      `json:"service_port,omitempty"`  // primary listening port; 0 = unknown → no internet edge
+	ServiceProto    string   `json:"service_proto,omitempty"` // "tcp" (default) | "udp"
 	// DNSNames are the hostnames resolving to this instance (public DNS, an ELB/CloudFront alias in
 	// front of it). Optional, and the honest gate on the web->cloud join: without them a pentest
 	// target hostname cannot be matched to the resource it runs on, so the two surfaces stay

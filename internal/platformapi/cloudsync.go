@@ -72,6 +72,7 @@ func (d Deps) SyncCloudInventory(ctx context.Context, tenantID string) ([]types.
 	if ferr != nil {
 		return nil, res, ferr
 	}
+	_, _ = d.linkTenantHostnames(ctx, tenantID, &res.Raw)
 	inv := awsinventory.Build(res.Raw)
 	invJSON, merr := json.Marshal(inv)
 	if merr != nil {
@@ -143,6 +144,7 @@ func (d Deps) handleCloudSync(w http.ResponseWriter, r *http.Request, tenantID s
 		return
 	}
 
+	hostJoin, hostNote := d.linkTenantHostnames(r.Context(), tenantID, &res.Raw)
 	inv := awsinventory.Build(res.Raw)
 	invJSON, merr := json.Marshal(inv)
 	if merr != nil {
@@ -158,6 +160,9 @@ func (d Deps) handleCloudSync(w http.ResponseWriter, r *http.Request, tenantID s
 
 	// Coverage rides on every response, including the successful one — especially the successful one.
 	summary["coverage"] = res.Coverage()
+	if hj := hostnameReport(hostJoin, hostNote); hj != nil {
+		summary["hostname_join"] = hj
+	}
 	summary["sources_read"] = res.Sources
 	summary["not_read"] = res.Skipped
 	writeJSON(w, http.StatusOK, summary)

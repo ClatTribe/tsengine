@@ -34,7 +34,12 @@ type Instance struct {
 	ID       string
 	Region   string
 	PublicIP bool
-	SGIDs    []string
+	// PublicIPAddress and PublicDNSName are what the instance is reachable AS. The boolean alone
+	// said "has an address" and dropped which one, so nothing could join a hostname the customer
+	// owns to the box it resolves to.
+	PublicIPAddress string
+	PublicDNSName   string
+	SGIDs           []string
 	// ProfileARN is the instance profile attached to the box. It is NOT the role ARN — the two
 	// differ by one path segment and a profile may (in principle) carry a different name — so the
 	// fetcher resolves it through IAM's instance-profile listing rather than rewriting the string.
@@ -96,9 +101,11 @@ func (l *EC2Lister) ListCompute(ctx context.Context) ([]Instance, []SecurityGrou
 					continue
 				}
 				inst := Instance{
-					ID:       aws.ToString(in.InstanceId),
-					Region:   l.Region,
-					PublicIP: aws.ToString(in.PublicIpAddress) != "",
+					ID:              aws.ToString(in.InstanceId),
+					Region:          l.Region,
+					PublicIP:        aws.ToString(in.PublicIpAddress) != "",
+					PublicIPAddress: aws.ToString(in.PublicIpAddress),
+					PublicDNSName:   aws.ToString(in.PublicDnsName),
 				}
 				for _, g := range in.SecurityGroups {
 					if id := aws.ToString(g.GroupId); id != "" {
