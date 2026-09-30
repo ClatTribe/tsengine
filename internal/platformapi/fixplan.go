@@ -165,12 +165,20 @@ func hasString(xs []string, v string) bool {
 }
 
 func (d Deps) handleFixPlan(w http.ResponseWriter, r *http.Request, tenantID string) {
-	ctx := r.Context()
-	now := time.Now().UTC()
-	open, ignored, err := d.planFindings(ctx, tenantID, now)
+	resp, err := d.fixPlan(r.Context(), tenantID, time.Now().UTC())
 	if err != nil {
 		respond(w, nil, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// fixPlan builds the plan. Shared by the endpoint and the board report, so the two cannot disagree
+// about what the top fixes are.
+func (d Deps) fixPlan(ctx context.Context, tenantID string, now time.Time) (fixPlanResponse, error) {
+	open, ignored, err := d.planFindings(ctx, tenantID, now)
+	if err != nil {
+		return fixPlanResponse{}, err
 	}
 	assets, _ := d.Store.ListAssets(ctx, tenantID)
 	acts, _ := d.Store.ListActions(ctx, tenantID)
@@ -231,7 +239,7 @@ func (d Deps) handleFixPlan(w http.ResponseWriter, r *http.Request, tenantID str
 		})
 		resp.Steps = append(resp.Steps, step)
 	}
-	writeJSON(w, http.StatusOK, resp)
+	return resp, nil
 }
 
 type fixPlanPrepareResponse struct {

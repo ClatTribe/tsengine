@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Bug, Activity, ShieldCheck, Boxes, ScrollText,
   RefreshCw, Plug, LogOut, Search, CornerDownLeft, Settings, FileText, UserCheck,
-  Layers, ListOrdered, Crosshair, Spline, AppWindow, Scale, Radar, Cloud, Sparkles, ScanSearch,
+  Layers, ListOrdered, Presentation, Crosshair, Spline, AppWindow, Scale, Radar, Cloud, Sparkles, ScanSearch,
 } from "lucide-react";
 import { rescanAll } from "@/app/(app)/assets/actions";
 import { FRAMEWORKS, FRAMEWORK_LABEL } from "@/lib/frameworks";
@@ -63,6 +63,7 @@ export function CommandPalette() {
       { id: "overview", label: "Overview", group: "Go to", icon: LayoutDashboard, keywords: "home dashboard risk", run: go("/dashboard") },
       { id: "inbox", label: "Inbox", group: "Go to", icon: Inbox, keywords: "approvals hitl triage", run: go("/inbox") },
       { id: "issues", label: "Issues", group: "Go to", icon: Layers, keywords: "unified deduped confirmed prioritized noise", run: go("/issues") },
+      { id: "board", label: "Board report", group: "Go to", icon: Presentation, keywords: "board investor report summary one page executive leadership pdf", run: go("/board") },
       { id: "fixes", label: "Top fixes", group: "Go to", icon: ListOrdered, keywords: "remediation plan roadmap campaign order what first upgrade prepare", run: go("/fixes") },
       { id: "findings", label: "Findings", group: "Go to", icon: Bug, keywords: "vulnerabilities raw scanners", run: go("/findings") },
       { id: "pentest", label: "Pentest", group: "Go to", icon: Crosshair, keywords: "vapt exploit proven engagement penetration", run: go("/pentest") },

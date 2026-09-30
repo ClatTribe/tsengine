@@ -11,6 +11,7 @@ import type {
   VendorsResponse,
   DetectionValidation,
   FixPlan,
+  BoardReport,
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
@@ -388,6 +389,7 @@ export const api = {
     }),
 
   coverage: () => safe<CoverageSummary>("/v1/coverage", { assets: [], total_assets: 0, scanned_assets: 0 }),
+  boardReport: () => safe<BoardReport | null>("/v1/board-report", null),
   fixPlan: () => safe<FixPlan>("/v1/fix-plan", { steps: [], open_findings: 0, ignored: 0, note: "" }),
   detectionValidation: () =>
     safe<DetectionValidation>("/v1/detection-validation", { results: [], detected: 0, not_detected: 0, undetermined: 0, blocked: 0, missed_proven: 0, caveat: "" }),
