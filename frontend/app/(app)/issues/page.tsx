@@ -53,14 +53,18 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const showingIgnored = show === "ignored";
   const showingLive = show === "live";
   const showingExternal = show === "external";
-  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live, explanations, acceptances }, exclResp, funnel, llm, priorInv, fbResp] = await Promise.all([
+  const [{ issues, count, raw_findings, confirmed, ignored, excluded, attacked, live, explanations, acceptances }, exclResp, funnel, llm, priorInv, fbResp, me] = await Promise.all([
     api.issues(showingIgnored),
     api.exclusions(),
     api.triageFunnel(),
     api.llmSettings(),
     api.aiAnalyses("investigate"),
     api.issueFeedback(),
+    api.me(),
   ]);
+  // Accepting a risk and adding an exclusion rule are the owner's acts (the server refuses them from a
+  // member — owner_scope.go); the controls below offer a member only what the API will accept.
+  const isOwner = me?.role === "owner";
   const aiEnabled = llm.ai_enabled;
   // Persisted per-issue investigations keyed by issue key (scope) — so reopening Investigate shows the saved
   // narrative instantly instead of re-spending the LLM (survives navigation, like the triage brief).
@@ -203,7 +207,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
       {mainView && <TriageFunnel f={funnel} />}
 
       {/* Custom exclusion rules (path/package/rule noise filters) */}
-      {mainView && <ExclusionRules rules={exclResp.exclusions} excluded={excluded ?? 0} />}
+      {mainView && <ExclusionRules rules={exclResp.exclusions} excluded={excluded ?? 0} canAdd={isOwner} />}
 
       {/* "Start here" — the AI Security Engineer's outcome #1 (figure out what to work on). The list is
           already risk-ranked (severity × data-tier × attack-path), so the top row IS the #1 fix; we just
@@ -233,7 +237,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
             </thead>
             <tbody>
               {visible.map((it) => (
-                <IssueRow key={it.key} issue={it} ignored={showingIgnored} prior={priorByIssue.get(it.key)} explain={explanations?.[it.key]} decision={acceptances?.[it.key]} />
+                <IssueRow key={it.key} issue={it} ignored={showingIgnored} prior={priorByIssue.get(it.key)} explain={explanations?.[it.key]} decision={acceptances?.[it.key]} isOwner={isOwner} />
               ))}
             </tbody>
           </table>
@@ -345,7 +349,7 @@ function LeadCard({ issue, prior, explain }: { issue: Issue; prior?: PriorInv; e
   );
 }
 
-function IssueRow({ issue, ignored, prior, explain, decision }: { issue: Issue; ignored: boolean; prior?: PriorInv; explain?: Explanation; decision?: IgnoreDecision }) {
+function IssueRow({ issue, ignored, prior, explain, decision, isOwner }: { issue: Issue; ignored: boolean; prior?: PriorInv; explain?: Explanation; decision?: IgnoreDecision; isOwner: boolean }) {
   // The issue links to one of its underlying findings (the evidence).
   const href = issue.finding_ids[0] ? `/findings/${issue.finding_ids[0]}` : undefined;
   const title = (
@@ -450,7 +454,7 @@ function IssueRow({ issue, ignored, prior, explain, decision }: { issue: Issue; 
           <div className="flex items-center justify-end gap-2">
           {!ignored && <IssueInvestigate issueKey={issue.key} title={issue.title} prior={prior} />}
           {!ignored && issue.finding_ids[0] && <IssueAutofix findingId={issue.finding_ids[0]} title={issue.title} />}
-          <IssueActions issueKey={issue.key} ignored={ignored} />
+          <IssueActions issueKey={issue.key} ignored={ignored} canDecideRisk={isOwner} />
           {href && (
             <Link href={href} className="hidden text-faint transition group-hover:text-accent sm:inline-block">
               <ArrowRight className="h-4 w-4" />

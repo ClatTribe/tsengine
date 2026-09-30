@@ -54,6 +54,11 @@ export default async function SettingsPage() {
   const [mdm, hris] = await Promise.all([api.mdmSettings(), api.hrisSettings()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
+  // The server decides who may change what (owner_scope.go); these only stop the page offering a
+  // control the API will refuse. A member may make the workspace more cautious — halt, quarantine —
+  // and every setting below is the owner's.
+  const isOwner = me?.role === "owner";
+  const canAct = isOwner || me?.role === "member";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -62,6 +67,13 @@ export default async function SettingsPage() {
         title="Settings"
         description="Your organization, connected systems, team, and how the agent reaches you — plus the safety controls: the kill-switch, what the agent is allowed to touch, and your public trust link."
       />
+
+      {!isOwner && (
+        <p className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-muted">
+          Settings are changed by the workspace owner — you can read them here, and saving one will be refused. You can
+          still halt automation or quarantine a connection; resuming either is the owner&apos;s call.
+        </p>
+      )}
 
       {/* Organization */}
       <div>
@@ -145,8 +157,8 @@ export default async function SettingsPage() {
       <div>
         <SectionTitle>Automation</SectionTitle>
         <div className="space-y-3">
-          <KillSwitch halted={tenant?.agents_halted ?? false} canToggle={me?.role === "owner"} />
-          <AIBomPanel bom={aiBom} canQuarantine={me?.role === "owner"} />
+          <KillSwitch halted={tenant?.agents_halted ?? false} canHalt={canAct} canResume={isOwner} />
+          <AIBomPanel bom={aiBom} canQuarantine={canAct} canRestore={isOwner} />
         </div>
       </div>
 

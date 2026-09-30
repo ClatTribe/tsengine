@@ -6,9 +6,10 @@ import { setKillSwitch } from "@/app/(app)/settings/actions";
 import { cn } from "@/lib/utils";
 
 // The global kill-switch control (agentic-SMB spec OM-3 / TS-5) — the one human "on the
-// loop" can freeze every agent instantly. Owner-gated. Engaging asks for confirmation
-// (it pauses all automation); disengaging is immediate.
-export function KillSwitch({ halted: initial, canToggle }: { halted: boolean; canToggle: boolean }) {
+// loop" can freeze every agent instantly. Engaging asks for confirmation (it pauses all
+// automation); disengaging is immediate. Anyone who can act may pull the brake; only the owner may
+// release it — the server refuses a member's resume (owner_scope.go), so the page does not offer it.
+export function KillSwitch({ halted: initial, canHalt, canResume }: { halted: boolean; canHalt: boolean; canResume: boolean }) {
   const [halted, setHalted] = useState(initial);
   const [pending, start] = useTransition();
 
@@ -47,7 +48,7 @@ export function KillSwitch({ halted: initial, canToggle }: { halted: boolean; ca
           </p>
         </div>
       </div>
-      {canToggle ? (
+      {(halted ? canResume : canHalt) ? (
         <button
           onClick={toggle}
           disabled={pending}
@@ -62,7 +63,9 @@ export function KillSwitch({ halted: initial, canToggle }: { halted: boolean; ca
           {halted ? "Resume automation" : "Halt all automation"}
         </button>
       ) : (
-        <span className="shrink-0 text-[11px] text-faint">owner only</span>
+        <span className="shrink-0 text-[11px] text-faint">
+          {halted && canHalt ? "only the workspace owner can resume" : "owner only"}
+        </span>
       )}
     </div>
   );

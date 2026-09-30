@@ -14,8 +14,11 @@ const TREATMENTS = [
 
 // DecideRisk is the human-in-the-loop control. A risk decision is a judgment call the agent cannot
 // make — so this is a person, by name, choosing a treatment with a rationale. The decision is signed
-// into the ledger server-side.
-export function DecideRisk({ id, decided }: { id: string; decided: boolean }) {
+// into the ledger server-side. canAccept: accepting (deciding to do nothing) is the workspace owner's
+// call and the server refuses it from a member, so a member is offered only the treatments that
+// commit the team to act.
+export function DecideRisk({ id, decided, canAccept = true }: { id: string; decided: boolean; canAccept?: boolean }) {
+  const treatments = canAccept ? TREATMENTS : TREATMENTS.filter((t) => t.value !== "accept");
   const [open, setOpen] = useState(false);
 
   if (!open) {
@@ -37,12 +40,15 @@ export function DecideRisk({ id, decided }: { id: string; decided: boolean }) {
         <option value="" disabled>
           Choose a treatment…
         </option>
-        {TREATMENTS.map((t) => (
+        {treatments.map((t) => (
           <option key={t.value} value={t.value}>
             {t.label} — {t.hint}
           </option>
         ))}
       </select>
+      {!canAccept && (
+        <p className="text-[11px] text-faint">Accepting a risk as-is is the workspace owner&apos;s decision.</p>
+      )}
       <input
         name="owner"
         placeholder="Accountable owner (name) — defaults to you"

@@ -25,7 +25,7 @@ func TestRiskDecision_RecordsPractitionerCapacity(t *testing.T) {
 		},
 	})
 	_ = st.PutFinding(ctx, "ten-1", types.Finding{ID: "f1", Tool: "sqlmap", Severity: types.SeverityHigh, CWE: []string{"CWE-89"}})
-	d := Deps{Store: st, Recorder: ledger.NewRecorder()}
+	d := Deps{Store: st, Recorder: ledger.NewRecorder(), Token: "tok"}
 	_ = call(d, d.handleSeedRisks, http.MethodPost, "/v1/risks/seed", "", "")
 
 	// decided by the MSP practitioner → capacity msp + firm AcmeMSP
@@ -57,7 +57,7 @@ func TestPentestSignoff_RecordsCapacity(t *testing.T) {
 		},
 	})
 	_ = st.PutPentest(ctx, pentest.Engagement{ID: "pt-1", TenantID: "ten-1", Name: "Q3"})
-	d := Deps{Store: st, Recorder: ledger.NewRecorder()}
+	d := Deps{Store: st, Recorder: ledger.NewRecorder(), Token: "tok"}
 
 	rec := call(d, d.handleSignoffPentest, http.MethodPost, "/x", `{"signer":"dana@ts.io","role":"Lead Pentester"}`, "pt-1")
 	var eng pentest.Engagement

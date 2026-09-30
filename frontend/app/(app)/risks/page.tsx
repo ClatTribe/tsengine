@@ -37,7 +37,9 @@ function score(r: Risk) {
 }
 
 export default async function RisksPage() {
-  const [{ risks, summary }, practitioners] = await Promise.all([api.risks(), api.practitioners()]);
+  const [{ risks, summary }, practitioners, me] = await Promise.all([api.risks(), api.practitioners(), api.me()]);
+  // Accepting a risk is the owner's act; the server refuses it from a member (owner_scope.go).
+  const isOwner = me?.role === "owner";
   const { selfOwned, actor } = hitlOwner(practitioners?.service_model, practitioners?.practitioners?.[0]);
   const proposed = risks.filter((r) => r.proposed);
   const decided = risks.filter((r) => !r.proposed);
@@ -92,7 +94,7 @@ export default async function RisksPage() {
         ) : (
           <div className="space-y-2">
             {proposed.map((r) => (
-              <RiskRow key={r.id} r={r} />
+              <RiskRow key={r.id} r={r} isOwner={isOwner} />
             ))}
           </div>
         )}
@@ -105,7 +107,7 @@ export default async function RisksPage() {
         ) : (
           <div className="space-y-2">
             {decided.map((r) => (
-              <RiskRow key={r.id} r={r} />
+              <RiskRow key={r.id} r={r} isOwner={isOwner} />
             ))}
           </div>
         )}
@@ -114,7 +116,7 @@ export default async function RisksPage() {
   );
 }
 
-function RiskRow({ r }: { r: Risk }) {
+function RiskRow({ r, isOwner }: { r: Risk; isOwner: boolean }) {
   const lv = level(r);
   return (
     <div className="card px-4 py-3">
@@ -147,7 +149,7 @@ function RiskRow({ r }: { r: Risk }) {
       {r.rationale && <p className="mt-1.5 rounded-lg bg-surface-2/60 px-2.5 py-1.5 text-xs text-muted">&ldquo;{r.rationale}&rdquo;</p>}
 
       <div className="mt-2">
-        <DecideRisk id={r.id} decided={!r.proposed} />
+        <DecideRisk id={r.id} decided={!r.proposed} canAccept={isOwner} />
       </div>
     </div>
   );

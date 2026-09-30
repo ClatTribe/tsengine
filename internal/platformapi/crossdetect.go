@@ -382,6 +382,13 @@ func (d Deps) handleIgnoreIssue(w http.ResponseWriter, r *http.Request, tenantID
 	}
 	now := time.Now().UTC()
 	ir := platform.IgnoreRule{TenantID: tenantID, IssueKey: body.Key, Reason: reason, Note: body.Note, By: body.By, At: now}
+	// "This is not real" is triage, and any member may say it. "This is real and we are living with it"
+	// is a risk decision, and it is the owner's — NeedsReview is the same line the expiry rules use, so
+	// the two cannot disagree about which suppressions are risk decisions.
+	if ir.NeedsReview() && !d.callerIsOwner(r) {
+		refuseOwnerOnly(w, "only the workspace owner can accept a risk — a member can mark a false positive")
+		return
+	}
 	expires, defaulted, msg := reviewDate(body.ReviewInDays, body.ExpiresAt, ir.NeedsReview(), now)
 	if msg != "" {
 		writeJSON(w, http.StatusBadRequest, errBody(msg))

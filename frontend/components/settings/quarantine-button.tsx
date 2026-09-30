@@ -6,8 +6,9 @@ import { setQuarantine } from "@/app/(app)/settings/actions";
 import { cn } from "@/lib/utils";
 
 // Per-connection quarantine toggle (WRD-4): the human freezes ONE connection's automation
-// without halting the rest of the roster. Engaging asks to confirm; restoring is immediate.
-export function QuarantineButton({ id, status }: { id: string; status: string }) {
+// without halting the rest of the roster. Engaging asks to confirm; restoring is immediate. Any
+// member may quarantine; only the owner may restore (the server refuses a member's restore).
+export function QuarantineButton({ id, status, canRestore }: { id: string; status: string; canRestore: boolean }) {
   const [st, setSt] = useState(status);
   const [pending, start] = useTransition();
   const quarantined = st === "quarantined";
@@ -21,6 +22,10 @@ export function QuarantineButton({ id, status }: { id: string; status: string })
       const r = await setQuarantine(id, next);
       setSt(r.status);
     });
+  }
+
+  if (quarantined && !canRestore) {
+    return <span className="text-[11px] text-faint">only the owner can restore</span>;
   }
 
   return (
