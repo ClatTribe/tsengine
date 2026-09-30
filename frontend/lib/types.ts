@@ -151,9 +151,21 @@ export interface AttackPath {
   steps: AttackStep[];
 }
 
+export interface ChokePoint {
+  kind: "entity" | "finding"; // entity = a shared identifier (key, role, bucket); finding = one shared weakness
+  ref: string;
+  label: string;
+  paths: number; // distinct attack paths that run through it (always >= 2 — one path is not leverage)
+  worst_severity: string;
+  why: string; // the server's own statement of the leverage, rendered verbatim
+}
+
 export interface AttackPaths {
   attack_paths: AttackPath[];
   count: number;
+  // Where one change cuts several paths at once (crossdetect.ChokePoints). Empty is a real answer: each
+  // path is separate work.
+  choke_points?: ChokePoint[];
   // The basis the correlation ran over. Zero paths is only good news if there was something to
   // correlate — a chain is built FROM findings, so an unscanned estate yields zero just like a
   // secure one. Optional so an older API response still parses.

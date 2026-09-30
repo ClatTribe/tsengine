@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Spline, Crown, ArrowRight, Globe, Cloud, GitBranch, Server, Network, Smartphone, KeyRound, ShieldCheck, ShieldAlert, Bug } from "lucide-react";
+import { Spline, Crown, ArrowRight, Scissors, Globe, Cloud, GitBranch, Server, Network, Smartphone, KeyRound, ShieldCheck, ShieldAlert, Bug } from "lucide-react";
 import { api } from "@/lib/api";
-import type { AttackPath, AttackStep } from "@/lib/types";
+import type { AttackPath, AttackStep, ChokePoint } from "@/lib/types";
 import { SeverityBadge } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { PageTabs } from "@/components/ui/page-tabs";
@@ -10,7 +10,7 @@ import { SECURITY_TABS } from "@/lib/tabs";
 export const dynamic = "force-dynamic";
 
 export default async function AttackPathsPage() {
-  const [{ attack_paths: paths, correlated_findings }, conns] = await Promise.all([
+  const [{ attack_paths: paths, correlated_findings, choke_points }, conns] = await Promise.all([
     api.attackPaths(),
     api.connections(),
   ]);
@@ -43,6 +43,11 @@ export default async function AttackPathsPage() {
 
       {/* Always-on explainer so the page is self-evident even at zero paths. */}
       <HowItWorks />
+
+      {/* The highest-leverage fix on the page: one change that cuts several paths at once. Computed by
+          the server (crossdetect.ChokePoints) and shown ABOVE the paths, because a founder with one
+          afternoon should spend it here rather than working through the chains one by one. */}
+      {(choke_points ?? []).length > 0 && <ChokePointCard items={choke_points ?? []} total={paths.length} />}
 
       {sorted.length === 0 && !hasCloud ? (
         <div className="space-y-3">
@@ -283,4 +288,42 @@ function assetIcon(type: string) {
 const SEV = { critical: 0, high: 1, medium: 2, low: 3, info: 4 } as const;
 function sevRank(s: string): number {
   return (SEV as Record<string, number>)[s?.toLowerCase()] ?? 5;
+}
+
+// ChokePointCard: "fix one thing, cut N routes". Everything is read from the server — the path count,
+// the worst severity and the reason are crossdetect.ChokePoints' own, rendered verbatim, so the page can
+// never claim more leverage than the correlation found. A finding-kind choke point links to its
+// evidence; an entity (a key, a role, a bucket) is shown as the identifier to revoke or rotate.
+function ChokePointCard({ items, total }: { items: ChokePoint[]; total: number }) {
+  const top = items.slice(0, 3);
+  return (
+    <div className="rounded-2xl border border-accent/30 bg-accent-soft/20 p-5">
+      <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
+        <Scissors className="h-3.5 w-3.5" /> Fix one thing, cut several paths
+      </div>
+      <ul className="space-y-3">
+        {top.map((c) => (
+          <li key={c.kind + c.ref} className="flex flex-wrap items-start gap-3">
+            <SeverityBadge severity={c.worst_severity} />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-ink">
+                {c.kind === "finding" ? (
+                  <Link href={`/findings/${encodeURIComponent(c.ref)}`} className="hover:text-accent">{c.label}</Link>
+                ) : (
+                  <code className="mono">{c.label}</code>
+                )}
+                <span className="ml-2 text-xs font-normal text-muted">
+                  in {c.paths} of {total} attack path{total === 1 ? "" : "s"}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">{c.why}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {items.length > top.length && (
+        <p className="mt-3 text-[11px] text-faint">{items.length - top.length} more shared step{items.length - top.length === 1 ? "" : "s"} below in the paths.</p>
+      )}
+    </div>
+  );
 }

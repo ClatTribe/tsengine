@@ -28,3 +28,20 @@ func TestIssuesPageExplainsTheRanking(t *testing.T) {
 		}
 	}
 }
+
+// Choke points were computed by the server and returned by GET /v1/attack-paths for months while the
+// page never read the field — the highest-leverage fix on the page ("one change cuts N routes") was
+// computed and discarded at the last step. These pin the reader half.
+func TestAttackPathsPageShowsChokePoints(t *testing.T) {
+	page := stripComments(frontendFile(t, "app", "(app)", "attack-paths", "page.tsx"))
+
+	for _, want := range []struct{ field, why string }{
+		{"choke_points", "the page never reads choke_points — the fix that cuts several paths at once is invisible"},
+		{"c.why", "a choke point is shown without the server's own reason for its leverage"},
+		{"c.paths", "a choke point is shown without how many paths run through it — the whole point of it"},
+	} {
+		if !strings.Contains(page, want.field) {
+			t.Errorf("attack-paths page never renders %s: %s", want.field, want.why)
+		}
+	}
+}
