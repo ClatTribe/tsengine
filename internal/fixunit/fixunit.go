@@ -22,11 +22,21 @@ import "github.com/ClatTribe/tsengine/pkg/types"
 //     fixed by one upgrade.
 //   - everything else → the rule id: the same rule across files is one fix pattern.
 func Key(f types.Finding) string {
+	// A scanner that names its own remediation unit is believed: a Nessus plugin is one patch however
+	// many CVEs it lists, and Tenable says so, not us.
+	if u := f.ToolArgs[ToolArgFixUnit]; u != "" {
+		return "unit:" + u
+	}
 	if pkg := f.ToolArgs["pkg"]; pkg != "" {
 		return "pkg:" + pkg + "@" + f.ToolArgs["installed_version"]
 	}
 	return "rule:" + f.RuleID
 }
+
+// ToolArgFixUnit is a SCANNER-DECLARED remediation unit: findings carrying the same value are closed by
+// one change. Set only by importers that know the scanner's own unit (internal/importers); it outranks
+// the package coordinate and the rule id because it is the scanner's statement, not our derivation.
+const ToolArgFixUnit = "fix_unit"
 
 // Group is a set of findings fixable by one remediation, in stable order.
 type Group struct {
