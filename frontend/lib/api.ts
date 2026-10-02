@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
+  APIKey, APIKeysResponse,
   AccessReview,
   AuditReview,
   AuditCertificate,
@@ -843,6 +844,10 @@ export const api = {
     }),
 
   // On-call escalation roster (names + numbers the escalation matrix references).
+  apiKeys: () => safe<APIKeysResponse>("/v1/settings/api-keys", { keys: [], scopes: {}, active: 0 }),
+  createAPIKey: (k: { name: string; scopes: string[]; expires_in_days: number }) =>
+    call<{ key: APIKey; token: string; note: string }>("/v1/settings/api-keys", { method: "POST", body: JSON.stringify(k) }),
+  revokeAPIKey: (id: string) => call<APIKey>(`/v1/settings/api-keys/${id}/revoke`, { method: "POST" }),
   contacts: () => safe<Contact[]>("/v1/contacts", []),
   addContact: (c: { name: string; role?: string; email?: string; phone?: string; order: number }) =>
     call<Contact>("/v1/contacts", { method: "POST", body: JSON.stringify(c) }),

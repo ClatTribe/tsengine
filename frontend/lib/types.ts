@@ -2094,3 +2094,24 @@ export interface BoardReport {
   coverage: { total_assets: number; scanned_assets: number; never_scanned?: string[] };
   caveats: string[];
 }
+
+// A workspace API key — a scoped, expiring MACHINE credential for CI and collectors. The key itself is
+// returned once at creation and never again; only a digest is stored, so a listing carries no secret.
+export interface APIKey {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  last_used_at?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+}
+
+export interface APIKeysResponse {
+  keys: APIKey[] | null;
+  scopes: Record<string, string>;
+  active: number;
+}

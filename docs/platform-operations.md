@@ -191,10 +191,25 @@ Auth: every `/v1/*` call (except the OAuth callback + Slack endpoint) needs
 `Authorization: Bearer $TSENGINE_PLATFORM_TOKEN`. Tenant-scoped calls also need
 `X-Tenant-ID: <id>` (or `?tenant=<id>` on the console).
 
+Three credentials reach the tenant API, and each carries a different amount of authority:
+
+- **The platform token** (above) — the operator's credential, above any tenant; it needs the
+  `X-Tenant-ID` header.
+- **A user session** (`POST /v1/auth/login`) — a person, with their role (owner / member / auditor /
+  employee). The tenant comes from the session; the header is ignored.
+- **A workspace API key** (`tsk_…`, minted by the owner at `POST /v1/settings/api-keys`) — a machine
+  credential for CI and collectors. The tenant comes from the key. Scopes: `read` (every GET a member
+  can make) and `ingest` (post scan output, inventories and events, run the PR check, start a scan).
+  No scope approves a fix, accepts a risk, changes a setting or mints another key. A key expires
+  within a year, is stored only as a digest, and revocation is recorded rather than deleted.
+
 | Method + path | Purpose |
 |---|---|
 | `GET /healthz` | Liveness. |
 | `POST /v1/tenants` | Provision a tenant (operator token; no tenant header). |
+| `GET /v1/settings/api-keys` | The workspace's API keys (digests never returned). |
+| `POST /v1/settings/api-keys` | Mint a scoped, expiring key — owner only; the key is returned once. |
+| `POST /v1/settings/api-keys/{id}/revoke` | Revoke a key — owner only; recorded on the key. |
 | `GET /v1/connect/{kind}` | Get a provider OAuth consent URL. |
 | `GET /v1/connect/{kind}/callback` | OAuth redirect target (no bearer; tenant in `state`). |
 | `POST /v1/webhooks/{kind}` | Provider webhook → event-driven re-scan. |

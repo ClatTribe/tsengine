@@ -45,6 +45,7 @@ type Memory struct {
 	training    map[string]map[string]platform.TrainingCompletion // tenantID → completionID → record
 	idLinks     map[string]platform.IdentityLinkSet               // tenantID → person→GitHub join inputs
 	warehouse   map[string]platform.WarehouseSnapshot             // tenantID → latest warehouse access snapshot
+	apiKeys     map[string]platform.APIKey                        // key digest → machine credential
 	auditDisp   map[string]map[string]platform.AuditDisposition   // tenantID → target|key → decision
 	auditOrders map[string]map[string]platform.AuditOrder         // tenantID → orderID → per-application order
 	vendors     map[string]map[string]platform.Vendor             // tenantID → vendorID → register row
@@ -84,6 +85,7 @@ func NewMemory() *Memory {
 		training:        map[string]map[string]platform.TrainingCompletion{},
 		idLinks:         map[string]platform.IdentityLinkSet{},
 		warehouse:       map[string]platform.WarehouseSnapshot{},
+		apiKeys:         map[string]platform.APIKey{},
 		auditDisp:       map[string]map[string]platform.AuditDisposition{},
 		auditOrders:     map[string]map[string]platform.AuditOrder{},
 		vendors:         map[string]map[string]platform.Vendor{},
@@ -839,6 +841,37 @@ func (m *Memory) GetWarehouseSnapshot(_ context.Context, tenantID string) (platf
 	return s, ok, nil
 }
 
+// PutAPIKey upserts a key by its digest (revocation re-puts it with RevokedAt set).
+func (m *Memory) PutAPIKey(_ context.Context, k platform.APIKey) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.apiKeys[k.Hash] = k
+	return nil
+}
+
+func (m *Memory) GetAPIKeyByHash(_ context.Context, hash string) (platform.APIKey, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	k, ok := m.apiKeys[hash]
+	if !ok || hash == "" {
+		return platform.APIKey{}, ErrNotFound
+	}
+	return k, nil
+}
+
+func (m *Memory) ListAPIKeys(_ context.Context, tenantID string) ([]platform.APIKey, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []platform.APIKey
+	for _, k := range m.apiKeys {
+		if k.TenantID == tenantID {
+			out = append(out, k)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
+}
+
 // PutTrainingCompletion upserts one completion by its id. Keyed rather than appended so confirming
 // the same module twice in one day is idempotent, while last year's completion stays on record.
 func (m *Memory) PutTrainingCompletion(_ context.Context, c platform.TrainingCompletion) error {
@@ -976,6 +1009,7 @@ type Snapshot struct {
 	Training        map[string]map[string]platform.TrainingCompletion `json:"training,omitempty"`
 	IdLinks         map[string]platform.IdentityLinkSet               `json:"identity_links,omitempty"`
 	Warehouse       map[string]platform.WarehouseSnapshot             `json:"warehouse,omitempty"`
+	APIKeys         map[string]platform.APIKey                        `json:"api_keys,omitempty"`
 	AuditDisp       map[string]map[string]platform.AuditDisposition   `json:"audit_dispositions,omitempty"`
 	AuditOrders     map[string]map[string]platform.AuditOrder         `json:"audit_orders,omitempty"`
 	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
@@ -1018,6 +1052,7 @@ func (m *Memory) Export() Snapshot {
 		Training:        m.training,
 		IdLinks:         m.idLinks,
 		Warehouse:       m.warehouse,
+		APIKeys:         m.apiKeys,
 		AuditDisp:       m.auditDisp,
 		AuditOrders:     m.auditOrders,
 		Vendors:         m.vendors,
@@ -1064,6 +1099,10 @@ func (m *Memory) load(s Snapshot) {
 	m.warehouse = s.Warehouse
 	if m.warehouse == nil {
 		m.warehouse = map[string]platform.WarehouseSnapshot{}
+	}
+	m.apiKeys = s.APIKeys
+	if m.apiKeys == nil {
+		m.apiKeys = map[string]platform.APIKey{}
 	}
 	m.auditDisp = orEmptyAuditDisp(s.AuditDisp)
 	m.auditOrders = orEmptyAuditOrders(s.AuditOrders)

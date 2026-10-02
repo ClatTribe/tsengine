@@ -314,6 +314,13 @@ func (f *File) PutTrainingCompletion(ctx context.Context, c platform.TrainingCom
 	return f.persist()
 }
 
+func (f *File) PutAPIKey(ctx context.Context, k platform.APIKey) error {
+	if err := f.Memory.PutAPIKey(ctx, k); err != nil {
+		return err
+	}
+	return f.persist()
+}
+
 func (f *File) PutWarehouseSnapshot(ctx context.Context, s platform.WarehouseSnapshot) error {
 	if err := f.Memory.PutWarehouseSnapshot(ctx, s); err != nil {
 		return err

@@ -9,6 +9,7 @@ import type { PRBotSettings } from "@/lib/types";
 // exits non-zero (fails the build) when a high+ finding lands on a changed line. Works in any CI today —
 // with a GitHub App configured the same call also posts the review to the PR. Full GitHub Action: docs/ci/github-action.yml.
 const CI_SNIPPET = `# Fail the PR when a high+ finding lands on a changed line (any CI).
+# TENSORSHIELD_TOKEN: an API key with the ingest scope — Settings → API keys.
 curl -sS -X POST "$TENSORSHIELD_URL/v1/ci/pr-check" \\
   -H "Authorization: Bearer $TENSORSHIELD_TOKEN" \\
   -d "$(jq -n --argjson cf "$CHANGED_FILES" --argjson f "$FINDINGS" \\

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no cgo → keeps the static binary)
@@ -76,6 +77,8 @@ CREATE TABLE IF NOT EXISTS apps        (tenant_id TEXT, provider TEXT, app_id TE
 CREATE TABLE IF NOT EXISTS employees   (tenant_id TEXT, source TEXT, emp_id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,source,emp_id));
 CREATE TABLE IF NOT EXISTS identitylinks (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS warehouse (tenant_id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS apikeys   (hash TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS apikeys_tenant ON apikeys(tenant_id);
 CREATE TABLE IF NOT EXISTS training    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditdisp   (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS auditorders (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -630,6 +633,28 @@ func (s *SQLite) GetOperatorSession(ctx context.Context, token string) (platform
 func (s *SQLite) DeleteOperatorSession(ctx context.Context, token string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM opsessions WHERE token=?`, token)
 	return err
+}
+
+// --- API keys (keyed by digest; the key itself is never stored) ---
+
+func (s *SQLite) PutAPIKey(ctx context.Context, k platform.APIKey) error {
+	d, err := enc(k)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO apikeys(hash,tenant_id,data) VALUES(?,?,?)
+		ON CONFLICT(hash) DO UPDATE SET data=excluded.data`, k.Hash, k.TenantID, d)
+	return err
+}
+func (s *SQLite) GetAPIKeyByHash(ctx context.Context, hash string) (platform.APIKey, error) {
+	var k platform.APIKey
+	err := getJSON(ctx, s.db, &k, `SELECT data FROM apikeys WHERE hash=?`, hash)
+	return k, err
+}
+func (s *SQLite) ListAPIKeys(ctx context.Context, tenantID string) ([]platform.APIKey, error) {
+	ks, err := listJSON[platform.APIKey](ctx, s.db, `SELECT data FROM apikeys WHERE tenant_id=?`, tenantID)
+	sort.Slice(ks, func(i, j int) bool { return ks[i].CreatedAt.Before(ks[j].CreatedAt) })
+	return ks, err
 }
 
 // --- warehouse access snapshot (one per tenant, sample values stripped) ---

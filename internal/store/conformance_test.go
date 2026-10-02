@@ -96,6 +96,7 @@ func seedTenant(ctx context.Context, t *testing.T, s Store, tid string) {
 	must(s.ReplaceEmployees(ctx, tid, "merge", []platform.Employee{{TenantID: tid, Source: "merge", ID: tid + "-emp", WorkEmail: tid + "@example.com"}}))
 	must(s.PutTrainingCompletion(ctx, platform.TrainingCompletion{TenantID: tid, ID: tid + "-tc", Subject: tid + "@example.com", ModuleID: "phishing", Tier: platform.TrainingDelivered}))
 	must(s.PutWarehouseSnapshot(ctx, platform.WarehouseSnapshot{TenantID: tid, Ref: tid + "-wh", Estate: []byte(`{"objects":[{"name":"` + tid + `.customers"}]}`)}))
+	must(s.PutAPIKey(ctx, platform.APIKey{ID: tid + "-key", TenantID: tid, Hash: tid + "-digest", Name: "ci", Scopes: []string{platform.APIKeyScopeIngest}}))
 	must(s.PutIdentityLinks(ctx, platform.IdentityLinkSet{TenantID: tid,
 		Links:    []platform.IdentityLink{{Email: tid + "@example.com", Login: tid + "-gh", Source: "github_saml"}},
 		Controls: []platform.GitHubControl{{Login: tid + "-gh", Org: tid + "-org", Admin: true, Evidence: []string{"orgs/" + tid + "-org/members?role=admin"}}},
@@ -230,6 +231,20 @@ func TestStoreConformance(t *testing.T) {
 				orFail(t, err)
 				if !ok || wh.TenantID != tid || wh.Ref != tid+"-wh" || !strings.Contains(string(wh.Estate), tid+".customers") {
 					t.Errorf("ISOLATION warehouse[%s]: ok=%v %+v", tid, ok, wh)
+				}
+
+				// An API key is a bearer credential into ONE workspace. Listing must never show another
+				// tenant's keys, and the digest lookup must return the tenant the key names — the auth gate
+				// takes the tenant from it, so a mix-up here is a cross-tenant login.
+				keys, err := s.ListAPIKeys(ctx, tid)
+				orFail(t, err)
+				if len(keys) != 1 || keys[0].TenantID != tid || keys[0].ID != tid+"-key" {
+					t.Errorf("ISOLATION api keys[%s]: %+v", tid, keys)
+				}
+				k, err := s.GetAPIKeyByHash(ctx, tid+"-digest")
+				orFail(t, err)
+				if k.TenantID != tid {
+					t.Errorf("ISOLATION api key digest %s-digest resolved to tenant %q", tid, k.TenantID)
 				}
 
 				// The identity-link set maps one company's people to their GitHub accounts and repository

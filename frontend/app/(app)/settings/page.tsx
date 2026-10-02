@@ -27,6 +27,7 @@ import { EscalationControl } from "@/components/settings/escalation-control";
 import { SLAControl } from "@/components/settings/sla-control";
 import { MaintenanceControl } from "@/components/settings/maintenance-control";
 import { ContactsControl } from "@/components/settings/contacts-control";
+import { APIKeysControl } from "@/components/settings/api-keys-control";
 import { PractitionersControl } from "@/components/settings/practitioners-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
@@ -51,7 +52,7 @@ export default async function SettingsPage() {
   const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests()]);
   const branding = await api.brandingSettings();
   const drata = await api.drataSettings();
-  const [mdm, hris] = await Promise.all([api.mdmSettings(), api.hrisSettings()]);
+  const [mdm, hris, apiKeys] = await Promise.all([api.mdmSettings(), api.hrisSettings(), api.apiKeys()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
   // The server decides who may change what (owner_scope.go); these only stop the page offering a
@@ -171,6 +172,12 @@ export default async function SettingsPage() {
           <TeamSection members={team} currentEmail={me?.email} canInvite={me?.role === "owner"} />
         </div>
       )}
+
+      {/* API keys — machine credentials for CI and collectors (owner mints and revokes). */}
+      <div>
+        <SectionTitle>API keys</SectionTitle>
+        <APIKeysControl keys={apiKeys.keys ?? []} scopes={apiKeys.scopes ?? {}} canManage={isOwner} />
+      </div>
 
       {/* Connected systems */}
       <div>

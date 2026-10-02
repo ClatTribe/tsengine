@@ -277,3 +277,28 @@ export async function setDrata(cfg: { api_key: string; workspace_id: number }) {
 export async function syncDrata() {
   return api.syncDrata();
 }
+
+// Mint a workspace API key. Returns the key ONCE — the server stores only its digest — or the
+// server's own refusal (a member, a bad scope, a lifetime past a year) as text rather than a throw,
+// so the reason reaches the person instead of being swallowed by the action boundary.
+export async function createAPIKey(k: { name: string; scopes: string[]; expires_in_days: number }):
+  Promise<{ ok: true; token: string; prefix: string } | { ok: false; error: string }> {
+  try {
+    const r = await api.createAPIKey(k);
+    revalidatePath("/settings");
+    return { ok: true, token: r.token, prefix: r.key.prefix };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "could not create the key" };
+  }
+}
+
+// Revoke a key. Recorded on the key rather than deleted, so what it did keeps its referent.
+export async function revokeAPIKey(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await api.revokeAPIKey(id);
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "could not revoke the key" };
+  }
+}
