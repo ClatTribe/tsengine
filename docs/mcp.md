@@ -19,14 +19,16 @@ Add to your MCP client config (Claude Code: `.mcp.json`; Cursor: `~/.cursor/mcp.
       "command": "/absolute/path/to/tsmcp",
       "env": {
         "TSENGINE_URL": "https://your-workspace.example.com",
-        "TSENGINE_TOKEN": "<a session token from your workspace>"
+        "TSENGINE_TOKEN": "<a workspace API key with the read scope>"
       }
     }
   }
 }
 ```
 
-Both env vars are required. The server refuses to start without them rather than running and answering
+Create the key in Settings → API keys (the workspace owner can) with the `read` scope — the MCP
+server only reads. A person's session token also works but expires and carries everything that
+person can do, which is more than an assistant needs. Both env vars are required. The server refuses to start without them rather than running and answering
 "unauthorized" to every call.
 
 ## What you can ask

@@ -308,6 +308,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/trust/{tenant}/request", d.handleTrustAccessRequest)                         // PUBLIC: a buyer asks to read the gated document tier (rate-limited)
 	mux.HandleFunc("POST /v1/trust/{tenant}/nda", d.handleTrustNDA)                                       // PUBLIC: click-through acceptance, recorded with the digest of the exact text
 	mux.HandleFunc("GET /v1/trust/{tenant}/doc", d.handleTrustDocument)                                   // PUBLIC: serve one document, re-checking the gate rather than trusting the listing
+	mux.HandleFunc("GET /v1/settings/api-keys", d.auth(d.handleListAPIKeys))                              // machine credentials (digests never returned)
+	mux.HandleFunc("POST /v1/settings/api-keys", d.auth(d.handleCreateAPIKey))                            // mint a scoped, expiring key (owner) — shown once
+	mux.HandleFunc("POST /v1/settings/api-keys/{id}/revoke", d.auth(d.handleRevokeAPIKey))                // revoke (owner) — recorded, not deleted
 	mux.HandleFunc("GET /v1/settings/trust-center", d.auth(d.handleGetTrustSettings))                     // owner: config + share link + what a buyer can actually be shown
 	mux.HandleFunc("PUT /v1/settings/trust-center", d.auth(d.handlePutTrustSettings))                     // owner: save config (normalized; corrections ride back)
 	mux.HandleFunc("POST /v1/settings/trust-center/revoke-link", d.auth(d.handleRevokeTrustLink))         // owner: kill every outstanding share link for THIS tenant
@@ -526,6 +529,31 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 				return
 			}
 			h(w, r, tenantID)
+			return
+		}
+		// A workspace API key (tsk_…): a MACHINE credential. Its tenant comes from the key, never a
+		// header, and it reaches only what its scopes name (apikey_scope.go) — no key can approve,
+		// accept, suppress, reconfigure or mint another key, because those need a named human.
+		if k, isKey, kerr := d.resolveAPIKey(r); isKey {
+			var refused errKeyRefused
+			switch {
+			case errors.As(kerr, &refused):
+				writeJSON(w, http.StatusUnauthorized, errCode(refused.reason, "api_key_refused"))
+				return
+			case kerr != nil:
+				writeJSON(w, http.StatusInternalServerError, errBody("could not check the API key"))
+				return
+			}
+			if !apiKeyMayReach(k, r.Method, r.URL.Path) {
+				writeJSON(w, http.StatusForbidden, errCode(
+					"this API key's scopes ("+strings.Join(k.Scopes, ", ")+") do not reach this endpoint — "+
+						"approvals, risk decisions and settings need a person", "api_key_scope"))
+				return
+			}
+			if !d.rateOK(r, w, k.TenantID) {
+				return
+			}
+			h(w, r, k.TenantID)
 			return
 		}
 		if s, ok := d.resolveSession(r); ok {

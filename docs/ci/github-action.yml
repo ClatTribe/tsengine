@@ -7,7 +7,11 @@
 #
 # Secrets the workflow needs:
 #   TENSORSHIELD_URL    your platform base URL (e.g. https://app.tensorshield.example)
-#   TENSORSHIELD_TOKEN  a tenant API token (X-Tenant-ID is carried by the session token)
+#   TENSORSHIELD_TOKEN  a workspace API key with the `ingest` scope (Settings → API keys, owner only).
+#                       Do NOT paste a person's session token here: it expires under the job and carries
+#                       everything that person can do. An ingest key can post this check and nothing
+#                       that approves, accepts or reconfigures; it names its own workspace, so no
+#                       X-Tenant-ID header is needed.
 #
 # The gate works from the check's exit code alone. When the platform has a GitHub App configured and
 # this workspace has recorded its installation id (Settings → Pull-request review), the same call ALSO

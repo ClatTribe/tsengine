@@ -210,6 +210,12 @@ type Store interface {
 	// The latest warehouse access snapshot (one per tenant), sample values stripped.
 	PutWarehouseSnapshot(ctx context.Context, s platform.WarehouseSnapshot) error
 	GetWarehouseSnapshot(ctx context.Context, tenantID string) (platform.WarehouseSnapshot, bool, error)
+	// API keys: machine credentials, keyed by the DIGEST of the key (the key itself is never stored).
+	// GetAPIKeyByHash is the one CROSS-tenant read, like GetSession — the key names its own tenant, and
+	// the auth gate takes the tenant from it. Revocation is a Put with RevokedAt set, never a delete.
+	PutAPIKey(ctx context.Context, k platform.APIKey) error
+	GetAPIKeyByHash(ctx context.Context, hash string) (platform.APIKey, error)
+	ListAPIKeys(ctx context.Context, tenantID string) ([]platform.APIKey, error)
 
 	// Training completions are APPEND-ONLY — Put upserts one record by its own id (person|module|day)
 	// and never removes an older one. "Trained every year since 2024" is what an auditor asks for and
