@@ -51,11 +51,15 @@ type importResponse struct {
 	Findings int    `json:"findings"`
 	Stored   int    `json:"stored"`
 	Detail   string `json:"detail"`
+	// SkippedInformational counts items the export carried that were deliberately not imported
+	// (Nessus severity-0 plugins, Burp "Information" issues). Reported so "40 imported" is never
+	// read as "the scan found 40 things".
+	SkippedInformational int `json:"skipped_informational,omitempty"`
 }
 
 // handleImportScan ingests a third-party scanner export.
 //
-//	?format=  snyk | dependabot | sarif | auto (default)
+//	?format=  snyk | dependabot | sarif | wiz | nessus | burp | auto (default)
 //	?target=  what the report is about (repo name / URL), used as the finding endpoint when the
 //	          report does not carry one.
 func (d Deps) handleImportScan(w http.ResponseWriter, r *http.Request, tenantID string) {
@@ -83,7 +87,7 @@ func (d Deps) handleImportScan(w http.ResponseWriter, r *http.Request, tenantID 
 
 	// Parse BEFORE queueing. A malformed file must fail while the customer is still looking at the
 	// screen — queueing it would turn a typo into a job that fails somewhere they never look.
-	scan, perr := importers.Import(body, importers.Format(format), target, time.Now().UTC())
+	scan, stats, perr := importers.ImportWithStats(body, importers.Format(format), target, time.Now().UTC())
 	if perr != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error":  "could not read that export: " + perr.Error(),
@@ -92,11 +96,17 @@ func (d Deps) handleImportScan(w http.ResponseWriter, r *http.Request, tenantID 
 		return
 	}
 	found := scan.FindingsRaw
+	skipped := stats.SkippedInformational
 	if len(found) == 0 {
 		// An export with no findings is a real answer — a clean Snyk run — and must not read as a
-		// failed import.
+		// failed import. One with only informational items is a different answer and says so.
+		detail := "That export contains no findings. Nothing to import."
+		if skipped > 0 {
+			detail = "That export contains only informational items (" + plural(skipped, "item", "items") +
+				", such as open ports and detected software) — nothing that needs fixing, so nothing was imported."
+		}
 		writeJSON(w, http.StatusOK, importResponse{
-			Format: format, Detail: "That export contains no findings. Nothing to import.",
+			Format: format, Detail: detail, SkippedInformational: skipped,
 		})
 		return
 	}
@@ -106,9 +116,9 @@ func (d Deps) handleImportScan(w http.ResponseWriter, r *http.Request, tenantID 
 	if d.Jobs == nil || len(found) <= inlineImportLimit {
 		stored := d.storeImported(r.Context(), tenantID, found)
 		writeJSON(w, http.StatusOK, importResponse{
-			Format: format, Findings: len(found), Stored: stored,
+			Format: format, Findings: len(found), Stored: stored, SkippedInformational: skipped,
 			Detail: plural(stored, "finding is", "findings are") + " now in your issues, ready to be " +
-				"triaged and tested for exploitability.",
+				"triaged and tested for exploitability." + skippedNote(skipped),
 		})
 		return
 	}
@@ -121,10 +131,20 @@ func (d Deps) handleImportScan(w http.ResponseWriter, r *http.Request, tenantID 
 		return
 	}
 	writeJSON(w, http.StatusAccepted, importResponse{
-		JobID: job.ID, Format: format, Findings: len(found),
+		JobID: job.ID, Format: format, Findings: len(found), SkippedInformational: skipped,
 		Detail: plural(len(found), "finding is", "findings are") + " importing in the background. " +
-			"They appear in your issues as they land.",
+			"They appear in your issues as they land." + skippedNote(skipped),
 	})
+}
+
+// skippedNote names the informational items left out, so the count imported is never mistaken for the
+// size of the scan.
+func skippedNote(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return " " + plural(n, "informational item was", "informational items were") +
+		" left out (open ports, detected software and the like)."
 }
 
 // inlineImportLimit is where an import stops being instant. Below this the measured cost is well
