@@ -1013,7 +1013,7 @@ type Snapshot struct {
 	AuditDisp       map[string]map[string]platform.AuditDisposition   `json:"audit_dispositions,omitempty"`
 	AuditOrders     map[string]map[string]platform.AuditOrder         `json:"audit_orders,omitempty"`
 	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
-	Users           map[string]platform.User                          `json:"users"`
+	Users           map[string]platform.UserRecord                    `json:"users"` // UserRecord, not User: the secrets must survive the snapshot
 	Sessions        map[string]platform.Session                       `json:"sessions"`
 	Operators       map[string]platform.Operator                      `json:"operators,omitempty"`
 	OpSessions      map[string]platform.OperatorSession               `json:"op_sessions,omitempty"`
@@ -1056,7 +1056,7 @@ func (m *Memory) Export() Snapshot {
 		AuditDisp:       m.auditDisp,
 		AuditOrders:     m.auditOrders,
 		Vendors:         m.vendors,
-		Users:           m.users,
+		Users:           storeUsers(m.users),
 		Sessions:        m.sessions,
 		Operators:       m.operators,
 		OpSessions:      m.opSessions,
@@ -1107,9 +1107,9 @@ func (m *Memory) load(s Snapshot) {
 	m.auditDisp = orEmptyAuditDisp(s.AuditDisp)
 	m.auditOrders = orEmptyAuditOrders(s.AuditOrders)
 	m.vendors = orEmptyVendors(s.Vendors)
-	m.users = s.Users
-	if m.users == nil {
-		m.users = map[string]platform.User{}
+	m.users = map[string]platform.User{}
+	for id, r := range s.Users {
+		m.users[id] = r.Restore()
 	}
 	m.sessions = s.Sessions
 	if m.sessions == nil {
@@ -1283,4 +1283,26 @@ func orEmptyVendors(m map[string]map[string]platform.Vendor) map[string]map[stri
 		return map[string]map[string]platform.Vendor{}
 	}
 	return m
+}
+
+// storeUsers converts users to their persisted shape for a snapshot. User's secret fields are
+// json:"-", so snapshotting the plain map silently dropped every password-reset token (platform.UserRecord).
+func storeUsers(in map[string]platform.User) map[string]platform.UserRecord {
+	out := make(map[string]platform.UserRecord, len(in))
+	for id, u := range in {
+		out[id] = platform.StoreUser(u)
+	}
+	return out
+}
+
+// restoreUsers converts persisted records back to users, keeping the caller's error.
+func restoreUsers(rs []platform.UserRecord, err error) ([]platform.User, error) {
+	if err != nil {
+		return nil, err
+	}
+	out := make([]platform.User, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, r.Restore())
+	}
+	return out, nil
 }

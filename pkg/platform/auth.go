@@ -52,6 +52,41 @@ type User struct {
 	ResetTokenExpires time.Time `json:"-"`
 }
 
+// UserRecord is how a User is PERSISTED. User's secret fields are json:"-" so no handler that
+// writes a User to a client can leak them — and that same tag made every JSON-backed store (SQLite,
+// file, Postgres) DROP them on save. Measured: a password-reset token set by /v1/auth/forgot came back
+// empty from GetUser on SQLite, so every reset link on a production deployment was rejected as
+// invalid, while the in-memory store the tests use kept the struct and the suite stayed green.
+//
+// The fix keeps the API side closed by construction and gives the store its own shape: the secrets
+// ride in a separate field that only exists on the storage type. Stores encode StoreUser(u) and decode
+// back with Restore(); nothing else should use this type.
+type UserRecord struct {
+	User
+	Secrets UserSecrets `json:"_secrets,omitzero"`
+}
+
+// UserSecrets are the User fields that must persist but must never be serialized to a client.
+type UserSecrets struct {
+	ResetTokenHash    string    `json:"reset_token_hash,omitempty"`
+	ResetTokenExpires time.Time `json:"reset_token_expires,omitzero"`
+}
+
+// StoreUser converts a User to its persisted form.
+func StoreUser(u User) UserRecord {
+	return UserRecord{User: u, Secrets: UserSecrets{
+		ResetTokenHash: u.ResetTokenHash, ResetTokenExpires: u.ResetTokenExpires,
+	}}
+}
+
+// Restore converts a persisted record back to a User, secrets included.
+func (r UserRecord) Restore() User {
+	u := r.User
+	u.ResetTokenHash = r.Secrets.ResetTokenHash
+	u.ResetTokenExpires = r.Secrets.ResetTokenExpires
+	return u
+}
+
 // Session is an authenticated browser session: an opaque random Token that maps to a
 // user + tenant until it expires. Stored server-side so it can be revoked on sign-out.
 type Session struct {

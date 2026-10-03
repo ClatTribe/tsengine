@@ -3,6 +3,7 @@ package platformapi
 import (
 	"context"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -20,8 +21,28 @@ func (m *recMailer) Configured() bool                                { return tr
 
 var tokenRE = regexp.MustCompile(`token=([^&"]+)`)
 
+// Runs against SQLite (the production store) as well as memory. It ran on memory alone, and that is
+// exactly how every reset link on a persistent deployment came to be refused while this test passed:
+// the reset token is json:"-" on User, the memory store keeps the struct, and the JSON-backed stores
+// dropped it on save (platform.UserRecord).
 func TestPasswordReset_FullFlow(t *testing.T) {
-	st := store.NewMemory()
+	stores := map[string]func(*testing.T) store.Store{
+		"memory": func(*testing.T) store.Store { return store.NewMemory() },
+		"sqlite": func(t *testing.T) store.Store {
+			s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "p.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = s.Close() })
+			return s
+		},
+	}
+	for name, open := range stores {
+		t.Run(name, func(t *testing.T) { passwordResetFlow(t, open(t)) })
+	}
+}
+
+func passwordResetFlow(t *testing.T, st store.Store) {
 	ctx := context.Background()
 	hash, _ := authn.HashPassword("old-password-123")
 	_ = st.PutUser(ctx, platform.User{ID: "u1", TenantID: "t1", Email: "ada@acme.com", Role: platform.RoleOwner, PasswordHash: hash})
