@@ -105,6 +105,11 @@ type Fetcher struct {
 	// inventory that SAYS its serverless compute is unread rather than one with none.
 	Functions FunctionReader
 	Databases DatabaseReader
+	// LoadBalancers (ALB/NLB, regional) and Distributions (CloudFront, global) are the front doors.
+	// Unread, an instance with no public address of its own has no internet path, so the most common
+	// web architecture reads as unexposed — each is named in Skipped when it was not read.
+	LoadBalancers LoadBalancerReader
+	Distributions DistributionReader
 }
 
 // Fetch reads what it can and reports exactly that.
@@ -235,6 +240,45 @@ func (f Fetcher) Fetch(ctx context.Context) (Result, error) {
 		res.Sources = append(res.Sources, "rds")
 	}
 
+	if f.LoadBalancers == nil {
+		res.Skipped["elb"] = "no load balancer reader configured — ALBs/NLBs and the instances behind them are unread"
+	} else if lbs, lerr := f.LoadBalancers.ListLoadBalancers(ctx); lerr != nil {
+		res.Skipped["elb"] = lerr.Error()
+	} else {
+		var incomplete []string
+		for _, lb := range lbs {
+			res.Raw.LoadBalancers = append(res.Raw.LoadBalancers, awsinventory.RawLoadBalancer{
+				ARN: lb.ARN, Name: lb.Name, DNSName: lb.DNSName, Type: lb.Type, Scheme: lb.Scheme, Region: lb.Region,
+				SGIDs: lb.SGIDs, SGsKnown: true, Listeners: rawListeners(lb.Listeners),
+				TargetInstances: lb.TargetInstances, TargetFunctions: lb.TargetFunctions, IPTargets: lb.IPTargets,
+			})
+			if lb.Incomplete != "" {
+				incomplete = append(incomplete, lb.Name+" "+lb.Incomplete)
+			}
+		}
+		res.Sources = append(res.Sources, "elb")
+		if len(incomplete) > 0 {
+			sort.Strings(incomplete)
+			res.Skipped["elb-details"] = fmt.Sprintf("%d load balancer(s) were only partly read, so their internet "+
+				"exposure or their targets may be missing (no edge is drawn on missing data): %s",
+				len(incomplete), strings.Join(incomplete, "; "))
+		}
+	}
+
+	if f.Distributions == nil {
+		res.Skipped["cloudfront"] = "no CloudFront reader configured — distributions and the private origins they serve are unread"
+	} else if ds, derr := f.Distributions.ListDistributions(ctx); derr != nil {
+		res.Skipped["cloudfront"] = derr.Error()
+	} else {
+		for _, d := range ds {
+			res.Raw.Distributions = append(res.Raw.Distributions, awsinventory.RawDistribution{
+				ARN: d.ARN, ID: d.ID, DomainName: d.DomainName, Aliases: d.Aliases, Enabled: d.Enabled,
+				ViewerRestricted: d.ViewerRestricted, Origins: d.Origins,
+			})
+		}
+		res.Sources = append(res.Sources, "cloudfront")
+	}
+
 	if len(res.Sources) == 0 {
 		return res, fmt.Errorf("awsfetch: every surface failed: %v", res.Skipped)
 	}
@@ -248,4 +292,12 @@ func nonEmpty(s string) []string {
 		return nil
 	}
 	return []string{s}
+}
+
+func rawListeners(ls []Listener) []awsinventory.RawListener {
+	out := make([]awsinventory.RawListener, 0, len(ls))
+	for _, l := range ls {
+		out = append(out, awsinventory.RawListener{Port: l.Port, Protocol: l.Protocol})
+	}
+	return out
 }

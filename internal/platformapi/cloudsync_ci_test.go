@@ -63,3 +63,25 @@ func TestCloudSync_LivePathRunsTheCIIdentityAssessment(t *testing.T) {
 		t.Error("the live sync stored no coverage notes — a partial read renders as a whole one on the attack-path page")
 	}
 }
+
+// The surfaces the live read could NOT see are stored as coverage gaps, as the GCP door does. Without
+// them an account whose role cannot list load balancers reads, on the attack-path page, as an account
+// with no front doors — the exposure of every instance behind an ALB silently gone.
+func TestCloudSync_UnreadSurfacesAreStoredAsCoverageGaps(t *testing.T) {
+	d := syncDeps(t, fetchLister{out: []awsfetch.Bucket{{Name: "logs"}}}, true)
+	d.AWSFetcher = func(c platform.Connection) awsfetch.Fetcher {
+		return awsfetch.Fetcher{AccountID: c.Account, Buckets: fetchLister{out: []awsfetch.Bucket{{Name: "logs"}}}}
+	}
+	if _, _, err := d.SyncCloudInventory(context.Background(), "ten-1"); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	snap, ok, _ := d.CloudSnapshots.Get(context.Background(), "ten-1")
+	if !ok {
+		t.Fatal("snapshot not stored")
+	}
+	for _, surface := range []string{"elb", "cloudfront", "iam"} {
+		if _, ok := snap.CoverageGaps["not-read: "+surface]; !ok {
+			t.Errorf("unread surface %q not stored as a gap: %v", surface, snap.CoverageGaps)
+		}
+	}
+}

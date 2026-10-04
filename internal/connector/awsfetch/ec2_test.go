@@ -43,15 +43,17 @@ func TestFetch_AllThreeSurfacesProduceAUsableGraph(t *testing.T) {
 				{Proto: "tcp", CIDR: "0.0.0.0/0", PortFrom: 443, PortTo: 443},
 			}}},
 		},
-		Functions: fakeFunctions{},
-		Databases: fakeDatabases{},
+		Functions:     fakeFunctions{},
+		Databases:     fakeDatabases{},
+		LoadBalancers: fakeLBs{},
+		Distributions: fakeDists{},
 	}.Fetch(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Every surface read, nothing left unread.
-	for _, s := range []string{"s3", "iam", "ec2", "lambda", "rds"} {
+	for _, s := range []string{"s3", "iam", "ec2", "lambda", "rds", "elb", "cloudfront"} {
 		if !res.Covers(s) {
 			t.Errorf("%q was read but not reported as covered", s)
 		}

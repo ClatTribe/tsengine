@@ -55,7 +55,7 @@ func TestIngestAWSInventory_JoinsTheTenantsHostnamesToInstances(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 	hj, _ := resp["hostname_join"].(map[string]any)
 	note, _ := hj["note"].(string)
-	if !strings.Contains(note, "1 of your 2") || !strings.Contains(note, "resolve somewhere else") {
+	if !strings.Contains(note, "1 of your 2") || !strings.Contains(note, "resolve somewhere this inventory does not cover") {
 		t.Fatalf("the response must say what was joined and what resolves elsewhere: %q (%v)", note, resp)
 	}
 	// A CDN in front is architecture, not a gap: it must never surface as unread coverage.
@@ -95,5 +95,60 @@ func TestCloudSync_LivePathJoinsTheTenantsHostnames(t *testing.T) {
 	joined := strings.Join(names, ",")
 	if !strings.Contains(joined, "app.acme.com") || !strings.Contains(joined, "ec2-3-3-3-3.compute.amazonaws.com") {
 		t.Fatalf("the live read must carry both AWS's own DNS name and the tenant hostname that resolves to it: %v", names)
+	}
+}
+
+// The common architecture: the tenant's hostname resolves to an ALB (whose addresses are its own), and a
+// second hostname is a CloudFront alias. Both must reach the stored graph joined to the front door that
+// serves them, and the instance behind the ALB must be reachable from the internet through it.
+func TestIngestAWSInventory_JoinsHostnamesToLoadBalancersAndCloudFront(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "w", TenantID: "t1", Type: "web_application", Target: "https://app.acme.com"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "f", TenantID: "t1", Type: "web_application", Target: "https://files.acme.com"})
+	snaps := cloudsnap.NewMemStore()
+	d := Deps{Store: st, CloudSnapshots: snaps, LookupHost: func(_ context.Context, h string) ([]string, error) {
+		return map[string][]string{
+			"app.acme.com":                      {"52.1.1.1"},
+			"web-1.us-east-1.elb.amazonaws.com": {"52.1.1.1", "52.1.1.2"},
+			"files.acme.com":                    {"13.32.0.1"},
+		}[h], nil
+	}}
+	body := `{"account_id":"111122223333",
+	  "instances":[{"id":"i-app"}],
+	  "security_groups":[{"id":"sg-lb","ingress":"[{\"proto\":\"tcp\",\"cidr\":\"0.0.0.0/0\",\"port_from\":443,\"port_to\":443}]"}],
+	  "buckets":[{"name":"exports","region":"us-east-1","sensitive":true}],
+	  "load_balancers":[{"arn":"arn:lb","dns_name":"web-1.us-east-1.elb.amazonaws.com","scheme":"internet-facing",
+	    "security_group_ids":["sg-lb"],"security_groups_known":true,"listeners":[{"port":443}],"target_instances":["i-app"]}],
+	  "distributions":[{"arn":"arn:dist","enabled":true,"aliases":["files.acme.com"],"origins":["exports.s3.us-east-1.amazonaws.com"]}]}`
+	rec := httptest.NewRecorder()
+	d.handleIngestAWSInventory(rec, httptest.NewRequest(http.MethodPost, "/v1/cloud/inventory", strings.NewReader(body)), "t1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ingest: %d %s", rec.Code, rec.Body)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	hj, _ := resp["hostname_join"].(map[string]any)
+	linked, _ := hj["linked"].(map[string]any)
+	if linked["app.acme.com"] != "arn:lb" || linked["files.acme.com"] != "arn:dist" {
+		t.Fatalf("hostnames not joined to their front doors: %v", hj)
+	}
+	snap, _, _ := snaps.Get(ctx, "t1")
+	inv, err := cloudgraph.ParseInventory(snap.Inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := cloudgraph.Ingest(inv)
+	has := func(from, to string) bool {
+		for _, e := range s.Edges {
+			if e.From == from && e.To == to {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(cloudgraph.InternetID, "arn:lb") || !has("arn:lb", "i-app") || !has("arn:dist", "arn:aws:s3:::exports") {
+		t.Errorf("front-door paths missing from the stored graph: %+v", s.Edges)
 	}
 }

@@ -68,32 +68,44 @@ func hostOf(target string) string {
 	return strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
 }
 
-// linkTenantHostnames resolves the tenant's hostnames and attaches each to the instance it resolves to.
-// Returns the join and a coverage note describing what could and could not be tied (empty when there
-// was nothing to try).
+// linkTenantHostnames resolves the tenant's hostnames and joins each to the instance, load balancer or
+// CloudFront distribution that serves it (awsinventory.AttachHostnamesTo — see it for what counts as
+// evidence). Returns the join and a note describing what could and could not be tied (empty when there
+// was nothing to try). Load balancers' own DNS names are resolved too, from the same lookup budget,
+// because a hostname is tied to a load balancer by a shared address.
 func (d Deps) linkTenantHostnames(ctx context.Context, tenantID string, raw *awsinventory.RawAWS) (awsinventory.HostnameJoin, string) {
-	hasAddr := false
+	hasTarget := len(raw.LoadBalancers) > 0 || len(raw.Distributions) > 0
 	for _, in := range raw.Instances {
 		if in.PublicIPAddress != "" {
-			hasAddr = true
+			hasTarget = true
 			break
 		}
 	}
 	hosts := d.tenantHostnames(ctx, tenantID)
-	if !hasAddr || len(hosts) == 0 {
+	if !hasTarget || len(hosts) == 0 {
 		return awsinventory.HostnameJoin{}, ""
 	}
+	var lbNames []string
+	for _, lb := range raw.LoadBalancers {
+		if n := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(lb.DNSName), ".")); n != "" {
+			lbNames = append(lbNames, n)
+		}
+	}
 	skipped := 0
-	if len(hosts) > maxHostLookups {
-		skipped = len(hosts) - maxHostLookups
-		hosts = hosts[:maxHostLookups]
+	budget := maxHostLookups - len(lbNames)
+	if budget < 0 {
+		budget = 0
+	}
+	if len(hosts) > budget {
+		skipped = len(hosts) - budget
+		hosts = hosts[:budget]
 	}
 	lookup := d.LookupHost
 	if lookup == nil {
 		lookup = net.DefaultResolver.LookupHost
 	}
 	resolved := map[string][]string{}
-	for _, h := range hosts {
+	resolveHost := func(h string) {
 		lctx, cancel := context.WithTimeout(ctx, hostLookupLimit)
 		ips, err := lookup(lctx, h)
 		cancel()
@@ -101,15 +113,28 @@ func (d Deps) linkTenantHostnames(ctx context.Context, tenantID string, raw *aws
 			resolved[h] = ips
 		}
 	}
-	join := awsinventory.AttachHostnames(raw, resolved)
-	note := fmt.Sprintf("%d of your %d web hostname(s) resolve to an instance in this account and are joined to it.",
-		len(join.Linked), len(hosts))
-	if n := len(join.Unlinked); n > 0 {
-		note += fmt.Sprintf(" %d resolve somewhere else — a load balancer, a CDN or another provider, none of which "+
-			"this inventory reads — so their web findings are not joined to a cloud resource.", n)
+	for i, n := range lbNames {
+		if i >= maxHostLookups {
+			break
+		}
+		resolveHost(n)
 	}
-	if n := len(hosts) - len(resolved); n > 0 {
-		note += fmt.Sprintf(" %d did not resolve.", n)
+	unresolved := 0
+	for _, h := range hosts {
+		resolveHost(h)
+		if _, ok := resolved[h]; !ok {
+			unresolved++
+		}
+	}
+	join := awsinventory.AttachHostnamesTo(raw, hosts, resolved)
+	note := fmt.Sprintf("%d of your %d web hostname(s) are served by an instance, load balancer or CloudFront "+
+		"distribution in this account and are joined to it.", len(join.Linked), len(hosts))
+	if n := len(join.Unlinked); n > 0 {
+		note += fmt.Sprintf(" %d resolve somewhere this inventory does not cover — another provider, another "+
+			"account, or a front door that was not read — so their web findings are not joined to a cloud resource.", n)
+	}
+	if unresolved > 0 {
+		note += fmt.Sprintf(" %d did not resolve.", unresolved)
 	}
 	if skipped > 0 {
 		note += fmt.Sprintf(" %d more were not looked up (limit %d).", skipped, maxHostLookups)
