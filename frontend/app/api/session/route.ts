@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { apiBase, TOKEN_COOKIE, TENANT_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { apiBase, TOKEN_COOKIE, TENANT_COOKIE, MFA_COOKIE, sessionCookieOptions } from "@/lib/auth";
 
 // POST { email, password } → verify with the platform's auth endpoint, then store the
 // returned session token (+ tenant) in httpOnly cookies. The browser never sees the token.
@@ -20,6 +20,13 @@ export async function POST(req: Request) {
   if (!res.ok) return NextResponse.json({ error: `Sign-in failed (HTTP ${res.status}).` }, { status: 502 });
 
   const data = await res.json().catch(() => ({}));
+  // Password right, second factor owed: hold the challenge in an httpOnly cookie (5 minutes, the same
+  // window the API gives it) and tell the page to ask for the code. No session cookie is set.
+  if (data.two_factor_required && data.challenge) {
+    const out = NextResponse.json({ two_factor_required: true });
+    out.cookies.set(MFA_COOKIE, data.challenge, { ...sessionCookieOptions(), maxAge: 5 * 60 });
+    return out;
+  }
   if (!data.token || !data.tenant) return NextResponse.json({ error: "Sign-in failed." }, { status: 502 });
 
   const out = NextResponse.json({ ok: true });

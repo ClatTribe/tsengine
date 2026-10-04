@@ -28,6 +28,7 @@ import { SLAControl } from "@/components/settings/sla-control";
 import { MaintenanceControl } from "@/components/settings/maintenance-control";
 import { ContactsControl } from "@/components/settings/contacts-control";
 import { APIKeysControl } from "@/components/settings/api-keys-control";
+import { TwoFactorControl } from "@/components/settings/two-factor-control";
 import { PractitionersControl } from "@/components/settings/practitioners-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
 import { LLMSettings } from "@/components/settings/llm-settings";
@@ -307,6 +308,9 @@ export default async function SettingsPage() {
       <div>
         <SectionTitle>Security &amp; session</SectionTitle>
         <Card className="space-y-4 p-5">
+          <div className="border-b border-border pb-4">
+            <TwoFactorControl enabled={!!me?.two_factor_enabled} remaining={me?.recovery_codes_remaining} />
+          </div>
           <ul className="space-y-2.5 text-sm">
             {[
               "Your session token is httpOnly + SameSite=Strict — never exposed to the browser.",

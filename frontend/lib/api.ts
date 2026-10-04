@@ -848,6 +848,16 @@ export const api = {
   createAPIKey: (k: { name: string; scopes: string[]; expires_in_days: number }) =>
     call<{ key: APIKey; token: string; note: string }>("/v1/settings/api-keys", { method: "POST", body: JSON.stringify(k) }),
   revokeAPIKey: (id: string) => call<APIKey>(`/v1/settings/api-keys/${id}/revoke`, { method: "POST" }),
+  // Two-factor sign-in. Every call acts on the signed-in person's own account.
+  twoFactorSetup: (password: string) =>
+    call<{ secret: string; uri: string; detail: string }>("/v1/auth/2fa/setup", { method: "POST", body: JSON.stringify({ password }) }),
+  twoFactorEnable: (code: string) =>
+    call<{ recovery_codes: string[]; other_sessions_signed_out: boolean; detail: string; warning?: string }>(
+      "/v1/auth/2fa/enable", { method: "POST", body: JSON.stringify({ code }) }),
+  twoFactorDisable: (b: { password: string; code?: string; recovery_code?: string }) =>
+    call<{ ok: boolean }>("/v1/auth/2fa/disable", { method: "POST", body: JSON.stringify(b) }),
+  twoFactorRecoveryCodes: (b: { password: string; code?: string; recovery_code?: string }) =>
+    call<{ recovery_codes: string[]; detail: string }>("/v1/auth/2fa/recovery-codes", { method: "POST", body: JSON.stringify(b) }),
   contacts: () => safe<Contact[]>("/v1/contacts", []),
   addContact: (c: { name: string; role?: string; email?: string; phone?: string; order: number }) =>
     call<Contact>("/v1/contacts", { method: "POST", body: JSON.stringify(c) }),

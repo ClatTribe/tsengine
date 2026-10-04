@@ -988,6 +988,10 @@ export interface User {
   /** The workspace's display name, carried on /v1/auth/me because every seat may read that endpoint
    *  and an employee seat may read nothing else about the workspace. */
   tenant_name?: string;
+  /** On only once an authenticator has been CONFIRMED with a code from it. */
+  two_factor_enabled?: boolean;
+  /** Present only when two-factor sign-in is on; 0 means none left. */
+  recovery_codes_remaining?: number;
 }
 
 // Public Trust Center aggregate (safe projection — coverage only, never findings).

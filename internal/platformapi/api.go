@@ -228,6 +228,11 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/auth/invite-roster", d.sessionAuth(d.handleRosterInvitePreview)) // who the HRIS roster would seat, without seating anyone (owner)
 	mux.HandleFunc("POST /v1/auth/invite-roster", d.sessionAuth(d.handleRosterInvite))       // seat every active HRIS employee as an EMPLOYEE (owner; idempotent; bounded)
 	mux.HandleFunc("POST /v1/auth/password", d.sessionAuth(d.handlePassword))                // change pw + clear MustChangePassword
+	mux.HandleFunc("POST /v1/auth/2fa/verify", d.handleTwoFactorVerify)                      // redeem a password-correct half-session with a code (public; 5 tries)
+	mux.HandleFunc("POST /v1/auth/2fa/setup", d.sessionAuth(d.handleTwoFactorSetup))         // new authenticator seed, sealed + pending (password)
+	mux.HandleFunc("POST /v1/auth/2fa/enable", d.sessionAuth(d.handleTwoFactorEnable))       // confirm with a code → on + recovery codes + other sessions out
+	mux.HandleFunc("POST /v1/auth/2fa/disable", d.sessionAuth(d.handleTwoFactorDisable))     // off (password AND code)
+	mux.HandleFunc("POST /v1/auth/2fa/recovery-codes", d.sessionAuth(d.handleRecoveryCodes)) // replace recovery codes (password AND code)
 	mux.HandleFunc("POST /v1/auth/forgot", d.handleForgotPassword)                           // start reset (public; emails a one-time link, no enumeration)
 	mux.HandleFunc("POST /v1/auth/reset", d.handleResetPassword)                             // complete reset with the token
 	mux.HandleFunc("POST /v1/webhooks/{kind}", d.auth(d.handleWebhook))

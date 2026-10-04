@@ -31,6 +31,12 @@ func (d Deps) resolveSession(r *http.Request) (platform.Session, bool) {
 	if err != nil || !time.Now().Before(s.ExpiresAt) {
 		return platform.Session{}, false
 	}
+	// A half-session (password right, second factor still owed) authenticates NOTHING. Refusing it
+	// HERE, at the one function every session-authenticated path calls, is what makes "the password
+	// alone opens no endpoint" a property rather than something each handler must remember.
+	if s.MFAPending {
+		return platform.Session{}, false
+	}
 	return s, true
 }
 
@@ -143,6 +149,10 @@ func (d Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, errBody("invalid email or password"))
 		return
 	}
+	if u.TwoFactorEnabled {
+		d.startSecondFactor(w, r, u)
+		return
+	}
 	out, err := d.issueSession(r, u)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
@@ -174,7 +184,14 @@ func (d Deps) handleMe(w http.ResponseWriter, r *http.Request, s platform.Sessio
 	if t, terr := d.Store.GetTenant(r.Context(), s.TenantID); terr == nil {
 		name = t.Name
 	}
-	writeJSON(w, http.StatusOK, meResponse{User: u, TenantName: name})
+	out := meResponse{User: u, TenantName: name}
+	if u.TwoFactorEnabled {
+		// The count, never the codes: so Settings can say "2 recovery codes left" before the day the
+		// phone is lost, which is the only day running out matters.
+		n := len(u.RecoveryHashes)
+		out.RecoveryCodesRemaining = &n
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // meResponse is the signed-in user plus the workspace name (flat JSON: the User fields at the top
@@ -182,6 +199,9 @@ func (d Deps) handleMe(w http.ResponseWriter, r *http.Request, s platform.Sessio
 type meResponse struct {
 	platform.User
 	TenantName string `json:"tenant_name,omitempty"`
+	// RecoveryCodesRemaining is set only when two-factor sign-in is on (a pointer so 0 — "none left" —
+	// is distinguishable from "not applicable").
+	RecoveryCodesRemaining *int `json:"recovery_codes_remaining,omitempty"`
 }
 
 // handleTeam lists the tenant's members, oldest first, with password hashes redacted.
