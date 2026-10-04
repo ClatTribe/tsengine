@@ -25,6 +25,7 @@ import { HRISControl } from "@/components/settings/hris-control";
 import { DrataControl } from "@/components/settings/drata-control";
 import { EscalationControl } from "@/components/settings/escalation-control";
 import { SLAControl } from "@/components/settings/sla-control";
+import { BoardDigestControl } from "@/components/settings/board-digest-control";
 import { MaintenanceControl } from "@/components/settings/maintenance-control";
 import { ContactsControl } from "@/components/settings/contacts-control";
 import { APIKeysControl } from "@/components/settings/api-keys-control";
@@ -53,7 +54,7 @@ export default async function SettingsPage() {
   const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation, aiMode] = await Promise.all([
     api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(), api.aiMode(),
   ]);
-  const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests()]);
+  const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests, boardDigest] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests(), api.boardDigest()]);
   const branding = await api.brandingSettings();
   const drata = await api.drataSettings();
   const [mdm, hris, apiKeys, securityPolicy, ssoSettings] = await Promise.all([api.mdmSettings(), api.hrisSettings(), api.apiKeys(), api.securityPolicy(), api.ssoSettings()]);
@@ -276,6 +277,7 @@ export default async function SettingsPage() {
           <EscalationControl policy={escalation} />
           <ContactsControl contacts={contacts} />
           <SLAControl policy={sla} />
+          <BoardDigestControl initial={boardDigest} members={team} canManage={isOwner} />
           <MaintenanceControl windows={maintenance} />
           {[
             { icon: BellRing, name: "PagerDuty", role: "New critical issues page on-call" },

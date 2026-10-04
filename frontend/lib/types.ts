@@ -2142,3 +2142,18 @@ export interface APIKeysResponse {
   scopes: Record<string, string>;
   active: number;
 }
+
+// The board-report email schedule (GET/PUT /v1/settings/board-digest). The server decides whether
+// anything will actually be sent; the page renders delivery_configured / delivery_note as given.
+export interface BoardDigestSettings {
+  enabled: boolean;
+  cadence?: "weekly" | "monthly";
+  recipients: string[];
+  configured_by?: string;
+  last_sent_at?: string;
+  last_attempt_at?: string;
+  last_error?: string;
+  next_due?: string;
+  delivery_configured: boolean;
+  delivery_note?: string;
+}

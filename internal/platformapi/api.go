@@ -295,6 +295,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("PUT /v1/settings/hris", d.auth(d.handlePutHRISSettings))                              // set + seal the HRIS credentials (Bucket B)
 	mux.HandleFunc("GET /v1/settings/escalation", d.auth(d.handleGetEscalationSettings))                  // per-tenant incident escalation matrix (MDR/SOC)
 	mux.HandleFunc("PUT /v1/settings/escalation", d.auth(d.handlePutEscalationSettings))                  // set the escalation tiers (severity → channels)
+	mux.HandleFunc("GET /v1/settings/board-digest", d.auth(d.handleGetBoardDigest))                       // the board-report email schedule + last delivery outcome
+	mux.HandleFunc("PUT /v1/settings/board-digest", d.auth(d.handlePutBoardDigest))                       // schedule it (weekly|monthly; recipients must hold a seat)
+	mux.HandleFunc("POST /v1/settings/board-digest/send", d.auth(d.handleSendBoardDigestNow))             // send now (counts as this period's send)
 	mux.HandleFunc("GET /v1/settings/sla", d.auth(d.handleGetSLASettings))                                // per-tenant remediation SLA policy (ack/resolve targets)
 	mux.HandleFunc("PUT /v1/settings/sla", d.auth(d.handlePutSLASettings))                                // set the per-severity SLA targets
 	mux.HandleFunc("GET /v1/settings/compliance-scope", d.auth(d.handleGetComplianceScope))               // target frameworks + applicability profile (scope before analysis)

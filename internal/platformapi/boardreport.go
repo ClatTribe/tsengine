@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -69,14 +70,28 @@ type boardReport struct {
 const boardTopFixes = 5
 
 func (d Deps) handleBoardReport(w http.ResponseWriter, r *http.Request, tenantID string) {
-	ctx := r.Context()
-	now := time.Now().UTC()
+	rep, err := d.buildBoardReport(r.Context(), tenantID, time.Now().UTC())
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if r.URL.Query().Get("format") == "md" {
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="security-board-report.md"`)
+		_, _ = w.Write([]byte(renderBoardMarkdown(rep)))
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
+// buildBoardReport assembles the report. ONE assembly for every consumer — the page, the download and the
+// scheduled email — so a report a board receives by email cannot say something the page does not.
+func (d Deps) buildBoardReport(ctx context.Context, tenantID string, now time.Time) (boardReport, error) {
 	rep := boardReport{GeneratedAt: now, TopFixes: []fixPlanStep{}, Caveats: []string{}}
 
 	open, held, err := d.planFindings(ctx, tenantID, now)
 	if err != nil {
-		respond(w, nil, err)
-		return
+		return rep, err
 	}
 	rep.Proven.BySeverity = map[string]int{}
 	rep.Proven.HeldByDecision = held
@@ -146,14 +161,7 @@ func (d Deps) handleBoardReport(w http.ResponseWriter, r *http.Request, tenantID
 
 	rep.Headline = boardHeadline(rep)
 	rep.Caveats = boardCaveats(rep)
-
-	if r.URL.Query().Get("format") == "md" {
-		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-		w.Header().Set("Content-Disposition", `attachment; filename="security-board-report.md"`)
-		_, _ = w.Write([]byte(renderBoardMarkdown(rep)))
-		return
-	}
-	writeJSON(w, http.StatusOK, rep)
+	return rep, nil
 }
 
 // boardHeadline is one factual sentence. It leads with what is PROVEN, because that is the part a board
