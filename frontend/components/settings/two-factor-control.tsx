@@ -2,7 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { KeyRound, Loader2, ShieldAlert, ShieldCheck, Copy, Check } from "lucide-react";
-import { confirmTwoFactor, disableTwoFactor, replaceRecoveryCodes, startTwoFactor } from "@/app/(app)/settings/actions";
+
+// The four server actions the control drives. Passed in rather than imported so the tenant Settings
+// page and the operator console — two separate auth namespaces with separate endpoints — share one
+// control and cannot drift in what they ask for.
+type R<T> = Promise<({ ok: true } & T) | { ok: false; error: string }>;
+type Weaken = { password: string; code?: string; recovery_code?: string };
+export interface TwoFactorActions {
+  start: (password: string) => R<{ secret: string; uri: string }>;
+  confirm: (code: string) => R<{ recovery_codes: string[]; warning?: string }>;
+  disable: (b: Weaken) => R<object>;
+  replace: (b: Weaken) => R<{ recovery_codes: string[] }>;
+}
 
 // Two-factor sign-in for the signed-in person's own account.
 //
@@ -19,7 +30,18 @@ const primary =
 const secondary =
   "inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink hover:bg-white/5 disabled:opacity-60";
 
-export function TwoFactorControl({ enabled, remaining }: { enabled: boolean; remaining?: number }) {
+export function TwoFactorControl({
+  enabled,
+  remaining,
+  actions,
+  canDisable = true,
+}: {
+  enabled: boolean;
+  remaining?: number;
+  actions: TwoFactorActions;
+  // false when the deployment REQUIRES two-factor (the server refuses turning it off there too).
+  canDisable?: boolean;
+}) {
   const [pending, start] = useTransition();
   const [err, setErr] = useState("");
   const [password, setPassword] = useState("");
@@ -41,7 +63,7 @@ export function TwoFactorControl({ enabled, remaining }: { enabled: boolean; rem
 
   function begin() {
     start(async () => {
-      const r = await startTwoFactor(password);
+      const r = await actions.start(password);
       if (!r.ok) return setErr(r.error);
       setEnrol({ secret: r.secret, uri: r.uri });
       setPassword("");
@@ -51,7 +73,7 @@ export function TwoFactorControl({ enabled, remaining }: { enabled: boolean; rem
 
   function confirm() {
     start(async () => {
-      const r = await confirmTwoFactor(code);
+      const r = await actions.confirm(code);
       if (!r.ok) return setErr(r.error);
       setEnrol(null);
       setCodes(r.recovery_codes);
@@ -65,12 +87,12 @@ export function TwoFactorControl({ enabled, remaining }: { enabled: boolean; rem
     const b = /^\d{6}$/.test(code.replace(/\s/g, "")) ? { password, code } : { password, recovery_code: code };
     start(async () => {
       if (kind === "off") {
-        const r = await disableTwoFactor(b);
+        const r = await actions.disable(b);
         if (!r.ok) return setErr(r.error);
         setNotice("Two-factor sign-in is off. Your password alone now signs you in.");
         setCodes(null);
       } else {
-        const r = await replaceRecoveryCodes(b);
+        const r = await actions.replace(b);
         if (!r.ok) return setErr(r.error);
         setCodes(r.recovery_codes);
         setNotice("Your old recovery codes no longer work.");
@@ -186,7 +208,9 @@ export function TwoFactorControl({ enabled, remaining }: { enabled: boolean; rem
       {enabled && mode === "" && (
         <div className="flex gap-2">
           <button type="button" onClick={() => setMode("replace")} className={secondary}>Replace recovery codes</button>
-          <button type="button" onClick={() => setMode("off")} className={secondary}>Turn off</button>
+          {canDisable && (
+            <button type="button" onClick={() => setMode("off")} className={secondary}>Turn off</button>
+          )}
         </div>
       )}
 

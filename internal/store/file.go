@@ -362,3 +362,10 @@ func (f *File) DeleteVendor(ctx context.Context, tenantID, id string) error {
 	}
 	return f.persist()
 }
+
+func (f *File) DeleteOperatorSessionsFor(ctx context.Context, operatorID string) error {
+	if err := f.Memory.DeleteOperatorSessionsFor(ctx, operatorID); err != nil {
+		return err
+	}
+	return f.persist()
+}

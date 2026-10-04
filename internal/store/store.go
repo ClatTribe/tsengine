@@ -261,4 +261,6 @@ type Store interface {
 	PutOperatorSession(ctx context.Context, s platform.OperatorSession) error
 	GetOperatorSession(ctx context.Context, token string) (platform.OperatorSession, error)
 	DeleteOperatorSession(ctx context.Context, token string) error
+	// DeleteOperatorSessionsFor signs an operator out everywhere (used when two-factor is turned on).
+	DeleteOperatorSessionsFor(ctx context.Context, operatorID string) error
 }

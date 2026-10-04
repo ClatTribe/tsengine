@@ -66,6 +66,7 @@ provider (§5–§6).
 |---|:---:|---|---|
 | `TSENGINE_PLATFORM_TOKEN` | ✅ | — | Static bearer token for the API + console. Treat as a root secret. |
 | `TSENGINE_SECRET_KEY` | strongly rec. | — (unsealed!) | base64 32-byte AES-256-GCM key. **Without it, OAuth tokens are stored in plaintext** (a startup WARNING is logged). |
+| `TSENGINE_OPERATOR_REQUIRE_2FA` | optional | off | `1` refuses every client-touching operator endpoint to an operator who has not turned on two-factor sign-in (they can still sign in and enrol). Tell your practitioners before switching it on. |
 | `TSENGINE_PLATFORM_DB` | rec. | in-memory | Path to a JSON store file (atomic, crash-safe). Without it the store is in-memory and lost on restart. |
 | `TSENGINE_PLATFORM_ADDR` | | `:8090` | Listen address. |
 | `TSENGINE_PLATFORM_PUBLIC` | for OAuth | — | Public base URL (e.g. `https://app.example.com`) used to build OAuth `redirect_uri`s. |
@@ -215,6 +216,7 @@ Three credentials reach the tenant API, and each carries a different amount of a
 | `POST /v1/webhooks/{kind}` | Provider webhook → event-driven re-scan. |
 | `POST /v1/auth/2fa/setup` · `.../enable` · `.../disable` · `.../recovery-codes` | Two-factor sign-in for the signed-in account (authenticator app + single-use recovery codes). Needs `TSENGINE_SECRET_KEY` so the seed can be sealed. |
 | `POST /v1/auth/2fa/verify` | Second sign-in step: a password-correct login on an account with two-factor returns a short-lived challenge instead of a session; redeem it with a code (5 attempts). |
+| `POST /v1/operator/2fa/setup` · `.../enable` · `.../disable` · `.../recovery-codes` · `POST /v1/operator/2fa/verify` | The same two-factor sign-in for operator (practitioner) accounts. With `TSENGINE_OPERATOR_REQUIRE_2FA=1` an operator who has not enrolled can reach only enrolment until they do. |
 | `GET /v1/findings` | The tenant's findings. |
 | `POST /v1/import` | Import an existing scanner export as findings — SARIF, Snyk, Dependabot, Wiz, Nessus (`.nessus` v2) or Burp issues XML; `?format=` or auto-detected. Informational items are counted (`skipped_informational`), not imported. |
 | `GET /v1/findings/export` | Export findings — SARIF (default; GitHub code-scanning) or CSV (`?format=csv`). |

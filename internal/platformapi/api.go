@@ -62,9 +62,12 @@ type Deps struct {
 	// (ADR 0031 D2b). Optional: nil → GET .../evidence-pack returns 501 rather than serving an
 	// unsigned artifact from a signed endpoint. Wired in cmd/platform via attest.LoadOrCreate.
 	EvidenceSigner func() (ed25519.PrivateKey, string, error)
-	IncidentOpener IncidentOpener   // optional: opens incidents for event-driven ingest (identity/SaaS)
-	Vault          Sealer           // optional: seals OAuth tokens before persistence
-	Recorder       *ledger.Recorder // optional: signs review request/resolve into the ledger
+	IncidentOpener IncidentOpener // optional: opens incidents for event-driven ingest (identity/SaaS)
+	Vault          Sealer         // optional: seals OAuth tokens before persistence
+	// OperatorRequire2FA (TSENGINE_OPERATOR_REQUIRE_2FA=1) refuses every client-touching operator
+	// endpoint to an operator who has not enrolled two-factor sign-in (operator_twofactor.go).
+	OperatorRequire2FA bool
+	Recorder           *ledger.Recorder // optional: signs review request/resolve into the ledger
 	// RateLimiter enforces the per-tenant fair-use ceiling (plan.APIRatePerMin) on
 	// authenticated /v1 requests. Optional: nil disables limiting (fail-open), which
 	// is the default in tests. Wired in cmd/platform for production.
@@ -370,6 +373,11 @@ func NewHandler(d Deps) http.Handler {
 	// Operator (cross-tenant practitioner) auth + console — a SEPARATE namespace from tenant auth.
 	mux.HandleFunc("POST /v1/operator", d.platformAuth(d.handleCreateOperator))                                                // provision an operator account (deployment-operator gated)
 	mux.HandleFunc("POST /v1/operator/login", d.handleOperatorLogin)                                                           // operator email+password login
+	mux.HandleFunc("POST /v1/operator/2fa/verify", d.handleOperatorTwoFactorVerify)                                            // redeem an operator half-session with a code (public; 5 tries)
+	mux.HandleFunc("POST /v1/operator/2fa/setup", d.operatorAuth(d.handleOperatorTwoFactorSetup))                              // new authenticator seed, sealed + pending (password)
+	mux.HandleFunc("POST /v1/operator/2fa/enable", d.operatorAuth(d.handleOperatorTwoFactorEnable))                            // confirm → on + recovery codes + other sessions out
+	mux.HandleFunc("POST /v1/operator/2fa/disable", d.operatorAuth(d.handleOperatorTwoFactorDisable))                          // off (password AND code; refused when the deployment requires it)
+	mux.HandleFunc("POST /v1/operator/2fa/recovery-codes", d.operatorAuth(d.handleOperatorRecoveryCodes))                      // replace recovery codes (password AND code)
 	mux.HandleFunc("POST /v1/operator/logout", d.operatorAuth(d.handleOperatorLogout))                                         // end the operator session
 	mux.HandleFunc("GET /v1/operator/me", d.operatorAuth(d.handleOperatorMe))                                                  // the current operator
 	mux.HandleFunc("GET /v1/operator/queue", d.operatorAuth(d.handleOperatorQueue))                                            // the operator's own cross-tenant work queue

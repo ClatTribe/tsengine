@@ -9,12 +9,15 @@ import { apiBase, sessionCookieOptions } from "./auth";
 // isolation.
 
 export const OP_TOKEN_COOKIE = "op_token";
+// The operator second-factor challenge between the password and the code (httpOnly, 5 minutes).
+export const OP_MFA_COOKIE = "op_mfa";
 
 export interface Operator {
   id: string;
   email: string;
   name?: string;
   firm?: string;
+  two_factor_enabled?: boolean;
 }
 
 export interface QueueItem {
@@ -60,6 +63,24 @@ export function operatorMe(): Promise<Operator | null> {
 
 export function operatorQueue(): Promise<OperatorQueue | null> {
   return operatorFetch<OperatorQueue>("/v1/operator/queue");
+}
+
+// operatorQueueResult is operatorQueue that can tell "not signed in" from "signed in, but this
+// deployment requires two-factor first". The console sends the first to the login page; it must NOT
+// send the second there — the login page sees a valid token and sends it straight back, a loop.
+export async function operatorQueueResult(): Promise<{ queue: OperatorQueue | null; setupRequired: boolean }> {
+  const tok = await getOperatorToken();
+  if (!tok) return { queue: null, setupRequired: false };
+  const res = await fetch(apiBase() + "/v1/operator/queue", {
+    headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  if (res.status === 403) {
+    const b = (await res.json().catch(() => ({}))) as { code?: string };
+    if (b.code === "two_factor_setup_required") return { queue: null, setupRequired: true };
+  }
+  if (!res.ok) return { queue: null, setupRequired: false };
+  return { queue: (await res.json()) as OperatorQueue, setupRequired: false };
 }
 
 // operatorCookieOptions reuses the tenant cookie hardening (httpOnly + SameSite=Strict + secure).

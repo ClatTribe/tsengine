@@ -143,15 +143,21 @@ func (d Deps) refuseSecondFactor(w http.ResponseWriter, r *http.Request, s platf
 
 // checkTOTP verifies a code against the user's CONFIRMED seed and refuses a replayed step.
 func (d Deps) checkTOTP(u platform.User, code string, now time.Time) (int64, bool, error) {
-	if u.TOTPSecretRef == "" || d.Vault == nil {
+	return d.checkSealedTOTP(u.TOTPSecretRef, u.TOTPLastStep, code, now)
+}
+
+// checkSealedTOTP is the one code check both account kinds use: open the sealed seed, verify, and
+// refuse any step at or below the last one accepted.
+func (d Deps) checkSealedTOTP(secretRef string, lastStep int64, code string, now time.Time) (int64, bool, error) {
+	if secretRef == "" || d.Vault == nil {
 		return 0, false, nil
 	}
-	secret, err := d.Vault.Open(u.TOTPSecretRef)
+	secret, err := d.Vault.Open(secretRef)
 	if err != nil {
 		return 0, false, err
 	}
 	step, ok := totp.Verify(secret, code, now)
-	if !ok || step <= u.TOTPLastStep {
+	if !ok || step <= lastStep {
 		return 0, false, nil
 	}
 	return step, true, nil
