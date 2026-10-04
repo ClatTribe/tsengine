@@ -110,6 +110,10 @@ func (d Deps) SyncCloudInventory(ctx context.Context, tenantID string) ([]types.
 
 // handleCloudSync fetches live AWS state for the tenant's connected account on demand.
 func (d Deps) handleCloudSync(w http.ResponseWriter, r *http.Request, tenantID string) {
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("provider")), "gcp") {
+		d.handleGCPSync(w, r, tenantID)
+		return
+	}
 	if d.CloudSnapshots == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errBody("cloud snapshot store not configured"))
 		return

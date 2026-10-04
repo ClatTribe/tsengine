@@ -987,7 +987,11 @@ func (s *Service) syncCloud(ctx context.Context, tenantID string) ([]types.Findi
 		if !errors.Is(err, ErrCloudSyncUnavailable) {
 			slog.Warn("[scan] cloud sync failed", "tenant", tenantID, "err", err)
 		}
-		return nil, false
+		// A PARTIAL read still hands back the drift of the clouds that DID read (one connected project
+		// failing must not drop another account's findings). They are real, stored findings, so they
+		// belong in the present state — dropping them would let this same pass resolve the incidents
+		// they just opened. ran stays false: one cloud went unread, so silence is not evidence.
+		return drift, false
 	}
 	if len(drift) > 0 {
 		slog.Info("[scan] cloud drift detected", "tenant", tenantID, "findings", len(drift))

@@ -566,6 +566,10 @@ func main() {
 				Databases:  awsfetch.NewRDSLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 			}
 		},
+		// LIVE GCP read: tsengine's own service account (GCP_TRUST_SERVICE_ACCOUNT, via Application Default
+		// Credentials) reads the project the customer granted it. Only wired when that account is
+		// configured — without it no GCP project can be connected, so there is nothing to read.
+		GCPFetcher: gcpFetcherFor(os.Getenv("GCP_TRUST_SERVICE_ACCOUNT")),
 		// LIVE provider dry-run (ADR 0024 P1a's remaining half): ask AWS's own policy simulator whether
 		// a move is authorized, through the SAME scoped read-only role recorded at connect time.
 		// iam:SimulatePrincipalPolicy is a READ, so this needs no new credential and no new consent —
@@ -710,8 +714,10 @@ func main() {
 	// whose change detection was manual. Self-gating: a tenant with no AWS connection, or a deployment
 	// with no fetcher wired, reports "unavailable" and the pass carries on.
 	svc.CloudSyncer = func(ctx context.Context, tenantID string) ([]types.Finding, error) {
-		drift, _, err := apiDeps.SyncCloudInventory(ctx, tenantID)
-		return drift, err
+		// Every connected cloud: AWS through its read-only role, each GCP project through the access it
+		// granted tsengine's service account. A cloud that is not connected is skipped silently; one whose
+		// read failed is reported, and the others' drift still reaches the pass.
+		return apiDeps.SyncClouds(ctx, tenantID)
 	}
 
 	// The RESPOND half for EVENT-DRIVEN incidents: when an ingest path (identity/cloud-drift/OSINT/…)
