@@ -171,6 +171,9 @@ type Deps struct {
 	// AWSFetcher builds a LIVE read-only fetcher for a connected AWS account. Nil → POST
 	// /v1/cloud/sync reports that live read is unavailable rather than returning an empty account.
 	AWSFetcher AWSFetcherFor
+	// GCPFetcher builds a LIVE read-only fetcher for a connected GCP project (gcpsync.go). Nil → the
+	// ?provider=gcp sync reports live read unavailable rather than an empty project.
+	GCPFetcher GCPFetcherFor
 	// CloudProber builds the tenant's PROVIDER DRY-RUN (ADR 0024 P1) over the same scoped read-only
 	// role — iam:SimulatePrincipalPolicy is a read, so it needs no new credential. Nil → the agent's
 	// check_reachable reports the provider was not asked, rather than a path proven or unproven.

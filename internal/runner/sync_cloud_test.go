@@ -170,3 +170,32 @@ func TestSyncCloud_UnchangedAccountYieldsNothing(t *testing.T) {
 		t.Errorf("an unchanged account invented %d findings", len(out))
 	}
 }
+
+// One cloud failing must not cost another cloud's drift. With AWS and a GCP project both connected, a GCP
+// read that fails still returns the AWS drift; dropping it would let this pass resolve the incident the
+// AWS drift just opened — the same open-then-close failure the first test in this file guards against.
+func TestSyncCloud_PartialFailureKeepsTheDriftThatWasRead(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t1"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "a1", TenantID: "t1", Type: "workspace", Target: "acme"})
+
+	n := 0
+	svc := &Service{
+		Store: st, Connectors: connector.NewRegistry(), Tokens: fakeTokens{},
+		Scanner: &togglingScanner{Open: false},
+		NewID:   func() string { n++; return itoa(n) },
+		CloudSyncer: func(ctx context.Context, tenantID string) ([]types.Finding, error) {
+			f := driftFinding()
+			_ = st.PutFinding(ctx, tenantID, f)
+			return []types.Finding{f}, errors.New("GCP project p: permission denied")
+		},
+		Detector: &detect.Detector{Store: st, NewID: func() string { n++; return itoa(n) }},
+	}
+	if _, err := svc.RescanTenant(ctx, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := openCount(t, st); got != 1 {
+		t.Fatalf("the AWS drift incident left %d open, want 1 — a failing GCP read dropped it", got)
+	}
+}

@@ -86,6 +86,7 @@ provider (§5–§6).
 | `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | Microsoft 365 |
 | `OKTA_ORG_URL` / `OKTA_CLIENT_ID` / `OKTA_CLIENT_SECRET` | Okta (org URL e.g. `https://dev-123.okta.com`) |
 | `AWS_REMEDIATION_ROLE_ARN` / `AWS_REMEDIATION_EXTERNAL_ID` / `AWS_REGION` | Enables the **live AWS remediation write path** (`connector.AWS.Apply` → S3 Block Public Access). `ROLE_ARN` is a scoped, cross-account **write** role the platform assumes via STS (distinct from the read-only onboarding role); `EXTERNAL_ID` is its tenant-binding ExternalId. Unset (and `AWS_REMEDIATION_ENABLED≠1`) → `Apply` stays an honest stub. The write is reached only after the HITL approval gate. |
+| `GCP_TRUST_SERVICE_ACCOUNT` | The service account customers grant **read-only** access (Security Reviewer, or Viewer + IAM Security Reviewer) on their project when they connect GCP. Setting it also enables the **live GCP read** (`POST /v1/cloud/sync?provider=gcp` and every monitoring pass): the platform reads each connected project as this account through **Application Default Credentials**, so the platform's ADC (`GOOGLE_APPLICATION_CREDENTIALS`, or the attached runtime service account) must BE this service account. The read is scoped `cloud-platform.read-only`. A deployment without ADC reports each project's sync as failed, naming the missing credentials, never as an empty project. |
 | `GCP_REMEDIATION_IMPERSONATE_SA` | Enables the **live GCP remediation write path** (`connector.GCP.Apply` → GCS Public Access Prevention). The platform impersonates this scoped **write** service account in the customer project (distinct from the read-only Security Reviewer grant). Unset (and `GCP_REMEDIATION_ENABLED≠1`) → `Apply` stays an honest stub. HITL-gated. |
 | `AZURE_REMEDIATION_ENABLED` | `1` enables the **live Azure remediation write path** (`connector.Azure.Apply` → disable storage `AllowBlobPublicAccess`). Uses the platform's service principal (`DefaultAzureCredential` — env / managed identity / Azure CLI), which must hold a scoped storage-write role (e.g. Storage Account Contributor) on the target subscription. Unset → `Apply` stays an honest stub. HITL-gated. |
 
@@ -245,6 +246,13 @@ signed `Incident`; an issue that stops appearing resolves its incident. A newly-
 incident fires the Slack alert. So the platform always knows *what's new since the last
 pass* and *what's now fixed* — the raw findings (overwritten each scan) can't tell you
 that.
+
+Each pass also **re-reads every connected cloud**: the AWS account through its read-only role, and each
+connected GCP project through the access it granted `GCP_TRUST_SERVICE_ACCOUNT`. Each account is diffed
+against ITS OWN previous snapshot (snapshots are kept per account, so an AWS account and a GCP project
+never become each other's drift baseline), and what a read could not see is stored as a coverage gap on
+the attack-path page. A cloud that is not connected is skipped silently; one whose read fails is logged,
+and the other clouds' drift still reaches the pass.
 
 ---
 
