@@ -34,7 +34,10 @@ func TestScopeDownOptions_AppliesTheReadOnlySessionPolicyAndExternalID(t *testin
 			t.Errorf("the applied policy must explicitly Deny %s (a read that could mutate or exfiltrate is not read-only)", a)
 		}
 	}
-	for _, a := range []string{"ec2:DescribeInstances", "s3:ListBuckets", "iam:GetRole"} {
+	for _, a := range []string{"ec2:DescribeInstances", "s3:ListBuckets", "iam:GetRole",
+		"elasticloadbalancing:DescribeLoadBalancers", "elasticloadbalancing:DescribeListeners",
+		"elasticloadbalancing:DescribeTargetGroups", "elasticloadbalancing:DescribeTargetHealth",
+		"cloudfront:ListDistributions"} {
 		if dec, _ := cloudiam.Eval(a, "*", doc); dec == cloudiam.ExplicitDeny {
 			t.Errorf("the applied policy must NOT Deny the metadata read %s, or the inventory fetch itself breaks", a)
 		}

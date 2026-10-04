@@ -92,11 +92,21 @@ func (d Deps) SyncCloudInventory(ctx context.Context, tenantID string) ([]types.
 	ciFindings = annotateCIReach(ctx, res.Raw, ciFindings, d.proberOrNil(ctx, tenantID))
 	d.persistCIIdentityFindings(ctx, tenantID, ciFindings)
 	coverage := connector.CoverAWS(res.Raw)
-	if len(ciNotAssessed) > 0 {
+	// What the READ could not see is stored beside what the snapshot could not answer — the GCP door does
+	// the same. A role that may list buckets but not load balancers produces an account with no front
+	// doors, and the person reading the attack-path page later is not the scheduler that ran the read.
+	extra := map[string]string{}
+	for k, v := range ciNotAssessed {
+		extra[k] = v
+	}
+	for surface, why := range res.Skipped {
+		extra["not-read: "+surface] = why
+	}
+	if len(extra) > 0 {
 		if coverage.Notes == nil {
 			coverage.Notes = map[string]string{}
 		}
-		for k, v := range ciNotAssessed {
+		for k, v := range extra {
 			coverage.Notes[k] = v
 		}
 	}

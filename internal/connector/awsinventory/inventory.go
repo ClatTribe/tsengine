@@ -43,6 +43,13 @@ type RawAWS struct {
 	// snapshot naming them was posted by hand.
 	Functions []RawFunction `json:"functions,omitempty"`
 	Databases []RawDatabase `json:"databases,omitempty"`
+	// LoadBalancers and Distributions are the FRONT DOORS most real web applications sit behind. Without
+	// them the graph had instances with no public address of their own and nothing in front of them, so
+	// the common architecture — CloudFront → ALB → private instances, or CloudFront → a private bucket —
+	// produced no internet path at all, and a hostname behind either could never be joined to the cloud
+	// resource that serves it.
+	LoadBalancers []RawLoadBalancer `json:"load_balancers,omitempty"`
+	Distributions []RawDistribution `json:"distributions,omitempty"`
 	// Grants are principal -> resource access facts. Without them an inventory has identities and
 	// data but nothing connecting the two, so no path can ever run from a foothold to a crown
 	// jewel. They are asserted by the fetcher (policy evaluation), never inferred here: guessing
@@ -157,6 +164,64 @@ type RawDatabase struct {
 	Port      int      `json:"port,omitempty"`
 	SGIDs     []string `json:"security_group_ids,omitempty"`
 	Sensitive bool     `json:"sensitive,omitempty"`
+}
+
+// RawLoadBalancer is one Application or Network Load Balancer.
+//
+// Edges from it are AWS's own statements, never guesses: the internet reaches it only when its scheme
+// is internet-facing AND (for a load balancer with security groups) a listener port is open to the
+// internet; it reaches a target only because that target is REGISTERED in one of its target groups.
+// What is NOT evaluated, and said so here rather than implied: whether each target's own security group
+// admits the load balancer. A registration is the operator stating "send traffic here", which is the
+// path an attacker uses; an over-tight target group would make the edge optimistic, never invented.
+type RawLoadBalancer struct {
+	ARN     string   `json:"arn"`
+	Name    string   `json:"name,omitempty"`
+	DNSName string   `json:"dns_name,omitempty"`
+	Type    string   `json:"type,omitempty"`   // "application" | "network" | "gateway"
+	Scheme  string   `json:"scheme,omitempty"` // "internet-facing" | "internal"
+	Region  string   `json:"region,omitempty"`
+	SGIDs   []string `json:"security_group_ids,omitempty"`
+	// SGsKnown is true when the security-group list was READ (an ALB always has them; an NLB may have
+	// none). An empty list with SGsKnown=false is unknown, and asserts no internet edge.
+	SGsKnown  bool          `json:"security_groups_known,omitempty"`
+	Listeners []RawListener `json:"listeners,omitempty"`
+	// TargetInstances / TargetFunctions are what the target groups REGISTER. IP targets are counted, not
+	// joined: an address could be anything, and joining on it is how a wrong path is drawn.
+	TargetInstances []string `json:"target_instances,omitempty"`
+	TargetFunctions []string `json:"target_functions,omitempty"`
+	IPTargets       int      `json:"ip_targets,omitempty"`
+	// Hostnames are the customer's own hostnames proven to resolve to this load balancer (AttachHostnames).
+	Hostnames []string `json:"hostnames,omitempty"`
+}
+
+// RawListener is one listener port.
+type RawListener struct {
+	Port     int    `json:"port"`
+	Protocol string `json:"protocol,omitempty"`
+}
+
+// RawDistribution is one CloudFront distribution.
+//
+// A distribution is public by nature, so the internet edge is the default — UNLESS every cache behaviour
+// requires signed URLs/cookies (ViewerRestricted), in which case only a holder of the signing key gets
+// through and no anonymous edge is drawn. Origins are joined to a load balancer or bucket in this account
+// only on an EXACT domain match; an origin naming something else is recorded but leads nowhere.
+//
+// The case this exists for: a bucket that is NOT public, holding customer data, served to the internet
+// through a distribution with origin access control. Every bucket-level check reads it as private. The
+// path internet → distribution → bucket is real, and was invisible.
+type RawDistribution struct {
+	ARN              string   `json:"arn"`
+	ID               string   `json:"id,omitempty"`
+	DomainName       string   `json:"domain_name,omitempty"` // dxxxx.cloudfront.net
+	Aliases          []string `json:"aliases,omitempty"`     // the customer's CNAMEs (validated by AWS against a certificate)
+	Enabled          bool     `json:"enabled,omitempty"`
+	ViewerRestricted bool     `json:"viewer_restricted,omitempty"`
+	Origins          []string `json:"origins,omitempty"` // origin domain names
+	// Hostnames are the customer's hostnames matched to this distribution (an exact alias, or one under a
+	// wildcard alias). A wildcard alias itself never becomes a hostname node.
+	Hostnames []string `json:"hostnames,omitempty"`
 }
 
 // RawBucket is an object store; Public + Sensitive are fetcher-resolved (public-access-block / tags).
@@ -297,6 +362,8 @@ func Build(raw RawAWS) cloudgraph.Inventory {
 			inv.Reaches = append(inv.Reaches, cloudgraph.InvReach{From: cloudgraph.InternetID, To: db.ARN})
 		}
 	}
+
+	buildFrontDoors(&inv, raw, sgByID)
 
 	for _, gr := range raw.Grants {
 		// Both ends must be named. A half-specified grant would otherwise create an edge to an

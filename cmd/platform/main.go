@@ -564,6 +564,10 @@ func main() {
 				Compute:    awsfetch.NewEC2Lister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Functions:  awsfetch.NewLambdaLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
 				Databases:  awsfetch.NewRDSLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				// The front doors: an ALB/NLB in front of private instances and CloudFront in front of
+				// private buckets are how most web apps are exposed, and without them neither path exists.
+				LoadBalancers: awsfetch.NewELBLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID),
+				Distributions: awsfetch.NewCloudFrontLister(c.SecretRef, c.TenantID),
 			}
 		},
 		// LIVE GCP read: tsengine's own service account (GCP_TRUST_SERVICE_ACCOUNT, via Application Default
