@@ -28,6 +28,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // — send them to the rotation screen, which also lives outside (app) so this check can't loop.
   if (me.must_change_password) redirect("/change-password");
 
+  // The workspace requires two-factor sign-in and this person has not enrolled: every app call would
+  // answer 403, so send them to enrolment, which also lives outside (app) so this cannot loop.
+  if (me.two_factor_required && !me.two_factor_enabled) redirect("/two-factor-setup");
+
   // An EMPLOYEE seat gets its own shell, before any estate call is made.
   //
   // Not the console with pages hidden: the API allowlist refuses this account every estate endpoint

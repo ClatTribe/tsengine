@@ -185,6 +185,12 @@ func (d Deps) handleMe(w http.ResponseWriter, r *http.Request, s platform.Sessio
 		name = t.Name
 	}
 	out := meResponse{User: u, TenantName: name}
+	// The workspace's two-factor policy rides with the person, so the app can send someone who has
+	// not enrolled to enrolment instead of a dashboard whose every call answers 403. Best-effort like
+	// the name: an unreadable tenant leaves it false here, and the gate itself fails closed.
+	if t, terr := d.Store.GetTenant(r.Context(), s.TenantID); terr == nil {
+		out.TwoFactorRequired = t.RequireTwoFactor
+	}
 	if u.TwoFactorEnabled {
 		// The count, never the codes: so Settings can say "2 recovery codes left" before the day the
 		// phone is lost, which is the only day running out matters.
@@ -202,6 +208,8 @@ type meResponse struct {
 	// RecoveryCodesRemaining is set only when two-factor sign-in is on (a pointer so 0 — "none left" —
 	// is distinguishable from "not applicable").
 	RecoveryCodesRemaining *int `json:"recovery_codes_remaining,omitempty"`
+	// TwoFactorRequired is the workspace's policy (Tenant.RequireTwoFactor), not this person's state.
+	TwoFactorRequired bool `json:"two_factor_required,omitempty"`
 }
 
 // handleTeam lists the tenant's members, oldest first, with password hashes redacted.
