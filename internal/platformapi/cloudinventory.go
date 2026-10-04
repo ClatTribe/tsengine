@@ -214,7 +214,10 @@ func (d Deps) applyCloudInventoryWithCoverage(ctx context.Context, tenantID stri
 	// failure never blocks storing the new snapshot.
 	driftStored := 0
 	var drift []types.Finding
-	if prevSnap, ok, gerr := d.CloudSnapshots.Get(ctx, tenantID); d.Store != nil && gerr == nil && ok && len(prevSnap.Inventory) > 0 {
+	// The baseline is THIS ACCOUNT's previous snapshot, never the tenant's merged view: diffing a GCP
+	// project against an AWS account reports every resource in it as newly created.
+	account := cloudsnap.AccountOf(invJSON)
+	if prevSnap, ok, gerr := d.CloudSnapshots.GetAccount(ctx, tenantID, account); d.Store != nil && gerr == nil && ok && len(prevSnap.Inventory) > 0 {
 		var prevInv cloudgraph.Inventory
 		if json.Unmarshal(prevSnap.Inventory, &prevInv) == nil {
 			findings := clouddrift.Diff(cloudgraph.Ingest(prevInv), cloudgraph.Ingest(inv), clouddrift.Options{})
@@ -222,7 +225,7 @@ func (d Deps) applyCloudInventoryWithCoverage(ctx context.Context, tenantID stri
 		}
 	}
 	if err := d.CloudSnapshots.Put(ctx, cloudsnap.Snapshot{
-		TenantID: tenantID, Inventory: invJSON, CapturedAt: time.Now().UTC(),
+		TenantID: tenantID, Account: account, Inventory: invJSON, CapturedAt: time.Now().UTC(),
 		CoverageGaps: coverage.Notes, GitHubTrusts: trusts,
 	}); err != nil {
 		return nil, nil, err
