@@ -538,7 +538,7 @@ func (s *SQLite) DeleteVendor(ctx context.Context, tenantID, id string) error {
 // --- users & sessions ---
 
 func (s *SQLite) PutUser(ctx context.Context, u platform.User) error {
-	d, err := enc(u)
+	d, err := enc(platform.StoreUser(u))
 	if err != nil {
 		return err
 	}
@@ -549,17 +549,17 @@ func (s *SQLite) PutUser(ctx context.Context, u platform.User) error {
 	return err
 }
 func (s *SQLite) GetUser(ctx context.Context, id string) (platform.User, error) {
-	var u platform.User
+	var u platform.UserRecord
 	err := getJSON(ctx, s.db, &u, `SELECT data FROM users WHERE id=?`, id)
-	return u, err
+	return u.Restore(), err
 }
 func (s *SQLite) GetUserByEmail(ctx context.Context, email string) (platform.User, error) {
-	var u platform.User
+	var u platform.UserRecord
 	err := getJSON(ctx, s.db, &u, `SELECT data FROM users WHERE lower(email)=lower(?) LIMIT 1`, email)
-	return u, err
+	return u.Restore(), err
 }
 func (s *SQLite) ListUsers(ctx context.Context, tenantID string) ([]platform.User, error) {
-	return listJSON[platform.User](ctx, s.db, `SELECT data FROM users WHERE tenant_id=? ORDER BY rowid`, tenantID)
+	return restoreUsers(listJSON[platform.UserRecord](ctx, s.db, `SELECT data FROM users WHERE tenant_id=? ORDER BY rowid`, tenantID))
 }
 
 func (s *SQLite) PutSession(ctx context.Context, sess platform.Session) error {

@@ -518,7 +518,7 @@ func (p *Postgres) DeleteVendor(ctx context.Context, tenantID, id string) error 
 // --- users & sessions ---
 
 func (p *Postgres) PutUser(ctx context.Context, u platform.User) error {
-	d, err := enc(u)
+	d, err := enc(platform.StoreUser(u))
 	if err != nil {
 		return err
 	}
@@ -528,17 +528,17 @@ func (p *Postgres) PutUser(ctx context.Context, u platform.User) error {
 		u.ID, u.TenantID, u.Email, d)
 }
 func (p *Postgres) GetUser(ctx context.Context, id string) (platform.User, error) {
-	var u platform.User
+	var u platform.UserRecord
 	err := p.get(ctx, &u, `SELECT data FROM users WHERE id=?`, id)
-	return u, err
+	return u.Restore(), err
 }
 func (p *Postgres) GetUserByEmail(ctx context.Context, email string) (platform.User, error) {
-	var u platform.User
+	var u platform.UserRecord
 	err := p.get(ctx, &u, `SELECT data FROM users WHERE lower(email)=lower(?) LIMIT 1`, email)
-	return u, err
+	return u.Restore(), err
 }
 func (p *Postgres) ListUsers(ctx context.Context, tenantID string) ([]platform.User, error) {
-	return listJSON[platform.User](ctx, p.db, pgRebind(`SELECT data FROM users WHERE tenant_id=? ORDER BY rowid`), tenantID)
+	return restoreUsers(listJSON[platform.UserRecord](ctx, p.db, pgRebind(`SELECT data FROM users WHERE tenant_id=? ORDER BY rowid`), tenantID))
 }
 
 func (p *Postgres) PutSession(ctx context.Context, sess platform.Session) error {
