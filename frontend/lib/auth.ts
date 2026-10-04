@@ -6,6 +6,10 @@ import { cookies } from "next/headers";
 
 export const TOKEN_COOKIE = "ts_token";
 export const TENANT_COOKIE = "ts_tenant";
+// MFA_COOKIE holds the second-factor CHALLENGE between the password step and the code step. It
+// authenticates nothing on its own (the API refuses it everywhere except the verify endpoint), and it
+// lives in an httpOnly cookie for the same reason the session does: script never sees it.
+export const MFA_COOKIE = "ts_mfa";
 
 export interface Session {
   token: string;

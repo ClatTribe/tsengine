@@ -45,6 +45,18 @@ type User struct {
 	// app endpoints are blocked (403 password_change_required) so the temp password — which
 	// the owner who issued it knows — cannot remain the standing credential.
 	MustChangePassword bool `json:"must_change_password,omitempty"`
+	// TwoFactorEnabled is true once the user has CONFIRMED an authenticator (a code from it verified),
+	// never on setup alone — a secret generated and never scanned would lock the account out.
+	TwoFactorEnabled bool `json:"two_factor_enabled,omitempty"`
+	// TOTPSecretRef / TOTPPendingRef hold the authenticator seed SEALED by the vault (never plaintext,
+	// §18.2 inv. 6): the confirmed one and one awaiting its first code. TOTPLastStep is the last time
+	// step accepted, so an observed code cannot be replayed inside its window. RecoveryHashes are the
+	// SHA-256 of the unused recovery codes. All json:"-" so no client ever sees them, and all persisted
+	// through UserSecrets — the json:"-" tag alone would have the stores drop them (see UserRecord).
+	TOTPSecretRef  string   `json:"-"`
+	TOTPPendingRef string   `json:"-"`
+	TOTPLastStep   int64    `json:"-"`
+	RecoveryHashes []string `json:"-"`
 	// ResetTokenHash is the SHA-256 (hex) of a one-time password-reset token; the raw token is
 	// emailed to the user and never stored. ResetTokenExpires bounds validity. Both clear on
 	// completion. Never serialized to clients (json:"-").
@@ -70,12 +82,18 @@ type UserRecord struct {
 type UserSecrets struct {
 	ResetTokenHash    string    `json:"reset_token_hash,omitempty"`
 	ResetTokenExpires time.Time `json:"reset_token_expires,omitzero"`
+	TOTPSecretRef     string    `json:"totp_secret_ref,omitempty"`
+	TOTPPendingRef    string    `json:"totp_pending_ref,omitempty"`
+	TOTPLastStep      int64     `json:"totp_last_step,omitempty"`
+	RecoveryHashes    []string  `json:"recovery_hashes,omitempty"`
 }
 
 // StoreUser converts a User to its persisted form.
 func StoreUser(u User) UserRecord {
 	return UserRecord{User: u, Secrets: UserSecrets{
 		ResetTokenHash: u.ResetTokenHash, ResetTokenExpires: u.ResetTokenExpires,
+		TOTPSecretRef: u.TOTPSecretRef, TOTPPendingRef: u.TOTPPendingRef,
+		TOTPLastStep: u.TOTPLastStep, RecoveryHashes: u.RecoveryHashes,
 	}}
 }
 
@@ -84,6 +102,10 @@ func (r UserRecord) Restore() User {
 	u := r.User
 	u.ResetTokenHash = r.Secrets.ResetTokenHash
 	u.ResetTokenExpires = r.Secrets.ResetTokenExpires
+	u.TOTPSecretRef = r.Secrets.TOTPSecretRef
+	u.TOTPPendingRef = r.Secrets.TOTPPendingRef
+	u.TOTPLastStep = r.Secrets.TOTPLastStep
+	u.RecoveryHashes = r.Secrets.RecoveryHashes
 	return u
 }
 
@@ -94,6 +116,11 @@ type Session struct {
 	UserID    string    `json:"user_id"`
 	TenantID  string    `json:"tenant_id"`
 	ExpiresAt time.Time `json:"expires_at"`
+	// MFAPending marks a HALF-session: the password was right and the second factor is still owed. It
+	// authenticates NOTHING — resolveSession refuses it — and is only redeemable at the 2FA verify
+	// endpoint, which deletes it and issues a real session. MFAAttempts counts wrong codes against it.
+	MFAPending  bool `json:"mfa_pending,omitempty"`
+	MFAAttempts int  `json:"mfa_attempts,omitempty"`
 }
 
 // Operator is a CROSS-TENANT practitioner identity — the MSP's expert or our managed delivery expert

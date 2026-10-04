@@ -213,6 +213,8 @@ Three credentials reach the tenant API, and each carries a different amount of a
 | `GET /v1/connect/{kind}` | Get a provider OAuth consent URL. |
 | `GET /v1/connect/{kind}/callback` | OAuth redirect target (no bearer; tenant in `state`). |
 | `POST /v1/webhooks/{kind}` | Provider webhook → event-driven re-scan. |
+| `POST /v1/auth/2fa/setup` · `.../enable` · `.../disable` · `.../recovery-codes` | Two-factor sign-in for the signed-in account (authenticator app + single-use recovery codes). Needs `TSENGINE_SECRET_KEY` so the seed can be sealed. |
+| `POST /v1/auth/2fa/verify` | Second sign-in step: a password-correct login on an account with two-factor returns a short-lived challenge instead of a session; redeem it with a code (5 attempts). |
 | `GET /v1/findings` | The tenant's findings. |
 | `POST /v1/import` | Import an existing scanner export as findings — SARIF, Snyk, Dependabot, Wiz, Nessus (`.nessus` v2) or Burp issues XML; `?format=` or auto-detected. Informational items are counted (`skipped_informational`), not imported. |
 | `GET /v1/findings/export` | Export findings — SARIF (default; GitHub code-scanning) or CSV (`?format=csv`). |

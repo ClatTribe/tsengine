@@ -14,6 +14,10 @@ export default function LoginPage() {
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // The second step: a correct password on an account with two-factor sign-in on lands here.
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState("");
+  const [useRecovery, setUseRecovery] = useState(false);
 
   async function copyPassword() {
     if (!password) return;
@@ -36,6 +40,13 @@ export default function LoginPage() {
       body: JSON.stringify({ email, password }),
     });
     if (res.ok) {
+      const b = await res.json().catch(() => ({}));
+      if (b.two_factor_required) {
+        // The password was right; nothing is signed in until the code is.
+        setNeedCode(true);
+        setBusy(false);
+        return;
+      }
       router.push("/dashboard");
       router.refresh();
     } else {
@@ -43,6 +54,33 @@ export default function LoginPage() {
       setErr(b.error ?? "Sign-in failed.");
       setBusy(false);
     }
+  }
+
+  async function verify(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr("");
+    const res = await fetch("/api/session/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(useRecovery ? { recovery_code: code } : { code }),
+    });
+    const b = await res.json().catch(() => ({}));
+    if (res.ok) {
+      // A recovery code was spent: land on Settings, which shows how many are left — before the day
+      // they are needed, not after.
+      router.push(typeof b.recovery_codes_remaining === "number" ? "/settings" : "/dashboard");
+      router.refresh();
+      return;
+    }
+    setBusy(false);
+    setCode("");
+    if (b.expired) {
+      // The sign-in expired or too many codes were wrong: back to the password, and say why.
+      setNeedCode(false);
+      setPassword("");
+    }
+    setErr(b.error ?? "That code is not right.");
   }
 
   return (
@@ -58,6 +96,46 @@ export default function LoginPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
           <p className="mt-1.5 text-sm text-muted">Your security team is standing by. Sign in to your workspace.</p>
 
+          {needCode ? (
+            <form onSubmit={verify} className="mt-8 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted">
+                  {useRecovery ? "Recovery code" : "6-digit code from your authenticator app"}
+                </label>
+                <input
+                  autoFocus
+                  inputMode={useRecovery ? "text" : "numeric"}
+                  autoComplete="one-time-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 font-mono text-sm tracking-widest shadow-sm outline-none transition placeholder:text-faint focus:border-accent focus:ring-4 focus:ring-accent/10"
+                  placeholder={useRecovery ? "xxxxx-xxxxx" : "123456"}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={busy || !code.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-hover active:translate-y-px disabled:opacity-60"
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {busy ? "Checking…" : "Verify and sign in"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUseRecovery((v) => !v);
+                  setCode("");
+                  setErr("");
+                }}
+                className="text-xs font-medium text-accent hover:underline"
+              >
+                {useRecovery ? "Use a code from my authenticator app" : "Lost your phone? Use a recovery code"}
+              </button>
+              {err && (
+                <p className="rounded-lg border border-critical/30 bg-critical/5 px-3 py-2 text-xs text-critical">{err}</p>
+              )}
+            </form>
+          ) : (
           <form onSubmit={submit} className="mt-8 space-y-4">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted">Work email</label>
@@ -123,6 +201,7 @@ export default function LoginPage() {
               <p className="rounded-lg border border-critical/30 bg-critical/5 px-3 py-2 text-xs text-critical">{err}</p>
             )}
           </form>
+          )}
 
           <p className="mt-5 text-sm text-muted">
             New to TensorShield?{" "}

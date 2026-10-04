@@ -302,3 +302,28 @@ export async function revokeAPIKey(id: string): Promise<{ ok: true } | { ok: fal
     return { ok: false, error: e instanceof Error ? e.message : "could not revoke the key" };
   }
 }
+
+// Two-factor sign-in. Each returns the server's refusal as text (a wrong password, a stale code) so the
+// reason reaches the person instead of being swallowed at the action boundary.
+type Result<T> = ({ ok: true } & T) | { ok: false; error: string };
+async function attempt<T>(fn: () => Promise<T>): Promise<Result<T>> {
+  try {
+    const r = await fn();
+    revalidatePath("/settings");
+    return { ok: true, ...r };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "that did not work" };
+  }
+}
+export async function startTwoFactor(password: string) {
+  return attempt(() => api.twoFactorSetup(password));
+}
+export async function confirmTwoFactor(code: string) {
+  return attempt(() => api.twoFactorEnable(code));
+}
+export async function disableTwoFactor(b: { password: string; code?: string; recovery_code?: string }) {
+  return attempt(() => api.twoFactorDisable(b));
+}
+export async function replaceRecoveryCodes(b: { password: string; code?: string; recovery_code?: string }) {
+  return attempt(() => api.twoFactorRecoveryCodes(b));
+}
