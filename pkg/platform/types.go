@@ -357,6 +357,9 @@ type Contact struct {
 	Email string `json:"email,omitempty"`
 	Phone string `json:"phone,omitempty"` // contact number (SMS/voice delivery is Bucket-C)
 	Order int    `json:"order"`           // escalation precedence (lower = contacted first)
+	// SlackID is the person's Slack member id (U…/W…). An incoming webhook can only @mention by member
+	// id, never by email, so this is what lets an incident alert ping the asset's owner by name.
+	SlackID string `json:"slack_id,omitempty"`
 }
 
 // MaintenanceWindow is a planned period during which alerting is suppressed (a change-freeze /
@@ -1471,12 +1474,23 @@ type Incident struct {
 	// ANNOTATION ONLY — a verdict never opens or closes an incident. A skill is third-party input,
 	// so letting a "benign" verdict silence a real alert would hand an injected skill a mute button
 	// on the SOC. The severity floor still decides whether an incident exists; the skill explains it.
-	TriageVerdict   string    `json:"triage_verdict,omitempty"`
-	TriageRationale string    `json:"triage_rationale,omitempty"`
-	TriageSkill     string    `json:"triage_skill,omitempty"`
-	OpenedAt        time.Time `json:"opened_at"`
-	ResolvedAt      time.Time `json:"resolved_at,omitzero"`
-	LedgerRef       string    `json:"ledger_ref,omitempty"`
+	TriageVerdict   string `json:"triage_verdict,omitempty"`
+	TriageRationale string `json:"triage_rationale,omitempty"`
+	TriageSkill     string `json:"triage_skill,omitempty"`
+	// AssetID/AssetTarget/Owner/Team route the alert to a person (ADR 0028 G1). Stamped from the opening
+	// finding's asset WHEN THE INCIDENT OPENS, so the alert and every re-page name who answers for it.
+	// AssetID empty means the finding was not tied to an asset — "unknown", never "unowned". Owner empty
+	// with AssetID set means the asset has NO owner recorded, and the alert says so rather than naming
+	// someone who never agreed to it. OwnerSlackID is the owner's Slack member id, from the escalation
+	// contacts roster (matched on email), so a Slack alert can @mention them.
+	AssetID      string    `json:"asset_id,omitempty"`
+	AssetTarget  string    `json:"asset_target,omitempty"`
+	Owner        string    `json:"owner,omitempty"`
+	Team         string    `json:"team,omitempty"`
+	OwnerSlackID string    `json:"owner_slack_id,omitempty"`
+	OpenedAt     time.Time `json:"opened_at"`
+	ResolvedAt   time.Time `json:"resolved_at,omitzero"`
+	LedgerRef    string    `json:"ledger_ref,omitempty"`
 	// AcknowledgedAt/By record that a human took ownership of the incident (the MDR "I'm on it").
 	// An acknowledged incident is never auto-escalated. Zero = unacknowledged.
 	AcknowledgedAt time.Time `json:"acknowledged_at,omitzero"`

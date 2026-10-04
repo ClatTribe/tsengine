@@ -12,6 +12,7 @@ export function ContactsControl({ contacts }: { contacts: Contact[] }) {
   const [role, setRole] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [slackID, setSlackID] = useState("");
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
 
@@ -21,11 +22,12 @@ export function ContactsControl({ contacts }: { contacts: Contact[] }) {
     if (!email.trim() && !phone.trim()) return setErr("Add an email or a phone number");
     start(async () => {
       try {
-        await addContact({ name: name.trim(), role: role.trim(), email: email.trim(), phone: phone.trim(), order: contacts.length + 1 });
+        await addContact({ name: name.trim(), role: role.trim(), email: email.trim(), phone: phone.trim(), slack_id: slackID.trim(), order: contacts.length + 1 });
         setName("");
         setRole("");
         setEmail("");
         setPhone("");
+        setSlackID("");
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Failed to add");
       }
@@ -55,6 +57,7 @@ export function ContactsControl({ contacts }: { contacts: Contact[] }) {
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted">
                   {c.email && <span className="inline-flex items-center gap-1"><Mail className="h-2.5 w-2.5" />{c.email}</span>}
                   {c.phone && <span className="inline-flex items-center gap-1"><Phone className="h-2.5 w-2.5" />{c.phone}</span>}
+                  {c.slack_id && <span className="inline-flex items-center gap-1">Slack {c.slack_id}</span>}
                 </div>
               </div>
               <DeleteBtn id={c.id} />
@@ -69,6 +72,7 @@ export function ContactsControl({ contacts }: { contacts: Contact[] }) {
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-ink placeholder:text-faint" />
         <div className="flex gap-2">
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-ink placeholder:text-faint" />
+          <input value={slackID} onChange={(e) => setSlackID(e.target.value)} placeholder="Slack member ID (U…)" title="In Slack: open their profile → ⋮ → Copy member ID. Lets an incident alert @mention them when they own the asset." className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-ink placeholder:text-faint" />
           <button onClick={add} disabled={pending} className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50">
             {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
           </button>

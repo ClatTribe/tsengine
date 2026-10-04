@@ -192,6 +192,7 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
           <TriageBadge verdict={i.triage_verdict} skill={i.triage_skill} />
           <BlastRadiusBadge blast={i.blast_radius} />
           <ConfirmingFixBadge status={i.status} absentPasses={i.absent_passes} />
+          <OwnerBadge incident={i} />
           <OnsetBadge onset={i.onset} />
           {respondPending && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent ring-1 ring-accent/30">
@@ -298,6 +299,26 @@ function OnsetBadge({ onset }: { onset?: Incident["onset"] }) {
       {onset.what} · first seen {onset.at.slice(0, 16).replace("T", " ")}
     </span>
   );
+}
+
+// OwnerBadge says who the incident is routed to. Three states, as the server records them: an owner (or
+// team) is named; an asset with nobody recorded says "unowned", because an alert with no route to a person
+// is the gap someone has to close; and an incident not tied to any asset shows nothing — "we do not know
+// which asset" is not "nobody owns it".
+function OwnerBadge({ incident: i }: { incident: Incident }) {
+  if (!i.asset_id) return null;
+  const who = i.owner && i.team ? `${i.owner} (${i.team})` : i.owner || i.team;
+  if (!who) {
+    return (
+      <span
+        className="rounded border border-medium/30 bg-medium/5 px-1.5 py-0.5 text-[10px] text-medium"
+        title={`Nobody is recorded as owning ${i.asset_target || "this asset"}, so this alert has no route to a person. Set an owner on the asset.`}
+      >
+        unowned asset
+      </span>
+    );
+  }
+  return <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted">owner · {who}</span>;
 }
 
 // ConfirmingFixBadge says an open incident's issue has stopped appearing but is being held open until

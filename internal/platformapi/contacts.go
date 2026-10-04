@@ -3,6 +3,7 @@ package platformapi
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -42,6 +43,8 @@ func (d Deps) handleAddContact(w http.ResponseWriter, r *http.Request, tenantID 
 		Email string `json:"email"`
 		Phone string `json:"phone"`
 		Order int    `json:"order"`
+		// SlackID is the person's Slack member id, so an incident alert can @mention them.
+		SlackID string `json:"slack_id"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
@@ -62,6 +65,14 @@ func (d Deps) handleAddContact(w http.ResponseWriter, r *http.Request, tenantID 
 		writeJSON(w, http.StatusBadRequest, errBody("email is not valid"))
 		return
 	}
+	slackID := strings.TrimSpace(body.SlackID)
+	// A member id, not a handle: an incoming webhook resolves <@U…> and nothing else, so "@alice" would
+	// render as plain text and the person the alert is meant to reach would never be pinged.
+	if slackID != "" && !slackMemberID.MatchString(slackID) {
+		writeJSON(w, http.StatusBadRequest, errBody("slack_id must be a Slack member id (it starts with U or W, "+
+			"e.g. U012ABCDEF — in Slack: profile → ⋮ → Copy member ID), not a @handle"))
+		return
+	}
 
 	t, err := d.Store.GetTenant(r.Context(), tenantID)
 	if err != nil {
@@ -72,7 +83,7 @@ func (d Deps) handleAddContact(w http.ResponseWriter, r *http.Request, tenantID 
 	if d.NewID != nil {
 		id = "ct-" + d.NewID()
 	}
-	c := platform.Contact{ID: id, Name: name, Role: strings.TrimSpace(body.Role), Email: email, Phone: phone, Order: body.Order}
+	c := platform.Contact{ID: id, Name: name, Role: strings.TrimSpace(body.Role), Email: email, Phone: phone, Order: body.Order, SlackID: slackID}
 	t.Contacts = append(t.Contacts, c)
 	if err := d.Store.PutTenant(r.Context(), t); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
@@ -117,3 +128,5 @@ func (d Deps) handleDeleteContact(w http.ResponseWriter, r *http.Request, tenant
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
 }
+
+var slackMemberID = regexp.MustCompile(`^[UW][A-Z0-9]{6,20}$`)

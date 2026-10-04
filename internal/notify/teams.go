@@ -50,6 +50,17 @@ func (t *Teams) IncidentOpened(ctx context.Context, inc platform.Incident) error
 		return nil // high/critical only by default — quieter issues stay on the dashboard
 	}
 
+	facts := []map[string]string{
+		{"name": "Severity", "value": inc.Severity},
+		{"name": "Rule", "value": inc.RuleID},
+		{"name": "Finding", "value": inc.FindingID},
+		{"name": "Tenant", "value": inc.TenantID},
+	}
+	// A webhook MessageCard cannot @mention (that needs the person's Entra id in a mention entity), so
+	// Teams names the owner in words.
+	if o, ok := ownerText(inc); ok {
+		facts = append(facts, map[string]string{"name": "Owner", "value": o})
+	}
 	card := map[string]any{
 		"@type":      "MessageCard",
 		"@context":   "https://schema.org/extensions",
@@ -58,13 +69,8 @@ func (t *Teams) IncidentOpened(ctx context.Context, inc platform.Incident) error
 		"title":      fmt.Sprintf("🛡️ TensorShield — new %s issue", inc.Severity),
 		"sections": []map[string]any{{
 			"activityTitle": inc.Title,
-			"facts": []map[string]string{
-				{"name": "Severity", "value": inc.Severity},
-				{"name": "Rule", "value": inc.RuleID},
-				{"name": "Finding", "value": inc.FindingID},
-				{"name": "Tenant", "value": inc.TenantID},
-			},
-			"markdown": true,
+			"facts":         facts,
+			"markdown":      true,
 		}},
 	}
 	raw, err := json.Marshal(card)
