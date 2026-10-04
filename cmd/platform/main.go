@@ -745,6 +745,8 @@ func main() {
 		// needs no change-gate to be affordable, and its findings carry content-derived ids so
 		// re-running over an unchanged estate updates rather than duplicates.
 		apiDeps.DetectEstateEachPass(ctx, tenantID)
+		// The board report, emailed on the owner's schedule (no-op without a schedule or a mail relay).
+		apiDeps.SendDueBoardDigest(ctx, tenantID)
 	}
 	api := platformapi.NewHandler(apiDeps)
 	// The human-facing dashboard (HTML) shares the same bearer token as the API (via a

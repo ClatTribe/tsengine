@@ -16,7 +16,7 @@ import type {
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User, ProductsView } from "./types";
+  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, BoardDigestSettings, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User, ProductsView } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -832,6 +832,12 @@ export const api = {
 
   // Per-tenant remediation SLA policy: per-severity time-to-acknowledge + time-to-resolve targets.
   slaSettings: () => safe<SLAPolicy>("/v1/settings/sla", { enabled: false, targets: [] }),
+  // The board report emailed on a schedule; recipients must hold a seat (the server refuses others).
+  boardDigest: () =>
+    safe<BoardDigestSettings>("/v1/settings/board-digest", { enabled: false, recipients: [], delivery_configured: false }),
+  setBoardDigest: (b: { enabled: boolean; cadence?: string; recipients?: string[] }) =>
+    call<BoardDigestSettings>("/v1/settings/board-digest", { method: "PUT", body: JSON.stringify(b) }),
+  sendBoardDigest: () => call<BoardDigestSettings>("/v1/settings/board-digest/send", { method: "POST", body: "{}" }),
   setSLASettings: (pol: SLAPolicy) =>
     call<SLAPolicy>("/v1/settings/sla", { method: "PUT", body: JSON.stringify(pol) }),
 

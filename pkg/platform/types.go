@@ -181,6 +181,8 @@ type Tenant struct {
 	// chose is not a statement of intent, and "we cannot say whether this is good" is the honest
 	// reading of a chart with no target. No secret material.
 	ExposureObjective *ExposureObjective `json:"exposure_objective,omitempty"`
+	// BoardDigest schedules the board report as an email (internal/platformapi/boardmail.go). Nil = off.
+	BoardDigest *BoardDigest `json:"board_digest,omitempty"`
 	// SLA is the per-tenant remediation SLA policy (per-severity time-to-acknowledge +
 	// time-to-resolve targets). nil/disabled = no SLA tracking. No secret material.
 	SLA *SLAPolicy `json:"sla,omitempty"`
@@ -2261,4 +2263,35 @@ type BusinessService struct {
 	// AssetIDs are the assets that carry it. An id that no longer resolves is skipped rather than
 	// counted, because a dangling reference is not evidence of anything.
 	AssetIDs []string `json:"asset_ids,omitempty"`
+}
+
+// BoardDigest is the schedule for emailing the board report.
+//
+// Recipients are SEAT HOLDERS of this workspace (any role — an auditor seat is the read-only way to give
+// a board member access). The report names exploitable exposure, so it goes only to people the workspace
+// already lets read it, and the check is repeated at send time: removing someone's seat stops their copy.
+type BoardDigest struct {
+	Cadence      string    `json:"cadence"` // "weekly" | "monthly"
+	Recipients   []string  `json:"recipients"`
+	ConfiguredBy string    `json:"configured_by"`
+	ConfiguredAt time.Time `json:"configured_at"`
+	// LastSentAt advances only when at least one copy was delivered; LastAttemptAt/LastError say what
+	// happened on the most recent try, so a delivery problem is visible in Settings rather than silent.
+	LastSentAt    time.Time `json:"last_sent_at,omitzero"`
+	LastAttemptAt time.Time `json:"last_attempt_at,omitzero"`
+	LastError     string    `json:"last_error,omitempty"`
+}
+
+// BoardDigestCadences are the accepted cadences.
+var BoardDigestCadences = map[string]bool{"weekly": true, "monthly": true}
+
+// NextDue is when the next digest is due: immediately if one was never sent.
+func (b BoardDigest) NextDue() time.Time {
+	if b.LastSentAt.IsZero() {
+		return time.Time{}
+	}
+	if b.Cadence == "monthly" {
+		return b.LastSentAt.AddDate(0, 1, 0)
+	}
+	return b.LastSentAt.AddDate(0, 0, 7)
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { api } from "@/lib/api";
 import type {
-  Branding, BrandingSettings, DeviceSyncResult, EscalationPolicy, HRISSettings, HRISSyncResult, MDMSettings, SLAPolicy, TrustCenterConfig,
+  BoardDigestSettings, Branding, BrandingSettings, DeviceSyncResult, EscalationPolicy, HRISSettings, HRISSyncResult, MDMSettings, SLAPolicy, TrustCenterConfig,
 } from "@/lib/types";
 
 // Engage/disengage the global kill-switch (agentic-SMB spec OM-3 / TS-5). When engaged the
@@ -99,6 +99,18 @@ export async function setSLA(pol: SLAPolicy): Promise<SLAPolicy> {
   const r = await api.setSLASettings(pol);
   revalidatePath("/settings");
   revalidatePath("/incidents");
+  return r;
+}
+
+export async function setBoardDigest(b: { enabled: boolean; cadence?: string; recipients?: string[] }): Promise<BoardDigestSettings> {
+  const r = await api.setBoardDigest(b);
+  revalidatePath("/settings");
+  return r;
+}
+
+export async function sendBoardDigestNow(): Promise<BoardDigestSettings> {
+  const r = await api.sendBoardDigest();
+  revalidatePath("/settings");
   return r;
 }
 
