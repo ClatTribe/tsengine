@@ -86,3 +86,19 @@ func TestContacts_Validation(t *testing.T) {
 		t.Errorf("unknown delete want 404, got %d", drec.Code)
 	}
 }
+
+// A Slack @handle renders as plain text in a webhook, so the person is never pinged: only a member id is
+// accepted.
+func TestAddContact_SlackIDMustBeAMemberID(t *testing.T) {
+	for in, ok := range map[string]bool{"U012ABCDEF": true, "W0ABCDEFG": true, "@priya": false, "priya": false, "u012abcdef": false} {
+		st := store.NewMemory()
+		_ = st.PutTenant(context.Background(), platform.Tenant{ID: "t1"})
+		d := Deps{Store: st}
+		rec := httptest.NewRecorder()
+		body := `{"name":"Priya","email":"p@acme.com","slack_id":"` + in + `"}`
+		d.handleAddContact(rec, httptest.NewRequest(http.MethodPost, "/v1/contacts", strings.NewReader(body)), "t1")
+		if got := rec.Code == http.StatusOK; got != ok {
+			t.Errorf("slack_id %q: accepted=%v want %v (%s)", in, got, ok, rec.Body)
+		}
+	}
+}

@@ -260,6 +260,7 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 		return res, nil
 	}
 	alerted := 0 // per-pass alert count — bounded by AlertCap to avoid a bulk-event alert storm
+	route := d.routing(ctx, tenantID, present)
 	for key, f := range present {
 		if _, already := openByKey[key]; already {
 			continue
@@ -284,6 +285,7 @@ func (d *Detector) openNew(ctx context.Context, tenantID string, present map[str
 			Ransomware: f.ThreatIntel != nil && f.ThreatIntel.KEV != nil && f.ThreatIntel.KEV.Ransomware,
 			KEVDueAt:   kevDueAt(f),
 		}
+		route.stamp(&inc, f)
 		// Detection Skill triage (ADR 0017): attach the detection engineer's reasoning to the alert so
 		// whoever is on shift inherits it instead of rediscovering it.
 		//

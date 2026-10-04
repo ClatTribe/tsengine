@@ -129,7 +129,7 @@ export async function deleteMaintenanceWindow(id: string): Promise<void> {
 }
 
 // Add / remove an on-call escalation contact (the roster the escalation matrix names).
-export async function addContact(c: { name: string; role?: string; email?: string; phone?: string; order: number }): Promise<void> {
+export async function addContact(c: { name: string; role?: string; email?: string; phone?: string; slack_id?: string; order: number }): Promise<void> {
   await api.addContact(c);
   revalidatePath("/settings");
 }

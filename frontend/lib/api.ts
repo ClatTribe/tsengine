@@ -871,7 +871,7 @@ export const api = {
   twoFactorRecoveryCodes: (b: { password: string; code?: string; recovery_code?: string }) =>
     call<{ recovery_codes: string[]; detail: string }>("/v1/auth/2fa/recovery-codes", { method: "POST", body: JSON.stringify(b) }),
   contacts: () => safe<Contact[]>("/v1/contacts", []),
-  addContact: (c: { name: string; role?: string; email?: string; phone?: string; order: number }) =>
+  addContact: (c: { name: string; role?: string; email?: string; phone?: string; slack_id?: string; order: number }) =>
     call<Contact>("/v1/contacts", { method: "POST", body: JSON.stringify(c) }),
   deleteContact: (id: string) => call<{ deleted: string }>(`/v1/contacts/${id}`, { method: "DELETE" }),
 

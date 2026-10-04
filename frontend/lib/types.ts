@@ -748,6 +748,13 @@ export interface Incident {
   // WAVSEP: dalfox found 7 cases in one run and 9 in the next on an unchanged target, succeeding
   // both times, so no failure signal fired).
   absent_passes?: number;
+  // Who answers for it, stamped from the asset when the incident opened. asset_id absent = the finding was
+  // not tied to an asset (unknown, NOT unowned); asset_id with no owner/team = an unowned asset.
+  asset_id?: string;
+  asset_target?: string;
+  owner?: string;
+  team?: string;
+  owner_slack_id?: string;
   // WHEN the state behind this incident changed, read from the estate timeline at request time and
   // never persisted (the timeline grows after an incident opens, so a frozen onset would go stale).
   //
@@ -830,6 +837,7 @@ export interface Contact {
   email?: string;
   phone?: string;
   order: number;
+  slack_id?: string; // Slack member id, so an incident alert can @mention this person
 }
 
 // SOC-performance scorecard (GET /v1/soc-metrics) — grounded in incident timestamps.

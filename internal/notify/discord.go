@@ -52,16 +52,20 @@ func (d *Discord) IncidentOpened(ctx context.Context, inc platform.Incident) err
 	if inc.Attacked {
 		title = fmt.Sprintf("🚨 TensorShield — %s issue UNDER ACTIVE ATTACK", inc.Severity)
 	}
+	fields := []map[string]any{
+		{"name": "Severity", "value": nz(inc.Severity, "—"), "inline": true},
+		{"name": "Rule", "value": nz(inc.RuleID, "—"), "inline": true},
+		{"name": "Finding", "value": nz(inc.FindingID, "—"), "inline": true},
+	}
+	if o, ok := ownerText(inc); ok {
+		fields = append(fields, map[string]any{"name": "Owner", "value": o, "inline": false})
+	}
 	payload := map[string]any{
 		"embeds": []map[string]any{{
 			"title":       title,
 			"description": inc.Title,
 			"color":       discordColor(inc.Severity),
-			"fields": []map[string]any{
-				{"name": "Severity", "value": nz(inc.Severity, "—"), "inline": true},
-				{"name": "Rule", "value": nz(inc.RuleID, "—"), "inline": true},
-				{"name": "Finding", "value": nz(inc.FindingID, "—"), "inline": true},
-			},
+			"fields":      fields,
 		}},
 	}
 	raw, err := json.Marshal(payload)

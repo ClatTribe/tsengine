@@ -88,6 +88,9 @@ func (s *Slack) post(ctx context.Context, msg map[string]any) error {
 func incidentMessage(inc platform.Incident) map[string]any {
 	text := fmt.Sprintf(":rotating_light: *New %s issue* — %s\n`%s`%s",
 		nz(inc.Severity, "security"), nz(inc.Title, inc.RuleID), inc.RuleID, openedSuffix(inc))
+	if o, ok := slackOwner(inc); ok {
+		text += "\n*Owner:* " + o
+	}
 	return map[string]any{
 		"text": "New incident: " + nz(inc.Title, inc.RuleID),
 		"blocks": []any{
