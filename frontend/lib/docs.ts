@@ -119,7 +119,7 @@ export const DOC_SECTIONS: DocSection[] = [
       { k: "POST /v1/tprm/ingest", v: "Vendor inventory — certifications, data access, DPAs, review dates." },
       { k: "POST /v1/cloud/inventory", v: "Raw cloud state when you would rather post it than grant a role. An inventory with no resources is refused, not stored." },
       { k: "POST /v1/saas/{provider}/snapshot", v: "SaaS configuration for GitHub org, Slack, Zoom, Atlassian, Salesforce, M365 or Google Workspace." },
-      { k: "POST /v1/import", v: "Your existing Snyk, Dependabot or SARIF backlog, so day one is not an empty dashboard." },
+      { k: "POST /v1/import", v: "Your existing Snyk, Dependabot, SARIF, Wiz, Nessus or Burp backlog, so day one is not an empty dashboard." },
     ],
   },
   {

@@ -1,7 +1,9 @@
 package importers
 
 import (
+	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"strings"
 	"time"
@@ -19,11 +21,24 @@ const (
 	FormatSnyk       Format = "snyk"
 	FormatDependabot Format = "dependabot" // GitHub Dependabot alerts JSON (GHAS)
 	FormatWiz        Format = "wiz"        // Wiz issues export (cloud posture) — the dominant CSPM at this size
+	FormatNessus     Format = "nessus"     // Tenable Nessus / Tenable.io / Tenable.sc .nessus v2 XML (network)
+	FormatBurp       Format = "burp"       // Burp Suite issues XML export (web application)
 )
 
 // Detect sniffs the format from the payload shape.
 func Detect(data []byte) Format {
 	trimmed := strings.TrimSpace(string(data))
+	// XML exports. Sniff the ROOT element rather than any substring, so a JSON report that happens to
+	// quote a Nessus or Burp string is never misread as one.
+	if strings.HasPrefix(trimmed, "<") {
+		switch xmlRoot(data) {
+		case "NessusClientData_v2":
+			return FormatNessus
+		case "issues":
+			return FormatBurp
+		}
+		return FormatAuto
+	}
 	// GitHub Dependabot alerts is a JSON array of objects with security_advisory.
 	if strings.HasPrefix(trimmed, "[") && strings.Contains(trimmed, "security_advisory") {
 		return FormatDependabot
@@ -46,20 +61,51 @@ func Detect(data []byte) Format {
 // Import normalizes any supported scanner output into a types.Scan (consumed by
 // report / findings DB / gate). format may be FormatAuto.
 func Import(data []byte, format Format, target string, now time.Time) (types.Scan, error) {
+	scan, _, err := ImportWithStats(data, format, target, now)
+	return scan, err
+}
+
+// ImportWithStats is Import plus what the parser deliberately did NOT turn into findings, so a caller
+// can say "imported 40 and set aside 312 informational items" rather than letting 40 read as the
+// size of the scan.
+func ImportWithStats(data []byte, format Format, target string, now time.Time) (types.Scan, ImportStats, error) {
 	if format == "" || format == FormatAuto {
 		format = Detect(data)
 	}
+	var (
+		scan types.Scan
+		err  error
+	)
 	switch format {
 	case FormatSARIF:
-		return FromSARIF(data, target, now)
+		scan, err = FromSARIF(data, target, now)
 	case FormatSnyk:
-		return FromSnyk(data, target, now)
+		scan, err = FromSnyk(data, target, now)
 	case FormatDependabot:
-		return FromDependabot(data, target, now)
+		scan, err = FromDependabot(data, target, now)
 	case FormatWiz:
-		return FromWiz(data, target, now)
+		scan, err = FromWiz(data, target, now)
+	case FormatNessus:
+		return FromNessus(data, target, now)
+	case FormatBurp:
+		return FromBurp(data, target, now)
 	default:
-		return types.Scan{}, fmt.Errorf("import: unrecognized format (not SARIF, Snyk, Dependabot, or Wiz)")
+		return types.Scan{}, ImportStats{}, fmt.Errorf("import: unrecognized format (not SARIF, Snyk, Dependabot, Wiz, Nessus, or Burp)")
+	}
+	return scan, ImportStats{}, err
+}
+
+// xmlRoot returns the local name of the document's first element, or "" when there is none.
+func xmlRoot(data []byte) string {
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return ""
+		}
+		if se, ok := tok.(xml.StartElement); ok {
+			return se.Name.Local
+		}
 	}
 }
 

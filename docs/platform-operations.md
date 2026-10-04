@@ -214,6 +214,7 @@ Three credentials reach the tenant API, and each carries a different amount of a
 | `GET /v1/connect/{kind}/callback` | OAuth redirect target (no bearer; tenant in `state`). |
 | `POST /v1/webhooks/{kind}` | Provider webhook → event-driven re-scan. |
 | `GET /v1/findings` | The tenant's findings. |
+| `POST /v1/import` | Import an existing scanner export as findings — SARIF, Snyk, Dependabot, Wiz, Nessus (`.nessus` v2) or Burp issues XML; `?format=` or auto-detected. Informational items are counted (`skipped_informational`), not imported. |
 | `GET /v1/findings/export` | Export findings — SARIF (default; GitHub code-scanning) or CSV (`?format=csv`). |
 | `GET /v1/engagements` | Scan history. |
 | `GET /v1/connections` | Connected systems (`SecretRef` redacted). |
