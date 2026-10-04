@@ -81,6 +81,9 @@ type Tenant struct {
 	RequireTwoFactor   bool      `json:"require_two_factor,omitempty"`
 	RequireTwoFactorBy string    `json:"require_two_factor_by,omitempty"`
 	RequireTwoFactorAt time.Time `json:"require_two_factor_at,omitzero"`
+	// SSO is the workspace's OpenID Connect sign-in (internal/platformapi/sso.go). Its client secret is
+	// SEALED (§18.2 inv. 6) and the whole block is dropped by Redacted, like every other credential.
+	SSO *SSOConfig `json:"sso,omitempty"`
 	// MonthlyAIBudgetUSD is a hard ceiling on what the AI agents may cost this calendar month, in USD.
 	// 0 means no ceiling.
 	//
@@ -1027,7 +1030,20 @@ func (t Tenant) Redacted() Tenant {
 	t.Drata = nil
 	t.MDM = nil
 	t.HRIS = nil
+	t.SSO = nil // carries a sealed client secret; the settings endpoint reports a safe view
 	return t
+}
+
+// SSOConfig is a workspace's OpenID Connect provider (Okta, Entra ID, Google Workspace, any OIDC IdP).
+type SSOConfig struct {
+	Issuer          string `json:"issuer"`
+	ClientID        string `json:"client_id"`
+	ClientSecretRef string `json:"client_secret_ref,omitempty"` // sealed
+	// Enforced refuses PASSWORD sign-in for every seat except the owner, whose password stays the
+	// break-glass: a misconfigured or unavailable IdP must not lock a workspace out of itself.
+	Enforced     bool      `json:"enforced,omitempty"`
+	ConfiguredBy string    `json:"configured_by,omitempty"`
+	ConfiguredAt time.Time `json:"configured_at,omitzero"`
 }
 
 // Connection kinds — the external systems the platform can link via OAuth.

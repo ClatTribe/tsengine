@@ -333,3 +333,9 @@ export async function replaceRecoveryCodes(b: { password: string; code?: string;
 export async function setRequireTwoFactor(require: boolean) {
   return attempt(() => api.setSecurityPolicy(require));
 }
+
+// Save or (with an empty issuer) remove the workspace's SSO provider. The server verifies the issuer
+// against the provider's own metadata before saving; a refusal comes back as text.
+export async function saveSSO(b: { issuer: string; client_id?: string; client_secret?: string; enforced?: boolean }) {
+  return attempt(() => api.setSSO(b));
+}

@@ -17,6 +17,11 @@ export async function POST(req: Request) {
   }).catch(() => null);
   if (!res) return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 502 });
   if (res.status === 401) return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+  // The workspace signs in through its identity provider: say so, rather than "sign-in failed".
+  if (res.status === 403) {
+    const b = await res.json().catch(() => ({}));
+    if (b.code === "sso_required") return NextResponse.json({ error: b.error, sso_required: true }, { status: 403 });
+  }
   if (!res.ok) return NextResponse.json({ error: `Sign-in failed (HTTP ${res.status}).` }, { status: 502 });
 
   const data = await res.json().catch(() => ({}));

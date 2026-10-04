@@ -996,6 +996,18 @@ export interface User {
   two_factor_required?: boolean;
 }
 
+/** The workspace's single sign-on provider. The client secret is never returned, only whether one is set. */
+export interface SSOSettings {
+  configured: boolean;
+  issuer?: string;
+  client_id?: string;
+  has_secret: boolean;
+  enforced: boolean;
+  configured_by?: string;
+  /** What the owner registers at their identity provider as the redirect / callback URL. */
+  redirect_uri: string;
+}
+
 /** The workspace two-factor policy and who it gates, by name. */
 export interface SecurityPolicy {
   require_two_factor: boolean;

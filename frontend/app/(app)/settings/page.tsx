@@ -30,6 +30,7 @@ import { ContactsControl } from "@/components/settings/contacts-control";
 import { APIKeysControl } from "@/components/settings/api-keys-control";
 import { TwoFactorControl } from "@/components/settings/two-factor-control";
 import { RequireTwoFactorControl } from "@/components/settings/require-two-factor-control";
+import { SSOControl } from "@/components/settings/sso-control";
 import { startTwoFactor, confirmTwoFactor, disableTwoFactor, replaceRecoveryCodes } from "./actions";
 import { PractitionersControl } from "@/components/settings/practitioners-control";
 import { AIBomPanel } from "@/components/settings/ai-bom-panel";
@@ -55,7 +56,7 @@ export default async function SettingsPage() {
   const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests()]);
   const branding = await api.brandingSettings();
   const drata = await api.drataSettings();
-  const [mdm, hris, apiKeys, securityPolicy] = await Promise.all([api.mdmSettings(), api.hrisSettings(), api.apiKeys(), api.securityPolicy()]);
+  const [mdm, hris, apiKeys, securityPolicy, ssoSettings] = await Promise.all([api.mdmSettings(), api.hrisSettings(), api.apiKeys(), api.securityPolicy(), api.ssoSettings()]);
   const orgName = tenant?.name ?? "Your organization";
   const plan = tenant?.plan || "free";
   // The server decides who may change what (owner_scope.go); these only stop the page offering a
@@ -321,6 +322,11 @@ export default async function SettingsPage() {
           {securityPolicy && (
             <div className="border-b border-border pb-4">
               <RequireTwoFactorControl policy={securityPolicy} canManage={isOwner} ownerEnrolled={!!me?.two_factor_enabled} />
+            </div>
+          )}
+          {ssoSettings && (
+            <div className="border-b border-border pb-4">
+              <SSOControl sso={ssoSettings} canManage={isOwner} />
             </div>
           )}
           <ul className="space-y-2.5 text-sm">
