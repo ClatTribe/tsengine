@@ -1117,15 +1117,24 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 	if s.ProposeBatch != nil && s.Desk != nil {
 		for _, act := range s.ProposeBatch(findings, a) {
 			if _, err := s.Desk.Submit(ctx, stampFindingKeys(act, findings)); err != nil {
-				return nil, nil, fmt.Errorf("runner: desk submit (bulk): %w", err)
+				// DELIVERY failure is not a DETECTION failure. The findings are already persisted
+				// (PutFinding above) and the scan itself succeeded; the only thing that failed is
+				// handing a remediation to the desk — e.g. GitHub rejecting the fix PR with HTTP 422
+				// because an identical PR already exists. Returning here marked a COMPLETED scan as
+				// "errored", skipped LastScanned (so the asset read "never scanned"), and tripped the
+				// degraded-pass handling that reasons from ABSENCE — none of which is true when the
+				// scan found and stored its findings. Log and continue so the pass is honest about
+				// what it actually did.
+				slog.Warn("[scan] remediation not delivered — scan unaffected", "asset", a.ID, "target", a.Target, "err", err.Error())
 			}
 		}
 		// The bulk path skips processFinding's per-finding propose, so the leaked-key deactivation
 		// (a second, gated action beside the PR) must be proposed here too or it is lost exactly
-		// on the tenants large enough to have bulk fixes.
+		// on the tenants large enough to have bulk fixes. A delivery failure here is non-fatal for
+		// the same reason as the PR above.
 		for _, f := range findings {
 			if err := s.proposeKeyDeactivation(ctx, a, f); err != nil {
-				return nil, nil, err
+				slog.Warn("[scan] key deactivation not proposed — scan unaffected", "asset", a.ID, "target", a.Target, "err", err.Error())
 			}
 		}
 	}
@@ -1137,8 +1146,10 @@ func (s *Service) scanAsset(ctx context.Context, a platform.Asset, trigger strin
 }
 
 // processFinding runs the optional autonomous loop for one finding: update the
-// compliance system-of-record, propose a fix, and gate it at the desk. Each step is
-// nil-safe; a step error aborts the scan (findings are already persisted).
+// compliance system-of-record, propose a fix, and gate it at the desk. Recording the
+// finding's compliance (GRC.Apply) is fatal — it is part of persisting the finding — but a
+// remediation DELIVERY failure (handing a fix to the desk) is NOT, because detection already
+// succeeded and the findings are persisted; see the bulk path in scanAsset for the full reason.
 func (s *Service) processFinding(ctx context.Context, a platform.Asset, f types.Finding) error {
 	if s.GRC != nil {
 		if err := s.GRC.Apply(ctx, a.TenantID, f); err != nil {
@@ -1151,11 +1162,14 @@ func (s *Service) processFinding(ctx context.Context, a platform.Asset, f types.
 		act, ok := s.Propose(f, a)
 		if ok {
 			if _, err := s.Desk.Submit(ctx, stampFindingKeys(act, []types.Finding{f})); err != nil {
-				return fmt.Errorf("runner: desk submit: %w", err)
+				slog.Warn("[scan] remediation not delivered — scan unaffected", "asset", a.ID, "target", a.Target, "err", err.Error())
 			}
 		}
 	}
-	return s.proposeKeyDeactivation(ctx, a, f)
+	if err := s.proposeKeyDeactivation(ctx, a, f); err != nil {
+		slog.Warn("[scan] key deactivation not proposed — scan unaffected", "asset", a.ID, "target", a.Target, "err", err.Error())
+	}
+	return nil
 }
 
 // stampFindingKeys captures the STABLE finding keys (rule_id|endpoint) of the findings a proposed
