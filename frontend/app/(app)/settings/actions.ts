@@ -327,3 +327,9 @@ export async function disableTwoFactor(b: { password: string; code?: string; rec
 export async function replaceRecoveryCodes(b: { password: string; code?: string; recovery_code?: string }) {
   return attempt(() => api.twoFactorRecoveryCodes(b));
 }
+
+// The workspace two-factor policy (owner). The server refuses switching it on until the owner has
+// enrolled; that refusal is returned as text so the owner reads why.
+export async function setRequireTwoFactor(require: boolean) {
+  return attempt(() => api.setSecurityPolicy(require));
+}

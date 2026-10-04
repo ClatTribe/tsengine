@@ -74,6 +74,13 @@ type Tenant struct {
 	// halted tenant's actions queue instead of executing until a human disengages it. The
 	// one human "on the loop" can freeze the whole roster instantly.
 	AgentsHalted bool `json:"agents_halted,omitempty"`
+	// RequireTwoFactor is the owner's policy that every PERSON signing in to this workspace uses a
+	// second factor. A seat without one may still sign in and enrol, and nothing else, until it has
+	// (internal/platformapi/twofactor_policy.go). Machine credentials (API keys) and the platform
+	// token are untouched — the policy is about people. By/At record who switched it on and when.
+	RequireTwoFactor   bool      `json:"require_two_factor,omitempty"`
+	RequireTwoFactorBy string    `json:"require_two_factor_by,omitempty"`
+	RequireTwoFactorAt time.Time `json:"require_two_factor_at,omitzero"`
 	// MonthlyAIBudgetUSD is a hard ceiling on what the AI agents may cost this calendar month, in USD.
 	// 0 means no ceiling.
 	//

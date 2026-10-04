@@ -275,6 +275,13 @@ func (d Deps) handleTwoFactorEnable(w http.ResponseWriter, r *http.Request, s pl
 // handleTwoFactorDisable turns 2FA off. It needs the password AND a current code (or a recovery code):
 // an open session alone must not be able to remove the protection.
 func (d Deps) handleTwoFactorDisable(w http.ResponseWriter, r *http.Request, s platform.Session) {
+	// Refused while the workspace requires it: the person would be locked out the moment they did it.
+	if t, err := d.Store.GetTenant(r.Context(), s.TenantID); err != nil || t.RequireTwoFactor {
+		writeJSON(w, http.StatusForbidden, errCode(
+			"this workspace requires two-factor sign-in — to move it to a new phone, replace it rather than turning it off",
+			"two_factor_required_by_policy"))
+		return
+	}
 	u, ok := d.reauthSecondFactor(w, r, s)
 	if !ok {
 		return

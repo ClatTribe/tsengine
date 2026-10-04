@@ -316,6 +316,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/trust/{tenant}/request", d.handleTrustAccessRequest)                         // PUBLIC: a buyer asks to read the gated document tier (rate-limited)
 	mux.HandleFunc("POST /v1/trust/{tenant}/nda", d.handleTrustNDA)                                       // PUBLIC: click-through acceptance, recorded with the digest of the exact text
 	mux.HandleFunc("GET /v1/trust/{tenant}/doc", d.handleTrustDocument)                                   // PUBLIC: serve one document, re-checking the gate rather than trusting the listing
+	mux.HandleFunc("GET /v1/settings/security", d.auth(d.handleGetSecurityPolicy))                        // the two-factor policy + who has not enrolled
+	mux.HandleFunc("PUT /v1/settings/security", d.auth(d.handlePutSecurityPolicy))                        // require two-factor for every seat (owner; owner must have it on)
 	mux.HandleFunc("GET /v1/settings/api-keys", d.auth(d.handleListAPIKeys))                              // machine credentials (digests never returned)
 	mux.HandleFunc("POST /v1/settings/api-keys", d.auth(d.handleCreateAPIKey))                            // mint a scoped, expiring key (owner) — shown once
 	mux.HandleFunc("POST /v1/settings/api-keys/{id}/revoke", d.auth(d.handleRevokeAPIKey))                // revoke (owner) — recorded, not deleted
@@ -577,6 +579,13 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 			u, uerr := d.Store.GetUser(r.Context(), s.UserID)
 			if uerr == nil && u.MustChangePassword {
 				writeJSON(w, http.StatusForbidden, errCode("set a new password to continue", "password_change_required"))
+				return
+			}
+			// The owner's two-factor policy (twofactor_policy.go). Enrolment itself is reachable: the
+			// 2FA endpoints sit behind sessionAuth, not this gate.
+			if uerr == nil && d.twoFactorBlocks(r, s.TenantID, u) {
+				writeJSON(w, http.StatusForbidden, errCode(
+					"this workspace requires two-factor sign-in — turn it on to continue", "two_factor_setup_required"))
 				return
 			}
 			// An auditor reads. Every request that could change state — start a scan, approve a

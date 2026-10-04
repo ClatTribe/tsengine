@@ -216,6 +216,7 @@ Three credentials reach the tenant API, and each carries a different amount of a
 | `POST /v1/webhooks/{kind}` | Provider webhook → event-driven re-scan. |
 | `POST /v1/auth/2fa/setup` · `.../enable` · `.../disable` · `.../recovery-codes` | Two-factor sign-in for the signed-in account (authenticator app + single-use recovery codes). Needs `TSENGINE_SECRET_KEY` so the seed can be sealed. |
 | `POST /v1/auth/2fa/verify` | Second sign-in step: a password-correct login on an account with two-factor returns a short-lived challenge instead of a session; redeem it with a code (5 attempts). |
+| `GET /v1/settings/security` · `PUT /v1/settings/security` | The workspace two-factor policy: `{"require_two_factor": true}` makes every person enrol before they can use anything else (owner only; the owner must have two-factor on first). The response names who has not enrolled. |
 | `POST /v1/operator/2fa/setup` · `.../enable` · `.../disable` · `.../recovery-codes` · `POST /v1/operator/2fa/verify` | The same two-factor sign-in for operator (practitioner) accounts. With `TSENGINE_OPERATOR_REQUIRE_2FA=1` an operator who has not enrolled can reach only enrolment until they do. |
 | `GET /v1/findings` | The tenant's findings. |
 | `POST /v1/import` | Import an existing scanner export as findings — SARIF, Snyk, Dependabot, Wiz, Nessus (`.nessus` v2) or Burp issues XML; `?format=` or auto-detected. Informational items are counted (`skipped_informational`), not imported. |

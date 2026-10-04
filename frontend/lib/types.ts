@@ -992,6 +992,17 @@ export interface User {
   two_factor_enabled?: boolean;
   /** Present only when two-factor sign-in is on; 0 means none left. */
   recovery_codes_remaining?: number;
+  /** The WORKSPACE's policy (the owner requires two-factor for every seat), not this person's state. */
+  two_factor_required?: boolean;
+}
+
+/** The workspace two-factor policy and who it gates, by name. */
+export interface SecurityPolicy {
+  require_two_factor: boolean;
+  required_by?: string;
+  required_at?: string;
+  without_two_factor: string[];
+  seats: number;
 }
 
 // Public Trust Center aggregate (safe projection — coverage only, never findings).

@@ -84,3 +84,33 @@ func TestOperatorConsoleEnrolsRatherThanLoops(t *testing.T) {
 		t.Error("the operator challenge must live in its httpOnly cookie and never be returned to the browser")
 	}
 }
+
+// The workspace policy: an un-enrolled person is sent to enrolment (outside (app), so it cannot loop)
+// rather than a dashboard that 403s every call, and the owner sees WHO the policy gates before and
+// after switching it on.
+func TestRequireTwoFactorSendsPeopleToEnrolment(t *testing.T) {
+	layout := stripComments(frontendFile(t, "app", "(app)", "layout.tsx"))
+	if !strings.Contains(layout, `if (me.two_factor_required && !me.two_factor_enabled) redirect("/two-factor-setup")`) {
+		t.Error("the app layout must send an un-enrolled person to /two-factor-setup when the workspace requires it")
+	}
+	setup := stripComments(frontendFile(t, "app", "two-factor-setup", "page.tsx"))
+	for _, want := range []string{"canDisable={false}", "enabled={false}", `redirect("/dashboard")`} {
+		if !strings.Contains(setup, want) {
+			t.Errorf("two-factor-setup page: missing %q", want)
+		}
+	}
+	ctl := stripComments(frontendFile(t, "components", "settings", "require-two-factor-control.tsx"))
+	for _, want := range []struct{ s, why string }{
+		{"policy.without_two_factor", "the owner must see who the policy gates, from the server's list"},
+		{"gated.join", "the gated people must be named, not counted"},
+		{"!ownerEnrolled", "switching it on must wait until the owner has enrolled, as the server requires"},
+	} {
+		if !strings.Contains(ctl, want.s) {
+			t.Errorf("require-two-factor control: %s (missing %q)", want.why, want.s)
+		}
+	}
+	page := stripComments(frontendFile(t, "app", "(app)", "settings", "page.tsx"))
+	if !strings.Contains(page, "canDisable={!me?.two_factor_required}") {
+		t.Error("settings must not offer turning two-factor off while the workspace requires it")
+	}
+}
