@@ -577,7 +577,7 @@ func (p *Postgres) DeleteSessionsForUser(ctx context.Context, userID string) err
 // --- operators & operator sessions ---
 
 func (p *Postgres) PutOperator(ctx context.Context, o platform.Operator) error {
-	d, err := enc(o)
+	d, err := enc(platform.StoreOperator(o))
 	if err != nil {
 		return err
 	}
@@ -586,14 +586,14 @@ func (p *Postgres) PutOperator(ctx context.Context, o platform.Operator) error {
 		o.ID, o.Email, d)
 }
 func (p *Postgres) GetOperator(ctx context.Context, id string) (platform.Operator, error) {
-	var o platform.Operator
+	var o platform.OperatorRecord
 	err := p.get(ctx, &o, `SELECT data FROM operators WHERE id=?`, id)
-	return o, err
+	return o.Restore(), err
 }
 func (p *Postgres) GetOperatorByEmail(ctx context.Context, email string) (platform.Operator, error) {
-	var o platform.Operator
+	var o platform.OperatorRecord
 	err := p.get(ctx, &o, `SELECT data FROM operators WHERE lower(email)=lower(?) LIMIT 1`, email)
-	return o, err
+	return o.Restore(), err
 }
 func (p *Postgres) PutOperatorSession(ctx context.Context, sess platform.OperatorSession) error {
 	d, err := enc(sess)
@@ -651,4 +651,20 @@ func (p *Postgres) GetWarehouseSnapshot(ctx context.Context, tenantID string) (p
 		return platform.WarehouseSnapshot{}, false, nil
 	}
 	return w, err == nil, err
+}
+
+// DeleteOperatorSessionsFor signs an operator out everywhere (the DeleteSessionsForUser shape).
+func (p *Postgres) DeleteOperatorSessionsFor(ctx context.Context, operatorID string) error {
+	sessions, err := listJSON[platform.OperatorSession](ctx, p.db, pgRebind(`SELECT data FROM opsessions`))
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		if sess.OperatorID == operatorID {
+			if err := p.exec(ctx, `DELETE FROM opsessions WHERE token=?`, sess.Token); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

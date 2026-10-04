@@ -603,10 +603,13 @@ func main() {
 		// The HRIS sync joins the fetched roster against the SAME identity source the runner scans
 		// with, so the on-demand join and the scheduled one see the same accounts.
 		WorkspaceSource: workspaceSource,
-		Recorder:        rec,      // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
-		IncidentOpener:  detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
-		Detector:        detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)
-		Token:           token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
+		Recorder:        rec, // sign HITL acts (risk/policy/audit/pentest) into the ledger — §18.2 inv. 4
+		// An operator credential reaches every client on the practitioner's roster; a deployment can
+		// refuse client-touching operator endpoints to anyone who has not enrolled two-factor sign-in.
+		OperatorRequire2FA: os.Getenv("TSENGINE_OPERATOR_REQUIRE_2FA") == "1",
+		IncidentOpener:     detector, // open incidents for event-driven ingest (identity/SaaS) — OpenFor, no resolve sweep
+		Detector:           detector, // reconcile a pentest run's findings into incidents immediately (detect-&-respond)
+		Token:              token, PublicURL: os.Getenv("TSENGINE_PLATFORM_PUBLIC"),
 		// AppURL lands the user back in the app after OAuth (else they'd see a raw JSON blob).
 		// Defaults to the public base (same-origin behind the TLS edge), override with TSENGINE_APP_URL.
 		AppURL:             envOr("TSENGINE_APP_URL", os.Getenv("TSENGINE_PLATFORM_PUBLIC")),

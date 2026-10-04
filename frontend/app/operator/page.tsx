@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
 import { Scale, FileCheck2, Crosshair, ScrollText } from "lucide-react";
-import { getOperatorToken, operatorMe, operatorQueue, type QueueItem } from "@/lib/operator";
+import { getOperatorToken, operatorMe, operatorQueueResult, type QueueItem } from "@/lib/operator";
+import { TwoFactorControl } from "@/components/settings/two-factor-control";
+import {
+  operatorStartTwoFactor,
+  operatorConfirmTwoFactor,
+  operatorDisableTwoFactor,
+  operatorReplaceRecoveryCodes,
+} from "./actions";
 import { DecideRiskInline } from "@/components/operator/decide-risk-inline";
 import { PublishPolicyInline } from "@/components/operator/publish-policy-inline";
 import { SignoffPentestInline } from "@/components/operator/signoff-pentest-inline";
@@ -14,8 +21,33 @@ const KIND_LABEL: Record<string, string> = { risk: "Risk decision", audit: "Cont
 
 export default async function OperatorConsole() {
   if (!(await getOperatorToken())) redirect("/operator/login");
-  const [me, queue] = await Promise.all([operatorMe(), operatorQueue()]);
-  if (!me || !queue) redirect("/operator/login");
+  const [me, result] = await Promise.all([operatorMe(), operatorQueueResult()]);
+  if (!me) redirect("/operator/login");
+  const twoFactorActions = {
+    start: operatorStartTwoFactor,
+    confirm: operatorConfirmTwoFactor,
+    disable: operatorDisableTwoFactor,
+    replace: operatorReplaceRecoveryCodes,
+  };
+  // This deployment requires two-factor for operators and this account has not enrolled: show
+  // enrolment, NOT a redirect to the login page — the login page would see a valid session and send
+  // the operator straight back here, a loop with no explanation.
+  if (result.setupRequired) {
+    return (
+      <main className="mx-auto max-w-xl px-5 py-10">
+        <h1 className="text-lg font-semibold tracking-tight">Turn on two-factor sign-in</h1>
+        <p className="mt-1 mb-6 text-sm text-muted">
+          This deployment requires two-factor sign-in for practitioner accounts, because one sign-in here reaches every
+          client you serve. Your queue opens as soon as it is on.
+        </p>
+        <div className="card p-5">
+          <TwoFactorControl enabled={false} actions={twoFactorActions} canDisable={false} />
+        </div>
+      </main>
+    );
+  }
+  const queue = result.queue;
+  if (!queue) redirect("/operator/login");
 
   // group the cross-tenant items by client tenant
   const byTenant = new Map<string, QueueItem[]>();
@@ -92,6 +124,12 @@ export default async function OperatorConsole() {
           </p>
         </div>
       )}
+      <section className="mt-10">
+        <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">Account security</h2>
+        <div className="card p-5">
+          <TwoFactorControl enabled={!!me.two_factor_enabled} actions={twoFactorActions} />
+        </div>
+      </section>
     </main>
   );
 }

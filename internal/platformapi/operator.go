@@ -28,13 +28,23 @@ func (d Deps) operatorAuth(h func(w http.ResponseWriter, r *http.Request, op pla
 			return
 		}
 		sess, err := d.Store.GetOperatorSession(r.Context(), tok)
-		if err != nil || sess.ExpiresAt.Before(time.Now()) {
+		// A half-session (password right, code still owed) is refused here, at the one gate every
+		// operator endpoint shares (operator_twofactor.go).
+		if err != nil || sess.ExpiresAt.Before(time.Now()) || sess.MFAPending {
 			writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
 			return
 		}
 		op, err := d.Store.GetOperator(r.Context(), sess.OperatorID)
 		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, errBody("unauthorized"))
+			return
+		}
+		// A deployment that requires two-factor for operators lets an un-enrolled operator reach only
+		// what enrolment needs. Nothing that touches a client is reachable on a password alone.
+		if d.OperatorRequire2FA && !op.TwoFactorEnabled && !operatorMayReachWithout2FA(r.URL.Path) {
+			writeJSON(w, http.StatusForbidden, errCode(
+				"this deployment requires two-factor sign-in for operators — turn it on before working your clients",
+				"two_factor_setup_required"))
 			return
 		}
 		h(w, r, op)
@@ -100,6 +110,10 @@ func (d Deps) handleOperatorLogin(w http.ResponseWriter, r *http.Request) {
 	op, err := d.Store.GetOperatorByEmail(r.Context(), strings.ToLower(strings.TrimSpace(body.Email)))
 	if err != nil || !authn.VerifyPassword(body.Password, op.PasswordHash) {
 		writeJSON(w, http.StatusUnauthorized, errBody("invalid email or password"))
+		return
+	}
+	if op.TwoFactorEnabled {
+		d.startOperatorSecondFactor(w, r, op)
 		return
 	}
 	tok, err := authn.NewToken()

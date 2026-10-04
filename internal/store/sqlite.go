@@ -598,7 +598,7 @@ func (s *SQLite) DeleteSessionsForUser(ctx context.Context, userID string) error
 }
 
 func (s *SQLite) PutOperator(ctx context.Context, o platform.Operator) error {
-	d, err := enc(o)
+	d, err := enc(platform.StoreOperator(o))
 	if err != nil {
 		return err
 	}
@@ -608,14 +608,14 @@ func (s *SQLite) PutOperator(ctx context.Context, o platform.Operator) error {
 	return err
 }
 func (s *SQLite) GetOperator(ctx context.Context, id string) (platform.Operator, error) {
-	var o platform.Operator
+	var o platform.OperatorRecord
 	err := getJSON(ctx, s.db, &o, `SELECT data FROM operators WHERE id=?`, id)
-	return o, err
+	return o.Restore(), err
 }
 func (s *SQLite) GetOperatorByEmail(ctx context.Context, email string) (platform.Operator, error) {
-	var o platform.Operator
+	var o platform.OperatorRecord
 	err := getJSON(ctx, s.db, &o, `SELECT data FROM operators WHERE lower(email)=lower(?) LIMIT 1`, email)
-	return o, err
+	return o.Restore(), err
 }
 func (s *SQLite) PutOperatorSession(ctx context.Context, sess platform.OperatorSession) error {
 	d, err := enc(sess)
@@ -675,4 +675,20 @@ func (s *SQLite) GetWarehouseSnapshot(ctx context.Context, tenantID string) (pla
 		return platform.WarehouseSnapshot{}, false, nil
 	}
 	return w, err == nil, err
+}
+
+// DeleteOperatorSessionsFor signs an operator out everywhere (the DeleteSessionsForUser shape).
+func (s *SQLite) DeleteOperatorSessionsFor(ctx context.Context, operatorID string) error {
+	sessions, err := listJSON[platform.OperatorSession](ctx, s.db, `SELECT data FROM opsessions`)
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		if sess.OperatorID == operatorID {
+			if _, err := s.db.ExecContext(ctx, `DELETE FROM opsessions WHERE token=?`, sess.Token); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

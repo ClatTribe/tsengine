@@ -1015,7 +1015,7 @@ type Snapshot struct {
 	Vendors         map[string]map[string]platform.Vendor             `json:"vendors,omitempty"`
 	Users           map[string]platform.UserRecord                    `json:"users"` // UserRecord, not User: the secrets must survive the snapshot
 	Sessions        map[string]platform.Session                       `json:"sessions"`
-	Operators       map[string]platform.Operator                      `json:"operators,omitempty"`
+	Operators       map[string]platform.OperatorRecord                `json:"operators,omitempty"` // OperatorRecord: the secrets must survive
 	OpSessions      map[string]platform.OperatorSession               `json:"op_sessions,omitempty"`
 }
 
@@ -1058,7 +1058,7 @@ func (m *Memory) Export() Snapshot {
 		Vendors:         m.vendors,
 		Users:           storeUsers(m.users),
 		Sessions:        m.sessions,
-		Operators:       m.operators,
+		Operators:       storeOperators(m.operators),
 		OpSessions:      m.opSessions,
 	}
 }
@@ -1115,9 +1115,9 @@ func (m *Memory) load(s Snapshot) {
 	if m.sessions == nil {
 		m.sessions = map[string]platform.Session{}
 	}
-	m.operators = s.Operators
-	if m.operators == nil {
-		m.operators = map[string]platform.Operator{}
+	m.operators = map[string]platform.Operator{}
+	for id, r := range s.Operators {
+		m.operators[id] = r.Restore()
 	}
 	m.opSessions = s.OpSessions
 	if m.opSessions == nil {
@@ -1305,4 +1305,25 @@ func restoreUsers(rs []platform.UserRecord, err error) ([]platform.User, error) 
 		out = append(out, r.Restore())
 	}
 	return out, nil
+}
+
+// storeOperators is storeUsers for operators.
+func storeOperators(in map[string]platform.Operator) map[string]platform.OperatorRecord {
+	out := make(map[string]platform.OperatorRecord, len(in))
+	for id, o := range in {
+		out[id] = platform.StoreOperator(o)
+	}
+	return out
+}
+
+// DeleteOperatorSessionsFor signs an operator out everywhere.
+func (m *Memory) DeleteOperatorSessionsFor(_ context.Context, operatorID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for tok, s := range m.opSessions {
+		if s.OperatorID == operatorID {
+			delete(m.opSessions, tok)
+		}
+	}
+	return nil
 }

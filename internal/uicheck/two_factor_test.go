@@ -51,3 +51,36 @@ func TestTwoFactorControlRendersServerStateAndAsksForBothFactors(t *testing.T) {
 		t.Error("settings must pass the server's two_factor_enabled to the control")
 	}
 }
+
+// The operator side: the login form asks for the code, the challenge never leaves an httpOnly cookie,
+// and — the bug this guards — an operator refused for want of two-factor is shown enrolment rather than
+// redirected to the login page, which would see a valid session and send them straight back.
+func TestOperatorConsoleEnrolsRatherThanLoops(t *testing.T) {
+	page := stripComments(frontendFile(t, "app", "operator", "page.tsx"))
+	for _, want := range []struct{ s, why string }{
+		{"if (result.setupRequired) {", "the console must branch on the server's two_factor_setup_required, not treat it as signed-out"},
+		{"canDisable={false}", "under the deployment policy the control must not offer turning two-factor off"},
+		{"enabled={!!me.two_factor_enabled}", "the account-security panel must render the server's state"},
+	} {
+		if !strings.Contains(page, want.s) {
+			t.Errorf("operator console: %s (missing %q)", want.why, want.s)
+		}
+	}
+	// Order matters: the enrolment branch must be taken BEFORE the no-queue redirect, or a refused queue
+	// still redirects and the loop is back.
+	if i, j := strings.Index(page, "if (result.setupRequired) {"), strings.Index(page, `if (!queue) redirect("/operator/login")`); i < 0 || j < 0 || i > j {
+		t.Error("operator console: the two-factor enrolment branch must come before the no-queue redirect to the login page")
+	}
+	lib := stripComments(frontendFile(t, "lib", "operator.ts"))
+	if !strings.Contains(lib, `"two_factor_setup_required"`) {
+		t.Error("lib/operator.ts must recognise the setup-required refusal, or the console loops through the login page")
+	}
+	form := stripComments(frontendFile(t, "components", "operator", "login-form.tsx"))
+	if !strings.Contains(form, "state?.needCode") || !strings.Contains(form, `name="code"`) {
+		t.Error("the operator login form must ask for the code when the server says one is owed")
+	}
+	actions := stripComments(frontendFile(t, "app", "operator", "actions.ts"))
+	if !strings.Contains(actions, "OP_MFA_COOKIE") || strings.Contains(actions, "return { needCode: true, challenge") {
+		t.Error("the operator challenge must live in its httpOnly cookie and never be returned to the browser")
+	}
+}

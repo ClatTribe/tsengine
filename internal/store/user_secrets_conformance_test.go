@@ -80,3 +80,39 @@ func TestUserJSONNeverCarriesSecrets(t *testing.T) {
 		t.Errorf("platform.User serializes a secret to clients: %s", b)
 	}
 }
+
+// Operator secrets survive the store, and signing an operator out everywhere removes only theirs.
+func TestConformance_OperatorSecretsAndSessionWipe(t *testing.T) {
+	for _, f := range factories() {
+		t.Run(f.name, func(t *testing.T) {
+			ctx := context.Background()
+			s := f.open(t)
+			op := platform.Operator{ID: "op-1", Email: "pat@msp.example", TwoFactorEnabled: true,
+				TOTPSecretRef: "enc:seed", TOTPLastStep: 42, RecoveryHashes: []string{"h1", "h2"}}
+			orFail(t, s.PutOperator(ctx, op))
+			for name, get := range map[string]func() (platform.Operator, error){
+				"GetOperator":        func() (platform.Operator, error) { return s.GetOperator(ctx, "op-1") },
+				"GetOperatorByEmail": func() (platform.Operator, error) { return s.GetOperatorByEmail(ctx, "pat@msp.example") },
+			} {
+				got, err := get()
+				orFail(t, err)
+				if got.TOTPSecretRef != "enc:seed" || got.TOTPLastStep != 42 || len(got.RecoveryHashes) != 2 || !got.TwoFactorEnabled {
+					t.Errorf("%s: operator two-factor state lost on save: %+v", name, got)
+				}
+			}
+			exp := time.Now().Add(time.Hour)
+			orFail(t, s.PutOperatorSession(ctx, platform.OperatorSession{Token: "a", OperatorID: "op-1", ExpiresAt: exp}))
+			orFail(t, s.PutOperatorSession(ctx, platform.OperatorSession{Token: "b", OperatorID: "op-1", ExpiresAt: exp}))
+			orFail(t, s.PutOperatorSession(ctx, platform.OperatorSession{Token: "c", OperatorID: "op-2", ExpiresAt: exp}))
+			orFail(t, s.DeleteOperatorSessionsFor(ctx, "op-1"))
+			for _, tok := range []string{"a", "b"} {
+				if _, err := s.GetOperatorSession(ctx, tok); err == nil {
+					t.Errorf("operator session %q survived signing the operator out everywhere", tok)
+				}
+			}
+			if _, err := s.GetOperatorSession(ctx, "c"); err != nil {
+				t.Errorf("another operator's session was removed: %v", err)
+			}
+		})
+	}
+}

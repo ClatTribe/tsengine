@@ -137,6 +137,39 @@ type Operator struct {
 	Firm         string    `json:"firm,omitempty"`
 	PasswordHash string    `json:"password_hash,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+	// Two-factor sign-in, the same shape and the same rules as User's (internal/platformapi/
+	// twofactor.go). An operator credential reaches every client on the practitioner's roster, so it is
+	// the more valuable one to protect. Secrets are json:"-" and persisted through OperatorRecord.
+	TwoFactorEnabled bool     `json:"two_factor_enabled,omitempty"`
+	TOTPSecretRef    string   `json:"-"`
+	TOTPPendingRef   string   `json:"-"`
+	TOTPLastStep     int64    `json:"-"`
+	RecoveryHashes   []string `json:"-"`
+}
+
+// OperatorRecord is how an Operator is PERSISTED — the UserRecord pattern, for the same reason: the
+// json:"-" secrets would otherwise be dropped by every JSON-backed store.
+type OperatorRecord struct {
+	Operator
+	Secrets UserSecrets `json:"_secrets,omitzero"`
+}
+
+// StoreOperator converts an Operator to its persisted form.
+func StoreOperator(o Operator) OperatorRecord {
+	return OperatorRecord{Operator: o, Secrets: UserSecrets{
+		TOTPSecretRef: o.TOTPSecretRef, TOTPPendingRef: o.TOTPPendingRef,
+		TOTPLastStep: o.TOTPLastStep, RecoveryHashes: o.RecoveryHashes,
+	}}
+}
+
+// Restore converts a persisted record back to an Operator, secrets included.
+func (r OperatorRecord) Restore() Operator {
+	o := r.Operator
+	o.TOTPSecretRef = r.Secrets.TOTPSecretRef
+	o.TOTPPendingRef = r.Secrets.TOTPPendingRef
+	o.TOTPLastStep = r.Secrets.TOTPLastStep
+	o.RecoveryHashes = r.Secrets.RecoveryHashes
+	return o
 }
 
 // OperatorSession authenticates an operator. Stored in a SEPARATE map from tenant Sessions so the two
@@ -145,4 +178,7 @@ type OperatorSession struct {
 	Token      string    `json:"token"`
 	OperatorID string    `json:"operator_id"`
 	ExpiresAt  time.Time `json:"expires_at"`
+	// MFAPending / MFAAttempts: the half-session rule, as on Session.
+	MFAPending  bool `json:"mfa_pending,omitempty"`
+	MFAAttempts int  `json:"mfa_attempts,omitempty"`
 }
