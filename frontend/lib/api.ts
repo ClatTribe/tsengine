@@ -1,7 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
-  APIKey, APIKeysResponse, SecurityPolicy,
+  APIKey, APIKeysResponse, SecurityPolicy, SSOSettings,
   AccessReview,
   AuditReview,
   AuditCertificate,
@@ -849,6 +849,9 @@ export const api = {
     call<{ key: APIKey; token: string; note: string }>("/v1/settings/api-keys", { method: "POST", body: JSON.stringify(k) }),
   revokeAPIKey: (id: string) => call<APIKey>(`/v1/settings/api-keys/${id}/revoke`, { method: "POST" }),
   securityPolicy: () => safe<SecurityPolicy | null>("/v1/settings/security", null),
+  ssoSettings: () => safe<SSOSettings | null>("/v1/settings/sso", null),
+  setSSO: (b: { issuer: string; client_id?: string; client_secret?: string; enforced?: boolean }) =>
+    call<SSOSettings>("/v1/settings/sso", { method: "PUT", body: JSON.stringify(b) }),
   setSecurityPolicy: (requireTwoFactor: boolean) =>
     call<SecurityPolicy>("/v1/settings/security", { method: "PUT", body: JSON.stringify({ require_two_factor: requireTwoFactor }) }),
   // Two-factor sign-in. Every call acts on the signed-in person's own account.

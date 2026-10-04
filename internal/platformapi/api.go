@@ -231,6 +231,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/auth/invite-roster", d.sessionAuth(d.handleRosterInvitePreview)) // who the HRIS roster would seat, without seating anyone (owner)
 	mux.HandleFunc("POST /v1/auth/invite-roster", d.sessionAuth(d.handleRosterInvite))       // seat every active HRIS employee as an EMPLOYEE (owner; idempotent; bounded)
 	mux.HandleFunc("POST /v1/auth/password", d.sessionAuth(d.handlePassword))                // change pw + clear MustChangePassword
+	mux.HandleFunc("POST /v1/auth/sso/start", d.handleSSOStart)                              // begin SSO for an email (public; says only whether SSO applies)
+	mux.HandleFunc("POST /v1/auth/sso/callback", d.handleSSOCallback)                        // complete SSO: exchange, verify the ID token, match the seat
 	mux.HandleFunc("POST /v1/auth/2fa/verify", d.handleTwoFactorVerify)                      // redeem a password-correct half-session with a code (public; 5 tries)
 	mux.HandleFunc("POST /v1/auth/2fa/setup", d.sessionAuth(d.handleTwoFactorSetup))         // new authenticator seed, sealed + pending (password)
 	mux.HandleFunc("POST /v1/auth/2fa/enable", d.sessionAuth(d.handleTwoFactorEnable))       // confirm with a code → on + recovery codes + other sessions out
@@ -316,6 +318,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/trust/{tenant}/request", d.handleTrustAccessRequest)                         // PUBLIC: a buyer asks to read the gated document tier (rate-limited)
 	mux.HandleFunc("POST /v1/trust/{tenant}/nda", d.handleTrustNDA)                                       // PUBLIC: click-through acceptance, recorded with the digest of the exact text
 	mux.HandleFunc("GET /v1/trust/{tenant}/doc", d.handleTrustDocument)                                   // PUBLIC: serve one document, re-checking the gate rather than trusting the listing
+	mux.HandleFunc("GET /v1/settings/sso", d.auth(d.handleGetSSO))                                        // the workspace's identity provider (secret never returned)
+	mux.HandleFunc("PUT /v1/settings/sso", d.auth(d.handlePutSSO))                                        // configure / remove SSO (owner; verified against the provider before saving)
 	mux.HandleFunc("GET /v1/settings/security", d.auth(d.handleGetSecurityPolicy))                        // the two-factor policy + who has not enrolled
 	mux.HandleFunc("PUT /v1/settings/security", d.auth(d.handlePutSecurityPolicy))                        // require two-factor for every seat (owner; owner must have it on)
 	mux.HandleFunc("GET /v1/settings/api-keys", d.auth(d.handleListAPIKeys))                              // machine credentials (digests never returned)
@@ -583,7 +587,7 @@ func (d Deps) auth(h func(w http.ResponseWriter, r *http.Request, tenantID strin
 			}
 			// The owner's two-factor policy (twofactor_policy.go). Enrolment itself is reachable: the
 			// 2FA endpoints sit behind sessionAuth, not this gate.
-			if uerr == nil && d.twoFactorBlocks(r, s.TenantID, u) {
+			if uerr == nil && !s.IdPMFA && d.twoFactorBlocks(r, s.TenantID, u) {
 				writeJSON(w, http.StatusForbidden, errCode(
 					"this workspace requires two-factor sign-in — turn it on to continue", "two_factor_setup_required"))
 				return

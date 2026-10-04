@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, BadgeCheck, Sparkles, ArrowRight, Eye, EyeOff, Copy, Check } from "lucide-react";
@@ -18,6 +18,36 @@ export default function LoginPage() {
   const [needCode, setNeedCode] = useState(false);
   const [code, setCode] = useState("");
   const [useRecovery, setUseRecovery] = useState(false);
+
+  // Returning from the identity provider: either it needs the person's own code, or it failed and the
+  // reason rides in the URL (the callback route never leaves someone on a blank page).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("step") === "code") setNeedCode(true);
+    const ssoErr = q.get("sso_error");
+    if (ssoErr) setErr(ssoErr);
+  }, []);
+
+  async function sso() {
+    if (!email.trim()) {
+      setErr("Enter your work email, then choose Sign in with SSO.");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    const res = await fetch("/api/sso/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const b = await res.json().catch(() => ({}));
+    if (res.ok && b.sso && b.authorize_url) {
+      window.location.assign(b.authorize_url);
+      return;
+    }
+    setBusy(false);
+    setErr(res.ok ? "Your workspace does not use single sign-on — sign in with your password." : (b.error ?? "Single sign-on is unavailable."));
+  }
 
   async function copyPassword() {
     if (!password) return;
@@ -196,6 +226,14 @@ export default function LoginPage() {
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {busy ? "Signing in…" : "Sign in"}
               {!busy && <ArrowRight className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={sso}
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-ink transition hover:bg-white/5 disabled:opacity-60"
+            >
+              Sign in with SSO
             </button>
             {err && (
               <p className="rounded-lg border border-critical/30 bg-critical/5 px-3 py-2 text-xs text-critical">{err}</p>

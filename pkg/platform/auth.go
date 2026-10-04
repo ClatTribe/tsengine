@@ -121,6 +121,23 @@ type Session struct {
 	// endpoint, which deletes it and issues a real session. MFAAttempts counts wrong codes against it.
 	MFAPending  bool `json:"mfa_pending,omitempty"`
 	MFAAttempts int  `json:"mfa_attempts,omitempty"`
+	// Via records how the session was established ("password" or "sso"); an SSO session is shorter so
+	// that disabling someone at the identity provider takes effect within hours, not weeks.
+	Via string `json:"via,omitempty"`
+	// IdPMFA is true when the identity provider asserted a second factor for this sign-in (the ID
+	// token's amr). It satisfies the workspace's two-factor policy for this session only.
+	IdPMFA bool `json:"idp_mfa,omitempty"`
+	// SSOFlow marks an SSO sign-in IN PROGRESS: the PKCE verifier and nonce, held server-side between
+	// the redirect to the provider and its return. It authenticates nothing (resolveSession refuses
+	// it) and is single use.
+	SSOFlow *SSOFlow `json:"sso_flow,omitempty"`
+}
+
+// SSOFlow is the server-side state of one SSO sign-in between redirect and callback.
+type SSOFlow struct {
+	Verifier string `json:"verifier"`
+	Nonce    string `json:"nonce"`
+	Email    string `json:"email"`
 }
 
 // Operator is a CROSS-TENANT practitioner identity — the MSP's expert or our managed delivery expert

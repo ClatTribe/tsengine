@@ -34,7 +34,7 @@ func (d Deps) resolveSession(r *http.Request) (platform.Session, bool) {
 	// A half-session (password right, second factor still owed) authenticates NOTHING. Refusing it
 	// HERE, at the one function every session-authenticated path calls, is what makes "the password
 	// alone opens no endpoint" a property rather than something each handler must remember.
-	if s.MFAPending {
+	if s.MFAPending || s.SSOFlow != nil {
 		return platform.Session{}, false
 	}
 	return s, true
@@ -149,6 +149,13 @@ func (d Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, errBody("invalid email or password"))
 		return
 	}
+	// A workspace that enforces SSO closes the password door to every seat but the owner's (whose
+	// password is the break-glass for an unavailable provider). Said plainly, so the person knows where
+	// to go instead of retrying a password that will never work here.
+	if d.ssoEnforcedFor(r.Context(), u) {
+		writeJSON(w, http.StatusForbidden, errCode("your workspace signs in through its identity provider — use \"Sign in with SSO\"", "sso_required"))
+		return
+	}
 	if u.TwoFactorEnabled {
 		d.startSecondFactor(w, r, u)
 		return
@@ -189,7 +196,9 @@ func (d Deps) handleMe(w http.ResponseWriter, r *http.Request, s platform.Sessio
 	// not enrolled to enrolment instead of a dashboard whose every call answers 403. Best-effort like
 	// the name: an unreadable tenant leaves it false here, and the gate itself fails closed.
 	if t, terr := d.Store.GetTenant(r.Context(), s.TenantID); terr == nil {
-		out.TwoFactorRequired = t.RequireTwoFactor
+		// A sign-in the identity provider already put through a second factor satisfies the policy
+		// for this session, exactly as the gate treats it, so the app does not send them to enrol.
+		out.TwoFactorRequired = t.RequireTwoFactor && !s.IdPMFA
 	}
 	if u.TwoFactorEnabled {
 		// The count, never the codes: so Settings can say "2 recovery codes left" before the day the
