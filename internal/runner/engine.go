@@ -111,12 +111,18 @@ func (e *EngineRunner) ScanWithReport(ctx context.Context, a platform.Asset) ([]
 // What is shared is the contract — a replay finding is stamped DiscoveryMethod{tool_replay, replayOf}
 // so it is never mistaken for something a scheduled scan discovered.
 func (e *EngineRunner) ReplayTool(ctx context.Context, a platform.Asset, toolName string, args tool.Args, replayID string) ([]types.Finding, error) {
+	f, _, err := e.ReplayToolWithOutput(ctx, a, toolName, args, replayID)
+	return f, err
+}
+
+// ReplayToolWithOutput is ReplayTool plus the tool's run summary (runner.ToolOutputReplayer).
+func (e *EngineRunner) ReplayToolWithOutput(ctx context.Context, a platform.Asset, toolName string, args tool.Args, replayID string) ([]types.Finding, any, error) {
 	if strings.TrimSpace(toolName) == "" {
-		return nil, errors.New("replay: no tool named")
+		return nil, nil, errors.New("replay: no tool named")
 	}
 	disp, cleanup, err := e.NewDispatcher(ctx, a)
 	if err != nil {
-		return nil, fmt.Errorf("replay: dispatcher: %w", err)
+		return nil, nil, fmt.Errorf("replay: dispatcher: %w", err)
 	}
 	if cleanup != nil {
 		defer cleanup()
@@ -132,7 +138,7 @@ func (e *EngineRunner) ReplayTool(ctx context.Context, a platform.Asset, toolNam
 
 	res, err := disp.Execute(ctx, toolName, callArgs)
 	if err != nil {
-		return nil, fmt.Errorf("replay: execute %s: %w", toolName, err)
+		return nil, nil, fmt.Errorf("replay: execute %s: %w", toolName, err)
 	}
 
 	emitted := append([]types.SandboxEmittedFinding(nil), res.Findings...)
@@ -156,5 +162,5 @@ func (e *EngineRunner) ReplayTool(ctx context.Context, a platform.Asset, toolNam
 			DiscoveryMethod: &types.DiscoveryMethod{Primary: "tool_replay", ReplayOf: replayID},
 		})
 	}
-	return out, nil
+	return out, res.Output, nil
 }

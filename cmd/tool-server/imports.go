@@ -14,6 +14,7 @@ import (
 	_ "github.com/ClatTribe/tsengine/internal/tool/cosign"
 	_ "github.com/ClatTribe/tsengine/internal/tool/crtsh"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dalfox"
+	_ "github.com/ClatTribe/tsengine/internal/tool/deepsec"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dnstwist"
 	_ "github.com/ClatTribe/tsengine/internal/tool/dockle"
 	_ "github.com/ClatTribe/tsengine/internal/tool/ffuf"
