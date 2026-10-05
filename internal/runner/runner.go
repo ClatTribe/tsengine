@@ -152,6 +152,9 @@ type Service struct {
 	// read-only role and runs internal/cloudcdr over the window (sync_cloudevents.go). nil → CDR
 	// runs only on events a customer POSTs to /v1/cloud/events.
 	CloudEventReader func(c platform.Connection) awsfetch.EventReader
+	// GuardDutyReader, when set, reads the findings AWS GuardDuty raised in each connected AWS account
+	// (sync_guardduty.go). nil → GuardDuty is not read.
+	GuardDutyReader func(c platform.Connection) awsfetch.GuardDutyReader
 
 	// IdentityLinkOpts, when set, makes the person → GitHub join inputs a per-pass fetch
 	// (internal/identitylinks: GitHub SAML external identities, Okta SCIM assignments joined on
@@ -537,6 +540,10 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 	if cdrRan {
 		cov = cov.With("cloudcdr")
 	}
+	// GuardDuty's findings ride the same pass (and the fast poll). Event producer: never resolved by
+	// absence, so it adds nothing to coverage.
+	gdRes, _ := s.SyncGuardDuty(ctx, tenantID)
+	current = append(current, gdRes.Findings...)
 	// The person → code join inputs, refreshed each pass so the estate graph can draw the chain
 	// from a workforce identity to a repository to the cloud role its workflows assume. Produces no
 	// findings of its own; the estate detections read what it stores.

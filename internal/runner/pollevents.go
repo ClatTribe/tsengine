@@ -34,10 +34,11 @@ func lockEvents(tenantID string) func() {
 
 // EventPollResult is what one poll did.
 type EventPollResult struct {
-	CloudRead    bool `json:"cloud_read"`
-	IdentityRead bool `json:"identity_read"`
-	Findings     int  `json:"findings"`
-	Opened       int  `json:"incidents_opened"`
+	CloudRead     bool `json:"cloud_read"`
+	IdentityRead  bool `json:"identity_read"`
+	GuardDutyRead bool `json:"guardduty_read"`
+	Findings      int  `json:"findings"`
+	Opened        int  `json:"incidents_opened"`
 }
 
 // PollEvents reads the tenant's event sources and opens incidents for what they found. A halted tenant
@@ -49,8 +50,9 @@ func (s *Service) PollEvents(ctx context.Context, tenantID string) EventPollResu
 	}
 	cdr, cloudRan := s.SyncCloudEvents(ctx, tenantID)
 	idl, idRan := s.SyncIdentityLogs(ctx, tenantID)
-	res.CloudRead, res.IdentityRead = cloudRan, idRan
-	found := append(append([]types.Finding{}, cdr.Findings...), idl.Findings...)
+	gd, gdRan := s.SyncGuardDuty(ctx, tenantID)
+	res.CloudRead, res.IdentityRead, res.GuardDutyRead = cloudRan, idRan, gdRan
+	found := append(append(append([]types.Finding{}, cdr.Findings...), idl.Findings...), gd.Findings...)
 	res.Findings = len(found)
 	if s.Detector == nil || len(found) == 0 {
 		return res

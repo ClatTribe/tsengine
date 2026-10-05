@@ -148,6 +148,9 @@ type Tenant struct {
 	// has read (runner.SyncCloudEvents). Same rule as IdentityLogCursors: a failed read never
 	// advances it; a truncated read does, and the unread older span is reported, not skipped silently.
 	CloudEventCursors map[string]time.Time `json:"cloud_event_cursors,omitempty"`
+	// GuardDutyCursors is, per AWS connection id, the newest GuardDuty finding update read — the same
+	// cursor discipline as CloudEventCursors.
+	GuardDutyCursors map[string]time.Time `json:"guardduty_cursors,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
