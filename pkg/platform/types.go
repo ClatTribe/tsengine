@@ -2374,4 +2374,8 @@ type AISpend struct {
 	// Verified is how many findings the run itself proved (verification_status verified) — the outcome
 	// the spend is weighed against. Counted at write time, against findings as they were then.
 	Verified int `json:"verified"`
+	// PerCall marks a row written for ONE model call by the metering wrapper (platformapi/aimeter.go)
+	// rather than for a whole run. Both count toward the monthly ceiling; the value view counts them as
+	// calls, not runs, because a code sweep making two hundred calls did not run two hundred times.
+	PerCall bool `json:"per_call,omitempty"`
 }

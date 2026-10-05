@@ -397,7 +397,7 @@ func (v vulnLocalizer) Locate(ctx context.Context, findingID string) (string, er
 	// model proposal against real repo files, and degrades to the pure heuristic result on a nil or
 	// erroring model. So a deployment with no model configured behaves exactly as before, and one with a
 	// model can only rank up or add — never drop a heuristic hit (§10).
-	res, lerr := codelocalize.LLMLocalizer{LLM: v.d.resolveAgentLLMForRole(ctx, v.tenantID, platform.RoleCode)}.Localize(ctx,
+	res, lerr := codelocalize.LLMLocalizer{LLM: v.d.resolveAgentLLMForRole(aiKind(ctx, "fault localization", "code"), v.tenantID, platform.RoleCode)}.Localize(ctx,
 		codelocalize.Query{CWE: target.CWE, Title: target.Title, Description: target.Description}, repoFiles)
 	if lerr != nil {
 		return "", lerr
