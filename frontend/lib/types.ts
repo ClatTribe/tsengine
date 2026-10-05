@@ -449,6 +449,10 @@ export interface Action {
   // "approved" so it is not lost, which also makes it look identical to one merely waiting — this is
   // what tells the two apart.
   delivery_error?: string;
+  // The issue-tracker ticket this action was delivered as, and what the tracker last said. Two verdicts
+  // side by side: the tracker's (resolved) and ours (verification) — closed_still_present is where they
+  // disagree.
+  ticket?: TicketRef;
   // A KNOWN reason this action could not be applied if approved right now (read-time preflight,
   // never persisted). Shown BEFORE the decision so nobody approves a fix that cannot land. Absent
   // means "no known blocker", not "guaranteed to work".
@@ -498,6 +502,10 @@ export interface ActionsView {
   awaiting_proof: number;
   /** Approved actions whose apply attempt failed — they are stuck, not pending. */
   failed_delivery: number;
+  /** Tickets the tracker reports done while a re-test made after the close still finds the issue. */
+  tickets_closed_still_present?: number;
+  /** Delivered tickets we can no longer read back — unknown, never "still open". */
+  tickets_unreadable?: number;
   /** Rule classes whose clean re-scans this tenant's own history shows have been contradicted. */
   distrusted_classes?: DistrustedClass[];
   /**
@@ -2261,4 +2269,20 @@ export interface AutonomyReport {
   min_closed: number;
   offers: AutonomyOffer[];
   grants: AutonomyGrantStatus[];
+}
+
+export interface TicketRef {
+  system: string;
+  key: string;
+  url?: string;
+  destination: string;
+  filed_at: string;
+  status?: string;
+  status_category?: string;
+  resolved: boolean;
+  resolved_at?: string;
+  last_synced_at?: string;
+  sync_error?: string;
+  closed_still_present?: boolean;
+  notified?: string;
 }

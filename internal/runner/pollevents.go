@@ -39,6 +39,9 @@ type EventPollResult struct {
 	GuardDutyRead bool `json:"guardduty_read"`
 	Findings      int  `json:"findings"`
 	Opened        int  `json:"incidents_opened"`
+	// TicketsResolved is how many delivered tickets the tracker newly reports done. Read on the fast
+	// clock so a ticket closed without the fix shows within minutes, not at the next 12-hour pass.
+	TicketsResolved int `json:"tickets_resolved"`
 }
 
 // PollEvents reads the tenant's event sources and opens incidents for what they found. A halted tenant
@@ -52,6 +55,7 @@ func (s *Service) PollEvents(ctx context.Context, tenantID string) EventPollResu
 	idl, idRan := s.SyncIdentityLogs(ctx, tenantID)
 	gd, gdRan := s.SyncGuardDuty(ctx, tenantID)
 	res.CloudRead, res.IdentityRead, res.GuardDutyRead = cloudRan, idRan, gdRan
+	res.TicketsResolved = s.syncTickets(ctx, tenantID).NewlyResolved
 	found := append(append(append([]types.Finding{}, cdr.Findings...), idl.Findings...), gd.Findings...)
 	res.Findings = len(found)
 	if s.Detector == nil || len(found) == 0 {

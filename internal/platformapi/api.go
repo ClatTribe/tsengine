@@ -1040,6 +1040,13 @@ type actionsView struct {
 	// stays at ActApproved so it is not lost — which also makes it indistinguishable, in the list,
 	// from one merely waiting. This count is what makes the difference visible.
 	FailedDelivery int `json:"failed_delivery"`
+	// TicketsClosedStillPresent counts delivered tickets the customer's tracker reports DONE while our
+	// re-test, made after the close, still finds the issue (internal/ticketsync). The most common way a
+	// remediation quietly fails, and the one nobody else in the loop is placed to notice.
+	TicketsClosedStillPresent int `json:"tickets_closed_still_present"`
+	// TicketsUnreadable counts delivered tickets we can no longer read back. Unreadable is not "still
+	// open", so they are counted as what they are rather than left looking in flight.
+	TicketsUnreadable int `json:"tickets_unreadable"`
 }
 
 // handleActions returns ALL the tenant's remediation actions with their fix-verification state —
@@ -1054,6 +1061,14 @@ func (d Deps) handleActions(w http.ResponseWriter, r *http.Request, tenantID str
 	for _, a := range acts {
 		if a.DeliveryError != "" {
 			v.FailedDelivery++
+		}
+		if a.Ticket != nil {
+			if a.Ticket.ClosedStillPresent {
+				v.TicketsClosedStillPresent++
+			}
+			if a.Ticket.SyncError != "" {
+				v.TicketsUnreadable++
+			}
 		}
 		if a.Status != platform.ActApplied || len(a.FindingKeys) == 0 {
 			continue

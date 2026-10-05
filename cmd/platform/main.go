@@ -104,6 +104,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/scheduler"
 	"github.com/ClatTribe/tsengine/internal/secret"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/ticketsync"
 	_ "github.com/ClatTribe/tsengine/internal/toolsbundle" // register OSS tools so host-side PlanAnchors resolves anchors (else 0 findings)
 	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
 	"github.com/ClatTribe/tsengine/internal/webagent"
@@ -727,6 +728,18 @@ func main() {
 	// operator must have enabled live probing (TSENGINE_ACTIVE_EXPLOIT), and the tenant must have
 	// proven ownership of the target. Both fail closed and report "unverified" rather than "clean".
 	svc.Reattacker = apiDeps.ReattackVerdicts
+	// Two-way ticket sync: read delivered tickets back from the tracker that holds them, with the
+	// credentials that filed them, and write the re-test verdict back as a comment. Only trackers that
+	// can be read back take part (Jira today); others keep filing exactly as before.
+	if tf, ok := deliverer.Ticket.(remediate.TenantFiler); ok {
+		svc.TicketTracker = func(ctx context.Context, tenantID string, ref platform.TicketRef) (ticketsync.Tracker, error) {
+			tr, err := tf.TrackerFor(ctx, tenantID, ref)
+			if err != nil {
+				return nil, err
+			}
+			return tr, nil
+		}
+	}
 	// Make the connected cloud account continuously monitored, like SaaS posture and OSINT already
 	// are. Each pass re-reads the account through its read-only role and diffs it against the previous
 	// snapshot, so a bucket that turned public or a principal that gained admin opens an incident on
