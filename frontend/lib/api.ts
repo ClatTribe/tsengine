@@ -16,7 +16,7 @@ import type {
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, BoardDigestSettings, AgentMemory, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User, ProductsView } from "./types";
+  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, BoardDigestSettings, AgentMemory, AIValue, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User, ProductsView } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -97,6 +97,8 @@ export const api = {
   // Take ownership of an open incident → stops the timed auto-escalation (the MDR "I'm on it").
   ackIncident: (id: string, by?: string) =>
     call<Incident>(`/v1/incidents/${id}/ack`, { method: "POST", body: JSON.stringify({ by: by ?? "" }) }),
+  aiValue: () =>
+    safe<AIValue>("/v1/ai-value", { days: 30, surfaces: [], total: { surface: "all", runs: 0, unknown_cost_runs: 0, usd: 0, verified: 0 }, fixes_proven_closed: 0, unmetered: [] }),
   agentMemory: () => safe<AgentMemory>("/v1/agent-memory", { lines: [] }),
   addAgentNote: (text: string) => call<{ id: string }>("/v1/agent-memory/notes", { method: "POST", body: JSON.stringify({ text }) }),
   deleteAgentNote: (id: string) => call<void>(`/v1/agent-memory/notes/${id}`, { method: "DELETE" }),

@@ -54,7 +54,7 @@ func factories() []storeFactory {
 			// Clean slate: each conformance run starts empty (Postgres is a shared DB, not a temp dir).
 			for _, tbl := range []string{"tenants", "connections", "assets", "engagements", "findings", "actions",
 				"controls", "incidents", "risks", "audits", "policies", "ignores", "exclusions", "runtimeevts",
-				"pentests", "reviews", "apps", "users", "sessions", "operators", "opsessions"} {
+				"pentests", "reviews", "apps", "users", "sessions", "operators", "opsessions", "ai_spend"} {
 				if _, err := p.db.ExecContext(context.Background(), "TRUNCATE TABLE "+tbl); err != nil {
 					t.Fatalf("truncate %s: %v", tbl, err)
 				}

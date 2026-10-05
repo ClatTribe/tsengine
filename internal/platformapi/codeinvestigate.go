@@ -80,7 +80,10 @@ func (d Deps) codeInvestigator(tenantID string) func(ctx context.Context, focus 
 			Findings: code,
 			Source:   codeagent.NewGitHubSource(owner, repo, gh.Config["ref"], token),
 		}
+		meter, model := usageMeter(llm)
 		rep, ierr := codeagent.Investigate(ctx, llm, cc, codeagent.Options{MaxIters: 14, Ledger: d.Recorder})
+		cost, known := meter()
+		d.recordAISpend(ctx, tenantID, "code", "code", cost, known, model, 0)
 		if ierr != nil {
 			return "Code investigation error: " + ierr.Error(), nil
 		}
@@ -135,7 +138,11 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 	d.applyTrainingConsent(r.Context(), tenantID, episode)
 	started := time.Now()
 
+	meter, model := usageMeter(llm)
 	rep, ierr := codeagent.Investigate(r.Context(), llm, cc, codeagent.Options{MaxIters: 24, Ledger: d.Recorder})
+	cost, known := meter()
+	codeVerified := 0 // set once the run's findings are saved; read by the deferred spend record
+	defer func() { d.recordAISpend(r.Context(), tenantID, "code", "code", cost, known, model, codeVerified) }()
 	if ierr != nil {
 		respond(w, nil, ierr)
 		return
@@ -171,6 +178,7 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
+	codeVerified = countVerified(saved)
 	episode.Cost = ledger.Cost{Iterations: rep.Calls, WallClock: time.Since(started)}
 	_ = episode.Close(d.censusState(r.Context(), tenantID, scope, codeFinding))
 	d.recordEpisode(r.Context(), tenantID, scope, episode, saved)

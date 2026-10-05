@@ -2202,3 +2202,22 @@ export interface AgentMemory {
   lines: AgentMemoryLine[];
   omitted?: Record<string, number>;
 }
+
+// GET /v1/ai-value — AI spend against findings the runs PROVED, per surface, last 30 days. cost_per_verified
+// is absent when a surface had any unknown-cost run (unknown is never free). fixes_proven_closed is context,
+// not credited to the AI. unmetered names AI paths not yet in these numbers.
+export interface AISurfaceValue {
+  surface: string;
+  runs: number;
+  unknown_cost_runs: number;
+  usd: number;
+  verified: number;
+  cost_per_verified?: number;
+}
+export interface AIValue {
+  days: number;
+  surfaces: AISurfaceValue[];
+  total: AISurfaceValue;
+  fixes_proven_closed: number;
+  unmetered: string[];
+}

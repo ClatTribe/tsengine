@@ -28,6 +28,7 @@ type Memory struct {
 	risks           map[string]map[string]platform.Risk               // tenantID → riskID → risk
 	aiAnalyses      map[string]map[string]platform.AIAnalysis         // tenantID → analysisID → AI analysis
 	evalRuns        map[string]map[string]platform.EvalRun            // tenantID → runID → eval run (append-only)
+	aiSpend         map[string]map[string]platform.AISpend            // tenantID → id → AI run cost (append-only)
 	episodes        map[string]map[string]platform.EpisodeRecord      // tenantID → episodeID → scored agent run (append-only)
 	complianceSnaps map[string]map[string]platform.ComplianceSnapshot // tenantID → snapshotID → evidence snapshot
 	audits          map[string]map[string]platform.AuditEngagement    // tenantID → engagementID → audit
@@ -69,6 +70,7 @@ func NewMemory() *Memory {
 		risks:           map[string]map[string]platform.Risk{},
 		aiAnalyses:      map[string]map[string]platform.AIAnalysis{},
 		evalRuns:        map[string]map[string]platform.EvalRun{},
+		aiSpend:         map[string]map[string]platform.AISpend{},
 		episodes:        map[string]map[string]platform.EpisodeRecord{},
 		complianceSnaps: map[string]map[string]platform.ComplianceSnapshot{},
 		audits:          map[string]map[string]platform.AuditEngagement{},
@@ -994,6 +996,7 @@ type Snapshot struct {
 	AIAnalyses      map[string]map[string]platform.AIAnalysis         `json:"ai_analyses,omitempty"`
 	ComplianceSnaps map[string]map[string]platform.ComplianceSnapshot `json:"compliance_snaps,omitempty"`
 	EvalRuns        map[string]map[string]platform.EvalRun            `json:"eval_runs,omitempty"`
+	AISpend         map[string]map[string]platform.AISpend            `json:"ai_spend,omitempty"`
 	Episodes        map[string]map[string]platform.EpisodeRecord      `json:"episodes,omitempty"`
 	Audits          map[string]map[string]platform.AuditEngagement    `json:"audits,omitempty"`
 	Policies        map[string]map[string]platform.Policy             `json:"policies,omitempty"`
@@ -1037,6 +1040,7 @@ func (m *Memory) Export() Snapshot {
 		AIAnalyses:      m.aiAnalyses,
 		ComplianceSnaps: m.complianceSnaps,
 		EvalRuns:        m.evalRuns,
+		AISpend:         m.aiSpend,
 		Episodes:        m.episodes,
 		Audits:          m.audits,
 		Policies:        m.policies,
@@ -1079,6 +1083,7 @@ func (m *Memory) load(s Snapshot) {
 	m.aiAnalyses = orEmptyAIAnalyses(s.AIAnalyses)
 	m.complianceSnaps = orEmptyComplianceSnaps(s.ComplianceSnaps)
 	m.evalRuns = orEmptyEvalRuns(s.EvalRuns)
+	m.aiSpend = orEmptyAISpend(s.AISpend)
 	m.episodes = orEmptyEpisodes(s.Episodes)
 	m.audits = orEmptyAudits(s.Audits)
 	m.policies = orEmptyPolicies(s.Policies)
@@ -1326,4 +1331,42 @@ func (m *Memory) DeleteOperatorSessionsFor(_ context.Context, operatorID string)
 		}
 	}
 	return nil
+}
+
+func (m *Memory) PutAISpend(_ context.Context, e platform.AISpend) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.aiSpend[e.TenantID] == nil {
+		m.aiSpend[e.TenantID] = map[string]platform.AISpend{}
+	}
+	m.aiSpend[e.TenantID][e.ID] = e
+	return nil
+}
+
+func (m *Memory) ListAISpend(_ context.Context, tenantID string) ([]platform.AISpend, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]platform.AISpend, 0, len(m.aiSpend[tenantID]))
+	for _, e := range m.aiSpend[tenantID] {
+		out = append(out, e)
+	}
+	sortAISpend(out)
+	return out, nil
+}
+
+// sortAISpend is the one ordering every store returns: oldest first, id as the tie-break.
+func sortAISpend(out []platform.AISpend) {
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].At.Equal(out[j].At) {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].At.Before(out[j].At)
+	})
+}
+
+func orEmptyAISpend(m map[string]map[string]platform.AISpend) map[string]map[string]platform.AISpend {
+	if m == nil {
+		return map[string]map[string]platform.AISpend{}
+	}
+	return m
 }

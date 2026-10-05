@@ -2345,3 +2345,27 @@ type AgentNote struct {
 	By   string    `json:"by"`
 	At   time.Time `json:"at"`
 }
+
+// AISpend is one AI run's cost, APPEND-ONLY — the record the monthly budget and the value view read.
+//
+// It exists because the only spend record was AIAnalysis, whose id is kind:scope so a re-run OVERWRITES the
+// last: ten whole-estate reviews in a month counted as one, and a run that returned no content was never
+// stored at all, so its cost counted as nothing. A budget that under-counts is a ceiling a customer can
+// pass without being told. One row per run, never updated.
+type AISpend struct {
+	ID       string    `json:"id"`
+	TenantID string    `json:"tenant_id"`
+	At       time.Time `json:"at"`
+	// Kind is what ran (triage, investigate, cloud, code); Surface is what it was spent on (estate,
+	// issue, cloud, code) — the axis the value view groups by.
+	Kind    string `json:"kind"`
+	Surface string `json:"surface"`
+	// USD is the run's estimated cost; CostKnown is false when the model reported no usage, in which case
+	// the run is counted but its cost is UNKNOWN — never zero, which would read as free.
+	USD       float64 `json:"usd"`
+	CostKnown bool    `json:"cost_known"`
+	Model     string  `json:"model,omitempty"`
+	// Verified is how many findings the run itself proved (verification_status verified) — the outcome
+	// the spend is weighed against. Counted at write time, against findings as they were then.
+	Verified int `json:"verified"`
+}
