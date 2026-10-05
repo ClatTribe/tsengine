@@ -672,6 +672,12 @@ func main() {
 	svc.CloudEventReader = func(c platform.Connection) awsfetch.EventReader {
 		return awsfetch.NewCloudTrailLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID)
 	}
+	// AWS GuardDuty's own findings (guardduty:ListFindings/GetFindings are reads in SecurityAudit), so an
+	// alert raised in the AWS console reaches the incident queue too. A region without GuardDuty enabled
+	// is reported as unwatched, never as clean.
+	svc.GuardDutyReader = func(c platform.Connection) awsfetch.GuardDutyReader {
+		return awsfetch.NewGuardDutyLister(os.Getenv("AWS_REGION"), c.SecretRef, c.TenantID)
+	}
 	svc.IdentityLogFetchers = map[string]identitylog.Fetcher{
 		platform.ConnOkta:       identitylog.NewOkta(os.Getenv("OKTA_ORG_URL")),
 		platform.ConnM365:       identitylog.NewM365(),
