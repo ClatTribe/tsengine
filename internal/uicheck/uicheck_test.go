@@ -129,6 +129,20 @@ var required = []struct {
 	},
 	{
 		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "granted_by",
+		wouldOtherwiseClaim: "that a fix applying without approval was the product's own decision, when " +
+			"a named owner allowed it on a stated record — the person who removed the human step must " +
+			"be on the screen beside the step that is gone (internal/autonomy)",
+	},
+	{
+		page:  "frontend/app/(app)/activity/page.tsx",
+		field: "reason",
+		wouldOtherwiseClaim: "that a fix the owner allowed is still applying on its own, when a failure " +
+			"under the grant has sent it back to the approval desk — without the reason the owner sees an " +
+			"allowance that silently stopped working and cannot tell which action broke it",
+	},
+	{
+		page:  "frontend/app/(app)/activity/page.tsx",
 		field: "distrusted_classes",
 		wouldOtherwiseClaim: "that a fix is unconfirmed for no stated reason, when the product " +
 			"can name exactly which rule classes its own absence-evidence has failed on and how often",

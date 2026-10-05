@@ -51,6 +51,7 @@ import (
 	"errors"
 	"fmt"
 	repoasset "github.com/ClatTribe/tsengine/internal/asset/repository"
+	"github.com/ClatTribe/tsengine/internal/autonomy"
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -268,7 +269,8 @@ func main() {
 	// the SAME ledger, so §18.2 inv. 4 ("every decision is signed") holds end to end. Previously the
 	// API Deps had no recorder, so HITL acts served by the API were silently NOT ledgered.
 	rec := ledger.NewRecorder()
-	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: rec}
+	// Earned autonomy: a tier-2 fix whose kind the owner allowed on its record applies without queueing.
+	desk := &hitl.Desk{Store: st, Apply: deliverer, Recorder: rec, Autonomy: autonomy.DeskHook(st, autonomy.OptionsFromEnv())}
 	// new-incident alerts fan out to every configured channel (Slack heads-up +
 	// PagerDuty on-call page); best-effort, so one failing never blocks the others.
 	var alerters notify.MultiAlerter

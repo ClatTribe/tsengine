@@ -151,6 +151,11 @@ type Tenant struct {
 	// GuardDutyCursors is, per AWS connection id, the newest GuardDuty finding update read — the same
 	// cursor discipline as CloudEventCursors.
 	GuardDutyCursors map[string]time.Time `json:"guardduty_cursors,omitempty"`
+	// AutonomyGrants are the (finding class, remediation type) pairs the OWNER has let apply without a
+	// per-action approval, because this tenant's own record shows that fix closing that class every time
+	// it was tried (internal/autonomy). Earned, not configured: a grant can only be made while the record
+	// qualifies, and it stops working the moment anything applied under it fails to close.
+	AutonomyGrants []AutonomyGrant `json:"autonomy_grants,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
@@ -2368,4 +2373,15 @@ type AISpend struct {
 	// Verified is how many findings the run itself proved (verification_status verified) — the outcome
 	// the spend is weighed against. Counted at write time, against findings as they were then.
 	Verified int `json:"verified"`
+}
+
+// AutonomyGrant lets one (finding class, remediation type) skip the approval desk. GrantedBy is the named
+// owner who allowed it; BasisClosed is how many proven closures it was granted on, so the record shows
+// what the decision rested on, not only that it was made.
+type AutonomyGrant struct {
+	Class           string    `json:"class"`
+	RemediationType string    `json:"remediation_type"`
+	GrantedBy       string    `json:"granted_by"`
+	GrantedAt       time.Time `json:"granted_at"`
+	BasisClosed     int       `json:"basis_closed"`
 }
