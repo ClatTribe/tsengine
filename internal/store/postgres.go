@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS risks       (seq BIGSERIAL, tenant_id TEXT, id TEXT, 
 CREATE TABLE IF NOT EXISTS ai_analyses (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS compliance_snaps (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS eval_runs       (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS ai_spend        (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS episodes        (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (seq BIGSERIAL, tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -667,4 +668,13 @@ func (p *Postgres) DeleteOperatorSessionsFor(ctx context.Context, operatorID str
 		}
 	}
 	return nil
+}
+
+func (p *Postgres) PutAISpend(ctx context.Context, e platform.AISpend) error {
+	return p.upsertTID(ctx, `INSERT INTO ai_spend(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, e.TenantID, e.ID, e)
+}
+func (p *Postgres) ListAISpend(ctx context.Context, tenantID string) ([]platform.AISpend, error) {
+	out, err := listJSON[platform.AISpend](ctx, p.db, pgRebind(`SELECT data FROM ai_spend WHERE tenant_id=? ORDER BY seq`), tenantID)
+	sortAISpend(out)
+	return out, err
 }

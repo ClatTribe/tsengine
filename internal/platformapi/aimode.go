@@ -186,23 +186,40 @@ func (d Deps) handleSetAIMode(w http.ResponseWriter, r *http.Request, tenantID s
 // recorded a real cost. Grounded: it sums observed run costs rather than estimating from token
 // prices, so the number matches what actually happened — and reads 0 when nothing has run.
 func (d Deps) monthlyAISpend(ctx context.Context, tenantID string) (float64, int) {
-	all, err := d.Store.ListAIAnalyses(ctx, tenantID)
-	if err != nil {
-		return 0, 0
-	}
 	now := time.Now().UTC()
+	sameMonth := func(t time.Time) bool { return t.Year() == now.Year() && t.Month() == now.Month() }
+
+	// The append-only record: every run, including re-runs and runs that produced nothing.
 	var total float64
 	runs := 0
-	for _, a := range all {
-		if a.CreatedAt.Year() != now.Year() || a.CreatedAt.Month() != now.Month() {
-			continue
+	if rows, err := d.Store.ListAISpend(ctx, tenantID); err == nil {
+		for _, e := range rows {
+			if !sameMonth(e.At) {
+				continue
+			}
+			if e.CostKnown && e.USD > 0 {
+				total += e.USD
+			}
+			runs++
 		}
-		if a.CostUSD > 0 {
-			total += a.CostUSD
-		}
-		runs++
 	}
-	return total, runs
+	// The month this ships, spend from before the record existed lives only in AIAnalysis (one row per
+	// kind:scope). Taking the larger of the two means the deploy can never RESET a tenant's month — the
+	// failure that would let a nearly-spent budget run again. From next month the record alone counts.
+	var legacy float64
+	legacyRuns := 0
+	if all, err := d.Store.ListAIAnalyses(ctx, tenantID); err == nil {
+		for _, a := range all {
+			if !sameMonth(a.CreatedAt) {
+				continue
+			}
+			if a.CostUSD > 0 {
+				legacy += a.CostUSD
+			}
+			legacyRuns++
+		}
+	}
+	return max(total, legacy), max(runs, legacyRuns)
 }
 
 // remainingBudget is what is left of the month's ceiling. Never negative: an overshoot reads as zero

@@ -83,7 +83,11 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	started := time.Now()
 
 	// llm (pentest.SpecLLM) satisfies cloudengine.LLM structurally — same Generate method.
+	meter, model := usageMeter(llm)
 	rep, ierr := cloudagent.Investigate(r.Context(), llm, cc, cloudagent.Options{MaxIters: 24, MaxHyp: 20})
+	cost, known := meter()
+	cloudVerified := 0 // set once the run's findings are saved; read by the deferred spend record
+	defer func() { d.recordAISpend(r.Context(), tenantID, "cloud", "cloud", cost, known, model, cloudVerified) }()
 	if ierr != nil {
 		respond(w, nil, ierr)
 		return
@@ -117,6 +121,7 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 	if d.IncidentOpener != nil && stored > 0 {
 		_, _ = d.IncidentOpener.OpenFor(r.Context(), tenantID, saved, nil)
 	}
+	cloudVerified = countVerified(saved)
 	// Agent proposes → named vCISO disposes (§18.4): the agent's proven attack paths cluster into
 	// candidate risks on the vCISO desk automatically, so the human judges the agent's discoveries.
 	risksProposed := 0
@@ -356,7 +361,10 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 		}
 		// Bounded specialist run (it's a nested agent — keep it tight). pentest.SpecLLM satisfies
 		// cloudengine.LLM structurally (same Generate), as the on-demand handler above relies on.
+		meter, model := usageMeter(llm)
 		rep, ierr := cloudagent.Investigate(ctx, llm, cc, cloudagent.Options{MaxIters: 12, MaxHyp: 12})
+		cost, known := meter()
+		d.recordAISpend(ctx, tenantID, "cloud", "cloud", cost, known, model, 0)
 		if ierr != nil {
 			return "Cloud investigation error: " + ierr.Error(), nil
 		}

@@ -6,6 +6,7 @@ import { GenerateBrief } from "@/components/brief/generate-brief";
 import { lastTriage } from "../brief/actions";
 import { AskEstate } from "@/components/engineer/ask-estate";
 import { EngineStatus } from "@/components/engineer/engine-status";
+import { AIValueCard } from "@/components/engineer/ai-value";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -54,8 +55,8 @@ const ACTIONS = [
 
 export default async function EngineerConsolePage() {
   // Scope so the founder sees WHAT the engineer reasons over (coverage honesty) before triggering an action.
-  const [findings, assets, engagements, priorBrief, approvals, llm] = await Promise.all([
-    api.findings(), api.assets(), api.engagements(), lastTriage(), api.approvals(), api.llmSettings(),
+  const [findings, assets, engagements, priorBrief, approvals, llm, aiValue] = await Promise.all([
+    api.findings(), api.assets(), api.engagements(), lastTriage(), api.approvals(), api.llmSettings(), api.aiValue(),
   ]);
   const freshest = engagements.map((e) => e.completed_at).filter(Boolean).sort().pop();
 
@@ -70,6 +71,9 @@ export default async function EngineerConsolePage() {
       {/* IS IT ACTUALLY RUNNING. Everything below describes an agent that reasons; without a model that
           half is idle, and the console used to describe it anyway. */}
       <EngineStatus hasKey={llm.has_key} aiEnabled={llm.ai_enabled} />
+
+      {/* What the runs cost against what they PROVED — the allocation question, answered from real spend. */}
+      <AIValueCard v={aiValue} />
 
       {/* ASK FIRST. The question the job actually opens with, and the one capability the agent had
           all along that no human could reach. */}

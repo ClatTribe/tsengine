@@ -1,0 +1,102 @@
+package platformapi
+
+import (
+	"net/http"
+	"sort"
+	"time"
+
+	"github.com/ClatTribe/tsengine/pkg/platform"
+)
+
+// aivalue.go: what the AI cost, against what it proved, per surface (GET /v1/ai-value).
+//
+// The capital-allocation question — "which surface should get the tokens?" — cannot be answered without
+// first knowing what each surface's tokens bought. Three rules keep the view honest:
+//   - Unknown is not free. A run whose model reported no usage is counted as a run with UNKNOWN cost, and
+//     cost-per-proof is withheld for a surface with any such run, because dividing a partial cost by the
+//     whole outcome would make the AI look cheaper than it was.
+//   - Proven, not claimed. The outcome is findings the run itself VERIFIED (a predicate ran), counted when
+//     the run happened — not findings it mentioned.
+//   - Fixes proven closed are shown as CONTEXT, not credited to the AI: a re-test proved the fix, but the
+//     fix may have come from anywhere, and claiming it would be the overclaim this view exists to avoid.
+
+type surfaceValue struct {
+	Surface         string   `json:"surface"`
+	Runs            int      `json:"runs"`
+	UnknownCostRuns int      `json:"unknown_cost_runs"`
+	USD             float64  `json:"usd"`
+	Verified        int      `json:"verified"`
+	CostPerVerified *float64 `json:"cost_per_verified,omitempty"`
+}
+
+type aiValueView struct {
+	Days              int            `json:"days"`
+	Surfaces          []surfaceValue `json:"surfaces"`
+	Total             surfaceValue   `json:"total"`
+	FixesProvenClosed int            `json:"fixes_proven_closed"`
+	// Unmetered names the AI paths whose runs are not in this view yet, so a total is never read as all
+	// AI spend.
+	Unmetered []string `json:"unmetered"`
+}
+
+var unmeteredAIPaths = []string{
+	"pentest exploit proposals (AI Pentester)",
+	"proactive code sweep",
+	"CWE attribution",
+	"model scoring in your eval suite",
+}
+
+func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID string) {
+	days := 30
+	since := time.Now().UTC().AddDate(0, 0, -days)
+	rows, err := d.Store.ListAISpend(r.Context(), tenantID)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	by := map[string]*surfaceValue{}
+	view := aiValueView{Days: days, Surfaces: []surfaceValue{}, Total: surfaceValue{Surface: "all"}, Unmetered: unmeteredAIPaths}
+	for _, e := range rows {
+		if e.At.Before(since) {
+			continue
+		}
+		sv := by[e.Surface]
+		if sv == nil {
+			sv = &surfaceValue{Surface: e.Surface}
+			by[e.Surface] = sv
+		}
+		for _, v := range []*surfaceValue{sv, &view.Total} {
+			v.Runs++
+			v.Verified += e.Verified
+			if e.CostKnown {
+				v.USD += e.USD
+			} else {
+				v.UnknownCostRuns++
+			}
+		}
+	}
+	for _, sv := range by {
+		view.Surfaces = append(view.Surfaces, *sv)
+	}
+	view.Surfaces = append(view.Surfaces, view.Total)
+	for i := range view.Surfaces {
+		v := &view.Surfaces[i]
+		if v.Verified > 0 && v.UnknownCostRuns == 0 && v.USD > 0 {
+			c := v.USD / float64(v.Verified)
+			v.CostPerVerified = &c
+		}
+	}
+	view.Total = view.Surfaces[len(view.Surfaces)-1]
+	view.Surfaces = view.Surfaces[:len(view.Surfaces)-1]
+	sort.Slice(view.Surfaces, func(i, j int) bool { return view.Surfaces[i].USD > view.Surfaces[j].USD })
+
+	if acts, err := d.Store.ListActions(r.Context(), tenantID); err == nil {
+		for _, a := range acts {
+			if v := a.Verification; v != nil && !v.VerifiedAt.Before(since) &&
+				(v.Status == platform.FixStatusFixed || v.Status == "closed_with_proof") {
+				view.FixesProvenClosed++
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, view)
+}

@@ -19,6 +19,12 @@ import (
 // persistAIAnalysis records an L2 Outcome as the tenant's latest analysis for (kind, scope). now is passed in
 // so the caller controls the timestamp (testable). Returns the stored record (for the caller to echo).
 func (d Deps) persistAIAnalysis(ctx context.Context, tenantID, kind, scope, title string, out l2.Outcome, now time.Time) platform.AIAnalysis {
+	// Spend first, and unconditionally: a run that produced nothing worth persisting was still paid for.
+	surface := "estate"
+	if kind == "investigate" {
+		surface = "issue"
+	}
+	d.recordAISpend(ctx, tenantID, kind, surface, out.CostUSD, out.CostUSD > 0 || out.Tokens > 0, out.Model, countVerified(out.Findings))
 	a := platform.AIAnalysis{
 		ID:         platform.AIAnalysisID(kind, scope),
 		TenantID:   tenantID,

@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS risks       (tenant_id TEXT, id TEXT, data TEXT NOT N
 CREATE TABLE IF NOT EXISTS ai_analyses (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS compliance_snaps (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS eval_runs (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
+CREATE TABLE IF NOT EXISTS ai_spend (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS episodes (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS audits      (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
 CREATE TABLE IF NOT EXISTS policies    (tenant_id TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(tenant_id,id));
@@ -691,4 +692,13 @@ func (s *SQLite) DeleteOperatorSessionsFor(ctx context.Context, operatorID strin
 		}
 	}
 	return nil
+}
+
+func (s *SQLite) PutAISpend(ctx context.Context, e platform.AISpend) error {
+	return s.upsertTID(ctx, `INSERT INTO ai_spend(tenant_id,id,data) VALUES(?,?,?) ON CONFLICT(tenant_id,id) DO UPDATE SET data=excluded.data`, e.TenantID, e.ID, e)
+}
+func (s *SQLite) ListAISpend(ctx context.Context, tenantID string) ([]platform.AISpend, error) {
+	out, err := listJSON[platform.AISpend](ctx, s.db, `SELECT data FROM ai_spend WHERE tenant_id=? ORDER BY rowid`, tenantID)
+	sortAISpend(out)
+	return out, err
 }

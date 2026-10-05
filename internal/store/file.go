@@ -369,3 +369,10 @@ func (f *File) DeleteOperatorSessionsFor(ctx context.Context, operatorID string)
 	}
 	return f.persist()
 }
+
+func (f *File) PutAISpend(ctx context.Context, e platform.AISpend) error {
+	if err := f.Memory.PutAISpend(ctx, e); err != nil {
+		return err
+	}
+	return f.persist()
+}

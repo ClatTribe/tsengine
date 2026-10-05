@@ -138,6 +138,9 @@ type Store interface {
 	// --- continuous-compliance evidence timeline (APPEND-ONLY per-framework posture snapshots, so an
 	// auditor sees a control held across the audit window, not just now). List returns all of a tenant's
 	// snapshots (any framework) oldest-first; callers filter by framework. ---
+	// PutAISpend appends one AI run's cost (never updated); ListAISpend returns them oldest-first.
+	PutAISpend(ctx context.Context, e platform.AISpend) error
+	ListAISpend(ctx context.Context, tenantID string) ([]platform.AISpend, error)
 	PutEvalRun(ctx context.Context, r platform.EvalRun) error
 	ListEvalRuns(ctx context.Context, tenantID string) ([]platform.EvalRun, error)
 
