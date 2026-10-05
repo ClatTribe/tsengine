@@ -88,6 +88,8 @@ var degradationAudience = map[string]string{
 	DegradationConnectionBroken: AudienceTenant, // their OAuth grant; only they can re-authorise
 	DegradationCloudCoverage:    AudienceTenant, // their snapshot is missing fields; their collector posts it
 	DegradationThreatIntelStale: AudienceBoth,   // BOTH, with different text — see below
+	// Their AWS account, their switch to turn on — and it costs them money, so it is theirs to decide.
+	DegradationThreatDetectionOff: AudienceTenant,
 }
 
 // Audience returns who should see this degradation, defaulting to both when a kind has no explicit
@@ -154,6 +156,12 @@ const (
 	// medium. Nothing is WRONG in a way a test could catch — it is the right answer to a question
 	// asked of an older world.
 	DegradationThreatIntelStale = "threat_intel_stale"
+	// DegradationThreatDetectionOff: a connected AWS account has no GuardDuty detector, so nothing is
+	// watching it for credential misuse, crypto-mining or reconnaissance.
+	//
+	// The incident queue for that account is quiet either way, and quiet reads as safe. The poller
+	// already knew — the read returned "not enabled" — and handed it back to a caller that dropped it.
+	DegradationThreatDetectionOff = "threat_detection_off"
 )
 
 // AllDegradationKinds is the closed set, for the guard test and for the frontend's exhaustiveness.
@@ -165,6 +173,7 @@ func AllDegradationKinds() []string {
 		DegradationConnectionBroken,
 		DegradationCloudCoverage,
 		DegradationThreatIntelStale,
+		DegradationThreatDetectionOff,
 	}
 }
 
@@ -238,7 +247,8 @@ func (d Deps) computeDegradations(ctx context.Context, tenantID string) []Degrad
 
 	// 4. A connection we cannot act through. The runner skips any asset whose connection is not active,
 	// so this is silently-reduced coverage: the asset list still shows the asset and nothing scans it.
-	if conns, err := d.Store.ListConnections(ctx, tenantID); err == nil {
+	conns, cerr := d.Store.ListConnections(ctx, tenantID)
+	if cerr == nil {
 		broken := 0
 		for _, c := range conns {
 			if c.Status != platform.ConnActive {
@@ -250,6 +260,31 @@ func (d Deps) computeDegradations(ctx context.Context, tenantID string) []Degrad
 				Kind: DegradationConnectionBroken, Severity: "warning",
 				Title:       plural(broken, "connection is", "connections are") + " not usable",
 				Detail:      "Assets behind " + plural(broken, "it", "them") + " are not being scanned. Reconnect to restore coverage.",
+				ActionLabel: "Review connections", ActionHref: "/assets",
+			})
+		}
+	}
+
+	// 4b. A connected AWS account nobody is watching. Read from what the GuardDuty poll actually
+	// observed (Tenant.GuardDutyOff), never inferred from an empty finding list — no GuardDuty findings
+	// and no GuardDuty are different claims. Only connections that still exist and are active count: a
+	// removed account is not something the customer can or should turn anything on in.
+	if terr == nil && cerr == nil && len(t.GuardDutyOff) > 0 {
+		var names []string
+		for _, c := range conns {
+			if _, off := t.GuardDutyOff[c.ID]; off && c.Kind == platform.ConnAWS && c.Status == platform.ConnActive {
+				names = append(names, firstNonBlank(c.Account, c.ID))
+			}
+		}
+		if len(names) > 0 {
+			sort.Strings(names)
+			out = append(out, Degradation{
+				Kind: DegradationThreatDetectionOff, Severity: "warning",
+				Title: "AWS GuardDuty is off in " + plural(len(names), "connected account", "connected accounts"),
+				Detail: "No GuardDuty detector in " + strings.Join(names, ", ") + ", so nothing is watching " +
+					oneOrMany(len(names), "it", "them") + " for credential misuse, crypto-mining or reconnaissance. " +
+					"A quiet incident queue for " + oneOrMany(len(names), "this account", "these accounts") +
+					" does not mean nothing happened. Turn GuardDuty on in the account's region and we read it on the next pass.",
 				ActionLabel: "Review connections", ActionHref: "/assets",
 			})
 		}
@@ -341,6 +376,21 @@ func humanDays(d time.Duration) string {
 // nowUTC is a variable so the guard test can drive staleness from a fixed clock rather than
 // depending on when the suite happens to run.
 var nowUTC = func() time.Time { return time.Now().UTC() }
+
+// oneOrMany picks a word by count without printing the count ("it"/"them").
+func oneOrMany(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+func firstNonBlank(a, b string) string {
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
+	return b
+}
 
 func plural(n int, one, many string) string {
 	if n == 1 {

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -78,3 +79,40 @@ func TestGuardDutySeverityBands(t *testing.T) {
 		}
 	}
 }
+
+// "Not enabled" is remembered on the tenant so the degradation bar can say it; a failed read says nothing
+// either way and leaves it; a real read clears it.
+func TestSyncGuardDuty_RemembersWhenNothingIsWatching(t *testing.T) {
+	ctx := context.Background()
+	r := &switchGDReader{page: awsfetch.GuardDutyPage{NotEnabled: true}, err: awsfetch.ErrGuardDutyNotEnabled}
+	st, svc := gdFixture(t, fakeGDReader{})
+	svc.GuardDutyReader = func(platform.Connection) awsfetch.GuardDutyReader { return r }
+
+	svc.SyncGuardDuty(ctx, "t1")
+	if tn, _ := st.GetTenant(ctx, "t1"); tn.GuardDutyOff["aws1"].IsZero() {
+		t.Fatalf("a not-enabled read was not remembered: %+v", tn.GuardDutyOff)
+	}
+
+	r.page, r.err = awsfetch.GuardDutyPage{}, errTransient
+	svc.SyncGuardDuty(ctx, "t1")
+	if tn, _ := st.GetTenant(ctx, "t1"); tn.GuardDutyOff["aws1"].IsZero() {
+		t.Fatal("a failed read cleared the off state — it says nothing about whether GuardDuty is on")
+	}
+
+	r.page, r.err = awsfetch.GuardDutyPage{}, nil
+	svc.SyncGuardDuty(ctx, "t1")
+	if tn, _ := st.GetTenant(ctx, "t1"); len(tn.GuardDutyOff) != 0 {
+		t.Fatalf("a successful read did not clear the off state: %+v", tn.GuardDutyOff)
+	}
+}
+
+type switchGDReader struct {
+	page awsfetch.GuardDutyPage
+	err  error
+}
+
+func (s *switchGDReader) FindingsSince(context.Context, time.Time) (awsfetch.GuardDutyPage, error) {
+	return s.page, s.err
+}
+
+var errTransient = errors.New("throttled")

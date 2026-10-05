@@ -50,6 +50,7 @@ func (s *Service) SyncGuardDuty(ctx context.Context, tenantID string) (GuardDuty
 	}
 	now := s.now()
 	latest := map[string]time.Time{}
+	offChanged := false
 	var found []types.Finding
 	for _, c := range conns {
 		if c.Kind != platform.ConnAWS || c.Status != platform.ConnActive {
@@ -67,12 +68,24 @@ func (s *Service) SyncGuardDuty(ctx context.Context, tenantID string) (GuardDuty
 		page, ferr := reader.FindingsSince(ctx, since)
 		if page.NotEnabled || errors.Is(ferr, awsfetch.ErrGuardDutyNotEnabled) {
 			res.NotEnabled = append(res.NotEnabled, c.ID)
+			if _, known := t.GuardDutyOff[c.ID]; !known {
+				if t.GuardDutyOff == nil {
+					t.GuardDutyOff = map[string]time.Time{}
+				}
+				t.GuardDutyOff[c.ID] = now
+				offChanged = true
+			}
 			continue
 		}
 		if ferr != nil {
+			// A failed read says nothing about whether GuardDuty is on, so an earlier "off" stands.
 			res.Failed[c.ID] = ferr.Error()
 			slog.Warn("[scan] guardduty not read", "tenant", tenantID, "connection", c.ID, "err", ferr.Error())
 			continue
+		}
+		if _, was := t.GuardDutyOff[c.ID]; was {
+			delete(t.GuardDutyOff, c.ID)
+			offChanged = true
 		}
 		res.Connections = append(res.Connections, c.ID)
 		if page.Truncated {
@@ -84,6 +97,13 @@ func (s *Service) SyncGuardDuty(ctx context.Context, tenantID string) (GuardDuty
 		found = append(found, guardDutyFindings(page.Findings)...)
 	}
 	if len(res.Connections) == 0 {
+		// Nothing was read, but learning that GuardDuty is off IS news, and it is only useful if it
+		// reaches the person reading the incident queue.
+		if offChanged {
+			if err := s.Store.PutTenant(ctx, t); err != nil {
+				slog.Warn("[scan] guardduty state not saved", "tenant", tenantID, "err", err.Error())
+			}
+		}
 		return res, false
 	}
 	found = l15.Enrich(found)
