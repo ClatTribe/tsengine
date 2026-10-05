@@ -282,8 +282,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/launch-readiness", d.platformAuth(d.handleLaunchReadiness)) // operator: what nobody set (mail, leads, OAuth apps, model, corpus, URLs)
 	mux.HandleFunc("GET /v1/settings/branding", d.auth(d.handleGetBranding))            // white-label: name/logo/support on outward artifacts
 	mux.HandleFunc("PUT /v1/settings/branding", d.auth(d.handlePutBranding))
-	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // per-tenant Slack incident webhook (has_slack_webhook)
-	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's Slack incident webhook (Bucket B)
+	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // which of the tenant's own channels are configured (presence only)
+	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's own Slack/Teams/Discord/PagerDuty/webhook destinations (Bucket B)
+	mux.HandleFunc("POST /v1/settings/notifications/test", d.auth(d.handleTestNotifyChannel))             // send ONE labelled test alert to ONE named channel (owner-only via the /v1/settings/ prefix)
 	mux.HandleFunc("GET /v1/settings/drata", d.auth(d.handleGetDrata))                                    // push-to-Drata config (has_key/connected)
 	mux.HandleFunc("PUT /v1/settings/drata", d.auth(d.handlePutDrata))                                    // set + seal the Drata API key + workspace
 	mux.HandleFunc("POST /v1/settings/drata/sync", d.auth(d.handleSyncDrata))                             // push control posture as Drata records

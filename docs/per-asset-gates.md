@@ -58,7 +58,7 @@ to `host.docker.internal` so a scan can reach a local target.
 
 | Destination | What | Endpoint + UX |
 |---|---|---|
-| **Slack** | per-tenant incident webhook, sealed; `notify.TenantRouter` routes each tenant's incidents to its own channel (operator channels = fallback) | `GET/PUT /v1/settings/notifications` + Settings (#388) |
+| **Slack / Teams / Discord / PagerDuty / signed webhook** | per-tenant destinations, each sealed; `notify.TenantRouter` delivers each tenant's incidents to every channel it configured, and an escalation tier's channel name resolves to the TENANT's destination before the operator's (operator channels = fallback) | `GET/PUT /v1/settings/notifications` + `POST /v1/settings/notifications/test` + Settings (#388, per-tenant non-Slack channels) |
 | **Jira** | per-tenant ticketing destination, token sealed; `remediate.TenantFiler` routes each `file_ticket` to the tenant's own project (operator tracker = fallback) | `GET/PUT /v1/settings/jira` + Settings (#391) |
 
 ---

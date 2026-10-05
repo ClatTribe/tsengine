@@ -19,15 +19,26 @@ type WebhookResolver func(ctx context.Context, tenantID string) (webhookURL stri
 // This makes incident notifications multi-tenant: tenant A's incidents go to tenant A's Slack, not
 // the operator's single channel. Implements detect.Alerter (IncidentOpened) structurally.
 type TenantRouter struct {
-	Resolve  WebhookResolver // per-tenant webhook lookup (sealed → opened by the caller)
-	Fallback Alerter         // operator-global channels (MultiAlerter); may be nil
-	HTTP     *http.Client    // shared client for the per-tenant Slack post; nil → a default
+	Resolve WebhookResolver // per-tenant Slack webhook lookup (legacy; used only when Channels is nil)
+	// Channels resolves EVERY destination the tenant configured for itself (Slack, Teams, Discord,
+	// PagerDuty, signed webhook). When set it supersedes Resolve, which only ever knew about Slack —
+	// the reason a customer on Teams or PagerDuty could not receive their own alerts at all.
+	Channels TenantChannelResolver
+	Fallback Alerter      // operator-global channels (MultiAlerter); may be nil
+	HTTP     *http.Client // shared client for the per-tenant Slack post; nil → a default
 }
 
-// IncidentOpened delivers to the tenant's own Slack webhook (if configured) and the operator
-// fallback. Both are best-effort; a per-tenant post failure never suppresses the fallback.
+// IncidentOpened delivers to every channel the tenant configured and the operator fallback. All are
+// best-effort; a per-tenant failure never suppresses the fallback or another tenant channel.
 func (r TenantRouter) IncidentOpened(ctx context.Context, inc platform.Incident) error {
-	if r.Resolve != nil {
+	if r.Channels != nil {
+		chans := r.Channels(ctx, inc.TenantID)
+		for _, name := range ChannelOrder {
+			if a := chans[name]; a != nil {
+				_ = a.IncidentOpened(ctx, inc) // best-effort, per channel
+			}
+		}
+	} else if r.Resolve != nil {
 		if url, ok := r.Resolve(ctx, inc.TenantID); ok && url != "" {
 			client := r.HTTP
 			if client == nil {

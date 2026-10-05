@@ -156,6 +156,13 @@ type Tenant struct {
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
 	// and never returned to the client — Redacted() strips it; HasSlackWebhook() reports presence.
 	SlackWebhookRef string `json:"slack_webhook_ref,omitempty"`
+	// NotifyChannelRefs are the tenant's OTHER own notification destinations, each Vault-sealed and
+	// keyed by channel: "teams", "discord", "pagerduty" (the routing key), "webhook" (the URL) and
+	// "webhook_secret" (its HMAC key). Same rules as SlackWebhookRef — every value is a bearer
+	// capability, sealed at rest, stripped by Redacted(), reported only as presence. Until these
+	// existed only Slack could be the customer's own; Teams, PagerDuty and the signed webhook were one
+	// operator-wide setting, so a customer's "critical → pagerduty" paged the operator, never them.
+	NotifyChannelRefs map[string]string `json:"notify_channel_refs,omitempty"`
 	// Jira is the tenant's OWN Jira instance where file_ticket remediations land (per-tenant; the
 	// operator-env Jira is the fallback). BaseURL/Email/Project are plain identifiers; the API token
 	// is sealed (TokenRef). Redacted() drops the whole block.
@@ -400,6 +407,18 @@ func (t Tenant) InMaintenance(now time.Time) (MaintenanceWindow, bool) {
 
 // HasSlackWebhook reports whether the tenant has configured its own Slack incident webhook.
 func (t Tenant) HasSlackWebhook() bool { return t.SlackWebhookRef != "" }
+
+// NotifyChannelsConfigured reports which of the tenant's own notification channels are set — presence
+// only, never a value. Keys are the escalation-policy channel names.
+func (t Tenant) NotifyChannelsConfigured() map[string]bool {
+	return map[string]bool{
+		"slack":     t.SlackWebhookRef != "",
+		"teams":     t.NotifyChannelRefs["teams"] != "",
+		"discord":   t.NotifyChannelRefs["discord"] != "",
+		"pagerduty": t.NotifyChannelRefs["pagerduty"] != "",
+		"webhook":   t.NotifyChannelRefs["webhook"] != "",
+	}
+}
 
 // EscalationPolicy is the per-tenant incident escalation matrix — the MDR/SOC "who is alerted, and
 // how urgently" for a newly-opened incident (PagerDuty/Opsgenie parity + the contractual
@@ -1040,6 +1059,7 @@ func (t Tenant) Redacted() Tenant {
 	t.LLM = nil
 	t.LLMRoles = nil // per-role overrides carry sealed key refs too — same reason as LLM
 	t.SlackWebhookRef = ""
+	t.NotifyChannelRefs = nil
 	t.Jira = nil
 	t.Drata = nil
 	t.MDM = nil
